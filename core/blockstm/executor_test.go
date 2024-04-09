@@ -270,7 +270,7 @@ func taskFactory(numTask int, sender Sender, readsPerT int, writesPerT int, nonI
 
 func testExecutorComb(t *testing.T, totalTxs []int, numReads []int, numWrites []int, numNonIO []int, taskRunner TaskRunner) {
 	t.Helper()
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, false)))
 
 	improved := 0
 	total := 0
@@ -313,7 +313,7 @@ func testExecutorComb(t *testing.T, totalTxs []int, numReads []int, numWrites []
 // nolint: gocognit
 func testExecutorCombWithMetadata(t *testing.T, totalTxs []int, numReads []int, numWrites []int, numNonIOs []int, taskRunner TaskRunnerWithMetadata) {
 	t.Helper()
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, false)))
 
 	improved := 0
 	improvedMetadata := 0

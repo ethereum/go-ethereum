@@ -53,7 +53,7 @@ var (
 
 func TestValidatorWentOffline(t *testing.T) {
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	fdlimit.Raise(2048)
 
 	// Generate a batch of accounts to seal and fund with

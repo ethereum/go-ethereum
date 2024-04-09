@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
 	"reflect"
@@ -234,7 +235,7 @@ func TestReadWriteGenesisAlloc(t *testing.T) {
 			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 			{2}: {Balance: big.NewInt(2), Storage: map[common.Hash]common.Hash{{2}: {2}}},
 		}
-		hash, _ = alloc.hash()
+		hash, _ = alloc.hash(false)
 	)
 
 	// nolint : errchkjson
@@ -269,4 +270,68 @@ func newDbConfig(scheme string) *trie.Config {
 		return trie.HashDefaults
 	}
 	return &trie.Config{PathDB: pathdb.Defaults}
+}
+
+func TestVerkleGenesisCommit(t *testing.T) {
+	t.Skip("verkle trie is not yet supported in bor")
+	var verkleTime uint64 = 0
+	verkleConfig := &params.ChainConfig{
+		ChainID:                       big.NewInt(1),
+		HomesteadBlock:                big.NewInt(0),
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                false,
+		EIP150Block:                   big.NewInt(0),
+		EIP155Block:                   big.NewInt(0),
+		EIP158Block:                   big.NewInt(0),
+		ByzantiumBlock:                big.NewInt(0),
+		ConstantinopleBlock:           big.NewInt(0),
+		PetersburgBlock:               big.NewInt(0),
+		IstanbulBlock:                 big.NewInt(0),
+		MuirGlacierBlock:              big.NewInt(0),
+		BerlinBlock:                   big.NewInt(0),
+		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             big.NewInt(0),
+		GrayGlacierBlock:              big.NewInt(0),
+		MergeNetsplitBlock:            nil,
+		ShanghaiBlock:                 big.NewInt(0),
+		CancunBlock:                   big.NewInt(0),
+		PragueBlock:                   big.NewInt(0),
+		VerkleBlock:                   big.NewInt(0),
+		TerminalTotalDifficulty:       big.NewInt(0),
+		TerminalTotalDifficultyPassed: true,
+		Ethash:                        nil,
+		Clique:                        nil,
+	}
+
+	genesis := &Genesis{
+		BaseFee:    big.NewInt(params.InitialBaseFee),
+		Config:     verkleConfig,
+		Timestamp:  verkleTime,
+		Difficulty: big.NewInt(0),
+		Alloc: GenesisAlloc{
+			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
+		},
+	}
+
+	expected := common.Hex2Bytes("14398d42be3394ff8d50681816a4b7bf8d8283306f577faba2d5bc57498de23b")
+	got := genesis.ToBlock().Root().Bytes()
+	if !bytes.Equal(got, expected) {
+		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
+	}
+
+	db := rawdb.NewMemoryDatabase()
+	triedb := trie.NewDatabase(db, &trie.Config{IsVerkle: true, PathDB: pathdb.Defaults})
+	block := genesis.MustCommit(db, triedb)
+	if !bytes.Equal(block.Root().Bytes(), expected) {
+		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
+	}
+
+	// Test that the trie is verkle
+	if !triedb.IsVerkle() {
+		t.Fatalf("expected trie to be verkle")
+	}
+
+	if !rawdb.ExistsAccountTrieNode(db, nil) {
+		t.Fatal("could not find node")
+	}
 }

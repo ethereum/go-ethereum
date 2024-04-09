@@ -45,11 +45,13 @@ func tmpDatadirWithKeystore(t *testing.T) string {
 }
 
 func TestAccountListEmpty(t *testing.T) {
+	t.Parallel()
 	geth := runGeth(t, "account", "list")
 	geth.ExpectExit()
 }
 
 func TestAccountList(t *testing.T) {
+	t.Parallel()
 	datadir := tmpDatadirWithKeystore(t)
 
 	var want = `
@@ -78,6 +80,7 @@ Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}\k
 }
 
 func TestAccountNew(t *testing.T) {
+	t.Parallel()
 	geth := runGeth(t, "account", "new", "--lightkdf")
 	defer geth.ExpectExit()
 	geth.Expect(`
@@ -100,6 +103,7 @@ Path of the secret key file: .*UTC--.+--[0-9a-f]{40}
 }
 
 func TestAccountImport(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ name, key, output string }{
 		{
 			name:   "correct account",
@@ -123,7 +127,6 @@ func TestAccountImport(t *testing.T) {
 
 func TestAccountHelp(t *testing.T) {
 	t.Parallel()
-
 	geth := runGeth(t, "account", "-h")
 	geth.WaitExit()
 
@@ -159,6 +162,7 @@ func importAccountWithExpect(t *testing.T, key string, expected string) {
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
+	t.Parallel()
 	geth := runGeth(t, "account", "new", "--lightkdf")
 	defer geth.ExpectExit()
 	geth.Expect(`
@@ -171,6 +175,7 @@ Fatal: Passwords do not match
 }
 
 func TestAccountUpdate(t *testing.T) {
+	t.Parallel()
 	datadir := tmpDatadirWithKeystore(t)
 
 	geth := runGeth(t, "account", "update",
@@ -188,6 +193,7 @@ Repeat password: {{.InputLine "foobar2"}}
 }
 
 func TestWalletImport(t *testing.T) {
+	t.Parallel()
 	geth := runGeth(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
 	defer geth.ExpectExit()
 	geth.Expect(`
@@ -203,6 +209,7 @@ Address: {d4584b5f6229b7be90727b0fc8c6b91bb427821f}
 }
 
 func TestWalletImportBadPassword(t *testing.T) {
+	t.Parallel()
 	geth := runGeth(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
 	defer geth.ExpectExit()
 	geth.Expect(`
@@ -213,6 +220,7 @@ Fatal: could not decrypt key with given password
 }
 
 func TestUnlockFlag(t *testing.T) {
+	t.Parallel()
 	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "console", "--exec", "loadScript('testdata/empty.js')")
 	geth.Expect(`
@@ -235,6 +243,7 @@ undefined
 }
 
 func TestUnlockFlagWrongPassword(t *testing.T) {
+	t.Parallel()
 	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "console", "--exec", "loadScript('testdata/empty.js')")
 
@@ -253,6 +262,7 @@ Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could 
 
 // https://github.com/ethereum/go-ethereum/issues/1785
 func TestUnlockFlagMultiIndex(t *testing.T) {
+	t.Parallel()
 	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--unlock", "0,2", "console", "--exec", "loadScript('testdata/empty.js')")
 
@@ -279,6 +289,7 @@ undefined
 }
 
 func TestUnlockFlagPasswordFile(t *testing.T) {
+	t.Parallel()
 	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--password", "testdata/passwords.txt", "--unlock", "0,2", "console", "--exec", "loadScript('testdata/empty.js')")
 
@@ -300,6 +311,7 @@ undefined
 }
 
 func TestUnlockFlagPasswordFileWrongPassword(t *testing.T) {
+	t.Parallel()
 	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--password",
 		"testdata/wrong-passwords.txt", "--unlock", "0,2")
@@ -310,6 +322,7 @@ Fatal: Failed to unlock account 0 (could not decrypt key with given password)
 }
 
 func TestUnlockFlagAmbiguous(t *testing.T) {
+	t.Parallel()
 	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
 
 	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
@@ -350,6 +363,7 @@ undefined
 }
 
 func TestUnlockFlagAmbiguousWrongPassword(t *testing.T) {
+	t.Parallel()
 	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
 	geth := runMinimalGeth(t, "--port", "0", "--ipcdisable", "--datadir", tmpDatadirWithKeystore(t),
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a", "--keystore",

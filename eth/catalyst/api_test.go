@@ -1568,7 +1568,7 @@ func TestBlockToPayloadWithBlobs(t *testing.T) {
 func TestParentBeaconBlockRoot(t *testing.T) {
 	t.Skip("This test is not compatible with bor")
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), log.LevelTrace, true)))
 
 	genesis, blocks := generateMergeChain(10, true)
 

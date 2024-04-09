@@ -41,6 +41,7 @@ func tmpKeyStoreIface(t *testing.T, encrypted bool) (dir string, ks keyStore) {
 }
 
 func TestKeyStorePlain(t *testing.T) {
+	t.Parallel()
 	_, ks := tmpKeyStoreIface(t, false)
 
 	pass := "" // not used but required by API
@@ -65,6 +66,7 @@ func TestKeyStorePlain(t *testing.T) {
 }
 
 func TestKeyStorePassphrase(t *testing.T) {
+	t.Parallel()
 	_, ks := tmpKeyStoreIface(t, true)
 
 	pass := "foo"
@@ -89,6 +91,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 }
 
 func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
+	t.Parallel()
 	_, ks := tmpKeyStoreIface(t, true)
 
 	pass := "foo"
@@ -104,6 +107,7 @@ func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
 }
 
 func TestImportPreSaleKey(t *testing.T) {
+	t.Parallel()
 	dir, ks := tmpKeyStoreIface(t, true)
 
 	// file content of a presale key file generated with:

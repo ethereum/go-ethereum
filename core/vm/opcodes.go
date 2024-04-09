@@ -25,7 +25,7 @@ type OpCode byte
 
 // IsPush specifies if an opcode is a PUSH opcode.
 func (op OpCode) IsPush() bool {
-	return PUSH1 <= op && op <= PUSH32
+	return PUSH0 <= op && op <= PUSH32
 }
 
 // 0x0 range - arithmetic ops.
