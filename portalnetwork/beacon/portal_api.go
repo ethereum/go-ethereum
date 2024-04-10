@@ -18,7 +18,7 @@ func NewPortalLightApi() *PortalLightApi {
 	return &PortalLightApi{}
 }
 
-func (api *PortalLightApi) GetUpdates(firstPeriod, count uint64) (LightClientUpdateRange, error) {
+func (api *PortalLightApi) GetUpdates(firstPeriod, count uint64) ([]*capella.LightClientUpdate, error) {
 	return api.bn.GetUpdates(firstPeriod, count)
 }
 

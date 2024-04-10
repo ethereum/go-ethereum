@@ -27,7 +27,7 @@ type BeaconNetwork struct {
 	Spec           *common.Spec
 }
 
-func (bn *BeaconNetwork) GetUpdates(firstPeriod, count uint64) (LightClientUpdateRange, error) {
+func (bn *BeaconNetwork) GetUpdates(firstPeriod, count uint64) ([]*capella.LightClientUpdate, error) {
 	lightClientUpdateKey := &LightClientUpdateKey{
 		StartPeriod: firstPeriod,
 		Count:       count,
@@ -44,7 +44,14 @@ func (bn *BeaconNetwork) GetUpdates(firstPeriod, count uint64) (LightClientUpdat
 		return nil, err
 	}
 
-	return lightClientUpdateRange, nil
+	updates := make([]*capella.LightClientUpdate, len(lightClientUpdateRange))
+	for i, update := range lightClientUpdateRange {
+		if update.ForkDigest != Capella {
+			return nil, errors.New("unknown fork digest")
+		}
+		updates[i] = update.LightClientUpdate.(*capella.LightClientUpdate)
+	}
+	return updates, nil
 }
 
 func (bn *BeaconNetwork) GetCheckpointData(checkpointHash tree.Root) (*capella.LightClientBootstrap, error) {

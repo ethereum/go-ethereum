@@ -30,7 +30,7 @@ var (
 )
 
 type ConsensusAPI interface {
-	GetUpdates(firstPeriod, count uint64) (LightClientUpdateRange, error)
+	GetUpdates(firstPeriod, count uint64) ([]*capella.LightClientUpdate, error)
 	GetCheckpointData(checkpointHash common.Root) (*capella.LightClientBootstrap, error)
 	GetFinalityData() (*capella.LightClientFinalityUpdate, error)
 	GetOptimisticData() (*capella.LightClientOptimisticUpdate, error)
@@ -52,7 +52,7 @@ type ConsensusLightClient struct {
 	API               ConsensusAPI
 	InitialCheckpoint common.Root
 	LastCheckpoint    common.Root
-	Config            Config
+	Config            *Config
 	Logger            log.Logger
 }
 
@@ -62,7 +62,7 @@ type Config struct {
 	DefaultCheckpoint    common.Root
 	Checkpoint           common.Root
 	DataDir              string
-	ChainConfig          ChainConfig
+	Chain                ChainConfig
 	Spec                 *common.Spec
 	MaxCheckpointAge     uint64
 	Fallback             string
@@ -79,11 +79,27 @@ type ChainConfig struct {
 type GenericUpdate struct {
 	AttestedHeader          *common.BeaconBlockHeader
 	SyncAggregate           *altair.SyncAggregate
-	SingnatureSlot          common.Slot
+	SignatureSlot           common.Slot
 	NextSyncCommittee       *common.SyncCommittee
 	NextSyncCommitteeBranch *altair.SyncCommitteeProofBranch
 	FinalizedHeader         *common.BeaconBlockHeader
 	FinalityBranch          *altair.FinalizedRootProofBranch
+}
+
+func NewConsensusLightClient(api ConsensusAPI, config *Config, checkpointBlockRoot common.Root, logger log.Logger) (*ConsensusLightClient, error) {
+	client := &ConsensusLightClient{
+		API:               api,
+		Config:            config,
+		Logger:            logger,
+		InitialCheckpoint: checkpointBlockRoot,
+	}
+
+	err := client.bootstrap()
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
 }
 
 //lint:ignore U1000 placeholder function
@@ -150,25 +166,25 @@ func (c *ConsensusLightClient) VerifyGenericUpdate(update *GenericUpdate) error 
 		return ErrInsufficientParticipation
 	}
 	updateFinalizedSlot := update.FinalizedHeader.Slot
-	validTime := uint64(c.expectedCurrentSlot()) >= uint64(update.SingnatureSlot) && update.SingnatureSlot > update.AttestedHeader.Slot && update.AttestedHeader.Slot >= updateFinalizedSlot
+	validTime := uint64(c.expectedCurrentSlot()) >= uint64(update.SignatureSlot) && update.SignatureSlot > update.AttestedHeader.Slot && update.AttestedHeader.Slot >= updateFinalizedSlot
 	if !validTime {
 		return ErrInvalidTimestamp
 	}
 
 	storePeriod := CalcSyncPeriod(uint64(c.Store.FinalizedHeader.Slot))
-	updateSigPeriod := CalcSyncPeriod(uint64(update.SingnatureSlot))
+	updateSigPeriod := CalcSyncPeriod(uint64(update.SignatureSlot))
 	validPeriod := false
 	if c.Store.NextSyncCommittee != nil {
-		validPeriod = (updateSigPeriod == storePeriod || updateSigPeriod == storePeriod+1)
+		validPeriod = updateSigPeriod == storePeriod || updateSigPeriod == storePeriod+1
 	} else {
-		validPeriod = (updateSigPeriod == storePeriod)
+		validPeriod = updateSigPeriod == storePeriod
 	}
 	if !validPeriod {
 		return ErrInvalidPeriod
 	}
 
 	updateAttestedPeriod := CalcSyncPeriod(uint64(update.AttestedHeader.Slot))
-	updateHasNextCommittee := (c.Store.NextSyncCommittee == nil && update.NextSyncCommittee != nil && updateAttestedPeriod == storePeriod)
+	updateHasNextCommittee := c.Store.NextSyncCommittee == nil && update.NextSyncCommittee != nil && updateAttestedPeriod == storePeriod
 
 	if update.AttestedHeader.Slot <= c.Store.FinalizedHeader.Slot && !updateHasNextCommittee {
 		return ErrNotRelevant
@@ -180,7 +196,7 @@ func (c *ConsensusLightClient) VerifyGenericUpdate(update *GenericUpdate) error 
 		}
 	}
 	if update.NextSyncCommittee != nil && update.NextSyncCommitteeBranch != nil {
-		isValid := IsNextCommitteeProofValid(c.Config.Spec, *update.AttestedHeader, *update.NextSyncCommittee, *update.NextSyncCommitteeBranch)
+		isValid := IsNextCommitteeProofValid(*update.AttestedHeader, *update.NextSyncCommittee, *update.NextSyncCommitteeBranch)
 		if !isValid {
 			return ErrInvalidNextSyncCommitteeProof
 		}
@@ -195,7 +211,7 @@ func (c *ConsensusLightClient) VerifyGenericUpdate(update *GenericUpdate) error 
 
 	pks := GetParticipatingKeys(*syncCommittee, update.SyncAggregate.SyncCommitteeBits)
 
-	isValidSig, err := c.VerifySyncCommitteeSignature(pks, *update.AttestedHeader, update.SyncAggregate.SyncCommitteeSignature, update.SingnatureSlot)
+	isValidSig, err := c.VerifySyncCommitteeSignature(pks, *update.AttestedHeader, update.SyncAggregate.SyncCommitteeSignature, update.SignatureSlot)
 	if err != nil {
 		return err
 	}
@@ -239,7 +255,7 @@ func (c *ConsensusLightClient) VerifySyncCommitteeSignature(pks []common.BLSPubk
 }
 
 func (c *ConsensusLightClient) ComputeCommitteeSignRoot(headerRoot tree.Root, slot common.Slot) common.Root {
-	genesisRoot := c.Config.ChainConfig.GenesisRoot
+	genesisRoot := c.Config.Chain.GenesisRoot
 	domainType := hexutil.MustDecode("0x07000000")
 	forkVersion := c.Config.Spec.ForkVersion(slot)
 	domain := common.ComputeDomain(common.BLSDomainType(domainType), forkVersion, genesisRoot)
@@ -247,11 +263,11 @@ func (c *ConsensusLightClient) ComputeCommitteeSignRoot(headerRoot tree.Root, sl
 }
 
 func (c *ConsensusLightClient) expectedCurrentSlot() common.Slot {
-	return c.Config.Spec.TimeToSlot(common.Timestamp(time.Now().Unix()), common.Timestamp(c.Config.ChainConfig.GenesisTime))
+	return c.Config.Spec.TimeToSlot(common.Timestamp(time.Now().Unix()), common.Timestamp(c.Config.Chain.GenesisTime))
 }
 
 func (c *ConsensusLightClient) slotTimestamp(slot common.Slot) (common.Timestamp, error) {
-	atSlot, err := c.Config.Spec.TimeAtSlot(slot, common.Timestamp(c.Config.ChainConfig.GenesisTime))
+	atSlot, err := c.Config.Spec.TimeAtSlot(slot, common.Timestamp(c.Config.Chain.GenesisTime))
 	if err != nil {
 		return 0, err
 	}
@@ -267,7 +283,7 @@ func FromLightClientUpdate(update *capella.LightClientUpdate) *GenericUpdate {
 	return &GenericUpdate{
 		AttestedHeader:          &update.AttestedHeader.Beacon,
 		SyncAggregate:           &update.SyncAggregate,
-		SingnatureSlot:          update.SignatureSlot,
+		SignatureSlot:           update.SignatureSlot,
 		NextSyncCommittee:       &update.NextSyncCommittee,
 		NextSyncCommitteeBranch: &update.NextSyncCommitteeBranch,
 		FinalizedHeader:         &update.FinalizedHeader.Beacon,
@@ -279,7 +295,7 @@ func FromLightClientFinalityUpdate(update *capella.LightClientFinalityUpdate) *G
 	return &GenericUpdate{
 		AttestedHeader:  &update.AttestedHeader.Beacon,
 		SyncAggregate:   &update.SyncAggregate,
-		SingnatureSlot:  update.SignatureSlot,
+		SignatureSlot:   update.SignatureSlot,
 		FinalizedHeader: &update.FinalizedHeader.Beacon,
 		FinalityBranch:  &update.FinalityBranch,
 	}
@@ -289,7 +305,7 @@ func FromLightClientOptimisticUpdate(update *capella.LightClientOptimisticUpdate
 	return &GenericUpdate{
 		AttestedHeader: &update.AttestedHeader.Beacon,
 		SyncAggregate:  &update.SyncAggregate,
-		SingnatureSlot: update.SignatureSlot,
+		SignatureSlot:  update.SignatureSlot,
 	}
 }
 
@@ -312,7 +328,7 @@ func IsFinalityProofValid(attestedHeader common.BeaconBlockHeader, finalityHeade
 	return merkle.VerifyMerkleBranch(leaf, finalityBranch[:], 6, 41, root)
 }
 
-func IsNextCommitteeProofValid(spec *common.Spec, attestedHeader common.BeaconBlockHeader, nextCommittee common.SyncCommittee, nextCommitteeBranch altair.SyncCommitteeProofBranch) bool {
+func IsNextCommitteeProofValid(attestedHeader common.BeaconBlockHeader, nextCommittee common.SyncCommittee, nextCommitteeBranch altair.SyncCommitteeProofBranch) bool {
 	leaf := nextCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
 	root := attestedHeader.StateRoot
 	return merkle.VerifyMerkleBranch(leaf, nextCommitteeBranch[:], 5, 23, root)
