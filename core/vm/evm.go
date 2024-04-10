@@ -102,6 +102,7 @@ type EVM struct {
 	// Context provides auxiliary blockchain related information
 	Context BlockContext
 	TxContext
+	// StateDB는 state에 대한 access 제공
 	// StateDB gives access to the underlying state
 	StateDB StateDB
 	// Depth is the current call stack

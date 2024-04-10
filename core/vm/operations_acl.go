@@ -96,6 +96,10 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 	}
 }
 
+// gasLoadEIP2929는 SLOAD의 dynamic gas를 계산한다.
+// (address,storage_key) pair가 accessed list에
+// 없으면 2100gas(ColdSLoadCostEIP2929)을 청구하고 해당 데이터 해시값을 해당 address의 slot에 저장하고
+// 있으면 100gas(WarmStorageReadCostEIP2929)를 청구한다.
 // gasSLoadEIP2929 calculates dynamic gas for SLOAD according to EIP-2929
 // For SLOAD, if the (address, storage_key) pair (where address is the address of the contract
 // whose storage is being read) is not yet in accessed_storage_keys,
@@ -103,6 +107,7 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 // If the pair is already in accessed_storage_keys, charge 100 gas.
 func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	loc := stack.peek()
+	// slot에 접근 데이터 hash를 저장
 	slot := common.Hash(loc.Bytes32())
 	// Check slot presence in the access list
 	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
@@ -114,6 +119,7 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	return params.WarmStorageReadCostEIP2929, nil
 }
 
+// getExtCodeCopyEIP2929는 extcodecopy를 구현한다.
 // gasExtCodeCopyEIP2929 implements extcodecopy according to EIP-2929
 // EIP spec:
 // > If the target is not in accessed_addresses,
@@ -139,6 +145,9 @@ func gasExtCodeCopyEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 	return gas, nil
 }
 
+// gasEip2929AccountCheck은 address가 access list에 있는지 확인한다.
+// 있으면 0을 리턴하고, 없으면 cold-warm gas(추가비용)를 리턴한다.
+// 이더리움 네트워크에서 계정 액세스에 대한 가스 비용을 동적으로 조절
 // gasEip2929AccountCheck checks whether the first stack item (as address) is present in the access list.
 // If it is, this method returns '0', otherwise 'cold-warm' gas, presuming that the opcode using it
 // is also using 'warm' as constant factor.
@@ -158,6 +167,7 @@ func gasEip2929AccountCheck(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 	return 0, nil
 }
 
+// EIP2929에 따라 계산되는 gas 비용
 func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 		addr := common.Address(stack.Back(1).Bytes20())
@@ -225,6 +235,7 @@ var (
 	gasSStoreEIP3529 = makeGasSStoreFunc(params.SstoreClearsScheduleRefundEIP3529)
 )
 
+// makeSelfdestructGasFn은 selfdestruct의 dynamic gas func를 생성한다.
 // makeSelfdestructGasFn can create the selfdestruct dynamic gas function for EIP-2929 and EIP-3529
 func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	gasFunc := func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {

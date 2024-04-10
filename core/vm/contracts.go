@@ -148,6 +148,7 @@ func init() {
 	}
 }
 
+// ActivePrecompiles은 config에 따라 precompiles할 주소 목록을 반환한다.
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {

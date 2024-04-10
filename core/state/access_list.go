@@ -25,12 +25,15 @@ type accessList struct {
 	slots     []map[common.Hash]struct{}
 }
 
+// ContainsAddress는 address가 access list에 있는지 여부를 리턴한다.
 // ContainsAddress returns true if the address is in the access list.
 func (al *accessList) ContainsAddress(address common.Address) bool {
 	_, ok := al.addresses[address]
 	return ok
 }
 
+// Contains는 slot이 access list에 있는 account에 속해 있는지 확인하고,
+// account와 slot각각에 대해 분리된 flag를 리턴한다.
 // Contains checks if a slot within an account is present in the access list, returning
 // separate flags for the presence of the account and the slot respectively.
 func (al *accessList) Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
@@ -47,6 +50,7 @@ func (al *accessList) Contains(address common.Address, slot common.Hash) (addres
 	return true, slotPresent
 }
 
+// newAccessList는 새로운 accessList를 생성
 // newAccessList creates a new accessList.
 func newAccessList() *accessList {
 	return &accessList{
@@ -54,6 +58,7 @@ func newAccessList() *accessList {
 	}
 }
 
+// Copy는 accessList의 독립된 copy를 생성한다.
 // Copy creates an independent copy of an accessList.
 func (a *accessList) Copy() *accessList {
 	cp := newAccessList()
@@ -71,6 +76,7 @@ func (a *accessList) Copy() *accessList {
 	return cp
 }
 
+// AddAddress는 access list에 address를 추가하고, 이 연산이 변화를 만들었다면 true를 리턴한다.
 // AddAddress adds an address to the access list, and returns 'true' if the operation
 // caused a change (addr was not previously in the list).
 func (al *accessList) AddAddress(address common.Address) bool {
@@ -81,6 +87,7 @@ func (al *accessList) AddAddress(address common.Address) bool {
 	return true
 }
 
+// AddSlot은 (addr, slot)을 access list에 추가한다.
 // AddSlot adds the specified (addr, slot) combo to the access list.
 // Return values are:
 // - address added
@@ -106,6 +113,7 @@ func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrCha
 	return false, false
 }
 
+// DeleteSlot은 (address, slot) tuple을 access list에서 제거한다.
 // DeleteSlot removes an (address, slot)-tuple from the access list.
 // This operation needs to be performed in the same order as the addition happened.
 // This method is meant to be used  by the journal, which maintains ordering of
@@ -127,6 +135,7 @@ func (al *accessList) DeleteSlot(address common.Address, slot common.Hash) {
 	}
 }
 
+// DeleteAddress는 address를 access list에서 삭제한다.
 // DeleteAddress removes an address from the access list. This operation
 // needs to be performed in the same order as the addition happened.
 // This method is meant to be used  by the journal, which maintains ordering of
