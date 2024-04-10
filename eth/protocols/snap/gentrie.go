@@ -25,18 +25,14 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// genTrie interface is used by the trie to generate merkle tree nodes based
-// on a received batch of states.
+// genTrie interface is used by the snap syncer to generate merkle tree nodes
+// based on a received batch of states.
 type genTrie interface {
 	// update inserts the state into generator trie.
 	update(key, value []byte) error
 
-	// commit flushes the leftover nodes produced in the trie into database.
-	// The nodes on right boundary won't be committed unless this function
-	// is called. The flag complete should be set to true if there are more
-	// items on the right side.
-	//
-	// This function must be called before flushing database batch.
+	// commit flushes the right boundary nodes if complete flag is true. This
+	// function must be called before flushing the associated database batch.
 	commit(complete bool) common.Hash
 }
 
@@ -47,11 +43,11 @@ type genTrie interface {
 type pathTrie struct {
 	owner common.Hash     // identifier of trie owner, empty for account trie
 	tr    *trie.StackTrie // underlying raw stack trie
-	first []byte          // the path of first written node
-	last  []byte          // the path of last written node
+	first []byte          // the path of first committed node by stackTrie
+	last  []byte          // the path of last committed node by stackTrie
 
-	// Flag whether the nodes on the left boundary are skipped for committing.
-	// If it's set, then nodes on the left boundary are regarded as incomplete
+	// This flag indicates whether nodes on the left boundary are skipped for
+	// committing. If set, the left boundary nodes are considered incomplete
 	// due to potentially missing left children.
 	skipLeftBoundary bool
 	db               ethdb.KeyValueReader
@@ -70,58 +66,52 @@ func newPathTrie(owner common.Hash, skipLeftBoundary bool, db ethdb.KeyValueRead
 	return tr
 }
 
-// onTrieNode is invoked whenever a new node is produced by the stackTrie.
+// onTrieNode is invoked whenever a new node is committed by the stackTrie.
 //
-// As the produced nodes might be incomplete if they are on the boundaries
+// As the committed nodes might be incomplete if they are on the boundaries
 // (left or right), this function has the ability to detect the incomplete
-// ones and filter them out for committing. Namely, only the nodes belonging
-// to completed subtries will be committed.
+// ones and filter them out for committing.
 //
 // Additionally, the assumption is made that there may exist leftover dangling
-// nodes in the database. This function has the ability to detect all the
-// dangling nodes that fall within the committed subtries (on the path covered
-// by internal extension nodes) and remove them from the database. This property
-// ensures that the entire path space is uniquely occupied by committed subtries.
+// nodes in the database. This function has the ability to detect the dangling
+// nodes that fall within the path space of committed nodes (specifically on
+// the path covered by internal extension nodes) and remove them from the
+// database. This property ensures that the entire path space is uniquely
+// occupied by committed nodes.
 //
-// Furthermore, all leftover dangling nodes along the path from committed tries
-// to the root node should be removed as well; otherwise, they might potentially
-// disrupt the state healing process, leaving behind an inconsistent state.
+// Furthermore, all leftover dangling nodes along the path from committed nodes
+// to the trie root (left and right boundaries) should be removed as well;
+// otherwise, they might potentially disrupt the state healing process.
 func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
-	// Filter out the nodes on the left boundary if skipLeftBoundary is configured.
-	// Nodes are considered to be on the left boundary if it's the first one
-	// produced, or on the path of the first produced one.
+	// Filter out the nodes on the left boundary if skipLeftBoundary is
+	// configured. Nodes are considered to be on the left boundary if
+	// it's the first one to be committed, or the parent/ancestor of the
+	// first committed node.
 	if t.skipLeftBoundary && (t.first == nil || bytes.HasPrefix(t.first, path)) {
 		if t.first == nil {
-			// Memorize the path of first produced node, which is regarded
+			// Memorize the path of first committed node, which is regarded
 			// as left boundary. Deep-copy is necessary as the path given
 			// is volatile.
 			t.first = append([]byte{}, path...)
 
-			// The position of first complete sub trie (e.g. N_4) can be determined
-			// by the first produced node(e.g. N_1) correctly, with a branch node
-			// (e.g. N_5) as the common parent for shared path prefix. Therefore,
-			// the nodes along the path from root to N_1 can be regarded as left
-			// boundary and the parent of the first complete sub trie. The leftover
-			// dangling nodes on left boundary should be cleaned out first before
-			// committing any node.
+			// The left boundary can be uniquely determined by the first committed node
+			// from stackTrie (e.g., N_1), as the shared path prefix between the first
+			// two inserted state items is deterministic (the path of N_3). The path
+			// from trie root towards the first committed node is considered the left
+			// boundary. The potential leftover dangling nodes on left boundary should
+			// be cleaned out.
 			//
-			//                           +-------------+
-			//                           |     N_5     |  parent for shared path prefix
-			//                           +-------------+
-			//                           /-     |     -\
-			//                          /       |      [ others ]
-			//                     +-----+   +-----+
-			// First produced one  | N_1 |   | N_4 | First completed sub trie
-			//                     +-----+   +-----+
-			//                                /-  -\
-			//                              N-2 ... N-3
+			//                            +-----+
+			//                            | N_3 | shared path prefix of state_1 and state_2
+			//                            +-----+
+			//                            /-   -\
+			//                       +-----+   +-----+
+			// First committed node  | N_1 |   | N_2 | latest inserted node (contain state_2)
+			//                       +-----+   +-----+
 			//
-			// Nodes must be cleaned from top to bottom as it's possible the procedure
-			// is interrupted in the middle.
-			//
-			// The node with the path of the first produced node is not removed, as
-			// it's a sibling of the first complete sub-trie, not the parent. There
-			// is no reason to remove it.
+			// The node with the path of the first committed one (e.g, N_1) is not
+			// removed because it's a sibling of the complete nodes, not the parent
+			// or ancestor.
 			for i := 0; i < len(path); i++ {
 				t.delete(path[:i], false)
 			}
@@ -131,21 +121,21 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 	// If boundary filtering is not configured, or the node is not on the left
 	// boundary, commit it to database.
 	//
-	// Note, the nodes fall within the path between extension node and its
-	// **in disk** child must be cleaned out before committing the extension
-	// node. This is essential in snap sync to avoid leaving dangling nodes
-	// within this range covered by extension node which could potentially
-	// break the state healing.
+	// Note: If the current committed node is an extension node, then the nodes
+	// falling within the path between itself and its standalone (not embedded
+	// in parent) child should be cleaned out for exclusively occupy the inner
+	// path.
 	//
-	// The target node is detected if its path is the prefix of last written
-	// one and path gap is larger than one. The current node could be a full
-	// node, or a shortNode with single byte key if the path gap is one,
-	// unnecessary to sweep the internal path in this case.
+	// This is essential in snap sync to avoid leaving dangling nodes within
+	// this range covered by extension node which could potentially break the
+	// state healing.
 	//
-	// Nodes must be cleaned from top to bottom, including the node with the
-	// path of the committed extension node itself.
+	// The extension node is detected if its path is the prefix of last written
+	// one and path gap is larger than one. If the path gap is only one byte,
+	// the current node could either be a full node, or a extension with single
+	// byte key. In either case, no gaps will be left in the path.
 	if t.last != nil && bytes.HasPrefix(t.last, path) && len(t.last)-len(path) > 1 {
-		for i := len(path); i < len(t.last); i++ {
+		for i := len(path) + 1; i < len(t.last); i++ {
 			t.delete(t.last[:i], true)
 		}
 	}
@@ -168,36 +158,46 @@ func (t *pathTrie) write(path []byte, blob []byte) {
 	}
 }
 
-// delete commits the node deletion to provided database batch in path mode.
-func (t *pathTrie) delete(path []byte, inner bool) {
-	if t.owner == (common.Hash{}) {
-		if rawdb.ExistsAccountTrieNode(t.db, path) {
-			rawdb.DeleteAccountTrieNode(t.batch, path)
-			if inner {
-				accountInnerDeleteGauge.Inc(1)
-			} else {
-				accountOuterDeleteGauge.Inc(1)
-			}
-		}
-		if inner {
-			accountInnerLookupGauge.Inc(1)
-		} else {
-			accountOuterLookupGauge.Inc(1)
-		}
+func (t *pathTrie) deleteAccountNode(path []byte, inner bool) {
+	if inner {
+		accountInnerLookupGauge.Inc(1)
+	} else {
+		accountOuterLookupGauge.Inc(1)
+	}
+	if !rawdb.ExistsAccountTrieNode(t.db, path) {
 		return
 	}
-	if rawdb.ExistsStorageTrieNode(t.db, t.owner, path) {
-		rawdb.DeleteStorageTrieNode(t.batch, t.owner, path)
-		if inner {
-			storageInnerDeleteGauge.Inc(1)
-		} else {
-			storageOuterDeleteGauge.Inc(1)
-		}
+	if inner {
+		accountInnerDeleteGauge.Inc(1)
+	} else {
+		accountOuterDeleteGauge.Inc(1)
 	}
+	rawdb.DeleteAccountTrieNode(t.batch, path)
+}
+
+func (t *pathTrie) deleteStorageNode(path []byte, inner bool) {
 	if inner {
 		storageInnerLookupGauge.Inc(1)
 	} else {
 		storageOuterLookupGauge.Inc(1)
+	}
+	if !rawdb.ExistsStorageTrieNode(t.db, t.owner, path) {
+		return
+	}
+	if inner {
+		storageInnerDeleteGauge.Inc(1)
+	} else {
+		storageOuterDeleteGauge.Inc(1)
+	}
+	rawdb.DeleteStorageTrieNode(t.batch, t.owner, path)
+}
+
+// delete commits the node deletion to provided database batch in path mode.
+func (t *pathTrie) delete(path []byte, inner bool) {
+	if t.owner == (common.Hash{}) {
+		t.deleteAccountNode(path, inner)
+	} else {
+		t.deleteStorageNode(path, inner)
 	}
 }
 
@@ -208,8 +208,8 @@ func (t *pathTrie) update(key, value []byte) error {
 }
 
 // commit implements genTrie interface, flushing the right boundary if it's
-// regarded as complete. Otherwise, the nodes on the right boundary are discarded
-// and cleaned up.
+// considered as complete. Otherwise, the nodes on the right boundary are
+// discarded and cleaned up.
 //
 // Note, this function must be called before flushing database batch, otherwise,
 // dangling nodes might be left in database.
@@ -218,51 +218,43 @@ func (t *pathTrie) commit(complete bool) common.Hash {
 	// The nodes on both left and right boundary will still be filtered
 	// out if left boundary filtering is configured.
 	if complete {
-		// The produced hash is meaningless if left side is incomplete
+		// Commit all inserted but not yet committed nodes(on the right
+		// boundary) in the stackTrie.
+		hash := t.tr.Hash()
 		if t.skipLeftBoundary {
-			return common.Hash{}
+			return common.Hash{} // hash is meaningless if left side is incomplete
 		}
-		return t.tr.Hash()
+		return hash
 	}
-	// If the right boundary is claimed as incomplete, the uncommitted
-	// nodes should be discarded, as they might be incomplete due to
-	// missing children on the right side. Furthermore, previously committed
-	// nodes can be the children of the right boundary nodes; therefore,
-	// the nodes of the right boundary must be cleaned out!
+	// Discard nodes on the right boundary as it's claimed as incomplete. These
+	// nodes might be incomplete due to missing children on the right side.
+	// Furthermore, the potential leftover nodes on right boundary should also
+	// be cleaned out.
 	//
-	// The position of the last complete sub-trie (e.g., N_1) can be correctly
-	// determined by the last produced node (e.g., N_4), with a branch node
-	// (e.g., N_5) as the common parent for the shared path prefix. Therefore,
-	// the nodes along the path from the root to N_4 can be regarded as the
-	// right boundary and the parent of the last complete subtrie.
+	// The right boundary can be uniquely determined by the last committed node
+	// from stackTrie (e.g., N_1), as the shared path prefix between the last
+	// two inserted state items is deterministic (the path of N_3). The path
+	// from trie root towards the last committed node is considered the right
+	// boundary (root to N_3).
 	//
-	//                             +-----+
-	//                             | N_5 |  parent for shared path prefix
-	//                             +-----+
-	//                             /-  -\
-	//                        +-----+   +-----+
-	// Last complete subtrie  | N_1 |   | N_4 | Last produced node
-	//                        +-----+   +-----+
-	//                        /-  -\
-	//                      N-2 .. N-3
+	//                           +-----+
+	//                           | N_3 | shared path prefix of last two states
+	//                           +-----+
+	//                           /-   -\
+	//                      +-----+   +-----+
+	// Last committed node  | N_1 |   | N_2 | latest inserted node  (contain last state)
+	//                      +-----+   +-----+
 	//
 	// Another interesting scenario occurs when the trie is committed due to
 	// too many items being accumulated in the batch. To flush them out to
-	// the database, the path of the last inserted item is temporarily treated
-	// as an incomplete right boundary, and nodes on this path are removed.
-	//
+	// the database, the path of the last inserted node (N_2) is temporarily
+	// treated as an incomplete right boundary, and nodes on this path are
+	// removed (e.g. from root to N_3).
 	// However, this path will be reclaimed as an internal path by inserting
-	// more items after the batch flush. Newly produced nodes on this path
-	// can be committed with no issues as they are actually complete (also
-	// from a database perspective, first deleting and then rewriting is
-	// still a valid data update).
-	//
-	// Nodes must be cleaned from top to bottom as it's possible the procedure
-	// is interrupted in the middle.
+	// more items after the batch flush. New nodes on this path can be committed
+	// with no issues as they are actually complete. Also, from a database
+	// perspective, first deleting and then rewriting is a valid data update.
 	for i := 0; i < len(t.last); i++ {
-		// The node with the path of the last produced node is not removed, as
-		// it's a sibling of the last complete sub-trie, not the parent. There
-		// is no reason to remove it.
 		t.delete(t.last[:i], false)
 	}
 	return common.Hash{} // the hash is meaningless for incomplete commit

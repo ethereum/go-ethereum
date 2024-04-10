@@ -30,13 +30,13 @@ var (
 	_      = types.TrieHasher((*StackTrie)(nil))
 )
 
-// OnTrieNode is a callback method to invoke when a trie node is produced
-// by the stack trie.
+// OnTrieNode is a callback method invoked when a trie node is committed
+// by the stack trie. The node is only committed if it's considered complete.
 //
 // The caller should not modify the contents of the returned path and blob
-// slice, and their contents may change after the call. It is up to the
-// `onTrieNode` receiver function to deep-copy the data if it wants to
-// retain it after the call ends.
+// slice, and their contents may be changed after the call. It is up to the
+// `onTrieNode` receiver function to deep-copy the data if it wants to retain
+// it after the call ends.
 type OnTrieNode func(path []byte, hash common.Hash, blob []byte)
 
 // StackTrie is a trie implementation that expects keys to be inserted
@@ -49,8 +49,8 @@ type StackTrie struct {
 	onTrieNode OnTrieNode
 }
 
-// NewStackTrie allocates and initializes an empty trie. The produced nodes will
-// be discarded immediately if no callback is provided.
+// NewStackTrie allocates and initializes an empty trie. The committed nodes
+// will be discarded immediately if no callback is configured.
 func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 	return &StackTrie{
 		root:       stPool.Get().(*stNode),
@@ -374,7 +374,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 
 	// Invoke the callback it's provided. Notably, the path and blob slices are
 	// volatile, please deep-copy the slices in callback if the contents need
-	// to be saved.
+	// to be retained.
 	if t.onTrieNode != nil {
 		t.onTrieNode(path, common.BytesToHash(st.val), blob)
 	}
