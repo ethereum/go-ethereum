@@ -158,7 +158,7 @@ func TestMVHashMapBasics(t *testing.T) {
 	mvh.Write(ap1, Version{10, 1}, valueFor(10, 1))
 
 	res = mvh.Read(ap1, 9)
-	require.Equal(t, -1, res.depIdx, "reads that should go the the DB return dependency -1")
+	require.Equal(t, -1, res.depIdx, "reads that should go the DB return dependency -1")
 	res = mvh.Read(ap1, 10)
 	require.Equal(t, -1, res.depIdx, "Read returns entries from smaller txns, not txn 10")
 
