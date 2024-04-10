@@ -236,6 +236,84 @@ func (c *ConsensusLightClient) VerifyOptimisticUpdate(update *capella.LightClien
 	return c.VerifyGenericUpdate(genericUpdate)
 }
 
+func (c *ConsensusLightClient) ApplyGenericUpdate(update *GenericUpdate) {
+	commiteeBits := bitfield.Bitlist(update.SyncAggregate.SyncCommitteeBits).Count()
+
+	if c.Store.CurrentMaxActiveParticipants < view.Uint64View(commiteeBits) {
+		c.Store.CurrentMaxActiveParticipants = view.Uint64View(commiteeBits)
+	}
+
+	shouldUpdateOptimistic := commiteeBits > c.safetyThreshold() && update.AttestedHeader.Slot > c.Store.OptimisticHeader.Slot
+
+	if shouldUpdateOptimistic {
+		c.Store.OptimisticHeader = update.AttestedHeader
+		c.logFinalityUpdate(update)
+	}
+
+	updateAttestedPeriod := CalcSyncPeriod(uint64(update.AttestedHeader.Slot))
+
+	updateFinalizedSlot := common.Slot(0)
+	if update.FinalizedHeader != nil {
+		updateFinalizedSlot = update.FinalizedHeader.Slot
+	}
+
+	updateFinalizedPeriod := CalcSyncPeriod(uint64(updateFinalizedSlot))
+
+	updateHasFinalizedNextCommittee := c.Store.NextSyncCommittee == nil &&
+		c.hasSyncUpdate(update) &&
+		c.hasFinalityUpdate(update) &&
+		updateFinalizedPeriod == updateAttestedPeriod
+
+	hasMajority := commiteeBits*3 >= 512*2
+	updateIsNewer := updateFinalizedSlot > c.Store.FinalizedHeader.Slot
+	goodUpdate := updateIsNewer || updateHasFinalizedNextCommittee
+
+	shouldApplyUpdate := hasMajority && goodUpdate
+
+	if shouldApplyUpdate {
+		storePeriod := CalcSyncPeriod(uint64(c.Store.FinalizedHeader.Slot))
+
+		if c.Store.NextSyncCommittee == nil {
+			c.Store.NextSyncCommittee = update.NextSyncCommittee
+		} else if updateFinalizedPeriod == storePeriod+1 {
+			c.Logger.Info("sync committee updated")
+			c.Store.CurrentSyncCommittee = c.Store.NextSyncCommittee
+			c.Store.NextSyncCommittee = update.NextSyncCommittee
+			c.Store.PreviousMaxActiveParticipants = c.Store.CurrentMaxActiveParticipants
+			c.Store.CurrentMaxActiveParticipants = 0
+		}
+
+		if updateFinalizedSlot > c.Store.FinalizedHeader.Slot {
+			c.Store.FinalizedHeader = update.FinalizedHeader
+			c.logFinalityUpdate(update)
+
+			if c.Store.FinalizedHeader.Slot%32 == 0 {
+				checkpoint := c.Store.FinalizedHeader.HashTreeRoot(tree.GetHashFn())
+				c.LastCheckpoint = checkpoint
+			}
+
+			if c.Store.FinalizedHeader.Slot > c.Store.OptimisticHeader.Slot {
+				c.Store.OptimisticHeader = c.Store.FinalizedHeader
+			}
+		}
+	}
+}
+
+func (c *ConsensusLightClient) ApplyUpdate(update *capella.LightClientUpdate) {
+	genericUpdate := FromLightClientUpdate(update)
+	c.ApplyGenericUpdate(genericUpdate)
+}
+
+func (c *ConsensusLightClient) ApplyFinalityUpdate(update *capella.LightClientFinalityUpdate) {
+	genericUpdate := FromLightClientFinalityUpdate(update)
+	c.ApplyGenericUpdate(genericUpdate)
+}
+
+func (c *ConsensusLightClient) ApplyOptimisticUpdate(update *capella.LightClientOptimisticUpdate) {
+	genericUpdate := FromLightClientOptimisticUpdate(update)
+	c.ApplyGenericUpdate(genericUpdate)
+}
+
 func (c *ConsensusLightClient) VerifySyncCommitteeSignature(pks []common.BLSPubkey, attestedHeader common.BeaconBlockHeader, signature common.BLSSignature, signatureSlot common.Slot) (bool, error) {
 	headerRoot := attestedHeader.HashTreeRoot(tree.GetHashFn())
 	signingRoot := c.ComputeCommitteeSignRoot(headerRoot, signatureSlot)
@@ -277,6 +355,53 @@ func (c *ConsensusLightClient) slotTimestamp(slot common.Slot) (common.Timestamp
 
 func (c *ConsensusLightClient) isCurrentCommitteeProofValid(attestedHeader common.BeaconBlockHeader, currentCommittee common.SyncCommittee, currentCommitteeBranch altair.SyncCommitteeProofBranch) bool {
 	return merkle.VerifyMerkleBranch(currentCommittee.HashTreeRoot(c.Config.Spec, tree.GetHashFn()), currentCommitteeBranch[:], 5, 22, attestedHeader.StateRoot)
+}
+
+func (c *ConsensusLightClient) safetyThreshold() uint64 {
+	if c.Store.CurrentMaxActiveParticipants > c.Store.PreviousMaxActiveParticipants {
+		return uint64(c.Store.CurrentMaxActiveParticipants) / 2
+	} else {
+		return uint64(c.Store.PreviousMaxActiveParticipants) / 2
+	}
+}
+
+func (c *ConsensusLightClient) hasSyncUpdate(update *GenericUpdate) bool {
+	return update.NextSyncCommittee != nil && update.NextSyncCommitteeBranch != nil
+}
+
+func (c *ConsensusLightClient) hasFinalityUpdate(update *GenericUpdate) bool {
+	return update.FinalizedHeader != nil && update.FinalityBranch != nil
+}
+
+func (c *ConsensusLightClient) logFinalityUpdate(update *GenericUpdate) {
+	count := bitfield.Bitlist(update.SyncAggregate.SyncCommitteeBits).Count()
+	participation := float32(count) / 512 * 100
+	decimals := 0
+	if participation == 100.0 {
+		decimals = 1
+	} else {
+		decimals = 2
+	}
+	slot := c.Store.OptimisticHeader.Slot
+	age, err := c.age(slot)
+	if err != nil {
+		c.Logger.Error("failed to get age", "slot is", slot, "err is", err)
+		return
+	}
+	days := int(age.Hours() / 24)
+	hours := int(age.Hours()) % 24
+	minutes := int(age.Minutes()) % 60
+	secs := int(age.Seconds()) % 60
+	ageStr := fmt.Sprintf("%d:%d:%d:%d", days, hours, minutes, secs)
+	c.Logger.Info("update header", "slot=", slot, "confidence=", decimals, "age", ageStr)
+}
+
+func (c *ConsensusLightClient) age(slot common.Slot) (time.Duration, error) {
+	expectTime, err := c.slotTimestamp(slot)
+	if err != nil {
+		return time.Duration(0), err
+	}
+	return time.Since(time.Unix(int64(expectTime), 0)), nil
 }
 
 func FromLightClientUpdate(update *capella.LightClientUpdate) *GenericUpdate {
