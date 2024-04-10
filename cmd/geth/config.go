@@ -218,7 +218,11 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 
 	if ctx.IsSet(utils.DeveloperFlag.Name) {
 		// Start dev mode.
-		simBeacon, err := catalyst.NewSimulatedBeacon(ctx.Uint64(utils.DeveloperPeriodFlag.Name), eth)
+		p, err := catalyst.ParseBlockPeriod(ctx.String(utils.DeveloperFlag.Name))
+		if err != nil {
+			utils.Fatalf("failed to parse developer mode block interval: %v", err)
+		}
+		simBeacon, err := catalyst.NewSimulatedBeacon(p, eth)
 		if err != nil {
 			utils.Fatalf("failed to register dev mode catalyst service: %v", err)
 		}

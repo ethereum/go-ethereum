@@ -36,7 +36,25 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const devEpochLength = 32
+const (
+	devEpochLength = 32
+	// ManualPeriod is a special value for the block interval that disables automatic block production, and
+	// requires manual invocation of the Commit, Fork and AdjustTime methods.
+	ManualPeriod = BlockPeriod(0)
+)
+
+type BlockPeriod time.Duration
+
+func ParseBlockPeriod(period string) (BlockPeriod, error) {
+	if period == "0" {
+		return ManualPeriod, nil
+	}
+	d, err := time.ParseDuration(period)
+	if err != nil {
+		return 0, err
+	}
+	return BlockPeriod(d), nil
+}
 
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are
 // pending inclusion.
@@ -74,23 +92,26 @@ func (w *withdrawalQueue) gatherPending(maxCount int) []*types.Withdrawal {
 type SimulatedBeacon struct {
 	shutdownCh  chan struct{}
 	eth         *eth.Ethereum
-	period      uint64
+	period      BlockPeriod
 	withdrawals withdrawalQueue
 
 	feeRecipient     common.Address
 	feeRecipientLock sync.Mutex // lock gates concurrent access to the feeRecipient
 
 	engineAPI          *ConsensusAPI
-	curForkchoiceState engine.ForkchoiceStateV1
+	curForkChoiceState engine.ForkchoiceStateV1
 	lastBlockTime      uint64
 }
 
 // NewSimulatedBeacon constructs a new simulated beacon chain.
 // Period sets the period in which blocks should be produced.
-//
-//   - If period is set to 0, a block is produced on every transaction.
-//     via Commit, Fork and AdjustTime.
-func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, error) {
+// Args:
+// - period: the block production period, use ManualPeriod to disable automatic block production and require manual invocation of Commit, Fork and AdjustTime.
+// - eth: the Ethereum service to which the simulated beacon should be attached.
+// Returns:
+// - a new simulated beacon chain.
+// - an error if the beacon could not be created.
+func NewSimulatedBeacon(period BlockPeriod, eth *eth.Ethereum) (*SimulatedBeacon, error) {
 	block := eth.BlockChain().CurrentBlock()
 	current := engine.ForkchoiceStateV1{
 		HeadBlockHash:      block.Hash(),
@@ -99,7 +120,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 	}
 	engineAPI := newConsensusAPIWithoutHeartbeat(eth)
 
-	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
+	// if genesis block, send forkChoiceUpdated to trigger transition to PoS
 	if block.Number.Sign() == 0 {
 		if _, err := engineAPI.ForkchoiceUpdatedV2(current, nil); err != nil {
 			return nil, err
@@ -111,7 +132,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 		shutdownCh:         make(chan struct{}),
 		engineAPI:          engineAPI,
 		lastBlockTime:      block.Time,
-		curForkchoiceState: current,
+		curForkChoiceState: current,
 		withdrawals:        withdrawalQueue{make(chan *types.Withdrawal, 20)},
 	}, nil
 }
@@ -124,7 +145,7 @@ func (c *SimulatedBeacon) setFeeRecipient(feeRecipient common.Address) {
 
 // Start invokes the SimulatedBeacon life-cycle function in a goroutine.
 func (c *SimulatedBeacon) Start() error {
-	if c.period == 0 {
+	if c.period == ManualPeriod {
 		// if period is set to 0, do not mine at all
 		// this is used in the simulated backend where blocks
 		// are explicitly mined via Commit, AdjustTime and Fork
@@ -151,14 +172,14 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	c.feeRecipientLock.Unlock()
 
 	// Reset to CurrentBlock in case of the chain was rewound
-	if header := c.eth.BlockChain().CurrentBlock(); c.curForkchoiceState.HeadBlockHash != header.Hash() {
+	if header := c.eth.BlockChain().CurrentBlock(); c.curForkChoiceState.HeadBlockHash != header.Hash() {
 		finalizedHash := c.finalizedBlockHash(header.Number.Uint64())
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
 	var random [32]byte
 	rand.Read(random[:])
-	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
+	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkChoiceState, &engine.PayloadAttributes{
 		Timestamp:             timestamp,
 		SuggestedFeeRecipient: feeRecipient,
 		Withdrawals:           withdrawals,
@@ -208,7 +229,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	c.setCurrentState(payload.BlockHash, finalizedHash)
 
 	// Mark the block containing the payload as canonical
-	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
+	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkChoiceState, nil); err != nil {
 		return err
 	}
 	c.lastBlockTime = payload.Timestamp
@@ -227,7 +248,7 @@ func (c *SimulatedBeacon) loop() {
 			if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
 			} else {
-				timer.Reset(time.Second * time.Duration(c.period))
+				timer.Reset(time.Duration(c.period))
 			}
 		}
 	}
@@ -249,9 +270,9 @@ func (c *SimulatedBeacon) finalizedBlockHash(number uint64) *common.Hash {
 	return nil
 }
 
-// setCurrentState sets the current forkchoice state
+// setCurrentState sets the current fork choice state.
 func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
-	c.curForkchoiceState = engine.ForkchoiceStateV1{
+	c.curForkChoiceState = engine.ForkchoiceStateV1{
 		HeadBlockHash:      headHash,
 		SafeBlockHash:      headHash,
 		FinalizedBlockHash: finalizedHash,
@@ -304,7 +325,7 @@ func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
 
 func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
 	api := &api{sim}
-	if sim.period == 0 {
+	if sim.period == ManualPeriod {
 		// mine on demand if period is set to 0
 		go api.loop()
 	}

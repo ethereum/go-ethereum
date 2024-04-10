@@ -96,7 +96,7 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 	if err != nil {
 		panic(err) // this should never happen
 	}
-	sim, err := newWithNode(stack, &ethConf, 0)
+	sim, err := newWithNode(stack, &ethConf, catalyst.ManualPeriod)
 	if err != nil {
 		panic(err) // this should never happen
 	}
@@ -105,17 +105,19 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 
 // newWithNode sets up a simulated backend on an existing node. The provided node
 // must not be started and will be started by this method.
-func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod uint64) (*Backend, error) {
+func newWithNode(stack *node.Node, conf *eth.Config, blockPeriod catalyst.BlockPeriod) (*Backend, error) {
 	backend, err := eth.New(stack, conf)
 	if err != nil {
 		return nil, err
 	}
 	// Register the filter system
 	filterSystem := filters.NewFilterSystem(backend.APIBackend, filters.Config{})
-	stack.RegisterAPIs([]rpc.API{{
-		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, false),
-	}})
+	stack.RegisterAPIs([]rpc.API{
+		{
+			Namespace: "eth",
+			Service:   filters.NewFilterAPI(filterSystem, false),
+		},
+	})
 	// Start the node
 	if err := stack.Start(); err != nil {
 		return nil, err
