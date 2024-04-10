@@ -9,6 +9,7 @@ import (
 	"github.com/protolambda/zrnt/eth2/beacon/altair"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
+	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/zrnt/eth2/util/merkle"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -75,6 +76,16 @@ type ChainConfig struct {
 	GenesisRoot common.Root
 }
 
+type GenericUpdate struct {
+	AttestedHeader          *common.BeaconBlockHeader
+	SyncAggregate           *altair.SyncAggregate
+	SingnatureSlot          common.Slot
+	NextSyncCommittee       *common.SyncCommittee
+	NextSyncCommitteeBranch *altair.SyncCommitteeProofBranch
+	FinalizedHeader         *common.BeaconBlockHeader
+	FinalityBranch          *altair.FinalizedRootProofBranch
+}
+
 //lint:ignore U1000 placeholder function
 func (c *ConsensusLightClient) bootstrap() error {
 	bootstrap, err := c.API.GetCheckpointData(c.InitialCheckpoint)
@@ -133,6 +144,108 @@ func (c *ConsensusLightClient) isValidCheckpoint(blockHashSlot common.Slot) bool
 	return uint64(slotAge) < c.Config.MaxCheckpointAge
 }
 
+func (c *ConsensusLightClient) VerifyGenericUpdate(update *GenericUpdate) error {
+	bits := bitfield.Bitlist(update.SyncAggregate.SyncCommitteeBits).Count()
+	if bits == 0 {
+		return ErrInsufficientParticipation
+	}
+	updateFinalizedSlot := update.FinalizedHeader.Slot
+	validTime := uint64(c.expectedCurrentSlot()) >= uint64(update.SingnatureSlot) && update.SingnatureSlot > update.AttestedHeader.Slot && update.AttestedHeader.Slot >= updateFinalizedSlot
+	if !validTime {
+		return ErrInvalidTimestamp
+	}
+
+	storePeriod := CalcSyncPeriod(uint64(c.Store.FinalizedHeader.Slot))
+	updateSigPeriod := CalcSyncPeriod(uint64(update.SingnatureSlot))
+	validPeriod := false
+	if c.Store.NextSyncCommittee != nil {
+		validPeriod = (updateSigPeriod == storePeriod || updateSigPeriod == storePeriod+1)
+	} else {
+		validPeriod = (updateSigPeriod == storePeriod)
+	}
+	if !validPeriod {
+		return ErrInvalidPeriod
+	}
+
+	updateAttestedPeriod := CalcSyncPeriod(uint64(update.AttestedHeader.Slot))
+	updateHasNextCommittee := (c.Store.NextSyncCommittee == nil && update.NextSyncCommittee != nil && updateAttestedPeriod == storePeriod)
+
+	if update.AttestedHeader.Slot <= c.Store.FinalizedHeader.Slot && !updateHasNextCommittee {
+		return ErrNotRelevant
+	}
+	if update.FinalizedHeader != nil && update.FinalityBranch != nil {
+		isValid := IsFinalityProofValid(*update.AttestedHeader, *update.FinalizedHeader, *update.FinalityBranch)
+		if !isValid {
+			return ErrInvalidFinalityProof
+		}
+	}
+	if update.NextSyncCommittee != nil && update.NextSyncCommitteeBranch != nil {
+		isValid := IsNextCommitteeProofValid(c.Config.Spec, *update.AttestedHeader, *update.NextSyncCommittee, *update.NextSyncCommitteeBranch)
+		if !isValid {
+			return ErrInvalidNextSyncCommitteeProof
+		}
+	}
+	var syncCommittee *common.SyncCommittee
+
+	if updateSigPeriod == storePeriod {
+		syncCommittee = c.Store.CurrentSyncCommittee
+	} else {
+		syncCommittee = c.Store.NextSyncCommittee
+	}
+
+	pks := GetParticipatingKeys(*syncCommittee, update.SyncAggregate.SyncCommitteeBits)
+
+	isValidSig, err := c.VerifySyncCommitteeSignature(pks, *update.AttestedHeader, update.SyncAggregate.SyncCommitteeSignature, update.SingnatureSlot)
+	if err != nil {
+		return err
+	}
+	if !isValidSig {
+		return ErrInvalidSignature
+	}
+	return nil
+}
+
+func (c *ConsensusLightClient) VerifyUpdate(update *capella.LightClientUpdate) error {
+	genericUpdate := FromLightClientUpdate(update)
+	return c.VerifyGenericUpdate(genericUpdate)
+}
+
+func (c *ConsensusLightClient) VerifyFinalityUpdate(update *capella.LightClientFinalityUpdate) error {
+	genericUpdate := FromLightClientFinalityUpdate(update)
+	return c.VerifyGenericUpdate(genericUpdate)
+}
+
+func (c *ConsensusLightClient) VerifyOptimisticUpdate(update *capella.LightClientOptimisticUpdate) error {
+	genericUpdate := FromLightClientOptimisticUpdate(update)
+	return c.VerifyGenericUpdate(genericUpdate)
+}
+
+func (c *ConsensusLightClient) VerifySyncCommitteeSignature(pks []common.BLSPubkey, attestedHeader common.BeaconBlockHeader, signature common.BLSSignature, signatureSlot common.Slot) (bool, error) {
+	headerRoot := attestedHeader.HashTreeRoot(tree.GetHashFn())
+	signingRoot := c.ComputeCommitteeSignRoot(headerRoot, signatureSlot)
+	blsuPubKeys := make([]*blsu.Pubkey, 0, len(pks))
+	for _, p := range pks {
+		blsuPubKey, err := p.Pubkey()
+		if err != nil {
+			return false, err
+		}
+		blsuPubKeys = append(blsuPubKeys, blsuPubKey)
+	}
+	blsuSig, err := signature.Signature()
+	if err != nil {
+		return false, err
+	}
+	return blsu.FastAggregateVerify(blsuPubKeys, signingRoot[:], blsuSig), nil
+}
+
+func (c *ConsensusLightClient) ComputeCommitteeSignRoot(headerRoot tree.Root, slot common.Slot) common.Root {
+	genesisRoot := c.Config.ChainConfig.GenesisRoot
+	domainType := hexutil.MustDecode("0x07000000")
+	forkVersion := c.Config.Spec.ForkVersion(slot)
+	domain := common.ComputeDomain(common.BLSDomainType(domainType), forkVersion, genesisRoot)
+	return ComputeSigningRoot(headerRoot, domain)
+}
+
 func (c *ConsensusLightClient) expectedCurrentSlot() common.Slot {
 	return c.Config.Spec.TimeToSlot(common.Timestamp(time.Now().Unix()), common.Timestamp(c.Config.ChainConfig.GenesisTime))
 }
@@ -148,15 +261,6 @@ func (c *ConsensusLightClient) slotTimestamp(slot common.Slot) (common.Timestamp
 
 func (c *ConsensusLightClient) isCurrentCommitteeProofValid(attestedHeader common.BeaconBlockHeader, currentCommittee common.SyncCommittee, currentCommitteeBranch altair.SyncCommitteeProofBranch) bool {
 	return merkle.VerifyMerkleBranch(currentCommittee.HashTreeRoot(c.Config.Spec, tree.GetHashFn()), currentCommitteeBranch[:], 5, 22, attestedHeader.StateRoot)
-}
-type GenericUpdate struct {
-	AttestedHeader          *common.BeaconBlockHeader
-	SyncAggregate           *altair.SyncAggregate
-	SingnatureSlot          common.Slot
-	NextSyncCommittee       *common.SyncCommittee
-	NextSyncCommitteeBranch *altair.SyncCommitteeProofBranch
-	FinalizedHeader         *common.BeaconBlockHeader
-	FinalityBranch          *altair.FinalizedRootProofBranch
 }
 
 func FromLightClientUpdate(update *capella.LightClientUpdate) *GenericUpdate {
@@ -189,106 +293,38 @@ func FromLightClientOptimisticUpdate(update *capella.LightClientOptimisticUpdate
 	}
 }
 
-func (clc *ConsensusLightClient) VerifyGenericUpdate(update *GenericUpdate) error {
-	bits := bitfield.Bitlist(update.SyncAggregate.SyncCommitteeBits).Count()
-	if bits == 0 {
-		return ErrInsufficientParticipation
+func ComputeSigningRoot(root common.Root, domain common.BLSDomain) common.Root {
+	data := common.SigningData{
+		ObjectRoot: root,
+		Domain:     domain,
 	}
-	updateFinalizedSlot := update.FinalizedHeader.Slot
-	validTime := clc.CurrentSlot() >= uint64(update.SingnatureSlot) && update.SingnatureSlot > update.AttestedHeader.Slot && update.AttestedHeader.Slot >= updateFinalizedSlot
-	if !validTime {
-		return ErrInvalidTimestamp
-	}
+	return data.HashTreeRoot(tree.GetHashFn())
+}
 
-	storePeriod := CalcSyncPeriod(uint64(clc.Store.FinalizedHeader.Slot))
-	updateSigPeriod := CalcSyncPeriod(uint64(update.SingnatureSlot))
-	validPeriod := false
-	if clc.Store.NextSyncCommittee != nil {
-		validPeriod = (updateSigPeriod == storePeriod || updateSigPeriod == storePeriod+1)
-	} else {
-		validPeriod = (updateSigPeriod == storePeriod)
-	}
-	if !validPeriod {
-		return ErrInvalidPeriod
-	}
+func CalcSyncPeriod(slot uint64) uint64 {
+	epoch := slot / 32 // 32 slots per epoch
+	return epoch / 256 // 256 epochs per sync committee
+}
 
-	updateAttestedPeriod := CalcSyncPeriod(uint64(update.AttestedHeader.Slot))
-	updateHasNextCommittee := (clc.Store.NextSyncCommittee == nil && update.NextSyncCommittee != nil && updateAttestedPeriod == storePeriod)
+func IsFinalityProofValid(attestedHeader common.BeaconBlockHeader, finalityHeader common.BeaconBlockHeader, finalityBranch altair.FinalizedRootProofBranch) bool {
+	leaf := finalityHeader.HashTreeRoot(tree.GetHashFn())
+	root := attestedHeader.StateRoot
+	return merkle.VerifyMerkleBranch(leaf, finalityBranch[:], 6, 41, root)
+}
 
-	if update.AttestedHeader.Slot <= clc.Store.FinalizedHeader.Slot && !updateHasNextCommittee {
-		return ErrNotRelevant
-	}
-	if update.FinalizedHeader != nil && update.FinalityBranch != nil {
-		isValid := IsFinalityProofValid(*update.AttestedHeader, *update.FinalizedHeader, *update.FinalityBranch)
-		if !isValid {
-			return ErrInvalidFinalityProof
+func IsNextCommitteeProofValid(spec *common.Spec, attestedHeader common.BeaconBlockHeader, nextCommittee common.SyncCommittee, nextCommitteeBranch altair.SyncCommitteeProofBranch) bool {
+	leaf := nextCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
+	root := attestedHeader.StateRoot
+	return merkle.VerifyMerkleBranch(leaf, nextCommitteeBranch[:], 5, 23, root)
+}
+
+func GetParticipatingKeys(committee common.SyncCommittee, syncBits altair.SyncCommitteeBits) []common.BLSPubkey {
+	bits := bitfield.Bitlist(syncBits)
+	res := make([]common.BLSPubkey, 0, bits.Count())
+	for i := 0; i < int(bits.Len()); i++ {
+		if bits.BitAt(uint64(i)) {
+			res = append(res, committee.Pubkeys[i])
 		}
 	}
-	if update.NextSyncCommittee != nil && update.NextSyncCommitteeBranch != nil {
-		isValid := IsNextCommitteeProofValid(clc.Config.Spec, *update.AttestedHeader, *update.NextSyncCommittee, *update.NextSyncCommitteeBranch)
-		if !isValid {
-			return ErrInvalidNextSyncCommitteeProof
-		}
-	}
-	var syncCommittee *common.SyncCommittee
-
-	if updateSigPeriod == storePeriod {
-		syncCommittee = clc.Store.CurrentSyncCommittee
-	} else {
-		syncCommittee = clc.Store.NextSyncCommittee
-	}
-
-	pks := GetParticipatingKeys(*syncCommittee, update.SyncAggregate.SyncCommitteeBits)
-
-	isValidSig, err := clc.VerifySyncCommitteeSignature(pks, *update.AttestedHeader, update.SyncAggregate.SyncCommitteeSignature, update.SingnatureSlot)
-	if err != nil {
-		return err
-	}
-	if !isValidSig {
-		return ErrInvalidSignature
-	}
-	return nil
-}
-
-func (clc *ConsensusLightClient) VerifyFinalityUpdate(update *capella.LightClientFinalityUpdate) error {
-	genericUpdate := FromLightClientFinalityUpdate(update)
-	return clc.VerifyGenericUpdate(genericUpdate)
-}
-
-func (clc *ConsensusLightClient) VerifyOptimisticUpdate(update *capella.LightClientOptimisticUpdate) error {
-	genericUpdate := FromLightClientOptimisticUpdate(update)
-	return clc.VerifyGenericUpdate(genericUpdate)
-}
-
-func (clc *ConsensusLightClient) VerifySyncCommitteeSignature(pks []common.BLSPubkey, attestedHeader common.BeaconBlockHeader, signature common.BLSSignature, signatureSlot common.Slot) (bool, error) {
-	headerRoot := attestedHeader.HashTreeRoot(tree.GetHashFn())
-	signingRoot := clc.ComputeCommitteeSignRoot(headerRoot, signatureSlot)
-	blsuPubKeys := make([]*blsu.Pubkey, 0, len(pks))
-	for _, p := range pks {
-		blsuPubKey, err := p.Pubkey()
-		if err != nil {
-			return false, err
-		}
-		blsuPubKeys = append(blsuPubKeys, blsuPubKey)
-	}
-	blsuSig, err := signature.Signature()
-	if err != nil {
-		return false, err
-	}
-	return blsu.FastAggregateVerify(blsuPubKeys, signingRoot[:], blsuSig), nil
-}
-
-func (clc *ConsensusLightClient) ComputeCommitteeSignRoot(headerRoot tree.Root, slot common.Slot) common.Root {
-	genesisRoot := clc.Config.ChainConfig.GenesisRoot
-	domainType := hexutil.MustDecode("0x07000000")
-	forkVersion := clc.Config.Spec.ForkVersion(slot)
-	domain := common.ComputeDomain(common.BLSDomainType(domainType), forkVersion, genesisRoot)
-	return ComputeSigningRoot(headerRoot, domain)
-}
-
-func (clc *ConsensusLightClient) CurrentSlot() uint64 {
-	now := time.Now().Unix()
-	genesisTime := clc.Config.ChainConfig.GenesisTime
-	sinceGenesis := now - int64(genesisTime)
-	return uint64(sinceGenesis / 2)
+	return res
 }
