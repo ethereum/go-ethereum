@@ -88,6 +88,7 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 			log.Warn("Beacon API request failed", "type", reflect.TypeOf(req), "reqid", id, "err", err)
 			s.eventCallback(request.Event{Type: request.EvFail, Data: request.RequestResponse{ID: id, Request: req}})
 		} else {
+			log.Debug("Beacon API request answered", "type", reflect.TypeOf(req), "reqid", id)
 			s.eventCallback(request.Event{Type: request.EvResponse, Data: request.RequestResponse{ID: id, Request: req, Response: resp}})
 		}
 	}()

@@ -64,11 +64,12 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 		}
 		if resp != nil {
 			if checkpoint := resp.(*types.BootstrapData); checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
+				log.Debug("Successful checkpoint init")
 				s.chain.CheckpointInit(*checkpoint)
 				s.initialized = true
 				return
 			}
-
+			log.Debug("Failed checkpoint init")
 			requester.Fail(event.Server, "invalid checkpoint data")
 		}
 	}
