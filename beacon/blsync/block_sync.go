@@ -66,6 +66,7 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 		case request.EvResponse, request.EvFail, request.EvTimeout:
 			sid, req, resp := event.RequestInfo()
 			blockRoot := common.Hash(req.(sync.ReqBeaconBlock))
+			log.Debug("Beacon block event", "type", event.Type.Name, "hash", blockRoot)
 			if resp != nil {
 				s.recentBlocks.Add(blockRoot, resp.(*types.BeaconBlock))
 			}
