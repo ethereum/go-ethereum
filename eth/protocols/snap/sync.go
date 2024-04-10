@@ -1975,6 +1975,10 @@ func (s *Syncer) processAccountResponse(res *accountResponse) {
 					resumed[res.hashes[i]] = struct{}{}
 					largeStorageResumedGauge.Inc(1)
 				} else {
+					// It's possible that in the hash scheme, the storage, along
+					// with the trie nodes of the given root, is already present
+					// in the database. Schedule the storage task anyway to simplify
+					// the logic here.
 					res.task.stateTasks[res.hashes[i]] = account.Root
 				}
 				res.task.needState[i] = true
