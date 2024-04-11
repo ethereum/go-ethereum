@@ -36,7 +36,11 @@ type (
 		Updates    []*types.LightClientUpdate
 		Committees []*types.SerializedSyncCommittee
 	}
-	ReqHeader         common.Hash
+	ReqHeader  common.Hash
+	RespHeader struct {
+		Header               types.Header
+		Canonical, Finalized bool
+	}
 	ReqCheckpointData common.Hash
 	ReqBeaconBlock    common.Hash
 )
