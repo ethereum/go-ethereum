@@ -67,10 +67,10 @@ type stateObject struct {
 	selfDestructed bool
 
 	// This is an EIP-6780 flag indicating if the object is eligible for
-	// self-destruct. Potential scenarios as follows:
-	// - object is created in the current transaction
-	// - object was previously existent and is being deployed in current transaction
-	destructible bool
+	// self-destruct by EIP-6780. Potential scenarios as follows:
+	// - object is created within the same transaction
+	// - object was previously existent and is being deployed within same transaction
+	eip6780Deletable bool
 }
 
 // empty returns whether the account is considered empty.
@@ -80,6 +80,7 @@ func (s *stateObject) empty() bool {
 
 // newObject creates a state object.
 func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *stateObject {
+	origin := acct
 	if acct == nil {
 		acct = types.NewEmptyStateAccount()
 	}
@@ -87,7 +88,7 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 		db:             db,
 		address:        address,
 		addrHash:       crypto.Keccak256Hash(address[:]),
-		origin:         acct,
+		origin:         origin,
 		data:           *acct,
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
@@ -244,7 +245,7 @@ func (s *stateObject) finalise(prefetch bool) {
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
 	}
-	s.destructible = false // unset the flag at the end of transaction
+	s.eip6780Deletable = false // unset the flag at the end of transaction
 }
 
 // updateTrie is responsible for persisting cached storage changes into the
@@ -449,7 +450,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	obj.dirtyStorage = s.dirtyStorage.Copy()
 	obj.dirtyCode = s.dirtyCode
 	obj.selfDestructed = s.selfDestructed
-	obj.destructible = s.destructible
+	obj.eip6780Deletable = s.eip6780Deletable
 	return obj
 }
 
@@ -529,14 +530,14 @@ func (s *stateObject) setNonce(nonce uint64) {
 	s.data.Nonce = nonce
 }
 
-func (s *stateObject) SetDestructible() {
-	if s.destructible {
+func (s *stateObject) SetEIP6780Deletable() {
+	if s.eip6780Deletable {
 		return // might be possible in fuzzing
 	}
-	s.db.journal.append(destructibleChange{
+	s.db.journal.append(eip6780DeletableChange{
 		account: s.address,
 	})
-	s.destructible = true
+	s.eip6780Deletable = true
 }
 
 func (s *stateObject) CodeHash() []byte {

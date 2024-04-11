@@ -497,7 +497,7 @@ func (s *StateDB) Selfdestruct6780(addr common.Address) {
 	if stateObject == nil {
 		return
 	}
-	if stateObject.destructible {
+	if stateObject.eip6780Deletable {
 		s.SelfDestruct(addr)
 	}
 }
@@ -660,16 +660,17 @@ func (s *StateDB) createObject(addr common.Address) *stateObject {
 // consensus bug eventually.
 func (s *StateDB) CreateAccount(addr common.Address) {
 	obj := s.createObject(addr)
-	obj.SetDestructible()
+	obj.SetEIP6780Deletable()
 }
 
-// SetDestructible marks the object with specific address as destructible.
-func (s *StateDB) SetDestructible(addr common.Address) {
+// SetEIP6780Deletable marks the object with specific address as deletable
+// by EIP6780.
+func (s *StateDB) SetEIP6780Deletable(addr common.Address) {
 	obj := s.getStateObject(addr)
 	if obj == nil {
 		return // might be possible in fuzzing
 	}
-	obj.SetDestructible()
+	obj.SetEIP6780Deletable()
 }
 
 // Copy creates a deep, independent copy of the state.

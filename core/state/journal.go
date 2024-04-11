@@ -128,7 +128,7 @@ type (
 		account            *common.Address
 		prevcode, prevhash []byte
 	}
-	destructibleChange struct {
+	eip6780DeletableChange struct {
 		account common.Address
 	}
 
@@ -257,16 +257,16 @@ func (ch codeChange) copy() journalEntry {
 	}
 }
 
-func (ch destructibleChange) revert(s *StateDB) {
-	s.getStateObject(ch.account).destructible = false
+func (ch eip6780DeletableChange) revert(s *StateDB) {
+	s.getStateObject(ch.account).eip6780Deletable = false
 }
 
-func (ch destructibleChange) dirtied() *common.Address {
-	return nil // destruct-eligible flag is not considered as dirty
+func (ch eip6780DeletableChange) dirtied() *common.Address {
+	return nil // this flag is not considered as dirty
 }
 
-func (ch destructibleChange) copy() journalEntry {
-	return destructibleChange{
+func (ch eip6780DeletableChange) copy() journalEntry {
+	return eip6780DeletableChange{
 		account: ch.account,
 	}
 }

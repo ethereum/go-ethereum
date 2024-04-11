@@ -463,9 +463,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		evm.StateDB.CreateAccount(address)
 	} else {
 		// The account with the designated address previously existed but is
-		// still eligible for deployment. Explicitly set it as destructible
-		// to adhere to EIP-6780.
-		evm.StateDB.SetDestructible(address)
+		// still eligible for deployment. Explicitly set it as deletable to
+		// adhere to EIP-6780.
+		evm.StateDB.SetEIP6780Deletable(address)
 	}
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1)

@@ -398,9 +398,9 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			},
 		},
 		{
-			name: "SetDestructible",
+			name: "SetEIP6780Deletable",
 			fn: func(a testAction, s *StateDB) {
-				s.SetDestructible(addr)
+				s.SetEIP6780Deletable(addr)
 			},
 		},
 		{
@@ -904,7 +904,7 @@ func TestSelfDestructAccountAfterDeploy(t *testing.T) {
 
 	// Revert the group of self-destruct operations. None of them should be applied.
 	id := state.Snapshot()
-	state.SetDestructible(addr)
+	state.SetEIP6780Deletable(addr)
 	state.SetCode(addr, []byte{0x1})
 	state.Selfdestruct6780(addr)
 	state.RevertToSnapshot(id)
@@ -918,7 +918,7 @@ func TestSelfDestructAccountAfterDeploy(t *testing.T) {
 	}
 
 	// Self-destruct the account with destructible flag setting
-	state.SetDestructible(addr)
+	state.SetEIP6780Deletable(addr)
 	state.SetCode(addr, []byte{0x1})
 	state.Selfdestruct6780(addr)
 
