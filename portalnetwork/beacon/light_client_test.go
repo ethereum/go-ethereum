@@ -11,6 +11,7 @@ import (
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var _ ConsensusAPI = (*MockConsensusAPI)(nil)
@@ -92,4 +93,71 @@ func getClient(strictCheckpointAge bool, t *testing.T) (*ConsensusLightClient, e
 func TestVerifyCheckpointAgeInvalid(t *testing.T) {
 	_, err := getClient(true, t)
 	assert.ErrorContains(t, err, "checkpoint is too old")
+}
+
+func TestVerifyUpdate(t *testing.T) {
+	client, err := getClient(false, t)
+	require.NoError(t, err)
+
+	period := CalcSyncPeriod(uint64(client.Store.FinalizedHeader.Slot))
+	updates, err := client.API.GetUpdates(period, MaxRequestLightClientUpdates)
+	require.NoError(t, err)
+	// normal
+	err = client.VerifyUpdate(updates[0])
+	require.NoError(t, err)
+	// ErrInvalidNextSyncCommitteeProof
+	updates[0].NextSyncCommittee.Pubkeys[0] = common.BLSPubkey{}
+	err = client.VerifyUpdate(updates[0])
+	require.Equal(t, ErrInvalidNextSyncCommitteeProof, err)
+	// ErrInvalidFinalityProof
+	updates, err = client.API.GetUpdates(period, MaxRequestLightClientUpdates)
+	require.NoError(t, err)
+	updates[0].FinalizedHeader.Beacon = common.BeaconBlockHeader{}
+	err = client.VerifyUpdate(updates[0])
+	require.Equal(t, ErrInvalidFinalityProof, err)
+
+	// ErrInvalidSignature
+	updates, err = client.API.GetUpdates(period, MaxRequestLightClientUpdates)
+	require.NoError(t, err)
+	updates[0].SyncAggregate.SyncCommitteeSignature[1] = 0xFE
+	err = client.VerifyUpdate(updates[0])
+	require.Error(t, err)
+}
+
+func TestVerifyFinalityUpdate(t *testing.T) {
+	client, err := getClient(false, t)
+	require.NoError(t, err)
+
+	update, err := client.API.GetFinalityData()
+	require.NoError(t, err)
+
+	// normal
+	err = client.VerifyFinalityUpdate(update)
+	require.NoError(t, err)
+
+	update.FinalizedHeader.Beacon = common.BeaconBlockHeader{}
+	err = client.VerifyFinalityUpdate(update)
+	require.Equal(t, ErrInvalidFinalityProof, err)
+	// ErrInvalidSignature
+	update, err = client.API.GetFinalityData()
+	require.NoError(t, err)
+	update.SyncAggregate.SyncCommitteeSignature[1] = 0xFE
+	err = client.VerifyFinalityUpdate(update)
+	require.Error(t, err)
+}
+
+func TestVerifyOptimisticUpdate(t *testing.T) {
+	client, err := getClient(false, t)
+	require.NoError(t, err)
+
+	update, err := client.API.GetOptimisticData()
+	require.NoError(t, err)
+
+	// normal
+	err = client.VerifyOptimisticUpdate(update)
+	require.NoError(t, err)
+
+	update.SyncAggregate.SyncCommitteeSignature = common.BLSSignature{}
+	err = client.VerifyOptimisticUpdate(update)
+	require.Error(t, err)
 }

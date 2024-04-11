@@ -10,6 +10,8 @@ import (
 	tree "github.com/protolambda/ztyp/tree"
 )
 
+const MaxRequestLightClientUpdates = 128
+
 var (
 	Bellatrix common.ForkDigest = [4]byte{0x0, 0x0, 0x0, 0x0}
 	Capella   common.ForkDigest = [4]byte{0xbb, 0xa4, 0xda, 0x96}

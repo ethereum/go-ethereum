@@ -16,7 +16,6 @@ import (
 	blsu "github.com/protolambda/bls12-381-util"
 	"github.com/protolambda/ztyp/tree"
 	"github.com/protolambda/ztyp/view"
-	"github.com/prysmaticlabs/go-bitfield"
 )
 
 var (
@@ -161,11 +160,14 @@ func (c *ConsensusLightClient) isValidCheckpoint(blockHashSlot common.Slot) bool
 }
 
 func (c *ConsensusLightClient) VerifyGenericUpdate(update *GenericUpdate) error {
-	bits := bitfield.Bitlist(update.SyncAggregate.SyncCommitteeBits).Count()
+	bits := c.getBits(update.SyncAggregate.SyncCommitteeBits)
 	if bits == 0 {
 		return ErrInsufficientParticipation
 	}
-	updateFinalizedSlot := update.FinalizedHeader.Slot
+	updateFinalizedSlot := common.Slot(0)
+	if update.FinalizedHeader != nil {
+		updateFinalizedSlot = update.FinalizedHeader.Slot
+	}
 	validTime := uint64(c.expectedCurrentSlot()) >= uint64(update.SignatureSlot) && update.SignatureSlot > update.AttestedHeader.Slot && update.AttestedHeader.Slot >= updateFinalizedSlot
 	if !validTime {
 		return ErrInvalidTimestamp
@@ -209,7 +211,7 @@ func (c *ConsensusLightClient) VerifyGenericUpdate(update *GenericUpdate) error 
 		syncCommittee = c.Store.NextSyncCommittee
 	}
 
-	pks := GetParticipatingKeys(*syncCommittee, update.SyncAggregate.SyncCommitteeBits)
+	pks := c.getParticipatingKeys(*syncCommittee, update.SyncAggregate.SyncCommitteeBits)
 
 	isValidSig, err := c.VerifySyncCommitteeSignature(pks, *update.AttestedHeader, update.SyncAggregate.SyncCommitteeSignature, update.SignatureSlot)
 	if err != nil {
@@ -237,7 +239,7 @@ func (c *ConsensusLightClient) VerifyOptimisticUpdate(update *capella.LightClien
 }
 
 func (c *ConsensusLightClient) ApplyGenericUpdate(update *GenericUpdate) {
-	commiteeBits := bitfield.Bitlist(update.SyncAggregate.SyncCommitteeBits).Count()
+	commiteeBits := c.getBits(update.SyncAggregate.SyncCommitteeBits)
 
 	if c.Store.CurrentMaxActiveParticipants < view.Uint64View(commiteeBits) {
 		c.Store.CurrentMaxActiveParticipants = view.Uint64View(commiteeBits)
@@ -374,7 +376,7 @@ func (c *ConsensusLightClient) hasFinalityUpdate(update *GenericUpdate) bool {
 }
 
 func (c *ConsensusLightClient) logFinalityUpdate(update *GenericUpdate) {
-	count := bitfield.Bitlist(update.SyncAggregate.SyncCommitteeBits).Count()
+	count := c.getBits(update.SyncAggregate.SyncCommitteeBits)
 	participation := float32(count) / 512 * 100
 	decimals := 0
 	if participation == 100.0 {
@@ -402,6 +404,26 @@ func (c *ConsensusLightClient) age(slot common.Slot) (time.Duration, error) {
 		return time.Duration(0), err
 	}
 	return time.Since(time.Unix(int64(expectTime), 0)), nil
+}
+
+func (c *ConsensusLightClient) getBits(sync altair.SyncCommitteeBits) uint64 {
+	res := 0
+	for i := 0; i < int(c.Config.Spec.SYNC_COMMITTEE_SIZE); i++ {
+		if sync.GetBit(uint64(i)) {
+			res++
+		}
+	}
+	return uint64(res)
+}
+
+func (c *ConsensusLightClient) getParticipatingKeys(committee common.SyncCommittee, syncBits altair.SyncCommitteeBits) []common.BLSPubkey {
+	res := make([]common.BLSPubkey, 0)
+	for i := 0; i < int(c.Config.Spec.SYNC_COMMITTEE_SIZE); i++ {
+		if syncBits.GetBit(uint64(i)) {
+			res = append(res, committee.Pubkeys[i])
+		}
+	}
+	return res
 }
 
 func FromLightClientUpdate(update *capella.LightClientUpdate) *GenericUpdate {
@@ -457,15 +479,4 @@ func IsNextCommitteeProofValid(attestedHeader common.BeaconBlockHeader, nextComm
 	leaf := nextCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
 	root := attestedHeader.StateRoot
 	return merkle.VerifyMerkleBranch(leaf, nextCommitteeBranch[:], 5, 23, root)
-}
-
-func GetParticipatingKeys(committee common.SyncCommittee, syncBits altair.SyncCommitteeBits) []common.BLSPubkey {
-	bits := bitfield.Bitlist(syncBits)
-	res := make([]common.BLSPubkey, 0, bits.Count())
-	for i := 0; i < int(bits.Len()); i++ {
-		if bits.BitAt(uint64(i)) {
-			res = append(res, committee.Pubkeys[i])
-		}
-	}
-	return res
 }
