@@ -28,7 +28,7 @@ import (
 // genTrie interface is used by the snap syncer to generate merkle tree nodes
 // based on a received batch of states.
 type genTrie interface {
-	// update inserts the state into generator trie.
+	// update inserts the state item into generator trie.
 	update(key, value []byte) error
 
 	// commit flushes the right boundary nodes if complete flag is true. This
@@ -110,8 +110,8 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 			//                       +-----+   +-----+
 			//
 			// The node with the path of the first committed one (e.g, N_1) is not
-			// removed because it's a sibling of the complete nodes, not the parent
-			// or ancestor.
+			// removed because it's a sibling of the nodes we want to commit, not
+			// the parent or ancestor.
 			for i := 0; i < len(path); i++ {
 				t.delete(path[:i], false)
 			}
@@ -130,7 +130,7 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 	// this range covered by extension node which could potentially break the
 	// state healing.
 	//
-	// The extension node is detected if its path is the prefix of last written
+	// The extension node is detected if its path is the prefix of last committed
 	// one and path gap is larger than one. If the path gap is only one byte,
 	// the current node could either be a full node, or a extension with single
 	// byte key. In either case, no gaps will be left in the path.
