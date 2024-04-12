@@ -29,33 +29,36 @@ const (
 	offsetTypesKind = 3
 	offsetCodeKind  = 6
 
-	kindTypes = 1
-	kindCode  = 2
-	kindData  = 3
+	kindTypes     = 1
+	kindCode      = 2
+	kindContainer = 3
+	kindData      = 4
 
 	eofFormatByte = 0xef
 	eof1Version   = 1
 
-	maxInputItems  = 127
-	maxOutputItems = 127
-	maxStackHeight = 1023
+	maxInputItems        = 127
+	maxOutputItems       = 127
+	maxStackHeight       = 1023
+	maxContainerSections = 256
 )
 
 var (
-	ErrInvalidMagic           = errors.New("invalid magic")
-	ErrInvalidVersion         = errors.New("invalid version")
-	ErrMissingTypeHeader      = errors.New("missing type header")
-	ErrInvalidTypeSize        = errors.New("invalid type section size")
-	ErrMissingCodeHeader      = errors.New("missing code header")
-	ErrInvalidCodeHeader      = errors.New("invalid code header")
-	ErrInvalidCodeSize        = errors.New("invalid code size")
-	ErrMissingDataHeader      = errors.New("missing data header")
-	ErrMissingTerminator      = errors.New("missing header terminator")
-	ErrTooManyInputs          = errors.New("invalid type content, too many inputs")
-	ErrTooManyOutputs         = errors.New("invalid type content, too many inputs")
-	ErrInvalidSection0Type    = errors.New("invalid section 0 type, input and output should be zero")
-	ErrTooLargeMaxStackHeight = errors.New("invalid type content, max stack height exceeds limit")
-	ErrInvalidContainerSize   = errors.New("invalid container size")
+	ErrInvalidMagic                = errors.New("invalid magic")
+	ErrInvalidVersion              = errors.New("invalid version")
+	ErrMissingTypeHeader           = errors.New("missing type header")
+	ErrInvalidTypeSize             = errors.New("invalid type section size")
+	ErrMissingCodeHeader           = errors.New("missing code header")
+	ErrInvalidCodeHeader           = errors.New("invalid code header")
+	ErrInvalidCodeSize             = errors.New("invalid code size")
+	ErrInvalidContainerSectionSize = errors.New("invalid container section size")
+	ErrMissingDataHeader           = errors.New("missing data header")
+	ErrMissingTerminator           = errors.New("missing header terminator")
+	ErrTooManyInputs               = errors.New("invalid type content, too many inputs")
+	ErrTooManyOutputs              = errors.New("invalid type content, too many inputs")
+	ErrInvalidSection0Type         = errors.New("invalid section 0 type, input and output should be zero")
+	ErrTooLargeMaxStackHeight      = errors.New("invalid type content, max stack height exceeds limit")
+	ErrInvalidContainerSize        = errors.New("invalid container size")
 )
 
 var eofMagic = []byte{0xef, 0x00}
@@ -78,9 +81,10 @@ func isEOFVersion1(code []byte) bool {
 
 // Container is an EOF container object.
 type Container struct {
-	Types []*FunctionMetadata
-	Code  [][]byte
-	Data  []byte
+	Types             []*FunctionMetadata
+	Code              [][]byte
+	ContainerSections [][]byte
+	Data              []byte
 }
 
 // FunctionMetadata is an EOF function signature.
@@ -105,6 +109,13 @@ func (c *Container) MarshalBinary() []byte {
 	for _, code := range c.Code {
 		b = binary.BigEndian.AppendUint16(b, uint16(len(code)))
 	}
+	if len(c.ContainerSections) != 0 {
+		b = append(b, kindContainer)
+		b = binary.BigEndian.AppendUint16(b, uint16(len(c.ContainerSections)))
+		for _, section := range c.ContainerSections {
+			b = binary.BigEndian.AppendUint16(b, uint16(len(section)))
+		}
+	}
 	b = append(b, kindData)
 	b = binary.BigEndian.AppendUint16(b, uint16(len(c.Data)))
 	b = append(b, 0) // terminator
@@ -115,6 +126,9 @@ func (c *Container) MarshalBinary() []byte {
 	}
 	for _, code := range c.Code {
 		b = append(b, code...)
+	}
+	for _, section := range c.ContainerSections {
+		b = append(b, section...)
 	}
 	b = append(b, c.Data...)
 
@@ -166,9 +180,24 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		return fmt.Errorf("%w: mismatch of code sections cound and type signatures, types %d, code %d", ErrInvalidCodeSize, typesSize/4, len(codeSizes))
 	}
 
+	// Parse container section header.
+	offset := offsetCodeKind + 2 + 2*len(codeSizes) + 1
+	kind, containerSizes, err := parseSectionList(b, offset)
+	if err != nil {
+		return err
+	}
+	// The container section is optional, only unmarshal if container section is set.
+	if kind == kindContainer {
+		offset = offset + 2 + 2*len(containerSizes) + 1
+	} else {
+		// empty out falsly parsed container sizes
+		// TODO (MariusVanDerWijden): clean this up, read the kind first before parsing the section list
+		// and if the kind is not KindContainer, just ignore it.
+		containerSizes = make([]int, 0)
+	}
+
 	// Parse data section header.
-	offsetDataKind := offsetCodeKind + 2 + 2*len(codeSizes) + 1
-	kind, dataSize, err = parseSection(b, offsetDataKind)
+	kind, dataSize, err = parseSection(b, offset)
 	if err != nil {
 		return err
 	}
@@ -177,7 +206,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	}
 
 	// Check for terminator.
-	offsetTerminator := offsetDataKind + 3
+	offsetTerminator := offset + 3
 	if len(b) < offsetTerminator {
 		return io.ErrUnexpectedEOF
 	}
@@ -187,6 +216,9 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 
 	// Verify overall container size.
 	expectedSize := offsetTerminator + typesSize + sum(codeSizes) + dataSize + 1
+	if len(containerSizes) != 0 {
+		expectedSize += sum(containerSizes)
+	}
 	if len(b) != expectedSize {
 		return fmt.Errorf("%w: have %d, want %d", ErrInvalidContainerSize, len(b), expectedSize)
 	}
@@ -227,6 +259,22 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		idx += size
 	}
 	c.Code = code
+
+	// Parse the optional container sizes.
+	if len(containerSizes) != 0 {
+		if len(containerSizes) > maxContainerSections {
+			return fmt.Errorf("%w number of container section exceed: %v: have %v", ErrInvalidContainerSectionSize, maxContainerSections, len(containerSizes))
+		}
+		container := make([][]byte, len(containerSizes))
+		for i, size := range containerSizes {
+			if size == 0 {
+				return fmt.Errorf("%w for section %d: size must not be 0", ErrInvalidContainerSectionSize, i)
+			}
+			container[i] = b[idx : idx+size]
+			idx += size
+		}
+		c.ContainerSections = container
+	}
 
 	// Parse data section.
 	c.Data = b[idx : idx+dataSize]

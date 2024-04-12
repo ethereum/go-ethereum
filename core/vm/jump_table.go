@@ -64,7 +64,7 @@ var (
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
 	verkleInstructionSet           = newVerkleInstructionSet()
-	shanghaiEOFInstructionSet      = newShanghaiEOFInstructionSet()
+	pragueEOFInstructionSet        = newPragueEOFInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -94,6 +94,16 @@ func newVerkleInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
+func NewPragueEOFInstructionSetForTesting() JumpTable {
+	return newPragueEOFInstructionSet()
+}
+
+func newPragueEOFInstructionSet() JumpTable {
+	instructionSet := newCancunInstructionSet()
+	enableEOF(&instructionSet)
+	return validate(instructionSet)
+}
+
 func newCancunInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4844(&instructionSet) // EIP-4844 (BLOBHASH opcode)
@@ -105,21 +115,11 @@ func newCancunInstructionSet() JumpTable {
 	return validate(instructionSet)
 }
 
-func NewShanghaiEOFInstructionSetForTesting() JumpTable {
-	return newShanghaiEOFInstructionSet()
-}
-
 func newShanghaiInstructionSet() JumpTable {
 	instructionSet := newMergeInstructionSet()
 	enable3855(&instructionSet) // PUSH0 instruction
 	enable3860(&instructionSet) // Limit and meter initcode
 
-	return validate(instructionSet)
-}
-
-func newShanghaiEOFInstructionSet() JumpTable {
-	instructionSet := newShanghaiInstructionSet()
-	enableEOF(&instructionSet)
 	return validate(instructionSet)
 }
 
