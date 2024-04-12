@@ -164,8 +164,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		common.TIPXDCXCancellationFee = common.TIPXDCXCancellationFeeTestnet
 	}
 
-	if ctx.GlobalBool(utils.Enable0xPrefixFlag.Name) {
-		common.Enable0xPrefix = true
+	if ctx.GlobalBool(utils.EnableXDCPrefixFlag.Name) {
+		common.Enable0xPrefix = false
 	}
 
 	// Rewound

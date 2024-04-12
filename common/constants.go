@@ -53,7 +53,7 @@ var ShanghaiBlock = big.NewInt(9999999999)
 
 var TIPXDCXTestnet = big.NewInt(38383838)
 var IsTestnet bool = false
-var Enable0xPrefix bool = false
+var Enable0xPrefix bool = true
 var StoreRewardFolder string
 var RollbackHash Hash
 var BasePrice = big.NewInt(1000000000000000000)                       // 1

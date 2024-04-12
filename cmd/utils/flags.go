@@ -117,7 +117,11 @@ var (
 	}
 	Enable0xPrefixFlag = cli.BoolFlag{
 		Name:  "enable-0x-prefix",
-		Usage: "Addres use 0x-prefix (default = false)",
+		Usage: "Addres use 0x-prefix (Deprecated: this is on by default, to use xdc prefix use --enable-xdc-prefix)",
+	}	
+	EnableXDCPrefixFlag = cli.BoolFlag{
+		Name:  "enable-xdc-prefix",
+		Usage: "Addres use xdc-prefix (default = false)",
 	}
 	// General settings
 	AnnounceTxsFlag = cli.BoolFlag{
@@ -786,6 +790,10 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
+func setPrefix(ctx *cli.Context, cfg *node.Config) {
+	checkExclusive(ctx, Enable0xPrefixFlag, EnableXDCPrefixFlag)
+}
+
 // MakeDatabaseHandles raises out the number of allowed file handles per process
 // for XDC and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles() int {
@@ -933,6 +941,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setHTTP(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
+	setPrefix(ctx, cfg)
 
 	switch {
 	case ctx.GlobalIsSet(DataDirFlag.Name):

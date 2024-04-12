@@ -114,6 +114,7 @@ var (
 		//utils.VMEnableDebugFlag,
 		utils.XDCTestnetFlag,
 		utils.Enable0xPrefixFlag,
+		utils.EnableXDCPrefixFlag,
 		utils.RewoundFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
