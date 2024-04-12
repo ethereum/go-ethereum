@@ -101,6 +101,14 @@ func NewConsensusLightClient(api ConsensusAPI, config *Config, checkpointBlockRo
 	return client, nil
 }
 
+func (c *ConsensusLightClient) GetHeader() *common.BeaconBlockHeader {
+	return c.Store.OptimisticHeader
+}
+
+func (c *ConsensusLightClient) GetFinalityHeader() *common.BeaconBlockHeader {
+	return c.Store.FinalizedHeader
+}
+
 func (c *ConsensusLightClient) Sync() error {
 	err := c.bootstrap()
 	if err != nil {

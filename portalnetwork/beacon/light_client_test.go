@@ -78,6 +78,7 @@ func getClient(strictCheckpointAge bool, t *testing.T) (*ConsensusLightClient, e
 		Chain:               baseConfig.Chain,
 		Spec:                baseConfig.Spec,
 		StrictCheckpointAge: strictCheckpointAge,
+		MaxCheckpointAge:    123123123,
 	}
 
 	checkpoint := common.Root(hexutil.MustDecode("0xc62aa0de55e6f21230fa63713715e1a6c13e73005e89f6389da271955d819bde"))
@@ -160,4 +161,18 @@ func TestVerifyOptimisticUpdate(t *testing.T) {
 	update.SyncAggregate.SyncCommitteeSignature = common.BLSSignature{}
 	err = client.VerifyOptimisticUpdate(update)
 	require.Error(t, err)
+}
+
+func TestSync(t *testing.T) {
+	client, err := getClient(false, t)
+	require.NoError(t, err)
+
+	err = client.Sync()
+	require.NoError(t, err)
+
+	header := client.GetHeader()
+	require.Equal(t, header.Slot, common.Slot(7358726))
+
+	finalizedHead := client.GetFinalityHeader()
+	require.Equal(t, finalizedHead.Slot, common.Slot(7358656))
 }
