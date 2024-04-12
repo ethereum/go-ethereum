@@ -23,20 +23,24 @@ import (
 )
 
 var (
-	ErrUndefinedInstruction   = errors.New("undefined instrustion")
-	ErrTruncatedImmediate     = errors.New("truncated immediate")
-	ErrInvalidSectionArgument = errors.New("invalid section argument")
-	ErrInvalidJumpDest        = errors.New("invalid jump destination")
-	ErrConflictingStack       = errors.New("conflicting stack height")
-	ErrInvalidBranchCount     = errors.New("invalid number of branches in jump table")
-	ErrInvalidOutputs         = errors.New("invalid number of outputs")
-	ErrInvalidMaxStackHeight  = errors.New("invalid max stack height")
-	ErrInvalidCodeTermination = errors.New("invalid code termination")
-	ErrUnreachableCode        = errors.New("unreachable code")
+	ErrUndefinedInstruction          = errors.New("undefined instruction")
+	ErrTruncatedImmediate            = errors.New("truncated immediate")
+	ErrInvalidSectionArgument        = errors.New("invalid section argument")
+	ErrInvalidCallArgument           = errors.New("callf into non-returning section")
+	ErrInvalidDataloadNArgument      = errors.New("invalid dataloadN argument")
+	ErrInvalidJumpDest               = errors.New("invalid jump destination")
+	ErrInvalidBackwardJump           = errors.New("invalid backward jump")
+	ErrConflictingStack              = errors.New("conflicting stack height")
+	ErrInvalidBranchCount            = errors.New("invalid number of branches in jump table")
+	ErrInvalidOutputs                = errors.New("invalid number of outputs")
+	ErrInvalidMaxStackHeight         = errors.New("invalid max stack height")
+	ErrInvalidCodeTermination        = errors.New("invalid code termination")
+	ErrEOFCreateWithTruncatedSection = errors.New("eofcreate with truncated section")
+	ErrUnreachableCode               = errors.New("unreachable code")
 )
 
 // validateCode validates the code parameter against the EOF v1 validity requirements.
-func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) error {
+func validateCode(code []byte, section int, container *Container, jt *JumpTable) (map[int]struct{}, error) {
 	var (
 		i = 0
 		// Tracks the number of actual instructions in the code (e.g.
@@ -45,6 +49,7 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 		count    = 0
 		op       OpCode
 		analysis bitvec
+		visited  = make(map[int]struct{})
 	)
 	// This loop visits every single instruction and verifies:
 	// * if the instruction is valid for the given jump table.
@@ -56,64 +61,81 @@ func validateCode(code []byte, section int, metadata []*FunctionMetadata, jt *Ju
 		count++
 		op = OpCode(code[i])
 		if jt[op].undefined {
-			return fmt.Errorf("%w: op %s, pos %d", ErrUndefinedInstruction, op, i)
+			return visited, fmt.Errorf("%w: op %s, pos %d", ErrUndefinedInstruction, op, i)
 		}
-		switch {
-		case op >= PUSH1 && op <= PUSH32:
-			size := int(op - PUSH0)
+		if size := jt[op].immediate; size != 0 {
 			if len(code) <= i+size {
-				return fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
+				return visited, fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
 			}
-			i += size
-		case op == RJUMP || op == RJUMPI:
-			if len(code) <= i+2 {
-				return fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
-			}
-			if err := checkDest(code, &analysis, i+1, i+3, len(code)); err != nil {
-				return err
-			}
-			i += 2
-		case op == RJUMPV:
-			if len(code) <= i+1 {
-				return fmt.Errorf("%w: jump table size missing, op %s, pos %d", ErrTruncatedImmediate, op, i)
-			}
-			count := int(code[i+1])
-			if count == 0 {
-				return fmt.Errorf("%w: must not be 0, pos %d", ErrInvalidBranchCount, i)
-			}
-			if len(code) <= i+count {
-				return fmt.Errorf("%w: jump table truncated, op %s, pos %d", ErrTruncatedImmediate, op, i)
-			}
-			for j := 0; j < count; j++ {
-				if err := checkDest(code, &analysis, i+2+j*2, i+2*count+2, len(code)); err != nil {
-					return err
+			switch {
+			case op == RJUMP || op == RJUMPI:
+				if err := checkDest(code, &analysis, i+1, i+3, len(code)); err != nil {
+					return visited, err
+				}
+			case op == RJUMPV:
+				max_size := int(code[i+1])
+				length := max_size + 1
+				if len(code) <= i+length {
+					return visited, fmt.Errorf("%w: jump table truncated, op %s, pos %d", ErrTruncatedImmediate, op, i)
+				}
+				offset := i + 2
+				for j := 0; j < length; j++ {
+					if err := checkDest(code, &analysis, offset+j*2, offset+(length*2), len(code)); err != nil {
+						return visited, err
+					}
+				}
+				i += 2 * max_size
+			case op == CALLF:
+				arg, _ := parseUint16(code[i+1:])
+				if arg >= len(container.Types) {
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
+				}
+				if container.Types[arg].Output == 0x80 {
+					return visited, fmt.Errorf("%w: section %v", ErrInvalidCallArgument, arg)
+				}
+				visited[arg] = struct{}{}
+			case op == JUMPF:
+				arg, _ := parseUint16(code[i+1:])
+				if arg >= len(container.Types) {
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
+				}
+				visited[arg] = struct{}{}
+			case op == DATALOADN:
+				arg, _ := parseUint16(code[i+1:])
+				if arg+32 > len(container.Data) {
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(container.Data), i)
+				}
+			case op == RETURNCONTRACT:
+				arg := int(code[i+1])
+				if arg >= len(container.ContainerSections) {
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
+				}
+			case op == EOFCREATE:
+				arg := int(code[i+1])
+				if arg >= len(container.ContainerSections) {
+					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
+				}
+				if ct := container.ContainerSections[arg]; len(ct.Data) != ct.DataSize {
+					return visited, fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", ErrEOFCreateWithTruncatedSection, arg, len(ct.Data), ct.DataSize, i)
 				}
 			}
-			i += 1 + 2*count
-		case op == CALLF:
-			if i+2 >= len(code) {
-				return fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
-			}
-			arg, _ := parseUint16(code[i+1:])
-			if arg >= len(metadata) {
-				return fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(metadata), i)
-			}
-			i += 2
+			i += size
 		}
 		i += 1
 	}
 	// Code sections may not "fall through" and require proper termination.
-	// Therefore, the last instruction must be considered terminal.
-	if !jt[op].terminal {
-		return fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, i)
+	// Therefore, the last instruction must be considered terminal or RJUMP.
+	if !jt[op].terminal && op != RJUMP {
+		return visited, fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, i)
 	}
-	if paths, err := validateControlFlow(code, section, metadata, jt); err != nil {
-		return err
+	if paths, err := validateControlFlow2(code, section, container.Types, jt); err != nil {
+		return visited, err
 	} else if paths != count {
-		// TODO(matt): return actual position of unreacable code
-		return ErrUnreachableCode
+		fmt.Printf("Paths: %v Count: %v\n", paths, count)
+		// TODO(matt): return actual position of unreachable code
+		return visited, ErrUnreachableCode
 	}
-	return nil
+	return visited, nil
 }
 
 // checkDest parses a relative offset at code[0:2] and checks if it is a valid jump destination.
@@ -139,32 +161,37 @@ func checkDest(code []byte, analysis *bitvec, imm, from, length int) error {
 // value and determines if it is valid per EOF v1.
 func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata, jt *JumpTable) (int, error) {
 	type item struct {
-		pos    int
-		height int
+		pos       int
+		height    int
+		backwards bool
 	}
 	var (
 		heights        = make(map[int]int)
-		worklist       = []item{{0, int(metadata[section].Input)}}
+		worklist       = []item{{0, int(metadata[section].Input), false}}
 		maxStackHeight = int(metadata[section].Input)
 	)
 	for 0 < len(worklist) {
 		var (
-			idx    = len(worklist) - 1
-			pos    = worklist[idx].pos
-			height = worklist[idx].height
+			idx       = len(worklist) - 1
+			pos       = worklist[idx].pos
+			height    = worklist[idx].height
+			backwards = worklist[idx].backwards
 		)
 		worklist = worklist[:idx]
 	outer:
 		for pos < len(code) {
 			op := OpCode(code[pos])
-
 			// Check if pos has already be visited; if so, the stack heights should be the same.
 			if want, ok := heights[pos]; ok {
-				if height != want {
-					return 0, fmt.Errorf("%w: have %d, want %d", ErrConflictingStack, height, want)
+				if height == want {
+					// Already visited this path and stack height
+					// matches.
+					break
 				}
-				// Already visited this path and stack height
-				// matches.
+				// Already visited this path but the stack height is not the same, need to revisit again
+				// TODO (MariusVanDerWijden): can this result in an infinite loop?
+			} else if backwards {
+				// If a instruction can only be reached by backwards jump, bail
 				break
 			}
 			heights[pos] = height
@@ -181,14 +208,15 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			switch {
 			case op == CALLF:
 				arg, _ := parseUint16(code[pos+1:])
-				if want, have := int(metadata[arg].Input), height; want > have {
+				newSection := metadata[arg]
+				if want, have := int(newSection.Input), height; want > have {
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
 				}
-				if have, limit := int(metadata[arg].Output)+height, int(params.StackLimit); have > limit {
+				if have, limit := height+int(newSection.MaxStackHeight)-int(newSection.Input), int(params.StackLimit); have > limit {
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackOverflow{stackLen: have, limit: limit}, pos)
 				}
-				height -= int(metadata[arg].Input)
-				height += int(metadata[arg].Output)
+				height -= int(newSection.Input)
+				height += int(newSection.Output)
 				pos += 3
 			case op == RETF:
 				if have, want := int(metadata[section].Output), height; have != want {
@@ -198,25 +226,60 @@ func validateControlFlow(code []byte, section int, metadata []*FunctionMetadata,
 			case op == RJUMP:
 				arg := parseInt16(code[pos+1:])
 				pos += 3 + arg
+				worklist = append(worklist, item{pos: pos, height: height, backwards: arg < 0})
+				break outer
 			case op == RJUMPI:
 				arg := parseInt16(code[pos+1:])
 				worklist = append(worklist, item{pos: pos + 3 + arg, height: height})
 				pos += 3
 			case op == RJUMPV:
-				count := int(code[pos+1])
+				count := int(code[pos+1]) + 1
 				for i := 0; i < count; i++ {
 					arg := parseInt16(code[pos+2+2*i:])
 					worklist = append(worklist, item{pos: pos + 2 + 2*count + arg, height: height})
 				}
 				pos += 2 + 2*count
+			case op == DUPN:
+				fallthrough
+			case op == SWAPN:
+				arg := int(code[pos+1]) + 1
+				if want, have := arg, height; want >= have {
+					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
+				}
+				pos += 2
+			case op == EXCHANGE:
+				arg := int(code[pos+1])
+				n := arg>>4 + 1
+				m := arg&0x0f + 1
+				if want, have := n+m, height; want >= have {
+					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
+				}
+				pos += 2
+			case op == JUMPF:
+				arg, _ := parseUint16(code[pos+1:])
+				newSection := metadata[arg]
+				if have, limit := height+int(newSection.MaxStackHeight)-int(newSection.Input), int(params.StackLimit); have > limit {
+					return 0, fmt.Errorf("%w: at pos %d", ErrStackOverflow{stackLen: have, limit: limit}, pos)
+				}
+				if newSection.Output == 0x80 {
+					if want, have := int(newSection.Input), height; want > have {
+						return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
+					}
+				} else {
+					if have, want := height, int(metadata[section].Output)+int(newSection.Input)-int(newSection.Output); have != want {
+						return 0, fmt.Errorf("%w: at pos %d", ErrInvalidNumberOfOutputs, pos)
+					}
+				}
+				pos += 3
 			default:
-				if op >= PUSH1 && op <= PUSH32 {
-					pos += 1 + int(op-PUSH0)
-				} else if jt[op].terminal {
-					break outer
+				if jt[op].immediate != 0 {
+					pos += jt[op].immediate + 1
 				} else {
 					// Simple op, no operand.
 					pos += 1
+				}
+				if jt[op].terminal {
+					break outer
 				}
 			}
 			maxStackHeight = max(maxStackHeight, height)

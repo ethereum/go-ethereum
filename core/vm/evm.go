@@ -95,6 +95,7 @@ type TxContext struct {
 	BlobHashes   []common.Hash       // Provides information for BLOBHASH
 	BlobFeeCap   *big.Int            // Is used to zero the blobbasefee if NoBaseFee is set
 	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
+	InitCodes    [][]byte            // Provides information for TXCREATE
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -245,7 +246,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
 			contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
-			ret, err = evm.interpreter.Run(contract, input, false)
+			ret, err = evm.interpreter.Run(contract, input, false, false)
 			gas = contract.Gas
 		}
 	}
@@ -310,7 +311,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
-		ret, err = evm.interpreter.Run(contract, input, false)
+		ret, err = evm.interpreter.Run(contract, input, false, false)
 		gas = contract.Gas
 	}
 	if err != nil {
@@ -331,7 +332,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
-func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64, fromEOF bool) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		// NOTE: caller must, at all times be a contract. It should never happen
@@ -355,6 +356,9 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	} else {
 		addrCopy := addr
 		code := evm.StateDB.GetCode(addrCopy)
+		if fromEOF && !hasEOFMagic(code) {
+			return nil, gas, errors.New("extDelegateCall to non-eof contract")
+		}
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
 		if witness := evm.StateDB.Witness(); witness != nil {
@@ -362,7 +366,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), code, evm.parseContainer(code))
-		ret, err = evm.interpreter.Run(contract, input, false)
+		ret, err = evm.interpreter.Run(contract, input, false, false)
 		gas = contract.Gas
 	}
 	if err != nil {
@@ -425,7 +429,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
-		ret, err = evm.interpreter.Run(contract, input, true)
+		ret, err = evm.interpreter.Run(contract, input, true, false)
 		gas = contract.Gas
 	}
 	if err != nil {
@@ -479,7 +483,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Validate initcode per EOF rules. If caller is EOF and initcode is legacy, fail.
 	isInitcodeEOF := hasEOFMagic(codeAndHash.code)
-	if evm.chainRules.IsShanghai {
+	if evm.chainRules.IsPrague {
 		if isInitcodeEOF {
 			// If the initcode is EOF, verify it is well-formed.
 			var c Container
@@ -548,7 +552,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	if err == nil {
-		ret, err = evm.interpreter.Run(contract, nil, false)
+		ret, err = evm.interpreter.Run(contract, nil, false, contract.IsDeployment)
 	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
@@ -630,6 +634,13 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
 	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, isEOF)
+}
+
+// EOFCreate
+func (evm *EVM) EOFCreate(caller ContractRef, code []byte, subcontainer []byte, gas uint64, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+	codeAndHash := &codeAndHash{code: subcontainer}
+	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, true)
 }
 
 // ChainConfig returns the environment's chain configuration

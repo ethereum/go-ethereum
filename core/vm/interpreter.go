@@ -43,8 +43,9 @@ type ScopeContext struct {
 	Stack    *Stack
 	Contract *Contract
 
-	CodeSection uint64
-	ReturnStack []*ReturnContext
+	CodeSection  uint64
+	ReturnStack  []*ReturnContext
+	InitCodeMode bool
 }
 
 type ReturnContext struct {
@@ -161,7 +162,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
-func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, isInitCode bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -188,11 +189,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		mem         = NewMemory() // bound memory
 		stack       = newstack()  // local stack
 		callContext = &ScopeContext{
-			Memory:      mem,
-			Stack:       stack,
-			Contract:    contract,
-			CodeSection: 0,
-			ReturnStack: []*ReturnContext{{Section: 0, Pc: 0, StackHeight: 0}},
+			Memory:       mem,
+			Stack:        stack,
+			Contract:     contract,
+			CodeSection:  0,
+			ReturnStack:  []*ReturnContext{{Section: 0, Pc: 0, StackHeight: 0}},
+			InitCodeMode: isInitCode,
 		}
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC

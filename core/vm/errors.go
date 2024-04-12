@@ -41,6 +41,7 @@ var (
 	ErrInvalidEOF               = errors.New("invalid eof")
 	ErrInvalidEOFInitcode       = errors.New("invalid eof initcode")
 	ErrNonceUintOverflow        = errors.New("nonce uint64 overflow")
+	ErrInvalidNumberOfOutputs   = errors.New("invalid number of outputs")
 
 	// errStopToken is an internal token indicating interpreter loop termination,
 	// never returned to outside callers.

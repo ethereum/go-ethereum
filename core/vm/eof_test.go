@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"encoding/hex"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -30,23 +32,24 @@ func TestEOFMarshaling(t *testing.T) {
 	}{
 		{
 			want: Container{
-				Types: []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
-				Code:  [][]byte{common.Hex2Bytes("604200")},
-				Data:  []byte{0x01, 0x02, 0x03},
+				Types:    []*FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
+				Code:     [][]byte{common.Hex2Bytes("604200")},
+				Data:     []byte{0x01, 0x02, 0x03},
+				DataSize: 3,
 			},
 		},
 		{
 			want: Container{
-				Types:             []*FunctionMetadata{{Input: 0, Output: 0, MaxStackHeight: 1}},
-				Code:              [][]byte{common.Hex2Bytes("604200")},
-				ContainerSections: [][]byte{common.Hex2Bytes("604200")},
-				Data:              []byte{0x01, 0x02, 0x03},
+				Types:    []*FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
+				Code:     [][]byte{common.Hex2Bytes("604200")},
+				Data:     []byte{0x01, 0x02, 0x03},
+				DataSize: 3,
 			},
 		},
 		{
 			want: Container{
 				Types: []*FunctionMetadata{
-					{Input: 0, Output: 0, MaxStackHeight: 1},
+					{Input: 0, Output: 0x80, MaxStackHeight: 1},
 					{Input: 2, Output: 3, MaxStackHeight: 4},
 					{Input: 1, Output: 1, MaxStackHeight: 1},
 				},
@@ -69,6 +72,48 @@ func TestEOFMarshaling(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got, test.want) {
 			t.Fatalf("test %d: got %+v, want %+v", i, got, test.want)
+		}
+	}
+}
+
+func TestEOFSubcontainer(t *testing.T) {
+	var subcontainer = new(Container)
+	if err := subcontainer.UnmarshalBinary(common.Hex2Bytes("ef000101000402000100010400000000800000fe")); err != nil {
+		t.Fatal(err)
+	}
+	container := Container{
+		Types:             []*FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
+		Code:              [][]byte{common.Hex2Bytes("604200")},
+		ContainerSections: []*Container{subcontainer},
+		Data:              []byte{0x01, 0x02, 0x03},
+		DataSize:          3,
+	}
+	var (
+		b   = container.MarshalBinary()
+		got Container
+	)
+	if err := got.UnmarshalBinary(b); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Print(got)
+	if res := got.MarshalBinary(); !reflect.DeepEqual(res, b) {
+		t.Fatalf("invalid marshalling, want %v got %v", b, res)
+	}
+}
+
+func TestMarshaling(t *testing.T) {
+	tests := []string{
+		"EF000101000402000100040400000000800000E0000000",
+		"ef0001010004020001000d04000000008000025fe100055f5fe000035f600100",
+	}
+	for i, test := range tests {
+		s, err := hex.DecodeString(test)
+		if err != nil {
+			t.Fatalf("test %d: error decoding: %v", i, err)
+		}
+		var got Container
+		if err := got.UnmarshalBinary(s); err != nil {
+			t.Fatalf("test %d: got error %v", i, err)
 		}
 	}
 }

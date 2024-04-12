@@ -19,6 +19,7 @@ package vm
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -38,7 +39,7 @@ const (
 	eof1Version   = 1
 
 	maxInputItems        = 127
-	maxOutputItems       = 127
+	maxOutputItems       = 128
 	maxStackHeight       = 1023
 	maxContainerSections = 256
 )
@@ -56,7 +57,7 @@ var (
 	ErrMissingTerminator           = errors.New("missing header terminator")
 	ErrTooManyInputs               = errors.New("invalid type content, too many inputs")
 	ErrTooManyOutputs              = errors.New("invalid type content, too many inputs")
-	ErrInvalidSection0Type         = errors.New("invalid section 0 type, input and output should be zero")
+	ErrInvalidSection0Type         = errors.New("invalid section 0 type, input and output should be zero and non-returning (0x80)")
 	ErrTooLargeMaxStackHeight      = errors.New("invalid type content, max stack height exceeds limit")
 	ErrInvalidContainerSize        = errors.New("invalid container size")
 )
@@ -83,8 +84,10 @@ func isEOFVersion1(code []byte) bool {
 type Container struct {
 	Types             []*FunctionMetadata
 	Code              [][]byte
-	ContainerSections [][]byte
+	ContainerSections []*Container
+	ContainerCode     [][]byte
 	Data              []byte
+	DataSize          int // might be less than len(Data)
 }
 
 // FunctionMetadata is an EOF function signature.
@@ -109,15 +112,18 @@ func (c *Container) MarshalBinary() []byte {
 	for _, code := range c.Code {
 		b = binary.BigEndian.AppendUint16(b, uint16(len(code)))
 	}
+	var encodedContainer [][]byte
 	if len(c.ContainerSections) != 0 {
 		b = append(b, kindContainer)
 		b = binary.BigEndian.AppendUint16(b, uint16(len(c.ContainerSections)))
 		for _, section := range c.ContainerSections {
-			b = binary.BigEndian.AppendUint16(b, uint16(len(section)))
+			encoded := section.MarshalBinary()
+			b = binary.BigEndian.AppendUint16(b, uint16(len(encoded)))
+			encodedContainer = append(encodedContainer, encoded)
 		}
 	}
 	b = append(b, kindData)
-	b = binary.BigEndian.AppendUint16(b, uint16(len(c.Data)))
+	b = binary.BigEndian.AppendUint16(b, uint16(c.DataSize))
 	b = append(b, 0) // terminator
 
 	// Write section contents.
@@ -127,7 +133,7 @@ func (c *Container) MarshalBinary() []byte {
 	for _, code := range c.Code {
 		b = append(b, code...)
 	}
-	for _, section := range c.ContainerSections {
+	for _, section := range encodedContainer {
 		b = append(b, section...)
 	}
 	b = append(b, c.Data...)
@@ -180,20 +186,18 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		return fmt.Errorf("%w: mismatch of code sections cound and type signatures, types %d, code %d", ErrInvalidCodeSize, typesSize/4, len(codeSizes))
 	}
 
-	// Parse container section header.
+	// Parse (optional) container section header.
+	var containerSizes []int
 	offset := offsetCodeKind + 2 + 2*len(codeSizes) + 1
-	kind, containerSizes, err := parseSectionList(b, offset)
-	if err != nil {
-		return err
-	}
-	// The container section is optional, only unmarshal if container section is set.
-	if kind == kindContainer {
+	if offset < len(b) && b[offset] == kindContainer {
+		kind, containerSizes, err = parseSectionList(b, offset)
+		if err != nil {
+			return err
+		}
+		if kind != kindContainer {
+			panic("somethings wrong")
+		}
 		offset = offset + 2 + 2*len(containerSizes) + 1
-	} else {
-		// empty out falsly parsed container sizes
-		// TODO (MariusVanDerWijden): clean this up, read the kind first before parsing the section list
-		// and if the kind is not KindContainer, just ignore it.
-		containerSizes = make([]int, 0)
 	}
 
 	// Parse data section header.
@@ -204,11 +208,12 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	if kind != kindData {
 		return fmt.Errorf("%w: found section %x instead", ErrMissingDataHeader, kind)
 	}
+	c.DataSize = dataSize
 
 	// Check for terminator.
 	offsetTerminator := offset + 3
 	if len(b) < offsetTerminator {
-		return io.ErrUnexpectedEOF
+		return fmt.Errorf("%w: invalid offset terminator", io.ErrUnexpectedEOF)
 	}
 	if b[offsetTerminator] != 0 {
 		return fmt.Errorf("%w: have %x", ErrMissingTerminator, b[offsetTerminator])
@@ -219,7 +224,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	if len(containerSizes) != 0 {
 		expectedSize += sum(containerSizes)
 	}
-	if len(b) != expectedSize {
+	if len(b) < expectedSize-dataSize || len(b) > expectedSize {
 		return fmt.Errorf("%w: have %d, want %d", ErrInvalidContainerSize, len(b), expectedSize)
 	}
 
@@ -243,7 +248,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		}
 		types = append(types, sig)
 	}
-	if types[0].Input != 0 || types[0].Output != 0 {
+	if types[0].Input != 0 || types[0].Output != 0x80 {
 		return fmt.Errorf("%w: have %d, %d", ErrInvalidSection0Type, types[0].Input, types[0].Output)
 	}
 	c.Types = types
@@ -265,19 +270,29 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 		if len(containerSizes) > maxContainerSections {
 			return fmt.Errorf("%w number of container section exceed: %v: have %v", ErrInvalidContainerSectionSize, maxContainerSections, len(containerSizes))
 		}
-		container := make([][]byte, len(containerSizes))
+		containerCode := make([][]byte, 0, len(containerSizes))
+		container := make([]*Container, 0, len(containerSizes))
 		for i, size := range containerSizes {
-			if size == 0 {
+			if size == 0 || idx+size > len(b) {
 				return fmt.Errorf("%w for section %d: size must not be 0", ErrInvalidContainerSectionSize, i)
 			}
-			container[i] = b[idx : idx+size]
+			c := new(Container)
+			end := min(idx+size, len(b))
+			if err := c.UnmarshalBinary(b[idx:end]); err != nil {
+				return fmt.Errorf("%w for section %d", err, i)
+			}
+			container = append(container, c)
+			containerCode = append(containerCode, b[idx:end])
+
 			idx += size
 		}
 		c.ContainerSections = container
+		c.ContainerCode = containerCode
 	}
 
 	// Parse data section.
-	c.Data = b[idx : idx+dataSize]
+	end := min(idx+dataSize, len(b))
+	c.Data = b[idx:end]
 
 	return nil
 }
@@ -285,8 +300,40 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 // ValidateCode validates each code section of the container against the EOF v1
 // rule set.
 func (c *Container) ValidateCode(jt *JumpTable) error {
-	for i, code := range c.Code {
-		if err := validateCode(code, i, c.Types, jt); err != nil {
+	visited := make(map[int]struct{})
+	toVisit := []int{0}
+	for len(toVisit) > 0 {
+		// TODO check if this can be used as a DOS
+		// Theres and edge case here where we mark something as visited that we visit before,
+		// This should not trigger a re-visit
+		// e.g. 0 -> 1, 2, 3
+		// 1 -> 2, 3
+		// should not mean 2 and 3 should be visited twice
+		var (
+			index = toVisit[0]
+			code  = c.Code[index]
+		)
+		if _, ok := visited[index]; !ok {
+			v, err := validateCode(code, index, c, jt)
+			if err != nil {
+				return err
+			}
+			visited[index] = struct{}{}
+			// Mark all sections that can be visited from here.
+			for idx := range v {
+				if _, ok := visited[idx]; !ok {
+					toVisit = append(toVisit, idx)
+				}
+			}
+		}
+		toVisit = toVisit[1:]
+	}
+	// Make sure every code section is visited at least once.
+	if len(visited) != len(c.Code) {
+		return ErrUnreachableCode
+	}
+	for _, container := range c.ContainerSections {
+		if err := container.ValidateCode(jt); err != nil {
 			return err
 		}
 	}
@@ -360,4 +407,43 @@ func sum(list []int) (s int) {
 		s += n
 	}
 	return
+}
+
+func (c *Container) String() string {
+	var result string
+	result += "Header\n"
+	result += "-----------\n"
+	result += fmt.Sprintf("EOFMagic: %02x\n", eofMagic)
+	result += fmt.Sprintf("EOFVersion: %02x\n", eof1Version)
+	result += fmt.Sprintf("KindType: %02x\n", kindTypes)
+	result += fmt.Sprintf("TypesSize: %04x\n", len(c.Types)*4)
+	result += fmt.Sprintf("KindCode: %02x\n", kindCode)
+	result += fmt.Sprintf("CodeSize: %04x\n", len(c.Code))
+	for i, code := range c.Code {
+		result += fmt.Sprintf("Code %v length: %04x\n", i, len(code))
+	}
+	if len(c.ContainerSections) != 0 {
+		result += fmt.Sprintf("KindContainer: %02x\n", kindContainer)
+		result += fmt.Sprintf("ContainerSize: %04x\n", len(c.ContainerSections))
+		for i, section := range c.ContainerSections {
+			result += fmt.Sprintf("Container %v length: %04x\n", i, len(section.MarshalBinary()))
+		}
+	}
+	result += fmt.Sprintf("KindData: %02x\n", kindData)
+	result += fmt.Sprintf("DataSize: %04x\n", len(c.Data))
+	result += fmt.Sprintf("Terminator: %02x\n", 0x0)
+	result += "-----------\n"
+	result += "Body\n"
+	result += "-----------\n"
+	for i, typ := range c.Types {
+		result += fmt.Sprintf("Type %v: %v\n", i, hex.EncodeToString([]byte{typ.Input, typ.Output, byte(typ.MaxStackHeight >> 8), byte(typ.MaxStackHeight & 0x00ff)}))
+	}
+	for i, code := range c.Code {
+		result += fmt.Sprintf("Code %v: %v\n", i, hex.EncodeToString(code))
+	}
+	for i, section := range c.ContainerSections {
+		result += fmt.Sprintf("Section %v: %v\n", i, hex.EncodeToString(section.MarshalBinary()))
+	}
+	result += fmt.Sprintf("Data: %v\n", hex.EncodeToString(c.Data))
+	return result
 }

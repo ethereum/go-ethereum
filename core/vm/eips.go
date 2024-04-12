@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -570,11 +572,30 @@ func enableEOF(jt *JumpTable) {
 		maxStack:    maxStack(0, 0),
 		undefined:   true,
 	}
+	jt[CALL] = undefined
 	jt[CALLCODE] = undefined
+	jt[DELEGATECALL] = undefined
+	jt[STATICCALL] = undefined
 	jt[SELFDESTRUCT] = undefined
 	jt[JUMP] = undefined
 	jt[JUMPI] = undefined
 	jt[PC] = undefined
+	jt[CREATE] = undefined
+	jt[CREATE2] = undefined
+	jt[CODESIZE] = undefined
+	jt[CODECOPY] = undefined
+	jt[EXTCODESIZE] = undefined
+	jt[EXTCODECOPY] = undefined
+	jt[EXTCODEHASH] = undefined
+	jt[GAS] = undefined
+	// Allow 0xFE to terminate sections
+	jt[INVALID] = &operation{
+		execute:     opUndefined,
+		constantGas: 0,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+		terminal:    true,
+	}
 
 	// New opcodes
 	jt[RJUMP] = &operation{
@@ -582,25 +603,28 @@ func enableEOF(jt *JumpTable) {
 		constantGas: GasQuickStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
-		terminal:    true,
+		immediate:   2,
 	}
 	jt[RJUMPI] = &operation{
 		execute:     opRjumpi,
 		constantGas: GasFastishStep,
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
+		immediate:   2,
 	}
 	jt[RJUMPV] = &operation{
 		execute:     opRjumpv,
 		constantGas: GasFastishStep,
 		minStack:    minStack(1, 0),
 		maxStack:    maxStack(1, 0),
+		immediate:   3, // at least 3, maybe more
 	}
 	jt[CALLF] = &operation{
 		execute:     opCallf,
 		constantGas: GasFastStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
+		immediate:   2,
 	}
 	jt[RETF] = &operation{
 		execute:     opRetf,
@@ -609,6 +633,143 @@ func enableEOF(jt *JumpTable) {
 		maxStack:    maxStack(0, 0),
 		terminal:    true,
 	}
+	jt[JUMPF] = &operation{
+		execute:     opJumpf,
+		constantGas: GasFastStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+		immediate:   2,
+		terminal:    true,
+	}
+	jt[EOFCREATE] = &operation{
+		execute:     opEOFCreate,
+		constantGas: params.Create2Gas,
+		dynamicGas:  gasEOFCreate,
+		minStack:    minStack(4, 1),
+		maxStack:    maxStack(4, 1),
+		memorySize:  memoryEOFCreate,
+		immediate:   1,
+	}
+	jt[TXCREATE] = &operation{
+		execute:     opTXCreate,
+		constantGas: params.Create2Gas,
+		dynamicGas:  gasEOFCreate,
+		minStack:    minStack(5, 1),
+		maxStack:    maxStack(5, 1),
+		memorySize:  memoryEOFCreate,
+	}
+	jt[RETURNCONTRACT] = &operation{
+		execute:     opReturnContract,
+		constantGas: GasZeroStep,
+		dynamicGas:  memoryCopierGas(1),
+		minStack:    minStack(2, 0),
+		maxStack:    maxStack(2, 0),
+		immediate:   1,
+		memorySize:  memoryReturnContract,
+		terminal:    true,
+	}
+	jt[DATALOAD] = &operation{
+		execute:     opDataLoad,
+		constantGas: GasFastishStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	jt[DATALOADN] = &operation{
+		execute:     opDataLoadN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+		immediate:   2,
+	}
+	jt[DATASIZE] = &operation{
+		execute:     opDataSize,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+	jt[DATACOPY] = &operation{
+		execute:     opDataCopy,
+		constantGas: GasFastestStep,
+		dynamicGas:  memoryCopierGas(2),
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+		memorySize:  memoryMcopy,
+	}
+	jt[DUPN] = &operation{
+		execute:     opDupN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+		immediate:   1,
+	}
+	jt[SWAPN] = &operation{
+		execute:     opSwapN,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+		immediate:   1,
+	}
+	jt[EXCHANGE] = &operation{
+		execute:     opExchange,
+		constantGas: GasFastestStep,
+		minStack:    minStack(0, 0),
+		maxStack:    maxStack(0, 0),
+		immediate:   1,
+	}
+	jt[RETURNDATALOAD] = &operation{
+		execute:     opReturnDataLoad,
+		constantGas: GasFastestStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+	jt[EXTCALL] = &operation{
+		execute:     opExtCall,
+		constantGas: params.CallGasEIP150,
+		dynamicGas:  gasCall,
+		minStack:    minStack(4, 1),
+		maxStack:    maxStack(4, 1),
+		memorySize:  memoryCall,
+	}
+	jt[EXTDELEGATECALL] = &operation{
+		execute:     opExtDelegateCall,
+		dynamicGas:  gasDelegateCall,
+		constantGas: params.CallGasEIP150,
+		minStack:    minStack(3, 1),
+		maxStack:    maxStack(3, 1),
+		memorySize:  memoryDelegateCall,
+	}
+	jt[EXTSTATICCALL] = &operation{
+		execute:     opExtStaticCall,
+		constantGas: params.CallGasEIP150,
+		dynamicGas:  gasStaticCall,
+		minStack:    minStack(3, 1),
+		maxStack:    maxStack(3, 1),
+		memorySize:  memoryStaticCall,
+	}
+}
+
+func opExtCodeCopyEOF(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		stack      = scope.Stack
+		a          = stack.pop()
+		memOffset  = stack.pop()
+		codeOffset = stack.pop()
+		length     = stack.pop()
+	)
+	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
+	if overflow {
+		uint64CodeOffset = math.MaxUint64
+	}
+	addr := common.Address(a.Bytes20())
+	code := interpreter.evm.StateDB.GetCode(addr)
+	// Check if we're copying an EOF contract
+	if len(code) >= 2 && code[0] == 0xEF && code[1] == 0x00 {
+		code = []byte{0xEF, 0x00}
+	}
+	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
+	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
+
+	return nil, nil
 }
 
 // opRjump implements the rjump opcode.
@@ -690,4 +851,315 @@ func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	}
 	return nil, nil
 >>>>>>> 3532f16eb7 (core/vm: add eof container)
+}
+
+func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code = scope.Contract.CodeAt(scope.CodeSection)
+		idx  = binary.BigEndian.Uint16(code[*pc+1:])
+		typ  = scope.Contract.Container.Types[idx]
+	)
+	if scope.Stack.len()+int(typ.MaxStackHeight)-int(typ.Input) > 1024 {
+		return nil, fmt.Errorf("stack overflow")
+	}
+	scope.CodeSection = uint64(idx)
+	*pc = 0
+	return nil, nil
+}
+
+func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
+	var (
+		code         = scope.Contract.CodeAt(scope.CodeSection)
+		idx          = code[*pc+1]
+		value        = scope.Stack.pop()
+		salt         = scope.Stack.pop()
+		offset, size = scope.Stack.pop(), scope.Stack.pop()
+		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		gas          = scope.Contract.Gas
+	)
+	if int(idx) >= len(scope.Contract.Container.ContainerSections) {
+		return nil, fmt.Errorf("invalid subcontainer")
+	}
+	subcontainer := scope.Contract.Container.ContainerSections[idx]
+
+	// Reuse last popped value from stack
+	stackvalue := size
+	// Apply EIP150
+	gas -= gas / 64
+	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
+
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, subcontainer.MarshalBinary(), gas, &value, &salt)
+	if suberr != nil {
+		stackvalue.Clear()
+	} else {
+		stackvalue.SetBytes(addr.Bytes())
+	}
+	scope.Stack.push(&stackvalue)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	if suberr == ErrExecutionReverted {
+		interpreter.returnData = res // set REVERT data to return data buffer
+		return res, nil
+	}
+	interpreter.returnData = nil // clear dirty return data buffer
+	return nil, nil
+}
+
+func opTXCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
+	var (
+		value          = scope.Stack.pop()
+		salt           = scope.Stack.pop()
+		offset, size   = scope.Stack.pop(), scope.Stack.pop()
+		txInitCodeHash = scope.Stack.pop()
+		input          = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		gas            = scope.Contract.Gas
+	)
+	// Reuse last popped value from stack
+	stackvalue := txInitCodeHash
+
+	var initCode []byte
+	for _, code := range interpreter.evm.InitCodes {
+		if interpreter.hasher == nil {
+			interpreter.hasher = crypto.NewKeccakState()
+		} else {
+			interpreter.hasher.Reset()
+		}
+		interpreter.hasher.Write(code)
+		interpreter.hasher.Read(interpreter.hasherBuf[:])
+		if interpreter.hasherBuf.Cmp(txInitCodeHash.Bytes32()) == 0 {
+			initCode = code
+		}
+	}
+	if len(initCode) == 0 {
+		stackvalue.Clear()
+		scope.Stack.push(&stackvalue)
+	}
+
+	// Additional hashing charge
+	hashingCharge := params.InitCodeWordGas * ((uint64(len(initCode)) + 31) / 32)
+	scope.Contract.UseGas(hashingCharge, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
+	// Apply EIP150
+	gas -= gas / 64
+	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
+	scope.InitCodeMode = true
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, initCode, gas, &value, &salt)
+	if suberr != nil {
+		stackvalue.Clear()
+	} else {
+		stackvalue.SetBytes(addr.Bytes())
+	}
+	scope.Stack.push(&stackvalue)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	if suberr == ErrExecutionReverted {
+		interpreter.returnData = res // set REVERT data to return data buffer
+		return res, nil
+	}
+	interpreter.returnData = nil // clear dirty return data buffer
+	return nil, nil
+}
+
+func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if !scope.InitCodeMode {
+		return nil, errors.New("returncontract in non-initcode mode")
+	}
+	var (
+		code   = scope.Contract.CodeAt(scope.CodeSection)
+		idx    = code[*pc+1]
+		offset = scope.Stack.pop()
+		size   = scope.Stack.pop()
+	)
+	if int(idx) >= len(scope.Contract.Container.ContainerSections) {
+		return nil, fmt.Errorf("invalid subcontainer")
+	}
+	ret := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	containerCode := scope.Contract.Container.ContainerCode[idx]
+	deployedCode := append(containerCode, ret...)
+	if len(deployedCode) == 0 {
+		return nil, errors.New("nonexistant subcontainer")
+	}
+	return deployedCode, errStopToken
+}
+
+func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		stackItem        = scope.Stack.pop()
+		offset, overflow = stackItem.Uint64WithOverflow()
+	)
+
+	if overflow {
+		stackItem.Clear()
+		scope.Stack.push(&stackItem)
+	} else {
+		data := getData(scope.Contract.Container.Data, offset, 32)
+		scope.Stack.push(stackItem.SetBytes(data))
+	}
+	return nil, nil
+}
+
+func opDataLoadN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code   = scope.Contract.CodeAt(scope.CodeSection)
+		offset = uint64(binary.BigEndian.Uint16(code[*pc+1:]))
+	)
+	data := getData(scope.Contract.Container.Data, offset, 32)
+	scope.Stack.push(new(uint256.Int).SetBytes(data))
+	*pc += 2
+	return nil, nil
+}
+
+func opDataSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	length := len(scope.Contract.Container.Data)
+	item := uint256.NewInt(uint64(length))
+	scope.Stack.push(item)
+	return nil, nil
+}
+
+func opDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		memOffset = scope.Stack.pop()
+		offset    = scope.Stack.pop()
+		size      = scope.Stack.pop()
+	)
+	// These values are checked for overflow during memory expansion calculation
+	// (the memorySize function on the opcode).
+	data := getData(scope.Contract.Container.Data, offset.Uint64(), size.Uint64())
+	scope.Memory.Set(memOffset.Uint64(), size.Uint64(), data)
+	return nil, nil
+}
+
+func opDupN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code  = scope.Contract.CodeAt(scope.CodeSection)
+		index = int(code[*pc+1]) + 1
+	)
+	scope.Stack.dup(index)
+	*pc += 1
+	return nil, nil
+}
+
+func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code  = scope.Contract.CodeAt(scope.CodeSection)
+		index = int(code[*pc+1]) + 1
+	)
+	scope.Stack.swap(index)
+	*pc += 1
+	return nil, nil
+}
+
+func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		code  = scope.Contract.CodeAt(scope.CodeSection)
+		index = int(code[*pc+1]) + 1
+		n     = index>>4 + 1
+		m     = index%0x0F + 1
+	)
+	scope.Stack.swapN(n, m)
+	*pc += 1
+	return nil, nil
+}
+
+func opReturnDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		offset = scope.Stack.pop()
+	)
+	if offset.Uint64()+32 > uint64(len(interpreter.returnData)) {
+		return nil, errors.New("return buffer overflow")
+	}
+	scope.Stack.push(offset.SetBytes(interpreter.returnData[offset.Uint64() : offset.Uint64()+32]))
+	return nil, nil
+}
+
+func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	stack := scope.Stack
+	// Use all available gas
+	gas := (scope.Contract.Gas / 64) * 63
+	// Pop other call parameters.
+	addr, value, inOffset, inSize := stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// safe a memory alloc
+	temp := addr
+	// Get the arguments from the memory.
+	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+
+	if interpreter.readOnly && !value.IsZero() {
+		return nil, ErrWriteProtection
+	}
+	if !value.IsZero() {
+		gas += params.CallStipend
+	}
+	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
+
+	if err != nil {
+		temp.Clear()
+	} else {
+		temp.SetOne()
+	}
+	stack.push(&temp)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	interpreter.returnData = ret
+	return ret, nil
+}
+
+func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	stack := scope.Stack
+	// Use all available gas
+	gas := (scope.Contract.Gas / 64) * 63
+	// Pop other call parameters.
+	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// safe a memory alloc
+	temp := addr
+	// Get arguments from the memory.
+	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+
+	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, true)
+	if err != nil {
+		temp.Clear()
+	} else {
+		temp.SetOne()
+	}
+	stack.push(&temp)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	interpreter.returnData = ret
+	return ret, nil
+}
+
+func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	stack := scope.Stack
+	// Use all available gas
+	gas := (scope.Contract.Gas / 64) * 63
+	// Pop other call parameters.
+	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	// safe a memory alloc
+	temp := addr
+	// Get arguments from the memory.
+	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+
+	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
+	if err != nil {
+		temp.Clear()
+	} else {
+		temp.SetOne()
+	}
+	stack.push(&temp)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	interpreter.returnData = ret
+	return ret, nil
 }

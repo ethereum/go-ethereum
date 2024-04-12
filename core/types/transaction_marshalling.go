@@ -426,7 +426,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 				return err
 			}
 		}
-
 	case SetCodeTxType:
 		var itx SetCodeTx
 		inner = &itx
