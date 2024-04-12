@@ -70,6 +70,7 @@ The `period` configuration option sets the target block time of the chain.
     "petersburgBlock": 0,
     "istanbulBlock": 0,
     "berlinBlock": 0,
+    "terminalTotalDifficultyPassed": true,
     "clique": {
       "period": 5,
       "epoch": 30000
@@ -102,6 +103,7 @@ Since Ethash is the default consensus algorithm, no additional parameters need t
     "petersburgBlock": 0,
     "istanbulBlock": 0,
     "berlinBlock": 0,
+    "terminalTotalDifficultyPassed": true,
     "ethash": {}
   },
   "difficulty": "1",
@@ -274,6 +276,7 @@ In each data directory save a copy of the following `genesis.json` to the top le
     "londonBlock": 0,
     "arrowGlacierBlock": 0,
     "grayGlacierBlock": 0,
+    "terminalTotalDifficultyPassed": true,
     "clique": {
       "period": 5,
       "epoch": 30000
