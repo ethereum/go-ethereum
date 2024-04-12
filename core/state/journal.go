@@ -130,6 +130,7 @@ type (
 	}
 	eip6780DeletableChange struct {
 		account common.Address
+		prev    bool
 	}
 
 	// Changes to other state values.
@@ -258,7 +259,7 @@ func (ch codeChange) copy() journalEntry {
 }
 
 func (ch eip6780DeletableChange) revert(s *StateDB) {
-	s.getStateObject(ch.account).eip6780Deletable = false
+	s.getStateObject(ch.account).eip6780Deletable = ch.prev
 }
 
 func (ch eip6780DeletableChange) dirtied() *common.Address {

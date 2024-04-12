@@ -531,11 +531,9 @@ func (s *stateObject) setNonce(nonce uint64) {
 }
 
 func (s *stateObject) SetEIP6780Deletable() {
-	if s.eip6780Deletable {
-		return // might be possible in fuzzing
-	}
 	s.db.journal.append(eip6780DeletableChange{
 		account: s.address,
+		prev:    s.eip6780Deletable,
 	})
 	s.eip6780Deletable = true
 }

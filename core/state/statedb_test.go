@@ -917,7 +917,7 @@ func TestSelfDestructAccountAfterDeploy(t *testing.T) {
 		t.Fatalf("self-destructed should not be applied")
 	}
 
-	// Self-destruct the account with destructible flag setting
+	// Self-destruct the account with deletable flag setting
 	state.SetEIP6780Deletable(addr)
 	state.SetCode(addr, []byte{0x1})
 	state.Selfdestruct6780(addr)
