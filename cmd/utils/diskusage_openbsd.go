@@ -39,6 +39,5 @@ func getFreeDiskSpace(path string) (uint64, error) {
 		// because of the grace limit.
 		bavail = 0
 	}
-	//nolint:unconvert
 	return uint64(bavail) * uint64(stat.F_bsize), nil
 }
