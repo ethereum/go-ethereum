@@ -6,8 +6,6 @@ run:
   # default is true. Enables skipping of directories:
   #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
   skip-dirs-use-default: true
-  skip-files:
-    - core/genesis_alloc.go
 
 linters:
   disable-all: true
@@ -44,6 +42,8 @@ linters-settings:
     min-occurrences: 6 # minimum number of occurrences
 
 issues:
+  exclude-files:
+    - core/genesis_alloc.go
   exclude-rules:
     - path: crypto/bn256/cloudflare/optate.go
       linters:
