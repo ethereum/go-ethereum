@@ -29,8 +29,13 @@ var (
 	// triePrefetchMetricsPrefix is the prefix under which to publish the metrics.
 	triePrefetchMetricsPrefix = "trie/prefetch/"
 
-	// errTerminated is returned if any invocation is applied on a terminated fetcher.
+	// errTerminated is returned if a fetcher is attempted to be operated after it
+	// has already terminated.
 	errTerminated = errors.New("fetcher is already terminated")
+
+	// errNotTerminated is returned if a fetchers data is attempted to be retrieved
+	// before it terminates.
+	errNotTerminated = errors.New("fetcher is not yet terminated")
 )
 
 // triePrefetcher is an active prefetcher, which receives accounts or storage
@@ -42,7 +47,7 @@ type triePrefetcher struct {
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
 	fetchers map[string]*subfetcher // Subfetchers for each trie
-	closed   bool
+	term     chan struct{}          // Channel to signal interruption
 
 	deliveryMissMeter metrics.Meter
 	accountLoadMeter  metrics.Meter
@@ -59,6 +64,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		db:       db,
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
+		term:     make(chan struct{}),
 
 		deliveryMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss", nil),
 		accountLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/account/load", nil),
@@ -70,36 +76,74 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 	}
 }
 
-// close iterates over all the subfetchers, waits on any that were left spinning
-// and reports the stats to the metrics subsystem.
-func (p *triePrefetcher) close() {
-	// Short circuit if the fetcher is already closed.
-	if p.closed {
+// terminate iterates over all the subfetchers, waiting on any that still spin.
+func (p *triePrefetcher) terminate() {
+	// Short circuit if the fetcher is already closed
+	select {
+	case <-p.term:
+		return
+	default:
+	}
+	// Termiante all sub-fetchers synchronously and close the main fetcher
+	for _, fetcher := range p.fetchers {
+		fetcher.terminate()
+	}
+	close(p.term)
+}
+
+// terminateAsync iterates over all the subfetchers and terminates them async,
+// feeding each into a result channel as they finish.
+func (p *triePrefetcher) terminateAsync() chan *subfetcher {
+	// Short circuit if the fetcher is already closed
+	select {
+	case <-p.term:
+		return nil
+	default:
+	}
+	// Terminate all the sub-fetchers asynchronously and feed them into a result
+	// channel as they finish
+	var (
+		res  = make(chan *subfetcher, len(p.fetchers))
+		pend sync.WaitGroup
+	)
+	for _, fetcher := range p.fetchers {
+		pend.Add(1)
+		go func(f *subfetcher) {
+			f.terminate()
+			res <- f
+			pend.Done()
+		}(fetcher)
+	}
+	go func() {
+		pend.Wait()
+		close(res)
+	}()
+	close(p.term)
+	return res
+}
+
+// report aggregates the pre-fetching and usage metrics and reports them.
+func (p *triePrefetcher) report() {
+	if !metrics.Enabled {
 		return
 	}
 	for _, fetcher := range p.fetchers {
-		fetcher.close()
-
-		if metrics.Enabled {
-			if fetcher.root == p.root {
-				p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
-				p.accountDupMeter.Mark(int64(fetcher.dups))
-				for _, key := range fetcher.used {
-					delete(fetcher.seen, string(key))
-				}
-				p.accountWasteMeter.Mark(int64(len(fetcher.seen)))
-			} else {
-				p.storageLoadMeter.Mark(int64(len(fetcher.seen)))
-				p.storageDupMeter.Mark(int64(fetcher.dups))
-				for _, key := range fetcher.used {
-					delete(fetcher.seen, string(key))
-				}
-				p.storageWasteMeter.Mark(int64(len(fetcher.seen)))
+		if fetcher.root == p.root {
+			p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
+			p.accountDupMeter.Mark(int64(fetcher.dups))
+			for _, key := range fetcher.used {
+				delete(fetcher.seen, string(key))
 			}
+			p.accountWasteMeter.Mark(int64(len(fetcher.seen)))
+		} else {
+			p.storageLoadMeter.Mark(int64(len(fetcher.seen)))
+			p.storageDupMeter.Mark(int64(fetcher.dups))
+			for _, key := range fetcher.used {
+				delete(fetcher.seen, string(key))
+			}
+			p.storageWasteMeter.Mark(int64(len(fetcher.seen)))
 		}
 	}
-	p.closed = true
-	p.fetchers = nil
 }
 
 // prefetch schedules a batch of trie items to prefetch. After the prefetcher is
@@ -114,8 +158,11 @@ func (p *triePrefetcher) close() {
 //     repeated.
 //  2. Finalize of the main account trie. This happens only once per block.
 func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) error {
-	if p.closed {
+	// Ensure the subfetcher is still alive
+	select {
+	case <-p.term:
 		return errTerminated
+	default:
 	}
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
@@ -128,15 +175,13 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 
 // trie returns the trie matching the root hash, or nil if either the fetcher
 // is terminated or the trie is not available.
-func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
-	if p.closed {
-		return nil
-	}
+func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) (Trie, error) {
 	// Bail if no trie was prefetched for this root
 	fetcher := p.fetchers[p.trieID(owner, root)]
 	if fetcher == nil {
+		log.Warn("Prefetcher missed to load trie", "owner", owner, "root", root)
 		p.deliveryMissMeter.Mark(1)
-		return nil
+		return nil, nil
 	}
 	return fetcher.peek()
 }
@@ -144,9 +189,6 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 // used marks a batch of state items used to allow creating statistics as to
 // how useful or wasteful the fetcher is.
 func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte) {
-	if p.closed {
-		return
-	}
 	if fetcher := p.fetchers[p.trieID(owner, root)]; fetcher != nil {
 		fetcher.used = used
 	}
@@ -175,10 +217,9 @@ type subfetcher struct {
 	tasks [][]byte   // Items queued up for retrieval
 	lock  sync.Mutex // Lock protecting the task queue
 
-	wake chan struct{}  // Wake channel if a new task is scheduled
-	stop chan struct{}  // Channel to interrupt processing
-	term chan struct{}  // Channel to signal interruption
-	copy chan chan Trie // channel for retrieving copies of the subfetcher's trie
+	wake chan struct{} // Wake channel if a new task is scheduled
+	stop chan struct{} // Channel to interrupt processing
+	term chan struct{} // Channel to signal interruption
 
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
@@ -194,10 +235,9 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		owner: owner,
 		root:  root,
 		addr:  addr,
-		wake:  make(chan struct{}),
+		wake:  make(chan struct{}, 1),
 		stop:  make(chan struct{}),
 		term:  make(chan struct{}),
-		copy:  make(chan chan Trie),
 		seen:  make(map[string]struct{}),
 	}
 	go sf.loop()
@@ -206,6 +246,12 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 
 // schedule adds a batch of trie keys to the queue to prefetch.
 func (sf *subfetcher) schedule(keys [][]byte) error {
+	// Ensure the subfetcher is still alive
+	select {
+	case <-sf.term:
+		return errTerminated
+	default:
+	}
 	// Append the tasks to the current queue
 	sf.lock.Lock()
 	sf.tasks = append(sf.tasks, keys...)
@@ -214,27 +260,31 @@ func (sf *subfetcher) schedule(keys [][]byte) error {
 	// Notify the background thread to execute scheduled tasks
 	select {
 	case sf.wake <- struct{}{}:
-		return nil
-	case <-sf.term:
-		return errTerminated
+		// Wake signal sent
+	default:
+		// Wake signal not sent as a previous is already queued
 	}
+	return nil
 }
 
-// peek tries to retrieve a deep copy of the fetcher's trie. Nil is returned
-// if the fetcher is already terminated, or the associated trie is failing
-// for opening.
-func (sf *subfetcher) peek() Trie {
-	ch := make(chan Trie)
+// peek retrieves the fetcher's trie, populated with any pre-fetched data. The
+// returned trie will be a shallow copy, so modifying it will break subsequent
+// peeks for the original data.
+//
+// This method can only be called after closing the subfetcher.
+func (sf *subfetcher) peek() (Trie, error) {
+	// Ensure the subfetcher finished operating on its trie
 	select {
-	case sf.copy <- ch:
-		return <-ch
 	case <-sf.term:
-		return nil
+	default:
+		return nil, errNotTerminated
 	}
+	return sf.trie, nil
 }
 
-// close waits for the subfetcher to finish its tasks. It cannot be called multiple times
-func (sf *subfetcher) close() {
+// terminate waits for the subfetcher to finish its tasks, after which it tears
+// down all the internal background loaders.
+func (sf *subfetcher) terminate() {
 	select {
 	case <-sf.stop:
 	default:
@@ -249,7 +299,7 @@ func (sf *subfetcher) loop() {
 	// No matter how the loop stops, signal anyone waiting that it's terminated
 	defer close(sf.term)
 
-	// Start by opening the trie and stop processing if it fails.
+	// Start by opening the trie and stop processing if it fails
 	if sf.owner == (common.Hash{}) {
 		trie, err := sf.db.OpenTrie(sf.root)
 		if err != nil {
@@ -287,13 +337,20 @@ func (sf *subfetcher) loop() {
 				}
 				sf.seen[string(task)] = struct{}{}
 			}
-		case ch := <-sf.copy:
-			// Somebody wants a copy of the current trie, grant them.
-			ch <- sf.db.CopyTrie(sf.trie)
 
 		case <-sf.stop:
-			// Termination is requested, abort
-			return
+			// Termination is requested, abort if no more tasks are pending. If
+			// there are some, exhaust them first.
+			sf.lock.Lock()
+			done := sf.tasks == nil
+			sf.lock.Unlock()
+
+			if done {
+				return
+			}
+			// Some tasks are pending, loop and pick them up (that wake branch
+			// will be selected eventually, whilst stop remains closed to this
+			// branch will also run afterwards).
 		}
 	}
 }

@@ -210,7 +210,8 @@ func (s *StateDB) SetLogger(l *tracing.Hooks) {
 // commit phase, most of the needed data is already hot.
 func (s *StateDB) StartPrefetcher(namespace string) {
 	if s.prefetcher != nil {
-		s.prefetcher.close()
+		s.prefetcher.terminate()
+		s.prefetcher.report()
 		s.prefetcher = nil
 	}
 	if s.snap != nil {
@@ -222,7 +223,8 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 // from the gathered metrics.
 func (s *StateDB) StopPrefetcher() {
 	if s.prefetcher != nil {
-		s.prefetcher.close()
+		s.prefetcher.terminate()
+		s.prefetcher.report()
 		s.prefetcher = nil
 	}
 }
@@ -809,7 +811,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			delete(s.accountsOrigin, obj.address) // Clear out any previously updated account data (may be recreated via a resurrect)
 			delete(s.storagesOrigin, obj.address) // Clear out any previously updated storage data (may be recreated via a resurrect)
 		} else {
-			obj.finalise(true) // Prefetch slots in the background
+			obj.finalise()
 			s.markUpdate(addr)
 		}
 		// At this point, also ship the address off to the precacher. The precacher
@@ -818,7 +820,9 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		addressesToPrefetch = append(addressesToPrefetch, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
 	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
-		s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch)
+		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch); err != nil {
+			log.Error("Failed to prefetch addresses", "addresses", len(addressesToPrefetch), "err", err)
+		}
 	}
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
@@ -831,18 +835,14 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Finalise all the dirty storage states and write them into the tries
 	s.Finalise(deleteEmptyObjects)
 
-	// If there was a trie prefetcher operating, it gets aborted and irrevocably
-	// modified after we start retrieving tries. Remove it from the statedb after
-	// this round of use.
-	//
-	// This is weird pre-byzantium since the first tx runs with a prefetcher and
-	// the remainder without, but pre-byzantium even the initial prefetcher is
-	// useless, so no sleep lost.
-	prefetcher := s.prefetcher
+	// If there was a trie prefetcher operating, terminate it (blocking until
+	// all tasks finish) and then proceed with the trie hashing.
+	var subfetchers chan *subfetcher
 	if s.prefetcher != nil {
+		subfetchers = s.prefetcher.terminateAsync()
 		defer func() {
-			s.prefetcher.close()
-			s.prefetcher = nil
+			s.prefetcher.report()
+			s.prefetcher = nil // Pre-byzantium, unset any used up prefetcher
 		}()
 	}
 	// Although naively it makes sense to retrieve the account trie and then do
@@ -851,6 +851,18 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// first, giving the account prefetches just a few more milliseconds of time
 	// to pull useful data from disk.
 	start := time.Now()
+
+	updated := make(map[common.Address]struct{})
+	if subfetchers != nil {
+		for f := range subfetchers {
+			if op, ok := s.mutations[f.addr]; ok {
+				if !op.applied && !op.isDelete() {
+					s.stateObjects[f.addr].updateRoot()
+				}
+				updated[f.addr] = struct{}{}
+			}
+		}
+	}
 	for addr, op := range s.mutations {
 		if op.applied {
 			continue
@@ -865,8 +877,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
-	if prefetcher != nil {
-		if trie := prefetcher.trie(common.Hash{}, s.originalRoot); trie != nil {
+	if s.prefetcher != nil {
+		if trie, err := s.prefetcher.trie(common.Hash{}, s.originalRoot); err != nil {
+			log.Error("Failed to retrieve account pre-fetcher trie", "err", err)
+		} else if trie != nil {
 			s.trie = trie
 		}
 	}
@@ -902,8 +916,8 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		s.deleteStateObject(deletedAddr)
 		s.AccountDeleted += 1
 	}
-	if prefetcher != nil {
-		prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs)
+	if s.prefetcher != nil {
+		s.prefetcher.used(common.Hash{}, s.originalRoot, usedAddrs)
 	}
 	// Track the amount of time wasted on hashing the account trie
 	defer func(start time.Time) { s.AccountHashes += time.Since(start) }(time.Now())

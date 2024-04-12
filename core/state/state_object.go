@@ -126,7 +126,12 @@ func (s *stateObject) getTrie() (Trie, error) {
 		// Try fetching from prefetcher first
 		if s.data.Root != types.EmptyRootHash && s.db.prefetcher != nil {
 			// When the miner is creating the pending state, there is no prefetcher
-			s.trie = s.db.prefetcher.trie(s.addrHash, s.data.Root)
+			trie, err := s.db.prefetcher.trie(s.addrHash, s.data.Root)
+			if err != nil {
+				log.Error("Failed to retrieve storage pre-fetcher trie", "addr", s.address, "err", err)
+			} else {
+				s.trie = trie
+			}
 		}
 		if s.trie == nil {
 			tr, err := s.db.db.OpenStorageTrie(s.db.originalRoot, s.address, s.data.Root, s.db.trie)
@@ -253,7 +258,7 @@ func (s *stateObject) setState(key common.Hash, value *common.Hash) {
 
 // finalise moves all dirty storage slots into the pending area to be hashed or
 // committed later. It is invoked at the end of every transaction.
-func (s *stateObject) finalise(prefetch bool) {
+func (s *stateObject) finalise() {
 	slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
 		// If the slot is different from its original value, move it into the
@@ -268,8 +273,10 @@ func (s *stateObject) finalise(prefetch bool) {
 			delete(s.pendingStorage, key)
 		}
 	}
-	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
-		s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch)
+	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
+		if err := s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch); err != nil {
+			log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
+		}
 	}
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
@@ -288,7 +295,7 @@ func (s *stateObject) finalise(prefetch bool) {
 // storage change at all.
 func (s *stateObject) updateTrie() (Trie, error) {
 	// Make sure all dirty slots are finalized into the pending storage area
-	s.finalise(false)
+	s.finalise()
 
 	// Short circuit if nothing changed, don't bother with hashing anything
 	if len(s.pendingStorage) == 0 {

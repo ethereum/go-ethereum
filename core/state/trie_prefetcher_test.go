@@ -45,18 +45,23 @@ func filledStateDB() *StateDB {
 	return state
 }
 
-func TestUseAfterClose(t *testing.T) {
+func TestUseAfterTerminate(t *testing.T) {
 	db := filledStateDB()
 	prefetcher := newTriePrefetcher(db.db, db.originalRoot, "")
 	skey := common.HexToHash("aaa")
-	prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()})
-	a := prefetcher.trie(common.Hash{}, db.originalRoot)
-	prefetcher.close()
-	b := prefetcher.trie(common.Hash{}, db.originalRoot)
-	if a == nil {
-		t.Fatal("Prefetching before close should not return nil")
+
+	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}); err != nil {
+		t.Errorf("Prefetch failed before terminate: %v", err)
 	}
-	if b != nil {
-		t.Fatal("Trie after close should return nil")
+	if _, err := prefetcher.trie(common.Hash{}, db.originalRoot); err == nil {
+		t.Errorf("Trie retrieval succeeded before terminate")
+	}
+	prefetcher.terminate()
+
+	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}); err == nil {
+		t.Errorf("Prefetch succeeded after terminate: %v", err)
+	}
+	if _, err := prefetcher.trie(common.Hash{}, db.originalRoot); err != nil {
+		t.Errorf("Trie retrieval failed after terminate: %v", err)
 	}
 }
