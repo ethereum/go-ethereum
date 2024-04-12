@@ -141,8 +141,7 @@ type headerRequest struct {
 	cancel  chan struct{}        // Channel to track sync cancellation
 	stale   chan struct{}        // Channel to signal the request was dropped
 
-	head  uint64 // Head number of the requested batch of headers
-	chain BlockChain
+	head uint64 // Head number of the requested batch of headers
 }
 
 // headerResponse is an already verified remote response to a header request.
@@ -202,7 +201,6 @@ type backfiller interface {
 type skeleton struct {
 	db     ethdb.Database // Database backing the skeleton
 	filler backfiller     // Chain syncer suspended/resumed by head events
-	chain  BlockChain
 
 	peers *peerSet                   // Set of peers we can sync from
 	idles map[string]*peerConnection // Set of idle peers in the current sync cycle
@@ -229,7 +227,7 @@ type skeleton struct {
 
 // newSkeleton creates a new sync skeleton that tracks a potentially dangling
 // header chain until it's linked into an existing set of blocks.
-func newSkeleton(chain BlockChain, db ethdb.Database, peers *peerSet, drop peerDropFn, filler backfiller) *skeleton {
+func newSkeleton(db ethdb.Database, peers *peerSet, drop peerDropFn, filler backfiller) *skeleton {
 	sk := &skeleton{
 		db:         db,
 		filler:     filler,
@@ -239,7 +237,6 @@ func newSkeleton(chain BlockChain, db ethdb.Database, peers *peerSet, drop peerD
 		headEvents: make(chan *headUpdate),
 		terminate:  make(chan chan error),
 		terminated: make(chan struct{}),
-		chain:      chain,
 	}
 	go sk.startup()
 	return sk
@@ -349,7 +346,7 @@ func (s *skeleton) Sync(head *types.Header, final *types.Header, force bool) err
 // sync is the internal version of Sync that executes a single sync cycle, either
 // until some termination condition is reached, or until the current cycle merges
 // with a previously aborted run.
-func (s *skeleton) sync(head *types.Header) (header *types.Header, err error) {
+func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	// If we're continuing a previous merge interrupt, just access the existing
 	// old state without initing from disk.
 	if head == nil {
@@ -390,27 +387,6 @@ func (s *skeleton) sync(head *types.Header) (header *types.Header, err error) {
 				log.Error("Latest filled block is not available")
 				return
 			}
-			// if the skeleton just linked up and the current snap/full block is within
-			// the range of the skeleton, the skeleton forked
-			newlyLinked :=
-				rawdb.HasHeader(s.db, s.progress.Subchains[0].Next, s.progress.Subchains[0].Tail-1) &&
-					rawdb.HasBody(s.db, s.progress.Subchains[0].Next, s.progress.Subchains[0].Tail-1) &&
-					rawdb.HasReceipts(s.db, s.progress.Subchains[0].Next, s.progress.Subchains[0].Tail-1) && !linked
-			if newlyLinked && filled.Number.Uint64() >= s.progress.Subchains[0].Tail {
-				// TODO: this could also happen if the skeleton was reverted back to a block already in the filled history?
-				// ^probably/definitely not but need to verify
-
-				// revert the chain to the shared ancestor
-				ancestor, err := s.findSkeletonAncestor(filled)
-				if err != nil {
-					log.Crit("Failed to find skeleton ancestor", "err", err)
-				}
-				if err = s.chain.SetHead(ancestor); err != nil {
-					log.Crit("Failed to rewind chain", "err", err)
-				}
-				filled = s.chain.CurrentSnapBlock()
-			}
-
 			// If something was filled, try to delete stale sync helpers. If
 			// unsuccessful, warn the user, but not much else we can do (it's
 			// a programming error, just let users report an issue and don't
@@ -1156,6 +1132,16 @@ func (s *skeleton) cleanStales(filled *types.Header) error {
 	if number+1 == s.progress.Subchains[0].Tail {
 		return nil
 	}
+	// If the latest fill was on a different subchain, it means the backfiller
+	// was interrupted before it got to do any meaningful work, no cleanup
+	header := rawdb.ReadSkeletonHeader(s.db, filled.Number.Uint64())
+	if header == nil {
+		log.Debug("Filled header outside of skeleton range", "number", number, "head", s.progress.Subchains[0].Head, "tail", s.progress.Subchains[0].Tail)
+		return nil
+	} else if header.Hash() != filled.Hash() {
+		log.Debug("Filled header on different sidechain", "number", number, "filled", filled.Hash(), "skeleton", header.Hash())
+		return nil
+	}
 	var (
 		start uint64
 		end   uint64
@@ -1269,22 +1255,4 @@ func (s *skeleton) Bounds() (head *types.Header, tail *types.Header, final *type
 // subsequent calls might return headers from different chains.
 func (s *skeleton) Header(number uint64) *types.Header {
 	return rawdb.ReadSkeletonHeader(s.db, number)
-}
-
-// find the common ancestor header of the skeleton chain and the snap block
-func (s *skeleton) findSkeletonAncestor(filledHeader *types.Header) (uint64, error) {
-	for {
-		if filledHeader.Hash() == s.Header(filledHeader.Number.Uint64()).Hash() {
-			return filledHeader.Number.Uint64(), nil
-		}
-		if filledHeader.Number.Uint64() == s.progress.Subchains[0].Tail-1 {
-			if filledHeader.Hash() == s.progress.Subchains[0].Next {
-				return filledHeader.Number.Uint64(), nil
-			}
-			break
-		}
-		filledHeader = s.chain.GetHeaderByHash(filledHeader.ParentHash)
-	}
-	log.Crit("absolutely should not happen: the chain of the filled header and the skeleton chain must have a common ancestor")
-	return 0, nil
 }
