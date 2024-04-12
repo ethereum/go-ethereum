@@ -39,7 +39,7 @@ func (m *MockCaller) EXPECT() *MockCallerMockRecorder {
 }
 
 // Call mocks base method.
-func (m *MockCaller) Call(arg0 context.Context, arg1 ethapi.TransactionArgs, arg2 rpc.BlockNumberOrHash, arg3 *ethapi.StateOverride, arg4 *ethapi.BlockOverrides) (hexutil.Bytes, error) {
+func (m *MockCaller) Call(arg0 context.Context, arg1 ethapi.TransactionArgs, arg2 *rpc.BlockNumberOrHash, arg3 *ethapi.StateOverride, arg4 *ethapi.BlockOverrides) (hexutil.Bytes, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Call", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(hexutil.Bytes)
@@ -54,7 +54,7 @@ func (mr *MockCallerMockRecorder) Call(arg0, arg1, arg2, arg3, arg4 interface{})
 }
 
 // CallWithState mocks base method.
-func (m *MockCaller) CallWithState(arg0 context.Context, arg1 ethapi.TransactionArgs, arg2 rpc.BlockNumberOrHash, arg3 *state.StateDB, arg4 *ethapi.StateOverride, arg5 *ethapi.BlockOverrides) (hexutil.Bytes, error) {
+func (m *MockCaller) CallWithState(arg0 context.Context, arg1 ethapi.TransactionArgs, arg2 *rpc.BlockNumberOrHash, arg3 *state.StateDB, arg4 *ethapi.StateOverride, arg5 *ethapi.BlockOverrides) (hexutil.Bytes, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CallWithState", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(hexutil.Bytes)

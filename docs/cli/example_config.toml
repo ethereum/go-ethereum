@@ -1,8 +1,8 @@
 # This configuration file is for reference and learning purpose only.
 # The default value of the flags is provided below (except a few flags which has custom defaults which are explicitly mentioned).
-# Recommended values for mainnet and/or mumbai are also provided.
+# Recommended values for mainnet and/or mumbai,amoy are also provided.
 
-chain = "mainnet"               # Name of the chain to sync ("mumbai", "mainnet") or path to a genesis file
+chain = "mainnet"               # Name of the chain to sync ("amoy", "mumbai", "mainnet") or path to a genesis file
 identity = "Annon-Identity"     # Name/Identity of the node (default = OS hostname)
 verbosity = 3                   # Logging verbosity for the server (5=trace|4=debug|3=info|2=warn|1=error|0=crit) (`log-level` was replaced by `verbosity`, and thus will be deprecated soon)
 vmdebug = false                 # Record information useful for VM and contract debugging
@@ -74,7 +74,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   etherbase = ""           # Public address for block mining rewards
   extradata = ""           # Block extra data set by the miner (default = client version)
   gaslimit = 30000000      # Target gas ceiling for mined blocks
-  gasprice = "1000000000"  # Minimum gas price for mining a transaction (recommended for mainnet = 30000000000, default suitable for mumbai/devnet)
+  gasprice = "1000000000"  # Minimum gas price for mining a transaction (recommended for mainnet = 30000000000, default suitable for amoy/mumbai/devnet)
   recommit = "2m5s"        # The time interval for miner to re-create mining work
   commitinterrupt = true   # Interrupt the current mining work when time is exceeded and create partial blocks
 
@@ -128,7 +128,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   maxheaderhistory = 1024     # Maximum header history of gasprice oracle
   maxblockhistory = 1024      # Maximum block history of gasprice oracle
   maxprice = "5000000000000"  # Maximum gas price will be recommended by gpo
-  ignoreprice = "2"           # Gas price below which gpo will ignore transactions (recommended for mainnet = 30000000000, default suitable for mumbai/devnet)
+  ignoreprice = "2"           # Gas price below which gpo will ignore transactions (recommended for mainnet = 30000000000, default suitable for amoy/mumbai/devnet)
 
 [telemetry]
   metrics = false                            # Enable metrics collection and reporting
@@ -152,7 +152,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
       region = "us-north-1"
 
 [cache]
-  cache = 1024             # Megabytes of memory allocated to internal caching (recommended for mainnet = 4096, default suitable for mumbai/devnet)
+  cache = 1024             # Megabytes of memory allocated to internal caching (recommended for mainnet = 4096, default suitable for amoy/mumbai/devnet)
   gc = 25                  # Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)
   snapshot = 10            # Percentage of cache memory allowance to use for snapshot caching (default = 10% full mode, 20% archive mode)
   database = 50            # Percentage of cache memory allowance to use for database io

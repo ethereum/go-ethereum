@@ -84,6 +84,9 @@ type Config struct {
 	// GcMode selects the garbage collection mode for the trie
 	GcMode string `hcl:"gcmode,optional" toml:"gcmode,optional"`
 
+	// state.scheme selects the Scheme to use for storing ethereum state ('hash' or 'path')
+	StateScheme string `hcl:"state.scheme,optional" toml:"state.scheme,optional"`
+
 	// Snapshot enables the snapshot database mode
 	Snapshot bool `hcl:"snapshot,optional" toml:"snapshot,optional"`
 
@@ -642,10 +645,11 @@ func DefaultConfig() *Config {
 			Without:     false,
 			GRPCAddress: "",
 		},
-		SyncMode: "full",
-		GcMode:   "full",
-		Snapshot: true,
-		BorLogs:  false,
+		SyncMode:    "full",
+		GcMode:      "full",
+		StateScheme: "hash",
+		Snapshot:    true,
+		BorLogs:     false,
 		TxPool: &TxPoolConfig{
 			Locals:       []string{},
 			NoLocals:     false,
@@ -1166,6 +1170,14 @@ func (c *Config) buildEth(stack *node.Node, accountManager *accounts.Manager) (*
 		}
 	default:
 		return nil, fmt.Errorf("gcmode '%s' not found", c.GcMode)
+	}
+
+	// statescheme "hash" or "path"
+	switch c.StateScheme {
+	case "path":
+		n.StateScheme = "path"
+	default:
+		n.StateScheme = "hash"
 	}
 
 	// snapshot disable check

@@ -128,8 +128,7 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 	records = lrecords
 
 	log.Info(fmt.Sprintf("Retrieving existing TXT records on %s", name))
-
-	entries, err := c.DNSRecords(context.Background(), c.zoneID, cloudflare.DNSRecord{Type: "TXT"})
+	entries, _, err := c.ListDNSRecords(context.Background(), cloudflare.ZoneIdentifier(c.zoneID), cloudflare.ListDNSRecordsParams{Type: "TXT"})
 	if err != nil {
 		return err
 	}
@@ -163,16 +162,26 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 			if path != name {
 				ttl = treeNodeTTLCloudflare // Max TTL permitted by Cloudflare
 			}
-
-			record := cloudflare.DNSRecord{Type: "TXT", Name: path, Content: val, TTL: ttl}
-			_, err = c.CreateDNSRecord(context.Background(), c.zoneID, record)
+			record := cloudflare.CreateDNSRecordParams{Type: "TXT", Name: path, Content: val, TTL: ttl}
+			_, err = c.CreateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(c.zoneID), record)
 		} else if old.Content != val {
 			// Entry already exists, only change its content.
 			log.Info(fmt.Sprintf("Updating %s from %q to %q", path, old.Content, val))
 
 			updated++
-			old.Content = val
-			err = c.UpdateDNSRecord(context.Background(), c.zoneID, old.ID, old)
+
+			record := cloudflare.UpdateDNSRecordParams{
+				Type:     old.Type,
+				Name:     old.Name,
+				Content:  val,
+				Data:     old.Data,
+				ID:       old.ID,
+				Priority: old.Priority,
+				TTL:      old.TTL,
+				Proxied:  old.Proxied,
+				Tags:     old.Tags,
+			}
+			_, err = c.UpdateDNSRecord(context.Background(), cloudflare.ZoneIdentifier(c.zoneID), record)
 		} else {
 			skipped++
 
@@ -198,8 +207,7 @@ func (c *cloudflareClient) uploadRecords(name string, records map[string]string)
 		log.Debug(fmt.Sprintf("Deleting %s = %q", path, entry.Content))
 
 		deleted++
-
-		if err := c.DeleteDNSRecord(context.Background(), c.zoneID, entry.ID); err != nil {
+		if err := c.DeleteDNSRecord(context.Background(), cloudflare.ZoneIdentifier(c.zoneID), entry.ID); err != nil {
 			return fmt.Errorf("failed to delete %s: %v", path, err)
 		}
 	}

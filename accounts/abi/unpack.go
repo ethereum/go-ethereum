@@ -176,13 +176,14 @@ func forEachUnpack(t Type, output []byte, start, size int) (interface{}, error) 
 	// this value will become our slice or our array, depending on the type
 	var refSlice reflect.Value
 
-	if t.T == SliceTy {
+	switch t.T {
+	case SliceTy:
 		// declare our slice
 		refSlice = reflect.MakeSlice(t.GetType(), size, size)
-	} else if t.T == ArrayTy {
+	case ArrayTy:
 		// declare our array
 		refSlice = reflect.New(t.GetType()).Elem()
-	} else {
+	default:
 		return nil, errors.New("abi: invalid type in array/slice unpacking stage")
 	}
 

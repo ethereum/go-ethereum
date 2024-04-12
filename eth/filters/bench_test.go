@@ -68,7 +68,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 
 	b.Log("Running bloombits benchmark   section size:", sectionSize)
 
-	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false, rawdb.ExtraDBConfig{})
+	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}
@@ -145,7 +145,7 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64) {
 	for i := 0; i < benchFilterCnt; i++ {
 		if i%20 == 0 {
 			db.Close()
-			db, _ = rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false, rawdb.ExtraDBConfig{})
+			db, _ = rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
 			backend = &testBackend{db: db, sections: cnt}
 			sys = NewFilterSystem(backend, Config{})
 		}
@@ -187,7 +187,7 @@ func BenchmarkNoBloomBits(b *testing.B) {
 
 	b.Log("Running benchmark without bloombits")
 
-	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false, rawdb.ExtraDBConfig{})
+	db, err := rawdb.NewLevelDBDatabase(benchDataDir, 128, 1024, "", false)
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", benchDataDir, err)
 	}

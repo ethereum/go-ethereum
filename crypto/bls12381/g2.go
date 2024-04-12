@@ -27,7 +27,7 @@ import (
 // If z is equal to one the point is considered as in affine form.
 type PointG2 [3]fe2
 
-// Set copies valeus of one point to another.
+// Set copies values of one point to another.
 func (p *PointG2) Set(p2 *PointG2) *PointG2 {
 	p[0].set(&p2[0])
 	p[1].set(&p2[1])
@@ -134,7 +134,7 @@ func (g *G2) FromBytes(in []byte) (*PointG2, error) {
 	return p, nil
 }
 
-// DecodePoint given encoded (x, y) coordinates in 256 bytes returns a valid G1 Point.
+// DecodePoint given encoded (x, y) coordinates in 256 bytes returns a valid G2 Point.
 func (g *G2) DecodePoint(in []byte) (*PointG2, error) {
 	if len(in) != 256 {
 		return nil, errors.New("invalid g2 point length")

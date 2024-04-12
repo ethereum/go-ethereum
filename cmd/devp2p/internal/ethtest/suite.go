@@ -117,7 +117,7 @@ func (s *Suite) TestGetBlockHeaders(t *utesting.T) {
 	}
 	// write request
 	req := &GetBlockHeaders{
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			Origin:  eth.HashOrNumber{Hash: s.chain.blocks[1].Hash()},
 			Amount:  2,
 			Skip:    1,
@@ -160,7 +160,7 @@ func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	// create two requests
 	req1 := &GetBlockHeaders{
 		RequestId: uint64(111),
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			Origin: eth.HashOrNumber{
 				Hash: s.chain.blocks[1].Hash(),
 			},
@@ -171,7 +171,7 @@ func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	}
 	req2 := &GetBlockHeaders{
 		RequestId: uint64(222),
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			Origin: eth.HashOrNumber{
 				Hash: s.chain.blocks[1].Hash(),
 			},
@@ -215,12 +215,10 @@ func (s *Suite) TestSimultaneousRequests(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to get expected headers for request 2: %v", err)
 	}
-
-	if !headersMatch(expected1, headers1.BlockHeadersPacket) {
+	if !headersMatch(expected1, headers1.BlockHeadersRequest) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected1, headers1)
 	}
-
-	if !headersMatch(expected2, headers2.BlockHeadersPacket) {
+	if !headersMatch(expected2, headers2.BlockHeadersRequest) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected2, headers2)
 	}
 }
@@ -243,7 +241,7 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 	reqID := uint64(1234)
 	request1 := &GetBlockHeaders{
 		RequestId: reqID,
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			Origin: eth.HashOrNumber{
 				Number: 1,
 			},
@@ -252,7 +250,7 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 	}
 	request2 := &GetBlockHeaders{
 		RequestId: reqID,
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			Origin: eth.HashOrNumber{
 				Number: 33,
 			},
@@ -294,12 +292,10 @@ func (s *Suite) TestSameRequestID(t *utesting.T) {
 	if err != nil {
 		t.Fatalf("failed to get expected block headers: %v", err)
 	}
-
-	if !headersMatch(expected1, headers1.BlockHeadersPacket) {
+	if !headersMatch(expected1, headers1.BlockHeadersRequest) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected1, headers1)
 	}
-
-	if !headersMatch(expected2, headers2.BlockHeadersPacket) {
+	if !headersMatch(expected2, headers2.BlockHeadersRequest) {
 		t.Fatalf("header mismatch: \nexpected %v \ngot %v", expected2, headers2)
 	}
 }
@@ -319,7 +315,7 @@ func (s *Suite) TestZeroRequestID(t *utesting.T) {
 	}
 
 	req := &GetBlockHeaders{
-		GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 			Origin: eth.HashOrNumber{Number: 0},
 			Amount: 2,
 		},
@@ -356,7 +352,7 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	// create block bodies request
 	req := &GetBlockBodies{
 		RequestId: uint64(55),
-		GetBlockBodiesPacket: eth.GetBlockBodiesPacket{
+		GetBlockBodiesRequest: eth.GetBlockBodiesRequest{
 			s.chain.blocks[54].Hash(),
 			s.chain.blocks[75].Hash(),
 		},
@@ -371,13 +367,11 @@ func (s *Suite) TestGetBlockBodies(t *utesting.T) {
 	if !ok {
 		t.Fatalf("unexpected: %s", pretty.Sdump(msg))
 	}
-
-	bodies := resp.BlockBodiesPacket
+	bodies := resp.BlockBodiesResponse
 	t.Logf("received %d block bodies", len(bodies))
-
-	if len(bodies) != len(req.GetBlockBodiesPacket) {
+	if len(bodies) != len(req.GetBlockBodiesRequest) {
 		t.Fatalf("wrong bodies in response: expected %d bodies, "+
-			"got %d", len(req.GetBlockBodiesPacket), len(bodies))
+			"got %d", len(req.GetBlockBodiesRequest), len(bodies))
 	}
 }
 
@@ -526,8 +520,8 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 	}
 
 	getTxReq := &GetPooledTransactions{
-		RequestId:                   1234,
-		GetPooledTransactionsPacket: hashes,
+		RequestId:                    1234,
+		GetPooledTransactionsRequest: hashes,
 	}
 
 	if err = conn.Write(getTxReq); err != nil {
@@ -536,7 +530,7 @@ func (s *Suite) TestLargeTxRequest(t *utesting.T) {
 	// check that all received transactions match those that were sent to node
 	switch msg := conn.waitForResponse(s.chain, timeout, getTxReq.RequestId).(type) {
 	case *PooledTransactions:
-		for _, gotTx := range msg.PooledTransactionsPacket {
+		for _, gotTx := range msg.PooledTransactionsResponse {
 			if _, exists := hashMap[gotTx.Hash()]; !exists {
 				t.Fatalf("unexpected tx received: %v", gotTx.Hash())
 			}
@@ -600,8 +594,8 @@ func (s *Suite) TestNewPooledTxs(t *utesting.T) {
 		msg := conn.readAndServe(s.chain, timeout)
 		switch msg := msg.(type) {
 		case *GetPooledTransactions:
-			if len(msg.GetPooledTransactionsPacket) != len(hashes) {
-				t.Fatalf("unexpected number of txs requested: wanted %d, got %d", len(hashes), len(msg.GetPooledTransactionsPacket))
+			if len(msg.GetPooledTransactionsRequest) != len(hashes) {
+				t.Fatalf("unexpected number of txs requested: wanted %d, got %d", len(hashes), len(msg.GetPooledTransactionsRequest))
 			}
 
 			return

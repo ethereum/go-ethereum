@@ -94,6 +94,8 @@ var (
 		utils.GCModeFlag,
 		utils.SnapshotFlag,
 		utils.TxLookupLimitFlag,
+		utils.TransactionHistoryFlag,
+		utils.StateHistoryFlag,
 		utils.LightServeFlag,
 		utils.LightIngressFlag,
 		utils.LightEgressFlag,
@@ -141,6 +143,7 @@ var (
 		utils.SepoliaFlag,
 		utils.GoerliFlag,
 		utils.MumbaiFlag,
+		utils.AmoyFlag,
 		utils.BorMainnetFlag,
 		utils.DeveloperPeriodFlag,
 		utils.VMEnableDebugFlag,
@@ -152,7 +155,7 @@ var (
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
 		configFileFlag,
-	}, utils.NetworkFlags, utils.DatabasePathFlags)
+	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{
 		utils.HTTPEnabledFlag,
@@ -242,6 +245,9 @@ func init() {
 		// See verkle.go
 		verkleCommand,
 	}
+	if logTestCommand != nil {
+		app.Commands = append(app.Commands, logTestCommand)
+	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Flags = flags.Merge(
@@ -252,11 +258,16 @@ func init() {
 		metricsFlags,
 		utils.BorFlags,
 	)
+	flags.AutoEnvVars(app.Flags, "GETH")
 
 	app.Before = func(ctx *cli.Context) error {
 		maxprocs.Set() // Automatically set GOMAXPROCS to match Linux container CPU quota.
 		flags.MigrateGlobalFlags(ctx)
-		return debug.Setup(ctx)
+		if err := debug.Setup(ctx); err != nil {
+			return err
+		}
+		flags.CheckEnvVars(ctx, app.Flags, "GETH")
+		return nil
 	}
 	app.After = func(ctx *cli.Context) error {
 		debug.Exit()
@@ -289,6 +300,9 @@ func prepare(ctx *cli.Context) {
 	case ctx.IsSet(utils.MumbaiFlag.Name):
 		log.Info("Starting Bor on Mumbai testnet...")
 
+	case ctx.IsSet(utils.AmoyFlag.Name):
+		log.Info("Starting Bor on Amoy testnet...")
+
 	case ctx.IsSet(utils.BorMainnetFlag.Name):
 		log.Info("Starting Bor on Bor mainnet...")
 
@@ -319,6 +333,7 @@ func prepare(ctx *cli.Context) {
 		if !ctx.IsSet(utils.SepoliaFlag.Name) &&
 			!ctx.IsSet(utils.GoerliFlag.Name) &&
 			!ctx.IsSet(utils.MumbaiFlag.Name) &&
+			!ctx.IsSet(utils.AmoyFlag.Name) &&
 			!ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 4096)

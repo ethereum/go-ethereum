@@ -38,14 +38,16 @@ func TestNewSlotter(t *testing.T) {
 		2*blobSize + txAvgSize,  // 2 blob + some expected tx infos (could be fewer blobs and more tx data)
 		3*blobSize + txAvgSize,  // 3 blob + some expected tx infos (could be fewer blobs and more tx data)
 		4*blobSize + txAvgSize,  // 4 blob + some expected tx infos (could be fewer blobs and more tx data)
-		5*blobSize + txAvgSize,  // 1-4 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
-		6*blobSize + txAvgSize,  // 1-4 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
-		7*blobSize + txAvgSize,  // 1-4 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
-		8*blobSize + txAvgSize,  // 1-4 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
-		9*blobSize + txAvgSize,  // 1-4 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
-		10*blobSize + txAvgSize, // 1-4 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
-		11*blobSize + txAvgSize, // 1-4 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
-		12*blobSize + txAvgSize, // 1-4 blobs + unexpectedly large tx infos >= 4 blobs + max tx metadata size
+		5*blobSize + txAvgSize,  // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		6*blobSize + txAvgSize,  // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		7*blobSize + txAvgSize,  // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		8*blobSize + txAvgSize,  // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		9*blobSize + txAvgSize,  // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		10*blobSize + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		11*blobSize + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		12*blobSize + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		13*blobSize + txAvgSize, // 1-6 blobs + unexpectedly large tx infos < 4 blobs + max tx metadata size
+		14*blobSize + txAvgSize, // 1-6 blobs + unexpectedly large tx infos >= 4 blobs + max tx metadata size
 	}
 	if len(shelves) != len(want) {
 		t.Errorf("shelves count mismatch: have %d, want %d", len(shelves), len(want))

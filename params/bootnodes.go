@@ -32,6 +32,14 @@ var MainnetBootnodes = []string{
 	"enode://4aeb4ab6c14b23e2c4cfdce879c04b0748a20d8e9b59e25ded2a08143e265c6c25936e74cbc8e641e3312ca288673d91f2f93f8e277de3cfa444ecdaaf982052@157.90.35.166:30303",   // bootnode-hetzner-fsn
 }
 
+// HoleskyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Holesky test network.
+var HoleskyBootnodes = []string{
+	// EF DevOps
+	"enode://ac906289e4b7f12df423d654c5a962b6ebe5b3a74cc9e06292a85221f9a64a6f1cfdd6b714ed6dacef51578f92b34c60ee91e9ede9c7f8fadc4d347326d95e2b@146.190.13.128:30303",
+	"enode://a3435a0155a3e837c02f5e7f5662a2f1fbc25b48e4dc232016e1c51b544cb5b4510ef633ea3278c0e970fa8ad8141e2d4d0f9f95456c537ff05fdf9b31c15072@178.128.136.233:30303",
+}
+
 // SepoliaBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Sepolia test network.
 var SepoliaBootnodes = []string{
@@ -65,6 +73,13 @@ var GoerliBootnodes = []string{
 var MumbaiBootnodes = []string{
 	"enode://bdcd4786a616a853b8a041f53496d853c68d99d54ff305615cd91c03cd56895e0a7f6e9f35dbf89131044e2114a9a782b792b5661e3aff07faf125a98606a071@43.200.206.40:30303",
 	"enode://209aaf7ed549cf4a5700fd833da25413f80a1248bd3aa7fe2a87203e3f7b236dd729579e5c8df61c97bf508281bae4969d6de76a7393bcbd04a0af70270333b3@54.216.248.9:30303",
+}
+
+// AmoyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Amoy test network.
+var AmoyBootnodes = []string{
+	"enode://bce861be777e91b0a5a49d58a51e14f32f201b4c6c2d1fbea6c7a1f14756cbb3f931f3188d6b65de8b07b53ff28d03b6e366d09e56360d2124a9fc5a15a0913d@54.217.171.196:30303",
+	"enode://4a3dc0081a346d26a73d79dd88216a9402d2292318e2db9947dbc97ea9c4afb2498dc519c0af04420dc13a238c279062da0320181e7c1461216ce4513bfd40bf@13.251.184.185:30303",
 }
 
 // BorMainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
@@ -118,6 +133,8 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 		net = "mumbai"
 	case BorMainnetGenesisHash:
 		net = "bor-mainnet"
+	case AmoyGenesisHash:
+		net = "amoy"
 	case SepoliaGenesisHash:
 		net = "sepolia"
 	default:

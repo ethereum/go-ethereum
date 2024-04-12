@@ -67,9 +67,11 @@ var LightClientGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode:           downloader.SnapSync,
-	NetworkId:          1,
+	SyncMode:           downloader.FullSync,
+	NetworkId:          0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:      2350000,
+	TransactionHistory: 2350000,
+	StateHistory:       params.FullImmutabilityThreshold,
 	LightPeers:         100,
 	DatabaseCache:      512,
 	TrieCleanCache:     154,
@@ -88,14 +90,15 @@ var Defaults = Config{
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
 
-// Config contains configuration options for of the ETH and LES protocols.
+// Config contains configuration options for ETH and LES protocols.
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
 	// If nil, the Ethereum main net block is used.
 	Genesis *core.Genesis `toml:",omitempty"`
 
-	// Protocol options
-	NetworkId uint64 // Network ID to use for selecting peers to connect to
+	// Network ID separates blockchains on the peer-to-peer networking level. When left
+	// zero, the chain ID is used as network ID.
+	NetworkId uint64
 	SyncMode  downloader.SyncMode
 
 	// This can be set to list of enrtree:// URLs which will be queried for
@@ -106,7 +109,15 @@ type Config struct {
 	NoPruning  bool // Whether to disable pruning and flush everything to disk
 	NoPrefetch bool // Whether to disable prefetching and only load state on demand
 
-	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+	// Deprecated, use 'TransactionHistory' instead.
+	TxLookupLimit      uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+	TransactionHistory uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+	StateHistory       uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
+
+	// State scheme represents the scheme used to store ethereum states and trie
+	// nodes on top. It can be 'hash', 'path', or none which means use the scheme
+	// consistent with persistent state.
+	StateScheme string `toml:",omitempty"`
 
 	// RequiredBlocks is a set of block number -> hash mappings which must be in the
 	// canonical chain of all remote peers. Setting the option makes geth verify the
@@ -240,6 +251,9 @@ func CreateConsensusEngine(chainConfig *params.ChainConfig, ethConfig *Config, d
 			return bor.New(chainConfig, db, blockchainAPI, spanner, heimdallClient, genesisContractsClient, false), nil
 		}
 	}
+	// If defaulting to proof-of-work, enforce an already merged network since
+	// we cannot run PoW algorithms anymore, so we cannot even follow a chain
+	// not coordinated by a beacon node.
 	if !chainConfig.TerminalTotalDifficultyPassed {
 		return nil, errors.New("ethash is only supported as a historical component of already merged networks")
 	}

@@ -72,32 +72,23 @@ func (p *testTxPool) Has(hash common.Hash) bool {
 
 // Get retrieves the transaction from local txpool with given
 // tx hash.
-func (p *testTxPool) Get(hash common.Hash) *txpool.Transaction {
+func (p *testTxPool) Get(hash common.Hash) *types.Transaction {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-
-	if tx := p.pool[hash]; tx != nil {
-		return &txpool.Transaction{Tx: tx}
-	}
-	return nil
+	return p.pool[hash]
 }
 
 // Add appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) Add(txs []*txpool.Transaction, local bool, sync bool) []error {
-	unwrapped := make([]*types.Transaction, len(txs))
-	for i, tx := range txs {
-		unwrapped[i] = tx.Tx
-	}
+func (p *testTxPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	for _, tx := range unwrapped {
+	for _, tx := range txs {
 		p.pool[tx.Hash()] = tx
 	}
-
-	p.txFeed.Send(core.NewTxsEvent{Txs: unwrapped})
-	return make([]error, len(unwrapped))
+	p.txFeed.Send(core.NewTxsEvent{Txs: txs})
+	return make([]error, len(txs))
 }
 
 // Pending returns all the transactions known to the pool
@@ -119,19 +110,21 @@ func (p *testTxPool) Pending(enforceTips bool) map[common.Address][]*txpool.Lazy
 		for _, tx := range batch {
 			pending[addr] = append(pending[addr], &txpool.LazyTransaction{
 				Hash:      tx.Hash(),
-				Tx:        &txpool.Transaction{Tx: tx},
+				Tx:        tx,
 				Time:      tx.Time(),
 				GasFeeCap: tx.GasFeeCap(),
 				GasTipCap: tx.GasTipCap(),
+				Gas:       tx.Gas(),
+				BlobGas:   tx.BlobGas(),
 			})
 		}
 	}
 	return pending
 }
 
-// SubscribeNewTxsEvent should return an event subscription of NewTxsEvent and
+// SubscribeTransactions should return an event subscription of NewTxsEvent and
 // send events to the given channel.
-func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+func (p *testTxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {
 	return p.txFeed.Subscribe(ch)
 }
 

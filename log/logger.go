@@ -180,23 +180,22 @@ type logger struct {
 }
 
 func (l *logger) write(msg string, lvl Lvl, ctx []interface{}, skip int) {
-	if l.h.Level() < lvl {
-		return
-	}
-
-	l.h.Log(&Record{
+	record := &Record{
 		Time: time.Now(),
 		Lvl:  lvl,
 		Msg:  msg,
 		Ctx:  newContext(l.ctx, ctx),
-		Call: stack.Caller(skip),
 		KeyNames: RecordKeyNames{
 			Time: timeKey,
 			Msg:  msgKey,
 			Lvl:  lvlKey,
 			Ctx:  ctxKey,
 		},
-	})
+	}
+	if stackEnabled.Load() {
+		record.Call = stack.Caller(skip)
+	}
+	l.h.Log(record)
 }
 
 func (l *logger) New(ctx ...interface{}) Logger {

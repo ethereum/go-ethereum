@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBytesConversion(t *testing.T) {
@@ -613,4 +614,15 @@ func TestAddressEIP55(t *testing.T) {
 	if addr != dec {
 		t.Fatal("Unexpected address after unmarshal")
 	}
+}
+
+func BenchmarkPrettyDuration(b *testing.B) {
+	var x = PrettyDuration(time.Duration(int64(1203123912312)))
+	b.Logf("Pre %s", time.Duration(x).String())
+	var a string
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		a = x.String()
+	}
+	b.Logf("Post %s", a)
 }

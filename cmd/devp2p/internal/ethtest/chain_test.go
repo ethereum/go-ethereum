@@ -146,7 +146,7 @@ func TestChain_GetHeaders(t *testing.T) {
 	}{
 		{
 			req: GetBlockHeaders{
-				GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+				GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 					Origin:  eth.HashOrNumber{Number: uint64(2)},
 					Amount:  uint64(5),
 					Skip:    1,
@@ -163,7 +163,7 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+				GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 					Origin:  eth.HashOrNumber{Number: uint64(chain.Len() - 1)},
 					Amount:  uint64(3),
 					Skip:    0,
@@ -178,7 +178,7 @@ func TestChain_GetHeaders(t *testing.T) {
 		},
 		{
 			req: GetBlockHeaders{
-				GetBlockHeadersPacket: &eth.GetBlockHeadersPacket{
+				GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
 					Origin:  eth.HashOrNumber{Hash: chain.Head().Hash()},
 					Amount:  uint64(1),
 					Skip:    0,

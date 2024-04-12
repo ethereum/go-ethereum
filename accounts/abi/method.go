@@ -132,11 +132,12 @@ func NewMethod(name string, rawName string, funType FunctionType, mutability str
 	}
 
 	identity := fmt.Sprintf("function %v", rawName)
-	if funType == Fallback {
+	switch funType {
+	case Fallback:
 		identity = "fallback"
-	} else if funType == Receive {
+	case Receive:
 		identity = "receive"
-	} else if funType == Constructor {
+	case Constructor:
 		identity = "constructor"
 	}
 

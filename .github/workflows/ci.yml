@@ -27,9 +27,9 @@ jobs:
             git submodule update --init --recursive --force
             git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
 
-        - uses: actions/setup-go@v3
+        - uses: actions/setup-go@v5
           with:
-            go-version: 1.20.x
+            go-version: 1.22.x
 
         - name: Install dependencies on Linux
           if: runner.os == 'Linux'
@@ -59,9 +59,9 @@ jobs:
             git submodule update --init --recursive --force
             git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
 
-        - uses: actions/setup-go@v3
+        - uses: actions/setup-go@v5
           with:
-            go-version: 1.20.x
+            go-version: 1.22.x
 
         - name: Install dependencies on Linux
           if: runner.os == 'Linux'
@@ -87,9 +87,9 @@ jobs:
             git submodule update --init --recursive --force
             git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
 
-        - uses: actions/setup-go@v3
+        - uses: actions/setup-go@v5
           with:
-            go-version: 1.20.x
+            go-version: 1.22.x
 
         - name: Install dependencies on Linux
           if: runner.os == 'Linux'
@@ -138,9 +138,9 @@ jobs:
             git submodule update --init --recursive --force
             git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
 
-        - uses: actions/setup-go@v3
+        - uses: actions/setup-go@v5
           with:
-            go-version: 1.20.x
+            go-version: 1.22.x
 
         - name: Install dependencies on Linux
           if: runner.os == 'Linux'
@@ -194,9 +194,9 @@ jobs:
             git submodule update --init --recursive --force
             git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
 
-        - uses: actions/setup-go@v3
+        - uses: actions/setup-go@v5
           with:
-            go-version: 1.20.x
+            go-version: 1.22.x
 
         - name: Checkout matic-cli
           uses: actions/checkout@v3
@@ -248,6 +248,8 @@ jobs:
 
         - name: Run smoke tests
           run: |
+            echo "Funding ganache accounts..."
+            timeout 10m bash bor/integration-tests/fund_ganache_accounts.sh
             echo "Deposit 100 matic for each account to bor network"
             cd matic-cli/devnet/code/contracts
             npm run truffle exec scripts/deposit.js -- --network development $(jq -r .root.tokens.MaticToken contractAddresses.json) 100000000000000000000

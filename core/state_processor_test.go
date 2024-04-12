@@ -97,7 +97,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		}), signer, key1)
 		return tx
 	}
-	var mkBlobTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int, hashes []common.Hash) *types.Transaction {
+	var mkBlobTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap, blobGasFeeCap *big.Int, hashes []common.Hash) *types.Transaction {
 		tx, err := types.SignTx(types.NewTx(&types.BlobTx{
 			Nonce:      nonce,
 			GasTipCap:  uint256.MustFromBig(gasTipCap),
@@ -105,6 +105,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			Gas:        gasLimit,
 			To:         to,
 			BlobHashes: hashes,
+			BlobFeeCap: uint256.MustFromBig(blobGasFeeCap),
 			Value:      new(uint256.Int),
 		}), signer, key1)
 		if err != nil {
@@ -134,7 +135,7 @@ func TestStateProcessorErrors(t *testing.T) {
 		)
 
 		defer blockchain.Stop()
-		bigNumber := new(big.Int).SetBytes(common.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+		bigNumber := new(big.Int).SetBytes(common.MaxHash.Bytes())
 		tooBigNumber := new(big.Int).Set(bigNumber)
 		tooBigNumber.Add(tooBigNumber, common.Big1)
 		for i, tt := range []struct {
@@ -198,7 +199,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(0), big.NewInt(0)),
 				},
-				want: "could not apply tx 0 [0xc4ab868fef0c82ae0387b742aee87907f2d0fc528fc6ea0a021459fb0fc4a4a8]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 0 baseFee: 875000000",
+				want: "could not apply tx 0 [0xc4ab868fef0c82ae0387b742aee87907f2d0fc528fc6ea0a021459fb0fc4a4a8]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 0, baseFee: 875000000",
 			},
 			{ // ErrTipVeryHigh
 				txs: []*types.Transaction{
@@ -249,9 +250,9 @@ func TestStateProcessorErrors(t *testing.T) {
 			},
 			{ // ErrBlobFeeCapTooLow
 				txs: []*types.Transaction{
-					mkBlobTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(1), []common.Hash{(common.Hash{1})}),
+					mkBlobTx(0, common.Address{}, params.TxGas, big.NewInt(1), big.NewInt(1), big.NewInt(0), []common.Hash{(common.Hash{1})}),
 				},
-				want: "could not apply tx 0 [0x6c11015985ce82db691d7b2d017acda296db88b811c3c60dc71449c76256c716]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 1 baseFee: 875000000",
+				want: "could not apply tx 0 [0x6c11015985ce82db691d7b2d017acda296db88b811c3c60dc71449c76256c716]: max fee per gas less than block base fee: address 0x71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 1, baseFee: 875000000",
 			},
 		} {
 			block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), tt.txs, gspec.Config)
@@ -361,7 +362,8 @@ func TestStateProcessorErrors(t *testing.T) {
 func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig) *types.Block {
 	difficulty := big.NewInt(0)
 	if !config.TerminalTotalDifficultyPassed {
-		difficulty = engine.CalcDifficulty(&fakeChainReader{config: config}, parent.Time()+10, &types.Header{
+		fakeChainReader := newChainMaker(nil, config, engine)
+		difficulty = engine.CalcDifficulty(fakeChainReader, parent.Time()+10, &types.Header{
 			Number:     parent.Number(),
 			Time:       parent.Time(),
 			Difficulty: parent.Difficulty(),
@@ -417,6 +419,9 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		used := uint64(nBlobs * params.BlobTxBlobGasPerBlob)
 		header.ExcessBlobGas = &excess
 		header.BlobGasUsed = &used
+
+		beaconRoot := common.HexToHash("0xbeac00")
+		header.ParentBeaconRoot = &beaconRoot
 	}
 	// Assemble and return the final block for sealing
 	if config.IsShanghai(header.Number) {

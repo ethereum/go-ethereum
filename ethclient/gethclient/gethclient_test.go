@@ -39,11 +39,13 @@ import (
 )
 
 var (
-	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
-	testSlot    = common.HexToHash("0xdeadbeef")
-	testValue   = crypto.Keccak256Hash(testSlot[:])
-	testBalance = big.NewInt(2e15)
+	testKey, _   = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr     = crypto.PubkeyToAddress(testKey.PublicKey)
+	testContract = common.HexToAddress("0xbeef")
+	testEmpty    = common.HexToAddress("0xeeee")
+	testSlot     = common.HexToHash("0xdeadbeef")
+	testValue    = crypto.Keccak256Hash(testSlot[:])
+	testBalance  = big.NewInt(2e15)
 )
 
 func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
@@ -84,8 +86,12 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 // nolint:typecheck
 func generateTestChain() (*core.Genesis, []*types.Block) {
 	genesis := &core.Genesis{
-		Config:    params.AllEthashProtocolChanges,
-		Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}}},
+		Config: params.AllEthashProtocolChanges,
+		Alloc: core.GenesisAlloc{
+			testAddr:     {Balance: testBalance, Storage: map[common.Hash]common.Hash{testSlot: testValue}},
+			testContract: {Nonce: 1, Code: []byte{0x13, 0x37}},
+			testEmpty:    {Balance: big.NewInt(1)},
+		},
 		ExtraData: []byte("test genesis"),
 		Timestamp: 9000,
 	}
@@ -112,8 +118,17 @@ func TestGethClient(t *testing.T) {
 		test func(t *testing.T)
 	}{
 		{
-			"TestGetProof",
-			func(t *testing.T) { testGetProof(t, client) },
+			"TestGetProof1",
+			func(t *testing.T) { testGetProof(t, client, testAddr) },
+		}, {
+			"TestGetProof2",
+			func(t *testing.T) { testGetProof(t, client, testContract) },
+		}, {
+			"TestGetProofEmpty",
+			func(t *testing.T) { testGetProof(t, client, testEmpty) },
+		}, {
+			"TestGetProofNonExistent",
+			func(t *testing.T) { testGetProofNonExistent(t, client) },
 		}, {
 			"TestGetProofCanonicalizeKeys",
 			func(t *testing.T) { testGetProofCanonicalizeKeys(t, client) },
@@ -232,43 +247,41 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testGetProof(t *testing.T, client *rpc.Client) {
+func testGetProof(t *testing.T, client *rpc.Client, addr common.Address) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
-
-	result, err := ec.GetProof(context.Background(), testAddr, []string{testSlot.String()}, nil)
+	result, err := ec.GetProof(context.Background(), addr, []string{testSlot.String()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if !bytes.Equal(result.Address[:], testAddr[:]) {
-		t.Fatalf("unexpected address, want: %v got: %v", testAddr, result.Address)
+	if result.Address != addr {
+		t.Fatalf("unexpected address, have: %v want: %v", result.Address, addr)
 	}
 	// test nonce
-	nonce, _ := ethcl.NonceAt(context.Background(), result.Address, nil)
-	if result.Nonce != nonce {
+	if nonce, _ := ethcl.NonceAt(context.Background(), addr, nil); result.Nonce != nonce {
 		t.Fatalf("invalid nonce, want: %v got: %v", nonce, result.Nonce)
 	}
 	// test balance
-	balance, _ := ethcl.BalanceAt(context.Background(), result.Address, nil)
-	if result.Balance.Cmp(balance) != 0 {
+	if balance, _ := ethcl.BalanceAt(context.Background(), addr, nil); result.Balance.Cmp(balance) != 0 {
 		t.Fatalf("invalid balance, want: %v got: %v", balance, result.Balance)
 	}
-
 	// test storage
 	if len(result.StorageProof) != 1 {
 		t.Fatalf("invalid storage proof, want 1 proof, got %v proof(s)", len(result.StorageProof))
 	}
-
-	proof := result.StorageProof[0]
-	slotValue, _ := ethcl.StorageAt(context.Background(), testAddr, testSlot, nil)
-
-	if !bytes.Equal(slotValue, proof.Value.Bytes()) {
-		t.Fatalf("invalid storage proof value, want: %v, got: %v", slotValue, proof.Value.Bytes())
+	for _, proof := range result.StorageProof {
+		if proof.Key != testSlot.String() {
+			t.Fatalf("invalid storage proof key, want: %q, got: %q", testSlot.String(), proof.Key)
+		}
+		slotValue, _ := ethcl.StorageAt(context.Background(), addr, common.HexToHash(proof.Key), nil)
+		if have, want := common.BigToHash(proof.Value), common.BytesToHash(slotValue); have != want {
+			t.Fatalf("addr %x, invalid storage proof value: have: %v, want: %v", addr, have, want)
+		}
 	}
-
-	if proof.Key != testSlot.String() {
-		t.Fatalf("invalid storage proof key, want: %q, got: %q", testSlot.String(), proof.Key)
+	// test code
+	code, _ := ethcl.CodeAt(context.Background(), addr, nil)
+	if have, want := result.CodeHash, crypto.Keccak256Hash(code); have != want {
+		t.Fatalf("codehash wrong, have %v want %v ", have, want)
 	}
 }
 
@@ -300,6 +313,38 @@ func testGetProofCanonicalizeKeys(t *testing.T, client *rpc.Client) {
 	}
 	if result.StorageProof[0].Key != hashSizedKey {
 		t.Fatalf("wrong storage key encoding in proof: %q", result.StorageProof[0].Key)
+	}
+}
+
+func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
+	addr := common.HexToAddress("0x0001")
+	ec := New(client)
+	result, err := ec.GetProof(context.Background(), addr, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Address != addr {
+		t.Fatalf("unexpected address, have: %v want: %v", result.Address, addr)
+	}
+	// test nonce
+	if result.Nonce != 0 {
+		t.Fatalf("invalid nonce, want: %v got: %v", 0, result.Nonce)
+	}
+	// test balance
+	if result.Balance.Cmp(big.NewInt(0)) != 0 {
+		t.Fatalf("invalid balance, want: %v got: %v", 0, result.Balance)
+	}
+	// test storage
+	if have := len(result.StorageProof); have != 0 {
+		t.Fatalf("invalid storage proof, want 0 proof, got %v proof(s)", have)
+	}
+	// test codeHash
+	if have, want := result.CodeHash, (common.Hash{}); have != want {
+		t.Fatalf("codehash wrong, have %v want %v ", have, want)
+	}
+	// test codeHash
+	if have, want := result.StorageHash, (common.Hash{}); have != want {
+		t.Fatalf("storagehash wrong, have %v want %v ", have, want)
 	}
 }
 
@@ -452,7 +497,7 @@ func TestOverrideAccountMarshal(t *testing.T) {
 
 	om := map[common.Address]OverrideAccount{
 		{0x11}: {
-			// Zero-valued nonce is not overriddden, but simply dropped by the encoder.
+			// Zero-valued nonce is not overridden, but simply dropped by the encoder.
 			Nonce: 0,
 		},
 		{0xaa}: {

@@ -1677,7 +1677,7 @@ var bindTests = []struct {
 			}
 			sim.Commit()
 
-			// This test the existence of the free retreiver call for view and pure functions
+			// This test the existence of the free retriever call for view and pure functions
 			if num, err := pav.PureFunc(nil); err != nil {
 				t.Fatalf("Failed to call anonymous field retriever: %v", err)
 			} else if num.Cmp(big.NewInt(42)) != 0 {

@@ -24,6 +24,14 @@ const (
 	termCtxMaxPadding = 40
 )
 
+// ResetGlobalState resets the fieldPadding, which is useful for producing
+// predictable output.
+func ResetGlobalState() {
+	fieldPaddingLock.Lock()
+	fieldPadding = make(map[string]int)
+	fieldPaddingLock.Unlock()
+}
+
 // locationTrims are trimmed for display to avoid unwieldy log lines.
 var locationTrims = []string{
 	"github.com/ethereum/go-ethereum/",
@@ -33,13 +41,21 @@ var locationTrims = []string{
 // format output.
 func PrintOrigins(print bool) {
 	locationEnabled.Store(print)
+	if print {
+		stackEnabled.Store(true)
+	}
 }
+
+// stackEnabled is an atomic flag controlling whether the log handler needs
+// to store the callsite stack. This is needed in case any handler wants to
+// print locations (locationEnabled), use vmodule, or print full stacks (BacktraceAt).
+var stackEnabled atomic.Bool
 
 // locationEnabled is an atomic flag controlling whether the terminal formatter
 // should append the log locations too when printing entries.
 var locationEnabled atomic.Bool
 
-// locationLength is the maxmimum path length encountered, which all logs are
+// locationLength is the maximum path length encountered, which all logs are
 // padded to to aid in alignment.
 var locationLength atomic.Uint32
 

@@ -84,7 +84,7 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 		toaddr := common.Address{}
 		data := make([]byte, nbytes)
 		gas, _ := IntrinsicGas(data, nil, false, false, false, false)
-		signer := types.MakeSigner(gen.config, big.NewInt(int64(i)), gen.header.Time)
+		signer := gen.Signer()
 		gasPrice := big.NewInt(0)
 		if gen.header.BaseFee != nil {
 			gasPrice = gen.header.BaseFee
@@ -132,7 +132,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 		if gen.header.BaseFee != nil {
 			gasPrice = gen.header.BaseFee
 		}
-		signer := types.MakeSigner(gen.config, big.NewInt(int64(i)), gen.header.Time)
+		signer := gen.Signer()
 		for {
 			gas -= params.TxGas
 			if gas < params.TxGas {
@@ -190,7 +190,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	} else {
 		dir := b.TempDir()
 
-		db, err = rawdb.NewLevelDBDatabase(dir, 128, 128, "", false, rawdb.ExtraDBConfig{})
+		db, err = rawdb.NewLevelDBDatabase(dir, 128, 128, "", false)
 		if err != nil {
 			b.Fatalf("cannot create temporary database: %v", err)
 		}
@@ -293,7 +293,7 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 func benchWriteChain(b *testing.B, full bool, count uint64) {
 	for i := 0; i < b.N; i++ {
 		dir := b.TempDir()
-		db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false, rawdb.ExtraDBConfig{})
+		db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
 
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
@@ -307,7 +307,7 @@ func benchWriteChain(b *testing.B, full bool, count uint64) {
 func benchReadChain(b *testing.B, full bool, count uint64) {
 	dir := b.TempDir()
 
-	db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false, rawdb.ExtraDBConfig{})
+	db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
 	if err != nil {
 		b.Fatalf("error opening database at %v: %v", dir, err)
 	}
@@ -322,7 +322,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false, rawdb.ExtraDBConfig{})
+		db, err := rawdb.NewLevelDBDatabase(dir, 128, 1024, "", false)
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}

@@ -15,7 +15,7 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 
 	f.StringFlag(&flagset.StringFlag{
 		Name:    "chain",
-		Usage:   "Name of the chain to sync ('mumbai', 'mainnet') or path to a genesis file",
+		Usage:   "Name of the chain to sync ('amoy', 'mumbai', 'mainnet') or path to a genesis file",
 		Value:   &c.cliConfig.Chain,
 		Default: c.cliConfig.Chain,
 	})
@@ -97,6 +97,12 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Usage:   `Blockchain garbage collection mode ("full", "archive")`,
 		Value:   &c.cliConfig.GcMode,
 		Default: c.cliConfig.GcMode,
+	})
+	f.StringFlag(&flagset.StringFlag{
+		Name:    "state.scheme",
+		Usage:   "Scheme to use for storing ethereum state ('hash' or 'path')",
+		Value:   &c.cliConfig.StateScheme,
+		Default: c.cliConfig.StateScheme,
 	})
 	f.MapStringFlag(&flagset.MapStringFlag{
 		Name:    "eth.requiredblocks",

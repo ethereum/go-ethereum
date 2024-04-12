@@ -240,13 +240,13 @@ func TestMilestone(t *testing.T) {
 	require.Equal(t, order[0], uint64(16), "expected number to be 16 but got", order[0])
 	require.Equal(t, list[order[0]], common.Hash{16}, "expected value is", common.Hash{16}.String()[2:], "but got", list[order[0]])
 
-	capicity := milestone.MaxCapacity
-	for i := 16; i <= 16*(capicity+1); i = i + 16 {
+	capacity := milestone.MaxCapacity
+	for i := 16; i <= 16*(capacity+1); i = i + 16 {
 		s.ProcessFutureMilestone(uint64(i), common.Hash{16})
 	}
 
-	require.Equal(t, len(milestone.FutureMilestoneOrder), capicity, "expected length is", capicity)
-	require.Equal(t, milestone.FutureMilestoneOrder[capicity-1], uint64(16*capicity), "expected value is", uint64(16*capicity), "but got", milestone.FutureMilestoneOrder[capicity-1])
+	require.Equal(t, len(milestone.FutureMilestoneOrder), capacity, "expected length is", capacity)
+	require.Equal(t, milestone.FutureMilestoneOrder[capacity-1], uint64(16*capacity), "expected value is", uint64(16*capacity), "but got", milestone.FutureMilestoneOrder[capacity-1])
 }
 
 // TestIsValidPeer checks the IsValidPeer function in isolation
@@ -689,9 +689,9 @@ func TestPropertyBasedTestingMilestone(t *testing.T) {
 		}
 
 		var (
-			milestoneEndNum = rapid.Uint64().Draw(t, "endBlock")
-			milestoneID     = rapid.String().Draw(t, "MilestoneID")
-			doLock          = rapid.Bool().Draw(t, "Voted")
+			milestoneEndNum = rapid.Uint64().AsAny().Draw(t, "endBlock")
+			milestoneID     = rapid.String().AsAny().Draw(t, "MilestoneID")
+			doLock          = rapid.Bool().AsAny().Draw(t, "Voted")
 		)
 
 		val := milestone.LockMutex(milestoneEndNum.(uint64))
@@ -760,8 +760,8 @@ func TestPropertyBasedTestingMilestone(t *testing.T) {
 		}
 
 		var (
-			start = rapid.Uint64Max(milestoneEndNum.(uint64)).Draw(t, "start for mock chain")
-			end   = rapid.Uint64Min(start.(uint64)).Filter(fitlerFn).Draw(t, "end for mock chain")
+			start = rapid.Uint64Max(milestoneEndNum.(uint64)).AsAny().Draw(t, "start for mock chain")
+			end   = rapid.Uint64Min(start.(uint64)).Filter(fitlerFn).AsAny().Draw(t, "end for mock chain")
 		)
 
 		chainTemp := createMockChain(start.(uint64), end.(uint64))
@@ -780,9 +780,9 @@ func TestPropertyBasedTestingMilestone(t *testing.T) {
 		}
 
 		var (
-			milestoneEndNum2 = rapid.Uint64().Draw(t, "endBlockNum 2")
-			milestoneID2     = rapid.String().Draw(t, "MilestoneID 2")
-			doLock2          = rapid.Bool().Draw(t, "Voted 2")
+			milestoneEndNum2 = rapid.Uint64().AsAny().Draw(t, "endBlockNum 2")
+			milestoneID2     = rapid.String().AsAny().Draw(t, "MilestoneID 2")
+			doLock2          = rapid.Bool().AsAny().Draw(t, "Voted 2")
 		)
 
 		val = milestone.LockMutex(milestoneEndNum2.(uint64))
@@ -862,7 +862,7 @@ func TestPropertyBasedTestingMilestone(t *testing.T) {
 		}
 
 		var (
-			milestoneNum = rapid.Uint64().Draw(t, "milestone Number")
+			milestoneNum = rapid.Uint64().AsAny().Draw(t, "milestone Number")
 		)
 
 		lockedValue := milestone.LockedMilestoneNumber
@@ -892,7 +892,7 @@ func TestPropertyBasedTestingMilestone(t *testing.T) {
 		}
 
 		var (
-			futureMilestoneNum = rapid.Uint64Min(milestoneNum.(uint64)).Draw(t, "future milestone Number")
+			futureMilestoneNum = rapid.Uint64Min(milestoneNum.(uint64)).AsAny().Draw(t, "future milestone Number")
 		)
 
 		isChainLocked = milestone.Locked

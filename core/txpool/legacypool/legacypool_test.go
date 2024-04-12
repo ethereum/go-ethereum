@@ -3778,7 +3778,7 @@ func newTxs(pool *LegacyPool) *types.Transaction {
 
 // 			txCount++
 // 		} else {
-// 			// we don't maximize fulfilment of the block. just fill somehow
+// 			// we don't maximize fulfillment of the block. just fill somehow
 // 			return blockGasLimit, txCount
 // 		}
 // 	}

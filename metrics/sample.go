@@ -11,10 +11,7 @@ import (
 
 const rescaleThreshold = time.Hour
 
-// Samples maintain a statistically-significant selection of values from
-// a stream.
-type Sample interface {
-	Clear()
+type SampleSnapshot interface {
 	Count() int64
 	Max() int64
 	Mean() float64
@@ -22,12 +19,17 @@ type Sample interface {
 	Percentile(float64) float64
 	Percentiles([]float64) []float64
 	Size() int
-	Snapshot() Sample
 	StdDev() float64
 	Sum() int64
-	Update(int64)
-	Values() []int64
 	Variance() float64
+}
+
+// Samples maintain a statistically-significant selection of values from
+// a stream.
+type Sample interface {
+	Snapshot() SampleSnapshot
+	Clear()
+	Update(int64)
 }
 
 // ExpDecaySample is an exponentially-decaying sample using a forward-decaying
@@ -79,100 +81,34 @@ func (s *ExpDecaySample) Clear() {
 	s.values.Clear()
 }
 
-// Count returns the number of samples recorded, which may exceed the
-// reservoir size.
-func (s *ExpDecaySample) Count() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return s.count
-}
-
-// Max returns the maximum value in the sample, which may not be the maximum
-// value ever to be part of the sample.
-func (s *ExpDecaySample) Max() int64 {
-	return SampleMax(s.Values())
-}
-
-// Mean returns the mean of the values in the sample.
-func (s *ExpDecaySample) Mean() float64 {
-	return SampleMean(s.Values())
-}
-
-// Min returns the minimum value in the sample, which may not be the minimum
-// value ever to be part of the sample.
-func (s *ExpDecaySample) Min() int64 {
-	return SampleMin(s.Values())
-}
-
-// Percentile returns an arbitrary percentile of values in the sample.
-func (s *ExpDecaySample) Percentile(p float64) float64 {
-	return SamplePercentile(s.Values(), p)
-}
-
-// Percentiles returns a slice of arbitrary percentiles of values in the
-// sample.
-func (s *ExpDecaySample) Percentiles(ps []float64) []float64 {
-	return SamplePercentiles(s.Values(), ps)
-}
-
-// Size returns the size of the sample, which is at most the reservoir size.
-func (s *ExpDecaySample) Size() int {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return s.values.Size()
-}
-
 // Snapshot returns a read-only copy of the sample.
-func (s *ExpDecaySample) Snapshot() Sample {
+func (s *ExpDecaySample) Snapshot() SampleSnapshot {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	vals := s.values.Values()
-	values := make([]int64, len(vals))
-
-	for i, v := range vals {
-		values[i] = v.v
+	var (
+		samples       = s.values.Values()
+		values        = make([]int64, len(samples))
+		max     int64 = math.MinInt64
+		min     int64 = math.MaxInt64
+		sum     int64
+	)
+	for i, item := range samples {
+		v := item.v
+		values[i] = v
+		sum += v
+		if v > max {
+			max = v
+		}
+		if v < min {
+			min = v
+		}
 	}
-
-	return &SampleSnapshot{
-		count:  s.count,
-		values: values,
-	}
-}
-
-// StdDev returns the standard deviation of the values in the sample.
-func (s *ExpDecaySample) StdDev() float64 {
-	return SampleStdDev(s.Values())
-}
-
-// Sum returns the sum of the values in the sample.
-func (s *ExpDecaySample) Sum() int64 {
-	return SampleSum(s.Values())
+	return newSampleSnapshotPrecalculated(s.count, values, min, max, sum)
 }
 
 // Update samples a new value.
 func (s *ExpDecaySample) Update(v int64) {
 	s.update(time.Now(), v)
-}
-
-// Values returns a copy of the values in the sample.
-func (s *ExpDecaySample) Values() []int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	vals := s.values.Values()
-	values := make([]int64, len(vals))
-
-	for i, v := range vals {
-		values[i] = v.v
-	}
-
-	return values
-}
-
-// Variance returns the variance of the values in the sample.
-func (s *ExpDecaySample) Variance() float64 {
-	return SampleVariance(s.Values())
 }
 
 // update samples a new value at a particular timestamp.  This is a method all
@@ -216,183 +152,141 @@ func (s *ExpDecaySample) update(t time.Time, v int64) {
 // NilSample is a no-op Sample.
 type NilSample struct{}
 
-// Clear is a no-op.
-func (NilSample) Clear() {}
-
-// Count is a no-op.
-func (NilSample) Count() int64 { return 0 }
-
-// Max is a no-op.
-func (NilSample) Max() int64 { return 0 }
-
-// Mean is a no-op.
-func (NilSample) Mean() float64 { return 0.0 }
-
-// Min is a no-op.
-func (NilSample) Min() int64 { return 0 }
-
-// Percentile is a no-op.
-func (NilSample) Percentile(p float64) float64 { return 0.0 }
-
-// Percentiles is a no-op.
-func (NilSample) Percentiles(ps []float64) []float64 {
-	return make([]float64, len(ps))
-}
-
-// Size is a no-op.
-func (NilSample) Size() int { return 0 }
-
-// Sample is a no-op.
-func (NilSample) Snapshot() Sample { return NilSample{} }
-
-// StdDev is a no-op.
-func (NilSample) StdDev() float64 { return 0.0 }
-
-// Sum is a no-op.
-func (NilSample) Sum() int64 { return 0 }
-
-// Update is a no-op.
-func (NilSample) Update(v int64) {}
-
-// Values is a no-op.
-func (NilSample) Values() []int64 { return []int64{} }
-
-// Variance is a no-op.
-func (NilSample) Variance() float64 { return 0.0 }
-
-// SampleMax returns the maximum value of the slice of int64.
-func SampleMax(values []int64) int64 {
-	if len(values) == 0 {
-		return 0
-	}
-
-	var max int64 = math.MinInt64
-	for _, v := range values {
-		if max < v {
-			max = v
-		}
-	}
-
-	return max
-}
-
-// SampleMean returns the mean value of the slice of int64.
-func SampleMean(values []int64) float64 {
-	if len(values) == 0 {
-		return 0.0
-	}
-
-	return float64(SampleSum(values)) / float64(len(values))
-}
-
-// SampleMin returns the minimum value of the slice of int64.
-func SampleMin(values []int64) int64 {
-	if len(values) == 0 {
-		return 0
-	}
-
-	var min int64 = math.MaxInt64
-	for _, v := range values {
-		if min > v {
-			min = v
-		}
-	}
-
-	return min
-}
+func (NilSample) Clear()                   {}
+func (NilSample) Snapshot() SampleSnapshot { return (*emptySnapshot)(nil) }
+func (NilSample) Update(v int64)           {}
 
 // SamplePercentiles returns an arbitrary percentile of the slice of int64.
 func SamplePercentile(values []int64, p float64) float64 {
-	return SamplePercentiles(values, []float64{p})[0]
+	return CalculatePercentiles(values, []float64{p})[0]
 }
 
-// SamplePercentiles returns a slice of arbitrary percentiles of the slice of
-// int64.
-func SamplePercentiles(values []int64, ps []float64) []float64 {
+// CalculatePercentiles returns a slice of arbitrary percentiles of the slice of
+// int64. This method returns interpolated results, so e.g if there are only two
+// values, [0, 10], a 50% percentile will land between them.
+//
+// Note: As a side-effect, this method will also sort the slice of values.
+// Note2: The input format for percentiles is NOT percent! To express 50%, use 0.5, not 50.
+func CalculatePercentiles(values []int64, ps []float64) []float64 {
 	scores := make([]float64, len(ps))
 
 	size := len(values)
-	if size > 0 {
-		slices.Sort(values)
-		for i, p := range ps {
-			pos := p * float64(size+1)
-			if pos < 1.0 {
-				scores[i] = float64(values[0])
-			} else if pos >= float64(size) {
-				scores[i] = float64(values[size-1])
-			} else {
-				lower := float64(values[int(pos)-1])
-				upper := float64(values[int(pos)])
-				scores[i] = lower + (pos-math.Floor(pos))*(upper-lower)
-			}
+	if size == 0 {
+		return scores
+	}
+	slices.Sort(values)
+	for i, p := range ps {
+		pos := p * float64(size+1)
+
+		if pos < 1.0 {
+			scores[i] = float64(values[0])
+		} else if pos >= float64(size) {
+			scores[i] = float64(values[size-1])
+		} else {
+			lower := float64(values[int(pos)-1])
+			upper := float64(values[int(pos)])
+			scores[i] = lower + (pos-math.Floor(pos))*(upper-lower)
 		}
 	}
 
 	return scores
 }
 
-// SampleSnapshot is a read-only copy of another Sample.
-type SampleSnapshot struct {
+// sampleSnapshot is a read-only copy of another Sample.
+type sampleSnapshot struct {
 	count  int64
 	values []int64
+
+	max      int64
+	min      int64
+	mean     float64
+	sum      int64
+	variance float64
 }
 
-func NewSampleSnapshot(count int64, values []int64) *SampleSnapshot {
-	return &SampleSnapshot{
+// newSampleSnapshotPrecalculated creates a read-only sampleSnapShot, using
+// precalculated sums to avoid iterating the values
+func newSampleSnapshotPrecalculated(count int64, values []int64, min, max, sum int64) *sampleSnapshot {
+	if len(values) == 0 {
+		return &sampleSnapshot{
+			count:  count,
+			values: values,
+		}
+	}
+	return &sampleSnapshot{
 		count:  count,
 		values: values,
+		max:    max,
+		min:    min,
+		mean:   float64(sum) / float64(len(values)),
+		sum:    sum,
 	}
 }
 
-// Clear panics.
-func (*SampleSnapshot) Clear() {
-	panic("Clear called on a SampleSnapshot")
+// newSampleSnapshot creates a read-only sampleSnapShot, and calculates some
+// numbers.
+func newSampleSnapshot(count int64, values []int64) *sampleSnapshot {
+	var (
+		max int64 = math.MinInt64
+		min int64 = math.MaxInt64
+		sum int64
+	)
+	for _, v := range values {
+		sum += v
+		if v > max {
+			max = v
+		}
+		if v < min {
+			min = v
+		}
+	}
+	return newSampleSnapshotPrecalculated(count, values, min, max, sum)
 }
 
 // Count returns the count of inputs at the time the snapshot was taken.
-func (s *SampleSnapshot) Count() int64 { return s.count }
+func (s *sampleSnapshot) Count() int64 { return s.count }
 
 // Max returns the maximal value at the time the snapshot was taken.
-func (s *SampleSnapshot) Max() int64 { return SampleMax(s.values) }
+func (s *sampleSnapshot) Max() int64 { return s.max }
 
 // Mean returns the mean value at the time the snapshot was taken.
-func (s *SampleSnapshot) Mean() float64 { return SampleMean(s.values) }
+func (s *sampleSnapshot) Mean() float64 { return s.mean }
 
 // Min returns the minimal value at the time the snapshot was taken.
-func (s *SampleSnapshot) Min() int64 { return SampleMin(s.values) }
+func (s *sampleSnapshot) Min() int64 { return s.min }
 
 // Percentile returns an arbitrary percentile of values at the time the
 // snapshot was taken.
-func (s *SampleSnapshot) Percentile(p float64) float64 {
+func (s *sampleSnapshot) Percentile(p float64) float64 {
 	return SamplePercentile(s.values, p)
 }
 
 // Percentiles returns a slice of arbitrary percentiles of values at the time
 // the snapshot was taken.
-func (s *SampleSnapshot) Percentiles(ps []float64) []float64 {
-	return SamplePercentiles(s.values, ps)
+func (s *sampleSnapshot) Percentiles(ps []float64) []float64 {
+	return CalculatePercentiles(s.values, ps)
 }
 
 // Size returns the size of the sample at the time the snapshot was taken.
-func (s *SampleSnapshot) Size() int { return len(s.values) }
+func (s *sampleSnapshot) Size() int { return len(s.values) }
 
 // Snapshot returns the snapshot.
-func (s *SampleSnapshot) Snapshot() Sample { return s }
+func (s *sampleSnapshot) Snapshot() SampleSnapshot { return s }
 
 // StdDev returns the standard deviation of values at the time the snapshot was
 // taken.
-func (s *SampleSnapshot) StdDev() float64 { return SampleStdDev(s.values) }
-
-// Sum returns the sum of values at the time the snapshot was taken.
-func (s *SampleSnapshot) Sum() int64 { return SampleSum(s.values) }
-
-// Update panics.
-func (*SampleSnapshot) Update(int64) {
-	panic("Update called on a SampleSnapshot")
+func (s *sampleSnapshot) StdDev() float64 {
+	if s.variance == 0.0 {
+		s.variance = SampleVariance(s.mean, s.values)
+	}
+	return math.Sqrt(s.variance)
 }
 
+// Sum returns the sum of values at the time the snapshot was taken.
+func (s *sampleSnapshot) Sum() int64 { return s.sum }
+
 // Values returns a copy of the values in the sample.
-func (s *SampleSnapshot) Values() []int64 {
+func (s *sampleSnapshot) Values() []int64 {
 	values := make([]int64, len(s.values))
 	copy(values, s.values)
 
@@ -400,35 +294,22 @@ func (s *SampleSnapshot) Values() []int64 {
 }
 
 // Variance returns the variance of values at the time the snapshot was taken.
-func (s *SampleSnapshot) Variance() float64 { return SampleVariance(s.values) }
-
-// SampleStdDev returns the standard deviation of the slice of int64.
-func SampleStdDev(values []int64) float64 {
-	return math.Sqrt(SampleVariance(values))
-}
-
-// SampleSum returns the sum of the slice of int64.
-func SampleSum(values []int64) int64 {
-	var sum int64
-	for _, v := range values {
-		sum += v
+func (s *sampleSnapshot) Variance() float64 {
+	if s.variance == 0.0 {
+		s.variance = SampleVariance(s.mean, s.values)
 	}
-
-	return sum
+	return s.variance
 }
 
 // SampleVariance returns the variance of the slice of int64.
-func SampleVariance(values []int64) float64 {
+func SampleVariance(mean float64, values []int64) float64 {
 	if len(values) == 0 {
 		return 0.0
 	}
-
-	m := SampleMean(values)
-
 	var sum float64
 
 	for _, v := range values {
-		d := float64(v) - m
+		d := float64(v) - mean
 		sum += d * d
 	}
 
@@ -473,93 +354,14 @@ func (s *UniformSample) Clear() {
 	s.values = make([]int64, 0, s.reservoirSize)
 }
 
-// Count returns the number of samples recorded, which may exceed the
-// reservoir size.
-func (s *UniformSample) Count() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return s.count
-}
-
-// Max returns the maximum value in the sample, which may not be the maximum
-// value ever to be part of the sample.
-func (s *UniformSample) Max() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return SampleMax(s.values)
-}
-
-// Mean returns the mean of the values in the sample.
-func (s *UniformSample) Mean() float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return SampleMean(s.values)
-}
-
-// Min returns the minimum value in the sample, which may not be the minimum
-// value ever to be part of the sample.
-func (s *UniformSample) Min() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return SampleMin(s.values)
-}
-
-// Percentile returns an arbitrary percentile of values in the sample.
-func (s *UniformSample) Percentile(p float64) float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return SamplePercentile(s.values, p)
-}
-
-// Percentiles returns a slice of arbitrary percentiles of values in the
-// sample.
-func (s *UniformSample) Percentiles(ps []float64) []float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return SamplePercentiles(s.values, ps)
-}
-
-// Size returns the size of the sample, which is at most the reservoir size.
-func (s *UniformSample) Size() int {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return len(s.values)
-}
-
 // Snapshot returns a read-only copy of the sample.
-func (s *UniformSample) Snapshot() Sample {
+func (s *UniformSample) Snapshot() SampleSnapshot {
 	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	values := make([]int64, len(s.values))
 	copy(values, s.values)
-
-	return &SampleSnapshot{
-		count:  s.count,
-		values: values,
-	}
-}
-
-// StdDev returns the standard deviation of the values in the sample.
-func (s *UniformSample) StdDev() float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return SampleStdDev(s.values)
-}
-
-// Sum returns the sum of the values in the sample.
-func (s *UniformSample) Sum() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return SampleSum(s.values)
+	count := s.count
+	s.mutex.Unlock()
+	return newSampleSnapshot(count, values)
 }
 
 // Update samples a new value.
@@ -582,24 +384,6 @@ func (s *UniformSample) Update(v int64) {
 			s.values[int(r)] = v
 		}
 	}
-}
-
-// Values returns a copy of the values in the sample.
-func (s *UniformSample) Values() []int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	values := make([]int64, len(s.values))
-	copy(values, s.values)
-
-	return values
-}
-
-// Variance returns the variance of the values in the sample.
-func (s *UniformSample) Variance() float64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	return SampleVariance(s.values)
 }
 
 // expDecaySample represents an individual sample in a heap.

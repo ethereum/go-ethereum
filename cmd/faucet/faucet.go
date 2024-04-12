@@ -88,6 +88,7 @@ var (
 	goerliFlag  = flag.Bool("goerli", false, "Initializes the faucet with Görli network config")
 	sepoliaFlag = flag.Bool("sepolia", false, "Initializes the faucet with Sepolia network config")
 	mumbaiFlag  = flag.Bool("bor-mumbai", false, "Initializes the faucet with Bor-Mumbai network config")
+	amoyFlag    = flag.Bool("bor-amoy", false, "Initializes the faucet with Bor-Amoy network config")
 )
 
 var (
@@ -146,7 +147,7 @@ func main() {
 		log.Crit("Failed to render the faucet template", "err", err)
 	}
 	// Load and parse the genesis block requested by the user
-	genesis, err := getGenesis(*genesisFlag, *goerliFlag, *sepoliaFlag, *mumbaiFlag)
+	genesis, err := getGenesis(*genesisFlag, *goerliFlag, *sepoliaFlag, *mumbaiFlag, *amoyFlag)
 	if err != nil {
 		log.Crit("Failed to parse genesis config", "err", err)
 	}
@@ -962,7 +963,7 @@ func authNoAuth(url string) (string, string, common.Address, error) {
 }
 
 // getGenesis returns a genesis based on input args
-func getGenesis(genesisFlag string, goerliFlag bool, sepoliaFlag bool, mumbaiFlag bool) (*core.Genesis, error) {
+func getGenesis(genesisFlag string, goerliFlag bool, sepoliaFlag bool, mumbaiFlag bool, amoyFlag bool) (*core.Genesis, error) {
 	switch {
 	case genesisFlag != "":
 		var genesis core.Genesis
@@ -975,6 +976,8 @@ func getGenesis(genesisFlag string, goerliFlag bool, sepoliaFlag bool, mumbaiFla
 		return core.DefaultSepoliaGenesisBlock(), nil
 	case mumbaiFlag:
 		return core.DefaultMumbaiGenesisBlock(), nil
+	case amoyFlag:
+		return core.DefaultAmoyGenesisBlock(), nil
 	default:
 		return nil, errors.New("no genesis flag provided")
 	}

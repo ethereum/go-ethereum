@@ -2,7 +2,7 @@
 # `mine`, `etherbase`, `nodiscover`, `maxpeers`, `keystore`, `allow-insecure-unlock`, `password`, `unlock`
 
 chain = "mainnet"
-# chain = "mumbai"
+# chain = "mumbai", "amoy"
 # identity = "Annon-Identity"
 # verbosity = 3
 # vmdebug = false

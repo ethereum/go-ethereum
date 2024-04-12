@@ -34,6 +34,7 @@ var (
 	MumbaiGenesisHash     = common.HexToHash("0x7b66506a9ebdbf30d32b43c5f15a3b1216269a1ec3a75aa3182b86176a2b1ca7")
 	BorMainnetGenesisHash = common.HexToHash("0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
 	KilnGenesisHash       = common.HexToHash("0x51c7fe41be669f69c45c33a56982cbde405313342d9e2b00d7c91a7b284dd4f8")
+	AmoyGenesisHash       = common.HexToHash("0x7202b2b53c5a0836e773e319d18922cc756dd67432f9a1f65352b61f4406c697")
 )
 
 var (
@@ -77,6 +78,8 @@ var (
 		MuirGlacierBlock:              big.NewInt(0),
 		BerlinBlock:                   big.NewInt(0),
 		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             nil,
+		GrayGlacierBlock:              nil,
 		TerminalTotalDifficulty:       big.NewInt(17_000_000_000_000_000),
 		TerminalTotalDifficultyPassed: true,
 		MergeNetsplitBlock:            big.NewInt(1735371),
@@ -246,6 +249,52 @@ var (
 		},
 	}
 
+	// AmoyChainConfig contains the chain parameters to run a node on the Amoy test network.
+	AmoyChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(80002),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(73100),
+		ShanghaiBlock:       big.NewInt(73100),
+		CancunBlock:         big.NewInt(5423600),
+		Bor: &BorConfig{
+			JaipurBlock: big.NewInt(73100),
+			DelhiBlock:  big.NewInt(73100),
+			IndoreBlock: big.NewInt(73100),
+			StateSyncConfirmationDelay: map[string]uint64{
+				"0": 128,
+			},
+			Period: map[string]uint64{
+				"0": 2,
+			},
+			ProducerDelay: map[string]uint64{
+				"0": 4,
+			},
+			Sprint: map[string]uint64{
+				"0": 16,
+			},
+			BackupMultiplier: map[string]uint64{
+				"0": 2,
+			},
+			ValidatorContract:     "0x0000000000000000000000000000000000001000",
+			StateReceiverContract: "0x0000000000000000000000000000000000001001",
+			BurntContract: map[string]string{
+				"0":     "0x000000000000000000000000000000000000dead",
+				"73100": "0xeCDD77cE6f146cCf5dab707941d318Bd50eeD2C9",
+			},
+		},
+	}
+
 	BorMainnetChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(137),
 		HomesteadBlock:      big.NewInt(0),
@@ -408,7 +457,7 @@ var (
 	}
 
 	// TestChainConfig contains every protocol change (EIPs) introduced
-	// and accepted by the Ethereum core developers for testing proposes.
+	// and accepted by the Ethereum core developers for testing purposes.
 	TestChainConfig = &ChainConfig{
 		ChainID:                       big.NewInt(1),
 		HomesteadBlock:                big.NewInt(0),
@@ -480,6 +529,7 @@ var NetworkNames = map[string]string{
 	SepoliaChainConfig.ChainID.String():    "sepolia",
 	BorMainnetChainConfig.ChainID.String(): "bor",
 	MumbaiChainConfig.ChainID.String():     "mumbai",
+	AmoyChainConfig.ChainID.String():       "amoy",
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -656,7 +706,7 @@ func (c *BorConfig) CalculateBurntContract(number uint64) string {
 func (c *ChainConfig) Description() string {
 	var banner string
 
-	// Create some basinc network config output
+	// Create some basic network config output
 	network := NetworkNames[c.ChainID.String()]
 	if network == "" {
 		network = "unknown"

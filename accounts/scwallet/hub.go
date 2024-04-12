@@ -256,7 +256,7 @@ func (hub *Hub) refreshWallets() {
 
 			continue
 		}
-		// Card connected, start tracking in amongs the wallets
+		// Card connected, start tracking in amongst the wallets
 		hub.wallets[reader] = wallet
 		events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletArrived})
 	}

@@ -17,8 +17,6 @@
 package state
 
 import (
-	"bytes"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -48,7 +46,7 @@ func NewStateSync(root common.Hash, database ethdb.KeyValueReader, onLeaf func(k
 		}
 
 		var obj types.StateAccount
-		if err := rlp.Decode(bytes.NewReader(leaf), &obj); err != nil {
+		if err := rlp.DecodeBytes(leaf, &obj); err != nil {
 			return err
 		}
 

@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 // clientHandler is responsible for receiving and processing all incoming server
@@ -69,7 +70,7 @@ func (h *clientHandler) handle(p *serverPeer, noInitAnnounce bool) error {
 	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
-	forkid := forkid.NewID(h.backend.blockchain.Config(), h.backend.genesis, h.backend.blockchain.CurrentHeader().Number.Uint64(), h.backend.blockchain.CurrentHeader().Time)
+	forkid := forkid.NewID(h.backend.blockchain.Config(), h.backend.BlockChain().Genesis(), h.backend.blockchain.CurrentHeader().Number.Uint64(), h.backend.blockchain.CurrentHeader().Time)
 	if err := p.Handshake(h.backend.blockchain.Genesis().Hash(), forkid, h.forkFilter); err != nil {
 		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
@@ -236,7 +237,7 @@ func (h *clientHandler) handleMsg(p *serverPeer) error {
 		p.Log().Trace("Received les/2 proofs response")
 		var resp struct {
 			ReqID, BV uint64
-			Data      light.NodeList
+			Data      trienode.ProofList
 		}
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)

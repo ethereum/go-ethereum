@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var (
@@ -91,7 +92,7 @@ func setupMiner(t *testing.T, n int, genesis *core.Genesis) ([]*node.Node, []*et
 		// Start the node and wait until it's up
 		stack, ethBackend, err := InitMiner(genesis, keys[i], true)
 		if err != nil {
-			t.Fatal("Error occured while initialising miner", "error", err)
+			t.Fatal("Error occurred while initialising miner", "error", err)
 		}
 
 		for stack.Server().NodeInfo().Ports.Listener == 0 {
@@ -127,14 +128,14 @@ func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
 		BorLogs: true,
 	}
 
-	ethConf.Genesis.MustCommit(db)
+	ethConf.Genesis.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
 
 	ethereum := utils.CreateBorEthereum(ethConf)
 	if err != nil {
 		t.Fatalf("failed to register Ethereum protocol: %v", err)
 	}
 
-	ethConf.Genesis.MustCommit(ethereum.ChainDb())
+	ethConf.Genesis.MustCommit(ethereum.ChainDb(), trie.NewDatabase(ethereum.ChainDb(), trie.HashDefaults))
 
 	ethereum.Engine().(*bor.Bor).Authorize(addr, func(account accounts.Account, s string, data []byte) ([]byte, error) {
 		return crypto.Sign(crypto.Keccak256(data), key)

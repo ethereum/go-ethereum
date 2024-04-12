@@ -144,7 +144,7 @@ type TraceBlockRequest struct {
 	Config     *TraceConfig
 }
 
-// If you use context as first parameter this function gets exposed automaticall on rpc endpoint
+// If you use context as first parameter this function gets exposed automatically on rpc endpoint
 func (api *API) TraceBorBlock(req *TraceBlockRequest) (*BlockTraceResult, error) {
 	ctx := context.Background()
 

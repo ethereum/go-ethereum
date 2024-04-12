@@ -368,7 +368,7 @@ func (i *SliceStringFlag) String() string {
 }
 
 func (i *SliceStringFlag) Set(value string) error {
-	// overwritting insted of appending
+	// overwriting instead of appending
 	*i.Value = SplitAndTrim(value)
 	return nil
 }
