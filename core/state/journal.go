@@ -105,6 +105,11 @@ type (
 	createObjectChange struct {
 		account *common.Address
 	}
+
+	createContractChange struct {
+		account common.Address
+	}
+
 	selfDestructChange struct {
 		account     *common.Address
 		prev        bool // whether account had already self-destructed
@@ -169,6 +174,20 @@ func (ch createObjectChange) dirtied() *common.Address {
 
 func (ch createObjectChange) copy() journalEntry {
 	return createObjectChange{
+		account: ch.account,
+	}
+}
+
+func (ch createContractChange) revert(s *StateDB) {
+	s.stateObjects[ch.account].created = false
+}
+
+func (ch createContractChange) dirtied() *common.Address {
+	return &ch.account
+}
+
+func (ch createContractChange) copy() journalEntry {
+	return createContractChange{
 		account: ch.account,
 	}
 }

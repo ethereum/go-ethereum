@@ -662,6 +662,19 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	s.createObject(addr)
 }
 
+// CreateContract is used whenever a contract is created. This may be preceded
+// by CreateAccount, but that is not required if it already existed
+// in the state due to funds sent beforehand.
+// This operation sets the 'created'-flag, which is required in order to
+// correctly handle EIP-6780 'delete-in-same-transaction' logic.
+func (s *StateDB) CreateContract(addr common.Address) {
+	obj := s.getStateObject(addr)
+	if !obj.created {
+		obj.created = true
+		s.journal.append(createContractChange{account: addr})
+	}
+}
+
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (s *StateDB) Copy() *StateDB {

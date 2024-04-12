@@ -462,6 +462,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
 	}
+	// CreateContract means that regardless of whether the acccount existed
+	// in the state trie or not, previously, it _now_ becomes created as a
+	// _contract_ account. This is performed _prior_ to executing the initcode,
+	// since the initcode acts inside that account.
+	evm.StateDB.CreateContract(address)
+
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1)
 	}
