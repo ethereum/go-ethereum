@@ -101,6 +101,105 @@ func NewConsensusLightClient(api ConsensusAPI, config *Config, checkpointBlockRo
 	return client, nil
 }
 
+func (c *ConsensusLightClient) Sync() error {
+	err := c.bootstrap()
+	if err != nil {
+		return err
+	}
+
+	bootstrapPeriod := CalcSyncPeriod(uint64(c.Store.FinalizedHeader.Slot))
+
+	updates := make([]*capella.LightClientUpdate, 0)
+
+	if c.API.Name() == "portal" {
+		currentPeriod := CalcSyncPeriod(uint64(c.expectedCurrentSlot()))
+		for i := bootstrapPeriod; i < currentPeriod; i++ {
+			update, err := c.API.GetUpdates(i, 1)
+			if err != nil {
+				return err
+			}
+			updates = append(updates, update...)
+		}
+	} else {
+		updates, err = c.API.GetUpdates(bootstrapPeriod, MaxRequestLightClientUpdates)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, update := range updates {
+		err = c.VerifyUpdate(update)
+		if err != nil {
+			return err
+		}
+		c.ApplyUpdate(update)
+	}
+
+	finalityUpdate, err := c.API.GetFinalityData()
+	if err != nil {
+		return err
+	}
+	err = c.VerifyFinalityUpdate(finalityUpdate)
+	if err != nil {
+		return err
+	}
+	c.ApplyFinalityUpdate(finalityUpdate)
+
+	optimisticUpdate, err := c.API.GetOptimisticData()
+	if err != nil {
+		return err
+	}
+	err = c.VerifyOptimisticUpdate(optimisticUpdate)
+	if err != nil {
+		return err
+	}
+	c.ApplyOptimisticUpdate(optimisticUpdate)
+
+	c.Logger.Info("Light client in sync with ", "checkpoint", hexutil.Encode(c.InitialCheckpoint[:]))
+	return nil
+}
+
+func (c *ConsensusLightClient) Advance() error {
+	finalityUpdate, err := c.API.GetFinalityData()
+	if err != nil {
+		return err
+	}
+	err = c.VerifyFinalityUpdate(finalityUpdate)
+	if err != nil {
+		return err
+	}
+	c.ApplyFinalityUpdate(finalityUpdate)
+
+	optimisticUpdate, err := c.API.GetOptimisticData()
+	if err != nil {
+		return err
+	}
+	err = c.VerifyOptimisticUpdate(optimisticUpdate)
+	if err != nil {
+		return err
+	}
+	c.ApplyOptimisticUpdate(optimisticUpdate)
+
+	if c.Store.NextSyncCommittee == nil {
+		c.Logger.Debug("checking for sync committee update")
+		currentPeriod := CalcSyncPeriod(uint64(c.Store.FinalizedHeader.Slot))
+		updates, err := c.API.GetUpdates(currentPeriod, 1)
+		if err != nil {
+			return err
+		}
+		if len(updates) == 1 {
+			update := updates[0]
+			err = c.VerifyUpdate(update)
+			if err != nil {
+				return err
+			}
+			c.Logger.Info("updating sync committee")
+			c.ApplyUpdate(update)
+		}
+	}
+	return nil
+}
+
 //lint:ignore U1000 placeholder function
 func (c *ConsensusLightClient) bootstrap() error {
 	bootstrap, err := c.API.GetCheckpointData(c.InitialCheckpoint)
