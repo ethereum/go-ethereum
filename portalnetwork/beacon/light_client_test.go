@@ -78,7 +78,6 @@ func getClient(strictCheckpointAge bool, t *testing.T) (*ConsensusLightClient, e
 		Chain:               baseConfig.Chain,
 		Spec:                baseConfig.Spec,
 		StrictCheckpointAge: strictCheckpointAge,
-		MaxCheckpointAge:    123123123,
 	}
 
 	checkpoint := common.Root(hexutil.MustDecode("0xc62aa0de55e6f21230fa63713715e1a6c13e73005e89f6389da271955d819bde"))
@@ -99,6 +98,7 @@ func TestVerifyCheckpointAgeInvalid(t *testing.T) {
 func TestVerifyUpdate(t *testing.T) {
 	client, err := getClient(false, t)
 	require.NoError(t, err)
+	client.Config.MaxCheckpointAge = 123123123
 
 	period := CalcSyncPeriod(uint64(client.Store.FinalizedHeader.Slot))
 	updates, err := client.API.GetUpdates(period, MaxRequestLightClientUpdates)
