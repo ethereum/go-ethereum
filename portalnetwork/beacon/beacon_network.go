@@ -2,13 +2,18 @@ package beacon
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
+	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
 )
@@ -23,8 +28,38 @@ const (
 )
 
 type BeaconNetwork struct {
-	PortalProtocol *discover.PortalProtocol
-	Spec           *common.Spec
+	portalProtocol *discover.PortalProtocol
+	spec           *common.Spec
+	log            log.Logger
+	closeCtx       context.Context
+	closeFunc      context.CancelFunc
+}
+
+func NewBeaconNetwork(portalProtocol *discover.PortalProtocol) *BeaconNetwork {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	return &BeaconNetwork{
+		portalProtocol: portalProtocol,
+		spec:           configs.Mainnet,
+		closeCtx:       ctx,
+		closeFunc:      cancel,
+		log:            log.New("sub-protocol", "beacon"),
+	}
+}
+
+func (bn *BeaconNetwork) Start() error {
+	err := bn.portalProtocol.Start()
+	if err != nil {
+		return err
+	}
+	go bn.processContentLoop(bn.closeCtx)
+	bn.log.Debug("beacon network start successfully")
+	return nil
+}
+
+func (bn *BeaconNetwork) Stop() {
+	bn.closeFunc()
+	bn.portalProtocol.Stop()
 }
 
 func (bn *BeaconNetwork) GetUpdates(firstPeriod, count uint64) ([]*capella.LightClientUpdate, error) {
@@ -39,7 +74,7 @@ func (bn *BeaconNetwork) GetUpdates(firstPeriod, count uint64) ([]*capella.Light
 	}
 
 	var lightClientUpdateRange LightClientUpdateRange = make([]ForkedLightClientUpdate, 0)
-	err = lightClientUpdateRange.Deserialize(bn.Spec, codec.NewDecodingReader(bytes.NewReader(lightClientUpdateRangeContent), uint64(len(lightClientUpdateRangeContent))))
+	err = lightClientUpdateRange.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(lightClientUpdateRangeContent), uint64(len(lightClientUpdateRangeContent))))
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +100,7 @@ func (bn *BeaconNetwork) GetCheckpointData(checkpointHash tree.Root) (*capella.L
 	}
 
 	var forkedLightClientBootstrap ForkedLightClientBootstrap
-	err = forkedLightClientBootstrap.Deserialize(bn.Spec, codec.NewDecodingReader(bytes.NewReader(bootstrapValue), uint64(len(bootstrapValue))))
+	err = forkedLightClientBootstrap.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(bootstrapValue), uint64(len(bootstrapValue))))
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +123,7 @@ func (bn *BeaconNetwork) GetFinalityUpdate(finalizedSlot uint64) (*capella.Light
 	}
 
 	var forkedLightClientFinalityUpdate ForkedLightClientFinalityUpdate
-	err = forkedLightClientFinalityUpdate.Deserialize(bn.Spec, codec.NewDecodingReader(bytes.NewReader(finalityUpdateValue), uint64(len(finalityUpdateValue))))
+	err = forkedLightClientFinalityUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(finalityUpdateValue), uint64(len(finalityUpdateValue))))
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +146,7 @@ func (bn *BeaconNetwork) GetOptimisticUpdate(optimisticSlot uint64) (*capella.Li
 	}
 
 	var forkedLightClientOptimisticUpdate ForkedLightClientOptimisticUpdate
-	err = forkedLightClientOptimisticUpdate.Deserialize(bn.Spec, codec.NewDecodingReader(bytes.NewReader(optimisticUpdateValue), uint64(len(optimisticUpdateValue))))
+	err = forkedLightClientOptimisticUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(optimisticUpdateValue), uint64(len(optimisticUpdateValue))))
 	if err != nil {
 		return nil, err
 	}
@@ -130,9 +165,9 @@ func (bn *BeaconNetwork) getContent(contentType storage.ContentType, beaconConte
 	}
 
 	contentKey := storage.NewContentKey(contentType, contentKeyBytes).Encode()
-	contentId := bn.PortalProtocol.ToContentId(contentKey)
+	contentId := bn.portalProtocol.ToContentId(contentKey)
 
-	res, err := bn.PortalProtocol.Get(contentKey, contentId)
+	res, err := bn.portalProtocol.Get(contentKey, contentId)
 	// other error
 	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
 		return nil, err
@@ -142,10 +177,75 @@ func (bn *BeaconNetwork) getContent(contentType storage.ContentType, beaconConte
 		return res, nil
 	}
 
-	content, _, err := bn.PortalProtocol.ContentLookup(contentKey, contentId)
+	content, _, err := bn.portalProtocol.ContentLookup(contentKey, contentId)
 	if err != nil {
 		return nil, err
 	}
 
 	return content, nil
+}
+
+func (bn *BeaconNetwork) validateContent(contentKey []byte, content []byte) error {
+	switch storage.ContentType(contentKey[0]) {
+	case LightClientUpdate:
+		var lightClientUpdateRange LightClientUpdateRange = make([]ForkedLightClientUpdate, 0)
+		return lightClientUpdateRange.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+	case LightClientBootstrap:
+		var forkedLightClientBootstrap ForkedLightClientBootstrap
+		return forkedLightClientBootstrap.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+	// TODO: IF WE NEED LIGHT CLIENT VERIFY
+	case LightClientFinalityUpdate:
+		var forkedLightClientFinalityUpdate ForkedLightClientFinalityUpdate
+		return forkedLightClientFinalityUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+	// TODO: IF WE NEED LIGHT CLIENT VERIFY
+	case LightClientOptimisticUpdate:
+		var forkedLightClientOptimisticUpdate ForkedLightClientOptimisticUpdate
+		return forkedLightClientOptimisticUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+	// TODO: VERIFY
+	case HistoricalSummaries:
+		var historicalSummaries HistoricalSummariesProof
+		return historicalSummaries.Deserialize(codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+	default:
+		return fmt.Errorf("unknown content type %v", contentKey[0])
+	}
+}
+
+func (bn *BeaconNetwork) validateContents(contentKeys [][]byte, contents [][]byte) error {
+	for i, content := range contents {
+		contentKey := contentKeys[i]
+		err := bn.validateContent(contentKey, content)
+		if err != nil {
+			bn.log.Error("content validate failed", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content), "err", err)
+			return fmt.Errorf("content validate failed with content key %x and content %x", contentKey, content)
+		}
+		contentId := bn.portalProtocol.ToContentId(contentKey)
+		err = bn.portalProtocol.Put(contentKey, contentId, content)
+		if err != nil {
+			bn.log.Error("put content failed", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content), "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (bn *BeaconNetwork) processContentLoop(ctx context.Context) {
+	contentChan := bn.portalProtocol.GetContent()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case contentElement := <-contentChan:
+			err := bn.validateContents(contentElement.ContentKeys, contentElement.Contents)
+			if err != nil {
+				bn.log.Error("validate content failed", "err", err)
+				continue
+			}
+			gossippedNum, err := bn.portalProtocol.Gossip(&contentElement.Node, contentElement.ContentKeys, contentElement.Contents)
+			bn.log.Trace("gossippedNum", "gossippedNum", gossippedNum)
+			if err != nil {
+				bn.log.Error("gossip failed", "err", err)
+				continue
+			}
+		}
+	}
 }

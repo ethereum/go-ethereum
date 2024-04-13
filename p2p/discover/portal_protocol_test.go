@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/prysmaticlabs/go-bitfield"
 	"golang.org/x/exp/slices"
 
@@ -22,22 +23,6 @@ import (
 	"github.com/optimism-java/utp-go"
 	"github.com/stretchr/testify/assert"
 )
-
-type MockStorage struct {
-	db map[string][]byte
-}
-
-func (m *MockStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
-	if content, ok := m.db[string(contentId)]; ok {
-		return content, nil
-	}
-	return nil, ContentNotFound
-}
-
-func (m *MockStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
-	m.db[string(contentId)] = content
-	return nil
-}
 
 func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol, error) {
 	conf := DefaultPortalProtocolConfig()
@@ -101,7 +86,7 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 	}
 
 	contentQueue := make(chan *ContentElement, 50)
-	portalProtocol, err := NewPortalProtocol(conf, string(portalwire.HistoryNetwork), privKey, conn, localNode, discV5, &MockStorage{db: make(map[string][]byte)}, contentQueue)
+	portalProtocol, err := NewPortalProtocol(conf, string(portalwire.HistoryNetwork), privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}
@@ -112,19 +97,19 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 func TestPortalWireProtocolUdp(t *testing.T) {
 	node1, err := setupLocalPortalNode(":8777", nil)
 	assert.NoError(t, err)
-	node1.log = testlog.Logger(t, log.LvlTrace)
+	node1.Log = testlog.Logger(t, log.LvlTrace)
 	err = node1.Start()
 	assert.NoError(t, err)
 
 	node2, err := setupLocalPortalNode(":8778", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
-	node2.log = testlog.Logger(t, log.LvlTrace)
+	node2.Log = testlog.Logger(t, log.LvlTrace)
 	err = node2.Start()
 	assert.NoError(t, err)
 
 	node3, err := setupLocalPortalNode(":8779", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
-	node3.log = testlog.Logger(t, log.LvlTrace)
+	node3.Log = testlog.Logger(t, log.LvlTrace)
 	err = node3.Start()
 	assert.NoError(t, err)
 	time.Sleep(10 * time.Second)
@@ -254,7 +239,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 func TestPortalWireProtocol(t *testing.T) {
 	node1, err := setupLocalPortalNode(":7777", nil)
 	assert.NoError(t, err)
-	node1.log = testlog.Logger(t, log.LevelDebug)
+	node1.Log = testlog.Logger(t, log.LevelDebug)
 	err = node1.Start()
 	assert.NoError(t, err)
 	fmt.Println(node1.localNode.Node().String())
@@ -263,7 +248,7 @@ func TestPortalWireProtocol(t *testing.T) {
 
 	node2, err := setupLocalPortalNode(":7778", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
-	node2.log = testlog.Logger(t, log.LevelDebug)
+	node2.Log = testlog.Logger(t, log.LevelDebug)
 	err = node2.Start()
 	assert.NoError(t, err)
 	fmt.Println(node2.localNode.Node().String())
@@ -272,7 +257,7 @@ func TestPortalWireProtocol(t *testing.T) {
 
 	node3, err := setupLocalPortalNode(":7779", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
-	node3.log = testlog.Logger(t, log.LevelDebug)
+	node3.Log = testlog.Logger(t, log.LevelDebug)
 	err = node3.Start()
 	assert.NoError(t, err)
 	fmt.Println(node3.localNode.Node().String())
@@ -365,7 +350,7 @@ func TestPortalWireProtocol(t *testing.T) {
 	testGossipContentKeys := [][]byte{[]byte("test_gossip_content_keys"), []byte("test_gossip_content_keys2")}
 	testGossipContent := [][]byte{[]byte("test_gossip_content"), []byte("test_gossip_content2")}
 	id := node1.Self().ID()
-	gossip, err := node1.NeighborhoodGossip(&id, testGossipContentKeys, testGossipContent)
+	gossip, err := node1.Gossip(&id, testGossipContentKeys, testGossipContent)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, gossip)
 
@@ -382,26 +367,6 @@ func TestPortalWireProtocol(t *testing.T) {
 	assert.Equal(t, testGossipContent[0], contentElement.Contents[0])
 	assert.Equal(t, testGossipContentKeys[1], contentElement.ContentKeys[1])
 	assert.Equal(t, testGossipContent[1], contentElement.Contents[1])
-
-	testRandGossipContentKeys := [][]byte{[]byte("test_rand_gossip_content_keys"), []byte("test_rand_gossip_content_keys2")}
-	testRandGossipContent := [][]byte{[]byte("test_rand_gossip_content"), []byte("test_rand_gossip_content2")}
-	randGossip, err := node1.RandomGossip(&id, testRandGossipContentKeys, testRandGossipContent)
-	assert.NoError(t, err)
-	assert.Equal(t, 2, randGossip)
-
-	contentElement = <-node2.contentQueue
-	assert.Equal(t, node1.localNode.Node().ID(), contentElement.Node)
-	assert.Equal(t, testRandGossipContentKeys[0], contentElement.ContentKeys[0])
-	assert.Equal(t, testRandGossipContent[0], contentElement.Contents[0])
-	assert.Equal(t, testRandGossipContentKeys[1], contentElement.ContentKeys[1])
-	assert.Equal(t, testRandGossipContent[1], contentElement.Contents[1])
-
-	contentElement = <-node3.contentQueue
-	assert.Equal(t, node1.localNode.Node().ID(), contentElement.Node)
-	assert.Equal(t, testRandGossipContentKeys[0], contentElement.ContentKeys[0])
-	assert.Equal(t, testRandGossipContent[0], contentElement.Contents[0])
-	assert.Equal(t, testRandGossipContentKeys[1], contentElement.ContentKeys[1])
-	assert.Equal(t, testRandGossipContent[1], contentElement.Contents[1])
 
 	node1.Stop()
 	node2.Stop()
@@ -428,21 +393,21 @@ func TestCancel(t *testing.T) {
 func TestContentLookup(t *testing.T) {
 	node1, err := setupLocalPortalNode(":17777", nil)
 	assert.NoError(t, err)
-	node1.log = testlog.Logger(t, log.LvlTrace)
+	node1.Log = testlog.Logger(t, log.LvlTrace)
 	err = node1.Start()
 	assert.NoError(t, err)
 	fmt.Println(node1.localNode.Node().String())
 
 	node2, err := setupLocalPortalNode(":17778", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
-	node2.log = testlog.Logger(t, log.LvlTrace)
+	node2.Log = testlog.Logger(t, log.LvlTrace)
 	err = node2.Start()
 	assert.NoError(t, err)
 	fmt.Println(node2.localNode.Node().String())
 
 	node3, err := setupLocalPortalNode(":17779", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
-	node3.log = testlog.Logger(t, log.LvlTrace)
+	node3.Log = testlog.Logger(t, log.LvlTrace)
 	err = node3.Start()
 	assert.NoError(t, err)
 	fmt.Println(node3.localNode.Node().String())
@@ -468,19 +433,19 @@ func TestContentLookup(t *testing.T) {
 func TestTraceContentLookup(t *testing.T) {
 	node1, err := setupLocalPortalNode(":17787", nil)
 	assert.NoError(t, err)
-	node1.log = testlog.Logger(t, log.LvlTrace)
+	node1.Log = testlog.Logger(t, log.LvlTrace)
 	err = node1.Start()
 	assert.NoError(t, err)
 
 	node2, err := setupLocalPortalNode(":17788", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
-	node2.log = testlog.Logger(t, log.LvlTrace)
+	node2.Log = testlog.Logger(t, log.LvlTrace)
 	err = node2.Start()
 	assert.NoError(t, err)
 
 	node3, err := setupLocalPortalNode(":17789", []*enode.Node{node2.localNode.Node()})
 	assert.NoError(t, err)
-	node3.log = testlog.Logger(t, log.LvlTrace)
+	node3.Log = testlog.Logger(t, log.LvlTrace)
 	err = node3.Start()
 	assert.NoError(t, err)
 

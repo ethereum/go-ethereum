@@ -508,7 +508,7 @@ func (h *HistoryNetwork) processContentLoop(ctx context.Context) {
 				h.log.Error("validate content failed", "err", err)
 				continue
 			}
-			gossippedNum, err := h.portalProtocol.NeighborhoodGossip(&contentElement.Node, contentElement.ContentKeys, contentElement.Contents)
+			gossippedNum, err := h.portalProtocol.Gossip(&contentElement.Node, contentElement.ContentKeys, contentElement.Contents)
 			h.log.Trace("gossippedNum", "gossippedNum", gossippedNum)
 			if err != nil {
 				h.log.Error("gossip failed", "err", err)

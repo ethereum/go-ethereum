@@ -11,10 +11,10 @@ type ContentKey struct {
 	data     []byte
 }
 
-func NewContentKey(selector ContentType, hash []byte) *ContentKey {
+func NewContentKey(selector ContentType, data []byte) *ContentKey {
 	return &ContentKey{
 		selector: selector,
-		data:     hash,
+		data:     data,
 	}
 }
 
@@ -29,4 +29,20 @@ type ContentStorage interface {
 	Get(contentKey []byte, contentId []byte) ([]byte, error)
 
 	Put(contentKey []byte, contentId []byte, content []byte) error
+}
+
+type MockStorage struct {
+	Db map[string][]byte
+}
+
+func (m *MockStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
+	if content, ok := m.Db[string(contentId)]; ok {
+		return content, nil
+	}
+	return nil, ErrContentNotFound
+}
+
+func (m *MockStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
+	m.Db[string(contentId)] = content
+	return nil
 }

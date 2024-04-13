@@ -384,14 +384,14 @@ func (p *PortalProtocolAPI) FindContent(enr string, contentKey string) (interfac
 			Content:     hexutil.Encode(findContent.([]byte)),
 			UtpTransfer: false,
 		}
-		p.portalProtocol.log.Trace("FindContent", "contentInfo", contentInfo)
+		p.portalProtocol.Log.Trace("FindContent", "contentInfo", contentInfo)
 		return contentInfo, nil
 	case portalwire.ContentConnIdSelector:
 		contentInfo := &ContentInfo{
 			Content:     hexutil.Encode(findContent.([]byte)),
 			UtpTransfer: true,
 		}
-		p.portalProtocol.log.Trace("FindContent", "contentInfo", contentInfo)
+		p.portalProtocol.Log.Trace("FindContent", "contentInfo", contentInfo)
 		return contentInfo, nil
 	default:
 		enrs := make([]string, 0)
@@ -399,7 +399,7 @@ func (p *PortalProtocolAPI) FindContent(enr string, contentKey string) (interfac
 			enrs = append(enrs, r.String())
 		}
 
-		p.portalProtocol.log.Trace("FindContent", "enrs", enrs)
+		p.portalProtocol.Log.Trace("FindContent", "enrs", enrs)
 		return &Enrs{
 			Enrs: enrs,
 		}, nil
@@ -515,7 +515,7 @@ func (p *PortalProtocolAPI) Gossip(contentKeyHex, contentHex string) (int, error
 		return 0, err
 	}
 	id := p.portalProtocol.Self().ID()
-	return p.portalProtocol.NeighborhoodGossip(&id, [][]byte{contentKey}, [][]byte{content})
+	return p.portalProtocol.Gossip(&id, [][]byte{contentKey}, [][]byte{content})
 }
 
 func (p *PortalProtocolAPI) TraceRecursiveFindContent(contentKeyHex string) (*TraceContentResult, error) {

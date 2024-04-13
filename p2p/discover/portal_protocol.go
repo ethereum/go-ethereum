@@ -165,7 +165,7 @@ type PortalProtocol struct {
 	packetRouter   *utp.PacketRouter
 	ListenAddr     string
 	localNode      *enode.LocalNode
-	log            log.Logger
+	Log            log.Logger
 	PrivateKey     *ecdsa.PrivateKey
 	NetRestrict    *netutil.Netlist
 	BootstrapNodes []*enode.Node
@@ -193,7 +193,7 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 	protocol := &PortalProtocol{
 		protocolId:     protocolId,
 		ListenAddr:     config.ListenAddr,
-		log:            log.New("protocol", protocolId),
+		Log:            log.New("protocol", protocolId),
 		PrivateKey:     privateKey,
 		NetRestrict:    config.NetRestrict,
 		BootstrapNodes: config.BootstrapNodes,
@@ -244,7 +244,7 @@ func (p *PortalProtocol) Stop() {
 	p.DiscV5.Close()
 	err := p.utp.Close()
 	if err != nil {
-		p.log.Error("failed to close utp listener", "err", err)
+		p.Log.Error("failed to close utp listener", "err", err)
 	}
 }
 func (p *PortalProtocol) RoutingTableInfo() [][]string {
@@ -258,14 +258,14 @@ func (p *PortalProtocol) RoutingTableInfo() [][]string {
 		}
 		nodes = append(nodes, bucketNodes)
 	}
-	p.log.Trace("routingTableInfo resp:", "nodes", nodes)
+	p.Log.Trace("routingTableInfo resp:", "nodes", nodes)
 	return nodes
 }
 
 func (p *PortalProtocol) setupUDPListening() error {
 	laddr := p.conn.LocalAddr().(*net.UDPAddr)
 	p.localNode.SetFallbackUDP(laddr.Port)
-	p.log.Debug("UDP listener up", "addr", laddr)
+	p.Log.Debug("UDP listener up", "addr", laddr)
 	// TODO: NAT
 	//if !laddr.IP.IsLoopback() && !laddr.IP.IsPrivate() {
 	//	srv.portMappingRegister <- &portMapping{
@@ -298,14 +298,14 @@ func (p *PortalProtocol) setupUDPListening() error {
 				}
 			}
 
-			p.log.Trace("send to target data", "ip", target.IP().String(), "port", target.UDP(), "bufLength", len(buf))
+			p.Log.Trace("send to target data", "ip", target.IP().String(), "port", target.UDP(), "bufLength", len(buf))
 			_, err := p.DiscV5.TalkRequest(target, string(portalwire.UTPNetwork), buf)
 			return len(buf), err
 		})
 
 	ctx := context.Background()
 	var logger *zap.Logger
-	if p.log.Enabled(ctx, log.LevelDebug) || p.log.Enabled(ctx, log.LevelTrace) {
+	if p.Log.Enabled(ctx, log.LevelDebug) || p.Log.Enabled(ctx, log.LevelTrace) {
 		logger, err = zap.NewDevelopmentConfig().Build()
 	} else {
 		logger, err = zap.NewProductionConfig().Build()
@@ -336,7 +336,7 @@ func (p *PortalProtocol) setupDiscV5AndTable() error {
 		PrivateKey:  p.PrivateKey,
 		NetRestrict: p.NetRestrict,
 		Bootnodes:   p.BootstrapNodes,
-		Log:         p.log,
+		Log:         p.Log,
 	}
 
 	p.table, err = newMeteredTable(p, p.localNode.Database(), cfg)
@@ -376,7 +376,7 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 		CustomPayload: customPayloadBytes,
 	}
 
-	p.log.Trace("Sending ping request", "protocol", p.protocolId, "ip", p.Self().IP().String(), "source", p.Self().ID(), "target", node.ID(), "ping", pingRequest)
+	p.Log.Trace("Sending ping request", "protocol", p.protocolId, "ip", p.Self().IP().String(), "source", p.Self().ID(), "target", node.ID(), "ping", pingRequest)
 	pingRequestBytes, err := pingRequest.MarshalSSZ()
 	if err != nil {
 		return nil, err
@@ -389,12 +389,12 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 
 	if err != nil {
-		p.log.Error("ping error:", err)
+		p.Log.Error("ping error:", err)
 		p.replaceNode(node)
 		return nil, err
 	}
 
-	p.log.Trace("Received ping response", "source", p.Self().ID(), "target", node.ID(), "res", talkResp)
+	p.Log.Trace("Received ping response", "source", p.Self().ID(), "target", node.ID(), "res", talkResp)
 
 	return p.processPong(node, talkResp)
 }
@@ -409,10 +409,10 @@ func (p *PortalProtocol) findNodes(node *enode.Node, distances []uint) ([]*enode
 		Distances: distancesBytes,
 	}
 
-	p.log.Trace("Sending find nodes request", "id", node.ID(), "findNodes", findNodes)
+	p.Log.Trace("Sending find nodes request", "id", node.ID(), "findNodes", findNodes)
 	findNodesBytes, err := findNodes.MarshalSSZ()
 	if err != nil {
-		p.log.Error("failed to marshal find nodes request", "err", err)
+		p.Log.Error("failed to marshal find nodes request", "err", err)
 		return nil, err
 	}
 
@@ -422,7 +422,7 @@ func (p *PortalProtocol) findNodes(node *enode.Node, distances []uint) ([]*enode
 
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 	if err != nil {
-		p.log.Error("failed to send find nodes request", "err", err)
+		p.Log.Error("failed to send find nodes request", "err", err)
 		return nil, err
 	}
 
@@ -434,10 +434,10 @@ func (p *PortalProtocol) findContent(node *enode.Node, contentKey []byte) (byte,
 		ContentKey: contentKey,
 	}
 
-	p.log.Trace("Sending find content request", "id", node.ID(), "findContent", findContent)
+	p.Log.Trace("Sending find content request", "id", node.ID(), "findContent", findContent)
 	findContentBytes, err := findContent.MarshalSSZ()
 	if err != nil {
-		p.log.Error("failed to marshal find content request", "err", err)
+		p.Log.Error("failed to marshal find content request", "err", err)
 		return 0xff, nil, err
 	}
 
@@ -447,7 +447,7 @@ func (p *PortalProtocol) findContent(node *enode.Node, contentKey []byte) (byte,
 
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 	if err != nil {
-		p.log.Error("failed to send find content request", "err", err)
+		p.Log.Error("failed to send find content request", "err", err)
 		return 0xff, nil, err
 	}
 
@@ -461,10 +461,10 @@ func (p *PortalProtocol) offer(node *enode.Node, offerRequest *OfferRequest) ([]
 		ContentKeys: contentKeys,
 	}
 
-	p.log.Trace("Sending offer request", "offer", offer)
+	p.Log.Trace("Sending offer request", "offer", offer)
 	offerBytes, err := offer.MarshalSSZ()
 	if err != nil {
-		p.log.Error("failed to marshal offer request", "err", err)
+		p.Log.Error("failed to marshal offer request", "err", err)
 		return nil, err
 	}
 
@@ -474,7 +474,7 @@ func (p *PortalProtocol) offer(node *enode.Node, offerRequest *OfferRequest) ([]
 
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 	if err != nil {
-		p.log.Error("failed to send offer request", "err", err)
+		p.Log.Error("failed to send offer request", "err", err)
 		return nil, err
 	}
 
@@ -493,7 +493,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 		return nil, err
 	}
 
-	p.log.Trace("Received accept response", "id", target.ID(), "accept", accept)
+	p.Log.Trace("Received accept response", "id", target.ID(), "accept", accept)
 	p.setJustSeen(target)
 
 	var contentKeyLen int
@@ -534,7 +534,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 						if contentId != nil {
 							content, err = p.storage.Get(contentKey, contentId)
 							if err != nil {
-								p.log.Error("failed to get content from storage", "err", err)
+								p.Log.Error("failed to get content from storage", "err", err)
 								contents = append(contents, []byte{})
 							} else {
 								contents = append(contents, content)
@@ -548,7 +548,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				var contentsPayload []byte
 				contentsPayload, err = encodeContents(contents)
 				if err != nil {
-					p.log.Error("failed to encode contents", "err", err)
+					p.Log.Error("failed to encode contents", "err", err)
 					return
 				}
 
@@ -559,17 +559,17 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 
 				if err != nil {
 					conncancel()
-					p.log.Error("failed to dial utp connection", "err", err)
+					p.Log.Error("failed to dial utp connection", "err", err)
 					return
 				}
 				conncancel()
 
 				err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
 				if err != nil {
-					p.log.Error("failed to set write deadline", "err", err)
+					p.Log.Error("failed to set write deadline", "err", err)
 					err = conn.Close()
 					if err != nil {
-						p.log.Error("failed to close utp connection", "err", err)
+						p.Log.Error("failed to close utp connection", "err", err)
 						return
 					}
 
@@ -579,18 +579,18 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				var written int
 				written, err = conn.Write(contentsPayload)
 				if err != nil {
-					p.log.Error("failed to write to utp connection", "err", err)
+					p.Log.Error("failed to write to utp connection", "err", err)
 					err = conn.Close()
 					if err != nil {
-						p.log.Error("failed to close utp connection", "err", err)
+						p.Log.Error("failed to close utp connection", "err", err)
 						return
 					}
 					return
 				}
-				p.log.Trace("Sent content response", "id", target.ID(), "contents", contents, "size", written)
+				p.Log.Trace("Sent content response", "id", target.ID(), "contents", contents, "size", written)
 				err = conn.Close()
 				if err != nil {
-					p.log.Error("failed to close utp connection", "err", err)
+					p.Log.Error("failed to close utp connection", "err", err)
 					return
 				}
 				return
@@ -614,7 +614,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			return 0xff, nil, err
 		}
 
-		p.log.Trace("Received content response", "id", target.ID(), "content", content)
+		p.Log.Trace("Received content response", "id", target.ID(), "content", content)
 		p.setJustSeen(target)
 		return resp[1], content.Content, nil
 	case portalwire.ContentConnIdSelector:
@@ -624,7 +624,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			return 0xff, nil, err
 		}
 
-		p.log.Trace("Received returned content response", "id", target.ID(), "connIdMsg", connIdMsg)
+		p.Log.Trace("Received returned content response", "id", target.ID(), "connIdMsg", connIdMsg)
 		p.setJustSeen(target)
 		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
 		laddr := p.utp.Addr().(*utp.Addr)
@@ -644,10 +644,10 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		// Read ALL the data from the connection until EOF and return it
 		data, err := io.ReadAll(conn)
 		if err != nil {
-			p.log.Error("failed to read from utp connection", "err", err)
+			p.Log.Error("failed to read from utp connection", "err", err)
 			return 0xff, nil, err
 		}
-		p.log.Trace("Received content response", "id", target.ID(), "size", len(data), "data", data)
+		p.Log.Trace("Received content response", "id", target.ID(), "size", len(data), "data", data)
 		return resp[1], data, nil
 	case portalwire.ContentEnrsSelector:
 		enrs := &portalwire.Enrs{}
@@ -657,7 +657,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			return 0xff, nil, err
 		}
 
-		p.log.Trace("Received content response", "id", target.ID(), "enrs", enrs)
+		p.Log.Trace("Received content response", "id", target.ID(), "enrs", enrs)
 		p.setJustSeen(target)
 		nodes := p.filterNodes(target, enrs.Enrs, nil)
 		return resp[1], nodes, nil
@@ -702,19 +702,19 @@ func (p *PortalProtocol) filterNodes(target *enode.Node, enrs [][]byte, distance
 		record := &enr.Record{}
 		err = rlp.DecodeBytes(b, record)
 		if err != nil {
-			p.log.Error("Invalid record in nodes response", "id", target.ID(), "err", err)
+			p.Log.Error("Invalid record in nodes response", "id", target.ID(), "err", err)
 			continue
 		}
 		n, err = p.verifyResponseNode(target, record, distances, seen)
 		if err != nil {
-			p.log.Error("Invalid record in nodes response", "id", target.ID(), "err", err)
+			p.Log.Error("Invalid record in nodes response", "id", target.ID(), "err", err)
 			continue
 		}
 		verified++
 		nodes = append(nodes, n)
 	}
 
-	p.log.Trace("Received nodes response", "id", target.ID(), "total", len(enrs), "verified", verified, "nodes", nodes)
+	p.Log.Trace("Received nodes response", "id", target.ID(), "total", len(enrs), "verified", verified, "nodes", nodes)
 	return nodes
 }
 
@@ -729,7 +729,7 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 		return nil, err
 	}
 
-	p.log.Trace("Received pong response", "id", target.ID(), "pong", pong)
+	p.Log.Trace("Received pong response", "id", target.ID(), "pong", pong)
 
 	customPayload := &portalwire.PingPongCustomData{}
 	err = customPayload.UnmarshalSSZ(pong.CustomPayload)
@@ -738,7 +738,7 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 		return nil, err
 	}
 
-	p.log.Trace("Received pong response", "id", target.ID(), "pong", pong, "customPayload", customPayload)
+	p.Log.Trace("Received pong response", "id", target.ID(), "pong", pong, "customPayload", customPayload)
 	p.setJustSeen(target)
 
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
@@ -749,13 +749,13 @@ func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, ms
 	if n := p.DiscV5.getNode(id); n != nil {
 		p.table.addSeenNode(wrapNode(n))
 	}
-	p.log.Trace("receive utp data", "addr", addr, "msg-length", len(msg))
+	p.Log.Trace("receive utp data", "addr", addr, "msg-length", len(msg))
 	p.packetRouter.ReceiveMessage(msg, addr)
 	return []byte("")
 }
 
 func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
-	p.log.Trace("handleTalkRequest", "id", id, "addr", addr)
+	p.Log.Trace("handleTalkRequest", "id", id, "addr", addr)
 	if n := p.DiscV5.getNode(id); n != nil {
 		p.table.addSeenNode(wrapNode(n))
 	}
@@ -767,14 +767,14 @@ func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg [
 		pingRequest := &portalwire.Ping{}
 		err := pingRequest.UnmarshalSSZ(msg[1:])
 		if err != nil {
-			p.log.Error("failed to unmarshal ping request", "err", err)
+			p.Log.Error("failed to unmarshal ping request", "err", err)
 			return nil
 		}
 
-		p.log.Trace("received ping request", "protocol", p.protocolId, "source", id, "pingRequest", pingRequest)
+		p.Log.Trace("received ping request", "protocol", p.protocolId, "source", id, "pingRequest", pingRequest)
 		resp, err := p.handlePing(id, pingRequest)
 		if err != nil {
-			p.log.Error("failed to handle ping request", "err", err)
+			p.Log.Error("failed to handle ping request", "err", err)
 			return nil
 		}
 
@@ -783,14 +783,14 @@ func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg [
 		findNodesRequest := &portalwire.FindNodes{}
 		err := findNodesRequest.UnmarshalSSZ(msg[1:])
 		if err != nil {
-			p.log.Error("failed to unmarshal find nodes request", "err", err)
+			p.Log.Error("failed to unmarshal find nodes request", "err", err)
 			return nil
 		}
 
-		p.log.Trace("received find nodes request", "protocol", p.protocolId, "source", id, "findNodesRequest", findNodesRequest)
+		p.Log.Trace("received find nodes request", "protocol", p.protocolId, "source", id, "findNodesRequest", findNodesRequest)
 		resp, err := p.handleFindNodes(addr, findNodesRequest)
 		if err != nil {
-			p.log.Error("failed to handle find nodes request", "err", err)
+			p.Log.Error("failed to handle find nodes request", "err", err)
 			return nil
 		}
 
@@ -799,14 +799,14 @@ func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg [
 		findContentRequest := &portalwire.FindContent{}
 		err := findContentRequest.UnmarshalSSZ(msg[1:])
 		if err != nil {
-			p.log.Error("failed to unmarshal find content request", "err", err)
+			p.Log.Error("failed to unmarshal find content request", "err", err)
 			return nil
 		}
 
-		p.log.Trace("received find content request", "protocol", p.protocolId, "source", id, "findContentRequest", findContentRequest)
+		p.Log.Trace("received find content request", "protocol", p.protocolId, "source", id, "findContentRequest", findContentRequest)
 		resp, err := p.handleFindContent(id, addr, findContentRequest)
 		if err != nil {
-			p.log.Error("failed to handle find content request", "err", err)
+			p.Log.Error("failed to handle find content request", "err", err)
 			return nil
 		}
 
@@ -815,14 +815,14 @@ func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg [
 		offerRequest := &portalwire.Offer{}
 		err := offerRequest.UnmarshalSSZ(msg[1:])
 		if err != nil {
-			p.log.Error("failed to unmarshal offer request", "err", err)
+			p.Log.Error("failed to unmarshal offer request", "err", err)
 			return nil
 		}
 
-		p.log.Trace("received offer request", "protocol", p.protocolId, "source", id, "offerRequest", offerRequest)
+		p.Log.Trace("received offer request", "protocol", p.protocolId, "source", id, "offerRequest", offerRequest)
 		resp, err := p.handleOffer(id, addr, offerRequest)
 		if err != nil {
-			p.log.Error("failed to handle offer request", "err", err)
+			p.Log.Error("failed to handle offer request", "err", err)
 			return nil
 		}
 
@@ -860,7 +860,7 @@ func (p *PortalProtocol) handlePing(id enode.ID, ping *portalwire.Ping) ([]byte,
 		CustomPayload: pongCustomPayloadBytes,
 	}
 
-	p.log.Trace("Sending pong response", "protocol", p.protocolId, "source", id, "pong", pong)
+	p.Log.Trace("Sending pong response", "protocol", p.protocolId, "source", id, "pong", pong)
 	pongBytes, err := pong.MarshalSSZ()
 
 	if err != nil {
@@ -893,7 +893,7 @@ func (p *PortalProtocol) handleFindNodes(fromAddr *net.UDPAddr, request *portalw
 		Enrs:  enrs,
 	}
 
-	p.log.Trace("Sending nodes response", "protocol", p.protocolId, "source", fromAddr, "nodes", nodesMsg)
+	p.Log.Trace("Sending nodes response", "protocol", p.protocolId, "source", fromAddr, "nodes", nodesMsg)
 	nodesMsgBytes, err := nodesMsg.MarshalSSZ()
 	if err != nil {
 		return nil, err
@@ -942,7 +942,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			Enrs: enrs,
 		}
 
-		p.log.Trace("Sending enrs content response", "protocol", p.protocolId, "source", addr, "enrs", enrsMsg)
+		p.Log.Trace("Sending enrs content response", "protocol", p.protocolId, "source", addr, "enrs", enrsMsg)
 		var enrsMsgBytes []byte
 		enrsMsgBytes, err = enrsMsg.MarshalSSZ()
 		if err != nil {
@@ -963,7 +963,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			Content: content,
 		}
 
-		p.log.Trace("Sending raw content response", "protocol", p.protocolId, "source", addr, "content", rawContentMsg)
+		p.Log.Trace("Sending raw content response", "protocol", p.protocolId, "source", addr, "content", rawContentMsg)
 
 		var rawContentMsgBytes []byte
 		rawContentMsgBytes, err = rawContentMsg.MarshalSSZ()
@@ -995,7 +995,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 					var conn *utp.Conn
 					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
 					if err != nil {
-						p.log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
+						p.Log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
 						cancel()
 						return
 					}
@@ -1003,10 +1003,10 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 
 					err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
 					if err != nil {
-						p.log.Error("failed to set write deadline", "err", err)
+						p.Log.Error("failed to set write deadline", "err", err)
 						err = conn.Close()
 						if err != nil {
-							p.log.Error("failed to close utp connection", "err", err)
+							p.Log.Error("failed to close utp connection", "err", err)
 							return
 						}
 						return
@@ -1015,10 +1015,10 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 					var n int
 					n, err = conn.Write(content)
 					if err != nil {
-						p.log.Error("failed to write content to utp connection", "err", err)
+						p.Log.Error("failed to write content to utp connection", "err", err)
 						err = conn.Close()
 						if err != nil {
-							p.log.Error("failed to close utp connection", "err", err)
+							p.Log.Error("failed to close utp connection", "err", err)
 							return
 						}
 						return
@@ -1026,11 +1026,11 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 
 					err = conn.Close()
 					if err != nil {
-						p.log.Error("failed to close utp connection", "err", err)
+						p.Log.Error("failed to close utp connection", "err", err)
 						return
 					}
 
-					p.log.Trace("wrote content size to utp connection", "n", n)
+					p.Log.Trace("wrote content size to utp connection", "n", n)
 					return
 				}
 			}
@@ -1042,7 +1042,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			Id: idBuffer,
 		}
 
-		p.log.Trace("Sending connection id content response", "protocol", p.protocolId, "source", addr, "connId", connIdMsg)
+		p.Log.Trace("Sending connection id content response", "protocol", p.protocolId, "source", addr, "connId", connIdMsg)
 		var connIdMsgBytes []byte
 		connIdMsgBytes, err = connIdMsg.MarshalSSZ()
 		if err != nil {
@@ -1070,7 +1070,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 			ContentKeys:  contentKeyBitlist,
 		}
 
-		p.log.Trace("Sending accept response", "protocol", p.protocolId, "source", addr, "accept", acceptMsg)
+		p.Log.Trace("Sending accept response", "protocol", p.protocolId, "source", addr, "accept", acceptMsg)
 		var acceptMsgBytes []byte
 		acceptMsgBytes, err = acceptMsg.MarshalSSZ()
 		if err != nil {
@@ -1115,7 +1115,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 					var conn *utp.Conn
 					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
 					if err != nil {
-						p.log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
+						p.Log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
 						cancel()
 						return
 					}
@@ -1123,21 +1123,21 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 
 					err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
 					if err != nil {
-						p.log.Error("failed to set read deadline", "err", err)
+						p.Log.Error("failed to set read deadline", "err", err)
 						return
 					}
 					// Read ALL the data from the connection until EOF and return it
 					var data []byte
 					data, err = io.ReadAll(conn)
 					if err != nil {
-						p.log.Error("failed to read from utp connection", "err", err)
+						p.Log.Error("failed to read from utp connection", "err", err)
 						return
 					}
-					p.log.Trace("Received offer content response", "id", id, "size", len(data), "data", data)
+					p.Log.Trace("Received offer content response", "id", id, "size", len(data), "data", data)
 
 					err = p.handleOfferedContents(id, contentKeys, data)
 					if err != nil {
-						p.log.Error("failed to handle offered Contents", "err", err)
+						p.Log.Error("failed to handle offered Contents", "err", err)
 						return
 					}
 
@@ -1156,7 +1156,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 		ContentKeys:  []byte(contentKeyBitlist),
 	}
 
-	p.log.Trace("Sending accept response", "protocol", p.protocolId, "source", addr, "accept", acceptMsg)
+	p.Log.Trace("Sending accept response", "protocol", p.protocolId, "source", addr, "accept", acceptMsg)
 	var acceptMsgBytes []byte
 	acceptMsgBytes, err = acceptMsg.MarshalSSZ()
 	if err != nil {
@@ -1295,10 +1295,10 @@ func (p *PortalProtocol) offerWorker() {
 		case <-p.closeCtx.Done():
 			return
 		case offerRequestWithNode := <-p.offerQueue:
-			p.log.Trace("offerWorker", "offerRequestWithNode", offerRequestWithNode)
+			p.Log.Trace("offerWorker", "offerRequestWithNode", offerRequestWithNode)
 			_, err := p.offer(offerRequestWithNode.Node, offerRequestWithNode.Request)
 			if err != nil {
-				p.log.Error("failed to offer", "err", err)
+				p.Log.Error("failed to offer", "err", err)
 			}
 		}
 	}
@@ -1310,7 +1310,7 @@ func (p *PortalProtocol) truncateNodes(nodes []*enode.Node, maxSize int, enrOver
 	for _, n := range nodes {
 		enrBytes, err := rlp.EncodeToBytes(n.Record())
 		if err != nil {
-			p.log.Error("failed to encode n", "err", err)
+			p.Log.Error("failed to encode n", "err", err)
 			continue
 		}
 
@@ -1619,21 +1619,21 @@ func (p *PortalProtocol) InRange(contentId []byte) bool {
 
 func (p *PortalProtocol) Get(contentKey []byte, contentId []byte) ([]byte, error) {
 	content, err := p.storage.Get(contentKey, contentId)
-	p.log.Trace("get local storage", "contentId", hexutil.Encode(contentId), "content", hexutil.Encode(content), "err", err)
+	p.Log.Trace("get local storage", "contentId", hexutil.Encode(contentId), "content", hexutil.Encode(content), "err", err)
 	return content, err
 }
 
 func (p *PortalProtocol) Put(contentKey []byte, contentId []byte, content []byte) error {
 	err := p.storage.Put(contentKey, contentId, content)
-	p.log.Trace("put local storage", "contentId", hexutil.Encode(contentId), "content", hexutil.Encode(content), "err", err)
+	p.Log.Trace("put local storage", "contentId", hexutil.Encode(contentId), "content", hexutil.Encode(content), "err", err)
 	return err
 }
 
-func (p *PortalProtocol) GetContent() <-chan *ContentElement {
+func (p *PortalProtocol) GetContent() chan *ContentElement {
 	return p.contentQueue
 }
 
-func (p *PortalProtocol) NeighborhoodGossip(srcNodeId *enode.ID, contentKeys [][]byte, content [][]byte) (int, error) {
+func (p *PortalProtocol) Gossip(srcNodeId *enode.ID, contentKeys [][]byte, content [][]byte) (int, error) {
 	if len(content) == 0 {
 		return 0, errors.New("empty content")
 	}
@@ -1652,23 +1652,9 @@ func (p *PortalProtocol) NeighborhoodGossip(srcNodeId *enode.ID, contentKeys [][
 		return 0, ErrNilContentKey
 	}
 
-	// For selecting the closest nodes to whom to gossip the content a mixed
-	// approach is taken:
-	// 1. Select the closest neighbours in the routing table
-	// 2. Check if the radius is known for these these nodes and whether they are
-	// in range of the content to be offered.
-	// 3. If more than n (= 8) nodes are in range, offer these nodes the content
-	// (max nodes set at 8).
-	// 4. If less than n nodes are in range, do a node lookup, and offer the nodes
-	// returned from the lookup the content (max nodes set at 8)
-	//
-	// This should give a bigger rate of success and avoid the data being stopped
-	// in its propagation than when looking only for nodes in the own routing
-	// table, but at the same time avoid unnecessary node lookups.
-	// It might still cause issues in data getting propagated in a wider id range.
-	maxGossipNodes := 8
-
-	closestLocalNodes := p.findNodesCloseToContent(contentId, 16)
+	maxClosestNodes := 4
+	maxFartherNodes := 4
+	closestLocalNodes := p.findNodesCloseToContent(contentId, 32)
 
 	gossipNodes := make([]*enode.Node, 0)
 	for _, n := range closestLocalNodes {
@@ -1689,74 +1675,22 @@ func (p *PortalProtocol) NeighborhoodGossip(srcNodeId *enode.ID, contentKeys [][
 		}
 	}
 
-	if len(gossipNodes) >= maxGossipNodes {
-		numberOfGossipedNodes := min(len(gossipNodes), maxGossipNodes)
-		for _, n := range gossipNodes[:numberOfGossipedNodes] {
-			transientOfferRequest := &TransientOfferRequest{
-				Contents: contentList,
-			}
+	if len(gossipNodes) == 0 {
+		return 0, nil
+	}
 
-			offerRequest := &OfferRequest{
-				Kind:    TransientOfferRequestKind,
-				Request: transientOfferRequest,
-			}
-
-			offerRequestWithNode := &OfferRequestWithNode{
-				Node:    n,
-				Request: offerRequest,
-			}
-			p.offerQueue <- offerRequestWithNode
-		}
-
-		return numberOfGossipedNodes, nil
+	var finalGossipNodes []*enode.Node
+	if len(gossipNodes) > maxClosestNodes {
+		fartherNodes := gossipNodes[maxClosestNodes:]
+		rand.Shuffle(len(fartherNodes), func(i, j int) {
+			fartherNodes[i], fartherNodes[j] = fartherNodes[j], fartherNodes[i]
+		})
+		finalGossipNodes = append(gossipNodes[:maxClosestNodes], fartherNodes[:min(maxFartherNodes, len(fartherNodes))]...)
 	} else {
-		closestNodes := p.Lookup(enode.ID(contentId))
-		numberOfGossipedNodes := min(len(closestNodes), maxGossipNodes)
-		// Note: opportunistically not checking if the radius of the node is known
-		// and thus if the node is in radius with the content. Reason is, these
-		// should really be the closest nodes in the DHT, and thus are most likely
-		// going to be in range of the requested content.
-		for _, n := range closestNodes[:numberOfGossipedNodes] {
-			transientOfferRequest := &TransientOfferRequest{
-				Contents: contentList,
-			}
-
-			offerRequest := &OfferRequest{
-				Kind:    TransientOfferRequestKind,
-				Request: transientOfferRequest,
-			}
-
-			offerRequestWithNode := &OfferRequestWithNode{
-				Node:    n,
-				Request: offerRequest,
-			}
-			p.offerQueue <- offerRequestWithNode
-		}
-
-		return numberOfGossipedNodes, nil
-	}
-}
-
-func (p *PortalProtocol) RandomGossip(srcNodeId *enode.ID, contentKeys [][]byte, content [][]byte) (int, error) {
-	if len(content) == 0 {
-		return 0, errors.New("empty content")
+		finalGossipNodes = gossipNodes
 	}
 
-	contentList := make([]*ContentEntry, 0, portalwire.ContentKeysLimit)
-	for i := 0; i < len(content); i++ {
-		contentEntry := &ContentEntry{
-			ContentKey: contentKeys[i],
-			Content:    content[i],
-		}
-		contentList = append(contentList, contentEntry)
-	}
-
-	maxGossipNodes := 4
-	nodes := RandomNodes(p.table, maxGossipNodes, func(node *enode.Node) bool {
-		return srcNodeId == nil || node.ID() != *srcNodeId
-	})
-
-	for _, n := range nodes {
+	for _, n := range finalGossipNodes {
 		transientOfferRequest := &TransientOfferRequest{
 			Contents: contentList,
 		}
@@ -1773,7 +1707,7 @@ func (p *PortalProtocol) RandomGossip(srcNodeId *enode.ID, contentKeys [][]byte,
 		p.offerQueue <- offerRequestWithNode
 	}
 
-	return len(nodes), nil
+	return len(finalGossipNodes), nil
 }
 
 func (p *PortalProtocol) Distance(a, b enode.ID) enode.ID {
@@ -1781,7 +1715,7 @@ func (p *PortalProtocol) Distance(a, b enode.ID) enode.ID {
 	for i := range a {
 		res[i] = a[i] ^ b[i]
 	}
-	return enode.ID(res)
+	return res
 }
 
 func inRange(nodeId enode.ID, nodeRadius *uint256.Int, contentId []byte) bool {

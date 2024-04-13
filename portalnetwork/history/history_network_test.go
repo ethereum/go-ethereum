@@ -362,22 +362,6 @@ func parseBlockHeaderKeyContent() ([]contentEntry, error) {
 	return res, nil
 }
 
-type MockStorage struct {
-	db map[string][]byte
-}
-
-func (m *MockStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
-	if content, ok := m.db[string(contentId)]; ok {
-		return content, nil
-	}
-	return nil, storage.ErrContentNotFound
-}
-
-func (m *MockStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
-	m.db[string(contentId)] = content
-	return nil
-}
-
 func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*HistoryNetwork, error) {
 	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
 	slogVerbosity := log.FromLegacyLevel(5)
@@ -448,7 +432,7 @@ func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*HistoryNetwork, e
 
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	portalProtocol, err := discover.NewPortalProtocol(conf, string(portalwire.HistoryNetwork), privKey, conn, localNode, discV5, &MockStorage{db: make(map[string][]byte)}, contentQueue)
+	portalProtocol, err := discover.NewPortalProtocol(conf, string(portalwire.HistoryNetwork), privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}

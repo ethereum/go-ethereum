@@ -27,14 +27,14 @@ func (api *PortalLightApi) GetCheckpointData(checkpointHash tree.Root) (*capella
 }
 
 func (api *PortalLightApi) GetFinalityData() (*capella.LightClientFinalityUpdate, error) {
-	expectedCurrentSlot := api.bn.Spec.TimeToSlot(zrntcommon.Timestamp(time.Now().Unix()), zrntcommon.Timestamp(BeaconGenesisTime))
-	recentEpochStart := expectedCurrentSlot - (expectedCurrentSlot % api.bn.Spec.SLOTS_PER_EPOCH) + 1
+	expectedCurrentSlot := api.bn.spec.TimeToSlot(zrntcommon.Timestamp(time.Now().Unix()), zrntcommon.Timestamp(BeaconGenesisTime))
+	recentEpochStart := expectedCurrentSlot - (expectedCurrentSlot % api.bn.spec.SLOTS_PER_EPOCH) + 1
 
 	return api.bn.GetFinalityUpdate(uint64(recentEpochStart))
 }
 
 func (api *PortalLightApi) GetOptimisticData() (*capella.LightClientOptimisticUpdate, error) {
-	expectedCurrentSlot := api.bn.Spec.TimeToSlot(zrntcommon.Timestamp(time.Now().Unix()), zrntcommon.Timestamp(BeaconGenesisTime))
+	expectedCurrentSlot := api.bn.spec.TimeToSlot(zrntcommon.Timestamp(time.Now().Unix()), zrntcommon.Timestamp(BeaconGenesisTime))
 
 	return api.bn.GetOptimisticUpdate(uint64(expectedCurrentSlot))
 }
