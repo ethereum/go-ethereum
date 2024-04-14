@@ -79,7 +79,7 @@ func (h *TerminalHandler) format(buf []byte, r slog.Record, usecolor bool) []byt
 }
 
 func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, color string) {
-	writeAttr := func(attr slog.Attr, first, last bool) {
+	writeAttr := func(attr slog.Attr, _, last bool) {
 		buf.WriteByte(' ')
 
 		if color != "" {
