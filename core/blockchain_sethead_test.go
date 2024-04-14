@@ -22,7 +22,7 @@ package core
 import (
 	"fmt"
 	"math/big"
-	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1966,7 +1966,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 
 	// Create a temporary persistent database
 	datadir := t.TempDir()
-	ancient := path.Join(datadir, "ancient")
+	ancient := filepath.Join(datadir, "ancient")
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory:         datadir,

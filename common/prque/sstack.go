@@ -49,7 +49,7 @@ func newSstack[P cmp.Ordered, V any](setIndex SetIndexCallback[V]) *sstack[P, V]
 	return result
 }
 
-// Pushes a value onto the stack, expanding it if necessary. Required by
+// Push a value onto the stack, expanding it if necessary. Required by
 // heap.Interface.
 func (s *sstack[P, V]) Push(data any) {
 	if s.size == s.capacity {
@@ -69,7 +69,7 @@ func (s *sstack[P, V]) Push(data any) {
 	s.size++
 }
 
-// Pops a value off the stack and returns it. Currently no shrinking is done.
+// Pop a value off the stack and returns it. Currently no shrinking is done.
 // Required by heap.Interface.
 func (s *sstack[P, V]) Pop() (res any) {
 	s.size--
@@ -85,18 +85,18 @@ func (s *sstack[P, V]) Pop() (res any) {
 	return
 }
 
-// Returns the length of the stack. Required by sort.Interface.
+// Len returns the length of the stack. Required by sort.Interface.
 func (s *sstack[P, V]) Len() int {
 	return s.size
 }
 
-// Compares the priority of two elements of the stack (higher is first).
+// Less compares the priority of two elements of the stack (higher is first).
 // Required by sort.Interface.
 func (s *sstack[P, V]) Less(i, j int) bool {
 	return s.blocks[i/blockSize][i%blockSize].priority > s.blocks[j/blockSize][j%blockSize].priority
 }
 
-// Swaps two elements in the stack. Required by sort.Interface.
+// Swap two elements in the stack. Required by sort.Interface.
 func (s *sstack[P, V]) Swap(i, j int) {
 	ib, io, jb, jo := i/blockSize, i%blockSize, j/blockSize, j%blockSize
 	a, b := s.blocks[jb][jo], s.blocks[ib][io]
@@ -107,7 +107,7 @@ func (s *sstack[P, V]) Swap(i, j int) {
 	s.blocks[ib][io], s.blocks[jb][jo] = a, b
 }
 
-// Resets the stack, effectively clearing its contents.
+// Reset the stack, effectively clearing its contents.
 func (s *sstack[P, V]) Reset() {
 	*s = *newSstack[P, V](s.setIndex)
 }

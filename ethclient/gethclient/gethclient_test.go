@@ -299,7 +299,7 @@ func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
 		t.Fatalf("invalid nonce, want: %v got: %v", 0, result.Nonce)
 	}
 	// test balance
-	if result.Balance.Cmp(big.NewInt(0)) != 0 {
+	if result.Balance.Sign() != 0 {
 		t.Fatalf("invalid balance, want: %v got: %v", 0, result.Balance)
 	}
 	// test storage

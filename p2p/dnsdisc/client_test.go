@@ -215,7 +215,7 @@ func TestIteratorNodeUpdates(t *testing.T) {
 	// Ensure RandomNode returns the new nodes after the tree is updated.
 	updateSomeNodes(keys, nodes)
 	tree2, _ := makeTestTree("n", nodes, nil)
-	resolver.clear()
+	clear(resolver)
 	resolver.add(tree2.ToTXT("n"))
 	t.Log("tree updated")
 
@@ -256,7 +256,7 @@ func TestIteratorRootRecheckOnFail(t *testing.T) {
 	// Ensure RandomNode returns the new nodes after the tree is updated.
 	updateSomeNodes(keys, nodes)
 	tree2, _ := makeTestTree("n", nodes, nil)
-	resolver.clear()
+	clear(resolver)
 	resolver.add(tree2.ToTXT("n"))
 	t.Log("tree updated")
 
@@ -445,12 +445,6 @@ func newMapResolver(maps ...map[string]string) mapResolver {
 		mr.add(m)
 	}
 	return mr
-}
-
-func (mr mapResolver) clear() {
-	for k := range mr {
-		delete(mr, k)
-	}
 }
 
 func (mr mapResolver) add(m map[string]string) {

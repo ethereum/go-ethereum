@@ -18,7 +18,6 @@ package era
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"math/big"
 
@@ -80,7 +79,7 @@ func (it *Iterator) Block() (*types.Block, error) {
 // Receipts returns the receipts for the iterator's current position.
 func (it *Iterator) Receipts() (types.Receipts, error) {
 	if it.inner.Receipts == nil {
-		return nil, fmt.Errorf("receipts must be non-nil")
+		return nil, errors.New("receipts must be non-nil")
 	}
 	var receipts types.Receipts
 	err := rlp.Decode(it.inner.Receipts, &receipts)
