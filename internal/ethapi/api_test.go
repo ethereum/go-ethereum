@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -54,7 +55,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 )
 
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
@@ -1037,11 +1037,8 @@ func TestSignBlobTransaction(t *testing.T) {
 	}
 
 	_, err = api.SignTransaction(context.Background(), argsFromTransaction(res.Tx, b.acc.Address))
-	if err == nil {
-		t.Fatalf("should fail on blob transaction")
-	}
-	if !errors.Is(err, errBlobTxNotSupported) {
-		t.Errorf("error mismatch. Have: %v, want: %v", err, errBlobTxNotSupported)
+	if err != nil {
+		t.Fatalf("should not fail on blob transaction")
 	}
 }
 

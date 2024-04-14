@@ -63,7 +63,7 @@ func (w *withdrawalQueue) gatherPending(maxCount int) []*types.Withdrawal {
 		case withdrawal := <-w.pending:
 			withdrawals = append(withdrawals, withdrawal)
 			if len(withdrawals) == maxCount {
-				break
+				return withdrawals
 			}
 		default:
 			return withdrawals

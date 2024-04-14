@@ -156,7 +156,7 @@ func (l *logger) Handler() slog.Handler {
 	return l.inner.Handler()
 }
 
-// write logs a message at the specified level:
+// Write logs a message at the specified level:
 func (l *logger) Write(level slog.Level, msg string, attrs ...any) {
 	if !l.inner.Enabled(context.Background(), level) {
 		return

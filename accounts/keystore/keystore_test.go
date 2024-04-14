@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
-	"golang.org/x/exp/slices"
 )
 
 var testSigData = make([]byte, 32)
@@ -343,7 +343,7 @@ func TestWalletNotifications(t *testing.T) {
 	checkEvents(t, wantEvents, events)
 }
 
-// TestImportExport tests the import functionality of a keystore.
+// TestImportECDSA tests the import functionality of a keystore.
 func TestImportECDSA(t *testing.T) {
 	t.Parallel()
 	_, ks := tmpKeyStore(t)
@@ -362,7 +362,7 @@ func TestImportECDSA(t *testing.T) {
 	}
 }
 
-// TestImportECDSA tests the import and export functionality of a keystore.
+// TestImportExport tests the import and export functionality of a keystore.
 func TestImportExport(t *testing.T) {
 	t.Parallel()
 	_, ks := tmpKeyStore(t)

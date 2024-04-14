@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"math/big"
 	"math/rand"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/exp/slices"
 )
 
 func TestStackTrieInsertAndHash(t *testing.T) {

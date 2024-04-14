@@ -303,10 +303,13 @@ func (n *ExecNode) Stop() error {
 	go func() {
 		waitErr <- n.Cmd.Wait()
 	}()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
 	select {
 	case err := <-waitErr:
 		return err
-	case <-time.After(5 * time.Second):
+	case <-timer.C:
 		return n.Cmd.Process.Kill()
 	}
 }

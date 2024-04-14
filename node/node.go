@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 
@@ -280,16 +281,6 @@ func (n *Node) openEndpoints() error {
 		n.server.Stop()
 	}
 	return err
-}
-
-// containsLifecycle checks if 'lfs' contains 'l'.
-func containsLifecycle(lfs []Lifecycle, l Lifecycle) bool {
-	for _, obj := range lfs {
-		if obj == l {
-			return true
-		}
-	}
-	return false
 }
 
 // stopServices terminates running services, RPC and p2p networking.
@@ -575,7 +566,7 @@ func (n *Node) RegisterLifecycle(lifecycle Lifecycle) {
 	if n.state != initializingState {
 		panic("can't register lifecycle on running/stopped node")
 	}
-	if containsLifecycle(n.lifecycles, lifecycle) {
+	if slices.Contains(n.lifecycles, lifecycle) {
 		panic(fmt.Sprintf("attempt to register lifecycle %T more than once", lifecycle))
 	}
 	n.lifecycles = append(n.lifecycles, lifecycle)
