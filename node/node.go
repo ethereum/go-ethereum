@@ -92,7 +92,7 @@ func New(conf *Config) (*Node, error) {
 	}
 
 	if conf.HTTPProto == "" {
-		conf.HTTPProto = "tcp4"
+		conf.HTTPProto = "tcp"
 	}
 
 	// Ensure that the instance name doesn't cause weird conflicts with
