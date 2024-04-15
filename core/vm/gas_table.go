@@ -23,8 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	trieUtils "github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/holiman/uint256"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -100,23 +98,11 @@ var (
 
 func gasExtCodeSize(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	usedGas := uint64(0)
-	slot := stack.Back(0)
-	address := slot.Bytes20()
-	if evm.chainRules.IsPrague {
-		usedGas += evm.TxContext.Accesses.TouchAddressOnReadAndComputeGas(address[:], uint256.Int{}, trieUtils.CodeSizeLeafKey)
-	}
-
 	return usedGas, nil
 }
 
 func gasSLoad(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	usedGas := uint64(0)
-
-	if evm.chainRules.IsPrague {
-		where := stack.Back(0)
-		treeIndex, subIndex := trieUtils.GetTreeKeyStorageSlotTreeIndexes(where.Bytes())
-		usedGas += evm.Accesses.TouchAddressOnReadAndComputeGas(contract.Address().Bytes(), *treeIndex, subIndex)
-	}
 
 	return usedGas, nil
 }
@@ -405,7 +391,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	} else if !evm.StateDB.Exist(address) {
 		gas += params.CallNewAccountGas
 	}
-	if transfersValue {
+	if transfersValue && !evm.chainRules.IsEIP4762 {
 		gas += params.CallValueTransferGas
 	}
 	memoryGas, err := memoryGasCost(mem, memorySize)
@@ -424,13 +410,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
-	if evm.chainRules.IsPrague {
-		if _, isPrecompile := evm.precompile(address); !isPrecompile {
-			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()[:]))
-			if overflow {
-				return 0, ErrGasUintOverflow
-			}
-		}
+	if evm.chainRules.IsEIP4762 {
 		if transfersValue {
 			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeValueTransfer(contract.Address().Bytes()[:], address.Bytes()[:]))
 			if overflow {
@@ -451,7 +431,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		gas      uint64
 		overflow bool
 	)
-	if stack.Back(2).Sign() != 0 {
+	if stack.Back(2).Sign() != 0 && !evm.chainRules.IsEIP4762 {
 		gas += params.CallValueTransferGas
 	}
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
@@ -464,10 +444,11 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
-	if evm.chainRules.IsPrague {
+	if evm.chainRules.IsEIP4762 {
 		address := common.Address(stack.Back(1).Bytes20())
-		if _, isPrecompile := evm.precompile(address); !isPrecompile {
-			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()))
+		transfersValue := !stack.Back(2).IsZero()
+		if transfersValue {
+			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeValueTransfer(contract.Address().Bytes()[:], address.Bytes()[:]))
 			if overflow {
 				return 0, ErrGasUintOverflow
 			}
@@ -489,15 +470,6 @@ func gasDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}
-	if evm.chainRules.IsPrague {
-		address := common.Address(stack.Back(1).Bytes20())
-		if _, isPrecompile := evm.precompile(address); !isPrecompile {
-			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()))
-			if overflow {
-				return 0, ErrGasUintOverflow
-			}
-		}
-	}
 	return gas, nil
 }
 
@@ -513,15 +485,6 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
-	}
-	if evm.chainRules.IsPrague {
-		address := common.Address(stack.Back(1).Bytes20())
-		if _, isPrecompile := evm.precompile(address); !isPrecompile {
-			gas, overflow = math.SafeAdd(gas, evm.Accesses.TouchAndChargeMessageCall(address.Bytes()))
-			if overflow {
-				return 0, ErrGasUintOverflow
-			}
-		}
 	}
 	return gas, nil
 }

@@ -26,11 +26,11 @@ import (
 )
 
 const (
-	VersionLeafKey    = 0
-	BalanceLeafKey    = 1
-	NonceLeafKey      = 2
-	CodeKeccakLeafKey = 3
-	CodeSizeLeafKey   = 4
+	VersionLeafKey  = 0
+	BalanceLeafKey  = 1
+	NonceLeafKey    = 2
+	CodeHashLeafKey = 3
+	CodeSizeLeafKey = 4
 
 	maxPointCacheByteSize = 100 << 20
 )
@@ -152,7 +152,7 @@ func GetTreeKeyNonce(address []byte) []byte {
 }
 
 func GetTreeKeyCodeKeccak(address []byte) []byte {
-	return GetTreeKey(address, zero, CodeKeccakLeafKey)
+	return GetTreeKey(address, zero, CodeHashLeafKey)
 }
 
 func GetTreeKeyCodeSize(address []byte) []byte {

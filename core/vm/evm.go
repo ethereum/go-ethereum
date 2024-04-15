@@ -178,20 +178,6 @@ func (evm *EVM) SetBlockContext(blockCtx BlockContext) {
 	evm.chainRules = evm.chainConfig.Rules(num, blockCtx.Random != nil, timestamp)
 }
 
-// tryConsumeGas tries to subtract gas from gasPool, setting the result in gasPool
-// if subtracting more gas than remains in gasPool, set gasPool = 0 and return false
-// otherwise, do the subtraction setting the result in gasPool and return true
-func tryConsumeGas(gasPool *uint64, gas uint64) bool {
-	// XXX check this is still needed as a func
-	if *gasPool < gas {
-		*gasPool = 0
-		return false
-	}
-
-	*gasPool -= gas
-	return true
-}
-
 // Call executes the contract associated with the addr with the given input as
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
@@ -211,11 +197,17 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	var creation bool
 	if !evm.StateDB.Exist(addr) {
-		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
-			if evm.chainRules.IsPrague {
-				// proof of absence
-				tryConsumeGas(&gas, evm.Accesses.TouchAndChargeProofOfAbsence(addr.Bytes()))
+		if !isPrecompile && evm.chainRules.IsEIP4762 {
+			// add proof of absence to witness
+			wgas := evm.Accesses.TouchFullAccount(addr.Bytes(), false)
+			if gas < wgas {
+				evm.StateDB.RevertToSnapshot(snapshot)
+				return nil, 0, ErrOutOfGas
 			}
+			gas -= wgas
+		}
+
+		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
 			// Calling a non existing account, don't do anything, but ping the tracer
 			if debug {
 				if evm.depth == 0 {
@@ -463,7 +455,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
 	// the access-list change should not be rolled back
-	if evm.chainRules.IsBerlin {
+	if evm.chainRules.IsEIP2929 {
 		evm.StateDB.AddAddressToAccessList(address)
 	}
 	// Ensure there's no existing contract already at the designated address
@@ -486,6 +478,14 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 	contract.IsDeployment = true
 
+	// Charge the contract creation init gas in verkle mode
+	var err error
+	if evm.chainRules.IsEIP4762 {
+		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateInit(address.Bytes(), value.Sign() != 0)) {
+			err = ErrOutOfGas
+		}
+	}
+
 	if evm.Config.Tracer != nil {
 		if evm.depth == 0 {
 			evm.Config.Tracer.CaptureStart(evm, caller.Address(), address, true, codeAndHash.code, gas, value)
@@ -494,7 +494,10 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		}
 	}
 
-	ret, err := evm.interpreter.Run(contract, nil, false)
+	var ret []byte
+	if err == nil {
+		ret, err = evm.interpreter.Run(contract, nil, false)
+	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
 	if err == nil && evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
@@ -511,20 +514,24 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// be stored due to not enough gas set an error and let it be handled
 	// by the error checking condition below.
 	if err == nil {
-		createDataGas := uint64(len(ret)) * params.CreateDataGas
-		if contract.UseGas(createDataGas) {
-			evm.StateDB.SetCode(address, ret)
+		if !evm.chainRules.IsEIP4762 {
+			createDataGas := uint64(len(ret)) * params.CreateDataGas
+			if !contract.UseGas(createDataGas) {
+				err = ErrCodeStoreOutOfGas
+			}
 		} else {
-			err = ErrCodeStoreOutOfGas
-		}
-	}
+			// Contract creation completed, touch the missing fields in the contract
+			if !contract.UseGas(evm.Accesses.TouchFullAccount(address.Bytes()[:], true)) {
+				err = ErrCodeStoreOutOfGas
+			}
 
-	if err == nil && evm.chainRules.IsPrague {
-		if len(ret) > 0 {
-			touchCodeChunksRangeOnReadAndChargeGas(address.Bytes(), 0, uint64(len(ret)), uint64(len(ret)), evm.Accesses)
+			if err == nil && len(ret) > 0 && !contract.UseGas(evm.Accesses.TouchCodeChunksRangeAndChargeGas(address.Bytes(), 0, uint64(len(ret)), uint64(len(ret)), true)) {
+				err = ErrCodeStoreOutOfGas
+			}
 		}
-		if !contract.UseGas(evm.Accesses.TouchAndChargeContractCreateCompleted(address.Bytes()[:])) {
-			err = ErrOutOfGas
+
+		if err == nil {
+			evm.StateDB.SetCode(address, ret)
 		}
 	}
 

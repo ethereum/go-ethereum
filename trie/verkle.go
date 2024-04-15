@@ -125,7 +125,7 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	// been recreated after that, then its code keccak will NOT be 0. So return `nil` if
 	// the nonce, and values[10], and code keccak is 0.
 
-	if acc.Nonce == 0 && len(values) > 10 && len(values[10]) > 0 && bytes.Equal(values[utils.CodeKeccakLeafKey], zero[:]) {
+	if acc.Nonce == 0 && len(values) > 10 && len(values[10]) > 0 && bytes.Equal(values[utils.CodeHashLeafKey], zero[:]) {
 		if !t.ended {
 			return nil, errDeletedAccount
 		} else {
@@ -144,7 +144,7 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	// 	}
 	// }
 	acc.Balance = new(big.Int).SetBytes(balance[:])
-	acc.CodeHash = values[utils.CodeKeccakLeafKey]
+	acc.CodeHash = values[utils.CodeHashLeafKey]
 	// TODO fix the code size as well
 
 	return acc, nil
@@ -164,7 +164,7 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount)
 	values[utils.VersionLeafKey] = zero[:]
 	values[utils.NonceLeafKey] = nonce[:]
 	values[utils.BalanceLeafKey] = balance[:]
-	values[utils.CodeKeccakLeafKey] = acc.CodeHash[:]
+	values[utils.CodeHashLeafKey] = acc.CodeHash[:]
 
 	binary.LittleEndian.PutUint64(nonce[:], acc.Nonce)
 	bbytes := acc.Balance.Bytes()

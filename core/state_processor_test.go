@@ -20,6 +20,9 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/binary"
+	"encoding/json"
+	"fmt"
+	"os"
 
 	//"fmt"
 	"math/big"
@@ -37,7 +40,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/utils"
 
 	//"github.com/ethereum/go-ethereum/rlp"
@@ -472,11 +477,19 @@ func TestProcessVerkle(t *testing.T) {
 				},
 			},
 		}
+		loggerCfg = &logger.Config{}
 	)
+
+	os.MkdirAll("output", 0755)
+	traceFile, err := os.Create("./output/traces.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Verkle trees use the snapshot, which must be enabled before the
 	// data is saved into the tree+database.
 	genesis := gspec.MustCommit(bcdb)
-	blockchain, _ := NewBlockChain(bcdb, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(bcdb, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{Tracer: logger.NewJSONLogger(loggerCfg, traceFile)}, nil, nil)
 	defer blockchain.Stop()
 
 	// Commit the genesis block to the block-generation database as it
@@ -485,8 +498,8 @@ func TestProcessVerkle(t *testing.T) {
 
 	txCost1 := params.TxGas
 	txCost2 := params.TxGas
-	contractCreationCost := intrinsicContractCreationGas + uint64(5600+700+700+700 /* creation with value */ +2739 /* execution costs */)
-	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(5600+700 /* creation */ +302044 /* execution costs */)
+	contractCreationCost := intrinsicContractCreationGas + uint64(5600+700+700+700 /* creation with value */ +1439 /* execution costs */)
+	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(5600+700 /* creation */ +44044 /* execution costs */)
 	blockGasUsagesExpected := []uint64{
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
@@ -513,6 +526,33 @@ func TestProcessVerkle(t *testing.T) {
 		}
 	})
 
+	kvjson, err := json.Marshal(keyvals)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile("./output/statediffs.json", kvjson, 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blockrlp, err := rlp.EncodeToBytes(genesis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(fmt.Sprintf("./output/block%d.rlp.hex", 0), []byte(fmt.Sprintf("%x", blockrlp)), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range chain {
+		blockrlp, err := rlp.EncodeToBytes(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = os.WriteFile(fmt.Sprintf("./output/block%d.rlp.hex", block.NumberU64()), []byte(fmt.Sprintf("%x", blockrlp)), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	// Uncomment to extract block #2
 	//f, _ := os.Create("block2.rlp")
 	//defer f.Close()
@@ -521,7 +561,7 @@ func TestProcessVerkle(t *testing.T) {
 	//f.Write(buf.Bytes())
 	//fmt.Printf("root= %x\n", chain[0].Root())
 	// check the proof for the last block
-	err := trie.DeserializeAndVerifyVerkleProof(proofs[1], chain[0].Root().Bytes(), chain[1].Root().Bytes(), keyvals[1])
+	err = trie.DeserializeAndVerifyVerkleProof(proofs[1], chain[0].Root().Bytes(), chain[1].Root().Bytes(), keyvals[1])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -913,7 +953,7 @@ func TestProcessVerklExtCodeHashOpcode(t *testing.T) {
 	}
 
 	codeHashStateDiff := statediff[1][stateDiffIdx].SuffixDiffs[0]
-	if codeHashStateDiff.Suffix != utils.CodeKeccakLeafKey {
+	if codeHashStateDiff.Suffix != utils.CodeHashLeafKey {
 		t.Fatalf("code hash invalid suffix")
 	}
 	if codeHashStateDiff.CurrentValue == nil {

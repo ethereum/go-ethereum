@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	tutils "github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
@@ -261,7 +260,7 @@ func (kvm *keyValueMigrator) addAccount(addr []byte, acc *types.StateAccount) {
 	binary.LittleEndian.PutUint64(nonce[:8], acc.Nonce)
 	leafNodeData.Values[tutils.NonceLeafKey] = nonce[:]
 
-	leafNodeData.Values[tutils.CodeKeccakLeafKey] = acc.CodeHash[:]
+	leafNodeData.Values[tutils.CodeHashLeafKey] = acc.CodeHash[:]
 }
 
 func (kvm *keyValueMigrator) addAccountCode(addr []byte, codeSize uint64, chunks []byte) {
@@ -369,7 +368,13 @@ func (kvm *keyValueMigrator) migrateCollectedKeyValues(tree *trie.VerkleTrie) er
 	return nil
 }
 
+// InsertBlockHashHistoryAtEip2935Fork handles the insertion of all previous 256
+// blocks on the eip2935 activation block. It also adds the account header of the
+// history contract to the witness.
 func InsertBlockHashHistoryAtEip2935Fork(statedb *state.StateDB, prevNumber uint64, prevHash common.Hash, chain consensus.ChainHeaderReader) {
+	// Make sure that the historical contract is added to the witness
+	statedb.Witness().TouchFullAccount(params.HistoryStorageAddress[:], true)
+
 	ancestor := chain.GetHeader(prevHash, prevNumber)
 	for i := prevNumber; i > 0 && i >= prevNumber-params.Eip2935BlockHashHistorySize; i-- {
 		ProcessParentBlockHash(statedb, i, ancestor.Hash())
@@ -382,6 +387,5 @@ func ProcessParentBlockHash(statedb *state.StateDB, prevNumber uint64, prevHash 
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)
 	statedb.SetState(params.HistoryStorageAddress, key, prevHash)
-	index, suffix := utils.GetTreeKeyStorageSlotTreeIndexes(key[:])
-	statedb.Witness().TouchAddressOnWriteAndComputeGas(params.HistoryStorageAddress[:], *index, suffix)
+	statedb.Witness().TouchSlotAndChargeGas(params.HistoryStorageAddress[:], key, true)
 }

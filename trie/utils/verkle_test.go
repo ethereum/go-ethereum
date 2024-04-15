@@ -17,10 +17,11 @@
 package utils
 
 import (
+	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"math/big"
-	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-verkle"
@@ -77,7 +78,7 @@ func sha256GetTreeKeyCodeSize(addr []byte) []byte {
 	copy(payload[:len(treeIndexBytes)], treeIndexBytes)
 	digest.Write(payload[:])
 	h := digest.Sum(nil)
-	h[31] = CodeKeccakLeafKey
+	h[31] = CodeHashLeafKey
 	return h
 }
 
@@ -91,5 +92,24 @@ func BenchmarkSha256Hash(b *testing.B) {
 		rand.Read(v[:])
 		rand.Read(addr[:])
 		sha256GetTreeKeyCodeSize(addr[:])
+	}
+}
+
+func TestCompareGetTreeKeyWithEvaluated(t *testing.T) {
+	var addr [32]byte
+	rand.Read(addr[:])
+	addrpoint := EvaluateAddressPoint(addr[:])
+	for i := 0; i < 100; i++ {
+		var val [32]byte
+		rand.Read(val[:])
+		n := uint256.NewInt(0).SetBytes(val[:])
+		n.Lsh(n, 8)
+		subindex := val[0]
+		tk1 := GetTreeKey(addr[:], n, subindex)
+		tk2 := GetTreeKeyWithEvaluatedAddess(addrpoint, n, subindex)
+
+		if !bytes.Equal(tk1, tk2) {
+			t.Fatalf("differing key: slot=%x, addr=%x", val, addr)
+		}
 	}
 }

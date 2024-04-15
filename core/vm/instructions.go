@@ -20,12 +20,10 @@ import (
 	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -264,13 +262,6 @@ func opAddress(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
-	if interpreter.evm.chainRules.IsPrague {
-		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(address[:], uint256.Int{}, utils.BalanceLeafKey)
-		if !scope.Contract.UseGas(statelessGas) {
-			scope.Contract.Gas = 0
-			return nil, ErrOutOfGas
-		}
-	}
 	slot.SetFromBig(interpreter.evm.StateDB.GetBalance(address))
 	return nil, nil
 }
@@ -355,13 +346,6 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	slot := scope.Stack.peek()
 	address := slot.Bytes20()
 	cs := uint64(interpreter.evm.StateDB.GetCodeSize(address))
-	if interpreter.evm.chainRules.IsPrague {
-		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(address[:], uint256.Int{}, utils.CodeSizeLeafKey)
-		if !scope.Contract.UseGas(statelessGas) {
-			scope.Contract.Gas = 0
-			return nil, ErrOutOfGas
-		}
-	}
 	slot.SetUint64(cs)
 	return nil, nil
 }
@@ -386,8 +370,8 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 
 	contractAddr := scope.Contract.Address()
 	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(scope.Contract.Code, uint64CodeOffset, length.Uint64())
-	if interpreter.evm.chainRules.IsPrague && !scope.Contract.IsDeployment {
-		statelessGas := touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], copyOffset, nonPaddedCopyLength, uint64(len(scope.Contract.Code)), interpreter.evm.Accesses)
+	if interpreter.evm.chainRules.IsEIP4762 && !scope.Contract.IsDeployment {
+		statelessGas := interpreter.evm.Accesses.TouchCodeChunksRangeAndChargeGas(contractAddr[:], copyOffset, nonPaddedCopyLength, uint64(len(scope.Contract.Code)), false)
 		if !scope.Contract.UseGas(statelessGas) {
 			scope.Contract.Gas = 0
 			return nil, ErrOutOfGas
@@ -395,41 +379,6 @@ func opCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	}
 	scope.Memory.Set(memOffset.Uint64(), uint64(len(paddedCodeCopy)), paddedCodeCopy)
 	return nil, nil
-}
-
-// touchCodeChunksRangeOnReadAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
-func touchCodeChunksRangeOnReadAndChargeGas(contractAddr []byte, startPC, size uint64, codeLen uint64, accesses *state.AccessWitness) uint64 {
-	// note that in the case where the copied code is outside the range of the
-	// contract code but touches the last leaf with contract code in it,
-	// we don't include the last leaf of code in the AccessWitness.  The
-	// reason that we do not need the last leaf is the account's code size
-	// is already in the AccessWitness so a stateless verifier can see that
-	// the code from the last leaf is not needed.
-	if (codeLen == 0 && size == 0) || startPC > codeLen {
-		return 0
-	}
-
-	endPC := startPC + size
-	if endPC > codeLen {
-		endPC = codeLen
-	}
-	if endPC > 0 {
-		endPC -= 1 // endPC is the last bytecode that will be touched.
-	}
-
-	var statelessGasCharged uint64
-	for chunkNumber := startPC / 31; chunkNumber <= endPC/31; chunkNumber++ {
-		treeIndex := *uint256.NewInt((chunkNumber + 128) / 256)
-		subIndex := byte((chunkNumber + 128) % 256)
-		gas := accesses.TouchAddressOnReadAndComputeGas(contractAddr, treeIndex, subIndex)
-		var overflow bool
-		statelessGasCharged, overflow = math.SafeAdd(statelessGasCharged, gas)
-		if overflow {
-			panic("overflow when adding gas")
-		}
-	}
-
-	return statelessGasCharged
 }
 
 func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
@@ -445,14 +394,14 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		uint64CodeOffset = 0xffffffffffffffff
 	}
 	addr := common.Address(a.Bytes20())
-	if interpreter.evm.chainRules.IsPrague {
+	if interpreter.evm.chainRules.IsEIP4762 {
 		code := interpreter.evm.StateDB.GetCode(addr)
 		contract := &Contract{
 			Code: code,
 			self: AccountRef(addr),
 		}
 		paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-		statelessGas := touchCodeChunksRangeOnReadAndChargeGas(addr[:], copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), interpreter.evm.Accesses)
+		statelessGas := interpreter.evm.Accesses.TouchCodeChunksRangeAndChargeGas(addr[:], copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
 		if !scope.Contract.UseGas(statelessGas) {
 			scope.Contract.Gas = 0
 			return nil, ErrOutOfGas
@@ -495,13 +444,6 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
 	address := common.Address(slot.Bytes20())
-	if interpreter.evm.chainRules.IsPrague {
-		statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(address[:], uint256.Int{}, utils.CodeKeccakLeafKey)
-		if !scope.Contract.UseGas(statelessGas) {
-			scope.Contract.Gas = 0
-			return nil, ErrOutOfGas
-		}
-	}
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
@@ -516,13 +458,12 @@ func opGasprice(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	return nil, nil
 }
 
-func getBlockHashFromContract(number uint64, statedb StateDB, witness *state.AccessWitness) common.Hash {
+func getBlockHashFromContract(number uint64, statedb StateDB, witness *state.AccessWitness) (common.Hash, uint64) {
 	ringIndex := number % params.Eip2935BlockHashHistorySize
 	var pnum common.Hash
 	binary.BigEndian.PutUint64(pnum[24:], ringIndex)
-	treeIndex, suffix := utils.GetTreeKeyStorageSlotTreeIndexes(pnum.Bytes())
-	witness.TouchAddressOnReadAndComputeGas(params.HistoryStorageAddress[:], *treeIndex, suffix)
-	return statedb.GetState(params.HistoryStorageAddress, pnum)
+	statelessGas := witness.TouchSlotAndChargeGas(params.HistoryStorageAddress[:], pnum, false)
+	return statedb.GetState(params.HistoryStorageAddress, pnum), statelessGas
 }
 
 func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
@@ -545,7 +486,13 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	if num64 >= lower && num64 < upper {
 		// if Prague is active, read it from the history contract (EIP 2935).
 		if evm.chainRules.IsPrague {
-			num.SetBytes(getBlockHashFromContract(num64, evm.StateDB, evm.Accesses).Bytes())
+			blockHash, statelessGas := getBlockHashFromContract(num64, evm.StateDB, evm.Accesses)
+			if interpreter.evm.chainRules.IsEIP4762 {
+				if !scope.Contract.UseGas(statelessGas) {
+					return nil, ErrExecutionReverted
+				}
+			}
+			num.SetBytes(blockHash.Bytes())
 		} else {
 			num.SetBytes(interpreter.evm.Context.GetHash(num64).Bytes())
 		}
@@ -681,22 +628,25 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	if interpreter.readOnly {
 		return nil, ErrWriteProtection
 	}
+
+	value := scope.Stack.pop()
+	if interpreter.evm.chainRules.IsEIP4762 {
+		contractAddress := crypto.CreateAddress(scope.Contract.Address(), interpreter.evm.StateDB.GetNonce(scope.Contract.Address()))
+		statelessGas := interpreter.evm.Accesses.TouchAndChargeContractCreateInit(contractAddress.Bytes()[:], value.Sign() != 0)
+		if !scope.Contract.UseGas(statelessGas) {
+			return nil, ErrExecutionReverted
+		}
+	}
+
 	var (
-		value        = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		gas          = scope.Contract.Gas
 	)
-	if interpreter.evm.chainRules.IsPrague {
-		contractAddress := crypto.CreateAddress(scope.Contract.Address(), interpreter.evm.StateDB.GetNonce(scope.Contract.Address()))
-		statelessGas := interpreter.evm.Accesses.TouchAndChargeContractCreateInit(contractAddress.Bytes()[:], value.Sign() != 0)
-		if !tryConsumeGas(&gas, statelessGas) {
-			return nil, ErrExecutionReverted
-		}
-	}
 	if interpreter.evm.chainRules.IsEIP150 {
 		gas -= gas / 64
 	}
+
 	// reuse size int for stackvalue
 	stackvalue := size
 
@@ -739,17 +689,17 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		salt         = scope.Stack.pop()
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		gas          = scope.Contract.Gas
 	)
-	if interpreter.evm.chainRules.IsPrague {
+	if interpreter.evm.chainRules.IsEIP4762 {
 		codeAndHash := &codeAndHash{code: input}
 		contractAddress := crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
 		statelessGas := interpreter.evm.Accesses.TouchAndChargeContractCreateInit(contractAddress.Bytes()[:], endowment.Sign() != 0)
-		if !tryConsumeGas(&gas, statelessGas) {
+		if !scope.Contract.UseGas(statelessGas) {
 			return nil, ErrExecutionReverted
 		}
 	}
 
+	var gas = scope.Contract.Gas
 	// Apply EIP150
 	gas -= gas / 64
 	scope.Contract.UseGas(gas)
@@ -962,22 +912,6 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 		tracer.CaptureEnter(SELFDESTRUCT, scope.Contract.Address(), beneficiary.Bytes20(), []byte{}, 0, balance)
 		tracer.CaptureExit([]byte{}, 0, nil)
 	}
-	if interpreter.evm.chainRules.IsPrague {
-		contractAddr := scope.Contract.Address()
-		beneficiaryAddr := beneficiary.Bytes20()
-		// If the beneficiary isn't the contract, we need to touch the beneficiary's balance.
-		// If the beneficiary is the contract itself, there're two possibilities:
-		// 1. The contract was created in the same transaction: the balance is already touched (no need to touch again)
-		// 2. The contract wasn't created in the same transaction: there's no net change in balance,
-		//    and SELFDESTRUCT will perform no action on the account header. (we touch since we did SubBalance+AddBalance above)
-		if contractAddr != beneficiaryAddr || interpreter.evm.StateDB.WasCreatedInCurrentTx(contractAddr) {
-			statelessGas := interpreter.evm.Accesses.TouchAddressOnReadAndComputeGas(beneficiaryAddr[:], uint256.Int{}, utils.BalanceLeafKey)
-			if !scope.Contract.UseGas(statelessGas) {
-				scope.Contract.Gas = 0
-				return nil, ErrOutOfGas
-			}
-		}
-	}
 	return nil, errStopToken
 }
 
@@ -1025,7 +959,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
-			statelessGas := touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], *pc+1, uint64(1), uint64(len(scope.Contract.Code)), interpreter.evm.Accesses)
+			statelessGas := interpreter.evm.Accesses.TouchCodeChunksRangeAndChargeGas(contractAddr[:], *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false)
 			if !scope.Contract.UseGas(statelessGas) {
 				scope.Contract.Gas = 0
 				return nil, ErrOutOfGas
@@ -1054,7 +988,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 
 		if !scope.Contract.IsDeployment && interpreter.evm.chainRules.IsPrague {
 			contractAddr := scope.Contract.Address()
-			statelessGas := touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], uint64(startMin), uint64(pushByteSize), uint64(len(scope.Contract.Code)), interpreter.evm.Accesses)
+			statelessGas := interpreter.evm.Accesses.TouchCodeChunksRangeAndChargeGas(contractAddr[:], uint64(startMin), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false)
 			if !scope.Contract.UseGas(statelessGas) {
 				scope.Contract.Gas = 0
 				return nil, ErrOutOfGas

@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/ethereum/go-verkle"
-	"github.com/holiman/uint256"
 )
 
 // Proof-of-stake protocol constants.
@@ -357,11 +356,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		state.AddBalance(w.Address, amount)
 
 		// The returned gas is not charged
-		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.VersionLeafKey)
-		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.BalanceLeafKey)
-		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.NonceLeafKey)
-		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.CodeKeccakLeafKey)
-		state.Witness().TouchAddressOnWriteAndComputeGas(w.Address[:], uint256.Int{}, utils.CodeSizeLeafKey)
+		state.Witness().TouchFullAccount(w.Address[:], true)
 	}
 }
 

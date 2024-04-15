@@ -33,8 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/utils"
-	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -568,19 +566,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Div(r, big8)
 
 		// This should not happen, but it's useful for replay tests
-		if config.IsPrague(header.Number, header.Time) {
-			state.Witness().TouchAddressOnReadAndComputeGas(uncle.Coinbase.Bytes(), uint256.Int{}, utils.BalanceLeafKey)
-		}
 		state.AddBalance(uncle.Coinbase, r)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
-	}
-	if config.IsPrague(header.Number, header.Time) {
-		state.Witness().TouchAddressOnReadAndComputeGas(header.Coinbase.Bytes(), uint256.Int{}, utils.BalanceLeafKey)
-		state.Witness().TouchAddressOnReadAndComputeGas(header.Coinbase.Bytes(), uint256.Int{}, utils.VersionLeafKey)
-		state.Witness().TouchAddressOnReadAndComputeGas(header.Coinbase.Bytes(), uint256.Int{}, utils.NonceLeafKey)
-		state.Witness().TouchAddressOnReadAndComputeGas(header.Coinbase.Bytes(), uint256.Int{}, utils.CodeKeccakLeafKey)
 	}
 	state.AddBalance(header.Coinbase, reward)
 }

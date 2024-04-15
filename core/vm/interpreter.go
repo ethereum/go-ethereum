@@ -179,11 +179,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
 
-		if in.evm.chainRules.IsPrague && !contract.IsDeployment {
+		if in.evm.chainRules.IsEIP4762 && !contract.IsDeployment {
 			// if the PC ends up in a new "chunk" of verkleized code, charge the
 			// associated costs.
 			contractAddr := contract.Address()
-			contract.Gas -= touchCodeChunksRangeOnReadAndChargeGas(contractAddr[:], pc, 1, uint64(len(contract.Code)), in.evm.TxContext.Accesses)
+			contract.Gas -= in.evm.TxContext.Accesses.TouchCodeChunksRangeAndChargeGas(contractAddr[:], pc, 1, uint64(len(contract.Code)), false)
 		}
 
 		// Get the operation from the jump table and validate the stack to ensure there are

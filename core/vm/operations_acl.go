@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie/utils"
 )
 
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
@@ -51,11 +50,6 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			}
 		}
 		value := common.Hash(y.Bytes32())
-
-		if evm.chainRules.IsPrague {
-			treeIndex, subIndex := utils.GetTreeKeyStorageSlotTreeIndexes(x.Bytes())
-			cost += evm.Accesses.TouchAddressOnWriteAndComputeGas(contract.Address().Bytes(), *treeIndex, subIndex)
-		}
 
 		if current == value { // noop (1)
 			// EIP 2200 original clause:
@@ -110,13 +104,6 @@ func gasSLoadEIP2929(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 	loc := stack.peek()
 	slot := common.Hash(loc.Bytes32())
 	var gasUsed uint64
-
-	if evm.chainRules.IsPrague {
-		where := stack.Back(0)
-		treeIndex, subIndex := utils.GetTreeKeyStorageSlotTreeIndexes(where.Bytes())
-		addr := contract.Address()
-		gasUsed += evm.Accesses.TouchAddressOnReadAndComputeGas(addr.Bytes(), *treeIndex, subIndex)
-	}
 
 	// Check slot presence in the access list
 	if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
