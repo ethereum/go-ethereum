@@ -40,11 +40,13 @@ var (
 	errExceedMaxTopics   = errors.New("exceed max topics")
 )
 
-// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
-const maxTopics = 4
+const (
+	// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
+	maxTopics = 4
 
-// The maximum number of allowed topics within a topic criteria
-const maxSubTopics = 1000
+	// The maximum number of allowed topics within a topic criteria
+	maxSubTopics = 1000
+)
 
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
