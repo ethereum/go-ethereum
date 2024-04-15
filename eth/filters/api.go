@@ -43,6 +43,9 @@ var (
 // The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
 const maxTopics = 4
 
+// The maximum number of allowed topics within a topic criteria
+const maxSubTopics = 1000
+
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
 type filter struct {
@@ -539,6 +542,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 			return errors.New("invalid addresses in query")
 		}
 	}
+	if len(raw.Topics) > maxTopics {
+		return errExceedMaxTopics
+	}
 
 	// topics is an array consisting of strings and/or arrays of strings.
 	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
@@ -559,6 +565,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 
 			case []interface{}:
 				// or case e.g. [null, "topic0", "topic1"]
+				if len(topic) > maxSubTopics {
+					return errExceedMaxTopics
+				}
 				for _, rawTopic := range topic {
 					if rawTopic == nil {
 						// null component, match all
