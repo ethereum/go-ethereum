@@ -172,7 +172,7 @@ func (ch createObjectChange) revert(s *StateDB) {
 }
 
 func (ch createObjectChange) dirtied() *common.Address {
-	return nil
+	return ch.account
 }
 
 func (ch createObjectChange) copy() journalEntry {
@@ -186,7 +186,7 @@ func (ch createContractChange) revert(s *StateDB) {
 }
 
 func (ch createContractChange) dirtied() *common.Address {
-	return &ch.account
+	return nil
 }
 
 func (ch createContractChange) copy() journalEntry {
