@@ -106,6 +106,9 @@ type (
 		account *common.Address
 	}
 
+	// createContractChange represents an account becoming a contract-account.
+	// This event happens prior to executing initcode. The journal-event simply
+	// manages the created-flag, in order to allow same-tx destruction.
 	createContractChange struct {
 		account common.Address
 	}
@@ -169,7 +172,7 @@ func (ch createObjectChange) revert(s *StateDB) {
 }
 
 func (ch createObjectChange) dirtied() *common.Address {
-	return ch.account
+	return nil
 }
 
 func (ch createObjectChange) copy() journalEntry {
