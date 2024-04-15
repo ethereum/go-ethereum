@@ -19,6 +19,7 @@ package abi
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -1217,4 +1218,29 @@ func TestUnpackRevert(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUnmarshalJSON(t *testing.T) {
+	t.Parallel()
+	jsonData := `{"name": "Alice", "age": 30}`
+
+	reader := bytes.NewReader([]byte(jsonData))
+
+	dec := json.NewDecoder(reader)
+	type ABI struct {
+		Constructor Method
+		Methods     map[string]Method
+		Events      map[string]Event
+		Errors      map[string]Error
+
+		Fallback Method // Note it's also used to represent legacy fallback before v0.6.0
+		Receive  Method
+	}
+	var abi ABI
+
+	if err := dec.Decode(&abi); err != nil {
+		t.Fatalf("Output mismatch, want %v, got %v", err, dec)
+
+	}
+
 }
