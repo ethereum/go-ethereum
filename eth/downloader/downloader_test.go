@@ -1649,14 +1649,42 @@ func TestFakedSyncProgress67NoRemoteCheckpoint(t *testing.T) {
 	chainA := testChainForkLightA.blocks
 	tester.newPeer("light", protocol, chainA[1:])
 
+	// Set the max validation threshold equal to chain length to enforce validation
+	tester.downloader.maxValidationThreshold = uint64(len(chainA) - 1)
+
 	// Synchronise with the peer and make sure all blocks were retrieved
 	// Should fail in first attempt
-	if err := tester.sync("light", nil, mode); err != nil {
-		assert.Equal(t, whitelist.ErrNoRemote, err, "failed synchronisation")
-	}
+	err := tester.sync("light", nil, mode)
+	assert.Equal(t, whitelist.ErrNoRemote, err, "failed synchronisation")
 
 	// Try syncing again, should succeed
 	if err := tester.sync("light", nil, mode); err != nil {
 		t.Fatal("succeeded attacker synchronisation")
 	}
+}
+
+// TestFakedSyncProgress67BypassWhitelistValidation tests if peer validation
+// via whitelist is bypassed when remote peer is far away or not
+func TestFakedSyncProgress67BypassWhitelistValidation(t *testing.T) {
+	protocol := uint(eth.ETH67)
+	mode := FullSync
+
+	tester := newTester(t)
+	validate := func(count int) (bool, error) {
+		return false, whitelist.ErrNoRemote
+	}
+
+	tester.downloader.ChainValidator = newWhitelistFake(validate)
+
+	defer tester.terminate()
+
+	// 1223 length chain
+	chainA := testChainBase.blocks
+	tester.newPeer("light", protocol, chainA[1:])
+
+	// Although the validate function above returns an error (which says that
+	// remote peer doesn't have that block), sync will go through as the chain
+	// import length is 1223 which is more than the default threshold of 1024
+	err := tester.sync("light", nil, mode)
+	assert.NoError(t, err, "failed synchronisation")
 }

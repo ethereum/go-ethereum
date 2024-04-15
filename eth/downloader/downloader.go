@@ -57,6 +57,8 @@ var (
 	fsHeaderSafetyNet = 2048            // Number of headers to discard in case a chain violation is detected
 	fsHeaderContCheck = 3 * time.Second // Time interval to check for header continuations during state download
 	fsMinFullBlocks   = 64              // Number of blocks to retrieve fully even in snap sync
+
+	maxValidationThreshold = uint64(1024) // Number of block difference from remote peer to start validation
 )
 
 var (
@@ -147,7 +149,9 @@ type Downloader struct {
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.Mutex    // Lock to prevent double closes
 
+	// Validation
 	ethereum.ChainValidator
+	maxValidationThreshold uint64 // Number of block difference from remote peer to start validation
 
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
@@ -228,19 +232,20 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, chain BlockChain, lightchai
 	}
 
 	dl := &Downloader{
-		stateDB:        stateDb,
-		mux:            mux,
-		queue:          newQueue(blockCacheMaxItems, blockCacheInitialItems),
-		peers:          newPeerSet(),
-		blockchain:     chain,
-		lightchain:     lightchain,
-		dropPeer:       dropPeer,
-		headerProcCh:   make(chan *headerTask, 1),
-		quitCh:         make(chan struct{}),
-		SnapSyncer:     snap.NewSyncer(stateDb, chain.TrieDB().Scheme()),
-		stateSyncStart: make(chan *stateSync),
-		syncStartBlock: chain.CurrentSnapBlock().Number.Uint64(),
-		ChainValidator: whitelistService,
+		stateDB:                stateDb,
+		mux:                    mux,
+		queue:                  newQueue(blockCacheMaxItems, blockCacheInitialItems),
+		peers:                  newPeerSet(),
+		blockchain:             chain,
+		lightchain:             lightchain,
+		dropPeer:               dropPeer,
+		headerProcCh:           make(chan *headerTask, 1),
+		quitCh:                 make(chan struct{}),
+		SnapSyncer:             snap.NewSyncer(stateDb, chain.TrieDB().Scheme()),
+		stateSyncStart:         make(chan *stateSync),
+		syncStartBlock:         chain.CurrentSnapBlock().Number.Uint64(),
+		ChainValidator:         whitelistService,
+		maxValidationThreshold: maxValidationThreshold,
 	}
 	// Create the post-merge skeleton syncer and start the process
 	dl.skeleton = newSkeleton(stateDb, dl.peers, dropPeer, newBeaconBackfiller(dl, success))
@@ -893,13 +898,6 @@ func (d *Downloader) getFetchHeadersByNumber(p *peerConnection) func(number uint
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
-	// Check the validity of peer from which the chain is to be downloaded
-	if d.ChainValidator != nil {
-		if _, err := d.IsValidPeer(d.getFetchHeadersByNumber(p)); err != nil {
-			return 0, err
-		}
-	}
-
 	// Figure out the valid ancestor range to prevent rewrite attacks
 	var (
 		floor        = int64(-1)
@@ -915,6 +913,25 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		localHeight = d.blockchain.CurrentSnapBlock().Number.Uint64()
 	default:
 		localHeight = d.lightchain.CurrentHeader().Number.Uint64()
+	}
+
+	// Check the validity of peer from which the chain is to be downloaded
+	if d.ChainValidator != nil {
+		_, err := d.IsValidPeer(d.getFetchHeadersByNumber(p))
+		if errors.Is(err, whitelist.ErrMismatch) {
+			return 0, err
+		}
+
+		if errors.Is(err, whitelist.ErrNoRemote) {
+			// Don't validate the peer against whitelisted milestones until the different of
+			// our local height and remote peer's height is less than `maxValidationThreshold`
+			if localHeight >= remoteHeight-d.maxValidationThreshold {
+				log.Info("Remote peer didn't respond", "id", p.id, "local", localHeight, "remote", remoteHeight, "err", err)
+				return 0, err
+			}
+
+			log.Info("Remote peer didn't respond but is far ahead, skipping validation", "id", p.id, "local", localHeight, "remote", remoteHeight, "err", err)
+		}
 	}
 
 	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
