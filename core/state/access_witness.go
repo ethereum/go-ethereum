@@ -89,9 +89,9 @@ func (aw *AccessWitness) Copy() *AccessWitness {
 	return naw
 }
 
-// TouchFullAccount returns the gas to be charged for each of the currently cold
+// AddAccount returns the gas to be charged for each of the currently cold
 // member fields of an account.
-func (aw *AccessWitness) TouchFullAccount(addr []byte, isWrite bool) uint64 {
+func (aw *AccessWitness) AddAccount(addr []byte, isWrite bool) uint64 {
 	var gas uint64
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
 		gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, byte(i), isWrite)
@@ -99,28 +99,28 @@ func (aw *AccessWitness) TouchFullAccount(addr []byte, isWrite bool) uint64 {
 	return gas
 }
 
-// TouchAndChargeMessageCall returns the gas to be charged for each of the currently
+// MessageCallGas returns the gas to be charged for each of the currently
 // cold member fields of an account, that need to be touched when making a message
 // call to that account.
-func (aw *AccessWitness) TouchAndChargeMessageCall(destination []byte) uint64 {
+func (aw *AccessWitness) MessageCallGas(destination []byte) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.VersionLeafKey, false)
 	gas += aw.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.CodeSizeLeafKey, false)
 	return gas
 }
 
-// TouchAndChargeValueTransfer returns the gas to be charged for each of the currently
+// ValueTransferGas returns the gas to be charged for each of the currently
 // cold balance member fields of the caller and the callee accounts.
-func (aw *AccessWitness) TouchAndChargeValueTransfer(callerAddr, targetAddr []byte) uint64 {
+func (aw *AccessWitness) ValueTransferGas(callerAddr, targetAddr []byte) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
 	gas += aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
 	return gas
 }
 
-// TouchAndChargeContractCreateInit returns the access gas costs for the initialization of
+// ContractCreateInitGas returns the access gas costs for the initialization of
 // a contract creation.
-func (aw *AccessWitness) TouchAndChargeContractCreateInit(addr []byte, createSendsValue bool) uint64 {
+func (aw *AccessWitness) ContractCreateInitGas(addr []byte, createSendsValue bool) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, true)
 	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.NonceLeafKey, true)
@@ -130,24 +130,24 @@ func (aw *AccessWitness) TouchAndChargeContractCreateInit(addr []byte, createSen
 	return gas
 }
 
-// TouchTxOrigin adds the member fields of the sender account to the witness,
+// AddTxOrigin adds the member fields of the sender account to the witness,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
-func (aw *AccessWitness) TouchTxOrigin(originAddr []byte) {
+func (aw *AccessWitness) AddTxOrigin(originAddr []byte) {
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
 		aw.touchAddressAndChargeGas(originAddr, zeroTreeIndex, byte(i), i == utils.BalanceLeafKey || i == utils.NonceLeafKey)
 	}
 }
 
-// TouchTxDestination adds the member fields of the sender account to the witness,
+// AddTxDestination adds the member fields of the sender account to the witness,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
-func (aw *AccessWitness) TouchTxDestination(targetAddr []byte, sendsValue bool) {
+func (aw *AccessWitness) AddTxDestination(targetAddr []byte, sendsValue bool) {
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
 		aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, byte(i), i == utils.VersionLeafKey && sendsValue)
 	}
 }
 
-// TouchSlotAndChargeGas returns the amount of gas to be charged for a cold storage access.
-func (aw *AccessWitness) TouchSlotAndChargeGas(addr []byte, slot common.Hash, isWrite bool) uint64 {
+// SlotGas returns the amount of gas to be charged for a cold storage access.
+func (aw *AccessWitness) SlotGas(addr []byte, slot common.Hash, isWrite bool) uint64 {
 	treeIndex, subIndex := utils.StorageIndex(slot.Bytes())
 	return aw.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite)
 }
@@ -238,7 +238,7 @@ func newChunkAccessKey(branchKey branchAccessKey, leafKey byte) chunkAccessKey {
 }
 
 // touchCodeChunksRangeOnReadAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
-func (aw *AccessWitness) TouchCodeChunksRangeAndChargeGas(contractAddr []byte, startPC, size uint64, codeLen uint64, isWrite bool) uint64 {
+func (aw *AccessWitness) CodeChunksRangeGas(contractAddr []byte, startPC, size uint64, codeLen uint64, isWrite bool) uint64 {
 	// note that in the case where the copied code is outside the range of the
 	// contract code but touches the last leaf with contract code in it,
 	// we don't include the last leaf of code in the AccessWitness.  The
@@ -272,22 +272,22 @@ func (aw *AccessWitness) TouchCodeChunksRangeAndChargeGas(contractAddr []byte, s
 	return statelessGasCharged
 }
 
-func (aw *AccessWitness) TouchVersion(addr []byte, isWrite bool) uint64 {
+func (aw *AccessWitness) VersionGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, isWrite)
 }
 
-func (aw *AccessWitness) TouchBalance(addr []byte, isWrite bool) uint64 {
+func (aw *AccessWitness) BalanceGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BalanceLeafKey, isWrite)
 }
 
-func (aw *AccessWitness) TouchNonce(addr []byte, isWrite bool) uint64 {
+func (aw *AccessWitness) NonceGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.NonceLeafKey, isWrite)
 }
 
-func (aw *AccessWitness) TouchCodeSize(addr []byte, isWrite bool) uint64 {
+func (aw *AccessWitness) CodeSizeGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeSizeLeafKey, isWrite)
 }
 
-func (aw *AccessWitness) TouchCodeHash(addr []byte, isWrite bool) uint64 {
+func (aw *AccessWitness) CodeHashGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeKeccakLeafKey, isWrite)
 }

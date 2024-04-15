@@ -389,7 +389,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 			self: AccountRef(addr),
 		}
 		paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-		statelessGas := interpreter.evm.Accesses.TouchCodeChunksRangeAndChargeGas(addr[:], copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
+		statelessGas := interpreter.evm.Accesses.CodeChunksRangeGas(addr[:], copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
 		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
 			scope.Contract.Gas = 0
 			return nil, ErrOutOfGas
@@ -606,7 +606,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 
 	if interpreter.evm.chainRules.IsEIP4762 {
 		contractAddress := crypto.CreateAddress(scope.Contract.Address(), interpreter.evm.StateDB.GetNonce(scope.Contract.Address()))
-		statelessGas := interpreter.evm.Accesses.TouchAndChargeContractCreateInit(contractAddress.Bytes()[:], value.Sign() != 0)
+		statelessGas := interpreter.evm.Accesses.ContractCreateInitGas(contractAddress.Bytes()[:], value.Sign() != 0)
 		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
 			return nil, ErrExecutionReverted
 		}
@@ -655,7 +655,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if interpreter.evm.chainRules.IsEIP4762 {
 		codeAndHash := &codeAndHash{code: input}
 		contractAddress := crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-		statelessGas := interpreter.evm.Accesses.TouchAndChargeContractCreateInit(contractAddress.Bytes()[:], endowment.Sign() != 0)
+		statelessGas := interpreter.evm.Accesses.ContractCreateInitGas(contractAddress.Bytes()[:], endowment.Sign() != 0)
 		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
 			return nil, ErrExecutionReverted
 		}
@@ -918,7 +918,7 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
 			// advanced past this boundary.
 			contractAddr := scope.Contract.Address()
-			statelessGas := interpreter.evm.Accesses.TouchCodeChunksRangeAndChargeGas(contractAddr[:], *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false)
+			statelessGas := interpreter.evm.Accesses.CodeChunksRangeGas(contractAddr[:], *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false)
 			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
 				scope.Contract.Gas = 0
 				return nil, ErrOutOfGas
@@ -947,7 +947,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 
 		if !scope.Contract.IsDeployment && interpreter.evm.chainRules.IsEIP4762 {
 			contractAddr := scope.Contract.Address()
-			statelessGas := interpreter.evm.Accesses.TouchCodeChunksRangeAndChargeGas(contractAddr[:], uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false)
+			statelessGas := interpreter.evm.Accesses.CodeChunksRangeGas(contractAddr[:], uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false)
 			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
 				scope.Contract.Gas = 0
 				return nil, ErrOutOfGas
