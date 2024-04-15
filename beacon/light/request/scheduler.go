@@ -93,7 +93,9 @@ type (
 	// the modules that do not interact with them directly.
 	// In order to make module testing easier, Server interface is used in
 	// events and modules.
-	Server      any
+	Server interface {
+		Name() string
+	}
 	Request     any
 	Response    any
 	ID          uint64

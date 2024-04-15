@@ -24,10 +24,10 @@ import (
 )
 
 var (
-	testServer1 = "testServer1"
-	testServer2 = "testServer2"
-	testServer3 = "testServer3"
-	testServer4 = "testServer4"
+	testServer1 = testServer("testServer1")
+	testServer2 = testServer("testServer2")
+	testServer3 = testServer("testServer3")
+	testServer4 = testServer("testServer4")
 
 	testHead0 = types.HeadInfo{}
 	testHead1 = types.HeadInfo{Slot: 123, BlockRoot: common.Hash{1}}
@@ -41,6 +41,12 @@ var (
 	testSHead3 = types.SignedHeader{SignatureSlot: 0x4000, Header: types.Header{Slot: 0x3fff, StateRoot: common.Hash{3}}}
 	testSHead4 = types.SignedHeader{SignatureSlot: 0x6444, Header: types.Header{Slot: 0x6443, StateRoot: common.Hash{4}}}
 )
+
+type testServer string
+
+func (t testServer) Name() string {
+	return string(t)
+}
 
 func TestValidatedHead(t *testing.T) {
 	chain := &TestCommitteeChain{}

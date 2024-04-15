@@ -103,3 +103,8 @@ func (s *ApiServer) Unsubscribe() {
 		s.unsubscribe = nil
 	}
 }
+
+// Name implements request.Server
+func (s *ApiServer) Name() string {
+	return s.api.url
+}

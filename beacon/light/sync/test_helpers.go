@@ -75,7 +75,7 @@ func (ts *TestScheduler) Run(testIndex int, exp ...any) {
 		if count == 0 {
 			continue
 		}
-		ts.t.Errorf("Missing %d Server.Fail(s) from server %s in test case #%d", count, server.(string), testIndex)
+		ts.t.Errorf("Missing %d Server.Fail(s) from server %s in test case #%d", count, server.Name(), testIndex)
 	}
 
 	if !reflect.DeepEqual(ts.sent[testIndex], expReqs) {
@@ -104,7 +104,7 @@ func (ts *TestScheduler) Send(server request.Server, req request.Request) reques
 
 func (ts *TestScheduler) Fail(server request.Server, desc string) {
 	if ts.expFail[server] == 0 {
-		ts.t.Errorf("Unexpected Fail from server %s in test case #%d: %s", server.(string), ts.testIndex, desc)
+		ts.t.Errorf("Unexpected Fail from server %s in test case #%d: %s", server.Name(), ts.testIndex, desc)
 		return
 	}
 	ts.expFail[server]--
