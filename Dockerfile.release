@@ -10,6 +10,7 @@ WORKDIR ${BOR_DIR}
 COPY bor /usr/bin/
 COPY builder/files/genesis-mainnet-v1.json ${BOR_DIR}
 COPY builder/files/genesis-testnet-v4.json ${BOR_DIR}
+COPY builder/files/genesis-amoy.json ${BOR_DIR}
 
 EXPOSE 8545 8546 8547 30303 30303/udp
 ENTRYPOINT ["bor"]
