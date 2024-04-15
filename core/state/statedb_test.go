@@ -1178,7 +1178,7 @@ func TestDeleteStorage(t *testing.T) {
 				t.Fatal("delete should have empty hashes")
 			}
 			if len(n.Blob) != 0 {
-				t.Fatal("delete should have have empty blobs")
+				t.Fatal("delete should have empty blobs")
 			}
 			a = append(a, fmt.Sprintf("%x", path))
 		})
