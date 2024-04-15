@@ -429,6 +429,9 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	// Set the receipt logs and create a bloom for filtering
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.BlockHash = statedb.BlockHash()
+	receipt.BlockNumber = header.Number
+	receipt.TransactionIndex = uint(statedb.TxIndex())
 	if balanceFee != nil && failed {
 		state.PayFeeWithTRC21TxFail(statedb, msg.From(), *tx.To())
 	}
@@ -467,6 +470,9 @@ func ApplySignTransaction(config *params.ChainConfig, statedb *state.StateDB, he
 	statedb.AddLog(log)
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.BlockHash = statedb.BlockHash()
+	receipt.BlockNumber = header.Number
+	receipt.TransactionIndex = uint(statedb.TxIndex())
 	return receipt, 0, nil, false
 }
 
@@ -491,6 +497,9 @@ func ApplyEmptyTransaction(config *params.ChainConfig, statedb *state.StateDB, h
 	statedb.AddLog(log)
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.BlockHash = statedb.BlockHash()
+	receipt.BlockNumber = header.Number
+	receipt.TransactionIndex = uint(statedb.TxIndex())
 	return receipt, 0, nil, false
 }
 

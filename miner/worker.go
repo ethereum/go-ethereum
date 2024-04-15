@@ -364,18 +364,26 @@ func (self *worker) wait() {
 			}
 			work := result.Work
 
+			// Different block could share same sealhash, deep copy here to prevent write-write conflict.
+			hash := block.Hash()
+			receipts := make([]*types.Receipt, len(work.receipts))
+			for i, receipt := range work.receipts {
+				// add block location fields
+				receipt.BlockHash = hash
+				receipt.BlockNumber = block.Number()
+				receipt.TransactionIndex = uint(i)
+
+				receipts[i] = new(types.Receipt)
+				*receipts[i] = *receipt
+			}
 			// Update the block hash in all logs since it is now available and not when the
 			// receipt/log of individual transactions were created.
-			for _, r := range work.receipts {
-				for _, l := range r.Logs {
-					l.BlockHash = block.Hash()
-				}
-			}
 			for _, log := range work.state.Logs() {
-				log.BlockHash = block.Hash()
+				log.BlockHash = hash
 			}
+			// Commit block and state to database.
 			self.currentMu.Lock()
-			stat, err := self.chain.WriteBlockWithState(block, work.receipts, work.state, work.tradingState, work.lendingState)
+			stat, err := self.chain.WriteBlockWithState(block, receipts, work.state, work.tradingState, work.lendingState)
 			self.currentMu.Unlock()
 			if err != nil {
 				log.Error("Failed writing block to chain", "err", err)
