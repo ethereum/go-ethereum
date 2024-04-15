@@ -222,45 +222,40 @@ func readSize(b []byte, slen byte) (uint64, error) {
 	return s, nil
 }
 
-// AppendUint64 appends the RLP encoding of i to b, and returns the resulting slice.
-func AppendUint64(b []byte, i uint64) []byte {
-	if i == 0 {
-		return append(b, 0x80)
-	} else if i < 128 {
-		return append(b, byte(i))
-	}
+// appendUintWithTag appends kind tag and i to b in big endian byte order,
+// using the least number of bytes needed to represent i.
+func appendUintWithTag(b []byte, i uint64, kindTag byte) []byte {
 	switch {
 	case i < (1 << 8):
-		return append(b, 0x81, byte(i))
+		return append(b, kindTag+1, byte(i))
 	case i < (1 << 16):
-		return append(b, 0x82,
+		return append(b, kindTag+2,
 			byte(i>>8),
 			byte(i),
 		)
 	case i < (1 << 24):
-		return append(b, 0x83,
+		return append(b, kindTag+3,
 			byte(i>>16),
 			byte(i>>8),
 			byte(i),
 		)
 	case i < (1 << 32):
-		return append(b, 0x84,
+		return append(b, kindTag+4,
 			byte(i>>24),
 			byte(i>>16),
 			byte(i>>8),
 			byte(i),
 		)
 	case i < (1 << 40):
-		return append(b, 0x85,
+		return append(b, kindTag+5,
 			byte(i>>32),
 			byte(i>>24),
 			byte(i>>16),
 			byte(i>>8),
 			byte(i),
 		)
-
 	case i < (1 << 48):
-		return append(b, 0x86,
+		return append(b, kindTag+6,
 			byte(i>>40),
 			byte(i>>32),
 			byte(i>>24),
@@ -269,7 +264,7 @@ func AppendUint64(b []byte, i uint64) []byte {
 			byte(i),
 		)
 	case i < (1 << 56):
-		return append(b, 0x87,
+		return append(b, kindTag+7,
 			byte(i>>48),
 			byte(i>>40),
 			byte(i>>32),
@@ -278,9 +273,8 @@ func AppendUint64(b []byte, i uint64) []byte {
 			byte(i>>8),
 			byte(i),
 		)
-
 	default:
-		return append(b, 0x88,
+		return append(b, kindTag+8,
 			byte(i>>56),
 			byte(i>>48),
 			byte(i>>40),
@@ -291,4 +285,65 @@ func AppendUint64(b []byte, i uint64) []byte {
 			byte(i),
 		)
 	}
+}
+
+// AppendUint64 appends the RLP encoding of i to b, and returns the resulting slice.
+func AppendUint64(b []byte, i uint64) []byte {
+	if i == 0 {
+		return append(b, 0x80)
+	} else if i < 128 {
+		// fits single byte
+		return append(b, byte(i))
+	} else {
+		return appendUintWithTag(b, i, 0x80)
+	}
+}
+
+// AppendString appends RLP-encoded str to buf and returns the extended buffer.
+func AppendString(buf, str []byte) []byte {
+	if size := len(str); size == 0 {
+		return append(buf, 0x80)
+	} else if size == 1 && str[0] < 128 {
+		// fits single byte, no string header
+		return append(buf, str[0])
+	} else if size < 56 {
+		buf = append(buf, 0x80+byte(size))
+		return append(buf, str...)
+	} else {
+		buf = appendUintWithTag(buf, uint64(size), 0xB7)
+		return append(buf, str...)
+	}
+}
+
+// StartList appends a one-byte header, and returns the offset to
+// before the header. It is expected that StartList is later followed by EndList.
+func StartList(buf []byte) ([]byte, int) {
+	offset := len(buf)
+	// append a 1-byte header, which will suffice if content size is < 56 bytes
+	return append(buf, 0xc0), offset
+}
+
+// EndList ends up list starting from offset and returns the extended buffer.
+// Content after offset is treated as list content.
+//
+// OBS: It is assumed that a 1-bytes header is already in place, put there
+// by a preceding call to StartList.
+func EndList(buf []byte, offset int) []byte {
+	contentSize := len(buf) - offset - 1
+	if contentSize < 56 {
+		// write list header
+		buf[offset] = 0xC0 + byte(contentSize)
+		return buf
+	}
+	headerSize := intsize(uint64(contentSize)) + 1
+	// shift the content for room of list header (minus the one byte already written)
+	buf = append(buf[:offset+headerSize-1], buf[offset:]...)
+	// write list header. OBS! This call ignores the return value,
+	// since the append operation is performed on buf[:offset], and we
+	// already just moved the content, we know that the append operation
+	// will not cause a realloc. This operation simply writes the header into
+	// the given location.
+	appendUintWithTag(buf[:offset], uint64(contentSize), 0xF7)
+
+	return buf
 }
