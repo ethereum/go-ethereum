@@ -386,6 +386,27 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			},
 		},
 		{
+			name: "CreateContract",
+			fn: func(a testAction, s *StateDB) {
+				if !s.Exist(addr) {
+					s.CreateAccount(addr)
+				}
+				contractHash := s.GetCodeHash(addr)
+				emptyCode := contractHash == (common.Hash{}) || contractHash == types.EmptyCodeHash
+				storageRoot := s.GetStorageRoot(addr)
+				emptyStorage := storageRoot == (common.Hash{}) || storageRoot == types.EmptyRootHash
+				if s.GetNonce(addr) == 0 && emptyCode && emptyStorage {
+					s.CreateContract(addr)
+					// We also set some code here, to prevent the
+					// CreateContract action from being performed twice in a row,
+					// which would cause a difference in state when unrolling
+					// the journal. (CreateContact assumes created was false prior to
+					// invocation, and the journal rollback sets it to false).
+					s.SetCode(addr, []byte{1})
+				}
+			},
+		},
+		{
 			name: "SelfDestruct",
 			fn: func(a testAction, s *StateDB) {
 				s.SelfDestruct(addr)
