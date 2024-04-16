@@ -935,16 +935,6 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	}
 	defer release()
 
-	// Apply only when we have used StateAtBlock since `StateAtTransaction` already handles the beacon root
-	if config == nil || config.TxIndex == nil {
-		if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-			context := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
-			vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
-
-			core.ProcessBeaconBlockRoot(*block.BeaconRoot(), vmenv, statedb)
-		}
-	}
-
 	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	// Apply the customization rules if required.
 	if config != nil {
