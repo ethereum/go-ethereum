@@ -244,17 +244,10 @@ func NewDABatch(batch *encoding.Batch) (*DABatch, error) {
 	}
 
 	// blob payload
-	blob, z, err := constructBlobPayload(batch.Chunks)
+	blob, blobVersionedHash, z, err := constructBlobPayload(batch.Chunks)
 	if err != nil {
 		return nil, err
 	}
-
-	// blob versioned hash
-	c, err := kzg4844.BlobToCommitment(*blob)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create blob commitment")
-	}
-	blobVersionedHash := kzg4844.CalcBlobHashV1(sha256.New(), &c)
 
 	daBatch := DABatch{
 		Version:                CodecV1Version,
@@ -298,7 +291,7 @@ func computeBatchDataHash(chunks []*encoding.Chunk, totalL1MessagePoppedBefore u
 }
 
 // constructBlobPayload constructs the 4844 blob payload.
-func constructBlobPayload(chunks []*encoding.Chunk) (*kzg4844.Blob, *kzg4844.Point, error) {
+func constructBlobPayload(chunks []*encoding.Chunk) (*kzg4844.Blob, common.Hash, *kzg4844.Point, error) {
 	// metadata consists of num_chunks (2 bytes) and chunki_size (4 bytes per chunk)
 	metadataLength := 2 + MaxNumChunks*4
 
@@ -306,8 +299,8 @@ func constructBlobPayload(chunks []*encoding.Chunk) (*kzg4844.Blob, *kzg4844.Poi
 	blobBytes := make([]byte, metadataLength)
 
 	// challenge digest preimage
-	// 1 hash for metadata and 1 for each chunk
-	challengePreimage := make([]byte, (1+MaxNumChunks)*32)
+	// 1 hash for metadata, 1 hash for each chunk, 1 hash for blob versioned hash
+	challengePreimage := make([]byte, (1+MaxNumChunks+1)*32)
 
 	// the chunk data hash used for calculating the challenge preimage
 	var chunkDataHash common.Hash
@@ -326,7 +319,7 @@ func constructBlobPayload(chunks []*encoding.Chunk) (*kzg4844.Blob, *kzg4844.Poi
 					// encode L2 txs into blob payload
 					rlpTxData, err := encoding.ConvertTxDataToRLPEncoding(tx)
 					if err != nil {
-						return nil, nil, err
+						return nil, common.Hash{}, nil, err
 					}
 					blobBytes = append(blobBytes, rlpTxData...)
 				}
@@ -358,8 +351,18 @@ func constructBlobPayload(chunks []*encoding.Chunk) (*kzg4844.Blob, *kzg4844.Poi
 	// convert raw data to BLSFieldElements
 	blob, err := makeBlobCanonical(blobBytes)
 	if err != nil {
-		return nil, nil, err
+		return nil, common.Hash{}, nil, err
 	}
+
+	// compute blob versioned hash
+	c, err := kzg4844.BlobToCommitment(*blob)
+	if err != nil {
+		return nil, common.Hash{}, nil, fmt.Errorf("failed to create blob commitment")
+	}
+	blobVersionedHash := kzg4844.CalcBlobHashV1(sha256.New(), &c)
+
+	// challenge: append blob versioned hash
+	copy(challengePreimage[(1+MaxNumChunks)*32:], blobVersionedHash[:])
 
 	// compute z = challenge_digest % BLS_MODULUS
 	challengeDigest := crypto.Keccak256Hash(challengePreimage)
@@ -371,7 +374,7 @@ func constructBlobPayload(chunks []*encoding.Chunk) (*kzg4844.Blob, *kzg4844.Poi
 	start := 32 - len(pointBytes)
 	copy(z[start:], pointBytes)
 
-	return blob, &z, nil
+	return blob, blobVersionedHash, &z, nil
 }
 
 // makeBlobCanonical converts the raw blob data into the canonical blob representation of 4096 BLSFieldElements.
