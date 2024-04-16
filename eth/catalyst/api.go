@@ -627,7 +627,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		log.Warn("State not available, ignoring new payload")
 		return engine.PayloadStatusV1{Status: engine.ACCEPTED}, nil
 	}
-	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number)
+	log.Trace("Inserting block without sethead", "hash", block.Hash(), "number", block.Number())
 	if err := api.eth.BlockChain().InsertBlockWithoutSetHead(block); err != nil {
 		log.Warn("NewPayloadV1: inserting block failed", "error", err)
 
