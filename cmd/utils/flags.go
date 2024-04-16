@@ -66,6 +66,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -1019,7 +1020,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Name:     "networks",
 		Usage:    "portal sub networks: history, beacon, state",
 		Category: flags.PortalNetworkCategory,
-		Value:    cli.NewStringSlice("history", "beacon", "state"),
+		Value:    cli.NewStringSlice(portalwire.HistoryNetworkName, portalwire.BeaconNetworkName, portalwire.StateNetworkName),
 	}
 )
 

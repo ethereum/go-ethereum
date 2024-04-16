@@ -48,6 +48,18 @@ var (
 	Rendezvous               = []byte{0x72, 0x65, 0x6e}
 )
 
+const (
+	HistoryNetworkName = "history"
+	BeaconNetworkName  = "beacon"
+	StateNetworkName   = "state"
+)
+
+var NetworkNameMap = map[string]string{
+	string(StateNetwork):   StateNetworkName,
+	string(HistoryNetwork): HistoryNetworkName,
+	string(StateNetwork):   StateNetworkName,
+}
+
 type ContentKV struct {
 	ContentKey []byte
 	Content    []byte
