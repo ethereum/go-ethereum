@@ -218,9 +218,8 @@ type extblock struct {
 // NewBlock creates a new block. The input data is copied, changes to header and to the
 // field values will not affect the block.
 //
-// The values of TxHash, UncleHash, ReceiptHash and Bloom in header
-// are ignored and set to values derived from the given txs, uncles
-// and receipts.
+// The body elements and the receipts are used to recompute and overwrite the
+// relevant portions of the header.
 func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher) *Block {
 	if body == nil {
 		body = &Body{}
@@ -231,9 +230,6 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher
 		uncles      = body.Uncles
 		withdrawals = body.Withdrawals
 	)
-	if len(txs) != len(receipts) {
-		panic("cannot make new block with mismatched number of txs and receipts")
-	}
 
 	if len(txs) == 0 {
 		b.header.TxHash = EmptyTxsHash
@@ -454,7 +450,8 @@ func (b *Block) WithSeal(header *Header) *Block {
 	}
 }
 
-// WithBody returns a copy of the block with the given transaction and uncle contents.
+// WithBody returns a new block with the original header and a deep copy of the
+// provided body.
 func (b *Block) WithBody(body Body) *Block {
 	block := &Block{
 		header:       b.header,
