@@ -2,9 +2,12 @@ package main
 
 import (
 	"crypto/ecdsa"
+	"database/sql"
 	"fmt"
 	"net"
 	"net/http"
+	"path"
+	"slices"
 	"strings"
 
 	"os"
@@ -19,8 +22,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/beacon"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
+	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage/sqlite"
 	"github.com/ethereum/go-ethereum/rpc"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/urfave/cli/v2"
 )
 
@@ -31,6 +37,7 @@ type Config struct {
 	DataDir      string
 	DataCapacity uint64
 	LogLevel     int
+	Networks     []string
 }
 
 var app = flags.NewApp("the go-portal-network command line interface")
@@ -71,17 +78,7 @@ func shisui(ctx *cli.Context) error {
 		return nil
 	}
 
-	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
-	slogVerbosity := log.FromLegacyLevel(config.LogLevel)
-	glogger.Verbosity(slogVerbosity)
-	defaultLogger := log.NewLogger(glogger)
-	log.SetDefault(defaultLogger)
-
-	nodeId := enode.PubkeyToIDV4(&config.PrivateKey.PublicKey)
-	contentStorage, err := sqlite.NewContentStorage(config.DataCapacity, nodeId, config.DataDir)
-	if err != nil {
-		return err
-	}
+	logger := setDefaultLogger(*config)
 
 	addr, err := net.ResolveUDPAddr("udp", config.Protocol.ListenAddr)
 	if err != nil {
@@ -92,16 +89,64 @@ func shisui(ctx *cli.Context) error {
 		return err
 	}
 
+	return startPortalRpcServer(*config, conn, logger, config.RpcAddr)
+}
+
+func setDefaultLogger(config Config) log.Logger {
+	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
+	slogVerbosity := log.FromLegacyLevel(config.LogLevel)
+	glogger.Verbosity(slogVerbosity)
+	defaultLogger := log.NewLogger(glogger)
+	log.SetDefault(defaultLogger)
+	return defaultLogger
+}
+
+func startPortalRpcServer(config Config, conn discover.UDPConn, logger log.Logger, addr string) error {
+	discV5, localNode, err := initDiscV5(config, conn, logger)
+	if err != nil {
+		return err
+	}
+
+	server := rpc.NewServer()
+	discV5API := discover.NewDiscV5API(discV5)
+	err = server.RegisterName("discv5", discV5API)
+	if err != nil {
+		return err
+	}
+
+	if slices.Contains(config.Networks, "history") {
+		err = initHistory(config, server, conn, localNode, discV5)
+		if err != nil {
+			return err
+		}
+	}
+
+	if slices.Contains(config.Networks, "beacon") {
+		err = initBeacon(config, server, conn, localNode, discV5)
+		if err != nil {
+			return err
+		}
+	}
+
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: server,
+	}
+	httpServer.ListenAndServe()
+	return nil
+}
+
+func initDiscV5(config Config, conn discover.UDPConn, log log.Logger) (*discover.UDPv5, *enode.LocalNode, error) {
 	discCfg := discover.Config{
 		PrivateKey:  config.PrivateKey,
 		NetRestrict: config.Protocol.NetRestrict,
 		Bootnodes:   config.Protocol.BootstrapNodes,
-		Log:         defaultLogger,
+		Log:         log,
 	}
 
 	nodeDB, err := enode.OpenDB(config.Protocol.NodeDBPath)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	localNode := enode.NewLocalNode(nodeDB, config.PrivateKey)
@@ -115,7 +160,7 @@ func shisui(ctx *cli.Context) error {
 		addrs, err = net.InterfaceAddrs()
 
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		for _, address := range addrs {
@@ -131,31 +176,74 @@ func shisui(ctx *cli.Context) error {
 
 	discV5, err := discover.ListenV5(conn, localNode, discCfg)
 	if err != nil {
+		return nil, nil, err
+	}
+	return discV5, localNode, nil
+}
+
+func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) error {
+	contentStorage, err := sqlite.NewContentStorage(config.DataCapacity, localNode.ID(), config.DataDir)
+	if err != nil {
 		return err
 	}
-
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	historyProtocol, err := discover.NewPortalProtocol(config.Protocol, string(portalwire.HistoryNetwork), config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
+	protocol, err := discover.NewPortalProtocol(config.Protocol, string(portalwire.HistoryNetwork), config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
 
 	if err != nil {
 		return err
 	}
-
+	historyAPI := discover.NewPortalAPI(protocol)
+	historyNetworkAPI := history.NewHistoryNetworkAPI(historyAPI)
+	err = server.RegisterName("portal", historyNetworkAPI)
+	if err != nil {
+		return err
+	}
 	accumulator, err := history.NewMasterAccumulator()
 	if err != nil {
 		return err
 	}
+	historyNetwork := history.NewHistoryNetwork(protocol, &accumulator)
+	return historyNetwork.Start()
+}
 
-	historyNetwork := history.NewHistoryNetwork(historyProtocol, &accumulator)
-	err = historyNetwork.Start()
+func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) error {
+	dbPath := path.Join(config.DataDir, "beacon")
+	err := os.MkdirAll(dbPath, 0755)
 	if err != nil {
 		return err
 	}
-	defer historyNetwork.Stop()
+	sqlDb, err := sql.Open("sqlite3", path.Join(dbPath, "beacon.sqlite"))
+	if err != nil {
+		return err
+	}
 
-	startPortalRpcServer(discover.NewDiscV5API(discV5), discover.NewPortalAPI(historyProtocol), nil, config.RpcAddr)
-	return nil
+	contentStorage, err := beacon.NewBeaconStorage(storage.PortalStorageConfig{
+		StorageCapacityMB: config.DataCapacity,
+		DB:                sqlDb,
+		NodeId:            localNode.ID(),
+		Spec:              configs.Mainnet,
+	})
+	if err != nil {
+		return err
+	}
+	contentQueue := make(chan *discover.ContentElement, 50)
+
+	protocol, err := discover.NewPortalProtocol(config.Protocol, string(portalwire.HistoryNetwork), config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
+
+	if err != nil {
+		return err
+	}
+	portalApi := discover.NewPortalAPI(protocol)
+
+	beaconAPI := beacon.NewBeaconNetworkAPI(portalApi)
+	err = server.RegisterName("beacon", beaconAPI)
+	if err != nil {
+		return err
+	}
+
+	beaconNetwork := beacon.NewBeaconNetwork(protocol)
+	return beaconNetwork.Start()
 }
 
 func getPortalConfig(ctx *cli.Context) (*Config, error) {
@@ -180,8 +268,9 @@ func getPortalConfig(ctx *cli.Context) (*Config, error) {
 		config.Protocol.ListenAddr = port
 	}
 
-	if ctx.IsSet(utils.PortalUDPListenAddrFlag.Name) {
-		ip := ctx.String(utils.PortalUDPListenAddrFlag.Name)
+	udpAddr := ctx.String(utils.PortalUDPListenAddrFlag.Name)
+	if udpAddr != "" {
+		ip := udpAddr
 		netIp := net.ParseIP(ip)
 		if netIp == nil {
 			return config, fmt.Errorf("invalid ip addr: %s", ip)
@@ -189,8 +278,9 @@ func getPortalConfig(ctx *cli.Context) (*Config, error) {
 		config.Protocol.NodeIP = netIp
 	}
 
-	if ctx.IsSet(utils.PortalBootNodesFlag.Name) {
-		for _, node := range ctx.StringSlice(utils.PortalBootNodesFlag.Name) {
+	bootNodes := ctx.StringSlice(utils.PortalBootNodesFlag.Name)
+	if len(bootNodes) > 0 {
+		for _, node := range bootNodes {
 			bootNode := new(enode.Node)
 			err = bootNode.UnmarshalText([]byte(node))
 			if err != nil {
@@ -199,14 +289,15 @@ func getPortalConfig(ctx *cli.Context) (*Config, error) {
 			config.Protocol.BootstrapNodes = append(config.Protocol.BootstrapNodes, bootNode)
 		}
 	}
+	config.Networks = ctx.StringSlice(utils.PortalNetworksFlag.Name)
 	return config, nil
 }
 
 func setPrivateKey(ctx *cli.Context, config *Config) error {
 	var privateKey *ecdsa.PrivateKey
 	var err error
-	if ctx.IsSet(utils.PortalPrivateKeyFlag.Name) {
-		keyStr := ctx.String(utils.PortalPrivateKeyFlag.Name)
+	keyStr := ctx.String(utils.PortalPrivateKeyFlag.Name)
+	if keyStr != "" {
 		keyBytes, err := hexutil.Decode(keyStr)
 		if err != nil {
 			return err
@@ -222,43 +313,5 @@ func setPrivateKey(ctx *cli.Context, config *Config) error {
 		}
 	}
 	config.PrivateKey = privateKey
-	return nil
-}
-
-func startPortalRpcServer(discV5API *discover.DiscV5API, historyAPI *discover.PortalProtocolAPI, beaconAPI *discover.PortalProtocolAPI, addr string) error {
-	disv5 := discV5API
-
-	server := rpc.NewServer()
-	err := server.RegisterName("discv5", disv5)
-	if err != nil {
-		return err
-	}
-
-	var historyNetworkAPI *history.API
-	if historyAPI != nil {
-		historyNetworkAPI = history.NewHistoryNetworkAPI(historyAPI)
-		err = server.RegisterName("portal", historyNetworkAPI)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	var beaconNetworkAPI *beacon.API
-	if beaconAPI != nil {
-		beaconNetworkAPI = beacon.NewBeaconNetworkAPI(beaconAPI)
-		err = server.RegisterName("portal", beaconNetworkAPI)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: server,
-	}
-
-	httpServer.ListenAndServe()
 	return nil
 }

@@ -1019,6 +1019,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Name:     "networks",
 		Usage:    "portal sub networks: history, beacon, state",
 		Category: flags.PortalNetworkCategory,
+		Value:    cli.NewStringSlice("history", "beacon", "state"),
 	}
 )
 
