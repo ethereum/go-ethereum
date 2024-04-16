@@ -23,12 +23,15 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/consensys/gnark-crypto/ecc"
+	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
+	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/blake2b"
-	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
@@ -673,26 +676,22 @@ func (c *bls12381G1Add) Run(input []byte) ([]byte, error) {
 		return nil, errBLS12381InvalidInputLength
 	}
 	var err error
-	var p0, p1 *bls12381.PointG1
-
-	// Initialize G1
-	g := bls12381.NewG1()
+	var p0, p1 *bls12381.G1Affine
 
 	// Decode G1 point p_0
-	if p0, err = g.DecodePoint(input[:128]); err != nil {
+	if p0, err = decodePointG1(input[:128]); err != nil {
 		return nil, err
 	}
 	// Decode G1 point p_1
-	if p1, err = g.DecodePoint(input[128:]); err != nil {
+	if p1, err = decodePointG1(input[128:]); err != nil {
 		return nil, err
 	}
 
 	// Compute r = p_0 + p_1
-	r := g.New()
-	g.Add(r, p0, p1)
+	p0.Add(p0, p1)
 
 	// Encode the G1 point result into 128 bytes
-	return g.EncodePoint(r), nil
+	return encodePointG1(p0), nil
 }
 
 // bls12381G1Mul implements EIP-2537 G1Mul precompile.
@@ -711,24 +710,21 @@ func (c *bls12381G1Mul) Run(input []byte) ([]byte, error) {
 		return nil, errBLS12381InvalidInputLength
 	}
 	var err error
-	var p0 *bls12381.PointG1
-
-	// Initialize G1
-	g := bls12381.NewG1()
+	var p0 *bls12381.G1Affine
 
 	// Decode G1 point
-	if p0, err = g.DecodePoint(input[:128]); err != nil {
+	if p0, err = decodePointG1(input[:128]); err != nil {
 		return nil, err
 	}
 	// Decode scalar value
 	e := new(big.Int).SetBytes(input[128:])
 
 	// Compute r = e * p_0
-	r := g.New()
-	g.MulScalar(r, p0, e)
+	r := new(bls12381.G1Affine)
+	r.ScalarMultiplication(p0, e)
 
 	// Encode the G1 point into 128 bytes
-	return g.EncodePoint(r), nil
+	return encodePointG1(r), nil
 }
 
 // bls12381G1MultiExp implements EIP-2537 G1MultiExp precompile.
@@ -761,31 +757,29 @@ func (c *bls12381G1MultiExp) Run(input []byte) ([]byte, error) {
 	if len(input) == 0 || len(input)%160 != 0 {
 		return nil, errBLS12381InvalidInputLength
 	}
-	var err error
-	points := make([]*bls12381.PointG1, k)
-	scalars := make([]*big.Int, k)
-
-	// Initialize G1
-	g := bls12381.NewG1()
+	points := make([]bls12381.G1Affine, k)
+	scalars := make([]fr.Element, k)
 
 	// Decode point scalar pairs
 	for i := 0; i < k; i++ {
 		off := 160 * i
 		t0, t1, t2 := off, off+128, off+160
 		// Decode G1 point
-		if points[i], err = g.DecodePoint(input[t0:t1]); err != nil {
+		p, err := decodePointG1(input[t0:t1])
+		if err != nil {
 			return nil, err
 		}
+		points[i] = *p
 		// Decode scalar value
-		scalars[i] = new(big.Int).SetBytes(input[t1:t2])
+		scalars[i] = *new(fr.Element).SetBytes(input[t1:t2])
 	}
 
 	// Compute r = e_0 * p_0 + e_1 * p_1 + ... + e_(k-1) * p_(k-1)
-	r := g.New()
-	g.MultiExp(r, points, scalars)
+	r := new(bls12381.G1Affine)
+	r.MultiExp(points, scalars, ecc.MultiExpConfig{})
 
 	// Encode the G1 point to 128 bytes
-	return g.EncodePoint(r), nil
+	return encodePointG1(r), nil
 }
 
 // bls12381G2Add implements EIP-2537 G2Add precompile.
@@ -804,26 +798,23 @@ func (c *bls12381G2Add) Run(input []byte) ([]byte, error) {
 		return nil, errBLS12381InvalidInputLength
 	}
 	var err error
-	var p0, p1 *bls12381.PointG2
-
-	// Initialize G2
-	g := bls12381.NewG2()
-	r := g.New()
+	var p0, p1 *bls12381.G2Affine
 
 	// Decode G2 point p_0
-	if p0, err = g.DecodePoint(input[:256]); err != nil {
+	if p0, err = decodePointG2(input[:256]); err != nil {
 		return nil, err
 	}
 	// Decode G2 point p_1
-	if p1, err = g.DecodePoint(input[256:]); err != nil {
+	if p1, err = decodePointG2(input[256:]); err != nil {
 		return nil, err
 	}
 
 	// Compute r = p_0 + p_1
-	g.Add(r, p0, p1)
+	r := new(bls12381.G2Affine)
+	r.Add(p0, p1)
 
 	// Encode the G2 point into 256 bytes
-	return g.EncodePoint(r), nil
+	return encodePointG2(r), nil
 }
 
 // bls12381G2Mul implements EIP-2537 G2Mul precompile.
@@ -842,24 +833,21 @@ func (c *bls12381G2Mul) Run(input []byte) ([]byte, error) {
 		return nil, errBLS12381InvalidInputLength
 	}
 	var err error
-	var p0 *bls12381.PointG2
-
-	// Initialize G2
-	g := bls12381.NewG2()
+	var p0 *bls12381.G2Affine
 
 	// Decode G2 point
-	if p0, err = g.DecodePoint(input[:256]); err != nil {
+	if p0, err = decodePointG2(input[:256]); err != nil {
 		return nil, err
 	}
 	// Decode scalar value
 	e := new(big.Int).SetBytes(input[256:])
 
 	// Compute r = e * p_0
-	r := g.New()
-	g.MulScalar(r, p0, e)
+	r := new(bls12381.G2Affine)
+	r.ScalarMultiplication(p0, e)
 
 	// Encode the G2 point into 256 bytes
-	return g.EncodePoint(r), nil
+	return encodePointG2(r), nil
 }
 
 // bls12381G2MultiExp implements EIP-2537 G2MultiExp precompile.
@@ -892,31 +880,29 @@ func (c *bls12381G2MultiExp) Run(input []byte) ([]byte, error) {
 	if len(input) == 0 || len(input)%288 != 0 {
 		return nil, errBLS12381InvalidInputLength
 	}
-	var err error
-	points := make([]*bls12381.PointG2, k)
-	scalars := make([]*big.Int, k)
-
-	// Initialize G2
-	g := bls12381.NewG2()
+	points := make([]bls12381.G2Affine, k)
+	scalars := make([]fr.Element, k)
 
 	// Decode point scalar pairs
 	for i := 0; i < k; i++ {
 		off := 288 * i
 		t0, t1, t2 := off, off+256, off+288
-		// Decode G1 point
-		if points[i], err = g.DecodePoint(input[t0:t1]); err != nil {
+		// Decode G2 point
+		p, err := decodePointG2(input[t0:t1])
+		if err != nil {
 			return nil, err
 		}
+		points[i] = *p
 		// Decode scalar value
-		scalars[i] = new(big.Int).SetBytes(input[t1:t2])
+		scalars[i] = *new(fr.Element).SetBytes(input[t1:t2])
 	}
 
 	// Compute r = e_0 * p_0 + e_1 * p_1 + ... + e_(k-1) * p_(k-1)
-	r := g.New()
-	g.MultiExp(r, points, scalars)
+	r := new(bls12381.G2Affine)
+	r.MultiExp(points, scalars, ecc.MultiExpConfig{})
 
 	// Encode the G2 point to 256 bytes.
-	return g.EncodePoint(r), nil
+	return encodePointG2(r), nil
 }
 
 // bls12381Pairing implements EIP-2537 Pairing precompile.
@@ -939,9 +925,10 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 		return nil, errBLS12381InvalidInputLength
 	}
 
-	// Initialize BLS12-381 pairing engine
-	e := bls12381.NewPairingEngine()
-	g1, g2 := e.G1, e.G2
+	var (
+		p []bls12381.G1Affine
+		q []bls12381.G2Affine
+	)
 
 	// Decode pairs
 	for i := 0; i < k; i++ {
@@ -949,53 +936,125 @@ func (c *bls12381Pairing) Run(input []byte) ([]byte, error) {
 		t0, t1, t2 := off, off+128, off+384
 
 		// Decode G1 point
-		p1, err := g1.DecodePoint(input[t0:t1])
+		p1, err := decodePointG1(input[t0:t1])
 		if err != nil {
 			return nil, err
 		}
 		// Decode G2 point
-		p2, err := g2.DecodePoint(input[t1:t2])
+		p2, err := decodePointG2(input[t1:t2])
 		if err != nil {
 			return nil, err
 		}
 
 		// 'point is on curve' check already done,
 		// Here we need to apply subgroup checks.
-		if !g1.InCorrectSubgroup(p1) {
+		if !p1.IsInSubGroup() {
 			return nil, errBLS12381G1PointSubgroup
 		}
-		if !g2.InCorrectSubgroup(p2) {
+		if !p2.IsInSubGroup() {
 			return nil, errBLS12381G2PointSubgroup
 		}
-
-		// Update pairing engine with G1 and G2 points
-		e.AddPair(p1, p2)
+		p = append(p, *p1)
+		q = append(q, *p2)
 	}
 	// Prepare 32 byte output
 	out := make([]byte, 32)
 
 	// Compute pairing and set the result
-	if e.Check() {
+	ok, err := bls12381.PairingCheck(p, q)
+	if err == nil && ok {
 		out[31] = 1
 	}
 	return out, nil
 }
 
+func decodePointG1(in []byte) (*bls12381.G1Affine, error) {
+	if len(in) != 128 {
+		return nil, errors.New("invalid g1 point length")
+	}
+	// decode x
+	x, err := decodeBLS12381FieldElement(in[:64])
+	if err != nil {
+		return nil, err
+	}
+	// decode y
+	y, err := decodeBLS12381FieldElement(in[64:])
+	if err != nil {
+		return nil, err
+	}
+	elem := bls12381.G1Affine{X: x, Y: y}
+	if !elem.IsOnCurve() {
+		return nil, errors.New("invalid point: not on curve")
+	}
+
+	return &elem, nil
+}
+
+// decodePointG2 given encoded (x, y) coordinates in 256 bytes returns a valid G2 Point.
+func decodePointG2(in []byte) (*bls12381.G2Affine, error) {
+	if len(in) != 256 {
+		return nil, errors.New("invalid g2 point length")
+	}
+	x0, err := decodeBLS12381FieldElement(in[:64])
+	if err != nil {
+		return nil, err
+	}
+	x1, err := decodeBLS12381FieldElement(in[64:128])
+	if err != nil {
+		return nil, err
+	}
+	y0, err := decodeBLS12381FieldElement(in[128:192])
+	if err != nil {
+		return nil, err
+	}
+	y1, err := decodeBLS12381FieldElement(in[192:])
+	if err != nil {
+		return nil, err
+	}
+
+	p := bls12381.G2Affine{X: bls12381.E2{A0: x0, A1: x1}, Y: bls12381.E2{A0: y0, A1: y1}}
+	if !p.IsOnCurve() {
+		return nil, errors.New("invalid point: not on curve")
+	}
+	return &p, err
+}
+
 // decodeBLS12381FieldElement decodes BLS12-381 elliptic curve field element.
 // Removes top 16 bytes of 64 byte input.
-func decodeBLS12381FieldElement(in []byte) ([]byte, error) {
+func decodeBLS12381FieldElement(in []byte) (fp.Element, error) {
 	if len(in) != 64 {
-		return nil, errors.New("invalid field element length")
+		return fp.Element{}, errors.New("invalid field element length")
 	}
 	// check top bytes
 	for i := 0; i < 16; i++ {
 		if in[i] != byte(0x00) {
-			return nil, errBLS12381InvalidFieldElementTopBytes
+			return fp.Element{}, errBLS12381InvalidFieldElementTopBytes
 		}
 	}
-	out := make([]byte, 48)
-	copy(out[:], in[16:])
-	return out, nil
+	var res [48]byte
+	copy(res[:], in[16:])
+
+	return fp.BigEndian.Element(&res)
+}
+
+// encodePointG1 encodes a point into 128 bytes.
+func encodePointG1(p *bls12381.G1Affine) []byte {
+	out := make([]byte, 128)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[16:]), p.X)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[64+16:]), p.Y)
+	return out
+}
+
+// encodePointG2 encodes a point into 256 bytes.
+func encodePointG2(p *bls12381.G2Affine) []byte {
+	out := make([]byte, 256)
+	// encode x
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[16:16+48]), p.X.A0)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[80:80+48]), p.X.A1)
+	// encode y
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[144:144+48]), p.Y.A0)
+	fp.BigEndian.PutElement((*[fp.Bytes]byte)(out[208:208+48]), p.Y.A1)
+	return out
 }
 
 // bls12381MapG1 implements EIP-2537 MapG1 precompile.
@@ -1020,17 +1079,14 @@ func (c *bls12381MapG1) Run(input []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Initialize G1
-	g := bls12381.NewG1()
-
 	// Compute mapping
-	r, err := g.MapToCurve(fe)
+	r := bls12381.MapToG1(fe)
 	if err != nil {
 		return nil, err
 	}
 
 	// Encode the G1 point to 128 bytes
-	return g.EncodePoint(r), nil
+	return encodePointG1(&r), nil
 }
 
 // bls12381MapG2 implements EIP-2537 MapG2 precompile.
@@ -1050,29 +1106,23 @@ func (c *bls12381MapG2) Run(input []byte) ([]byte, error) {
 	}
 
 	// Decode input field element
-	fe := make([]byte, 96)
 	c0, err := decodeBLS12381FieldElement(input[:64])
 	if err != nil {
 		return nil, err
 	}
-	copy(fe[48:], c0)
 	c1, err := decodeBLS12381FieldElement(input[64:])
 	if err != nil {
 		return nil, err
 	}
-	copy(fe[:48], c1)
-
-	// Initialize G2
-	g := bls12381.NewG2()
 
 	// Compute mapping
-	r, err := g.MapToCurve(fe)
+	r := bls12381.MapToG2(bls12381.E2{A0: c0, A1: c1})
 	if err != nil {
 		return nil, err
 	}
 
 	// Encode the G2 point to 256 bytes
-	return g.EncodePoint(r), nil
+	return encodePointG2(&r), nil
 }
 
 // kzgPointEvaluation implements the EIP-4844 point evaluation precompile.
