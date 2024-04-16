@@ -376,14 +376,13 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 				failed = err
 				break
 			}
-
-			if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-				context := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
+			// Insert block's parent beacon block root in the state
+			// as per EIP-4788.
+			if beaconRoot := next.BeaconRoot(); beaconRoot != nil {
+				context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
 				vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
-
-				core.ProcessBeaconBlockRoot(*block.BeaconRoot(), vmenv, statedb)
+				core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 			}
-
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
 			// tracing state of block next depends on the parent state and construction
