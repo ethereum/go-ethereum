@@ -92,17 +92,29 @@ var (
 	l1TxCccUnknownErrCounter          = metrics.NewRegisteredCounter("miner/skipped_txs/l1/ccc_unknown_err", nil)
 	l2TxCccUnknownErrCounter          = metrics.NewRegisteredCounter("miner/skipped_txs/l2/ccc_unknown_err", nil)
 	l1TxStrangeErrCounter             = metrics.NewRegisteredCounter("miner/skipped_txs/l1/strange_err", nil)
-	l2CommitTxsTimer                  = metrics.NewRegisteredTimer("miner/commit/txs_all", nil)
-	l2CommitTxTimer                   = metrics.NewRegisteredTimer("miner/commit/tx_all", nil)
-	l2CommitTxTraceTimer              = metrics.NewRegisteredTimer("miner/commit/tx_trace", nil)
-	l2CommitTxCCCTimer                = metrics.NewRegisteredTimer("miner/commit/tx_ccc", nil)
-	l2CommitTxApplyTimer              = metrics.NewRegisteredTimer("miner/commit/tx_apply", nil)
-	l2CommitTimer                     = metrics.NewRegisteredTimer("miner/commit/all", nil)
-	l2CommitTraceTimer                = metrics.NewRegisteredTimer("miner/commit/trace", nil)
-	l2CommitCCCTimer                  = metrics.NewRegisteredTimer("miner/commit/ccc", nil)
-	l2CommitNewWorkTimer              = metrics.NewRegisteredTimer("miner/commit/new_work_all", nil)
-	l2CommitNewWorkL1CollectTimer     = metrics.NewRegisteredTimer("miner/commit/new_work_collect_l1", nil)
-	l2ResultTimer                     = metrics.NewRegisteredTimer("miner/result/all", nil)
+
+	l2CommitTxsTimer                = metrics.NewRegisteredTimer("miner/commit/txs_all", nil)
+	l2CommitTxTimer                 = metrics.NewRegisteredTimer("miner/commit/tx_all", nil)
+	l2CommitTxTraceTimer            = metrics.NewRegisteredTimer("miner/commit/tx_trace", nil)
+	l2CommitTxTraceStateRevertTimer = metrics.NewRegisteredTimer("miner/commit/tx_trace_state_revert", nil)
+	l2CommitTxCCCTimer              = metrics.NewRegisteredTimer("miner/commit/tx_ccc", nil)
+	l2CommitTxApplyTimer            = metrics.NewRegisteredTimer("miner/commit/tx_apply", nil)
+
+	l2CommitNewWorkTimer                    = metrics.NewRegisteredTimer("miner/commit/new_work_all", nil)
+	l2CommitNewWorkL1CollectTimer           = metrics.NewRegisteredTimer("miner/commit/new_work_collect_l1", nil)
+	l2CommitNewWorkPrepareTimer             = metrics.NewRegisteredTimer("miner/commit/new_work_prepare", nil)
+	l2CommitNewWorkCommitUncleTimer         = metrics.NewRegisteredTimer("miner/commit/new_work_uncle", nil)
+	l2CommitNewWorkTidyPendingTxTimer       = metrics.NewRegisteredTimer("miner/commit/new_work_tidy_pending", nil)
+	l2CommitNewWorkCommitL1MsgTimer         = metrics.NewRegisteredTimer("miner/commit/new_work_commit_l1_msg", nil)
+	l2CommitNewWorkPrioritizedTxCommitTimer = metrics.NewRegisteredTimer("miner/commit/new_work_prioritized", nil)
+	l2CommitNewWorkRemoteLocalCommitTimer   = metrics.NewRegisteredTimer("miner/commit/new_work_remote_local", nil)
+	l2CommitNewWorkLocalPriceAndNonceTimer  = metrics.NewRegisteredTimer("miner/commit/new_work_local_price_and_nonce", nil)
+	l2CommitNewWorkRemotePriceAndNonceTimer = metrics.NewRegisteredTimer("miner/commit/new_work_remote_price_and_nonce", nil)
+
+	l2CommitTimer      = metrics.NewRegisteredTimer("miner/commit/all", nil)
+	l2CommitTraceTimer = metrics.NewRegisteredTimer("miner/commit/trace", nil)
+	l2CommitCCCTimer   = metrics.NewRegisteredTimer("miner/commit/ccc", nil)
+	l2ResultTimer      = metrics.NewRegisteredTimer("miner/result/all", nil)
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -937,18 +949,20 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 		// 2.1 when starting handling the first tx, `state.refund` is 0 by default,
 		// 2.2 after tracing, the state is either committed in `core.ApplyTransaction`, or reverted, so the `state.refund` can be cleared,
 		// 2.3 when starting handling the following txs, `state.refund` comes as 0
-		withTimer(l2CommitTxTraceTimer, func() {
+		common.WithTimer(l2CommitTxTraceTimer, func() {
 			traces, err = w.current.traceEnv.GetBlockTrace(
 				types.NewBlockWithHeader(w.current.header).WithBody([]*types.Transaction{tx}, nil),
 			)
 		})
-		// `w.current.traceEnv.State` & `w.current.state` share a same pointer to the state, so only need to revert `w.current.state`
-		// revert to snapshot for calling `core.ApplyMessage` again, (both `traceEnv.GetBlockTrace` & `core.ApplyTransaction` will call `core.ApplyMessage`)
-		w.current.state.RevertToSnapshot(snap)
+		common.WithTimer(l2CommitTxTraceStateRevertTimer, func() {
+			// `w.current.traceEnv.State` & `w.current.state` share a same pointer to the state, so only need to revert `w.current.state`
+			// revert to snapshot for calling `core.ApplyMessage` again, (both `traceEnv.GetBlockTrace` & `core.ApplyTransaction` will call `core.ApplyMessage`)
+			w.current.state.RevertToSnapshot(snap)
+		})
 		if err != nil {
 			return nil, nil, err
 		}
-		withTimer(l2CommitTxCCCTimer, func() {
+		common.WithTimer(l2CommitTxCCCTimer, func() {
 			accRows, err = w.circuitCapacityChecker.ApplyTransaction(traces)
 		})
 		if err != nil {
@@ -966,7 +980,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	snap := w.current.state.Snapshot()
 
 	var receipt *types.Receipt
-	withTimer(l2CommitTxApplyTimer, func() {
+	common.WithTimer(l2CommitTxApplyTimer, func() {
 		receipt, err = core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	})
 	if err != nil {
@@ -1013,9 +1027,10 @@ func (w *worker) commitTransactions(txs types.OrderedTransactionSet, coinbase co
 	}
 
 	var coalescedLogs []*types.Log
-
+	var loops int64
 loop:
 	for {
+		loops++
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
 		// (2) worker start or restart, the interrupt signal is 1
@@ -1341,10 +1356,14 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 		header.Coinbase = w.coinbase
 	}
-	if err := w.engine.Prepare(w.chain, header); err != nil {
-		log.Error("Failed to prepare header for mining", "err", err)
-		return
-	}
+
+	common.WithTimer(l2CommitNewWorkPrepareTimer, func() {
+		if err := w.engine.Prepare(w.chain, header); err != nil {
+			log.Error("Failed to prepare header for mining", "err", err)
+			return
+		}
+	})
+
 	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
 	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil {
 		// Check whether the block is among the fork extra-override range
@@ -1390,9 +1409,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			}
 		}
 	}
-	// Prefer to locally generated uncle
-	commitUncles(w.localUncles)
-	commitUncles(w.remoteUncles)
+
+	common.WithTimer(l2CommitNewWorkCommitUncleTimer, func() {
+		// Prefer to locally generated uncle
+		commitUncles(w.localUncles)
+		commitUncles(w.remoteUncles)
+	})
 
 	// Create an empty block based on temporary copied state for
 	// sealing in advance without waiting block execution finished.
@@ -1402,10 +1424,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// fetch l1Txs
 	var l1Messages []types.L1MessageTx
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() {
-		withTimer(l2CommitNewWorkL1CollectTimer, func() {
+		common.WithTimer(l2CommitNewWorkL1CollectTimer, func() {
 			l1Messages = w.collectPendingL1Messages(env.nextL1MsgIndex)
 		})
 	}
+
+	tidyPendingStart := time.Now()
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(true)
 	// Short circuit if there is no available pending transactions.
@@ -1413,6 +1437,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// empty block is necessary to keep the liveness of the network.
 	if len(pending) == 0 && len(l1Messages) == 0 && atomic.LoadUint32(&w.noempty) == 0 {
 		w.updateSnapshot()
+		l2CommitNewWorkTidyPendingTxTimer.UpdateSince(tidyPendingStart)
 		return
 	}
 	// Split the pending transactions into locals and remotes
@@ -1423,7 +1448,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			localTxs[account] = txs
 		}
 	}
+	l2CommitNewWorkTidyPendingTxTimer.UpdateSince(tidyPendingStart)
+
 	var skipCommit, circuitCapacityReached bool
+	commitL1MsgStart := time.Now()
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Messages) > 0 {
 		log.Trace("Processing L1 messages for inclusion", "count", len(l1Messages))
 		txs, err := types.NewL1MessagesByQueueIndex(l1Messages)
@@ -1433,9 +1461,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
+			l2CommitNewWorkCommitL1MsgTimer.UpdateSince(commitL1MsgStart)
 			return
 		}
 	}
+	l2CommitNewWorkCommitL1MsgTimer.UpdateSince(commitL1MsgStart)
+
+	prioritizedTxStart := time.Now()
 	if w.prioritizedTx != nil && w.current.header.Number.Uint64() > w.prioritizedTx.blockNumber {
 		w.prioritizedTx = nil
 	}
@@ -1446,25 +1478,39 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, txList, header.BaseFee)
 		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
+			l2CommitNewWorkPrioritizedTxCommitTimer.UpdateSince(prioritizedTxStart)
 			return
 		}
 	}
+	l2CommitNewWorkPrioritizedTxCommitTimer.UpdateSince(prioritizedTxStart)
+
+	remoteLocalStart := time.Now()
 	if len(localTxs) > 0 && !circuitCapacityReached {
+		localTxPriceAndNonceStart := time.Now()
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs, header.BaseFee)
+		l2CommitNewWorkLocalPriceAndNonceTimer.UpdateSince(localTxPriceAndNonceStart)
+
 		skipCommit, circuitCapacityReached = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
+			l2CommitNewWorkRemoteLocalCommitTimer.UpdateSince(remoteLocalStart)
 			return
 		}
 	}
+
 	if len(remoteTxs) > 0 && !circuitCapacityReached {
+		remoteTxPriceAndNonceStart := time.Now()
 		txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs, header.BaseFee)
+		l2CommitNewWorkRemotePriceAndNonceTimer.UpdateSince(remoteTxPriceAndNonceStart)
+
 		// don't need to get `circuitCapacityReached` here because we don't have further `commitTransactions`
 		// after this one, and if we assign it won't take effect (`ineffassign`)
 		skipCommit, _ = w.commitTransactions(txs, w.coinbase, interrupt)
 		if skipCommit {
+			l2CommitNewWorkRemoteLocalCommitTimer.UpdateSince(remoteLocalStart)
 			return
 		}
 	}
+	l2CommitNewWorkRemoteLocalCommitTimer.UpdateSince(remoteLocalStart)
 
 	// do not produce empty blocks
 	if w.current.tcount == 0 {
@@ -1492,7 +1538,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		)
 		var traces *types.BlockTrace
 		var err error
-		withTimer(l2CommitTraceTimer, func() {
+		common.WithTimer(l2CommitTraceTimer, func() {
 			traces, err = w.current.traceEnv.GetBlockTrace(types.NewBlockWithHeader(w.current.header))
 		})
 		if err != nil {
@@ -1503,7 +1549,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		traces.ExecutionResults = traces.ExecutionResults[:0]
 		traces.TxStorageTraces = traces.TxStorageTraces[:0]
 		var accRows *types.RowConsumption
-		withTimer(l2CommitCCCTimer, func() {
+		common.WithTimer(l2CommitCCCTimer, func() {
 			accRows, err = w.circuitCapacityChecker.ApplyBlock(traces)
 		})
 		if err != nil {
@@ -1574,12 +1620,4 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
-}
-
-func withTimer(timer metrics.Timer, f func()) {
-	if metrics.Enabled {
-		timer.Time(f)
-	} else {
-		f()
-	}
 }
