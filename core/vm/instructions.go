@@ -892,7 +892,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 		var (
 			codeLen = len(scope.Contract.Code)
 			start   = min(codeLen, int(*pc+1))
-			end     = min(start+pushByteSize, codeLen)
+			end     = min(codeLen, start+pushByteSize)
 		)
 		scope.Stack.push(new(uint256.Int).SetBytes(
 			common.RightPadBytes(
