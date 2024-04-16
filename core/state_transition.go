@@ -276,7 +276,7 @@ func (st *StateTransition) initGas() error {
 	return nil
 }
 
-func (st *StateTransition) preCheck() error {
+func (st *StateTransition) StatelessChecks() error {
 	// Only check transactions that are not fake
 	msg := st.msg
 	if !msg.SkipAccountChecks {
@@ -351,7 +351,14 @@ func (st *StateTransition) preCheck() error {
 			}
 		}
 	}
+	return nil
+}
+
+func (st *StateTransition) preCheck() error {
 	if !st.feeCharged {
+		if err := st.StatelessChecks(); err != nil {
+			return err
+		}
 		if err := st.BuyGas(); err != nil {
 			return err
 		}
