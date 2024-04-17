@@ -167,7 +167,8 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 		case !state.canonical:
 			log.Error("Checkpoint not available, block is reported as non-canonical", "server", server.Name())
 		case !s.hasEpochInfo:
-			panic(nil) // should be available if hasHeader is true and state is ssPrintStatus
+			// should be available if hasHeader is true and state is ssPrintStatus
+			panic("Checkpoint epoch info not available when printing retrieval status")
 		case !s.epochBoundary:
 			log.Error("Checkpoint not available, block is not on epoch boundary", "slot", s.cpSlot, "parent slot", s.parentSlot, "server", server.Name())
 		case !state.finalized:
