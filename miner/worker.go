@@ -95,6 +95,7 @@ var (
 
 	l2CommitTxsTimer                = metrics.NewRegisteredTimer("miner/commit/txs_all", nil)
 	l2CommitTxTimer                 = metrics.NewRegisteredTimer("miner/commit/tx_all", nil)
+	l2CommitTxFailedTimer           = metrics.NewRegisteredTimer("miner/commit/tx_all_failed", nil)
 	l2CommitTxTraceTimer            = metrics.NewRegisteredTimer("miner/commit/tx_trace", nil)
 	l2CommitTxTraceStateRevertTimer = metrics.NewRegisteredTimer("miner/commit/tx_trace_state_revert", nil)
 	l2CommitTxCCCTimer              = metrics.NewRegisteredTimer("miner/commit/tx_ccc", nil)
@@ -927,6 +928,9 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	if w.isRunning() {
 		defer func(t0 time.Time) {
 			l2CommitTxTimer.Update(time.Since(t0))
+			if err != nil {
+				l2CommitTxFailedTimer.Update(time.Since(t0))
+			}
 		}(time.Now())
 
 		// do gas limit check up-front and do not run CCC if it fails
