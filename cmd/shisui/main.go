@@ -78,7 +78,7 @@ func shisui(ctx *cli.Context) error {
 		return nil
 	}
 
-	logger := setDefaultLogger(*config)
+	setDefaultLogger(*config)
 
 	addr, err := net.ResolveUDPAddr("udp", config.Protocol.ListenAddr)
 	if err != nil {
@@ -89,20 +89,19 @@ func shisui(ctx *cli.Context) error {
 		return err
 	}
 
-	return startPortalRpcServer(*config, conn, logger, config.RpcAddr)
+	return startPortalRpcServer(*config, conn, config.RpcAddr)
 }
 
-func setDefaultLogger(config Config) log.Logger {
+func setDefaultLogger(config Config) {
 	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
 	slogVerbosity := log.FromLegacyLevel(config.LogLevel)
 	glogger.Verbosity(slogVerbosity)
 	defaultLogger := log.NewLogger(glogger)
 	log.SetDefault(defaultLogger)
-	return defaultLogger
 }
 
-func startPortalRpcServer(config Config, conn discover.UDPConn, logger log.Logger, addr string) error {
-	discV5, localNode, err := initDiscV5(config, conn, logger)
+func startPortalRpcServer(config Config, conn discover.UDPConn, addr string) error {
+	discV5, localNode, err := initDiscV5(config, conn)
 	if err != nil {
 		return err
 	}
@@ -136,12 +135,12 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, logger log.Logge
 	return nil
 }
 
-func initDiscV5(config Config, conn discover.UDPConn, log log.Logger) (*discover.UDPv5, *enode.LocalNode, error) {
+func initDiscV5(config Config, conn discover.UDPConn) (*discover.UDPv5, *enode.LocalNode, error) {
 	discCfg := discover.Config{
 		PrivateKey:  config.PrivateKey,
 		NetRestrict: config.Protocol.NetRestrict,
 		Bootnodes:   config.Protocol.BootstrapNodes,
-		Log:         log,
+		Log:         log.New("discV5"),
 	}
 
 	nodeDB, err := enode.OpenDB(config.Protocol.NodeDBPath)

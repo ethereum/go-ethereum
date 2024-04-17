@@ -55,9 +55,9 @@ const (
 )
 
 var NetworkNameMap = map[string]string{
-	string(StateNetwork):   StateNetworkName,
-	string(HistoryNetwork): HistoryNetworkName,
-	string(StateNetwork):   StateNetworkName,
+	string(StateNetwork):             StateNetworkName,
+	string(HistoryNetwork):           HistoryNetworkName,
+	string(BeaconLightClientNetwork): BeaconNetworkName,
 }
 
 type ContentKV struct {

@@ -191,11 +191,12 @@ func defaultContentIdFunc(contentKey []byte) []byte {
 func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, conn UDPConn, localNode *enode.LocalNode, discV5 *UDPv5, storage storage.ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
 	closeCtx, cancelCloseCtx := context.WithCancel(context.Background())
 
+	protocolName := portalwire.NetworkNameMap[protocolId]
 	protocol := &PortalProtocol{
 		protocolId:     protocolId,
-		protocolName:   portalwire.NetworkNameMap[protocolId],
+		protocolName:   protocolName,
 		ListenAddr:     config.ListenAddr,
-		Log:            log.New("protocol", protocolId),
+		Log:            log.New("protocol", protocolName),
 		PrivateKey:     privateKey,
 		NetRestrict:    config.NetRestrict,
 		BootstrapNodes: config.BootstrapNodes,
