@@ -153,7 +153,7 @@ func SamplePercentile(values []int64, p float64) float64 {
 }
 
 // CalculatePercentiles returns a slice of arbitrary percentiles of the slice of
-// int64. This method returns interpolated results, so e.g if there are only two
+// int64. This method returns interpolated results, so e.g. if there are only two
 // values, [0, 10], a 50% percentile will land between them.
 //
 // Note: As a side-effect, this method will also sort the slice of values.

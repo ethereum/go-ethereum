@@ -889,22 +889,17 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 // make push instruction function
 func makePush(size uint64, pushByteSize int) executionFunc {
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-		codeLen := len(scope.Contract.Code)
-
-		startMin := codeLen
-		if int(*pc+1) < startMin {
-			startMin = int(*pc + 1)
-		}
-
-		endMin := codeLen
-		if startMin+pushByteSize < endMin {
-			endMin = startMin + pushByteSize
-		}
-
-		integer := new(uint256.Int)
-		scope.Stack.push(integer.SetBytes(common.RightPadBytes(
-			scope.Contract.Code[startMin:endMin], pushByteSize)))
-
+		var (
+			codeLen = len(scope.Contract.Code)
+			start   = min(codeLen, int(*pc+1))
+			end     = min(codeLen, start+pushByteSize)
+		)
+		scope.Stack.push(new(uint256.Int).SetBytes(
+			common.RightPadBytes(
+				scope.Contract.Code[start:end],
+				pushByteSize,
+			)),
+		)
 		*pc += size
 		return nil, nil
 	}

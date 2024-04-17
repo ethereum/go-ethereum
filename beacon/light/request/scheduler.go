@@ -65,7 +65,7 @@ type Requester interface {
 // allow new operations.
 type Scheduler struct {
 	lock    sync.Mutex
-	modules []Module // first has highest priority
+	modules []Module // first has the highest priority
 	names   map[Module]string
 	servers map[server]struct{}
 	targets map[targetData]uint64
