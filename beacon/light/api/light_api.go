@@ -548,7 +548,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 // established. It can only return nil when the context is canceled.
 func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadEventListener) *eventsource.Stream {
 	for retry := true; retry; retry = ctxSleep(ctx, 5*time.Second) {
-		path := "/eth/v1/events?topics=head&topics=light_client_optimistic_update&topics=light_client_finality_update"
+		path := "/eth/v1/events?topics=head&topics=light_client_finality_update&topics=light_client_optimistic_update"
 		log.Debug("Sending event subscription request")
 		req, err := http.NewRequestWithContext(ctx, "GET", api.url+path, nil)
 		if err != nil {

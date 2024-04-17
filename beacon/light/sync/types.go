@@ -43,4 +43,5 @@ type (
 	}
 	ReqCheckpointData common.Hash
 	ReqBeaconBlock    common.Hash
+	ReqFinality       struct{}
 )

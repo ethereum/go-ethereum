@@ -24,7 +24,8 @@ import (
 
 type headTracker interface {
 	ValidateOptimistic(update types.OptimisticUpdate) (bool, error)
-	ValidateFinality(update types.FinalityUpdate) (bool, error)
+	ValidateFinality(head types.FinalityUpdate) (bool, error)
+	ValidatedFinality() (types.FinalityUpdate, bool)
 	SetPrefetchHead(head types.HeadInfo)
 }
 
@@ -41,6 +42,7 @@ type HeadSync struct {
 	unvalidatedOptimistic map[request.Server]types.OptimisticUpdate
 	unvalidatedFinality   map[request.Server]types.FinalityUpdate
 	serverHeads           map[request.Server]types.HeadInfo
+	reqFinalityEpoch      map[request.Server]uint64 // next epoch to request finality update
 	headServerCount       map[types.HeadInfo]headServerCount
 	headCounter           uint64
 	prefetchHead          types.HeadInfo
@@ -64,6 +66,7 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 		unvalidatedFinality:   make(map[request.Server]types.FinalityUpdate),
 		serverHeads:           make(map[request.Server]types.HeadInfo),
 		headServerCount:       make(map[types.HeadInfo]headServerCount),
+		reqFinalityEpoch:      make(map[request.Server]uint64),
 	}
 	return s
 }
@@ -75,9 +78,22 @@ func (s *HeadSync) Process(requester request.Requester, events []request.Event) 
 		case EvNewHead:
 			s.setServerHead(event.Server, event.Data.(types.HeadInfo))
 		case EvNewOptimisticUpdate:
-			s.newOptimisticUpdate(event.Server, event.Data.(types.OptimisticUpdate))
+			update := event.Data.(types.OptimisticUpdate)
+			s.newOptimisticUpdate(event.Server, update)
+			epoch := update.Attested.Epoch()
+			if epoch < s.reqFinalityEpoch[event.Server] {
+				continue
+			}
+			if finality, ok := s.headTracker.ValidatedFinality(); ok && finality.Attested.Header.Epoch() >= epoch {
+				continue
+			}
+			requester.Send(event.Server, ReqFinality{})
+			s.reqFinalityEpoch[event.Server] = epoch + 1
 		case EvNewFinalityUpdate:
 			s.newFinalityUpdate(event.Server, event.Data.(types.FinalityUpdate))
+		case request.EvResponse:
+			_, _, resp := event.RequestInfo()
+			s.newFinalityUpdate(event.Server, resp.(types.FinalityUpdate))
 		case request.EvUnregistered:
 			s.setServerHead(event.Server, types.HeadInfo{})
 			delete(s.serverHeads, event.Server)

@@ -83,6 +83,9 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 		case sync.ReqBeaconBlock:
 			log.Debug("Beacon API: requesting block", "reqid", id, "hash", common.Hash(data))
 			resp, err = s.api.GetBeaconBlock(common.Hash(data))
+		case sync.ReqFinality:
+			log.Debug("Beacon API: requesting finality update")
+			resp, err = s.api.GetFinalityUpdate()
 		default:
 		}
 
