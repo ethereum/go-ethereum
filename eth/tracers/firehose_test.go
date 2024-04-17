@@ -4,15 +4,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 	pbeth "github.com/ethereum/go-ethereum/pb/sf/ethereum/type/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -285,4 +292,179 @@ func filter[S ~[]T, T any](s S, f func(T) bool) (out S) {
 	}
 
 	return out
+}
+
+func TestFirehose_reorderIsolatedTransactionsAndOrdinals(t *testing.T) {
+	tests := []struct {
+		name              string
+		populate          func(t *Firehose)
+		expectedBlockFile string
+	}{
+		{
+			name: "empty",
+			populate: func(t *Firehose) {
+				t.OnBlockStart(blockEvent(1))
+
+				// Simulated GetTxTracer being called
+				t.blockReorderOrdinalOnce.Do(func() {
+					t.blockReorderOrdinal = true
+					t.blockReorderOrdinalSnapshot = t.blockOrdinal.value
+				})
+
+				t.blockOrdinal.Reset()
+				t.onTxStart(txEvent(), hex2Hash("CC"), from, to)
+				t.OnCallEnter(0, byte(vm.CALL), from, to, nil, 0, nil)
+				t.OnBalanceChange(empty, b(1), b(2), 0)
+				t.OnCallExit(0, nil, 0, nil, false)
+				t.OnTxEnd(txReceiptEvent(2), nil)
+
+				t.blockOrdinal.Reset()
+				t.onTxStart(txEvent(), hex2Hash("AA"), from, to)
+				t.OnCallEnter(0, byte(vm.CALL), from, to, nil, 0, nil)
+				t.OnBalanceChange(empty, b(1), b(2), 0)
+				t.OnCallExit(0, nil, 0, nil, false)
+				t.OnTxEnd(txReceiptEvent(0), nil)
+
+				t.blockOrdinal.Reset()
+				t.onTxStart(txEvent(), hex2Hash("BB"), from, to)
+				t.OnCallEnter(0, byte(vm.CALL), from, to, nil, 0, nil)
+				t.OnBalanceChange(empty, b(1), b(2), 0)
+				t.OnCallExit(0, nil, 0, nil, false)
+				t.OnTxEnd(txReceiptEvent(1), nil)
+			},
+			expectedBlockFile: "testdata/firehose/reorder-ordinals-empty.golden.json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := NewFirehose(&FirehoseConfig{
+				ApplyBackwardCompatibility: ptr(false),
+			})
+			f.OnBlockchainInit(params.AllEthashProtocolChanges)
+
+			tt.populate(f)
+
+			f.reorderIsolatedTransactionsAndOrdinals()
+
+			goldenUpdate := os.Getenv("GOLDEN_UPDATE") == "true"
+			goldenPath := tt.expectedBlockFile
+
+			if !goldenUpdate && !fileExits(t, goldenPath) {
+				t.Fatalf("the golden file %q does not exist, re-run with 'GOLDEN_UPDATE=true go test ./... -run %q' to generate the intial version", goldenPath, t.Name())
+			}
+
+			content, err := protojson.MarshalOptions{Indent: "  "}.Marshal(f.block)
+			require.NoError(t, err)
+
+			if goldenUpdate {
+				require.NoError(t, os.WriteFile(goldenPath, content, os.ModePerm))
+			}
+
+			expected, err := os.ReadFile(goldenPath)
+			require.NoError(t, err)
+
+			expectedBlock := &pbeth.Block{}
+			protojson.Unmarshal(expected, expectedBlock)
+
+			if !proto.Equal(expectedBlock, f.block) {
+				assert.Equal(t, expectedBlock, f.block, "Run 'GOLDEN_UPDATE=true go test ./... -run %q' to update golden file", t.Name())
+			}
+
+			seenOrdinals := make(map[uint64]int)
+
+			walkChanges(f.block.BalanceChanges, seenOrdinals)
+			walkChanges(f.block.CodeChanges, seenOrdinals)
+			walkCalls(f.block.SystemCalls, seenOrdinals)
+
+			for _, trx := range f.block.TransactionTraces {
+				seenOrdinals[trx.BeginOrdinal] = seenOrdinals[trx.BeginOrdinal] + 1
+				seenOrdinals[trx.EndOrdinal] = seenOrdinals[trx.EndOrdinal] + 1
+				walkCalls(trx.Calls, seenOrdinals)
+			}
+
+			// No ordinal should be seen more than once
+			for ordinal, count := range seenOrdinals {
+				assert.Equal(t, 1, count, "Ordinal %d seen %d times", ordinal, count)
+			}
+
+			ordinals := maps.Keys(seenOrdinals)
+			slices.Sort(ordinals)
+
+			// All ordinals should be in stricly increasing order
+			prev := -1
+			for _, ordinal := range ordinals {
+				if prev != -1 {
+					assert.Equal(t, prev+1, int(ordinal), "Ordinal %d is not in sequence", ordinal)
+				}
+			}
+		})
+	}
+}
+
+func walkCalls(calls []*pbeth.Call, ordinals map[uint64]int) {
+	for _, call := range calls {
+		walkCall(call, ordinals)
+	}
+}
+
+func walkCall(call *pbeth.Call, ordinals map[uint64]int) {
+	ordinals[call.BeginOrdinal] = ordinals[call.BeginOrdinal] + 1
+	ordinals[call.EndOrdinal] = ordinals[call.EndOrdinal] + 1
+
+	walkChanges(call.BalanceChanges, ordinals)
+	walkChanges(call.CodeChanges, ordinals)
+	walkChanges(call.Logs, ordinals)
+	walkChanges(call.StorageChanges, ordinals)
+	walkChanges(call.NonceChanges, ordinals)
+	walkChanges(call.GasChanges, ordinals)
+}
+
+func walkChanges[T any](changes []T, ordinals map[uint64]int) {
+	for _, change := range changes {
+		var x any = change
+		if v, ok := x.(interface{ GetOrdinal() uint64 }); ok {
+			ordinals[v.GetOrdinal()] = ordinals[v.GetOrdinal()] + 1
+		}
+	}
+}
+
+var b = big.NewInt
+var empty, from, to = common.HexToAddress("00"), common.HexToAddress("01"), common.HexToAddress("02")
+var hex2Hash = common.HexToHash
+
+func fileExits(t *testing.T, path string) bool {
+	t.Helper()
+	stat, err := os.Stat(path)
+	return err == nil && !stat.IsDir()
+}
+
+func txEvent() *types.Transaction {
+	return types.NewTx(&types.LegacyTx{
+		Nonce:    0,
+		GasPrice: big.NewInt(1),
+		Gas:      1,
+		To:       &to,
+		Value:    big.NewInt(1),
+		Data:     nil,
+		V:        big.NewInt(1),
+		R:        big.NewInt(1),
+		S:        big.NewInt(1),
+	})
+}
+
+func txReceiptEvent(txIndex uint) *types.Receipt {
+	return &types.Receipt{
+		Status:           1,
+		TransactionIndex: txIndex,
+	}
+}
+
+func blockEvent(height uint64) tracing.BlockEvent {
+	return tracing.BlockEvent{
+		Block: types.NewBlock(&types.Header{
+			Number: big.NewInt(int64(height)),
+		}, nil, nil, nil, nil),
+		TD: b(1),
+	}
 }
