@@ -140,6 +140,9 @@ type CacheConfig struct {
 	StateHistory        uint64        // Number of blocks from head whose state histories are reserved.
 	StateScheme         string        // Scheme used to store ethereum states and merkle tree nodes on top
 
+	EnableDiskRootInterval bool          // Enable update disk root when time threshold is reached. Disabled by default
+	DiskRootThreshold      time.Duration // Time threshold after which to flush the layers to disk
+
 	SnapshotNoBuild bool // Whether the background generation is allowed
 	SnapshotWait    bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -168,12 +171,14 @@ func (c *CacheConfig) triedbConfig(isVerkle bool) *triedb.Config {
 // defaultCacheConfig are the default caching values if none are specified by the
 // user (also used during testing).
 var defaultCacheConfig = &CacheConfig{
-	TrieCleanLimit: 256,
-	TrieDirtyLimit: 256,
-	TrieTimeLimit:  5 * time.Minute,
-	SnapshotLimit:  256,
-	SnapshotWait:   true,
-	StateScheme:    rawdb.HashScheme,
+	TrieCleanLimit:         256,
+	TrieDirtyLimit:         256,
+	TrieTimeLimit:          5 * time.Minute,
+	SnapshotLimit:          256,
+	SnapshotWait:           true,
+	StateScheme:            rawdb.HashScheme,
+	EnableDiskRootInterval: false,
+	DiskRootThreshold:      60 * time.Minute,
 }
 
 // DefaultCacheConfigWithScheme returns a deep copied default cache config with
@@ -441,10 +446,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			recover = true
 		}
 		snapconfig := snapshot.Config{
-			CacheSize:  bc.cacheConfig.SnapshotLimit,
-			Recovery:   recover,
-			NoBuild:    bc.cacheConfig.SnapshotNoBuild,
-			AsyncBuild: !bc.cacheConfig.SnapshotWait,
+			CacheSize:              bc.cacheConfig.SnapshotLimit,
+			Recovery:               recover,
+			NoBuild:                bc.cacheConfig.SnapshotNoBuild,
+			AsyncBuild:             !bc.cacheConfig.SnapshotWait,
+			EnableDiskRootInterval: bc.cacheConfig.EnableDiskRootInterval,
+			DiskRootThreshold:      bc.cacheConfig.DiskRootThreshold,
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
 	}

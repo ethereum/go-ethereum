@@ -44,6 +44,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		TrieTimeout             time.Duration
 		SnapshotCache           int
 		Preimages               bool
+		EnableDiskRootInterval  bool
+		DiskRootThreshold       time.Duration
 		FilterLogCacheSize      int
 		Miner                   miner.Config
 		TxPool                  legacypool.Config
@@ -87,6 +89,8 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.TrieTimeout = c.TrieTimeout
 	enc.SnapshotCache = c.SnapshotCache
 	enc.Preimages = c.Preimages
+	enc.EnableDiskRootInterval = c.EnableDiskRootInterval
+	enc.DiskRootThreshold = c.DiskRootThreshold
 	enc.FilterLogCacheSize = c.FilterLogCacheSize
 	enc.Miner = c.Miner
 	enc.TxPool = c.TxPool
@@ -134,6 +138,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		TrieTimeout             *time.Duration
 		SnapshotCache           *int
 		Preimages               *bool
+		EnableDiskRootInterval  *bool
+		DiskRootThreshold       *time.Duration
 		FilterLogCacheSize      *int
 		Miner                   *miner.Config
 		TxPool                  *legacypool.Config
@@ -233,6 +239,12 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.Preimages != nil {
 		c.Preimages = *dec.Preimages
+	}
+	if dec.EnableDiskRootInterval != nil {
+		c.EnableDiskRootInterval = *dec.EnableDiskRootInterval
+	}
+	if dec.DiskRootThreshold != nil {
+		c.DiskRootThreshold = *dec.DiskRootThreshold
 	}
 	if dec.FilterLogCacheSize != nil {
 		c.FilterLogCacheSize = *dec.FilterLogCacheSize

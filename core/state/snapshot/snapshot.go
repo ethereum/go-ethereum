@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -150,10 +151,12 @@ type snapshot interface {
 
 // Config includes the configurations for snapshots.
 type Config struct {
-	CacheSize  int  // Megabytes permitted to use for read caches
-	Recovery   bool // Indicator that the snapshots is in the recovery mode
-	NoBuild    bool // Indicator that the snapshots generation is disallowed
-	AsyncBuild bool // The snapshot generation is allowed to be constructed asynchronously
+	CacheSize              int           // Megabytes permitted to use for read caches
+	Recovery               bool          // Indicator that the snapshots is in the recovery mode
+	NoBuild                bool          // Indicator that the snapshots generation is disallowed
+	AsyncBuild             bool          // The snapshot generation is allowed to be constructed asynchronously
+	EnableDiskRootInterval bool          // The disk root is allowed to update after a time threshold
+	DiskRootThreshold      time.Duration // The threshold to update disk root
 }
 
 // Tree is an Ethereum state snapshot tree. It consists of one persistent base
@@ -166,11 +169,12 @@ type Config struct {
 // storage data to avoid expensive multi-level trie lookups; and to allow sorted,
 // cheap iteration of the account/storage tries for sync aid.
 type Tree struct {
-	config Config                   // Snapshots configurations
-	diskdb ethdb.KeyValueStore      // Persistent database to store the snapshot
-	triedb *triedb.Database         // In-memory cache to access the trie through
-	layers map[common.Hash]snapshot // Collection of all known layers
-	lock   sync.RWMutex
+	config   Config                   // Snapshots configurations
+	diskdb   ethdb.KeyValueStore      // Persistent database to store the snapshot
+	triedb   *triedb.Database         // In-memory cache to access the trie through
+	layers   map[common.Hash]snapshot // Collection of all known layers
+	lock     sync.RWMutex
+	baseTime time.Time // Reference to calculate the time threshold
 
 	// Test hooks
 	onFlatten func() // Hook invoked when the bottom most diff layers are flattened
@@ -195,11 +199,18 @@ type Tree struct {
 func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, root common.Hash) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
-		config: config,
-		diskdb: diskdb,
-		triedb: triedb,
-		layers: make(map[common.Hash]snapshot),
+		config:   config,
+		diskdb:   diskdb,
+		triedb:   triedb,
+		layers:   make(map[common.Hash]snapshot),
+		baseTime: time.Now(),
 	}
+
+	// If user provided threshold smaller than minimum, set to minimum
+	if config.DiskRootThreshold < minTimeThreshold {
+		config.DiskRootThreshold = minTimeThreshold
+	}
+
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, disabled, err := loadSnapshot(diskdb, triedb, root, config.CacheSize, config.Recovery, config.NoBuild)
 	if disabled {
@@ -500,7 +511,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 			t.onFlatten()
 		}
 		diff.parent = flattened
-		if flattened.memory < aggregatorMemoryLimit {
+		if (flattened.memory < aggregatorMemoryLimit) && !t.isPastThreshold() {
 			// Accumulator layer is smaller than the limit, so we can abort, unless
 			// there's a snapshot being generated currently. In that case, the trie
 			// will move from underneath the generator so we **must** merge all the
@@ -512,12 +523,15 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 	default:
 		panic(fmt.Sprintf("unknown data layer: %T", parent))
 	}
-	// If the bottom-most layer is larger than our memory cap, persist to disk
+	// If the bottom-most layer is larger than our memory cap or time elapsed greater than threshold, persist to disk
 	bottom := diff.parent.(*diffLayer)
 
 	bottom.lock.RLock()
 	base := diffToDisk(bottom)
 	bottom.lock.RUnlock()
+
+	// Reset the time reference for next update
+	t.baseTime = time.Now()
 
 	t.layers[base.root] = base
 	diff.parent = base
@@ -884,4 +898,10 @@ func (t *Tree) Size() (diffs common.StorageSize, buf common.StorageSize) {
 		}
 	}
 	return size, 0
+}
+
+// Check if time threshold is enabled and if the time elapsed is more than the threshold.
+// if false, we can abort else we proceed to update the disk root
+func (t *Tree) isPastThreshold() bool {
+	return (t.config.EnableDiskRootInterval && (time.Since(t.baseTime) > t.config.DiskRootThreshold))
 }

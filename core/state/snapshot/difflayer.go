@@ -76,6 +76,9 @@ var (
 	bloomDestructHasherOffset = 0
 	bloomAccountHasherOffset  = 0
 	bloomStorageHasherOffset  = 0
+
+	// Setting a minimum to prevent very low input from user
+	minTimeThreshold = 1 * time.Minute
 )
 
 func init() {

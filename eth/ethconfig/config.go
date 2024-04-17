@@ -48,25 +48,27 @@ var FullNodeGPO = gasprice.Config{
 
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
-	SyncMode:           downloader.SnapSync,
-	NetworkId:          0, // enable auto configuration of networkID == chainID
-	TxLookupLimit:      2350000,
-	TransactionHistory: 2350000,
-	StateHistory:       params.FullImmutabilityThreshold,
-	LightPeers:         100,
-	DatabaseCache:      512,
-	TrieCleanCache:     154,
-	TrieDirtyCache:     256,
-	TrieTimeout:        60 * time.Minute,
-	SnapshotCache:      102,
-	FilterLogCacheSize: 32,
-	Miner:              miner.DefaultConfig,
-	TxPool:             legacypool.DefaultConfig,
-	BlobPool:           blobpool.DefaultConfig,
-	RPCGasCap:          50000000,
-	RPCEVMTimeout:      5 * time.Second,
-	GPO:                FullNodeGPO,
-	RPCTxFeeCap:        1, // 1 ether
+	SyncMode:               downloader.SnapSync,
+	NetworkId:              0, // enable auto configuration of networkID == chainID
+	TxLookupLimit:          2350000,
+	TransactionHistory:     2350000,
+	StateHistory:           params.FullImmutabilityThreshold,
+	LightPeers:             100,
+	DatabaseCache:          512,
+	TrieCleanCache:         154,
+	TrieDirtyCache:         256,
+	TrieTimeout:            60 * time.Minute,
+	SnapshotCache:          102,
+	EnableDiskRootInterval: false,
+	DiskRootThreshold:      60 * time.Minute,
+	FilterLogCacheSize:     32,
+	Miner:                  miner.DefaultConfig,
+	TxPool:                 legacypool.DefaultConfig,
+	BlobPool:               blobpool.DefaultConfig,
+	RPCGasCap:              50000000,
+	RPCEVMTimeout:          5 * time.Second,
+	GPO:                    FullNodeGPO,
+	RPCTxFeeCap:            1, // 1 ether
 }
 
 //go:generate go run github.com/fjl/gencodec -type Config -formats toml -out gen_config.go
@@ -119,11 +121,13 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseFreezer    string
 
-	TrieCleanCache int
-	TrieDirtyCache int
-	TrieTimeout    time.Duration
-	SnapshotCache  int
-	Preimages      bool
+	TrieCleanCache         int
+	TrieDirtyCache         int
+	TrieTimeout            time.Duration
+	SnapshotCache          int
+	Preimages              bool
+	EnableDiskRootInterval bool
+	DiskRootThreshold      time.Duration
 
 	// This is the number of blocks for which logs will be cached in the filter system.
 	FilterLogCacheSize int

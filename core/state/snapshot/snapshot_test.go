@@ -330,6 +330,103 @@ func TestPostCapBasicDataAccess(t *testing.T) {
 	}
 }
 
+func TestForceSnapRootCaps(t *testing.T) {
+	// setAccount is a helper to construct a random account entry and assign it to
+	// an account slot in a snapshot
+	setAccount := func(accKey string) map[common.Hash][]byte {
+		return map[common.Hash][]byte{
+			common.HexToHash(accKey): randomAccount(),
+		}
+	}
+	makeRoot := func(height uint64) common.Hash {
+		var buffer [8]byte
+		binary.BigEndian.PutUint64(buffer[:], height)
+		return common.BytesToHash(buffer[:])
+	}
+	var (
+		last = common.HexToHash("0x01")
+		head common.Hash
+	)
+	// Create a starting base layer and a snapshot tree out of it
+	base := &diskLayer{
+		diskdb: rawdb.NewMemoryDatabase(),
+		root:   common.HexToHash("0x01"),
+		cache:  fastcache.New(1024 * 500),
+	}
+	snaps := &Tree{
+		layers: map[common.Hash]snapshot{
+			base.root: base,
+		},
+		baseTime: time.Now(),
+		config: Config{
+			EnableDiskRootInterval: true,
+			DiskRootThreshold:      30 * time.Minute,
+		},
+	}
+
+	// adding layers to the tree more than 128
+	for i := 0; i < 150; i++ {
+		head = makeRoot(uint64(i + 2))
+		snaps.Update(head, last, nil, setAccount(fmt.Sprintf("%d", i+2)), nil)
+		last = head
+	}
+
+	// Currently the tree should have all the 150 layers + disk layer
+	if count := len(snaps.layers); count != 151 {
+		t.Errorf("Unexpected number of layers - count %d, expected 151", count)
+	}
+
+	// Now capping without time threshold reached
+	if err := snaps.Cap(head, 128); err != nil {
+		t.Error("Error while capping layers", err)
+	}
+
+	// the diskRoot should not have been updated yet since
+	// the time and the memory limit have not been reached
+	if firstDiskRoot := snaps.diskRoot(); firstDiskRoot != base.root {
+		t.Errorf("Disk root should not have updated at this point - actual: %s, expected: %s", firstDiskRoot, base.root)
+	}
+
+	// layers beyond 128 should be flattened into one so total layers
+	// 128 top layers + 1 flattened layer + disk layer
+	if newLayers := len(snaps.layers); newLayers != 130 {
+		t.Errorf("Unexpected number of layers after flatten - count: %d, expected: 130", newLayers)
+	}
+
+	// Setting baseTime 100 min behind to trigger disk update
+	snaps.baseTime = time.Now().Add(time.Duration(-100) * time.Minute)
+
+	// Check if forceSnapshot disabled, time threshold should not trigger snapshot
+	snaps.config.EnableDiskRootInterval = false
+	if err := snaps.Cap(head, 128); err != nil {
+		t.Error("Error while capping layers", err)
+	}
+
+	// the diskRoot should not have been updated yet since
+	// the force snapshot is disabled
+	if firstDiskRoot := snaps.diskRoot(); firstDiskRoot != base.root {
+		t.Errorf("Disk root should not have updated at this point - actual: %s, expected: %s", firstDiskRoot, base.root)
+	}
+
+	// Re-enable forceSnapshot, time threshold should trigger snapshot
+	snaps.config.EnableDiskRootInterval = true
+	if err := snaps.Cap(head, 128); err != nil {
+		t.Error("Error while capping layers", err)
+	}
+
+	// the diskRoot should have been updated now since the time and the memory limit
+	// have not been reached
+	if updatedDiskRoot := snaps.diskRoot(); updatedDiskRoot == base.root {
+		t.Errorf("Disk root did not update at this point - actual: %s", updatedDiskRoot)
+	}
+
+	// disk layer should be updated now to be the flattened layer
+	// 128 top layers + disk layer
+	if newLayers := len(snaps.layers); newLayers != 129 {
+		t.Errorf("Unexpected number of layers after flatten - count: %d, expected: 130", newLayers)
+	}
+}
+
 // TestSnaphots tests the functionality for retrieving the snapshot
 // with given head root and the desired depth.
 func TestSnaphots(t *testing.T) {
