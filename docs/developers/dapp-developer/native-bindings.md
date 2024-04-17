@@ -223,12 +223,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to the Ethereum client: %v", err)
 	}
-	auth, err := bind.NewTransactor(strings.NewReader(key), "<<strong_password>>")
+	auth, err := bind.NewTransactorWithChainID(strings.NewReader(key), "<<strong_password>>", ChainId)
 	if err != nil {
 		log.Fatalf("Failed to create authorized transactor: %v", err)
 	}
 	// Deploy the contract passing the newly created `auth` and `conn` vars
-	address, tx, instance, err := DeployStorage(auth, conn), new(big.Int), "Storage contract in Go!", 0, "Go!")
+	address, tx, instance, err := DeployStorage(auth, conn)
 	if err != nil {
 		log.Fatalf("Failed to deploy new storage contract: %v", err)
 	}
