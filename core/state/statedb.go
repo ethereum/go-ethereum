@@ -703,11 +703,11 @@ func (s *StateDB) Copy() *StateDB {
 		stateObjects:         make(map[common.Address]*stateObject, len(s.journal.dirties)),
 		stateObjectsPending:  make(map[common.Address]struct{}, len(s.stateObjectsPending)),
 		stateObjectsDirty:    make(map[common.Address]struct{}, len(s.journal.dirties)),
-		stateObjectsDestruct: make(map[common.Address]*types.StateAccount, len(s.stateObjectsDestruct)),
+		stateObjectsDestruct: make(map[common.Address]*types.StateAccount),
 		refund:               s.refund,
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
-		preimages:            make(map[common.Hash][]byte, len(s.preimages)),
+		preimages:            make(map[common.Hash][]byte),
 		journal:              newJournal(),
 		hasher:               crypto.NewKeccakState(),
 
