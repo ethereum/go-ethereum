@@ -31,7 +31,7 @@ jobs:
 
           # check if version changed in version.go
           # note: the grep will fail if use \d instead of [0-9]
-          git diff HEAD..origin/develop --text --no-ext-diff --unified=0 --no-prefix params/version.go | grep -E '^\+VersionPatch = "v[0-9]+"$' && true
+          git diff HEAD..origin/develop --text --no-ext-diff --unified=0 --no-prefix params/version.go | grep -E '^\+\s*VersionPatch' && true
 
           exit_code=$?
 
