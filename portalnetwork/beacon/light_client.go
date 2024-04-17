@@ -208,7 +208,6 @@ func (c *ConsensusLightClient) Advance() error {
 	return nil
 }
 
-//lint:ignore U1000 placeholder function
 func (c *ConsensusLightClient) bootstrap() error {
 	bootstrap, err := c.API.GetCheckpointData(c.InitialCheckpoint)
 	if err != nil {
