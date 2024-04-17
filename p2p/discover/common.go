@@ -18,7 +18,11 @@ package discover
 
 import (
 	"crypto/ecdsa"
+	crand "crypto/rand"
+	"encoding/binary"
+	"math/rand"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -91,4 +95,35 @@ func ListenUDP(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 type ReadPacket struct {
 	Data []byte
 	Addr *net.UDPAddr
+}
+
+type randomSource interface {
+	Intn(int) int
+	Int63n(int64) int64
+}
+
+// reseedingRandom is a random number generator that tracks when it was last re-seeded.
+type reseedingRandom struct {
+	cur      atomic.Pointer[rand.Rand]
+	lastSeed mclock.AbsTime
+}
+
+func (r *reseedingRandom) nextReseedTime() mclock.AbsTime {
+	return r.lastSeed.Add(10 * time.Minute)
+}
+
+func (r *reseedingRandom) seed(now mclock.AbsTime) {
+	var b [8]byte
+	crand.Read(b[:])
+	seed := binary.BigEndian.Uint64(b[:])
+	r.cur.Store(rand.New(rand.NewSource(int64(seed))))
+	r.lastSeed = now
+}
+
+func (r *reseedingRandom) Intn(n int) int {
+	return r.cur.Load().Intn(n)
+}
+
+func (r *reseedingRandom) Int63n(n int64) int64 {
+	return r.cur.Load().Int63n(n)
 }

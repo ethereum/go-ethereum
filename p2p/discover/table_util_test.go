@@ -26,6 +26,8 @@ import (
 	"net"
 	"slices"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -40,8 +42,7 @@ func init() {
 	nullNode = enode.SignNull(&r, enode.ID{})
 }
 
-func newTestTable(t transport) (*Table, *enode.DB) {
-	cfg := Config{}
+func newTestTable(t transport, cfg Config) (*Table, *enode.DB) {
 	db, _ := enode.OpenDB("")
 	tab, _ := newTable(t, db, cfg)
 	go tab.loop()
@@ -102,7 +103,9 @@ func fillBucket(tab *Table, n *node) (last *node) {
 	ld := enode.LogDist(tab.self().ID(), n.ID())
 	b := tab.bucket(n.ID())
 	for len(b.entries) < bucketSize {
-		b.entries = append(b.entries, nodeAtDistance(tab.self().ID(), ld, intIP(ld)))
+		node := nodeAtDistance(tab.self().ID(), ld, intIP(ld))
+		b.entries = append(b.entries, node)
+		tab.nodeAdded(b, node)
 	}
 	return b.entries[bucketSize-1]
 }
@@ -119,10 +122,12 @@ func fillTable(tab *Table, nodes []*node, setLive bool) {
 }
 
 type pingRecorder struct {
-	mu           sync.Mutex
-	dead, pinged map[enode.ID]bool
-	records      map[enode.ID]*enode.Node
-	n            *enode.Node
+	mu      sync.Mutex
+	cond    *sync.Cond
+	dead    map[enode.ID]bool
+	records map[enode.ID]*enode.Node
+	pinged  []*enode.Node
+	n       *enode.Node
 }
 
 func newPingRecorder() *pingRecorder {
@@ -130,12 +135,13 @@ func newPingRecorder() *pingRecorder {
 	r.Set(enr.IP{0, 0, 0, 0})
 	n := enode.SignNull(&r, enode.ID{})
 
-	return &pingRecorder{
+	t := &pingRecorder{
 		dead:    make(map[enode.ID]bool),
-		pinged:  make(map[enode.ID]bool),
 		records: make(map[enode.ID]*enode.Node),
 		n:       n,
 	}
+	t.cond = sync.NewCond(&t.mu)
+	return t
 }
 
 // updateRecord updates a node record. Future calls to ping and
@@ -151,12 +157,46 @@ func (t *pingRecorder) Self() *enode.Node           { return nullNode }
 func (t *pingRecorder) lookupSelf() []*enode.Node   { return nil }
 func (t *pingRecorder) lookupRandom() []*enode.Node { return nil }
 
+func (t *pingRecorder) wasPinged(id enode.ID) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return slices.ContainsFunc(t.pinged, func(n *enode.Node) bool { return n.ID() == id })
+}
+
+func (t *pingRecorder) waitPing(timeout time.Duration) *enode.Node {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Wake up the loop on timeout.
+	var timedout atomic.Bool
+	timer := time.AfterFunc(timeout, func() {
+		timedout.Store(true)
+		t.cond.Broadcast()
+	})
+	defer timer.Stop()
+
+	// Wait for a ping.
+	for {
+		if timedout.Load() {
+			return nil
+		}
+		if len(t.pinged) > 0 {
+			n := t.pinged[0]
+			t.pinged = append(t.pinged[:0], t.pinged[1:]...)
+			return n
+		}
+		t.cond.Wait()
+	}
+}
+
 // ping simulates a ping request.
 func (t *pingRecorder) ping(n *enode.Node) (seq uint64, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.pinged[n.ID()] = true
+	t.pinged = append(t.pinged, n)
+	t.cond.Broadcast()
+
 	if t.dead[n.ID()] {
 		return 0, errTimeout
 	}

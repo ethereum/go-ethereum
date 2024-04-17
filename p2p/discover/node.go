@@ -38,9 +38,10 @@ type BucketNode struct {
 // node represents a host on the network.
 // The fields of Node may not be modified.
 type node struct {
-	enode.Node
-	addedAt        time.Time // time when the node was added to the table
-	livenessChecks uint      // how often liveness was checked
+	*enode.Node
+	addedAt         time.Time // time when the node was added to the table
+	livenessChecks  uint      // how often liveness was checked
+	isValidatedLive bool
 }
 
 type encPubkey [64]byte
@@ -71,7 +72,7 @@ func (e encPubkey) id() enode.ID {
 }
 
 func wrapNode(n *enode.Node) *node {
-	return &node{Node: *n}
+	return &node{Node: n}
 }
 
 func wrapNodes(ns []*enode.Node) []*node {
@@ -83,7 +84,7 @@ func wrapNodes(ns []*enode.Node) []*node {
 }
 
 func unwrapNode(n *node) *enode.Node {
-	return &n.Node
+	return n.Node
 }
 
 func unwrapNodes(ns []*node) []*enode.Node {

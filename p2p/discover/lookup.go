@@ -152,9 +152,9 @@ func (it *lookup) query(n *node, reply chan<- []*node) {
 		// Remove the node from the local table if it fails to return anything useful too
 		// many times, but only if there are enough other nodes in the bucket.
 		dropped := false
-		if fails >= maxFindnodeFailures && it.tab.bucketLen(n.ID()) >= bucketSize/2 {
+		if fails >= maxFindnodeFailures {
 			dropped = true
-			it.tab.delete(n)
+			it.tab.trackFindFailure(n)
 		}
 		it.tab.log.Trace("FINDNODE failed", "id", n.ID(), "failcount", fails, "dropped", dropped, "err", err)
 	} else if fails > 0 {
