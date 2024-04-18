@@ -19,6 +19,7 @@ package bls
 import (
 	"bytes"
 	"fmt"
+
 	"math/big"
 	"time"
 

@@ -2,6 +2,9 @@ package vm
 
 import (
 	"fmt"
+
+	"github.com/holiman/uint256"
+
 	"math/big"
 	"time"
 
@@ -9,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 // Wrapper type which allows PrecompiledContract to be used as PrecompiledContractWithCtx
