@@ -16,6 +16,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 )
 
 func setupBeaconNetwork(addr string, bootNodes []*enode.Node) (*BeaconNetwork, error) {
@@ -216,5 +218,58 @@ func TestBeaconNetworkContent(t *testing.T) {
 		get3, err := node2.portalProtocol.Get(contentKey3, contentId3)
 		assert.NoError(t, err)
 		assert.Equal(t, vBytes3, get3)
+	}
+}
+
+type Entry struct {
+	ContentKey   string `yaml:"content_key"`
+	ContentValue string `yaml:"content_value"`
+}
+
+func TestGossipTwoNodes(t *testing.T) {
+	file, err := os.ReadFile("./testdata/hive/gossip.yaml")
+	require.NoError(t, err)
+	entries := make([]Entry, 0)
+	err = yaml.Unmarshal(file, &entries)
+	require.NoError(t, err)
+
+	keys := make([][]byte, 0)
+	values := make([][]byte, 0)
+
+	for _, entry := range entries {
+		keys = append(keys, hexutil.MustDecode(entry.ContentKey))
+		values = append(values, hexutil.MustDecode(entry.ContentValue))
+	}
+
+	logger := testlog.Logger(t, log.LvlTrace)
+	node1, err := setupBeaconNetwork(":6998", nil)
+	assert.NoError(t, err)
+	node1.log = logger
+	node1.portalProtocol.Log = logger
+	err = node1.Start()
+	assert.NoError(t, err)
+
+	node2, err := setupBeaconNetwork(":6999", nil)
+	assert.NoError(t, err)
+	node2.log = logger
+	node2.portalProtocol.Log = logger
+	err = node2.Start()
+	assert.NoError(t, err)
+
+	node2.portalProtocol.AddEnr(node1.portalProtocol.Self())
+
+	id := node2.portalProtocol.Self().ID()
+
+	num, err := node2.portalProtocol.Gossip(&id, keys, values)
+	require.NoError(t, err)
+	require.Equal(t, num, 1)
+
+	time.Sleep(time.Second * 10)
+
+	for i, key := range keys {
+		val := values[i]
+		res, err := node1.portalProtocol.Get(key, node1.portalProtocol.ToContentId(key))
+		require.NoError(t, err)
+		require.Equal(t, res, val)
 	}
 }

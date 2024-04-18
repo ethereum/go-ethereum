@@ -244,10 +244,7 @@ func (p *PortalProtocolAPI) AddEnr(enr string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
-	wn := wrapNode(n)
-	wn.livenessChecks++
-	p.portalProtocol.table.addVerifiedNode(wn)
+	p.portalProtocol.AddEnr(n)
 	return true, nil
 }
 
@@ -258,10 +255,7 @@ func (p *PortalProtocolAPI) AddEnrs(enrs []string) bool {
 		if err != nil {
 			continue
 		}
-
-		wn := wrapNode(n)
-		wn.livenessChecks++
-		p.portalProtocol.table.addVerifiedNode(wn)
+		p.portalProtocol.AddEnr(n)
 	}
 
 	return true

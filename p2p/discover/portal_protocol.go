@@ -88,6 +88,8 @@ var ErrNilContentKey = errors.New("content key cannot be nil")
 
 var ContentNotFound = storage.ErrContentNotFound
 
+var MaxDistance = hexutil.MustDecode("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+
 type ContentElement struct {
 	Node        enode.ID
 	ContentKeys [][]byte
@@ -263,6 +265,12 @@ func (p *PortalProtocol) RoutingTableInfo() [][]string {
 	}
 	p.Log.Trace("routingTableInfo resp:", "nodes", nodes)
 	return nodes
+}
+
+func (p *PortalProtocol) AddEnr(n *enode.Node) {
+	p.setJustSeen(n)
+	id := n.ID().String()
+	p.radiusCache.Set([]byte(id), MaxDistance)
 }
 
 func (p *PortalProtocol) setupUDPListening() error {
