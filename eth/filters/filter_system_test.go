@@ -628,11 +628,3 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 		}
 	}
 }
-
-func flattenLogs(pl [][]*types.Log) []*types.Log {
-	var logs []*types.Log
-	for _, l := range pl {
-		logs = append(logs, l...)
-	}
-	return logs
-}
