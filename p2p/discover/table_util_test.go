@@ -120,7 +120,7 @@ func fillTable(tab *Table, nodes []*node, setLive bool) {
 		tab.addSeenNode(n)
 	}
 }
-
+7
 type pingRecorder struct {
 	mu      sync.Mutex
 	cond    *sync.Cond
@@ -156,12 +156,6 @@ func (t *pingRecorder) updateRecord(n *enode.Node) {
 func (t *pingRecorder) Self() *enode.Node           { return nullNode }
 func (t *pingRecorder) lookupSelf() []*enode.Node   { return nil }
 func (t *pingRecorder) lookupRandom() []*enode.Node { return nil }
-
-func (t *pingRecorder) wasPinged(id enode.ID) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return slices.ContainsFunc(t.pinged, func(n *enode.Node) bool { return n.ID() == id })
-}
 
 func (t *pingRecorder) waitPing(timeout time.Duration) *enode.Node {
 	t.mu.Lock()

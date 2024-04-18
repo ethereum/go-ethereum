@@ -17,7 +17,6 @@
 package discover
 
 import (
-	"fmt"
 	"slices"
 	"time"
 
@@ -28,8 +27,8 @@ import (
 const never = ^mclock.AbsTime(0)
 
 type tableRevalidation struct {
-	newNodes  revalidationQueue
-	nodes     revalidationQueue
+	newNodes  revalidationList
+	nodes     revalidationList
 	activeReq map[enode.ID]struct{}
 }
 
@@ -43,14 +42,14 @@ type revalidationResponse struct {
 func (tr *tableRevalidation) init(cfg *Config) {
 	tr.activeReq = make(map[enode.ID]struct{})
 	tr.newNodes.nextTime = never
-	tr.newNodes.interval = cfg.PingInterval
+	tr.newNodes.interval = cfg.PingInterval / 3
 	tr.nodes.nextTime = never
 	tr.nodes.interval = cfg.PingInterval
 }
 
 // nodeAdded is called when the table receives a new node.
 func (tr *tableRevalidation) nodeAdded(tab *Table, n *node) {
-	tr.newNodes.push(n, tab.rand)
+	tr.newNodes.push(n, tab.cfg.Clock.Now(), tab.rand)
 }
 
 // nodeRemoved is called when a node was removed from the table.
@@ -71,11 +70,11 @@ func (tr *tableRevalidation) nextTime() mclock.AbsTime {
 func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) {
 	if n := tr.newNodes.get(now, tab.rand, tr.activeReq); n != nil {
 		tr.startRequest(tab, n, true)
-		tr.newNodes.schedule(tab.rand)
+		tr.newNodes.schedule(now, tab.rand)
 	}
 	if n := tr.nodes.get(now, tab.rand, tr.activeReq); n != nil {
 		tr.startRequest(tab, n, false)
-		tr.nodes.schedule(tab.rand)
+		tr.nodes.schedule(now, tab.rand)
 	}
 }
 
@@ -87,26 +86,33 @@ func (tr *tableRevalidation) startRequest(tab *Table, n *node, newNode bool) {
 	tr.activeReq[n.ID()] = struct{}{}
 	resp := revalidationResponse{n: n, isNewNode: newNode}
 
-	go func() {
-		// Ping the selected node and wait for a pong response.
-		remoteSeq, err := tab.net.ping(unwrapNode(n))
-		resp.didRespond = err == nil
+	// Fetch the node while holding lock.
+	tab.mutex.Lock()
+	node := n.Node
+	tab.mutex.Unlock()
 
-		// Also fetch record if the node replied and returned a higher sequence number.
-		if remoteSeq > n.Seq() {
-			newrec, err := tab.net.RequestENR(unwrapNode(n))
-			if err != nil {
-				tab.log.Debug("ENR request failed", "id", n.ID(), "addr", n.addr(), "err", err)
-			} else {
-				resp.newRecord = newrec
-			}
-		}
+	go tab.doRevalidate(resp, node)
+}
 
-		select {
-		case tab.revalidateResp <- resp:
-		case <-tab.closed:
+func (tab *Table) doRevalidate(resp revalidationResponse, node *enode.Node) {
+	// Ping the selected node and wait for a pong response.
+	remoteSeq, err := tab.net.ping(node)
+	resp.didRespond = err == nil
+
+	// Also fetch record if the node replied and returned a higher sequence number.
+	if remoteSeq > node.Seq() {
+		newrec, err := tab.net.RequestENR(node)
+		if err != nil {
+			tab.log.Debug("ENR request failed", "id", node.ID(), "err", err)
+		} else {
+			resp.newRecord = newrec
 		}
-	}()
+	}
+
+	select {
+	case tab.revalidateResp <- resp:
+	case <-tab.closed:
+	}
 }
 
 // handleResponse processes the result of a revalidation request.
@@ -143,7 +149,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	// Move node over to main queue after first validation.
 	if resp.isNewNode {
 		tr.newNodes.remove(n)
-		tr.nodes.push(n, tab.rand)
+		tr.nodes.push(n, tab.cfg.Clock.Now(), tab.rand)
 	}
 
 	// Store potential seeds in database.
@@ -152,15 +158,15 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	}
 }
 
-// revalidationQueue holds a list nodes and the next revalidation time.
-type revalidationQueue struct {
+// revalidationList holds a list nodes and the next revalidation time.
+type revalidationList struct {
 	nodes    []*node
 	nextTime mclock.AbsTime
 	interval time.Duration
 }
 
 // get returns a random node from the queue. Nodes in the 'exclude' map are not returned.
-func (rq *revalidationQueue) get(now mclock.AbsTime, rand randomSource, exclude map[enode.ID]struct{}) *node {
+func (rq *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude map[enode.ID]struct{}) *node {
 	if now < rq.nextTime || len(rq.nodes) == 0 {
 		return nil
 	}
@@ -174,18 +180,18 @@ func (rq *revalidationQueue) get(now mclock.AbsTime, rand randomSource, exclude 
 	return nil
 }
 
-func (rq *revalidationQueue) push(n *node, rand randomSource) {
+func (rq *revalidationList) push(n *node, now mclock.AbsTime, rand randomSource) {
 	rq.nodes = append(rq.nodes, n)
 	if rq.nextTime == never {
-		rq.schedule(rand)
+		rq.schedule(now, rand)
 	}
 }
 
-func (rq *revalidationQueue) schedule(rand randomSource) {
-	rq.nextTime = mclock.AbsTime(rand.Int63n(int64(rq.interval)))
+func (rq *revalidationList) schedule(now mclock.AbsTime, rand randomSource) {
+	rq.nextTime = now.Add(time.Duration(rand.Int63n(int64(rq.interval))))
 }
 
-func (rq *revalidationQueue) remove(n *node) bool {
+func (rq *revalidationList) remove(n *node) bool {
 	i := slices.Index(rq.nodes, n)
 	if i == -1 {
 		return false
@@ -195,10 +201,4 @@ func (rq *revalidationQueue) remove(n *node) bool {
 		rq.nextTime = never
 	}
 	return true
-}
-
-func printIDs(list []*node) {
-	for i, n := range list {
-		fmt.Println("   - ", i, n.ID())
-	}
 }

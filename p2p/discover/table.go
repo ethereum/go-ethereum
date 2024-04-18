@@ -435,7 +435,7 @@ func (tab *Table) loadSeedNodes() {
 			age := time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP()))
 			tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
 		}
-		tab.addSeenNode(seed)
+		tab.handleAddNode(addNodeRequest{node: seed, isLive: true})
 	}
 }
 
