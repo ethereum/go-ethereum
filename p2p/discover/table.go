@@ -510,7 +510,7 @@ func (tab *Table) handleAddNode(req addNodeRequest) {
 	}
 
 	// Add to bucket.
-	b.entries, _ = pushNode(b.entries, req.node, bucketSize)
+	b.entries = append(b.entries, req.node)
 	b.replacements = deleteNode(b.replacements, req.node)
 	req.node.addedAt = time.Now()
 	tab.nodeAdded(b, req.node)
