@@ -419,6 +419,8 @@ func (es *EventSystem) eventLoop() {
 			es.handleLogs(index, ev)
 		case ev := <-es.rmLogsCh:
 			es.handleLogs(index, ev.Logs)
+		case ev := <-es.chainCh:
+			es.handleChainEvent(index, ev)
 
 		case f := <-es.install:
 			index[f.typ][f.id] = f
