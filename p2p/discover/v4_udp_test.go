@@ -264,7 +264,7 @@ func TestUDPv4_findnode(t *testing.T) {
 		n := wrapNode(enode.NewV4(&key.PublicKey, ip, 0, 2000))
 		// Ensure half of table content isn't verified live yet.
 		if i > numCandidates/2 {
-			n.livenessChecks = 1
+			n.isValidatedLive = true
 			live[n.ID()] = true
 		}
 		nodes.push(n, numCandidates)

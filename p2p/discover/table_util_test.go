@@ -116,11 +116,12 @@ func fillTable(tab *Table, nodes []*node, setLive bool) {
 	for _, n := range nodes {
 		if setLive {
 			n.livenessChecks = 1
+			n.isValidatedLive = true
 		}
 		tab.addSeenNode(n)
 	}
 }
-7
+
 type pingRecorder struct {
 	mu      sync.Mutex
 	cond    *sync.Cond
