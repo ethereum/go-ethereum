@@ -251,6 +251,7 @@ type worker struct {
 	skipSealHook func(*task) bool                   // Method to decide whether skipping the sealing.
 	fullTaskHook func()                             // Method to call before pushing the full sealing task.
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
+	beforeTxHook func()                             // Method to call before processing a transaction.
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
@@ -1034,6 +1035,10 @@ func (w *worker) commitTransactions(txs types.OrderedTransactionSet, coinbase co
 	var loops int64
 loop:
 	for {
+		if w.beforeTxHook != nil {
+			w.beforeTxHook()
+		}
+
 		loops++
 		// In the following three cases, we will interrupt the execution of the transaction.
 		// (1) new head block event arrival, the interrupt signal is 1
@@ -1054,6 +1059,12 @@ loop:
 				}
 			}
 			return atomic.LoadInt32(interrupt) == commitInterruptNewHead, circuitCapacityReached
+		}
+		// seal block early if we're over time
+		// note: current.header.Time = max(parent.Time + cliquePeriod, now())
+		if w.current.tcount > 0 && w.chainConfig.Clique != nil && uint64(time.Now().Unix()) > w.current.header.Time {
+			circuitCapacityReached = true // skip subsequent invocations of commitTransactions
+			break
 		}
 		// If we don't have enough gas for any further transactions then we're done
 		if w.current.gasPool.Gas() < params.TxGas {
