@@ -240,12 +240,20 @@ func (bn *BeaconNetwork) processContentLoop(ctx context.Context) {
 				bn.log.Error("validate content failed", "err", err)
 				continue
 			}
-			gossippedNum, err := bn.portalProtocol.Gossip(&contentElement.Node, contentElement.ContentKeys, contentElement.Contents)
-			bn.log.Trace("gossippedNum", "gossippedNum", gossippedNum)
-			if err != nil {
-				bn.log.Error("gossip failed", "err", err)
-				continue
-			}
+			go func(ctx context.Context) {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					var gossippedNum int
+					gossippedNum, err = bn.portalProtocol.Gossip(&contentElement.Node, contentElement.ContentKeys, contentElement.Contents)
+					bn.log.Trace("gossippedNum", "gossippedNum", gossippedNum)
+					if err != nil {
+						bn.log.Error("gossip failed", "err", err)
+						return
+					}
+				}
+			}(ctx)
 		}
 	}
 }
