@@ -167,6 +167,7 @@ func (tab *Table) Nodes() [][]BucketNode {
 			nodes[i][j] = BucketNode{
 				Node:    n.Node,
 				Checks:  int(n.livenessChecks),
+				Live:    n.isValidatedLive,
 				AddedAt: n.addedAt,
 			}
 		}

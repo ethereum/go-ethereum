@@ -33,6 +33,7 @@ type BucketNode struct {
 	Node    *enode.Node `json:"node"`
 	AddedAt time.Time   `json:"added"`
 	Checks  int         `json:"checks"`
+	Live    bool        `json:"live"`
 }
 
 // node represents a host on the network.
