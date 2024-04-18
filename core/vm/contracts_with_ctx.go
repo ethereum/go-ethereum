@@ -7,9 +7,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // Wrapper type which allows PrecompiledContract to be used as PrecompiledContractWithCtx
@@ -45,10 +45,10 @@ func NewContext(caller common.Address, evm *EVM) *precompileContext {
 }
 
 var vmBlockCtx = BlockContext{
-	CanTransfer: func(db StateDB, addr common.Address, amount *big.Int) bool {
+	CanTransfer: func(db StateDB, addr common.Address, amount *uint256.Int) bool {
 		return db.GetBalance(addr).Cmp(amount) >= 0
 	},
-	Transfer: func(StateDB, common.Address, common.Address, *big.Int) {
+	Transfer: func(StateDB, common.Address, common.Address, *uint256.Int) {
 		panic("transfer: not implemented")
 	},
 	GetHash: func(u uint64) common.Hash {
@@ -90,10 +90,8 @@ func (c *mint) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 	}
 
 	mintTo := common.BytesToAddress(input[0:32])
-
-	var parsed bool
-	value, parsed := math.ParseBig256(hexutil.Encode(input[32:64]))
-	if !parsed {
+	value, err := uint256.FromHex(hexutil.Encode(input[32:64]))
+	if err != nil {
 		log.Error("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[32:64]))
 		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[32:64]))
 	}
@@ -124,9 +122,8 @@ func (c *burn) Run(input []byte, ctx *precompileContext) ([]byte, error) {
 
 	burnFrom := common.BytesToAddress(input[0:32])
 
-	var parsed bool
-	value, parsed := math.ParseBig256(hexutil.Encode(input[32:64]))
-	if !parsed {
+	value, err := uint256.FromHex(hexutil.Encode(input[32:64]))
+	if err != nil {
 		log.Error("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[32:64]))
 		return nil, fmt.Errorf("Error parsing transfer: unable to parse value from " + hexutil.Encode(input[32:64]))
 	}
