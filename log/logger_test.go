@@ -26,7 +26,7 @@ func TestLoggingWithVmodule(t *testing.T) {
 	logger.Trace("a message", "foo", "bar")
 	have := out.String()
 	// The timestamp is locale-dependent, so we want to trim that off
-	// "INFO [01-01|00:00:00.000] a messag ..." -> "a messag..."
+	// "INFO [01-01|00:00:00.000] a message ..." -> "a message..."
 	have = strings.Split(have, "]")[1]
 	want := " a message                                foo=bar\n"
 	if have != want {
@@ -42,7 +42,7 @@ func TestTerminalHandlerWithAttrs(t *testing.T) {
 	logger.Trace("a message", "foo", "bar")
 	have := out.String()
 	// The timestamp is locale-dependent, so we want to trim that off
-	// "INFO [01-01|00:00:00.000] a messag ..." -> "a messag..."
+	// "INFO [01-01|00:00:00.000] a message ..." -> "a message..."
 	have = strings.Split(have, "]")[1]
 	want := " a message                                baz=bat foo=bar\n"
 	if have != want {
