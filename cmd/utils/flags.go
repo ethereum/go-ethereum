@@ -544,7 +544,7 @@ var (
 		Usage:    "Name of tracer which should record internal VM operations (costly)",
 		Category: flags.VMCategory,
 	}
-	VMTraceConfigFlag = &cli.StringFlag{
+	VMTraceJsonConfigFlag = &cli.StringFlag{
 		Name:     "vmtrace.jsonconfig",
 		Usage:    "Tracer configuration (JSON)",
 		Category: flags.VMCategory,
@@ -1903,12 +1903,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
 			var config string
-			if ctx.IsSet(VMTraceConfigFlag.Name) {
-				config = ctx.String(VMTraceConfigFlag.Name)
+			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
+				config = ctx.String(VMTraceJsonConfigFlag.Name)
 			}
 
 			cfg.VMTrace = name
-			cfg.VMTraceConfig = config
+			cfg.VMTraceJsonConfig = config
 		}
 	}
 }
@@ -2192,8 +2192,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
 			var config json.RawMessage
-			if ctx.IsSet(VMTraceConfigFlag.Name) {
-				config = json.RawMessage(ctx.String(VMTraceConfigFlag.Name))
+			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
+				config = json.RawMessage(ctx.String(VMTraceJsonConfigFlag.Name))
 			}
 			t, err := tracers.LiveDirectory.New(name, config)
 			if err != nil {

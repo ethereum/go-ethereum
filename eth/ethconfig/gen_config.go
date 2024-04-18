@@ -51,7 +51,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
 		VMTrace                 string
-		VMTraceConfig           string
+		VMTraceJsonConfig       string
 		DocRoot                 string `toml:"-"`
 		RPCGasCap               uint64
 		RPCEVMTimeout           time.Duration
@@ -94,7 +94,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.VMTrace = c.VMTrace
-	enc.VMTraceConfig = c.VMTraceConfig
+	enc.VMTraceJsonConfig = c.VMTraceJsonConfig
 	enc.DocRoot = c.DocRoot
 	enc.RPCGasCap = c.RPCGasCap
 	enc.RPCEVMTimeout = c.RPCEVMTimeout
@@ -141,7 +141,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		VMTrace                 *string
-		VMTraceConfig           *string
+		VMTraceJsonConfig       *string
 		DocRoot                 *string `toml:"-"`
 		RPCGasCap               *uint64
 		RPCEVMTimeout           *time.Duration
@@ -255,8 +255,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.VMTrace != nil {
 		c.VMTrace = *dec.VMTrace
 	}
-	if dec.VMTraceConfig != nil {
-		c.VMTraceConfig = *dec.VMTraceConfig
+	if dec.VMTraceJsonConfig != nil {
+		c.VMTraceJsonConfig = *dec.VMTraceJsonConfig
 	}
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
