@@ -17,6 +17,7 @@
 package discover
 
 import (
+	"math"
 	"slices"
 	"time"
 
@@ -24,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-const never = ^mclock.AbsTime(0)
+const never = mclock.AbsTime(math.MaxInt64)
 
 type tableRevalidation struct {
 	newNodes  revalidationList
