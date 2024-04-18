@@ -214,7 +214,7 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {
 		return receipts
 	}
-	number := rawdb.ReadHeaderNumber(bc.db, hash)
+	number := rawdb.ReadHeaderNumber(bc.db.BlockStore(), hash)
 	if number == nil {
 		return nil
 	}

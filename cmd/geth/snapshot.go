@@ -545,6 +545,7 @@ func dumpState(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 	triedb := utils.MakeTrieDatabase(ctx, db, false, true, false)
 	defer triedb.Close()
 

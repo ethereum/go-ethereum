@@ -73,6 +73,12 @@ const (
 	initializingState = iota
 	runningState
 	closedState
+	blockDbCacheSize        = 256
+	blockDbHandlesMinSize   = 1000
+	blockDbHandlesMaxSize   = 2000
+	chainDbMemoryPercentage = 50
+	chainDbHandlesPercentage
+	diffStoreHandlesPercentage = 20
 )
 
 // New creates a new P2P node, ready for protocol registration.
@@ -740,21 +746,43 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 }
 
 func (n *Node) OpenAndMergeDatabase(name string, cache, handles int, ancient, namespace string, readonly bool) (ethdb.Database, error) {
-	chainDataHandles := handles
+	var (
+		err                error
+		stateDiskDb        ethdb.Database
+		blockDb            ethdb.Database
+		blockDbHandlesSize int
+		chainDataHandles   = handles
+		chainDbCache       = cache
+	)
 
-	var statediskdb ethdb.Database
-	var err error
+	isMultiDatabase := n.CheckIfMultiDataBase()
 	// Open the separated state database if the state directory exists
-	if n.IsSeparatedDB() {
-		// Allocate half of the  handles and cache to this separate state data database
-		statediskdb, err = n.OpenDatabaseWithFreezer(name+"/state", cache/2, chainDataHandles/2, "", "eth/db/statedata/", readonly)
+	if isMultiDatabase {
+		// Resource allocation rules:
+		// 1) Allocate a fixed percentage of memory for chainDb based on chainDbMemoryPercentage & chainDbHandlesPercentage.
+		// 2) Allocate a fixed size for blockDb based on blockDbCacheSize & blockDbHandlesSize.
+		// 3) Allocate the remaining resources to stateDb.
+		chainDbCache = int(float64(cache) * chainDbMemoryPercentage / 100)
+		chainDataHandles = int(float64(handles) * chainDbHandlesPercentage / 100)
+		if handles/10 > blockDbHandlesMaxSize {
+			blockDbHandlesSize = blockDbHandlesMaxSize
+		} else {
+			blockDbHandlesSize = blockDbHandlesMinSize
+		}
+		stateDbCache := cache - chainDbCache - blockDbCacheSize
+		stateDbHandles := handles - chainDataHandles - blockDbHandlesSize
+
+		// Allocate half of the  handles and chainDbCache to this separate state data database
+		stateDiskDb, err = n.OpenDatabaseWithFreezer(name+"/state", stateDbCache, stateDbHandles, "", "eth/db/statedata/", readonly)
 		if err != nil {
 			return nil, err
 		}
 
-		// Reduce the handles and cache to this separate database because it is not a complete database with no trie data storing in it.
-		cache = int(float64(cache) * 0.6)
-		chainDataHandles = int(float64(chainDataHandles) * 0.6)
+		blockDb, err = n.OpenDatabaseWithFreezer(name+"/block", blockDbCacheSize, blockDbHandlesSize, "", "eth/db/blockdata/", readonly)
+		if err != nil {
+			return nil, err
+		}
+		log.Warn("Multi-database is an experimental feature")
 	}
 
 	chainDB, err := n.OpenDatabaseWithFreezer(name, cache, chainDataHandles, ancient, namespace, readonly)
@@ -762,8 +790,9 @@ func (n *Node) OpenAndMergeDatabase(name string, cache, handles int, ancient, na
 		return nil, err
 	}
 
-	if statediskdb != nil {
-		chainDB.SetStateStore(statediskdb)
+	if isMultiDatabase {
+		chainDB.SetStateStore(stateDiskDb)
+		chainDB.SetBlockStore(blockDb)
 	}
 
 	return chainDB, nil
@@ -802,14 +831,31 @@ func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, ancient 
 	return db, err
 }
 
-// IsSeparatedDB check the state subdirectory of db, if subdirectory exists, return true
-func (n *Node) IsSeparatedDB() bool {
-	separateDir := filepath.Join(n.ResolvePath("chaindata"), "state")
-	fileInfo, err := os.Stat(separateDir)
-	if os.IsNotExist(err) {
-		return false
+// CheckIfMultiDataBase check the state and block subdirectory of db, if subdirectory exists, return true
+func (n *Node) CheckIfMultiDataBase() bool {
+	var (
+		stateExist = true
+		blockExist = true
+	)
+
+	separateStateDir := filepath.Join(n.ResolvePath("chaindata"), "state")
+	fileInfo, stateErr := os.Stat(separateStateDir)
+	if os.IsNotExist(stateErr) || !fileInfo.IsDir() {
+		stateExist = false
 	}
-	return fileInfo.IsDir()
+	separateBlockDir := filepath.Join(n.ResolvePath("chaindata"), "block")
+	blockFileInfo, blockErr := os.Stat(separateBlockDir)
+	if os.IsNotExist(blockErr) || !blockFileInfo.IsDir() {
+		blockExist = false
+	}
+
+	if stateExist && blockExist {
+		return true
+	} else if !stateExist && !blockExist {
+		return false
+	} else {
+		panic("data corruption! missing block or state dir.")
+	}
 }
 
 // ResolvePath returns the absolute path of a resource in the instance directory.

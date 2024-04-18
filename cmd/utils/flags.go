@@ -94,10 +94,10 @@ var (
 		Value:    flags.DirectoryString(node.DefaultDataDir()),
 		Category: flags.EthCategory,
 	}
-	SeparateDBFlag = &cli.BoolFlag{
-		Name: "separatedb",
-		Usage: "Enable a separated trie database, it will be created within a subdirectory called state, " +
-			"Users can copy this state directory to another directory or disk, and then create a symbolic link to the state directory under the chaindata",
+	MultiDataBaseFlag = &cli.BoolFlag{
+		Name: "multidatabase",
+		Usage: "Enable a separated state and block database, it will be created within two subdirectory called state and block, " +
+			"Users can copy this state or block directory to another directory or disk, and then create a symbolic link to the state directory under the chaindata",
 		Category: flags.EthCategory,
 	}
 	RemoteDBFlag = &cli.StringFlag{
@@ -980,7 +980,7 @@ var (
 		DBEngineFlag,
 		StateSchemeFlag,
 		HttpHeaderFlag,
-		SeparateDBFlag,
+		MultiDataBaseFlag,
 	}
 )
 
@@ -2078,9 +2078,11 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	default:
 		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly)
 		// set the separate state database
-		if stack.IsSeparatedDB() && err == nil {
+		if stack.CheckIfMultiDataBase() && err == nil {
 			stateDiskDb := MakeStateDataBase(ctx, stack, readonly, false)
 			chainDb.SetStateStore(stateDiskDb)
+			blockDb := MakeBlockDatabase(ctx, stack, readonly, false)
+			chainDb.SetBlockStore(blockDb)
 		}
 	}
 	if err != nil {
@@ -2092,12 +2094,23 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 // MakeStateDataBase open a separate state database using the flags passed to the client and will hard crash if it fails.
 func MakeStateDataBase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
 	cache := ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
-	handles := MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name)) / 2
+	handles := MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name)) * 90 / 100
 	statediskdb, err := stack.OpenDatabaseWithFreezer("chaindata/state", cache, handles, "", "", readonly)
 	if err != nil {
 		Fatalf("Failed to open separate trie database: %v", err)
 	}
 	return statediskdb
+}
+
+// MakeBlockDatabase open a separate block database using the flags passed to the client and will hard crash if it fails.
+func MakeBlockDatabase(ctx *cli.Context, stack *node.Node, readonly, disableFreeze bool) ethdb.Database {
+	cache := ctx.Int(CacheFlag.Name) * ctx.Int(CacheDatabaseFlag.Name) / 100
+	handles := MakeDatabaseHandles(ctx.Int(FDLimitFlag.Name)) / 10
+	blockDb, err := stack.OpenDatabaseWithFreezer("chaindata/block", cache, handles, "", "", readonly)
+	if err != nil {
+		Fatalf("Failed to open separate block database: %v", err)
+	}
+	return blockDb
 }
 
 // tryMakeReadOnlyDatabase try to open the chain database in read-only mode,
