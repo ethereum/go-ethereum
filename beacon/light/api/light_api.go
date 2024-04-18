@@ -460,35 +460,35 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 		defer wg.Done()
 
 		// Request initial data.
-		log.Debug("Requesting initial head header")
+		log.Trace("Requesting initial head header")
 		if head, _, _, err := api.GetHeader(common.Hash{}); err == nil {
-			log.Debug("Successfully retrieved initial head header", "slot", head.Slot, "hash", head.Hash())
+			log.Trace("Retrieved initial head header", "slot", head.Slot, "hash", head.Hash())
 			listener.OnNewHead(head.Slot, head.Hash())
 		} else {
 			log.Debug("Failed to retrieve initial head header", "error", err)
 		}
-		log.Debug("Requesting initial optimistic update")
+		log.Trace("Requesting initial optimistic update")
 		if optimisticUpdate, err := api.GetOptimisticUpdate(); err == nil {
-			log.Debug("Successfully retrieved initial optimistic update", "slot", optimisticUpdate.Attested.Slot, "hash", optimisticUpdate.Attested.Hash())
+			log.Trace("Retrieved initial optimistic update", "slot", optimisticUpdate.Attested.Slot, "hash", optimisticUpdate.Attested.Hash())
 			listener.OnOptimistic(optimisticUpdate)
 		} else {
 			log.Debug("Failed to retrieve initial optimistic update", "error", err)
 		}
-		log.Debug("Requesting initial finality update")
+		log.Trace("Requesting initial finality update")
 		if finalityUpdate, err := api.GetFinalityUpdate(); err == nil {
-			log.Debug("Successfully retrieved initial finality update", "slot", finalityUpdate.Finalized.Slot, "hash", finalityUpdate.Finalized.Hash())
+			log.Trace("Retrieved initial finality update", "slot", finalityUpdate.Finalized.Slot, "hash", finalityUpdate.Finalized.Hash())
 			listener.OnFinality(finalityUpdate)
 		} else {
 			log.Debug("Failed to retrieve initial finality update", "error", err)
 		}
 
-		log.Debug("Starting event stream processing loop")
+		log.Trace("Starting event stream processing loop")
 		// Receive the stream.
 		var stream *eventsource.Stream
 		select {
 		case stream = <-streamCh:
 		case <-ctx.Done():
-			log.Debug("Stopping event stream processing loop")
+			log.Trace("Stopping event stream processing loop")
 			return
 		}
 
@@ -499,10 +499,10 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 
 			case event, ok := <-stream.Events:
 				if !ok {
-					log.Debug("Event stream closed")
+					log.Trace("Event stream closed")
 					return
 				}
-				log.Debug("New event received from event stream", "type", event.Event())
+				log.Trace("New event received from event stream", "type", event.Event())
 				switch event.Event() {
 				case "head":
 					slot, blockRoot, err := decodeHeadEvent([]byte(event.Data()))
@@ -549,7 +549,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadEventListener) *eventsource.Stream {
 	for retry := true; retry; retry = ctxSleep(ctx, 5*time.Second) {
 		path := "/eth/v1/events?topics=head&topics=light_client_finality_update&topics=light_client_optimistic_update"
-		log.Debug("Sending event subscription request")
+		log.Trace("Sending event subscription request")
 		req, err := http.NewRequestWithContext(ctx, "GET", api.url+path, nil)
 		if err != nil {
 			listener.OnError(fmt.Errorf("error creating event subscription request: %v", err))
@@ -563,7 +563,7 @@ func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadE
 			listener.OnError(fmt.Errorf("error creating event subscription: %v", err))
 			continue
 		}
-		log.Debug("Successfully created event stream")
+		log.Trace("Successfully created event stream")
 		return stream
 	}
 	return nil
