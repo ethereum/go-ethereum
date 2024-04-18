@@ -309,7 +309,7 @@ func (tab *Table) addSeenNode(n *node) {
 	select {
 	case tab.addNodeCh <- req:
 		<-tab.addNodeHandled
-	case <-tab.closed:
+	case <-tab.closeReq:
 	}
 }
 
@@ -326,7 +326,7 @@ func (tab *Table) addVerifiedNode(n *node) {
 	select {
 	case tab.addNodeCh <- req:
 		<-tab.addNodeHandled
-	case <-tab.closed:
+	case <-tab.closeReq:
 	}
 }
 
