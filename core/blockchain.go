@@ -53,6 +53,7 @@ var (
 	headBlockGauge     = metrics.NewRegisteredGauge("chain/head/block", nil)
 	headHeaderGauge    = metrics.NewRegisteredGauge("chain/head/header", nil)
 	headFastBlockGauge = metrics.NewRegisteredGauge("chain/head/receipt", nil)
+	headTimeGapGauge   = metrics.NewRegisteredGauge("chain/head/timegap", nil)
 
 	l2BaseFeeGauge = metrics.NewRegisteredGauge("chain/fees/l2basefee", nil)
 
@@ -1254,6 +1255,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	} else {
 		l2BaseFeeGauge.Update(0)
 	}
+
+	parent := bc.GetHeaderByHash(block.ParentHash())
+	// block.Time is guaranteed to be larger than parent.Time,
+	// and the time gap should fit into int64.
+	gap := int64(block.Time() - parent.Time)
+	headTimeGapGauge.Update(gap)
 
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
