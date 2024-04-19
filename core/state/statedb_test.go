@@ -284,14 +284,14 @@ func TestCopyObjectState(t *testing.T) {
 	}
 	orig.Finalise(true)
 	cpy := orig.Copy()
-	for _, obj := range cpy.mutations {
-		if have, want := obj.applied, false; have != want {
+	for _, op := range cpy.mutations {
+		if have, want := op.applied, false; have != want {
 			t.Fatalf("Error in test itself, the 'done' flag should not be set before Commit, have %v want %v", have, want)
 		}
 	}
 	orig.Commit(0, true)
-	for _, obj := range cpy.mutations {
-		if have, want := obj.applied, false; have != want {
+	for _, op := range cpy.mutations {
+		if have, want := op.applied, false; have != want {
 			t.Fatalf("Error: original state affected copy, have %v want %v", have, want)
 		}
 	}

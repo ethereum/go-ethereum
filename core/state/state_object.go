@@ -66,8 +66,12 @@ type stateObject struct {
 	// account is still accessible in the scope of same transaction.
 	selfDestructed bool
 
-	// Flag whether the object was created in the current transaction
-	created bool
+	// This is an EIP-6780 flag indicating whether the object is eligible for
+	// self-destruct according to EIP-6780. The flag could be set either when
+	// the contract is just created within the current transaction, or when the
+	// object was previously existent and is being deployed as a contract within
+	// the current transaction.
+	newContract bool
 }
 
 // empty returns whether the account is considered empty.
@@ -242,6 +246,10 @@ func (s *stateObject) finalise(prefetch bool) {
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
 	}
+	// Revoke the flag at the end of the transaction. It finalizes the status
+	// of the newly-created object as it's no longer eligible for self-destruct
+	// by EIP-6780. For non-newly-created objects, it's a no-op.
+	s.newContract = false
 }
 
 // updateTrie is responsible for persisting cached storage changes into the
@@ -446,7 +454,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	obj.dirtyStorage = s.dirtyStorage.Copy()
 	obj.dirtyCode = s.dirtyCode
 	obj.selfDestructed = s.selfDestructed
-	obj.created = s.created
+	obj.newContract = s.newContract
 	return obj
 }
 

@@ -56,6 +56,10 @@ type mutation struct {
 	applied bool
 }
 
+func (m *mutation) copy() *mutation {
+	return &mutation{typ: m.typ, applied: m.applied}
+}
+
 func (m *mutation) isDelete() bool {
 	return m.typ == deletion
 }
@@ -497,7 +501,7 @@ func (s *StateDB) Selfdestruct6780(addr common.Address) {
 	if stateObject == nil {
 		return
 	}
-	if stateObject.created {
+	if stateObject.newContract {
 		s.SelfDestruct(addr)
 	}
 }
@@ -663,14 +667,14 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 }
 
 // CreateContract is used whenever a contract is created. This may be preceded
-// by CreateAccount, but that is not required if it already existed
-// in the state due to funds sent beforehand.
-// This operation sets the 'created'-flag, which is required in order to
+// by CreateAccount, but that is not required if it already existed in the
+// state due to funds sent beforehand.
+// This operation sets the 'newContract'-flag, which is required in order to
 // correctly handle EIP-6780 'delete-in-same-transaction' logic.
 func (s *StateDB) CreateContract(addr common.Address) {
 	obj := s.getStateObject(addr)
-	if !obj.created {
-		obj.created = true
+	if !obj.newContract {
+		obj.newContract = true
 		s.journal.append(createContractChange{account: addr})
 	}
 }
@@ -714,10 +718,9 @@ func (s *StateDB) Copy() *StateDB {
 		state.stateObjects[addr] = obj.deepCopy(state)
 	}
 	// Deep copy the object state markers.
-	for addr, m := range s.mutations {
-		state.mutations[addr] = &mutation{m.typ, m.applied}
+	for addr, op := range s.mutations {
+		state.mutations[addr] = op.copy()
 	}
-
 	// Deep copy the logs occurred in the scope of block
 	for hash, logs := range s.logs {
 		cpy := make([]*types.Log, len(logs))
@@ -812,7 +815,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			delete(s.accountsOrigin, obj.address) // Clear out any previously updated account data (may be recreated via a resurrect)
 			delete(s.storagesOrigin, obj.address) // Clear out any previously updated storage data (may be recreated via a resurrect)
 		} else {
-			obj.created = false
+			obj.newContract = false
 			obj.finalise(true) // Prefetch slots in the background
 			s.markUpdate(addr)
 		}
@@ -849,6 +852,20 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.prefetcher = nil
 		}()
 	}
+	// Although naively it makes sense to retrieve the account trie and then do
+	// the contract storage and account updates sequentially, that short circuits
+	// the account prefetcher. Instead, let's process all the storage updates
+	// first, giving the account prefetches just a few more milliseconds of time
+	// to pull useful data from disk.
+	for addr, op := range s.mutations {
+		if op.applied {
+			continue
+		}
+		if op.isDelete() {
+			continue
+		}
+		s.stateObjects[addr].updateRoot()
+	}
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
@@ -871,18 +888,16 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		usedAddrs    [][]byte
 		deletedAddrs []common.Address
 	)
-	for addr, mutation := range s.mutations {
-		if mutation.applied {
+	for addr, op := range s.mutations {
+		if op.applied {
 			continue
 		}
-		mutation.applied = true
+		op.applied = true
 
-		if mutation.isDelete() {
+		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
 		} else {
-			obj := s.stateObjects[addr]
-			obj.updateRoot()
-			s.updateStateObject(obj)
+			s.updateStateObject(s.stateObjects[addr])
 			s.AccountUpdated += 1
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
@@ -1137,8 +1152,8 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		return common.Hash{}, err
 	}
 	// Handle all state updates afterwards
-	for addr, mutation := range s.mutations {
-		if mutation.isDelete() {
+	for addr, op := range s.mutations {
+		if op.isDelete() {
 			continue
 		}
 		obj := s.stateObjects[addr]

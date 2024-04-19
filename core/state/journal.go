@@ -182,7 +182,7 @@ func (ch createObjectChange) copy() journalEntry {
 }
 
 func (ch createContractChange) revert(s *StateDB) {
-	s.stateObjects[ch.account].created = false
+	s.getStateObject(ch.account).newContract = false
 }
 
 func (ch createContractChange) dirtied() *common.Address {
