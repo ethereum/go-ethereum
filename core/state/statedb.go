@@ -815,7 +815,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			delete(s.accountsOrigin, obj.address) // Clear out any previously updated account data (may be recreated via a resurrect)
 			delete(s.storagesOrigin, obj.address) // Clear out any previously updated storage data (may be recreated via a resurrect)
 		} else {
-			obj.newContract = false
 			obj.finalise(true) // Prefetch slots in the background
 			s.markUpdate(addr)
 		}
