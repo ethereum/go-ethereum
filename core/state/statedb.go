@@ -133,7 +133,7 @@ type StateDB struct {
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
-	journal *journal
+	journal journal
 
 	// State witness if cross validation is needed
 	witness *stateless.Witness
@@ -177,7 +177,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		mutations:            make(map[common.Address]*mutation),
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
-		journal:              newJournal(),
+		journal:              newLinearJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 	}
@@ -726,8 +726,9 @@ func (s *StateDB) GetRefund() uint64 {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
-	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
-	for addr := range s.journal.dirties {
+	dirties := s.journal.dirtyAccounts()
+	addressesToPrefetch := make([]common.Address, 0, len(dirties))
+	for _, addr := range dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			// ripeMD is 'touched' at block 1714175, in tx 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2
