@@ -17,7 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func setupBeaconNetwork(addr string, bootNodes []*enode.Node) (*BeaconNetwork, error) {
