@@ -32,33 +32,36 @@ type revision struct {
 	journalIndex int
 }
 
-// journalEntry is a modification entry in the state change journal that can be
+// journalEntry is a modification entry in the state change linear journal that can be
 // reverted on demand.
 type journalEntry interface {
-	// revert undoes the changes introduced by this journal entry.
+	// revert undoes the changes introduced by this entry.
 	revert(*StateDB)
 
-	// dirtied returns the Ethereum address modified by this journal entry.
+	// dirtied returns the Ethereum address modified by this entry.
 	dirtied() *common.Address
 
-	// copy returns a deep-copied journal entry.
+	// copy returns a deep-copied entry.
 	copy() journalEntry
 }
 
-// journal contains the list of state modifications applied since the last state
+// linearJournal contains the list of state modifications applied since the last state
 // commit. These are tracked to be able to be reverted in the case of an execution
 // exception or request for reversal.
-type journal struct {
-	entries []journalEntry         // Current changes tracked by the journal
+type linearJournal struct {
+	entries []journalEntry         // Current changes tracked by the linearJournal
 	dirties map[common.Address]int // Dirty accounts and the number of changes
 
 	validRevisions []revision
 	nextRevisionId int
 }
 
-// newJournal creates a new initialized journal.
-func newJournal() *journal {
-	return &journal{
+// compile-time interface check
+var _ journal = (*linearJournal)(nil)
+
+// newLinearJournal creates a new initialized linearJournal.
+func newLinearJournal() *linearJournal {
+	return &linearJournal{
 		dirties: make(map[common.Address]int),
 	}
 }
@@ -66,15 +69,24 @@ func newJournal() *journal {
 // reset clears the journal, after this operation the journal can be used anew.
 // It is semantically similar to calling 'newJournal', but the underlying slices
 // can be reused.
-func (j *journal) reset() {
+func (j *linearJournal) reset() {
 	j.entries = j.entries[:0]
 	j.validRevisions = j.validRevisions[:0]
 	clear(j.dirties)
 	j.nextRevisionId = 0
 }
 
+func (j linearJournal) dirtyAccounts() []common.Address {
+	dirty := make([]common.Address, 0, len(j.dirties))
+	// flatten into list
+	for addr := range j.dirties {
+		dirty = append(dirty, addr)
+	}
+	return dirty
+}
+
 // snapshot returns an identifier for the current revision of the state.
-func (j *journal) snapshot() int {
+func (j *linearJournal) snapshot() int {
 	id := j.nextRevisionId
 	j.nextRevisionId++
 	j.validRevisions = append(j.validRevisions, revision{id, j.length()})
@@ -82,23 +94,23 @@ func (j *journal) snapshot() int {
 }
 
 // revertToSnapshot reverts all state changes made since the given revision.
-func (j *journal) revertToSnapshot(revid int, s *StateDB) {
+func (j *linearJournal) revertToSnapshot(revid int, s *StateDB) {
 	// Find the snapshot in the stack of valid snapshots.
 	idx := sort.Search(len(j.validRevisions), func(i int) bool {
 		return j.validRevisions[i].id >= revid
 	})
 	if idx == len(j.validRevisions) || j.validRevisions[idx].id != revid {
-		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
+		panic(fmt.Errorf("revision id %v cannot be reverted (valid revisions: %d)", revid, len(j.validRevisions)))
 	}
 	snapshot := j.validRevisions[idx].journalIndex
 
-	// Replay the journal to undo changes and remove invalidated snapshots
+	// Replay the linearJournal to undo changes and remove invalidated snapshots
 	j.revert(s, snapshot)
 	j.validRevisions = j.validRevisions[:idx]
 }
 
-// append inserts a new modification entry to the end of the change journal.
-func (j *journal) append(entry journalEntry) {
+// append inserts a new modification entry to the end of the change linearJournal.
+func (j *linearJournal) append(entry journalEntry) {
 	j.entries = append(j.entries, entry)
 	if addr := entry.dirtied(); addr != nil {
 		j.dirties[*addr]++
@@ -107,7 +119,7 @@ func (j *journal) append(entry journalEntry) {
 
 // revert undoes a batch of journalled modifications along with any reverted
 // dirty handling too.
-func (j *journal) revert(statedb *StateDB, snapshot int) {
+func (j *linearJournal) revert(statedb *StateDB, snapshot int) {
 	for i := len(j.entries) - 1; i >= snapshot; i-- {
 		// Undo the changes made by the operation
 		j.entries[i].revert(statedb)
@@ -125,22 +137,22 @@ func (j *journal) revert(statedb *StateDB, snapshot int) {
 // dirty explicitly sets an address to dirty, even if the change entries would
 // otherwise suggest it as clean. This method is an ugly hack to handle the RIPEMD
 // precompile consensus exception.
-func (j *journal) dirty(addr common.Address) {
+func (j *linearJournal) dirty(addr common.Address) {
 	j.dirties[addr]++
 }
 
-// length returns the current number of entries in the journal.
-func (j *journal) length() int {
+// length returns the current number of entries in the linearJournal.
+func (j *linearJournal) length() int {
 	return len(j.entries)
 }
 
 // copy returns a deep-copied journal.
-func (j *journal) copy() *journal {
+func (j *linearJournal) copy() journal {
 	entries := make([]journalEntry, 0, j.length())
 	for i := 0; i < j.length(); i++ {
 		entries = append(entries, j.entries[i].copy())
 	}
-	return &journal{
+	return &linearJournal{
 		entries:        entries,
 		dirties:        maps.Clone(j.dirties),
 		validRevisions: slices.Clone(j.validRevisions),
@@ -148,23 +160,23 @@ func (j *journal) copy() *journal {
 	}
 }
 
-func (j *journal) logChange(txHash common.Hash) {
+func (j *linearJournal) logChange(txHash common.Hash) {
 	j.append(addLogChange{txhash: txHash})
 }
 
-func (j *journal) createObject(addr common.Address) {
+func (j *linearJournal) createObject(addr common.Address) {
 	j.append(createObjectChange{account: addr})
 }
 
-func (j *journal) createContract(addr common.Address) {
+func (j *linearJournal) createContract(addr common.Address) {
 	j.append(createContractChange{account: addr})
 }
 
-func (j *journal) destruct(addr common.Address) {
+func (j *linearJournal) destruct(addr common.Address) {
 	j.append(selfDestructChange{account: addr})
 }
 
-func (j *journal) storageChange(addr common.Address, key, prev, origin common.Hash) {
+func (j *linearJournal) storageChange(addr common.Address, key, prev, origin common.Hash) {
 	j.append(storageChange{
 		account:   addr,
 		key:       key,
@@ -173,7 +185,7 @@ func (j *journal) storageChange(addr common.Address, key, prev, origin common.Ha
 	})
 }
 
-func (j *journal) transientStateChange(addr common.Address, key, prev common.Hash) {
+func (j *linearJournal) transientStateChange(addr common.Address, key, prev common.Hash) {
 	j.append(transientStorageChange{
 		account:  addr,
 		key:      key,
@@ -181,29 +193,29 @@ func (j *journal) transientStateChange(addr common.Address, key, prev common.Has
 	})
 }
 
-func (j *journal) refundChange(previous uint64) {
+func (j *linearJournal) refundChange(previous uint64) {
 	j.append(refundChange{prev: previous})
 }
 
-func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
+func (j *linearJournal) balanceChange(addr common.Address, previous *uint256.Int) {
 	j.append(balanceChange{
 		account: addr,
 		prev:    previous.Clone(),
 	})
 }
 
-func (j *journal) setCode(address common.Address) {
+func (j *linearJournal) setCode(address common.Address) {
 	j.append(codeChange{account: address})
 }
 
-func (j *journal) nonceChange(address common.Address, prev uint64) {
+func (j *linearJournal) nonceChange(address common.Address, prev uint64) {
 	j.append(nonceChange{
 		account: address,
 		prev:    prev,
 	})
 }
 
-func (j *journal) touchChange(address common.Address) {
+func (j *linearJournal) touchChange(address common.Address) {
 	j.append(touchChange{
 		account: address,
 	})
@@ -214,11 +226,11 @@ func (j *journal) touchChange(address common.Address) {
 	}
 }
 
-func (j *journal) accessListAddAccount(addr common.Address) {
+func (j *linearJournal) accessListAddAccount(addr common.Address) {
 	j.append(accessListAddAccountChange{addr})
 }
 
-func (j *journal) accessListAddSlot(addr common.Address, slot common.Hash) {
+func (j *linearJournal) accessListAddSlot(addr common.Address, slot common.Hash) {
 	j.append(accessListAddSlotChange{
 		address: addr,
 		slot:    slot,
@@ -231,7 +243,7 @@ type (
 		account common.Address
 	}
 	// createContractChange represents an account becoming a contract-account.
-	// This event happens prior to executing initcode. The journal-event simply
+	// This event happens prior to executing initcode. The linearJournal-event simply
 	// manages the created-flag, in order to allow same-tx destruction.
 	createContractChange struct {
 		account common.Address
@@ -457,7 +469,7 @@ func (ch addLogChange) copy() journalEntry {
 func (ch accessListAddAccountChange) revert(s *StateDB) {
 	/*
 		One important invariant here, is that whenever a (addr, slot) is added, if the
-		addr is not already present, the add causes two journal entries:
+		addr is not already present, the add causes two linearJournal entries:
 		- one for the address,
 		- one for the (address,slot)
 		Therefore, when unrolling the change, we can always blindly delete the
