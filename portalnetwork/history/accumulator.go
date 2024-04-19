@@ -148,6 +148,9 @@ func BuildProof(header types.Header, epochAccumulator EpochAccumulator) (Accumul
 	// maybe the calculation of index should impl in ssz
 	proofIndex := epochSize*2 + index*2
 	sszProof, err := tree.Prove(int(proofIndex))
+	if err != nil {
+		return nil, err
+	}
 	// the epoch hash root has mix in with epochsize, so we have to add it to proof
 	hashes := sszProof.Hashes
 	sizeBytes := make([]byte, 32)

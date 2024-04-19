@@ -15,7 +15,7 @@ import (
 const nodeDataDir = "./"
 
 func clearNodeData() {
-	os.Remove(fmt.Sprintf("%s%s", nodeDataDir, sqliteName))
+	_ = os.Remove(fmt.Sprintf("%s%s", nodeDataDir, sqliteName))
 }
 
 func genBytes(length int) []byte {
@@ -28,7 +28,7 @@ func genBytes(length int) []byte {
 
 func TestBasicStorage(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := newContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(math.MaxUint32, zeroNodeId, nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -64,7 +64,7 @@ func TestBasicStorage(t *testing.T) {
 
 func TestDBSize(t *testing.T) {
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := newContentStorage(math.MaxUint32, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(math.MaxUint32, zeroNodeId, nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -125,7 +125,7 @@ func TestDBPruning(t *testing.T) {
 	storageCapacity := uint64(100_000)
 
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := newContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(storageCapacity, zeroNodeId, nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -192,7 +192,7 @@ func TestGetLargestDistance(t *testing.T) {
 	storageCapacity := uint64(100_000)
 
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := newContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(storageCapacity, zeroNodeId, nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()
@@ -217,7 +217,7 @@ func TestSimpleForcePruning(t *testing.T) {
 	storageCapacity := uint64(100_000)
 
 	zeroNodeId := uint256.NewInt(0).Bytes32()
-	storage, err := newContentStorage(storageCapacity, enode.ID(zeroNodeId), nodeDataDir)
+	storage, err := newContentStorage(storageCapacity, zeroNodeId, nodeDataDir)
 	assert.NoError(t, err)
 	defer clearNodeData()
 	defer storage.Close()

@@ -165,7 +165,7 @@ func (h *HistoryNetwork) GetBlockBody(blockHash []byte) (*types.Body, error) {
 	res, err := h.portalProtocol.Get(contentKey, contentId)
 	// other error
 	// TODO maybe use nil res to replace the ErrContentNotFound
-	if err != nil && err != storage.ErrContentNotFound {
+	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
 		return nil, err
 	}
 	// no error
@@ -215,7 +215,7 @@ func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error)
 
 	res, err := h.portalProtocol.Get(contentKey, contentId)
 	// other error
-	if err != nil && err != storage.ErrContentNotFound {
+	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
 		return nil, err
 	}
 	// no error
@@ -256,7 +256,7 @@ func (h *HistoryNetwork) GetEpochAccumulator(epochHash []byte) (*EpochAccumulato
 
 	res, err := h.portalProtocol.Get(contentKey, contentId)
 	// other error
-	if err != nil && err != storage.ErrContentNotFound {
+	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
 		return nil, err
 	}
 	// no error

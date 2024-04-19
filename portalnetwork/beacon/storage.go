@@ -135,17 +135,25 @@ func (bs *BeaconStorage) getLcUpdateValueByRange(start, end uint64) ([]byte, err
 		return nil, err
 	}
 	hasData := false
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			bs.log.Error("failed to close rows", "err", err)
+		}
+	}(rows)
 	for rows.Next() {
 		hasData = true
 		var val []byte
-		err := rows.Scan(&val)
+		err = rows.Scan(&val)
 		if err != nil {
 			return nil, err
 		}
 		update := new(ForkedLightClientUpdate)
 		dec := codec.NewDecodingReader(bytes.NewReader(val), uint64(len(val)))
-		update.Deserialize(bs.spec, dec)
+		err = update.Deserialize(bs.spec, dec)
+		if err != nil {
+			return nil, err
+		}
 		lightClientUpdateRange = append(lightClientUpdateRange, *update)
 	}
 	if !hasData {

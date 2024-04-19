@@ -1270,7 +1270,7 @@ func (p *PortalProtocol) lookupSelf() []*enode.Node {
 
 func (p *PortalProtocol) newRandomLookup(ctx context.Context) *lookup {
 	var target enode.ID
-	crand.Read(target[:])
+	_, _ = crand.Read(target[:])
 	return p.newLookup(ctx, target)
 }
 
@@ -1395,7 +1395,7 @@ func (p *PortalProtocol) ResolveNodeId(id enode.ID) *enode.Node {
 	}
 
 	// Otherwise do a network lookup.
-	result := p.Lookup(n.ID())
+	result := p.Lookup(id)
 	for _, rn := range result {
 		if rn.ID() == id {
 			if n != nil && rn.Seq() <= n.Seq() {

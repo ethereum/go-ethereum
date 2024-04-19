@@ -457,7 +457,7 @@ func parseDataForBlock14764013() (map[string]contentEntry, error) {
 	}
 
 	contentMap := make(map[string]map[string]string)
-	json.Unmarshal(content, &contentMap)
+	_ = json.Unmarshal(content, &contentMap)
 	res := make(map[string]contentEntry)
 	for key, val := range contentMap {
 		entry := contentEntry{}

@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
-	sqlite3 "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 	containSql                 = "SELECT 1 FROM kvstore WHERE key = (?1);"
 	getAllOrderedByDistanceSql = "SELECT key, length(value), xor(key, (?1)) as distance FROM kvstore ORDER BY distance DESC;"
 	deleteOutOfRadiusStmt      = "DELETE FROM kvstore WHERE greater(xor(key, (?1)), (?2)) = 1"
-	XOR_FIND_FARTHEST_QUERY    = `SELECT
+	XorFindFarthestQuery       = `SELECT
 		xor(key, (?1)) as distance
 		FROM kvstore
 		ORDER BY distance DESC`
@@ -148,7 +148,7 @@ func createDir(dir string) error {
 func (p *ContentStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
 	var res []byte
 	err := p.getStmt.QueryRow(contentId).Scan(&res)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrContentNotFound
 	}
 	return res, err
@@ -208,10 +208,22 @@ func (p *ContentStorage) put(contentId []byte, content []byte) PutResult {
 }
 
 func (p *ContentStorage) Close() error {
-	p.getStmt.Close()
-	p.putStmt.Close()
-	p.delStmt.Close()
-	p.containStmt.Close()
+	err := p.getStmt.Close()
+	if err != nil {
+		return err
+	}
+	err = p.putStmt.Close()
+	if err != nil {
+		return err
+	}
+	err = p.delStmt.Close()
+	if err != nil {
+		return err
+	}
+	err = p.containStmt.Close()
+	if err != nil {
+		return err
+	}
 	return p.sqliteDB.Close()
 }
 
@@ -220,7 +232,12 @@ func (p *ContentStorage) createTable() error {
 	if err != nil {
 		return err
 	}
-	defer stat.Close()
+	defer func(stat *sql.Stmt) {
+		err = stat.Close()
+		if err != nil {
+			p.log.Error("failed to close statement", "err", err)
+		}
+	}(stat)
 	_, err = stat.Exec()
 	return err
 }
@@ -301,7 +318,7 @@ func (p *ContentStorage) queryRowUint64(sql string) (uint64, error) {
 
 // GetLargestDistance find the largest distance
 func (p *ContentStorage) GetLargestDistance() (*uint256.Int, error) {
-	stmt, err := p.sqliteDB.Prepare(XOR_FIND_FARTHEST_QUERY)
+	stmt, err := p.sqliteDB.Prepare(XorFindFarthestQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +373,12 @@ func (p *ContentStorage) deleteContentFraction(fraction float64) (deleteCount in
 	if err != nil {
 		return deleteCount, err
 	}
-	defer rows.Close()
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			p.log.Error("failed to close rows", "err", err)
+		}
+	}(rows)
 	idsToDelete := make([][]byte, 0)
 	for deleteBytes < int(bytesToDelete) && rows.Next() {
 		var contentId []byte
@@ -376,7 +398,10 @@ func (p *ContentStorage) deleteContentFraction(fraction float64) (deleteCount in
 	}
 	// row must close first, or database is locked
 	// rows.Close() can call multi times
-	rows.Close()
+	err = rows.Close()
+	if err != nil {
+		return 0, err
+	}
 	err = p.batchDel(idsToDelete)
 	return
 }
@@ -407,6 +432,9 @@ func (p *ContentStorage) ReclaimSpace() error {
 
 func (p *ContentStorage) deleteContentOutOfRadius(radius *uint256.Int) error {
 	res, err := p.sqliteDB.Exec(deleteOutOfRadiusStmt, p.nodeId[:], radius.Bytes())
+	if err != nil {
+		return err
+	}
 	count, _ := res.RowsAffected()
 	p.log.Trace("delete %d items", count)
 	return err

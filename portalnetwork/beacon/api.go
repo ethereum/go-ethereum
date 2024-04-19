@@ -64,8 +64,8 @@ func (p *API) BeaconGossip(contentKeyHex, contentHex string) (int, error) {
 	return p.Gossip(contentKeyHex, contentHex)
 }
 
-func (p *API) BeaconTraceRecursiveFindContent(contentKeyHex string) {
-	p.TraceRecursiveFindContent(contentKeyHex)
+func (p *API) BeaconTraceRecursiveFindContent(contentKeyHex string) (*discover.TraceContentResult, error) {
+	return p.TraceRecursiveFindContent(contentKeyHex)
 }
 
 func NewBeaconNetworkAPI(BeaconAPI *discover.PortalProtocolAPI) *API {

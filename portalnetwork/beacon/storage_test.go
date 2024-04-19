@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
-	"github.com/ethereum/go-ethereum/portalnetwork/utils"
 	"github.com/holiman/uint256"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/protolambda/zrnt/eth2/configs"
@@ -55,7 +54,10 @@ func TestGetAndPut(t *testing.T) {
 }
 
 func genStorage(testDir string) (storage.ContentStorage, error) {
-	utils.EnsureDir(testDir)
+	err := os.MkdirAll(testDir, 0755)
+	if err != nil {
+		return nil, err
+	}
 	db, err := sql.Open("sqlite3", path.Join(testDir, dbName))
 	if err != nil {
 		return nil, err

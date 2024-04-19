@@ -58,7 +58,7 @@ func (p *BlockHeaderProof) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(p)
 }
 
-func (p *BlockHeaderProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+func (p *BlockHeaderProof) MarshalSSZTo(_ []byte) (dst []byte, err error) {
 	return ssz.MarshalSSZ(p)
 }
 
@@ -83,7 +83,7 @@ func (p *BlockHeaderProof) UnmarshalSSZ(buf []byte) (err error) {
 		proof[i] = proofBytes[i*32 : (i+1)*32]
 	}
 
-	p.Proof = AccumulatorProof(proof)
+	p.Proof = proof
 	return
 }
 
@@ -103,7 +103,7 @@ func (p *BlockHeaderProof) SizeSSZ() (size int) {
 	return size
 }
 
-func (p *BlockHeaderProof) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+func (p *BlockHeaderProof) HashTreeRootWith(_ ssz.HashWalker) (err error) {
 	panic("implement me")
 }
 
@@ -142,7 +142,7 @@ func (p *PortalReceipts) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the PortalReceipts object
+// UnmarshalSSZ ssz unmarshal the PortalReceipts object
 func (p *PortalReceipts) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
@@ -187,6 +187,6 @@ func (p *PortalReceipts) SizeSSZ() (size int) {
 }
 
 // HashTreeRootWith ssz hashes the PortalReceipts object with a hasher
-func (p *PortalReceipts) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+func (p *PortalReceipts) HashTreeRootWith(_ ssz.HashWalker) (err error) {
 	panic("implement me")
 }
