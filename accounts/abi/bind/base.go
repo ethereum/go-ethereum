@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-const basefeeWiggleMultiplier = 2
+const baseFeeWiggleMultiplier = 2
 
 var (
 	errNoEventSignature       = errors.New("no event signature")
@@ -279,7 +279,7 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 	if gasFeeCap == nil {
 		gasFeeCap = new(big.Int).Add(
 			gasTipCap,
-			new(big.Int).Mul(head.BaseFee, big.NewInt(basefeeWiggleMultiplier)),
+			new(big.Int).Mul(head.BaseFee, big.NewInt(baseFeeWiggleMultiplier)),
 		)
 	}
 	if gasFeeCap.Cmp(gasTipCap) < 0 {
