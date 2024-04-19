@@ -657,7 +657,7 @@ func (api *ConsensusAPI) delayPayloadImport(block *types.Block) engine.PayloadSt
 	api.remoteBlocks.put(block.Hash(), block.Header())
 
 	// Although we don't want to trigger a sync, if there is one already in
-	// progress, try to extend if with the current payload request to relieve
+	// progress, try to extend it with the current payload request to relieve
 	// some strain from the forkchoice update.
 	err := api.eth.Downloader().BeaconExtend(api.eth.SyncMode(), block.Header())
 	if err == nil {
