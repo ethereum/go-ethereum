@@ -375,6 +375,16 @@ func TypedDataAndHash(typedData TypedData) ([]byte, string, error) {
 	return crypto.Keccak256([]byte(rawData)), rawData, nil
 }
 
+// WeakHashStruct generates a keccak256 hash of the encoding of the provided data
+// WeakHashStruct use WeakEncodeData to encodeData, in which it will encode non-provided struct params with zerohash
+func (typedData *TypedData) WeakHashStruct(primaryType string, data TypedDataMessage) (hexutil.Bytes, error) {
+	encodedData, err := typedData.WeakEncodeData(primaryType, data, 1)
+	if err != nil {
+		return nil, err
+	}
+	return crypto.Keccak256(encodedData), nil
+}
+
 // HashStruct generates a keccak256 hash of the encoding of the provided data
 func (typedData *TypedData) HashStruct(primaryType string, data TypedDataMessage) (hexutil.Bytes, error) {
 	encodedData, err := typedData.EncodeData(primaryType, data, 1)
@@ -444,7 +454,21 @@ func (typedData *TypedData) TypeHash(primaryType string) hexutil.Bytes {
 // `enc(value₁) ‖ enc(value₂) ‖ … ‖ enc(valueₙ)`
 //
 // each encoded member is 32-byte long
+// Will encode missing params with zerohash instead of throwing error
+// This behavior is to match Browser's eth_signTypedData_v4
+func (typedData *TypedData) WeakEncodeData(primaryType string, data map[string]interface{}, depth int) (hexutil.Bytes, error) {
+	return typedData.encodeData(primaryType, data, depth, true)
+}
+
+// EncodeData generates the following encoding:
+// `enc(value₁) ‖ enc(value₂) ‖ … ‖ enc(valueₙ)`
+//
+// each encoded member is 32-byte long
 func (typedData *TypedData) EncodeData(primaryType string, data map[string]interface{}, depth int) (hexutil.Bytes, error) {
+	return typedData.encodeData(primaryType, data, depth, false)
+}
+
+func (typedData *TypedData) encodeData(primaryType string, data map[string]interface{}, depth int, weakVerify bool) (hexutil.Bytes, error) {
 	if err := typedData.validate(); err != nil {
 		return nil, err
 	}
@@ -477,7 +501,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 					if !ok {
 						return nil, dataMismatchError(parsedType, item)
 					}
-					encodedData, err := typedData.EncodeData(parsedType, mapValue, depth+1)
+					encodedData, err := typedData.encodeData(parsedType, mapValue, depth+1, weakVerify)
 					if err != nil {
 						return nil, err
 					}
@@ -493,7 +517,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 			buffer.Write(crypto.Keccak256(arrayBuffer.Bytes()))
 		} else if typedData.Types[field.Type] != nil {
-			if encValue == nil {
+			if encValue == nil && weakVerify {
 				buffer.Write(common.Hash{}.Bytes())
 				continue
 			}
@@ -501,7 +525,7 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
 			}
-			encodedData, err := typedData.EncodeData(field.Type, mapValue, depth+1)
+			encodedData, err := typedData.encodeData(field.Type, mapValue, depth+1, weakVerify)
 			if err != nil {
 				return nil, err
 			}

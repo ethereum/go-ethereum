@@ -359,15 +359,15 @@ func TestEncodeData(t *testing.T) {
 	}
 }
 
-func TestEncodeDataWithMissingParams(t *testing.T) {
+func TestWeakEncodeData(t *testing.T) {
 	t.Parallel()
-	hash, err := typedData.EncodeData(typedDataWithMissing.PrimaryType, typedDataWithMissing.Message, 0)
+	hash, err := typedData.WeakEncodeData(typedDataWithMissing.PrimaryType, typedDataWithMissing.Message, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	dataEncoding := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
 	if dataEncoding != "0xa0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac20000000000000000000000000000000000000000000000000000000000000000cd54f074a4af31b4411ff6a60c9719dbd559c221c8ac3492d9d872b041d703d1b5aadf3154a261abdd9086fc627b61efca26ae5702701d05cd2305f7c52a2fc8" {
-		t.Errorf("Expected different encodeData result (got %s)", dataEncoding)
+		t.Errorf("Expected different weakEncodeData result (got %s)", dataEncoding)
 	}
 }
 
