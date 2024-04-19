@@ -155,7 +155,8 @@ var DefaultConfig = Config{
 	AccountQueue: 64,
 	GlobalQueue:  1024,
 
-	Lifetime: 3 * time.Hour,
+	Lifetime:            3 * time.Hour,
+	AllowUnprotectedTxs: false,
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -601,7 +602,8 @@ func (pool *LegacyPool) local() map[common.Address]types.Transactions {
 // and does not require the pool mutex to be held.
 func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, local bool) error {
 	opts := &txpool.ValidationOptions{
-		Config: pool.chainconfig,
+		Config:              pool.chainconfig,
+		AllowUnprotectedTxs: pool.config.AllowUnprotectedTxs,
 		Accept: 0 |
 			1<<types.LegacyTxType |
 			1<<types.AccessListTxType |
@@ -671,6 +673,11 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 		knownTxMeter.Mark(1)
 		return false, txpool.ErrAlreadyKnown
 	}
+
+	if pool.config.AllowUnprotectedTxs {
+		pool.signer = types.NewFakeSigner(tx.ChainId())
+	}
+
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
 	isLocal := local || pool.locals.containsTx(tx)
@@ -984,6 +991,11 @@ func (pool *LegacyPool) Add(txs []*types.Transaction, local, sync bool) []error 
 			knownTxMeter.Mark(1)
 			continue
 		}
+
+		if pool.config.AllowUnprotectedTxs {
+			pool.signer = types.NewFakeSigner(tx.ChainId())
+		}
+
 		// Exclude transactions with basic errors, e.g invalid signatures and
 		// insufficient intrinsic gas as soon as possible and cache senders
 		// in transactions before obtaining lock
