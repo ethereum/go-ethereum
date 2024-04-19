@@ -213,6 +213,7 @@ func (tc *TestCommitteeChain) ExpNextSyncPeriod(t *testing.T, expNsp uint64) {
 type TestHeadTracker struct {
 	phead     types.HeadInfo
 	validated []types.OptimisticUpdate
+	finality  types.FinalityUpdate
 }
 
 func (ht *TestHeadTracker) ValidateOptimistic(update types.OptimisticUpdate) (bool, error) {
@@ -220,9 +221,13 @@ func (ht *TestHeadTracker) ValidateOptimistic(update types.OptimisticUpdate) (bo
 	return true, nil
 }
 
-//TODO add test case for finality
 func (ht *TestHeadTracker) ValidateFinality(update types.FinalityUpdate) (bool, error) {
+	ht.finality = update
 	return true, nil
+}
+
+func (ht *TestHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
+	return ht.finality, ht.finality.Attested.Header != (types.Header{})
 }
 
 func (ht *TestHeadTracker) ExpValidated(t *testing.T, tci int, expHeads []types.OptimisticUpdate) {

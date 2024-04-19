@@ -73,6 +73,12 @@ func NewHeadSync(headTracker headTracker, chain committeeChain) *HeadSync {
 
 // Process implements request.Module.
 func (s *HeadSync) Process(requester request.Requester, events []request.Event) {
+	nextPeriod, chainInit := s.chain.NextSyncPeriod()
+	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
+		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
+		s.processUnvalidatedUpdates()
+	}
+
 	for _, event := range events {
 		switch event.Type {
 		case EvNewHead:
@@ -100,12 +106,6 @@ func (s *HeadSync) Process(requester request.Requester, events []request.Event) 
 			delete(s.unvalidatedOptimistic, event.Server)
 			delete(s.unvalidatedFinality, event.Server)
 		}
-	}
-
-	nextPeriod, chainInit := s.chain.NextSyncPeriod()
-	if nextPeriod != s.nextSyncPeriod || chainInit != s.chainInit {
-		s.nextSyncPeriod, s.chainInit = nextPeriod, chainInit
-		s.processUnvalidatedUpdates()
 	}
 }
 
