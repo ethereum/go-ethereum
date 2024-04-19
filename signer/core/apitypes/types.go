@@ -493,6 +493,10 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 			buffer.Write(crypto.Keccak256(arrayBuffer.Bytes()))
 		} else if typedData.Types[field.Type] != nil {
+			if encValue == nil {
+				buffer.Write(common.Hash{}.Bytes())
+				continue
+			}
 			mapValue, ok := encValue.(map[string]interface{})
 			if !ok {
 				return nil, dataMismatchError(encType, encValue)
