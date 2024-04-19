@@ -66,8 +66,8 @@ func blockTestCmd(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	var tests map[string]tests.BlockTest
-	if err = json.Unmarshal(src, &tests); err != nil {
+	var evmTests map[string]tests.BlockTest
+	if err = json.Unmarshal(src, &evmTests); err != nil {
 		return err
 	}
 	re, err := regexp.Compile(ctx.String(RunFlag.Name))
@@ -77,7 +77,7 @@ func blockTestCmd(ctx *cli.Context) error {
 
 	// Run them in order
 	var keys []string
-	for key := range tests {
+	for key := range evmTests {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
@@ -85,7 +85,7 @@ func blockTestCmd(ctx *cli.Context) error {
 		if !re.MatchString(name) {
 			continue
 		}
-		test := tests[name]
+		test := evmTests[name]
 		if err := test.Run(false, rawdb.HashScheme, tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if state, _ := chain.State(); state != nil {
