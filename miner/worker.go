@@ -116,6 +116,8 @@ var (
 	l2CommitTraceTimer = metrics.NewRegisteredTimer("miner/commit/trace", nil)
 	l2CommitCCCTimer   = metrics.NewRegisteredTimer("miner/commit/ccc", nil)
 	l2ResultTimer      = metrics.NewRegisteredTimer("miner/result/all", nil)
+
+	l2TaskCommitTxMeter = metrics.NewRegisteredMeter("miner/task/commit_txs", nil)
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -691,6 +693,7 @@ func (w *worker) taskLoop() {
 				delete(w.pendingTasks, sealHash)
 				w.pendingMu.Unlock()
 			}
+			l2TaskCommitTxMeter.Mark(int64(len(task.block.Transactions())))
 		case <-w.exitCh:
 			interrupt()
 			return
