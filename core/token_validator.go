@@ -86,7 +86,7 @@ func RunContract(chain consensus.ChainContext, statedb *state.StateDB, contractA
 	return unpackResult, nil
 }
 
-//FIXME: please use copyState for this function
+// FIXME: please use copyState for this function
 // CallContractWithState executes a contract call at the given state.
 func CallContractWithState(call ethereum.CallMsg, chain consensus.ChainContext, statedb *state.StateDB) ([]byte, error) {
 	// Ensure message is initialized properly.
@@ -124,7 +124,7 @@ func ValidateXDCXApplyTransaction(chain consensus.ChainContext, blockNumber *big
 	if blockNumber == nil || blockNumber.Sign() <= 0 {
 		blockNumber = chain.CurrentHeader().Number
 	}
-	if !chain.Config().IsTIPXDCX(blockNumber) {
+	if !chain.Config().IsTIPXDCXReceiver(blockNumber) {
 		return nil
 	}
 	contractABI, err := GetTokenAbi(contract.TRC21ABI)
@@ -146,7 +146,7 @@ func ValidateXDCZApplyTransaction(chain consensus.ChainContext, blockNumber *big
 	if blockNumber == nil || blockNumber.Sign() <= 0 {
 		blockNumber = chain.CurrentHeader().Number
 	}
-	if !chain.Config().IsTIPXDCX(blockNumber) {
+	if !chain.Config().IsTIPXDCXReceiver(blockNumber) {
 		return nil
 	}
 	contractABI, err := GetTokenAbi(contract.TRC21ABI)

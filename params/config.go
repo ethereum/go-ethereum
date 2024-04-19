@@ -606,7 +606,11 @@ func (c *ChainConfig) IsTIPXDCX(num *big.Int) bool {
 	return isForked(common.TIPXDCX, num)
 }
 func (c *ChainConfig) IsTIPXDCXMiner(num *big.Int) bool {
-	return isForked(common.TIPXDCX, num) && !isForked(common.TIPXDCXDISABLE, num)
+	return isForked(common.TIPXDCX, num) && !isForked(common.TIPXDCXMinerDisable, num)
+}
+
+func (c *ChainConfig) IsTIPXDCXReceiver(num *big.Int) bool {
+	return isForked(common.TIPXDCX, num) && !isForked(common.TIPXDCXReceiverDisable, num)
 }
 
 func (c *ChainConfig) IsTIPXDCXLending(num *big.Int) bool {

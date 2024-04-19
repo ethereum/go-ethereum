@@ -273,7 +273,7 @@ func (pool *LendingPool) loop() {
 // reset retrieves the current state of the blockchain and ensures the content
 // of the transaction pool is valid with regard to the chain state.
 func (pool *LendingPool) reset(oldHead, newblock *types.Block) {
-	if !pool.chainconfig.IsTIPXDCX(pool.chain.CurrentBlock().Number()) || pool.chain.Config().XDPoS == nil || pool.chain.CurrentBlock().NumberU64() <= pool.chain.Config().XDPoS.Epoch {
+	if !pool.chainconfig.IsTIPXDCXReceiver(pool.chain.CurrentBlock().Number()) || pool.chain.Config().XDPoS == nil || pool.chain.CurrentBlock().NumberU64() <= pool.chain.Config().XDPoS.Epoch {
 		return
 	}
 	// If we're reorging an old state, reinject all dropped transactions
@@ -814,7 +814,7 @@ func (pool *LendingPool) AddRemotes(txs []*types.LendingTransaction) []error {
 
 // addTx enqueues a single transaction into the pool if it is valid.
 func (pool *LendingPool) addTx(tx *types.LendingTransaction, local bool) error {
-	if !pool.chainconfig.IsTIPXDCX(pool.chain.CurrentBlock().Number()) {
+	if !pool.chainconfig.IsTIPXDCXReceiver(pool.chain.CurrentBlock().Number()) {
 		return nil
 	}
 	tx.CacheHash()
