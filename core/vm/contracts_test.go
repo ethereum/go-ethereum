@@ -316,6 +316,8 @@ func TestPrecompiledBLS12381MapG2(t *testing.T)      { testJson("blsMapG2", "f12
 
 func TestPrecompiledPointEvaluation(t *testing.T) { testJson("pointEvaluation", "0a", t) }
 
+func BenchmarkPrecompiledPointEvaluation(b *testing.B) { benchJson("pointEvaluation", "0a", b) }
+
 func BenchmarkPrecompiledBLS12381G1Add(b *testing.B)      { benchJson("blsG1Add", "f0a", b) }
 func BenchmarkPrecompiledBLS12381G1Mul(b *testing.B)      { benchJson("blsG1Mul", "f0b", b) }
 func BenchmarkPrecompiledBLS12381G1MultiExp(b *testing.B) { benchJson("blsG1MultiExp", "f0c", b) }
