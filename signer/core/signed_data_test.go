@@ -182,6 +182,21 @@ var typedData = apitypes.TypedData{
 	Message:     messageStandard,
 }
 
+var messageWithMissingFrom = map[string]interface{}{
+	"to": map[string]interface{}{
+		"name":   "Bob",
+		"wallet": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+	},
+	"contents": "Hello, Bob!",
+}
+
+var typedDataWithMissing = apitypes.TypedData{
+	Types:       typesStandard,
+	PrimaryType: primaryType,
+	Domain:      domainStandard,
+	Message:     messageWithMissingFrom,
+}
+
 func TestSignData(t *testing.T) {
 	t.Parallel()
 	api, control := setup(t)
@@ -340,6 +355,18 @@ func TestEncodeData(t *testing.T) {
 	}
 	dataEncoding := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
 	if dataEncoding != "0xa0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac2fc71e5fa27ff56c350aa531bc129ebdf613b772b6604664f5d8dbe21b85eb0c8cd54f074a4af31b4411ff6a60c9719dbd559c221c8ac3492d9d872b041d703d1b5aadf3154a261abdd9086fc627b61efca26ae5702701d05cd2305f7c52a2fc8" {
+		t.Errorf("Expected different encodeData result (got %s)", dataEncoding)
+	}
+}
+
+func TestEncodeDataWithMissingParams(t *testing.T) {
+	t.Parallel()
+	hash, err := typedData.EncodeData(typedDataWithMissing.PrimaryType, typedDataWithMissing.Message, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataEncoding := fmt.Sprintf("0x%s", common.Bytes2Hex(hash))
+	if dataEncoding != "0xa0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac20000000000000000000000000000000000000000000000000000000000000000cd54f074a4af31b4411ff6a60c9719dbd559c221c8ac3492d9d872b041d703d1b5aadf3154a261abdd9086fc627b61efca26ae5702701d05cd2305f7c52a2fc8" {
 		t.Errorf("Expected different encodeData result (got %s)", dataEncoding)
 	}
 }
