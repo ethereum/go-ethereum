@@ -250,17 +250,18 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		}
 		statedb.SetTxContext(tx.Hash(), len(receipts))
 		var (
-			snapshot = statedb.Snapshot()
-			prevGas  = gaspool.Gas()
+			prevGas = gaspool.Gas()
 		)
+		statedb.Snapshot()
 		receipt, err := core.ApplyTransactionWithEVM(msg, gaspool, statedb, vmContext.BlockNumber, blockHash, pre.Env.Timestamp, tx, &gasUsed, evm)
 		if err != nil {
-			statedb.RevertToSnapshot(snapshot)
+			statedb.RevertSnapshot()
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
 			continue
 		}
+		statedb.DiscardSnapshot()
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
 			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)

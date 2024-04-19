@@ -310,7 +310,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			)
 			b.ResetTimer()
 			for n := 0; n < b.N; n++ {
-				snapshot := state.StateDB.Snapshot()
+				state.StateDB.Snapshot()
 				state.StateDB.Prepare(rules, msg.From, context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 				b.StartTimer()
 				start := time.Now()
@@ -327,7 +327,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 				refund += state.StateDB.GetRefund()
 				gasUsed += msg.GasLimit - leftOverGas
 
-				state.StateDB.RevertToSnapshot(snapshot)
+				state.StateDB.RevertSnapshot()
 			}
 			if elapsed < 1 {
 				elapsed = 1

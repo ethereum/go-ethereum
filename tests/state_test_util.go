@@ -327,17 +327,18 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		tracer.OnTxStart(evm.GetVMContext(), nil, msg.From)
 	}
 	// Execute the message.
-	snapshot := st.StateDB.Snapshot()
+	st.StateDB.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
 	vmRet, err := core.ApplyMessage(evm, msg, gaspool)
 	if err != nil {
-		st.StateDB.RevertToSnapshot(snapshot)
+		st.StateDB.RevertSnapshot()
 		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
 			evm.Config.Tracer.OnTxEnd(nil, err)
 		}
 		return st, common.Hash{}, 0, err
 	}
+	st.StateDB.DiscardSnapshot()
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where
 	// - the coinbase self-destructed, or

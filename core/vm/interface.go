@@ -89,8 +89,14 @@ type StateDB interface {
 
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 
-	RevertToSnapshot(int)
-	Snapshot() int
+	// Snapshot starts a new journalled scope.
+	Snapshot()
+	// RevertSnapshot reverts all state changes made in the most recent journalled scope.
+	RevertSnapshot()
+	// DiscardSnapshot removes the ability to roll back the changes in the most
+	// recent journalled scope. After calling this method, the changes are considered
+	// part of the parent scope.
+	DiscardSnapshot()
 
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)
