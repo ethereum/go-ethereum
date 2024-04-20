@@ -24,16 +24,21 @@ func NewMockConsensusAPI(path string) (ConsensusAPI, error) {
 	return &MockConsensusAPI{testdataDir: path}, nil
 }
 
-func (m MockConsensusAPI) GetUpdates(_, _ uint64) ([]*capella.LightClientUpdate, error) {
+func (m MockConsensusAPI) GetUpdates(_, _ uint64) ([]common.SpecObj, error) {
 	jsonStr, _ := os.ReadFile(m.testdataDir + "/updates.json")
 
 	updates := make([]*capella.LightClientUpdate, 0)
 	_ = json.Unmarshal(jsonStr, &updates)
 
-	return updates, nil
+	res := make([]common.SpecObj, 0)
+
+	for _, item := range updates {
+		res = append(res, item)
+	}
+	return res, nil
 }
 
-func (m MockConsensusAPI) GetCheckpointData(_ common.Root) (*capella.LightClientBootstrap, error) {
+func (m MockConsensusAPI) GetCheckpointData(_ common.Root) (common.SpecObj, error) {
 	jsonStr, _ := os.ReadFile(m.testdataDir + "/bootstrap.json")
 
 	bootstrap := &capella.LightClientBootstrap{}
@@ -42,7 +47,7 @@ func (m MockConsensusAPI) GetCheckpointData(_ common.Root) (*capella.LightClient
 	return bootstrap, nil
 }
 
-func (m MockConsensusAPI) GetFinalityData() (*capella.LightClientFinalityUpdate, error) {
+func (m MockConsensusAPI) GetFinalityData() (common.SpecObj, error) {
 	jsonStr, _ := os.ReadFile(m.testdataDir + "/finality.json")
 
 	finality := &capella.LightClientFinalityUpdate{}
@@ -51,7 +56,7 @@ func (m MockConsensusAPI) GetFinalityData() (*capella.LightClientFinalityUpdate,
 	return finality, nil
 }
 
-func (m MockConsensusAPI) GetOptimisticData() (*capella.LightClientOptimisticUpdate, error) {
+func (m MockConsensusAPI) GetOptimisticData() (common.SpecObj, error) {
 	jsonStr, _ := os.ReadFile(m.testdataDir + "/optimistic.json")
 
 	optimistic := &capella.LightClientOptimisticUpdate{}
@@ -107,21 +112,27 @@ func TestVerifyUpdate(t *testing.T) {
 	err = client.VerifyUpdate(updates[0])
 	require.NoError(t, err)
 	// ErrInvalidNextSyncCommitteeProof
-	updates[0].NextSyncCommittee.Pubkeys[0] = common.BLSPubkey{}
-	err = client.VerifyUpdate(updates[0])
+	genericUpdate, err := FromLightClientUpdate(updates[0])
+	require.NoError(t, err)
+	genericUpdate.NextSyncCommittee.Pubkeys[0] = common.BLSPubkey{}
+	err = client.VerifyGenericUpdate(genericUpdate)
 	require.Equal(t, ErrInvalidNextSyncCommitteeProof, err)
 	// ErrInvalidFinalityProof
 	updates, err = client.API.GetUpdates(period, MaxRequestLightClientUpdates)
 	require.NoError(t, err)
-	updates[0].FinalizedHeader.Beacon = common.BeaconBlockHeader{}
-	err = client.VerifyUpdate(updates[0])
+	genericUpdate, err = FromLightClientUpdate(updates[0])
+	require.NoError(t, err)
+	genericUpdate.FinalizedHeader = &common.BeaconBlockHeader{}
+	err = client.VerifyGenericUpdate(genericUpdate)
 	require.Equal(t, ErrInvalidFinalityProof, err)
 
 	// ErrInvalidSignature
 	updates, err = client.API.GetUpdates(period, MaxRequestLightClientUpdates)
 	require.NoError(t, err)
-	updates[0].SyncAggregate.SyncCommitteeSignature[1] = 0xFE
-	err = client.VerifyUpdate(updates[0])
+	genericUpdate, err = FromLightClientUpdate(updates[0])
+	require.NoError(t, err)
+	genericUpdate.SyncAggregate.SyncCommitteeSignature[1] = 0xFE
+	err = client.VerifyGenericUpdate(genericUpdate)
 	require.Error(t, err)
 }
 
@@ -136,14 +147,20 @@ func TestVerifyFinalityUpdate(t *testing.T) {
 	err = client.VerifyFinalityUpdate(update)
 	require.NoError(t, err)
 
-	update.FinalizedHeader.Beacon = common.BeaconBlockHeader{}
-	err = client.VerifyFinalityUpdate(update)
+	genericUpdate, err := FromLightClientFinalityUpdate(update)
+	require.NoError(t, err)
+
+	genericUpdate.FinalizedHeader = &common.BeaconBlockHeader{}
+	err = client.VerifyGenericUpdate(genericUpdate)
 	require.Equal(t, ErrInvalidFinalityProof, err)
 	// ErrInvalidSignature
 	update, err = client.API.GetFinalityData()
 	require.NoError(t, err)
-	update.SyncAggregate.SyncCommitteeSignature[1] = 0xFE
-	err = client.VerifyFinalityUpdate(update)
+
+	genericUpdate, err = FromLightClientFinalityUpdate(update)
+	require.NoError(t, err)
+	genericUpdate.SyncAggregate.SyncCommitteeSignature[1] = 0xFE
+	err = client.VerifyGenericUpdate(genericUpdate)
 	require.Error(t, err)
 }
 
@@ -158,8 +175,11 @@ func TestVerifyOptimisticUpdate(t *testing.T) {
 	err = client.VerifyOptimisticUpdate(update)
 	require.NoError(t, err)
 
-	update.SyncAggregate.SyncCommitteeSignature = common.BLSSignature{}
-	err = client.VerifyOptimisticUpdate(update)
+	genericUpdate, err := FromLightClientOptimisticUpdate(update)
+	require.NoError(t, err)
+
+	genericUpdate.SyncAggregate.SyncCommitteeSignature = common.BLSSignature{}
+	err = client.VerifyGenericUpdate(genericUpdate)
 	require.Error(t, err)
 }
 

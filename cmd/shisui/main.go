@@ -140,7 +140,7 @@ func initDiscV5(config Config, conn discover.UDPConn) (*discover.UDPv5, *enode.L
 		PrivateKey:  config.PrivateKey,
 		NetRestrict: config.Protocol.NetRestrict,
 		Bootnodes:   config.Protocol.BootstrapNodes,
-		Log:         log.New("discV5"),
+		Log:         log.New("protocol", "discV5"),
 	}
 
 	nodeDB, err := enode.OpenDB(config.Protocol.NodeDBPath)

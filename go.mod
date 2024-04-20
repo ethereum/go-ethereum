@@ -153,4 +153,6 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
+// replace github.com/protolambda/zrnt v0.32.2 => ../zrnt-fork
+
 replace github.com/protolambda/zrnt v0.32.2 => github.com/optimism-java/zrnt v0.32.4-0.20240415084906-d9dbf06b32f7

@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	ssz "github.com/ferranbt/fastssz"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/codec"
@@ -62,100 +61,82 @@ func (bn *BeaconNetwork) Stop() {
 	bn.portalProtocol.Stop()
 }
 
-func (bn *BeaconNetwork) GetUpdates(firstPeriod, count uint64) ([]*capella.LightClientUpdate, error) {
+func (bn *BeaconNetwork) GetUpdates(firstPeriod, count uint64) ([]common.SpecObj, error) {
 	lightClientUpdateKey := &LightClientUpdateKey{
 		StartPeriod: firstPeriod,
 		Count:       count,
 	}
 
-	lightClientUpdateRangeContent, err := bn.getContent(LightClientUpdate, lightClientUpdateKey)
+	data, err := bn.getContent(LightClientUpdate, lightClientUpdateKey)
 	if err != nil {
 		return nil, err
 	}
-
 	var lightClientUpdateRange LightClientUpdateRange = make([]ForkedLightClientUpdate, 0)
-	err = lightClientUpdateRange.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(lightClientUpdateRangeContent), uint64(len(lightClientUpdateRangeContent))))
+	err = lightClientUpdateRange.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(data), uint64(len(data))))
 	if err != nil {
 		return nil, err
 	}
+	res := make([]common.SpecObj, len(lightClientUpdateRange))
 
-	updates := make([]*capella.LightClientUpdate, len(lightClientUpdateRange))
-	for i, update := range lightClientUpdateRange {
-		if update.ForkDigest != Capella {
-			return nil, errors.New("unknown fork digest")
-		}
-		updates[i] = update.LightClientUpdate.(*capella.LightClientUpdate)
+	for i, item := range lightClientUpdateRange {
+		res[i] = item.LightClientUpdate
 	}
-	return updates, nil
+	return res, nil
 }
 
-func (bn *BeaconNetwork) GetCheckpointData(checkpointHash tree.Root) (*capella.LightClientBootstrap, error) {
+func (bn *BeaconNetwork) GetCheckpointData(checkpointHash tree.Root) (common.SpecObj, error) {
 	bootstrapKey := &LightClientBootstrapKey{
 		BlockHash: checkpointHash[:],
 	}
 
-	bootstrapValue, err := bn.getContent(LightClientBootstrap, bootstrapKey)
+	data, err := bn.getContent(LightClientBootstrap, bootstrapKey)
 	if err != nil {
 		return nil, err
 	}
 
-	var forkedLightClientBootstrap ForkedLightClientBootstrap
-	err = forkedLightClientBootstrap.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(bootstrapValue), uint64(len(bootstrapValue))))
+	var forkedLightClientBootstrap *ForkedLightClientBootstrap
+	err = forkedLightClientBootstrap.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(data), uint64(len(data))))
 	if err != nil {
 		return nil, err
 	}
-
-	if forkedLightClientBootstrap.ForkDigest != Capella {
-		return nil, errors.New("unknown fork digest")
-	}
-
-	return forkedLightClientBootstrap.Bootstrap.(*capella.LightClientBootstrap), nil
+	return forkedLightClientBootstrap.Bootstrap, nil
 }
 
-func (bn *BeaconNetwork) GetFinalityUpdate(finalizedSlot uint64) (*capella.LightClientFinalityUpdate, error) {
+func (bn *BeaconNetwork) GetFinalityUpdate(finalizedSlot uint64) (common.SpecObj, error) {
 	finalityUpdateKey := &LightClientFinalityUpdateKey{
 		FinalizedSlot: finalizedSlot,
 	}
-
-	finalityUpdateValue, err := bn.getContent(LightClientFinalityUpdate, finalityUpdateKey)
+	data, err := bn.getContent(LightClientFinalityUpdate, finalityUpdateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	var forkedLightClientFinalityUpdate ForkedLightClientFinalityUpdate
-	err = forkedLightClientFinalityUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(finalityUpdateValue), uint64(len(finalityUpdateValue))))
+	var forkedLightClientFinalityUpdate *ForkedLightClientFinalityUpdate
+	err = forkedLightClientFinalityUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(data), uint64(len(data))))
 	if err != nil {
 		return nil, err
 	}
 
-	if forkedLightClientFinalityUpdate.ForkDigest != Capella {
-		return nil, errors.New("unknown fork digest")
-	}
-
-	return forkedLightClientFinalityUpdate.LightClientFinalityUpdate.(*capella.LightClientFinalityUpdate), nil
+	return forkedLightClientFinalityUpdate.LightClientFinalityUpdate, nil
 }
 
-func (bn *BeaconNetwork) GetOptimisticUpdate(optimisticSlot uint64) (*capella.LightClientOptimisticUpdate, error) {
+func (bn *BeaconNetwork) GetOptimisticUpdate(optimisticSlot uint64) (common.SpecObj, error) {
 	optimisticUpdateKey := &LightClientOptimisticUpdateKey{
 		OptimisticSlot: optimisticSlot,
 	}
 
-	optimisticUpdateValue, err := bn.getContent(LightClientOptimisticUpdate, optimisticUpdateKey)
+	data, err := bn.getContent(LightClientOptimisticUpdate, optimisticUpdateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	var forkedLightClientOptimisticUpdate ForkedLightClientOptimisticUpdate
-	err = forkedLightClientOptimisticUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(optimisticUpdateValue), uint64(len(optimisticUpdateValue))))
+	var forkedLightClientOptimisticUpdate *ForkedLightClientOptimisticUpdate
+	err = forkedLightClientOptimisticUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(data), uint64(len(data))))
 	if err != nil {
 		return nil, err
 	}
 
-	if forkedLightClientOptimisticUpdate.ForkDigest != Capella {
-		return nil, errors.New("unknown fork digest")
-	}
-
-	return forkedLightClientOptimisticUpdate.LightClientOptimisticUpdate.(*capella.LightClientOptimisticUpdate), nil
+	return forkedLightClientOptimisticUpdate.LightClientOptimisticUpdate, nil
 }
 
 func (bn *BeaconNetwork) getContent(contentType storage.ContentType, beaconContentKey ssz.Marshaler) ([]byte, error) {
