@@ -163,7 +163,7 @@ func transferTx(t *testing.T, to common.Address, transferAmount int64) *types.Tr
 	amount := big.NewInt(transferAmount)
 	nonce := uint64(1)
 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
-	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), voterKey)
+	signedTX, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(chainID)), voterKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 	to := common.HexToAddress(common.MasternodeVotingSMC)
 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
 
-	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), voterKey)
+	signedTX, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(chainID)), voterKey)
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +411,7 @@ func createBlockFromHeader(bc *BlockChain, customHeader *types.Header, txs []*ty
 // 	nonce := uint64(0)
 // 	to := common.HexToAddress("xdc35658f7b2a9e7701e65e7a654659eb1c481d1dc5")
 // 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
-// 	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), acc4Key)
+// 	signedTX, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(chainID)), acc4Key)
 // 	if err != nil {
 // 		t.Fatal(err)
 // 	}

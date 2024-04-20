@@ -242,22 +242,11 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	if err != nil {
 		return nil, 0, err, false
 	}
-	// Create a new context to be used in the EVM environment
+	// Create a new context to be used in the EVM environment.
 	context := NewEVMContext(msg, header, bc, author)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(context, statedb, XDCxState, config, cfg)
-
-	if config.IsEIP1559(header.Number) {
-		statedb.AddAddressToAccessList(msg.From())
-		if dst := msg.To(); dst != nil {
-			statedb.AddAddressToAccessList(*dst)
-			// If it's a create-tx, the destination will be added inside evm.create
-		}
-		for _, addr := range vmenv.ActivePrecompiles() {
-			statedb.AddAddressToAccessList(addr)
-		}
-	}
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	var beneficiary common.Address
@@ -419,7 +408,8 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	if err != nil {
 		return nil, 0, err, false
 	}
-	// Update the state with pending changes
+
+	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
 		statedb.Finalise(true)
@@ -428,16 +418,23 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	}
 	*usedGas += gas
 
-	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
-	// based on the eip phase, we're passing wether the root touch-delete accounts.
-	receipt := types.NewReceipt(root, failed, *usedGas)
+	// Create a new receipt for the transaction, storing the intermediate root and gas used
+	// by the tx.
+	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+	if failed {
+		receipt.Status = types.ReceiptStatusFailed
+	} else {
+		receipt.Status = types.ReceiptStatusSuccessful
+	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = gas
-	// if the transaction created a contract, store the creation address in the receipt.
+
+	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
 		receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
 	}
-	// Set the receipt logs and create a bloom for filtering
+
+	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	receipt.BlockHash = statedb.BlockHash()
@@ -532,7 +529,6 @@ func InitSignerInTransactions(config *params.ChainConfig, header *types.Header, 
 		go func(from int, to int) {
 			for j := from; j < to; j++ {
 				types.CacheSigner(signer, txs[j])
-				txs[j].CacheHash()
 			}
 			wg.Done()
 		}(from, to)

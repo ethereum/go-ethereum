@@ -16,7 +16,11 @@
 
 package core
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+)
 
 var (
 	// ErrKnownBlock is returned when a block to import is already known locally.
@@ -38,4 +42,8 @@ var (
 	ErrNotFoundM1 = errors.New("list M1 not found ")
 
 	ErrStopPreparingBlock = errors.New("stop calculating a block not verified by M2")
+
+	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
+	// current network configuration.
+	ErrTxTypeNotSupported = types.ErrTxTypeNotSupported
 )
