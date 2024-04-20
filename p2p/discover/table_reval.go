@@ -28,8 +28,8 @@ import (
 const never = mclock.AbsTime(math.MaxInt64)
 
 type tableRevalidation struct {
-	newNodes  revalidationList
-	nodes     revalidationList
+	fast      revalidationList
+	slow      revalidationList
 	activeReq map[enode.ID]struct{}
 }
 
@@ -42,22 +42,21 @@ type revalidationResponse struct {
 
 func (tr *tableRevalidation) init(cfg *Config) {
 	tr.activeReq = make(map[enode.ID]struct{})
-	tr.newNodes.nextTime = never
-	tr.newNodes.interval = cfg.PingInterval / 3
-	tr.nodes.nextTime = never
-	tr.nodes.interval = cfg.PingInterval
+	tr.fast.nextTime = never
+	tr.fast.interval = cfg.PingInterval
+	tr.slow.nextTime = never
+	tr.slow.interval = cfg.PingInterval * 3
 }
 
 // nodeAdded is called when the table receives a new node.
 func (tr *tableRevalidation) nodeAdded(tab *Table, n *node) {
-	tr.newNodes.push(n, tab.cfg.Clock.Now(), &tab.rand)
+	tr.fast.push(n, tab.cfg.Clock.Now(), &tab.rand)
 }
 
 // nodeRemoved is called when a node was removed from the table.
 func (tr *tableRevalidation) nodeRemoved(n *node) {
-	wasnew := tr.newNodes.remove(n)
-	if !wasnew {
-		tr.nodes.remove(n)
+	if !tr.fast.remove(n) {
+		tr.slow.remove(n)
 	}
 }
 
@@ -65,22 +64,22 @@ func (tr *tableRevalidation) nodeRemoved(n *node) {
 // It returns the next time it should be invoked, which is used in the Table main loop
 // to schedule a timer. However, run can be called at any time.
 func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mclock.AbsTime) {
-	if n := tr.newNodes.get(now, &tab.rand, tr.activeReq); n != nil {
+	if n := tr.fast.get(now, &tab.rand, tr.activeReq); n != nil {
 		tr.startRequest(tab, n, true)
-		tr.newNodes.schedule(now, &tab.rand)
+		tr.fast.schedule(now, &tab.rand)
 	}
-	if n := tr.nodes.get(now, &tab.rand, tr.activeReq); n != nil {
+	if n := tr.slow.get(now, &tab.rand, tr.activeReq); n != nil {
 		tr.startRequest(tab, n, false)
-		tr.nodes.schedule(now, &tab.rand)
+		tr.slow.schedule(now, &tab.rand)
 	}
 
-	if tr.newNodes.nextTime == never {
-		return tr.nodes.nextTime
+	if tr.fast.nextTime == never {
+		return tr.slow.nextTime
 	}
-	if tr.nodes.nextTime == never {
-		return tr.newNodes.nextTime
+	if tr.slow.nextTime == never {
+		return tr.fast.nextTime
 	}
-	return min(tr.newNodes.nextTime, tr.nodes.nextTime)
+	return min(tr.fast.nextTime, tr.slow.nextTime)
 }
 
 // startRequest spawns a revalidation request for node n.
@@ -122,6 +121,7 @@ func (tab *Table) doRevalidate(resp revalidationResponse, node *enode.Node) {
 
 // handleResponse processes the result of a revalidation request.
 func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationResponse) {
+	now := tab.cfg.Clock.Now()
 	n := resp.n
 	b := tab.bucket(n.ID())
 	delete(tr.activeReq, n.ID())
@@ -135,32 +135,45 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 		if n.livenessChecks == 0 || resp.isNewNode {
 			tab.deleteInBucket(b, n.ID())
 		}
+		// Move to fast queue.
+		if !resp.isNewNode {
+			tr.moveToList(&tr.fast, &tr.slow, n, now, &tab.rand)
+		}
 		return
 	}
 
 	// The node responded.
 	n.livenessChecks++
 	n.isValidatedLive = true
-	tab.log.Debug("Revalidated node", "b", b.index, "id", n.ID(), "checks", n.livenessChecks)
+	var endpointChanged bool
 	if resp.newRecord != nil {
-		updated := tab.bumpInBucket(b, resp.newRecord)
-		if updated {
+		endpointChanged := tab.bumpInBucket(b, resp.newRecord)
+		if endpointChanged {
 			// If the node changed its advertised endpoint, the updated ENR is not served
 			// until it has been revalidated.
 			n.isValidatedLive = false
 		}
 	}
+	tab.log.Debug("Revalidated node", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "changed", endpointChanged)
 
-	// Move node over to main queue after first validation.
-	if resp.isNewNode {
-		tr.newNodes.remove(n)
-		tr.nodes.push(n, tab.cfg.Clock.Now(), &tab.rand)
+	// Move node over to slow queue after first validation.
+	if resp.isNewNode && !endpointChanged {
+		tr.moveToList(&tr.slow, &tr.fast, n, now, &tab.rand)
+	} else if endpointChanged {
+		tr.moveToList(&tr.fast, &tr.slow, n, now, &tab.rand)
 	}
 
 	// Store potential seeds in database.
 	if n.isValidatedLive && n.livenessChecks > 5 {
 		tab.db.UpdateNode(resp.n.Node)
 	}
+}
+
+func (tr *tableRevalidation) moveToList(dest, source *revalidationList, n *node, now mclock.AbsTime, rand randomSource) {
+	if !source.remove(n) {
+		panic("moveToList: node not in source list")
+	}
+	dest.push(n, now, rand)
 }
 
 // revalidationList holds a list nodes and the next revalidation time.
@@ -185,15 +198,15 @@ func (rq *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude m
 	return nil
 }
 
+func (rq *revalidationList) schedule(now mclock.AbsTime, rand randomSource) {
+	rq.nextTime = now.Add(time.Duration(rand.Int63n(int64(rq.interval))))
+}
+
 func (rq *revalidationList) push(n *node, now mclock.AbsTime, rand randomSource) {
 	rq.nodes = append(rq.nodes, n)
 	if rq.nextTime == never {
 		rq.schedule(now, rand)
 	}
-}
-
-func (rq *revalidationList) schedule(now mclock.AbsTime, rand randomSource) {
-	rq.nextTime = now.Add(time.Duration(rand.Int63n(int64(rq.interval))))
 }
 
 func (rq *revalidationList) remove(n *node) bool {
