@@ -568,7 +568,7 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
 
 	// Add replacement.
 	if len(b.replacements) == 0 {
-		tab.log.Debug("Removed dead node", "b", b.index, "id", n.ID(), "ip", n.IP(), "checks", n.livenessChecks)
+		tab.log.Debug("Removed dead node", "b", b.index, "id", n.ID(), "ip", n.IP())
 		return nil
 	}
 	rindex := tab.rand.Intn(len(b.replacements))
@@ -577,7 +577,7 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
 	b.entries = append(b.entries, rep)
 	tab.nodeAdded(b, rep)
 
-	tab.log.Debug("Replaced dead node", "b", b.index, "id", n.ID(), "ip", n.IP(), "checks", n.livenessChecks, "r", rep.ID(), "rip", rep.IP())
+	tab.log.Debug("Replaced dead node", "b", b.index, "id", n.ID(), "ip", n.IP(), "r", rep.ID(), "rip", rep.IP())
 	return rep
 }
 
