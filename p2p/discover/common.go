@@ -66,7 +66,7 @@ type Config struct {
 func (cfg Config) withDefaults() Config {
 	// Node table configuration:
 	if cfg.PingInterval == 0 {
-		cfg.PingInterval = 5 * time.Second
+		cfg.PingInterval = 3 * time.Second
 	}
 	if cfg.RefreshInterval == 0 {
 		cfg.RefreshInterval = 30 * time.Minute
