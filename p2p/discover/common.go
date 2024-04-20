@@ -104,20 +104,14 @@ type randomSource interface {
 
 // reseedingRandom is a random number generator that tracks when it was last re-seeded.
 type reseedingRandom struct {
-	cur      atomic.Pointer[rand.Rand]
-	lastSeed mclock.AbsTime
+	cur atomic.Pointer[rand.Rand]
 }
 
-func (r *reseedingRandom) nextReseedTime() mclock.AbsTime {
-	return r.lastSeed.Add(10 * time.Minute)
-}
-
-func (r *reseedingRandom) seed(now mclock.AbsTime) {
+func (r *reseedingRandom) seed() {
 	var b [8]byte
 	crand.Read(b[:])
 	seed := binary.BigEndian.Uint64(b[:])
 	r.cur.Store(rand.New(rand.NewSource(int64(seed))))
-	r.lastSeed = now
 }
 
 func (r *reseedingRandom) Intn(n int) int {

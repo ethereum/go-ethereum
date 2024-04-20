@@ -135,7 +135,7 @@ func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
 			ips:   netutil.DistinctNetSet{Subnet: bucketSubnet, Limit: bucketIPLimit},
 		}
 	}
-	tab.rand.seed(cfg.Clock.Now())
+	tab.rand.seed()
 	tab.revalidation.init(&cfg)
 
 	// initial table content
@@ -337,7 +337,7 @@ func (tab *Table) loop() {
 		refreshDone     = make(chan struct{})           // where doRefresh reports completion
 		waiting         = []chan struct{}{tab.initDone} // holds waiting callers while doRefresh runs
 		revalTimer      = mclock.NewAlarm(tab.cfg.Clock)
-		reseedRandTimer = mclock.NewAlarm(tab.cfg.Clock)
+		reseedRandTimer = time.NewTicker(10 * time.Minute)
 	)
 	defer refresh.Stop()
 	defer revalTimer.Stop()
@@ -351,11 +351,9 @@ loop:
 		nextTime := tab.revalidation.run(tab, tab.cfg.Clock.Now())
 		revalTimer.Schedule(nextTime)
 
-		reseedRandTimer.Schedule(tab.rand.nextReseedTime())
-
 		select {
-		case <-reseedRandTimer.C():
-			tab.rand.seed(tab.cfg.Clock.Now())
+		case <-reseedRandTimer.C:
+			tab.rand.seed()
 
 		case <-revalTimer.C():
 
