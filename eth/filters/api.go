@@ -28,7 +28,6 @@ import (
 	ethereum "github.com/XinFinOrg/XDPoSChain"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
-	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
@@ -443,10 +442,6 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		case LogsSubscription:
 			logs := f.logs
 			f.logs = nil
-			for _, log := range logs {
-				// update BlockHash to fix #208
-				log.BlockHash = core.GetCanonicalHash(api.chainDb, log.BlockNumber)
-			}
 			return returnLogs(logs), nil
 		}
 	}
