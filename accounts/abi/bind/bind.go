@@ -395,7 +395,7 @@ func bindStructTypeGo(kind abi.Type, structs map[string]*tmplStruct) string {
 		}
 		var (
 			names  = make(map[string]bool)
-			fields []*tmplField
+			fields = make([]*tmplField, 0, len(kind.TupleElems))
 		)
 		for i, elem := range kind.TupleElems {
 			name := capitalise(kind.TupleRawNames[i])
