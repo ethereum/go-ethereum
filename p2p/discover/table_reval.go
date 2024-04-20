@@ -17,6 +17,7 @@
 package discover
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"time"
@@ -35,17 +36,19 @@ type tableRevalidation struct {
 
 type revalidationResponse struct {
 	n          *node
-	didRespond bool
-	isNewNode  bool
 	newRecord  *enode.Node
+	list       *revalidationList
+	didRespond bool
 }
 
 func (tr *tableRevalidation) init(cfg *Config) {
 	tr.activeReq = make(map[enode.ID]struct{})
 	tr.fast.nextTime = never
 	tr.fast.interval = cfg.PingInterval
+	tr.fast.name = "fast"
 	tr.slow.nextTime = never
 	tr.slow.interval = cfg.PingInterval * 3
+	tr.slow.name = "slow"
 }
 
 // nodeAdded is called when the table receives a new node.
@@ -65,11 +68,11 @@ func (tr *tableRevalidation) nodeRemoved(n *node) {
 // to schedule a timer. However, run can be called at any time.
 func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mclock.AbsTime) {
 	if n := tr.fast.get(now, &tab.rand, tr.activeReq); n != nil {
-		tr.startRequest(tab, n, true)
+		tr.startRequest(tab, &tr.fast, n)
 		tr.fast.schedule(now, &tab.rand)
 	}
 	if n := tr.slow.get(now, &tab.rand, tr.activeReq); n != nil {
-		tr.startRequest(tab, n, false)
+		tr.startRequest(tab, &tr.slow, n)
 		tr.slow.schedule(now, &tab.rand)
 	}
 
@@ -83,12 +86,12 @@ func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mcloc
 }
 
 // startRequest spawns a revalidation request for node n.
-func (tr *tableRevalidation) startRequest(tab *Table, n *node, newNode bool) {
+func (tr *tableRevalidation) startRequest(tab *Table, list *revalidationList, n *node) {
 	if _, ok := tr.activeReq[n.ID()]; ok {
-		panic("duplicate startRequest")
+		panic(fmt.Errorf("duplicate startRequest (list %q, node %v)", list.name, n.ID()))
 	}
 	tr.activeReq[n.ID()] = struct{}{}
-	resp := revalidationResponse{n: n, isNewNode: newNode}
+	resp := revalidationResponse{n: n, list: list}
 
 	// Fetch the node while holding lock.
 	tab.mutex.Lock()
@@ -134,9 +137,8 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 		n.livenessChecks /= 3
 		if n.livenessChecks <= 0 {
 			tab.deleteInBucket(b, n.ID())
-		} else if !resp.isNewNode {
-			// Move to fast queue.
-			tr.moveToList(&tr.fast, &tr.slow, n, now, &tab.rand)
+		} else {
+			tr.moveToList(&tr.fast, resp.list, n, now, &tab.rand)
 		}
 		return
 	}
@@ -153,13 +155,13 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 			n.isValidatedLive = false
 		}
 	}
-	tab.log.Debug("Revalidated node", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "changed", endpointChanged)
+	tab.log.Debug("Revalidated node", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "q", resp.list.name)
 
 	// Move node over to slow queue after first validation.
-	if resp.isNewNode && !endpointChanged {
-		tr.moveToList(&tr.slow, &tr.fast, n, now, &tab.rand)
-	} else if endpointChanged {
-		tr.moveToList(&tr.fast, &tr.slow, n, now, &tab.rand)
+	if !endpointChanged {
+		tr.moveToList(&tr.slow, resp.list, n, now, &tab.rand)
+	} else {
+		tr.moveToList(&tr.fast, resp.list, n, now, &tab.rand)
 	}
 
 	// Store potential seeds in database.
@@ -169,8 +171,11 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 }
 
 func (tr *tableRevalidation) moveToList(dest, source *revalidationList, n *node, now mclock.AbsTime, rand randomSource) {
+	if source == dest {
+		return
+	}
 	if !source.remove(n) {
-		panic("moveToList: node not in source list")
+		panic(fmt.Errorf("moveToList(%q -> %q): node %v not in source list", source.name, dest.name, n.ID()))
 	}
 	dest.push(n, now, rand)
 }
@@ -180,6 +185,7 @@ type revalidationList struct {
 	nodes    []*node
 	nextTime mclock.AbsTime
 	interval time.Duration
+	name     string
 }
 
 // get returns a random node from the queue. Nodes in the 'exclude' map are not returned.
