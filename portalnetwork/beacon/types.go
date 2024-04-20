@@ -6,6 +6,7 @@ import (
 	"github.com/protolambda/zrnt/eth2/beacon/altair"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
+	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
 )
@@ -15,6 +16,7 @@ const MaxRequestLightClientUpdates = 128
 var (
 	Bellatrix common.ForkDigest = [4]byte{0x0, 0x0, 0x0, 0x0}
 	Capella   common.ForkDigest = [4]byte{0xbb, 0xa4, 0xda, 0x96}
+	Deneb     common.ForkDigest = [4]byte{0x6a, 0x95, 0xa1, 0xa9}
 )
 
 //go:generate sszgen --path types.go --exclude-objs ForkedLightClientBootstrap,ForkedLightClientUpdate,LightClientUpdateRange
@@ -51,6 +53,8 @@ func (flcb *ForkedLightClientBootstrap) Deserialize(spec *common.Spec, dr *codec
 		flcb.Bootstrap = &altair.LightClientBootstrap{}
 	} else if flcb.ForkDigest == Capella {
 		flcb.Bootstrap = &capella.LightClientBootstrap{}
+	} else if flcb.ForkDigest == Deneb {
+		flcb.Bootstrap = &deneb.LightClientBootstrap{}
 	} else {
 		return errors.New("unknown fork digest")
 	}
@@ -64,7 +68,7 @@ func (flcb *ForkedLightClientBootstrap) Deserialize(spec *common.Spec, dr *codec
 }
 
 func (flcb *ForkedLightClientBootstrap) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
-	return w.Container(flcb.ForkDigest, spec.Wrap(flcb.Bootstrap))
+	return w.FixedLenContainer(flcb.ForkDigest, spec.Wrap(flcb.Bootstrap))
 }
 
 func (flcb *ForkedLightClientBootstrap) FixedLength(_ *common.Spec) uint64 {
@@ -94,6 +98,8 @@ func (flcu *ForkedLightClientUpdate) Deserialize(spec *common.Spec, dr *codec.De
 		flcu.LightClientUpdate = &altair.LightClientUpdate{}
 	} else if flcu.ForkDigest == Capella {
 		flcu.LightClientUpdate = &capella.LightClientUpdate{}
+	} else if flcu.ForkDigest == Deneb {
+		flcu.LightClientUpdate = &deneb.LightClientUpdate{}
 	} else {
 		return errors.New("unknown fork digest")
 	}
@@ -107,7 +113,7 @@ func (flcu *ForkedLightClientUpdate) Deserialize(spec *common.Spec, dr *codec.De
 }
 
 func (flcu *ForkedLightClientUpdate) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
-	return w.Container(flcu.ForkDigest, spec.Wrap(flcu.LightClientUpdate))
+	return w.FixedLenContainer(flcu.ForkDigest, spec.Wrap(flcu.LightClientUpdate))
 }
 
 func (flcu *ForkedLightClientUpdate) FixedLength(_ *common.Spec) uint64 {
@@ -174,6 +180,8 @@ func (flcou *ForkedLightClientOptimisticUpdate) Deserialize(spec *common.Spec, d
 		flcou.LightClientOptimisticUpdate = &altair.LightClientOptimisticUpdate{}
 	} else if flcou.ForkDigest == Capella {
 		flcou.LightClientOptimisticUpdate = &capella.LightClientOptimisticUpdate{}
+	} else if flcou.ForkDigest == Deneb {
+		flcou.LightClientOptimisticUpdate = &deneb.LightClientOptimisticUpdate{}
 	} else {
 		return errors.New("unknown fork digest")
 	}
@@ -187,7 +195,7 @@ func (flcou *ForkedLightClientOptimisticUpdate) Deserialize(spec *common.Spec, d
 }
 
 func (flcou *ForkedLightClientOptimisticUpdate) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
-	return w.Container(flcou.ForkDigest, spec.Wrap(flcou.LightClientOptimisticUpdate))
+	return w.FixedLenContainer(flcou.ForkDigest, spec.Wrap(flcou.LightClientOptimisticUpdate))
 }
 
 func (flcou *ForkedLightClientOptimisticUpdate) FixedLength(_ *common.Spec) uint64 {
@@ -217,6 +225,8 @@ func (flcfu *ForkedLightClientFinalityUpdate) Deserialize(spec *common.Spec, dr 
 		flcfu.LightClientFinalityUpdate = &altair.LightClientFinalityUpdate{}
 	} else if flcfu.ForkDigest == Capella {
 		flcfu.LightClientFinalityUpdate = &capella.LightClientFinalityUpdate{}
+	} else if flcfu.ForkDigest == Deneb {
+		flcfu.LightClientFinalityUpdate = &deneb.LightClientFinalityUpdate{}
 	} else {
 		return errors.New("unknown fork digest")
 	}
@@ -230,7 +240,7 @@ func (flcfu *ForkedLightClientFinalityUpdate) Deserialize(spec *common.Spec, dr 
 }
 
 func (flcfu *ForkedLightClientFinalityUpdate) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
-	return w.Container(flcfu.ForkDigest, spec.Wrap(flcfu.LightClientFinalityUpdate))
+	return w.FixedLenContainer(flcfu.ForkDigest, spec.Wrap(flcfu.LightClientFinalityUpdate))
 }
 
 func (flcfu *ForkedLightClientFinalityUpdate) FixedLength(_ *common.Spec) uint64 {

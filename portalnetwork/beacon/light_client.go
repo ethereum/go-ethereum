@@ -9,6 +9,7 @@ import (
 	"github.com/protolambda/zrnt/eth2/beacon/altair"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
+	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/zrnt/eth2/util/merkle"
 
@@ -29,10 +30,10 @@ var (
 )
 
 type ConsensusAPI interface {
-	GetUpdates(firstPeriod, count uint64) ([]*capella.LightClientUpdate, error)
-	GetCheckpointData(checkpointHash common.Root) (*capella.LightClientBootstrap, error)
-	GetFinalityData() (*capella.LightClientFinalityUpdate, error)
-	GetOptimisticData() (*capella.LightClientOptimisticUpdate, error)
+	GetUpdates(firstPeriod, count uint64) ([]common.SpecObj, error)
+	GetCheckpointData(checkpointHash common.Root) (common.SpecObj, error)
+	GetFinalityData() (common.SpecObj, error)
+	GetOptimisticData() (common.SpecObj, error)
 	ChainID() uint64
 	Name() string
 }
@@ -85,6 +86,36 @@ type GenericUpdate struct {
 	FinalityBranch          *altair.FinalizedRootProofBranch
 }
 
+type GenericBootstrap struct {
+	Header                     *common.BeaconBlockHeader
+	CurrentSyncCommittee       common.SyncCommittee
+	CurrentSyncCommitteeBranch altair.SyncCommitteeProofBranch
+}
+
+func FromBootstrap(commonBootstrap common.SpecObj) (*GenericBootstrap, error) {
+	switch bootstrap := commonBootstrap.(type) {
+	case *deneb.LightClientBootstrap:
+		return &GenericBootstrap{
+			Header:                     &bootstrap.Header.Beacon,
+			CurrentSyncCommittee:       bootstrap.CurrentSyncCommittee,
+			CurrentSyncCommitteeBranch: bootstrap.CurrentSyncCommitteeBranch,
+		}, nil
+	case *capella.LightClientBootstrap:
+		return &GenericBootstrap{
+			Header:                     &bootstrap.Header.Beacon,
+			CurrentSyncCommittee:       bootstrap.CurrentSyncCommittee,
+			CurrentSyncCommitteeBranch: bootstrap.CurrentSyncCommitteeBranch,
+		}, nil
+	case *altair.LightClientBootstrap:
+		return &GenericBootstrap{
+			Header:                     &bootstrap.Header.Beacon,
+			CurrentSyncCommittee:       bootstrap.CurrentSyncCommittee,
+			CurrentSyncCommitteeBranch: bootstrap.CurrentSyncCommitteeBranch,
+		}, nil
+	}
+	return nil, errors.New("unknown bootstrap type")
+}
+
 func NewConsensusLightClient(api ConsensusAPI, config *Config, checkpointBlockRoot common.Root, logger log.Logger) (*ConsensusLightClient, error) {
 	client := &ConsensusLightClient{
 		API:               api,
@@ -117,7 +148,7 @@ func (c *ConsensusLightClient) Sync() error {
 
 	bootstrapPeriod := CalcSyncPeriod(uint64(c.Store.FinalizedHeader.Slot))
 
-	updates := make([]*capella.LightClientUpdate, 0)
+	updates := make([]common.SpecObj, 0)
 
 	if c.API.Name() == "portal" {
 		currentPeriod := CalcSyncPeriod(uint64(c.expectedCurrentSlot()))
@@ -209,12 +240,15 @@ func (c *ConsensusLightClient) Advance() error {
 }
 
 func (c *ConsensusLightClient) bootstrap() error {
-	bootstrap, err := c.API.GetCheckpointData(c.InitialCheckpoint)
+	forkedBootstrap, err := c.API.GetCheckpointData(c.InitialCheckpoint)
 	if err != nil {
 		return err
 	}
-
-	isValid := c.isValidCheckpoint(bootstrap.Header.Beacon.Slot)
+	bootstrap, err := FromBootstrap(forkedBootstrap)
+	if err != nil {
+		return err
+	}
+	isValid := c.isValidCheckpoint(bootstrap.Header.Slot)
 	if !isValid {
 		if c.Config.StrictCheckpointAge {
 			return errors.New("checkpoint is too old")
@@ -223,9 +257,9 @@ func (c *ConsensusLightClient) bootstrap() error {
 		}
 	}
 
-	committeeValid := c.isCurrentCommitteeProofValid(bootstrap.Header.Beacon, bootstrap.CurrentSyncCommittee, bootstrap.CurrentSyncCommitteeBranch)
+	committeeValid := c.isCurrentCommitteeProofValid(*bootstrap.Header, bootstrap.CurrentSyncCommittee, bootstrap.CurrentSyncCommitteeBranch)
 
-	headerHash := bootstrap.Header.Beacon.HashTreeRoot(tree.GetHashFn()).String()
+	headerHash := bootstrap.Header.HashTreeRoot(tree.GetHashFn()).String()
 	expectedHash := c.InitialCheckpoint.String()
 
 	headerValid := headerHash == expectedHash
@@ -239,9 +273,9 @@ func (c *ConsensusLightClient) bootstrap() error {
 	}
 
 	c.Store = LightClientStore{
-		FinalizedHeader:               &bootstrap.Header.Beacon,
+		FinalizedHeader:               bootstrap.Header,
 		CurrentSyncCommittee:          &bootstrap.CurrentSyncCommittee,
-		OptimisticHeader:              &bootstrap.Header.Beacon,
+		OptimisticHeader:              bootstrap.Header,
 		PreviousMaxActiveParticipants: view.Uint64View(0),
 		CurrentMaxActiveParticipants:  view.Uint64View(0),
 	}
@@ -329,18 +363,27 @@ func (c *ConsensusLightClient) VerifyGenericUpdate(update *GenericUpdate) error 
 	return nil
 }
 
-func (c *ConsensusLightClient) VerifyUpdate(update *capella.LightClientUpdate) error {
-	genericUpdate := FromLightClientUpdate(update)
+func (c *ConsensusLightClient) VerifyUpdate(update common.SpecObj) error {
+	genericUpdate, err := FromLightClientUpdate(update)
+	if err != nil {
+		return err
+	}
 	return c.VerifyGenericUpdate(genericUpdate)
 }
 
-func (c *ConsensusLightClient) VerifyFinalityUpdate(update *capella.LightClientFinalityUpdate) error {
-	genericUpdate := FromLightClientFinalityUpdate(update)
+func (c *ConsensusLightClient) VerifyFinalityUpdate(update common.SpecObj) error {
+	genericUpdate, err := FromLightClientFinalityUpdate(update)
+	if err != nil {
+		return err
+	}
 	return c.VerifyGenericUpdate(genericUpdate)
 }
 
-func (c *ConsensusLightClient) VerifyOptimisticUpdate(update *capella.LightClientOptimisticUpdate) error {
-	genericUpdate := FromLightClientOptimisticUpdate(update)
+func (c *ConsensusLightClient) VerifyOptimisticUpdate(update common.SpecObj) error {
+	genericUpdate, err := FromLightClientOptimisticUpdate(update)
+	if err != nil {
+		return err
+	}
 	return c.VerifyGenericUpdate(genericUpdate)
 }
 
@@ -407,19 +450,31 @@ func (c *ConsensusLightClient) ApplyGenericUpdate(update *GenericUpdate) {
 	}
 }
 
-func (c *ConsensusLightClient) ApplyUpdate(update *capella.LightClientUpdate) {
-	genericUpdate := FromLightClientUpdate(update)
+func (c *ConsensusLightClient) ApplyUpdate(update common.SpecObj) error {
+	genericUpdate, err := FromLightClientUpdate(update)
+	if err != nil {
+		return err
+	}
 	c.ApplyGenericUpdate(genericUpdate)
+	return nil
 }
 
-func (c *ConsensusLightClient) ApplyFinalityUpdate(update *capella.LightClientFinalityUpdate) {
-	genericUpdate := FromLightClientFinalityUpdate(update)
+func (c *ConsensusLightClient) ApplyFinalityUpdate(update common.SpecObj) error {
+	genericUpdate, err := FromLightClientFinalityUpdate(update)
+	if err != nil {
+		return err
+	}
 	c.ApplyGenericUpdate(genericUpdate)
+	return nil
 }
 
-func (c *ConsensusLightClient) ApplyOptimisticUpdate(update *capella.LightClientOptimisticUpdate) {
-	genericUpdate := FromLightClientOptimisticUpdate(update)
+func (c *ConsensusLightClient) ApplyOptimisticUpdate(update common.SpecObj) error {
+	genericUpdate, err := FromLightClientOptimisticUpdate(update)
+	if err != nil {
+		return err
+	}
 	c.ApplyGenericUpdate(genericUpdate)
+	return nil
 }
 
 func (c *ConsensusLightClient) VerifySyncCommitteeSignature(pks []common.BLSPubkey, attestedHeader common.BeaconBlockHeader, signature common.BLSSignature, signatureSlot common.Slot) (bool, error) {
@@ -532,34 +587,94 @@ func (c *ConsensusLightClient) getParticipatingKeys(committee common.SyncCommitt
 	return res
 }
 
-func FromLightClientUpdate(update *capella.LightClientUpdate) *GenericUpdate {
-	return &GenericUpdate{
-		AttestedHeader:          &update.AttestedHeader.Beacon,
-		SyncAggregate:           &update.SyncAggregate,
-		SignatureSlot:           update.SignatureSlot,
-		NextSyncCommittee:       &update.NextSyncCommittee,
-		NextSyncCommitteeBranch: &update.NextSyncCommitteeBranch,
-		FinalizedHeader:         &update.FinalizedHeader.Beacon,
-		FinalityBranch:          &update.FinalityBranch,
+func FromLightClientUpdate(commonUpdate common.SpecObj) (*GenericUpdate, error) {
+	switch update := commonUpdate.(type) {
+	case *deneb.LightClientUpdate:
+		return &GenericUpdate{
+			AttestedHeader:          &update.AttestedHeader.Beacon,
+			SyncAggregate:           &update.SyncAggregate,
+			SignatureSlot:           update.SignatureSlot,
+			NextSyncCommittee:       &update.NextSyncCommittee,
+			NextSyncCommitteeBranch: &update.NextSyncCommitteeBranch,
+			FinalizedHeader:         &update.FinalizedHeader.Beacon,
+			FinalityBranch:          &update.FinalityBranch,
+		}, nil
+	case *capella.LightClientUpdate:
+		return &GenericUpdate{
+			AttestedHeader:          &update.AttestedHeader.Beacon,
+			SyncAggregate:           &update.SyncAggregate,
+			SignatureSlot:           update.SignatureSlot,
+			NextSyncCommittee:       &update.NextSyncCommittee,
+			NextSyncCommitteeBranch: &update.NextSyncCommitteeBranch,
+			FinalizedHeader:         &update.FinalizedHeader.Beacon,
+			FinalityBranch:          &update.FinalityBranch,
+		}, nil
+	case *altair.LightClientUpdate:
+		return &GenericUpdate{
+			AttestedHeader:          &update.AttestedHeader.Beacon,
+			SyncAggregate:           &update.SyncAggregate,
+			SignatureSlot:           update.SignatureSlot,
+			NextSyncCommittee:       &update.NextSyncCommittee,
+			NextSyncCommitteeBranch: &update.NextSyncCommitteeBranch,
+			FinalizedHeader:         &update.FinalizedHeader.Beacon,
+			FinalityBranch:          &update.FinalityBranch,
+		}, nil
 	}
+	return nil, errors.New("unknown update type")
 }
 
-func FromLightClientFinalityUpdate(update *capella.LightClientFinalityUpdate) *GenericUpdate {
-	return &GenericUpdate{
-		AttestedHeader:  &update.AttestedHeader.Beacon,
-		SyncAggregate:   &update.SyncAggregate,
-		SignatureSlot:   update.SignatureSlot,
-		FinalizedHeader: &update.FinalizedHeader.Beacon,
-		FinalityBranch:  &update.FinalityBranch,
+func FromLightClientFinalityUpdate(commonFinalityUpdate common.SpecObj) (*GenericUpdate, error) {
+	switch update := commonFinalityUpdate.(type) {
+	case *deneb.LightClientFinalityUpdate:
+		return &GenericUpdate{
+			AttestedHeader:  &update.AttestedHeader.Beacon,
+			SyncAggregate:   &update.SyncAggregate,
+			SignatureSlot:   update.SignatureSlot,
+			FinalizedHeader: &update.FinalizedHeader.Beacon,
+			FinalityBranch:  &update.FinalityBranch,
+		}, nil
+	case *capella.LightClientFinalityUpdate:
+		return &GenericUpdate{
+			AttestedHeader:  &update.AttestedHeader.Beacon,
+			SyncAggregate:   &update.SyncAggregate,
+			SignatureSlot:   update.SignatureSlot,
+			FinalizedHeader: &update.FinalizedHeader.Beacon,
+			FinalityBranch:  &update.FinalityBranch,
+		}, nil
+	case *altair.LightClientFinalityUpdate:
+		return &GenericUpdate{
+			AttestedHeader:  &update.AttestedHeader.Beacon,
+			SyncAggregate:   &update.SyncAggregate,
+			SignatureSlot:   update.SignatureSlot,
+			FinalizedHeader: &update.FinalizedHeader,
+			FinalityBranch:  &update.FinalityBranch,
+		}, nil
 	}
+	return nil, errors.New("unknown finality update type")
 }
 
-func FromLightClientOptimisticUpdate(update *capella.LightClientOptimisticUpdate) *GenericUpdate {
-	return &GenericUpdate{
-		AttestedHeader: &update.AttestedHeader.Beacon,
-		SyncAggregate:  &update.SyncAggregate,
-		SignatureSlot:  update.SignatureSlot,
+func FromLightClientOptimisticUpdate(commonOptimisticUpdate common.SpecObj) (*GenericUpdate, error) {
+	switch update := commonOptimisticUpdate.(type) {
+	case *deneb.LightClientOptimisticUpdate:
+		return &GenericUpdate{
+			AttestedHeader: &update.AttestedHeader.Beacon,
+			SyncAggregate:  &update.SyncAggregate,
+			SignatureSlot:  update.SignatureSlot,
+		}, nil
+	case *capella.LightClientOptimisticUpdate:
+		return &GenericUpdate{
+			AttestedHeader: &update.AttestedHeader.Beacon,
+			SyncAggregate:  &update.SyncAggregate,
+			SignatureSlot:  update.SignatureSlot,
+		}, nil
+	case *altair.LightClientOptimisticUpdate:
+		return &GenericUpdate{
+			AttestedHeader: &update.AttestedHeader.Beacon,
+			SyncAggregate:  &update.SyncAggregate,
+			SignatureSlot:  update.SignatureSlot,
+		}, nil
 	}
+	return nil, errors.New("unknown optimistic update type")
 }
 
 func ComputeSigningRoot(root common.Root, domain common.BLSDomain) common.Root {
