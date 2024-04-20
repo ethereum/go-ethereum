@@ -50,7 +50,7 @@ func (tr *tableRevalidation) init(cfg *Config) {
 
 // nodeAdded is called when the table receives a new node.
 func (tr *tableRevalidation) nodeAdded(tab *Table, n *node) {
-	tr.newNodes.push(n, tab.cfg.Clock.Now(), tab.rand)
+	tr.newNodes.push(n, tab.cfg.Clock.Now(), &tab.rand)
 }
 
 // nodeRemoved is called when a node was removed from the table.
@@ -61,22 +61,26 @@ func (tr *tableRevalidation) nodeRemoved(n *node) {
 	}
 }
 
-// nextTime returns the next time run() should be invoked.
-// The Table main loop uses this to schedule a timer.
-func (tr *tableRevalidation) nextTime() mclock.AbsTime {
-	return min(tr.newNodes.nextTime, tr.nodes.nextTime)
-}
-
 // run performs node revalidation.
-func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) {
-	if n := tr.newNodes.get(now, tab.rand, tr.activeReq); n != nil {
+// It returns the next time it should be invoked, which is used in the Table main loop
+// to schedule a timer. However, run can be called at any time.
+func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mclock.AbsTime) {
+	if n := tr.newNodes.get(now, &tab.rand, tr.activeReq); n != nil {
 		tr.startRequest(tab, n, true)
-		tr.newNodes.schedule(now, tab.rand)
+		tr.newNodes.schedule(now, &tab.rand)
 	}
-	if n := tr.nodes.get(now, tab.rand, tr.activeReq); n != nil {
+	if n := tr.nodes.get(now, &tab.rand, tr.activeReq); n != nil {
 		tr.startRequest(tab, n, false)
-		tr.nodes.schedule(now, tab.rand)
+		tr.nodes.schedule(now, &tab.rand)
 	}
+
+	if tr.newNodes.nextTime == never {
+		return tr.nodes.nextTime
+	}
+	if tr.nodes.nextTime == never {
+		return tr.newNodes.nextTime
+	}
+	return min(tr.newNodes.nextTime, tr.nodes.nextTime)
 }
 
 // startRequest spawns a revalidation request for node n.
@@ -111,7 +115,7 @@ func (tab *Table) doRevalidate(resp revalidationResponse, node *enode.Node) {
 	}
 
 	select {
-	case tab.revalidateResp <- resp:
+	case tab.revalResponseCh <- resp:
 	case <-tab.closed:
 	}
 }
@@ -150,7 +154,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	// Move node over to main queue after first validation.
 	if resp.isNewNode {
 		tr.newNodes.remove(n)
-		tr.nodes.push(n, tab.cfg.Clock.Now(), tab.rand)
+		tr.nodes.push(n, tab.cfg.Clock.Now(), &tab.rand)
 	}
 
 	// Store potential seeds in database.

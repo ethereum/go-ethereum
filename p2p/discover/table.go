@@ -66,7 +66,7 @@ type Table struct {
 	mutex        sync.Mutex        // protects buckets, bucket content, nursery, rand
 	buckets      [nBuckets]*bucket // index of known nodes by distance
 	nursery      []*node           // bootstrap nodes
-	rand         *reseedingRandom  // source of randomness, periodically reseeded
+	rand         reseedingRandom   // source of randomness, periodically reseeded
 	ips          netutil.DistinctNetSet
 	revalidation tableRevalidation
 
@@ -76,14 +76,14 @@ type Table struct {
 	log log.Logger
 
 	// loop channels
-	refreshReq     chan chan struct{}
-	revalidateResp chan revalidationResponse
-	addNodeCh      chan addNodeRequest
-	addNodeHandled chan struct{}
-	findFailureCh  chan *node
-	initDone       chan struct{}
-	closeReq       chan struct{}
-	closed         chan struct{}
+	refreshReq      chan chan struct{}
+	revalResponseCh chan revalidationResponse
+	addNodeCh       chan addNodeRequest
+	addNodeHandled  chan struct{}
+	findFailureCh   chan *node
+	initDone        chan struct{}
+	closeReq        chan struct{}
+	closed          chan struct{}
 
 	nodeAddedHook   func(*bucket, *node)
 	nodeRemovedHook func(*bucket, *node)
@@ -115,20 +115,19 @@ type addNodeRequest struct {
 func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
 	cfg = cfg.withDefaults()
 	tab := &Table{
-		net:            t,
-		db:             db,
-		cfg:            cfg,
-		log:            cfg.Log,
-		refreshReq:     make(chan chan struct{}),
-		revalidateResp: make(chan revalidationResponse),
-		addNodeCh:      make(chan addNodeRequest),
-		addNodeHandled: make(chan struct{}),
-		findFailureCh:  make(chan *node),
-		initDone:       make(chan struct{}),
-		closeReq:       make(chan struct{}),
-		closed:         make(chan struct{}),
-		rand:           new(reseedingRandom),
-		ips:            netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
+		net:             t,
+		db:              db,
+		cfg:             cfg,
+		log:             cfg.Log,
+		refreshReq:      make(chan chan struct{}),
+		revalResponseCh: make(chan revalidationResponse),
+		addNodeCh:       make(chan addNodeRequest),
+		addNodeHandled:  make(chan struct{}),
+		findFailureCh:   make(chan *node),
+		initDone:        make(chan struct{}),
+		closeReq:        make(chan struct{}),
+		closed:          make(chan struct{}),
+		ips:             netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit},
 	}
 	for i := range tab.buckets {
 		tab.buckets[i] = &bucket{
@@ -349,17 +348,18 @@ func (tab *Table) loop() {
 
 loop:
 	for {
+		nextTime := tab.revalidation.run(tab, tab.cfg.Clock.Now())
+		revalTimer.Schedule(nextTime)
+
 		reseedRandTimer.Schedule(tab.rand.nextReseedTime())
-		revalTimer.Schedule(tab.revalidation.nextTime())
 
 		select {
 		case <-reseedRandTimer.C():
 			tab.rand.seed(tab.cfg.Clock.Now())
 
 		case <-revalTimer.C():
-			tab.revalidation.run(tab, mclock.Now())
 
-		case r := <-tab.revalidateResp:
+		case r := <-tab.revalResponseCh:
 			tab.revalidation.handleResponse(tab, r)
 
 		case addreq := <-tab.addNodeCh:
