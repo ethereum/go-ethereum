@@ -132,11 +132,10 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	if !resp.didRespond {
 		// Revalidation failed.
 		n.livenessChecks /= 3
-		if n.livenessChecks == 0 || resp.isNewNode {
+		if n.livenessChecks <= 0 {
 			tab.deleteInBucket(b, n.ID())
-		}
-		// Move to fast queue.
-		if !resp.isNewNode {
+		} else if !resp.isNewNode {
+			// Move to fast queue.
 			tr.moveToList(&tr.fast, &tr.slow, n, now, &tab.rand)
 		}
 		return
