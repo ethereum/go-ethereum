@@ -319,3 +319,14 @@ func enable6780(jt *JumpTable) {
 		maxStack:    maxStack(1, 0),
 	}
 }
+
+func enableXXXX(jt *JumpTable) {
+	jt[AUTH_CREATE] = &operation{
+		execute:     opAuthCreate,
+		constantGas: params.AuthCreateGas,
+		dynamicGas:  gasAuthCreate,
+		minStack:    minStack(3, 1),
+		maxStack:    maxStack(3, 1),
+		memorySize:  memoryAuthCreate,
+	}
+}

@@ -523,6 +523,36 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2)
 }
 
+func (evm *EVM) AuthCreate(caller ContractRef, data []byte, gas uint64, endowment *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+	if data[0] >= 4 {
+		return nil, common.Address{}, 0, ErrAuthCreateSigType
+	}
+
+	code := make([]byte, len(data)-65)
+	copy(code[:], data[65:])
+	codeAndHash := &codeAndHash{code: code}
+
+	sig := make([]byte, 65)
+	copy(sig, data)
+
+	msg := []byte{params.AuthCreateMagic}
+	msg = append(msg, common.LeftPadBytes(evm.chainConfig.ChainID.Bytes(), 32)...)
+	msg = append(msg, codeAndHash.Hash().Bytes()...)
+	msg = crypto.Keccak256(msg)
+
+	sig = append(sig[1:], sig[0])
+	pub, err := crypto.Ecrecover(msg, sig)
+	if err != nil {
+		return nil, common.Address{}, 0, err
+	}
+
+	var eoaAddr common.Address
+	copy(eoaAddr[:], crypto.Keccak256(pub[1:])[12:])
+
+	evm.StateDB.SetNonce(eoaAddr, 0)
+	return evm.create(caller, codeAndHash, gas, endowment, eoaAddr, AUTH_CREATE)
+}
+
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 

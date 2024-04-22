@@ -38,6 +38,7 @@ var (
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
 	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
 	ErrNonceUintOverflow        = errors.New("nonce uint64 overflow")
+	ErrAuthCreateSigType        = errors.New("auth_create signature type not found ")
 
 	// errStopToken is an internal token indicating interpreter loop termination,
 	// never returned to outside callers.
