@@ -753,6 +753,7 @@ type Rules struct {
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai                                     bool
+	IsXDCxDisable                                           bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
@@ -774,5 +775,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          c.IsMerge(num),
 		IsShanghai:       c.IsShanghai(num),
+		IsXDCxDisable:    c.IsTIPXDCXReceiver(num),
 	}
 }

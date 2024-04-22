@@ -48,6 +48,8 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 	if contract.CodeAddr != nil {
 		var precompiles map[common.Address]PrecompiledContract
 		switch {
+		case evm.chainRules.IsXDCxDisable:
+			precompiles = PrecompiledContractsXDCv2
 		case evm.chainRules.IsIstanbul:
 			precompiles = PrecompiledContractsIstanbul
 		case evm.chainRules.IsByzantium:
@@ -56,11 +58,13 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 			precompiles = PrecompiledContractsHomestead
 		}
 		if p := precompiles[*contract.CodeAddr]; p != nil {
-			switch p.(type) {
-			case *XDCxEpochPrice:
-				p.(*XDCxEpochPrice).SetTradingState(evm.tradingStateDB)
-			case *XDCxLastPrice:
-				p.(*XDCxLastPrice).SetTradingState(evm.tradingStateDB)
+			if evm.chainConfig.IsTIPXDCXReceiver(evm.BlockNumber) {
+				switch p := p.(type) {
+				case *XDCxEpochPrice:
+					p.SetTradingState(evm.tradingStateDB)
+				case *XDCxLastPrice:
+					p.SetTradingState(evm.tradingStateDB)
+				}
 			}
 			return RunPrecompiledContract(p, input, contract)
 		}
