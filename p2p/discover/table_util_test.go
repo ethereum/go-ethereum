@@ -118,7 +118,7 @@ func fillTable(tab *Table, nodes []*node, setLive bool) {
 			n.livenessChecks = 1
 			n.isValidatedLive = true
 		}
-		tab.addSeenNode(n)
+		tab.addFoundNode(n)
 	}
 }
 

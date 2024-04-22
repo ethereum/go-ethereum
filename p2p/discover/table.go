@@ -108,8 +108,8 @@ type bucket struct {
 }
 
 type addNodeRequest struct {
-	node   *node
-	isLive bool
+	node      *node
+	isInbound bool
 }
 
 func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
@@ -300,13 +300,13 @@ func (tab *Table) len() (n int) {
 	return n
 }
 
-// addSeenNode adds a node which may not be live. If the bucket has space available,
+// addFoundNode adds a node which may not be live. If the bucket has space available,
 // adding the node succeeds immediately. Otherwise, the node is added to the replacements
 // list.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) addSeenNode(n *node) {
-	req := addNodeRequest{node: n, isLive: false}
+func (tab *Table) addFoundNode(n *node) {
+	req := addNodeRequest{node: n, isInbound: false}
 	select {
 	case tab.addNodeCh <- req:
 		<-tab.addNodeHandled
@@ -314,16 +314,16 @@ func (tab *Table) addSeenNode(n *node) {
 	}
 }
 
-// addVerifiedNode adds a node whose existence has been verified recently. If the bucket
-// has no space, the node is added to the replacements list.
+// addInboundNode adds a node from an inbound contact. If the bucket has no space, the
+// node is added to the replacements list.
 //
-// There is an additional safety measure: if the table is still initializing the node
-// is not added. This prevents an attack where the table could be filled by just sending
-// ping repeatedly.
+// There is an additional safety measure: if the table is still initializing the node is
+// not added. This prevents an attack where the table could be filled by just sending ping
+// repeatedly.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) addVerifiedNode(n *node) {
-	req := addNodeRequest{node: n, isLive: true}
+func (tab *Table) addInboundNode(n *node) {
+	req := addNodeRequest{node: n, isInbound: true}
 	select {
 	case tab.addNodeCh <- req:
 		<-tab.addNodeHandled
@@ -435,7 +435,7 @@ func (tab *Table) loadSeedNodes() {
 			age := time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP()))
 			tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
 		}
-		tab.handleAddNode(addNodeRequest{node: seed, isLive: true})
+		tab.handleAddNode(addNodeRequest{node: seed, isInbound: true})
 	}
 }
 
@@ -488,7 +488,9 @@ func (tab *Table) handleAddNode(req addNodeRequest) {
 	if req.node.ID() == tab.self().ID() {
 		return
 	}
-	if !req.isLive && !tab.isInitDone() {
+	// For nodes from inbound contact, there is an additional safety measure: if the table
+	// is still initializing the node is not added.
+	if req.isInbound && !tab.isInitDone() {
 		return
 	}
 

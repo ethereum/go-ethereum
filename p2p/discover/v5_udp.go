@@ -699,7 +699,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	}
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
-		t.tab.addSeenNode(wrapNode(fromNode))
+		t.tab.addInboundNode(wrapNode(fromNode))
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.

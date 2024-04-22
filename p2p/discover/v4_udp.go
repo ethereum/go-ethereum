@@ -673,10 +673,10 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 	n := wrapNode(enode.NewV4(h.senderKey, from.IP, int(req.From.TCP), from.Port))
 	if time.Since(t.db.LastPongReceived(n.ID(), from.IP)) > bondExpiration {
 		t.sendPing(fromID, from, func() {
-			t.tab.addVerifiedNode(n)
+			t.tab.addInboundNode(n)
 		})
 	} else {
-		t.tab.addVerifiedNode(n)
+		t.tab.addInboundNode(n)
 	}
 
 	// Update node database and endpoint predictor.
