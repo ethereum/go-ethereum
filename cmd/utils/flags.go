@@ -2027,7 +2027,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	})
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, false),
+		Service:   filters.NewFilterAPI(filterSystem),
 	}})
 	return filterSystem
 }
