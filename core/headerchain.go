@@ -305,14 +305,6 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header) (int, error) {
 			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x..], item %d is #%d [%x..] (parent [%x..])", i-1, chain[i-1].Number,
 				parentHash.Bytes()[:4], i, chain[i].Number, hash.Bytes()[:4], chain[i].ParentHash[:4])
 		}
-		// If the header is a banned one, straight out abort
-		if BadHashes[chain[i].ParentHash] {
-			return i - 1, ErrBannedHash
-		}
-		// If it's the last header in the cunk, we need to check it too
-		if i == len(chain)-1 && BadHashes[chain[i].Hash()] {
-			return i, ErrBannedHash
-		}
 	}
 	// Start the parallel verifier
 	abort, results := hc.engine.VerifyHeaders(hc, chain)
