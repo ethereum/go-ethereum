@@ -6,7 +6,7 @@ import (
 	"math/big"
 )
 
-// Generates approptiate public key format from given coordinates
+// Generates appropriate public key format from given coordinates
 func newPublicKey(x, y *big.Int) *ecdsa.PublicKey {
 	// Check if the given coordinates are valid
 	if x == nil || y == nil || !elliptic.P256().IsOnCurve(x, y) {

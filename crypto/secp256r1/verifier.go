@@ -5,7 +5,8 @@ import (
 	"math/big"
 )
 
-// Verifies the given signature (r, s) for the given hash and public key (x, y).
+// Verify verifies the given signature (r, s) for the given hash and public key (x, y).
+// It returns true if the signature is valid, false otherwise.
 func Verify(hash []byte, r, s, x, y *big.Int) bool {
 	// Create the public key format
 	publicKey := newPublicKey(x, y)
