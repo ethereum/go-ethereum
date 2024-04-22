@@ -164,10 +164,11 @@ func (tab *Table) Nodes() [][]BucketNode {
 		nodes[i] = make([]BucketNode, len(b.entries))
 		for j, n := range b.entries {
 			nodes[i][j] = BucketNode{
-				Node:    n.Node,
-				Checks:  int(n.livenessChecks),
-				Live:    n.isValidatedLive,
-				AddedAt: n.addedAt,
+				Node:        n.Node,
+				Checks:      int(n.livenessChecks),
+				Live:        n.isValidatedLive,
+				AddedTable:  n.addedToTable,
+				AddedBucket: n.addedToBucket,
 			}
 		}
 	}
@@ -511,7 +512,6 @@ func (tab *Table) handleAddNode(req addNodeRequest) {
 	// Add to bucket.
 	b.entries = append(b.entries, req.node)
 	b.replacements = deleteNode(b.replacements, req.node)
-	req.node.addedAt = time.Now()
 	tab.nodeAdded(b, req.node)
 }
 
@@ -524,6 +524,8 @@ func (tab *Table) addReplacement(b *bucket, n *node) {
 	if !tab.addIP(b, n.IP()) {
 		return
 	}
+
+	n.addedToTable = time.Now()
 	var removed *node
 	b.replacements, removed = pushNode(b.replacements, n, maxReplacements)
 	if removed != nil {
@@ -532,6 +534,10 @@ func (tab *Table) addReplacement(b *bucket, n *node) {
 }
 
 func (tab *Table) nodeAdded(b *bucket, n *node) {
+	if n.addedToTable == (time.Time{}) {
+		n.addedToTable = time.Now()
+	}
+	n.addedToBucket = time.Now()
 	tab.revalidation.nodeAdded(tab, n)
 	if tab.nodeAddedHook != nil {
 		tab.nodeAddedHook(b, n)
@@ -576,7 +582,6 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
 	b.replacements = slices.Delete(b.replacements, rindex, rindex+1)
 	b.entries = append(b.entries, rep)
 	tab.nodeAdded(b, rep)
-
 	tab.log.Debug("Replaced dead node", "b", b.index, "id", n.ID(), "ip", n.IP(), "r", rep.ID(), "rip", rep.IP())
 	return rep
 }

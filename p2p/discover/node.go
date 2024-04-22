@@ -30,19 +30,21 @@ import (
 )
 
 type BucketNode struct {
-	Node    *enode.Node `json:"node"`
-	AddedAt time.Time   `json:"added"`
-	Checks  int         `json:"checks"`
-	Live    bool        `json:"live"`
+	Node        *enode.Node `json:"node"`
+	AddedTable  time.Time   `json:"addedToTable"`
+	AddedBucket time.Time   `json:"addedToBucket"`
+	Checks      int         `json:"checks"`
+	Live        bool        `json:"live"`
 }
 
 // node represents a host on the network.
 // The fields of Node may not be modified.
 type node struct {
 	*enode.Node
-	addedAt         time.Time // time when the node was added to the table
+	addedToTable    time.Time // first time node was added to bucket or replacement list
+	addedToBucket   time.Time // time it was added in the actual bucket
 	livenessChecks  uint      // how often liveness was checked
-	isValidatedLive bool
+	isValidatedLive bool      // true if existence of node is considered validated right now
 }
 
 type encPubkey [64]byte
