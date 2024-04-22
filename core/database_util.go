@@ -262,10 +262,6 @@ func GetBlockReceipts(db DatabaseReader, hash common.Hash, number uint64) types.
 		receipts[i].BlockHash = hash
 		receipts[i].BlockNumber = big.NewInt(0).SetUint64(number)
 		receipts[i].TransactionIndex = uint(i)
-		for _, log := range receipts[i].Logs {
-			// update BlockHash to fix #208
-			log.BlockHash = hash
-		}
 	}
 	return receipts
 }
