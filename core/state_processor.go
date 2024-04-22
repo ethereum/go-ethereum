@@ -248,6 +248,17 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(context, statedb, XDCxState, config, cfg)
 
+	if config.IsEIP1559(header.Number) {
+		statedb.AddAddressToAccessList(msg.From())
+		if dst := msg.To(); dst != nil {
+			statedb.AddAddressToAccessList(*dst)
+			// If it's a create-tx, the destination will be added inside evm.create
+		}
+		for _, addr := range vmenv.ActivePrecompiles() {
+			statedb.AddAddressToAccessList(addr)
+		}
+	}
+
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	var beneficiary common.Address
 	if author == nil {

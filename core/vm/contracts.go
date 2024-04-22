@@ -22,10 +22,9 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/XinFinOrg/XDPoSChain/core/vm/privacy"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/XinFinOrg/XDPoSChain/core/vm/privacy"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/crypto/blake2b"
 	"github.com/XinFinOrg/XDPoSChain/crypto/bn256"
@@ -88,15 +87,37 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 }
 
 var PrecompiledContractsXDCv2 = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}):  &ecrecover{},
-	common.BytesToAddress([]byte{2}):  &sha256hash{},
-	common.BytesToAddress([]byte{3}):  &ripemd160hash{},
-	common.BytesToAddress([]byte{4}):  &dataCopy{},
-	common.BytesToAddress([]byte{5}):  &bigModExp{},
-	common.BytesToAddress([]byte{6}):  &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}):  &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}):  &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}):  &blake2F{},
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hash{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModExp{},
+	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}): &blake2F{},
+}
+
+var (
+	PrecompiledAddressesXDCv2     []common.Address
+	PrecompiledAddressesIstanbul  []common.Address
+	PrecompiledAddressesByzantium []common.Address
+	PrecompiledAddressesHomestead []common.Address
+)
+
+func init() {
+	for k := range PrecompiledContractsHomestead {
+		PrecompiledAddressesHomestead = append(PrecompiledAddressesHomestead, k)
+	}
+	for k := range PrecompiledContractsByzantium {
+		PrecompiledAddressesHomestead = append(PrecompiledAddressesByzantium, k)
+	}
+	for k := range PrecompiledContractsIstanbul {
+		PrecompiledAddressesIstanbul = append(PrecompiledAddressesIstanbul, k)
+	}
+	for k := range PrecompiledContractsXDCv2 {
+		PrecompiledAddressesXDCv2 = append(PrecompiledAddressesXDCv2, k)
+	}
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
@@ -499,7 +520,6 @@ func (c *bn256PairingByzantium) RequiredGas(input []byte) uint64 {
 func (c *bn256PairingByzantium) Run(input []byte) ([]byte, error) {
 	return runBn256Pairing(input)
 }
-
 
 type blake2F struct{}
 
