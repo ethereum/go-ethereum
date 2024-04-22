@@ -27,7 +27,6 @@ import (
 )
 
 // Tests that handshake failures are detected and reported correctly.
-func TestHandshake67(t *testing.T) { testHandshake(t, ETH67) }
 func TestHandshake68(t *testing.T) { testHandshake(t, ETH68) }
 
 func testHandshake(t *testing.T, protocol uint) {

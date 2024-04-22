@@ -172,7 +172,7 @@ type SimNode struct {
 	registerOnce sync.Once
 }
 
-// Close closes the underlaying node.Node to release
+// Close closes the underlying node.Node to release
 // acquired resources.
 func (sn *SimNode) Close() error {
 	return sn.node.Close()

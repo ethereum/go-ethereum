@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -66,16 +65,10 @@ func (frdb *freezerdb) Close() error {
 // Freeze is a helper method used for external testing to trigger and block until
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
-func (frdb *freezerdb) Freeze(threshold uint64) error {
+func (frdb *freezerdb) Freeze() error {
 	if frdb.AncientStore.(*chainFreezer).readonly {
 		return errReadOnly
 	}
-	// Set the freezer threshold to a temporary value
-	defer func(old uint64) {
-		frdb.AncientStore.(*chainFreezer).threshold.Store(old)
-	}(frdb.AncientStore.(*chainFreezer).threshold.Load())
-	frdb.AncientStore.(*chainFreezer).threshold.Store(threshold)
-
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
 	frdb.AncientStore.(*chainFreezer).trigger <- trigger
@@ -178,7 +171,7 @@ func resolveChainFreezerDir(ancient string) string {
 	// sub folder, if not then two possibilities:
 	// - chain freezer is not initialized
 	// - chain freezer exists in legacy location (root ancient folder)
-	freezer := path.Join(ancient, ChainFreezerName)
+	freezer := filepath.Join(ancient, ChainFreezerName)
 	if !common.FileExist(freezer) {
 		if !common.FileExist(ancient) {
 			// The entire ancient store is not initialized, still use the sub
@@ -657,7 +650,6 @@ func ReadChainMetadata(db ethdb.KeyValueStore) [][]string {
 		{"snapshotRecoveryNumber", pp(ReadSnapshotRecoveryNumber(db))},
 		{"snapshotRoot", fmt.Sprintf("%v", ReadSnapshotRoot(db))},
 		{"txIndexTail", pp(ReadTxIndexTail(db))},
-		{"fastTxLookupLimit", pp(ReadFastTxLookupLimit(db))},
 	}
 	if b := ReadSkeletonSyncStatus(db); b != nil {
 		data = append(data, []string{"SkeletonSyncStatus", string(b)})

@@ -20,13 +20,13 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"golang.org/x/exp/slices"
 )
 
 func TestUDPv4_Lookup(t *testing.T) {
@@ -285,7 +285,7 @@ func (tn *preminedTestnet) neighborsAtDistances(base *enode.Node, distances []ui
 		for i := range lookupTestnet.dists[d] {
 			n := lookupTestnet.node(d, i)
 			d := enode.LogDist(base.ID(), n.ID())
-			if containsUint(uint(d), distances) {
+			if slices.Contains(distances, uint(d)) {
 				result = append(result, n)
 				if len(result) >= elems {
 					return result

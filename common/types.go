@@ -475,3 +475,14 @@ func (d *Decimal) UnmarshalJSON(input []byte) error {
 		return err
 	}
 }
+
+type PrettyBytes []byte
+
+// TerminalString implements log.TerminalStringer, formatting a string for console
+// output during logging.
+func (b PrettyBytes) TerminalString() string {
+	if len(b) < 7 {
+		return fmt.Sprintf("%x", b)
+	}
+	return fmt.Sprintf("%#x...%x (%dB)", b[:3], b[len(b)-3:], len(b))
+}

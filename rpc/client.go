@@ -70,7 +70,7 @@ type BatchElem struct {
 	// discarded.
 	Result interface{}
 	// Error is set if the server returns an error for this request, or if
-	// unmarshaling into Result fails. It is not set for I/O errors.
+	// unmarshalling into Result fails. It is not set for I/O errors.
 	Error error
 }
 
@@ -431,7 +431,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 	}
 
 	// Wait for all responses to come back.
-	for n := 0; n < len(batchresp) && err == nil; n++ {
+	for n := 0; n < len(batchresp); n++ {
 		resp := batchresp[n]
 		if resp == nil {
 			// Ignore null responses. These can happen for batches sent via HTTP.

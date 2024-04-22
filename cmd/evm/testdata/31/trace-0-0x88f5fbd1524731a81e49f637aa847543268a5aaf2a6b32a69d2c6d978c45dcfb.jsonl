@@ -1,0 +1,6 @@
+{"pc":0,"op":96,"gas":"0x13498","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1"}
+{"pc":2,"op":96,"gas":"0x13495","gasCost":"0x3","memSize":0,"stack":["0x40"],"depth":1,"refund":0,"opName":"PUSH1"}
+{"pc":4,"op":96,"gas":"0x13492","gasCost":"0x3","memSize":0,"stack":["0x40","0x40"],"depth":1,"refund":0,"opName":"PUSH1"}
+{"pc":6,"op":96,"gas":"0x1348f","gasCost":"0x3","memSize":0,"stack":["0x40","0x40","0x40"],"depth":1,"refund":0,"opName":"PUSH1"}
+{"pc":8,"op":0,"gas":"0x1348c","gasCost":"0x0","memSize":0,"stack":["0x40","0x40","0x40","0x40"],"depth":1,"refund":0,"opName":"STOP"}
+{"output":"","gasUsed":"0xc"}

@@ -197,8 +197,8 @@ type Block struct {
 	withdrawals  Withdrawals
 
 	// caches
-	hash atomic.Value
-	size atomic.Value
+	hash atomic.Pointer[common.Hash]
+	size atomic.Uint64
 
 	// These fields are used by package eth to track
 	// inter-peer block relay.
@@ -406,8 +406,8 @@ func (b *Block) BlobGasUsed() *uint64 {
 // Size returns the true RLP encoded storage size of the block, either by encoding
 // and returning it, or returning a previously cached value.
 func (b *Block) Size() uint64 {
-	if size := b.size.Load(); size != nil {
-		return size.(uint64)
+	if size := b.size.Load(); size > 0 {
+		return size
 	}
 	c := writeCounter(0)
 	rlp.Encode(&c, b)
@@ -486,11 +486,11 @@ func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
 // The hash is computed on the first call and cached thereafter.
 func (b *Block) Hash() common.Hash {
 	if hash := b.hash.Load(); hash != nil {
-		return hash.(common.Hash)
+		return *hash
 	}
-	v := b.header.Hash()
-	b.hash.Store(v)
-	return v
+	h := b.header.Hash()
+	b.hash.Store(&h)
+	return h
 }
 
 type Blocks []*Block

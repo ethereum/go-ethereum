@@ -2,8 +2,10 @@ package log
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/big"
 	"os"
 	"strings"
@@ -11,7 +13,6 @@ import (
 	"time"
 
 	"github.com/holiman/uint256"
-	"golang.org/x/exp/slog"
 )
 
 // TestLoggingWithVmodule checks that vmodule works.
@@ -49,6 +50,25 @@ func TestTerminalHandlerWithAttrs(t *testing.T) {
 	}
 }
 
+// Make sure the default json handler outputs debug log lines
+func TestJSONHandler(t *testing.T) {
+	out := new(bytes.Buffer)
+	handler := JSONHandler(out)
+	logger := slog.New(handler)
+	logger.Debug("hi there")
+	if len(out.String()) == 0 {
+		t.Error("expected non-empty debug log output from default JSON Handler")
+	}
+
+	out.Reset()
+	handler = JSONHandlerWithLevel(out, slog.LevelInfo)
+	logger = slog.New(handler)
+	logger.Debug("hi there")
+	if len(out.String()) != 0 {
+		t.Errorf("expected empty debug log output, but got: %v", out.String())
+	}
+}
+
 func BenchmarkTraceLogging(b *testing.B) {
 	SetDefault(NewLogger(NewTerminalHandler(os.Stderr, true)))
 	b.ResetTimer()
@@ -77,7 +97,7 @@ func benchmarkLogger(b *testing.B, l Logger) {
 		tt     = time.Now()
 		bigint = big.NewInt(100)
 		nilbig *big.Int
-		err    = fmt.Errorf("Oh nooes it's crap")
+		err    = errors.New("Oh nooes it's crap")
 	)
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -106,7 +126,7 @@ func TestLoggerOutput(t *testing.T) {
 		tt        = time.Time{}
 		bigint    = big.NewInt(100)
 		nilbig    *big.Int
-		err       = fmt.Errorf("Oh nooes it's crap")
+		err       = errors.New("Oh nooes it's crap")
 		smallUint = uint256.NewInt(500_000)
 		bigUint   = &uint256.Int{0xff, 0xff, 0xff, 0xff}
 	)

@@ -9,7 +9,7 @@ type GaugeInfoSnapshot interface {
 	Value() GaugeInfoValue
 }
 
-// GaugeInfos hold a GaugeInfoValue value that can be set arbitrarily.
+// GaugeInfo holds a GaugeInfoValue value that can be set arbitrarily.
 type GaugeInfo interface {
 	Update(GaugeInfoValue)
 	Snapshot() GaugeInfoSnapshot

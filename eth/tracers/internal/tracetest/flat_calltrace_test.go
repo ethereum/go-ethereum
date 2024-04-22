@@ -16,11 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
-
-	// Force-load the native, to trigger registration
-	"github.com/ethereum/go-ethereum/eth/tracers"
 )
 
 // flatCallTrace is the result of a callTracerParity run.
@@ -63,8 +61,8 @@ type flatCallTraceResult struct {
 
 // flatCallTracerTest defines a single test to check the call tracer against.
 type flatCallTracerTest struct {
-	Genesis      core.Genesis    `json:"genesis"`
-	Context      callContext     `json:"context"`
+	Genesis      *core.Genesis   `json:"genesis"`
+	Context      *callContext    `json:"context"`
 	Input        string          `json:"input"`
 	TracerConfig json.RawMessage `json:"tracerConfig"`
 	Result       []flatCallTrace `json:"result"`
@@ -86,39 +84,28 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		return fmt.Errorf("failed to parse testcase input: %v", err)
 	}
 	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-	origin, _ := signer.Sender(tx)
-	txContext := vm.TxContext{
-		Origin:   origin,
-		GasPrice: tx.GasPrice(),
-	}
-	context := vm.BlockContext{
-		CanTransfer: core.CanTransfer,
-		Transfer:    core.Transfer,
-		Coinbase:    test.Context.Miner,
-		BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-		Time:        uint64(test.Context.Time),
-		Difficulty:  (*big.Int)(test.Context.Difficulty),
-		GasLimit:    uint64(test.Context.GasLimit),
-	}
-	triedb, _, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
-	defer triedb.Close()
+	context := test.Context.toBlockContext(test.Genesis)
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+	defer state.Close()
 
 	// Create the tracer, the EVM environment and run it
 	tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create call tracer: %v", err)
 	}
-	evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
 
-	msg, err := core.TransactionToMessage(tx, signer, nil)
+	state.StateDB.SetLogger(tracer.Hooks)
+	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction for tracing: %v", err)
 	}
-	st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-
-	if _, err = st.TransitionDb(); err != nil {
+	evm := vm.NewEVM(context, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+	tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+	vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %v", err)
 	}
+	tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 
 	// Retrieve the trace result and compare against the etalon
 	res, err := tracer.GetResult()
@@ -130,7 +117,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 		return fmt.Errorf("failed to unmarshal trace result: %v", err)
 	}
 	if !jsonEqualFlat(ret, test.Result) {
-		t.Logf("tracer name: %s", tracerName)
+		t.Logf("test %s failed", filename)
 
 		// uncomment this for easier debugging
 		// have, _ := json.MarshalIndent(ret, "", " ")
@@ -176,7 +163,7 @@ func testFlatCallTracer(tracerName string, dirPath string, t *testing.T) {
 	}
 }
 
-// jsonEqual is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
+// jsonEqualFlat is similar to reflect.DeepEqual, but does a 'bounce' via json prior to
 // comparison
 func jsonEqualFlat(x, y interface{}) bool {
 	xTrace := new([]flatCallTrace)

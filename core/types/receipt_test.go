@@ -343,7 +343,7 @@ func TestReceiptJSON(t *testing.T) {
 		r := Receipt{}
 		err = r.UnmarshalJSON(b)
 		if err != nil {
-			t.Fatal("error unmarshaling receipt from json:", err)
+			t.Fatal("error unmarshalling receipt from json:", err)
 		}
 	}
 }
@@ -360,7 +360,7 @@ func TestEffectiveGasPriceNotRequired(t *testing.T) {
 	r2 := Receipt{}
 	err = r2.UnmarshalJSON(b)
 	if err != nil {
-		t.Fatal("error unmarshaling receipt from json:", err)
+		t.Fatal("error unmarshalling receipt from json:", err)
 	}
 }
 

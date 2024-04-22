@@ -28,7 +28,6 @@ import (
 )
 
 // Tests that snap sync is disabled after a successful sync cycle.
-func TestSnapSyncDisabling67(t *testing.T) { testSnapSyncDisabling(t, eth.ETH67, snap.SNAP1) }
 func TestSnapSyncDisabling68(t *testing.T) { testSnapSyncDisabling(t, eth.ETH68, snap.SNAP1) }
 
 // Tests that snap sync gets disabled as soon as a real block is successfully
@@ -86,10 +85,11 @@ func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
 	time.Sleep(250 * time.Millisecond)
 
 	// Check that snap sync was disabled
-	op := peerToSyncOp(downloader.SnapSync, empty.handler.peers.peerWithHighestTD())
-	if err := empty.handler.doSync(op); err != nil {
+	if err := empty.handler.downloader.BeaconSync(downloader.SnapSync, full.chain.CurrentBlock(), nil); err != nil {
 		t.Fatal("sync failed:", err)
 	}
+	empty.handler.enableSyncedFeatures()
+
 	if empty.handler.snapSync.Load() {
 		t.Fatalf("snap sync not disabled after successful synchronisation")
 	}

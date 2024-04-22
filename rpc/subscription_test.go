@@ -235,10 +235,10 @@ func (c *mockConn) writeJSON(ctx context.Context, msg interface{}, isError bool)
 	return c.enc.Encode(msg)
 }
 
-// Closed returns a channel which is closed when the connection is closed.
+// closed returns a channel which is closed when the connection is closed.
 func (c *mockConn) closed() <-chan interface{} { return nil }
 
-// RemoteAddr returns the peer address of the connection.
+// remoteAddr returns the peer address of the connection.
 func (c *mockConn) remoteAddr() string { return "" }
 
 // BenchmarkNotify benchmarks the performance of notifying a subscription.
