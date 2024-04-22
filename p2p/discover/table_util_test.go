@@ -241,6 +241,8 @@ func checkNodesEqual(got, want []*enode.Node) error {
 				goto NotEqual
 			}
 		}
+	} else {
+		return fmt.Errorf("length dismatch: got %d nodes, want %d nodes", len(got), len(want))
 	}
 	return nil
 
