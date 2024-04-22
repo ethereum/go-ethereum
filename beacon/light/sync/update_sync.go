@@ -163,18 +163,18 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 		}
 		switch {
 		case !state.hasHeader:
-			log.Error("Checkpoint not available, block is reported as unknown", "server", server.Name())
+			log.Error("blsync: checkpoint block is not available, reported as unknown", "server", server.Name())
 		case !state.canonical:
-			log.Error("Checkpoint not available, block is reported as non-canonical", "server", server.Name())
+			log.Error("blsync: checkpoint block is not available, reported as non-canonical", "server", server.Name())
 		case !s.hasEpochInfo:
 			// should be available if hasHeader is true and state is ssPrintStatus
-			panic("Checkpoint epoch info not available when printing retrieval status")
+			panic("checkpoint epoch info not available when printing retrieval status")
 		case !s.epochBoundary:
-			log.Error("Checkpoint not available, block is not on epoch boundary", "slot", s.cpSlot, "parent slot", s.parentSlot, "server", server.Name())
+			log.Error("blsync: checkpoint block is not first of epoch", "slot", s.cpSlot, "parent", s.parentSlot, "server", server.Name())
 		case !state.finalized:
-			log.Error("Checkpoint not available, block is reported as non-finalized", "server", server.Name())
+			log.Error("blsync: checkpoint block is reported as non-finalized", "server", server.Name())
 		default:
-			log.Error("Checkpoint not available, block is reported as canonical and finalized; specified checkpoint might be too old", "server", server.Name())
+			log.Error("blsync: checkpoint not available, but reported as finalized; specified checkpoint hash might be too old", "server", server.Name())
 		}
 		s.serverState[server] = serverState{state: ssDone}
 	}
