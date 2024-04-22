@@ -71,7 +71,7 @@ func init() {
 }
 
 func newFirehoseTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
-	firehoseInfo("new firehose tracer")
+	firehoseInfo("new firehose tracer (config=%s)", string(cfg))
 
 	var config FirehoseConfig
 	if len([]byte(cfg)) > 0 {
@@ -84,6 +84,8 @@ func newFirehoseTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 }
 
 func newTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
+	firehoseInfo("new tracing hooks from firehose (apply_backward_compatibility=%s)", (*boolPtrView)(tracer.applyBackwardCompatibility))
+
 	return &tracing.Hooks{
 		OnBlockchainInit: tracer.OnBlockchainInit,
 		OnGenesisBlock:   tracer.OnGenesisBlock,
@@ -255,6 +257,8 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 	if f.applyBackwardCompatibility == nil {
 		f.applyBackwardCompatibility = ptr(chainNeedsLegacyBackwardCompatibility(chainConfig.ChainID))
 	}
+
+	firehoseInfo("blockchain init (chain_id=%d apply_backward_compatibility=%t)", chainConfig.ChainID.Int64(), *f.applyBackwardCompatibility)
 }
 
 var mainnetChainID = big.NewInt(1)
@@ -1930,6 +1934,16 @@ func (e _errorView) String() string {
 	}
 
 	return e.err.Error()
+}
+
+type boolPtrView bool
+
+func (b *boolPtrView) String() string {
+	if b == nil {
+		return "<nil>"
+	}
+
+	return strconv.FormatBool(*(*bool)(b))
 }
 
 type inputView []byte
