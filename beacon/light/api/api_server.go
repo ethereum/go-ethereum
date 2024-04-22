@@ -73,8 +73,10 @@ func (s *ApiServer) SendRequest(id request.ID, req request.Request) {
 			r.Updates, r.Committees, err = s.api.GetBestUpdatesAndCommittees(data.FirstPeriod, data.Count)
 			resp = r
 		case sync.ReqHeader:
+			var r sync.RespHeader
 			log.Debug("Beacon API: requesting header", "reqid", id, "hash", common.Hash(data))
-			resp, err = s.api.GetHeader(common.Hash(data))
+			r.Header, r.Canonical, r.Finalized, err = s.api.GetHeader(common.Hash(data))
+			resp = r
 		case sync.ReqCheckpointData:
 			log.Debug("Beacon API: requesting checkpoint data", "reqid", id, "hash", common.Hash(data))
 			resp, err = s.api.GetCheckpointData(common.Hash(data))
@@ -100,4 +102,9 @@ func (s *ApiServer) Unsubscribe() {
 		s.unsubscribe()
 		s.unsubscribe = nil
 	}
+}
+
+// Name implements request.Server
+func (s *ApiServer) Name() string {
+	return s.api.url
 }
