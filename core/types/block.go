@@ -260,6 +260,7 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher
 		b.header.WithdrawalsHash = nil
 	} else if len(withdrawals) == 0 {
 		b.header.WithdrawalsHash = &EmptyWithdrawalsHash
+		b.withdrawals = Withdrawals{}
 	} else {
 		hash := DeriveSha(Withdrawals(withdrawals), hasher)
 		b.header.WithdrawalsHash = &hash
