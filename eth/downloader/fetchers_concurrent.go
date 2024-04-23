@@ -154,17 +154,14 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			}
 			sort.Sort(&peerCapacitySort{idles, caps})
 
-			var (
-				throttled bool
-				queued    = queue.pending()
-			)
+			var throttled bool
 			for _, peer := range idles {
 				// Short circuit if throttling activated or there are no more
 				// queued tasks to be retrieved
 				if throttled {
 					break
 				}
-				if queued = queue.pending(); queued == 0 {
+				if queued := queue.pending(); queued == 0 {
 					break
 				}
 				// Reserve a chunk of fetches for a peer. A nil can mean either that
@@ -302,16 +299,6 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				queue.updateCapacity(peer, 0, 0)
 			} else {
 				d.dropPeer(peer.id)
-
-				// If this peer was the master peer, abort sync immediately
-				d.cancelLock.RLock()
-				master := peer.id == d.cancelPeer
-				d.cancelLock.RUnlock()
-
-				if master {
-					d.cancel()
-					return errTimeout
-				}
 			}
 
 		case res := <-responses:

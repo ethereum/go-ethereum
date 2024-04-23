@@ -88,9 +88,8 @@ type Downloader struct {
 	mode atomic.Uint32  // Synchronisation mode defining the strategy used (per sync cycle), use d.getMode() to get the SyncMode
 	mux  *event.TypeMux // Event multiplexer to announce sync operation events
 
-	genesis uint64   // Genesis block number to limit sync to (e.g. light client CHT)
-	queue   *queue   // Scheduler for selecting the hashes to download
-	peers   *peerSet // Set of active peers from which download can proceed
+	queue *queue   // Scheduler for selecting the hashes to download
+	peers *peerSet // Set of active peers from which download can proceed
 
 	stateDB ethdb.Database // Database to state sync into (and deduplicate via)
 
@@ -107,11 +106,10 @@ type Downloader struct {
 	badBlock badBlockFn // Reports a block as rejected by the chain
 
 	// Status
-	synchroniseMock func(id string, hash common.Hash) error // Replacement for synchronise during testing
-	synchronising   atomic.Bool
-	notified        atomic.Bool
-	committed       atomic.Bool
-	ancientLimit    uint64 // The maximum block number which can be regarded as ancient data.
+	synchronising atomic.Bool
+	notified      atomic.Bool
+	committed     atomic.Bool
+	ancientLimit  uint64 // The maximum block number which can be regarded as ancient data.
 
 	// Channels
 	headerProcCh chan *headerTask // Channel to feed the header processor new tasks
@@ -127,7 +125,6 @@ type Downloader struct {
 	stateSyncStart chan *stateSync
 
 	// Cancellation and termination
-	cancelPeer string         // Identifier of the peer currently being used as the master (cancel on drop)
 	cancelCh   chan struct{}  // Channel to cancel mid-flight syncs
 	cancelLock sync.RWMutex   // Lock to protect the cancel channel and peer in delivers
 	cancelWg   sync.WaitGroup // Make sure all fetcher goroutines have exited.
@@ -136,7 +133,6 @@ type Downloader struct {
 	quitLock sync.Mutex    // Lock to prevent double closes
 
 	// Testing hooks
-	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
 	receiptFetchHook func([]*types.Header) // Method to call upon starting a receipt fetch
 	chainInsertHook  func([]*fetchResult)  // Method to call upon inserting a chain of blocks (possibly in multiple invocations)
@@ -318,7 +314,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // synchronise will select the peer and use it for synchronising. If an empty string is given
 // it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
-func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, mode SyncMode, beaconPing chan struct{}) error {
+func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error {
 	// The beacon header syncer is async. It will start this synchronization and
 	// will continue doing other tasks. However, if synchronization needs to be
 	// cancelled, the syncer needs to know if we reached the startup point (and
@@ -332,10 +328,6 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 				close(beaconPing) // weird exit condition, notify that it's safe to cancel (the nothing)
 			}
 		}()
-	}
-	// Mock out the synchronisation if testing
-	if d.synchroniseMock != nil {
-		return d.synchroniseMock(id, hash)
 	}
 	// Make sure only one goroutine is ever allowed past this point at once
 	if !d.synchronising.CompareAndSwap(false, true) {
@@ -384,7 +376,6 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 	// Create cancel channel for aborting mid-flight and mark the master peer
 	d.cancelLock.Lock()
 	d.cancelCh = make(chan struct{})
-	d.cancelPeer = id
 	d.cancelLock.Unlock()
 
 	defer d.Cancel() // No matter what, we can't leave the cancel channel open
@@ -395,7 +386,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td, ttd *big.Int, 
 	if beaconPing != nil {
 		close(beaconPing)
 	}
-	return d.syncToHead(hash)
+	return d.syncToHead()
 }
 
 func (d *Downloader) getMode() SyncMode {
@@ -404,7 +395,7 @@ func (d *Downloader) getMode() SyncMode {
 
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
-func (d *Downloader) syncToHead(hash common.Hash) (err error) {
+func (d *Downloader) syncToHead() (err error) {
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -537,9 +528,7 @@ func (d *Downloader) syncToHead(hash common.Hash) (err error) {
 	}
 	// Initiate the sync using a concurrent header and content retrieval algorithm
 	d.queue.Prepare(origin+1, mode)
-	if d.syncInitHook != nil {
-		d.syncInitHook(origin, height)
-	}
+
 	// In beacon mode, headers are served by the skeleton syncer
 	fetchers := []func() error{
 		func() error { return d.fetchHeaders(origin + 1) },  // Headers are always retrieved
@@ -633,70 +622,6 @@ func (d *Downloader) Terminate() {
 	d.Cancel()
 }
 
-// fetchHead retrieves the head header and prior pivot block (if available) from
-// a remote peer.
-func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *types.Header, err error) {
-	p.log.Debug("Retrieving remote chain head")
-	mode := d.getMode()
-
-	// Request the advertised remote head block and wait for the response
-	latest, _ := p.peer.Head()
-	fetch := 1
-	if mode == SnapSync {
-		fetch = 2 // head + pivot headers
-	}
-	headers, hashes, err := d.fetchHeadersByHash(p, latest, fetch, fsMinFullBlocks-1, true)
-	if err != nil {
-		return nil, nil, err
-	}
-	// Make sure the peer gave us at least one and at most the requested headers
-	if len(headers) == 0 || len(headers) > fetch {
-		return nil, nil, fmt.Errorf("%w: returned headers %d != requested %d", errBadPeer, len(headers), fetch)
-	}
-	// The first header needs to be the head, validate against the request. If
-	// only 1 header was returned, make sure there's no pivot or there was not
-	// one requested.
-	head = headers[0]
-	if len(headers) == 1 {
-		if mode == SnapSync && head.Number.Uint64() > uint64(fsMinFullBlocks) {
-			return nil, nil, fmt.Errorf("%w: no pivot included along head header", errBadPeer)
-		}
-		p.log.Debug("Remote head identified, no pivot", "number", head.Number, "hash", hashes[0])
-		return head, nil, nil
-	}
-	// At this point we have 2 headers in total and the first is the
-	// validated head of the chain. Check the pivot number and return,
-	pivot = headers[1]
-	if pivot.Number.Uint64() != head.Number.Uint64()-uint64(fsMinFullBlocks) {
-		return nil, nil, fmt.Errorf("%w: remote pivot %d != requested %d", errInvalidChain, pivot.Number, head.Number.Uint64()-uint64(fsMinFullBlocks))
-	}
-	return head, pivot, nil
-}
-
-// fillHeaderSkeleton concurrently retrieves headers from all our available peers
-// and maps them to the provided skeleton header chain.
-//
-// Any partial results from the beginning of the skeleton is (if possible) forwarded
-// immediately to the header processor to keep the rest of the pipeline full even
-// in the case of header stalls.
-//
-// The method returns the entire filled skeleton and also the number of headers
-// already forwarded for processing.
-func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) ([]*types.Header, []common.Hash, int, error) {
-	log.Debug("Filling up skeleton", "from", from)
-	d.queue.ScheduleSkeleton(from, skeleton)
-
-	err := d.concurrentFetch((*headerQueue)(d))
-	if err != nil {
-		log.Debug("Skeleton fill failed", "err", err)
-	}
-	filled, hashes, proced := d.queue.RetrieveHeaders()
-	if err == nil {
-		log.Debug("Skeleton fill succeeded", "filled", len(filled), "processed", proced)
-	}
-	return filled, hashes, proced, err
-}
-
 // fetchBodies iteratively downloads the scheduled block bodies, taking any
 // available peers, reserving a chunk of blocks for each, waiting for delivery
 // and also periodically checking for timeouts.
@@ -724,8 +649,8 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 // queue until the stream ends or a failure occurs.
 func (d *Downloader) processHeaders(origin uint64) error {
 	var (
-		mode       = d.getMode()
-		timer      = time.NewTimer(time.Second)
+		mode  = d.getMode()
+		timer = time.NewTimer(time.Second)
 	)
 	defer timer.Stop()
 

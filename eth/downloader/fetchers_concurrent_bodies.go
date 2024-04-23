@@ -78,7 +78,6 @@ func (q *bodyQueue) request(peer *peerConnection, req *fetchRequest, resCh chan 
 	if q.bodyFetchHook != nil {
 		q.bodyFetchHook(req.Headers)
 	}
-
 	hashes := make([]common.Hash, 0, len(req.Headers))
 	for _, header := range req.Headers {
 		hashes = append(hashes, header.Hash())
