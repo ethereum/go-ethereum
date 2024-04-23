@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/rand"
 	"reflect"
@@ -609,11 +610,29 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
 		}
+		// Check transient storage.
+		{
+			have := state.transientStorage
+			want := checkstate.transientStorage
+			eq := maps.EqualFunc(have, want,
+				func(a Storage, b Storage) bool {
+					return maps.Equal(a, b)
+				})
+			if !eq {
+				return fmt.Errorf("transient storage differs ,have\n%v\nwant\n%v",
+					have.PrettyPrint(),
+					want.PrettyPrint())
+			}
+		}
 		if err != nil {
 			return err
 		}
 	}
-
+	if !checkstate.accessList.Equal(state.accessList) { // Check access lists
+		return fmt.Errorf("AccessLists are wrong, have \n%v\nwant\n%v",
+			checkstate.accessList.PrettyPrint(),
+			state.accessList.PrettyPrint())
+	}
 	if state.GetRefund() != checkstate.GetRefund() {
 		return fmt.Errorf("got GetRefund() == %d, want GetRefund() == %d",
 			state.GetRefund(), checkstate.GetRefund())
