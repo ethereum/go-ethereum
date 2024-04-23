@@ -93,9 +93,9 @@ func (t *tracer) reset() {
 // copy returns a deep copied tracer instance.
 func (t *tracer) copy() *tracer {
 	var (
-		inserts    = make(map[string]struct{})
-		deletes    = make(map[string]struct{})
-		accessList = make(map[string][]byte)
+		inserts    = make(map[string]struct{}, len(t.inserts))
+		deletes    = make(map[string]struct{}, len(t.deletes))
+		accessList = make(map[string][]byte, len(t.accessList))
 	)
 	for path := range t.inserts {
 		inserts[path] = struct{}{}
