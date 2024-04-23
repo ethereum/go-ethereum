@@ -121,6 +121,10 @@ var (
 		Name:  "seal.clique",
 		Usage: "Seal block with Clique. `stdin` or file name of where to find the Clique sealing data.",
 	}
+	SealEccpowFlag = &cli.StringFlag{
+		Name:  "seal.eccpow",
+		Usage: "Seal block with eccpow.",
+	}
 	SealEthashFlag = &cli.BoolFlag{
 		Name:  "seal.ethash",
 		Usage: "Seal block with ethash.",
