@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	ethereum "github.com/cryptoecc/ETH-ECC"
+	"github.com/cryptoecc/ETH-ECC"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/consensus/ethash"
 	"github.com/cryptoecc/ETH-ECC/core"

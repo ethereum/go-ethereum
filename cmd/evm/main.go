@@ -185,6 +185,7 @@ var blockBuilderCommand = &cli.Command{
 		t8ntool.InputOmmersFlag,
 		t8ntool.InputTxsRlpFlag,
 		t8ntool.SealCliqueFlag,
+		t8ntool.SealEccpowFlag,
 		t8ntool.SealEthashFlag,
 		t8ntool.SealEthashDirFlag,
 		t8ntool.SealEthashModeFlag,
