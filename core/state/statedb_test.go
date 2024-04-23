@@ -601,6 +601,10 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCode", state.GetCode(addr), checkstate.GetCode(addr))
 		checkeq("GetCodeHash", state.GetCodeHash(addr), checkstate.GetCodeHash(addr))
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
+		// Check created-flag
+		if obj := state.getStateObject(addr); obj != nil {
+			checkeq("IsNewContract", obj.newContract, checkstate.getStateObject(addr).newContract)
+		}
 		// Check storage.
 		if obj := state.getStateObject(addr); obj != nil {
 			forEachStorage(state, addr, func(key, value common.Hash) bool {

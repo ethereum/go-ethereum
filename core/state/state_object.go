@@ -459,22 +459,22 @@ func (s *stateObject) setBalance(amount *uint256.Int) {
 
 func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	obj := &stateObject{
-		db:       db,
-		address:  s.address,
-		addrHash: s.addrHash,
-		origin:   s.origin,
-		data:     s.data,
+		db:             db,
+		address:        s.address,
+		addrHash:       s.addrHash,
+		origin:         s.origin,
+		data:           s.data,
+		code:           s.code,
+		originStorage:  s.originStorage.Copy(),
+		pendingStorage: s.pendingStorage.Copy(),
+		dirtyStorage:   s.dirtyStorage.Copy(),
+		dirtyCode:      s.dirtyCode,
+		selfDestructed: s.selfDestructed,
+		newContract:    s.newContract,
 	}
 	if s.trie != nil {
 		obj.trie = db.db.CopyTrie(s.trie)
 	}
-	obj.code = s.code
-	obj.originStorage = s.originStorage.Copy()
-	obj.pendingStorage = s.pendingStorage.Copy()
-	obj.dirtyStorage = s.dirtyStorage.Copy()
-	obj.dirtyCode = s.dirtyCode
-	obj.selfDestructed = s.selfDestructed
-	obj.newContract = s.newContract
 	return obj
 }
 
