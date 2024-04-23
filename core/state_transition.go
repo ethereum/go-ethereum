@@ -242,9 +242,8 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 		return nil, 0, false, err, nil
 	}
 
-	// Set up the initial access list.
-	if st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber) {
-		st.state.PrepareAccessList(msg.From(), msg.To(), st.evm.ActivePrecompiles(), msg.AccessList())
+	if rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber); rules.IsEIP1559 {
+		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 	}
 
 	var (
