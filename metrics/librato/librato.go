@@ -62,7 +62,7 @@ func (rep *Reporter) Run() {
 // calculate sum of squares from data provided by metrics.Histogram
 // see http://en.wikipedia.org/wiki/Standard_deviation#Rapid_calculation_methods
 func sumSquares(icount int64, mean, stDev float64) float64 {
-	sumSquares := float64(icount) * (math.Pow(mean, 2) + math.Pow(stDev, 2))
+	sumSquares := float64(icount) * (mean * mean + stDev * stDev)
 	if math.IsNaN(sumSquares) {
 		return 0.0
 	}
