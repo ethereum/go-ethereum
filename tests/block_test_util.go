@@ -86,6 +86,8 @@ type btHeader struct {
 	GasUsed          uint64
 	Timestamp        uint64
 	BaseFeePerGas    *big.Int
+	Codeword         []byte
+	CodeLength       uint64
 }
 
 type btHeaderMarshaling struct {
@@ -175,8 +177,7 @@ func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
 	}
 }
 
-/*
-See https://github.com/ethereum/tests/wiki/Blockchain-Tests-II
+/* See https://github.com/ethereum/tests/wiki/Blockchain-Tests-II
 
 	Whether a block is valid or not is a bit subtle, it's defined by presence of
 	blockHeader, transactions and uncleHeaders fields. If they are missing, the block is
