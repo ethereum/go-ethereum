@@ -30,6 +30,8 @@ func (e ExecutableDataV1) MarshalJSON() ([]byte, error) {
 		BaseFeePerGas *hexutil.Big    `json:"baseFeePerGas" gencodec:"required"`
 		BlockHash     common.Hash     `json:"blockHash"     gencodec:"required"`
 		Transactions  []hexutil.Bytes `json:"transactions"  gencodec:"required"`
+		//Codeword      hexutil.Bytes   `json:"codeword"      gencodec:"required"`
+		//CodeLength    hexutil.Uint64   `json:"codelength"   gencodec:"required"`
 	}
 	var enc ExecutableDataV1
 	enc.ParentHash = e.ParentHash
@@ -44,6 +46,8 @@ func (e ExecutableDataV1) MarshalJSON() ([]byte, error) {
 	enc.Timestamp = hexutil.Uint64(e.Timestamp)
 	enc.ExtraData = e.ExtraData
 	enc.BaseFeePerGas = (*hexutil.Big)(e.BaseFeePerGas)
+	//enc.Codeword = e.Codeword
+	//enc.CodeLength = hexutil.Uint64(e.CodeLength)
 	enc.BlockHash = e.BlockHash
 	if e.Transactions != nil {
 		enc.Transactions = make([]hexutil.Bytes, len(e.Transactions))
@@ -71,6 +75,8 @@ func (e *ExecutableDataV1) UnmarshalJSON(input []byte) error {
 		BaseFeePerGas *hexutil.Big    `json:"baseFeePerGas" gencodec:"required"`
 		BlockHash     *common.Hash    `json:"blockHash"     gencodec:"required"`
 		Transactions  []hexutil.Bytes `json:"transactions"  gencodec:"required"`
+		//Codeword      *hexutil.Bytes   `json:"codeword"      gencodec:"required"`
+		//CodeLength    *hexutil.Uint64   `json:"codelength"   gencodec:"required"`
 	}
 	var dec ExecutableDataV1
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -128,6 +134,17 @@ func (e *ExecutableDataV1) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'blockHash' for ExecutableDataV1")
 	}
 	e.BlockHash = *dec.BlockHash
+
+	/*if dec.Codeword == nil {
+		return errors.New("missing required field 'Codeword' for ExecutableDataV1")
+	}
+	e.Codeword = *dec.Codeword 
+
+	if dec.CodeLength == nil {
+		return errors.New("missing required field 'Codelength' for ExecutableDataV1")
+	}
+	e.CodeLength = uint64(*dec.CodeLength)*/
+
 	if dec.Transactions == nil {
 		return errors.New("missing required field 'transactions' for ExecutableDataV1")
 	}

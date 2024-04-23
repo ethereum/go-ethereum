@@ -24,13 +24,13 @@ import (
 	"strings"
 	"sync"
 
+ethereum "github.com/cryptoecc/ETH-ECC"
 	"github.com/cryptoecc/ETH-ECC/accounts/abi"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/core/types"
 	"github.com/cryptoecc/ETH-ECC/crypto"
 	"github.com/cryptoecc/ETH-ECC/event"
-	"github.com/ethereum/go-ethereum"
-)
+	)
 
 const basefeeWiggleMultiplier = 2
 

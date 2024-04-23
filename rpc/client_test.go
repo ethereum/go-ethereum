@@ -32,9 +32,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cryptoecc/ETH-ECC/log"
 	"github.com/davecgh/go-spew/spew"
-)
+	"github.com/cryptoecc/ETH-ECC/log"
+	)
 
 func TestClientRequest(t *testing.T) {
 	server := newTestServer()

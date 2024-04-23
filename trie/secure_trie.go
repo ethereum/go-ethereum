@@ -35,14 +35,14 @@ func NewSecure(owner common.Hash, root common.Hash, db *Database) (*SecureTrie, 
 	return NewStateTrie(owner, root, db)
 }
 
-// StateTrie wraps a trie with key hashing. In a secure trie, all
+// StateTrie wraps a trie with key hashing. In a stateTrie trie, all
 // access operations hash the key using keccak256. This prevents
 // calling code from creating long chains of nodes that
 // increase the access time.
 //
 // Contrary to a regular trie, a StateTrie can only be created with
 // New and must have an attached database. The database also stores
-// the preimage of each key.
+// the preimage of each key if preimage recording is enabled.
 //
 // StateTrie is not safe for concurrent use.
 type StateTrie struct {
@@ -53,17 +53,11 @@ type StateTrie struct {
 	secKeyCacheOwner *StateTrie // Pointer to self, replace the key cache on mismatch
 }
 
-// NewStateTrie creates a trie with an existing root node from a backing database
-// and optional intermediate in-memory node pool.
+// NewStateTrie creates a trie with an existing root node from a backing database.
 //
 // If root is the zero hash or the sha3 hash of an empty string, the
 // trie is initially empty. Otherwise, New will panic if db is nil
 // and returns MissingNodeError if the root node cannot be found.
-//
-// Accessing the trie loads nodes from the database or node pool on demand.
-// Loaded nodes are kept around until their 'cache generation' expires.
-// A new cache generation is created by each call to Commit.
-// cachelimit sets the number of past cache generations to keep.
 func NewStateTrie(owner common.Hash, root common.Hash, db *Database) (*StateTrie, error) {
 	if db == nil {
 		panic("trie.NewSecure called without a database")
@@ -87,11 +81,15 @@ func (t *StateTrie) Get(key []byte) []byte {
 
 // TryGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
-// If a node was not found in the database, a MissingNodeError is returned.
+// If the specified node is not in the trie, nil will be returned.
+// If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) TryGet(key []byte) ([]byte, error) {
 	return t.trie.TryGet(t.hashKey(key))
 }
 
+// TryGetAccount attempts to retrieve an account with provided trie path.
+// If the specified account is not in the trie, nil will be returned.
+// If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	var ret types.StateAccount
 	res, err := t.trie.TryGet(t.hashKey(key))

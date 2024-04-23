@@ -29,16 +29,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptoecc/ETH-ECC/common/hexutil"
 	"github.com/cryptoecc/ETH-ECC/common/mclock"
 	"github.com/cryptoecc/ETH-ECC/crypto"
 	"github.com/cryptoecc/ETH-ECC/p2p/enode"
-	"github.com/davecgh/go-spew/spew"
-)
+	)
 
 // To regenerate discv5 test vectors, run
 //
-//	go test -run TestVectors -write-test-vectors
+//     go test -run TestVectors -write-test-vectors
+//
 var writeTestVectorsFlag = flag.Bool("write-test-vectors", false, "Overwrite discv5 test vectors in testdata/")
 
 var (

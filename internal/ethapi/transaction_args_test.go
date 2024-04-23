@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cryptoecc/ETH-ECC"
 	"github.com/cryptoecc/ETH-ECC/accounts"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/common/hexutil"
@@ -37,8 +38,7 @@ import (
 	"github.com/cryptoecc/ETH-ECC/event"
 	"github.com/cryptoecc/ETH-ECC/params"
 	"github.com/cryptoecc/ETH-ECC/rpc"
-	"github.com/ethereum/go-ethereum"
-)
+	)
 
 // TestSetFeeDefaults tests the logic for filling in default fee values works as expected.
 func TestSetFeeDefaults(t *testing.T) {

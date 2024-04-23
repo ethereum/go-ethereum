@@ -523,7 +523,7 @@ func TestExchangeTransitionConfig(t *testing.T) {
 TestNewPayloadOnInvalidChain sets up a valid chain and tries to feed blocks
 from an invalid chain to test if latestValidHash (LVH) works correctly.
 
-We set up the following chain where P1 ... Pn and P1” are valid while
+We set up the following chain where P1 ... Pn and P1'' are valid while
 P1' is invalid.
 We expect
 (1) The LVH to point to the current inserted payload if it was valid.
@@ -531,7 +531,6 @@ We expect
 (3) If the parent is unavailable, the LVH should not be set.
 
 CommonAncestor◄─▲── P1 ◄── P2  ◄─ P3  ◄─ ... ◄─ Pn
-
 	│
 	└── P1' ◄─ P2' ◄─ P3' ◄─ ... ◄─ Pn'
 	│
@@ -707,6 +706,8 @@ func setBlockhash(data *beacon.ExecutableDataV1) *beacon.ExecutableDataV1 {
 		BaseFee:     data.BaseFeePerGas,
 		Extra:       data.ExtraData,
 		MixDigest:   data.Random,
+		//Codeword:    data.Codeword,
+		//CodeLength:  data.CodeLength,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	data.BlockHash = block.Hash()

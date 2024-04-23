@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"time"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/common/bitutil"
 	"github.com/cryptoecc/ETH-ECC/core"
@@ -35,8 +36,7 @@ import (
 	"github.com/cryptoecc/ETH-ECC/params"
 	"github.com/cryptoecc/ETH-ECC/rlp"
 	"github.com/cryptoecc/ETH-ECC/trie"
-	mapset "github.com/deckarep/golang-set"
-)
+	)
 
 // IndexerConfig includes a set of configs for chain indexers.
 type IndexerConfig struct {

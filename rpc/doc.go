@@ -15,6 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
+
 Package rpc implements bi-directional JSON-RPC 2.0 on multiple transports.
 
 It provides access to the exported methods of an object across a network or other I/O
@@ -22,7 +23,7 @@ connection. After creating a server or client instance, objects can be registere
 them visible as 'services'. Exported methods that follow specific conventions can be
 called remotely. It also has support for the publish/subscribe pattern.
 
-# RPC Methods
+RPC Methods
 
 Methods that satisfy the following criteria are made available for remote access:
 
@@ -74,7 +75,7 @@ An example server which uses the JSON codec:
 	 l, _ := net.ListenUnix("unix", &net.UnixAddr{Net: "unix", Name: "/tmp/calculator.sock"})
 	 server.ServeListener(l)
 
-# Subscriptions
+Subscriptions
 
 The package also supports the publish subscribe pattern through the use of subscriptions.
 A method that is considered eligible for notifications must satisfy the following
@@ -100,7 +101,7 @@ the client and server. The server will close the connection for any write error.
 
 For more information about subscriptions, see https://github.com/cryptoecc/ETH-ECC/wiki/RPC-PUB-SUB.
 
-# Reverse Calls
+Reverse Calls
 
 In any method handler, an instance of rpc.Client can be accessed through the
 ClientFromContext method. Using this client instance, server-to-client method calls can be

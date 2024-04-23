@@ -29,6 +29,7 @@ import (
 	"github.com/cryptoecc/ETH-ECC/consensus"
 	"github.com/cryptoecc/ETH-ECC/consensus/beacon"
 	"github.com/cryptoecc/ETH-ECC/consensus/clique"
+	"github.com/cryptoecc/ETH-ECC/consensus/eccpow"
 	"github.com/cryptoecc/ETH-ECC/consensus/ethash"
 	"github.com/cryptoecc/ETH-ECC/core"
 	"github.com/cryptoecc/ETH-ECC/eth/downloader"

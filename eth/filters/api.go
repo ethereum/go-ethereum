@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cryptoecc/ETH-ECC"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/common/hexutil"
 	"github.com/cryptoecc/ETH-ECC/core/types"
 	"github.com/cryptoecc/ETH-ECC/rpc"
-	"github.com/ethereum/go-ethereum"
-)
+	)
 
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.

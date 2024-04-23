@@ -24,6 +24,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cryptoecc/ETH-ECC"
 	"github.com/cryptoecc/ETH-ECC/accounts/abi"
 	"github.com/cryptoecc/ETH-ECC/accounts/abi/bind"
 	"github.com/cryptoecc/ETH-ECC/common"
@@ -31,7 +32,6 @@ import (
 	"github.com/cryptoecc/ETH-ECC/core/types"
 	"github.com/cryptoecc/ETH-ECC/crypto"
 	"github.com/cryptoecc/ETH-ECC/rlp"
-	"github.com/ethereum/go-ethereum"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cryptoecc/ETH-ECC"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/core"
 	"github.com/cryptoecc/ETH-ECC/core/bloombits"
@@ -33,7 +34,6 @@ import (
 	"github.com/cryptoecc/ETH-ECC/event"
 	"github.com/cryptoecc/ETH-ECC/log"
 	"github.com/cryptoecc/ETH-ECC/rpc"
-	"github.com/ethereum/go-ethereum"
 	lru "github.com/hashicorp/golang-lru"
 )
 

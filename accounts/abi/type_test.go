@@ -21,9 +21,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/davecgh/go-spew/spew"
-)
+	"github.com/cryptoecc/ETH-ECC/common"
+	)
 
 // typeWithoutStringer is a alias for the Type type which simply doesn't implement
 // the stringer interface to allow printing type details in the tests below.

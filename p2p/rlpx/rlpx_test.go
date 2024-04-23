@@ -28,11 +28,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptoecc/ETH-ECC/crypto"
 	"github.com/cryptoecc/ETH-ECC/crypto/ecies"
 	"github.com/cryptoecc/ETH-ECC/p2p/simulations/pipes"
 	"github.com/cryptoecc/ETH-ECC/rlp"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 )
 

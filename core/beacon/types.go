@@ -58,6 +58,9 @@ type ExecutableDataV1 struct {
 	BaseFeePerGas *big.Int       `json:"baseFeePerGas" gencodec:"required"`
 	BlockHash     common.Hash    `json:"blockHash"     gencodec:"required"`
 	Transactions  [][]byte       `json:"transactions"  gencodec:"required"`
+	//Codeword      []byte         `json:"codeword"      gencodec:"required"`
+	//CodeLength      uint64         `json:"codelength"      gencodec:"required"`
+	
 }
 
 // JSON type overrides for executableData.
@@ -136,11 +139,9 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 
 // ExecutableDataToBlock constructs a block from executable data.
 // It verifies that the following fields:
-//
-//	len(extraData) <= 32
-//	uncleHash = emptyUncleHash
-//	difficulty = 0
-//
+// 		len(extraData) <= 32
+// 		uncleHash = emptyUncleHash
+// 		difficulty = 0
 // and that the blockhash of the constructed block matches the parameters.
 func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
@@ -150,6 +151,11 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 	if len(params.ExtraData) > 32 {
 		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
 	}
+/*
+	if len(params.Codeword) > 32 {
+		return nil, fmt.Errorf("invalid extradata length: %v", len(params.Codeword))
+	}*/
+
 	if len(params.LogsBloom) != 256 {
 		return nil, fmt.Errorf("invalid logsBloom length: %v", len(params.LogsBloom))
 	}
@@ -173,6 +179,8 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 		BaseFee:     params.BaseFeePerGas,
 		Extra:       params.ExtraData,
 		MixDigest:   params.Random,
+		//Codeword:    params.Codeword,
+		//CodeLength:  params.CodeLength,
 	}
 	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
 	if block.Hash() != params.BlockHash {
@@ -199,5 +207,7 @@ func BlockToExecutableData(block *types.Block) *ExecutableDataV1 {
 		Transactions:  encodeTransactions(block.Transactions()),
 		Random:        block.MixDigest(),
 		ExtraData:     block.Extra(),
+		//Codeword:      block.Codeword(),
+		//CodeLength:      block.CodeLength(),
 	}
 }

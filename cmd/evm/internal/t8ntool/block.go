@@ -28,6 +28,7 @@ import (
 	"github.com/cryptoecc/ETH-ECC/common/hexutil"
 	"github.com/cryptoecc/ETH-ECC/common/math"
 	"github.com/cryptoecc/ETH-ECC/consensus/clique"
+	"github.com/cryptoecc/ETH-ECC/consensus/eccpow"
 	"github.com/cryptoecc/ETH-ECC/consensus/ethash"
 	"github.com/cryptoecc/ETH-ECC/core/types"
 	"github.com/cryptoecc/ETH-ECC/crypto"

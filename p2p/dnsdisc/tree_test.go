@@ -20,10 +20,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptoecc/ETH-ECC/common/hexutil"
 	"github.com/cryptoecc/ETH-ECC/p2p/enode"
-	"github.com/davecgh/go-spew/spew"
-)
+	)
 
 func TestParseRoot(t *testing.T) {
 	tests := []struct {

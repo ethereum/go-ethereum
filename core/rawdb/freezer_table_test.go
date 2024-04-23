@@ -29,8 +29,8 @@ import (
 	"testing/quick"
 	"time"
 
-	"github.com/cryptoecc/ETH-ECC/metrics"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/cryptoecc/ETH-ECC/metrics"
 	"github.com/stretchr/testify/require"
 )
 

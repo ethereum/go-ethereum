@@ -21,12 +21,12 @@ import (
 	"math/rand"
 	"sync"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/core/types"
 	"github.com/cryptoecc/ETH-ECC/p2p"
 	"github.com/cryptoecc/ETH-ECC/rlp"
-	mapset "github.com/deckarep/golang-set"
-)
+	)
 
 const (
 	// maxKnownTxs is the maximum transactions hashes to keep in the known list

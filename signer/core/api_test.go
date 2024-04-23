@@ -39,7 +39,7 @@ import (
 	"github.com/cryptoecc/ETH-ECC/signer/storage"
 )
 
-// Used for testing
+//Used for testing
 type headlessUi struct {
 	approveCh chan string // to send approve/deny
 	inputCh   chan string // to send password

@@ -28,6 +28,7 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/core/rawdb"
 	"github.com/cryptoecc/ETH-ECC/core/types"
@@ -35,7 +36,6 @@ import (
 	"github.com/cryptoecc/ETH-ECC/ethdb"
 	"github.com/cryptoecc/ETH-ECC/ethdb/memorydb"
 	"github.com/cryptoecc/ETH-ECC/rlp"
-	"github.com/davecgh/go-spew/spew"
 	"golang.org/x/crypto/sha3"
 )
 

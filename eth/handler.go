@@ -411,6 +411,7 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 						res.Done <- errors.New("unsynced node cannot serve sync")
 						return
 					}
+
 					res.Done <- nil
 					return
 				}

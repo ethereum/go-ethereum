@@ -21,14 +21,14 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/consensus/ethash"
 	"github.com/cryptoecc/ETH-ECC/core/rawdb"
 	"github.com/cryptoecc/ETH-ECC/core/vm"
 	"github.com/cryptoecc/ETH-ECC/ethdb"
 	"github.com/cryptoecc/ETH-ECC/params"
-	"github.com/davecgh/go-spew/spew"
-)
+	)
 
 func TestInvalidCliqueConfig(t *testing.T) {
 	block := DefaultGoerliGenesisBlock()

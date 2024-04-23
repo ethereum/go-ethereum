@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptoecc/ETH-ECC/consensus/ethash"
 	"github.com/cryptoecc/ETH-ECC/core"
 	"github.com/cryptoecc/ETH-ECC/core/rawdb"
@@ -30,8 +31,7 @@ import (
 	"github.com/cryptoecc/ETH-ECC/core/vm"
 	"github.com/cryptoecc/ETH-ECC/params"
 	"github.com/cryptoecc/ETH-ECC/trie"
-	"github.com/davecgh/go-spew/spew"
-)
+	)
 
 func TestNodeIterator(t *testing.T) {
 	var (

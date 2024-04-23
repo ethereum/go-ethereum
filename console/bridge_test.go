@@ -19,9 +19,9 @@ package console
 import (
 	"testing"
 
-	"github.com/cryptoecc/ETH-ECC/internal/jsre"
 	"github.com/dop251/goja"
-)
+	"github.com/cryptoecc/ETH-ECC/internal/jsre"
+	)
 
 // TestUndefinedAsParam ensures that personal functions can receive
 // `undefined` as a parameter.

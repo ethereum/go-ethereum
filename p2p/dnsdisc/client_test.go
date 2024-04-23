@@ -25,14 +25,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptoecc/ETH-ECC/common/mclock"
 	"github.com/cryptoecc/ETH-ECC/crypto"
 	"github.com/cryptoecc/ETH-ECC/internal/testlog"
 	"github.com/cryptoecc/ETH-ECC/log"
 	"github.com/cryptoecc/ETH-ECC/p2p/enode"
 	"github.com/cryptoecc/ETH-ECC/p2p/enr"
-	"github.com/davecgh/go-spew/spew"
-)
+	)
 
 const (
 	signingKeySeed = 0x111111

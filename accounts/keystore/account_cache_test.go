@@ -27,10 +27,10 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptoecc/ETH-ECC/accounts"
 	"github.com/cryptoecc/ETH-ECC/common"
-	"github.com/davecgh/go-spew/spew"
-)
+	)
 
 var (
 	cachetestDir, _   = filepath.Abs(filepath.Join("testdata", "keystore"))

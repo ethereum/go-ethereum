@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cryptoecc/ETH-ECC"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/core/rawdb"
 	"github.com/cryptoecc/ETH-ECC/core/state/snapshot"
@@ -34,8 +35,7 @@ import (
 	"github.com/cryptoecc/ETH-ECC/event"
 	"github.com/cryptoecc/ETH-ECC/log"
 	"github.com/cryptoecc/ETH-ECC/params"
-	"github.com/ethereum/go-ethereum"
-)
+	)
 
 var (
 	MaxBlockFetch   = 128 // Amount of blocks to be fetched per retrieval request
@@ -741,11 +741,9 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 // calculateRequestSpan calculates what headers to request from a peer when trying to determine the
 // common ancestor.
 // It returns parameters to be used for peer.RequestHeadersByNumber:
-//
-//	from - starting block number
-//	count - number of headers to request
-//	skip - number of headers to skip
-//
+//  from - starting block number
+//  count - number of headers to request
+//  skip - number of headers to skip
 // and also returns 'max', the last block which is expected to be returned by the remote peers,
 // given the (from,count,skip)
 func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, uint64) {

@@ -24,13 +24,13 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/core/rawdb"
 	"github.com/cryptoecc/ETH-ECC/core/state"
 	"github.com/cryptoecc/ETH-ECC/crypto"
 	"github.com/cryptoecc/ETH-ECC/trie"
-	"github.com/davecgh/go-spew/spew"
-)
+	)
 
 var dumper = spew.ConfigState{Indent: "    "}
 

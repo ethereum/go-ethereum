@@ -21,9 +21,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/cryptoecc/ETH-ECC/internal/cmdtest"
 	"github.com/docker/docker/pkg/reexec"
-)
+	"github.com/cryptoecc/ETH-ECC/internal/cmdtest"
+	)
 
 type testEthkey struct {
 	*cmdtest.TestCmd

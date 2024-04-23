@@ -25,6 +25,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/docker/docker/pkg/reexec"
 	"github.com/cryptoecc/ETH-ECC/crypto"
 	"github.com/cryptoecc/ETH-ECC/log"
 	"github.com/cryptoecc/ETH-ECC/node"
@@ -32,7 +33,6 @@ import (
 	"github.com/cryptoecc/ETH-ECC/p2p/enode"
 	"github.com/cryptoecc/ETH-ECC/p2p/enr"
 	"github.com/cryptoecc/ETH-ECC/rpc"
-	"github.com/docker/docker/pkg/reexec"
 	"github.com/gorilla/websocket"
 )
 
@@ -42,6 +42,7 @@ import (
 // * SimNode    - An in-memory node
 // * ExecNode   - A child process node
 // * DockerNode - A Docker container node
+//
 type Node interface {
 	// Addr returns the node's address (e.g. an Enode URL)
 	Addr() []byte

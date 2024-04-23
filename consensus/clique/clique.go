@@ -740,6 +740,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.MixDigest,
 		header.Nonce,
 	}
+
 	if header.BaseFee != nil {
 		enc = append(enc, header.BaseFee)
 	}

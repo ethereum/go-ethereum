@@ -47,7 +47,7 @@ func copyConfig(original *params.ChainConfig) *params.ChainConfig {
 		TerminalTotalDifficulty: original.TerminalTotalDifficulty,
 		Ethash:                  original.Ethash,
 		Clique:                  original.Clique,
-	}
+		}
 }
 
 func config() *params.ChainConfig {

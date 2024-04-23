@@ -959,9 +959,9 @@ func doWindowsInstaller(cmdline []string) {
 	// Render NSIS scripts: Installer NSIS contains two installer sections,
 	// first section contains the worldland binary, second section holds the dev tools.
 	templateData := map[string]interface{}{
-		"License":   "COPYING",
+		"License":  "COPYING",
 		"Worldland": gethTool,
-		"DevTools":  devTools,
+		"DevTools": devTools,
 	}
 	build.Render("build/nsis.worldland.nsi", filepath.Join(*workdir, "worldland.nsi"), 0644, nil)
 	build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, templateData)
