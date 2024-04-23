@@ -113,7 +113,6 @@ func TestHistoryImportAndExport(t *testing.T) {
 			if err != nil {
 				t.Fatalf("error opening era file: %v", err)
 			}
-			defer f.Close()
 			var (
 				h   = sha256.New()
 				buf = bytes.NewBuffer(nil)
