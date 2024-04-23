@@ -40,7 +40,7 @@ import (
 
 // Register adds the engine API to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
-	log.Warn("Engine API enabled", "protocol", "eth")
+	log.Warn("Engine API enabled", "protocol", "worldland")
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
@@ -125,9 +125,10 @@ type ConsensusAPI struct {
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
+	/*
 	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
 		log.Warn("Engine API started but chain not configured for merge yet")
-	}
+	}*/
 	api := &ConsensusAPI{
 		eth:               eth,
 		remoteBlocks:      newHeaderQueue(),
@@ -143,21 +144,14 @@ func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
 
 // ForkchoiceUpdatedV1 has several responsibilities:
 // If the method is called with an empty head block:
-//
-//	we return success, which can be used to check if the engine API is enabled
-//
+// 		we return success, which can be used to check if the engine API is enabled
 // If the total difficulty was not reached:
-//
-//	we return INVALID
-//
+// 		we return INVALID
 // If the finalizedBlockHash is set:
-//
-//	we check if we have the finalizedBlockHash in our db, if not we start a sync
-//
+// 		we check if we have the finalizedBlockHash in our db, if not we start a sync
 // We try to set our blockchain to the headBlock
 // If there are payloadAttributes:
-//
-//	we try to assemble a block with the payloadAttributes and return its payloadID
+// 		we try to assemble a block with the payloadAttributes and return its payloadID
 func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, payloadAttributes *beacon.PayloadAttributesV1) (beacon.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()

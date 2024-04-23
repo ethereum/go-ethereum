@@ -91,55 +91,34 @@ func (t *StateTrie) TryGet(key []byte) ([]byte, error) {
 // If the specified account is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
-	var ret types.StateAccount
 	res, err := t.trie.TryGet(t.hashKey(key))
-	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
-		return &ret, err
+	if res == nil || err != nil {
+		return nil, err
 	}
-	if res == nil {
-		return nil, nil
-	}
-	err = rlp.DecodeBytes(res, &ret)
-	return &ret, err
+	ret := new(types.StateAccount)
+	err = rlp.DecodeBytes(res, ret)
+	return ret, err
 }
 
 // TryGetAccountWithPreHashedKey does the same thing as TryGetAccount, however
 // it expects a key that is already hashed. This constitutes an abstraction leak,
 // since the client code needs to know the key format.
 func (t *StateTrie) TryGetAccountWithPreHashedKey(key []byte) (*types.StateAccount, error) {
-	var ret types.StateAccount
 	res, err := t.trie.TryGet(key)
-	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
-		return &ret, err
+	if res == nil || err != nil {
+		return nil, err
 	}
-	if res == nil {
-		return nil, nil
-	}
-	err = rlp.DecodeBytes(res, &ret)
-	return &ret, err
+	ret := new(types.StateAccount)
+	err = rlp.DecodeBytes(res, ret)
+	return ret, err
 }
 
 // TryGetNode attempts to retrieve a trie node by compact-encoded path. It is not
 // possible to use keybyte-encoding as the path might contain odd nibbles.
+// If the specified trie node is not in the trie, nil will be returned.
+// If a trie node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) TryGetNode(path []byte) ([]byte, int, error) {
 	return t.trie.TryGetNode(path)
-}
-
-// TryUpdateAccount account will abstract the write of an account to the
-// secure trie.
-func (t *StateTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
-	hk := t.hashKey(key)
-	data, err := rlp.EncodeToBytes(acc)
-	if err != nil {
-		return err
-	}
-	if err := t.trie.TryUpdate(hk, data); err != nil {
-		return err
-	}
-	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
-	return nil
 }
 
 // Update associates key with value in the trie. Subsequent calls to
@@ -161,11 +140,26 @@ func (t *StateTrie) Update(key, value []byte) {
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 //
-// If a node was not found in the database, a MissingNodeError is returned.
+// If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) TryUpdate(key, value []byte) error {
 	hk := t.hashKey(key)
 	err := t.trie.TryUpdate(hk, value)
 	if err != nil {
+		return err
+	}
+	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
+	return nil
+}
+
+// TryUpdateAccount account will abstract the write of an account to the
+// secure trie.
+func (t *StateTrie) TryUpdateAccount(key []byte, acc *types.StateAccount) error {
+	hk := t.hashKey(key)
+	data, err := rlp.EncodeToBytes(acc)
+	if err != nil {
+		return err
+	}
+	if err := t.trie.TryUpdate(hk, data); err != nil {
 		return err
 	}
 	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
@@ -180,14 +174,15 @@ func (t *StateTrie) Delete(key []byte) {
 }
 
 // TryDelete removes any existing value for key from the trie.
-// If a node was not found in the database, a MissingNodeError is returned.
+// If the specified trie node is not in the trie, nothing will be changed.
+// If a node is not found in the database, a MissingNodeError is returned.
 func (t *StateTrie) TryDelete(key []byte) error {
 	hk := t.hashKey(key)
 	delete(t.getSecKeyCache(), string(hk))
 	return t.trie.TryDelete(hk)
 }
 
-// TryDeleteACcount abstracts an account deletion from the trie.
+// TryDeleteAccount abstracts an account deletion from the trie.
 func (t *StateTrie) TryDeleteAccount(key []byte) error {
 	hk := t.hashKey(key)
 	delete(t.getSecKeyCache(), string(hk))
