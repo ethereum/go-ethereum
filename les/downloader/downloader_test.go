@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cryptoecc/ETH-ECC"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/core/rawdb"
 	"github.com/cryptoecc/ETH-ECC/core/state/snapshot"
@@ -34,7 +35,6 @@ import (
 	"github.com/cryptoecc/ETH-ECC/ethdb"
 	"github.com/cryptoecc/ETH-ECC/event"
 	"github.com/cryptoecc/ETH-ECC/trie"
-	"github.com/ethereum/go-ethereum"
 )
 
 // Reduce some of the parameters to make the tester faster.

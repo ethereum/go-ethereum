@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"math/big"
 
-	ethereum "github.com/cryptoecc/ETH-ECC"
+	"github.com/cryptoecc/ETH-ECC"
 	"github.com/cryptoecc/ETH-ECC/common"
 	"github.com/cryptoecc/ETH-ECC/common/hexutil"
 	"github.com/cryptoecc/ETH-ECC/core/types"
