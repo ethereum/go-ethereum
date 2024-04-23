@@ -34,6 +34,7 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 		}
 		w.WriteBigInt(obj.Number)
 	}
+
 	w.WriteUint64(obj.GasLimit)
 	w.WriteUint64(obj.GasUsed)
 	w.WriteUint64(obj.Time)
@@ -50,6 +51,17 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 			}
 			w.WriteBigInt(obj.BaseFee)
 		}
+	}
+	_tmp2 := obj.Codeword != nil
+	if _tmp2 {
+		if obj.Codeword == nil {
+			w.Write(rlp.EmptyString)
+		} else {
+			w.WriteBytes(obj.Codeword)
+		}
+	}
+	if obj.CodeLength != 0 {
+		w.WriteUint64(obj.CodeLength)
 	}
 	w.ListEnd(_tmp0)
 	return w.Flush()

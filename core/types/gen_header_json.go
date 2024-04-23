@@ -31,8 +31,11 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		Extra       hexutil.Bytes  `json:"extraData"        gencodec:"required"`
 		MixDigest   common.Hash    `json:"mixHash"`
 		Nonce       BlockNonce     `json:"nonce"`
-		BaseFee     *hexutil.Big   `json:"baseFeePerGas" rlp:"optional"`
+		BaseFee     *hexutil.Big   `json:"baseFeePerGas"    rlp:"optional"`
 		Hash        common.Hash    `json:"hash"`
+		Codeword    hexutil.Bytes  `json:"codeword"         rlp:"optional"`
+		CodeLength  hexutil.Uint64 `json:"codelength"       rlp:"optional"`
+		
 	}
 	var enc Header
 	enc.ParentHash = h.ParentHash
@@ -52,6 +55,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.Nonce = h.Nonce
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee)
 	enc.Hash = h.Hash()
+	enc.Codeword = h.Codeword
+	enc.CodeLength = hexutil.Uint64(h.CodeLength)
 	return json.Marshal(&enc)
 }
 
@@ -73,7 +78,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		Extra       *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
 		MixDigest   *common.Hash    `json:"mixHash"`
 		Nonce       *BlockNonce     `json:"nonce"`
-		BaseFee     *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
+		BaseFee     *hexutil.Big    `json:"baseFeePerGas"    rlp:"optional"`
+		Codeword    *hexutil.Bytes  `json:"codeword"         rlp:"optional"`
+		CodeLength  *hexutil.Uint64 `json:"codelength"       rlp:"optional"`
 	}
 	var dec Header
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -139,5 +146,12 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.BaseFee != nil {
 		h.BaseFee = (*big.Int)(dec.BaseFee)
 	}
+	if dec.Codeword == nil {
+		h.Codeword = *dec.Codeword
+	}
+	if dec.CodeLength == nil {
+		h.CodeLength = uint64(*dec.CodeLength)
+	}
+
 	return nil
 }
