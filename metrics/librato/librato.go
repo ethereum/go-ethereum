@@ -62,22 +62,14 @@ func (rep *Reporter) Run() {
 // calculate sum of squares from data provided by metrics.Histogram
 // see http://en.wikipedia.org/wiki/Standard_deviation#Rapid_calculation_methods
 func sumSquares(icount int64, mean, stDev float64) float64 {
-	count := float64(icount)
-	sumSquared := math.Pow(count*mean, 2)
-	sumSquares := math.Pow(count*stDev, 2) + sumSquared/count
+	sumSquares := float64(icount) * (math.Pow(mean, 2) + math.Pow(stDev, 2))
 	if math.IsNaN(sumSquares) {
 		return 0.0
 	}
 	return sumSquares
 }
 func sumSquaresTimer(t metrics.TimerSnapshot) float64 {
-	count := float64(t.Count())
-	sumSquared := math.Pow(count*t.Mean(), 2)
-	sumSquares := math.Pow(count*t.StdDev(), 2) + sumSquared/count
-	if math.IsNaN(sumSquares) {
-		return 0.0
-	}
-	return sumSquares
+	return sumSquares(t.Count(), t.Mean(), t.StdDev())
 }
 
 func (rep *Reporter) BuildRequest(now time.Time, r metrics.Registry) (snapshot Batch, err error) {
