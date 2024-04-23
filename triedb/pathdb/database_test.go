@@ -106,7 +106,7 @@ func newTester(t *testing.T, historyLimit uint64) *tester {
 			StateHistory:   historyLimit,
 			CleanCacheSize: 16 * 1024,
 			DirtyCacheSize: 16 * 1024,
-		})
+		}, false)
 		obj = &tester{
 			db:           db,
 			preimages:    make(map[common.Hash]common.Address),
@@ -305,7 +305,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 	return root, ctx.nodes, triestate.New(ctx.accountOrigin, ctx.storageOrigin)
 }
 
-// lastRoot returns the latest root hash, or empty if nothing is cached.
+// lastHash returns the latest root hash, or empty if nothing is cached.
 func (t *tester) lastHash() common.Hash {
 	if len(t.roots) == 0 {
 		return common.Hash{}
@@ -476,13 +476,13 @@ func TestDisable(t *testing.T) {
 
 	_, stored := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
 	if err := tester.db.Disable(); err != nil {
-		t.Fatal("Failed to deactivate database")
+		t.Fatalf("Failed to deactivate database: %v", err)
 	}
 	if err := tester.db.Enable(types.EmptyRootHash); err == nil {
-		t.Fatalf("Invalid activation should be rejected")
+		t.Fatal("Invalid activation should be rejected")
 	}
 	if err := tester.db.Enable(stored); err != nil {
-		t.Fatal("Failed to activate database")
+		t.Fatalf("Failed to activate database: %v", err)
 	}
 
 	// Ensure journal is deleted from disk
@@ -550,7 +550,7 @@ func TestJournal(t *testing.T) {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
 	tester.db.Close()
-	tester.db = New(tester.db.diskdb, nil)
+	tester.db = New(tester.db.diskdb, nil, false)
 
 	// Verify states including disk layer and all diff on top.
 	for i := 0; i < len(tester.roots); i++ {
@@ -588,7 +588,7 @@ func TestCorruptedJournal(t *testing.T) {
 	rawdb.WriteTrieJournal(tester.db.diskdb, blob)
 
 	// Verify states, all not-yet-written states should be discarded
-	tester.db = New(tester.db.diskdb, nil)
+	tester.db = New(tester.db.diskdb, nil, false)
 	for i := 0; i < len(tester.roots); i++ {
 		if tester.roots[i] == root {
 			if err := tester.verifyState(root); err != nil {
@@ -625,7 +625,7 @@ func TestTailTruncateHistory(t *testing.T) {
 	defer tester.release()
 
 	tester.db.Close()
-	tester.db = New(tester.db.diskdb, &Config{StateHistory: 10})
+	tester.db = New(tester.db.diskdb, &Config{StateHistory: 10}, false)
 
 	head, err := tester.db.freezer.Ancients()
 	if err != nil {

@@ -544,10 +544,13 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 		return err
 	}
 	// Wait for the pong request to arrive back
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
 	select {
 	case <-s.pongCh:
 		// Pong delivered, report the latency
-	case <-time.After(5 * time.Second):
+	case <-timer.C:
 		// Ping timeout, abort
 		return errors.New("ping timed out")
 	}

@@ -26,6 +26,9 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/holiman/uint256"
+	"github.com/tyler-smith/go-bip39"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
@@ -48,8 +51,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/holiman/uint256"
-	"github.com/tyler-smith/go-bip39"
 )
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas is
@@ -90,15 +91,17 @@ func (s *EthereumAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, e
 }
 
 type feeHistoryResult struct {
-	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
-	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
-	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
-	GasUsedRatio []float64        `json:"gasUsedRatio"`
+	OldestBlock      *hexutil.Big     `json:"oldestBlock"`
+	Reward           [][]*hexutil.Big `json:"reward,omitempty"`
+	BaseFee          []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
+	GasUsedRatio     []float64        `json:"gasUsedRatio"`
+	BlobBaseFee      []*hexutil.Big   `json:"baseFeePerBlobGas,omitempty"`
+	BlobGasUsedRatio []float64        `json:"blobGasUsedRatio,omitempty"`
 }
 
 // FeeHistory returns the fee market history.
 func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecimal64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
-	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, uint64(blockCount), lastBlock, rewardPercentiles)
+	oldest, reward, baseFee, gasUsed, blobBaseFee, blobGasUsed, err := s.b.FeeHistory(ctx, uint64(blockCount), lastBlock, rewardPercentiles)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +124,21 @@ func (s *EthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecim
 			results.BaseFee[i] = (*hexutil.Big)(v)
 		}
 	}
+	if blobBaseFee != nil {
+		results.BlobBaseFee = make([]*hexutil.Big, len(blobBaseFee))
+		for i, v := range blobBaseFee {
+			results.BlobBaseFee[i] = (*hexutil.Big)(v)
+		}
+	}
+	if blobGasUsed != nil {
+		results.BlobGasUsedRatio = blobGasUsed
+	}
 	return results, nil
+}
+
+// BlobBaseFee returns the base fee for blob gas at the current head.
+func (s *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
+	return (*hexutil.Big)(s.b.BlobBaseFee(ctx))
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
@@ -1186,9 +1203,6 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		return 0, err
 	}
 	call := args.ToMessage(header.BaseFee)
-	if err != nil {
-		return 0, err
-	}
 	// Run the gas estimation andwrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
 	if err != nil {
@@ -1500,7 +1514,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	} else {
 		to = crypto.CreateAddress(args.from(), uint64(*args.Nonce))
 	}
-	isPostMerge := header.Difficulty.Cmp(common.Big0) == 0
+	isPostMerge := header.Difficulty.Sign() == 0
 	// Retrieve the precompiles since they don't need to be added to the access list
 	precompiles := vm.ActivePrecompiles(b.ChainConfig().Rules(header.Number, isPostMerge, header.Time))
 
@@ -1519,9 +1533,6 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Set the accesslist to the last al
 		args.AccessList = &accessList
 		msg := args.ToMessage(header.BaseFee)
-		if err != nil {
-			return nil, 0, nil, err
-		}
 
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
@@ -1871,14 +1882,13 @@ type SignTransactionResult struct {
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
 func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
+	args.blobSidecarAllowed = true
+
 	if args.Gas == nil {
 		return nil, errors.New("gas not specified")
 	}
 	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
 		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
-	}
-	if args.IsEIP4844() {
-		return nil, errBlobTxNotSupported
 	}
 	if args.Nonce == nil {
 		return nil, errors.New("nonce not specified")
@@ -1894,6 +1904,16 @@ func (s *TransactionAPI) SignTransaction(ctx context.Context, args TransactionAr
 	signed, err := s.sign(args.from(), tx)
 	if err != nil {
 		return nil, err
+	}
+	// If the transaction-to-sign was a blob transaction, then the signed one
+	// no longer retains the blobs, only the blob hashes. In this step, we need
+	// to put back the blob(s).
+	if args.IsEIP4844() {
+		signed = signed.WithBlobTxSidecar(&types.BlobTxSidecar{
+			Blobs:       args.Blobs,
+			Commitments: args.Commitments,
+			Proofs:      args.Proofs,
+		})
 	}
 	data, err := signed.MarshalBinary()
 	if err != nil {

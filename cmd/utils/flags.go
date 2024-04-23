@@ -545,7 +545,7 @@ var (
 		Category: flags.VMCategory,
 	}
 	VMTraceConfigFlag = &cli.StringFlag{
-		Name:     "vmtrace.config",
+		Name:     "vmtrace.jsonconfig",
 		Usage:    "Tracer configuration (JSON)",
 		Category: flags.VMCategory,
 	}
@@ -661,7 +661,7 @@ var (
 	}
 	HTTPPathPrefixFlag = &cli.StringFlag{
 		Name:     "http.rpcprefix",
-		Usage:    "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
+		Usage:    "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value:    "",
 		Category: flags.APICategory,
 	}
@@ -1959,7 +1959,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	})
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, false),
+		Service:   filters.NewFilterAPI(filterSystem),
 	}})
 	return filterSystem
 }

@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,20 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
-)
-
-const (
-	firehoseTraceLevel = "trace"
-	firehoseDebugLevel = "debug"
-	firehoseInfoLevel  = "info"
-)
-
-const (
-	callSourceRoot  = "root"
-	callSourceChild = "child"
 )
 
 // Here what you can expect from the debugging levels:
@@ -52,9 +41,9 @@ const (
 // - Debug == Info + call start/end + error
 // - Trace == Debug + state db changes, log, balance, nonce, code, storage, gas
 var firehoseTracerLogLevel = strings.ToLower(os.Getenv("FIREHOSE_ETHEREUM_TRACER_LOG_LEVEL"))
-var isFirehoseInfoEnabled = firehoseTracerLogLevel == firehoseInfoLevel || firehoseTracerLogLevel == firehoseDebugLevel || firehoseTracerLogLevel == firehoseTraceLevel
-var isFirehoseDebugEnabled = firehoseTracerLogLevel == firehoseDebugLevel || firehoseTracerLogLevel == firehoseTraceLevel
-var isFirehoseTracerEnabled = firehoseTracerLogLevel == firehoseTraceLevel
+var isFirehoseInfoEnabled = firehoseTracerLogLevel == "info" || firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
+var isFirehoseDebugEnabled = firehoseTracerLogLevel == "debug" || firehoseTracerLogLevel == "trace"
+var isFirehoseTracerEnabled = firehoseTracerLogLevel == "trace"
 
 var emptyCommonAddress = common.Address{}
 var emptyCommonHash = common.Hash{}
@@ -71,7 +60,7 @@ func init() {
 }
 
 func newFirehoseTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
-	firehoseInfo("new firehose tracer (config=%s)", string(cfg))
+	firehoseInfo("new firehose tracer")
 
 	var config FirehoseConfig
 	if len([]byte(cfg)) > 0 {
@@ -84,8 +73,6 @@ func newFirehoseTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 }
 
 func newTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
-	firehoseInfo("new tracing hooks from firehose (apply_backward_compatibility=%s)", (*boolPtrView)(tracer.applyBackwardCompatibility))
-
 	return &tracing.Hooks{
 		OnBlockchainInit: tracer.OnBlockchainInit,
 		OnGenesisBlock:   tracer.OnGenesisBlock,
@@ -257,8 +244,6 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 	if f.applyBackwardCompatibility == nil {
 		f.applyBackwardCompatibility = ptr(chainNeedsLegacyBackwardCompatibility(chainConfig.ChainID))
 	}
-
-	firehoseInfo("blockchain init (chain_id=%d apply_backward_compatibility=%t)", chainConfig.ChainID.Int64(), *f.applyBackwardCompatibility)
 }
 
 var mainnetChainID = big.NewInt(1)
@@ -562,9 +547,7 @@ func (f *Firehose) completeTransaction(receipt *types.Receipt) *pbeth.Transactio
 	rootCall := f.transaction.Calls[0]
 
 	if !f.deferredCallState.IsEmpty() {
-		if err := f.deferredCallState.MaybePopulateCallAndReset(callSourceRoot, rootCall); err != nil {
-			panic(err)
-		}
+		f.deferredCallState.MaybePopulateCallAndReset("root", rootCall)
 	}
 
 	// Receipt can be nil if an error occurred during the transaction execution, right now we don't have it
@@ -727,7 +710,7 @@ func (f *Firehose) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 
 	if activeCall := f.callStack.Peek(); activeCall != nil {
 		opCode := vm.OpCode(op)
-		f.captureInterpreterStep(activeCall)
+		f.captureInterpreterStep(activeCall, pc, opCode, gas, cost, scope, rData, depth, err)
 
 		// The rest of the logic expects that a call succeeded, nothing to do more here if the interpreter failed on this OpCode
 		if err != nil {
@@ -768,9 +751,7 @@ func (f *Firehose) onOpcodeKeccak256(call *pbeth.Call, stack []uint256.Int, memo
 	// We should have exclusive access to the hasher, we can safely reset it.
 	f.hasher.Reset()
 	f.hasher.Write(preImage)
-	if _, err := f.hasher.Read(f.hasherBuf[:]); err != nil {
-		panic(fmt.Errorf("failed to read keccak256 hash: %w", err))
-	}
+	f.hasher.Read(f.hasherBuf[:])
 
 	encodedData := hex.EncodeToString(preImage)
 
@@ -813,11 +794,13 @@ var opCodeToGasChangeReasonMap = map[vm.OpCode]pbeth.GasChange_Reason{
 // OnOpcodeFault implements the EVMLogger interface to trace an execution fault.
 func (f *Firehose) OnOpcodeFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	if activeCall := f.callStack.Peek(); activeCall != nil {
-		f.captureInterpreterStep(activeCall)
+		f.captureInterpreterStep(activeCall, pc, vm.OpCode(op), gas, cost, scope, nil, depth, err)
 	}
 }
 
-func (f *Firehose) captureInterpreterStep(activeCall *pbeth.Call) {
+func (f *Firehose) captureInterpreterStep(activeCall *pbeth.Call, pc uint64, op vm.OpCode, gas, cost uint64, _ tracing.OpContext, rData []byte, depth int, err error) {
+	_, _, _, _, _, _, _ = pc, op, gas, cost, rData, depth, err
+
 	if *f.applyBackwardCompatibility {
 		// for call, we need to process the executed code here
 		// since in old firehose executed code calculation depends if the code exist
@@ -879,7 +862,7 @@ func (f *Firehose) callStart(source string, callType pbeth.CallType, from common
 		// be assigned back to 0 because of a bug in the console reader. remove on new chain.
 		//
 		// New chain integration should remove this `if` statement
-		if source == callSourceRoot {
+		if source == "root" {
 			call.BeginOrdinal = 0
 		}
 	}
@@ -939,7 +922,7 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 	firehoseDebug("call end (source=%s index=%d output=%s gasUsed=%d err=%s reverted=%t)", source, f.callStack.ActiveIndex(), outputView(output), gasUsed, errorView(err), reverted)
 
 	if f.latestCallEnterSuicided {
-		if source != callSourceChild {
+		if source != "child" {
 			panic(fmt.Errorf("unexpected source for suicided call end, expected child but got %s, suicide are always produced on a 'child' source", source))
 		}
 
@@ -995,10 +978,10 @@ func (f *Firehose) callEnd(source string, output []byte, gasUsed uint64, err err
 
 func computeCallSource(depth int) string {
 	if depth == 0 {
-		return callSourceRoot
+		return "root"
 	}
 
-	return callSourceChild
+	return "child"
 }
 
 func (f *Firehose) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
@@ -1463,10 +1446,7 @@ func flushToFirehose(in []byte, writer io.Writer) {
 	}
 
 	errstr := fmt.Sprintf("\nFIREHOSE FAILED WRITING %dx: %s\n", loops, err)
-	if err := os.WriteFile("./firehose_writer_failed_print.log", []byte(errstr), 0600); err != nil {
-		fmt.Println(errstr)
-	}
-
+	os.WriteFile("/tmp/firehose_writer_failed_print.log", []byte(errstr), 0644)
 	fmt.Fprint(writer, errstr)
 }
 
@@ -1744,30 +1724,26 @@ func gasPrice(tx *types.Transaction, baseFee *big.Int) *pbeth.BigInt {
 	panic(errUnhandledTransactionType("gasPrice", tx.Type()))
 }
 
-func FirehoseDebug(msg string, args ...any) {
+func FirehoseDebug(msg string, args ...interface{}) {
 	firehoseDebug(msg, args...)
 }
 
-func firehoseInfo(msg string, args ...any) {
+func firehoseInfo(msg string, args ...interface{}) {
 	if isFirehoseInfoEnabled {
-		firehoseLog(msg, args)
+		fmt.Fprintf(os.Stderr, "[Firehose] "+msg+"\n", args...)
 	}
 }
 
-func firehoseDebug(msg string, args ...any) {
+func firehoseDebug(msg string, args ...interface{}) {
 	if isFirehoseDebugEnabled {
-		firehoseLog(msg, args)
+		fmt.Fprintf(os.Stderr, "[Firehose] "+msg+"\n", args...)
 	}
 }
 
-func firehoseTrace(msg string, args ...any) {
+func firehoseTrace(msg string, args ...interface{}) {
 	if isFirehoseTracerEnabled {
-		firehoseLog(msg, args)
+		fmt.Fprintf(os.Stderr, "[Firehose] "+msg+"\n", args...)
 	}
-}
-
-func firehoseLog(msg string, args []any) {
-	fmt.Fprintf(os.Stderr, "[Firehose] "+msg+"\n", args...)
 }
 
 // Ignore unused, we keep it around for debugging purposes
@@ -1934,16 +1910,6 @@ func (e _errorView) String() string {
 	}
 
 	return e.err.Error()
-}
-
-type boolPtrView bool
-
-func (b *boolPtrView) String() string {
-	if b == nil {
-		return "<nil>"
-	}
-
-	return strconv.FormatBool(*(*bool)(b))
 }
 
 type inputView []byte

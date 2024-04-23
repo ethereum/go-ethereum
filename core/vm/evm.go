@@ -42,6 +42,8 @@ type (
 func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
+	case evm.chainRules.IsPrague:
+		precompiles = PrecompiledContractsPrague
 	case evm.chainRules.IsCancun:
 		precompiles = PrecompiledContractsCancun
 	case evm.chainRules.IsBerlin:
@@ -439,13 +441,19 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.chainRules.IsBerlin {
 		evm.StateDB.AddAddressToAccessList(address)
 	}
-	// Ensure there's no existing contract already at the designated address
+	// Ensure there's no existing contract already at the designated address.
+	// Account is regarded as existent if any of these three conditions is met:
+	// - the nonce is nonzero
+	// - the code is non-empty
+	// - the storage is non-empty
 	contractHash := evm.StateDB.GetCodeHash(address)
-	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
+	storageRoot := evm.StateDB.GetStorageRoot(address)
+	if evm.StateDB.GetNonce(address) != 0 ||
+		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
+		(storageRoot != (common.Hash{}) && storageRoot != types.EmptyRootHash) { // non-empty storage
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 		}
-
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
 	// Create a new account on the state

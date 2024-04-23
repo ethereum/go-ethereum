@@ -83,7 +83,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}
 	if _, err := chain.InsertChain(blocks); err != nil {
-		t.Fatalf("error insterting chain: %v", err)
+		t.Fatalf("error inserting chain: %v", err)
 	}
 
 	// Make temp directory for era files.

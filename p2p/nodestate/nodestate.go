@@ -823,7 +823,7 @@ func (ns *NodeStateMachine) addTimeout(n *enode.Node, mask bitMask, timeout time
 	}
 }
 
-// removeTimeout removes node state timeouts associated to the given state flag(s).
+// removeTimeouts removes node state timeouts associated to the given state flag(s).
 // If a timeout was associated to multiple flags which are not all included in the
 // specified remove mask then only the included flags are de-associated and the timer
 // stays active.

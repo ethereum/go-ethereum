@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -101,9 +102,14 @@ func Transition(ctx *cli.Context) error {
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			logger := logger.NewJSONLogger(logConfig, traceFile)
+			var l *tracing.Hooks
+			if ctx.Bool(TraceEnableCallFramesFlag.Name) {
+				l = logger.NewJSONLoggerWithCallFrames(logConfig, traceFile)
+			} else {
+				l = logger.NewJSONLogger(logConfig, traceFile)
+			}
 			tracer := &tracers.Tracer{
-				Hooks: logger,
+				Hooks: l,
 				// jsonLogger streams out result to file.
 				GetResult: func() (json.RawMessage, error) { return nil, nil },
 				Stop:      func(err error) {},

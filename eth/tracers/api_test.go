@@ -61,7 +61,7 @@ type testBackend struct {
 	relHook func() // Hook is invoked when the requested state is released
 }
 
-// testBackend creates a new test backend. OBS: After test is done, teardown must be
+// newTestBackend creates a new test backend. OBS: After test is done, teardown must be
 // invoked in order to release associated resources.
 func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
 	backend := &testBackend{

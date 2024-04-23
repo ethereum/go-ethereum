@@ -17,6 +17,8 @@
 package logger
 
 import (
+	"maps"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -71,22 +73,14 @@ func (al accessList) equal(other accessList) bool {
 	// Accounts match, cross reference the storage slots too
 	for addr, slots := range al {
 		otherslots := other[addr]
-
-		if len(slots) != len(otherslots) {
+		if !maps.Equal(slots, otherslots) {
 			return false
-		}
-		// Given that len(slots) == len(otherslots), we only need to check that
-		// all the items from slots are in otherslots.
-		for hash := range slots {
-			if _, ok := otherslots[hash]; !ok {
-				return false
-			}
 		}
 	}
 	return true
 }
 
-// accesslist converts the accesslist to a types.AccessList.
+// accessList converts the accesslist to a types.AccessList.
 func (al accessList) accessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
 	for addr, slots := range al {

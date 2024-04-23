@@ -285,7 +285,7 @@ func (tn *preminedTestnet) neighborsAtDistances(base *enode.Node, distances []ui
 		for i := range lookupTestnet.dists[d] {
 			n := lookupTestnet.node(d, i)
 			d := enode.LogDist(base.ID(), n.ID())
-			if containsUint(uint(d), distances) {
+			if slices.Contains(distances, uint(d)) {
 				result = append(result, n)
 				if len(result) >= elems {
 					return result

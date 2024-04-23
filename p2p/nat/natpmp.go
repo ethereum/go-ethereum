@@ -26,7 +26,7 @@ import (
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
 
-// natPMPClient adapts the NAT-PMP protocol implementation so it conforms to
+// pmp adapts the NAT-PMP protocol implementation so it conforms to
 // the common interface.
 type pmp struct {
 	gw net.IP

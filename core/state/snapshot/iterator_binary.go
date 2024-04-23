@@ -68,7 +68,7 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
 		// If the storage in this layer is already destructed, discard all
-		// deeper layers but still return an valid single-branch iterator.
+		// deeper layers but still return a valid single-branch iterator.
 		a, destructed := dl.StorageIterator(account, common.Hash{})
 		if destructed {
 			l := &binaryIterator{
@@ -92,7 +92,7 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 		return l
 	}
 	// If the storage in this layer is already destructed, discard all
-	// deeper layers but still return an valid single-branch iterator.
+	// deeper layers but still return a valid single-branch iterator.
 	a, destructed := dl.StorageIterator(account, common.Hash{})
 	if destructed {
 		l := &binaryIterator{

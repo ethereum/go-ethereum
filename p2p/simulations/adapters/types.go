@@ -299,7 +299,7 @@ func RegisterLifecycles(lifecycles LifecycleConstructors) {
 }
 
 // adds the host part to the configuration's ENR, signs it
-// creates and  the corresponding enode object to the configuration
+// creates and adds the corresponding enode object to the configuration
 func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
 	enrIp := enr.IP(ip)
 	n.Record.Set(&enrIp)

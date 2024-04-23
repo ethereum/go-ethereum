@@ -375,6 +375,14 @@ func TestT8nTracing(t *testing.T) {
 }`},
 			expectedTraces: []string{"trace-0-0x88f5fbd1524731a81e49f637aa847543268a5aaf2a6b32a69d2c6d978c45dcfb.json"},
 		},
+		{
+			base: "./testdata/32",
+			input: t8nInput{
+				"alloc.json", "txs.json", "env.json", "Merge", "",
+			},
+			extraArgs:      []string{"--trace", "--trace.callframes"},
+			expectedTraces: []string{"trace-0-0x47806361c0fa084be3caa18afe8c48156747c01dbdfc1ee11b5aecdbe4fcf23e.jsonl"},
+		},
 	} {
 		args := []string{"t8n"}
 		args = append(args, tc.input.get(tc.base)...)

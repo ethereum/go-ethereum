@@ -17,11 +17,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/donovanhide/eventsource"
@@ -30,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -182,46 +185,56 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 	return updates, committees, nil
 }
 
-// GetOptimisticHeadUpdate fetches a signed header based on the latest available
-// optimistic update. Note that the signature should be verified by the caller
-// as its validity depends on the update chain.
+// GetOptimisticUpdate fetches the latest available optimistic update.
+// Note that the signature should be verified by the caller as its validity
+// depends on the update chain.
 //
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
-func (api *BeaconLightApi) GetOptimisticHeadUpdate() (types.SignedHeader, error) {
+func (api *BeaconLightApi) GetOptimisticUpdate() (types.OptimisticUpdate, error) {
 	resp, err := api.httpGet("/eth/v1/beacon/light_client/optimistic_update")
 	if err != nil {
-		return types.SignedHeader{}, err
+		return types.OptimisticUpdate{}, err
 	}
-	return decodeOptimisticHeadUpdate(resp)
+	return decodeOptimisticUpdate(resp)
 }
 
-func decodeOptimisticHeadUpdate(enc []byte) (types.SignedHeader, error) {
+func decodeOptimisticUpdate(enc []byte) (types.OptimisticUpdate, error) {
 	var data struct {
-		Data struct {
-			Header        jsonBeaconHeader    `json:"attested_header"`
-			Aggregate     types.SyncAggregate `json:"sync_aggregate"`
-			SignatureSlot common.Decimal      `json:"signature_slot"`
+		Version string
+		Data    struct {
+			Attested      jsonHeaderWithExecProof `json:"attested_header"`
+			Aggregate     types.SyncAggregate     `json:"sync_aggregate"`
+			SignatureSlot common.Decimal          `json:"signature_slot"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(enc, &data); err != nil {
-		return types.SignedHeader{}, err
+		return types.OptimisticUpdate{}, err
 	}
-	if data.Data.Header.Beacon.StateRoot == (common.Hash{}) {
+	// Decode the execution payload headers.
+	attestedExecHeader, err := types.ExecutionHeaderFromJSON(data.Version, data.Data.Attested.Execution)
+	if err != nil {
+		return types.OptimisticUpdate{}, fmt.Errorf("invalid attested header: %v", err)
+	}
+	if data.Data.Attested.Beacon.StateRoot == (common.Hash{}) {
 		// workaround for different event encoding format in Lodestar
 		if err := json.Unmarshal(enc, &data.Data); err != nil {
-			return types.SignedHeader{}, err
+			return types.OptimisticUpdate{}, err
 		}
 	}
 
 	if len(data.Data.Aggregate.Signers) != params.SyncCommitteeBitmaskSize {
-		return types.SignedHeader{}, errors.New("invalid sync_committee_bits length")
+		return types.OptimisticUpdate{}, errors.New("invalid sync_committee_bits length")
 	}
 	if len(data.Data.Aggregate.Signature) != params.BLSSignatureSize {
-		return types.SignedHeader{}, errors.New("invalid sync_committee_signature length")
+		return types.OptimisticUpdate{}, errors.New("invalid sync_committee_signature length")
 	}
-	return types.SignedHeader{
-		Header:        data.Data.Header.Beacon,
+	return types.OptimisticUpdate{
+		Attested: types.HeaderWithExecProof{
+			Header:        data.Data.Attested.Beacon,
+			PayloadHeader: attestedExecHeader,
+			PayloadBranch: data.Data.Attested.ExecutionBranch,
+		},
 		Signature:     data.Data.Aggregate,
 		SignatureSlot: uint64(data.Data.SignatureSlot),
 	}, nil
@@ -287,9 +300,11 @@ func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	}, nil
 }
 
-// GetHead fetches and validates the beacon header with the given blockRoot.
+// GetHeader fetches and validates the beacon header with the given blockRoot.
 // If blockRoot is null hash then the latest head header is fetched.
-func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error) {
+// The values of the canonical and finalized flags are also returned. Note that
+// these flags are not validated.
+func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool, bool, error) {
 	var blockId string
 	if blockRoot == (common.Hash{}) {
 		blockId = "head"
@@ -298,11 +313,12 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error
 	}
 	resp, err := api.httpGetf("/eth/v1/beacon/headers/%s", blockId)
 	if err != nil {
-		return types.Header{}, err
+		return types.Header{}, false, false, err
 	}
 
 	var data struct {
-		Data struct {
+		Finalized bool `json:"finalized"`
+		Data      struct {
 			Root      common.Hash `json:"root"`
 			Canonical bool        `json:"canonical"`
 			Header    struct {
@@ -312,16 +328,16 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(resp, &data); err != nil {
-		return types.Header{}, err
+		return types.Header{}, false, false, err
 	}
 	header := data.Data.Header.Message
 	if blockRoot == (common.Hash{}) {
 		blockRoot = data.Data.Root
 	}
 	if header.Hash() != blockRoot {
-		return types.Header{}, errors.New("retrieved beacon header root does not match")
+		return types.Header{}, false, false, errors.New("retrieved beacon header root does not match")
 	}
-	return header, nil
+	return header, data.Data.Canonical, data.Finalized, nil
 }
 
 // GetCheckpointData fetches and validates bootstrap data belonging to the given checkpoint.
@@ -406,7 +422,7 @@ func decodeHeadEvent(enc []byte) (uint64, common.Hash, error) {
 
 type HeadEventListener struct {
 	OnNewHead    func(slot uint64, blockRoot common.Hash)
-	OnSignedHead func(head types.SignedHeader)
+	OnOptimistic func(head types.OptimisticUpdate)
 	OnFinality   func(head types.FinalityUpdate)
 	OnError      func(err error)
 }
@@ -416,74 +432,95 @@ type HeadEventListener struct {
 // The callbacks are also called for the current head and optimistic head at startup.
 // They are never called concurrently.
 func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() {
-	closeCh := make(chan struct{})   // initiate closing the stream
-	closedCh := make(chan struct{})  // stream closed (or failed to create)
-	stoppedCh := make(chan struct{}) // sync loop stopped
-	streamCh := make(chan *eventsource.Stream, 1)
+	var (
+		ctx, closeCtx = context.WithCancel(context.Background())
+		streamCh      = make(chan *eventsource.Stream, 1)
+		wg            sync.WaitGroup
+	)
+
+	// When connected to a Lodestar node the subscription blocks until the first actual
+	// event arrives; therefore we create the subscription in a separate goroutine while
+	// letting the main goroutine sync up to the current head.
+	wg.Add(1)
 	go func() {
-		defer close(closedCh)
-		// when connected to a Lodestar node the subscription blocks until the
-		// first actual event arrives; therefore we create the subscription in
-		// a separate goroutine while letting the main goroutine sync up to the
-		// current head
-		req, err := http.NewRequest("GET", api.url+
-			"/eth/v1/events?topics=head&topics=light_client_optimistic_update&topics=light_client_finality_update", nil)
-		if err != nil {
-			listener.OnError(fmt.Errorf("error creating event subscription request: %v", err))
+		defer wg.Done()
+		stream := api.startEventStream(ctx, &listener)
+		if stream == nil {
+			// This case happens when the context was closed.
 			return
 		}
-		for k, v := range api.customHeaders {
-			req.Header.Set(k, v)
-		}
-		stream, err := eventsource.SubscribeWithRequest("", req)
-		if err != nil {
-			listener.OnError(fmt.Errorf("error creating event subscription: %v", err))
-			close(streamCh)
-			return
-		}
+		// Stream was opened, wait for close signal.
 		streamCh <- stream
-		<-closeCh
+		<-ctx.Done()
 		stream.Close()
 	}()
 
+	wg.Add(1)
 	go func() {
-		defer close(stoppedCh)
+		defer wg.Done()
 
-		if head, err := api.GetHeader(common.Hash{}); err == nil {
+		// Request initial data.
+		log.Trace("Requesting initial head header")
+		if head, _, _, err := api.GetHeader(common.Hash{}); err == nil {
+			log.Trace("Retrieved initial head header", "slot", head.Slot, "hash", head.Hash())
 			listener.OnNewHead(head.Slot, head.Hash())
+		} else {
+			log.Debug("Failed to retrieve initial head header", "error", err)
 		}
-		if signedHead, err := api.GetOptimisticHeadUpdate(); err == nil {
-			listener.OnSignedHead(signedHead)
+		log.Trace("Requesting initial optimistic update")
+		if optimisticUpdate, err := api.GetOptimisticUpdate(); err == nil {
+			log.Trace("Retrieved initial optimistic update", "slot", optimisticUpdate.Attested.Slot, "hash", optimisticUpdate.Attested.Hash())
+			listener.OnOptimistic(optimisticUpdate)
+		} else {
+			log.Debug("Failed to retrieve initial optimistic update", "error", err)
 		}
+		log.Trace("Requesting initial finality update")
 		if finalityUpdate, err := api.GetFinalityUpdate(); err == nil {
+			log.Trace("Retrieved initial finality update", "slot", finalityUpdate.Finalized.Slot, "hash", finalityUpdate.Finalized.Hash())
 			listener.OnFinality(finalityUpdate)
+		} else {
+			log.Debug("Failed to retrieve initial finality update", "error", err)
 		}
-		stream := <-streamCh
-		if stream == nil {
+
+		log.Trace("Starting event stream processing loop")
+		// Receive the stream.
+		var stream *eventsource.Stream
+		select {
+		case stream = <-streamCh:
+		case <-ctx.Done():
+			log.Trace("Stopping event stream processing loop")
 			return
 		}
 
 		for {
 			select {
+			case <-ctx.Done():
+				stream.Close()
+
 			case event, ok := <-stream.Events:
 				if !ok {
+					log.Trace("Event stream closed")
 					return
 				}
+				log.Trace("New event received from event stream", "type", event.Event())
 				switch event.Event() {
 				case "head":
-					if slot, blockRoot, err := decodeHeadEvent([]byte(event.Data())); err == nil {
+					slot, blockRoot, err := decodeHeadEvent([]byte(event.Data()))
+					if err == nil {
 						listener.OnNewHead(slot, blockRoot)
 					} else {
 						listener.OnError(fmt.Errorf("error decoding head event: %v", err))
 					}
 				case "light_client_optimistic_update":
-					if signedHead, err := decodeOptimisticHeadUpdate([]byte(event.Data())); err == nil {
-						listener.OnSignedHead(signedHead)
+					optimisticUpdate, err := decodeOptimisticUpdate([]byte(event.Data()))
+					if err == nil {
+						listener.OnOptimistic(optimisticUpdate)
 					} else {
 						listener.OnError(fmt.Errorf("error decoding optimistic update event: %v", err))
 					}
 				case "light_client_finality_update":
-					if finalityUpdate, err := decodeFinalityUpdate([]byte(event.Data())); err == nil {
+					finalityUpdate, err := decodeFinalityUpdate([]byte(event.Data()))
+					if err == nil {
 						listener.OnFinality(finalityUpdate)
 					} else {
 						listener.OnError(fmt.Errorf("error decoding finality update event: %v", err))
@@ -491,6 +528,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 				default:
 					listener.OnError(fmt.Errorf("unexpected event: %s", event.Event()))
 				}
+
 			case err, ok := <-stream.Errors:
 				if !ok {
 					return
@@ -499,9 +537,45 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 			}
 		}
 	}()
+
 	return func() {
-		close(closeCh)
-		<-closedCh
-		<-stoppedCh
+		closeCtx()
+		wg.Wait()
+	}
+}
+
+// startEventStream establishes an event stream. This will keep retrying until the stream has been
+// established. It can only return nil when the context is canceled.
+func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadEventListener) *eventsource.Stream {
+	for retry := true; retry; retry = ctxSleep(ctx, 5*time.Second) {
+		path := "/eth/v1/events?topics=head&topics=light_client_finality_update&topics=light_client_optimistic_update"
+		log.Trace("Sending event subscription request")
+		req, err := http.NewRequestWithContext(ctx, "GET", api.url+path, nil)
+		if err != nil {
+			listener.OnError(fmt.Errorf("error creating event subscription request: %v", err))
+			continue
+		}
+		for k, v := range api.customHeaders {
+			req.Header.Set(k, v)
+		}
+		stream, err := eventsource.SubscribeWithRequest("", req)
+		if err != nil {
+			listener.OnError(fmt.Errorf("error creating event subscription: %v", err))
+			continue
+		}
+		log.Trace("Successfully created event stream")
+		return stream
+	}
+	return nil
+}
+
+func ctxSleep(ctx context.Context, timeout time.Duration) (ok bool) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }

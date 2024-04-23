@@ -568,7 +568,7 @@ var (
 	u256_32 = uint256.NewInt(32)
 )
 
-// AccumulateRewards credits the coinbase of the given block with the mining
+// accumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(config *params.ChainConfig, stateDB *state.StateDB, header *types.Header, uncles []*types.Header) {

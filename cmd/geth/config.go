@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
@@ -169,7 +168,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 }
 
 // makeFullNode loads geth configuration and creates the Ethereum backend.
-func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
+func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
 	if ctx.IsSet(utils.OverrideCancun.Name) {
 		v := ctx.Uint64(utils.OverrideCancun.Name)
@@ -238,7 +237,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 			utils.Fatalf("failed to register catalyst service: %v", err)
 		}
 	}
-	return stack, backend
+	return stack
 }
 
 // dumpConfig is the dumpconfig command.
