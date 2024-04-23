@@ -146,6 +146,21 @@ func (w *wizard) deployNode(boot bool) {
 					return
 				}
 			}
+		} else if w.conf.Genesis.Config.Eccpow != nil {
+			// Eccpow based miners only need an etherbase to mine against
+			fmt.Println()
+			if infos.etherbase == "" {
+				fmt.Printf("What address should the miner use?\n")
+				for {
+					if address := w.readAddress(); address != nil {
+						infos.etherbase = address.Hex()
+						break
+					}
+				}
+			} else {
+				fmt.Printf("What address should the miner use? (default = %s)\n", infos.etherbase)
+				infos.etherbase = w.readDefaultAddress(common.HexToAddress(infos.etherbase)).Hex()
+			}
 		}
 		// Establish the gas dynamics to be enforced by the signer
 		fmt.Println()
