@@ -142,6 +142,8 @@ func (h *Header) GetExtra() []byte       { return h.header.Extra }
 func (h *Header) GetMixDigest() *Hash    { return &Hash{h.header.MixDigest} }
 func (h *Header) GetNonce() *Nonce       { return &Nonce{h.header.Nonce} }
 func (h *Header) GetHash() *Hash         { return &Hash{h.header.Hash()} }
+func (h *Header) GetCodeword() []byte    { return h.header.Codeword }
+func (h *Header) GetCodeLength() int64   { return int64(h.header.CodeLength) }
 
 // Headers represents a slice of headers.
 type Headers struct{ headers []*types.Header }
@@ -218,6 +220,8 @@ func (b *Block) GetExtra() []byte               { return b.block.Extra() }
 func (b *Block) GetMixDigest() *Hash            { return &Hash{b.block.MixDigest()} }
 func (b *Block) GetNonce() int64                { return int64(b.block.Nonce()) }
 func (b *Block) GetHash() *Hash                 { return &Hash{b.block.Hash()} }
+func (b *Block) GetCodeword() []byte            { return b.block.Codeword() }
+func (b *Block) GetCodeLength() int64           { return int64(b.block.CodeLength()) }
 func (b *Block) GetHeader() *Header             { return &Header{b.block.Header()} }
 func (b *Block) GetUncles() *Headers            { return &Headers{b.block.Uncles()} }
 func (b *Block) GetTransactions() *Transactions { return &Transactions{b.block.Transactions()} }

@@ -73,7 +73,7 @@ var Defaults = Config{
 		DatasetsOnDisk:   2,
 		DatasetsLockMmap: false,
 	},
-	NetworkId:               1,
+	NetworkId:               103,
 	TxLookupLimit:           2350000,
 	LightPeers:              100,
 	UltraLightFraction:      75,
@@ -182,6 +182,10 @@ type Config struct {
 	// Ethash options
 	Ethash ethash.Config
 
+	// Ethash options
+	Eccpow eccpow.Config
+
+
 	// Transaction pool options
 	TxPool core.TxPoolConfig
 
@@ -218,11 +222,13 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, ethashConfig *ethash.Config, cliqueConfig *params.CliqueConfig, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, ethashConfig *ethash.Config, cliqueConfig *params.CliqueConfig, eccpowConfig *eccpow.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
 	if cliqueConfig != nil {
 		engine = clique.New(cliqueConfig, db)
+	} else if eccpowConfig != nil {
+		engine = eccpow.New(eccpow.Config{}, notify, noverify)
 	} else {
 		switch ethashConfig.PowMode {
 		case ethash.ModeFake:
@@ -246,5 +252,9 @@ func CreateConsensusEngine(stack *node.Node, ethashConfig *ethash.Config, clique
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
+	//return engine , add worldland hardfork consensus.
+	
+	//return beacon.New(engine, eccpow.New(eccpow.Config{}, nil, false))
+
 	return beacon.New(engine)
 }
