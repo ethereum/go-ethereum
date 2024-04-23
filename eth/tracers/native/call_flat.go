@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"slices"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -115,6 +116,7 @@ type flatCallTracer struct {
 	config            flatCallTracerConfig
 	ctx               *tracers.Context // Holds tracer context data
 	reason            error            // Textual reason for the interruption
+	interrupt         atomic.Bool      // Atomic flag to signal execution interruption
 	activePrecompiles []common.Address // Updated on tx start based on given rules
 }
 
@@ -169,6 +171,9 @@ func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to co
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnExit(depth, output, gasUsed, err, reverted)
 
 	if depth == 0 {
@@ -194,6 +199,9 @@ func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err er
 }
 
 func (t *flatCallTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnTxStart(env, tx, from)
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
@@ -201,6 +209,9 @@ func (t *flatCallTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 }
 
 func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
+	if t.interrupt.Load() {
+		return
+	}
 	t.tracer.OnTxEnd(receipt, err)
 }
 
@@ -225,7 +236,7 @@ func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 // Stop terminates execution of the tracer at the first opportune moment.
 func (t *flatCallTracer) Stop(err error) {
 	t.reason = err
-	t.tracer.Stop(err)
+	t.interrupt.Store(true)
 }
 
 // isPrecompiled returns whether the addr is a precompile.

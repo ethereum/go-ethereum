@@ -1,7 +1,6 @@
 package native_test
 
 import (
-	"encoding/json"
 	"errors"
 	"math/big"
 	"testing"
@@ -16,17 +15,21 @@ import (
 )
 
 func TestCallFlatStop(t *testing.T) {
-
-	ctx := &tracers.Context{}
-
-	tracer, err := tracers.DefaultDirectory.New("flatCallTracer", ctx, json.RawMessage(`{}`))
+	tracer, err := tracers.DefaultDirectory.New("flatCallTracer", &tracers.Context{}, nil)
 	require.NoError(t, err)
 
 	// this error should be returned by GetResult
 	stopError := errors.New("stop error")
 
 	// simulate a transaction
-	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil)
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    0,
+		To:       &common.Address{},
+		Value:    big.NewInt(0),
+		Gas:      0,
+		GasPrice: big.NewInt(0),
+		Data:     nil,
+	})
 
 	tracer.OnTxStart(&tracing.VMContext{
 		ChainConfig: params.MainnetChainConfig,
