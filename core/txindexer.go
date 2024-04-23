@@ -176,6 +176,9 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 
 // report returns the tx indexing progress.
 func (indexer *txIndexer) report(head uint64, tail *uint64) TxIndexProgress {
+	if head == 0 {
+		return TxIndexProgress{}
+	}
 	total := indexer.limit
 	if indexer.limit == 0 || total > head {
 		total = head + 1 // genesis included
