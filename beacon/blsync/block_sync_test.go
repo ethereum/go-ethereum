@@ -28,8 +28,8 @@ import (
 )
 
 var (
-	testServer1 = "testServer1"
-	testServer2 = "testServer2"
+	testServer1 = testServer("testServer1")
+	testServer2 = testServer("testServer2")
 
 	testBlock1 = types.NewBeaconBlock(&deneb.BeaconBlock{
 		Slot: 123,
@@ -50,6 +50,12 @@ var (
 		},
 	})
 )
+
+type testServer string
+
+func (t testServer) Name() string {
+	return string(t)
+}
 
 func TestBlockSync(t *testing.T) {
 	ht := &testHeadTracker{}

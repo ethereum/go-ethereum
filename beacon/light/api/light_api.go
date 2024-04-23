@@ -291,7 +291,9 @@ func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 
 // GetHeader fetches and validates the beacon header with the given blockRoot.
 // If blockRoot is null hash then the latest head header is fetched.
-func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error) {
+// The values of the canonical and finalized flags are also returned. Note that
+// these flags are not validated.
+func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool, bool, error) {
 	var blockId string
 	if blockRoot == (common.Hash{}) {
 		blockId = "head"
@@ -300,11 +302,12 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error
 	}
 	resp, err := api.httpGetf("/eth/v1/beacon/headers/%s", blockId)
 	if err != nil {
-		return types.Header{}, err
+		return types.Header{}, false, false, err
 	}
 
 	var data struct {
-		Data struct {
+		Finalized bool `json:"finalized"`
+		Data      struct {
 			Root      common.Hash `json:"root"`
 			Canonical bool        `json:"canonical"`
 			Header    struct {
@@ -314,16 +317,16 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, error
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(resp, &data); err != nil {
-		return types.Header{}, err
+		return types.Header{}, false, false, err
 	}
 	header := data.Data.Header.Message
 	if blockRoot == (common.Hash{}) {
 		blockRoot = data.Data.Root
 	}
 	if header.Hash() != blockRoot {
-		return types.Header{}, errors.New("retrieved beacon header root does not match")
+		return types.Header{}, false, false, errors.New("retrieved beacon header root does not match")
 	}
-	return header, nil
+	return header, data.Data.Canonical, data.Finalized, nil
 }
 
 // GetCheckpointData fetches and validates bootstrap data belonging to the given checkpoint.
@@ -446,7 +449,7 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 		defer wg.Done()
 
 		// Request initial data.
-		if head, err := api.GetHeader(common.Hash{}); err == nil {
+		if head, _, _, err := api.GetHeader(common.Hash{}); err == nil {
 			listener.OnNewHead(head.Slot, head.Hash())
 		}
 		if signedHead, err := api.GetOptimisticHeadUpdate(); err == nil {

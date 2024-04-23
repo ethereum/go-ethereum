@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
+	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -42,6 +43,31 @@ type CheckpointInit struct {
 	checkpointHash common.Hash
 	locked         request.ServerAndID
 	initialized    bool
+	// per-server state is used to track the state of requesting checkpoint header
+	// info. Part of this info (canonical and finalized state) is not validated
+	// and therefore it is requested from each server separately after it has
+	// reported a missing checkpoint (which is also not validated info).
+	serverState map[request.Server]serverState
+	// the following fields are used to determine whether the checkpoint is on
+	// epoch boundary. This information is validated and therefore stored globally.
+	parentHash                  common.Hash
+	hasEpochInfo, epochBoundary bool
+	cpSlot, parentSlot          uint64
+}
+
+const (
+	ssDefault         = iota // no action yet or checkpoint requested
+	ssNeedHeader             // checkpoint req failed, need cp header
+	ssHeaderRequested        // cp header requested
+	ssNeedParent             // cp header slot %32 != 0, need parent to check epoch boundary
+	ssParentRequested        // cp parent header requested
+	ssPrintStatus            // has all necessary info, print log message if init still not successful
+	ssDone                   // log message printed, no more action required
+)
+
+type serverState struct {
+	state                           int
+	hasHeader, canonical, finalized bool // stored per server because not validated
 }
 
 // NewCheckpointInit creates a new CheckpointInit.
@@ -49,40 +75,109 @@ func NewCheckpointInit(chain committeeChain, checkpointHash common.Hash) *Checkp
 	return &CheckpointInit{
 		chain:          chain,
 		checkpointHash: checkpointHash,
+		serverState:    make(map[request.Server]serverState),
 	}
 }
 
 // Process implements request.Module.
 func (s *CheckpointInit) Process(requester request.Requester, events []request.Event) {
+	if s.initialized {
+		return
+	}
 	for _, event := range events {
-		if !event.IsRequestEvent() {
-			continue
-		}
-		sid, req, resp := event.RequestInfo()
-		if s.locked == sid {
-			s.locked = request.ServerAndID{}
-		}
-		if resp != nil {
-			if checkpoint := resp.(*types.BootstrapData); checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
-				s.chain.CheckpointInit(*checkpoint)
-				s.initialized = true
-				return
+		switch event.Type {
+		case request.EvResponse, request.EvFail, request.EvTimeout:
+			sid, req, resp := event.RequestInfo()
+			if s.locked == sid {
+				s.locked = request.ServerAndID{}
 			}
-
-			requester.Fail(event.Server, "invalid checkpoint data")
+			if event.Type == request.EvTimeout {
+				continue
+			}
+			switch s.serverState[sid.Server].state {
+			case ssDefault:
+				if resp != nil {
+					if checkpoint := resp.(*types.BootstrapData); checkpoint.Header.Hash() == common.Hash(req.(ReqCheckpointData)) {
+						s.chain.CheckpointInit(*checkpoint)
+						s.initialized = true
+						return
+					}
+					requester.Fail(event.Server, "invalid checkpoint data")
+				}
+				s.serverState[sid.Server] = serverState{state: ssNeedHeader}
+			case ssHeaderRequested:
+				if resp == nil {
+					s.serverState[sid.Server] = serverState{state: ssPrintStatus}
+					continue
+				}
+				newState := serverState{
+					hasHeader: true,
+					canonical: resp.(RespHeader).Canonical,
+					finalized: resp.(RespHeader).Finalized,
+				}
+				s.cpSlot, s.parentHash = resp.(RespHeader).Header.Slot, resp.(RespHeader).Header.ParentRoot
+				if s.cpSlot%params.EpochLength == 0 {
+					s.hasEpochInfo, s.epochBoundary = true, true
+				}
+				if s.hasEpochInfo {
+					newState.state = ssPrintStatus
+				} else {
+					newState.state = ssNeedParent
+				}
+				s.serverState[sid.Server] = newState
+			case ssParentRequested:
+				s.parentSlot = resp.(RespHeader).Header.Slot
+				s.hasEpochInfo, s.epochBoundary = true, s.cpSlot/params.EpochLength > s.parentSlot/params.EpochLength
+				newState := s.serverState[sid.Server]
+				newState.state = ssPrintStatus
+				s.serverState[sid.Server] = newState
+			}
+		case request.EvUnregistered:
+			delete(s.serverState, event.Server)
 		}
 	}
 	// start a request if possible
-	if s.initialized || s.locked != (request.ServerAndID{}) {
-		return
+	for _, server := range requester.CanSendTo() {
+		switch s.serverState[server].state {
+		case ssDefault:
+			if s.locked == (request.ServerAndID{}) {
+				id := requester.Send(server, ReqCheckpointData(s.checkpointHash))
+				s.locked = request.ServerAndID{Server: server, ID: id}
+			}
+		case ssNeedHeader:
+			requester.Send(server, ReqHeader(s.checkpointHash))
+			newState := s.serverState[server]
+			newState.state = ssHeaderRequested
+			s.serverState[server] = newState
+		case ssNeedParent:
+			requester.Send(server, ReqHeader(s.parentHash))
+			newState := s.serverState[server]
+			newState.state = ssParentRequested
+			s.serverState[server] = newState
+		}
 	}
-	cs := requester.CanSendTo()
-	if len(cs) == 0 {
-		return
+	// print log message if necessary
+	for server, state := range s.serverState {
+		if state.state != ssPrintStatus {
+			continue
+		}
+		switch {
+		case !state.hasHeader:
+			log.Error("blsync: checkpoint block is not available, reported as unknown", "server", server.Name())
+		case !state.canonical:
+			log.Error("blsync: checkpoint block is not available, reported as non-canonical", "server", server.Name())
+		case !s.hasEpochInfo:
+			// should be available if hasHeader is true and state is ssPrintStatus
+			panic("checkpoint epoch info not available when printing retrieval status")
+		case !s.epochBoundary:
+			log.Error("blsync: checkpoint block is not first of epoch", "slot", s.cpSlot, "parent", s.parentSlot, "server", server.Name())
+		case !state.finalized:
+			log.Error("blsync: checkpoint block is reported as non-finalized", "server", server.Name())
+		default:
+			log.Error("blsync: checkpoint not available, but reported as finalized; specified checkpoint hash might be too old", "server", server.Name())
+		}
+		s.serverState[server] = serverState{state: ssDone}
 	}
-	server := cs[0]
-	id := requester.Send(server, ReqCheckpointData(s.checkpointHash))
-	s.locked = request.ServerAndID{Server: server, ID: id}
 }
 
 // ForwardUpdateSync implements request.Module; it fetches updates between the
