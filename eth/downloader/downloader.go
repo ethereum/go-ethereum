@@ -694,16 +694,11 @@ func (d *Downloader) processHeaders(origin uint64) error {
 					// Although the received headers might be all valid, a legacy
 					// PoW/PoA sync must not accept post-merge headers. Make sure
 					// that any transition is rejected at this point.
-					var rejected []*types.Header
 					if len(chunkHeaders) > 0 {
 						if n, err := d.lightchain.InsertHeaderChain(chunkHeaders); err != nil {
 							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)
 							return fmt.Errorf("%w: %v", errInvalidChain, err)
 						}
-					}
-					if len(rejected) != 0 {
-						log.Info("Legacy sync reached merge threshold", "number", rejected[0].Number, "hash", rejected[0].Hash())
-						return ErrMergeTransition
 					}
 				}
 				// Unless we're doing light chains, schedule the headers for associated content retrieval
