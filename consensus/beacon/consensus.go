@@ -57,19 +57,36 @@ var (
 // is only used for necessary consensus checks. The legacy consensus engine can be any
 // engine implements the consensus interface (except the beacon itself).
 type Beacon struct {
-	ethone consensus.Engine // Original consensus engine used in eth1, e.g. ethash or clique
+	ethone consensus.Engine // Original consensus engine used in eth1, e.g. ethash or clique or eccpow
+	//ethone consensus.Engine // Second consensus engine used in worldland hardfork, e.g. ethash or clique or eccpow
 }
 
+// New creates a consensus engine with the given embedded eth1 engine.
 // New creates a consensus engine with the given embedded eth1 engine.
 func New(ethone consensus.Engine) *Beacon {
 	if _, ok := ethone.(*Beacon); ok {
 		panic("nested consensus engine")
 	}
+	
 	return &Beacon{ethone: ethone}
 }
 
+/*func New(ethone consensus.Engine, ethone consensus.Engine) *Beacon {
+	if _, ok := ethone.(*Beacon); ok {
+		panic("nested consensus engine")
+	}
+
+	if _, ok := ethone.(*Beacon); ok {
+		panic("nested worldland consensus engine")
+	}
+	return &Beacon{ethone: ethone, ethone: ethone}
+}*/
+
 // Author implements consensus.Engine, returning the verified author of the block.
 func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
+	/*if chain.Config().IsWorldland(header.Number) {
+		return beacon.ethone.Author(header)
+	}*/
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.Author(header)
 	}
@@ -83,9 +100,16 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 	if err != nil {
 		return err
 	}
+
+	//wordland hardfork
+	if chain.Config().IsWorldland(header.Number) {
+			return beacon.ethone.VerifyHeader(chain, header, seal)
+	}
+
 	if !reached {
 		return beacon.ethone.VerifyHeader(chain, header, seal)
 	}
+
 	// Short circuit if the parent is not known
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
@@ -99,15 +123,96 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
 // VerifyHeaders expect the headers to be ordered and continuous.
+// have to update
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+	//wordland hardfork
+	//VerifyHeaders expect the headers to be ordered
 	if !beacon.IsPoSHeader(headers[len(headers)-1]) {
+		if !chain.Config().IsWorldland(headers[len(headers)-1].Number) {
+			return beacon.ethone.VerifyHeaders(chain, headers, seals)
+		}
+	}
+
+	/////////////////////////////////////////////////////// wordland start ///////////////////////////////////////////////////////
+	var (
+		preHeaders  []*types.Header
+		postHeaders []*types.Header
+		preSeals    []bool
+		postSeals   []bool
+	)
+
+	for index, header := range headers {
+		if chain.Config().IsWorldland(header.Number) {
+			preHeaders = headers[:index]
+			postHeaders = headers[index:]
+			preSeals = seals[:index]
+			postSeals = seals[:index]
+			break
+		}
+	}
+
+	if len(preHeaders) == 0 {
 		return beacon.ethone.VerifyHeaders(chain, headers, seals)
 	}
+
+	var (
+		abort   = make(chan struct{})
+		results = make(chan error, len(headers))
+	)
+	go func() {
+		var (
+			old, new, out      = 0, len(preHeaders), 0
+			errors             = make([]error, len(headers))
+			done               = make([]bool, len(headers))
+			oldDone, oldResult = beacon.ethone.VerifyHeaders(chain, preHeaders, preSeals)
+			newDone, newResult = beacon.ethone.VerifyHeaders(chain, postHeaders, postSeals)
+		)
+
+		/* need to update
+		if index, err := verifyTerminalPoWBlock(chain, preHeaders); err != nil {
+			// Mark all subsequent pow headers with the error.
+			for i := index; i < len(preHeaders); i++ {
+				errors[i], done[i] = err, true
+			}
+		}
+		need to update */
+
+		// Collect the results
+		for {
+			for ; done[out]; out++ {
+				results <- errors[out]
+				if out == len(headers)-1 {
+					return
+				}
+			}
+			select {
+			case err := <-oldResult:
+				if !done[old] { // skip TTD-verified failures
+					errors[old], done[old] = err, true
+				}
+				old++
+			case err := <-newResult:
+				errors[new], done[new] = err, true
+				new++
+			case <-abort:
+				close(oldDone)
+				close(newDone)
+				return
+			}
+		}
+	}()
+	return abort, results
+
+	/////////////////////////////////////////////////////// wordland end ///////////////////////////////////////////////////
+	
+	/* redeclared err
 	var (
 		preHeaders  []*types.Header
 		postHeaders []*types.Header
 		preSeals    []bool
 	)
+	*/
+
 	for index, header := range headers {
 		if beacon.IsPoSHeader(header) {
 			preHeaders = headers[:index]
@@ -135,10 +240,13 @@ func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers [
 
 	// The transition point exists in the middle, separate the headers
 	// into two batches and apply different verification rules for them.
+	/* redeclare err
 	var (
 		abort   = make(chan struct{})
 		results = make(chan error, len(headers))
 	)
+	*/
+
 	go func() {
 		var (
 			old, new, out      = 0, len(preHeaders), 0
@@ -211,6 +319,12 @@ func verifyTerminalPoWBlock(chain consensus.ChainHeaderReader, preHeaders []*typ
 // VerifyUncles verifies that the given block's uncles conform to the consensus
 // rules of the Ethereum consensus engine.
 func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+	
+	//wordland hardfork
+	if chain.Config().IsWorldland(block.Header().Number) {
+		return beacon.ethone.VerifyUncles(chain, block)
+	}
+
 	if !beacon.IsPoSHeader(block.Header()) {
 		return beacon.ethone.VerifyUncles(chain, block)
 	}
@@ -224,11 +338,10 @@ func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 // verifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine. The difference between the beacon and classic is
 // (a) The following fields are expected to be constants:
-//   - difficulty is expected to be 0
-//   - nonce is expected to be 0
-//   - unclehash is expected to be Hash(emptyHeader)
+//     - difficulty is expected to be 0
+// 	   - nonce is expected to be 0
+//     - unclehash is expected to be Hash(emptyHeader)
 //     to be the desired constants
-//
 // (b) we don't verify if a block is in the future anymore
 // (c) the extradata is limited to 32 bytes
 func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
@@ -249,7 +362,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	// Verify the block's difficulty to ensure it's the default constant
 	if beaconDifficulty.Cmp(header.Difficulty) != 0 {
-		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, beaconDifficulty)
+		return fmt.Errorf("invalid beacon difficulty: have %v, want %v", header.Difficulty, beaconDifficulty)
 	}
 	// Verify that the gas limit is <= 2^63-1
 	if header.GasLimit > params.MaxGasLimit {
@@ -311,13 +424,18 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 // header to conform to the beacon protocol. The changes are done inline.
 func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
 	// Transition isn't triggered yet, use the legacy rules for preparation.
+	if chain.Config().IsWorldland(header.Number) {
+		return beacon.ethone.Prepare(chain, header)
+	}
 	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
 	if err != nil {
 		return err
 	}
+	
 	if !reached {
 		return beacon.ethone.Prepare(chain, header)
 	}
+
 	header.Difficulty = beaconDifficulty
 	return nil
 }
@@ -326,6 +444,11 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// Finalize is different with Prepare, it can be used in both block generation
 	// and verification. So determine the consensus rules by header type.
+	if chain.Config().IsWorldland(header.Number) {
+		beacon.ethone.Finalize(chain, header, state, txs, uncles)
+		return 
+	}
+
 	if !beacon.IsPoSHeader(header) {
 		beacon.ethone.Finalize(chain, header, state, txs, uncles)
 		return
@@ -340,6 +463,10 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// FinalizeAndAssemble is different with Prepare, it can be used in both block
 	// generation and verification. So determine the consensus rules by header type.
+	if chain.Config().IsWorldland(header.Number) {
+		return beacon.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
+	}
+	
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.FinalizeAndAssemble(chain, header, state, txs, uncles, receipts)
 	}
@@ -354,6 +481,10 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 // Note, the method returns immediately and will send the result async. More
 // than one result may also be returned depending on the consensus algorithm.
 func (beacon *Beacon) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	if chain.Config().IsWorldland(block.Header().Number) {
+		return beacon.ethone.Seal(chain, block, results, stop)
+	}
+	
 	if !beacon.IsPoSHeader(block.Header()) {
 		return beacon.ethone.Seal(chain, block, results, stop)
 	}
@@ -364,8 +495,12 @@ func (beacon *Beacon) Seal(chain consensus.ChainHeaderReader, block *types.Block
 	return nil
 }
 
+//eccpow ethhash sealhash is equal
 // SealHash returns the hash of a block prior to it being sealed.
 func (beacon *Beacon) SealHash(header *types.Header) common.Hash {
+	/*if chain.Config().IsWorldland( parent.Number ) {
+		return beacon.ethone.SealHash(header)
+	}*/
 	return beacon.ethone.SealHash(header)
 }
 
@@ -374,6 +509,10 @@ func (beacon *Beacon) SealHash(header *types.Header) common.Hash {
 // given the parent block's time and difficulty.
 func (beacon *Beacon) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
 	// Transition isn't triggered yet, use the legacy rules for calculation
+	if chain.Config().IsWorldland( parent.Number ) {
+		return beacon.ethone.CalcDifficulty(chain, time, parent)
+	}
+
 	if reached, _ := IsTTDReached(chain, parent.Hash(), parent.Number.Uint64()); !reached {
 		return beacon.ethone.CalcDifficulty(chain, time, parent)
 	}
@@ -382,6 +521,9 @@ func (beacon *Beacon) CalcDifficulty(chain consensus.ChainHeaderReader, time uin
 
 // APIs implements consensus.Engine, returning the user facing RPC APIs.
 func (beacon *Beacon) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+	/*if chain.Config().IsWorldland( parent.Number ) {
+		return beacon.ethone.APIs(chain)
+	}*/
 	return beacon.ethone.APIs(chain)
 }
 
@@ -402,6 +544,9 @@ func (beacon *Beacon) IsPoSHeader(header *types.Header) bool {
 
 // InnerEngine returns the embedded eth1 consensus engine.
 func (beacon *Beacon) InnerEngine() consensus.Engine {
+	/*if chain.Config().IsWorldland( parent.Number ) {
+		return beacon.ethone
+	}*/
 	return beacon.ethone
 }
 
@@ -411,9 +556,20 @@ func (beacon *Beacon) SetThreads(threads int) {
 	type threaded interface {
 		SetThreads(threads int)
 	}
+
 	if th, ok := beacon.ethone.(threaded); ok {
 		th.SetThreads(threads)
 	}
+
+	/*if chain.Config().IsWorldland(parent.Number) {
+		if th, ok := beacon.ethone.(threaded); ok {
+			th.SetThreads(threads)
+		}
+	}else{
+		if th, ok := beacon.ethone.(threaded); ok {
+			th.SetThreads(threads)
+		}
+	}*/
 }
 
 // IsTTDReached checks if the TotalTerminalDifficulty has been surpassed on the `parentHash` block.
