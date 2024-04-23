@@ -313,7 +313,7 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 // Welcome show summary of current Geth instance and some metadata about the
 // console's available modules.
 func (c *Console) Welcome() {
-	message := "Welcome to the Geth JavaScript console!\n\n"
+	message := "Welcome to the Worldland JavaScript console!\n\n"
 
 	// Print some generic Geth metadata
 	if res, err := c.jsre.Run(`
