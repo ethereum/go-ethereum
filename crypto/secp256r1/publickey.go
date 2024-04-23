@@ -13,11 +13,6 @@ func newPublicKey(x, y *big.Int) *ecdsa.PublicKey {
 		return nil
 	}
 
-	// Check if the given coordinates are the reference point (infinity)
-	if x.Sign() == 0 && y.Sign() == 0 {
-		return nil
-	}
-
 	return &ecdsa.PublicKey{
 		Curve: elliptic.P256(),
 		X:     x,
