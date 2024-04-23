@@ -78,7 +78,7 @@ func NewNodeSet(owner common.Hash) *NodeSet {
 // ForEachWithOrder iterates the nodes with the order from bottom to top,
 // right to left, nodes with the longest path will be iterated first.
 func (set *NodeSet) ForEachWithOrder(callback func(path string, n *Node)) {
-	var paths []string
+	paths := make([]string, 0, len(set.Nodes))
 	for path := range set.Nodes {
 		paths = append(paths, path)
 	}
@@ -133,7 +133,7 @@ func (set *NodeSet) Size() (int, int) {
 // Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
 // we get rid of it?
 func (set *NodeSet) Hashes() []common.Hash {
-	var ret []common.Hash
+	ret := make([]common.Hash, 0, len(set.Nodes))
 	for _, node := range set.Nodes {
 		ret = append(ret, node.Hash)
 	}
