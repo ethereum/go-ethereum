@@ -725,7 +725,6 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 func (d *Downloader) processHeaders(origin uint64) error {
 	var (
 		mode       = d.getMode()
-		gotHeaders = false // Wait for batches of headers to process
 		timer      = time.NewTimer(time.Second)
 	)
 	defer timer.Stop()
