@@ -19,7 +19,6 @@ package miner
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
 	"github.com/XinFinOrg/XDPoSChain/accounts"
@@ -307,12 +306,7 @@ func (self *worker) update() {
 			timeout.Reset(time.Duration(minePeriod) * time.Second)
 
 		// Handle ChainSideEvent
-		case ev := <-self.chainSideCh:
-			if self.config.XDPoS == nil {
-				self.uncleMu.Lock()
-				self.possibleUncles[ev.Block.Hash()] = ev.Block
-				self.uncleMu.Unlock()
-			}
+		case <-self.chainSideCh:
 
 		// Handle NewTxsEvent
 		case ev := <-self.txsCh:
@@ -506,17 +500,6 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		uncles:       mapset.NewSet(),
 		header:       header,
 		createdAt:    time.Now(),
-	}
-
-	if self.config.XDPoS == nil {
-		// when 08 is processed ancestors contain 07 (quick block)
-		for _, ancestor := range self.chain.GetBlocksFromHash(parent.Hash(), 7) {
-			for _, uncle := range ancestor.Uncles() {
-				work.family.Add(uncle.Hash())
-			}
-			work.family.Add(ancestor.Hash())
-			work.ancestors.Add(ancestor.Hash())
-		}
 	}
 
 	// Keep track of transactions which return errors so they can be removed
@@ -800,54 +783,21 @@ func (self *worker) commitNewWork() {
 	work.commitTransactions(self.mux, feeCapacity, txs, specialTxs, self.chain, self.coinbase)
 	// compute uncles for the new block.
 	var (
-		uncles    []*types.Header
-		badUncles []common.Hash
+		uncles []*types.Header
 	)
-	if self.config.XDPoS == nil {
-		for hash, uncle := range self.possibleUncles {
-			if len(uncles) == 2 {
-				break
-			}
-			if err := self.commitUncle(work, uncle.Header()); err != nil {
-				log.Trace("Bad uncle found and will be removed", "hash", hash)
-				log.Trace(fmt.Sprint(uncle))
 
-				badUncles = append(badUncles, hash)
-			} else {
-				log.Debug("Committing new uncle to block", "hash", hash)
-				uncles = append(uncles, uncle.Header())
-			}
-		}
-		for _, hash := range badUncles {
-			delete(self.possibleUncles, hash)
-		}
-	}
 	// Create the new block to seal with the consensus engine
 	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.parentState, work.txs, uncles, work.receipts); err != nil {
 		log.Error("Failed to finalize block for sealing", "err", err)
 		return
 	}
+
 	if atomic.LoadInt32(&self.mining) == 1 {
 		log.Info("Committing new block", "number", work.Block.Number(), "txs", work.tcount, "special-txs", len(specialTxs), "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 		self.lastParentBlockCommit = parent.Hash().Hex()
 	}
 	self.push(work)
-}
-
-func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
-	hash := uncle.Hash()
-	if work.uncles.Contains(hash) {
-		return fmt.Errorf("uncle not unique")
-	}
-	if !work.ancestors.Contains(uncle.ParentHash) {
-		return fmt.Errorf("uncle's parent unknown (%x)", uncle.ParentHash[0:4])
-	}
-	if work.family.Contains(hash) {
-		return fmt.Errorf("uncle already in family (%x)", hash)
-	}
-	work.uncles.Add(uncle.Hash())
-	return nil
 }
 
 func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Address]*big.Int, txs *types.TransactionsByPriceAndNonce, specialTxs types.Transactions, bc *core.BlockChain, coinbase common.Address) {

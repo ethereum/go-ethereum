@@ -240,7 +240,7 @@ func (x *XDPoS) VerifyHeaders(chain consensus.ChainReader, headers []*types.Head
 func (x *XDPoS) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	switch x.config.BlockConsensusVersion(block.Number(), block.Extra(), ExtraFieldCheck) {
 	case params.ConsensusEngineVersion2:
-		return nil
+		return x.EngineV2.VerifyUncles(chain, block)
 	default: // Default "v1"
 		return x.EngineV1.VerifyUncles(chain, block)
 	}

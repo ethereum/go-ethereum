@@ -2,6 +2,7 @@ package engine_v2
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -512,6 +513,15 @@ func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.
 		log.Info("masternode", "index", i, "address", n.Address.String())
 	}
 
+	return nil
+}
+
+// VerifyUncles implements consensus.Engine, always returning an error for any
+// uncles as this consensus mechanism doesn't permit uncles.
+func (x *XDPoS_v2) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+	if len(block.Uncles()) > 0 {
+		return errors.New("uncles not allowed in XDPoS_v2")
+	}
 	return nil
 }
 
