@@ -23,18 +23,26 @@ archives:
   - format: tar.gz
     name_template: >-
       {{- .Binary }}_
-      {{- .Version }}_
+      {{- if .IsSnapshot }}{{ .ShortCommit }}_
+      {{- else }}{{ .Version }}_
+      {{ end }}
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
-      {{- else }}{{ .Arch }}{{ end }}
+      {{- else }}{{ .Arch }}
+      {{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
         format: zip
 
 checksum:
-  name_template: mev-commit-geth_{{ .Version }}_checksums.txt
+  name_template: >-
+    mev-commit-geth_
+    {{- if .IsSnapshot }}{{ .ShortCommit }}
+    {{- else }}{{ .Version }}
+    {{ end }}
+    _checksums.txt
 
 changelog:
   sort: asc
