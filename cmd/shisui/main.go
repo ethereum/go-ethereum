@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/portalnetwork/beacon"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
-	"github.com/ethereum/go-ethereum/portalnetwork/storage/sqlite"
 	"github.com/ethereum/go-ethereum/rpc"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/protolambda/zrnt/eth2/configs"
@@ -181,7 +180,15 @@ func initDiscV5(config Config, conn discover.UDPConn) (*discover.UDPv5, *enode.L
 }
 
 func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) error {
-	contentStorage, err := sqlite.NewContentStorage(config.DataCapacity, localNode.ID(), config.DataDir)
+	db, err := history.NewDB(config.DataDir)
+	if err != nil {
+		return err
+	}
+	contentStorage, err := history.NewHistoryStorage(storage.PortalStorageConfig{
+		StorageCapacityMB: config.DataCapacity,
+		DB:                db,
+		NodeId:            localNode.ID(),
+	})
 	if err != nil {
 		return err
 	}

@@ -68,7 +68,10 @@ func (flcb *ForkedLightClientBootstrap) Deserialize(spec *common.Spec, dr *codec
 }
 
 func (flcb *ForkedLightClientBootstrap) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
-	return w.FixedLenContainer(flcb.ForkDigest, spec.Wrap(flcb.Bootstrap))
+	if err := w.Write(flcb.ForkDigest[:]); err != nil {
+		return err
+	}
+	return flcb.Bootstrap.Serialize(spec, w)
 }
 
 func (flcb *ForkedLightClientBootstrap) FixedLength(_ *common.Spec) uint64 {
@@ -113,7 +116,10 @@ func (flcu *ForkedLightClientUpdate) Deserialize(spec *common.Spec, dr *codec.De
 }
 
 func (flcu *ForkedLightClientUpdate) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
-	return w.FixedLenContainer(flcu.ForkDigest, spec.Wrap(flcu.LightClientUpdate))
+	if err := w.Write(flcu.ForkDigest[:]); err != nil {
+		return err
+	}
+	return flcu.LightClientUpdate.Serialize(spec, w)
 }
 
 func (flcu *ForkedLightClientUpdate) FixedLength(_ *common.Spec) uint64 {
@@ -195,7 +201,10 @@ func (flcou *ForkedLightClientOptimisticUpdate) Deserialize(spec *common.Spec, d
 }
 
 func (flcou *ForkedLightClientOptimisticUpdate) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
-	return w.FixedLenContainer(flcou.ForkDigest, spec.Wrap(flcou.LightClientOptimisticUpdate))
+	if err := w.Write(flcou.ForkDigest[:]); err != nil {
+		return err
+	}
+	return flcou.LightClientOptimisticUpdate.Serialize(spec, w)
 }
 
 func (flcou *ForkedLightClientOptimisticUpdate) FixedLength(_ *common.Spec) uint64 {
@@ -240,7 +249,10 @@ func (flcfu *ForkedLightClientFinalityUpdate) Deserialize(spec *common.Spec, dr 
 }
 
 func (flcfu *ForkedLightClientFinalityUpdate) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
-	return w.FixedLenContainer(flcfu.ForkDigest, spec.Wrap(flcfu.LightClientFinalityUpdate))
+	if err := w.Write(flcfu.ForkDigest[:]); err != nil {
+		return err
+	}
+	return flcfu.LightClientFinalityUpdate.Serialize(spec, w)
 }
 
 func (flcfu *ForkedLightClientFinalityUpdate) FixedLength(_ *common.Spec) uint64 {
