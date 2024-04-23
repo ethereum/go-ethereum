@@ -1642,10 +1642,7 @@ func (s *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 		if tx := s.b.GetPoolTransaction(hash); tx != nil {
 			return NewRPCPendingTransaction(tx, s.b.CurrentHeader(), s.b.ChainConfig()), nil
 		}
-		if err == nil {
-			return nil, nil
-		}
-		return nil, NewTxIndexingError()
+		return nil, err
 	}
 	header, err := s.b.HeaderByHash(ctx, blockHash)
 	if err != nil {
@@ -1662,10 +1659,7 @@ func (s *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash commo
 		if tx = s.b.GetPoolTransaction(hash); tx != nil {
 			return tx.MarshalBinary()
 		}
-		if err == nil {
-			return nil, nil
-		}
-		return nil, NewTxIndexingError()
+		return nil, err
 	}
 	return tx.MarshalBinary()
 }
@@ -1674,7 +1668,7 @@ func (s *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash commo
 func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	found, tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
 	if err != nil {
-		return nil, NewTxIndexingError() // transaction is not fully indexed
+		return nil, err
 	}
 	if !found {
 		return nil, nil // transaction is not existent or reachable
@@ -2082,10 +2076,7 @@ func (s *DebugAPI) GetRawTransaction(ctx context.Context, hash common.Hash) (hex
 		if tx = s.b.GetPoolTransaction(hash); tx != nil {
 			return tx.MarshalBinary()
 		}
-		if err == nil {
-			return nil, nil
-		}
-		return nil, NewTxIndexingError()
+		return nil, err
 	}
 	return tx.MarshalBinary()
 }

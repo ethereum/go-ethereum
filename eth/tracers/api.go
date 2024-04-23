@@ -830,7 +830,7 @@ func containsTx(block *types.Block, hash common.Hash) bool {
 func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
 	found, _, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
 	if err != nil {
-		return nil, ethapi.NewTxIndexingError()
+		return nil, err
 	}
 	// Only mined txes are supported
 	if !found {
