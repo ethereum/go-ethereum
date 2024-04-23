@@ -140,8 +140,12 @@ func (h *testHeadTracker) PrefetchHead() types.HeadInfo {
 	return h.prefetch
 }
 
-func (h *testHeadTracker) ValidatedHead() (types.SignedHeader, bool) {
-	return h.validated, h.validated.Header != (types.Header{})
+func (h *testHeadTracker) ValidatedOptimistic() (types.OptimisticUpdate, bool) {
+	return types.OptimisticUpdate{
+		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
+		Signature:     h.validated.Signature,
+		SignatureSlot: h.validated.SignatureSlot,
+	}, h.validated.Header != (types.Header{})
 }
 
 // TODO add test case for finality
