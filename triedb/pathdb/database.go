@@ -293,6 +293,7 @@ func (db *Database) Enable(root common.Hash) error {
 	// Ensure the provided state root matches the stored one.
 	root = types.TrieRootHash(root)
 	_, stored := rawdb.ReadAccountTrieNode(db.diskdb, nil)
+	stored = types.TrieRootHash(stored)
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}

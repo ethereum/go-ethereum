@@ -153,6 +153,7 @@ type testRequestServer struct {
 	eventCb func(Event)
 }
 
+func (rs *testRequestServer) Name() string                  { return "" }
 func (rs *testRequestServer) Subscribe(eventCb func(Event)) { rs.eventCb = eventCb }
 func (rs *testRequestServer) SendRequest(ID, Request)       {}
 func (rs *testRequestServer) Unsubscribe()                  {}

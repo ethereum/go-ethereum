@@ -170,7 +170,7 @@ func (it *insertIterator) current() *types.Header {
 	return it.chain[it.index].Header()
 }
 
-// first returns the first block in the it.
+// first returns the first block in it.
 func (it *insertIterator) first() *types.Block {
 	return it.chain[0]
 }
