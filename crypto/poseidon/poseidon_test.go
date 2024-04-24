@@ -173,6 +173,6 @@ func BenchmarkPoseidonHash(b *testing.B) {
 	bigArray4 := []*big.Int{b1, b2, b0, b0, b0, b0}
 
 	for i := 0; i < b.N; i++ {
-		HashFixed(bigArray4) //nolint:errcheck,gosec
+		HashFixedWithDomain(bigArray4, b0) //nolint:errcheck,gosec
 	}
 }
