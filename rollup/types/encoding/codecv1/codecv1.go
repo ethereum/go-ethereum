@@ -355,7 +355,7 @@ func constructBlobPayload(chunks []*encoding.Chunk) (*kzg4844.Blob, common.Hash,
 	}
 
 	// compute blob versioned hash
-	c, err := kzg4844.BlobToCommitment(*blob)
+	c, err := kzg4844.BlobToCommitment(blob)
 	if err != nil {
 		return nil, common.Hash{}, nil, fmt.Errorf("failed to create blob commitment")
 	}
@@ -452,12 +452,12 @@ func (b *DABatch) BlobDataProof() ([]byte, error) {
 		return nil, errors.New("called BlobDataProof with empty z")
 	}
 
-	commitment, err := kzg4844.BlobToCommitment(*b.blob)
+	commitment, err := kzg4844.BlobToCommitment(b.blob)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create blob commitment")
 	}
 
-	proof, y, err := kzg4844.ComputeProof(*b.blob, *b.z)
+	proof, y, err := kzg4844.ComputeProof(b.blob, *b.z)
 	if err != nil {
 		log.Crit("failed to create KZG proof at point", "err", err, "z", hex.EncodeToString(b.z[:]))
 	}
