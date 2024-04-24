@@ -140,13 +140,20 @@ func (s *stateObject) getTrie() (Trie, error) {
 
 // GetState retrieves a value from the account storage trie.
 func (s *stateObject) GetState(key common.Hash) common.Hash {
+	value, _ := s.getState(key)
+	return value
+}
+
+// getState retrieves a value from the account storage trie and also returns if
+// the slot is already dirty or not.
+func (s *stateObject) getState(key common.Hash) (common.Hash, bool) {
 	// If we have a dirty value for this state entry, return it
 	value, dirty := s.dirtyStorage[key]
 	if dirty {
-		return value
+		return value, true
 	}
 	// Otherwise return the entry's original value
-	return s.GetCommittedState(key)
+	return s.GetCommittedState(key), false
 }
 
 // GetCommittedState retrieves a value from the committed account storage trie.
@@ -209,25 +216,38 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 
 // SetState updates a value in account storage.
 func (s *stateObject) SetState(key, value common.Hash) {
-	// If the new value is the same as old, don't set
-	prev := s.GetState(key)
+	// If the new value is the same as old, don't set. Otherwise, track only the
+	// dirty changes, supporting reverting all of it back to no change.
+	prev, dirty := s.getState(key)
 	if prev == value {
 		return
 	}
+	var prevvalue *common.Hash
+	if dirty {
+		prevvalue = &prev
+	}
 	// New value is different, update and journal the change
 	s.db.journal.append(storageChange{
-		account:  &s.address,
-		key:      key,
-		prevalue: prev,
+		account:   &s.address,
+		key:       key,
+		prevvalue: prevvalue,
 	})
 	if s.db.logger != nil && s.db.logger.OnStorageChange != nil {
 		s.db.logger.OnStorageChange(s.address, key, prev, value)
 	}
-	s.setState(key, value)
+	s.setState(key, &value)
 }
 
-func (s *stateObject) setState(key, value common.Hash) {
-	s.dirtyStorage[key] = value
+// setState updates a value in account dirty storage. If the value being set is
+// nil (assuming journal revert), the dirtyness is removed.
+func (s *stateObject) setState(key common.Hash, value *common.Hash) {
+	// If the first set is being reverted, undo the dirty marker
+	if value == nil {
+		delete(s.dirtyStorage, key)
+		return
+	}
+	// Otherwise restore the previous value
+	s.dirtyStorage[key] = *value
 }
 
 // finalise moves all dirty storage slots into the pending area to be hashed or
