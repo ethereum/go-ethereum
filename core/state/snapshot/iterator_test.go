@@ -248,7 +248,7 @@ func TestAccountIteratorTraversal(t *testing.T) {
 		aggregatorMemoryLimit = limit
 	}()
 	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
-	snaps.Cap(common.HexToHash("0x04"), 2)
+	snaps.Cap(common.HexToHash("0x04"), 2, false)
 	verifyIterator(t, 7, head.(*diffLayer).newBinaryAccountIterator(), verifyAccount)
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x04"), common.Hash{})
@@ -296,7 +296,7 @@ func TestStorageIteratorTraversal(t *testing.T) {
 		aggregatorMemoryLimit = limit
 	}()
 	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
-	snaps.Cap(common.HexToHash("0x04"), 2)
+	snaps.Cap(common.HexToHash("0x04"), 2, false)
 	verifyIterator(t, 6, head.(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa")), verifyStorage)
 
 	it, _ = snaps.StorageIterator(common.HexToHash("0x04"), common.HexToHash("0xaa"), common.Hash{})
@@ -384,7 +384,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 		aggregatorMemoryLimit = limit
 	}()
 	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
-	snaps.Cap(common.HexToHash("0x09"), 2)
+	snaps.Cap(common.HexToHash("0x09"), 2, false)
 
 	it, _ = snaps.AccountIterator(common.HexToHash("0x09"), common.Hash{})
 	for it.Next() {
@@ -483,7 +483,7 @@ func TestStorageIteratorTraversalValues(t *testing.T) {
 		aggregatorMemoryLimit = limit
 	}()
 	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
-	snaps.Cap(common.HexToHash("0x09"), 2)
+	snaps.Cap(common.HexToHash("0x09"), 2, false)
 
 	it, _ = snaps.StorageIterator(common.HexToHash("0x09"), common.HexToHash("0xaa"), common.Hash{})
 	for it.Next() {
@@ -541,7 +541,7 @@ func TestAccountIteratorLargeTraversal(t *testing.T) {
 		aggregatorMemoryLimit = limit
 	}()
 	aggregatorMemoryLimit = 0 // Force pushing the bottom-most layer into disk
-	snaps.Cap(common.HexToHash("0x80"), 2)
+	snaps.Cap(common.HexToHash("0x80"), 2, false)
 
 	verifyIterator(t, 200, head.(*diffLayer).newBinaryAccountIterator(), verifyAccount)
 
@@ -580,7 +580,7 @@ func TestAccountIteratorFlattening(t *testing.T) {
 	it, _ := snaps.AccountIterator(common.HexToHash("0x04"), common.Hash{})
 	defer it.Release()
 
-	if err := snaps.Cap(common.HexToHash("0x04"), 1); err != nil {
+	if err := snaps.Cap(common.HexToHash("0x04"), 1, false); err != nil {
 		t.Fatalf("failed to flatten snapshot stack: %v", err)
 	}
 	//verifyIterator(t, 7, it)

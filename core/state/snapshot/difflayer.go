@@ -77,8 +77,10 @@ var (
 	bloomAccountHasherOffset  = 0
 	bloomStorageHasherOffset  = 0
 
-	// Setting a minimum to prevent very low input from user
-	minTimeThreshold = 1 * time.Minute
+	// Count for number of commits before force disk update
+	// after the first 128 layers, the 129 layers would be committed
+	// to disk.
+	defaultCommitThreshold = 128
 )
 
 func init() {
