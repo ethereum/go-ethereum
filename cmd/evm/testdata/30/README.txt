@@ -3,7 +3,7 @@ The input transactions contain three transactions, number `0` and `2` are taken 
 `testdata/13`, whereas number `1` is taken from #27730.
 
 The problematic second transaction cannot be RLP-decoded, and the expectation is
-that that particular transaction should be rejected, but number `0` and `1` should
+that particular transaction should be rejected, but number `0` and `1` should
 still be accepted.
 
 ```
