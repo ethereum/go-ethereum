@@ -5520,6 +5520,11 @@ var properties = function () {
             outputFormatter: formatters.outputBigNumberFormatter
         }),
         new Property({
+            name: 'blobBaseFee',
+            getter: 'eth_blobBaseFee',
+            outputFormatter: formatters.outputBigNumberFormatter
+        }),
+        new Property({
             name: 'accounts',
             getter: 'eth_accounts'
         }),

@@ -476,13 +476,13 @@ func TestDisable(t *testing.T) {
 
 	_, stored := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
 	if err := tester.db.Disable(); err != nil {
-		t.Fatal("Failed to deactivate database")
+		t.Fatalf("Failed to deactivate database: %v", err)
 	}
 	if err := tester.db.Enable(types.EmptyRootHash); err == nil {
-		t.Fatalf("Invalid activation should be rejected")
+		t.Fatal("Invalid activation should be rejected")
 	}
 	if err := tester.db.Enable(stored); err != nil {
-		t.Fatal("Failed to activate database")
+		t.Fatalf("Failed to activate database: %v", err)
 	}
 
 	// Ensure journal is deleted from disk

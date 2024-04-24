@@ -58,6 +58,7 @@ const (
 // EvResponse or EvFail. Additionally, it may also send application-defined
 // events that the Modules can interpret.
 type requestServer interface {
+	Name() string
 	Subscribe(eventCallback func(Event))
 	SendRequest(ID, Request)
 	Unsubscribe()
@@ -69,6 +70,7 @@ type requestServer interface {
 // limit the number of parallel in-flight requests and temporarily disable
 // new requests based on timeouts and response failures.
 type server interface {
+	Server
 	subscribe(eventCallback func(Event))
 	canRequestNow() bool
 	sendRequest(Request) ID
@@ -136,6 +138,11 @@ type serverWithTimeout struct {
 	childEventCb func(event Event)
 	timeouts     map[ID]mclock.Timer
 	lastID       ID
+}
+
+// Name implements request.Server
+func (s *serverWithTimeout) Name() string {
+	return s.parent.Name()
 }
 
 // init initializes serverWithTimeout
