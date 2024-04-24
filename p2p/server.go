@@ -51,7 +51,7 @@ const (
 
 	// Connectivity defaults.
 	defaultMaxPendingPeers = 50
-	defaultDialRatio       = 3
+	defaultDialRatio       = 2
 
 	// This time limits inbound connection attempts per source IP.
 	inboundThrottleTime = 30 * time.Second
