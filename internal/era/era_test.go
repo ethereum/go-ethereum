@@ -45,7 +45,15 @@ func TestEra1Builder(t *testing.T) {
 		builder = NewBuilder(f)
 		chain   = testchain{}
 	)
-	for i := 0; i < 128; i++ {
+
+	// Create a chain of 128 blocks.
+	const blockNum = 128 
+	chain.headers = make([][]byte, 0, blockNum)
+	chain.bodies = make([][]byte, 0, blockNum)
+	chain.receipts = make([][]byte, 0, blockNum)
+	chain.tds = make([]*big.Int, 0, blockNum)
+
+	for i := 0; i < blockNum; i++ {
 		chain.headers = append(chain.headers, []byte{byte('h'), byte(i)})
 		chain.bodies = append(chain.bodies, []byte{byte('b'), byte(i)})
 		chain.receipts = append(chain.receipts, []byte{byte('r'), byte(i)})
