@@ -406,7 +406,7 @@ func (b *bridge) Send(call jsre.Call) (goja.Value, error) {
 	}
 
 	// Execute the requests.
-	var resps []*goja.Object
+	resps := make([]*goja.Object, 0, len(reqs))
 	for _, req := range reqs {
 		resp := call.VM.NewObject()
 		resp.Set("jsonrpc", "2.0")
