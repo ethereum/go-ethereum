@@ -352,7 +352,7 @@ func (t Type) requiresLengthPrefix() bool {
 }
 
 // isDynamicType returns true if the type is dynamic.
-// The following types are called “dynamic”:
+// The following types are called "dynamic":
 // * bytes
 // * string
 // * T[] for any T
