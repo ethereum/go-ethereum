@@ -375,6 +375,9 @@ type EthashConfig struct{}
 
 // String implements the stringer interface, returning the consensus engine details.
 func (c *EthashConfig) String() string {
+	if c == nil {
+		return "<nil>"
+	}
 	return "ethash"
 }
 
@@ -386,7 +389,10 @@ type CliqueConfig struct {
 
 // String implements the stringer interface, returning the consensus engine details.
 func (c *CliqueConfig) String() string {
-	return "clique"
+	if c == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("Clique { Period: %d, Epoch: %d }", c.Period, c.Epoch)
 }
 
 // Description returns a human-readable description of ChainConfig.
