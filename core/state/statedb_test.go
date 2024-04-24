@@ -558,10 +558,14 @@ func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.H
 	if err != nil {
 		return err
 	}
-	it := trie.NewIterator(trieIt)
+	var (
+		it      = trie.NewIterator(trieIt)
+		visited = make(map[common.Hash]bool)
+	)
 
 	for it.Next() {
 		key := common.BytesToHash(s.trie.GetKey(it.Key))
+		visited[key] = true
 		if value, dirty := so.dirtyStorage[key]; dirty {
 			if !cb(key, value) {
 				return nil
@@ -579,6 +583,16 @@ func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.H
 			}
 		}
 	}
+	// Now visit any remaining dirty storage which is not in trie
+	for key, value := range so.dirtyStorage {
+		if visited[key] {
+			continue
+		}
+		if !cb(key, value) {
+			return nil
+		}
+	}
+
 	return nil
 }
 
