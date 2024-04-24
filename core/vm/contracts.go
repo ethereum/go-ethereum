@@ -705,6 +705,8 @@ func (c *bls12381G1Add) Run(input []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	// No need to check the subgroup here, as specified by EIP-2537
+
 	// Compute r = p_0 + p_1
 	p0.Add(p0, p1)
 
@@ -836,6 +838,8 @@ func (c *bls12381G2Add) Run(input []byte) ([]byte, error) {
 	if p1, err = decodePointG2(input[256:]); err != nil {
 		return nil, err
 	}
+
+	// No need to check the subgroup here, as specified by EIP-2537
 
 	// Compute r = p_0 + p_1
 	r := new(bls12381.G2Affine)
