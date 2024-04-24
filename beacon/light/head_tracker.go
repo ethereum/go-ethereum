@@ -29,15 +29,15 @@ import (
 // which is the (not necessarily validated) head announced by the majority of
 // servers.
 type HeadTracker struct {
-	lock              sync.RWMutex
-	committeeChain    *CommitteeChain
-	minSignerCount    int
-	signedHead        types.SignedHeader
-	hasSignedHead     bool
-	finalityUpdate    types.FinalityUpdate
-	hasFinalityUpdate bool
-	prefetchHead      types.HeadInfo
-	changeCounter     uint64
+	lock                sync.RWMutex
+	committeeChain      *CommitteeChain
+	minSignerCount      int
+	optimisticUpdate    types.OptimisticUpdate
+	hasOptimisticUpdate bool
+	finalityUpdate      types.FinalityUpdate
+	hasFinalityUpdate   bool
+	prefetchHead        types.HeadInfo
+	changeCounter       uint64
 }
 
 // NewHeadTracker creates a new HeadTracker.
@@ -48,15 +48,15 @@ func NewHeadTracker(committeeChain *CommitteeChain, minSignerCount int) *HeadTra
 	}
 }
 
-// ValidatedHead returns the latest validated head.
-func (h *HeadTracker) ValidatedHead() (types.SignedHeader, bool) {
+// ValidatedOptimistic returns the latest validated optimistic update.
+func (h *HeadTracker) ValidatedOptimistic() (types.OptimisticUpdate, bool) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 
-	return h.signedHead, h.hasSignedHead
+	return h.optimisticUpdate, h.hasOptimisticUpdate
 }
 
-// ValidatedFinality returns the latest validated finality.
+// ValidatedFinality returns the latest validated finality update.
 func (h *HeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
@@ -64,26 +64,36 @@ func (h *HeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
 	return h.finalityUpdate, h.hasFinalityUpdate
 }
 
-// ValidateHead validates the given signed head. If the head is successfully validated
-// and it is better than the old validated head (higher slot or same slot and more
-// signers) then ValidatedHead is updated. The boolean return flag signals if
-// ValidatedHead has been changed.
-func (h *HeadTracker) ValidateHead(head types.SignedHeader) (bool, error) {
+// ValidateOptimistic validates the given optimistic update. If the update is
+// successfully validated and it is better than the old validated update (higher
+// slot or same slot and more signers) then ValidatedOptimistic is updated.
+// The boolean return flag signals if ValidatedOptimistic has been changed.
+func (h *HeadTracker) ValidateOptimistic(update types.OptimisticUpdate) (bool, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	replace, err := h.validate(head, h.signedHead)
+	if err := update.Validate(); err != nil {
+		return false, err
+	}
+	replace, err := h.validate(update.SignedHeader(), h.optimisticUpdate.SignedHeader())
 	if replace {
-		h.signedHead, h.hasSignedHead = head, true
+		h.optimisticUpdate, h.hasOptimisticUpdate = update, true
 		h.changeCounter++
 	}
 	return replace, err
 }
 
+// ValidateFinality validates the given finality update. If the update is
+// successfully validated and it is better than the old validated update (higher
+// slot or same slot and more signers) then ValidatedFinality is updated.
+// The boolean return flag signals if ValidatedFinality has been changed.
 func (h *HeadTracker) ValidateFinality(update types.FinalityUpdate) (bool, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
+	if err := update.Validate(); err != nil {
+		return false, err
+	}
 	replace, err := h.validate(update.SignedHeader(), h.finalityUpdate.SignedHeader())
 	if replace {
 		h.finalityUpdate, h.hasFinalityUpdate = update, true
@@ -142,6 +152,7 @@ func (h *HeadTracker) SetPrefetchHead(head types.HeadInfo) {
 	h.changeCounter++
 }
 
+// ChangeCounter implements request.targetData
 func (h *HeadTracker) ChangeCounter() uint64 {
 	h.lock.RLock()
 	defer h.lock.RUnlock()

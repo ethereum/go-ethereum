@@ -23,9 +23,9 @@ import (
 )
 
 var (
-	EvNewHead           = &request.EventType{Name: "newHead"}           // data: types.HeadInfo
-	EvNewSignedHead     = &request.EventType{Name: "newSignedHead"}     // data: types.SignedHeader
-	EvNewFinalityUpdate = &request.EventType{Name: "newFinalityUpdate"} // data: types.FinalityUpdate
+	EvNewHead             = &request.EventType{Name: "newHead"}             // data: types.HeadInfo
+	EvNewOptimisticUpdate = &request.EventType{Name: "newOptimisticUpdate"} // data: types.OptimisticUpdate
+	EvNewFinalityUpdate   = &request.EventType{Name: "newFinalityUpdate"}   // data: types.FinalityUpdate
 )
 
 type (
@@ -43,4 +43,5 @@ type (
 	}
 	ReqCheckpointData common.Hash
 	ReqBeaconBlock    common.Hash
+	ReqFinality       struct{}
 )

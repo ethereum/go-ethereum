@@ -835,7 +835,7 @@ func (t *Tree) disklayer() *diskLayer {
 	}
 }
 
-// diskRoot is a internal helper function to return the disk layer root.
+// diskRoot is an internal helper function to return the disk layer root.
 // The lock of snapTree is assumed to be held already.
 func (t *Tree) diskRoot() common.Hash {
 	disklayer := t.disklayer()

@@ -203,8 +203,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	)
 	if config.VMTrace != "" {
 		var traceConfig json.RawMessage
-		if config.VMTraceConfig != "" {
-			traceConfig = json.RawMessage(config.VMTraceConfig)
+		if config.VMTraceJsonConfig != "" {
+			traceConfig = json.RawMessage(config.VMTraceJsonConfig)
 		}
 		t, err := tracers.LiveDirectory.New(config.VMTrace, traceConfig)
 		if err != nil {

@@ -84,6 +84,7 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 	if s.initialized {
 		return
 	}
+
 	for _, event := range events {
 		switch event.Type {
 		case request.EvResponse, request.EvFail, request.EvTimeout:
@@ -132,10 +133,12 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 				newState.state = ssPrintStatus
 				s.serverState[sid.Server] = newState
 			}
+
 		case request.EvUnregistered:
 			delete(s.serverState, event.Server)
 		}
 	}
+
 	// start a request if possible
 	for _, server := range requester.CanSendTo() {
 		switch s.serverState[server].state {
@@ -156,6 +159,7 @@ func (s *CheckpointInit) Process(requester request.Requester, events []request.E
 			s.serverState[server] = newState
 		}
 	}
+
 	// print log message if necessary
 	for server, state := range s.serverState {
 		if state.state != ssPrintStatus {
@@ -316,9 +320,9 @@ func (s *ForwardUpdateSync) Process(requester request.Requester, events []reques
 			if !queued {
 				s.unlockRange(sid, req)
 			}
-		case EvNewSignedHead:
-			signedHead := event.Data.(types.SignedHeader)
-			s.nextSyncPeriod[event.Server] = types.SyncPeriod(signedHead.SignatureSlot + 256)
+		case EvNewOptimisticUpdate:
+			update := event.Data.(types.OptimisticUpdate)
+			s.nextSyncPeriod[event.Server] = types.SyncPeriod(update.SignatureSlot + 256)
 		case request.EvUnregistered:
 			delete(s.nextSyncPeriod, event.Server)
 		}

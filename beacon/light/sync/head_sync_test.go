@@ -19,6 +19,7 @@ package sync
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -28,6 +29,7 @@ var (
 	testServer2 = testServer("testServer2")
 	testServer3 = testServer("testServer3")
 	testServer4 = testServer("testServer4")
+	testServer5 = testServer("testServer5")
 
 	testHead0 = types.HeadInfo{}
 	testHead1 = types.HeadInfo{Slot: 123, BlockRoot: common.Hash{1}}
@@ -35,12 +37,20 @@ var (
 	testHead3 = types.HeadInfo{Slot: 124, BlockRoot: common.Hash{3}}
 	testHead4 = types.HeadInfo{Slot: 125, BlockRoot: common.Hash{4}}
 
-	testSHead1 = types.SignedHeader{SignatureSlot: 0x0124, Header: types.Header{Slot: 0x0123, StateRoot: common.Hash{1}}}
-	testSHead2 = types.SignedHeader{SignatureSlot: 0x2010, Header: types.Header{Slot: 0x200e, StateRoot: common.Hash{2}}}
-	// testSHead3 is at the end of period 1 but signed in period 2
-	testSHead3 = types.SignedHeader{SignatureSlot: 0x4000, Header: types.Header{Slot: 0x3fff, StateRoot: common.Hash{3}}}
-	testSHead4 = types.SignedHeader{SignatureSlot: 0x6444, Header: types.Header{Slot: 0x6443, StateRoot: common.Hash{4}}}
+	testOptUpdate1 = types.OptimisticUpdate{SignatureSlot: 0x0124, Attested: types.HeaderWithExecProof{Header: types.Header{Slot: 0x0123, StateRoot: common.Hash{1}}}}
+	testOptUpdate2 = types.OptimisticUpdate{SignatureSlot: 0x2010, Attested: types.HeaderWithExecProof{Header: types.Header{Slot: 0x200e, StateRoot: common.Hash{2}}}}
+	// testOptUpdate3 is at the end of period 1 but signed in period 2
+	testOptUpdate3 = types.OptimisticUpdate{SignatureSlot: 0x4000, Attested: types.HeaderWithExecProof{Header: types.Header{Slot: 0x3fff, StateRoot: common.Hash{3}}}}
+	testOptUpdate4 = types.OptimisticUpdate{SignatureSlot: 0x6444, Attested: types.HeaderWithExecProof{Header: types.Header{Slot: 0x6443, StateRoot: common.Hash{4}}}}
 )
+
+func finality(opt types.OptimisticUpdate) types.FinalityUpdate {
+	return types.FinalityUpdate{
+		SignatureSlot: opt.SignatureSlot,
+		Attested:      opt.Attested,
+		Finalized:     types.HeaderWithExecProof{Header: types.Header{Slot: (opt.Attested.Header.Slot - 64) & uint64(0xffffffffffffffe0)}},
+	}
+}
 
 type testServer string
 
@@ -57,50 +67,66 @@ func TestValidatedHead(t *testing.T) {
 	ht.ExpValidated(t, 0, nil)
 
 	ts.AddServer(testServer1, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead1)
-	ts.Run(1)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer1, testOptUpdate1)
+	ts.Run(1, testServer1, ReqFinality{})
 	// announced head should be queued because of uninitialized chain
 	ht.ExpValidated(t, 1, nil)
 
 	chain.SetNextSyncPeriod(0) // initialize chain
 	ts.Run(2)
 	// expect previously queued head to be validated
-	ht.ExpValidated(t, 2, []types.SignedHeader{testSHead1})
+	ht.ExpValidated(t, 2, []types.OptimisticUpdate{testOptUpdate1})
 
 	chain.SetNextSyncPeriod(1)
-	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead2)
+	ts.ServerEvent(EvNewFinalityUpdate, testServer1, finality(testOptUpdate2))
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer1, testOptUpdate2)
 	ts.AddServer(testServer2, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer2, testSHead2)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer2, testOptUpdate2)
 	ts.Run(3)
 	// expect both head announcements to be validated instantly
-	ht.ExpValidated(t, 3, []types.SignedHeader{testSHead2, testSHead2})
+	ht.ExpValidated(t, 3, []types.OptimisticUpdate{testOptUpdate2, testOptUpdate2})
 
-	ts.ServerEvent(EvNewSignedHead, testServer1, testSHead3)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer1, testOptUpdate3)
 	ts.AddServer(testServer3, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer3, testSHead4)
-	ts.Run(4)
-	// future period announced heads should be queued
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer3, testOptUpdate4)
+	// finality should be requested from both servers
+	ts.Run(4, testServer1, ReqFinality{}, testServer3, ReqFinality{})
+	// future period annonced heads should be queued
 	ht.ExpValidated(t, 4, nil)
 
 	chain.SetNextSyncPeriod(2)
 	ts.Run(5)
-	// testSHead3 can be validated now but not testSHead4
-	ht.ExpValidated(t, 5, []types.SignedHeader{testSHead3})
+	// testOptUpdate3 can be validated now but not testOptUpdate4
+	ht.ExpValidated(t, 5, []types.OptimisticUpdate{testOptUpdate3})
+
+	ts.AddServer(testServer4, 1)
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer4, testOptUpdate3)
+	// new server joined with recent optimistic update but still no finality; should be requested
+	ts.Run(6, testServer4, ReqFinality{})
+	ht.ExpValidated(t, 6, []types.OptimisticUpdate{testOptUpdate3})
+
+	ts.AddServer(testServer5, 1)
+	ts.RequestEvent(request.EvResponse, ts.Request(6, 1), finality(testOptUpdate3))
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer5, testOptUpdate3)
+	// finality update request answered; new server should not be requested
+	ts.Run(7)
+	ht.ExpValidated(t, 7, []types.OptimisticUpdate{testOptUpdate3})
 
 	// server 3 disconnected without proving period 3, its announced head should be dropped
 	ts.RemoveServer(testServer3)
-	ts.Run(6)
-	ht.ExpValidated(t, 6, nil)
+	ts.Run(8)
+	ht.ExpValidated(t, 8, nil)
 
 	chain.SetNextSyncPeriod(3)
-	ts.Run(7)
-	// testSHead4 could be validated now but it's not queued by any registered server
-	ht.ExpValidated(t, 7, nil)
+	ts.Run(9)
+	// testOptUpdate4 could be validated now but it's not queued by any registered server
+	ht.ExpValidated(t, 9, nil)
 
-	ts.ServerEvent(EvNewSignedHead, testServer2, testSHead4)
-	ts.Run(8)
-	// now testSHead4 should be validated
-	ht.ExpValidated(t, 8, []types.SignedHeader{testSHead4})
+	ts.ServerEvent(EvNewFinalityUpdate, testServer2, finality(testOptUpdate4))
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer2, testOptUpdate4)
+	ts.Run(10)
+	// now testOptUpdate4 should be validated
+	ht.ExpValidated(t, 10, []types.OptimisticUpdate{testOptUpdate4})
 }
 
 func TestPrefetchHead(t *testing.T) {
