@@ -19,12 +19,12 @@ package bls
 import (
 	"bytes"
 	"fmt"
-	"github.com/holiman/uint256"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -111,7 +111,7 @@ func fuzz(id byte, data []byte) int {
 	}
 	cpy := make([]byte, len(data))
 	copy(cpy, data)
-	_, err := precompile.Run(cpy, vm.NewContext(common.HexToAddress("1337"), mockEVM))
+	_, err := precompile.Run(cpy)
 	if !bytes.Equal(cpy, data) {
 		panic(fmt.Sprintf("input data modified, precompile %d: %x %x", id, data, cpy))
 	}
