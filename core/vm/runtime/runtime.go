@@ -72,6 +72,7 @@ func setDefaults(cfg *Config) {
 			ShanghaiBlock:       new(big.Int),
 			BernoulliBlock:      new(big.Int),
 			CurieBlock:          new(big.Int),
+			DescartesBlock:      new(big.Int),
 		}
 	}
 

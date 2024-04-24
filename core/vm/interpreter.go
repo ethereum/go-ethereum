@@ -74,6 +74,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	if cfg.JumpTable[STOP] == nil {
 		var jt JumpTable
 		switch {
+		case evm.chainRules.IsDescartes:
+			jt = descartesInstructionSet
 		case evm.chainRules.IsCurie:
 			jt = curieInstructionSet
 		case evm.chainRules.IsShanghai:
