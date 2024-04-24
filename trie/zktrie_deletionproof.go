@@ -10,21 +10,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb"
 )
 
-// Pick Node from its hash directly from database, notice it has different
-// interface with the function of same name in `trie`
-func (t *ZkTrie) TryGetNode(nodeHash *zkt.Hash) (*zktrie.Node, error) {
-	if bytes.Equal(nodeHash[:], zkt.HashZero[:]) {
-		return zktrie.NewEmptyNode(), nil
-	}
-	nBytes, err := t.db.Get(nodeHash[:])
-	if err == zktrie.ErrKeyNotFound {
-		return nil, zktrie.ErrKeyNotFound
-	} else if err != nil {
-		return nil, err
-	}
-	return zktrie.NewNodeFromBytes(nBytes)
-}
-
 type ProofTracer struct {
 	*ZkTrie
 	deletionTracer map[zkt.Hash]struct{}
@@ -95,7 +80,7 @@ func (t *ProofTracer) GetDeletionProofs() ([][]byte, error) {
 					siblingHash = n.ChildL
 				}
 				if siblingHash != nil {
-					sibling, err := t.TryGetNode(siblingHash)
+					sibling, err := t.ZkTrie.Tree().GetNode(siblingHash)
 					if err != nil {
 						return nil, err
 					}

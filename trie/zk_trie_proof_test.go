@@ -79,7 +79,11 @@ func TestSMTOneElementProof(t *testing.T) {
 		if proof.Len() != 2 {
 			t.Errorf("prover %d: proof should have 1+1 element (including the magic kv)", i)
 		}
-		val, err := VerifyProof(common.BytesToHash(mt.Root().Bytes()), keyBytes, proof)
+
+		root, err := mt.Root()
+		assert.NoError(t, err)
+
+		val, err := VerifyProof(common.BytesToHash(root.Bytes()), keyBytes, proof)
 		if err != nil {
 			t.Fatalf("prover %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
 		}
@@ -91,7 +95,9 @@ func TestSMTOneElementProof(t *testing.T) {
 
 func TestSMTProof(t *testing.T) {
 	mt, vals := randomZktrie(t, 500)
-	root := mt.Tree().Root()
+	root, err := mt.Tree().Root()
+	assert.NoError(t, err)
+
 	for i, prover := range makeSMTProvers(mt) {
 		for _, kv := range vals {
 			proof := prover(kv.k)
@@ -111,7 +117,9 @@ func TestSMTProof(t *testing.T) {
 
 func TestSMTBadProof(t *testing.T) {
 	mt, vals := randomZktrie(t, 500)
-	root := mt.Tree().Root()
+	root, err := mt.Tree().Root()
+	assert.NoError(t, err)
+
 	for i, prover := range makeSMTProvers(mt) {
 		for _, kv := range vals {
 			proof := prover(kv.k)
@@ -157,7 +165,11 @@ func TestSMTMissingKeyProof(t *testing.T) {
 		if proof.Len() != 2 {
 			t.Errorf("test %d: proof should have 2 element (with magic kv)", i)
 		}
-		val, err := VerifyProof(common.BytesToHash(mt.Root().Bytes()), keyBytes, proof)
+
+		root, err := mt.Root()
+		assert.NoError(t, err)
+
+		val, err := VerifyProof(common.BytesToHash(root.Bytes()), keyBytes, proof)
 		if err != nil {
 			t.Fatalf("test %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
 		}
