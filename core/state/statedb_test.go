@@ -584,16 +584,6 @@ func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.H
 			}
 		}
 	}
-	// Now visit any remaining dirty storage which is not in trie
-	for key, value := range so.dirtyStorage {
-		if visited[key] {
-			continue
-		}
-		if !cb(key, value) {
-			return nil
-		}
-	}
-
 	return nil
 }
 
@@ -628,6 +618,26 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 			forEachStorage(checkstate, addr, func(key, value common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", checkstate.GetState(addr, key), value)
 			})
+			other := checkstate.getStateObject(addr)
+			// Check dirty storage which is not in trie
+			if !maps.Equal(obj.dirtyStorage, other.dirtyStorage) {
+				print := func(dirty map[common.Hash]common.Hash) string {
+					var keys []common.Hash
+					out := new(strings.Builder)
+					for key := range dirty {
+						keys = append(keys, key)
+					}
+					slices.SortFunc(keys, common.Hash.Cmp)
+					for i, key := range keys {
+						fmt.Fprintf(out, "  %d. %v %v\n", i, key, dirty[key])
+					}
+					return out.String()
+				}
+				return fmt.Errorf("dirty storage err, have\n%v\nwant\n%v",
+					print(obj.dirtyStorage),
+					print(other.dirtyStorage))
+			}
+
 		}
 		// Check transient storage.
 		{
