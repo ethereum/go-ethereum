@@ -32,20 +32,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-type Code []byte
-
-func (c Code) String() string {
-	return string(c) //strings.Join(Disassemble(c), " ")
-}
-
 type Storage map[common.Hash]common.Hash
-
-func (s Storage) String() (str string) {
-	for key, value := range s {
-		str += fmt.Sprintf("%X : %X\n", key, value)
-	}
-	return
-}
 
 func (s Storage) Copy() Storage {
 	return maps.Clone(s)
@@ -65,8 +52,8 @@ type stateObject struct {
 	data     types.StateAccount  // Account data with all mutations applied in the scope of block
 
 	// Write caches.
-	trie Trie // storage trie, which becomes non-nil on first access
-	code Code // contract bytecode, which gets set when code is loaded
+	trie Trie   // storage trie, which becomes non-nil on first access
+	code []byte // contract bytecode, which gets set when code is loaded
 
 	originStorage  Storage // Storage cache of original entries to dedup rewrites
 	pendingStorage Storage // Storage entries that need to be flushed to disk, at the end of an entire block
@@ -75,17 +62,16 @@ type stateObject struct {
 	// Cache flags.
 	dirtyCode bool // true if the code was updated
 
-	// Flag whether the account was marked as self-destructed. The self-destructed account
-	// is still accessible in the scope of same transaction.
+	// Flag whether the account was marked as self-destructed. The self-destructed
+	// account is still accessible in the scope of same transaction.
 	selfDestructed bool
 
-	// Flag whether the account was marked as deleted. A self-destructed account
-	// or an account that is considered as empty will be marked as deleted at
-	// the end of transaction and no longer accessible anymore.
-	deleted bool
-
-	// Flag whether the object was created in the current transaction
-	created bool
+	// This is an EIP-6780 flag indicating whether the object is eligible for
+	// self-destruct according to EIP-6780. The flag could be set either when
+	// the contract is just created within the current transaction, or when the
+	// object was previously existent and is being deployed as a contract within
+	// the current transaction.
+	newContract bool
 }
 
 // empty returns whether the account is considered empty.
@@ -95,10 +81,7 @@ func (s *stateObject) empty() bool {
 
 // newObject creates a state object.
 func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *stateObject {
-	var (
-		origin  = acct
-		created = acct == nil // true if the account was not existent
-	)
+	origin := acct
 	if acct == nil {
 		acct = types.NewEmptyStateAccount()
 	}
@@ -111,7 +94,6 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 		originStorage:  make(Storage),
 		pendingStorage: make(Storage),
 		dirtyStorage:   make(Storage),
-		created:        created,
 	}
 }
 
@@ -264,6 +246,10 @@ func (s *stateObject) finalise(prefetch bool) {
 	if len(s.dirtyStorage) > 0 {
 		s.dirtyStorage = make(Storage)
 	}
+	// Revoke the flag at the end of the transaction. It finalizes the status
+	// of the newly-created object as it's no longer eligible for self-destruct
+	// by EIP-6780. For non-newly-created objects, it's a no-op.
+	s.newContract = false
 }
 
 // updateTrie is responsible for persisting cached storage changes into the
@@ -463,12 +449,12 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		obj.trie = db.db.CopyTrie(s.trie)
 	}
 	obj.code = s.code
-	obj.dirtyStorage = s.dirtyStorage.Copy()
 	obj.originStorage = s.originStorage.Copy()
 	obj.pendingStorage = s.pendingStorage.Copy()
-	obj.selfDestructed = s.selfDestructed
+	obj.dirtyStorage = s.dirtyStorage.Copy()
 	obj.dirtyCode = s.dirtyCode
-	obj.deleted = s.deleted
+	obj.selfDestructed = s.selfDestructed
+	obj.newContract = s.newContract
 	return obj
 }
 
@@ -483,7 +469,7 @@ func (s *stateObject) Address() common.Address {
 
 // Code returns the contract code associated with this object, if any.
 func (s *stateObject) Code() []byte {
-	if s.code != nil {
+	if len(s.code) != 0 {
 		return s.code
 	}
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
@@ -501,7 +487,7 @@ func (s *stateObject) Code() []byte {
 // or zero if none. This method is an almost mirror of Code, but uses a cache
 // inside the database to avoid loading codes seen recently.
 func (s *stateObject) CodeSize() int {
-	if s.code != nil {
+	if len(s.code) != 0 {
 		return len(s.code)
 	}
 	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
