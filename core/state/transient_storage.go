@@ -67,6 +67,7 @@ func (t transientStorage) Copy() transientStorage {
 	return storage
 }
 
+// PrettyPrint prints the contents of the access list in a human-readable form
 func (t transientStorage) PrettyPrint() string {
 	out := new(strings.Builder)
 	var sortedAddrs []common.Address
