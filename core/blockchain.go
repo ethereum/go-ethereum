@@ -1153,6 +1153,10 @@ func (bc *BlockChain) Stop() {
 			}
 		}
 	}
+	// Allow tracers to clean-up and release resources.
+	if bc.logger != nil && bc.logger.OnClose != nil {
+		bc.logger.OnClose()
+	}
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
 		log.Error("Failed to close trie database", "err", err)
