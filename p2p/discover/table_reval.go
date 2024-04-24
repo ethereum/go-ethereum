@@ -148,7 +148,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	n.isValidatedLive = true
 	var endpointChanged bool
 	if resp.newRecord != nil {
-		endpointChanged := tab.bumpInBucket(b, resp.newRecord)
+		endpointChanged = tab.bumpInBucket(b, resp.newRecord)
 		if endpointChanged {
 			// If the node changed its advertised endpoint, the updated ENR is not served
 			// until it has been revalidated.
