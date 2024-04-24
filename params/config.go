@@ -392,7 +392,7 @@ func (c *CliqueConfig) String() string {
 	if c == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("Clique { Period: %d, Epoch: %d }", c.Period, c.Epoch)
+	return fmt.Sprintf("clique { period: %d, epoch: %d }", c.Period, c.Epoch)
 }
 
 // Description returns a human-readable description of ChainConfig.
