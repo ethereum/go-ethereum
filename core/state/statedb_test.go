@@ -25,6 +25,7 @@ import (
 	"math"
 	"math/rand"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -615,7 +616,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCode", state.GetCode(addr), checkstate.GetCode(addr))
 		checkeq("GetCodeHash", state.GetCodeHash(addr), checkstate.GetCodeHash(addr))
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
-		// Check created-flag
+		// Check newContract-flag
 		if obj := state.getStateObject(addr); obj != nil {
 			checkeq("IsNewContract", obj.newContract, checkstate.getStateObject(addr).newContract)
 		}
@@ -658,6 +659,23 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 	if !reflect.DeepEqual(state.GetLogs(common.Hash{}, 0, common.Hash{}), checkstate.GetLogs(common.Hash{}, 0, common.Hash{})) {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
 			state.GetLogs(common.Hash{}, 0, common.Hash{}), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}))
+	}
+	if !maps.Equal(state.journal.dirties, checkstate.journal.dirties) {
+		getKeys := func(dirty map[common.Address]int) string {
+			var keys []common.Address
+			out := new(strings.Builder)
+			for key := range dirty {
+				keys = append(keys, key)
+			}
+			slices.SortFunc(keys, common.Address.Cmp)
+			for i, key := range keys {
+				fmt.Fprintf(out, "  %d. %v\n", i, key)
+			}
+			return out.String()
+		}
+		have := getKeys(state.journal.dirties)
+		want := getKeys(checkstate.journal.dirties)
+		return fmt.Errorf("dirty-journal set mismatch.\nhave:\n%v\nwant:\n%v\n", have, want)
 	}
 	return nil
 }
