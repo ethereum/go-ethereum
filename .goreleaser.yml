@@ -41,7 +41,7 @@ checksum:
     mev-commit-geth_
     {{- if .IsSnapshot }}{{ .ShortCommit }}
     {{- else }}{{ .Version }}
-    {{ end }}
+    {{- end -}}
     _checksums.txt
 
 changelog:
