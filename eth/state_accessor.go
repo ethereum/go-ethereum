@@ -237,7 +237,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, eth.blockchain.Config(), vm.Config{})
-		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb, block.Number(), block.Time())
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil

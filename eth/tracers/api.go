@@ -381,7 +381,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			if beaconRoot := next.BeaconRoot(); beaconRoot != nil {
 				context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
 				vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
-				core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+				core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb, vmenv.Context.BlockNumber, vmenv.Context.Time)
 			}
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
@@ -533,7 +533,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb, vmenv.Context.BlockNumber, vmenv.Context.Time)
 	}
 	for i, tx := range block.Transactions() {
 		if err := ctx.Err(); err != nil {
@@ -612,7 +612,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
-		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb, vmenv.Context.BlockNumber, vmenv.Context.Time)
 	}
 	for i, tx := range txs {
 		// Generate the next state snapshot fast without tracing
@@ -770,7 +770,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	}
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb, vmenv.Context.BlockNumber, vmenv.Context.Time)
 	}
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
