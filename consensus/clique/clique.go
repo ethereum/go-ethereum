@@ -674,10 +674,6 @@ func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, res
 	}
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
 
-	// For now, hard code delay to 20ms less than block period.
-	// This may cause deadlocks with certain numbers of nodes, more testing is needed.
-	delay = time.Millisecond * (time.Duration(c.config.PeriodMs - 20))
-
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
