@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/portalnetwork/beacon"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
+	"github.com/ethereum/go-ethereum/portalnetwork/web3"
 	"github.com/ethereum/go-ethereum/rpc"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/protolambda/zrnt/eth2/configs"
@@ -108,6 +109,12 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, addr string) err
 	server := rpc.NewServer()
 	discV5API := discover.NewDiscV5API(discV5)
 	err = server.RegisterName("discv5", discV5API)
+	if err != nil {
+		return err
+	}
+
+	api := &web3.API{}
+	err = server.RegisterName("web3", api)
 	if err != nil {
 		return err
 	}

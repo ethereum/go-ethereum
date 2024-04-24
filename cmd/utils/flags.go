@@ -978,8 +978,8 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 
 	PortalDataCapacityFlag = &cli.Uint64Flag{
 		Name:     "data.capacity",
-		Usage:    "the capacity of the data stored, the unit is byte",
-		Value:    1000 * 1000 * 1000 * 2, // 2 GB
+		Usage:    "the capacity of the data stored, the unit is MB",
+		Value:    1000 * 10, // 10 GB
 		Category: flags.PortalNetworkCategory,
 	}
 
