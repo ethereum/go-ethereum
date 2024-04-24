@@ -113,3 +113,20 @@ func TestCompareGetTreeKeyWithEvaluated(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkGetTreeKeyWithEvaluatedAddress(b *testing.B) {
+	var buf [32]byte
+	rand.Read(buf[:])
+	addrpoint := EvaluateAddressPoint(buf[:])
+
+	rand.Read(buf[:])
+	n := uint256.NewInt(0).SetBytes32(buf[:])
+
+	_ = verkle.GetConfig()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = GetTreeKeyWithEvaluatedAddess(addrpoint, n, 0)
+	}
+}
