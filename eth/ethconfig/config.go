@@ -142,8 +142,8 @@ type Config struct {
 	EnablePreimageRecording bool
 
 	// Enables VM tracing
-	VMTrace       string
-	VMTraceConfig string
+	VMTrace           string
+	VMTraceJsonConfig string
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
