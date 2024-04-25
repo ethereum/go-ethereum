@@ -34,8 +34,8 @@ import (
 // randomStateSet generates a random state change set.
 func randomStateSet(n int) *triestate.Set {
 	var (
-		accounts = make(map[common.Address][]byte)
-		storages = make(map[common.Address]map[common.Hash][]byte)
+		accounts = make(map[common.Address][]byte, n)
+		storages = make(map[common.Address]map[common.Hash][]byte, n)
 	)
 	for i := 0; i < n; i++ {
 		addr := testrand.Address()
@@ -154,8 +154,8 @@ func TestTruncateHeadHistory(t *testing.T) {
 
 func TestTruncateTailHistory(t *testing.T) {
 	var (
-		roots      []common.Hash
 		hs         = makeHistories(10)
+		roots      = make([]common.Hash, 0, len(hs))
 		db         = rawdb.NewMemoryDatabase()
 		freezer, _ = openFreezer(t.TempDir(), false)
 	)
@@ -197,12 +197,11 @@ func TestTruncateTailHistories(t *testing.T) {
 	}
 	for i, c := range cases {
 		var (
-			roots      []common.Hash
 			hs         = makeHistories(10)
+			roots      = make([]common.Hash, 0, len(hs))
 			db         = rawdb.NewMemoryDatabase()
 			freezer, _ = openFreezer(t.TempDir()+fmt.Sprintf("%d", i), false)
 		)
-		defer freezer.Close()
 
 		for i := 0; i < len(hs); i++ {
 			accountData, storageData, accountIndex, storageIndex := hs[i].encode()
@@ -221,6 +220,8 @@ func TestTruncateTailHistories(t *testing.T) {
 			checkHistoriesInRange(t, db, freezer, uint64(1), c.maxPruned, roots[:tail], false)
 			checkHistoriesInRange(t, db, freezer, c.minUnpruned, uint64(10), roots[tail:], true)
 		}
+
+		freezer.Close()
 	}
 }
 

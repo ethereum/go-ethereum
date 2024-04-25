@@ -62,8 +62,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 	)
 	// First, we set up 128 diff layers, with 3K items each
 	fill := func(parent layer, index int) *diffLayer {
-		nodes := make(map[common.Hash]map[string]*trienode.Node)
-		nodes[common.Hash{}] = make(map[string]*trienode.Node)
+		nodes := map[common.Hash]map[string]*trienode.Node{common.Hash{}: make(map[string]*trienode.Node, 3000)}
 		for i := 0; i < 3000; i++ {
 			var (
 				path = testrand.Bytes(32)
@@ -108,8 +107,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 func BenchmarkPersist(b *testing.B) {
 	// First, we set up 128 diff layers, with 3K items each
 	fill := func(parent layer) *diffLayer {
-		nodes := make(map[common.Hash]map[string]*trienode.Node)
-		nodes[common.Hash{}] = make(map[string]*trienode.Node)
+		nodes := map[common.Hash]map[string]*trienode.Node{common.Hash{}: make(map[string]*trienode.Node, 3000)}
 		for i := 0; i < 3000; i++ {
 			var (
 				path = testrand.Bytes(32)
@@ -146,8 +144,7 @@ func BenchmarkJournal(b *testing.B) {
 
 	// First, we set up 128 diff layers, with 3K items each
 	fill := func(parent layer) *diffLayer {
-		nodes := make(map[common.Hash]map[string]*trienode.Node)
-		nodes[common.Hash{}] = make(map[string]*trienode.Node)
+		nodes := map[common.Hash]map[string]*trienode.Node{common.Hash{}: make(map[string]*trienode.Node, 3000)}
 		for i := 0; i < 3000; i++ {
 			var (
 				path = testrand.Bytes(32)

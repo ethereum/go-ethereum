@@ -145,8 +145,8 @@ func (t *tester) randAccount() (common.Address, []byte) {
 func (t *tester) generateStorage(ctx *genctx, addr common.Address) common.Hash {
 	var (
 		addrHash = crypto.Keccak256Hash(addr.Bytes())
-		storage  = make(map[common.Hash][]byte)
-		origin   = make(map[common.Hash][]byte)
+		storage  = make(map[common.Hash][]byte, 10)
+		origin   = make(map[common.Hash][]byte, 10)
 	)
 	for i := 0; i < 10; i++ {
 		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
@@ -195,8 +195,8 @@ func (t *tester) mutateStorage(ctx *genctx, addr common.Address, root common.Has
 func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash) common.Hash {
 	var (
 		addrHash = crypto.Keccak256Hash(addr.Bytes())
-		storage  = make(map[common.Hash][]byte)
-		origin   = make(map[common.Hash][]byte)
+		storage  = make(map[common.Hash][]byte, len(t.storages[addrHash]))
+		origin   = make(map[common.Hash][]byte, len(t.storages[addrHash]))
 	)
 	for hash, val := range t.storages[addrHash] {
 		origin[hash] = val
