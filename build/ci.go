@@ -117,23 +117,15 @@ var (
 		debEthereum,
 	}
 
-	// Distros for which packages are created.
-	// Note: vivid is unsupported because there is no golang-1.6 package for it.
-	// Note: the following Ubuntu releases have been officially deprecated on Launchpad:
-	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite, impish,
-	//   kinetic, lunar
-	debDistroGoBoots = map[string]string{
-		"trusty": "golang-1.11", // 14.04, EOL: 04/2024
-		"xenial": "golang-go",   // 16.04, EOL: 04/2026
-		"bionic": "golang-go",   // 18.04, EOL: 04/2028
-		"focal":  "golang-go",   // 20.04, EOL: 04/2030
-		"jammy":  "golang-go",   // 22.04, EOL: 04/2032
-		"mantic": "golang-go",   // 23.10, EOL: 07/2024
-	}
+	// Distros for which packages are created
+	debDistros = []string{
+		"xenial", // 16.04, EOL: 04/2026
+		"bionic", // 18.04, EOL: 04/2028
+		"focal",  // 20.04, EOL: 04/2030
+		"jammy",  // 22.04, EOL: 04/2032
+		"noble",  // 24.04, EOL: 04/2034
 
-	debGoBootPaths = map[string]string{
-		"golang-1.11": "/usr/lib/go-1.11",
-		"golang-go":   "/usr/lib/go",
+		"mantic", // 23.10, EOL: 07/2024
 	}
 
 	// This is where the tests should be unpacked.
@@ -708,9 +700,9 @@ func doDebianSource(cmdline []string) {
 
 	// Create Debian packages and upload them.
 	for _, pkg := range debPackages {
-		for distro, goboot := range debDistroGoBoots {
+		for _, distro := range debDistros {
 			// Prepare the debian package with the go-ethereum sources.
-			meta := newDebMetadata(distro, goboot, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
+			meta := newDebMetadata(distro, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
 			pkgdir := stageDebianSource(*workdir, meta)
 
 			// Add bootstrapper Go source code
@@ -853,10 +845,7 @@ type debPackage struct {
 }
 
 type debMetadata struct {
-	Env           build.Environment
-	GoBootPackage string
-	GoBootPath    string
-
+	Env         build.Environment
 	PackageName string
 
 	// go-ethereum version being built. Note that this
@@ -884,21 +873,19 @@ func (d debExecutable) Package() string {
 	return d.BinaryName
 }
 
-func newDebMetadata(distro, goboot, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
+func newDebMetadata(distro, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
 	if author == "" {
 		// No signing key, use default author.
 		author = "Ethereum Builds <fjl@ethereum.org>"
 	}
 	return debMetadata{
-		GoBootPackage: goboot,
-		GoBootPath:    debGoBootPaths[goboot],
-		PackageName:   name,
-		Env:           env,
-		Author:        author,
-		Distro:        distro,
-		Version:       version,
-		Time:          t.Format(time.RFC1123Z),
-		Executables:   exes,
+		PackageName: name,
+		Env:         env,
+		Author:      author,
+		Distro:      distro,
+		Version:     version,
+		Time:        t.Format(time.RFC1123Z),
+		Executables: exes,
 	}
 }
 
