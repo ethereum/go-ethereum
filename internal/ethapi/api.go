@@ -142,7 +142,7 @@ func (s *EthereumAPI) BlobBaseFee(ctx context.Context) *hexutil.Big {
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
-// yet received the latest block headers from its pears. In case it is synchronizing:
+// yet received the latest block headers from its peers. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronize from
 // - currentBlock:  block number this node is currently importing
 // - highestBlock:  block number of the highest block header this node has received from peers
