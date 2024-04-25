@@ -126,7 +126,7 @@ func keyToRecord(ctx *cli.Context) error {
 }
 
 func makeRecord(ctx *cli.Context) (*enode.Node, error) {
-	if ctx.NArg() != 1 {
+	if ctx.NArg() < 1 {
 		return nil, errors.New("need key file as argument")
 	}
 
