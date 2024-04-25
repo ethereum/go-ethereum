@@ -187,7 +187,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 	}
 	// diskLayer only has one and is the bottom layer.
 	if dl := tree.bottom(); dl != nil && dl.isStale() {
-		remove(dl.root)
+		remove(dl.rootHash())
 	}
 	return nil
 }
