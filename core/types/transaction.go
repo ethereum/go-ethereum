@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
@@ -56,6 +57,7 @@ var (
 const (
 	LegacyTxType = iota
 	AccessListTxType
+	DynamicFeeTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -88,6 +90,8 @@ type TxData interface {
 	data() []byte
 	gas() uint64
 	gasPrice() *big.Int
+	tip() *big.Int
+	feeCap() *big.Int
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
@@ -191,6 +195,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner AccessListTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case DynamicFeeTxType:
+		var inner DynamicFeeTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -274,6 +282,12 @@ func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 // GasPrice returns the gas price of the transaction.
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
+// Tip returns the tip per gas of the transaction.
+func (tx *Transaction) Tip() *big.Int { return new(big.Int).Set(tx.inner.tip()) }
+
+// FeeCap returns the fee cap per gas of the transaction.
+func (tx *Transaction) FeeCap() *big.Int { return new(big.Int).Set(tx.inner.feeCap()) }
+
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
 
@@ -351,11 +365,13 @@ func (tx *Transaction) Size() common.StorageSize {
 }
 
 // AsMessage returns the transaction as a core.Message.
-func (tx *Transaction) AsMessage(s Signer, balanceFee *big.Int, number *big.Int) (Message, error) {
+func (tx *Transaction) AsMessage(s Signer, balanceFee, blockNumber, baseFee *big.Int) (Message, error) {
 	msg := Message{
 		nonce:           tx.Nonce(),
 		gasLimit:        tx.Gas(),
 		gasPrice:        new(big.Int).Set(tx.GasPrice()),
+		feeCap:          new(big.Int).Set(tx.FeeCap()),
+		tip:             new(big.Int).Set(tx.Tip()),
 		to:              tx.To(),
 		amount:          tx.Value(),
 		data:            tx.Data(),
@@ -364,17 +380,23 @@ func (tx *Transaction) AsMessage(s Signer, balanceFee *big.Int, number *big.Int)
 		balanceTokenFee: balanceFee,
 	}
 
+	if balanceFee != nil {
+		if blockNumber != nil {
+			if blockNumber.Cmp(common.BlockNumberGas50x) >= 0 {
+				msg.gasPrice = common.GasPrice50x
+			} else if blockNumber.Cmp(common.TIPTRC21Fee) > 0 {
+				msg.gasPrice = common.TRC21GasPrice
+			} else {
+				msg.gasPrice = common.TRC21GasPriceBefore
+			}
+		}
+	} else if baseFee != nil {
+		// If baseFee provided, set gasPrice to effectiveGasPrice.
+		msg.gasPrice = math.BigMin(msg.gasPrice.Add(msg.tip, baseFee), msg.feeCap)
+	}
+
 	var err error
 	msg.from, err = Sender(s, tx)
-	if balanceFee != nil {
-		if number.Cmp(common.BlockNumberGas50x) >= 0 {
-			msg.gasPrice = common.GasPrice50x
-		} else if number.Cmp(common.TIPTRC21Fee) > 0 {
-			msg.gasPrice = common.TRC21GasPrice
-		} else {
-			msg.gasPrice = common.TRC21GasPriceBefore
-		}
-	}
 	return msg, err
 }
 
@@ -742,13 +764,15 @@ type Message struct {
 	amount          *big.Int
 	gasLimit        uint64
 	gasPrice        *big.Int
+	feeCap          *big.Int
+	tip             *big.Int
 	data            []byte
 	accessList      AccessList
 	checkNonce      bool
 	balanceTokenFee *big.Int
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList AccessList, checkNonce bool, balanceTokenFee *big.Int, number *big.Int) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, feeCap, tip *big.Int, data []byte, accessList AccessList, checkNonce bool, balanceTokenFee *big.Int, number *big.Int) Message {
 	if balanceTokenFee != nil {
 		gasPrice = common.GetGasPrice(number)
 	}
@@ -759,6 +783,8 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		amount:          amount,
 		gasLimit:        gasLimit,
 		gasPrice:        gasPrice,
+		feeCap:          feeCap,
+		tip:             tip,
 		data:            data,
 		accessList:      accessList,
 		checkNonce:      checkNonce,
@@ -770,6 +796,8 @@ func (m Message) From() common.Address      { return m.from }
 func (m Message) BalanceTokenFee() *big.Int { return m.balanceTokenFee }
 func (m Message) To() *common.Address       { return m.to }
 func (m Message) GasPrice() *big.Int        { return m.gasPrice }
+func (m Message) FeeCap() *big.Int          { return m.feeCap }
+func (m Message) Tip() *big.Int             { return m.tip }
 func (m Message) Value() *big.Int           { return m.amount }
 func (m Message) Gas() uint64               { return m.gasLimit }
 func (m Message) Nonce() uint64             { return m.nonce }

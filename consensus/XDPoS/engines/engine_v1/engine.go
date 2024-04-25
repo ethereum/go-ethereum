@@ -241,6 +241,10 @@ func (x *XDPoS_v1) verifyCascadingFields(chain consensus.ChainReader, header *ty
 	if parent.Time.Uint64()+x.config.Period > header.Time.Uint64() {
 		return utils.ErrInvalidTimestamp
 	}
+	// Verify the header's EIP-1559 attributes.
+	if err := misc.VerifyEip1559Header(chain.Config(), header); err != nil {
+		return err
+	}
 
 	if number%x.config.Epoch != 0 {
 		return x.verifySeal(chain, header, parents, fullVerify)

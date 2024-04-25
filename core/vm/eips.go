@@ -158,7 +158,7 @@ func enable3198(jt *JumpTable) {
 
 // opBaseFee implements BASEFEE opcode
 func opBaseFee(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error) {
-	baseFee, _ := uint256.FromBig(common.MinGasPrice50x)
+	baseFee, _ := uint256.FromBig(common.BaseFee)
 	callContext.Stack.push(baseFee)
 	return nil, nil
 }

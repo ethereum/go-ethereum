@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -1431,7 +1432,7 @@ func TestEIP2718Transition(t *testing.T) {
 		// A sender who makes transactions, has some funds
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		address = crypto.PubkeyToAddress(key.PublicKey)
-		funds   = big.NewInt(1000000000)
+		funds   = big.NewInt(math.MaxInt64)
 		gspec   = &Genesis{
 			Config: &params.ChainConfig{
 				ChainId:             new(big.Int).SetBytes([]byte("eip1559")),
@@ -1458,7 +1459,7 @@ func TestEIP2718Transition(t *testing.T) {
 						byte(vm.SLOAD),
 					},
 					Nonce:   0,
-					Balance: big.NewInt(0),
+					Balance: big.NewInt(50000000000),
 				},
 			},
 		}
@@ -1475,7 +1476,7 @@ func TestEIP2718Transition(t *testing.T) {
 			Nonce:    0,
 			To:       &aa,
 			Gas:      30000,
-			GasPrice: big.NewInt(1),
+			GasPrice: new(big.Int).Set(common.BaseFee),
 			AccessList: types.AccessList{{
 				Address:     aa,
 				StorageKeys: []common.Hash{{0}},

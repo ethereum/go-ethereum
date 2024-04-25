@@ -118,7 +118,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 			}
 		}
 		statedb.Prepare(tx.Hash(), i)
-		receipt, gas, err, tokenFeeUsed := applyTransaction(p.config, balanceFee, gp, statedb, coinbaseOwner, blockNumber, blockHash, tx, usedGas, vmenv)
+		receipt, gas, err, tokenFeeUsed := applyTransaction(p.config, balanceFee, gp, statedb, coinbaseOwner, blockNumber, header.BaseFee, blockHash, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -198,7 +198,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 			}
 		}
 		statedb.Prepare(tx.Hash(), i)
-		receipt, gas, err, tokenFeeUsed := applyTransaction(p.config, balanceFee, gp, statedb, coinbaseOwner, blockNumber, blockHash, tx, usedGas, vmenv)
+		receipt, gas, err, tokenFeeUsed := applyTransaction(p.config, balanceFee, gp, statedb, coinbaseOwner, blockNumber, header.BaseFee, blockHash, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -220,7 +220,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 	return receipts, allLogs, *usedGas, nil
 }
 
-func applyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, gp *GasPool, statedb *state.StateDB, coinbaseOwner common.Address, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, uint64, error, bool) {
+func applyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, gp *GasPool, statedb *state.StateDB, coinbaseOwner common.Address, blockNumber, baseFee *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, uint64, error, bool) {
 	to := tx.To()
 	if to != nil {
 		if *to == common.BlockSignersBinary && config.IsTIPSigning(blockNumber) {
@@ -246,7 +246,8 @@ func applyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 			balanceFee = value
 		}
 	}
-	msg, err := tx.AsMessage(types.MakeSigner(config, blockNumber), balanceFee, blockNumber)
+	// msg, err := tx.AsMessage(types.MakeSigner(config, blockNumber), balanceFee, blockNumber)
+	msg, err := tx.AsMessage(types.MakeSigner(config, blockNumber), balanceFee, blockNumber, baseFee)
 	if err != nil {
 		return nil, 0, err, false
 	}
@@ -465,7 +466,7 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, XDCxState, config, cfg)
 	coinbaseOwner := getCoinbaseOwner(bc, statedb, header, author)
-	return applyTransaction(config, tokensFee, gp, statedb, coinbaseOwner, header.Number, header.Hash(), tx, usedGas, vmenv)
+	return applyTransaction(config, tokensFee, gp, statedb, coinbaseOwner, header.Number, header.BaseFee, header.Hash(), tx, usedGas, vmenv)
 }
 
 func ApplySignTransaction(config *params.ChainConfig, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64) (*types.Receipt, uint64, error, bool) {

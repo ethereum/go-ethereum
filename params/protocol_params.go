@@ -67,6 +67,8 @@ const (
 
 	TxDataNonZeroGas uint64 = 68 // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
 
+	InitialBaseFee = 12500000000 // Initial base fee for EIP-1559 blocks.
+
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
 
 	// Precompiled contract gas prices

@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core"
@@ -242,7 +241,8 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 							balance = value
 						}
 					}
-					msg, _ := tx.AsMessage(signer, balance, task.block.Number())
+					header := task.block.Header()
+					msg, _ := tx.AsMessage(signer, balance, header.Number, header.BaseFee)
 					txctx := &tracers.Context{
 						BlockHash: task.block.Hash(),
 						TxIndex:   i,
@@ -486,7 +486,8 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 						balance = value
 					}
 				}
-				msg, _ := txs[task.index].AsMessage(signer, balance, block.Number())
+				header := block.Header()
+				msg, _ := txs[task.index].AsMessage(signer, balance, header.Number, header.BaseFee)
 				txctx := &tracers.Context{
 					BlockHash: blockHash,
 					TxIndex:   task.index,
@@ -518,7 +519,8 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 			}
 		}
 		// Generate the next state snapshot fast without tracing
-		msg, _ := tx.AsMessage(signer, balance, block.Number())
+		header := block.Header()
+		msg, _ := tx.AsMessage(signer, balance, header.Number, header.BaseFee)
 		txContext := core.NewEVMTxContext(msg)
 		statedb.Prepare(tx.Hash(), i)
 
@@ -800,7 +802,8 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 					balanceFee = value
 				}
 			}
-			msg, err := tx.AsMessage(types.MakeSigner(api.config, block.Header().Number), balanceFee, block.Number())
+			header := block.Header()
+			msg, err := tx.AsMessage(types.MakeSigner(api.config, header.Number), balanceFee, header.Number, header.BaseFee)
 			if err != nil {
 				return nil, vm.BlockContext{}, nil, fmt.Errorf("tx %x failed: %v", tx.Hash(), err)
 			}

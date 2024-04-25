@@ -31,12 +31,16 @@ func NewEVMBlockContext(header *types.Header, chain consensus.ChainContext, auth
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	var (
 		beneficiary common.Address
+		baseFee     *big.Int
 		random      common.Hash
 	)
 	if author == nil {
 		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
 	} else {
 		beneficiary = *author
+	}
+	if header.BaseFee != nil {
+		baseFee = new(big.Int).Set(header.BaseFee)
 	}
 	// since xdpos chain do not use difficulty and mixdigest, we use hash of the block number as random
 	random = crypto.Keccak256Hash(header.Number.Bytes())
@@ -48,6 +52,7 @@ func NewEVMBlockContext(header *types.Header, chain consensus.ChainContext, auth
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        new(big.Int).Set(header.Time),
 		Difficulty:  new(big.Int).Set(header.Difficulty),
+		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
 		Random:      &random,
 	}

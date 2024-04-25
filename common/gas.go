@@ -4,6 +4,7 @@ import "math/big"
 
 var MinGasPrice50x = big.NewInt(12500000000)
 var GasPrice50x = big.NewInt(12500000000)
+var BaseFee = big.NewInt(12500000000)
 
 func GetGasFee(blockNumber, gas uint64) *big.Int {
 	fee := new(big.Int).SetUint64(gas)

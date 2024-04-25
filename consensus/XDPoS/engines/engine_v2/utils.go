@@ -20,7 +20,7 @@ import (
 func sigHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewKeccak256()
 
-	err := rlp.Encode(hasher, []interface{}{
+	enc := []interface{}{
 		header.ParentHash,
 		header.UncleHash,
 		header.Coinbase,
@@ -38,10 +38,11 @@ func sigHash(header *types.Header) (hash common.Hash) {
 		header.Nonce,
 		header.Validators,
 		header.Penalties,
-	})
-	if err != nil {
-		log.Debug("Fail to encode", err)
 	}
+	if header.BaseFee != nil {
+		enc = append(enc, header.BaseFee)
+	}
+	rlp.Encode(hasher, enc)
 	hasher.Sum(hash[:0])
 	return hash
 }

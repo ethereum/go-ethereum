@@ -133,7 +133,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				if value, ok := feeCapacity[testContractAddr]; ok {
 					balanceTokenFee = value
 				}
-				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, nil, false, balanceTokenFee, header.Number)}
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), nil, nil, data, nil, false, balanceTokenFee, header.Number)}
 
 				context := core.NewEVMBlockContext(header, bc, nil)
 				txContext := core.NewEVMTxContext(msg)
@@ -154,7 +154,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			if value, ok := feeCapacity[testContractAddr]; ok {
 				balanceTokenFee = value
 			}
-			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, nil, false, balanceTokenFee, header.Number)}
+			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), nil, nil, data, nil, false, balanceTokenFee, header.Number)}
 			context := core.NewEVMBlockContext(header, lc, nil)
 			txContext := core.NewEVMTxContext(msg)
 			vmenv := vm.NewEVM(context, txContext, statedb, nil, config, vm.Config{})

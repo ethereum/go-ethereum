@@ -94,7 +94,10 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	if header.UncleHash != utils.UncleHash {
 		return utils.ErrInvalidUncleHash
 	}
-
+	// Verify the header's EIP-1559 attributes.
+	if err := misc.VerifyEip1559Header(chain.Config(), header); err != nil {
+		return err
+	}
 	if header.Difficulty.Cmp(big.NewInt(1)) != 0 {
 		return utils.ErrInvalidDifficulty
 	}

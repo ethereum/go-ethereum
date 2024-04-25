@@ -165,7 +165,7 @@ func (args *TransactionArgs) ToMessage(b Backend, number *big.Int, globalGasCap 
 	}
 
 	// Create new call message
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, accessList, false, nil, number)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, nil, nil, data, accessList, false, nil, number)
 	return msg
 }
 
