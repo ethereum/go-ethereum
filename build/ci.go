@@ -718,7 +718,7 @@ func doDebianSource(cmdline []string) {
 				if err := build.ExtractArchive(gobootbundle, pkgdir); err != nil {
 					log.Fatalf("Failed to extract bootstrapper Go sources: %v", err)
 				}
-				if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, fmt.Sprintf(".goboot-%d", i))); err != nil {
+				if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, fmt.Sprintf(".goboot-%d", i+1))); err != nil {
 					log.Fatalf("Failed to rename bootstrapper Go source folder: %v", err)
 				}
 			}
@@ -762,7 +762,7 @@ func downloadGoBootstrapSources(cachedir string) []string {
 	csdb := build.MustLoadChecksums("build/checksums.txt")
 
 	var bundles []string
-	for _, booter := range []string{"ppa-builder", "ppa-builder-2"} {
+	for _, booter := range []string{"ppa-builder-1", "ppa-builder-2"} {
 		gobootVersion, err := build.Version(csdb, booter)
 		if err != nil {
 			log.Fatal(err)
