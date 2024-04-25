@@ -593,11 +593,10 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 			common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
 			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
 			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
+			// Pre-deploy EIP-4788 system contract
+			params.BeaconRootsAddress: types.Account{Code: params.BeaconRootsCode},
 		},
 	}
-	// Pre-deploy EIP-4788 system contract
-	genesis.Alloc[params.BeaconRootsAddress] = types.Account{Code: params.BeaconRootsCode}
-	
 	if faucet != nil {
 		genesis.Alloc[*faucet] = types.Account{Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))}
 	}
