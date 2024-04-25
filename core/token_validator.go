@@ -38,21 +38,21 @@ const (
 	getDecimalFunction = "decimals"
 )
 
-// callmsg implements core.Message to allow passing it as a transaction simulator.
-type callmsg struct {
+// callMsg implements core.Message to allow passing it as a transaction simulator.
+type callMsg struct {
 	ethereum.CallMsg
 }
 
-func (m callmsg) From() common.Address         { return m.CallMsg.From }
-func (m callmsg) Nonce() uint64                { return 0 }
-func (m callmsg) CheckNonce() bool             { return false }
-func (m callmsg) To() *common.Address          { return m.CallMsg.To }
-func (m callmsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
-func (m callmsg) Gas() uint64                  { return m.CallMsg.Gas }
-func (m callmsg) Value() *big.Int              { return m.CallMsg.Value }
-func (m callmsg) Data() []byte                 { return m.CallMsg.Data }
-func (m callmsg) BalanceTokenFee() *big.Int    { return m.CallMsg.BalanceTokenFee }
-func (m callmsg) AccessList() types.AccessList { return m.CallMsg.AccessList }
+func (m callMsg) From() common.Address         { return m.CallMsg.From }
+func (m callMsg) Nonce() uint64                { return 0 }
+func (m callMsg) CheckNonce() bool             { return false }
+func (m callMsg) To() *common.Address          { return m.CallMsg.To }
+func (m callMsg) GasPrice() *big.Int           { return m.CallMsg.GasPrice }
+func (m callMsg) Gas() uint64                  { return m.CallMsg.Gas }
+func (m callMsg) Value() *big.Int              { return m.CallMsg.Value }
+func (m callMsg) Data() []byte                 { return m.CallMsg.Data }
+func (m callMsg) BalanceTokenFee() *big.Int    { return m.CallMsg.BalanceTokenFee }
+func (m callMsg) AccessList() types.AccessList { return m.CallMsg.AccessList }
 
 type SimulatedBackend interface {
 	CallContractWithState(call ethereum.CallMsg, chain consensus.ChainContext, statedb *state.StateDB) ([]byte, error)
@@ -101,7 +101,7 @@ func CallContractWithState(call ethereum.CallMsg, chain consensus.ChainContext, 
 		call.Value = new(big.Int)
 	}
 	// Execute the call.
-	msg := callmsg{call}
+	msg := callMsg{call}
 	feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
 	if msg.To() != nil {
 		if value, ok := feeCapacity[*msg.To()]; ok {
