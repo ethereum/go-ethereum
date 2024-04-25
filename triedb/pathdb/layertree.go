@@ -185,10 +185,9 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		}
 		delete(children, root)
 	}
-	for root, layer := range tree.layers {
-		if dl, ok := layer.(*diskLayer); ok && dl.isStale() {
-			remove(root)
-		}
+	// diskLayer only has one and is the bottom layer.
+	if dl := tree.bottom(); dl.isStale() {
+		remove(root)
 	}
 	return nil
 }
