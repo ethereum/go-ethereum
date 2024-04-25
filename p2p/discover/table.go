@@ -78,9 +78,9 @@ type Table struct {
 	// loop channels
 	refreshReq      chan chan struct{}
 	revalResponseCh chan revalidationResponse
-	addNodeCh       chan addNodeRequest
+	addNodeCh       chan addNodeOp
 	addNodeHandled  chan struct{}
-	findFailureCh   chan *node
+	trackRequestCh  chan trackRequestOp
 	initDone        chan struct{}
 	closeReq        chan struct{}
 	closed          chan struct{}
@@ -107,9 +107,15 @@ type bucket struct {
 	index        int
 }
 
-type addNodeRequest struct {
+type addNodeOp struct {
 	node      *node
 	isInbound bool
+}
+
+type trackRequestOp struct {
+	node       *node
+	foundNodes []*node
+	success    bool
 }
 
 func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
@@ -121,9 +127,9 @@ func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
 		log:             cfg.Log,
 		refreshReq:      make(chan chan struct{}),
 		revalResponseCh: make(chan revalidationResponse),
-		addNodeCh:       make(chan addNodeRequest),
+		addNodeCh:       make(chan addNodeOp),
 		addNodeHandled:  make(chan struct{}),
-		findFailureCh:   make(chan *node),
+		trackRequestCh:  make(chan trackRequestOp),
 		initDone:        make(chan struct{}),
 		closeReq:        make(chan struct{}),
 		closed:          make(chan struct{}),
@@ -145,13 +151,6 @@ func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
 	tab.loadSeedNodes()
 
 	return tab, nil
-}
-
-func (tab *Table) trackFindFailure(n *node) {
-	select {
-	case tab.findFailureCh <- n:
-	case <-tab.closed:
-	}
 }
 
 // Nodes returns all nodes contained in the table.
@@ -306,9 +305,9 @@ func (tab *Table) len() (n int) {
 //
 // The caller must not hold tab.mutex.
 func (tab *Table) addFoundNode(n *node) {
-	req := addNodeRequest{node: n, isInbound: false}
+	op := addNodeOp{node: n, isInbound: false}
 	select {
-	case tab.addNodeCh <- req:
+	case tab.addNodeCh <- op:
 		<-tab.addNodeHandled
 	case <-tab.closeReq:
 	}
@@ -323,10 +322,18 @@ func (tab *Table) addFoundNode(n *node) {
 //
 // The caller must not hold tab.mutex.
 func (tab *Table) addInboundNode(n *node) {
-	req := addNodeRequest{node: n, isInbound: true}
+	op := addNodeOp{node: n, isInbound: true}
 	select {
-	case tab.addNodeCh <- req:
+	case tab.addNodeCh <- op:
 		<-tab.addNodeHandled
+	case <-tab.closeReq:
+	}
+}
+
+func (tab *Table) trackRequest(n *node, success bool, foundNodes []*node) {
+	op := trackRequestOp{n, foundNodes, success}
+	select {
+	case tab.trackRequestCh <- op:
 	case <-tab.closeReq:
 	}
 }
@@ -361,11 +368,12 @@ loop:
 		case r := <-tab.revalResponseCh:
 			tab.revalidation.handleResponse(tab, r)
 
-		case addreq := <-tab.addNodeCh:
-			tab.handleAddNode(addreq)
+		case op := <-tab.addNodeCh:
+			tab.handleAddNode(op)
 			tab.addNodeHandled <- struct{}{}
 
-		case <-tab.findFailureCh:
+		case op := <-tab.trackRequestCh:
+			tab.handleTrackRequest(op)
 			// TODO: handle failure by potentially dropping node
 
 		case <-refresh.C:
@@ -435,7 +443,7 @@ func (tab *Table) loadSeedNodes() {
 			age := time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP()))
 			tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
 		}
-		tab.handleAddNode(addNodeRequest{node: seed, isInbound: true})
+		tab.handleAddNode(addNodeOp{node: seed, isInbound: true})
 	}
 }
 
@@ -484,7 +492,7 @@ func (tab *Table) removeIP(b *bucket, ip net.IP) {
 	b.ips.Remove(ip)
 }
 
-func (tab *Table) handleAddNode(req addNodeRequest) {
+func (tab *Table) handleAddNode(req addNodeOp) {
 	if req.node.ID() == tab.self().ID() {
 		return
 	}
@@ -608,6 +616,33 @@ func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node) bool {
 	}
 	b.entries[i].Node = newRecord
 	return true
+}
+
+func (tab *Table) handleTrackRequest(op trackRequestOp) {
+	var fails int
+	if op.success {
+		// Reset failure counter because it counts _consecutive_ failures.
+		tab.db.UpdateFindFails(op.node.ID(), op.node.IP(), 0)
+	} else {
+		fails = tab.db.FindFails(op.node.ID(), op.node.IP())
+		fails++
+		tab.db.UpdateFindFails(op.node.ID(), op.node.IP(), fails)
+	}
+
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+
+	b := tab.bucket(op.node.ID())
+	// Remove the node from the local table if it fails to return anything useful too
+	// many times, but only if there are enough other nodes in the bucket.
+	if fails >= maxFindnodeFailures && len(b.entries) >= bucketSize/2 {
+		tab.deleteInBucket(b, op.node.ID())
+	}
+
+	// Add found nodes.
+	for _, n := range op.foundNodes {
+		tab.handleAddNode(addNodeOp{n, false})
+	}
 }
 
 func contains(ns []*node, id enode.ID) bool {
