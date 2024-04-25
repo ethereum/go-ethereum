@@ -154,7 +154,6 @@ func BenchmarkBytecodeExecutionNonModyfing(b *testing.B) {
 }
 
 func runBenchmark(samples int) {
-
 	if csv {
 		fmt.Println("SampleId, ops, ns/op, mem allocs/op, mem bytes/op")
 	} else {
