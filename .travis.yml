@@ -123,6 +123,7 @@ jobs:
 
     # This builder does the Ubuntu PPA nightly uploads
     - stage: build
+      if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
       dist: bionic
       go: 1.22.x
