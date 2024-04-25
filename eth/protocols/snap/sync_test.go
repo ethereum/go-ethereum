@@ -839,7 +839,7 @@ func testMultiSyncManyUseless(t *testing.T, scheme string) {
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
 }
 
-// TestMultiSyncManyUseless contains one good peer, and many which doesn't return anything valuable at all
+// TestMultiSyncManyUselessWithLowTimeout contains one good peer, and many which doesn't return anything valuable at all
 func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -1378,7 +1378,7 @@ func testSyncWithStorageAndNonProvingPeer(t *testing.T, scheme string) {
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
 }
 
-// TestSyncWithStorage tests  basic sync using accounts + storage + code, against
+// TestSyncWithStorageMisbehavingProve tests  basic sync using accounts + storage + code, against
 // a peer who insists on delivering full storage sets _and_ proofs. This triggered
 // an error, where the recipient erroneously clipped the boundary nodes, but
 // did not mark the account for healing.

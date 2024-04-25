@@ -107,8 +107,8 @@ type (
 	// BlockchainInitHook is called when the blockchain is initialized.
 	BlockchainInitHook = func(chainConfig *params.ChainConfig)
 
-	// BlockchainTerminateHook is called when the tracer is terminated.
-	BlockchainTerminateHook = func()
+	// CloseHook is called when the blockchain closes.
+	CloseHook = func()
 
 	// BlockStartHook is called before executing `block`.
 	// `td` is the total difficulty prior to `block`.
@@ -155,12 +155,12 @@ type Hooks struct {
 	OnFault     FaultHook
 	OnGasChange GasChangeHook
 	// Chain events
-	OnBlockchainInit      BlockchainInitHook
-	OnBlockchainTerminate BlockchainTerminateHook
-	OnBlockStart          BlockStartHook
-	OnBlockEnd            BlockEndHook
-	OnSkippedBlock        SkippedBlockHook
-	OnGenesisBlock        GenesisBlockHook
+	OnBlockchainInit BlockchainInitHook
+	OnClose          CloseHook
+	OnBlockStart     BlockStartHook
+	OnBlockEnd       BlockEndHook
+	OnSkippedBlock   SkippedBlockHook
+	OnGenesisBlock   GenesisBlockHook
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook

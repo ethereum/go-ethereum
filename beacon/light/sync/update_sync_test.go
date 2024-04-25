@@ -68,9 +68,9 @@ func TestUpdateSyncParallel(t *testing.T) {
 	ts := NewTestScheduler(t, updateSync)
 	// add 2 servers, head at period 100; allow 3-3 parallel requests for each
 	ts.AddServer(testServer1, 3)
-	ts.ServerEvent(EvNewSignedHead, testServer1, types.SignedHeader{SignatureSlot: 0x2000*100 + 0x1000})
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer1, types.OptimisticUpdate{SignatureSlot: 0x2000*100 + 0x1000})
 	ts.AddServer(testServer2, 3)
-	ts.ServerEvent(EvNewSignedHead, testServer2, types.SignedHeader{SignatureSlot: 0x2000*100 + 0x1000})
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer2, types.OptimisticUpdate{SignatureSlot: 0x2000*100 + 0x1000})
 
 	// expect 6 requests to be sent
 	ts.Run(1,
@@ -150,11 +150,11 @@ func TestUpdateSyncDifferentHeads(t *testing.T) {
 	ts := NewTestScheduler(t, updateSync)
 	// add 3 servers with different announced head periods
 	ts.AddServer(testServer1, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer1, types.SignedHeader{SignatureSlot: 0x2000*15 + 0x1000})
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer1, types.OptimisticUpdate{SignatureSlot: 0x2000*15 + 0x1000})
 	ts.AddServer(testServer2, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer2, types.SignedHeader{SignatureSlot: 0x2000*16 + 0x1000})
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer2, types.OptimisticUpdate{SignatureSlot: 0x2000*16 + 0x1000})
 	ts.AddServer(testServer3, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer3, types.SignedHeader{SignatureSlot: 0x2000*17 + 0x1000})
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer3, types.OptimisticUpdate{SignatureSlot: 0x2000*17 + 0x1000})
 
 	// expect request to the best announced head
 	ts.Run(1, testServer3, ReqUpdates{FirstPeriod: 10, Count: 7})
@@ -190,7 +190,7 @@ func TestUpdateSyncDifferentHeads(t *testing.T) {
 
 	// a new server is registered with announced head period 17
 	ts.AddServer(testServer4, 1)
-	ts.ServerEvent(EvNewSignedHead, testServer4, types.SignedHeader{SignatureSlot: 0x2000*17 + 0x1000})
+	ts.ServerEvent(EvNewOptimisticUpdate, testServer4, types.OptimisticUpdate{SignatureSlot: 0x2000*17 + 0x1000})
 	// expect request to sync one more period
 	ts.Run(7, testServer4, ReqUpdates{FirstPeriod: 16, Count: 1})
 

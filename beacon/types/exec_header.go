@@ -36,7 +36,7 @@ type ExecutionHeader struct {
 	obj headerObject
 }
 
-// HeaderFromJSON decodes an execution header from JSON data provided by
+// ExecutionHeaderFromJSON decodes an execution header from JSON data provided by
 // the beacon chain API.
 func ExecutionHeaderFromJSON(forkName string, data []byte) (*ExecutionHeader, error) {
 	var obj headerObject

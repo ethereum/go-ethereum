@@ -272,8 +272,17 @@ func runCmd(ctx *cli.Context) error {
 	output, leftOverGas, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
-		statedb.Commit(genesisConfig.Number, true)
-		fmt.Println(string(statedb.Dump(nil)))
+		root, err := statedb.Commit(genesisConfig.Number, true)
+		if err != nil {
+			fmt.Printf("Failed to commit changes %v\n", err)
+			return err
+		}
+		dumpdb, err := state.New(root, sdb, nil)
+		if err != nil {
+			fmt.Printf("Failed to open statedb %v\n", err)
+			return err
+		}
+		fmt.Println(string(dumpdb.Dump(nil)))
 	}
 
 	if ctx.Bool(DebugFlag.Name) {

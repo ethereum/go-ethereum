@@ -88,7 +88,7 @@ func (s *Server) SetHTTPBodyLimit(limit int) {
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no
-// methods on the given receiver match the criteria to be either a RPC method or a
+// methods on the given receiver match the criteria to be either an RPC method or a
 // subscription an error is returned. Otherwise a new service is created and added to the
 // service collection this server provides to clients.
 func (s *Server) RegisterName(name string, receiver interface{}) error {

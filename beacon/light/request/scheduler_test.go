@@ -70,6 +70,10 @@ type testServer struct {
 	canRequest int
 }
 
+func (s *testServer) Name() string {
+	return ""
+}
+
 func (s *testServer) subscribe(eventCb func(Event)) {
 	s.eventCb = eventCb
 }

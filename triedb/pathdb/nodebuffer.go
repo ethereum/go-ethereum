@@ -59,21 +59,16 @@ func newNodeBuffer(limit int, nodes map[common.Hash]map[string]*trienode.Node, l
 }
 
 // node retrieves the trie node with given node info.
-func (b *nodebuffer) node(owner common.Hash, path []byte, hash common.Hash) (*trienode.Node, error) {
+func (b *nodebuffer) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 	subset, ok := b.nodes[owner]
 	if !ok {
-		return nil, nil
+		return nil, false
 	}
 	n, ok := subset[string(path)]
 	if !ok {
-		return nil, nil
+		return nil, false
 	}
-	if n.Hash != hash {
-		dirtyFalseMeter.Mark(1)
-		log.Error("Unexpected trie node in node buffer", "owner", owner, "path", path, "expect", hash, "got", n.Hash)
-		return nil, newUnexpectedNodeError("dirty", hash, n.Hash, owner, path, n.Blob)
-	}
-	return n, nil
+	return n, true
 }
 
 // commit merges the dirty nodes into the nodebuffer. This operation won't take

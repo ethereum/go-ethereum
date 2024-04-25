@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"sync"
 	"time"
 
@@ -437,7 +438,7 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	}
 	if distances != nil {
 		nd := enode.LogDist(c.id, node.ID())
-		if !containsUint(uint(nd), distances) {
+		if !slices.Contains(distances, uint(nd)) {
 			return nil, errors.New("does not match any requested distance")
 		}
 	}
@@ -446,15 +447,6 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	}
 	seen[node.ID()] = struct{}{}
 	return node, nil
-}
-
-func containsUint(x uint, xs []uint) bool {
-	for _, v := range xs {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }
 
 // callToNode sends the given call and sets up a handler for response packets (of message

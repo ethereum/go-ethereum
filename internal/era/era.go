@@ -239,7 +239,7 @@ func (e *Era) readOffset(n uint64) (int64, error) {
 	return blockIndexRecordOffset + int64(binary.LittleEndian.Uint64(e.buf[:])), nil
 }
 
-// newReader returns a snappy.Reader for the e2store entry value at off.
+// newSnappyReader returns a snappy.Reader for the e2store entry value at off.
 func newSnappyReader(e *e2store.Reader, expectedType uint16, off int64) (io.Reader, int64, error) {
 	r, n, err := e.ReaderAt(expectedType, off)
 	if err != nil {

@@ -111,7 +111,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
+	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Sign() <= 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
 		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
 	}
@@ -203,8 +203,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	)
 	if config.VMTrace != "" {
 		var traceConfig json.RawMessage
-		if config.VMTraceConfig != "" {
-			traceConfig = json.RawMessage(config.VMTraceConfig)
+		if config.VMTraceJsonConfig != "" {
+			traceConfig = json.RawMessage(config.VMTraceJsonConfig)
 		}
 		t, err := tracers.LiveDirectory.New(config.VMTrace, traceConfig)
 		if err != nil {

@@ -141,17 +141,17 @@ func makeWriter(typ reflect.Type, ts rlpstruct.Tags) (writer, error) {
 	switch {
 	case typ == rawValueType:
 		return writeRawValue, nil
-	case typ.AssignableTo(reflect.PtrTo(bigInt)):
+	case typ.AssignableTo(reflect.PointerTo(bigInt)):
 		return writeBigIntPtr, nil
 	case typ.AssignableTo(bigInt):
 		return writeBigIntNoPtr, nil
-	case typ == reflect.PtrTo(u256Int):
+	case typ == reflect.PointerTo(u256Int):
 		return writeU256IntPtr, nil
 	case typ == u256Int:
 		return writeU256IntNoPtr, nil
 	case kind == reflect.Ptr:
 		return makePtrWriter(typ, ts)
-	case reflect.PtrTo(typ).Implements(encoderInterface):
+	case reflect.PointerTo(typ).Implements(encoderInterface):
 		return makeEncoderWriter(typ), nil
 	case isUint(kind):
 		return writeUint, nil

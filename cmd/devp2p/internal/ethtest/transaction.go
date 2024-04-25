@@ -102,7 +102,7 @@ func (s *Suite) sendTxs(t *utesting.T, txs []*types.Transaction) error {
 		}
 	}
 
-	return fmt.Errorf("timed out waiting for txs")
+	return errors.New("timed out waiting for txs")
 }
 
 func (s *Suite) sendInvalidTxs(t *utesting.T, txs []*types.Transaction) error {
