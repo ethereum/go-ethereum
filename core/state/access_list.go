@@ -149,7 +149,7 @@ func (al *accessList) Equal(other *accessList) bool {
 func (al *accessList) PrettyPrint() string {
 	out := new(strings.Builder)
 	var sortedAddrs []common.Address
-	for addr, _ := range al.addresses {
+	for addr := range al.addresses {
 		sortedAddrs = append(sortedAddrs, addr)
 	}
 	slices.SortFunc(sortedAddrs, common.Address.Cmp)
@@ -158,7 +158,7 @@ func (al *accessList) PrettyPrint() string {
 		fmt.Fprintf(out, "%#x : (idx %d)\n", addr, idx)
 		if idx >= 0 {
 			slotmap := al.slots[idx]
-			for h, _ := range slotmap {
+			for h := range slotmap {
 				fmt.Fprintf(out, "    %#x\n", h)
 			}
 		}

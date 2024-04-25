@@ -637,7 +637,6 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 					print(obj.dirtyStorage),
 					print(other.dirtyStorage))
 			}
-
 		}
 		// Check transient storage.
 		{
