@@ -694,8 +694,8 @@ func doDebianSource(cmdline []string) {
 	}
 	// Download and verify the Go source packages.
 	var (
-		gobootbundle = downloadGoBootstrapSources(*cachedir)
-		gobundle     = downloadGoSources(*cachedir)
+		gobootbundles = downloadGoBootstrapSources(*cachedir)
+		gobundle      = downloadGoSources(*cachedir)
 	)
 	// Download all the dependencies needed to build the sources and run the ci script
 	srcdepfetch := tc.Go("mod", "download")
@@ -714,11 +714,13 @@ func doDebianSource(cmdline []string) {
 			pkgdir := stageDebianSource(*workdir, meta)
 
 			// Add bootstrapper Go source code
-			if err := build.ExtractArchive(gobootbundle, pkgdir); err != nil {
-				log.Fatalf("Failed to extract bootstrapper Go sources: %v", err)
-			}
-			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".goboot")); err != nil {
-				log.Fatalf("Failed to rename bootstrapper Go source folder: %v", err)
+			for i, gobootbundle := range gobootbundles {
+				if err := build.ExtractArchive(gobootbundle, pkgdir); err != nil {
+					log.Fatalf("Failed to extract bootstrapper Go sources: %v", err)
+				}
+				if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, fmt.Sprintf(".goboot-%d", i+1))); err != nil {
+					log.Fatalf("Failed to rename bootstrapper Go source folder: %v", err)
+				}
 			}
 			// Add builder Go source code
 			if err := build.ExtractArchive(gobundle, pkgdir); err != nil {
@@ -754,21 +756,26 @@ func doDebianSource(cmdline []string) {
 	}
 }
 
-// downloadGoBootstrapSources downloads the Go source tarball that will be used
+// downloadGoBootstrapSources downloads the Go source tarball(s) that will be used
 // to bootstrap the builder Go.
-func downloadGoBootstrapSources(cachedir string) string {
+func downloadGoBootstrapSources(cachedir string) []string {
 	csdb := build.MustLoadChecksums("build/checksums.txt")
-	gobootVersion, err := build.Version(csdb, "ppa-builder")
-	if err != nil {
-		log.Fatal(err)
+
+	var bundles []string
+	for _, booter := range []string{"ppa-builder-1", "ppa-builder-2"} {
+		gobootVersion, err := build.Version(csdb, booter)
+		if err != nil {
+			log.Fatal(err)
+		}
+		file := fmt.Sprintf("go%s.src.tar.gz", gobootVersion)
+		url := "https://dl.google.com/go/" + file
+		dst := filepath.Join(cachedir, file)
+		if err := csdb.DownloadFile(url, dst); err != nil {
+			log.Fatal(err)
+		}
+		bundles = append(bundles, dst)
 	}
-	file := fmt.Sprintf("go%s.src.tar.gz", gobootVersion)
-	url := "https://dl.google.com/go/" + file
-	dst := filepath.Join(cachedir, file)
-	if err := csdb.DownloadFile(url, dst); err != nil {
-		log.Fatal(err)
-	}
-	return dst
+	return bundles
 }
 
 // downloadGoSources downloads the Go source tarball.
