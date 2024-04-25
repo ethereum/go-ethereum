@@ -101,7 +101,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 		return nil, common.Hash{}, 0, 0
 	}
 	blockHash := ReadCanonicalHash(db, *blockNumber)
-	if blockHash == (common.Hash{}) {
+	if blockHash.IsZero() {
 		return nil, common.Hash{}, 0, 0
 	}
 	body := ReadBody(db, blockHash, *blockNumber)
@@ -127,7 +127,7 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 		return nil, common.Hash{}, 0, 0
 	}
 	blockHash := ReadCanonicalHash(db, *blockNumber)
-	if blockHash == (common.Hash{}) {
+	if blockHash.IsZero() {
 		return nil, common.Hash{}, 0, 0
 	}
 	blockHeader := ReadHeader(db, blockHash, *blockNumber)

@@ -89,7 +89,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		return nil, ErrNoGenesis
 	}
 	hc.currentHeader.Store(hc.genesisHeader)
-	if head := rawdb.ReadHeadBlockHash(chainDb); head != (common.Hash{}) {
+	if head := rawdb.ReadHeadBlockHash(chainDb); !head.IsZero() {
 		if chead := hc.GetHeaderByHash(head); chead != nil {
 			hc.currentHeader.Store(chead)
 		}
@@ -141,7 +141,7 @@ func (hc *HeaderChain) Reorg(headers []*types.Header) error {
 		// Delete any canonical number assignments above the new head
 		for i := last.Number.Uint64() + 1; ; i++ {
 			hash := rawdb.ReadCanonicalHash(hc.chainDb, i)
-			if hash == (common.Hash{}) {
+			if hash.IsZero() {
 				break
 			}
 			rawdb.DeleteCanonicalHash(batch, i)
@@ -457,7 +457,7 @@ func (hc *HeaderChain) HasHeader(hash common.Hash, number uint64) bool {
 // caching it (associated with its hash) if found.
 func (hc *HeaderChain) GetHeaderByNumber(number uint64) *types.Header {
 	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
-	if hash == (common.Hash{}) {
+	if hash.IsZero() {
 		return nil
 	}
 	return hc.GetHeader(hash, number)
@@ -481,7 +481,7 @@ func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 	var headers []rlp.RawValue
 	// If we have some of the headers in cache already, use that before going to db.
 	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
-	if hash == (common.Hash{}) {
+	if hash.IsZero() {
 		return nil
 	}
 	for count > 0 {

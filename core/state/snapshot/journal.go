@@ -129,7 +129,7 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 	// Retrieve the block number and hash of the snapshot, failing if no snapshot
 	// is present in the database (or crashed mid-update).
 	baseRoot := rawdb.ReadSnapshotRoot(diskdb)
-	if baseRoot == (common.Hash{}) {
+	if baseRoot.IsZero() {
 		return nil, false, errors.New("missing or corrupted snapshot")
 	}
 	base := &diskLayer{

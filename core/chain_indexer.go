@@ -397,7 +397,7 @@ func (c *ChainIndexer) processSection(section uint64, lastHead common.Hash) (com
 
 	for number := section * c.sectionSize; number < (section+1)*c.sectionSize; number++ {
 		hash := rawdb.ReadCanonicalHash(c.chainDb, number)
-		if hash == (common.Hash{}) {
+		if hash.IsZero() {
 			return common.Hash{}, fmt.Errorf("canonical block #%d unknown", number)
 		}
 		header := rawdb.ReadHeader(c.chainDb, hash, number)

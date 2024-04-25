@@ -163,7 +163,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// Hold the state reference and also drop the parent state
 		// to prevent accumulating too many nodes in memory.
 		tdb.Reference(root, common.Hash{})
-		if parent != (common.Hash{}) {
+		if !parent.IsZero() {
 			tdb.Dereference(parent)
 		}
 		parent = root

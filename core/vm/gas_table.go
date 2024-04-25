@@ -111,9 +111,9 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 		// 2. From a non-zero value address to a zero-value address (DELETE)
 		// 3. From a non-zero to a non-zero                         (CHANGE)
 		switch {
-		case current == (common.Hash{}) && y.Sign() != 0: // 0 => non 0
+		case current.IsZero() && y.Sign() != 0: // 0 => non 0
 			return params.SstoreSetGas, nil
-		case current != (common.Hash{}) && y.Sign() == 0: // non 0 => 0
+		case !current.IsZero() && y.Sign() == 0: // non 0 => 0
 			evm.StateDB.AddRefund(params.SstoreRefundGas)
 			return params.SstoreClearGas, nil
 		default: // non 0 => non 0 (or 0 => 0)
@@ -141,23 +141,23 @@ func gasSStore(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySi
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
-		if original == (common.Hash{}) { // create slot (2.1.1)
+		if original.IsZero() { // create slot (2.1.1)
 			return params.NetSstoreInitGas, nil
 		}
-		if value == (common.Hash{}) { // delete slot (2.1.2b)
+		if value.IsZero() { // delete slot (2.1.2b)
 			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
 		}
 		return params.NetSstoreCleanGas, nil // write existing slot (2.1.2)
 	}
-	if original != (common.Hash{}) {
-		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+	if !original.IsZero() {
+		if current.IsZero() { // recreate slot (2.2.1.1)
 			evm.StateDB.SubRefund(params.NetSstoreClearRefund)
-		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+		} else if value.IsZero() { // delete slot (2.2.1.2)
 			evm.StateDB.AddRefund(params.NetSstoreClearRefund)
 		}
 	}
 	if original == value {
-		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
+		if original.IsZero() { // reset to original inexistent slot (2.2.2.1)
 			evm.StateDB.AddRefund(params.NetSstoreResetClearRefund)
 		} else { // reset to original existing slot (2.2.2.2)
 			evm.StateDB.AddRefund(params.NetSstoreResetRefund)
@@ -198,23 +198,23 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	}
 	original := evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
 	if original == current {
-		if original == (common.Hash{}) { // create slot (2.1.1)
+		if original.IsZero() { // create slot (2.1.1)
 			return params.SstoreSetGasEIP2200, nil
 		}
-		if value == (common.Hash{}) { // delete slot (2.1.2b)
+		if value.IsZero() { // delete slot (2.1.2b)
 			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 		}
 		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
 	}
-	if original != (common.Hash{}) {
-		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+	if !original.IsZero() {
+		if current.IsZero() { // recreate slot (2.2.1.1)
 			evm.StateDB.SubRefund(params.SstoreClearsScheduleRefundEIP2200)
-		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+		} else if value.IsZero() { // delete slot (2.2.1.2)
 			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
 		}
 	}
 	if original == value {
-		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
+		if original.IsZero() { // reset to original inexistent slot (2.2.2.1)
 			evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.SloadGasEIP2200)
 		} else { // reset to original existing slot (2.2.2.2)
 			evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)

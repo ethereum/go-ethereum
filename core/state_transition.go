@@ -294,7 +294,7 @@ func (st *StateTransition) preCheck() error {
 		}
 		// Make sure the sender is an EOA
 		codeHash := st.state.GetCodeHash(msg.From)
-		if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
+		if !codeHash.IsZero() && codeHash != types.EmptyCodeHash {
 			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
 				msg.From.Hex(), codeHash)
 		}

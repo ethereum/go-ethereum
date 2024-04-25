@@ -305,7 +305,7 @@ func (q *queue) Schedule(headers []*types.Header, hashes []common.Hash, from uin
 			log.Warn("Header broke chain ordering", "number", header.Number, "hash", hash, "expected", from)
 			break
 		}
-		if q.headerHead != (common.Hash{}) && q.headerHead != header.ParentHash {
+		if !q.headerHead.IsZero() && q.headerHead != header.ParentHash {
 			log.Warn("Header broke chain ancestry", "number", header.Number, "hash", hash)
 			break
 		}

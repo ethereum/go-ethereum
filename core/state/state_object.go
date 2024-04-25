@@ -322,7 +322,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		s.originStorage[key] = value
 
 		var encoded []byte // rlp-encoded value to be used by the snapshot
-		if (value != common.Hash{}) {
+		if !value.IsZero() {
 			// Encoding []byte cannot fail, ok to ignore the error.
 			trimmed := common.TrimLeftZeroes(value[:])
 			encoded, _ = rlp.EncodeToBytes(trimmed)
@@ -353,7 +353,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		}
 		// Track the original value of slot only if it's mutated first time
 		if _, ok := origin[khash]; !ok {
-			if prev == (common.Hash{}) {
+			if prev.IsZero() {
 				origin[khash] = nil // nil if it was not present previously
 			} else {
 				// Encoding []byte cannot fail, ok to ignore the error.

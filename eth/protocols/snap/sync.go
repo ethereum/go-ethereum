@@ -786,7 +786,7 @@ func (s *Syncer) loadSyncStatus() {
 					task.genTrie = newHashTrie(task.genBatch)
 				}
 				if s.scheme == rawdb.PathScheme {
-					task.genTrie = newPathTrie(common.Hash{}, task.Next != common.Hash{}, s.db, task.genBatch)
+					task.genTrie = newPathTrie(common.Hash{}, !task.Next.IsZero(), s.db, task.genBatch)
 				}
 				// Restore leftover storage tasks
 				for accountHash, subtasks := range task.SubTasks {
@@ -803,7 +803,7 @@ func (s *Syncer) loadSyncStatus() {
 							subtask.genTrie = newHashTrie(subtask.genBatch)
 						}
 						if s.scheme == rawdb.PathScheme {
-							subtask.genTrie = newPathTrie(accountHash, subtask.Next != common.Hash{}, s.db, subtask.genBatch)
+							subtask.genTrie = newPathTrie(accountHash, !subtask.Next.IsZero(), s.db, subtask.genBatch)
 						}
 					}
 				}
@@ -861,7 +861,7 @@ func (s *Syncer) loadSyncStatus() {
 			tr = newHashTrie(batch)
 		}
 		if s.scheme == rawdb.PathScheme {
-			tr = newPathTrie(common.Hash{}, next != common.Hash{}, s.db, batch)
+			tr = newPathTrie(common.Hash{}, !next.IsZero(), s.db, batch)
 		}
 		s.tasks = append(s.tasks, &accountTask{
 			Next:           next,
@@ -3149,7 +3149,7 @@ func (s *Syncer) reportHealProgress(force bool) {
 // a contract storage, based on the number of keys and the last hash. This method
 // assumes that the hashes are lexicographically ordered and evenly distributed.
 func estimateRemainingSlots(hashes int, last common.Hash) (uint64, error) {
-	if last == (common.Hash{}) {
+	if last.IsZero() {
 		return 0, errors.New("last hash empty")
 	}
 	space := new(big.Int).Mul(math.MaxBig256, big.NewInt(int64(hashes)))

@@ -358,7 +358,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			if bc.cacheConfig.SnapshotLimit > 0 {
 				diskRoot = rawdb.ReadSnapshotRoot(bc.db)
 			}
-			if diskRoot != (common.Hash{}) {
+			if !diskRoot.IsZero() {
 				log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash(), "snaproot", diskRoot)
 
 				snapDisk, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, diskRoot, true)
@@ -487,7 +487,7 @@ func (bc *BlockChain) empty() bool {
 func (bc *BlockChain) loadLastState() error {
 	// Restore the last known head block
 	head := rawdb.ReadHeadBlockHash(bc.db)
-	if head == (common.Hash{}) {
+	if head.IsZero() {
 		// Corrupt or empty database, init from scratch
 		log.Warn("Empty database, resetting chain")
 		return bc.Reset()
@@ -505,7 +505,7 @@ func (bc *BlockChain) loadLastState() error {
 
 	// Restore the last known head header
 	headHeader := headBlock.Header()
-	if head := rawdb.ReadHeadHeaderHash(bc.db); head != (common.Hash{}) {
+	if head := rawdb.ReadHeadHeaderHash(bc.db); !head.IsZero() {
 		if header := bc.GetHeaderByHash(head); header != nil {
 			headHeader = header
 		}
@@ -516,7 +516,7 @@ func (bc *BlockChain) loadLastState() error {
 	bc.currentSnapBlock.Store(headBlock.Header())
 	headFastBlockGauge.Update(int64(headBlock.NumberU64()))
 
-	if head := rawdb.ReadHeadFastBlockHash(bc.db); head != (common.Hash{}) {
+	if head := rawdb.ReadHeadFastBlockHash(bc.db); !head.IsZero() {
 		if block := bc.GetBlockByHash(head); block != nil {
 			bc.currentSnapBlock.Store(block.Header())
 			headFastBlockGauge.Update(int64(block.NumberU64()))
@@ -526,7 +526,7 @@ func (bc *BlockChain) loadLastState() error {
 	// Restore the last known finalized block and safe block
 	// Note: the safe block is not stored on disk and it is set to the last
 	// known finalized block on startup
-	if head := rawdb.ReadFinalizedBlockHash(bc.db); head != (common.Hash{}) {
+	if head := rawdb.ReadFinalizedBlockHash(bc.db); !head.IsZero() {
 		if block := bc.GetBlockByHash(head); block != nil {
 			bc.currentFinalBlock.Store(block.Header())
 			headFinalizedBlockGauge.Update(int64(block.NumberU64()))
@@ -629,7 +629,7 @@ func (bc *BlockChain) SetSafe(header *types.Header) {
 func (bc *BlockChain) rewindHashHead(head *types.Header, root common.Hash) (*types.Header, uint64) {
 	var (
 		limit      uint64                             // The oldest block that will be searched for this rewinding
-		beyondRoot = root == common.Hash{}            // Flag whether we're beyond the requested root (no root, always true)
+		beyondRoot = root.IsZero()                    // Flag whether we're beyond the requested root (no root, always true)
 		pivot      = rawdb.ReadLastPivotNumber(bc.db) // Associated block number of pivot point state
 		rootNumber uint64                             // Associated block number of requested root
 
@@ -709,7 +709,7 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 
 		// BeyondRoot represents whether the requested root is already
 		// crossed. The flag value is set to true if the root is empty.
-		beyondRoot = root == common.Hash{}
+		beyondRoot = root.IsZero()
 
 		// noState represents if the target state requested for search
 		// is unavailable and impossible to be recovered.
@@ -1139,7 +1139,7 @@ func (bc *BlockChain) Stop() {
 					}
 				}
 			}
-			if snapBase != (common.Hash{}) {
+			if !snapBase.IsZero() {
 				log.Info("Writing snapshot state to disk", "root", snapBase)
 				if err := triedb.Commit(snapBase, true); err != nil {
 					log.Error("Failed to commit recent state trie", "err", err)
@@ -2308,7 +2308,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	}
 	for i := number + 1; ; i++ {
 		hash := rawdb.ReadCanonicalHash(bc.db, i)
-		if hash == (common.Hash{}) {
+		if hash.IsZero() {
 			break
 		}
 		rawdb.DeleteCanonicalHash(indexesBatch, i)
@@ -2454,7 +2454,7 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 	} else if parent = bc.GetHeaderByHash(header.ParentHash); parent != nil {
 		parentRoot = parent.Root
 	}
-	if parentRoot == (common.Hash{}) {
+	if parentRoot.IsZero() {
 		return false // Theoretically impossible case
 	}
 	// Parent is also missing snapshot: we can skip this. Otherwise process.

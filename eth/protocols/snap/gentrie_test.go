@@ -77,7 +77,7 @@ func (r *replayer) modifies() map[string]common.Hash {
 func (r *replayer) updates() int {
 	var count int
 	for _, hash := range r.modifies() {
-		if hash == (common.Hash{}) {
+		if hash.IsZero() {
 			continue
 		}
 		count++
@@ -118,7 +118,7 @@ func innerNodes(first, last []byte, includeLeft, includeRight bool, nodes map[st
 		inner     = make(map[string]common.Hash)
 	)
 	for path, hash := range nodes {
-		if hash == (common.Hash{}) {
+		if hash.IsZero() {
 			t.Fatalf("Unexpected deletion, %v", []byte(path))
 		}
 		// Filter out the siblings on the left side or the left boundary nodes.
@@ -490,7 +490,7 @@ func TestBoundSplit(t *testing.T) {
 				// Derive the path of left-most node in this chunk
 				var leftRoot []byte
 				for path, hash := range r.modifies() {
-					if hash == (common.Hash{}) {
+					if hash.IsZero() {
 						t.Fatalf("Unexpected deletion %v", []byte(path))
 					}
 					if leftRoot == nil || bytes.Compare(leftRoot, []byte(path)) > 0 {

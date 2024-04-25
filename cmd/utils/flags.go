@@ -1863,7 +1863,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.Genesis = core.DeveloperGenesisBlock(ctx.Uint64(DeveloperGasLimitFlag.Name), &developer.Address)
 		if ctx.IsSet(DataDirFlag.Name) {
 			chaindb := tryMakeReadOnlyDatabase(ctx, stack)
-			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
+			if !rawdb.ReadCanonicalHash(chaindb, 0).IsZero() {
 				cfg.Genesis = nil // fallback to db content
 
 				//validate genesis has PoS enabled in block 0

@@ -719,7 +719,7 @@ txloop:
 // be one filename per transaction traced.
 func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block, config *StdTraceConfig) ([]string, error) {
 	// If we're tracing a single transaction, make sure it's present
-	if config != nil && config.TxHash != (common.Hash{}) {
+	if config != nil && !config.TxHash.IsZero() {
 		if !containsTx(block, config.TxHash) {
 			return nil, fmt.Errorf("transaction %#x not found in block", config.TxHash)
 		}
@@ -783,7 +783,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 			err       error
 		)
 		// If the transaction needs tracing, swap out the configs
-		if tx.Hash() == txHash || txHash == (common.Hash{}) {
+		if tx.Hash() == txHash || txHash.IsZero() {
 			// Generate a unique temporary file to dump it into
 			prefix := fmt.Sprintf("block_%#x-%d-%#x-", block.Hash().Bytes()[:4], i, tx.Hash().Bytes()[:4])
 			if !canon {

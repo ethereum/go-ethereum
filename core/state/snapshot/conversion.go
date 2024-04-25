@@ -294,7 +294,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 	)
 	// Start to feed leaves
 	for it.Next() {
-		if account == (common.Hash{}) {
+		if account.IsZero() {
 			var (
 				err      error
 				fullData []byte
@@ -342,7 +342,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 		// Accumulate the generation statistic if it's required.
 		processed++
 		if time.Since(logged) > 3*time.Second && stats != nil {
-			if account == (common.Hash{}) {
+			if account.IsZero() {
 				stats.progressAccounts(it.Hash(), processed)
 			} else {
 				stats.progressContract(account, it.Hash(), processed)
@@ -352,7 +352,7 @@ func generateTrieRoot(db ethdb.KeyValueWriter, scheme string, it Iterator, accou
 	}
 	// Commit the last part statistic.
 	if processed > 0 && stats != nil {
-		if account == (common.Hash{}) {
+		if account.IsZero() {
 			stats.finishAccounts(processed)
 		} else {
 			stats.finishContract(account, processed)

@@ -170,7 +170,7 @@ func (db *Database) insert(hash common.Hash, node []byte) {
 	db.dirties[hash] = entry
 
 	// Update the flush-list endpoints
-	if db.oldest == (common.Hash{}) {
+	if db.oldest.IsZero() {
 		db.oldest, db.newest = hash, hash
 	} else {
 		db.dirties[db.newest].flushNext, db.newest = hash, hash
@@ -182,7 +182,7 @@ func (db *Database) insert(hash common.Hash, node []byte) {
 // cached, the method queries the persistent database for the content.
 func (db *Database) node(hash common.Hash) ([]byte, error) {
 	// It doesn't make sense to retrieve the metaroot
-	if hash == (common.Hash{}) {
+	if hash.IsZero() {
 		return nil, errors.New("not found")
 	}
 	// Retrieve the node from the clean cache if available
@@ -240,7 +240,7 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 		return
 	}
 	// The reference is for state root, increase the reference counter.
-	if parent == (common.Hash{}) {
+	if parent.IsZero() {
 		node.parents += 1
 		return
 	}
@@ -260,7 +260,7 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 // Dereference removes an existing reference from a root node.
 func (db *Database) Dereference(root common.Hash) {
 	// Sanity check to ensure that the meta-root is not removed
-	if root == (common.Hash{}) {
+	if root.IsZero() {
 		log.Error("Attempted to dereference the trie cache meta root")
 		return
 	}
@@ -302,12 +302,12 @@ func (db *Database) dereference(hash common.Hash) {
 		switch hash {
 		case db.oldest:
 			db.oldest = node.flushNext
-			if node.flushNext != (common.Hash{}) {
+			if !node.flushNext.IsZero() {
 				db.dirties[node.flushNext].flushPrev = common.Hash{}
 			}
 		case db.newest:
 			db.newest = node.flushPrev
-			if node.flushPrev != (common.Hash{}) {
+			if !node.flushPrev.IsZero() {
 				db.dirties[node.flushPrev].flushNext = common.Hash{}
 			}
 		default:
@@ -347,7 +347,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 
 	// Keep committing nodes from the flush-list until we're below allowance
 	oldest := db.oldest
-	for size > limit && oldest != (common.Hash{}) {
+	for size > limit && !oldest.IsZero() {
 		// Fetch the oldest referenced node and push into the batch
 		node := db.dirties[oldest]
 		rawdb.WriteLegacyTrieNode(batch, oldest, node.node)
@@ -385,7 +385,7 @@ func (db *Database) Cap(limit common.StorageSize) error {
 			db.childrenSize -= common.StorageSize(len(node.external) * common.HashLength)
 		}
 	}
-	if db.oldest != (common.Hash{}) {
+	if !db.oldest.IsZero() {
 		db.dirties[db.oldest].flushPrev = common.Hash{}
 	}
 	db.flushnodes += uint64(nodes - len(db.dirties))
@@ -510,12 +510,12 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 	switch hash {
 	case c.db.oldest:
 		c.db.oldest = node.flushNext
-		if node.flushNext != (common.Hash{}) {
+		if !node.flushNext.IsZero() {
 			c.db.dirties[node.flushNext].flushPrev = common.Hash{}
 		}
 	case c.db.newest:
 		c.db.newest = node.flushPrev
-		if node.flushPrev != (common.Hash{}) {
+		if !node.flushPrev.IsZero() {
 			c.db.dirties[node.flushPrev].flushNext = common.Hash{}
 		}
 	default:
@@ -566,7 +566,7 @@ func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, n
 	// retain the invariant that children go into the dirty cache first.
 	var order []common.Hash
 	for owner := range nodes.Sets {
-		if owner == (common.Hash{}) {
+		if owner.IsZero() {
 			continue
 		}
 		order = append(order, owner)

@@ -137,7 +137,7 @@ type HashOrNumber struct {
 // EncodeRLP is a specialized encoder for HashOrNumber to encode only one of the
 // two contained union fields.
 func (hn *HashOrNumber) EncodeRLP(w io.Writer) error {
-	if hn.Hash == (common.Hash{}) {
+	if hn.Hash.IsZero() {
 		return rlp.Encode(w, hn.Number)
 	}
 	if hn.Number != 0 {

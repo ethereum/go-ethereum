@@ -134,7 +134,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		nBlob []byte
 		nHash common.Hash
 	)
-	if owner == (common.Hash{}) {
+	if owner.IsZero() {
 		nBlob, nHash = rawdb.ReadAccountTrieNode(dl.db.diskdb, path)
 	} else {
 		nBlob, nHash = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)

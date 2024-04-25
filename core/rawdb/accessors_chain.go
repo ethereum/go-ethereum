@@ -943,7 +943,7 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 // ReadHeadHeader returns the current canonical head header.
 func ReadHeadHeader(db ethdb.Reader) *types.Header {
 	headHeaderHash := ReadHeadHeaderHash(db)
-	if headHeaderHash == (common.Hash{}) {
+	if headHeaderHash.IsZero() {
 		return nil
 	}
 	headHeaderNumber := ReadHeaderNumber(db, headHeaderHash)
@@ -956,7 +956,7 @@ func ReadHeadHeader(db ethdb.Reader) *types.Header {
 // ReadHeadBlock returns the current canonical head block.
 func ReadHeadBlock(db ethdb.Reader) *types.Block {
 	headBlockHash := ReadHeadBlockHash(db)
-	if headBlockHash == (common.Hash{}) {
+	if headBlockHash.IsZero() {
 		return nil
 	}
 	headBlockNumber := ReadHeaderNumber(db, headBlockHash)

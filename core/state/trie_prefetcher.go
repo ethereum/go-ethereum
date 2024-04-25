@@ -297,7 +297,7 @@ func (sf *subfetcher) loop() {
 	defer close(sf.term)
 
 	// Start by opening the trie and stop processing if it fails
-	if sf.owner == (common.Hash{}) {
+	if sf.owner.IsZero() {
 		trie, err := sf.db.OpenTrie(sf.root)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)

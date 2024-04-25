@@ -78,7 +78,7 @@ type Genesis struct {
 func ReadGenesis(db ethdb.Database) (*Genesis, error) {
 	var genesis Genesis
 	stored := rawdb.ReadCanonicalHash(db, 0)
-	if (stored == common.Hash{}) {
+	if stored.IsZero() {
 		return nil, fmt.Errorf("invalid genesis hash in database: %x", stored)
 	}
 	blob := rawdb.ReadGenesisStateSpec(db, stored)
@@ -281,7 +281,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *triedb.Database, g
 	}
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
-	if (stored == common.Hash{}) {
+	if stored.IsZero() {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
 			genesis = DefaultGenesisBlock()
@@ -371,7 +371,7 @@ func LoadChainConfig(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, 
 	// in case the database is empty. Notably, we only care about the
 	// chain config corresponds to the canonical chain.
 	stored := rawdb.ReadCanonicalHash(db, 0)
-	if stored != (common.Hash{}) {
+	if !stored.IsZero() {
 		storedcfg := rawdb.ReadChainConfig(db, stored)
 		if storedcfg != nil {
 			return storedcfg, nil
@@ -387,7 +387,7 @@ func LoadChainConfig(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, 
 		// config is missing(initialize the empty leveldb with an
 		// external ancient chain segment), ensure the provided genesis
 		// is matched.
-		if stored != (common.Hash{}) && genesis.ToBlock().Hash() != stored {
+		if !stored.IsZero() && genesis.ToBlock().Hash() != stored {
 			return nil, &GenesisMismatchError{stored, genesis.ToBlock().Hash()}
 		}
 		return genesis.Config, nil
@@ -443,7 +443,7 @@ func (g *Genesis) ToBlock() *types.Block {
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
-	if g.Difficulty == nil && g.Mixhash == (common.Hash{}) {
+	if g.Difficulty == nil && g.Mixhash.IsZero() {
 		head.Difficulty = params.GenesisDifficulty
 	}
 	if g.Config != nil && g.Config.IsLondon(common.Big0) {

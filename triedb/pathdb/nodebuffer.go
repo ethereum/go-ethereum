@@ -149,7 +149,7 @@ func (b *nodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[s
 				// In case of database rollback, don't panic if this "clean"
 				// node occurs which is not present in buffer.
 				var nhash common.Hash
-				if owner == (common.Hash{}) {
+				if owner.IsZero() {
 					_, nhash = rawdb.ReadAccountTrieNode(db, []byte(path))
 				} else {
 					_, nhash = rawdb.ReadStorageTrieNode(db, owner, []byte(path))
@@ -203,7 +203,7 @@ func (b *nodebuffer) setSize(size int, db ethdb.KeyValueStore, clean *fastcache.
 func (b *nodebuffer) allocBatch(db ethdb.KeyValueStore) ethdb.Batch {
 	var metasize int
 	for owner, nodes := range b.nodes {
-		if owner == (common.Hash{}) {
+		if owner.IsZero() {
 			metasize += len(nodes) * len(rawdb.TrieNodeAccountPrefix) // database key prefix
 		} else {
 			metasize += len(nodes) * (len(rawdb.TrieNodeStoragePrefix) + common.HashLength) // database key prefix + owner
@@ -250,7 +250,7 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 	for owner, subset := range nodes {
 		for path, n := range subset {
 			if n.IsDeleted() {
-				if owner == (common.Hash{}) {
+				if owner.IsZero() {
 					rawdb.DeleteAccountTrieNode(batch, []byte(path))
 				} else {
 					rawdb.DeleteStorageTrieNode(batch, owner, []byte(path))
@@ -259,7 +259,7 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 					clean.Del(cacheKey(owner, []byte(path)))
 				}
 			} else {
-				if owner == (common.Hash{}) {
+				if owner.IsZero() {
 					rawdb.WriteAccountTrieNode(batch, []byte(path), n.Blob)
 				} else {
 					rawdb.WriteStorageTrieNode(batch, owner, []byte(path), n.Blob)
@@ -276,7 +276,7 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 
 // cacheKey constructs the unique key of clean cache.
 func cacheKey(owner common.Hash, path []byte) []byte {
-	if owner == (common.Hash{}) {
+	if owner.IsZero() {
 		return path
 	}
 	return append(owner.Bytes(), path...)

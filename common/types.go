@@ -179,6 +179,16 @@ func (h Hash) Value() (driver.Value, error) {
 	return h[:], nil
 }
 
+// IsZero checks if the Hash is a zero value
+func (h Hash) IsZero() bool {
+	for _, b := range h {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // ImplementsGraphQLType returns true if Hash implements the specified GraphQL type.
 func (Hash) ImplementsGraphQLType(name string) bool { return name == "Bytes32" }
 

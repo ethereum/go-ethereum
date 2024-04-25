@@ -282,7 +282,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 		return errInvalidCheckpointSigners
 	}
 	// Ensure that the mix digest is zero as we don't have fork protection currently
-	if header.MixDigest != (common.Hash{}) {
+	if !header.MixDigest.IsZero() {
 		return errInvalidMixDigest
 	}
 	// Ensure that the block doesn't contain any uncles which are meaningless in PoA

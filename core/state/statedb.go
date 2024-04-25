@@ -610,7 +610,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 			if len(data.CodeHash) == 0 {
 				data.CodeHash = types.EmptyCodeHash.Bytes()
 			}
-			if data.Root == (common.Hash{}) {
+			if data.Root.IsZero() {
 				data.Root = types.EmptyRootHash
 			}
 		}
@@ -994,7 +994,7 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 			size += common.StorageSize(common.HashLength + len(it.LeafBlob()))
 			continue
 		}
-		if it.Hash() == (common.Hash{}) {
+		if it.Hash().IsZero() {
 			continue
 		}
 		size += common.StorageSize(len(it.Path()))
@@ -1231,11 +1231,11 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		s.SnapshotCommits += time.Since(start)
 		s.snap = nil
 	}
-	if root == (common.Hash{}) {
+	if root.IsZero() {
 		root = types.EmptyRootHash
 	}
 	origin := s.originalRoot
-	if origin == (common.Hash{}) {
+	if origin.IsZero() {
 		origin = types.EmptyRootHash
 	}
 	if root != origin {

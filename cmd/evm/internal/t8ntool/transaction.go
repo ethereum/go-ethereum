@@ -56,7 +56,7 @@ func (r *result) MarshalJSON() ([]byte, error) {
 	if r.Address != (common.Address{}) {
 		out.Address = &r.Address
 	}
-	if r.Hash != (common.Hash{}) {
+	if !r.Hash.IsZero() {
 		out.Hash = &r.Hash
 	}
 	out.IntrinsicGas = hexutil.Uint64(r.IntrinsicGas)

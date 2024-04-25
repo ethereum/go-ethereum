@@ -228,7 +228,7 @@ func (t *prestateTracer) processDiffState() {
 
 		for key, val := range state.Storage {
 			// don't include the empty slot
-			if val == (common.Hash{}) {
+			if val.IsZero() {
 				delete(t.pre[addr].Storage, key)
 			}
 
@@ -238,7 +238,7 @@ func (t *prestateTracer) processDiffState() {
 				delete(t.pre[addr].Storage, key)
 			} else {
 				modified = true
-				if newVal != (common.Hash{}) {
+				if !newVal.IsZero() {
 					postAccount.Storage[key] = newVal
 				}
 			}

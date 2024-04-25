@@ -45,7 +45,7 @@ func (err *MissingNodeError) Unwrap() error {
 }
 
 func (err *MissingNodeError) Error() string {
-	if err.Owner == (common.Hash{}) {
+	if err.Owner.IsZero() {
 		return fmt.Sprintf("missing trie node %x (path %x) %v", err.NodeHash, err.Path, err.err)
 	}
 	return fmt.Sprintf("missing trie node %x (owner %x) (path %x) %v", err.NodeHash, err.Owner, err.Path, err.err)

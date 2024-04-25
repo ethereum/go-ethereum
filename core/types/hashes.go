@@ -48,7 +48,7 @@ var (
 // TrieRootHash returns the hash itself if it's non-empty or the predefined
 // emptyHash one instead.
 func TrieRootHash(hash common.Hash) common.Hash {
-	if hash == (common.Hash{}) {
+	if hash.IsZero() {
 		log.Error("Zero trie root hash!")
 		return EmptyRootHash
 	}

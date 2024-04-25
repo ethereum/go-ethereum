@@ -105,7 +105,7 @@ func (c *Contract) isCode(udest uint64) bool {
 	// Do we have a contract hash already?
 	// If we do have a hash, that means it's a 'regular' contract. For regular
 	// contracts ( not temporary initcode), we store the analysis in a map
-	if c.CodeHash != (common.Hash{}) {
+	if !c.CodeHash.IsZero() {
 		// Does parent context have the analysis?
 		analysis, exist := c.jumpdests[c.CodeHash]
 		if !exist {

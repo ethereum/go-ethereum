@@ -326,7 +326,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 		log.Warn("Failed to prove account range", "origin", req.Origin, "err", err)
 		return nil, nil
 	}
-	if last != (common.Hash{}) {
+	if !last.IsZero() {
 		if err := tr.Prove(last[:], proof); err != nil {
 			log.Warn("Failed to prove account range", "last", last, "err", err)
 			return nil, nil
@@ -411,7 +411,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 		// Generate the Merkle proofs for the first and last storage slot, but
 		// only if the response was capped. If the entire storage trie included
 		// in the response, no need for any proofs.
-		if origin != (common.Hash{}) || (abort && len(storage) > 0) {
+		if !origin.IsZero() || (abort && len(storage) > 0) {
 			// Request started at a non-zero hash or was capped prematurely, add
 			// the endpoint Merkle proofs
 			accTrie, err := trie.NewStateTrie(trie.StateTrieID(req.Root), chain.TrieDB())
@@ -432,7 +432,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 				log.Warn("Failed to prove storage range", "origin", req.Origin, "err", err)
 				return nil, nil
 			}
-			if last != (common.Hash{}) {
+			if !last.IsZero() {
 				if err := stTrie.Prove(last[:], proof); err != nil {
 					log.Warn("Failed to prove storage range", "last", last, "err", err)
 					return nil, nil

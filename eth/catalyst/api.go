@@ -236,7 +236,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	defer api.forkchoiceLock.Unlock()
 
 	log.Trace("Engine API request received", "method", "ForkchoiceUpdated", "head", update.HeadBlockHash, "finalized", update.FinalizedBlockHash, "safe", update.SafeBlockHash)
-	if update.HeadBlockHash == (common.Hash{}) {
+	if update.HeadBlockHash.IsZero() {
 		log.Warn("Forkchoice requested update to zero hash")
 		return engine.STATUS_INVALID, nil // TODO(karalabe): Why does someone send us this?
 	}
@@ -269,7 +269,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 
 		// Header advertised via a past newPayload request. Start syncing to it.
 		context := []interface{}{"number", header.Number, "hash", header.Hash()}
-		if update.FinalizedBlockHash != (common.Hash{}) {
+		if !update.FinalizedBlockHash.IsZero() {
 			if finalized == nil {
 				context = append(context, []interface{}{"finalized", "unknown"}...)
 			} else {
@@ -328,7 +328,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 
 	// If the beacon client also advertised a finalized block, mark the local
 	// chain final and completely in PoS mode.
-	if update.FinalizedBlockHash != (common.Hash{}) {
+	if !update.FinalizedBlockHash.IsZero() {
 		// If the finalized block is not in our canonical tree, something is wrong
 		finalBlock := api.eth.BlockChain().GetBlockByHash(update.FinalizedBlockHash)
 		if finalBlock == nil {
@@ -342,7 +342,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		api.eth.BlockChain().SetFinalized(finalBlock.Header())
 	}
 	// Check if the safe block hash is in our canonical tree, if not something is wrong
-	if update.SafeBlockHash != (common.Hash{}) {
+	if !update.SafeBlockHash.IsZero() {
 		safeBlock := api.eth.BlockChain().GetBlockByHash(update.SafeBlockHash)
 		if safeBlock == nil {
 			log.Warn("Safe block not available in database")
@@ -415,7 +415,7 @@ func (api *ConsensusAPI) ExchangeTransitionConfigurationV1(config engine.Transit
 		log.Warn("Invalid TTD configured", "geth", ttd, "beacon", config.TerminalTotalDifficulty)
 		return nil, fmt.Errorf("invalid ttd: execution %v consensus %v", ttd, config.TerminalTotalDifficulty)
 	}
-	if config.TerminalBlockHash != (common.Hash{}) {
+	if !config.TerminalBlockHash.IsZero() {
 		if hash := api.eth.BlockChain().GetCanonicalHash(uint64(config.TerminalBlockNumber)); hash == config.TerminalBlockHash {
 			return &engine.TransitionConfigurationV1{
 				TerminalTotalDifficulty: (*hexutil.Big)(ttd),

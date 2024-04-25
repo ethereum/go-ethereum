@@ -151,7 +151,7 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 
 // write commits the node write to provided database batch in path mode.
 func (t *pathTrie) write(path []byte, blob []byte) {
-	if t.owner == (common.Hash{}) {
+	if t.owner.IsZero() {
 		rawdb.WriteAccountTrieNode(t.batch, path, blob)
 	} else {
 		rawdb.WriteStorageTrieNode(t.batch, t.owner, path, blob)
@@ -194,7 +194,7 @@ func (t *pathTrie) deleteStorageNode(path []byte, inner bool) {
 
 // delete commits the node deletion to provided database batch in path mode.
 func (t *pathTrie) delete(path []byte, inner bool) {
-	if t.owner == (common.Hash{}) {
+	if t.owner.IsZero() {
 		t.deleteAccountNode(path, inner)
 	} else {
 		t.deleteStorageNode(path, inner)

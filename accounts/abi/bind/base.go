@@ -190,7 +190,7 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 				return ErrNoCode
 			}
 		}
-	} else if opts.BlockHash != (common.Hash{}) {
+	} else if !opts.BlockHash.IsZero() {
 		bh, ok := c.caller.(BlockHashContractCaller)
 		if !ok {
 			return ErrNoBlockHashState

@@ -409,7 +409,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime uint64,
 	parentDifficulty *big.Int, parentUncleHash common.Hash) *big.Int {
 	uncleHash := parentUncleHash
-	if uncleHash == (common.Hash{}) {
+	if uncleHash.IsZero() {
 		uncleHash = types.EmptyUncleHash
 	}
 	parent := &types.Header{

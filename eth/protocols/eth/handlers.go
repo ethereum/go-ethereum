@@ -51,7 +51,7 @@ func ServiceGetBlockHeadersQuery(chain *core.BlockChain, query *GetBlockHeadersR
 }
 
 func serviceNonContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHeadersRequest, peer *Peer) []rlp.RawValue {
-	hashMode := query.Origin.Hash != (common.Hash{})
+	hashMode := !query.Origin.Hash.IsZero()
 	first := true
 	maxNonCanonical := uint64(100)
 
@@ -98,7 +98,7 @@ func serviceNonContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBloc
 				unknown = true
 			} else {
 				query.Origin.Hash, query.Origin.Number = chain.GetAncestor(query.Origin.Hash, query.Origin.Number, ancestor, &maxNonCanonical)
-				unknown = (query.Origin.Hash == common.Hash{})
+				unknown = query.Origin.Hash.IsZero()
 			}
 		case hashMode && !query.Reverse:
 			// Hash based traversal towards the leaf block
@@ -144,7 +144,7 @@ func serviceContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHe
 	if count > maxHeadersServe {
 		count = maxHeadersServe
 	}
-	if query.Origin.Hash == (common.Hash{}) {
+	if query.Origin.Hash.IsZero() {
 		// Number mode, just return the canon chain segment. The backend
 		// delivers in [N, N-1, N-2..] descending order, so we need to
 		// accommodate for that.

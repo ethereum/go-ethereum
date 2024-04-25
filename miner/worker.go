@@ -128,7 +128,7 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 
 	// Find the parent block for sealing task
 	parent := miner.chain.CurrentBlock()
-	if genParams.parentHash != (common.Hash{}) {
+	if !genParams.parentHash.IsZero() {
 		block := miner.chain.GetBlockByHash(genParams.parentHash)
 		if block == nil {
 			return nil, errors.New("missing parent")
@@ -157,7 +157,7 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 		header.Extra = miner.config.ExtraData
 	}
 	// Set the randomness field from the beacon chain if it's available.
-	if genParams.random != (common.Hash{}) {
+	if !genParams.random.IsZero() {
 		header.MixDigest = genParams.random
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain

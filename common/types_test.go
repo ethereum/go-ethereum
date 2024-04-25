@@ -595,3 +595,21 @@ func BenchmarkPrettyDuration(b *testing.B) {
 	}
 	b.Logf("Post %s", a)
 }
+
+func TestHash_IsZero(t *testing.T) {
+	tests := []struct {
+		name string
+		h    Hash
+		want bool
+	}{
+		{"yes", Hash{}, true},
+		{"no", Hash{1}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.h.IsZero(); got != tt.want {
+				t.Errorf("Hash.IsZero() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

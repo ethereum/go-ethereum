@@ -563,7 +563,7 @@ func testIteratorNodeBlob(t *testing.T, scheme string) {
 	trie, _ = New(TrieID(root), triedb)
 	it := trie.MustNodeIterator(nil)
 	for it.Next(true) {
-		if it.Hash() == (common.Hash{}) {
+		if it.Hash().IsZero() {
 			continue
 		}
 		found[it.Hash()] = it.NodeBlob()

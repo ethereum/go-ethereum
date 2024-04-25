@@ -132,7 +132,7 @@ func (db *testDb) Commit(root common.Hash) error {
 	pending, roots := db.dirties(root, false)
 	for i, nodes := range pending {
 		for owner, set := range nodes.Sets {
-			if owner == (common.Hash{}) {
+			if owner.IsZero() {
 				continue
 			}
 			set.ForEachWithOrder(func(path string, n *trienode.Node) {

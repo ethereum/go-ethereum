@@ -256,7 +256,7 @@ func defaultAccountRequestHandler(t *testPeer, id uint64, root common.Hash, orig
 
 func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.Hash, limit common.Hash, cap uint64) (keys []common.Hash, vals [][]byte, proofs [][]byte) {
 	var size uint64
-	if limit == (common.Hash{}) {
+	if limit.IsZero() {
 		limit = common.MaxHash
 	}
 	for _, entry := range t.accountValues {

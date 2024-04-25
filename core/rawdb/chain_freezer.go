@@ -77,7 +77,7 @@ func (f *chainFreezer) Close() error {
 // block is unknown or not available yet.
 func (f *chainFreezer) readHeadNumber(db ethdb.KeyValueReader) uint64 {
 	hash := ReadHeadBlockHash(db)
-	if hash == (common.Hash{}) {
+	if hash.IsZero() {
 		log.Error("Head block is not reachable")
 		return 0
 	}
@@ -93,7 +93,7 @@ func (f *chainFreezer) readHeadNumber(db ethdb.KeyValueReader) uint64 {
 // if the block is unknown or not available yet.
 func (f *chainFreezer) readFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 	hash := ReadFinalizedBlockHash(db)
-	if hash == (common.Hash{}) {
+	if hash.IsZero() {
 		return 0
 	}
 	number := ReadHeaderNumber(db, hash)
@@ -286,7 +286,7 @@ func (f *chainFreezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hash
 		for ; number <= limit; number++ {
 			// Retrieve all the components of the canonical block.
 			hash := ReadCanonicalHash(nfdb, number)
-			if hash == (common.Hash{}) {
+			if hash.IsZero() {
 				return fmt.Errorf("canonical hash missing, can't freeze block %d", number)
 			}
 			header := ReadHeaderRLP(nfdb, hash, number)

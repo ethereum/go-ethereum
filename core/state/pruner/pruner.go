@@ -244,7 +244,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	if err != nil {
 		return err
 	}
-	if stateBloomRoot != (common.Hash{}) {
+	if !stateBloomRoot.IsZero() {
 		return RecoverPruning(p.config.Datadir, p.db)
 	}
 	// If the target state root is not specified, use the HEAD-127 as the
@@ -252,7 +252,7 @@ func (p *Pruner) Prune(root common.Hash) error {
 	// - in most of the normal cases, the related state is available
 	// - the probability of this layer being reorg is very low
 	var layers []snapshot.Snapshot
-	if root == (common.Hash{}) {
+	if root.IsZero() {
 		// Retrieve all snapshot layers from the current HEAD.
 		// In theory there are 128 difflayers + 1 disk layer present,
 		// so 128 diff layers are expected to be returned.
@@ -403,7 +403,7 @@ func RecoverPruning(datadir string, db ethdb.Database) error {
 // into the given bloomfilter.
 func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 	genesisHash := rawdb.ReadCanonicalHash(db, 0)
-	if genesisHash == (common.Hash{}) {
+	if genesisHash.IsZero() {
 		return errors.New("missing genesis hash")
 	}
 	genesis := rawdb.ReadBlock(db, genesisHash, 0)
@@ -422,7 +422,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 		hash := accIter.Hash()
 
 		// Embedded nodes don't have hash.
-		if hash != (common.Hash{}) {
+		if !hash.IsZero() {
 			stateBloom.Put(hash.Bytes(), nil)
 		}
 		// If it's a leaf node, yes we are touching an account,
@@ -444,7 +444,7 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 				}
 				for storageIter.Next(true) {
 					hash := storageIter.Hash()
-					if hash != (common.Hash{}) {
+					if !hash.IsZero() {
 						stateBloom.Put(hash.Bytes(), nil)
 					}
 				}

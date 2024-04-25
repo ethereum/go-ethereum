@@ -689,7 +689,7 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 	if b.header != nil {
 		return b.header, nil
 	}
-	if b.numberOrHash == nil && b.hash == (common.Hash{}) {
+	if b.numberOrHash == nil && b.hash.IsZero() {
 		return nil, errBlockInvariant
 	}
 	var err error
@@ -697,7 +697,7 @@ func (b *Block) resolveHeader(ctx context.Context) (*types.Header, error) {
 	if err != nil {
 		return nil, err
 	}
-	if b.hash == (common.Hash{}) {
+	if b.hash.IsZero() {
 		b.hash = b.header.Hash()
 	}
 	return b.header, nil

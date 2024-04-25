@@ -198,7 +198,7 @@ func HasTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash c
 	case HashScheme:
 		return HasLegacyTrieNode(db, hash)
 	case PathScheme:
-		if owner == (common.Hash{}) {
+		if owner.IsZero() {
 			return HasAccountTrieNode(db, path, hash)
 		}
 		return HasStorageTrieNode(db, owner, path, hash)
@@ -224,7 +224,7 @@ func ReadTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash 
 			blob  []byte
 			nHash common.Hash
 		)
-		if owner == (common.Hash{}) {
+		if owner.IsZero() {
 			blob, nHash = ReadAccountTrieNode(db, path)
 		} else {
 			blob, nHash = ReadStorageTrieNode(db, owner, path)
@@ -251,7 +251,7 @@ func WriteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, hash
 	case HashScheme:
 		WriteLegacyTrieNode(db, hash, node)
 	case PathScheme:
-		if owner == (common.Hash{}) {
+		if owner.IsZero() {
 			WriteAccountTrieNode(db, path, node)
 		} else {
 			WriteStorageTrieNode(db, owner, path, node)
@@ -274,7 +274,7 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 	case HashScheme:
 		DeleteLegacyTrieNode(db, hash)
 	case PathScheme:
-		if owner == (common.Hash{}) {
+		if owner.IsZero() {
 			DeleteAccountTrieNode(db, path)
 		} else {
 			DeleteStorageTrieNode(db, owner, path)

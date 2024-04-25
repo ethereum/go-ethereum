@@ -343,7 +343,7 @@ func (o BlockOverrides) MarshalJSON() ([]byte, error) {
 	if o.Coinbase != (common.Address{}) {
 		output.Coinbase = &o.Coinbase
 	}
-	if o.Random != (common.Hash{}) {
+	if !o.Random.IsZero() {
 		output.Random = &o.Random
 	}
 	return json.Marshal(output)

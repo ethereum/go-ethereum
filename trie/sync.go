@@ -191,7 +191,7 @@ func (batch *syncMemBatch) addCode(hash common.Hash, code []byte) {
 // addNode caches a node database write operation.
 func (batch *syncMemBatch) addNode(owner common.Hash, path []byte, blob []byte, hash common.Hash) {
 	if batch.scheme == rawdb.PathScheme {
-		if owner == (common.Hash{}) {
+		if owner.IsZero() {
 			batch.size += uint64(len(path) + len(blob))
 		} else {
 			batch.size += common.HashLength + uint64(len(path)+len(blob))
@@ -213,7 +213,7 @@ func (batch *syncMemBatch) delNode(owner common.Hash, path []byte) {
 		log.Error("Unexpected node deletion", "owner", owner, "path", path, "scheme", batch.scheme)
 		return // deletion is not supported in hash mode.
 	}
-	if owner == (common.Hash{}) {
+	if owner.IsZero() {
 		batch.size += uint64(len(path))
 	} else {
 		batch.size += common.HashLength + uint64(len(path))
@@ -275,7 +275,7 @@ func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, par
 		callback: callback,
 	}
 	// If this sub-trie has a designated parent, link them together
-	if parent != (common.Hash{}) {
+	if !parent.IsZero() {
 		ancestor := s.nodeReqs[string(parentPath)]
 		if ancestor == nil {
 			panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
@@ -311,7 +311,7 @@ func (s *Sync) AddCodeEntry(hash common.Hash, path []byte, parent common.Hash, p
 		hash: hash,
 	}
 	// If this sub-trie has a designated parent, link them together
-	if parent != (common.Hash{}) {
+	if !parent.IsZero() {
 		ancestor := s.nodeReqs[string(parentPath)] // the parent of codereq can ONLY be nodereq
 		if ancestor == nil {
 			panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
@@ -429,14 +429,14 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 	for _, op := range s.membatch.nodes {
 		if op.isDelete() {
 			// node deletion is only supported in path mode.
-			if op.owner == (common.Hash{}) {
+			if op.owner.IsZero() {
 				rawdb.DeleteAccountTrieNode(dbw, op.path)
 			} else {
 				rawdb.DeleteStorageTrieNode(dbw, op.owner, op.path)
 			}
 			deletionGauge.Inc(1)
 		} else {
-			if op.owner == (common.Hash{}) {
+			if op.owner.IsZero() {
 				account += 1
 			} else {
 				storage += 1
@@ -545,7 +545,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 				// without a bloom filter, the relatively low frequency of lookups makes
 				// the performance impact negligible.
 				var exists bool
-				if owner == (common.Hash{}) {
+				if owner.IsZero() {
 					exists = rawdb.ExistsAccountTrieNode(s.database, append(inner, key[:i]...))
 				} else {
 					exists = rawdb.ExistsStorageTrieNode(s.database, owner, append(inner, key[:i]...))
@@ -692,7 +692,7 @@ func (s *Sync) hasNode(owner common.Hash, path []byte, hash common.Hash) (exists
 	// If node is running with path scheme, check the presence with node path.
 	var blob []byte
 	var dbHash common.Hash
-	if owner == (common.Hash{}) {
+	if owner.IsZero() {
 		blob, dbHash = rawdb.ReadAccountTrieNode(s.database, path)
 	} else {
 		blob, dbHash = rawdb.ReadStorageTrieNode(s.database, owner, path)

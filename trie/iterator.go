@@ -256,7 +256,7 @@ func (it *nodeIterator) Path() []byte {
 }
 
 func (it *nodeIterator) NodeBlob() []byte {
-	if it.Hash() == (common.Hash{}) {
+	if it.Hash().IsZero() {
 		return nil // skip the non-standalone node
 	}
 	blob, err := it.resolveBlob(it.Hash().Bytes(), it.Path())
@@ -344,7 +344,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 	for len(it.stack) > 0 {
 		parent := it.stack[len(it.stack)-1]
 		ancestor := parent.hash
-		if (ancestor == common.Hash{}) {
+		if ancestor.IsZero() {
 			ancestor = parent.parent
 		}
 		state, path, ok := it.nextChild(parent, ancestor)
@@ -377,7 +377,7 @@ func (it *nodeIterator) peekSeek(seekKey []byte) (*nodeIteratorState, *int, []by
 	for len(it.stack) > 0 {
 		parent := it.stack[len(it.stack)-1]
 		ancestor := parent.hash
-		if (ancestor == common.Hash{}) {
+		if ancestor.IsZero() {
 			ancestor = parent.parent
 		}
 		state, path, ok := it.nextChildAt(parent, ancestor, seekKey)
@@ -654,7 +654,7 @@ func (it *differenceIterator) Next(bool) bool {
 			return true
 		case 0:
 			// a and b are identical; skip this whole subtree if the nodes have hashes
-			hasHash := it.a.Hash() == common.Hash{}
+			hasHash := it.a.Hash().IsZero()
 			if !it.b.Next(hasHash) {
 				return false
 			}
@@ -768,7 +768,7 @@ func (it *unionIterator) Next(descend bool) bool {
 	for len(*it.items) > 0 && ((!descend && bytes.HasPrefix((*it.items)[0].Path(), least.Path())) || compareNodes(least, (*it.items)[0]) == 0) {
 		skipped := heap.Pop(it.items).(NodeIterator)
 		// Skip the whole subtree if the nodes have hashes; otherwise just skip this node
-		if skipped.Next(skipped.Hash() == common.Hash{}) {
+		if skipped.Next(skipped.Hash().IsZero()) {
 			it.count++
 			// If there are more elements, push the iterator back on the heap
 			heap.Push(it.items, skipped)

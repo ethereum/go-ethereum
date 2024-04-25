@@ -922,7 +922,7 @@ func inspectHistory(ctx *cli.Context) error {
 		}
 	}
 	// Inspect the state history.
-	if slot == (common.Hash{}) {
+	if slot.IsZero() {
 		return inspectAccount(triedb, start, end, address, ctx.Bool("raw"))
 	}
 	return inspectStorage(triedb, start, end, address, slot, ctx.Bool("raw"))

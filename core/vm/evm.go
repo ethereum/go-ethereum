@@ -409,7 +409,7 @@ type codeAndHash struct {
 }
 
 func (c *codeAndHash) Hash() common.Hash {
-	if c.hash == (common.Hash{}) {
+	if c.hash.IsZero() {
 		c.hash = crypto.Keccak256Hash(c.code)
 	}
 	return c.hash
@@ -450,8 +450,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contractHash := evm.StateDB.GetCodeHash(address)
 	storageRoot := evm.StateDB.GetStorageRoot(address)
 	if evm.StateDB.GetNonce(address) != 0 ||
-		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
-		(storageRoot != (common.Hash{}) && storageRoot != types.EmptyRootHash) { // non-empty storage
+		(!contractHash.IsZero() && contractHash != types.EmptyCodeHash) || // non-empty code
+		(!storageRoot.IsZero() && storageRoot != types.EmptyRootHash) { // non-empty storage
 		if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 			evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
 		}

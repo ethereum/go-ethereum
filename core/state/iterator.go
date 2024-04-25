@@ -159,7 +159,7 @@ func (it *nodeIterator) retrieve() bool {
 	switch {
 	case it.dataIt != nil:
 		it.Hash, it.Parent = it.dataIt.Hash(), it.dataIt.Parent()
-		if it.Parent == (common.Hash{}) {
+		if it.Parent.IsZero() {
 			it.Parent = it.accountHash
 		}
 	case it.code != nil:

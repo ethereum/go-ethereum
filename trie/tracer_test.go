@@ -324,7 +324,7 @@ func forHashedNodes(tr *Trie) map[string][]byte {
 		nodes = make(map[string][]byte)
 	)
 	for it.Next(true) {
-		if it.Hash() == (common.Hash{}) {
+		if it.Hash().IsZero() {
 			continue
 		}
 		nodes[string(it.Path())] = common.CopyBytes(it.NodeBlob())

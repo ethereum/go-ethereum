@@ -1440,7 +1440,7 @@ func testCanonicalBlockRetrieval(t *testing.T, scheme string) {
 			// try to retrieve a block by its canonical hash and see if the block data can be retrieved.
 			for {
 				ch := rawdb.ReadCanonicalHash(blockchain.db, block.NumberU64())
-				if ch == (common.Hash{}) {
+				if ch.IsZero() {
 					continue // busy wait for canonical hash to be written
 				}
 				if ch != block.Hash() {

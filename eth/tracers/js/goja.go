@@ -153,13 +153,13 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (*trace
 	if ctx == nil {
 		ctx = new(tracers.Context)
 	}
-	if ctx.BlockHash != (common.Hash{}) {
+	if !ctx.BlockHash.IsZero() {
 		blockHash, err := t.toBuf(vm, ctx.BlockHash.Bytes())
 		if err != nil {
 			return nil, err
 		}
 		t.ctx["blockHash"] = blockHash
-		if ctx.TxHash != (common.Hash{}) {
+		if !ctx.TxHash.IsZero() {
 			t.ctx["txIndex"] = vm.ToValue(ctx.TxIndex)
 			txHash, err := t.toBuf(vm, ctx.TxHash.Bytes())
 			if err != nil {

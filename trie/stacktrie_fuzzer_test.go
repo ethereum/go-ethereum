@@ -130,7 +130,7 @@ func fuzz(data []byte, debugging bool) {
 	trieA, _ = New(TrieID(rootA), dbA)
 	iterA := trieA.MustNodeIterator(nil)
 	for iterA.Next(true) {
-		if iterA.Hash() == (common.Hash{}) {
+		if iterA.Hash().IsZero() {
 			if _, present := nodeset[string(iterA.Path())]; present {
 				panic("unexpected tiny node")
 			}

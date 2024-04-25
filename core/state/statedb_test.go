@@ -392,9 +392,9 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 					s.CreateAccount(addr)
 				}
 				contractHash := s.GetCodeHash(addr)
-				emptyCode := contractHash == (common.Hash{}) || contractHash == types.EmptyCodeHash
+				emptyCode := contractHash.IsZero() || contractHash == types.EmptyCodeHash
 				storageRoot := s.GetStorageRoot(addr)
-				emptyStorage := storageRoot == (common.Hash{}) || storageRoot == types.EmptyRootHash
+				emptyStorage := storageRoot.IsZero() || storageRoot == types.EmptyRootHash
 				if s.GetNonce(addr) == 0 && emptyCode && emptyStorage {
 					s.CreateContract(addr)
 					// We also set some code here, to prevent the

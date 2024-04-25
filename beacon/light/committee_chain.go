@@ -229,7 +229,7 @@ func (s *CommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
 // Note that the period where the first committee is added has to have a fixed
 // root which can either come from a BootstrapData or a trusted source.
 func (s *CommitteeChain) addFixedCommitteeRoot(period uint64, root common.Hash) error {
-	if root == (common.Hash{}) {
+	if root.IsZero() {
 		return ErrWrongCommitteeRoot
 	}
 
@@ -257,7 +257,7 @@ func (s *CommitteeChain) addFixedCommitteeRoot(period uint64, root common.Hash) 
 			}
 		}
 	}
-	if oldRoot != (common.Hash{}) && (oldRoot != root) {
+	if !oldRoot.IsZero() && (oldRoot != root) {
 		// existing old root was different, we have to reorg the chain
 		if err := s.rollback(period); err != nil {
 			return err
@@ -321,7 +321,7 @@ func (s *CommitteeChain) addCommittee(period uint64, committee *types.Serialized
 		return ErrInvalidPeriod
 	}
 	root := s.getCommitteeRoot(period)
-	if root == (common.Hash{}) {
+	if root.IsZero() {
 		return ErrInvalidPeriod
 	}
 	if root != committee.Root() {
@@ -349,7 +349,7 @@ func (s *CommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommi
 		return ErrInvalidUpdate
 	}
 	oldRoot := s.getCommitteeRoot(period + 1)
-	reorg := oldRoot != (common.Hash{}) && oldRoot != update.NextSyncCommitteeRoot
+	reorg := !oldRoot.IsZero() && oldRoot != update.NextSyncCommitteeRoot
 	if oldUpdate, ok := s.updates.get(s.db, period); ok && !update.Score().BetterThan(oldUpdate.Score()) {
 		// a better or equal update already exists; no changes, only fail if new one tried to reorg
 		if reorg {

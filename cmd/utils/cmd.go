@@ -617,7 +617,7 @@ func ExportSnapshotPreimages(chaindb ethdb.Database, snaptree *snapshot.Tree, fn
 			preimages += 1
 			hashCh <- hashAndPreimageSize{Hash: accIt.Hash(), Size: common.AddressLength}
 
-			if acc.Root != (common.Hash{}) && acc.Root != types.EmptyRootHash {
+			if !acc.Root.IsZero() && acc.Root != types.EmptyRootHash {
 				stIt, err := snaptree.StorageIterator(root, accIt.Hash(), common.Hash{})
 				if err != nil {
 					log.Error("Failed to create storage iterator", "error", err)

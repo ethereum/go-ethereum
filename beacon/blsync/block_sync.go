@@ -85,7 +85,7 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 		s.tryRequestBlock(requester, vh.Attested.Hash(), false)
 	}
 	// request prefetch head if the given server has announced it
-	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead != (common.Hash{}) {
+	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; !prefetchHead.IsZero() {
 		s.tryRequestBlock(requester, prefetchHead, true)
 	}
 }

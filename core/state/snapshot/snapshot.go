@@ -693,7 +693,7 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 		return common.Hash{}, err
 	}
 	diskroot := t.diskRoot()
-	if diskroot == (common.Hash{}) {
+	if diskroot.IsZero() {
 		return common.Hash{}, errors.New("invalid disk root")
 	}
 	// Secondly write out the disk layer root, ensure the

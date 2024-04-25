@@ -216,7 +216,7 @@ func decodeOptimisticUpdate(enc []byte) (types.OptimisticUpdate, error) {
 	if err != nil {
 		return types.OptimisticUpdate{}, fmt.Errorf("invalid attested header: %v", err)
 	}
-	if data.Data.Attested.Beacon.StateRoot == (common.Hash{}) {
+	if data.Data.Attested.Beacon.StateRoot.IsZero() {
 		// workaround for different event encoding format in Lodestar
 		if err := json.Unmarshal(enc, &data.Data); err != nil {
 			return types.OptimisticUpdate{}, err
@@ -306,7 +306,7 @@ func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 // these flags are not validated.
 func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool, bool, error) {
 	var blockId string
-	if blockRoot == (common.Hash{}) {
+	if blockRoot.IsZero() {
 		blockId = "head"
 	} else {
 		blockId = blockRoot.Hex()
@@ -331,7 +331,7 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool,
 		return types.Header{}, false, false, err
 	}
 	header := data.Data.Header.Message
-	if blockRoot == (common.Hash{}) {
+	if blockRoot.IsZero() {
 		blockRoot = data.Data.Root
 	}
 	if header.Hash() != blockRoot {

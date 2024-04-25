@@ -152,7 +152,7 @@ func (b *EthAPIBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 
 // GetBody returns body of a block. It does not resolve special block numbers.
 func (b *EthAPIBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
-	if number < 0 || hash == (common.Hash{}) {
+	if number < 0 || hash.IsZero() {
 		return nil, errors.New("invalid arguments; expect hash and no special block numbers")
 	}
 	if body := b.eth.blockchain.GetBody(hash); body != nil {

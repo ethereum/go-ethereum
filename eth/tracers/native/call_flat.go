@@ -335,13 +335,13 @@ func fillCallFrameFromContext(callFrame *flatCallFrame, ctx *tracers.Context) {
 	if ctx == nil {
 		return
 	}
-	if ctx.BlockHash != (common.Hash{}) {
+	if !ctx.BlockHash.IsZero() {
 		callFrame.BlockHash = &ctx.BlockHash
 	}
 	if ctx.BlockNumber != nil {
 		callFrame.BlockNumber = ctx.BlockNumber.Uint64()
 	}
-	if ctx.TxHash != (common.Hash{}) {
+	if !ctx.TxHash.IsZero() {
 		callFrame.TransactionHash = &ctx.TxHash
 	}
 	callFrame.TransactionPosition = uint64(ctx.TxIndex)

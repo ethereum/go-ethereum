@@ -727,7 +727,7 @@ func (s *BlockChainAPI) GetProof(ctx context.Context, address common.Address, st
 
 	if len(keys) > 0 {
 		var storageTrie state.Trie
-		if storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
+		if storageRoot != types.EmptyRootHash && !storageRoot.IsZero() {
 			id := trie.StorageTrieID(header.Root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
 			st, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
 			if err != nil {
@@ -1365,7 +1365,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		R:        (*hexutil.Big)(r),
 		S:        (*hexutil.Big)(s),
 	}
-	if blockHash != (common.Hash{}) {
+	if !blockHash.IsZero() {
 		result.BlockHash = &blockHash
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
@@ -1394,7 +1394,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
 		// if the transaction has been mined, compute the effective gas price
-		if baseFee != nil && blockHash != (common.Hash{}) {
+		if baseFee != nil && !blockHash.IsZero() {
 			// price = min(gasTipCap + baseFee, gasFeeCap)
 			result.GasPrice = (*hexutil.Big)(effectiveGasPrice(tx, baseFee))
 		} else {
@@ -1410,7 +1410,7 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
 		// if the transaction has been mined, compute the effective gas price
-		if baseFee != nil && blockHash != (common.Hash{}) {
+		if baseFee != nil && !blockHash.IsZero() {
 			result.GasPrice = (*hexutil.Big)(effectiveGasPrice(tx, baseFee))
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
