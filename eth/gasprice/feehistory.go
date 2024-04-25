@@ -242,7 +242,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 		maxFeeHistory = oracle.maxBlockHistory
 	}
 	if len(rewardPercentiles) > maxQueryLimit {
-		return common.Big0, nil, nil, nil, fmt.Errorf("%w: over the query limit %d", errInvalidPercentile, maxQueryLimit)
+		return common.Big0, nil, nil, nil, nil, nil, fmt.Errorf("%w: over the query limit %d", errInvalidPercentile, maxQueryLimit)
 	}
 	if blocks > maxFeeHistory {
 		log.Warn("Sanitizing fee history length", "requested", blocks, "truncated", maxFeeHistory)
