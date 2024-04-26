@@ -309,7 +309,7 @@ func (db *Database) Enable(root common.Hash) error {
 	root = types.TrieRootHash(root)
 	stored := types.EmptyRootHash
 	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		stored = crypto.Keccak256Hash()
+		stored = crypto.Keccak256Hash(blob)
 	}
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
