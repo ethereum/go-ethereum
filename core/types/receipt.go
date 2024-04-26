@@ -117,6 +117,47 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 	return r
 }
 
+// DeriveField fills the receipt with their computed fields based on consensus
+// data and contextual infos like containing block and transactions.
+func (r *Receipt) DeriveField(signer Signer, hash common.Hash, number uint64, baseFee *big.Int, blobGasPrice *big.Int, txIndex uint, gasUsed uint64, firstLogIndex uint, tx *Transaction) error {
+	// The transaction type and hash can be retrieved from the transaction itself
+	r.Type = tx.Type()
+	r.TxHash = tx.Hash()
+	r.EffectiveGasPrice = tx.inner.effectiveGasPrice(new(big.Int), baseFee)
+
+	// EIP-4844 blob transaction fields
+	if tx.Type() == BlobTxType {
+		r.BlobGasUsed = tx.BlobGas()
+		r.BlobGasPrice = blobGasPrice
+	}
+
+	// block location fields
+	r.BlockHash = hash
+	r.BlockNumber = new(big.Int).SetUint64(number)
+	r.TransactionIndex = txIndex
+
+	// The contract address can be derived from the transaction itself
+	if tx.To() == nil {
+		// Deriving the signer is expensive, only do if it's actually needed
+		from, _ := Sender(signer, tx)
+		r.ContractAddress = crypto.CreateAddress(from, tx.Nonce())
+	} else {
+		r.ContractAddress = common.Address{}
+	}
+
+	r.GasUsed = gasUsed
+
+	// The derived log fields can simply be set from the block and transaction
+	for i := 0; i < len(r.Logs); i++ {
+		r.Logs[i].BlockNumber = number
+		r.Logs[i].BlockHash = hash
+		r.Logs[i].TxHash = r.TxHash
+		r.Logs[i].TxIndex = txIndex
+		r.Logs[i].Index = firstLogIndex + uint(i)
+	}
+	return nil
+}
+
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
@@ -331,47 +372,16 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 		return errors.New("transaction and receipt count mismatch")
 	}
 	for i := 0; i < len(rs); i++ {
-		// The transaction type and hash can be retrieved from the transaction itself
-		rs[i].Type = txs[i].Type()
-		rs[i].TxHash = txs[i].Hash()
-		rs[i].EffectiveGasPrice = txs[i].inner.effectiveGasPrice(new(big.Int), baseFee)
-
-		// EIP-4844 blob transaction fields
-		if txs[i].Type() == BlobTxType {
-			rs[i].BlobGasUsed = txs[i].BlobGas()
-			rs[i].BlobGasPrice = blobGasPrice
-		}
-
-		// block location fields
-		rs[i].BlockHash = hash
-		rs[i].BlockNumber = new(big.Int).SetUint64(number)
-		rs[i].TransactionIndex = uint(i)
-
-		// The contract address can be derived from the transaction itself
-		if txs[i].To() == nil {
-			// Deriving the signer is expensive, only do if it's actually needed
-			from, _ := Sender(signer, txs[i])
-			rs[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
-		} else {
-			rs[i].ContractAddress = common.Address{}
-		}
-
-		// The used gas can be calculated based on previous r
+		var gasUsed uint64
 		if i == 0 {
-			rs[i].GasUsed = rs[i].CumulativeGasUsed
+			gasUsed = rs[i].CumulativeGasUsed
 		} else {
-			rs[i].GasUsed = rs[i].CumulativeGasUsed - rs[i-1].CumulativeGasUsed
+			gasUsed = rs[i].CumulativeGasUsed - rs[i-1].CumulativeGasUsed
 		}
-
-		// The derived log fields can simply be set from the block and transaction
-		for j := 0; j < len(rs[i].Logs); j++ {
-			rs[i].Logs[j].BlockNumber = number
-			rs[i].Logs[j].BlockHash = hash
-			rs[i].Logs[j].TxHash = rs[i].TxHash
-			rs[i].Logs[j].TxIndex = uint(i)
-			rs[i].Logs[j].Index = logIndex
-			logIndex++
+		if err := rs[i].DeriveField(signer, hash, number, baseFee, blobGasPrice, uint(i), gasUsed, logIndex, txs[i]); err != nil {
+			return err
 		}
+		logIndex += uint(len(rs[i].Logs))
 	}
 	return nil
 }
