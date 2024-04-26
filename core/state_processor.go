@@ -78,7 +78,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
 	)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb, header.Number, header.Time)
+		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -190,7 +190,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
 // contract. This method is exported to be used in tests.
-func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *state.StateDB, num *big.Int, time uint64) {
+func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *state.StateDB) {
 	// If EIP-4788 is enabled, we need to invoke the beaconroot storage contract with
 	// the new root
 	msg := &Message{
@@ -204,11 +204,11 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	}
 	txctx := NewEVMTxContext(msg)
 	vmenv.Reset(txctx, statedb)
-	if vmenv.ChainConfig().Rules(num, true, time).IsEIP2929 {
+	if vmenv.ChainConfig().Rules(vmenv.Context.BlockNumber, true, vmenv.Context.Time).IsEIP2929 {
 		statedb.AddAddressToAccessList(params.BeaconRootsAddress)
 	}
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
-	if vmenv.ChainConfig().Rules(num, true, time).IsEIP4762 {
+	if vmenv.ChainConfig().Rules(vmenv.Context.BlockNumber, true, vmenv.Context.Time).IsEIP4762 {
 		statedb.Witness().Merge(txctx.Accesses)
 	}
 	statedb.Finalise(true)
