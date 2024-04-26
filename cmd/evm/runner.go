@@ -182,12 +182,14 @@ func runCmd(ctx *cli.Context) error {
 				//Try reading from stdin
 				if hexcode, err = io.ReadAll(os.Stdin); err != nil {
 					fmt.Printf("Could not load code from stdin: %v\n", err)
+					triedb.Close()
 					os.Exit(1)
 				}
 			} else {
 				// Codefile with hex assembly
 				if hexcode, err = os.ReadFile(codeFileFlag); err != nil {
 					fmt.Printf("Could not load code from file: %v\n", err)
+					triedb.Close()
 					os.Exit(1)
 				}
 			}
