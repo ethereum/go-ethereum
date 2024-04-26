@@ -18,9 +18,12 @@ package vm
 
 import (
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -321,6 +324,125 @@ func enable6780(jt *JumpTable) {
 	}
 }
 
+func opCreateEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
+	var endowment = scope.Stack.peek()
+
+	contractAddress := crypto.CreateAddress(scope.Contract.Address(), interpreter.evm.StateDB.GetNonce(scope.Contract.Address()))
+	statelessGas := interpreter.evm.Accesses.ContractCreateInitGas(contractAddress.Bytes()[:], endowment.Sign() != 0)
+	if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
+		return nil, ErrExecutionReverted
+	}
+
+	return opCreate(pc, interpreter, scope)
+}
+
+func opCreate2EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
+	var (
+		endowment    = scope.Stack.Back(0)
+		offset, size = scope.Stack.Back(1), scope.Stack.Back(2)
+		salt         = scope.Stack.Back(3)
+		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+	)
+
+	codeAndHash := &codeAndHash{code: input}
+	contractAddress := crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
+	statelessGas := interpreter.evm.Accesses.ContractCreateInitGas(contractAddress.Bytes()[:], endowment.Sign() != 0)
+	if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
+		return nil, ErrExecutionReverted
+	}
+
+	return opCreate2(pc, interpreter, scope)
+}
+
+func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		stack      = scope.Stack
+		a          = stack.pop()
+		memOffset  = stack.pop()
+		codeOffset = stack.pop()
+		length     = stack.pop()
+	)
+	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
+	if overflow {
+		uint64CodeOffset = math.MaxUint64
+	}
+	addr := common.Address(a.Bytes20())
+	code := interpreter.evm.StateDB.GetCode(addr)
+	contract := &Contract{
+		Code: code,
+		self: AccountRef(addr),
+	}
+	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
+	statelessGas := interpreter.evm.Accesses.CodeChunksRangeGas(addr[:], copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
+	if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
+		scope.Contract.Gas = 0
+		return nil, ErrOutOfGas
+	}
+	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), paddedCodeCopy)
+
+	return nil, nil
+}
+
+// opPush1EIP4762 is a specialized version of pushN
+func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		codeLen = uint64(len(scope.Contract.Code))
+		integer = new(uint256.Int)
+	)
+	*pc += 1
+	if *pc < codeLen {
+		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
+
+		if !scope.Contract.IsDeployment && *pc%31 == 0 {
+			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
+			// advanced past this boundary.
+			contractAddr := scope.Contract.Address()
+			statelessGas := interpreter.evm.Accesses.CodeChunksRangeGas(contractAddr[:], *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false)
+			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
+				scope.Contract.Gas = 0
+				return nil, ErrOutOfGas
+			}
+		}
+	} else {
+		scope.Stack.push(integer.Clear())
+	}
+	return nil, nil
+}
+
+func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
+	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+		var (
+			codeLen = len(scope.Contract.Code)
+			start   = min(codeLen, int(*pc+1))
+			end     = min(codeLen, start+pushByteSize)
+		)
+		scope.Stack.push(new(uint256.Int).SetBytes(
+			common.RightPadBytes(
+				scope.Contract.Code[start:end],
+				pushByteSize,
+			)),
+		)
+
+		if !scope.Contract.IsDeployment {
+			contractAddr := scope.Contract.Address()
+			statelessGas := interpreter.evm.Accesses.CodeChunksRangeGas(contractAddr[:], uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false)
+			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
+				scope.Contract.Gas = 0
+				return nil, ErrOutOfGas
+			}
+		}
+
+		*pc += size
+		return nil, nil
+	}
+}
+
 func enable4762(jt *JumpTable) {
 	jt[SSTORE].constantGas = 0
 	jt[SSTORE].dynamicGas = gasSStore4762
@@ -334,16 +456,23 @@ func enable4762(jt *JumpTable) {
 	jt[EXTCODEHASH].dynamicGas = gasExtCodeHash4762
 	jt[EXTCODECOPY].constantGas = 0
 	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP4762
+	jt[EXTCODECOPY].execute = opExtCodeCopyEIP4762
 	jt[CODECOPY].dynamicGas = gasCodeCopyEip4762
 	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP4762
 	jt[CREATE].constantGas = params.CreateNGasEip4762
+	jt[CREATE].execute = opCreateEIP4762
 	jt[CREATE2].constantGas = params.CreateNGasEip4762
+	jt[CREATE2].execute = opCreate2EIP4762
 	jt[CALL].constantGas = 0
 	jt[CALL].dynamicGas = gasCallEIP4762
 	jt[CALLCODE].constantGas = 0
-	jt[CALLCODE].dynamicGas = gasCallCodeEIP4762
+	jt[CALLCODE].dynamicGas = gasDelegateCallEIP4762
 	jt[STATICCALL].constantGas = 0
 	jt[STATICCALL].dynamicGas = gasStaticCallEIP4762
 	jt[DELEGATECALL].constantGas = 0
 	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP4762
+	jt[PUSH1].execute = opPush1EIP4762
+	for i := 1; i < 32; i++ {
+		jt[PUSH1+OpCode(i)].execute = makePushEIP4762(uint64(i+1), i+1)
+	}
 }

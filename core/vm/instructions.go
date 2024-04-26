@@ -382,23 +382,8 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
-	if interpreter.evm.chainRules.IsEIP4762 {
-		code := interpreter.evm.StateDB.GetCode(addr)
-		contract := &Contract{
-			Code: code,
-			self: AccountRef(addr),
-		}
-		paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-		statelessGas := interpreter.evm.Accesses.CodeChunksRangeGas(addr[:], copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
-		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-			scope.Contract.Gas = 0
-			return nil, ErrOutOfGas
-		}
-		scope.Memory.Set(memOffset.Uint64(), length.Uint64(), paddedCodeCopy)
-	} else {
-		codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
-		scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
-	}
+	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
+	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
 	return nil, nil
 }
@@ -604,14 +589,6 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 		gas -= gas / 64
 	}
 
-	if interpreter.evm.chainRules.IsEIP4762 {
-		contractAddress := crypto.CreateAddress(scope.Contract.Address(), interpreter.evm.StateDB.GetNonce(scope.Contract.Address()))
-		statelessGas := interpreter.evm.Accesses.ContractCreateInitGas(contractAddress.Bytes()[:], value.Sign() != 0)
-		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-			return nil, ErrExecutionReverted
-		}
-	}
-
 	// reuse size int for stackvalue
 	stackvalue := size
 
@@ -652,14 +629,6 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		gas          = scope.Contract.Gas
 	)
-	if interpreter.evm.chainRules.IsEIP4762 {
-		codeAndHash := &codeAndHash{code: input}
-		contractAddress := crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-		statelessGas := interpreter.evm.Accesses.ContractCreateInitGas(contractAddress.Bytes()[:], endowment.Sign() != 0)
-		if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-			return nil, ErrExecutionReverted
-		}
-	}
 
 	// Apply EIP150
 	gas -= gas / 64
@@ -913,17 +882,6 @@ func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	*pc += 1
 	if *pc < codeLen {
 		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
-
-		if !scope.Contract.IsDeployment && interpreter.evm.chainRules.IsEIP4762 && *pc%31 == 0 {
-			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
-			// advanced past this boundary.
-			contractAddr := scope.Contract.Address()
-			statelessGas := interpreter.evm.Accesses.CodeChunksRangeGas(contractAddr[:], *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false)
-			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-				scope.Contract.Gas = 0
-				return nil, ErrOutOfGas
-			}
-		}
 	} else {
 		scope.Stack.push(integer.Clear())
 	}
@@ -944,15 +902,6 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 				pushByteSize,
 			)),
 		)
-
-		if !scope.Contract.IsDeployment && interpreter.evm.chainRules.IsEIP4762 {
-			contractAddr := scope.Contract.Address()
-			statelessGas := interpreter.evm.Accesses.CodeChunksRangeGas(contractAddr[:], uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false)
-			if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-				scope.Contract.Gas = 0
-				return nil, ErrOutOfGas
-			}
-		}
 
 		*pc += size
 		return nil, nil
