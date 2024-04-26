@@ -18,7 +18,9 @@ package catalyst
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -35,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis) (*node.Node, *eth.Ethereum, *SimulatedBeacon) {
+func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis, period uint64) (*node.Node, *eth.Ethereum, *SimulatedBeacon) {
 	t.Helper()
 
 	n, err := node.New(&node.Config{
@@ -55,7 +57,7 @@ func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis) (*node.
 		t.Fatal("can't create eth service:", err)
 	}
 
-	simBeacon, err := NewSimulatedBeacon(1, ethservice)
+	simBeacon, err := NewSimulatedBeacon(period, ethservice)
 	if err != nil {
 		t.Fatal("can't create simulated beacon:", err)
 	}
@@ -87,7 +89,7 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	// short period (1 second) for testing purposes
 	var gasLimit uint64 = 10_000_000
 	genesis := core.DeveloperGenesisBlock(gasLimit, &testAddr)
-	node, ethService, mock := startSimulatedBeaconEthService(t, genesis)
+	node, ethService, mock := startSimulatedBeaconEthService(t, genesis, 1)
 	_ = mock
 	defer node.Close()
 
@@ -133,6 +135,81 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 
 			// ensure all withdrawals/txs included. this will take two blocks b/c number of withdrawals > 10
 			if len(includedTxs) == len(txs) && len(includedWithdrawals) == len(withdrawals) && evt.Block.Number().Cmp(big.NewInt(2)) == 0 {
+				return
+			}
+		case <-timer.C:
+			t.Fatal("timed out without including all withdrawals/txs")
+		}
+	}
+}
+
+// Tests that zero-period dev mode can handle a lot of simultaneous
+// transactions/withdrawals
+func TestOnDemandSpam(t *testing.T) {
+	var withdrawals []types.Withdrawal
+	txs := make(map[common.Hash]*types.Transaction)
+
+	var (
+		// testKey is a private key to use for funding a tester account.
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+
+		// testAddr is the Ethereum address of the tester account.
+		testAddr = crypto.PubkeyToAddress(testKey.PublicKey)
+	)
+
+	// short period (1 second) for testing purposes
+	var gasLimit uint64 = 10_000_000
+	genesis := core.DeveloperGenesisBlock(gasLimit, &testAddr)
+	node, ethService, mock := startSimulatedBeaconEthService(t, genesis, 0)
+	_ = mock
+	defer node.Close()
+
+	api := &api{mock}
+	go api.loop()
+
+	chainHeadCh := make(chan core.ChainHeadEvent, 10)
+	subscription := ethService.BlockChain().SubscribeChainHeadEvent(chainHeadCh)
+	defer subscription.Unsubscribe()
+
+	// generate some withdrawals
+	for i := 0; i < 0; i++ {
+		withdrawals = append(withdrawals, types.Withdrawal{Index: uint64(i)})
+		if err := mock.withdrawals.add(&withdrawals[i]); err != nil {
+			t.Fatal("addWithdrawal failed", err)
+		}
+	}
+
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelDebug, true)))
+	// generate a bunch of transactions
+	signer := types.NewEIP155Signer(ethService.BlockChain().Config().ChainID)
+	for i := 0; i < 20000; i++ {
+		tx, err := types.SignTx(types.NewTransaction(uint64(i), common.Address{}, big.NewInt(1000), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, testKey)
+		if err != nil {
+			t.Fatalf("error signing transaction, err=%v", err)
+		}
+		txs[tx.Hash()] = tx
+
+		if err := ethService.APIBackend.SendTx(context.Background(), tx); err != nil {
+			t.Fatal("SendTx failed", err)
+		}
+	}
+
+	includedTxs := make(map[common.Hash]struct{})
+	var includedWithdrawals []uint64
+
+	timer := time.NewTimer(12 * time.Second)
+	for {
+		select {
+		case evt := <-chainHeadCh:
+			for _, includedTx := range evt.Block.Transactions() {
+				includedTxs[includedTx.Hash()] = struct{}{}
+			}
+			for _, includedWithdrawal := range evt.Block.Withdrawals() {
+				includedWithdrawals = append(includedWithdrawals, includedWithdrawal.Index)
+			}
+
+			// ensure all withdrawals/txs included. this will take two blocks b/c number of withdrawals > 10
+			if len(includedTxs) == len(txs) && len(includedWithdrawals) == len(withdrawals) {
 				return
 			}
 		case <-timer.C:
