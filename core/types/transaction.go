@@ -43,6 +43,7 @@ var (
 	errInvalidYParity           = errors.New("'yParity' field must be 0 or 1")
 	errVYParityMismatch         = errors.New("'v' and 'yParity' fields do not match")
 	errVYParityMissing          = errors.New("missing 'yParity' or 'v' field in transaction")
+	ErrFeeCapTooLow             = errors.New("fee cap less than base fee")
 	errEmptyTypedTx             = errors.New("empty typed transaction bytes")
 	errNoSigner                 = errors.New("missing signing methods")
 	skipNonceDestinationAddress = map[common.Address]bool{
@@ -318,6 +319,19 @@ func (tx *Transaction) From() *common.Address {
 		return nil
 	}
 	return &from
+}
+
+// EffectiveTip returns the effective miner tip for the given base fee.
+// Returns error in case of a negative effective miner tip.
+func (tx *Transaction) EffectiveTip(baseFee *big.Int) (*big.Int, error) {
+	if baseFee == nil {
+		return tx.Tip(), nil
+	}
+	feeCap := tx.FeeCap()
+	if feeCap.Cmp(baseFee) == -1 {
+		return nil, ErrFeeCapTooLow
+	}
+	return math.BigMin(tx.Tip(), feeCap.Sub(feeCap, baseFee)), nil
 }
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.
