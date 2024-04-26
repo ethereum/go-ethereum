@@ -7,7 +7,7 @@
 # Launchpad rejects Go's access to $HOME, use custom folders
 export GOCACHE=/tmp/go-build
 export GOPATH=/tmp/gopath
-export GOROOT_BOOTSTRAP={{.GoBootPath}}
+export GOROOT_BOOTSTRAP=/usr/lib/go
 
 override_dh_auto_clean:
 	# Don't try to be smart Launchpad, we know our build rules better than you
