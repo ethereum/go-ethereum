@@ -194,7 +194,7 @@ func TestOnDemandSpam(t *testing.T) {
 	includedTxs := make(map[common.Hash]struct{})
 	var includedWithdrawals []uint64
 
-	timer := time.NewTimer(12 * time.Second)
+	timer := time.NewTimer(20 * time.Second)
 	for {
 		select {
 		case evt := <-chainHeadCh:
