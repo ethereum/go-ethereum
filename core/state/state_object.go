@@ -294,9 +294,6 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	if len(s.pendingStorage) == 0 {
 		return s.trie, nil
 	}
-	// Track the amount of time wasted on updating the storage trie
-	defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
-
 	// The snapshot storage map for the object
 	var (
 		storage map[common.Hash][]byte
@@ -400,9 +397,6 @@ func (s *stateObject) updateRoot() {
 	if err != nil || tr == nil {
 		return
 	}
-	// Track the amount of time wasted on hashing the storage trie
-	defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
-
 	s.data.Root = tr.Hash()
 }
 
@@ -415,9 +409,6 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 		s.origin = s.data.Copy()
 		return nil, nil
 	}
-	// Track the amount of time wasted on committing the storage trie
-	defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
-
 	// The trie is currently in an open state and could potentially contain
 	// cached mutations. Call commit to acquire a set of nodes that have been
 	// modified, the set can be nil if nothing to commit.
