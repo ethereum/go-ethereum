@@ -141,11 +141,12 @@ func (it *lookup) slowdown() {
 
 func (it *lookup) query(n *node, reply chan<- []*node) {
 	r, err := it.queryfunc(n)
-	if !errors.Is(err, errClosed) {
-		// Avoid recording failures on shutdown.
+	if !errors.Is(err, errClosed) { // avoid recording failures on shutdown.
 		success := len(r) > 0
 		it.tab.trackRequest(n, success, r)
-		it.tab.log.Trace("FINDNODE failed", "id", n.ID(), "err", err)
+		if err != nil {
+			it.tab.log.Trace("FINDNODE failed", "id", n.ID(), "err", err)
+		}
 	}
 	reply <- r
 }
