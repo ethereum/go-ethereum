@@ -18,9 +18,7 @@ package catalyst
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum/log"
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
@@ -179,7 +177,6 @@ func TestOnDemandSpam(t *testing.T) {
 		}
 	}
 
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelDebug, true)))
 	// generate a bunch of transactions
 	signer := types.NewEIP155Signer(ethService.BlockChain().Config().ChainID)
 	for i := 0; i < 20000; i++ {
