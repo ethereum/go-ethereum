@@ -369,12 +369,13 @@ loop:
 			tab.revalidation.handleResponse(tab, r)
 
 		case op := <-tab.addNodeCh:
+			tab.mutex.Lock()
 			tab.handleAddNode(op)
+			tab.mutex.Unlock()
 			tab.addNodeHandled <- struct{}{}
 
 		case op := <-tab.trackRequestCh:
 			tab.handleTrackRequest(op)
-			// TODO: handle failure by potentially dropping node
 
 		case <-refresh.C:
 			if refreshDone == nil {
@@ -492,6 +493,8 @@ func (tab *Table) removeIP(b *bucket, ip net.IP) {
 	b.ips.Remove(ip)
 }
 
+// handleAddNode adds the node in the request to the table, if there is space.
+// The caller must hold tab.mutex.
 func (tab *Table) handleAddNode(req addNodeOp) {
 	if req.node.ID() == tab.self().ID() {
 		return
@@ -502,8 +505,6 @@ func (tab *Table) handleAddNode(req addNodeOp) {
 		return
 	}
 
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
 	b := tab.bucket(req.node.ID())
 	if tab.bumpInBucket(b, req.node.Node) {
 		// Already in bucket, update record.
