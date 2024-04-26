@@ -18,6 +18,7 @@ package catalyst
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,8 +33,9 @@ type api struct {
 
 func (a *api) loop() {
 	var (
-		newTxs = make(chan core.NewTxsEvent)
-		sub    = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
+		newTxs   = make(chan core.NewTxsEvent)
+		sub      = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
+		commitMu = sync.Mutex{}
 	)
 	defer sub.Unsubscribe()
 
@@ -42,12 +44,22 @@ func (a *api) loop() {
 		case <-a.sim.shutdownCh:
 			return
 		case w := <-a.sim.withdrawals.pending:
-			withdrawals := append(a.sim.withdrawals.gatherPending(9), w)
-			if err := a.sim.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
-				log.Warn("Error performing sealing work", "err", err)
-			}
+			go func() {
+				commitMu.Lock()
+				defer commitMu.Unlock()
+
+				withdrawals := append(a.sim.withdrawals.gatherPending(9), w)
+				if err := a.sim.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
+					log.Warn("Error performing sealing work", "err", err)
+				}
+			}()
 		case <-newTxs:
-			a.sim.Commit()
+			go func() {
+				commitMu.Lock()
+				defer commitMu.Unlock()
+
+				a.sim.Commit()
+			}()
 		}
 	}
 }
