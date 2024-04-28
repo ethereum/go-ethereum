@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -120,9 +121,9 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 
 // ReadReceipt retrieves a specific transaction receipt from the database, along with
 // its added positional metadata.
-func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
-	// Retrieve the context of the receipt based on the transaction hash
-	blockNumber := ReadTxLookupEntry(db, hash)
+func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
+	// Retrieve the context of the receipt based on the transaction txHash
+	blockNumber := ReadTxLookupEntry(db, txHash)
 	if blockNumber == nil {
 		return nil, common.Hash{}, 0, 0
 	}
@@ -134,14 +135,56 @@ func ReadReceipt(db ethdb.Reader, hash common.Hash, config *params.ChainConfig) 
 	if blockHeader == nil {
 		return nil, common.Hash{}, 0, 0
 	}
-	// Read all the receipts from the block and return the one with the matching hash
-	receipts := ReadReceipts(db, blockHash, *blockNumber, blockHeader.Time, config)
-	for receiptIndex, receipt := range receipts {
-		if receipt.TxHash == hash {
-			return receipt, blockHash, *blockNumber, uint64(receiptIndex)
+	blockBody := ReadBody(db, blockHash, *blockNumber)
+	if blockBody == nil {
+		log.Error("Missing body but have receipt", "blockHash", blockHash, "number", blockNumber)
+		return nil, common.Hash{}, 0, 0
+	}
+
+	// Find index by tx txHash
+	for txIndex, tx := range blockBody.Transactions {
+		if tx.Hash() == txHash {
+			// Read raw receipts only if hash matches
+			receipts := ReadRawReceipts(db, blockHash, *blockNumber)
+			if receipts == nil {
+				return nil, common.Hash{}, 0, 0
+			}
+			if len(blockBody.Transactions) != len(receipts) {
+				log.Error("Transaction and receipt count mismatch", "txs", len(blockBody.Transactions), "receipts", len(receipts))
+				return nil, common.Hash{}, 0, 0
+			}
+
+			targetReceipt := receipts[txIndex]
+			signer := types.MakeSigner(config, new(big.Int).SetUint64(*blockNumber), blockHeader.Time)
+
+			// Compute effective blob gas price.
+			var blobGasPrice *big.Int
+			if blockHeader.ExcessBlobGas != nil {
+				blobGasPrice = eip4844.CalcBlobFee(*blockHeader.ExcessBlobGas)
+			}
+
+			var gasUsed uint64
+			if txIndex == 0 {
+				gasUsed = targetReceipt.CumulativeGasUsed
+			} else {
+				gasUsed = targetReceipt.CumulativeGasUsed - receipts[txIndex-1].CumulativeGasUsed
+			}
+
+			// Calculate the staring log index from previous logs
+			logIndex := uint(0)
+			for i := 0; i < txIndex; i++ {
+				logIndex += uint(len(receipts[i].Logs))
+			}
+
+			if err := targetReceipt.DeriveField(signer, blockHash, *blockNumber, blockHeader.BaseFee, blobGasPrice, uint(txIndex), gasUsed, logIndex, blockBody.Transactions[txIndex]); err != nil {
+				log.Error("Failed to derive the receipt fields", "txHash", txHash, "err", err)
+				return nil, common.Hash{}, 0, 0
+			}
+			return targetReceipt, blockHash, *blockNumber, uint64(txIndex)
 		}
 	}
-	log.Error("Receipt not found", "number", *blockNumber, "hash", blockHash, "txhash", hash)
+
+	log.Error("Receipt not found", "number", *blockNumber, "txHash", blockHash, "txhash", txHash)
 	return nil, common.Hash{}, 0, 0
 }
 
