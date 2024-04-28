@@ -305,7 +305,45 @@ func TestDecodeEmptyTypedReceipt(t *testing.T) {
 	}
 }
 
-// Tests that receipt data can be correctly derived from the contextual infos
+// Tests that a single receipt data can be correctly derived from the contextual infos
+func TestDeriveField(t *testing.T) {
+	// Re-derive receipts one by one.
+	basefee := big.NewInt(1000)
+	blobGasPrice := big.NewInt(920)
+	derivedReceipts := clearComputedFieldsOnReceipts(receipts)
+	logIndex := uint(0)
+	for i := 0; i < len(derivedReceipts); i++ {
+		signer := MakeSigner(params.TestChainConfig, new(big.Int).SetUint64(blockNumber.Uint64()), blockTime)
+		var gasUsed uint64
+		if i == 0 {
+			gasUsed = derivedReceipts[i].CumulativeGasUsed
+		} else {
+			gasUsed = derivedReceipts[i].CumulativeGasUsed - derivedReceipts[i-1].CumulativeGasUsed
+		}
+		err := derivedReceipts[i].DeriveField(signer, blockHash, blockNumber.Uint64(), basefee, blobGasPrice, uint(i), gasUsed, logIndex, txs[i])
+		if err != nil {
+			t.Fatalf("DeriveField(...) = %v, want <nil>", err)
+		}
+		logIndex += uint(len(derivedReceipts[i].Logs))
+
+		// Check diff of a receipt against a derivedReceipt.
+		r1, err := json.MarshalIndent(receipts[i], "", "  ")
+		if err != nil {
+			t.Fatal("error marshaling an input receipt:", err)
+		}
+
+		r2, err := json.MarshalIndent(derivedReceipts[i], "", "  ")
+		if err != nil {
+			t.Fatal("error marshaling a derived receipt:", err)
+		}
+		d := diff.Diff(string(r1), string(r2))
+		if d != "" {
+			t.Fatal("a receipt differ:", d)
+		}
+	}
+}
+
+// Tests that multiple receipt data can be correctly derived from the contextual infos
 func TestDeriveFields(t *testing.T) {
 	// Re-derive receipts.
 	basefee := big.NewInt(1000)
