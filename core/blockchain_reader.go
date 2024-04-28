@@ -209,6 +209,12 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 	return
 }
 
+// GetReceiptByHash retrieves the receipt by transaction hash
+func (bc *BlockChain) GetReceiptByHash(txHash common.Hash) *types.Receipt {
+	receipt, _, _, _ := rawdb.ReadReceipt(bc.db, txHash, bc.chainConfig)
+	return receipt
+}
+
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {

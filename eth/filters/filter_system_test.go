@@ -107,6 +107,11 @@ func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.
 	return nil, errors.New("block body not found")
 }
 
+func (b *testBackend) GetReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
+	receipt, _, _, _ := rawdb.ReadReceipt(b.db, txHash, params.TestChainConfig)
+	return receipt, nil
+}
+
 func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	if number := rawdb.ReadHeaderNumber(b.db, hash); number != nil {
 		if header := rawdb.ReadHeader(b.db, hash, *number); header != nil {
