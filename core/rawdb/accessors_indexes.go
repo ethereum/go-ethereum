@@ -141,7 +141,7 @@ func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig
 		return nil, common.Hash{}, 0, 0
 	}
 
-	// Find index by tx txHash
+	// Find a match tx and derive receipt fields
 	for txIndex, tx := range blockBody.Transactions {
 		if tx.Hash() == txHash {
 			// Read raw receipts only if hash matches
