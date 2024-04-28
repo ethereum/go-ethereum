@@ -1109,7 +1109,7 @@ loop:
 			continue
 		}
 		// Start executing the transaction
-		w.current.state.Prepare(tx.Hash(), w.current.tcount)
+		w.current.state.SetTxContext(tx.Hash(), w.current.tcount)
 
 		logs, traces, err := w.commitTransaction(tx, coinbase)
 		switch {

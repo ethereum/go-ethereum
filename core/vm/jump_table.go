@@ -70,7 +70,6 @@ type JumpTable [256]*operation
 // contantinople, istanbul, petersburg, berlin, london, shanghai, curie, and descartes instructions.
 func newDescartesInstructionSet() JumpTable {
 	instructionSet := newCurieInstructionSet()
-
 	return instructionSet
 }
 
@@ -80,6 +79,7 @@ func newCurieInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	enable5656(&instructionSet) // EIP-5656 (MCOPY opcode)
+	enable1153(&instructionSet) // EIP-1153 (TLOAD, TSTORE opcodes)
 	return instructionSet
 }
 

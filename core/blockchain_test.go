@@ -3188,6 +3188,9 @@ func TestTransactionCountLimit(t *testing.T) {
 	config := params.TestChainConfig
 	config.Scroll.MaxTxPerBlock = new(int)
 	*config.Scroll.MaxTxPerBlock = 1
+	defer func() {
+		config.Scroll.MaxTxPerBlock = nil
+	}()
 
 	var (
 		engine  = ethash.NewFaker()
@@ -3359,6 +3362,10 @@ func TestL1MessageValidationFailure(t *testing.T) {
 	config.Scroll.L1Config.NumL1MessagesPerBlock = 1
 	maxPayload := 1024
 	config.Scroll.MaxTxPayloadBytesPerBlock = &maxPayload
+	defer func() {
+		config.Scroll.MaxTxPayloadBytesPerBlock = nil
+		config.Scroll.L1Config.NumL1MessagesPerBlock = 0
+	}()
 
 	genspec := &Genesis{
 		Config: config,
@@ -3437,7 +3444,9 @@ func TestBlockPayloadSizeLimit(t *testing.T) {
 	config := params.TestChainConfig
 	config.Scroll.MaxTxPayloadBytesPerBlock = new(int)
 	*config.Scroll.MaxTxPayloadBytesPerBlock = 150
-	config.Scroll.MaxTxPerBlock = nil
+	defer func() {
+		config.Scroll.MaxTxPayloadBytesPerBlock = nil
+	}()
 
 	var (
 		engine  = ethash.NewFaker()
@@ -3605,5 +3614,101 @@ func TestEIP3651(t *testing.T) {
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
+	}
+}
+
+// TestTransientStorageReset ensures the transient storage is wiped correctly
+// between transactions.
+func TestTransientStorageReset(t *testing.T) {
+	var (
+		db          = rawdb.NewMemoryDatabase()
+		engine      = ethash.NewFaker()
+		key, _      = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address     = crypto.PubkeyToAddress(key.PublicKey)
+		destAddress = crypto.CreateAddress(address, 0)
+		funds       = big.NewInt(1000000000000000)
+		vmConfig    = vm.Config{
+			ExtraEips: []int{1153}, // Enable transient storage EIP
+		}
+	)
+	code := append([]byte{
+		// TLoad value with location 1
+		byte(vm.PUSH1), 0x1,
+		byte(vm.TLOAD),
+
+		// PUSH location
+		byte(vm.PUSH1), 0x1,
+
+		// SStore location:value
+		byte(vm.SSTORE),
+	}, make([]byte, 32-6)...)
+	initCode := []byte{
+		// TSTORE 1:1
+		byte(vm.PUSH1), 0x1,
+		byte(vm.PUSH1), 0x1,
+		byte(vm.TSTORE),
+
+		// Get the runtime-code on the stack
+		byte(vm.PUSH32)}
+	initCode = append(initCode, code...)
+	initCode = append(initCode, []byte{
+		byte(vm.PUSH1), 0x0, // offset
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 0x6, // size
+		byte(vm.PUSH1), 0x0, // offset
+		byte(vm.RETURN), // return 6 bytes of zero-code
+	}...)
+	gspec := &Genesis{
+		Config: params.TestChainConfig,
+		Alloc: GenesisAlloc{
+			address: {Balance: funds},
+		},
+	}
+	genesis := gspec.MustCommit(db)
+	nonce := uint64(0)
+	signer := types.HomesteadSigner{}
+	blocks, _ := GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *BlockGen) {
+		fee := big.NewInt(1)
+		if b.header.BaseFee != nil {
+			fee = b.header.BaseFee
+		}
+		b.SetCoinbase(common.Address{1})
+		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    nonce,
+			GasPrice: new(big.Int).Set(fee),
+			Gas:      100000,
+			Data:     initCode,
+		})
+		nonce++
+		b.AddTxWithVMConfig(tx, vmConfig)
+
+		tx, _ = types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    nonce,
+			GasPrice: new(big.Int).Set(fee),
+			Gas:      100000,
+			To:       &destAddress,
+		})
+		b.AddTxWithVMConfig(tx, vmConfig)
+		nonce++
+	})
+
+	// Initialize the blockchain with 1153 enabled.
+	chain, err := NewBlockChain(db, nil, gspec.Config, engine, vmConfig, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	// Import the blocks
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to insert into chain: %v", err)
+	}
+	// Check the storage
+	state, err := chain.StateAt(chain.CurrentHeader().Root)
+	if err != nil {
+		t.Fatalf("Failed to load state %v", err)
+	}
+	loc := common.BytesToHash([]byte{1})
+	slot := state.GetState(destAddress, loc)
+	if slot != (common.Hash{}) {
+		t.Fatalf("Unexpected dirty storage slot")
 	}
 }

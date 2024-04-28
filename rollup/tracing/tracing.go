@@ -226,7 +226,7 @@ func (env *TraceEnv) GetBlockTrace(block *types.Block) (*types.BlockTrace, error
 
 			// Generate the next state snapshot fast without tracing
 			msg, _ := tx.AsMessage(env.signer, block.BaseFee())
-			env.state.Prepare(tx.Hash(), i)
+			env.state.SetTxContext(tx.Hash(), i)
 			vmenv := vm.NewEVM(env.blockCtx, core.NewEVMTxContext(msg), env.state, env.chainConfig, vm.Config{})
 			l1DataFee, err := fees.CalculateL1DataFee(tx, env.state)
 			if err != nil {
@@ -331,7 +331,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 	vmenv := vm.NewEVM(env.blockCtx, txContext, state, env.chainConfig, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 
 	// Call Prepare to clear out the statedb access list
-	state.Prepare(txctx.TxHash, txctx.TxIndex)
+	state.SetTxContext(txctx.TxHash, txctx.TxIndex)
 
 	// Computes the new state by applying the given message.
 	l1DataFee, err := fees.CalculateL1DataFee(tx, state)
