@@ -503,6 +503,10 @@ var (
 		Value:    ethconfig.Defaults.Miner.NewPayloadTimeout,
 		Category: flags.MinerCategory,
 	}
+	MinerStoreSkippedTxTracesFlag = &cli.BoolFlag{
+		Name:  "miner.storeskippedtxtraces",
+		Usage: "Store the wrapped traces when storing a skipped tx",
+	}
 
 	// Account settings
 	UnlockedAccountFlag = &cli.StringFlag{
@@ -960,6 +964,12 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	L1DeploymentBlockFlag = &cli.Int64Flag{
 		Name:  "l1.sync.startblock",
 		Usage: "L1 block height to start syncing from. Should be set to the L1 message queue deployment block number.",
+	}
+
+	// Circuit capacity check settings
+	CircuitCapacityCheckEnabledFlag = &cli.BoolFlag{
+		Name:  "ccc",
+		Usage: "Enable circuit capacity check during block validation",
 	}
 
 	// Rollup verify service settings
@@ -1641,6 +1651,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerNewPayloadTimeout.Name) {
 		cfg.NewPayloadTimeout = ctx.Duration(MinerNewPayloadTimeout.Name)
 	}
+	if ctx.IsSet(MinerStoreSkippedTxTracesFlag.Name) {
+		cfg.StoreSkippedTxTraces = ctx.Bool(MinerStoreSkippedTxTracesFlag.Name)
+	}
 }
 
 func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
@@ -1668,6 +1681,12 @@ func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {
 			Fatalf("Invalid required block hash %s: %v", parts[1], err)
 		}
 		cfg.RequiredBlocks[number] = hash
+	}
+}
+
+func setCircuitCapacityCheck(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.IsSet(CircuitCapacityCheckEnabledFlag.Name) {
+		cfg.CheckCircuitCapacity = ctx.Bool(CircuitCapacityCheckEnabledFlag.Name)
 	}
 }
 
@@ -1740,6 +1759,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setMiner(ctx, &cfg.Miner)
 	setRequiredBlocks(ctx, cfg)
 	setLes(ctx, cfg)
+	setCircuitCapacityCheck(ctx, cfg)
 	setEnableRollupVerify(ctx, cfg)
 	setMaxBlockRange(ctx, cfg)
 

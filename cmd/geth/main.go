@@ -123,6 +123,7 @@ var (
 		utils.MinerExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
 		utils.MinerNewPayloadTimeout,
+		utils.MinerStoreSkippedTxTracesFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV4Flag,
@@ -147,6 +148,7 @@ var (
 		utils.L1EndpointFlag,
 		utils.L1ConfirmationsFlag,
 		utils.L1DeploymentBlockFlag,
+		utils.CircuitCapacityCheckEnabledFlag,
 		utils.RollupVerifyEnabledFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 

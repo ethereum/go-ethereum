@@ -415,3 +415,12 @@ func (p *TxPool) Status(hash common.Hash) TxStatus {
 	}
 	return TxStatusUnknown
 }
+
+// RemoveTx removes a transaction from the pool, returning the number of transactions removed.
+func (p *TxPool) RemoveTx(hash common.Hash, outofbound bool, unreserve bool) int {
+	var ret int
+	for _, subpool := range p.subpools {
+		ret += subpool.RemoveTx(hash, outofbound, unreserve)
+	}
+	return ret
+}

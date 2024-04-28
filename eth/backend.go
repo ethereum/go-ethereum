@@ -59,6 +59,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rollup/rollup_sync_service"
 	"github.com/ethereum/go-ethereum/rollup/sync_service"
+	"github.com/ethereum/go-ethereum/rollup/tracing"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -217,6 +218,10 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TransactionHistory)
 	if err != nil {
 		return nil, err
+	}
+	if config.CheckCircuitCapacity {
+		tracer := tracing.NewTracerWrapper()
+		eth.blockchain.Validator().SetupTracerAndCircuitCapacityChecker(tracer)
 	}
 	eth.bloomIndexer.Start(eth.blockchain)
 

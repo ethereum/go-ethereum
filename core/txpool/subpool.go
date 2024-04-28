@@ -137,4 +137,7 @@ type SubPool interface {
 	// Status returns the known status (unknown/pending/queued) of a transaction
 	// identified by their hashes.
 	Status(hash common.Hash) TxStatus
+
+	// RemoveTx removes a transaction from the pool, returning the number of transactions removed.
+	RemoveTx(hash common.Hash, outofbound bool, unreserve bool) int
 }

@@ -155,9 +155,9 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		// if a block's RowConsumption has been stored, which means it has been processed before,
 		// (e.g., in miner/worker.go or in insertChain),
 		// we simply skip its calculation and validation
-		// if rawdb.ReadBlockRowConsumption(v.bc.db, block.Hash()) != nil {
-		// 	return nil
-		// }
+		if rawdb.ReadBlockRowConsumption(v.bc.db, block.Hash()) != nil {
+			return nil
+		}
 		rowConsumption, err := v.validateCircuitRowConsumption(block)
 		if err != nil {
 			return err
@@ -169,7 +169,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			"hash", block.Hash().String(),
 			"rowConsumption", rowConsumption,
 		)
-		// rawdb.WriteBlockRowConsumption(v.bc.db, block.Hash(), rowConsumption)
+		rawdb.WriteBlockRowConsumption(v.bc.db, block.Hash(), rowConsumption)
 	}
 
 	return nil

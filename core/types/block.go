@@ -557,6 +557,11 @@ func (b *Block) CountL2Tx() int {
 
 type Blocks []*Block
 
+type BlockWithRowConsumption struct {
+	*Block
+	*RowConsumption
+}
+
 // HeaderParentHashFromRLP returns the parentHash of an RLP-encoded
 // header. If 'header' is invalid, the zero hash is returned.
 func HeaderParentHashFromRLP(header []byte) common.Hash {

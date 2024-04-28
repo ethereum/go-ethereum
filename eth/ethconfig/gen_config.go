@@ -56,6 +56,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		RPCTxFeeCap             float64
 		OverrideCancun          *uint64 `toml:",omitempty"`
 		OverrideVerkle          *uint64 `toml:",omitempty"`
+		CheckCircuitCapacity    bool
 		EnableRollupVerify      bool
 		MaxBlockRange           int64
 	}
@@ -99,6 +100,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.RPCTxFeeCap = c.RPCTxFeeCap
 	enc.OverrideCancun = c.OverrideCancun
 	enc.OverrideVerkle = c.OverrideVerkle
+	enc.CheckCircuitCapacity = c.CheckCircuitCapacity
 	enc.EnableRollupVerify = c.EnableRollupVerify
 	enc.MaxBlockRange = c.MaxBlockRange
 	return &enc, nil
@@ -146,6 +148,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		RPCTxFeeCap             *float64
 		OverrideCancun          *uint64 `toml:",omitempty"`
 		OverrideVerkle          *uint64 `toml:",omitempty"`
+		CheckCircuitCapacity    *bool
 		EnableRollupVerify      *bool
 		MaxBlockRange           *int64
 	}
@@ -269,6 +272,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.OverrideVerkle != nil {
 		c.OverrideVerkle = dec.OverrideVerkle
+	}
+	if dec.CheckCircuitCapacity != nil {
+		c.CheckCircuitCapacity = *dec.CheckCircuitCapacity
 	}
 	if dec.EnableRollupVerify != nil {
 		c.EnableRollupVerify = *dec.EnableRollupVerify

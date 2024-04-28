@@ -34,20 +34,24 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/sync_service"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
 type mockBackend struct {
-	bc     *core.BlockChain
-	txPool *txpool.TxPool
+	bc      *core.BlockChain
+	txPool  *txpool.TxPool
+	chainDb ethdb.Database
 }
 
-func NewMockBackend(bc *core.BlockChain, txPool *txpool.TxPool) *mockBackend {
+func NewMockBackend(bc *core.BlockChain, txPool *txpool.TxPool, chainDb ethdb.Database) *mockBackend {
 	return &mockBackend{
-		bc:     bc,
-		txPool: txPool,
+		bc:      bc,
+		txPool:  txPool,
+		chainDb: chainDb,
 	}
 }
 
@@ -57,6 +61,14 @@ func (m *mockBackend) BlockChain() *core.BlockChain {
 
 func (m *mockBackend) TxPool() *txpool.TxPool {
 	return m.txPool
+}
+
+func (m *mockBackend) ChainDb() ethdb.Database {
+	return m.chainDb
+}
+
+func (m *mockBackend) SyncService() *sync_service.SyncService {
+	return nil
 }
 
 func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
@@ -312,7 +324,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	pool := legacypool.New(testTxPoolConfig, blockchain)
 	txpool, _ := txpool.New(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain, []txpool.SubPool{pool})
 
-	backend := NewMockBackend(bc, txpool)
+	backend := NewMockBackend(bc, txpool, chainDB)
 	// Create event Mux
 	mux := new(event.TypeMux)
 	// Create Miner

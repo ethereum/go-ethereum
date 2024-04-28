@@ -169,6 +169,11 @@ func CreateTraceEnv(chainConfig *params.ChainConfig, chainContext core.ChainCont
 }
 
 func (env *TraceEnv) GetBlockTrace(block *types.Block) (*types.BlockTrace, error) {
+	if env == nil {
+		log.Warn("running in light mode? trace env is nil and do not support `GetBlockTrace`")
+		return nil, nil
+	}
+
 	// Execute all the transaction contained within the block concurrently
 	var (
 		txs   = block.Transactions()

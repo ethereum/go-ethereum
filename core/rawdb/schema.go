@@ -153,6 +153,9 @@ var (
 	batchMetaPrefix                   = []byte("R-bm")
 	finalizedL2BlockNumberKey         = []byte("R-finalized")
 
+	// Row consumption
+	rowConsumptionPrefix = []byte("rc") // rowConsumptionPrefix + hash -> row consumption by block
+
 	// Skipped transactions
 	numSkippedTransactionsKey    = []byte("NumberOfSkippedTransactions")
 	skippedTransactionPrefix     = []byte("skip") // skippedTransactionPrefix + tx hash -> skipped transaction
@@ -385,6 +388,11 @@ func L1MessageKey(queueIndex uint64) []byte {
 // FirstQueueIndexNotInL2BlockKey = firstQueueIndexNotInL2BlockPrefix + L2 block hash
 func FirstQueueIndexNotInL2BlockKey(l2BlockHash common.Hash) []byte {
 	return append(firstQueueIndexNotInL2BlockPrefix, l2BlockHash.Bytes()...)
+}
+
+// rowConsumptionKey = rowConsumptionPrefix + hash
+func rowConsumptionKey(hash common.Hash) []byte {
+	return append(rowConsumptionPrefix, hash.Bytes()...)
 }
 
 // SkippedTransactionKey = skippedTransactionPrefix + tx hash

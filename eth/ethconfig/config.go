@@ -170,6 +170,9 @@ type Config struct {
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
 
+	// Check circuit capacity in block validator
+	CheckCircuitCapacity bool
+
 	// Enable verification of batch consistency between L1 and L2 in rollup
 	EnableRollupVerify bool
 

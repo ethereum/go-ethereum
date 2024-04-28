@@ -1557,3 +1557,8 @@ func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
 	}
 	return txpool.TxStatusUnknown
 }
+
+// added for interface compatibility, do nothing
+func (p *BlobPool) RemoveTx(hash common.Hash, outofbound bool, unreserve bool) int {
+	return 0
+}

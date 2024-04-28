@@ -1063,6 +1063,15 @@ func (pool *LegacyPool) Has(hash common.Hash) bool {
 	return pool.all.Get(hash) != nil
 }
 
+// RemoveTx is similar to removeTx, but with locking to prevent concurrency.
+// Note: currently should only be called by miner/worker.go.
+func (pool *LegacyPool) RemoveTx(hash common.Hash, outofbound bool, unreserve bool) int {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	return pool.removeTx(hash, outofbound, unreserve)
+}
+
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
 //
