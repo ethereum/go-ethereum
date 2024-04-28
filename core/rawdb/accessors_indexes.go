@@ -122,7 +122,7 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 // ReadReceipt retrieves a specific transaction receipt from the database, along with
 // its added positional metadata.
 func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
-	// Retrieve the context of the receipt based on the transaction txHash
+	// Retrieve the context of the receipt based on the transaction hash
 	blockNumber := ReadTxLookupEntry(db, txHash)
 	if blockNumber == nil {
 		return nil, common.Hash{}, 0, 0
