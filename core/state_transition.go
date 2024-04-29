@@ -359,19 +359,6 @@ func (st *StateTransition) preCheck() error {
 	return st.buyGas()
 }
 
-// tryConsumeGas tries to subtract gas from gasPool, setting the result in gasPool
-// if subtracting more gas than remains in gasPool, set gasPool = 0 and return false
-// otherwise, do the subtraction setting the result in gasPool and return true
-func tryConsumeGas(gasPool *uint64, gas uint64) bool {
-	if *gasPool < gas {
-		*gasPool = 0
-		return false
-	}
-
-	*gasPool -= gas
-	return true
-}
-
 // TransitionDb will transition the state by applying the current message and
 // returning the evm execution result with following fields.
 //
@@ -419,12 +406,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	st.gasRemaining -= gas
 
 	if rules.IsEIP4762 {
-		targetAddr := msg.To
-		originAddr := msg.From
+		st.evm.AccessEvents.AddTxOrigin(msg.From.Bytes())
 
-		st.evm.AccessEvents.AddTxOrigin(originAddr.Bytes())
-
-		if msg.To != nil {
+		if targetAddr := msg.To; targetAddr != nil {
 			st.evm.AccessEvents.AddTxDestination(targetAddr.Bytes(), msg.Value.Sign() != 0)
 
 			// ensure the code size ends up in the access witness
