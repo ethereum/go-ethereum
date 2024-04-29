@@ -1983,11 +1983,11 @@ func (r *receiptView) String() string {
 	return fmt.Sprintf("[status=%s, gasUsed=%d, logs=%d]", status, r.GasUsed, len(r.Logs))
 }
 
-type callerViewer struct {
+type _callerView struct {
 	skipFrame int
 }
 
-func (v callerViewer) String() string {
+func (v _callerView) String() string {
 	_, file, line, found := runtime.Caller(v.skipFrame)
 	if !found {
 		return "<unknown>"
@@ -2009,7 +2009,7 @@ func (v callerViewer) String() string {
 // In this example, with `callerView(2)` which means skip 3 call frames, you would get
 // you to ProcessCall frame and `callerView` would print that.
 func callerView(skipFrame int) fmt.Stringer {
-	return callerViewer{skipFrame}
+	return _callerView{skipFrame}
 }
 
 func emptyBytesToNil(in []byte) []byte {
