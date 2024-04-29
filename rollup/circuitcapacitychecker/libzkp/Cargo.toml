@@ -8,33 +8,35 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [patch.crates-io]
+gobuild = { git = "https://github.com/scroll-tech/gobuild.git" }
+halo2curves = { git = "https://github.com/scroll-tech/halo2curves", branch = "v0.1.0" }
 ethers-core = { git = "https://github.com/scroll-tech/ethers-rs.git", branch = "v2.0.7" }
+ethers-providers = { git = "https://github.com/scroll-tech/ethers-rs.git", branch = "v2.0.7" }
+ethers-signers  = { git = "https://github.com/scroll-tech/ethers-rs.git", branch = "v2.0.7" }
+#ethers-etherscan = { git = "https://github.com/scroll-tech/ethers-rs.git", branch = "v2.0.7" }
+#ethers = { git = "https://github.com/scroll-tech/ethers-rs.git", branch = "v2.0.7" }
 [patch."https://github.com/privacy-scaling-explorations/halo2.git"]
-halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "develop"  }
+halo2_proofs = { git = "https://github.com/scroll-tech/halo2.git", branch = "v1.1"  }
 [patch."https://github.com/privacy-scaling-explorations/poseidon.git"]
-poseidon = { git = "https://github.com/scroll-tech/poseidon.git", branch = "scroll-dev-0220" }
-[patch."https://github.com/privacy-scaling-explorations/halo2wrong.git"]
-halo2wrong = { git = "https://github.com/scroll-tech/halo2wrong.git", branch = "halo2-ecc-snark-verifier-0323" }
-maingate = { git = "https://github.com/scroll-tech/halo2wrong", branch = "halo2-ecc-snark-verifier-0323" }
-[patch."https://github.com/privacy-scaling-explorations/halo2curves.git"]
-halo2curves = { git = "https://github.com/scroll-tech/halo2curves.git", branch = "0.3.1-derive-serde" }
+poseidon = { git = "https://github.com/scroll-tech/poseidon.git", branch = "main" }
+[patch."https://github.com/privacy-scaling-explorations/bls12_381"]
+bls12_381 = { git = "https://github.com/scroll-tech/bls12_381", branch = "feat/impl_scalar_field" }
 
 [dependencies]
-prover = { git = "https://github.com/scroll-tech/zkevm-circuits.git", tag = "v0.9.13", default-features = false, features = ["parallel_syn", "scroll", "shanghai", "strict-ccc"] }
+prover = { git = "https://github.com/scroll-tech/zkevm-circuits.git", tag = "v0.10.2", default-features = false, features = ["parallel_syn", "scroll", "shanghai", "strict-ccc"] }
 
 anyhow = "1.0"
-log = "0.4"
+base64 = "0.13.0"
 env_logger = "0.9.0"
+libc = "0.2"
+log = "0.4"
+once_cell = "1.19"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0.66"
-libc = "0.2"
-once_cell = "1.8.0"
-
 
 [profile.test]
 opt-level = 3
-debug-assertions = true
 
 [profile.release]
 opt-level = 3

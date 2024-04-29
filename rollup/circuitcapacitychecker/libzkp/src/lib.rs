@@ -1,5 +1,3 @@
-#![feature(once_cell)]
-
 pub mod checker {
     use crate::utils::{c_char_to_str, c_char_to_vec, vec_to_c_char};
     use anyhow::{anyhow, bail, Error};
@@ -121,7 +119,7 @@ pub mod checker {
                 .ok_or(anyhow!(
                     "fail to get circuit capacity checker (id: {id:?}) in apply_tx"
                 ))?
-                .estimate_circuit_capacity(&[traces])
+                .estimate_circuit_capacity(traces)
         });
         match r {
             Ok(result) => result,
@@ -174,7 +172,7 @@ pub mod checker {
                 .ok_or(anyhow!(
                     "fail to get circuit capacity checker (id: {id:?}) in apply_block"
                 ))?
-                .estimate_circuit_capacity(&[traces])
+                .estimate_circuit_capacity(traces)
         });
         match r {
             Ok(result) => result,
