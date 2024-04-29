@@ -45,11 +45,12 @@ type BlockGen struct {
 	header  *types.Header
 	statedb *state.StateDB
 
-	gasPool     *GasPool
-	txs         []*types.Transaction
-	receipts    []*types.Receipt
-	uncles      []*types.Header
-	withdrawals []*types.Withdrawal
+	gasPool              *GasPool
+	txs                  []*types.Transaction
+	receipts             []*types.Receipt
+	uncles               []*types.Header
+	withdrawals          []*types.Withdrawal
+	inclusionListSummary []*types.InclusionListEntry
 
 	engine consensus.Engine
 }
@@ -346,7 +347,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 
-		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals}
+		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals, InclusionListSummary: b.inclusionListSummary}
 		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, &body, b.receipts)
 		if err != nil {
 			panic(err)

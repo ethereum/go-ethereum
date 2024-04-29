@@ -65,11 +65,12 @@ type fetchRequest struct {
 type fetchResult struct {
 	pending atomic.Int32 // Flag telling what deliveries are outstanding
 
-	Header       *types.Header
-	Uncles       []*types.Header
-	Transactions types.Transactions
-	Receipts     types.Receipts
-	Withdrawals  types.Withdrawals
+	Header               *types.Header
+	Uncles               []*types.Header
+	Transactions         types.Transactions
+	Receipts             types.Receipts
+	Withdrawals          types.Withdrawals
+	InclusionListSummary []*types.InclusionListEntry
 }
 
 func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
@@ -774,7 +775,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 // also wakes any threads waiting for data delivery.
 func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListHashes []common.Hash,
 	uncleLists [][]*types.Header, uncleListHashes []common.Hash,
-	withdrawalLists [][]*types.Withdrawal, withdrawalListHashes []common.Hash) (int, error) {
+	withdrawalLists [][]*types.Withdrawal, withdrawalListHashes []common.Hash, ilSummaries [][]*types.InclusionListEntry, ilSummaryHashes []common.Hash) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -795,6 +796,19 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 				return errInvalidBody
 			}
 			if withdrawalListHashes[index] != *header.WithdrawalsHash {
+				return errInvalidBody
+			}
+		}
+		if header.InclusionListSummaryRoot == nil {
+			// nil hash means that inclusionListSummaries should not be present in body
+			if ilSummaries[index] != nil {
+				return errInvalidBody
+			}
+		} else {
+			if ilSummaries[index] == nil {
+				return errInvalidBody
+			}
+			if ilSummaryHashes[index] != *header.InclusionListSummaryRoot {
 				return errInvalidBody
 			}
 		}
@@ -836,6 +850,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		result.Transactions = txLists[index]
 		result.Uncles = uncleLists[index]
 		result.Withdrawals = withdrawalLists[index]
+		result.InclusionListSummary = ilSummaries[index]
 		result.SetBodyDone()
 	}
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,

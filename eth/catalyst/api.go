@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip7547"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -92,6 +93,7 @@ var caps = []string{
 	"engine_getPayloadBodiesByHashV1",
 	"engine_getPayloadBodiesByRangeV1",
 	"engine_getClientVersionV1",
+	"engine_getInclusionListV1",
 }
 
 type ConsensusAPI struct {
@@ -135,6 +137,9 @@ type ConsensusAPI struct {
 
 	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
 	newPayloadLock sync.Mutex // Lock for the NewPayload method
+
+	coolMapThatIsNotAMemLeak  map[common.Hash][]*types.Transaction
+	coolMapThatIsNotAMemLeak2 map[common.Hash]*types.InclusionListSummary
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -151,11 +156,13 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 		log.Warn("Engine API started but chain not configured for merge yet")
 	}
 	api := &ConsensusAPI{
-		eth:               eth,
-		remoteBlocks:      newHeaderQueue(),
-		localBlocks:       newPayloadQueue(),
-		invalidBlocksHits: make(map[common.Hash]int),
-		invalidTipsets:    make(map[common.Hash]*types.Header),
+		eth:                       eth,
+		remoteBlocks:              newHeaderQueue(),
+		localBlocks:               newPayloadQueue(),
+		invalidBlocksHits:         make(map[common.Hash]int),
+		invalidTipsets:            make(map[common.Hash]*types.Header),
+		coolMapThatIsNotAMemLeak:  make(map[common.Hash][]*types.Transaction),
+		coolMapThatIsNotAMemLeak2: make(map[common.Hash]*types.InclusionListSummary),
 	}
 	eth.Downloader().SetBadBlockCallback(api.setInvalidAncestor)
 	return api
@@ -220,7 +227,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 		if params.BeaconRoot == nil {
 			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing beacon root"))
 		}
-		if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
+		if latest := api.eth.BlockChain().Config().LatestFork(params.Timestamp); latest != forks.Cancun && latest != forks.Prague {
 			return engine.STATUS_INVALID, engine.UnsupportedFork.With(errors.New("forkchoiceUpdatedV3 must only be called for cancun payloads"))
 		}
 	}
@@ -340,6 +347,9 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		}
 		// Set the finalized block
 		api.eth.BlockChain().SetFinalized(finalBlock.Header())
+		// Clear the inclusionList for that block
+		delete(api.coolMapThatIsNotAMemLeak, update.FinalizedBlockHash)
+		delete(api.coolMapThatIsNotAMemLeak2, update.FinalizedBlockHash)
 	}
 	// Check if the safe block hash is in our canonical tree, if not something is wrong
 	if update.SafeBlockHash != (common.Hash{}) {
@@ -360,13 +370,15 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		args := &miner.BuildPayloadArgs{
-			Parent:       update.HeadBlockHash,
-			Timestamp:    payloadAttributes.Timestamp,
-			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
-			Random:       payloadAttributes.Random,
-			Withdrawals:  payloadAttributes.Withdrawals,
-			BeaconRoot:   payloadAttributes.BeaconRoot,
-			Version:      payloadVersion,
+			Parent:               update.HeadBlockHash,
+			Timestamp:            payloadAttributes.Timestamp,
+			FeeRecipient:         payloadAttributes.SuggestedFeeRecipient,
+			Random:               payloadAttributes.Random,
+			Withdrawals:          payloadAttributes.Withdrawals,
+			BeaconRoot:           payloadAttributes.BeaconRoot,
+			Version:              payloadVersion,
+			InclusionList:        api.coolMapThatIsNotAMemLeak[update.HeadBlockHash],
+			InclusionListSummary: api.coolMapThatIsNotAMemLeak2[update.HeadBlockHash],
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
@@ -895,4 +907,69 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 		TransactionData: txs,
 		Withdrawals:     withdrawals,
 	}
+}
+
+func (api *ConsensusAPI) NewInclusionListV1(inclusionListSummary *types.InclusionListSummary, transactions [][]byte, parentBlockHash common.Hash) (*engine.InclusionListStatusV1, error) {
+	if len(inclusionListSummary.Summary) != len(transactions) {
+		return inclusionListError("number of transactions do not match addresses"), nil
+	}
+	txs, err := engine.DecodeTransactions(transactions)
+	if err != nil {
+		return nil, fmt.Errorf("could not decode transactions: %v", err)
+	}
+	signer := types.LatestSignerForChainID(api.eth.BlockChain().Config().ChainID)
+	var maxGas uint64
+	for index, tx := range txs {
+		sender, err := signer.Sender(tx)
+		if err != nil {
+			return inclusionListError(fmt.Sprintf("Invalid signer at index %v, error: %v", index, err)), nil
+		}
+		if inclusionListSummary.Summary[index].Address != sender {
+			return inclusionListError(fmt.Sprintf("Invalid sender at index %v, got %v want %v", index, sender, inclusionListSummary.Summary[index].Address)), nil
+		}
+		maxGas += tx.Gas()
+	}
+	if maxGas != params.InclusionListMaxGas {
+		return inclusionListError(fmt.Sprintf("Invalid inclusion list max gas, got %v want %v", maxGas, params.InclusionListMaxGas)), nil
+	}
+	block := api.eth.BlockChain().GetBlockByHash(parentBlockHash)
+	if block == nil {
+		return inclusionListError("Parent block not found"), nil
+	}
+	if err := eip7547.VerifyInclusionList(api.eth.BlockChain(), block, signer, txs); err != nil {
+		return inclusionListError(err.Error()), nil
+	}
+	api.coolMapThatIsNotAMemLeak[parentBlockHash] = txs
+	api.coolMapThatIsNotAMemLeak2[parentBlockHash] = inclusionListSummary
+	return &engine.InclusionListStatusV1{Status: engine.VALID}, nil
+}
+
+func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) ([]common.Address, [][]byte, error) {
+	return []common.Address{}, [][]byte{}, nil
+}
+
+func inclusionListError(errorMsg string) *engine.InclusionListStatusV1 {
+	return &engine.InclusionListStatusV1{Status: engine.INVALID, ValidationError: &errorMsg}
+}
+
+func (c *ConsensusAPI) SetLocalAccounts(locals []common.Address) error {
+	for _, addr := range locals {
+		c.eth.TxPool().MarkLocal(addr)
+	}
+	return nil
+}
+
+func (c *ConsensusAPI) GetLocalTransactions() ([][]byte, error) {
+	var res [][]byte
+	for _, addr := range c.eth.TxPool().Locals() {
+		pending, _ := c.eth.TxPool().ContentFrom(addr)
+		for _, tx := range pending {
+			m, err := tx.MarshalJSON()
+			if err != nil {
+				return [][]byte{}, nil
+			}
+			res = append(res, m)
+		}
+	}
+	return res, nil
 }

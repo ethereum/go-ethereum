@@ -310,9 +310,10 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 	}
 	metadata := func() interface{} {
 		var (
-			txsHashes        = make([]common.Hash, len(res.BlockBodiesResponse))
-			uncleHashes      = make([]common.Hash, len(res.BlockBodiesResponse))
-			withdrawalHashes = make([]common.Hash, len(res.BlockBodiesResponse))
+			txsHashes                 = make([]common.Hash, len(res.BlockBodiesResponse))
+			uncleHashes               = make([]common.Hash, len(res.BlockBodiesResponse))
+			withdrawalHashes          = make([]common.Hash, len(res.BlockBodiesResponse))
+			inclusionListSummaryRoots = make([]common.Hash, len(res.BlockBodiesResponse))
 		)
 		hasher := trie.NewStackTrie(nil)
 		for i, body := range res.BlockBodiesResponse {
@@ -321,8 +322,11 @@ func handleBlockBodies(backend Backend, msg Decoder, peer *Peer) error {
 			if body.Withdrawals != nil {
 				withdrawalHashes[i] = types.DeriveSha(types.Withdrawals(body.Withdrawals), hasher)
 			}
+			if body.InclusionListSummary != nil {
+				inclusionListSummaryRoots[i] = types.DeriveSha(types.InclusionList{List: body.InclusionListSummary}, hasher)
+			}
 		}
-		return [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes}
+		return [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes, inclusionListSummaryRoots}
 	}
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
