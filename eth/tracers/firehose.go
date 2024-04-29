@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	pbeth "github.com/ethereum/go-ethereum/pb/sf/ethereum/type/v2"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -60,8 +61,6 @@ func init() {
 }
 
 func newFirehoseTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
-	firehoseInfo("new firehose tracer")
-
 	var config FirehoseConfig
 	if len([]byte(cfg)) > 0 {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -111,6 +110,18 @@ type FirehoseConfig struct {
 	ApplyBackwardCompatibility *bool `json:"applyBackwardCompatibility"`
 }
 
+// LogKeValues returns a list of key-values to be logged when the config is printed.
+func (c *FirehoseConfig) LogKeyValues() []any {
+	applyBackwardCompatibility := "<unspecified>"
+	if c.ApplyBackwardCompatibility != nil {
+		applyBackwardCompatibility = strconv.FormatBool(*c.ApplyBackwardCompatibility)
+	}
+
+	return []any{
+		"config.applyBackwardCompatibility", applyBackwardCompatibility,
+	}
+}
+
 type Firehose struct {
 	// Global state
 	outputBuffer *bytes.Buffer
@@ -157,6 +168,8 @@ type Firehose struct {
 const FirehoseProtocolVersion = "3.0"
 
 func NewFirehose(config *FirehoseConfig) *Firehose {
+	log.Info("Firehose tracer created", config.LogKeyValues()...)
+
 	return &Firehose{
 		// Global state
 		outputBuffer:               bytes.NewBuffer(make([]byte, 0, 100*1024*1024)),
@@ -249,6 +262,8 @@ func (f *Firehose) OnBlockchainInit(chainConfig *params.ChainConfig) {
 	if f.applyBackwardCompatibility == nil {
 		f.applyBackwardCompatibility = ptr(chainNeedsLegacyBackwardCompatibility(chainConfig.ChainID))
 	}
+
+	log.Info("Firehose tracer initialized", "chain_id", chainConfig.ChainID, "apply_backward_compatibility", *f.applyBackwardCompatibility, "protocol_version", FirehoseProtocolVersion)
 }
 
 var mainnetChainID = big.NewInt(1)
