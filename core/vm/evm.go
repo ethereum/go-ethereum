@@ -207,7 +207,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 
-	var creation bool
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP4762 {
 			// add proof of absence to witness
@@ -224,7 +223,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
-		creation = true
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 
@@ -242,7 +240,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
-			contract.IsDeployment = creation
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
 		}
