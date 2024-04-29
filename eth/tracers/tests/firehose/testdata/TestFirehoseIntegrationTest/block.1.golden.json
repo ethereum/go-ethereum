@@ -1,0 +1,64 @@
+{
+  "hash": "jm7ksQVNlN8dilH7mDRH3C4nqFRZDDrABh+ZQoS+gVA=",
+  "number": "1",
+  "size": "541",
+  "header": {
+    "parentHash": "hFutUVaUpBa6tLjUTiLPl6jIlKhQIRCrgHiDlA4YXOA=",
+    "uncleHash": "HcxN6N7HXXqrhbVntszUGtMSRRuUinQT8KFC/UDUk0c=",
+    "coinbase": "AAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "stateRoot": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "transactionsRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
+    "receiptRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
+    "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "difficulty": {
+      "bytes": "Ag=="
+    },
+    "totalDifficulty": {
+      "bytes": "Aw=="
+    },
+    "number": "1",
+    "gasLimit": "1000000",
+    "timestamp": "1970-01-01T00:00:01Z",
+    "mixHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "hash": "jm7ksQVNlN8dilH7mDRH3C4nqFRZDDrABh+ZQoS+gVA=",
+    "baseFeePerGas": {
+      "bytes": "CA=="
+    },
+    "parentBeaconRoot": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  },
+  "balanceChanges": [
+    {
+      "address": "AAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "newValue": {
+        "bytes": "G8FtZ07IAAA="
+      },
+      "reason": "REASON_REWARD_MINE_BLOCK",
+      "ordinal": "5"
+    }
+  ],
+  "systemCalls": [
+    {
+      "index": 1,
+      "callType": "CALL",
+      "caller": "//////////////////////////4=",
+      "address": "AA899tcygH7xMZ+3uLuFItC+rAI=",
+      "gasLimit": "30000000",
+      "input": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "gasChanges": [
+        {
+          "newValue": "30000000",
+          "reason": "REASON_CALL_INITIAL_BALANCE",
+          "ordinal": "2"
+        },
+        {
+          "oldValue": "30000000",
+          "reason": "REASON_CALL_LEFT_OVER_RETURNED",
+          "ordinal": "3"
+        }
+      ],
+      "beginOrdinal": "1",
+      "endOrdinal": "4"
+    }
+  ],
+  "ver": 4
+}
