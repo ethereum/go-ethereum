@@ -237,6 +237,7 @@ type worker struct {
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
 	coinbase common.Address
 	extra    []byte
+	tip      *big.Int // Minimum tip needed for non-local transaction to include them
 
 	pendingMu    sync.RWMutex
 	pendingTasks map[common.Hash]*task
@@ -295,6 +296,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		isLocalBlock:        isLocalBlock,
 		coinbase:            config.Etherbase,
 		extra:               config.ExtraData,
+		tip:                 config.GasPrice,
 		pendingTasks:        make(map[common.Hash]*task),
 		txsCh:               make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:         make(chan core.ChainHeadEvent, chainHeadChanSize),
@@ -393,6 +395,13 @@ func (w *worker) setExtra(extra []byte) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.extra = extra
+}
+
+// setGasTip sets the minimum miner tip needed to include a non-local transaction.
+func (w *worker) setGasTip(tip *big.Int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.tip = tip
 }
 
 // setRecommitInterval updates the interval for miner sealing work recommitting.
@@ -648,7 +657,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 				}
 				txset := newTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, txset, nil, context.Background())
+				w.commitTransactions(w.current, txset, nil, new(big.Int), context.Background())
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -908,7 +917,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, inte
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce, interrupt *atomic.Int32, interruptCtx context.Context) error {
+func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *big.Int, interruptCtx context.Context) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -921,6 +930,7 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 	chDeps := make(chan blockstm.TxDep)
 
 	var depsWg sync.WaitGroup
+	var once sync.Once
 
 	EnableMVHashMap := w.chainConfig.IsCancun(env.header.Number)
 
@@ -929,6 +939,11 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 		deps = map[int]map[int]bool{}
 
 		chDeps = make(chan blockstm.TxDep)
+
+		// Make sure we safely close the channel in case of interrupt
+		defer once.Do(func() {
+			close(chDeps)
+		})
 
 		depsWg.Add(1)
 
@@ -990,7 +1005,7 @@ mainloop:
 			break
 		}
 		// Retrieve the next transaction and abort if all done.
-		ltx := txs.Peek()
+		ltx, tip := txs.Peek()
 		if ltx == nil {
 			breakCause = "all transactions has been included"
 			break
@@ -1005,6 +1020,11 @@ mainloop:
 			log.Trace("Not enough blob gas left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas)
 			txs.Pop()
 			continue
+		}
+		// If we don't receive enough tip for the next transaction, skip the account
+		if tip.Cmp(minTip) < 0 {
+			log.Trace("Not enough tip for transaction", "hash", ltx.Hash, "tip", tip, "needed", minTip)
+			break // If the next-best is too low, surely no better will be available
 		}
 		// Transaction seems to fit, pull it up from the pool
 		tx := ltx.Resolve()
@@ -1109,7 +1129,9 @@ mainloop:
 
 	// nolint:nestif
 	if EnableMVHashMap && w.IsRunning() {
-		close(chDeps)
+		once.Do(func() {
+			close(chDeps)
+		})
 		depsWg.Wait()
 
 		var blockExtraData types.BlockExtraData
@@ -1461,6 +1483,10 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		err             error
 	)
 
+	w.mu.RLock()
+	tip := w.tip
+	w.mu.RUnlock()
+
 	if len(localTxs) > 0 {
 		var txs *transactionsByPriceAndNonce
 
@@ -1479,7 +1505,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		})
 
 		tracing.Exec(ctx, "", "worker.LocalCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactions(env, txs, interrupt, interruptCtx)
+			err = w.commitTransactions(env, txs, interrupt, new(big.Int), interruptCtx)
 		})
 
 		if err != nil {
@@ -1507,7 +1533,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		})
 
 		tracing.Exec(ctx, "", "worker.RemoteCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactions(env, txs, interrupt, interruptCtx)
+			err = w.commitTransactions(env, txs, interrupt, tip, interruptCtx)
 		})
 
 		if err != nil {

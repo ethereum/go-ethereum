@@ -174,8 +174,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
-		log.Debug(" ###########", "Unprotected transactions allowed")
-
+		log.Info("------Unprotected transactions allowed-------")
 		config.TxPool.AllowUnprotectedTxs = true
 	}
 
@@ -822,6 +821,12 @@ func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()
 	s.snapDialCandidates.Close()
+
+	// Close the engine before handler else it may cause a deadlock where
+	// the heimdall is unresponsive and the syncing loop keeps waiting
+	// for a response and is unable to proceed to exit `Finalize` during
+	// block processing.
+	s.engine.Close()
 	s.handler.Stop()
 
 	// Then stop everything else.
@@ -834,7 +839,6 @@ func (s *Ethereum) Stop() error {
 	s.txPool.Close()
 	s.miner.Close()
 	s.blockchain.Stop()
-	s.engine.Close()
 
 	// Clean shutdown marker as the last thing before closing db
 	s.shutdownTracker.Stop()

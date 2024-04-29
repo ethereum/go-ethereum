@@ -435,7 +435,7 @@ func verifyUpdates(updates []*Validator, vals *ValidatorSet) (updatedTotalVoting
 		_, val := vals.GetByAddress(address)
 
 		if val == nil {
-			// New validator, add its voting power the the total.
+			// New validator, add its voting power the total.
 			updatedTotalVotingPower += valUpdate.VotingPower
 			numNewValidators++
 		} else {
