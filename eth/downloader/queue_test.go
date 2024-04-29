@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"golang.org/x/exp/slog"
 )
 
 // makeChain creates a chain of n blocks starting at and including parent.
@@ -309,7 +311,7 @@ func XTestDelivery(t *testing.T) {
 	world.progress(10)
 
 	if false {
-		log.Root().SetHandler(log.StdoutHandler)
+		log.SetDefault(log.NewLogger(slog.NewTextHandler(os.Stdout, nil)))
 	}
 
 	q := newQueue(10, 10)

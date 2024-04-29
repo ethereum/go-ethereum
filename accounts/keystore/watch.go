@@ -132,7 +132,6 @@ func (w *watcher) loop() {
 			if !ok {
 				return
 			}
-
 			log.Info("Filesystem watcher error", "err", err)
 		case <-debounce.C:
 			w.ac.scanAccounts()

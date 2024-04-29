@@ -180,6 +180,7 @@ func list(ui *headlessUi, api *core.SignerAPI, t *testing.T) ([]common.Address, 
 }
 
 func TestNewAcc(t *testing.T) {
+	t.Parallel()
 	api, control := setup(t)
 	verifyNum := func(num int) {
 		list, err := list(control, api, t)
@@ -252,6 +253,7 @@ func mkTestTx(from common.MixedcaseAddress) apitypes.SendTxArgs {
 }
 
 func TestSignTx(t *testing.T) {
+	t.Parallel()
 	var (
 		list      []common.Address
 		res, res2 *ethapi.SignTransactionResult
