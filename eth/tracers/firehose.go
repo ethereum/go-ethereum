@@ -94,6 +94,11 @@ func newTracingHooksFromFirehose(tracer *Firehose) *tracing.Hooks {
 		OnGasChange:     tracer.OnGasChange,
 		OnLog:           tracer.OnLog,
 
+		// This is being discussed in PR https://github.com/ethereum/go-ethereum/pull/29355
+		// but Firehose needs them so we add handling for them in our patch.
+		OnSystemCallStart: tracer.OnSystemCallStart,
+		OnSystemCallEnd:   tracer.OnSystemCallEnd,
+
 		// This should actually be conditional but it's not possible to do it in the hooks
 		// directly because the chain ID will be known only after the `OnBlockchainInit` call.
 		// So we register it unconditionally and the actual `OnNewAccount` hook will decide
@@ -442,15 +447,15 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 	return call.EndOrdinal
 }
 
-func (f *Firehose) OnBeaconBlockRootStart(root common.Hash) {
-	firehoseInfo("system call start (for=%s)", "beacon_block_root")
+func (f *Firehose) OnSystemCallStart() {
+	firehoseInfo("system call start (for=%s)", callerView(3))
 	f.ensureInBlockAndNotInTrx()
 
 	f.inSystemCall = true
 	f.transaction = &pbeth.TransactionTrace{}
 }
 
-func (f *Firehose) OnBeaconBlockRootEnd() {
+func (f *Firehose) OnSystemCallEnd() {
 	f.ensureInBlockAndInTrx()
 	f.ensureInSystemCall()
 
@@ -1961,6 +1966,35 @@ func (r *receiptView) String() string {
 	}
 
 	return fmt.Sprintf("[status=%s, gasUsed=%d, logs=%d]", status, r.GasUsed, len(r.Logs))
+}
+
+type callerViewer struct {
+	skipFrame int
+}
+
+func (v callerViewer) String() string {
+	_, file, line, found := runtime.Caller(v.skipFrame)
+	if !found {
+		return "<unknown>"
+	}
+
+	return fmt.Sprintf("%s:%d", file, line)
+}
+
+// callerView returns a fmt.Stringer that will print the caller of the function. You need
+// to specify how many frames to skip from the callstack. The minimum is 1  and usually 2.
+//
+// Imagine you have the call stack
+//   - callerView(3)
+//   - firehoseDebug(..., callerView(3))
+//   - OnOpcode(...)
+//   - ProcessCall(...)
+//   - ...<rest of Geth calls>
+//
+// In this example, with `callerView(2)` which means skip 3 call frames, you would get
+// you to ProcessCall frame and `callerView` would print that.
+func callerView(skipFrame int) fmt.Stringer {
+	return callerViewer{skipFrame}
 }
 
 func emptyBytesToNil(in []byte) []byte {

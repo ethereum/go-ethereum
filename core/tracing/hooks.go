@@ -168,6 +168,11 @@ type Hooks struct {
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
 
+	// This is being discussed in PR https://github.com/ethereum/go-ethereum/pull/29355
+	// but Firehose needs them so we add handling for them in our patch
+	OnSystemCallStart func()
+	OnSystemCallEnd   func()
+
 	// Firehose backward compatibility
 	// This hook exist because some current Firehose supported chains requires it
 	// but this field is going to be deprecated and newer chains will not produced
