@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/workerpool"
+	"github.com/ethereum/go-ethereum/internal/syncx"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -1162,7 +1162,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		code = s.db.DiskDB().NewBatch()
 		lock sync.Mutex
 	)
-	workers := workerpool.New[*stateObject, error](len(s.mutations), min(len(s.mutations), runtime.NumCPU()),
+	workers := syncx.NewWorkerPool[*stateObject, error](len(s.mutations), min(len(s.mutations), runtime.NumCPU()),
 		func(obj *stateObject) error {
 			// Write any storage changes in the state object to its storage trie
 			set, err := obj.commit()

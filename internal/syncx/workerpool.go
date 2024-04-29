@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package workerpool implements a concurrent task processor.
-package workerpool
+package syncx
 
 import (
 	"runtime"
@@ -30,10 +29,10 @@ type WorkerPool[T any, R any] struct {
 	working sync.WaitGroup // Waitgroup blocking on worker liveness
 }
 
-// New creates a worker pool with the given number of max task capacity and an
-// optional goroutine count to execute on. If 0 threads are requested, the pool
-// will default to the number of (logical) CPUs.
-func New[T any, R any](tasks int, threads int, f func(T) R) *WorkerPool[T, R] {
+// NewWorkerPool creates a worker pool with the given number of max task capacity
+// and an optional goroutine count to execute on. If 0 threads are requested, the
+// pool will default to the number of (logical) CPUs.
+func NewWorkerPool[T any, R any](tasks int, threads int, f func(T) R) *WorkerPool[T, R] {
 	// Create the worker pool
 	pool := &WorkerPool[T, R]{
 		tasks:   make(chan T, tasks),
