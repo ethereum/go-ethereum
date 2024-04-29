@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
+	"runtime"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/workerpool"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -1146,47 +1149,78 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		storageTrieNodesUpdated int
 		storageTrieNodesDeleted int
 		nodes                   = trienode.NewMergedNodeSet()
-		codeWriter              = s.db.DiskDB().NewBatch()
 	)
 	// Handle all state deletions first
 	if err := s.handleDestruction(nodes); err != nil {
 		return common.Hash{}, err
 	}
-	// Handle all state updates afterwards
+	// Handle all state updates afterwards, concurrently to one another to shave
+	// off some milliseconds from the commit operation. Also accumulate the code
+	// writes to run in parallel with the computations.
 	start := time.Now()
+	var (
+		code = s.db.DiskDB().NewBatch()
+		lock sync.Mutex
+	)
+	workers := workerpool.New[*stateObject, error](len(s.mutations), min(len(s.mutations), runtime.NumCPU()),
+		func(obj *stateObject) error {
+			// Write any storage changes in the state object to its storage trie
+			set, err := obj.commit()
+			if err != nil {
+				return err
+			}
+			// Merge the dirty nodes of storage trie into global set. It is possible
+			// that the account was destructed and then resurrected in the same block.
+			// In this case, the node set is shared by both accounts.
+			if set != nil {
+				lock.Lock()
+				defer lock.Unlock()
+
+				if err = nodes.Merge(set); err != nil {
+					return err
+				}
+				updates, deleted := set.Size()
+				storageTrieNodesUpdated += updates
+				storageTrieNodesDeleted += deleted
+			}
+			return nil
+		})
+
 	for addr, op := range s.mutations {
 		if op.isDelete() {
 			continue
 		}
-		obj := s.stateObjects[addr]
-
 		// Write any contract code associated with the state object
+		obj := s.stateObjects[addr]
 		if obj.code != nil && obj.dirtyCode {
-			rawdb.WriteCode(codeWriter, common.BytesToHash(obj.CodeHash()), obj.code)
+			rawdb.WriteCode(code, common.BytesToHash(obj.CodeHash()), obj.code)
 			obj.dirtyCode = false
 		}
-		// Write any storage changes in the state object to its storage trie
-		set, err := obj.commit()
-		if err != nil {
-			return common.Hash{}, err
-		}
-		// Merge the dirty nodes of storage trie into global set. It is possible
-		// that the account was destructed and then resurrected in the same block.
-		// In this case, the node set is shared by both accounts.
-		if set != nil {
-			if err := nodes.Merge(set); err != nil {
-				return common.Hash{}, err
-			}
-			updates, deleted := set.Size()
-			storageTrieNodesUpdated += updates
-			storageTrieNodesDeleted += deleted
+		// Run the storage updates concurrently to one another
+		workers.Schedule(obj)
+	}
+	workers.Close()
+
+	// Updates running concurrently, wait for them to complete; running the code
+	// writes in the meantime.
+	done := make(chan struct{})
+	go func() {
+		// This goroutine is only needed to accurately measure the storage commit
+		// and not have the concurrent code write dirty the stats.
+		defer close(done)
+
+		workers.Wait()
+		s.StorageCommits += time.Since(start)
+	}()
+	if code.ValueSize() > 0 {
+		if err := code.Write(); err != nil {
+			log.Crit("Failed to commit dirty codes", "error", err)
 		}
 	}
-	s.StorageCommits += time.Since(start)
-
-	if codeWriter.ValueSize() > 0 {
-		if err := codeWriter.Write(); err != nil {
-			log.Crit("Failed to commit dirty codes", "error", err)
+	<-done
+	for err := range workers.Results() {
+		if err != nil {
+			return common.Hash{}, err
 		}
 	}
 	// Write the account trie changes, measuring the amount of wasted time
