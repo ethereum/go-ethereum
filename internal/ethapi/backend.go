@@ -97,6 +97,10 @@ type Backend interface {
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
+
+	// RIP-7560 specific functions
+	SubmitRip7560Bundle(bundle *types.ExternallyReceivedBundle) error
+	GetRip7560BundleStatus(ctx context.Context, hash common.Hash) (*types.BundleReceipt, error)
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

@@ -49,6 +49,7 @@ const (
 	AccessListTxType = 0x01
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
+	Rip7560Type      = 0x04
 )
 
 // Transaction is an Ethereum transaction.
@@ -464,6 +465,12 @@ func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
 		cpy.from.Store(f)
 	}
 	return cpy
+}
+
+func (tx *Transaction) Rip7560TransactionData() *Rip7560AccountAbstractionTx {
+	inner := tx.inner
+	ptr := inner.(*Rip7560AccountAbstractionTx)
+	return ptr
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set

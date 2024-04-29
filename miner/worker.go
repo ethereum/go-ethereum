@@ -373,6 +373,22 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 	return nil
 }
 
+func (miner *Miner) commitRip7560TransactionsBundle(env *environment, txs *types.ExternallyReceivedBundle, _ *atomic.Int32) error {
+
+	// todo: copied over to fix crash, probably should do it once
+	gasLimit := env.header.GasLimit
+	if env.gasPool == nil {
+		env.gasPool = new(core.GasPool).AddGas(gasLimit)
+	}
+
+	validatedTxs, receipts, _, err := core.HandleRip7560Transactions(txs.Transactions, 0, env.state, &env.coinbase, env.header, env.gasPool, miner.chainConfig, miner.chain, vm.Config{})
+
+	env.txs = append(env.txs, validatedTxs...)
+	env.receipts = append(env.receipts, receipts...)
+	env.tcount += len(validatedTxs)
+	return err
+}
+
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
@@ -411,6 +427,14 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 			localBlobTxs[account] = txs
 		}
 	}
+
+	pendingBundle, err := miner.txpool.PendingRip7560Bundle()
+	if pendingBundle != nil {
+		if err = miner.commitRip7560TransactionsBundle(env, pendingBundle, interrupt); err != nil {
+			return err
+		}
+	}
+
 	// Fill the block with all available pending transactions.
 	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 {
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, localPlainTxs, env.header.BaseFee)

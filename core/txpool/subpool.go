@@ -162,4 +162,10 @@ type SubPool interface {
 	// Status returns the known status (unknown/pending/queued) of a transaction
 	// identified by their hashes.
 	Status(hash common.Hash) TxStatus
+
+	// RIP-7560 specific subpool functions, other subpools should ignore these
+
+	SubmitRip7560Bundle(bundle *types.ExternallyReceivedBundle) error
+	GetRip7560BundleStatus(hash common.Hash) (*types.BundleReceipt, error)
+	PendingRip7560Bundle() (*types.ExternallyReceivedBundle, error)
 }

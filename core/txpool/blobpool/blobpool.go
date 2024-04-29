@@ -1653,3 +1653,18 @@ func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
 	}
 	return txpool.TxStatusUnknown
 }
+
+func (pool *BlobPool) SubmitRip7560Bundle(_ *types.ExternallyReceivedBundle) error {
+	// nothing to do here
+	return nil
+}
+
+func (pool *BlobPool) GetRip7560BundleStatus(_ common.Hash) (*types.BundleReceipt, error) {
+	// nothing to do here
+	return nil, nil
+}
+
+func (pool *BlobPool) PendingRip7560Bundle() (*types.ExternallyReceivedBundle, error) {
+	// nothing to do here
+	return nil, nil
+}

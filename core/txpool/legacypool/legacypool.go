@@ -117,6 +117,8 @@ type BlockChain interface {
 
 	// StateAt returns a state database for a given root hash (generally the head).
 	StateAt(root common.Hash) (*state.StateDB, error)
+
+	GetReceiptsByHash(hash common.Hash) types.Receipts
 }
 
 // Config are the configuration parameters of the transaction pool.
@@ -1958,4 +1960,19 @@ func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 // numSlots calculates the number of slots needed for a single transaction.
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+}
+
+func (pool *LegacyPool) SubmitRip7560Bundle(_ *types.ExternallyReceivedBundle) error {
+	// nothing to do here
+	return nil
+}
+
+func (pool *LegacyPool) GetRip7560BundleStatus(_ common.Hash) (*types.BundleReceipt, error) {
+	// nothing to do here
+	return nil, nil
+}
+
+func (pool *LegacyPool) PendingRip7560Bundle() (*types.ExternallyReceivedBundle, error) {
+	// nothing to do here
+	return nil, nil
 }
