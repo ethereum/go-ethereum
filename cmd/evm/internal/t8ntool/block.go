@@ -282,7 +282,7 @@ func readInput(ctx *cli.Context) (*bbInput, error) {
 	}
 	// Deserialize rlp txs and ommers
 	var (
-		ommers = []*types.Header{}
+		ommers = make([]*types.Header, 0, len(inputData.OmmersRlp))
 		txs    = []*types.Transaction{}
 	)
 	if inputData.TxRlp != "" {

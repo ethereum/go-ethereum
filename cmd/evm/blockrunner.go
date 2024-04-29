@@ -76,7 +76,7 @@ func blockTestCmd(ctx *cli.Context) error {
 	}
 
 	// Run them in order
-	var keys []string
+	keys := make([]string, 0, len(tests))
 	for key := range tests {
 		keys = append(keys, key)
 	}

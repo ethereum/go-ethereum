@@ -832,7 +832,7 @@ func decreaseKey(key []byte) []byte {
 
 func BenchmarkProve(b *testing.B) {
 	trie, vals := randomTrie(100)
-	var keys []string
+	keys := make([]string, 0, len(vals))
 	for k := range vals {
 		keys = append(keys, k)
 	}
@@ -850,8 +850,8 @@ func BenchmarkProve(b *testing.B) {
 func BenchmarkVerifyProof(b *testing.B) {
 	trie, vals := randomTrie(100)
 	root := trie.Hash()
-	var keys []string
 	var proofs []*memorydb.Database
+	keys := make([]string, 0, len(vals))
 	for k := range vals {
 		keys = append(keys, k)
 		proof := memorydb.New()

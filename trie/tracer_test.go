@@ -164,7 +164,7 @@ func testAccessList(t *testing.T, vals []struct{ k, v string }) {
 	parent = root
 	trie, _ = New(TrieID(root), db)
 	orig = trie.Copy()
-	var keys []string
+	keys := make([]string, 0, 30)
 	for i := 0; i < 30; i++ {
 		key := randBytes(32)
 		keys = append(keys, string(key))

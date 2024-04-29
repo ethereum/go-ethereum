@@ -82,8 +82,8 @@ func showAttributeCounts(ns nodeSet) {
 		}
 	}
 
-	var keys []string
 	var maxlength int
+	keys := make([]string, 0, len(attrcount))
 	for key := range attrcount {
 		keys = append(keys, key)
 		if len(key) > maxlength {
