@@ -120,7 +120,7 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	}
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
-	txContext.Accesses = statedb.NewAccessWitness()
+	txContext.AccessEvents = statedb.NewAccessEvents()
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
@@ -159,8 +159,8 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
-	if statedb.Witness() != nil {
-		statedb.Witness().Merge(txContext.Accesses)
+	if statedb.AccessEvents() != nil {
+		statedb.AccessEvents().Merge(txContext.AccessEvents)
 	}
 
 	// Set the receipt logs and create the bloom filter.
@@ -209,7 +209,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	}
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	if vmenv.ChainConfig().Rules(vmenv.Context.BlockNumber, true, vmenv.Context.Time).IsEIP4762 {
-		statedb.Witness().Merge(txctx.Accesses)
+		statedb.AccessEvents().Merge(txctx.AccessEvents)
 	}
 	statedb.Finalise(true)
 }

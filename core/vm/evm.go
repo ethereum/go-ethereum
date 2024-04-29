@@ -86,11 +86,11 @@ type BlockContext struct {
 // All fields can change between transactions.
 type TxContext struct {
 	// Message information
-	Origin     common.Address       // Provides information for ORIGIN
-	GasPrice   *big.Int             // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
-	BlobHashes []common.Hash        // Provides information for BLOBHASH
-	BlobFeeCap *big.Int             // Is used to zero the blobbasefee if NoBaseFee is set
-	Accesses   *state.AccessWitness // Capture all state accesses for this tx
+	Origin       common.Address      // Provides information for ORIGIN
+	GasPrice     *big.Int            // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
+	BlobHashes   []common.Hash       // Provides information for BLOBHASH
+	BlobFeeCap   *big.Int            // Is used to zero the blobbasefee if NoBaseFee is set
+	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -151,8 +151,8 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 	}
-	if txCtx.Accesses == nil && chainConfig.IsPrague(blockCtx.BlockNumber, blockCtx.Time) {
-		evm.Accesses = evm.StateDB.(*state.StateDB).NewAccessWitness()
+	if txCtx.AccessEvents == nil && chainConfig.IsPrague(blockCtx.BlockNumber, blockCtx.Time) {
+		evm.AccessEvents = evm.StateDB.(*state.StateDB).NewAccessEvents()
 	}
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
@@ -161,8 +161,8 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
-	if txCtx.Accesses == nil && evm.chainRules.IsPrague {
-		txCtx.Accesses = evm.StateDB.(*state.StateDB).NewAccessWitness()
+	if txCtx.AccessEvents == nil && evm.chainRules.IsPrague {
+		txCtx.AccessEvents = evm.StateDB.(*state.StateDB).NewAccessEvents()
 	}
 	evm.TxContext = txCtx
 	evm.StateDB = statedb
@@ -211,7 +211,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP4762 {
 			// add proof of absence to witness
-			wgas := evm.Accesses.AddAccount(addr.Bytes(), false)
+			wgas := evm.AccessEvents.AddAccount(addr.Bytes(), false)
 			if gas < wgas {
 				evm.StateDB.RevertToSnapshot(snapshot)
 				return nil, 0, ErrOutOfGas
@@ -504,7 +504,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
-		if !contract.UseGas(evm.Accesses.ContractCreateInitGas(address.Bytes(), value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
+		if !contract.UseGas(evm.AccessEvents.ContractCreateInitGas(address.Bytes(), value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
 			err = ErrOutOfGas
 		}
 	}
@@ -535,11 +535,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			}
 		} else {
 			// Contract creation completed, touch the missing fields in the contract
-			if !contract.UseGas(evm.Accesses.AddAccount(address.Bytes()[:], true), evm.Config.Tracer, tracing.GasChangeWitnessContractCreation) {
+			if !contract.UseGas(evm.AccessEvents.AddAccount(address.Bytes()[:], true), evm.Config.Tracer, tracing.GasChangeWitnessContractCreation) {
 				err = ErrCodeStoreOutOfGas
 			}
 
-			if err == nil && len(ret) > 0 && !contract.UseGas(evm.Accesses.CodeChunksRangeGas(address.Bytes(), 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk) {
+			if err == nil && len(ret) > 0 && !contract.UseGas(evm.AccessEvents.CodeChunksRangeGas(address.Bytes(), 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk) {
 				err = ErrCodeStoreOutOfGas
 			}
 		}

@@ -422,10 +422,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		targetAddr := msg.To
 		originAddr := msg.From
 
-		st.evm.Accesses.AddTxOrigin(originAddr.Bytes())
+		st.evm.AccessEvents.AddTxOrigin(originAddr.Bytes())
 
 		if msg.To != nil {
-			st.evm.Accesses.AddTxDestination(targetAddr.Bytes(), msg.Value.Sign() != 0)
+			st.evm.AccessEvents.AddTxDestination(targetAddr.Bytes(), msg.Value.Sign() != 0)
 
 			// ensure the code size ends up in the access witness
 			st.evm.StateDB.GetCodeSize(*targetAddr)
@@ -488,7 +488,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 		// add the coinbase to the witness iff the fee is greater than 0
 		if rules.IsEIP4762 && fee.Sign() != 0 {
-			st.evm.Accesses.BalanceGas(st.evm.Context.Coinbase[:], true)
+			st.evm.AccessEvents.BalanceGas(st.evm.Context.Coinbase[:], true)
 		}
 	}
 

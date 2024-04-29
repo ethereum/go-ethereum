@@ -140,8 +140,8 @@ type StateDB struct {
 	// Transient storage
 	transientStorage transientStorage
 
-	// Verkle witness
-	witness *AccessWitness
+	// State access events, used for Verkle tries/EIP4762
+	accessEvents *AccessEvents
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -198,7 +198,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		hasher:               crypto.NewKeccakState(),
 	}
 	if tr.IsVerkle() {
-		sdb.witness = sdb.NewAccessWitness()
+		sdb.accessEvents = sdb.NewAccessEvents()
 	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
@@ -206,19 +206,19 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 	return sdb, nil
 }
 
-func (s *StateDB) NewAccessWitness() *AccessWitness {
-	return NewAccessWitness(utils.NewPointCache(100))
+func (s *StateDB) NewAccessEvents() *AccessEvents {
+	return NewAccessEvents(utils.NewPointCache(100))
 }
 
-func (s *StateDB) Witness() *AccessWitness {
-	if s.witness == nil {
-		s.witness = s.NewAccessWitness()
+func (s *StateDB) AccessEvents() *AccessEvents {
+	if s.accessEvents == nil {
+		s.accessEvents = s.NewAccessEvents()
 	}
-	return s.witness
+	return s.accessEvents
 }
 
-func (s *StateDB) SetWitness(aw *AccessWitness) {
-	s.witness = aw
+func (s *StateDB) SetAccessEvents(ae *AccessEvents) {
+	s.accessEvents = ae
 }
 
 // SetLogger sets the logger for account update hooks.

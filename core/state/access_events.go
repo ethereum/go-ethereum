@@ -37,27 +37,27 @@ const (
 
 var zeroTreeIndex uint256.Int
 
-// AccessWitness lists the locations of the state that are being accessed
+// AccessEvents lists the locations of the state that are being accessed
 // during the production of a block.
-type AccessWitness struct {
+type AccessEvents struct {
 	branches map[branchAccessKey]mode
 	chunks   map[chunkAccessKey]mode
 
 	pointCache *utils.PointCache
 }
 
-func NewAccessWitness(pointCache *utils.PointCache) *AccessWitness {
-	return &AccessWitness{
+func NewAccessEvents(pointCache *utils.PointCache) *AccessEvents {
+	return &AccessEvents{
 		branches:   make(map[branchAccessKey]mode),
 		chunks:     make(map[chunkAccessKey]mode),
 		pointCache: pointCache,
 	}
 }
 
-// Merge is used to merge the witness that got generated during the execution
-// of a tx, with the accumulation of witnesses that were generated during the
-// execution of all the txs preceding this one in a given block.
-func (aw *AccessWitness) Merge(other *AccessWitness) {
+// Merge is used to merge the access events that were generated during the
+// execution of a tx, with the accumulation of all access events that were
+// generated during the execution of all txs preceding this one in a block.
+func (aw *AccessEvents) Merge(other *AccessEvents) {
 	for k := range other.branches {
 		aw.branches[k] |= other.branches[k]
 	}
@@ -68,7 +68,7 @@ func (aw *AccessWitness) Merge(other *AccessWitness) {
 
 // Key returns, predictably, the list of keys that were touched during the
 // buildup of the access witness.
-func (aw *AccessWitness) Keys() [][]byte {
+func (aw *AccessEvents) Keys() [][]byte {
 	// TODO: consider if parallelizing this is worth it, probably depending on len(aw.chunks).
 	keys := make([][]byte, 0, len(aw.chunks))
 	for chunk := range aw.chunks {
@@ -79,8 +79,8 @@ func (aw *AccessWitness) Keys() [][]byte {
 	return keys
 }
 
-func (aw *AccessWitness) Copy() *AccessWitness {
-	naw := &AccessWitness{
+func (aw *AccessEvents) Copy() *AccessEvents {
+	naw := &AccessEvents{
 		branches:   make(map[branchAccessKey]mode),
 		chunks:     make(map[chunkAccessKey]mode),
 		pointCache: aw.pointCache,
@@ -91,7 +91,7 @@ func (aw *AccessWitness) Copy() *AccessWitness {
 
 // AddAccount returns the gas to be charged for each of the currently cold
 // member fields of an account.
-func (aw *AccessWitness) AddAccount(addr []byte, isWrite bool) uint64 {
+func (aw *AccessEvents) AddAccount(addr []byte, isWrite bool) uint64 {
 	var gas uint64
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
 		gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, byte(i), isWrite)
@@ -102,7 +102,7 @@ func (aw *AccessWitness) AddAccount(addr []byte, isWrite bool) uint64 {
 // MessageCallGas returns the gas to be charged for each of the currently
 // cold member fields of an account, that need to be touched when making a message
 // call to that account.
-func (aw *AccessWitness) MessageCallGas(destination []byte) uint64 {
+func (aw *AccessEvents) MessageCallGas(destination []byte) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.VersionLeafKey, false)
 	gas += aw.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.CodeSizeLeafKey, false)
@@ -111,7 +111,7 @@ func (aw *AccessWitness) MessageCallGas(destination []byte) uint64 {
 
 // ValueTransferGas returns the gas to be charged for each of the currently
 // cold balance member fields of the caller and the callee accounts.
-func (aw *AccessWitness) ValueTransferGas(callerAddr, targetAddr []byte) uint64 {
+func (aw *AccessEvents) ValueTransferGas(callerAddr, targetAddr []byte) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
 	gas += aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
@@ -120,7 +120,7 @@ func (aw *AccessWitness) ValueTransferGas(callerAddr, targetAddr []byte) uint64 
 
 // ContractCreateInitGas returns the access gas costs for the initialization of
 // a contract creation.
-func (aw *AccessWitness) ContractCreateInitGas(addr []byte, createSendsValue bool) uint64 {
+func (aw *AccessEvents) ContractCreateInitGas(addr []byte, createSendsValue bool) uint64 {
 	var gas uint64
 	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, true)
 	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.NonceLeafKey, true)
@@ -132,7 +132,7 @@ func (aw *AccessWitness) ContractCreateInitGas(addr []byte, createSendsValue boo
 
 // AddTxOrigin adds the member fields of the sender account to the witness,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
-func (aw *AccessWitness) AddTxOrigin(originAddr []byte) {
+func (aw *AccessEvents) AddTxOrigin(originAddr []byte) {
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
 		aw.touchAddressAndChargeGas(originAddr, zeroTreeIndex, byte(i), i == utils.BalanceLeafKey || i == utils.NonceLeafKey)
 	}
@@ -140,21 +140,21 @@ func (aw *AccessWitness) AddTxOrigin(originAddr []byte) {
 
 // AddTxDestination adds the member fields of the sender account to the witness,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
-func (aw *AccessWitness) AddTxDestination(targetAddr []byte, sendsValue bool) {
+func (aw *AccessEvents) AddTxDestination(targetAddr []byte, sendsValue bool) {
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
 		aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, byte(i), i == utils.VersionLeafKey && sendsValue)
 	}
 }
 
 // SlotGas returns the amount of gas to be charged for a cold storage access.
-func (aw *AccessWitness) SlotGas(addr []byte, slot common.Hash, isWrite bool) uint64 {
+func (aw *AccessEvents) SlotGas(addr []byte, slot common.Hash, isWrite bool) uint64 {
 	treeIndex, subIndex := utils.StorageIndex(slot.Bytes())
 	return aw.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite)
 }
 
 // touchAddressAndChargeGas adds any missing access event to the witness, and returns the cold
 // access cost to be charged, if need be.
-func (aw *AccessWitness) touchAddressAndChargeGas(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) uint64 {
+func (aw *AccessEvents) touchAddressAndChargeGas(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) uint64 {
 	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := aw.touchAddress(addr, treeIndex, subIndex, isWrite)
 
 	var gas uint64
@@ -178,7 +178,7 @@ func (aw *AccessWitness) touchAddressAndChargeGas(addr []byte, treeIndex uint256
 }
 
 // touchAddress adds any missing access event to the witness.
-func (aw *AccessWitness) touchAddress(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) (bool, bool, bool, bool, bool) {
+func (aw *AccessEvents) touchAddress(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) (bool, bool, bool, bool, bool) {
 	branchKey := newBranchAccessKey(addr, treeIndex)
 	chunkKey := newChunkAccessKey(branchKey, subIndex)
 
@@ -238,7 +238,7 @@ func newChunkAccessKey(branchKey branchAccessKey, leafKey byte) chunkAccessKey {
 }
 
 // touchCodeChunksRangeOnReadAndChargeGas is a helper function to touch every chunk in a code range and charge witness gas costs
-func (aw *AccessWitness) CodeChunksRangeGas(contractAddr []byte, startPC, size uint64, codeLen uint64, isWrite bool) uint64 {
+func (aw *AccessEvents) CodeChunksRangeGas(contractAddr []byte, startPC, size uint64, codeLen uint64, isWrite bool) uint64 {
 	// note that in the case where the copied code is outside the range of the
 	// contract code but touches the last leaf with contract code in it,
 	// we don't include the last leaf of code in the AccessWitness.  The
@@ -272,22 +272,22 @@ func (aw *AccessWitness) CodeChunksRangeGas(contractAddr []byte, startPC, size u
 	return statelessGasCharged
 }
 
-func (aw *AccessWitness) VersionGas(addr []byte, isWrite bool) uint64 {
+func (aw *AccessEvents) VersionGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, isWrite)
 }
 
-func (aw *AccessWitness) BalanceGas(addr []byte, isWrite bool) uint64 {
+func (aw *AccessEvents) BalanceGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BalanceLeafKey, isWrite)
 }
 
-func (aw *AccessWitness) NonceGas(addr []byte, isWrite bool) uint64 {
+func (aw *AccessEvents) NonceGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.NonceLeafKey, isWrite)
 }
 
-func (aw *AccessWitness) CodeSizeGas(addr []byte, isWrite bool) uint64 {
+func (aw *AccessEvents) CodeSizeGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeSizeLeafKey, isWrite)
 }
 
-func (aw *AccessWitness) CodeHashGas(addr []byte, isWrite bool) uint64 {
+func (aw *AccessEvents) CodeHashGas(addr []byte, isWrite bool) uint64 {
 	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeKeccakLeafKey, isWrite)
 }
