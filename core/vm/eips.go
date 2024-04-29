@@ -389,7 +389,8 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	return nil, nil
 }
 
-// opPush1EIP4762 is a specialized version of pushN
+// opPush1EIP4762 handles the special case of PUSH1 opcode for EIP-4762, which
+// need not worry about the adjusted bound logic.
 func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		codeLen = uint64(len(scope.Contract.Code))
