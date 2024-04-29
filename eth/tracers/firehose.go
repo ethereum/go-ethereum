@@ -463,7 +463,7 @@ func (f *Firehose) reorderCallOrdinals(call *pbeth.Call, ordinalBase uint64) (or
 }
 
 func (f *Firehose) OnSystemCallStart() {
-	firehoseInfo("system call start (for=%s)", callerView(3))
+	firehoseInfo("system call start")
 	f.ensureInBlockAndNotInTrx()
 
 	f.inSystemCall = true
@@ -1981,35 +1981,6 @@ func (r *receiptView) String() string {
 	}
 
 	return fmt.Sprintf("[status=%s, gasUsed=%d, logs=%d]", status, r.GasUsed, len(r.Logs))
-}
-
-type _callerView struct {
-	skipFrame int
-}
-
-func (v _callerView) String() string {
-	_, file, line, found := runtime.Caller(v.skipFrame)
-	if !found {
-		return "<unknown>"
-	}
-
-	return fmt.Sprintf("%s:%d", file, line)
-}
-
-// callerView returns a fmt.Stringer that will print the caller of the function. You need
-// to specify how many frames to skip from the callstack. The minimum is 1  and usually 2.
-//
-// Imagine you have the call stack
-//   - callerView(3)
-//   - firehoseDebug(..., callerView(3))
-//   - OnOpcode(...)
-//   - ProcessCall(...)
-//   - ...<rest of Geth calls>
-//
-// In this example, with `callerView(2)` which means skip 3 call frames, you would get
-// you to ProcessCall frame and `callerView` would print that.
-func callerView(skipFrame int) fmt.Stringer {
-	return _callerView{skipFrame}
 }
 
 func emptyBytesToNil(in []byte) []byte {
