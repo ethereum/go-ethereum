@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"maps"
 	"math/big"
-	"runtime"
 	"slices"
 	"sort"
 	"sync"
@@ -33,13 +32,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/syncx"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/holiman/uint256"
+	"golang.org/x/sync/errgroup"
 )
 
 type revision struct {
@@ -1159,11 +1158,51 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	// writes to run in parallel with the computations.
 	start := time.Now()
 	var (
-		code = s.db.DiskDB().NewBatch()
-		lock sync.Mutex
+		code    = s.db.DiskDB().NewBatch()
+		lock    sync.Mutex
+		root    common.Hash
+		workers errgroup.Group
 	)
-	workers := syncx.NewWorkerPool[*stateObject, error](len(s.mutations), min(len(s.mutations), runtime.NumCPU()),
-		func(obj *stateObject) error {
+	// Schedule the account trie first since that will be the biggest, so give
+	// it the most time to crunch.
+	workers.Go(func() error {
+		// Write the account trie changes, measuring the amount of wasted time
+		start = time.Now()
+
+		newroot, set, err := s.trie.Commit(true)
+		if err != nil {
+			return err
+		}
+		root = newroot
+
+		// Merge the dirty nodes of account trie into global set
+		if set != nil {
+			lock.Lock()
+			defer lock.Unlock()
+
+			if err = nodes.Merge(set); err != nil {
+				return err
+			}
+			accountTrieNodesUpdated, accountTrieNodesDeleted = set.Size()
+		}
+		// Report the commit metrics
+		s.AccountCommits += time.Since(start)
+		return nil
+	})
+	// Schedule each of the storage tries that need to be updated, so they can
+	// run concurrently to one another.
+	for addr, op := range s.mutations {
+		if op.isDelete() {
+			continue
+		}
+		// Write any contract code associated with the state object
+		obj := s.stateObjects[addr]
+		if obj.code != nil && obj.dirtyCode {
+			rawdb.WriteCode(code, common.BytesToHash(obj.CodeHash()), obj.code)
+			obj.dirtyCode = false
+		}
+		// Run the storage updates concurrently to one another
+		workers.Go(func() error {
 			// Write any storage changes in the state object to its storage trie
 			set, err := obj.commit()
 			if err != nil {
@@ -1185,60 +1224,24 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			}
 			return nil
 		})
-
-	for addr, op := range s.mutations {
-		if op.isDelete() {
-			continue
-		}
-		// Write any contract code associated with the state object
-		obj := s.stateObjects[addr]
-		if obj.code != nil && obj.dirtyCode {
-			rawdb.WriteCode(code, common.BytesToHash(obj.CodeHash()), obj.code)
-			obj.dirtyCode = false
-		}
-		// Run the storage updates concurrently to one another
-		workers.Schedule(obj)
 	}
-	workers.Close()
-
 	// Updates running concurrently, wait for them to complete; running the code
 	// writes in the meantime.
 	done := make(chan struct{})
 	go func() {
-		// This goroutine is only needed to accurately measure the storage commit
-		// and not have the concurrent code write dirty the stats.
 		defer close(done)
 
-		workers.Wait()
-		s.StorageCommits += time.Since(start)
+		if code.ValueSize() > 0 {
+			if err := code.Write(); err != nil {
+				log.Crit("Failed to commit dirty codes", "error", err)
+			}
+		}
 	}()
-	if code.ValueSize() > 0 {
-		if err := code.Write(); err != nil {
-			log.Crit("Failed to commit dirty codes", "error", err)
-		}
-	}
-	<-done
-	for err := range workers.Results() {
-		if err != nil {
-			return common.Hash{}, err
-		}
-	}
-	// Write the account trie changes, measuring the amount of wasted time
-	start = time.Now()
-
-	root, set, err := s.trie.Commit(true)
-	if err != nil {
+	if err := workers.Wait(); err != nil {
 		return common.Hash{}, err
 	}
-	// Merge the dirty nodes of account trie into global set
-	if set != nil {
-		if err := nodes.Merge(set); err != nil {
-			return common.Hash{}, err
-		}
-		accountTrieNodesUpdated, accountTrieNodesDeleted = set.Size()
-	}
-	// Report the commit metrics
-	s.AccountCommits += time.Since(start)
+	s.StorageCommits += time.Since(start)
+	<-done
 
 	accountUpdatedMeter.Mark(int64(s.AccountUpdated))
 	storageUpdatedMeter.Mark(int64(s.StorageUpdated))
