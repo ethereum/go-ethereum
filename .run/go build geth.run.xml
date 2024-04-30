@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="go build geth" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="go-ethereum-1.14-7560" />
+    <working_directory value="$PROJECT_DIR$" />
+    <parameters value="--networkid 1337 --allow-insecure-unlock --http.api &quot;eth,net,web3,personal,web3,debug&quot; --identity &quot;HelloWorldNode&quot; --http --http.port 8545 --rpc.allow-unprotected-txs --port 30304 --bootnodes enode://f00bd8e0f1aac5044a8620e3d8bb50585220fe01a224e989a2397816e6351d0b050fb239e075c2715cbefb249774d76997b810ad4315c06b8798b2005a499528@127.0.0.1:0?discport=30303 --datadir alexfdata --mine --miner.etherbase 0xe6c5ca21523ff5ae736b13f8d1ea9c8d24753d76 --miner.gaslimit 30000000 --unlock 0xe6c5ca21523ff5ae736b13f8d1ea9c8d24753d76 --password ./passwordfile" />
+    <kind value="PACKAGE" />
+    <package value="github.com/ethereum/go-ethereum/cmd/geth" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/cmd/geth/main.go" />
+    <option name="run" value="false" />
+    <method v="2" />
+  </configuration>
+</component>
