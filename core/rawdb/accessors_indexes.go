@@ -184,7 +184,7 @@ func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig
 		}
 	}
 
-	log.Error("Receipt not found", "number", *blockNumber, "txHash", blockHash, "txhash", txHash)
+	log.Error("Receipt not found", "number", *blockNumber, "blockHash", blockHash, "txHash", txHash)
 	return nil, common.Hash{}, 0, 0
 }
 
