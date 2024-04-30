@@ -114,7 +114,12 @@ func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*Node) error {
 				set.updates -= 1
 			}
 		}
-		set.AddNode([]byte(path), node)
+		if node.IsDeleted() {
+			set.deletes += 1
+		} else {
+			set.updates += 1
+		}
+		set.Nodes[path] = node
 	}
 	return nil
 }
