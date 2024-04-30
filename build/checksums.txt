@@ -56,10 +56,12 @@ a5e68ae73d38748b5269fad36ac7575e3c162a5dc63ef58abdea03cc5da4522a  golangci-lint-
 # This is the builder on PPA that will build Go itself (inception-y), don't modify!
 #
 # This version is fine to be old and full of security holes, we just use it
-# to build the latest Go. Don't change it. If it ever becomes insufficient,
-# we need to switch over to a recursive builder to jump across supported
-# versions.
+# to build the latest Go. Don't change it.
 #
-# version:ppa-builder 1.19.6
+# version:ppa-builder-1 1.19.6
 # https://go.dev/dl/
 d7f0013f82e6d7f862cc6cb5c8cdb48eef5f2e239b35baa97e2f1a7466043767  go1.19.6.src.tar.gz
+
+# version:ppa-builder-2 1.21.9
+# https://go.dev/dl/
+58f0c5ced45a0012bce2ff7a9df03e128abcc8818ebabe5027bb92bafe20e421  go1.21.9.src.tar.gz

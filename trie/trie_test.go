@@ -886,7 +886,7 @@ func TestCommitSequence(t *testing.T) {
 	} {
 		addresses, accounts := makeAccounts(tc.count)
 		// This spongeDb is used to check the sequence of disk-db-writes
-		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
+		s := &spongeDb{sponge: crypto.NewKeccakState()}
 		db := newTestDatabase(rawdb.NewDatabase(s), rawdb.HashScheme)
 		trie := NewEmpty(db)
 		// Fill the trie with elements
@@ -917,7 +917,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 	} {
 		prng := rand.New(rand.NewSource(int64(i)))
 		// This spongeDb is used to check the sequence of disk-db-writes
-		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
+		s := &spongeDb{sponge: crypto.NewKeccakState()}
 		db := newTestDatabase(rawdb.NewDatabase(s), rawdb.HashScheme)
 		trie := NewEmpty(db)
 		// Fill the trie with elements
@@ -963,11 +963,9 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 			id:     "b",
 			values: make(map[string]string),
 		}
-		options := NewStackTrieOptions()
-		options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+		stTrie := NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(stackTrieSponge, common.Hash{}, path, hash, blob, db.Scheme())
 		})
-		stTrie := NewStackTrie(options)
 
 		// Fill the trie with elements
 		for i := 0; i < count; i++ {
@@ -993,7 +991,7 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 		s.Flush()
 
 		// And flush stacktrie -> disk
-		stRoot := stTrie.Commit()
+		stRoot := stTrie.Hash()
 		if stRoot != root {
 			t.Fatalf("root wrong, got %x exp %x", stRoot, root)
 		}
@@ -1034,12 +1032,9 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 		id:     "b",
 		values: make(map[string]string),
 	}
-	options := NewStackTrieOptions()
-	options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+	stTrie := NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		rawdb.WriteTrieNode(stackTrieSponge, common.Hash{}, path, hash, blob, db.Scheme())
 	})
-	stTrie := NewStackTrie(options)
-
 	// Add a single small-element to the trie(s)
 	key := make([]byte, 5)
 	key[0] = 1
@@ -1053,7 +1048,7 @@ func TestCommitSequenceSmallRoot(t *testing.T) {
 	db.Commit(root)
 
 	// And flush stacktrie -> disk
-	stRoot := stTrie.Commit()
+	stRoot := stTrie.Hash()
 	if stRoot != root {
 		t.Fatalf("root wrong, got %x exp %x", stRoot, root)
 	}

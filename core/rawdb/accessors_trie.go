@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/crypto/sha3"
 )
 
 // HashScheme is the legacy hash-based state scheme with which trie nodes are
@@ -50,7 +49,7 @@ const PathScheme = "path"
 type hasher struct{ sha crypto.KeccakState }
 
 var hasherPool = sync.Pool{
-	New: func() interface{} { return &hasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
+	New: func() interface{} { return &hasher{sha: crypto.NewKeccakState()} },
 }
 
 func newHasher() *hasher {
@@ -65,33 +64,15 @@ func (h *hasher) release() {
 	hasherPool.Put(h)
 }
 
-// ReadAccountTrieNode retrieves the account trie node and the associated node
-// hash with the specified node path.
-func ReadAccountTrieNode(db ethdb.KeyValueReader, path []byte) ([]byte, common.Hash) {
-	data, err := db.Get(accountTrieNodeKey(path))
-	if err != nil {
-		return nil, common.Hash{}
-	}
-	h := newHasher()
-	defer h.release()
-	return data, h.hash(data)
+// ReadAccountTrieNode retrieves the account trie node with the specified node path.
+func ReadAccountTrieNode(db ethdb.KeyValueReader, path []byte) []byte {
+	data, _ := db.Get(accountTrieNodeKey(path))
+	return data
 }
 
-// HasAccountTrieNode checks the account trie node presence with the specified
-// node path and the associated node hash.
-func HasAccountTrieNode(db ethdb.KeyValueReader, path []byte, hash common.Hash) bool {
-	data, err := db.Get(accountTrieNodeKey(path))
-	if err != nil {
-		return false
-	}
-	h := newHasher()
-	defer h.release()
-	return h.hash(data) == hash
-}
-
-// ExistsAccountTrieNode checks the presence of the account trie node with the
+// HasAccountTrieNode checks the presence of the account trie node with the
 // specified node path, regardless of the node hash.
-func ExistsAccountTrieNode(db ethdb.KeyValueReader, path []byte) bool {
+func HasAccountTrieNode(db ethdb.KeyValueReader, path []byte) bool {
 	has, err := db.Has(accountTrieNodeKey(path))
 	if err != nil {
 		return false
@@ -113,33 +94,15 @@ func DeleteAccountTrieNode(db ethdb.KeyValueWriter, path []byte) {
 	}
 }
 
-// ReadStorageTrieNode retrieves the storage trie node and the associated node
-// hash with the specified node path.
-func ReadStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte) ([]byte, common.Hash) {
-	data, err := db.Get(storageTrieNodeKey(accountHash, path))
-	if err != nil {
-		return nil, common.Hash{}
-	}
-	h := newHasher()
-	defer h.release()
-	return data, h.hash(data)
+// ReadStorageTrieNode retrieves the storage trie node with the specified node path.
+func ReadStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte) []byte {
+	data, _ := db.Get(storageTrieNodeKey(accountHash, path))
+	return data
 }
 
-// HasStorageTrieNode checks the storage trie node presence with the provided
-// node path and the associated node hash.
-func HasStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte, hash common.Hash) bool {
-	data, err := db.Get(storageTrieNodeKey(accountHash, path))
-	if err != nil {
-		return false
-	}
-	h := newHasher()
-	defer h.release()
-	return h.hash(data) == hash
-}
-
-// ExistsStorageTrieNode checks the presence of the storage trie node with the
+// HasStorageTrieNode checks the presence of the storage trie node with the
 // specified account hash and node path, regardless of the node hash.
-func ExistsStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte) bool {
+func HasStorageTrieNode(db ethdb.KeyValueReader, accountHash common.Hash, path []byte) bool {
 	has, err := db.Has(storageTrieNodeKey(accountHash, path))
 	if err != nil {
 		return false
@@ -198,10 +161,18 @@ func HasTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash c
 	case HashScheme:
 		return HasLegacyTrieNode(db, hash)
 	case PathScheme:
+		var blob []byte
 		if owner == (common.Hash{}) {
-			return HasAccountTrieNode(db, path, hash)
+			blob = ReadAccountTrieNode(db, path)
+		} else {
+			blob = ReadStorageTrieNode(db, owner, path)
 		}
-		return HasStorageTrieNode(db, owner, path, hash)
+		if len(blob) == 0 {
+			return false
+		}
+		h := newHasher()
+		defer h.release()
+		return h.hash(blob) == hash // exists but not match
 	default:
 		panic(fmt.Sprintf("Unknown scheme %v", scheme))
 	}
@@ -209,28 +180,24 @@ func HasTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash c
 
 // ReadTrieNode retrieves the trie node from database with the provided node info
 // and associated node hash.
-// hashScheme-based lookup requires the following:
-//   - hash
-//
-// pathScheme-based lookup requires the following:
-//   - owner
-//   - path
 func ReadTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash common.Hash, scheme string) []byte {
 	switch scheme {
 	case HashScheme:
 		return ReadLegacyTrieNode(db, hash)
 	case PathScheme:
-		var (
-			blob  []byte
-			nHash common.Hash
-		)
+		var blob []byte
 		if owner == (common.Hash{}) {
-			blob, nHash = ReadAccountTrieNode(db, path)
+			blob = ReadAccountTrieNode(db, path)
 		} else {
-			blob, nHash = ReadStorageTrieNode(db, owner, path)
+			blob = ReadStorageTrieNode(db, owner, path)
 		}
-		if nHash != hash {
+		if len(blob) == 0 {
 			return nil
+		}
+		h := newHasher()
+		defer h.release()
+		if h.hash(blob) != hash {
+			return nil // exists but not match
 		}
 		return blob
 	default:
@@ -238,14 +205,10 @@ func ReadTrieNode(db ethdb.KeyValueReader, owner common.Hash, path []byte, hash 
 	}
 }
 
-// WriteTrieNode writes the trie node into database with the provided node info
-// and associated node hash.
-// hashScheme-based lookup requires the following:
-//   - hash
+// WriteTrieNode writes the trie node into database with the provided node info.
 //
-// pathScheme-based lookup requires the following:
-//   - owner
-//   - path
+// hash-scheme requires the node hash as the identifier.
+// path-scheme requires the node owner and path as the identifier.
 func WriteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, hash common.Hash, node []byte, scheme string) {
 	switch scheme {
 	case HashScheme:
@@ -261,14 +224,10 @@ func WriteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, hash
 	}
 }
 
-// DeleteTrieNode deletes the trie node from database with the provided node info
-// and associated node hash.
-// hashScheme-based lookup requires the following:
-//   - hash
+// DeleteTrieNode deletes the trie node from database with the provided node info.
 //
-// pathScheme-based lookup requires the following:
-//   - owner
-//   - path
+// hash-scheme requires the node hash as the identifier.
+// path-scheme requires the node owner and path as the identifier.
 func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, hash common.Hash, scheme string) {
 	switch scheme {
 	case HashScheme:
@@ -287,9 +246,8 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 // ReadStateScheme reads the state scheme of persistent state, or none
 // if the state is not present in database.
 func ReadStateScheme(db ethdb.Reader) string {
-	// Check if state in path-based scheme is present
-	blob, _ := ReadAccountTrieNode(db, nil)
-	if len(blob) != 0 {
+	// Check if state in path-based scheme is present.
+	if HasAccountTrieNode(db, nil) {
 		return PathScheme
 	}
 	// The root node might be deleted during the initial snap sync, check
@@ -304,8 +262,7 @@ func ReadStateScheme(db ethdb.Reader) string {
 	if header == nil {
 		return "" // empty datadir
 	}
-	blob = ReadLegacyTrieNode(db, header.Root)
-	if len(blob) == 0 {
+	if !HasLegacyTrieNode(db, header.Root) {
 		return "" // no state in disk
 	}
 	return HashScheme

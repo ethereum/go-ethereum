@@ -28,7 +28,7 @@ var (
 	errDatabaseWaitSync = errors.New("waiting for sync")
 
 	// errSnapshotStale is returned from data accessors if the underlying layer
-	// layer had been invalidated due to the chain progressing forward far enough
+	// had been invalidated due to the chain progressing forward far enough
 	// to not maintain the layer's original state.
 	errSnapshotStale = errors.New("layer stale")
 

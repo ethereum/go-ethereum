@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -546,9 +547,9 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 				// the performance impact negligible.
 				var exists bool
 				if owner == (common.Hash{}) {
-					exists = rawdb.ExistsAccountTrieNode(s.database, append(inner, key[:i]...))
+					exists = rawdb.HasAccountTrieNode(s.database, append(inner, key[:i]...))
 				} else {
-					exists = rawdb.ExistsStorageTrieNode(s.database, owner, append(inner, key[:i]...))
+					exists = rawdb.HasStorageTrieNode(s.database, owner, append(inner, key[:i]...))
 				}
 				if exists {
 					s.membatch.delNode(owner, append(inner, key[:i]...))
@@ -691,13 +692,14 @@ func (s *Sync) hasNode(owner common.Hash, path []byte, hash common.Hash) (exists
 	}
 	// If node is running with path scheme, check the presence with node path.
 	var blob []byte
-	var dbHash common.Hash
 	if owner == (common.Hash{}) {
-		blob, dbHash = rawdb.ReadAccountTrieNode(s.database, path)
+		blob = rawdb.ReadAccountTrieNode(s.database, path)
 	} else {
-		blob, dbHash = rawdb.ReadStorageTrieNode(s.database, owner, path)
+		blob = rawdb.ReadStorageTrieNode(s.database, owner, path)
 	}
-	exists = hash == dbHash
+	h := newBlobHasher()
+	defer h.release()
+	exists = hash == h.hash(blob)
 	inconsistent = !exists && len(blob) != 0
 	return exists, inconsistent
 }
@@ -711,4 +713,24 @@ func ResolvePath(path []byte) (common.Hash, []byte) {
 		path = path[2*common.HashLength:]
 	}
 	return owner, path
+}
+
+// blobHasher is used to compute the sha256 hash of the provided data.
+type blobHasher struct{ state crypto.KeccakState }
+
+// blobHasherPool is the pool for reusing pre-allocated hash state.
+var blobHasherPool = sync.Pool{
+	New: func() interface{} { return &blobHasher{state: crypto.NewKeccakState()} },
+}
+
+func newBlobHasher() *blobHasher {
+	return blobHasherPool.Get().(*blobHasher)
+}
+
+func (h *blobHasher) hash(data []byte) common.Hash {
+	return crypto.HashData(h.state, data)
+}
+
+func (h *blobHasher) release() {
+	blobHasherPool.Put(h)
 }
