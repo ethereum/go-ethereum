@@ -143,45 +143,47 @@ func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig
 
 	// Find a match tx and derive receipt fields
 	for txIndex, tx := range blockBody.Transactions {
-		if tx.Hash() == txHash {
-			// Read raw receipts only if hash matches
-			receipts := ReadRawReceipts(db, blockHash, *blockNumber)
-			if receipts == nil {
-				return nil, common.Hash{}, 0, 0
-			}
-			if len(blockBody.Transactions) != len(receipts) {
-				log.Error("Transaction and receipt count mismatch", "txs", len(blockBody.Transactions), "receipts", len(receipts))
-				return nil, common.Hash{}, 0, 0
-			}
-
-			targetReceipt := receipts[txIndex]
-			signer := types.MakeSigner(config, new(big.Int).SetUint64(*blockNumber), blockHeader.Time)
-
-			// Compute effective blob gas price.
-			var blobGasPrice *big.Int
-			if blockHeader.ExcessBlobGas != nil {
-				blobGasPrice = eip4844.CalcBlobFee(*blockHeader.ExcessBlobGas)
-			}
-
-			var gasUsed uint64
-			if txIndex == 0 {
-				gasUsed = targetReceipt.CumulativeGasUsed
-			} else {
-				gasUsed = targetReceipt.CumulativeGasUsed - receipts[txIndex-1].CumulativeGasUsed
-			}
-
-			// Calculate the staring log index from previous logs
-			logIndex := uint(0)
-			for i := 0; i < txIndex; i++ {
-				logIndex += uint(len(receipts[i].Logs))
-			}
-
-			if err := targetReceipt.DeriveField(signer, blockHash, *blockNumber, blockHeader.BaseFee, blobGasPrice, uint(txIndex), gasUsed, logIndex, blockBody.Transactions[txIndex]); err != nil {
-				log.Error("Failed to derive the receipt fields", "txHash", txHash, "err", err)
-				return nil, common.Hash{}, 0, 0
-			}
-			return targetReceipt, blockHash, *blockNumber, uint64(txIndex)
+		if tx.Hash() != txHash {
+			continue
 		}
+
+		// Read raw receipts only if hash matches
+		receipts := ReadRawReceipts(db, blockHash, *blockNumber)
+		if receipts == nil {
+			return nil, common.Hash{}, 0, 0
+		}
+		if len(blockBody.Transactions) != len(receipts) {
+			log.Error("Transaction and receipt count mismatch", "txs", len(blockBody.Transactions), "receipts", len(receipts))
+			return nil, common.Hash{}, 0, 0
+		}
+
+		targetReceipt := receipts[txIndex]
+		signer := types.MakeSigner(config, new(big.Int).SetUint64(*blockNumber), blockHeader.Time)
+
+		// Compute effective blob gas price.
+		var blobGasPrice *big.Int
+		if blockHeader.ExcessBlobGas != nil {
+			blobGasPrice = eip4844.CalcBlobFee(*blockHeader.ExcessBlobGas)
+		}
+
+		var gasUsed uint64
+		if txIndex == 0 {
+			gasUsed = targetReceipt.CumulativeGasUsed
+		} else {
+			gasUsed = targetReceipt.CumulativeGasUsed - receipts[txIndex-1].CumulativeGasUsed
+		}
+
+		// Calculate the staring log index from previous logs
+		logIndex := uint(0)
+		for i := 0; i < txIndex; i++ {
+			logIndex += uint(len(receipts[i].Logs))
+		}
+
+		if err := targetReceipt.DeriveField(signer, blockHash, *blockNumber, blockHeader.BaseFee, blobGasPrice, uint(txIndex), gasUsed, logIndex, blockBody.Transactions[txIndex]); err != nil {
+			log.Error("Failed to derive the receipt fields", "txHash", txHash, "err", err)
+			return nil, common.Hash{}, 0, 0
+		}
+		return targetReceipt, blockHash, *blockNumber, uint64(txIndex)
 	}
 
 	log.Error("Receipt not found", "number", *blockNumber, "blockHash", blockHash, "txHash", txHash)
