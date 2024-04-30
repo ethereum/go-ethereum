@@ -1165,10 +1165,15 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	)
 	// Schedule the account trie first since that will be the biggest, so give
 	// it the most time to crunch.
+	//
+	// TODO(karalabe): This account trie commit is *very* heavy. 5-6ms at chain
+	// heads, which seems excessive given that it doesn't do hashing, it just
+	// shuffles some data. For comparison, the *hashing* at chain head is 2-3ms.
+	// We need to investigate what's happening as it seems something's wonky.
+	// Obviously it's not an end of the world issue, just something the original
+	// code didn't anticipate for.
 	workers.Go(func() error {
 		// Write the account trie changes, measuring the amount of wasted time
-		start = time.Now()
-
 		newroot, set, err := s.trie.Commit(true)
 		if err != nil {
 			return err
@@ -1176,21 +1181,25 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		root = newroot
 
 		// Merge the dirty nodes of account trie into global set
-		if set != nil {
-			lock.Lock()
-			defer lock.Unlock()
+		lock.Lock()
+		defer lock.Unlock()
 
+		if set != nil {
 			if err = nodes.Merge(set); err != nil {
 				return err
 			}
 			accountTrieNodesUpdated, accountTrieNodesDeleted = set.Size()
 		}
-		// Report the commit metrics
-		s.AccountCommits += time.Since(start)
+		s.AccountCommits = time.Since(start)
 		return nil
 	})
 	// Schedule each of the storage tries that need to be updated, so they can
 	// run concurrently to one another.
+	//
+	// TODO(karalabe): Experimentally, the account commit takes approximately the
+	// same time as all the storage commits combined, so we could maybe only have
+	// 2 threads in total. But that kind of depends on the account commit being
+	// more expensive than it should be, so let's fix that and revisit this todo.
 	for addr, op := range s.mutations {
 		if op.isDelete() {
 			continue
@@ -1211,10 +1220,10 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			// Merge the dirty nodes of storage trie into global set. It is possible
 			// that the account was destructed and then resurrected in the same block.
 			// In this case, the node set is shared by both accounts.
-			if set != nil {
-				lock.Lock()
-				defer lock.Unlock()
+			lock.Lock()
+			defer lock.Unlock()
 
+			if set != nil {
 				if err = nodes.Merge(set); err != nil {
 					return err
 				}
@@ -1222,27 +1231,25 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 				storageTrieNodesUpdated += updates
 				storageTrieNodesDeleted += deleted
 			}
+			s.StorageCommits = time.Since(start) // overwrite with the longest storage commit runtime
 			return nil
 		})
 	}
-	// Updates running concurrently, wait for them to complete; running the code
-	// writes in the meantime.
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-
+	// Schedule the code commits to run concurrently too. This shouldn't really
+	// take much since we don't often commit code, but since it's disk access,
+	// it's always yolo.
+	workers.Go(func() error {
 		if code.ValueSize() > 0 {
 			if err := code.Write(); err != nil {
 				log.Crit("Failed to commit dirty codes", "error", err)
 			}
 		}
-	}()
+		return nil
+	})
+	// Wait for everything to finish and update the metrics
 	if err := workers.Wait(); err != nil {
 		return common.Hash{}, err
 	}
-	s.StorageCommits += time.Since(start)
-	<-done
-
 	accountUpdatedMeter.Mark(int64(s.AccountUpdated))
 	storageUpdatedMeter.Mark(int64(s.StorageUpdated))
 	accountDeletedMeter.Mark(int64(s.AccountDeleted))
