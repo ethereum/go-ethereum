@@ -32,6 +32,7 @@ func BenchmarkMerge(b *testing.B) {
 		benchmarkMerge(b, 10_000)
 	})
 }
+
 func benchmarkMerge(b *testing.B, count int) {
 	x := NewNodeSet(common.Hash{})
 	y := NewNodeSet(common.Hash{})
@@ -57,5 +58,4 @@ func benchmarkMerge(b *testing.B, count int) {
 		x.Merge(common.Hash{}, y.Nodes)
 		x = z
 	}
-
 }
