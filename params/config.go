@@ -374,7 +374,6 @@ type ChainConfig struct {
 
 	// RIP-7560 specific config parameters
 	EntryPointAddress     common.Address `json:"entryPointAddress,omitempty"`
-	NonceManagerAddress   common.Address `json:"nonceManagerAddress,omitempty"`
 	DeployerCallerAddress common.Address `json:"deployerCallerAddress,omitempty"`
 }
 

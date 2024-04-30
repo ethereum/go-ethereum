@@ -46,7 +46,6 @@ type Rip7560AccountAbstractionTx struct {
 	ValidationGas uint64
 	PaymasterGas  uint64
 	PostOpGas     uint64
-	BigNonce      *big.Int
 
 	// removed fields
 	To    *common.Address
@@ -68,7 +67,6 @@ func (tx *Rip7560AccountAbstractionTx) copy() TxData {
 		GasTipCap:  new(big.Int),
 		GasFeeCap:  new(big.Int),
 
-		BigNonce:      new(big.Int),
 		Sender:        copyAddressPtr(tx.Sender),
 		Signature:     common.CopyBytes(tx.Signature),
 		PaymasterData: common.CopyBytes(tx.PaymasterData),
@@ -90,9 +88,6 @@ func (tx *Rip7560AccountAbstractionTx) copy() TxData {
 	if tx.GasFeeCap != nil {
 		cpy.GasFeeCap.Set(tx.GasFeeCap)
 	}
-	if tx.BigNonce != nil {
-		cpy.BigNonce.Set(tx.BigNonce)
-	}
 	if tx.BuilderFee != nil {
 		cpy.BuilderFee.Set(tx.BuilderFee)
 	}
@@ -110,7 +105,6 @@ func (tx *Rip7560AccountAbstractionTx) gasTipCap() *big.Int    { return tx.GasTi
 func (tx *Rip7560AccountAbstractionTx) gasPrice() *big.Int     { return tx.GasFeeCap }
 func (tx *Rip7560AccountAbstractionTx) value() *big.Int        { return tx.Value }
 func (tx *Rip7560AccountAbstractionTx) nonce() uint64          { return 0 }
-func (tx *Rip7560AccountAbstractionTx) bigNonce() *big.Int     { return tx.BigNonce }
 func (tx *Rip7560AccountAbstractionTx) to() *common.Address    { return tx.To }
 
 func (tx *Rip7560AccountAbstractionTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
@@ -181,7 +175,7 @@ func (tx *Rip7560AccountAbstractionTx) AbiEncode() ([]byte, error) {
 	}
 	record := &Rip7560Transaction{
 		Sender:               *tx.Sender,
-		Nonce:                tx.BigNonce,
+		Nonce:                big.NewInt(int64(tx.Nonce)),
 		ValidationGasLimit:   big.NewInt(int64(tx.ValidationGas)),
 		PaymasterGasLimit:    big.NewInt(int64(tx.PaymasterGas)),
 		CallGasLimit:         big.NewInt(int64(tx.Gas)),

@@ -128,71 +128,12 @@ func NewRip7560StateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTra
 	}
 }
 
-// GetRip7560AccountNonce reads the two-dimensional RIP-7560 nonce from the given blockchain state
-func GetRip7560AccountNonce(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, cfg vm.Config, sender common.Address, nonceKey *big.Int) uint64 {
-
-	// todo: this is a copy paste of 5 lines that need 8 parameters to run, wtf?
-	blockContext := NewEVMBlockContext(header, bc, author)
-	message, err := TransactionToMessage(tx, types.MakeSigner(config, header.Number, header.Time), header.BaseFee)
-	txContext := NewEVMTxContext(message)
-	vmenv := vm.NewEVM(blockContext, txContext, statedb, config, cfg)
-	vmenv.Reset(txContext, statedb) // TODO what does this 'reset' do?
-
-	from := common.HexToAddress("0x0000000000000000000000000000000000000000")
-	// todo: read NM address from global config
-	nonceManager := common.HexToAddress("0xdebc121d1b09bc03ff57fa1f96514d04a1f0f59d")
-	fromBigNonceKey256, _ := uint256.FromBig(nonceKey)
-	key := make([]byte, 24)
-	fromBigNonceKey256.WriteToSlice(key)
-	nonceManagerData := make([]byte, 0)
-	nonceManagerData = append(nonceManagerData[:], sender.Bytes()...)
-	nonceManagerData = append(nonceManagerData[:], key...)
-
-	nonceManagerMsg := &Message{
-		From:              from,
-		To:                &nonceManager,
-		Value:             big.NewInt(0),
-		GasLimit:          100000,
-		GasPrice:          big.NewInt(875000000),
-		GasFeeCap:         big.NewInt(875000000),
-		GasTipCap:         big.NewInt(875000000),
-		Data:              nonceManagerData,
-		AccessList:        make(types.AccessList, 0),
-		SkipAccountChecks: true,
-		IsRip7560Frame:    true,
-	}
-	resultNonceManager, err := ApplyRip7560FrameMessage(vmenv, nonceManagerMsg, gp)
-	if err != nil {
-		// todo: handle
-		return 777
-	}
-	if resultNonceManager.Err != nil {
-		return 888
-	}
-	if resultNonceManager.ReturnData == nil {
-		return 999
-	}
-	return big.NewInt(0).SetBytes(resultNonceManager.ReturnData).Uint64()
-}
-
 func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, cfg vm.Config) (*ValidationPhaseResult, error) {
-	/*** Nonce Manger Frame ***/
-	nonceManagerMsg := prepareNonceManagerMessage(tx, chainConfig)
-
+	stubMsg := prepareStubMessage(tx, chainConfig)
 	blockContext := NewEVMBlockContext(header, bc, author)
-	txContext := NewEVMTxContext(nonceManagerMsg)
+	txContext := NewEVMTxContext(stubMsg)
 	txContext.Origin = *tx.Rip7560TransactionData().Sender
 	evm := vm.NewEVM(blockContext, txContext, statedb, chainConfig, cfg)
-
-	resultNonceManager, err := ApplyRip7560FrameMessage(evm, nonceManagerMsg, gp)
-	if err != nil {
-		return nil, err
-	}
-	statedb.IntermediateRoot(true)
-	if resultNonceManager.Err != nil {
-		return nil, resultNonceManager.Err
-	}
-
 	/*** Deployer Frame ***/
 	deployerMsg := prepareDeployerMessage(tx, chainConfig)
 	var deploymentUsedGas uint64
@@ -340,25 +281,15 @@ func ApplyRip7560ExecutionPhase(config *params.ChainConfig, vpr *ValidationPhase
 	}
 	return receipt, err
 }
-
-func prepareNonceManagerMessage(baseTx *types.Transaction, chainConfig *params.ChainConfig) *Message {
+func prepareStubMessage(baseTx *types.Transaction, chainConfig *params.ChainConfig) *Message {
 	tx := baseTx.Rip7560TransactionData()
-	key := make([]byte, 32)
-	fromBig, _ := uint256.FromBig(tx.BigNonce)
-	fromBig.WriteToSlice(key)
-
-	nonceManagerData := make([]byte, 0)
-	nonceManagerData = append(nonceManagerData[:], tx.Sender.Bytes()...)
-	nonceManagerData = append(nonceManagerData[:], key...)
 	return &Message{
 		From:              chainConfig.EntryPointAddress,
-		To:                &chainConfig.NonceManagerAddress,
 		Value:             big.NewInt(0),
 		GasLimit:          100000,
 		GasPrice:          tx.GasFeeCap,
 		GasFeeCap:         tx.GasFeeCap,
 		GasTipCap:         tx.GasTipCap,
-		Data:              nonceManagerData,
 		AccessList:        make(types.AccessList, 0),
 		SkipAccountChecks: true,
 		IsRip7560Frame:    true,

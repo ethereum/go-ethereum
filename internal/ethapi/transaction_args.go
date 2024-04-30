@@ -84,7 +84,6 @@ type TransactionArgs struct {
 	BuilderFee    *hexutil.Big
 	ValidationGas *hexutil.Uint64
 	PaymasterGas  *hexutil.Uint64
-	BigNonce      *hexutil.Big // AA nonce is 256 bits wide
 }
 
 // from retrieves the transaction sender address.
@@ -506,7 +505,6 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			BuilderFee:    (*big.Int)(args.BuilderFee),
 			ValidationGas: uint64(*args.ValidationGas),
 			PaymasterGas:  uint64(*args.PaymasterGas),
-			BigNonce:      (*big.Int)(args.BigNonce),
 		}
 		data = &aatx
 		hash := types.NewTx(data).Hash()
