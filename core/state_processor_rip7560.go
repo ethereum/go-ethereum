@@ -27,7 +27,6 @@ type ValidationPhaseResult struct {
 	SenderValidUntil    uint64
 	PmValidAfter        uint64
 	PmValidUntil        uint64
-	IsEOA               bool
 }
 
 // HandleRip7560Transactions apply state changes of all sequential RIP-7560 transactions and return
@@ -38,22 +37,13 @@ func HandleRip7560Transactions(transactions []*types.Transaction, index int, sta
 	receipts := make([]*types.Receipt, 0)
 	allLogs := make([]*types.Log, 0)
 
-	i := index
-	for {
-		if i >= len(transactions) {
-			break
-		}
-		if transactions[i].Type() != types.Rip7560Type {
-			break
-		}
-		iTransactions, iReceipts, iLogs, err := handleRip7560Transactions(transactions, index, statedb, coinbase, header, gp, chainConfig, bc, cfg)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		validatedTransactions = append(validatedTransactions, iTransactions...)
-		receipts = append(receipts, iReceipts...)
-		allLogs = append(allLogs, iLogs...)
+	iTransactions, iReceipts, iLogs, err := handleRip7560Transactions(transactions, index, statedb, coinbase, header, gp, chainConfig, bc, cfg)
+	if err != nil {
+		return nil, nil, nil, err
 	}
+	validatedTransactions = append(validatedTransactions, iTransactions...)
+	receipts = append(receipts, iReceipts...)
+	allLogs = append(allLogs, iLogs...)
 	return validatedTransactions, receipts, allLogs, nil
 }
 
@@ -62,47 +52,31 @@ func handleRip7560Transactions(transactions []*types.Transaction, index int, sta
 	validatedTransactions := make([]*types.Transaction, 0)
 	receipts := make([]*types.Receipt, 0)
 	allLogs := make([]*types.Log, 0)
-	signer := types.MakeSigner(chainConfig, header.Number, header.Time)
 	for i, tx := range transactions[index:] {
 		if tx.Type() != types.Rip7560Type {
 			break
 		}
 
 		aatx := tx.Rip7560TransactionData()
-		isEoa, err := isTransactionEOA(tx, statedb, signer)
+		statedb.SetTxContext(tx.Hash(), index+i)
+		err := BuyGasRip7560Transaction(aatx, statedb)
+		var vpr *ValidationPhaseResult
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		statedb.SetTxContext(tx.Hash(), index+i)
-		err = BuyGasRip7560Transaction(aatx, statedb)
-		var vpr *ValidationPhaseResult
-		if isEoa {
-			blockContext := NewEVMBlockContext(header, bc, coinbase)
-			tmpMsg, err := TransactionToMessage(tx, signer, header.BaseFee)
-			txContext := NewEVMTxContext(tmpMsg)
-			evm := vm.NewEVM(blockContext, txContext, statedb, chainConfig, cfg)
-			//signer := types.MakeSigner(chainConfig, header.Number, header.Time)
-			signingHash := signer.Hash(tx)
-			vpr, err = validateRip7560TransactionFromEOA(tx, signingHash, statedb, evm, coinbase, header, gp, chainConfig)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-		} else {
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			vpr, err = ApplyRip7560ValidationPhases(chainConfig, bc, coinbase, gp, statedb, header, tx, cfg)
-			if err != nil {
-				return nil, nil, nil, err
-			}
+		vpr, err = ApplyRip7560ValidationPhases(chainConfig, bc, coinbase, gp, statedb, header, tx, cfg)
+		if err != nil {
+			return nil, nil, nil, err
 		}
 		validationPhaseResults = append(validationPhaseResults, vpr)
 		validatedTransactions = append(validatedTransactions, tx)
-	}
-	for i, vpr := range validationPhaseResults {
+
+		// This is the line separating the Validation and Execution phases
+		// It should be separated to implement the mempool-friendly AA RIP (number not assigned yet)
+		// for i, vpr := range validationPhaseResults
 
 		// TODO: this will miss all validation phase events - pass in 'vpr'
-		statedb.SetTxContext(vpr.Tx.Hash(), i)
+		// statedb.SetTxContext(vpr.Tx.Hash(), i)
 
 		receipt, err := ApplyRip7560ExecutionPhase(chainConfig, vpr, bc, coinbase, gp, statedb, header, cfg)
 
@@ -137,49 +111,6 @@ func BuyGasRip7560Transaction(st *types.Rip7560AccountAbstractionTx, state vm.St
 
 	state.SubBalance(chargeFrom, mgval, 0)
 	return nil
-}
-
-// TODO: not needed with subtype - only use to validate transaction, maybe
-func isTransactionEOA(tx *types.Transaction, statedb *state.StateDB, signer types.Signer) (bool, error) {
-	aatx := tx.Rip7560TransactionData()
-	senderHasCode := statedb.GetCodeSize(*aatx.Sender) != 0 || len(aatx.DeployerData) != 0
-	if senderHasCode {
-		return false, nil
-	}
-	address, err := signer.Sender(tx)
-	if err != nil {
-		return false, err
-	}
-	if address.Cmp(*tx.Rip7560TransactionData().Sender) != 0 {
-		return false, errors.New("recovered signature does not match the claimed EOA sender")
-	}
-	return true, nil
-}
-
-func validateRip7560TransactionFromEOA(tx *types.Transaction, signingHash common.Hash, statedb *state.StateDB, evm *vm.EVM, coinbase *common.Address, header *types.Header, gp *GasPool, chainConfig *params.ChainConfig) (*ValidationPhaseResult, error) {
-	// TODO: paymaste is actually optional for eoa-type-4 -> check paymaster data len()
-	paymasterContext, pmValidationUsedGas, pmValidAfter, pmValidUntil, err := applyPaymasterValidationFrame(tx, chainConfig, signingHash, evm, gp, statedb, header)
-	if err != nil {
-		return nil, err
-	}
-	err = validateValidityTimeRange(header.Time, pmValidAfter, pmValidUntil)
-	if err != nil {
-		return nil, err
-	}
-	vpr := &ValidationPhaseResult{
-		Tx:                  tx,
-		TxHash:              tx.Hash(),
-		PaymasterContext:    paymasterContext,
-		DeploymentUsedGas:   0,
-		ValidationUsedGas:   0,
-		PmValidationUsedGas: pmValidationUsedGas,
-		SenderValidAfter:    0,
-		SenderValidUntil:    0,
-		PmValidAfter:        pmValidAfter,
-		PmValidUntil:        pmValidUntil,
-		IsEOA:               true,
-	}
-	return vpr, nil
 }
 
 func ApplyRip7560FrameMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
@@ -311,7 +242,6 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 		SenderValidUntil:    validUntil,
 		PmValidAfter:        pmValidAfter,
 		PmValidUntil:        pmValidUntil,
-		IsEOA:               false,
 	}
 
 	return vpr, nil
@@ -373,15 +303,7 @@ func ApplyRip7560ExecutionPhase(config *params.ChainConfig, vpr *ValidationPhase
 	txContext.Origin = *vpr.Tx.Rip7560TransactionData().Sender
 	evm := vm.NewEVM(blockContext, txContext, statedb, config, cfg)
 
-	var accountExecutionMsg *Message
-	if vpr.IsEOA {
-		accountExecutionMsg, err = prepareEOATargetExecutionMessage(vpr.Tx)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		accountExecutionMsg = prepareAccountExecutionMessage(vpr.Tx, evm.ChainConfig())
-	}
+	accountExecutionMsg := prepareAccountExecutionMessage(vpr.Tx, evm.ChainConfig())
 	executionResult, err := ApplyRip7560FrameMessage(evm, accountExecutionMsg, gp)
 	if err != nil {
 		return nil, err

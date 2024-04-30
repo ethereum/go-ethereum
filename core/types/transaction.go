@@ -207,6 +207,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		inner = new(DynamicFeeTx)
 	case BlobTxType:
 		inner = new(BlobTx)
+	case Rip7560Type:
+		inner = new(Rip7560AccountAbstractionTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}

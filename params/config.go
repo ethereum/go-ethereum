@@ -173,6 +173,7 @@ var (
 		EIP150Block:                   big.NewInt(0),
 		EIP155Block:                   big.NewInt(0),
 		EIP158Block:                   big.NewInt(0),
+		RIP7560Block:                  big.NewInt(0),
 		ByzantiumBlock:                big.NewInt(0),
 		ConstantinopleBlock:           big.NewInt(0),
 		PetersburgBlock:               big.NewInt(0),
@@ -335,6 +336,8 @@ type ChainConfig struct {
 	EIP150Block *big.Int `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
 	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
+
+	RIP7560Block *big.Int `json:"rip7560block,omitempty"` // RIP7560 HF block
 
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
@@ -584,6 +587,11 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 // IsVerkle returns whether num is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
+}
+
+// IsRIP7560 returns whether num is either equal to the RIP7560 fork block or greater.
+func (c *ChainConfig) IsRIP7560(num *big.Int) bool {
+	return isBlockForked(c.RIP7560Block, num)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
