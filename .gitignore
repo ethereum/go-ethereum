@@ -50,3 +50,10 @@ profile.cov
 logs/
 
 tests/spec-tests/
+/alexfdata/gethdata/
+/alexfdata/beacondata/
+/alexfdata/validatordata/
+/alexfdata/beacon_chain
+/alexfdata/prysmctl
+/alexfdata/validator
+/alexfdata/genesis.ssz
