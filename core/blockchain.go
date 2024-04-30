@@ -1309,7 +1309,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// Delete block data from the main database.
 		var (
 			batch       = bc.db.NewBatch()
-			canonHashes = make(map[common.Hash]struct{})
+			canonHashes = make(map[common.Hash]struct{}, len(blockChain))
 		)
 		for _, block := range blockChain {
 			canonHashes[block.Hash()] = struct{}{}
