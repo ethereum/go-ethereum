@@ -164,7 +164,7 @@ func (t *pathTrie) deleteAccountNode(path []byte, inner bool) {
 	} else {
 		accountOuterLookupGauge.Inc(1)
 	}
-	if !rawdb.ExistsAccountTrieNode(t.db, path) {
+	if !rawdb.HasAccountTrieNode(t.db, path) {
 		return
 	}
 	if inner {
@@ -181,7 +181,7 @@ func (t *pathTrie) deleteStorageNode(path []byte, inner bool) {
 	} else {
 		storageOuterLookupGauge.Inc(1)
 	}
-	if !rawdb.ExistsStorageTrieNode(t.db, t.owner, path) {
+	if !rawdb.HasStorageTrieNode(t.db, t.owner, path) {
 		return
 	}
 	if inner {

@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -148,14 +149,14 @@ func (b *nodebuffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[s
 				//
 				// In case of database rollback, don't panic if this "clean"
 				// node occurs which is not present in buffer.
-				var nhash common.Hash
+				var blob []byte
 				if owner == (common.Hash{}) {
-					_, nhash = rawdb.ReadAccountTrieNode(db, []byte(path))
+					blob = rawdb.ReadAccountTrieNode(db, []byte(path))
 				} else {
-					_, nhash = rawdb.ReadStorageTrieNode(db, owner, []byte(path))
+					blob = rawdb.ReadStorageTrieNode(db, owner, []byte(path))
 				}
 				// Ignore the clean node in the case described above.
-				if nhash == n.Hash {
+				if bytes.Equal(blob, n.Blob) {
 					continue
 				}
 				panic(fmt.Sprintf("non-existent node (%x %v) blob: %v", owner, path, crypto.Keccak256Hash(n.Blob).Hex()))

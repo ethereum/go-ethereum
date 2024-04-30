@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -306,8 +307,10 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Ensure the provided state root matches the stored one.
 	root = types.TrieRootHash(root)
-	_, stored := rawdb.ReadAccountTrieNode(db.diskdb, nil)
-	stored = types.TrieRootHash(stored)
+	stored := types.EmptyRootHash
+	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
+		stored = crypto.Keccak256Hash(blob)
+	}
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}
@@ -478,11 +481,6 @@ func (db *Database) SetBufferSize(size int) error {
 	}
 	db.bufferSize = size
 	return db.tree.bottom().setBufferSize(db.bufferSize)
-}
-
-// Scheme returns the node scheme used in the database.
-func (db *Database) Scheme() string {
-	return rawdb.PathScheme
 }
 
 // modifyAllowed returns the indicator if mutation is allowed. This function

@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
-	"golang.org/x/crypto/sha3"
 )
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
@@ -117,12 +116,12 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	dirtyMissMeter.Mark(1)
 
 	// Try to retrieve the trie node from the clean memory cache
+	h := newHasher()
+	defer h.release()
+
 	key := cacheKey(owner, path)
 	if dl.cleans != nil {
 		if blob := dl.cleans.Get(nil, key); len(blob) > 0 {
-			h := newHasher()
-			defer h.release()
-
 			cleanHitMeter.Mark(1)
 			cleanReadMeter.Mark(int64(len(blob)))
 			return blob, h.hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
@@ -130,20 +129,18 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		cleanMissMeter.Mark(1)
 	}
 	// Try to retrieve the trie node from the disk.
-	var (
-		nBlob []byte
-		nHash common.Hash
-	)
+	var blob []byte
 	if owner == (common.Hash{}) {
-		nBlob, nHash = rawdb.ReadAccountTrieNode(dl.db.diskdb, path)
+		blob = rawdb.ReadAccountTrieNode(dl.db.diskdb, path)
 	} else {
-		nBlob, nHash = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
+		blob = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
-	if dl.cleans != nil && len(nBlob) > 0 {
-		dl.cleans.Set(key, nBlob)
-		cleanWriteMeter.Mark(int64(len(nBlob)))
+	if dl.cleans != nil && len(blob) > 0 {
+		dl.cleans.Set(key, blob)
+		cleanWriteMeter.Mark(int64(len(blob)))
 	}
-	return nBlob, nHash, &nodeLoc{loc: locDiskLayer, depth: depth}, nil
+
+	return blob, h.hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // update implements the layer interface, returning a new diff layer on top
@@ -303,7 +300,7 @@ func (dl *diskLayer) resetCache() {
 type hasher struct{ sha crypto.KeccakState }
 
 var hasherPool = sync.Pool{
-	New: func() interface{} { return &hasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
+	New: func() interface{} { return &hasher{sha: crypto.NewKeccakState()} },
 }
 
 func newHasher() *hasher {

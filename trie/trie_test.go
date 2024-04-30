@@ -886,7 +886,7 @@ func TestCommitSequence(t *testing.T) {
 	} {
 		addresses, accounts := makeAccounts(tc.count)
 		// This spongeDb is used to check the sequence of disk-db-writes
-		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
+		s := &spongeDb{sponge: crypto.NewKeccakState()}
 		db := newTestDatabase(rawdb.NewDatabase(s), rawdb.HashScheme)
 		trie := NewEmpty(db)
 		// Fill the trie with elements
@@ -917,7 +917,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 	} {
 		prng := rand.New(rand.NewSource(int64(i)))
 		// This spongeDb is used to check the sequence of disk-db-writes
-		s := &spongeDb{sponge: sha3.NewLegacyKeccak256()}
+		s := &spongeDb{sponge: crypto.NewKeccakState()}
 		db := newTestDatabase(rawdb.NewDatabase(s), rawdb.HashScheme)
 		trie := NewEmpty(db)
 		// Fill the trie with elements

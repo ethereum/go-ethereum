@@ -474,7 +474,7 @@ func TestDisable(t *testing.T) {
 	tester := newTester(t, 0)
 	defer tester.release()
 
-	_, stored := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
+	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
 	if err := tester.db.Disable(); err != nil {
 		t.Fatalf("Failed to deactivate database: %v", err)
 	}
@@ -580,7 +580,7 @@ func TestCorruptedJournal(t *testing.T) {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
 	tester.db.Close()
-	_, root := rawdb.ReadAccountTrieNode(tester.db.diskdb, nil)
+	root := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
 
 	// Mutate the journal in disk, it should be regarded as invalid
 	blob := rawdb.ReadTrieJournal(tester.db.diskdb)
