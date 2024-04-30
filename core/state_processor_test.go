@@ -417,10 +417,11 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		header.ParentBeaconRoot = &beaconRoot
 	}
 	// Assemble and return the final block for sealing
+	body := &types.Body{Transactions: txs}
 	if config.IsShanghai(header.Number, header.Time) {
-		return types.NewBlockWithWithdrawals(header, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))
+		body.Withdrawals = []*types.Withdrawal{}
 	}
-	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 }
 
 var (

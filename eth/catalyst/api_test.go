@@ -779,7 +779,7 @@ func setBlockhash(data *engine.ExecutableData) *engine.ExecutableData {
 		Extra:       data.ExtraData,
 		MixDigest:   data.Random,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs})
 	data.BlockHash = block.Hash()
 	return data
 }
@@ -935,7 +935,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 		Extra:       data.ExtraData,
 		MixDigest:   data.Random,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs})
 	data.BlockHash = block.Hash()
 	// Send the new payload
 	resp2, err := api.NewPayloadV1(data)
@@ -1554,7 +1554,7 @@ func TestBlockToPayloadWithBlobs(t *testing.T) {
 		},
 	}
 
-	block := types.NewBlock(&header, txs, nil, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(&header, &types.Body{Transactions: txs}, nil, trie.NewStackTrie(nil))
 	envelope := engine.BlockToExecutableData(block, nil, sidecars)
 	var want int
 	for _, tx := range txs {
