@@ -1,7 +1,5 @@
 #!/bin/sh -e
 
-rm -rf ../gethdata
-
 ../../build/bin/geth --datadir=../gethdata --password=../pwd account import ../secret.txt
 
 ../../build/bin/geth --datadir=../gethdata init ../genesis.json
