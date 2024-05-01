@@ -90,7 +90,7 @@ func (b *nodebuffer) commit(nodes map[common.Hash]map[string]*trienode.Node) *no
 			// The nodes belong to original diff layer are still accessible even
 			// after merging, thus the ownership of nodes map should still belong
 			// to original layer and any mutation on it should be prevented.
-			current = make(map[string]*trienode.Node)
+			current = make(map[string]*trienode.Node, len(subset))
 			for path, n := range subset {
 				current[path] = n
 				delta += int64(len(n.Blob) + len(path))

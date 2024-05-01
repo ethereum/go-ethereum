@@ -436,7 +436,7 @@ type virtualHostHandler struct {
 }
 
 func newVHostHandler(vhosts []string, next http.Handler) http.Handler {
-	vhostMap := make(map[string]struct{})
+	vhostMap := make(map[string]struct{}, len(vhosts))
 	for _, allowedHost := range vhosts {
 		vhostMap[strings.ToLower(allowedHost)] = struct{}{}
 	}
@@ -636,7 +636,7 @@ func RegisterApis(apis []rpc.API, modules []string, srv *rpc.Server) error {
 		log.Error("Unavailable modules in HTTP API list", "unavailable", bad, "available", available)
 	}
 	// Generate the allow list based on the allowed modules
-	allowList := make(map[string]bool)
+	allowList := make(map[string]bool, len(modules))
 	for _, module := range modules {
 		allowList[module] = true
 	}
