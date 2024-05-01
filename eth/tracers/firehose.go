@@ -768,7 +768,7 @@ func (f *Firehose) OnCallExit(depth int, output []byte, gasUsed uint64, err erro
 
 // OnOpcode implements the EVMLogger interface to trace a single step of VM execution.
 func (f *Firehose) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-	firehoseTrace("on opcode (op=%s gas=%d cost=%d, err=%s)", op, gas, cost, errorView(err))
+	firehoseTrace("on opcode (op=%s gas=%d cost=%d, err=%s)", vm.OpCode(op), gas, cost, errorView(err))
 
 	if activeCall := f.callStack.Peek(); activeCall != nil {
 		opCode := vm.OpCode(op)
