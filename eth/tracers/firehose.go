@@ -281,6 +281,8 @@ func (f *Firehose) resetBlock() {
 
 // resetTransaction resets the transaction state and the call state in one shot
 func (f *Firehose) resetTransaction() {
+	firehoseDebug("resetting transaction state")
+
 	f.transaction = nil
 	f.evm = nil
 	f.transactionLogIndex = 0
@@ -683,8 +685,6 @@ func (f *Firehose) assignOrdinalAndIndexToReceiptLogs() {
 
 	trx := f.transaction
 
-	receiptsLogs := trx.Receipt.Logs
-
 	callLogs := []*pbeth.Log{}
 	for _, call := range trx.Calls {
 		firehoseTrace("checking call (reverted=%t logs=%d)", call.StateReverted, len(call.Logs))
@@ -698,6 +698,24 @@ func (f *Firehose) assignOrdinalAndIndexToReceiptLogs() {
 	slices.SortFunc(callLogs, func(i, j *pbeth.Log) int {
 		return cmp.Compare(i.Ordinal, j.Ordinal)
 	})
+
+	// When a transaction failed the receipt can be nil, so we need to deal with this
+	var receiptsLogs []*pbeth.Log
+	if trx.Receipt == nil {
+		if len(callLogs) == 0 {
+			// No logs in the transaction (nor in calls), nothing to do
+			return
+		}
+
+		panic(fmt.Errorf(
+			"mismatch between Firehose call logs and Ethereum transaction %s receipt logs at block #%d, the transaction has no receipt (failed) so there is no logs but it exists %d Firehose call logs",
+			hex.EncodeToString(trx.Hash),
+			f.block.Number,
+			len(callLogs),
+		))
+	} else {
+		receiptsLogs = trx.Receipt.Logs
+	}
 
 	if len(callLogs) != len(receiptsLogs) {
 		panic(fmt.Errorf(
