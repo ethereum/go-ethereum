@@ -1,0 +1,172 @@
+{
+  "genesis": {
+    "baseFeePerGas": "2935",
+    "difficulty": "0",
+    "extraData": "0x6769756c696f207761732068657265",
+    "gasLimit": "30000000",
+    "hash": "0xb606f9eea389beb86ad7b90f716ab8b2145b09806e3cae6d866cc406176ff953",
+    "miner": "0x008b3b2f992c0e14edaa6e2c662bec549caa8df1",
+    "mixHash": "0x0fbfbdea994592940443188d440d955b4a24241fd297fe6dc51842ed481c46da",
+    "nonce": "0x0000000000000000",
+    "number": "3733423",
+    "stateRoot": "0x6ade0dc69a4852c342f189cf0f98fd0c4eb3357ce1fcb19e039b95d4780148dc",
+    "timestamp": "1687294944",
+    "totalDifficulty": "17000018015853232",
+    "withdrawals": [
+      {
+        "index": "0xb53221",
+        "validatorIndex": "0x3d4",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb53222",
+        "validatorIndex": "0x3d5",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb53223",
+        "validatorIndex": "0x3d6",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb53224",
+        "validatorIndex": "0x3d7",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2fc09"
+      },
+      {
+        "index": "0xb53225",
+        "validatorIndex": "0x3d8",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb53226",
+        "validatorIndex": "0x3d9",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x247dd"
+      },
+      {
+        "index": "0xb53227",
+        "validatorIndex": "0x3da",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb53228",
+        "validatorIndex": "0x3db",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2fc09"
+      },
+      {
+        "index": "0xb53229",
+        "validatorIndex": "0x3dc",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb5322a",
+        "validatorIndex": "0x3dd",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb5322b",
+        "validatorIndex": "0x3de",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb5322c",
+        "validatorIndex": "0x3df",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb5322d",
+        "validatorIndex": "0x3e0",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb5322e",
+        "validatorIndex": "0x3e1",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      },
+      {
+        "index": "0xb5322f",
+        "validatorIndex": "0x3e2",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x238d9"
+      },
+      {
+        "index": "0xb53230",
+        "validatorIndex": "0x3e3",
+        "address": "0xe276bc378a527a8792b353cdca5b5e53263dfb9e",
+        "amount": "0x2ed05"
+      }
+    ],
+    "withdrawalsRoot": "0x3cb455e987780d127dae999ae7a1666b3314a2207953019902fd7f8f30a3c367",
+    "alloc": {
+      "0x0000006916a87b82333f4245046623b23794c65c": {
+        "balance": "0x1e729b7d5868c33d7f136",
+        "nonce": "5"
+      },
+      "0x2cb672d8c128acc0825dcbaf61e43a293a5a5276": {
+        "balance": "0x0",
+        "code": "0x60003560e01c8063095ea7b31461005c57806340c10f1914610062578063a9059cbb146100d957806323b872dd1461015657806318160ddd1461015857806370a08231146101695763dd62ed3e1461018957346101895760006000f35b60006000f35b60043573ffffffffffffffffffffffffffffffffffffffff1660007fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef60206000602435856000526040600020805482018083119155600254820180831190600255600154331415171761018957600052a360006000f35b60043573ffffffffffffffffffffffffffffffffffffffff16337fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef60206000602435856000526040600020805482018083119155813360005260406000208054828103809111915590503417176101505760006000fd5b600052a3005b005b346101895760025460005260206000f35b346101895760043560005260406000205460005260206000f35b60006000f35b60006000fd",
+        "nonce": "1",
+        "storage": {
+          "0xbb65ff7a03b11b79143b011da0de7c67f6d9bb8f57df2381d88d503cdb07b0b6": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0xdfecc5e296fad583cf3240a878ef92ffb0955f284f0216e1670f60c2279e53ba": "0x0000000000000000000000000000000000000000000000000000000000000096"
+        }
+      },
+      "0x549a32d57c35d36811de6a462596970c83ea9b23": {
+        "balance": "0x0",
+        "code": "0x60003560f81c806000146100985780600114610022576002146100965760006000fd5b6000600060446000600060013560601c60206024602460006000857f70a0823100000000000000000000000000000000000000000000000000000000600052306004525af1507fa9059cbb000000000000000000000000000000000000000000000000000000006000526000546004525af1005b005b00",
+        "nonce": "1",
+        "storage": {
+          "0x0000000000000000000000000000000000000000000000000000000000000000": "0x000000000000000000000000eb3d3d616f3e43e9ed361edd2d0e644d18d179b7"
+        }
+      },
+      "0xeb3d3d616f3e43e9ed361edd2d0e644d18d179b7": {
+        "balance": "0x79b25b8c248adbe",
+        "nonce": "27"
+      }
+    },
+    "config": {
+      "chainId": 11155111,
+      "homesteadBlock": 0,
+      "daoForkSupport": true,
+      "eip150Block": 0,
+      "eip155Block": 0,
+      "eip158Block": 0,
+      "byzantiumBlock": 0,
+      "constantinopleBlock": 0,
+      "petersburgBlock": 0,
+      "istanbulBlock": 0,
+      "muirGlacierBlock": 0,
+      "berlinBlock": 0,
+      "londonBlock": 0,
+      "mergeNetsplitBlock": 1735371,
+      "shanghaiTime": 1677557088,
+      "cancunTime": 1706655072,
+      "terminalTotalDifficulty": 17000000000000000,
+      "terminalTotalDifficultyPassed": true,
+      "ethash": {}
+    }
+  },
+  "context": {
+    "number": "3733424",
+    "difficulty": "0",
+    "timestamp": "1687294956",
+    "gasLimit": "30000000",
+    "miner": "0x0000006916a87b82333f4245046623b23794c65c",
+    "baseFeePerGas": "2727"
+  },
+  "input": "0xf8771b820b4583030d4094549a32d57c35d36811de6a462596970c83ea9b238095012cb672d8c128acc0825dcbaf61e43a293a5a52761ba0fe7f0de0e0fd2b337dbdf1b4fdf97a144457f8502497172eb1344ab6e25a6806a00b8c1589fb14dcbb91d53a0f8acb1ee1ede901c89749ee15bfe86c6beec7052e"
+}
