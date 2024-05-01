@@ -2274,9 +2274,17 @@ func (m Memory) GetPtr(offset, size int64) []byte {
 		return nil
 	}
 
-	if len(m) > int(offset) {
+	if len(m) >= (int(offset) + int(size)) {
 		return m[offset : offset+size]
 	}
 
-	return nil
+	// The EVM does memory expansion **after** notifying us about OnOpcode which we use
+	// to compute Keccak256 pre-images now. This creates problem when we want to retrieve
+	// the preimage data because the memory is not expanded yet but in the EVM is going to
+	// work because the memory is going to be expanded before the operation is actually
+	// executed so the memory will be of the correct size.
+	//
+	// In this situtation, we must pad with zeroes when the memory is not big enough.
+	reminder := m[offset:]
+	return append(reminder, make([]byte, int(size)-len(reminder))...)
 }

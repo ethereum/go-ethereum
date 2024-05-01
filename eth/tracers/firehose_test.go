@@ -468,3 +468,25 @@ func blockEvent(height uint64) tracing.BlockEvent {
 		TD: b(1),
 	}
 }
+
+func TestMemory_GetPtr(t *testing.T) {
+	type args struct {
+		offset int64
+		size   int64
+	}
+	tests := []struct {
+		name string
+		m    Memory
+		args args
+		want []byte
+	}{
+		{"memory is just a bit too small", Memory([]byte{1, 2, 3}), args{0, 4}, []byte{1, 2, 3, 0}},
+		{"memory is flushed with request", Memory([]byte{1, 2, 3, 4}), args{0, 4}, []byte{1, 2, 3, 4}},
+		{"memory is just a bit too big", Memory([]byte{1, 2, 3, 4, 5}), args{0, 4}, []byte{1, 2, 3, 4}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.m.GetPtr(tt.args.offset, tt.args.size))
+		})
+	}
+}
