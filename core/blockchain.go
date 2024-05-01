@@ -68,7 +68,6 @@ var (
 	accountCommitTimer = metrics.NewRegisteredResettingTimer("chain/account/commits", nil)
 
 	storageReadTimer   = metrics.NewRegisteredResettingTimer("chain/storage/reads", nil)
-	storageHashTimer   = metrics.NewRegisteredResettingTimer("chain/storage/hashes", nil)
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 
@@ -1310,7 +1309,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// Delete block data from the main database.
 		var (
 			batch       = bc.db.NewBatch()
-			canonHashes = make(map[common.Hash]struct{})
+			canonHashes = make(map[common.Hash]struct{}, len(blockChain))
 		)
 		for _, block := range blockChain {
 			canonHashes[block.Hash()] = struct{}{}
@@ -1937,8 +1936,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	accountUpdateTimer.Update(statedb.AccountUpdates)               // Account updates are complete(in validation)
 	storageUpdateTimer.Update(statedb.StorageUpdates)               // Storage updates are complete(in validation)
 	accountHashTimer.Update(statedb.AccountHashes)                  // Account hashes are complete(in validation)
-	storageHashTimer.Update(statedb.StorageHashes)                  // Storage hashes are complete(in validation)
-	triehash := statedb.AccountHashes + statedb.StorageHashes       // The time spent on tries hashing
+	triehash := statedb.AccountHashes                               // The time spent on tries hashing
 	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates   // The time spent on tries update
 	trieRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
 	trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read

@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
@@ -255,9 +256,16 @@ func (s *stateObject) setState(key common.Hash, value *common.Hash) {
 func (s *stateObject) finalise(prefetch bool) {
 	slotsToPrefetch := make([][]byte, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
-		s.pendingStorage[key] = value
+		// If the slot is different from its original value, move it into the
+		// pending area to be committed at the end of the block (and prefetch
+		// the pathways).
 		if value != s.originStorage[key] {
+			s.pendingStorage[key] = value
 			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
+		} else {
+			// Otherwise, the slot was reverted to its original value, remove it
+			// from the pending area to avoid thrashing the data strutures.
+			delete(s.pendingStorage, key)
 		}
 	}
 	if s.db.prefetcher != nil && prefetch && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
@@ -286,9 +294,6 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	if len(s.pendingStorage) == 0 {
 		return s.trie, nil
 	}
-	// Track the amount of time wasted on updating the storage trie
-	defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
-
 	// The snapshot storage map for the object
 	var (
 		storage map[common.Hash][]byte
@@ -371,6 +376,11 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		}
 		s.db.StorageDeleted += 1
 	}
+	// If no slots were touched, issue a warning as we shouldn't have done all
+	// the above work in the first place
+	if len(usedStorage) == 0 {
+		log.Error("State object update was noop", "addr", s.address, "slots", len(s.pendingStorage))
+	}
 	if s.db.prefetcher != nil {
 		s.db.prefetcher.used(s.addrHash, s.data.Root, usedStorage)
 	}
@@ -387,9 +397,6 @@ func (s *stateObject) updateRoot() {
 	if err != nil || tr == nil {
 		return
 	}
-	// Track the amount of time wasted on hashing the storage trie
-	defer func(start time.Time) { s.db.StorageHashes += time.Since(start) }(time.Now())
-
 	s.data.Root = tr.Hash()
 }
 
@@ -402,9 +409,6 @@ func (s *stateObject) commit() (*trienode.NodeSet, error) {
 		s.origin = s.data.Copy()
 		return nil, nil
 	}
-	// Track the amount of time wasted on committing the storage trie
-	defer func(start time.Time) { s.db.StorageCommits += time.Since(start) }(time.Now())
-
 	// The trie is currently in an open state and could potentially contain
 	// cached mutations. Call commit to acquire a set of nodes that have been
 	// modified, the set can be nil if nothing to commit.
@@ -459,22 +463,22 @@ func (s *stateObject) setBalance(amount *uint256.Int) {
 
 func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	obj := &stateObject{
-		db:       db,
-		address:  s.address,
-		addrHash: s.addrHash,
-		origin:   s.origin,
-		data:     s.data,
+		db:             db,
+		address:        s.address,
+		addrHash:       s.addrHash,
+		origin:         s.origin,
+		data:           s.data,
+		code:           s.code,
+		originStorage:  s.originStorage.Copy(),
+		pendingStorage: s.pendingStorage.Copy(),
+		dirtyStorage:   s.dirtyStorage.Copy(),
+		dirtyCode:      s.dirtyCode,
+		selfDestructed: s.selfDestructed,
+		newContract:    s.newContract,
 	}
 	if s.trie != nil {
 		obj.trie = db.db.CopyTrie(s.trie)
 	}
-	obj.code = s.code
-	obj.originStorage = s.originStorage.Copy()
-	obj.pendingStorage = s.pendingStorage.Copy()
-	obj.dirtyStorage = s.dirtyStorage.Copy()
-	obj.dirtyCode = s.dirtyCode
-	obj.selfDestructed = s.selfDestructed
-	obj.newContract = s.newContract
 	return obj
 }
 

@@ -623,11 +623,6 @@ func (db *Database) Close() error {
 	return nil
 }
 
-// Scheme returns the node scheme used in the database.
-func (db *Database) Scheme() string {
-	return rawdb.HashScheme
-}
-
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(root common.Hash) (*reader, error) {

@@ -151,7 +151,6 @@ type StateDB struct {
 	AccountUpdates       time.Duration
 	AccountCommits       time.Duration
 	StorageReads         time.Duration
-	StorageHashes        time.Duration
 	StorageUpdates       time.Duration
 	StorageCommits       time.Duration
 	SnapshotAccountReads time.Duration
@@ -856,6 +855,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// the account prefetcher. Instead, let's process all the storage updates
 	// first, giving the account prefetches just a few more milliseconds of time
 	// to pull useful data from disk.
+	start := time.Now()
 	for addr, op := range s.mutations {
 		if op.applied {
 			continue
@@ -865,6 +865,8 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 		s.stateObjects[addr].updateRoot()
 	}
+	s.StorageUpdates += time.Since(start)
+
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
@@ -1151,6 +1153,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		return common.Hash{}, err
 	}
 	// Handle all state updates afterwards
+	start := time.Now()
 	for addr, op := range s.mutations {
 		if op.isDelete() {
 			continue
@@ -1179,13 +1182,15 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			storageTrieNodesDeleted += deleted
 		}
 	}
+	s.StorageCommits += time.Since(start)
+
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
 			log.Crit("Failed to commit dirty codes", "error", err)
 		}
 	}
 	// Write the account trie changes, measuring the amount of wasted time
-	start := time.Now()
+	start = time.Now()
 
 	root, set, err := s.trie.Commit(true)
 	if err != nil {

@@ -705,6 +705,8 @@ func (c *bls12381G1Add) Run(input []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	// No need to check the subgroup here, as specified by EIP-2537
+
 	// Compute r = p_0 + p_1
 	p0.Add(p0, p1)
 
@@ -733,6 +735,11 @@ func (c *bls12381G1Mul) Run(input []byte) ([]byte, error) {
 	// Decode G1 point
 	if p0, err = decodePointG1(input[:128]); err != nil {
 		return nil, err
+	}
+	// 'point is on curve' check already done,
+	// Here we need to apply subgroup checks.
+	if !p0.IsInSubGroup() {
+		return nil, errBLS12381G1PointSubgroup
 	}
 	// Decode scalar value
 	e := new(big.Int).SetBytes(input[128:])
@@ -787,6 +794,11 @@ func (c *bls12381G1MultiExp) Run(input []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		// 'point is on curve' check already done,
+		// Here we need to apply subgroup checks.
+		if !p.IsInSubGroup() {
+			return nil, errBLS12381G1PointSubgroup
+		}
 		points[i] = *p
 		// Decode scalar value
 		scalars[i] = *new(fr.Element).SetBytes(input[t1:t2])
@@ -827,6 +839,8 @@ func (c *bls12381G2Add) Run(input []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	// No need to check the subgroup here, as specified by EIP-2537
+
 	// Compute r = p_0 + p_1
 	r := new(bls12381.G2Affine)
 	r.Add(p0, p1)
@@ -856,6 +870,11 @@ func (c *bls12381G2Mul) Run(input []byte) ([]byte, error) {
 	// Decode G2 point
 	if p0, err = decodePointG2(input[:256]); err != nil {
 		return nil, err
+	}
+	// 'point is on curve' check already done,
+	// Here we need to apply subgroup checks.
+	if !p0.IsInSubGroup() {
+		return nil, errBLS12381G2PointSubgroup
 	}
 	// Decode scalar value
 	e := new(big.Int).SetBytes(input[256:])
@@ -909,6 +928,11 @@ func (c *bls12381G2MultiExp) Run(input []byte) ([]byte, error) {
 		p, err := decodePointG2(input[t0:t1])
 		if err != nil {
 			return nil, err
+		}
+		// 'point is on curve' check already done,
+		// Here we need to apply subgroup checks.
+		if !p.IsInSubGroup() {
+			return nil, errBLS12381G2PointSubgroup
 		}
 		points[i] = *p
 		// Decode scalar value
