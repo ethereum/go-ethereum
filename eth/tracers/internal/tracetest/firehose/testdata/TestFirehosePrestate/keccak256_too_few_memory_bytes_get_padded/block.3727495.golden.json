@@ -1,0 +1,167 @@
+{
+  "hash": "SKLPDUOjSrOGLDSmQ92rvI79Tx7rbpi+MnMdw1ta0jQ=",
+  "number": "3727495",
+  "size": "723",
+  "header": {
+    "parentHash": "aYf8zdg87hj7kTMGYReWUn8vvkT0i92fQ04NAsNDcDc=",
+    "uncleHash": "HcxN6N7HXXqrhbVntszUGtMSRRuUinQT8KFC/UDUk0c=",
+    "coinbase": "AAAAaRaoe4IzP0JFBGYjsjeUxlw=",
+    "stateRoot": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "transactionsRoot": "bDCtoar4SKuDMt3K7Ay0vDV8FJj/S9YTAtfuy7yJYL0=",
+    "receiptRoot": "VugfFxvMVab/g0XmksD4bltI4BuZbK3AAWIvteNjtCE=",
+    "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "difficulty": {
+      "bytes": "AA=="
+    },
+    "totalDifficulty": {
+      "bytes": "PGVtIwKasA=="
+    },
+    "number": "3727495",
+    "gasLimit": "30000000",
+    "timestamp": "2023-06-19T23:23:48Z",
+    "mixHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "hash": "SKLPDUOjSrOGLDSmQ92rvI79Tx7rbpi+MnMdw1ta0jQ=",
+    "baseFeePerGas": {
+      "bytes": "DQ=="
+    },
+    "parentBeaconRoot": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  },
+  "transactionTraces": [
+    {
+      "to": "3Z+V4sEFOnYIm1AXgpuyMwy2rkc=",
+      "nonce": "5",
+      "gasPrice": {
+        "bytes": "AoQ="
+      },
+      "gasLimit": "200000",
+      "input": "QMEPGQAAAAAAAAAAAAAAAOs9PWFvPkPp7TYe3S0OZE0Y0Xm3AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPo=",
+      "v": "AVRtcg==",
+      "r": "Xww4NKZlcXSDEHF8P5UnXU9PLqL6aBoOU5VFipWpVaM=",
+      "s": "BOdJVNNAB7fPBAA48slaL2uQd1vOwb423lDacpucotM=",
+      "gasUsed": "69865",
+      "hash": "tF3PNXHZNWA+icLD8DyDTxT8x76iGVd8sDejy7wEQx8=",
+      "from": "6z09YW8+Q+ntNh7dLQ5kTRjRebc=",
+      "beginOrdinal": "1",
+      "endOrdinal": "13",
+      "status": "SUCCEEDED",
+      "receipt": {
+        "cumulativeGasUsed": "69865",
+        "logsBloom": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAIAACAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAIAAAAAAAAAAAAIAAAAAAAAAAAAAAAAEQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAA==",
+        "logs": [
+          {
+            "address": "3Z+V4sEFOnYIm1AXgpuyMwy2rkc=",
+            "topics": [
+              "3fJSrRviyJtpwrBo/DeNqpUrp/FjxKEWKPVaTfUjs+8=",
+              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+              "AAAAAAAAAAAAAAAA6z09YW8+Q+ntNh7dLQ5kTRjRebc="
+            ],
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPo=",
+            "ordinal": "9"
+          }
+        ]
+      },
+      "calls": [
+        {
+          "index": 1,
+          "callType": "CALL",
+          "caller": "6z09YW8+Q+ntNh7dLQ5kTRjRebc=",
+          "address": "3Z+V4sEFOnYIm1AXgpuyMwy2rkc=",
+          "gasLimit": "178428",
+          "gasConsumed": "48293",
+          "input": "QMEPGQAAAAAAAAAAAAAAAOs9PWFvPkPp7TYe3S0OZE0Y0Xm3AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPo=",
+          "executedCode": true,
+          "keccakPreimages": {
+            "bb65ff7a03b11b79143b011da0de7c67f6d9bb8f57df2381d88d503cdb07b0b6": "000000000000000000000000eb3d3d616f3e43e9ed361edd2d0e644d18d179b70000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "storageChanges": [
+            {
+              "address": "3Z+V4sEFOnYIm1AXgpuyMwy2rkc=",
+              "key": "u2X/egOxG3kUOwEdoN58Z/bZu49X3yOB2I1QPNsHsLY=",
+              "oldValue": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+              "newValue": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPo=",
+              "ordinal": "6"
+            },
+            {
+              "address": "3Z+V4sEFOnYIm1AXgpuyMwy2rkc=",
+              "key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAI=",
+              "oldValue": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+              "newValue": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPo=",
+              "ordinal": "7"
+            }
+          ],
+          "balanceChanges": [
+            {
+              "address": "6z09YW8+Q+ntNh7dLQ5kTRjRebc=",
+              "oldValue": {
+                "bytes": "B5sluWe3fF0="
+              },
+              "newValue": {
+                "bytes": "B5sluWAKJ10="
+              },
+              "reason": "REASON_GAS_BUY",
+              "ordinal": "2"
+            },
+            {
+              "address": "6z09YW8+Q+ntNh7dLQ5kTRjRebc=",
+              "oldValue": {
+                "bytes": "B5sluWAKJ10="
+              },
+              "newValue": {
+                "bytes": "B5sluWUI8jk="
+              },
+              "reason": "REASON_GAS_REFUND",
+              "ordinal": "11"
+            },
+            {
+              "address": "AAAAaRaoe4IzP0JFBGYjsjeUxlw=",
+              "oldValue": {
+                "bytes": "AecopRVH6fvBC6c="
+              },
+              "newValue": {
+                "bytes": "AecopRVH6f5hufY="
+              },
+              "reason": "REASON_REWARD_TRANSACTION_FEE",
+              "ordinal": "12"
+            }
+          ],
+          "nonceChanges": [
+            {
+              "address": "6z09YW8+Q+ntNh7dLQ5kTRjRebc=",
+              "oldValue": "5",
+              "newValue": "6",
+              "ordinal": "4"
+            }
+          ],
+          "logs": [
+            {
+              "address": "3Z+V4sEFOnYIm1AXgpuyMwy2rkc=",
+              "topics": [
+                "3fJSrRviyJtpwrBo/DeNqpUrp/FjxKEWKPVaTfUjs+8=",
+                "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                "AAAAAAAAAAAAAAAA6z09YW8+Q+ntNh7dLQ5kTRjRebc="
+              ],
+              "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPo=",
+              "ordinal": "9"
+            }
+          ],
+          "gasChanges": [
+            {
+              "oldValue": "200000",
+              "newValue": "178428",
+              "reason": "REASON_INTRINSIC_GAS",
+              "ordinal": "3"
+            },
+            {
+              "oldValue": "131897",
+              "newValue": "130141",
+              "reason": "REASON_EVENT_LOG",
+              "ordinal": "8"
+            }
+          ],
+          "endOrdinal": "10"
+        }
+      ]
+    }
+  ],
+  "ver": 3
+}
