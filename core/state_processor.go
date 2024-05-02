@@ -208,8 +208,5 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 		statedb.AddAddressToAccessList(params.BeaconRootsAddress)
 	}
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
-	if vmenv.ChainConfig().Rules(vmenv.Context.BlockNumber, true, vmenv.Context.Time).IsEIP4762 {
-		statedb.AccessEvents().Merge(txctx.AccessEvents)
-	}
 	statedb.Finalise(true)
 }

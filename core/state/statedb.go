@@ -1297,6 +1297,9 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+	if rules.IsEIP2929 && rules.IsEIP4762 {
+		panic("eip2929 and eip4762 are both activated")
+	}
 	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
