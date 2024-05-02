@@ -624,7 +624,7 @@ func decodePrealloc(data string) types.GenesisAlloc {
 			acc.Nonce = account.Misc.Nonce
 			acc.Code = account.Misc.Code
 
-			acc.Storage = make(map[common.Hash]common.Hash, len(account.Misc.Slots))
+			acc.Storage = make(map[common.Hash]common.Hash)
 			for _, slot := range account.Misc.Slots {
 				acc.Storage[slot.Key] = slot.Val
 			}

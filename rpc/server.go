@@ -190,7 +190,7 @@ func (s *RPCService) Modules() map[string]string {
 	s.server.services.mu.Lock()
 	defer s.server.services.mu.Unlock()
 
-	modules := make(map[string]string, len(s.server.services.services))
+	modules := make(map[string]string)
 	for name := range s.server.services.services {
 		modules[name] = "1.0"
 	}
