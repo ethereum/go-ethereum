@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,6 +33,14 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
+
+// hasherPool holds a pool of hashers used by state objects during concurrent
+// trie updates.
+var hasherPool = sync.Pool{
+	New: func() interface{} {
+		return crypto.NewKeccakState()
+	},
+}
 
 type Storage map[common.Hash]common.Hash
 
@@ -307,6 +316,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	// Insert all the pending storage updates into the trie
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 
+	hasher := hasherPool.Get().(crypto.KeccakState)
+	defer hasherPool.Put(hasher)
+
 	// Perform trie updates before deletions.  This prevents resolution of unnecessary trie nodes
 	//  in circumstances similar to the following:
 	//
@@ -335,26 +347,31 @@ func (s *stateObject) updateTrie() (Trie, error) {
 				s.db.setError(err)
 				return nil, err
 			}
-			s.db.StorageUpdated += 1
+			s.db.StorageUpdated.Add(1)
 		} else {
 			deletions = append(deletions, key)
 		}
+		khash := crypto.HashData(hasher, key[:])
+
 		// Cache the mutated storage slots until commit
 		if storage == nil {
+			s.db.storagesLock.Lock()
 			if storage = s.db.storages[s.addrHash]; storage == nil {
 				storage = make(map[common.Hash][]byte)
 				s.db.storages[s.addrHash] = storage
 			}
+			s.db.storagesLock.Unlock()
 		}
-		khash := crypto.HashData(s.db.hasher, key[:])
 		storage[khash] = encoded // encoded will be nil if it's deleted
 
 		// Cache the original value of mutated storage slots
 		if origin == nil {
+			s.db.storagesLock.Lock()
 			if origin = s.db.storagesOrigin[s.address]; origin == nil {
 				origin = make(map[common.Hash][]byte)
 				s.db.storagesOrigin[s.address] = origin
 			}
+			s.db.storagesLock.Unlock()
 		}
 		// Track the original value of slot only if it's mutated first time
 		if _, ok := origin[khash]; !ok {
@@ -374,7 +391,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			s.db.setError(err)
 			return nil, err
 		}
-		s.db.StorageDeleted += 1
+		s.db.StorageDeleted.Add(1)
 	}
 	// If no slots were touched, issue a warning as we shouldn't have done all
 	// the above work in the first place

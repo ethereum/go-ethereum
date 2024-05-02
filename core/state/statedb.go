@@ -24,6 +24,7 @@ import (
 	"slices"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -92,10 +93,12 @@ type StateDB struct {
 
 	// These maps hold the state changes (including the corresponding
 	// original value) that occurred in this **block**.
-	accounts       map[common.Hash][]byte                    // The mutated accounts in 'slim RLP' encoding
+	accounts       map[common.Hash][]byte    // The mutated accounts in 'slim RLP' encoding
+	accountsOrigin map[common.Address][]byte // The original value of mutated accounts in 'slim RLP' encoding
+
 	storages       map[common.Hash]map[common.Hash][]byte    // The mutated slots in prefix-zero trimmed rlp format
-	accountsOrigin map[common.Address][]byte                 // The original value of mutated accounts in 'slim RLP' encoding
 	storagesOrigin map[common.Address]map[common.Hash][]byte // The original value of mutated slots in prefix-zero trimmed rlp format
+	storagesLock   sync.Mutex                                // Lock protecting concurrent updates to the storage maps
 
 	// This map holds 'live' objects, which will get modified while
 	// processing a state transition.
@@ -161,9 +164,9 @@ type StateDB struct {
 	TrieDBCommits        time.Duration
 
 	AccountUpdated int
-	StorageUpdated int
 	AccountDeleted int
-	StorageDeleted int
+	StorageUpdated atomic.Int64
+	StorageDeleted atomic.Int64
 
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
@@ -857,7 +860,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// the account prefetcher. Instead, let's process all the storage updates
 	// first, giving the account prefetches just a few more milliseconds of time
 	// to pull useful data from disk.
-	start := time.Now()
+	var (
+		start   = time.Now()
+		workers errgroup.Group
+	)
 	for addr, op := range s.mutations {
 		if op.applied {
 			continue
@@ -865,8 +871,13 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		if op.isDelete() {
 			continue
 		}
-		s.stateObjects[addr].updateRoot()
+		obj := s.stateObjects[addr] // closure for the goroutine below
+		workers.Go(func() error {
+			obj.updateRoot()
+			return nil
+		})
 	}
+	workers.Wait()
 	s.StorageUpdates += time.Since(start)
 
 	// Now we're about to start to write changes to the trie. The trie is so far
@@ -1251,15 +1262,16 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		return common.Hash{}, err
 	}
 	accountUpdatedMeter.Mark(int64(s.AccountUpdated))
-	storageUpdatedMeter.Mark(int64(s.StorageUpdated))
+	storageUpdatedMeter.Mark(s.StorageUpdated.Load())
 	accountDeletedMeter.Mark(int64(s.AccountDeleted))
-	storageDeletedMeter.Mark(int64(s.StorageDeleted))
+	storageDeletedMeter.Mark(s.StorageDeleted.Load())
 	accountTrieUpdatedMeter.Mark(int64(accountTrieNodesUpdated))
 	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
 	storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
 	storageTriesDeletedMeter.Mark(int64(storageTrieNodesDeleted))
 	s.AccountUpdated, s.AccountDeleted = 0, 0
-	s.StorageUpdated, s.StorageDeleted = 0, 0
+	s.StorageUpdated.Store(0)
+	s.StorageDeleted.Store(0)
 
 	// If snapshotting is enabled, update the snapshot tree with this new version
 	if s.snap != nil {
