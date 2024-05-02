@@ -162,6 +162,7 @@ func rewindBack(eth *Ethereum, head uint64, rewindTo uint64) {
 }
 
 func rewind(eth *Ethereum, head uint64, rewindTo uint64) {
+	eth.handler.downloader.Cancel()
 	err := eth.blockchain.SetHead(rewindTo)
 
 	if err != nil {
