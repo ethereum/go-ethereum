@@ -23,7 +23,7 @@ import (
 )
 
 func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas := evm.AccessEvents.SlotGas(contract.Address().Bytes(), common.Hash(stack.peek().Bytes32()), true)
+	gas := evm.StateDB.AccessEvents().SlotGas(contract.Address().Bytes(), common.Hash(stack.peek().Bytes32()), true)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -31,7 +31,7 @@ func gasSStore4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 }
 
 func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas := evm.AccessEvents.SlotGas(contract.Address().Bytes(), common.Hash(stack.peek().Bytes32()), false)
+	gas := evm.StateDB.AccessEvents().SlotGas(contract.Address().Bytes(), common.Hash(stack.peek().Bytes32()), false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -40,7 +40,7 @@ func gasSLoad4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 
 func gasBalance4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	address := stack.peek().Bytes20()
-	gas := evm.AccessEvents.BalanceGas(address[:], false)
+	gas := evm.StateDB.AccessEvents().BalanceGas(address[:], false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
@@ -52,8 +52,8 @@ func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
-	wgas := evm.AccessEvents.VersionGas(address[:], false)
-	wgas += evm.AccessEvents.CodeSizeGas(address[:], false)
+	wgas := evm.StateDB.AccessEvents().VersionGas(address[:], false)
+	wgas += evm.StateDB.AccessEvents().CodeSizeGas(address[:], false)
 	if wgas == 0 {
 		wgas = params.WarmStorageReadCostEIP2929
 	}
@@ -65,7 +65,7 @@ func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
-	codehashgas := evm.AccessEvents.CodeHashGas(address[:], false)
+	codehashgas := evm.StateDB.AccessEvents().CodeHashGas(address[:], false)
 	if codehashgas == 0 {
 		codehashgas = params.WarmStorageReadCostEIP2929
 	}
@@ -81,7 +81,7 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
 		if _, isPrecompile := evm.precompile(contract.Address()); isPrecompile {
 			return gas, nil
 		}
-		wgas := evm.AccessEvents.MessageCallGas(contract.Address().Bytes())
+		wgas := evm.StateDB.AccessEvents().MessageCallGas(contract.Address().Bytes())
 		if wgas == 0 {
 			wgas = params.WarmStorageReadCostEIP2929
 		}
@@ -102,17 +102,17 @@ func gasSelfdestructEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Mem
 		return 0, nil
 	}
 	contractAddr := contract.Address()
-	statelessGas := evm.AccessEvents.VersionGas(contractAddr[:], false)
-	statelessGas += evm.AccessEvents.CodeSizeGas(contractAddr[:], false)
-	statelessGas += evm.AccessEvents.BalanceGas(contractAddr[:], false)
+	statelessGas := evm.StateDB.AccessEvents().VersionGas(contractAddr[:], false)
+	statelessGas += evm.StateDB.AccessEvents().CodeSizeGas(contractAddr[:], false)
+	statelessGas += evm.StateDB.AccessEvents().BalanceGas(contractAddr[:], false)
 	if contractAddr != beneficiaryAddr {
-		statelessGas += evm.AccessEvents.BalanceGas(beneficiaryAddr[:], false)
+		statelessGas += evm.StateDB.AccessEvents().BalanceGas(beneficiaryAddr[:], false)
 	}
 	// Charge write costs if it transfers value
 	if evm.StateDB.GetBalance(contractAddr).Sign() != 0 {
-		statelessGas += evm.AccessEvents.BalanceGas(contractAddr[:], true)
+		statelessGas += evm.StateDB.AccessEvents().BalanceGas(contractAddr[:], true)
 		if contractAddr != beneficiaryAddr {
-			statelessGas += evm.AccessEvents.BalanceGas(beneficiaryAddr[:], true)
+			statelessGas += evm.StateDB.AccessEvents().BalanceGas(beneficiaryAddr[:], true)
 		}
 	}
 	return statelessGas, nil
@@ -133,7 +133,7 @@ func gasCodeCopyEip4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	}
 	_, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(contract.Code, uint64CodeOffset, length.Uint64())
 	if !contract.IsDeployment {
-		gas += evm.AccessEvents.CodeChunksRangeGas(contract.Address().Bytes(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
+		gas += evm.StateDB.AccessEvents().CodeChunksRangeGas(contract.Address().Bytes(), copyOffset, nonPaddedCopyLength, uint64(len(contract.Code)), false)
 	}
 	return gas, nil
 }
@@ -145,8 +145,8 @@ func gasExtCodeCopyEIP4762(evm *EVM, contract *Contract, stack *Stack, mem *Memo
 		return 0, err
 	}
 	addr := common.Address(stack.peek().Bytes20())
-	wgas := evm.AccessEvents.VersionGas(addr[:], false)
-	wgas += evm.AccessEvents.CodeSizeGas(addr[:], false)
+	wgas := evm.StateDB.AccessEvents().VersionGas(addr[:], false)
+	wgas += evm.StateDB.AccessEvents().CodeSizeGas(addr[:], false)
 	if wgas == 0 {
 		wgas = params.WarmStorageReadCostEIP2929
 	}

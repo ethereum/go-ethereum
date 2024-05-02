@@ -36,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
-	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
@@ -140,8 +139,8 @@ type StateDB struct {
 	// Transient storage
 	transientStorage transientStorage
 
-	// State access events, used for Verkle tries/EIP4762
-	accessEvents *AccessEvents
+	// State access events, used for EIP4762
+	accessEvents *AccessEvents // reset for each transaction
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -197,28 +196,14 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 	}
-	if tr.IsVerkle() {
-		sdb.accessEvents = sdb.NewAccessEvents()
-	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
 }
 
-func (s *StateDB) NewAccessEvents() *AccessEvents {
-	return NewAccessEvents(utils.NewPointCache(100))
-}
-
 func (s *StateDB) AccessEvents() *AccessEvents {
-	if s.accessEvents == nil {
-		s.accessEvents = s.NewAccessEvents()
-	}
 	return s.accessEvents
-}
-
-func (s *StateDB) SetAccessEvents(ae *AccessEvents) {
-	s.accessEvents = ae
 }
 
 // SetLogger sets the logger for account update hooks.
@@ -767,6 +752,9 @@ func (s *StateDB) Copy() *StateDB {
 	if s.prefetcher != nil {
 		state.prefetcher = s.prefetcher.copy()
 	}
+	if s.accessEvents != nil {
+		state.accessEvents = s.accessEvents.Copy()
+	}
 	return state
 }
 
@@ -1297,6 +1285,9 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+	if rules.IsEIP2929 && rules.IsEIP4762 {
+		panic("eip2929 and eip4762 are both activated")
+	}
 	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
@@ -1319,6 +1310,9 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 		if rules.IsShanghai { // EIP-3651: warm coinbase
 			al.AddAddress(coinbase)
 		}
+	}
+	if rules.IsEIP4762 {
+		s.accessEvents = NewAccessEvents(s.db.PointCache())
 	}
 	// Reset transient storage at the beginning of transaction execution
 	s.transientStorage = newTransientStorage()

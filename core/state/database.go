@@ -38,6 +38,9 @@ const (
 
 	// Cache size granted for caching clean code.
 	codeCacheSize = 64 * 1024 * 1024
+
+	// Number of address->curve point associations to keep.
+	pointCacheSize = 4096
 )
 
 // Database wraps access to tries and contract code.
@@ -62,6 +65,9 @@ type Database interface {
 
 	// TrieDB returns the underlying trie database for managing trie nodes.
 	TrieDB() *triedb.Database
+
+	// PointCache returns the cache of evaluated curve points.
+	PointCache() *utils.PointCache
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -153,6 +159,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb.NewDatabase(db, config),
+		pointCache:    utils.NewPointCache(pointCacheSize),
 	}
 }
 
@@ -163,6 +170,7 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database 
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb,
+		pointCache:    utils.NewPointCache(pointCacheSize),
 	}
 }
 
@@ -171,12 +179,13 @@ type cachingDB struct {
 	codeSizeCache *lru.Cache[common.Hash, int]
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	triedb        *triedb.Database
+	pointCache    *utils.PointCache
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
-		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(100))
+		return trie.NewVerkleTrie(root, db.triedb, db.pointCache)
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
@@ -261,4 +270,9 @@ func (db *cachingDB) DiskDB() ethdb.KeyValueStore {
 // TrieDB retrieves any intermediate trie-node caching layer.
 func (db *cachingDB) TrieDB() *triedb.Database {
 	return db.triedb
+}
+
+// PointCache returns the cache of evaluated curve points.
+func (db *cachingDB) PointCache() *utils.PointCache {
+	return db.pointCache
 }

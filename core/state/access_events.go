@@ -66,7 +66,7 @@ func (aw *AccessEvents) Merge(other *AccessEvents) {
 	}
 }
 
-// Key returns, predictably, the list of keys that were touched during the
+// Keys returns, predictably, the list of keys that were touched during the
 // buildup of the access witness.
 func (aw *AccessEvents) Keys() [][]byte {
 	// TODO: consider if parallelizing this is worth it, probably depending on len(aw.chunks).
@@ -173,7 +173,6 @@ func (aw *AccessEvents) touchAddressAndChargeGas(addr []byte, treeIndex uint256.
 	if selectorFill {
 		gas += params.WitnessChunkFillCost
 	}
-
 	return gas
 }
 
@@ -206,10 +205,8 @@ func (aw *AccessEvents) touchAddress(addr []byte, treeIndex uint256.Int, subInde
 			chunkWrite = true
 			aw.chunks[chunkKey] |= AccessWitnessWriteFlag
 		}
-
 		// TODO: charge chunk filling costs if the leaf was previously empty in the state
 	}
-
 	return branchRead, chunkRead, branchWrite, chunkWrite, chunkFill
 }
 
@@ -268,7 +265,6 @@ func (aw *AccessEvents) CodeChunksRangeGas(contractAddr []byte, startPC, size ui
 			panic("overflow when adding gas")
 		}
 	}
-
 	return statelessGasCharged
 }
 
