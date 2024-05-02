@@ -3,7 +3,7 @@ services:
   sl-bootnode:
     build:
       context: ..
-      dockerfile: geth-poa/Dockerfile 
+      dockerfile: geth-poa/Dockerfile
     environment:
       - GETH_NODE_TYPE=bootnode
       - BOOT_KEY=7b548c1c0fbe80ef1eb0aaec2edf26fd20fb0d758e94948cf6c5f2a486e735f6
@@ -44,7 +44,7 @@ services:
         ]
   
   sl-node1-keystore:
-    build: 
+    build:
       context: ..
       dockerfile: geth-poa/SignerNode1Dockerfile
     environment:
@@ -85,7 +85,7 @@ services:
         ]
 
   sl-node1:
-    build: 
+    build:
       context: ..
       dockerfile: geth-poa/Dockerfile
     environment:
@@ -101,172 +101,6 @@ services:
       - 60602:60601
     volumes:
       - geth-data-node1:/data
-    profiles:
-      - settlement
-    labels:
-      com.datadoghq.ad.check_names: '["openmetrics"]'
-      com.datadoghq.ad.init_configs: '[{}]'
-      com.datadoghq.ad.instances: |
-        [
-          {
-            "openmetrics_endpoint": "http://%%host%%:6060/debug/metrics/prometheus",
-            "namespace": "geth-poa",
-            "metrics": [
-              "txpool*",
-              "trie*",
-              "system*",
-              "state*",
-              "rpc*",
-              "p2p*",
-              "eth*",
-              "chain*",
-              "clique*"
-              "vm*"
-            ]
-          }
-        ]
-
-  sl-node2-keystore:
-    build: 
-      context: ..
-      dockerfile: geth-poa/SignerNode2Dockerfile
-    environment:
-      - GETH_NODE_TYPE=signer
-      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
-      - NET_RESTRICT=172.29.0.0/16
-      - MEV_COMMIT_GETH_PASSWORD=${MEV_COMMIT_GETH_PASSWORD}
-    networks:
-      primev_net:
-        ipv4_address: '172.29.0.100'
-    ports:
-      - 60603:60601
-    volumes:
-      - geth-data-node2:/data
-    profiles:
-      - settlement-keystore
-    labels:
-      com.datadoghq.ad.check_names: '["openmetrics"]'
-      com.datadoghq.ad.init_configs: '[{}]'
-      com.datadoghq.ad.instances: |
-        [
-          {
-            "openmetrics_endpoint": "http://%%host%%:6060/debug/metrics/prometheus",
-            "namespace": "geth-poa",
-            "metrics": [
-              "txpool*",
-              "trie*",
-              "system*",
-              "state*",
-              "rpc*",
-              "p2p*",
-              "eth*",
-              "chain*",
-              "clique*"
-              "vm*"
-            ]
-          }
-        ]
-
-  sl-node2:
-    build: 
-      context: ..
-      dockerfile: geth-poa/Dockerfile
-    environment:
-      - GETH_NODE_TYPE=signer
-      - BLOCK_SIGNER_ADDRESS=0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4
-      - BLOCK_SIGNER_PRIVATE_KEY=${NODE2_PRIVATE_KEY}
-      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
-      - NET_RESTRICT=172.29.0.0/16
-    networks:
-      primev_net:
-        ipv4_address: '172.29.0.100'
-    ports:
-      - 60603:60601
-    volumes:
-      - geth-data-node2:/data
-    profiles:
-      - settlement
-    labels:
-      com.datadoghq.ad.check_names: '["openmetrics"]'
-      com.datadoghq.ad.init_configs: '[{}]'
-      com.datadoghq.ad.instances: |
-        [
-          {
-            "openmetrics_endpoint": "http://%%host%%:6060/debug/metrics/prometheus",
-            "namespace": "geth-poa",
-            "metrics": [
-              "txpool*",
-              "trie*",
-              "system*",
-              "state*",
-              "rpc*",
-              "p2p*",
-              "eth*",
-              "chain*",
-              "clique*"
-              "vm*"
-            ]
-          }
-        ]
-
-  sl-node3-keystore:
-    build:
-      context: ..
-      dockerfile: geth-poa/SignerNode3Dockerfile
-    environment:
-      - GETH_NODE_TYPE=signer
-      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
-      - MEV_COMMIT_GETH_PASSWORD=${MEV_COMMIT_GETH_PASSWORD}
-      - NET_RESTRICT=172.29.0.0/16
-    networks:
-      primev_net:
-        ipv4_address: '172.29.0.101'
-    ports:
-      - 60604:60601
-    volumes:
-      - geth-data-node1:/data
-    profiles:
-      - settlement-keystore
-    labels:
-      com.datadoghq.ad.check_names: '["openmetrics"]'
-      com.datadoghq.ad.init_configs: '[{}]'
-      com.datadoghq.ad.instances: |
-        [
-          {
-            "openmetrics_endpoint": "http://%%host%%:6060/debug/metrics/prometheus",
-            "namespace": "geth-poa",
-            "metrics": [
-              "txpool*",
-              "trie*",
-              "system*",
-              "state*",
-              "rpc*",
-              "p2p*",
-              "eth*",
-              "chain*",
-              "clique*"
-              "vm*"
-            ]
-          }
-        ]
-
-  sl-node3:
-    build:
-      context: ..
-      dockerfile: geth-poa/Dockerfile
-    environment:
-      - GETH_NODE_TYPE=signer
-      - BLOCK_SIGNER_ADDRESS=0xd9cd8E5DE6d55f796D980B818D350C0746C25b97
-      - BLOCK_SIGNER_PRIVATE_KEY=${NODE3_PRIVATE_KEY}
-      - BOOTNODE_ENDPOINT=enode://34a2a388ad31ca37f127bb9ffe93758ee711c5c2277dff6aff2e359bcf2c9509ea55034196788dbd59ed70861f523c1c03d54f1eabb2b4a5c1c129d966fe1e65@172.29.0.98:30301
-      - NET_RESTRICT=172.29.0.0/16
-    networks:
-      primev_net:
-        ipv4_address: '172.29.0.101'
-    ports:
-      - 60604:60601
-    volumes:
-      - geth-data-node3:/data
     profiles:
       - settlement
     labels:
@@ -368,7 +202,7 @@ services:
       - geth-data-l1-first-signer:/data
     profiles:
       - local_l1
-    
+
   l1-node2:
     build:
       context: .
@@ -428,4 +262,3 @@ volumes:
   geth-data-l1-bootnode:
   geth-data-l1-first-signer:
   geth-data-l1-second-signer:
-
