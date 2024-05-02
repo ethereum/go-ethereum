@@ -52,12 +52,12 @@ func gasExtCodeSize4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
-	wgas := evm.AccessEvents.VersionGas(address[:], false)
-	wgas += evm.AccessEvents.CodeSizeGas(address[:], false)
-	if wgas == 0 {
-		wgas = params.WarmStorageReadCostEIP2929
+	gas := evm.AccessEvents.VersionGas(address[:], false)
+	gas += evm.AccessEvents.CodeSizeGas(address[:], false)
+	if gas == 0 {
+		gas = params.WarmStorageReadCostEIP2929
 	}
-	return wgas, nil
+	return gas, nil
 }
 
 func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
@@ -65,11 +65,11 @@ func gasExtCodeHash4762(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
-	codehashgas := evm.AccessEvents.CodeHashGas(address[:], false)
-	if codehashgas == 0 {
-		codehashgas = params.WarmStorageReadCostEIP2929
+	gas := evm.AccessEvents.CodeHashGas(address[:], false)
+	if gas == 0 {
+		gas = params.WarmStorageReadCostEIP2929
 	}
-	return codehashgas, nil
+	return gas, nil
 }
 
 func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
@@ -81,11 +81,11 @@ func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
 		if _, isPrecompile := evm.precompile(contract.Address()); isPrecompile {
 			return gas, nil
 		}
-		wgas := evm.AccessEvents.MessageCallGas(contract.Address().Bytes())
-		if wgas == 0 {
-			wgas = params.WarmStorageReadCostEIP2929
+		witnessGas := evm.AccessEvents.MessageCallGas(contract.Address().Bytes())
+		if witnessGas == 0 {
+			witnessGas = params.WarmStorageReadCostEIP2929
 		}
-		return wgas + gas, nil
+		return witnessGas + gas, nil
 	}
 }
 

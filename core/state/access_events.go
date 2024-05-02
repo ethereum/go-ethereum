@@ -57,44 +57,44 @@ func NewAccessEvents(pointCache *utils.PointCache) *AccessEvents {
 // Merge is used to merge the access events that were generated during the
 // execution of a tx, with the accumulation of all access events that were
 // generated during the execution of all txs preceding this one in a block.
-func (aw *AccessEvents) Merge(other *AccessEvents) {
+func (ae *AccessEvents) Merge(other *AccessEvents) {
 	for k := range other.branches {
-		aw.branches[k] |= other.branches[k]
+		ae.branches[k] |= other.branches[k]
 	}
 	for k, chunk := range other.chunks {
-		aw.chunks[k] |= chunk
+		ae.chunks[k] |= chunk
 	}
 }
 
 // Key returns, predictably, the list of keys that were touched during the
 // buildup of the access witness.
-func (aw *AccessEvents) Keys() [][]byte {
-	// TODO: consider if parallelizing this is worth it, probably depending on len(aw.chunks).
-	keys := make([][]byte, 0, len(aw.chunks))
-	for chunk := range aw.chunks {
-		basePoint := aw.pointCache.Get(chunk.addr[:])
+func (ae *AccessEvents) Keys() [][]byte {
+	// TODO: consider if parallelizing this is worth it, probably depending on len(ae.chunks).
+	keys := make([][]byte, 0, len(ae.chunks))
+	for chunk := range ae.chunks {
+		basePoint := ae.pointCache.Get(chunk.addr[:])
 		key := utils.GetTreeKeyWithEvaluatedAddress(basePoint, &chunk.treeIndex, chunk.leafKey)
 		keys = append(keys, key)
 	}
 	return keys
 }
 
-func (aw *AccessEvents) Copy() *AccessEvents {
-	naw := &AccessEvents{
+func (ae *AccessEvents) Copy() *AccessEvents {
+	cpy := &AccessEvents{
 		branches:   make(map[branchAccessKey]mode),
 		chunks:     make(map[chunkAccessKey]mode),
-		pointCache: aw.pointCache,
+		pointCache: ae.pointCache,
 	}
-	naw.Merge(aw)
-	return naw
+	cpy.Merge(ae)
+	return cpy
 }
 
 // AddAccount returns the gas to be charged for each of the currently cold
 // member fields of an account.
-func (aw *AccessEvents) AddAccount(addr []byte, isWrite bool) uint64 {
+func (ae *AccessEvents) AddAccount(addr []byte, isWrite bool) uint64 {
 	var gas uint64
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
-		gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, byte(i), isWrite)
+		gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, byte(i), isWrite)
 	}
 	return gas
 }
@@ -102,60 +102,60 @@ func (aw *AccessEvents) AddAccount(addr []byte, isWrite bool) uint64 {
 // MessageCallGas returns the gas to be charged for each of the currently
 // cold member fields of an account, that need to be touched when making a message
 // call to that account.
-func (aw *AccessEvents) MessageCallGas(destination []byte) uint64 {
+func (ae *AccessEvents) MessageCallGas(destination []byte) uint64 {
 	var gas uint64
-	gas += aw.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.VersionLeafKey, false)
-	gas += aw.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.CodeSizeLeafKey, false)
+	gas += ae.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.VersionLeafKey, false)
+	gas += ae.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.CodeSizeLeafKey, false)
 	return gas
 }
 
 // ValueTransferGas returns the gas to be charged for each of the currently
 // cold balance member fields of the caller and the callee accounts.
-func (aw *AccessEvents) ValueTransferGas(callerAddr, targetAddr []byte) uint64 {
+func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr []byte) uint64 {
 	var gas uint64
-	gas += aw.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
-	gas += aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
+	gas += ae.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
+	gas += ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BalanceLeafKey, true)
 	return gas
 }
 
 // ContractCreateInitGas returns the access gas costs for the initialization of
 // a contract creation.
-func (aw *AccessEvents) ContractCreateInitGas(addr []byte, createSendsValue bool) uint64 {
+func (ae *AccessEvents) ContractCreateInitGas(addr []byte, createSendsValue bool) uint64 {
 	var gas uint64
-	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, true)
-	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.NonceLeafKey, true)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, true)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.NonceLeafKey, true)
 	if createSendsValue {
-		gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BalanceLeafKey, true)
+		gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BalanceLeafKey, true)
 	}
 	return gas
 }
 
 // AddTxOrigin adds the member fields of the sender account to the witness,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
-func (aw *AccessEvents) AddTxOrigin(originAddr []byte) {
+func (ae *AccessEvents) AddTxOrigin(originAddr []byte) {
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
-		aw.touchAddressAndChargeGas(originAddr, zeroTreeIndex, byte(i), i == utils.BalanceLeafKey || i == utils.NonceLeafKey)
+		ae.touchAddressAndChargeGas(originAddr, zeroTreeIndex, byte(i), i == utils.BalanceLeafKey || i == utils.NonceLeafKey)
 	}
 }
 
 // AddTxDestination adds the member fields of the sender account to the witness,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
-func (aw *AccessEvents) AddTxDestination(targetAddr []byte, sendsValue bool) {
+func (ae *AccessEvents) AddTxDestination(targetAddr []byte, sendsValue bool) {
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
-		aw.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, byte(i), i == utils.VersionLeafKey && sendsValue)
+		ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, byte(i), i == utils.VersionLeafKey && sendsValue)
 	}
 }
 
 // SlotGas returns the amount of gas to be charged for a cold storage access.
-func (aw *AccessEvents) SlotGas(addr []byte, slot common.Hash, isWrite bool) uint64 {
+func (ae *AccessEvents) SlotGas(addr []byte, slot common.Hash, isWrite bool) uint64 {
 	treeIndex, subIndex := utils.StorageIndex(slot.Bytes())
-	return aw.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite)
+	return ae.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite)
 }
 
 // touchAddressAndChargeGas adds any missing access event to the witness, and returns the cold
 // access cost to be charged, if need be.
-func (aw *AccessEvents) touchAddressAndChargeGas(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) uint64 {
-	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := aw.touchAddress(addr, treeIndex, subIndex, isWrite)
+func (ae *AccessEvents) touchAddressAndChargeGas(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) uint64 {
+	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := ae.touchAddress(addr, treeIndex, subIndex, isWrite)
 
 	var gas uint64
 	if stemRead {
@@ -178,33 +178,33 @@ func (aw *AccessEvents) touchAddressAndChargeGas(addr []byte, treeIndex uint256.
 }
 
 // touchAddress adds any missing access event to the witness.
-func (aw *AccessEvents) touchAddress(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) (bool, bool, bool, bool, bool) {
+func (ae *AccessEvents) touchAddress(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) (bool, bool, bool, bool, bool) {
 	branchKey := newBranchAccessKey(addr, treeIndex)
 	chunkKey := newChunkAccessKey(branchKey, subIndex)
 
 	// Read access.
 	var branchRead, chunkRead bool
-	if _, hasStem := aw.branches[branchKey]; !hasStem {
+	if _, hasStem := ae.branches[branchKey]; !hasStem {
 		branchRead = true
-		aw.branches[branchKey] = AccessWitnessReadFlag
+		ae.branches[branchKey] = AccessWitnessReadFlag
 	}
-	if _, hasSelector := aw.chunks[chunkKey]; !hasSelector {
+	if _, hasSelector := ae.chunks[chunkKey]; !hasSelector {
 		chunkRead = true
-		aw.chunks[chunkKey] = AccessWitnessReadFlag
+		ae.chunks[chunkKey] = AccessWitnessReadFlag
 	}
 
 	// Write access.
 	var branchWrite, chunkWrite, chunkFill bool
 	if isWrite {
-		if (aw.branches[branchKey] & AccessWitnessWriteFlag) == 0 {
+		if (ae.branches[branchKey] & AccessWitnessWriteFlag) == 0 {
 			branchWrite = true
-			aw.branches[branchKey] |= AccessWitnessWriteFlag
+			ae.branches[branchKey] |= AccessWitnessWriteFlag
 		}
 
-		chunkValue := aw.chunks[chunkKey]
+		chunkValue := ae.chunks[chunkKey]
 		if (chunkValue & AccessWitnessWriteFlag) == 0 {
 			chunkWrite = true
-			aw.chunks[chunkKey] |= AccessWitnessWriteFlag
+			ae.chunks[chunkKey] |= AccessWitnessWriteFlag
 		}
 
 		// TODO: charge chunk filling costs if the leaf was previously empty in the state
@@ -238,7 +238,7 @@ func newChunkAccessKey(branchKey branchAccessKey, leafKey byte) chunkAccessKey {
 }
 
 // CodeChunksRangeGas is a helper function to touch every chunk in a code range and charge witness gas costs
-func (aw *AccessEvents) CodeChunksRangeGas(contractAddr []byte, startPC, size uint64, codeLen uint64, isWrite bool) uint64 {
+func (ae *AccessEvents) CodeChunksRangeGas(contractAddr []byte, startPC, size uint64, codeLen uint64, isWrite bool) uint64 {
 	// note that in the case where the copied code is outside the range of the
 	// contract code but touches the last leaf with contract code in it,
 	// we don't include the last leaf of code in the AccessWitness.  The
@@ -261,7 +261,7 @@ func (aw *AccessEvents) CodeChunksRangeGas(contractAddr []byte, startPC, size ui
 	for chunkNumber := startPC / 31; chunkNumber <= endPC/31; chunkNumber++ {
 		treeIndex := *uint256.NewInt((chunkNumber + 128) / 256)
 		subIndex := byte((chunkNumber + 128) % 256)
-		gas := aw.touchAddressAndChargeGas(contractAddr, treeIndex, subIndex, isWrite)
+		gas := ae.touchAddressAndChargeGas(contractAddr, treeIndex, subIndex, isWrite)
 		var overflow bool
 		statelessGasCharged, overflow = math.SafeAdd(statelessGasCharged, gas)
 		if overflow {
@@ -272,22 +272,47 @@ func (aw *AccessEvents) CodeChunksRangeGas(contractAddr []byte, startPC, size ui
 	return statelessGasCharged
 }
 
-func (aw *AccessEvents) VersionGas(addr []byte, isWrite bool) uint64 {
-	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, isWrite)
+// VersionGas returns the amount of gas to be charged if the account's version hasn't been
+// touched in the proper mode. If `isWrite` is `true` then the charged gas is for an access
+// in write mode. If false, the charged gas corresponds to an access in read mode.
+// Note that an access in write mode implies an access in read mode, whereas an access in
+// read mode does not imply an access in write mode.
+func (ae *AccessEvents) VersionGas(addr []byte, isWrite bool) uint64 {
+	return ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.VersionLeafKey, isWrite)
 }
 
-func (aw *AccessEvents) BalanceGas(addr []byte, isWrite bool) uint64 {
-	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BalanceLeafKey, isWrite)
+// BalanceGas returns the amount of gas to be charged if the account's balance hasn't been
+// touched in the proper mode. If `isWrite` is `true` then the charged gas is for an access
+// in write mode. If false, the charged gas corresponds to an access in read mode.
+// Note that an access in write mode implies an access in read mode, whereas an access in
+// read mode does not imply an access in write mode.
+func (ae *AccessEvents) BalanceGas(addr []byte, isWrite bool) uint64 {
+	return ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BalanceLeafKey, isWrite)
 }
 
-func (aw *AccessEvents) NonceGas(addr []byte, isWrite bool) uint64 {
-	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.NonceLeafKey, isWrite)
+// NonceGas returns the amount of gas to be charged if the account's nonce hasn't been
+// touched in the proper mode. If `isWrite` is `true` then the charged gas is for an access
+// in write mode. If false, the charged gas corresponds to an access in read mode.
+// Note that an access in write mode implies an access in read mode, whereas an access in
+// read mode does not imply an access in write mode.
+func (ae *AccessEvents) NonceGas(addr []byte, isWrite bool) uint64 {
+	return ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.NonceLeafKey, isWrite)
 }
 
-func (aw *AccessEvents) CodeSizeGas(addr []byte, isWrite bool) uint64 {
-	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeSizeLeafKey, isWrite)
+// CodeSizeGas returns the amount of gas to be charged if the account's code size hasn't been
+// touched in the proper mode. If `isWrite` is `true` then the charged gas is for an access
+// in write mode. If false, the charged gas corresponds to an access in read mode.
+// Note that an access in write mode implies an access in read mode, whereas an access in
+// read mode does not imply an access in write mode.
+func (ae *AccessEvents) CodeSizeGas(addr []byte, isWrite bool) uint64 {
+	return ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeSizeLeafKey, isWrite)
 }
 
-func (aw *AccessEvents) CodeHashGas(addr []byte, isWrite bool) uint64 {
-	return aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeKeccakLeafKey, isWrite)
+// CodeHashGas returns the amount of gas to be charged if the account's code hash hasn't been
+// touched in the proper mode. If `isWrite` is `true` then the charged gas is for an access
+// in write mode. If false, the charged gas corresponds to an access in read mode.
+// Note that an access in write mode implies an access in read mode, whereas an access in
+// read mode does not imply an access in write mode.
+func (ae *AccessEvents) CodeHashGas(addr []byte, isWrite bool) uint64 {
+	return ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeKeccakLeafKey, isWrite)
 }
