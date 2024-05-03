@@ -22,7 +22,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"net"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -104,20 +104,29 @@ type randomSource interface {
 
 // reseedingRandom is a random number generator that tracks when it was last re-seeded.
 type reseedingRandom struct {
-	cur atomic.Pointer[rand.Rand]
+	mu  sync.Mutex
+	cur *rand.Rand
 }
 
 func (r *reseedingRandom) seed() {
 	var b [8]byte
 	crand.Read(b[:])
 	seed := binary.BigEndian.Uint64(b[:])
-	r.cur.Store(rand.New(rand.NewSource(int64(seed))))
+	new := rand.New(rand.NewSource(int64(seed)))
+
+	r.mu.Lock()
+	r.cur = new
+	r.mu.Unlock()
 }
 
 func (r *reseedingRandom) Intn(n int) int {
-	return r.cur.Load().Intn(n)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cur.Intn(n)
 }
 
 func (r *reseedingRandom) Int63n(n int64) int64 {
-	return r.cur.Load().Int63n(n)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cur.Int63n(n)
 }
