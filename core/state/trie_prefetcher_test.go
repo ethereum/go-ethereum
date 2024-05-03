@@ -53,10 +53,7 @@ func TestUseAfterTerminate(t *testing.T) {
 	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}); err != nil {
 		t.Errorf("Prefetch failed before terminate: %v", err)
 	}
-	if _, err := prefetcher.trie(common.Hash{}, db.originalRoot); err == nil {
-		t.Errorf("Trie retrieval succeeded before terminate")
-	}
-	prefetcher.terminate()
+	prefetcher.terminate(false)
 
 	if err := prefetcher.prefetch(common.Hash{}, db.originalRoot, common.Address{}, [][]byte{skey.Bytes()}); err == nil {
 		t.Errorf("Prefetch succeeded after terminate: %v", err)

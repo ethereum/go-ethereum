@@ -76,50 +76,21 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 	}
 }
 
-// terminate iterates over all the subfetchers, waiting on any that still spin.
-func (p *triePrefetcher) terminate() {
+// terminate iterates over all the subfetchers and issues a terminateion request
+// to all of them. Depending on the async parameter, the method will either block
+// until all subfetchers spin down, or return immediately.
+func (p *triePrefetcher) terminate(async bool) {
 	// Short circuit if the fetcher is already closed
 	select {
 	case <-p.term:
 		return
 	default:
 	}
-	// Termiante all sub-fetchers synchronously and close the main fetcher
+	// Termiante all sub-fetchers, sync or async, depending on the request
 	for _, fetcher := range p.fetchers {
-		fetcher.terminate()
+		fetcher.terminate(async)
 	}
 	close(p.term)
-}
-
-// terminateAsync iterates over all the subfetchers and terminates them async,
-// feeding each into a result channel as they finish.
-func (p *triePrefetcher) terminateAsync() chan *subfetcher {
-	// Short circuit if the fetcher is already closed
-	select {
-	case <-p.term:
-		return nil
-	default:
-	}
-	// Terminate all the sub-fetchers asynchronously and feed them into a result
-	// channel as they finish
-	var (
-		res  = make(chan *subfetcher, len(p.fetchers))
-		pend sync.WaitGroup
-	)
-	for _, fetcher := range p.fetchers {
-		pend.Add(1)
-		go func(f *subfetcher) {
-			f.terminate()
-			res <- f
-			pend.Done()
-		}(fetcher)
-	}
-	go func() {
-		pend.Wait()
-		close(res)
-	}()
-	close(p.term)
-	return res
 }
 
 // report aggregates the pre-fetching and usage metrics and reports them.
@@ -173,17 +144,19 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	return fetcher.schedule(keys)
 }
 
-// trie returns the trie matching the root hash, or nil if either the fetcher
-// is terminated or the trie is not available.
+// trie returns the trie matching the root hash, blocking until the fetcher of
+// the given trie terminates. If no fetcher exists for the request, nil will be
+// returned.
 func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) (Trie, error) {
 	// Bail if no trie was prefetched for this root
 	fetcher := p.fetchers[p.trieID(owner, root)]
 	if fetcher == nil {
-		log.Warn("Prefetcher missed to load trie", "owner", owner, "root", root)
+		log.Error("Prefetcher missed to load trie", "owner", owner, "root", root)
 		p.deliveryMissMeter.Mark(1)
 		return nil, nil
 	}
-	return fetcher.peek()
+	// Subfetcher exists, retrieve its trie
+	return fetcher.peek(), nil
 }
 
 // used marks a batch of state items used to allow creating statistics as to
@@ -269,26 +242,25 @@ func (sf *subfetcher) schedule(keys [][]byte) error {
 
 // peek retrieves the fetcher's trie, populated with any pre-fetched data. The
 // returned trie will be a shallow copy, so modifying it will break subsequent
-// peeks for the original data.
-//
-// This method can only be called after closing the subfetcher.
-func (sf *subfetcher) peek() (Trie, error) {
-	// Ensure the subfetcher finished operating on its trie
-	select {
-	case <-sf.term:
-	default:
-		return nil, errNotTerminated
-	}
-	return sf.trie, nil
+// peeks for the original data. The method will block until all the scheduled
+// data has been loaded and the fethcer terminated.
+func (sf *subfetcher) peek() Trie {
+	// Block until the fertcher terminates, then retrieve the trie
+	<-sf.term
+	return sf.trie
 }
 
-// terminate waits for the subfetcher to finish its tasks, after which it tears
-// down all the internal background loaders.
-func (sf *subfetcher) terminate() {
+// terminate requests the subfetcher to stop accepting new tasks and spin down
+// as soon as everything is loaded. Depending on the async parameter, the method
+// will either block until all disk loads finish or return immediately.
+func (sf *subfetcher) terminate(async bool) {
 	select {
 	case <-sf.stop:
 	default:
 		close(sf.stop)
+	}
+	if async {
+		return
 	}
 	<-sf.term
 }
