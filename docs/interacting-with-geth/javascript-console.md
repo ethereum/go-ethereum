@@ -110,19 +110,19 @@ It is also possible to execute JavaScript code non-interactively by passing the 
 For example, to display the accounts in the keystore:
 
 ```sh
-geth attach --exec eth.accounts
+geth --exec eth.accounts attach
 ```
 
 ```sh
-geth attach --exec eth.blockNumber
+geth --exec eth.blockNumber attach
 ```
 
 The same syntax can be used to execute a local script file with more complex statements on a remote node over http, for example:
 
 ```sh
-geth attach http://geth.example.org:8545 --exec 'loadScript("/tmp/checkbalances.js")'
+geth --exec 'loadScript("/tmp/checkbalances.js")' attach http://geth.example.org:8545
 
-geth attach http://geth.example.org:8545 --jspath "/tmp" --exec 'loadScript("checkbalances.js")'
+geth --jspath "/tmp" --exec 'loadScript("checkbalances.js")' attach http://geth.example.org:8545
 ```
 
 The `--jspath` flag is used to set a library directory for the Javascript scripts. Any parameters passed to `loadScript()` that do not explicitly define an absolute path will be interpreted relative to the `jspath` directory.
