@@ -322,7 +322,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		t.Fatalf("expected trie to be verkle")
 	}
 
-	if !rawdb.ExistsAccountTrieNode(db, nil) {
+	if !rawdb.HasAccountTrieNode(db, nil) {
 		t.Fatal("could not find node")
 	}
 }

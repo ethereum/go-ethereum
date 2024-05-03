@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/utesting"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"golang.org/x/crypto/sha3"
 )
 
 func (c *Conn) snapRequest(code uint64, msg any) (any, error) {
@@ -905,7 +904,7 @@ func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
 	// that the serving node is missing
 	var (
 		bytecodes = res.Codes
-		hasher    = sha3.NewLegacyKeccak256().(crypto.KeccakState)
+		hasher    = crypto.NewKeccakState()
 		hash      = make([]byte, 32)
 		codes     = make([][]byte, len(req.Hashes))
 	)
@@ -964,7 +963,7 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 
 	// Cross reference the requested trienodes with the response to find gaps
 	// that the serving node is missing
-	hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+	hasher := crypto.NewKeccakState()
 	hash := make([]byte, 32)
 	trienodes := res.Nodes
 	if got, want := len(trienodes), len(tc.expHashes); got != want {

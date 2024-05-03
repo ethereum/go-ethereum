@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -34,7 +34,7 @@ type HistoryStats struct {
 }
 
 // sanitizeRange limits the given range to fit within the local history store.
-func sanitizeRange(start, end uint64, freezer *rawdb.ResettableFreezer) (uint64, uint64, error) {
+func sanitizeRange(start, end uint64, freezer ethdb.AncientReader) (uint64, uint64, error) {
 	// Load the id of the first history object in local store.
 	tail, err := freezer.Tail()
 	if err != nil {
@@ -60,7 +60,7 @@ func sanitizeRange(start, end uint64, freezer *rawdb.ResettableFreezer) (uint64,
 	return first, last, nil
 }
 
-func inspectHistory(freezer *rawdb.ResettableFreezer, start, end uint64, onHistory func(*history, *HistoryStats)) (*HistoryStats, error) {
+func inspectHistory(freezer ethdb.AncientReader, start, end uint64, onHistory func(*history, *HistoryStats)) (*HistoryStats, error) {
 	var (
 		stats  = &HistoryStats{}
 		init   = time.Now()
@@ -96,7 +96,7 @@ func inspectHistory(freezer *rawdb.ResettableFreezer, start, end uint64, onHisto
 }
 
 // accountHistory inspects the account history within the range.
-func accountHistory(freezer *rawdb.ResettableFreezer, address common.Address, start, end uint64) (*HistoryStats, error) {
+func accountHistory(freezer ethdb.AncientReader, address common.Address, start, end uint64) (*HistoryStats, error) {
 	return inspectHistory(freezer, start, end, func(h *history, stats *HistoryStats) {
 		blob, exists := h.accounts[address]
 		if !exists {
@@ -108,7 +108,7 @@ func accountHistory(freezer *rawdb.ResettableFreezer, address common.Address, st
 }
 
 // storageHistory inspects the storage history within the range.
-func storageHistory(freezer *rawdb.ResettableFreezer, address common.Address, slot common.Hash, start uint64, end uint64) (*HistoryStats, error) {
+func storageHistory(freezer ethdb.AncientReader, address common.Address, slot common.Hash, start uint64, end uint64) (*HistoryStats, error) {
 	return inspectHistory(freezer, start, end, func(h *history, stats *HistoryStats) {
 		slots, exists := h.storages[address]
 		if !exists {
@@ -124,7 +124,7 @@ func storageHistory(freezer *rawdb.ResettableFreezer, address common.Address, sl
 }
 
 // historyRange returns the block number range of local state histories.
-func historyRange(freezer *rawdb.ResettableFreezer) (uint64, uint64, error) {
+func historyRange(freezer ethdb.AncientReader) (uint64, uint64, error) {
 	// Load the id of the first history object in local store.
 	tail, err := freezer.Tail()
 	if err != nil {

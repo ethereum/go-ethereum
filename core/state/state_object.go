@@ -403,6 +403,9 @@ func (s *stateObject) updateRoot() {
 // commit obtains a set of dirty storage trie nodes and updates the account data.
 // The returned set can be nil if nothing to commit. This function assumes all
 // storage mutations have already been flushed into trie by updateRoot.
+//
+// Note, commit may run concurrently across all the state objects. Do not assume
+// thread-safe access to the statedb.
 func (s *stateObject) commit() (*trienode.NodeSet, error) {
 	// Short circuit if trie is not even loaded, don't bother with committing anything
 	if s.trie == nil {
