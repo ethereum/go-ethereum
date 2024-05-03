@@ -28,7 +28,9 @@ archives:
       {{- if .IsSnapshot }}{{ .ShortCommit }}
       {{- else }}{{ .Version }}
       {{ end }}
-      {{- if .Env.DIRTY_SUFFIX }}{{ .Env.DIRTY_SUFFIX }}{{ end }}_
+      {{- with index .Env "DIRTY_SUFFIX" -}}
+      {{ . }}
+      {{- end -}}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
@@ -58,7 +60,9 @@ checksum:
     {{- if .IsSnapshot }}{{ .ShortCommit }}
     {{- else }}{{ .Version }}
     {{- end }}
-    {{- if .Env.DIRTY_SUFFIX }}{{ .Env.DIRTY_SUFFIX }}{{ end -}}
+    {{- with index .Env "DIRTY_SUFFIX" -}}
+    {{ . }}
+    {{- end -}}
     _checksums.txt
 
 changelog:
