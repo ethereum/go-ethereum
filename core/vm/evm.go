@@ -153,9 +153,6 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 	}
-	if txCtx.AccessEvents == nil && chainConfig.IsPrague(blockCtx.BlockNumber, blockCtx.Time) {
-		evm.AccessEvents = evm.StateDB.(*state.StateDB).NewAccessEvents()
-	}
 	evm.interpreter = NewEVMInterpreter(evm)
 	return evm
 }
@@ -163,8 +160,8 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
-	if txCtx.AccessEvents == nil && evm.chainRules.IsPrague {
-		txCtx.AccessEvents = evm.StateDB.(*state.StateDB).NewAccessEvents()
+	if evm.chainRules.IsEIP4762 {
+		txCtx.AccessEvents = state.NewAccessEvents(statedb.PointCache())
 	}
 	evm.TxContext = txCtx
 	evm.StateDB = statedb

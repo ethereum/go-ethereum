@@ -140,9 +140,6 @@ type StateDB struct {
 	// Transient storage
 	transientStorage transientStorage
 
-	// State access events, used for Verkle tries/EIP4762
-	accessEvents *AccessEvents
-
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -197,28 +194,10 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
 	}
-	if tr.IsVerkle() {
-		sdb.accessEvents = sdb.NewAccessEvents()
-	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
 	}
 	return sdb, nil
-}
-
-func (s *StateDB) NewAccessEvents() *AccessEvents {
-	return NewAccessEvents(utils.NewPointCache(100))
-}
-
-func (s *StateDB) AccessEvents() *AccessEvents {
-	if s.accessEvents == nil {
-		s.accessEvents = s.NewAccessEvents()
-	}
-	return s.accessEvents
-}
-
-func (s *StateDB) SetAccessEvents(ae *AccessEvents) {
-	s.accessEvents = ae
 }
 
 // SetLogger sets the logger for account update hooks.
@@ -1411,4 +1390,8 @@ func (s *StateDB) markUpdate(addr common.Address) {
 	}
 	s.mutations[addr].applied = false
 	s.mutations[addr].typ = update
+}
+
+func (s *StateDB) PointCache() *utils.PointCache {
+	return s.db.PointCache()
 }
