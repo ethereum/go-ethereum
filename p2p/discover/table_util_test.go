@@ -99,9 +99,9 @@ func intIP(i int) net.IP {
 }
 
 // fillBucket inserts nodes into the given bucket until it is full.
-func fillBucket(tab *Table, n *node) (last *node) {
-	ld := enode.LogDist(tab.self().ID(), n.ID())
-	b := tab.bucket(n.ID())
+func fillBucket(tab *Table, id enode.ID) (last *node) {
+	ld := enode.LogDist(tab.self().ID(), id)
+	b := tab.bucket(id)
 	for len(b.entries) < bucketSize {
 		node := nodeAtDistance(tab.self().ID(), ld, intIP(ld))
 		b.entries = append(b.entries, node)
@@ -290,4 +290,58 @@ func hexEncPubkey(h string) (ret encPubkey) {
 	}
 	copy(ret[:], b)
 	return ret
+}
+
+type nodeEventRecorder struct {
+	evc chan recordedNodeEvent
+}
+
+type recordedNodeEvent struct {
+	node  *node
+	added bool
+}
+
+func newNodeEventRecorder(buffer int) *nodeEventRecorder {
+	return &nodeEventRecorder{
+		evc: make(chan recordedNodeEvent, buffer),
+	}
+}
+
+func (set *nodeEventRecorder) nodeAdded(b *bucket, n *node) {
+	select {
+	case set.evc <- recordedNodeEvent{n, true}:
+	default:
+		panic("no space in event buffer")
+	}
+}
+
+func (set *nodeEventRecorder) nodeRemoved(b *bucket, n *node) {
+	select {
+	case set.evc <- recordedNodeEvent{n, false}:
+	default:
+		panic("no space in event buffer")
+	}
+}
+
+func (set *nodeEventRecorder) waitNodePresent(id enode.ID, timeout time.Duration) bool {
+	return set.waitNodeEvent(id, timeout, true)
+}
+
+func (set *nodeEventRecorder) waitNodeAbsent(id enode.ID, timeout time.Duration) bool {
+	return set.waitNodeEvent(id, timeout, false)
+}
+
+func (set *nodeEventRecorder) waitNodeEvent(id enode.ID, timeout time.Duration, added bool) bool {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	for {
+		select {
+		case ev := <-set.evc:
+			if ev.node.ID() == id && ev.added == added {
+				return true
+			}
+		case <-timer.C:
+			return false
+		}
+	}
 }
