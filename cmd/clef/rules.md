@@ -49,11 +49,11 @@ Whenever the external API is called (and the ruleset is enabled), the `signer` c
 invokes the corresponding method. In doing so, there are three possible outcomes:
 
 1. JS returns "Approve"
-  * Auto-approve request
+   * Auto-approve request
 2. JS returns "Reject"
-  * Auto-reject request
+   * Auto-reject request
 3. Error occurs, or something else is returned
-  * Pass on to `next` ui: the regular UI channel.
+   * Pass on to `next` ui: the regular UI channel.
 
 A more advanced example can be found below, "Example 1: ruleset for a rate-limited window", using `storage` to `Put` and `Get` `string`s by key.
 
