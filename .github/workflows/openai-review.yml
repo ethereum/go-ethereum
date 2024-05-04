@@ -1,0 +1,36 @@
+on: [pull_request]
+
+jobs:
+  add_pr_comment:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    name: OpenAI PR Comment
+    if: "contains(github.event.pull_request.labels.*.name, 'option.review-by-ai')"
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 2
+      - id: patch
+        run: |
+          patch_output=$(curl --silent --request GET \
+            --url https://api.github.com/repos/$PATCH_REPO/pulls/$PATCH_PR \
+            --header "Accept: application/vnd.github.v3.patch" \
+            --header "Authorization: Bearer $PATCH_GITHUB_TOKEN")
+          echo $patch_output
+          echo "GIT_PATCH_OUTPUT=$(echo $patch_output)" >> $GITHUB_ENV
+        env:
+          PATCH_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PATCH_PR: ${{ github.event.pull_request.number }}
+          PATCH_REPO: ${{ github.repository }}
+      - id: review
+        uses: taikoxyz/openai-review-action@main
+        with:
+          GIT_COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
+          GIT_PATCH_OUTPUT: ${{ env.GIT_PATCH_OUTPUT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_ORG_KEY: ${{ secrets.OPENAI_ORG_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          REPOSITORY_NAME: ${{ github.repository }}

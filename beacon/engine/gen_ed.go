@@ -17,23 +17,26 @@ var _ = (*executableDataMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (e ExecutableData) MarshalJSON() ([]byte, error) {
 	type ExecutableData struct {
-		ParentHash    common.Hash         `json:"parentHash"    gencodec:"required"`
-		FeeRecipient  common.Address      `json:"feeRecipient"  gencodec:"required"`
-		StateRoot     common.Hash         `json:"stateRoot"     gencodec:"required"`
-		ReceiptsRoot  common.Hash         `json:"receiptsRoot"  gencodec:"required"`
-		LogsBloom     hexutil.Bytes       `json:"logsBloom"     gencodec:"required"`
-		Random        common.Hash         `json:"prevRandao"    gencodec:"required"`
-		Number        hexutil.Uint64      `json:"blockNumber"   gencodec:"required"`
-		GasLimit      hexutil.Uint64      `json:"gasLimit"      gencodec:"required"`
-		GasUsed       hexutil.Uint64      `json:"gasUsed"       gencodec:"required"`
-		Timestamp     hexutil.Uint64      `json:"timestamp"     gencodec:"required"`
-		ExtraData     hexutil.Bytes       `json:"extraData"     gencodec:"required"`
-		BaseFeePerGas *hexutil.Big        `json:"baseFeePerGas" gencodec:"required"`
-		BlockHash     common.Hash         `json:"blockHash"     gencodec:"required"`
-		Transactions  []hexutil.Bytes     `json:"transactions"  gencodec:"required"`
-		Withdrawals   []*types.Withdrawal `json:"withdrawals"`
-		BlobGasUsed   *hexutil.Uint64     `json:"blobGasUsed"`
-		ExcessBlobGas *hexutil.Uint64     `json:"excessBlobGas"`
+		ParentHash      common.Hash         `json:"parentHash"    gencodec:"required"`
+		FeeRecipient    common.Address      `json:"feeRecipient"  gencodec:"required"`
+		StateRoot       common.Hash         `json:"stateRoot"     gencodec:"required"`
+		ReceiptsRoot    common.Hash         `json:"receiptsRoot"  gencodec:"required"`
+		LogsBloom       hexutil.Bytes       `json:"logsBloom"     gencodec:"required"`
+		Random          common.Hash         `json:"prevRandao"    gencodec:"required"`
+		Number          hexutil.Uint64      `json:"blockNumber"   gencodec:"required"`
+		GasLimit        hexutil.Uint64      `json:"gasLimit"      gencodec:"required"`
+		GasUsed         hexutil.Uint64      `json:"gasUsed"       gencodec:"required"`
+		Timestamp       hexutil.Uint64      `json:"timestamp"     gencodec:"required"`
+		ExtraData       hexutil.Bytes       `json:"extraData"     gencodec:"required"`
+		BaseFeePerGas   *hexutil.Big        `json:"baseFeePerGas" gencodec:"required"`
+		BlockHash       common.Hash         `json:"blockHash"     gencodec:"required"`
+		Transactions    []hexutil.Bytes     `json:"transactions"`
+		Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+		BlobGasUsed     *hexutil.Uint64     `json:"blobGasUsed"`
+		ExcessBlobGas   *hexutil.Uint64     `json:"excessBlobGas"`
+		TxHash          common.Hash         `json:"txHash"`
+		WithdrawalsHash common.Hash         `json:"withdrawalsHash"`
+		TaikoBlock      bool
 	}
 	var enc ExecutableData
 	enc.ParentHash = e.ParentHash
@@ -58,29 +61,35 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 	enc.Withdrawals = e.Withdrawals
 	enc.BlobGasUsed = (*hexutil.Uint64)(e.BlobGasUsed)
 	enc.ExcessBlobGas = (*hexutil.Uint64)(e.ExcessBlobGas)
+	enc.TxHash = e.TxHash
+	enc.WithdrawalsHash = e.WithdrawalsHash
+	enc.TaikoBlock = e.TaikoBlock
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 	type ExecutableData struct {
-		ParentHash    *common.Hash        `json:"parentHash"    gencodec:"required"`
-		FeeRecipient  *common.Address     `json:"feeRecipient"  gencodec:"required"`
-		StateRoot     *common.Hash        `json:"stateRoot"     gencodec:"required"`
-		ReceiptsRoot  *common.Hash        `json:"receiptsRoot"  gencodec:"required"`
-		LogsBloom     *hexutil.Bytes      `json:"logsBloom"     gencodec:"required"`
-		Random        *common.Hash        `json:"prevRandao"    gencodec:"required"`
-		Number        *hexutil.Uint64     `json:"blockNumber"   gencodec:"required"`
-		GasLimit      *hexutil.Uint64     `json:"gasLimit"      gencodec:"required"`
-		GasUsed       *hexutil.Uint64     `json:"gasUsed"       gencodec:"required"`
-		Timestamp     *hexutil.Uint64     `json:"timestamp"     gencodec:"required"`
-		ExtraData     *hexutil.Bytes      `json:"extraData"     gencodec:"required"`
-		BaseFeePerGas *hexutil.Big        `json:"baseFeePerGas" gencodec:"required"`
-		BlockHash     *common.Hash        `json:"blockHash"     gencodec:"required"`
-		Transactions  []hexutil.Bytes     `json:"transactions"  gencodec:"required"`
-		Withdrawals   []*types.Withdrawal `json:"withdrawals"`
-		BlobGasUsed   *hexutil.Uint64     `json:"blobGasUsed"`
-		ExcessBlobGas *hexutil.Uint64     `json:"excessBlobGas"`
+		ParentHash      *common.Hash        `json:"parentHash"    gencodec:"required"`
+		FeeRecipient    *common.Address     `json:"feeRecipient"  gencodec:"required"`
+		StateRoot       *common.Hash        `json:"stateRoot"     gencodec:"required"`
+		ReceiptsRoot    *common.Hash        `json:"receiptsRoot"  gencodec:"required"`
+		LogsBloom       *hexutil.Bytes      `json:"logsBloom"     gencodec:"required"`
+		Random          *common.Hash        `json:"prevRandao"    gencodec:"required"`
+		Number          *hexutil.Uint64     `json:"blockNumber"   gencodec:"required"`
+		GasLimit        *hexutil.Uint64     `json:"gasLimit"      gencodec:"required"`
+		GasUsed         *hexutil.Uint64     `json:"gasUsed"       gencodec:"required"`
+		Timestamp       *hexutil.Uint64     `json:"timestamp"     gencodec:"required"`
+		ExtraData       *hexutil.Bytes      `json:"extraData"     gencodec:"required"`
+		BaseFeePerGas   *hexutil.Big        `json:"baseFeePerGas" gencodec:"required"`
+		BlockHash       *common.Hash        `json:"blockHash"     gencodec:"required"`
+		Transactions    []hexutil.Bytes     `json:"transactions"`
+		Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+		BlobGasUsed     *hexutil.Uint64     `json:"blobGasUsed"`
+		ExcessBlobGas   *hexutil.Uint64     `json:"excessBlobGas"`
+		TxHash          *common.Hash        `json:"txHash"`
+		WithdrawalsHash *common.Hash        `json:"withdrawalsHash"`
+		TaikoBlock      *bool
 	}
 	var dec ExecutableData
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -138,12 +147,11 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'blockHash' for ExecutableData")
 	}
 	e.BlockHash = *dec.BlockHash
-	if dec.Transactions == nil {
-		return errors.New("missing required field 'transactions' for ExecutableData")
-	}
-	e.Transactions = make([][]byte, len(dec.Transactions))
-	for k, v := range dec.Transactions {
-		e.Transactions[k] = v
+	if dec.Transactions != nil {
+		e.Transactions = make([][]byte, len(dec.Transactions))
+		for k, v := range dec.Transactions {
+			e.Transactions[k] = v
+		}
 	}
 	if dec.Withdrawals != nil {
 		e.Withdrawals = dec.Withdrawals
@@ -153,6 +161,15 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ExcessBlobGas != nil {
 		e.ExcessBlobGas = (*uint64)(dec.ExcessBlobGas)
+	}
+	if dec.TxHash != nil {
+		e.TxHash = *dec.TxHash
+	}
+	if dec.WithdrawalsHash != nil {
+		e.WithdrawalsHash = *dec.WithdrawalsHash
+	}
+	if dec.TaikoBlock != nil {
+		e.TaikoBlock = *dec.TaikoBlock
 	}
 	return nil
 }

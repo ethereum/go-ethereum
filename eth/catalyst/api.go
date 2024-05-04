@@ -20,6 +20,7 @@ package catalyst
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -318,6 +319,10 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			PayloadID:     id,
 		}
 	}
+
+	// CHANGE(taiko): check whether --taiko flag is set.
+	isTaiko := api.eth.BlockChain().Config().Taiko
+
 	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
 		// Block is not canonical, set head.
 		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
@@ -327,6 +332,10 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		// If the specified head matches with our local head, do nothing and keep
 		// generating the payload. It's a special corner case that a few slots are
 		// missing and we are requested to generate the payload in slot.
+	} else if isTaiko { // CHANGE(taiko): reorg is allowed in L2.
+		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
+		}
 	} else {
 		// If the head block is already in our canonical chain, the beacon client is
 		// probably resyncing. Ignore the update.
@@ -371,6 +380,56 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// sealed by the beacon client. The payload will be requested later, and we
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
+		// CHANGE(taiko): create a L2 block by Taiko protocol.
+		if isTaiko {
+			// No need to check payloadAttribute here, because all its fields are
+			// marked as required.
+			block, err := api.eth.Miner().SealBlockWith(
+				update.HeadBlockHash,
+				payloadAttributes.Timestamp,
+				payloadAttributes.BlockMetadata,
+				payloadAttributes.BaseFeePerGas,
+				payloadAttributes.Withdrawals,
+			)
+			if err != nil {
+				log.Error("Failed to create sealing block", "err", err)
+				return valid(nil), engine.InvalidPayloadAttributes.With(err)
+			}
+
+			// Cache the mined block for later use.
+			args := &miner.BuildPayloadArgs{
+				Parent:       block.ParentHash(),
+				Timestamp:    block.Time(),
+				FeeRecipient: block.Coinbase(),
+				Random:       block.MixDigest(),
+				Withdrawals:  block.Withdrawals(),
+				Version:      payloadVersion,
+			}
+			id := args.Id()
+			payload, err := api.eth.Miner().BuildPayload(args)
+			if err != nil {
+				log.Error("Failed to build payload", "err", err)
+				return valid(nil), engine.InvalidPayloadAttributes.With(err)
+			}
+
+			payload.SetFullBlock(block, common.Big0)
+
+			api.localBlocks.put(id, payload)
+
+			// L1Origin **MUST NOT** be nil, it's a required field in PayloadAttributesV1.
+			l1Origin := payloadAttributes.L1Origin
+
+			// Set the block hash before inserting the L1Origin into database.
+			l1Origin.L2BlockHash = block.Hash()
+
+			// Write L1Origin.
+			rawdb.WriteL1Origin(api.eth.ChainDb(), l1Origin.BlockID, l1Origin)
+			// Write the head L1Origin.
+			rawdb.WriteHeadL1Origin(api.eth.ChainDb(), l1Origin.BlockID)
+
+			return valid(&id), nil
+		}
+
 		args := &miner.BuildPayloadArgs{
 			Parent:       update.HeadBlockHash,
 			Timestamp:    payloadAttributes.Timestamp,
@@ -491,7 +550,8 @@ func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.Payl
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("can't use newPayloadV2 post-cancun"))
 	}
 	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) == forks.Shanghai {
-		if params.Withdrawals == nil {
+		if params.Withdrawals == nil &&
+			(api.eth.BlockChain().Config().Taiko && params.WithdrawalsHash == (common.Hash{})) {
 			return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
 		}
 	} else {
@@ -551,10 +611,37 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	defer api.newPayloadLock.Unlock()
 
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
-	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot)
-	if err != nil {
-		log.Warn("Invalid NewPayload params", "params", params, "error", err)
-		return api.invalid(err, nil), nil
+	// CHANGE(taiko): allow passing the executable data with txHash instead of all transactions.
+	var (
+		block *types.Block
+		err   error
+	)
+	params.TaikoBlock = api.eth.BlockChain().Config().Taiko
+	if api.eth.BlockChain().Config().Taiko && params.Transactions == nil && params.Withdrawals == nil {
+		block = types.NewBlockWithHeader(&types.Header{
+			ParentHash:      params.ParentHash,
+			UncleHash:       types.EmptyUncleHash,
+			Coinbase:        params.FeeRecipient,
+			Root:            params.StateRoot,
+			TxHash:          params.TxHash,
+			ReceiptHash:     params.ReceiptsRoot,
+			Bloom:           types.BytesToBloom(params.LogsBloom),
+			Difficulty:      common.Big0,
+			Number:          new(big.Int).SetUint64(params.Number),
+			GasLimit:        params.GasLimit,
+			GasUsed:         params.GasUsed,
+			Time:            params.Timestamp,
+			BaseFee:         params.BaseFeePerGas,
+			Extra:           params.ExtraData,
+			MixDigest:       params.Random,
+			WithdrawalsHash: &params.WithdrawalsHash,
+		})
+	} else {
+		block, err = engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot)
+		if err != nil {
+			log.Debug("Invalid NewPayload params", "params", params, "error", err)
+			return engine.PayloadStatusV1{Status: engine.INVALID}, nil
+		}
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline
 	api.lastNewPayloadLock.Lock()
@@ -597,9 +684,18 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 		log.Error("Ignoring pre-merge parent block", "number", params.Number, "hash", params.BlockHash, "td", ptd, "ttd", ttd)
 		return engine.INVALID_TERMINAL_BLOCK, nil
 	}
-	if block.Time() <= parent.Time() {
-		log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
-		return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
+	// CHANGE(taiko): a block that has the same timestamp as its parents is
+	// allowed in Taiko protocol.
+	if api.eth.BlockChain().Config().Taiko {
+		if block.Time() < parent.Time() {
+			log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
+			return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
+		}
+	} else {
+		if block.Time() <= parent.Time() {
+			log.Warn("Invalid timestamp", "parent", block.Time(), "block", block.Time())
+			return api.invalid(errors.New("invalid timestamp"), parent.Header()), nil
+		}
 	}
 	// Another corner case: if the node is in snap sync mode, but the CL client
 	// tries to make it import a block. That should be denied as pushing something

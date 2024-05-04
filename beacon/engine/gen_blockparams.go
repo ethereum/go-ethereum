@@ -5,9 +5,11 @@ package engine
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -21,6 +23,9 @@ func (p PayloadAttributes) MarshalJSON() ([]byte, error) {
 		SuggestedFeeRecipient common.Address      `json:"suggestedFeeRecipient" gencodec:"required"`
 		Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 		BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
+		BaseFeePerGas         *big.Int            `json:"baseFeePerGas" gencodec:"required"`
+		BlockMetadata         *BlockMetadata      `json:"blockMetadata" gencodec:"required"`
+		L1Origin              *rawdb.L1Origin     `json:"l1Origin"      gencodec:"required"`
 	}
 	var enc PayloadAttributes
 	enc.Timestamp = hexutil.Uint64(p.Timestamp)
@@ -28,6 +33,9 @@ func (p PayloadAttributes) MarshalJSON() ([]byte, error) {
 	enc.SuggestedFeeRecipient = p.SuggestedFeeRecipient
 	enc.Withdrawals = p.Withdrawals
 	enc.BeaconRoot = p.BeaconRoot
+	enc.BaseFeePerGas = p.BaseFeePerGas
+	enc.BlockMetadata = p.BlockMetadata
+	enc.L1Origin = p.L1Origin
 	return json.Marshal(&enc)
 }
 
@@ -39,6 +47,9 @@ func (p *PayloadAttributes) UnmarshalJSON(input []byte) error {
 		SuggestedFeeRecipient *common.Address     `json:"suggestedFeeRecipient" gencodec:"required"`
 		Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 		BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
+		BaseFeePerGas         *big.Int            `json:"baseFeePerGas" gencodec:"required"`
+		BlockMetadata         *BlockMetadata      `json:"blockMetadata" gencodec:"required"`
+		L1Origin              *rawdb.L1Origin     `json:"l1Origin"      gencodec:"required"`
 	}
 	var dec PayloadAttributes
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -62,5 +73,17 @@ func (p *PayloadAttributes) UnmarshalJSON(input []byte) error {
 	if dec.BeaconRoot != nil {
 		p.BeaconRoot = dec.BeaconRoot
 	}
+	if dec.BaseFeePerGas == nil {
+		return errors.New("missing required field 'baseFeePerGas' for PayloadAttributes")
+	}
+	p.BaseFeePerGas = dec.BaseFeePerGas
+	if dec.BlockMetadata == nil {
+		return errors.New("missing required field 'blockMetadata' for PayloadAttributes")
+	}
+	p.BlockMetadata = dec.BlockMetadata
+	if dec.L1Origin == nil {
+		return errors.New("missing required field 'l1Origin' for PayloadAttributes")
+	}
+	p.L1Origin = dec.L1Origin
 	return nil
 }

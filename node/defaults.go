@@ -49,7 +49,8 @@ var (
 	DefaultAuthVhosts  = []string{"localhost"} // Default virtual hosts for the authenticated apis
 	DefaultAuthOrigins = []string{"localhost"} // Default origins for the authenticated apis
 	DefaultAuthPrefix  = ""                    // Default prefix for the authenticated apis
-	DefaultAuthModules = []string{"eth", "engine"}
+	// CHANGE(taiko): add `taikoAuth` namespace for authenticated APIs.
+	DefaultAuthModules = []string{"eth", "engine", rpc.TaikoAuth}
 )
 
 // DefaultConfig contains reasonable default settings.

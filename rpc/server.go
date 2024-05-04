@@ -28,6 +28,9 @@ import (
 const MetadataApi = "rpc"
 const EngineApi = "engine"
 
+// CHANGE(taiko): add `taikoAuth` namespace for authenticated APIs
+const TaikoAuth = "taikoAuth"
+
 // CodecOption specifies which type of messages a codec supports.
 //
 // Deprecated: this option is no longer honored by Server.
