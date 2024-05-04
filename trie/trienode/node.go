@@ -68,10 +68,10 @@ type NodeSet struct {
 
 // NewNodeSet initializes a node set. The owner is zero for the account trie and
 // the owning account address hash for storage tries.
-func NewNodeSet(owner common.Hash) *NodeSet {
+func NewNodeSet(owner common.Hash, capacity int) *NodeSet {
 	return &NodeSet{
 		Owner: owner,
-		Nodes: make(map[string]*Node),
+		Nodes: make(map[string]*Node, capacity),
 	}
 }
 
@@ -186,7 +186,7 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 
 // Flatten returns a two-dimensional map for internal nodes.
 func (set *MergedNodeSet) Flatten() map[common.Hash]map[string]*Node {
-	nodes := make(map[common.Hash]map[string]*Node)
+	nodes := make(map[common.Hash]map[string]*Node, len(set.Sets))
 	for owner, set := range set.Sets {
 		nodes[owner] = set.Nodes
 	}

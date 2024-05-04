@@ -83,7 +83,7 @@ func (h *testHasher) Delete(key []byte) error {
 func (h *testHasher) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
 	var (
 		nodes = make(map[common.Hash][]byte)
-		set   = trienode.NewNodeSet(h.owner)
+		set   = trienode.NewNodeSet(h.owner, len(h.dirties))
 	)
 	for hash, val := range h.cleans {
 		nodes[hash] = val

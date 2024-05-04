@@ -34,8 +34,8 @@ func BenchmarkMerge(b *testing.B) {
 }
 
 func benchmarkMerge(b *testing.B, count int) {
-	x := NewNodeSet(common.Hash{})
-	y := NewNodeSet(common.Hash{})
+	x := NewNodeSet(common.Hash{}, count)
+	y := NewNodeSet(common.Hash{}, count)
 	addNode := func(s *NodeSet) {
 		path := make([]byte, 4)
 		rand.Read(path)
@@ -52,7 +52,7 @@ func benchmarkMerge(b *testing.B, count int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// Store set x into a backup
-		z := NewNodeSet(common.Hash{})
+		z := NewNodeSet(common.Hash{}, len(x.Nodes))
 		z.Merge(common.Hash{}, x.Nodes)
 		// Merge y into x
 		x.Merge(common.Hash{}, y.Nodes)

@@ -622,7 +622,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 		if len(paths) == 0 {
 			return types.EmptyRootHash, nil, nil // case (a)
 		}
-		nodes := trienode.NewNodeSet(t.owner)
+		nodes := trienode.NewNodeSet(t.owner, len(paths))
 		for _, path := range paths {
 			nodes.AddNode([]byte(path), trienode.NewDeleted())
 		}
@@ -640,7 +640,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 		t.root = hashedNode
 		return rootHash, nil, nil
 	}
-	nodes := trienode.NewNodeSet(t.owner)
+	nodes := trienode.NewNodeSet(t.owner, len(t.tracer.deletedNodes()))
 	for _, path := range t.tracer.deletedNodes() {
 		nodes.AddNode([]byte(path), trienode.NewDeleted())
 	}

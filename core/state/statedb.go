@@ -947,7 +947,7 @@ func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (com
 
 	var (
 		size  common.StorageSize
-		nodes = trienode.NewNodeSet(addrHash)
+		nodes = trienode.NewNodeSet(addrHash, 0)
 		slots = make(map[common.Hash][]byte)
 	)
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
@@ -989,7 +989,7 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 	}
 	var (
 		size  common.StorageSize
-		nodes = trienode.NewNodeSet(addrHash)
+		nodes = trienode.NewNodeSet(addrHash, 0)
 		slots = make(map[common.Hash][]byte)
 	)
 	for it.Next(true) {

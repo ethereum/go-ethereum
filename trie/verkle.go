@@ -226,7 +226,7 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
 	if err != nil {
 		return common.Hash{}, nil, fmt.Errorf("serializing tree nodes: %s", err)
 	}
-	nodeset := trienode.NewNodeSet(common.Hash{})
+	nodeset := trienode.NewNodeSet(common.Hash{}, len(nodes))
 	for _, node := range nodes {
 		// hash parameter is not used in pathdb
 		nodeset.AddNode(node.Path, trienode.New(common.Hash{}, node.SerializedBytes))
