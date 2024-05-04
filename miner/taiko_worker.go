@@ -179,14 +179,14 @@ func (w *worker) sealBlockWith(
 		}
 		sender, err := types.LatestSignerForChainID(tx.ChainId()).Sender(tx)
 		if err != nil {
-			log.Info("Skip an invalid proposed transaction", "hash", tx.Hash(), "reason", err)
+			log.Debug("Skip an invalid proposed transaction", "hash", tx.Hash(), "reason", err)
 			continue
 		}
 
 		env.state.Prepare(rules, sender, blkMeta.Beneficiary, tx.To(), vm.ActivePrecompiles(rules), tx.AccessList())
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 		if _, err := w.commitTransaction(env, tx); err != nil {
-			log.Info("Skip an invalid proposed transaction", "hash", tx.Hash(), "reason", err)
+			log.Debug("Skip an invalid proposed transaction", "hash", tx.Hash(), "reason", err)
 			continue
 		}
 		env.tcount++
