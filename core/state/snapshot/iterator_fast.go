@@ -77,13 +77,21 @@ func newFastIterator(tree *Tree, root common.Hash, account common.Hash, seek com
 	if snap == nil {
 		return nil, fmt.Errorf("unknown snapshot: %x", root)
 	}
-	fi := &fastIterator{
-		tree:    tree,
-		root:    root,
-		account: accountIterator,
+
+	// Get all the ancestor snaps.
+	snaps := make([]snapshot, 0, 128)
+	for current := snap.(snapshot); current != nil; current = current.Parent() {
+		snaps = append(snaps, current)
 	}
-	current := snap.(snapshot)
-	for depth := 0; current != nil; depth++ {
+
+	fi := &fastIterator{
+		tree:      tree,
+		root:      root,
+		account:   accountIterator,
+		iterators: make([]*weightedIterator, 0, len(snaps)),
+	}
+
+	for depth, current := range snaps {
 		if accountIterator {
 			fi.iterators = append(fi.iterators, &weightedIterator{
 				it:       current.AccountIterator(seek),
@@ -103,7 +111,6 @@ func newFastIterator(tree *Tree, root common.Hash, account common.Hash, seek com
 				break
 			}
 		}
-		current = current.Parent()
 	}
 	fi.init()
 	return fi, nil
