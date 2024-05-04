@@ -365,7 +365,7 @@ func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, 
 	return db, blocks, receipts
 }
 
-func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts, []*verkle.VerkleProof, []verkle.StateDiff) {
+func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, diskdb ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts, []*verkle.VerkleProof, []verkle.StateDiff) {
 	if config == nil {
 		config = params.TestChainConfig
 	}
@@ -434,13 +434,16 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		return nil, nil
 	}
 	var snaps *snapshot.Tree
-	triedb := state.NewDatabaseWithConfig(db, nil)
-	triedb.EndVerkleTransition()
+	db := state.NewDatabaseWithConfig(diskdb, nil)
+	db.StartVerkleTransition(common.Hash{}, common.Hash{}, config, config.PragueTime, common.Hash{})
+	db.EndVerkleTransition()
+	db.SaveTransitionState(parent.Root())
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), triedb, snaps)
+		statedb, err := state.New(parent.Root(), db, snaps)
 		if err != nil {
 			panic(fmt.Sprintf("could not find state for block %d: err=%v, parent root=%x", i, err, parent.Root()))
 		}
+		statedb.NewAccessWitness()
 		block, receipt := genblock(i, parent, statedb)
 		blocks[i] = block
 		receipts[i] = receipt

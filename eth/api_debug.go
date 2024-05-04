@@ -17,7 +17,9 @@
 package eth
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"time"
@@ -431,4 +433,42 @@ func (api *DebugAPI) SetTrieFlushInterval(interval string) error {
 // GetTrieFlushInterval gets the current value of in-memory trie flush interval
 func (api *DebugAPI) GetTrieFlushInterval() string {
 	return api.eth.blockchain.GetTrieFlushInterval().String()
+}
+
+type ConversionStatusResult struct {
+	Started bool `json:"started"`
+	Ended   bool `json:"ended"`
+}
+
+func (api *DebugAPI) ConversionStatus(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*ConversionStatusResult, error) {
+	block, err := api.eth.APIBackend.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	data, err := rawdb.ReadVerkleTransitionState(api.eth.ChainDb(), block.Root())
+	if err != nil {
+		if err.Error() == "pebble: not found" {
+			return &ConversionStatusResult{}, nil
+		}
+		return nil, err
+	}
+	log.Info("found entry", "data", data)
+	if len(data) == 0 {
+		log.Info("found no data")
+		// started and ended will be false as no conversion has started
+		return &ConversionStatusResult{}, nil
+	}
+
+	var (
+		ts  state.TransitionState
+		buf = bytes.NewBuffer(data[:])
+		dec = gob.NewDecoder(buf)
+	)
+	// Decode transition state
+	err = dec.Decode(&ts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode transition state, err=%v", err)
+	}
+
+	return &ConversionStatusResult{Started: ts.Started, Ended: ts.Ended}, nil
 }

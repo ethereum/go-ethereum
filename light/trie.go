@@ -101,7 +101,7 @@ func (db *odrDatabase) DiskDB() ethdb.KeyValueStore {
 	panic("not implemented")
 }
 
-func (db *odrDatabase) StartVerkleTransition(originalRoot common.Hash, translatedRoot common.Hash, chainConfig *params.ChainConfig, _ *uint64) {
+func (db *odrDatabase) StartVerkleTransition(originalRoot common.Hash, translatedRoot common.Hash, chainConfig *params.ChainConfig, _ *uint64, _ common.Hash) {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -121,7 +121,11 @@ func (db *odrDatabase) Transitioned() bool {
 	panic("not implemented") // TODO: Implement
 }
 
-func (db *odrDatabase) SetCurrentSlotHash(hash common.Hash) {
+func (db *odrDatabase) InitTransitionStatus(bool, bool) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) SetCurrentSlotHash(common.Hash) {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -129,7 +133,7 @@ func (db *odrDatabase) GetCurrentAccountAddress() *common.Address {
 	panic("not implemented") // TODO: Implement
 }
 
-func (db *odrDatabase) SetCurrentAccountAddress(_ common.Address) {
+func (db *odrDatabase) SetCurrentAccountAddress(common.Address) {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -141,7 +145,7 @@ func (db *odrDatabase) GetCurrentSlotHash() common.Hash {
 	panic("not implemented") // TODO: Implement
 }
 
-func (db *odrDatabase) SetStorageProcessed(_ bool) {
+func (db *odrDatabase) SetStorageProcessed(bool) {
 	panic("not implemented") // TODO: Implement
 }
 
@@ -153,15 +157,30 @@ func (db *odrDatabase) GetCurrentPreimageOffset() int64 {
 	panic("not implemented") // TODO: Implement
 }
 
-func (db *odrDatabase) SetCurrentPreimageOffset(_ int64) {
+func (db *odrDatabase) SetCurrentPreimageOffset(int64) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (db *odrDatabase) AddRootTranslation(originalRoot common.Hash, translatedRoot common.Hash) {
+func (db *odrDatabase) AddRootTranslation(common.Hash, common.Hash) {
 	panic("not implemented") // TODO: Implement
 }
 
-func (db *odrDatabase) SetLastMerkleRoot(root common.Hash) {
+func (db *odrDatabase) SetLastMerkleRoot(common.Hash) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) SaveTransitionState(common.Hash) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) LoadTransitionState(common.Hash) {
+	panic("not implemented") // TODO: Implement
+}
+
+func (db *odrDatabase) LockCurrentTransitionState() {
+	panic("not implemented") // TODO: Implement
+}
+func (db *odrDatabase) UnLockCurrentTransitionState() {
 	panic("not implemented") // TODO: Implement
 }
 

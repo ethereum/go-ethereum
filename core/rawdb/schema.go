@@ -129,6 +129,8 @@ var (
 
 	CliqueSnapshotPrefix = []byte("clique-")
 
+	VerkleTransitionStatePrefix = []byte("verkle-transition-state-")
+
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 )
@@ -260,6 +262,11 @@ func accountTrieNodeKey(path []byte) []byte {
 // storageTrieNodeKey = trieNodeStoragePrefix + accountHash + nodePath.
 func storageTrieNodeKey(accountHash common.Hash, path []byte) []byte {
 	return append(append(trieNodeStoragePrefix, accountHash.Bytes()...), path...)
+}
+
+// transitionStateKey = transitionStatusKey + hash
+func transitionStateKey(hash common.Hash) []byte {
+	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
 }
 
 // IsLegacyTrieNode reports whether a provided database entry is a legacy trie

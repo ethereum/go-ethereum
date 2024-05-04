@@ -263,6 +263,12 @@ var (
 		Value:    2048,
 		Category: flags.EthCategory,
 	}
+	OverrideOverlayStride = &cli.Uint64Flag{
+		Name:     "override.overlay-stride",
+		Usage:    "Manually specify the stride of the overlay transition, overriding the bundled setting",
+		Value:    10000,
+		Category: flags.EthCategory,
+	}
 	OverrideCancun = &cli.Uint64Flag{
 		Name:     "override.cancun",
 		Usage:    "Manually specify the Cancun fork timestamp, overriding the bundled setting",
@@ -271,6 +277,17 @@ var (
 	OverridePrague = &cli.Uint64Flag{
 		Name:     "override.prague",
 		Usage:    "Manually specify the Verkle fork timestamp, overriding the bundled setting",
+		Category: flags.EthCategory,
+	}
+	OverrideProofInBlock = &cli.BoolFlag{
+		Name:     "override.blockproof",
+		Usage:    "Manually specify the proof-in-block setting",
+		Value:    true,
+		Category: flags.EthCategory,
+	}
+	ClearVerkleCosts = &cli.BoolFlag{
+		Name:     "clear.verkle.costs",
+		Usage:    "Clear verkle costs (for shadow forks)",
 		Category: flags.EthCategory,
 	}
 	// Light server and client settings

@@ -852,7 +852,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if genParams.parentHash != (common.Hash{}) {
 		block := w.chain.GetBlockByHash(genParams.parentHash)
 		if block == nil {
-			return nil, fmt.Errorf("missing parent")
+			return nil, fmt.Errorf("missing parent: %x", genParams.parentHash)
 		}
 		parent = block.Header()
 	}
@@ -894,7 +894,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if w.chain.Config().IsPrague(header.Number, header.Time) {
 		parent := w.chain.GetHeaderByNumber(header.Number.Uint64() - 1)
 		if !w.chain.Config().IsPrague(parent.Number, parent.Time) {
-			w.chain.StartVerkleTransition(parent.Root, common.Hash{}, w.chain.Config(), nil)
+			w.chain.StartVerkleTransition(parent.Root, common.Hash{}, w.chain.Config(), w.chain.Config().PragueTime, parent.Root)
 		}
 	}
 
@@ -903,9 +903,6 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	state, err := w.chain.StateAt(parent.Root)
 	if err != nil {
 		return nil, err
-	}
-	if w.chain.Config().IsPrague(header.Number, header.Time) {
-		core.OverlayVerkleTransition(state)
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {

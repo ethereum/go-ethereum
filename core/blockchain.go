@@ -251,6 +251,14 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
+	if overrides != nil {
+		if overrides.OverrideProofInBlock != nil {
+			chainConfig.ProofInBlocks = *overrides.OverrideProofInBlock
+		}
+		if overrides.OverrideOverlayStride != nil {
+			chainConfig.OverlayStride = *overrides.OverrideOverlayStride
+		}
+	}
 	log.Info("")
 	log.Info(strings.Repeat("-", 153))
 	for _, line := range strings.Split(chainConfig.Description(), "\n") {
@@ -312,7 +320,13 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	head := bc.CurrentBlock()
 
 	// Declare the end of the verkle transition if need be
-	if bc.chainConfig.Rules(head.Number, false /* XXX */, head.Time).IsPrague {
+	if bc.chainConfig.IsPrague(head.Number, head.Time) {
+		// TODO this only works when resuming a chain that has already gone
+		// through the conversion. All pointers should be saved to the DB
+		// for it to be able to recover if interrupted during the transition
+		// but that's left out to a later PR since there's not really a need
+		// right now.
+		bc.stateCache.InitTransitionStatus(true, true)
 		bc.stateCache.EndVerkleTransition()
 	}
 
@@ -1746,8 +1760,22 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
 
+		if bc.Config().IsPrague(block.Number(), block.Time()) {
+			bc.stateCache.LoadTransitionState(parent.Root)
+
+			// pragueTime has been reached. If the transition isn't active, it means this
+			// is the fork block and that the conversion needs to be marked at started.
+			if !bc.stateCache.InTransition() && !bc.stateCache.Transitioned() {
+				bc.stateCache.StartVerkleTransition(parent.Root, emptyVerkleRoot, bc.Config(), bc.Config().PragueTime, parent.Root)
+			}
+		} else {
+			// If the verkle activation time hasn't started, declare it as "not started".
+			// This is so that if the miner activates the conversion, the insertion happens
+			// in the correct mode.
+			bc.stateCache.InitTransitionStatus(false, false)
+		}
 		if parent.Number.Uint64() == conversionBlock {
-			bc.StartVerkleTransition(parent.Root, emptyVerkleRoot, bc.Config(), &parent.Time)
+			bc.StartVerkleTransition(parent.Root, emptyVerkleRoot, bc.Config(), &parent.Time, parent.Root)
 			bc.stateCache.SetLastMerkleRoot(parent.Root)
 		}
 		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
@@ -1989,7 +2017,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		parent = bc.GetHeader(parent.ParentHash, parent.Number.Uint64()-1)
 	}
 	if parent == nil {
-		return it.index, errors.New("missing parent")
+		return it.index, fmt.Errorf("missing parent: hash=%x, number=%d", current.Hash(), current.Number)
 	}
 	// Import all the pruned blocks to make the state available
 	var (
@@ -2050,7 +2078,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 		}
 	}
 	if parent == nil {
-		return common.Hash{}, errors.New("missing parent")
+		return common.Hash{}, fmt.Errorf("missing parent during ancestor recovery: hash=%x, number=%d", block.ParentHash(), block.Number())
 	}
 	// Import all the pruned blocks to make the state available
 	for i := len(hashes) - 1; i >= 0; i-- {
@@ -2288,6 +2316,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	defer bc.chainmu.Unlock()
 
 	// Re-execute the reorged chain in case the head state is missing.
+	log.Trace("looking for state", "root", head.Root(), "has state", bc.HasState(head.Root()))
 	if !bc.HasState(head.Root()) {
 		if latestValidHash, err := bc.recoverAncestors(head); err != nil {
 			return latestValidHash, err
@@ -2533,8 +2562,8 @@ func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
 }
 
-func (bc *BlockChain) StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, pragueTime *uint64) {
-	bc.stateCache.StartVerkleTransition(originalRoot, translatedRoot, chainConfig, pragueTime)
+func (bc *BlockChain) StartVerkleTransition(originalRoot, translatedRoot common.Hash, chainConfig *params.ChainConfig, pragueTime *uint64, root common.Hash) {
+	bc.stateCache.StartVerkleTransition(originalRoot, translatedRoot, chainConfig, pragueTime, root)
 }
 func (bc *BlockChain) ReorgThroughVerkleTransition() {
 	bc.stateCache.ReorgThroughVerkleTransition()

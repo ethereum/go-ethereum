@@ -17,6 +17,8 @@
 package trie
 
 import (
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -62,7 +64,11 @@ func (t *TransitionTrie) GetKey(key []byte) []byte {
 // not be modified by the caller. If a node was not found in the database, a
 // trie.MissingNodeError is returned.
 func (t *TransitionTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
-	if val, err := t.overlay.GetStorage(addr, key); len(val) != 0 || err != nil {
+	val, err := t.overlay.GetStorage(addr, key)
+	if err != nil {
+		return nil, fmt.Errorf("get storage from overlay: %s", err)
+	}
+	if len(val) != 0 {
 		return val, nil
 	}
 	// TODO also insert value into overlay
