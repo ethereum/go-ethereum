@@ -88,6 +88,8 @@ var ErrNilContentKey = errors.New("content key cannot be nil")
 
 var ContentNotFound = storage.ErrContentNotFound
 
+var ErrEmptyResp = errors.New("empty resp")
+
 var MaxDistance = hexutil.MustDecode("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 
 type ContentElement struct {
@@ -309,7 +311,11 @@ func (p *PortalProtocol) setupUDPListening() error {
 				}
 			}
 
-			p.Log.Trace("send to target data", "ip", target.IP().String(), "port", target.UDP(), "bufLength", len(buf))
+			if target == nil {
+				p.Log.Warn("not fount target node info", "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
+				return 0, fmt.Errorf("not found target node info")
+			}
+			p.Log.Trace("send to target data", "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
 			_, err := p.DiscV5.TalkRequest(target, string(portalwire.UTPNetwork), buf)
 			return len(buf), err
 		})
@@ -494,6 +500,9 @@ func (p *PortalProtocol) offer(node *enode.Node, offerRequest *OfferRequest) ([]
 
 func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *OfferRequest) ([]byte, error) {
 	var err error
+	if len(resp) == 0 {
+		return nil, ErrEmptyResp
+	}
 	if resp[0] != portalwire.ACCEPT {
 		return nil, fmt.Errorf("invalid accept response")
 	}
@@ -613,6 +622,10 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 }
 
 func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, interface{}, error) {
+	if len(resp) == 0 {
+		return 0x00, nil, ErrEmptyResp
+	}
+
 	if resp[0] != portalwire.CONTENT {
 		return 0xff, nil, fmt.Errorf("invalid content response")
 	}
@@ -678,6 +691,10 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 }
 
 func (p *PortalProtocol) processNodes(target *enode.Node, resp []byte, distances []uint) ([]*enode.Node, error) {
+	if len(resp) == 0 {
+		return nil, ErrEmptyResp
+	}
+
 	if resp[0] != portalwire.NODES {
 		return nil, fmt.Errorf("invalid nodes response")
 	}
@@ -731,7 +748,7 @@ func (p *PortalProtocol) filterNodes(target *enode.Node, enrs [][]byte, distance
 
 func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwire.Pong, error) {
 	if len(resp) == 0 {
-		return nil, fmt.Errorf("empty resp")
+		return nil, ErrEmptyResp
 	}
 	if resp[0] != portalwire.PONG {
 		return nil, fmt.Errorf("invalid pong response")

@@ -1006,7 +1006,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 
 	PortalPrivateKeyFlag = &cli.StringFlag{
 		Name:     "private.key",
-		Usage:    "private key of p2p node, hex format",
+		Usage:    "private key of p2p node, hex format without 0x prifix",
 		Category: flags.PortalNetworkCategory,
 	}
 
