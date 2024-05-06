@@ -1,0 +1,75 @@
+name: Overlay conversion
+
+on:
+  push:
+    branches: [ master, transition-post-genesis, store-transition-state-in-db ]
+  pull_request:
+    branches: [ master, kaustinen-with-shapella, transition-post-genesis, store-transition-state-in-db, lock-overlay-transition  ]
+  workflow_dispatch:
+
+jobs:
+  conversion:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.22.2
+
+      - name: Cleanup from previous runs
+        run: |
+          rm -f log.txt
+          rm -rf .shadowfork
+          rm -f genesis.json
+      - name: Download genesis file
+        run: wget https://gist.githubusercontent.com/gballet/0b02a025428aa0e7b67941864d54716c/raw/bfb4e158bca5217b356a19b2ec55c4a45a7b2bad/genesis.json
+
+      - name: Init data
+        run: go run ./cmd/geth --dev --cache.preimages init genesis.json
+
+      - name: Run geth in devmode
+        run: go run ./cmd/geth --dev --dev.period=5 --cache.preimages --http --datadir=.shadowfork --override.overlay-stride=10 --override.prague=$(($(date +%s) + 45)) --http.api=debug &
+
+      - name: Wait for the transition to start
+        run: |
+          start_time=$(date +%s)
+          while true; do
+            sleep 5
+            current_time=$(date +%s)
+            elapsed_time=$((current_time - start_time))
+            # 2 minute timeout
+            if [ $elapsed_time -ge 120 ]; then
+              kill -9 $(pgrep -f geth)
+              exit 1
+            fi
+            pgrep -l geth
+            # Check for signs that the conversion has started
+            started=`curl -X POST -H "Content-Type: application/json"  -d '{ "id": 7, "jsonrpc": "2.0", "method": "debug_conversionStatus", "params": ["latest"]}' http://localhost:8545 -s | jq '.result.started'`
+            echo $?
+            echo $started
+            if [ "$started" == "true" ]; then
+              break
+            fi
+            echo "looping"
+          done
+      - name: Wait for the transition to end
+        run: |
+          start_time=$(date +%s)
+          while true; do
+            sleep 5
+            current_time=$(date +%s)
+            elapsed_time=$((current_time - start_time))
+            # 10 minute timeout
+            if [ $elapsed_time -ge 300 ]; then
+              cat log.txt
+              kill -9 $(pgrep -f geth)
+              exit 1
+            fi
+            # Check for signs that the conversion has ended
+            ended=`curl -X POST -H "Content-Type: application/json"  -d '{ "id": 7, "jsonrpc": "2.0", "method": "debug_conversionStatus", "params": ["latest"]}' http://localhost:8545 -s | jq '.result.started'`
+            if [ "$ended" == "true" ]; then
+              kill -9 $(pgrep -f geth)
+              break
+            fi
+          done
