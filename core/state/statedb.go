@@ -41,6 +41,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// TriesInMemory represents the number of layers that are kept in RAM.
+const TriesInMemory = 128
+
 type revision struct {
 	id           int
 	journalIndex int
@@ -1269,12 +1272,12 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 			if err := s.snaps.Update(root, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}
-			// Keep 128 diff layers in the memory, persistent layer is 129th.
+			// Keep TriesInMemory diff layers in the memory, persistent layer is 129th.
 			// - head layer is paired with HEAD state
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := s.snaps.Cap(root, 128); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", root, "layers", 128, "err", err)
+			if err := s.snaps.Cap(root, TriesInMemory); err != nil {
+				log.Warn("Failed to cap snapshot tree", "root", root, "layers", TriesInMemory, "err", err)
 			}
 		}
 		s.SnapshotCommits += time.Since(start)
