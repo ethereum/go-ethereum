@@ -164,6 +164,7 @@ func (c *Config) sanitize() Config {
 	conf := *c
 
 	if conf.CommitThreshold == 0 {
+		log.Warn("Sanitizing commit threshold", "provided", conf.CommitThreshold, "updated", defaultCommitThreshold)
 		conf.CommitThreshold = defaultCommitThreshold
 	}
 	return conf
@@ -209,13 +210,11 @@ type Tree struct {
 func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, root common.Hash) (*Tree, error) {
 	// Create a new, empty snapshot tree
 	snap := &Tree{
-		config: config,
+		config: config.sanitize(),
 		diskdb: diskdb,
 		triedb: triedb,
 		layers: make(map[common.Hash]snapshot),
 	}
-
-	config = config.sanitize()
 
 	// Attempt to load a previously persisted snapshot and rebuild one if failed
 	head, disabled, err := loadSnapshot(diskdb, triedb, root, config.CacheSize, config.Recovery, config.NoBuild)
