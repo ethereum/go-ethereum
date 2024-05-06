@@ -68,6 +68,10 @@ var (
 	// is higher than the balance of the user's account.
 	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
 
+	// ErrEip4844InsufficientFunds is returned if the total cost of executing an EIP-4844 transaction
+	// is higher than the balance of the user's account, including the cost of blob gas.
+	ErrEip4844InsufficientFunds = errors.New("insufficient funds for gas * price + blobGas * blobGasPrice + value")
+
 	// ErrGasUintOverflow is returned when calculating gas usage.
 	ErrGasUintOverflow = errors.New("gas uint64 overflow")
 
