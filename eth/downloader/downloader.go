@@ -67,7 +67,6 @@ var (
 	errCancelContentProcessing = errors.New("content processing canceled (requested)")
 	errCanceled                = errors.New("syncing canceled (requested)")
 	errNoPivotHeader           = errors.New("pivot header is not found")
-	ErrMergeTransition         = errors.New("legacy sync reached the merge")
 )
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
@@ -230,13 +229,13 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 
 	current := uint64(0)
 	mode := d.getMode()
-	switch {
-	case d.blockchain != nil && mode == FullSync:
+	switch mode {
+	case FullSync:
 		current = d.blockchain.CurrentBlock().Number.Uint64()
-	case d.blockchain != nil && mode == SnapSync:
+	case SnapSync:
 		current = d.blockchain.CurrentSnapBlock().Number.Uint64()
 	default:
-		log.Error("Unknown downloader chain/mode combo", "full", d.blockchain != nil, "mode", mode)
+		log.Error("Unknown downloader mode", "mode", mode)
 	}
 	progress, pending := d.SnapSyncer.Progress()
 
