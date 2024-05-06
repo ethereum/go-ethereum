@@ -288,8 +288,6 @@ func main() {
 // prepare manipulates memory cache allowance and setups metric system.
 // This function should be called before launching devp2p stack.
 func prepare(ctx *cli.Context) {
-	const light = "light"
-
 	// If we're running a known preset, log it for convenience.
 	switch {
 	case ctx.IsSet(utils.GoerliFlag.Name):
