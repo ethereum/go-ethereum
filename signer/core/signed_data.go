@@ -26,10 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
 
@@ -135,35 +132,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 		}
 		req = &SignDataRequest{ContentType: mediaType, Rawdata: []byte(msg), Messages: messages, Hash: sighash}
 	case apitypes.ApplicationClique.Mime:
-		// Clique is the Ethereum PoA standard
-		cliqueData, err := fromHex(data)
-		if err != nil {
-			return nil, useEthereumV, err
-		}
-		header := &types.Header{}
-		if err := rlp.DecodeBytes(cliqueData, header); err != nil {
-			return nil, useEthereumV, err
-		}
-		// Add space in the extradata to put the signature
-		newExtra := make([]byte, len(header.Extra)+65)
-		copy(newExtra, header.Extra)
-		header.Extra = newExtra
-
-		// Get back the rlp data, encoded by us
-		sighash, cliqueRlp, err := cliqueHeaderHashAndRlp(header)
-		if err != nil {
-			return nil, useEthereumV, err
-		}
-		messages := []*apitypes.NameValueType{
-			{
-				Name:  "Clique header",
-				Typ:   "clique",
-				Value: fmt.Sprintf("clique header %d [%#x]", header.Number, header.Hash()),
-			},
-		}
-		// Clique uses V on the form 0 or 1
-		useEthereumV = false
-		req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueRlp, Messages: messages, Hash: sighash}
+		return nil, false, errors.New("clique signing is deprecated")
 	case apitypes.DataTyped.Mime:
 		// EIP-712 conformant typed data
 		var err error
@@ -200,23 +169,6 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 func SignTextValidator(validatorData apitypes.ValidatorData) (hexutil.Bytes, string) {
 	msg := fmt.Sprintf("\x19\x00%s%s", string(validatorData.Address.Bytes()), string(validatorData.Message))
 	return crypto.Keccak256([]byte(msg)), msg
-}
-
-// cliqueHeaderHashAndRlp returns the hash which is used as input for the proof-of-authority
-// signing. It is the hash of the entire header apart from the 65 byte signature
-// contained at the end of the extra data.
-//
-// The method requires the extra data to be at least 65 bytes -- the original implementation
-// in clique.go panics if this is the case, thus it's been reimplemented here to avoid the panic
-// and simply return an error instead
-func cliqueHeaderHashAndRlp(header *types.Header) (hash, rlp []byte, err error) {
-	if len(header.Extra) < 65 {
-		err = fmt.Errorf("clique header extradata too short, %d < 65", len(header.Extra))
-		return
-	}
-	rlp = clique.CliqueRLP(header)
-	hash = clique.SealHash(header).Bytes()
-	return hash, rlp, err
 }
 
 // SignTypedData signs EIP-712 conformant typed data

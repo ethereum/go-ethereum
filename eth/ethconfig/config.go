@@ -176,7 +176,7 @@ func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (conse
 	}
 	// Wrap previously supported consensus engines into their post-merge counterpart
 	if config.Clique != nil {
-		return beacon.New(clique.New(config.Clique, db)), nil
+		return beacon.New(clique.New()), nil
 	}
 	return beacon.New(ethash.NewFaker()), nil
 }

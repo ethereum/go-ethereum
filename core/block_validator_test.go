@@ -21,15 +21,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -95,61 +92,21 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 		postBlocks []*types.Block
 		engine     consensus.Engine
 	)
-	if isClique {
-		var (
-			key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-			addr   = crypto.PubkeyToAddress(key.PublicKey)
-			config = *params.AllCliqueProtocolChanges
-		)
-		engine = beacon.New(clique.New(params.AllCliqueProtocolChanges.Clique, rawdb.NewMemoryDatabase()))
-		gspec = &Genesis{
-			Config:    &config,
-			ExtraData: make([]byte, 32+common.AddressLength+crypto.SignatureLength),
-			Alloc: map[common.Address]types.Account{
-				addr: {Balance: big.NewInt(1)},
-			},
-			BaseFee:    big.NewInt(params.InitialBaseFee),
-			Difficulty: new(big.Int),
-		}
-		copy(gspec.ExtraData[32:], addr[:])
-
-		td := 0
-		genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
-		for i, block := range blocks {
-			header := block.Header()
-			if i > 0 {
-				header.ParentHash = blocks[i-1].Hash()
-			}
-			header.Extra = make([]byte, 32+crypto.SignatureLength)
-			header.Difficulty = big.NewInt(2)
-
-			sig, _ := crypto.Sign(engine.SealHash(header).Bytes(), key)
-			copy(header.Extra[len(header.Extra)-crypto.SignatureLength:], sig)
-			blocks[i] = block.WithSeal(header)
-
-			// calculate td
-			td += int(block.Difficulty().Uint64())
-		}
-		preBlocks = blocks
-		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, nil)
-	} else {
-		config := *params.TestChainConfig
-		gspec = &Genesis{Config: &config}
-		engine = beacon.New(ethash.NewFaker())
-		td := int(params.GenesisDifficulty.Uint64())
-		genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
-		for _, block := range blocks {
-			// calculate td
-			td += int(block.Difficulty().Uint64())
-		}
-		preBlocks = blocks
-		gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		t.Logf("Set ttd to %v\n", gspec.Config.TerminalTotalDifficulty)
-		postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, func(i int, gen *BlockGen) {
-			gen.SetPoS()
-		})
+	config := *params.TestChainConfig
+	gspec = &Genesis{Config: &config}
+	engine = beacon.New(ethash.NewFaker())
+	td := int(params.GenesisDifficulty.Uint64())
+	genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
+	for _, block := range blocks {
+		// calculate td
+		td += int(block.Difficulty().Uint64())
 	}
+	preBlocks = blocks
+	gspec.Config.TerminalTotalDifficulty = big.NewInt(int64(td))
+	t.Logf("Set ttd to %v\n", gspec.Config.TerminalTotalDifficulty)
+	postBlocks, _ = GenerateChain(gspec.Config, preBlocks[len(preBlocks)-1], engine, genDb, 8, func(i int, gen *BlockGen) {
+		gen.SetPoS()
+	})
 	// Assemble header batch
 	preHeaders := make([]*types.Header, len(preBlocks))
 	for i, block := range preBlocks {
