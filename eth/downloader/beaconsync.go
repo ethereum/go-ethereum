@@ -201,8 +201,6 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		chainHead = d.blockchain.CurrentBlock()
 	case SnapSync:
 		chainHead = d.blockchain.CurrentSnapBlock()
-	default:
-		chainHead = d.lightchain.CurrentHeader()
 	}
 	number := chainHead.Number.Uint64()
 
@@ -256,8 +254,6 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 			known = d.blockchain.HasBlock(h.Hash(), n)
 		case SnapSync:
 			known = d.blockchain.HasFastBlock(h.Hash(), n)
-		default:
-			known = d.lightchain.HasHeader(h.Hash(), n)
 		}
 		if !known {
 			end = check
