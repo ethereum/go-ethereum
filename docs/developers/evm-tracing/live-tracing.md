@@ -292,7 +292,7 @@ Note-worthy explanations:
 First compile the source by running `make geth`. Then run the following command:
 
 ```bash
-./build/bin/geth --vmtrace --vmtrace.config '{"config": "supply-logs"}' [OTHER_GETH_FLAGS]
+./build/bin/geth --vmtrace supply --vmtrace.config '{"config": "supply-logs"}' [OTHER_GETH_FLAGS]
 ```
 
 Soon you will see `supply-logs/supply.jsonl` file being populated with lines such as:
