@@ -100,7 +100,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	var table *JumpTable
 	switch {
 	case evm.chainRules.IsVerkle:
-		// TODO replace with prooper instruction set when fork is specified
+		// TODO replace with proper instruction set when fork is specified
 		table = &verkleInstructionSet
 	case evm.chainRules.IsCancun:
 		table = &cancunInstructionSet

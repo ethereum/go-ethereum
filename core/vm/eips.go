@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -324,42 +323,6 @@ func enable6780(jt *JumpTable) {
 	}
 }
 
-func opCreateEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.readOnly {
-		return nil, ErrWriteProtection
-	}
-	var endowment = scope.Stack.peek()
-
-	contractAddress := crypto.CreateAddress(scope.Contract.Address(), interpreter.evm.StateDB.GetNonce(scope.Contract.Address()))
-	statelessGas := interpreter.evm.AccessEvents.ContractCreateInitGas(contractAddress.Bytes()[:], endowment.Sign() != 0)
-	if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-		return nil, ErrExecutionReverted
-	}
-
-	return opCreate(pc, interpreter, scope)
-}
-
-func opCreate2EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.readOnly {
-		return nil, ErrWriteProtection
-	}
-	var (
-		endowment    = scope.Stack.Back(0)
-		offset, size = scope.Stack.Back(1), scope.Stack.Back(2)
-		salt         = scope.Stack.Back(3)
-		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-	)
-
-	codeAndHash := &codeAndHash{code: input}
-	contractAddress := crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	statelessGas := interpreter.evm.AccessEvents.ContractCreateInitGas(contractAddress.Bytes()[:], endowment.Sign() != 0)
-	if !scope.Contract.UseGas(statelessGas, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified) {
-		return nil, ErrExecutionReverted
-	}
-
-	return opCreate2(pc, interpreter, scope)
-}
-
 func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		stack      = scope.Stack
@@ -506,7 +469,7 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[CREATE] = &operation{
-		execute:     opCreateEIP4762,
+		execute:     opCreate,
 		constantGas: params.CreateNGasEip4762,
 		dynamicGas:  gasCreateEip3860,
 		minStack:    minStack(3, 1),
@@ -515,7 +478,7 @@ func enable4762(jt *JumpTable) {
 	}
 
 	jt[CREATE2] = &operation{
-		execute:     opCreate2EIP4762,
+		execute:     opCreate2,
 		constantGas: params.CreateNGasEip4762,
 		dynamicGas:  gasCreate2Eip3860,
 		minStack:    minStack(4, 1),

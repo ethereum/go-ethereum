@@ -130,7 +130,7 @@ func (ae *AccessEvents) ContractCreateInitGas(addr []byte, createSendsValue bool
 	return gas
 }
 
-// AddTxOrigin adds the member fields of the sender account to the witness,
+// AddTxOrigin adds the member fields of the sender account to the access event list,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
 func (ae *AccessEvents) AddTxOrigin(originAddr []byte) {
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
@@ -138,11 +138,11 @@ func (ae *AccessEvents) AddTxOrigin(originAddr []byte) {
 	}
 }
 
-// AddTxDestination adds the member fields of the sender account to the witness,
+// AddTxDestination adds the member fields of the sender account to the access event list,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
 func (ae *AccessEvents) AddTxDestination(targetAddr []byte, sendsValue bool) {
 	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
-		ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, byte(i), i == utils.VersionLeafKey && sendsValue)
+		ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, byte(i), i == utils.BalanceLeafKey && sendsValue)
 	}
 }
 
@@ -152,7 +152,7 @@ func (ae *AccessEvents) SlotGas(addr []byte, slot common.Hash, isWrite bool) uin
 	return ae.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite)
 }
 
-// touchAddressAndChargeGas adds any missing access event to the witness, and returns the cold
+// touchAddressAndChargeGas adds any missing access event to the access event list, and returns the cold
 // access cost to be charged, if need be.
 func (ae *AccessEvents) touchAddressAndChargeGas(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) uint64 {
 	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := ae.touchAddress(addr, treeIndex, subIndex, isWrite)
@@ -176,7 +176,7 @@ func (ae *AccessEvents) touchAddressAndChargeGas(addr []byte, treeIndex uint256.
 	return gas
 }
 
-// touchAddress adds any missing access event to the witness.
+// touchAddress adds any missing access event to the access event list.
 func (ae *AccessEvents) touchAddress(addr []byte, treeIndex uint256.Int, subIndex byte, isWrite bool) (bool, bool, bool, bool, bool) {
 	branchKey := newBranchAccessKey(addr, treeIndex)
 	chunkKey := newChunkAccessKey(branchKey, subIndex)

@@ -199,9 +199,6 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	}
 	txctx := NewEVMTxContext(msg)
 	vmenv.Reset(txctx, statedb)
-	if vmenv.ChainConfig().Rules(vmenv.Context.BlockNumber, true, vmenv.Context.Time).IsEIP2929 {
-		statedb.AddAddressToAccessList(params.BeaconRootsAddress)
-	}
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	statedb.Finalise(true)
 }
