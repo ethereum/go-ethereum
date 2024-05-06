@@ -130,11 +130,16 @@ func (s *stateObject) touch() {
 // getTrie returns the associated storage trie. The trie will be opened
 // if it's not loaded previously. An error will be returned if trie can't
 // be loaded.
-func (s *stateObject) getTrie() (Trie, error) {
+//
+// The skipPrefetcher parameter is used to request a direct load from disk, even
+// if a prefetcher is available. This path is used if snapshots are unavailable,
+// since that requires reading the trie *during* execution, when the prefetchers
+// cannot yet return data.
+func (s *stateObject) getTrie(skipPrefetcher bool) (Trie, error) {
 	if s.trie == nil {
-		// Try fetching from prefetcher first
-		if s.data.Root != types.EmptyRootHash && s.db.prefetcher != nil {
-			// When the miner is creating the pending state, there is no prefetcher
+		// Try fetching from prefetcher first, unless skipping it was explicitly
+		// requested
+		if s.data.Root != types.EmptyRootHash && s.db.prefetcher != nil && !skipPrefetcher {
 			trie, err := s.db.prefetcher.trie(s.addrHash, s.data.Root)
 			if err != nil {
 				log.Error("Failed to retrieve storage pre-fetcher trie", "addr", s.address, "err", err)
@@ -211,7 +216,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	// If the snapshot is unavailable or reading from it fails, load from the database.
 	if s.db.snap == nil || err != nil {
 		start := time.Now()
-		tr, err := s.getTrie()
+		tr, err := s.getTrie(true)
 		if err != nil {
 			s.db.setError(err)
 			return common.Hash{}
@@ -315,7 +320,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		storage map[common.Hash][]byte
 		origin  map[common.Hash][]byte
 	)
-	tr, err := s.getTrie()
+	tr, err := s.getTrie(false)
 	if err != nil {
 		s.db.setError(err)
 		return nil, err
