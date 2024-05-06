@@ -449,7 +449,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 			newstate: []*subchain{
 				{Head: 49, Tail: 49},
 			},
-			err: errReorgDenied,
+			err: errChainReorged,
 		},
 		// Initialize a sync and try to extend it with a number-wise sequential
 		// header, but a hash wise non-linking one.
@@ -459,7 +459,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 			newstate: []*subchain{
 				{Head: 49, Tail: 49},
 			},
-			err: errReorgDenied,
+			err: errChainForked,
 		},
 		// Initialize a sync and try to extend it with a non-linking future block.
 		{
@@ -468,7 +468,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 			newstate: []*subchain{
 				{Head: 49, Tail: 49},
 			},
-			err: errReorgDenied,
+			err: errChainGapped,
 		},
 		// Initialize a sync and try to extend it with a past canonical block.
 		{
@@ -477,7 +477,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 			newstate: []*subchain{
 				{Head: 50, Tail: 50},
 			},
-			err: errReorgDenied,
+			err: errChainReorged,
 		},
 		// Initialize a sync and try to extend it with a past sidechain block.
 		{
@@ -486,7 +486,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 			newstate: []*subchain{
 				{Head: 50, Tail: 50},
 			},
-			err: errReorgDenied,
+			err: errChainReorged,
 		},
 	}
 	for i, tt := range tests {
@@ -502,8 +502,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 		_ = skeleton.Sync(tt.head, nil, true)
 
 		<-wait
-
-		if err := skeleton.Sync(tt.extend, nil, false); err != tt.err {
+		if err := skeleton.Sync(tt.extend, nil, false); !errors.Is(err, tt.err) {
 			t.Errorf("test %d: extension failure mismatch: have %v, want %v", i, err, tt.err)
 		}
 

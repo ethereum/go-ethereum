@@ -31,6 +31,7 @@ import (
 // Config defines all necessary options for database.
 type Config struct {
 	Preimages bool           // Flag whether the preimage of node key is recorded
+	IsVerkle  bool           // Flag whether the db is holding a verkle tree
 	HashDB    *hashdb.Config // Configs for hash-based scheme
 	PathDB    *pathdb.Config // Configs for experimental path-based scheme
 }
@@ -239,17 +240,6 @@ func (db *Database) Dereference(root common.Hash) error {
 	return nil
 }
 
-// Node retrieves the rlp-encoded node blob with provided node hash. It's
-// only supported by hash-based database and will return an error for others.
-// Note, this function should be deprecated once ETH66 is deprecated.
-func (db *Database) Node(hash common.Hash) ([]byte, error) {
-	hdb, ok := db.backend.(*hashdb.Database)
-	if !ok {
-		return nil, errors.New("not supported")
-	}
-	return hdb.Node(hash)
-}
-
 // Recover rollbacks the database to a specified historical point. The state is
 // supported as the rollback destination only if it's canonical state and the
 // corresponding trie histories are existent. It's only supported by path-based
@@ -317,4 +307,9 @@ func (db *Database) SetBufferSize(size int) error {
 		return errors.New("not supported")
 	}
 	return pdb.SetBufferSize(size)
+}
+
+// IsVerkle returns the indicator if the database is holding a verkle tree.
+func (db *Database) IsVerkle() bool {
+	return db.config.IsVerkle
 }

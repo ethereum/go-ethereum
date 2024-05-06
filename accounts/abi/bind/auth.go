@@ -59,7 +59,7 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 }
 
 // NewKeyStoreTransactor is a utility method to easily create a transaction signer from
-// an decrypted key from a keystore.
+// a decrypted key from a keystore.
 //
 // Deprecated: Use NewKeyStoreTransactorWithChainID instead.
 func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account) (*TransactOpts, error) {
@@ -126,7 +126,7 @@ func NewTransactorWithChainID(keyin io.Reader, passphrase string, chainID *big.I
 }
 
 // NewKeyStoreTransactorWithChainID is a utility method to easily create a transaction signer from
-// an decrypted key from a keystore.
+// a decrypted key from a keystore.
 func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accounts.Account, chainID *big.Int) (*TransactOpts, error) {
 	if chainID == nil {
 		return nil, ErrNoChainID

@@ -42,7 +42,7 @@ const (
 )
 
 func TestMiningAfterLocking(t *testing.T) {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -151,7 +151,7 @@ func TestReorgingAfterLockingSprint(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -271,7 +271,7 @@ func TestReorgingAfterWhitelisting(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -384,7 +384,7 @@ func TestPeerConnectionAfterWhitelisting(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -506,7 +506,7 @@ func TestReorgingFutureSprintAfterLocking(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -594,7 +594,7 @@ func TestReorgingFutureSprintAfterLockingOnSameHash(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -683,7 +683,7 @@ func TestReorgingAfterLockingOnDifferentHash(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -803,7 +803,7 @@ func TestReorgingAfterWhitelistingOnDifferentHash(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -925,7 +925,7 @@ func TestNonMinerNodeWithWhitelisting(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -1022,7 +1022,7 @@ func TestNonMinerNodeWithTryToLock(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -1114,7 +1114,7 @@ func TestRewind(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -1230,7 +1230,7 @@ func TestRewinding(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
