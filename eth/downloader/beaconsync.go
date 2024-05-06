@@ -201,6 +201,8 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		chainHead = d.blockchain.CurrentBlock()
 	case SnapSync:
 		chainHead = d.blockchain.CurrentSnapBlock()
+	default:
+		panic("unknown sync mode")
 	}
 	number := chainHead.Number.Uint64()
 
@@ -220,7 +222,7 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	case SnapSync:
 		linked = d.blockchain.HasFastBlock(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
 	default:
-		linked = d.blockchain.HasHeader(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
+		panic("unknown sync mode")
 	}
 	if !linked {
 		// This is a programming error. The chain backfiller was called with a
@@ -254,6 +256,8 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 			known = d.blockchain.HasBlock(h.Hash(), n)
 		case SnapSync:
 			known = d.blockchain.HasFastBlock(h.Hash(), n)
+		default:
+			panic("unknown sync mode")
 		}
 		if !known {
 			end = check
