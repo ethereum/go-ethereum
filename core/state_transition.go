@@ -410,9 +410,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 		if targetAddr := msg.To; targetAddr != nil {
 			st.evm.AccessEvents.AddTxDestination(targetAddr.Bytes(), msg.Value.Sign() != 0)
-
-			// ensure the code size ends up in the access witness
-			st.evm.StateDB.GetCodeSize(*targetAddr)
 		}
 	}
 
