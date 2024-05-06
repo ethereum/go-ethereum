@@ -414,7 +414,7 @@ func makeHeaders(config *params.ChainConfig, blocks []simBlock, base *types.Head
 		prevNumber = overrides.Number.ToInt().Uint64()
 
 		if overrides.Time == nil {
-			t := prevTimestamp + 1
+			t := prevTimestamp + 12
 			overrides.Time = (*hexutil.Uint64)(&t)
 		} else if time := (*uint64)(overrides.Time); *time <= prevTimestamp {
 			return nil, &invalidBlockTimestampError{fmt.Sprintf("block timestamps must be in order: %d <= %d", *time, prevTimestamp)}
