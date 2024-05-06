@@ -464,7 +464,6 @@ func (s *Server) loggingServerInterceptor(ctx context.Context, req interface{}, 
 }
 
 func setupLogger(logLevel int, loggingInfo LoggingConfig) {
-
 	output := io.Writer(os.Stderr)
 
 	if loggingInfo.Json {
