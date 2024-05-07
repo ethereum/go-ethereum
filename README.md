@@ -3,7 +3,7 @@
 ![AppVeyor Build (with branch)](https://ci.appveyor.com/api/projects/status/github/optimism-java/shisui?branch=portal&svg=true)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/HBAgaHCBuY)
 
-Shisui is an [Ethereum portal client](https://github.com/ethereum/portal-network-specs) written in Go language based [go-ethereum](https://github.com/ethereum/go-ethereum) and [erigon](https://github.com/ledgerwatch/erigon).
+Shisui is an [Ethereum portal client](https://github.com/ethereum/portal-network-specs) written in Go language based on [go-ethereum](https://github.com/ethereum/go-ethereum).
 The name is inspired by Uchiha Shisui from the anime Naruto, who is renowned as "Shisui of the Body Flicker".
 
 > **Note:** Shisui is still **under heavy development** and is not yet ready for production use.
@@ -38,6 +38,19 @@ Alternatively, you can run the docker image by running
 ```shell
 docker run -d -p 8545:8545 -p 9009:9009/udp ghcr.io/optimism-java/shisui:latest
 ```
+
+### supported options
+
+* `--rpc.addr` HTTP-RPC server listening addr
+* `--rpc.port` HTTP-RPC server listening port(default: `8545`)
+* `--data.dir` data dir of where the data file located(default: `./`)
+* `--data.capacity` the capacity of the data stored, the unit is MB(default: `10GB`)
+* `--udp.addr` protocol UDP server listening interface(default: local ip)
+* `--udp.addr` protocol UDP server listening port(default: `9009`)
+* `--loglevel` loglevel of portal network, `1` to `5`, from `error` to `trace`(default: `1`)
+* `--private.key` private key of p2p node, hex format without `0x` prifix
+* `--bootnodes` bootnode of p2p network with ENR format
+* `--networks` portal sub networks: history, beacon, state
 
 ### Hardware Requirements
 
