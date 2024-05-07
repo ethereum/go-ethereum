@@ -83,6 +83,9 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 		if opts.Config.IsCancun(opts.Header.Number, opts.Header.Time) && len(call.BlobHashes) > 0 {
 			blobBalanceUsage := new(big.Int).SetInt64(int64(len(call.BlobHashes) * params.BlobTxBlobGasPerBlob))
 			blobBalanceUsage.Mul(blobBalanceUsage, call.BlobGasFeeCap)
+			if blobBalanceUsage.Cmp(available) >= 0 {
+				return 0, nil, core.ErrInsufficientFunds
+			}
 			available.Sub(available, blobBalanceUsage)
 		}
 		allowance := new(big.Int).Div(available, feeCap)
