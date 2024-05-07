@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -147,7 +146,13 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBloc
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	headers, err := makeHeaders(sim.b.ChainConfig(), blocks, sim.base)
+
+	var err error
+	blocks, err = sim.sanitizeBlockOrder(blocks)
+	if err != nil {
+		return nil, err
+	}
+	headers, err := sim.makeHeaders(blocks)
 	if err != nil {
 		return nil, err
 	}
@@ -392,27 +397,63 @@ func (sim *simulator) activePrecompiles(ctx context.Context, base *types.Header)
 	return vm.ActivePrecompiledContracts(rules).Copy()
 }
 
-func makeHeaders(config *params.ChainConfig, blocks []simBlock, base *types.Header) ([]*types.Header, error) {
+// sanitizeBlockOrder iterates the blocks checking that block numbers
+// are strictly increasing. When necessary it will generate empty blocks.
+// It modifies the block's override object.
+func (sim *simulator) sanitizeBlockOrder(blocks []simBlock) ([]simBlock, error) {
+	var (
+		res        = make([]simBlock, 0, len(blocks))
+		base       = sim.base
+		prevNumber = base.Number
+	)
+	for _, block := range blocks {
+		if block.BlockOverrides == nil {
+			block.BlockOverrides = new(BlockOverrides)
+		}
+		if block.BlockOverrides.Number == nil {
+			n := new(big.Int).Add(prevNumber, big.NewInt(1))
+			block.BlockOverrides.Number = (*hexutil.Big)(n)
+		}
+		diff := new(big.Int).Sub(block.BlockOverrides.Number.ToInt(), prevNumber)
+		if diff.Cmp(common.Big0) <= 0 {
+			return nil, &invalidBlockNumberError{fmt.Sprintf("block numbers must be in order: %d <= %d", block.BlockOverrides.Number.ToInt().Uint64(), prevNumber)}
+		}
+		if total := new(big.Int).Sub(block.BlockOverrides.Number.ToInt(), base.Number); total.Cmp(big.NewInt(maxSimulateBlocks)) > 0 {
+			return nil, &clientLimitExceededError{message: "too many blocks"}
+		}
+		if diff.Cmp(big.NewInt(1)) > 0 {
+			// Fill the gap with empty blocks.
+			gap := new(big.Int).Sub(diff, big.NewInt(1))
+			// Assign block number to the empty blocks.
+			for i := uint64(0); i < gap.Uint64(); i++ {
+				n := new(big.Int).Add(prevNumber, big.NewInt(int64(i+1)))
+				b := simBlock{BlockOverrides: &BlockOverrides{Number: (*hexutil.Big)(n)}}
+				res = append(res, b)
+			}
+		}
+		// Only append block after filling a potential gap.
+		prevNumber = block.BlockOverrides.Number.ToInt()
+		res = append(res, block)
+	}
+	return res, nil
+}
+
+// makeHeaders makes header object with preliminary fields based on a simulated block.
+// Some fields have to be filled post-execution.
+// It assumes blocks are in order and numbers have been validated.
+func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 	res := make([]*types.Header, len(blocks))
 	var (
-		prevNumber    = base.Number.Uint64()
+		config        = sim.b.ChainConfig()
+		base          = sim.base
 		prevTimestamp = base.Time
 		header        = base
 	)
 	for bi, block := range blocks {
-		overrides := new(BlockOverrides)
-		if block.BlockOverrides != nil {
-			overrides = block.BlockOverrides
+		if block.BlockOverrides == nil || block.BlockOverrides.Number == nil {
+			return nil, errors.New("empty block number")
 		}
-		// Sanitize block number and timestamp
-		if overrides.Number == nil {
-			n := new(big.Int).Add(big.NewInt(int64(prevNumber)), big.NewInt(1))
-			overrides.Number = (*hexutil.Big)(n)
-		} else if overrides.Number.ToInt().Uint64() <= prevNumber {
-			return nil, &invalidBlockNumberError{fmt.Sprintf("block numbers must be in order: %d <= %d", overrides.Number.ToInt().Uint64(), prevNumber)}
-		}
-		prevNumber = overrides.Number.ToInt().Uint64()
-
+		overrides := block.BlockOverrides
 		if overrides.Time == nil {
 			t := prevTimestamp + 12
 			overrides.Time = (*hexutil.Uint64)(&t)
