@@ -317,6 +317,8 @@ func (ecc *ECC) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, p
 	switch {
 	case chain.Config().IsSeoul(next):
 		return calcDifficultySeoul(chain, time, parent)
+	case chain.Config().IsAnnapurna(next):
+		return calcDifficultyAnnapurna(chain, time, parent)
 		//return calcDifficultyFrontier(time, parent)
 	default:
 		//fmt.Println("frontier")
@@ -367,6 +369,12 @@ func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 
 func calcDifficultySeoul(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
 	difficultyCalculator := MakeLDPCDifficultyCalculator_Seoul()
+	//return difficultyCalculator(chain, time, parent)
+	return difficultyCalculator(time, parent)
+}
+
+func calcDifficultyAnnapurna(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
+	difficultyCalculator := MakeLDPCDifficultyCalculatorAnnapurna()
 	//return difficultyCalculator(chain, time, parent)
 	return difficultyCalculator(time, parent)
 }
