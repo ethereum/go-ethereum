@@ -16,6 +16,10 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: 1.21.4
+          cache-dependency-path: |
+            go.mod
+            go.sum
+
       - name: Run tests
         run: go test -short ./...
         env:
