@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -189,6 +190,146 @@ func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode no
 	}
 }
 
+// MustGetBatch is a wrapper of GetBatch and will omit any encountered error but
+// just print out an error message.
+func (t *Trie) MustGetBatch(keys [][]byte) [][]byte {
+	res, err := t.GetBatch(keys)
+	if err != nil {
+		log.Error("Unhandled trie error in Trie.GetBatch", "err", err)
+	}
+	return res
+}
+
+// GetBatch is the batched version of Get, which can be used to retrieve multiple
+// values at the same time. The advantage vs the singleton method is that batched
+// retrievals can expand the trie with fewer descents and also potentially reads
+// data from disk concurrently.
+func (t *Trie) GetBatch(keys [][]byte) ([][]byte, error) {
+	// Short circuit if the trie is already committed and not usable.
+	if t.committed {
+		return make([][]byte, len(keys)), ErrCommitted
+	}
+	// Expand the paths to hex encoding and sort them for quicker comparisons,
+	// tracking the original order for restoring the query.
+	var (
+		hexkeys = make([][]byte, len(keys))
+		order   = make(map[string][]int, len(keys))
+	)
+	for i, key := range keys {
+		hexkeys[i] = keybytesToHex(key)
+		order[string(hexkeys[i])] = append(order[string(hexkeys[i])], i)
+	}
+	slices.SortFunc(hexkeys, bytes.Compare)
+
+	// Run the actual node retrievals, and restore the original sort order
+	values, newroot, didResolve, err := t.getBatch(t.root, hexkeys, 0)
+	if err == nil && didResolve {
+		t.root = newroot
+	}
+	// TODO(karalabe): This is very ugly, only temp code while focusing on the main points
+	result := make([][]byte, len(keys))
+	for i, key := range hexkeys {
+		for _, idx := range order[string(key)] {
+			result[idx] = values[i]
+		}
+	}
+	return result, nil
+}
+
+// getBatch resolves a batch of trie values simultenaously.
+//
+// Note, the keys are assumed to be hex encoded and sorted. Whilst duplicates and
+// different lengths are not ideal, the method does allow them to make this a bit
+// more robust.
+func (t *Trie) getBatch(origNode node, keys [][]byte, pos int) ([][]byte, node, bool, error) {
+	switch n := (origNode).(type) {
+	case nil:
+		return make([][]byte, len(keys)), nil, false, nil
+
+	case valueNode:
+		values := make([][]byte, len(keys))
+		for i := 0; i < len(values); i++ {
+			values[i] = n
+		}
+		return values, n, false, nil
+
+	case *shortNode:
+		// If only a subset of the keys branch off, find the non-branching ones to follow
+		first := len(keys)
+		for i, key := range keys {
+			if len(key)-pos >= len(n.Key) && bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
+				first = i
+				break
+			}
+		}
+		if first == len(keys) {
+			return make([][]byte, len(keys)), n, false, nil
+		}
+		// Find the item that is the first not following the short node
+		last := len(keys)
+		for i, key := range keys[first+1:] {
+			if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
+				last = first + 1 + i
+				break
+			}
+		}
+		// Get the nodes that follow the short node and prepend/append the missed ones
+		values, newnode, didResolve, err := t.getBatch(n.Val, keys[first:last], pos+len(n.Key))
+		if err == nil && didResolve {
+			n = n.copy()
+			n.Val = newnode
+		}
+		values = append(make([][]byte, first), values...)
+		values = append(values, make([][]byte, len(keys)-last)...)
+
+		return values, n, didResolve, err
+
+	case *fullNode:
+		var (
+			clone  *fullNode
+			values = make([][]byte, 0, len(keys))
+			fail   error
+			first  int
+		)
+		for first < len(keys) {
+			last := len(keys)
+			for i, key := range keys[first+1:] {
+				if keys[first][pos] != key[pos] {
+					last = first + 1 + i
+					break
+				}
+			}
+			results, newnode, didResolve, err := t.getBatch(n.Children[keys[first][pos]], keys[first:last], pos+1)
+			if err != nil && fail == nil {
+				fail = err
+			}
+			if err == nil && didResolve {
+				if clone == nil {
+					clone = n.copy()
+				}
+				clone.Children[keys[first][pos]] = newnode
+			}
+			values = append(values, results...)
+			first = last
+		}
+		if clone != nil {
+			n = clone
+		}
+		return values, n, clone != nil, fail
+
+	case hashNode:
+		child, err := t.resolveAndTrack(n, keys[0][:pos])
+		if err != nil {
+			return make([][]byte, len(keys)), n, true, err
+		}
+		values, newnode, _, err := t.getBatch(child, keys, pos)
+		return values, newnode, true, err
+
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+	}
+}
+
 // MustGetNode is a wrapper of GetNode and will omit any encountered error but
 // just print out an error message.
 func (t *Trie) MustGetNode(path []byte) ([]byte, int) {
@@ -215,9 +356,6 @@ func (t *Trie) GetNode(path []byte) ([]byte, int, error) {
 	}
 	if resolved > 0 {
 		t.root = newroot
-	}
-	if item == nil {
-		return nil, resolved, nil
 	}
 	return item, resolved, nil
 }

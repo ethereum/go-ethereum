@@ -379,9 +379,10 @@ var _ quick.Generator = (randTest)(nil)
 
 type randTestStep struct {
 	op    int
-	key   []byte // for opUpdate, opDelete, opGet
-	value []byte // for opUpdate
-	err   error  // for debugging
+	key   []byte   // for opUpdate, opDelete, opGet
+	value []byte   // for opUpdate
+	keys  [][]byte // for opGetBatch
+	err   error    // for debugging
 }
 
 const (
@@ -393,6 +394,7 @@ const (
 	opItercheckhash
 	opNodeDiff
 	opProve
+	opGetBatch
 	opMax // boundary value, not an actual op
 )
 
@@ -432,6 +434,12 @@ func generateSteps(finished func() bool, r io.Reader) randTest {
 			binary.BigEndian.PutUint64(step.value, uint64(len(steps)))
 		case opGet, opDelete, opProve:
 			step.key = genKey()
+		case opGetBatch:
+			r.Read(one)
+			step.keys = make([][]byte, int(one[0])%10)
+			for i := 0; i < len(step.keys); i++ {
+				step.keys[i] = genKey()
+			}
 		}
 		steps = append(steps, step)
 	}
@@ -513,6 +521,21 @@ func runRandTest(rt randTest) error {
 			want := values[string(step.key)]
 			if string(v) != want {
 				rt[i].err = fmt.Errorf("mismatch for key %#x, got %#x want %#x", step.key, v, want)
+			}
+		case opGetBatch:
+			vs := tr.MustGetBatch(step.keys)
+			want := make([]string, len(step.keys))
+			for i, key := range step.keys {
+				want[i] = values[string(key)]
+			}
+			if len(vs) != len(want) {
+				rt[i].err = fmt.Errorf("size mismatch, got %#x want %#x", len(vs), len(want))
+			} else {
+				for j := 0; j < len(vs); j++ {
+					if string(vs[j]) != want[j] {
+						rt[i].err = fmt.Errorf("mismatch for key %d:%#x, got %#x want %#x", j, step.keys[j], vs[j], want[j])
+					}
+				}
 			}
 		case opProve:
 			hash := tr.Hash()
