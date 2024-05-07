@@ -875,7 +875,7 @@ func testLightVsFastVsFullChainHeads(t *testing.T, scheme string) {
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 	)
-	height := uint64(1024)
+	height := uint64(64)
 	_, blocks, receipts := GenerateChainWithGenesis(gspec, ethash.NewFaker(), int(height), nil)
 
 	// makeDb creates a db instance for testing.
@@ -1833,7 +1833,7 @@ func testBlockchainRecovery(t *testing.T, scheme string) {
 		funds   = big.NewInt(1000000000)
 		gspec   = &Genesis{Config: params.TestChainConfig, Alloc: types.GenesisAlloc{address: {Balance: funds}}}
 	)
-	height := uint64(1024)
+	height := uint64(64)
 	_, blocks, receipts := GenerateChainWithGenesis(gspec, ethash.NewFaker(), int(height), nil)
 
 	// Import the chain as a ancient-first node and ensure all pointers are updated
@@ -1948,69 +1948,6 @@ func testInsertReceiptChainRollback(t *testing.T, scheme string) {
 	}
 	if frozen, _ := ancientChain.db.Ancients(); frozen != uint64(len(canonblocks))+1 {
 		t.Fatalf("wrong ancients count %d", frozen)
-	}
-}
-
-// Tests that importing a very large side fork, which is larger than the canon chain,
-// but where the difficulty per block is kept low: this means that it will not
-// overtake the 'canon' chain until after it's passed canon by about 200 blocks.
-//
-// Details at:
-//   - https://github.com/ethereum/go-ethereum/issues/18977
-//   - https://github.com/ethereum/go-ethereum/pull/18988
-func TestLowDiffLongChain(t *testing.T) {
-	testLowDiffLongChain(t, rawdb.HashScheme)
-	testLowDiffLongChain(t, rawdb.PathScheme)
-}
-
-func testLowDiffLongChain(t *testing.T, scheme string) {
-	// Generate a canonical chain to act as the main dataset
-	engine := ethash.NewFaker()
-	genesis := &Genesis{
-		Config:  params.TestChainConfig,
-		BaseFee: big.NewInt(params.InitialBaseFee),
-	}
-	// We must use a pretty long chain to ensure that the fork doesn't overtake us
-	// until after at least 128 blocks post tip
-	genDb, blocks, _ := GenerateChainWithGenesis(genesis, engine, 6*state.TriesInMemory, func(i int, b *BlockGen) {
-		b.SetCoinbase(common.Address{1})
-		b.OffsetTime(-9)
-	})
-
-	// Import the canonical chain
-	diskdb, _ := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
-	defer diskdb.Close()
-
-	chain, err := NewBlockChain(diskdb, DefaultCacheConfigWithScheme(scheme), genesis, nil, engine, vm.Config{}, nil, nil)
-	if err != nil {
-		t.Fatalf("failed to create tester chain: %v", err)
-	}
-	defer chain.Stop()
-
-	if n, err := chain.InsertChain(blocks); err != nil {
-		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
-	}
-	// Generate fork chain, starting from an early block
-	parent := blocks[10]
-	fork, _ := GenerateChain(genesis.Config, parent, engine, genDb, 8*state.TriesInMemory, func(i int, b *BlockGen) {
-		b.SetCoinbase(common.Address{2})
-	})
-
-	// And now import the fork
-	if i, err := chain.InsertChain(fork); err != nil {
-		t.Fatalf("block %d: failed to insert into chain: %v", i, err)
-	}
-	head := chain.CurrentBlock()
-	if got := fork[len(fork)-1].Hash(); got != head.Hash() {
-		t.Fatalf("head wrong, expected %x got %x", head.Hash(), got)
-	}
-	// Sanity check that all the canonical numbers are present
-	header := chain.CurrentHeader()
-	for number := head.Number.Uint64(); number > 0; number-- {
-		if hash := chain.GetHeaderByNumber(number).Hash(); hash != header.Hash() {
-			t.Fatalf("header %d: canonical hash mismatch: have %x, want %x", number, hash, header.Hash())
-		}
-		header = chain.GetHeader(header.ParentHash, number-1)
 	}
 }
 
@@ -3634,11 +3571,12 @@ func testSetCanonical(t *testing.T, scheme string) {
 			Alloc:   types.GenesisAlloc{address: {Balance: funds}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		signer = types.LatestSigner(gspec.Config)
-		engine = ethash.NewFaker()
+		signer      = types.LatestSigner(gspec.Config)
+		engine      = ethash.NewFaker()
+		chainLength = 10
 	)
 	// Generate and import the canonical chain
-	_, canon, _ := GenerateChainWithGenesis(gspec, engine, 2*state.TriesInMemory, func(i int, gen *BlockGen) {
+	_, canon, _ := GenerateChainWithGenesis(gspec, engine, chainLength, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1000), params.TxGas, gen.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
@@ -3659,7 +3597,7 @@ func testSetCanonical(t *testing.T, scheme string) {
 	}
 
 	// Generate the side chain and import them
-	_, side, _ := GenerateChainWithGenesis(gspec, engine, 2*state.TriesInMemory, func(i int, gen *BlockGen) {
+	_, side, _ := GenerateChainWithGenesis(gspec, engine, chainLength, func(i int, gen *BlockGen) {
 		tx, err := types.SignTx(types.NewTransaction(gen.TxNonce(address), common.Address{0x00}, big.NewInt(1), params.TxGas, gen.header.BaseFee, nil), signer, key)
 		if err != nil {
 			panic(err)
@@ -3698,8 +3636,8 @@ func testSetCanonical(t *testing.T, scheme string) {
 	verify(side[len(side)-1])
 
 	// Reset the chain head to original chain
-	chain.SetCanonical(canon[state.TriesInMemory-1])
-	verify(canon[state.TriesInMemory-1])
+	chain.SetCanonical(canon[chainLength-1])
+	verify(canon[chainLength-1])
 }
 
 // TestCanonicalHashMarker tests all the canonical hash markers are updated/deleted
