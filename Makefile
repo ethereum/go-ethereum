@@ -2,14 +2,22 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth android ios evm all test clean
+.PHONY: geth android ios evm all test clean libzkp
 
 GOBIN = ./build/bin
 GO ?= latest
 GORUN = go run
 
-geth:
+libzkp:
+	cd $(PWD)/rollup/circuitcapacitychecker/libzkp && make libzkp
+
+nccc_geth: ## geth without circuit capacity checker
 	$(GORUN) build/ci.go install ./cmd/geth
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+
+geth: libzkp ## geth with circuit capacity checker
+	$(GORUN) build/ci.go install -tags circuit_capacity_checker ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 

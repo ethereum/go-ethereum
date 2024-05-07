@@ -186,10 +186,11 @@ func main() {
 
 func doInstall(cmdline []string) {
 	var (
-		dlgo       = flag.Bool("dlgo", false, "Download Go and build with it")
-		arch       = flag.String("arch", "", "Architecture to cross build for")
-		cc         = flag.String("cc", "", "C compiler to cross build with")
-		staticlink = flag.Bool("static", false, "Create statically-linked executable")
+		dlgo        = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch        = flag.String("arch", "", "Architecture to cross build for")
+		cc          = flag.String("cc", "", "C compiler to cross build with")
+		staticlink  = flag.Bool("static", false, "Create statically-linked executable")
+		gobuildtags = flag.String("tags", "", "Tags for go build")
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
@@ -206,6 +207,10 @@ func doInstall(cmdline []string) {
 	// Enable linking the CKZG library since we can make it work with additional flags.
 	if env.UbuntuVersion != "trusty" {
 		buildTags = append(buildTags, "ckzg")
+	}
+
+	if len(*gobuildtags) > 0 {
+		buildTags = append(buildTags, strings.Split(*gobuildtags, ",")...)
 	}
 
 	// Configure the build.
