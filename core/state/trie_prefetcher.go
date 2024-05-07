@@ -32,10 +32,6 @@ var (
 	// errTerminated is returned if a fetcher is attempted to be operated after it
 	// has already terminated.
 	errTerminated = errors.New("fetcher is already terminated")
-
-	// errNotTerminated is returned if a fetchers data is attempted to be retrieved
-	// before it terminates.
-	errNotTerminated = errors.New("fetcher is not yet terminated")
 )
 
 // triePrefetcher is an active prefetcher, which receives accounts or storage

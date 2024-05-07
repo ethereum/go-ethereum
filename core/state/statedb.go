@@ -847,6 +847,14 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
+	if s.db.TrieDB().IsVerkle() {
+		// Whilst MPT storage tries are independent, Verkle has one single trie
+		// for all the accounts and all the storage slots merged together. The
+		// former can thus be simply parallelized, but updating the latter will
+		// need concurrency support within the trie itself. That's a TODO for a
+		// later time.
+		workers.SetLimit(1)
+	}
 	for addr, op := range s.mutations {
 		if op.applied || op.isDelete() {
 			continue
