@@ -2,7 +2,7 @@ name: "Push docker image to GAR"
 
 on:
   push:
-    branches: [taiko]
+    branches: [ taiko ]
     tags:
       - "v*"
 
@@ -38,9 +38,32 @@ jobs:
             type=ref,event=pr
             type=ref,event=tag
             type=sha
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          enableCrossOsArchive: true
+          path: |
+            go-build-platforms
+          key: ${{ runner.os }}-go_build-platforms
+          restore-keys: |
+            ${{ runner.os }}-go_build-platforms
+
+      - name: Inject cache into docker
+        uses: reproducible-containers/buildkit-cache-dance@v3.1.0
+        with:
+          cache-map: |
+            {
+              "go-build-platforms": "/root/.cache/go-build"
+            }
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
+
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
+          context: .
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
