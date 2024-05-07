@@ -166,6 +166,24 @@ var stateTransitionCommand = &cli.Command{
 	},
 }
 
+var stateTransitionServerCommand = &cli.Command{
+	Name:    "transition-server",
+	Aliases: []string{"t8n-server"},
+	Usage:   "Instantiates a server that accepts requests for full state transition",
+	Action:  t8ntool.TransitionServer,
+	Flags: []cli.Flag{
+		t8ntool.TraceFlag,
+		t8ntool.TraceTracerFlag,
+		t8ntool.TraceTracerConfigFlag,
+		t8ntool.TraceEnableMemoryFlag,
+		t8ntool.TraceDisableStackFlag,
+		t8ntool.TraceEnableReturnDataFlag,
+		t8ntool.TraceEnableCallFramesFlag,
+		t8ntool.PortFlag,
+		t8ntool.UnixSocketFlag,
+	},
+}
+
 var transactionCommand = &cli.Command{
 	Name:    "transaction",
 	Aliases: []string{"t9n"},
@@ -233,6 +251,7 @@ func init() {
 		blockTestCommand,
 		stateTestCommand,
 		stateTransitionCommand,
+		stateTransitionServerCommand,
 		transactionCommand,
 		blockBuilderCommand,
 	}

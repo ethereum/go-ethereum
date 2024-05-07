@@ -154,4 +154,13 @@ var (
 		Usage: "sets the verbosity level",
 		Value: 3,
 	}
+	PortFlag = &cli.IntFlag{
+		Name:  "port",
+		Usage: "port to listen on",
+		Value: 0,
+	}
+	UnixSocketFlag = &cli.StringFlag{
+		Name:  "unix-socket",
+		Usage: "File path to the unix socket to use",
+	}
 )

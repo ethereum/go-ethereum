@@ -40,15 +40,20 @@ func readFile(path, desc string, dest interface{}) error {
 
 // createBasedir makes sure the basedir exists, if user specified one.
 func createBasedir(ctx *cli.Context) (string, error) {
-	baseDir := ""
 	if ctx.IsSet(OutputBasedir.Name) {
-		if base := ctx.String(OutputBasedir.Name); len(base) > 0 {
-			err := os.MkdirAll(base, 0755) // //rw-r--r--
-			if err != nil {
-				return "", err
-			}
-			baseDir = base
-		}
+		base := ctx.String(OutputBasedir.Name)
+		return createBasedirFromString(base)
 	}
-	return baseDir, nil
+	return "", nil
+}
+
+func createBasedirFromString(baseDirPath string) (string, error) {
+	if len(baseDirPath) > 0 {
+		err := os.MkdirAll(baseDirPath, 0755) // //rw-r--r--
+		if err != nil {
+			return "", err
+		}
+		return baseDirPath, nil
+	}
+	return "", nil
 }

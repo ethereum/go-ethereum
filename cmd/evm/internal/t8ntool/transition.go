@@ -17,13 +17,20 @@
 package t8ntool
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -74,21 +81,102 @@ var (
 	_ cli.ExitCoder = (*NumberedError)(nil)
 )
 
+type tracerFn func(baseDir string) func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error)
+
 type input struct {
 	Alloc types.GenesisAlloc `json:"alloc,omitempty"`
 	Env   *stEnv             `json:"env,omitempty"`
 	Txs   []*txWithKey       `json:"txs,omitempty"`
-	TxRlp string             `json:"txsRlp,omitempty"`
+	TxRlp hexutil.Bytes      `json:"txsRlp,omitempty"`
 }
 
-func Transition(ctx *cli.Context) error {
-	var getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) { return nil, nil, nil }
+func (i *input) prestate() Prestate {
+	return Prestate{
+		Pre: i.Alloc,
+		Env: *i.Env,
+	}
+}
 
-	baseDir, err := createBasedir(ctx)
+func (i *input) txIterator(chainConfig *params.ChainConfig) (txIterator, error) {
+	if len(i.TxRlp) > 0 {
+		// Decode the body of already signed transactions
+		return newRlpTxIterator(i.TxRlp), nil
+	}
+	// We may have to sign the transactions.
+	signer := types.LatestSignerForChainID(chainConfig.ChainID)
+	txs, err := signUnsignedTransactions(i.Txs, signer)
+	return newSliceTxIterator(txs), err
+}
+
+type stateReq struct {
+	Fork    string `json:"fork,omitempty"`
+	ChainID int64  `json:"chainid,omitempty"`
+	Reward  int64  `json:"reward,omitempty"`
+}
+
+type transitionRequest struct {
+	Input   input    `json:"input,omitempty"`
+	State   stateReq `json:"state,omitempty"`
+	BaseDir string   `json:"baseDir,omitempty"`
+}
+
+type transitionRequestOutput struct {
+	Result *ExecutionResult `json:"result"`
+	Alloc  Alloc            `json:"alloc"`
+	Body   hexutil.Bytes    `json:"body"`
+}
+
+func (r *transitionRequest) process(tracerGenFn tracerFn) (*transitionRequestOutput, error) {
+	baseDir, err := createBasedirFromString(r.BaseDir)
 	if err != nil {
-		return NewError(ErrorIO, fmt.Errorf("failed creating output basedir: %v", err))
+		return nil, fmt.Errorf("failed creating output basedir: %v", err)
 	}
 
+	prestate := r.Input.prestate()
+	vmConfig := vm.Config{}
+	// Construct the chainconfig
+	var chainConfig *params.ChainConfig
+	if cConf, extraEips, err := tests.GetChainConfig(r.State.Fork); err != nil {
+		return nil, fmt.Errorf("failed constructing chain configuration: %v", err)
+	} else {
+		chainConfig = cConf
+		vmConfig.ExtraEips = extraEips
+	}
+	// Set the chain id
+	chainConfig.ChainID = big.NewInt(r.State.ChainID)
+
+	txIt, err := r.Input.txIterator(chainConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed loading transactions: %v", err)
+	}
+	if err := applyLondonChecks(&prestate.Env, chainConfig); err != nil {
+		return nil, fmt.Errorf("failed applying London checks: %v", err)
+	}
+	if err := applyShanghaiChecks(&prestate.Env, chainConfig); err != nil {
+		return nil, fmt.Errorf("failed applying Shanghai checks: %v", err)
+	}
+	if err := applyMergeChecks(&prestate.Env, chainConfig); err != nil {
+		return nil, fmt.Errorf("failed applying Merge checks: %v", err)
+	}
+	if err := applyCancunChecks(&prestate.Env, chainConfig); err != nil {
+		return nil, fmt.Errorf("failed applying Cancun checks: %v", err)
+	}
+	// Run the test and aggregate the result
+	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, r.State.Reward, tracerGenFn(baseDir))
+	if err != nil {
+		return nil, fmt.Errorf("failed applying prestate: %v", err)
+	}
+	// Dump the execution result
+	collector := make(Alloc)
+	s.DumpToCollector(collector, nil)
+	return &transitionRequestOutput{
+		Result: result,
+		Alloc:  collector,
+		Body:   body,
+	}, nil
+}
+
+func tracerGenerator(ctx *cli.Context) tracerFn {
 	if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
 		// Configure the EVM logger
 		logConfig := &logger.Config{
@@ -97,67 +185,85 @@ func Transition(ctx *cli.Context) error {
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 			Debug:            true,
 		}
-		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
-			if err != nil {
-				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+		enableCallFrames := ctx.Bool(TraceEnableCallFramesFlag.Name)
+		return func(baseDir string) func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+			return func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+				traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
+				if err != nil {
+					return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+				}
+				var l *tracing.Hooks
+				if enableCallFrames {
+					l = logger.NewJSONLoggerWithCallFrames(logConfig, traceFile)
+				} else {
+					l = logger.NewJSONLogger(logConfig, traceFile)
+				}
+				tracer := &tracers.Tracer{
+					Hooks: l,
+					// jsonLogger streams out result to file.
+					GetResult: func() (json.RawMessage, error) { return nil, nil },
+					Stop:      func(err error) {},
+				}
+				return tracer, traceFile, nil
 			}
-			var l *tracing.Hooks
-			if ctx.Bool(TraceEnableCallFramesFlag.Name) {
-				l = logger.NewJSONLoggerWithCallFrames(logConfig, traceFile)
-			} else {
-				l = logger.NewJSONLogger(logConfig, traceFile)
-			}
-			tracer := &tracers.Tracer{
-				Hooks: l,
-				// jsonLogger streams out result to file.
-				GetResult: func() (json.RawMessage, error) { return nil, nil },
-				Stop:      func(err error) {},
-			}
-			return tracer, traceFile, nil
 		}
 	} else if ctx.IsSet(TraceTracerFlag.Name) {
 		var config json.RawMessage
 		if ctx.IsSet(TraceTracerConfigFlag.Name) {
 			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
 		}
-		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
-			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
-			if err != nil {
-				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+		tracerStr := ctx.String(TraceTracerFlag.Name)
+		return func(baseDir string) func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+			return func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+				traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
+				if err != nil {
+					return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
+				}
+				tracer, err := tracers.DefaultDirectory.New(tracerStr, nil, config)
+				if err != nil {
+					return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
+				}
+				return tracer, traceFile, nil
 			}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
-			if err != nil {
-				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
-			}
-			return tracer, traceFile, nil
 		}
 	}
+	// Default to no tracing
+	return func(baseDir string) func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+		return func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+			return nil, nil, nil
+		}
+	}
+}
+
+func Transition(ctx *cli.Context) error {
 	// We need to load three things: alloc, env and transactions. May be either in
 	// stdin input or in files.
 	// Check if anything needs to be read from stdin
 	var (
-		prestate Prestate
-		txIt     txIterator // txs to apply
 		allocStr = ctx.String(InputAllocFlag.Name)
-
-		envStr    = ctx.String(InputEnvFlag.Name)
-		txStr     = ctx.String(InputTxsFlag.Name)
-		inputData = &input{}
+		envStr   = ctx.String(InputEnvFlag.Name)
+		txStr    = ctx.String(InputTxsFlag.Name)
 	)
+	request := transitionRequest{
+		BaseDir: ctx.String(OutputBasedir.Name),
+		State: stateReq{
+			Fork:    ctx.String(ForknameFlag.Name),
+			ChainID: ctx.Int64(ChainIDFlag.Name),
+			Reward:  ctx.Int64(RewardFlag.Name),
+		},
+	}
 	// Figure out the prestate alloc
 	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(inputData); err != nil {
+		if err := decoder.Decode(&request.Input); err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
 		}
 	}
 	if allocStr != stdinSelector {
-		if err := readFile(allocStr, "alloc", &inputData.Alloc); err != nil {
+		if err := readFile(allocStr, "alloc", &request.Input.Alloc); err != nil {
 			return err
 		}
 	}
-	prestate.Pre = inputData.Alloc
 
 	// Set the block environment
 	if envStr != stdinSelector {
@@ -165,46 +271,116 @@ func Transition(ctx *cli.Context) error {
 		if err := readFile(envStr, "env", &env); err != nil {
 			return err
 		}
-		inputData.Env = &env
+		request.Input.Env = &env
 	}
-	prestate.Env = *inputData.Env
 
-	vmConfig := vm.Config{}
-	// Construct the chainconfig
-	var chainConfig *params.ChainConfig
-	if cConf, extraEips, err := tests.GetChainConfig(ctx.String(ForknameFlag.Name)); err != nil {
-		return NewError(ErrorConfig, fmt.Errorf("failed constructing chain configuration: %v", err))
-	} else {
-		chainConfig = cConf
-		vmConfig.ExtraEips = extraEips
+	// Load the transactions from file if needed
+	if txStr != stdinSelector {
+		data, err := os.ReadFile(txStr)
+		if err != nil {
+			return NewError(ErrorIO, fmt.Errorf("failed reading txs file: %v", err))
+		}
+		if strings.HasSuffix(txStr, ".rlp") { // A file containing an rlp list
+			err = json.Unmarshal(data, &request.Input.TxRlp)
+		} else {
+			err = json.Unmarshal(data, &request.Input.Txs)
+		}
+		if err != nil {
+			return fmt.Errorf("failed unmarshalling txs-file: %v", err)
+		}
 	}
-	// Set the chain id
-	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
 
-	if txIt, err = loadTransactions(txStr, inputData, prestate.Env, chainConfig); err != nil {
-		return err
-	}
-	if err := applyLondonChecks(&prestate.Env, chainConfig); err != nil {
-		return err
-	}
-	if err := applyShanghaiChecks(&prestate.Env, chainConfig); err != nil {
-		return err
-	}
-	if err := applyMergeChecks(&prestate.Env, chainConfig); err != nil {
-		return err
-	}
-	if err := applyCancunChecks(&prestate.Env, chainConfig); err != nil {
-		return err
-	}
-	// Run the test and aggregate the result
-	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name), getTracer)
+	result, err := request.process(tracerGenerator(ctx))
 	if err != nil {
 		return err
 	}
-	// Dump the execution result
-	collector := make(Alloc)
-	s.DumpToCollector(collector, nil)
-	return dispatchOutput(ctx, baseDir, result, collector, body)
+	return dispatchOutput(ctx, request.BaseDir, result.Result, result.Alloc, result.Body)
+}
+
+func TransitionServer(ctx *cli.Context) error {
+	// Start the server
+	server := &transitionServer{
+		port:        ctx.Int(PortFlag.Name),
+		unixSocket:  ctx.String(UnixSocketFlag.Name),
+		tracerGenFn: tracerGenerator(ctx),
+	}
+
+	if err := server.start(); err != nil {
+		return NewError(ErrorIO, fmt.Errorf("failed starting server: %v", err))
+	}
+	log.Info("Started server", "port", server.port)
+
+	// Wait for a signal to shutdown
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	<-done
+
+	log.Info("Shutting down server")
+	if err := server.shutdown(); err != nil {
+		return NewError(ErrorIO, fmt.Errorf("failed shutting down server: %v", err))
+	}
+	return nil
+}
+
+type transitionServer struct {
+	port        int
+	unixSocket  string
+	tracerGenFn tracerFn
+	httpSrv     *http.Server
+}
+
+func (server *transitionServer) start() error {
+	// start the HTTP listener
+	var (
+		listener net.Listener
+		err      error
+	)
+	if server.unixSocket != "" {
+		listener, err = net.Listen("unix", server.unixSocket)
+	} else {
+		listener, err = net.Listen("tcp", fmt.Sprintf(":%d", server.port))
+	}
+	if err != nil {
+		return err
+	}
+
+	// Bundle and start the HTTP server
+	server.httpSrv = &http.Server{
+		Handler: server,
+	}
+	go server.httpSrv.Serve(listener)
+	if server.unixSocket == "" {
+		server.port = listener.Addr().(*net.TCPAddr).Port
+	}
+	return err
+}
+
+func (server *transitionServer) shutdown() error {
+	if server.httpSrv == nil {
+		return nil
+	}
+	return server.httpSrv.Shutdown(context.Background())
+}
+
+func (server *transitionServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	reqStartTime := time.Now()
+	decoder := json.NewDecoder(req.Body)
+	var request transitionRequest
+	// Parse this from the http request
+	if err := decoder.Decode(&request); err != nil {
+		http.Error(res, fmt.Sprintf("failed unmarshalling request: %v", err), http.StatusBadRequest)
+		return
+	}
+	output, err := request.process(server.tracerGenFn)
+	if err != nil {
+		http.Error(res, fmt.Sprintf("failed processing request: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Write the http response
+	res.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(res).Encode(output)
+	log.Info("Processed request", "duration", time.Since(reqStartTime))
 }
 
 func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {

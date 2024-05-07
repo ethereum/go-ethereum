@@ -89,7 +89,7 @@ func Transaction(ctx *cli.Context) error {
 			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
 		}
 		// Decode the body of already signed transactions
-		body = common.FromHex(inputData.TxRlp)
+		body = inputData.TxRlp
 	} else {
 		// Read input from file
 		inFile, err := os.Open(txStr)
