@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	params2 "github.com/ethereum/go-ethereum/params"
 	"math/big"
 	"slices"
 
@@ -199,7 +200,7 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 	if err != nil {
 		return nil, err
 	}
-	if len(params.ExtraData) > 32 {
+	if len(params.ExtraData) > int(params2.MaximumExtraDataSize) {
 		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
 	}
 	if len(params.LogsBloom) != 256 {
