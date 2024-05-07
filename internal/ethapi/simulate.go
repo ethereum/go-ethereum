@@ -26,15 +26,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -162,32 +160,27 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBloc
 		gp          = new(core.GasPool).AddGas(sim.b.RPCGasCap())
 		precompiles = sim.activePrecompiles(ctx, sim.base)
 		numHashes   = headers[len(headers)-1].Number.Uint64() - sim.base.Number.Uint64() + 256
+		parent      = sim.base
 	)
 	// Cache for the block hashes.
 	sim.hashes = make([]common.Hash, numHashes)
 	for bi, block := range blocks {
-		result, err := sim.processBlock(ctx, &block, headers[bi], headers, bi, gp, precompiles, timeout)
+		result, err := sim.processBlock(ctx, &block, headers[bi], parent, headers[:bi], gp, precompiles, timeout)
 		if err != nil {
 			return nil, err
 		}
 		results[bi] = *result
+		parent = headers[bi]
 	}
 	return results, nil
 }
 
-func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header *types.Header, headers []*types.Header, blockIndex int, gp *core.GasPool, precompiles vm.PrecompiledContracts, timeout time.Duration) (*simBlockResult, error) {
-	blockContext := core.NewEVMBlockContext(header, NewChainContext(ctx, sim.b), nil)
-	if block.BlockOverrides != nil && block.BlockOverrides.BlobBaseFee != nil {
+func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header, parent *types.Header, headers []*types.Header, gp *core.GasPool, precompiles vm.PrecompiledContracts, timeout time.Duration) (*simBlockResult, error) {
+	// Set this here for evm.GetHashFn to work.
+	header.ParentHash = parent.Hash()
+	blockContext := core.NewEVMBlockContext(header, sim.newSimulatedChainContext(ctx, headers), nil)
+	if block.BlockOverrides.BlobBaseFee != nil {
 		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
-	}
-	// Respond to BLOCKHASH requests.
-	blockContext.GetHash = func(n uint64) common.Hash {
-		h, err := sim.getBlockHash(ctx, n, sim.base, headers)
-		if err != nil {
-			log.Warn(err.Error())
-			return common.Hash{}
-		}
-		return h
 	}
 	// State overrides are applied prior to execution of a block
 	if err := block.StateOverrides.Apply(sim.state, precompiles); err != nil {
@@ -200,7 +193,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 		receipts             = make([]*types.Receipt, len(block.Calls))
 		tracer               = newTracer(sim.traceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
 		config               = sim.b.ChainConfig()
-		parent               = sim.base
 		vmConfig             = &vm.Config{
 			NoBaseFee: !sim.validate,
 			// Block hash will be repaired after execution.
@@ -208,9 +200,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 		}
 		evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, sim.state, config, *vmConfig)
 	)
-	if blockIndex > 0 {
-		parent = headers[blockIndex-1]
-	}
 	sim.state.SetLogger(tracer.Hooks())
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
@@ -265,15 +254,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 		}
 		callResults[i] = callRes
 	}
-	var (
-		parentHash common.Hash
-		err        error
-	)
-	parentHash, err = sim.getBlockHash(ctx, header.Number.Uint64()-1, sim.base, headers)
-	if err != nil {
-		return nil, err
-	}
-	header.ParentHash = parentHash
 	header.Root = sim.state.IntermediateRoot(true)
 	header.GasUsed = gasUsed
 	if len(txes) > 0 {
@@ -285,7 +265,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header 
 	}
 	if config.IsLondon(header.Number) {
 		// BaseFee depends on parent's gasUsed, hence can't be pre-computed.
-		// Phantom blocks are ignored.
 		header.BaseFee = eip1559.CalcBaseFee(config, parent)
 	}
 	if config.IsCancun(header.Number, header.Time) {
@@ -326,67 +305,6 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, 
 		call.MaxPriorityFeePerGas = (*hexutil.Big)(big.NewInt(0))
 	}
 	return nil
-}
-
-// getBlockHash returns the hash for the block of the given number. Block can be
-// part of the canonical chain, a simulated block or a phantom block.
-// Note getBlockHash assumes `n` is smaller than the last already simulated block
-// and smaller than the last block to be simulated.
-func (sim *simulator) getBlockHash(ctx context.Context, n uint64, base *types.Header, headers []*types.Header) (common.Hash, error) {
-	// getIndex returns the index of the hash in the hashes cache.
-	// The cache potentially includes 255 blocks prior to the base.
-	getIndex := func(n uint64) int {
-		first := base.Number.Uint64() - 255
-		return int(n - first)
-	}
-	index := getIndex(n)
-	if h := sim.hashes[index]; h != (common.Hash{}) {
-		return h, nil
-	}
-	h, err := sim.computeBlockHash(ctx, n, base, headers)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	if h != (common.Hash{}) {
-		sim.hashes[index] = h
-	}
-	return h, nil
-}
-
-func (sim *simulator) computeBlockHash(ctx context.Context, n uint64, base *types.Header, headers []*types.Header) (common.Hash, error) {
-	if n == base.Number.Uint64() {
-		return base.Hash(), nil
-	} else if n < base.Number.Uint64() {
-		h, err := sim.b.HeaderByNumber(ctx, rpc.BlockNumber(n))
-		if err != nil {
-			return common.Hash{}, fmt.Errorf("failed to load block hash for number %d. Err: %v\n", n, err)
-		}
-		return h.Hash(), nil
-	}
-	h := base
-	for i := range headers {
-		tmp := headers[i]
-		// BLOCKHASH will only allow numbers prior to current block
-		// so no need to check that condition.
-		if tmp.Number.Uint64() == n {
-			hash := tmp.Hash()
-			return hash, nil
-		} else if tmp.Number.Uint64() > n {
-			// Phantom block.
-			lastNonPhantomHash, err := sim.getBlockHash(ctx, h.Number.Uint64(), base, headers)
-			if err != nil {
-				return common.Hash{}, err
-			}
-			// keccak(rlp(lastNonPhantomBlockHash, blockNumber))
-			hashData, err := rlp.EncodeToBytes([][]byte{lastNonPhantomHash.Bytes(), big.NewInt(int64(n)).Bytes()})
-			if err != nil {
-				return common.Hash{}, err
-			}
-			return crypto.Keccak256Hash(hashData), nil
-		}
-		h = tmp
-	}
-	return common.Hash{}, errors.New("requested block is in future")
 }
 
 func (sim *simulator) activePrecompiles(ctx context.Context, base *types.Header) vm.PrecompiledContracts {
@@ -442,8 +360,8 @@ func (sim *simulator) sanitizeBlockOrder(blocks []simBlock) ([]simBlock, error) 
 // Some fields have to be filled post-execution.
 // It assumes blocks are in order and numbers have been validated.
 func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
-	res := make([]*types.Header, len(blocks))
 	var (
+		res           = make([]*types.Header, len(blocks))
 		config        = sim.b.ChainConfig()
 		base          = sim.base
 		prevTimestamp = base.Time
@@ -462,21 +380,56 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 		}
 		prevTimestamp = uint64(*overrides.Time)
 
-		var baseFee *big.Int
-		if config.IsLondon(overrides.Number.ToInt()) {
-			baseFee = eip1559.CalcBaseFee(config, header)
+		var withdrawalsHash *common.Hash
+		if config.IsShanghai(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
+			withdrawalsHash = &types.EmptyWithdrawalsHash
+		}
+		var parentBeaconRoot *common.Hash
+		if config.IsCancun(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
+			parentBeaconRoot = &common.Hash{}
 		}
 		header = overrides.MakeHeader(&types.Header{
-			UncleHash:   types.EmptyUncleHash,
-			ReceiptHash: types.EmptyReceiptsHash,
-			TxHash:      types.EmptyTxsHash,
-			Coinbase:    base.Coinbase,
-			Difficulty:  base.Difficulty,
-			GasLimit:    base.GasLimit,
-			//MixDigest:  header.MixDigest,
-			BaseFee: baseFee,
+			UncleHash:        types.EmptyUncleHash,
+			ReceiptHash:      types.EmptyReceiptsHash,
+			TxHash:           types.EmptyTxsHash,
+			Coinbase:         header.Coinbase,
+			Difficulty:       header.Difficulty,
+			GasLimit:         header.GasLimit,
+			WithdrawalsHash:  withdrawalsHash,
+			ParentBeaconRoot: parentBeaconRoot,
 		})
 		res[bi] = header
 	}
 	return res, nil
+}
+
+func (sim *simulator) newSimulatedChainContext(ctx context.Context, headers []*types.Header) *ChainContext {
+	return NewChainContext(ctx, &simBackend{base: sim.base, b: sim.b, headers: headers})
+}
+
+type simBackend struct {
+	b       ChainContextBackend
+	base    *types.Header
+	headers []*types.Header
+}
+
+func (b *simBackend) Engine() consensus.Engine {
+	return b.b.Engine()
+}
+
+func (b *simBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	if uint64(number) == b.base.Number.Uint64() {
+		return b.base, nil
+	}
+	if uint64(number) < b.base.Number.Uint64() {
+		// Resolve canonical header.
+		return b.b.HeaderByNumber(ctx, number)
+	}
+	// Simulated block.
+	for _, header := range b.headers {
+		if header.Number.Uint64() == uint64(number) {
+			return header, nil
+		}
+	}
+	return nil, errors.New("header not found")
 }

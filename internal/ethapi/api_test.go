@@ -1312,7 +1312,7 @@ func TestSimulateV1(t *testing.T) {
 				Number:       "0xc",
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xe891",
-				FeeRecipient: coinbase,
+				FeeRecipient: strings.ToLower(cac.String()),
 				Calls: []callRes{{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
 					GasUsed:     "0xe891",
@@ -1806,6 +1806,12 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
+				Number:       "0xb",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x0",
+				FeeRecipient: coinbase,
+				Calls:        []callRes{},
+			}, {
 				Number:       "0xc",
 				GasLimit:     "0x47e7c4",
 				GasUsed:      "0xf864",
@@ -1827,6 +1833,24 @@ func TestSimulateV1(t *testing.T) {
 					Logs:        []log{},
 					Status:      "0x1",
 				}},
+			}, {
+				Number:       "0xd",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x0",
+				FeeRecipient: coinbase,
+				Calls:        []callRes{},
+			}, {
+				Number:       "0xe",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x0",
+				FeeRecipient: coinbase,
+				Calls:        []callRes{},
+			}, {
+				Number:       "0xf",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x0",
+				FeeRecipient: coinbase,
+				Calls:        []callRes{},
 			}, {
 				Number:       "0x10",
 				GasLimit:     "0x47e7c4",
