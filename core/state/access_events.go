@@ -81,11 +81,10 @@ func (ae *AccessEvents) Keys() [][]byte {
 
 func (ae *AccessEvents) Copy() *AccessEvents {
 	cpy := &AccessEvents{
-		branches:   make(map[branchAccessKey]mode),
-		chunks:     make(map[chunkAccessKey]mode),
+		branches:   maps.Clone(ae.branches),
+		chunks:     maps.Clone(ae.chunks),
 		pointCache: ae.pointCache,
 	}
-	cpy.Merge(ae)
 	return cpy
 }
 
@@ -93,9 +92,11 @@ func (ae *AccessEvents) Copy() *AccessEvents {
 // member fields of an account.
 func (ae *AccessEvents) AddAccount(addr []byte, isWrite bool) uint64 {
 	var gas uint64
-	for i := utils.VersionLeafKey; i <= utils.CodeSizeLeafKey; i++ {
-		gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, byte(i), isWrite)
-	}
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, VersionLeafKey, isWrite)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, BalanceLeafKey, isWrite)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, NonceLeafKey, isWrite)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, CodeKeccakLeafKey, isWrite)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, CodeSizeLeafKey, isWrite)
 	return gas
 }
 
@@ -268,9 +269,8 @@ func (ae *AccessEvents) CodeChunksRangeGas(contractAddr []byte, startPC, size ui
 	return statelessGasCharged
 }
 
-// VersionGas returns the amount of gas to be charged if the account's version hasn't been
-// touched in the proper mode. If `isWrite` is `true` then the charged gas is for an access
-// in write mode. If false, the charged gas corresponds to an access in read mode.
+// VersionGas adds the accounts version to the accessed data, and returns the 
+// amount of gas that it costs. 
 // Note that an access in write mode implies an access in read mode, whereas an access in
 // read mode does not imply an access in write mode.
 func (ae *AccessEvents) VersionGas(addr []byte, isWrite bool) uint64 {
