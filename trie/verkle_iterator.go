@@ -24,7 +24,7 @@ import (
 
 type verkleNodeIteratorState struct {
 	Node  verkle.VerkleNode
-	Index int
+	Index int // points to _next_ value
 }
 
 type verkleNodeIterator struct {
@@ -97,9 +97,9 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		it.current = it.stack[len(it.stack)-1].Node
 		it.stack[len(it.stack)-1].Index++
 		return it.Next(descend)
-	case *verkle.HashedNode:
+	case verkle.HashedNode:
 		// resolve the node
-		data, err := it.trie.db.diskdb.Get(nodeToDBKey(node))
+		data, err := it.trie.FlatdbNodeResolver(it.Path())
 		if err != nil {
 			panic(err)
 		}
@@ -112,7 +112,7 @@ func (it *verkleNodeIterator) Next(descend bool) bool {
 		it.stack[len(it.stack)-1].Node = it.current
 		parent := &it.stack[len(it.stack)-2]
 		parent.Node.(*verkle.InternalNode).SetChild(parent.Index, it.current)
-		return true
+		return it.Next(true)
 	default:
 		panic("invalid node type")
 	}
@@ -147,7 +147,7 @@ func (it *verkleNodeIterator) Path() []byte {
 	var path []byte
 	for i, state := range it.stack {
 		// skip the last byte
-		if i <= len(it.stack)-1 {
+		if i >= len(it.stack)-1 {
 			break
 		}
 		path = append(path, byte(state.Index))

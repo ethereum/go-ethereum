@@ -231,11 +231,6 @@ func (trie *VerkleTrie) Hash() common.Hash {
 	return trie.root.Commit().Bytes()
 }
 
-func nodeToDBKey(n verkle.VerkleNode) []byte {
-	ret := n.Commitment().Bytes()
-	return ret[:]
-}
-
 // Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
 func (trie *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
