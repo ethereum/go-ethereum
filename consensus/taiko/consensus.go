@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"runtime"
 	"strings"
 	"time"
 
@@ -87,57 +86,35 @@ func (t *Taiko) VerifyHeader(chain consensus.ChainHeaderReader, header *types.He
 // a results channel to retrieve the async verifications (the order is that of
 // the input slice).
 func (t *Taiko) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
-	// Spawn as many workers as allowed threads
-	workers := runtime.GOMAXPROCS(0)
-	if len(headers) < workers {
-		workers = len(headers)
+	if len(headers) == 0 {
+		return make(chan struct{}), make(chan error, len(headers))
 	}
+	abort := make(chan struct{})
+	results := make(chan error, len(headers))
+	unixNow := time.Now().Unix()
 
-	// Create a task channel and spawn the verifiers
-	var (
-		inputs  = make(chan int)
-		done    = make(chan int, workers)
-		errors  = make([]error, len(headers))
-		abort   = make(chan struct{})
-		unixNow = time.Now().Unix()
-	)
-	for i := 0; i < workers; i++ {
-		go func() {
-			for index := range inputs {
-				errors[index] = t.verifyHeaderWorker(chain, headers, index, unixNow)
-				done <- index
-			}
-		}()
-	}
-
-	errorsOut := make(chan error, len(headers))
 	go func() {
-		defer close(inputs)
-		var (
-			in, out = 0, 0
-			checked = make([]bool, len(headers))
-			inputs  = inputs
-		)
-		for {
+		for i, header := range headers {
+			var parent *types.Header
+			if i == 0 {
+				parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+			} else if headers[i-1].Hash() == headers[i].ParentHash {
+				parent = headers[i-1]
+			}
+			var err error
+			if parent == nil {
+				err = consensus.ErrUnknownAncestor
+			} else {
+				err = t.verifyHeader(chain, header, parent, unixNow)
+			}
 			select {
-			case inputs <- in:
-				if in++; in == len(headers) {
-					// Reached end of headers. Stop sending to workers.
-					inputs = nil
-				}
-			case index := <-done:
-				for checked[index] = true; checked[out]; out++ {
-					errorsOut <- errors[out]
-					if out == len(headers)-1 {
-						return
-					}
-				}
 			case <-abort:
 				return
+			case results <- err:
 			}
 		}
 	}()
-	return abort, errorsOut
+	return abort, results
 }
 
 func (t *Taiko) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, unixNow int64) error {
@@ -191,20 +168,6 @@ func (t *Taiko) verifyHeader(chain consensus.ChainHeaderReader, header, parent *
 	}
 
 	return nil
-}
-
-func (t *Taiko) verifyHeaderWorker(chain consensus.ChainHeaderReader, headers []*types.Header, index int, unixNow int64) error {
-	var parent *types.Header
-	if index == 0 {
-		parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
-	} else if headers[index-1].Hash() == headers[index].ParentHash {
-		parent = headers[index-1]
-	}
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
-
-	return t.verifyHeader(chain, headers[index], parent, unixNow)
 }
 
 // VerifyUncles verifies that the given block's uncles conform to the consensus
