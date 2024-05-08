@@ -62,7 +62,7 @@ jobs:
         - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
         # build 386
-        - sudo -E apt-get install -yq --no-install-suggests --no-install-recommends --force-yes install gcc-multilib
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
         - go run build/ci.go install -dlgo -arch 386
         - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
