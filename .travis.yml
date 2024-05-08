@@ -47,7 +47,7 @@ jobs:
 
     # This builder does the Linux Azure uploads
     - stage: build
-      if: type = push
+      # if: type = push
       os: linux
       dist: noble
       sudo: required
@@ -57,9 +57,8 @@ jobs:
       git:
         submodules: false # avoid cloning ethereum/tests
       addons:
-        apt:
-          packages:
-            - gcc-multilib
+        apt_packages:
+          - gcc-multilib
       script:
         # Build for the primary platforms that Trusty can manage
         - go run build/ci.go install -dlgo
