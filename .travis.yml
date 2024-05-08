@@ -47,7 +47,7 @@ jobs:
 
     # This builder does the Linux Azure uploads
     - stage: build
-      # if: type = push
+      if: type = push
       os: linux
       dist: noble
       sudo: required
