@@ -197,10 +197,11 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	// Create the idle freezer instance. If the given ancient directory is empty,
 	// in-memory chain freezer is used (e.g. dev mode); otherwise the regular
 	// file-based freezer is created.
-	if ancient != "" {
-		ancient = resolveChainFreezerDir(ancient)
+	chainFreezerDir := ancient
+	if chainFreezerDir != "" {
+		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
 	}
-	frdb, err := newChainFreezer(ancient, namespace, readonly)
+	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly)
 	if err != nil {
 		printChainMetadata(db)
 		return nil, err
