@@ -50,6 +50,9 @@ var (
 
 	// MaxHash represents the maximum possible hash value.
 	MaxHash = HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+
+	addr0 Address // zero Address
+	hash0 Hash    // zero Hash
 )
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
@@ -192,6 +195,11 @@ func (h *Hash) UnmarshalGraphQL(input interface{}) error {
 		err = fmt.Errorf("unexpected type %T for Hash", input)
 	}
 	return err
+}
+
+// IsZero returns true for the zero hash.
+func (h Hash) IsZero() bool {
+	return h == hash0
 }
 
 // UnprefixedHash allows marshaling a Hash without 0x prefix.
@@ -369,6 +377,11 @@ func (a *Address) UnmarshalGraphQL(input interface{}) error {
 		err = fmt.Errorf("unexpected type %T for Address", input)
 	}
 	return err
+}
+
+// IsZero returns true for the zero address.
+func (a Address) IsZero() bool {
+	return a == addr0
 }
 
 // UnprefixedAddress allows marshaling an Address without 0x prefix.
