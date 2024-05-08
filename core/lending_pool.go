@@ -1066,7 +1066,7 @@ func (pool *LendingPool) promoteExecutables(accounts []common.Address) {
 	}
 	if queued > pool.config.GlobalQueue {
 		// Sort all accounts with queued transactions by heartbeat
-		addresses := make(addresssByHeartbeat, 0, len(pool.queue))
+		addresses := make(addressesByHeartbeat, 0, len(pool.queue))
 		for addr := range pool.queue {
 			if !pool.locals.contains(addr) { // don't drop locals
 				addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
