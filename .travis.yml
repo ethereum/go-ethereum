@@ -102,28 +102,18 @@ jobs:
       dist: noble
       go: 1.22.x
       script:
-        - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
-
-    - stage: build
-      if: type = pull_request
-      os: linux
-      arch: arm64
-      dist: noble
-      go: 1.21.x
-      script:
-        - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
+        - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       os: linux
       dist: noble
       go: 1.21.x
       script:
-        - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
+        - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
     # This builder does the Ubuntu PPA nightly uploads
     - stage: build
-      # if: type = cron || (type = push && tag ~= /^v[0-9]/)
-      if: type = push
+      if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
       dist: noble
       go: 1.22.x
@@ -157,4 +147,4 @@ jobs:
       dist: noble
       go: 1.22.x
       script:
-        - travis_wait 30 go run build/ci.go test  -race $TEST_PACKAGES
+        - travis_wait 50 go run build/ci.go test  -race $TEST_PACKAGES
