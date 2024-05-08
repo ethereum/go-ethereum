@@ -154,12 +154,10 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 	preHeaders := make([]*types.Header, len(preBlocks))
 	for i, block := range preBlocks {
 		preHeaders[i] = block.Header()
-		t.Logf("Pre-merge header: %d", block.NumberU64())
 	}
 	postHeaders := make([]*types.Header, len(postBlocks))
 	for i, block := range postBlocks {
 		postHeaders[i] = block.Header()
-		t.Logf("Post-merge header: %d", block.NumberU64())
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
 	chain, _ := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil, nil)
