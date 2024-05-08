@@ -49,16 +49,20 @@ type Options struct {
 // Estimate returns the lowest possible gas limit that allows the transaction to
 // run successfully with the provided context options. It returns an error if the
 // transaction would always revert, or if there are unexpected failures.
-func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uint64) (uint64, []byte, error) {
+func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uint64, blockGasLimit uint64) (uint64, []byte, error) {
 	// Binary search the gas limit, as it may need to be higher than the amount used
 	var (
 		lo uint64 // lowest-known gas limit where tx execution fails
 		hi uint64 // lowest-known gas limit where tx execution succeeds
 	)
+
 	// Determine the highest gas limit can be used during the estimation.
 	hi = opts.Header.GasLimit
 	if call.GasLimit >= params.TxGas {
 		hi = call.GasLimit
+	}
+	if hi > blockGasLimit {
+		hi = blockGasLimit
 	}
 	// Normalize the max fee per gas the call is willing to spend.
 	var feeCap *big.Int
