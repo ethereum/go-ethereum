@@ -114,8 +114,11 @@ func (n *Node) IP() net.IP {
     if n.Load(&ip6) == nil {
         return net.IP(ip6)
     }
-    if net.IP(ip4).IsLoopback() {
-        return net.IP(ip4)
+    if n.Load(&ip4) == nil {
+        ipv4Addr := net.IP(ip4)
+        if ipv4Addr.IsLoopback() {
+            return ipv4Addr
+        }
     }
     return nil
 }
