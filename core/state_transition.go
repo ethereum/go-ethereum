@@ -141,6 +141,7 @@ type Message struct {
 	AccessList    types.AccessList
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
+	Delegate      bool
 
 	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
@@ -163,6 +164,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		SkipAccountChecks: false,
 		BlobHashes:        tx.BlobHashes(),
 		BlobGasFeeCap:     tx.BlobGasFeeCap(),
+		Delegate:          tx.Delegate(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -433,7 +435,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
-		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
+		if !msg.Delegate {
+			ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
+		} else {
+			var contract = vm.NewContract(sender, sender, uint256.NewInt(0), st.gasRemaining)
+			ret, st.gasRemaining, vmerr = st.evm.DelegateCall(contract, st.to(), msg.Data, st.gasRemaining)
+		}
 	}
 
 	var gasRefund uint64
