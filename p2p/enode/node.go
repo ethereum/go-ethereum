@@ -101,18 +101,25 @@ func (n *Node) Load(k enr.Entry) error {
 
 // IP returns the IP address of the node. This prefers IPv4 addresses.
 func (n *Node) IP() net.IP {
-	var (
-		ip4 enr.IPv4
-		ip6 enr.IPv6
-	)
-	if n.Load(&ip4) == nil {
-		return net.IP(ip4)
-	}
-	if n.Load(&ip6) == nil {
-		return net.IP(ip6)
-	}
-	return nil
+    var (
+        ip4 enr.IPv4
+        ip6 enr.IPv6
+    )
+    if n.Load(&ip4) == nil {
+        ipv4Addr := net.IP(ip4)
+        if !ipv4Addr.IsLoopback() {
+            return ipv4Addr
+        }
+    }
+    if n.Load(&ip6) == nil {
+        return net.IP(ip6)
+    }
+    if net.IP(ip4).IsLoopback() {
+        return net.IP(ip4)
+    }
+    return nil
 }
+
 
 // UDP returns the UDP port of the node.
 func (n *Node) UDP() int {
