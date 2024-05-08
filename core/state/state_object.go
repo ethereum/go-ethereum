@@ -150,10 +150,10 @@ func (s *stateObject) GetState(key common.Hash) common.Hash {
 func (s *stateObject) getState(key common.Hash) (common.Hash, common.Hash) {
 	origin := s.GetCommittedState(key)
 	value, dirty := s.dirtyStorage[key]
-	if !dirty {
-		value = origin
+	if dirty {
+		return value, origin
 	}
-	return value, origin
+	return origin, origin
 }
 
 // GetCommittedState retrieves a value from the committed account storage trie.
