@@ -95,6 +95,30 @@ func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	return content, err
 }
 
+// GetStorageBatch is a batched version of GetStorage that simultaneously looks
+// up multiple slots. The advantage vs. the singleton version is the potential
+// for concurrent disk lookups.
+func (t *StateTrie) GetStorageBatch(_ []common.Address, keys [][]byte) ([][]byte, error) {
+	hashes := make([][]byte, len(keys))
+	for i, key := range keys {
+		hashes[i] = t.hashKey(key)
+	}
+	encs, err := t.trie.GetBatch(hashes)
+	if err != nil {
+		return nil, err
+	}
+	content := make([][]byte, len(keys))
+	for i, enc := range encs {
+		if len(enc) > 0 {
+			_, content[i], _, err = rlp.Split(enc)
+			if err != nil {
+				return content, err
+			}
+		}
+	}
+	return content, nil
+}
+
 // GetAccount attempts to retrieve an account with provided account address.
 // If the specified account is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
@@ -108,6 +132,29 @@ func (t *StateTrie) GetAccount(address common.Address) (*types.StateAccount, err
 	return ret, err
 }
 
+// GetAccountBatch is a batched version of GetAccount that simultaneously looks
+// up multiple slots. The advantage vs. the singleton version is the potential
+// for concurrent disk lookups.
+func (t *StateTrie) GetAccountBatch(addrs []common.Address) ([]*types.StateAccount, error) {
+	hashes := make([][]byte, len(addrs))
+	for i, addr := range addrs {
+		hashes[i] = t.hashKey(addr.Bytes())
+	}
+	encs, err := t.trie.GetBatch(hashes)
+	if err != nil {
+		return nil, err
+	}
+	content := make([]*types.StateAccount, len(addrs))
+	for i, enc := range encs {
+		if len(enc) > 0 {
+			if err = rlp.DecodeBytes(enc, content[i]); err != nil {
+				return content, err
+			}
+		}
+	}
+	return content, nil
+}
+
 // GetAccountByHash does the same thing as GetAccount, however it expects an
 // account hash that is the hash of address. This constitutes an abstraction
 // leak, since the client code needs to know the key format.
@@ -119,6 +166,29 @@ func (t *StateTrie) GetAccountByHash(addrHash common.Hash) (*types.StateAccount,
 	ret := new(types.StateAccount)
 	err = rlp.DecodeBytes(res, ret)
 	return ret, err
+}
+
+// GetAccountBatchByHash does the same thing as GetAccountBatch, however it
+// expects account hashes that are the hashes of addresses. This constitutes
+// an abstraction leak, since the client code needs to know the key format.
+func (t *StateTrie) GetAccountBatchByHash(addrHashes []common.Hash) ([]*types.StateAccount, error) {
+	hashes := make([][]byte, len(addrHashes))
+	for i, hash := range addrHashes {
+		hashes[i] = hash.Bytes()
+	}
+	encs, err := t.trie.GetBatch(hashes)
+	if err != nil {
+		return nil, err
+	}
+	content := make([]*types.StateAccount, len(addrHashes))
+	for i, enc := range encs {
+		if len(enc) > 0 {
+			if err = rlp.DecodeBytes(enc, content[i]); err != nil {
+				return content, err
+			}
+		}
+	}
+	return content, nil
 }
 
 // GetNode attempts to retrieve a trie node by compact-encoded path. It is not

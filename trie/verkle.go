@@ -115,6 +115,21 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	return acc, nil
 }
 
+// GetAccountBatch is a batched version of GetAccount that simultaneously looks
+// up multiple slots. The advantage vs. the singleton version is the potential
+// for concurrent disk lookups.
+func (t *VerkleTrie) GetAccountBatch(addrs []common.Address) ([]*types.StateAccount, error) {
+	results := make([]*types.StateAccount, len(addrs))
+	for i, addr := range addrs {
+		acc, err := t.GetAccount(addr)
+		if err != nil {
+			return results, err
+		}
+		results[i] = acc
+	}
+	return results, nil
+}
+
 // GetStorage implements state.Trie, retrieving the storage slot with the specified
 // account address and storage key. If the specified slot is not in the verkle tree,
 // nil will be returned. If the tree is corrupted, an error will be returned.
@@ -125,6 +140,21 @@ func (t *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error)
 		return nil, err
 	}
 	return common.TrimLeftZeroes(val), nil
+}
+
+// GetStorageBatch is a batched version of GetStorage that simultaneously looks
+// up multiple slots. The advantage vs. the singleton version is the potential
+// for concurrent disk lookups.
+func (t *VerkleTrie) GetStorageBatch(addrs []common.Address, keys [][]byte) ([][]byte, error) {
+	results := make([][]byte, len(keys))
+	for i := 0; i < len(keys); i++ {
+		val, err := t.GetStorage(addrs[i], keys[i])
+		if err != nil {
+			return results, err
+		}
+		results[i] = val
+	}
+	return results, nil
 }
 
 // UpdateAccount implements state.Trie, writing the provided account into the tree.

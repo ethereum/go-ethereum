@@ -87,10 +87,20 @@ type Trie interface {
 	// be returned.
 	GetAccount(address common.Address) (*types.StateAccount, error)
 
+	// GetAccountBatch is a batched version of GetAccount that simultaneously looks
+	// up multiple slots. The advantage vs. the singleton version is the potential
+	// for concurrent disk lookups.
+	GetAccountBatch(addrs []common.Address) ([]*types.StateAccount, error)
+
 	// GetStorage returns the value for key stored in the trie. The value bytes
 	// must not be modified by the caller. If a node was not found in the database,
 	// a trie.MissingNodeError is returned.
 	GetStorage(addr common.Address, key []byte) ([]byte, error)
+
+	// GetStorageBatch is a batched version of GetStorage that simultaneously looks
+	// up multiple slots. The advantage vs. teh singleton version is the potential
+	// for concurrent disk lookups.
+	GetStorageBatch(addrs []common.Address, keys [][]byte) ([][]byte, error)
 
 	// UpdateAccount abstracts an account write to the trie. It encodes the
 	// provided account object with associated algorithm and then updates it
