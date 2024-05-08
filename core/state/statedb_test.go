@@ -1329,3 +1329,47 @@ func TestDeleteStorage(t *testing.T) {
 		t.Fatalf("difference found:\nfast: %v\nslow: %v\n", fastRes, slowRes)
 	}
 }
+
+func TestStorageDirtiness(t *testing.T) {
+	var (
+		disk       = rawdb.NewMemoryDatabase()
+		tdb        = triedb.NewDatabase(disk, nil)
+		db         = NewDatabaseWithNodeDB(disk, tdb)
+		state, _   = New(types.EmptyRootHash, db, nil)
+		addr       = common.HexToAddress("0x1")
+		checkDirty = func(key common.Hash, value common.Hash, dirty bool) {
+			obj := state.getStateObject(addr)
+			v, exist := obj.dirtyStorage[key]
+			if exist != dirty {
+				t.Fatalf("Unexpected dirty marker, want: %t, got: %t", dirty, exist)
+			}
+			if v != value {
+				t.Fatalf("Unexpected storage slot, want: %t, got: %t", value, v)
+			}
+		}
+	)
+	state.CreateAccount(addr)
+
+	// the storage change is noop, no dirty marker
+	state.SetState(addr, common.Hash{0x1}, common.Hash{})
+	checkDirty(common.Hash{0x1}, common.Hash{}, false)
+
+	// the storage change is valid, dirty marker is expected
+	snap := state.Snapshot()
+	state.SetState(addr, common.Hash{0x1}, common.Hash{0x1})
+	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
+
+	// the storage change is reverted, dirtiness should be revoked
+	state.RevertToSnapshot(snap)
+	checkDirty(common.Hash{0x1}, common.Hash{}, false)
+
+	// the storage is reset back to its original value, dirtiness should be revoked
+	state.SetState(addr, common.Hash{0x1}, common.Hash{0x1})
+	snap = state.Snapshot()
+	state.SetState(addr, common.Hash{0x1}, common.Hash{})
+	checkDirty(common.Hash{0x1}, common.Hash{}, false)
+
+	// the storage change is reverted, dirty value should be set back
+	state.RevertToSnapshot(snap)
+	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
+}
