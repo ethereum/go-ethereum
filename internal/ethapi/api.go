@@ -1182,7 +1182,7 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 // successfully at block `blockNrOrHash`. It returns error if the transaction would revert, or if
 // there are unexpected failures. The gas limit is capped by both `args.Gas` (if non-nil &
 // non-zero) and `gasCap` (if non-zero).
-func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, gasCap uint64) (hexutil.Uint64, error) {
+func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, gasCap uint64, errorRatio float64) (hexutil.Uint64, error) {
 	// Retrieve the base state and mutate it with any overrides
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
@@ -1197,7 +1197,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		Chain:      NewChainContext(ctx, b),
 		Header:     header,
 		State:      state,
-		ErrorRatio: estimateGasErrorRatio,
+		ErrorRatio: errorRatio,
 	}
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return 0, err
@@ -1214,7 +1214,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	return hexutil.Uint64(estimate), nil
 }
 
-// EstimateGas returns the lowest possible gas limit that allows the transaction to run
+// EstimateGas returns some gas limit that allows the transaction to run
 // successfully at block `blockNrOrHash`, or the latest block if `blockNrOrHash` is unspecified. It
 // returns error if the transaction would revert or if there are unexpected failures. The returned
 // value is capped by both `args.Gas` (if non-nil & non-zero) and the backend's RPCGasCap
@@ -1225,7 +1225,21 @@ func (s *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, b
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, s.b, args, bNrOrHash, overrides, s.b.RPCGasCap())
+	return DoEstimateGas(ctx, s.b, args, bNrOrHash, overrides, s.b.RPCGasCap(), estimateGasErrorRatio)
+}
+
+// NecessaryGas returns the lowest gas limit that allows the transaction to run
+// successfully at block `blockNrOrHash`, or the latest block if `blockNrOrHash` is unspecified. It
+// returns error if the transaction would revert or if there are unexpected failures. The returned
+// value is capped by both `args.Gas` (if non-nil & non-zero) and the backend's RPCGasCap
+// configuration (if non-zero).
+// Note: Required blob gas is not computed in this method.
+func (s *BlockChainAPI) NecessaryGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Uint64, error) {
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	if blockNrOrHash != nil {
+		bNrOrHash = *blockNrOrHash
+	}
+	return DoEstimateGas(ctx, s.b, args, bNrOrHash, overrides, s.b.RPCGasCap(), 0)
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
