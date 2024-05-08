@@ -23,7 +23,7 @@ poseidon = { git = "https://github.com/scroll-tech/poseidon.git", branch = "main
 bls12_381 = { git = "https://github.com/scroll-tech/bls12_381", branch = "feat/impl_scalar_field" }
 
 [dependencies]
-prover = { git = "https://github.com/scroll-tech/zkevm-circuits.git", tag = "v0.10.2", default-features = false, features = ["parallel_syn", "scroll", "shanghai", "strict-ccc"] }
+prover = { git = "https://github.com/scroll-tech/zkevm-circuits.git", tag = "v0.10.4", default-features = false, features = ["parallel_syn", "scroll", "shanghai", "strict-ccc"] }
 
 anyhow = "1.0"
 base64 = "0.13.0"
