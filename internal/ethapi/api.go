@@ -1205,6 +1205,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 
 	call := args.ToMessage(header.BaseFee)
 
+	//Get the block gas cap
 	block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
 		return 0, err
@@ -1212,6 +1213,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if block == nil {
 		return 0, errors.New("block not found")
 	}
+
 	// Run the gas estimation andwrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap, block.GasLimit())
 
