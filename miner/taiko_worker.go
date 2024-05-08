@@ -177,7 +177,7 @@ func (w *worker) sealBlockWith(
 				return nil, err
 			}
 		}
-		sender, err := types.LatestSignerForChainID(tx.ChainId()).Sender(tx)
+		sender, err := types.LatestSignerForChainID(w.chainConfig.ChainID).Sender(tx)
 		if err != nil {
 			log.Debug("Skip an invalid proposed transaction", "hash", tx.Hash(), "reason", err)
 			continue
