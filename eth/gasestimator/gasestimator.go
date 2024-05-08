@@ -42,8 +42,6 @@ type Options struct {
 	Chain  core.ChainContext   // Chain context to access past block hashes
 	Header *types.Header       // Header defining the block context to execute in
 	State  *state.StateDB      // Pre-state on top of which to estimate the gas
-
-	ErrorRatio float64 // Allowed overestimation ratio for faster estimation termination
 }
 
 // Estimate returns the lowest possible gas limit that allows the transaction to
@@ -159,15 +157,6 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	}
 	// Binary search for the smallest gas limit that allows the tx to execute successfully.
 	for lo+1 < hi {
-		if opts.ErrorRatio > 0 {
-			// It is a bit pointless to return a perfect estimation, as changing
-			// network conditions require the caller to bump it up anyway. Since
-			// wallets tend to use 20-25% bump, allowing a small approximation
-			// error is fine (as long as it's upwards).
-			if float64(hi-lo)/float64(hi) < opts.ErrorRatio {
-				break
-			}
-		}
 		mid := (hi + lo) / 2
 		if mid > lo*2 {
 			// Most txs don't need much higher gas limit than their gas used, and most txs don't

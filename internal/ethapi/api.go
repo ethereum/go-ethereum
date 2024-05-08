@@ -53,9 +53,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// estimateGasErrorRatio is the amount of overestimation eth_estimateGas is
-// allowed to produce in order to speed up calculations.
-const estimateGasErrorRatio = 0.015
 
 var errBlobTxNotSupported = errors.New("signing blob transactions not supported")
 
@@ -1197,7 +1194,6 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		Chain:      NewChainContext(ctx, b),
 		Header:     header,
 		State:      state,
-		ErrorRatio: estimateGasErrorRatio,
 	}
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return 0, err
