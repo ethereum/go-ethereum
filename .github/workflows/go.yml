@@ -2,9 +2,9 @@ name: Go lint and test
 
 on:
   push:
-    branches: [ master ]
+    branches: [ kaustinen-with-shapella, kaustinen-with-shapella-rebase-pathdb ]
   pull_request:
-    branches: [ master, verkle-trie-proof-in-block-rebased, verkle-trie-post-merge, beverly-hills-head, 'verkle/replay-change-with-tree-group-tryupdate', beverly-hills-just-before-pbss, kaustinen-with-shapella ]
+    branches: [ kaustinen-with-shapella, kaustinen-with-shapella-rebase-pathdb ]
   workflow_dispatch:
 
 jobs:

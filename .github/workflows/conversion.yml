@@ -2,9 +2,9 @@ name: Overlay conversion
 
 on:
   push:
-    branches: [ master, transition-post-genesis, store-transition-state-in-db ]
+    branches: [ kaustinen-with-shapella, kaustinen-with-shapella-rebase-pathdb  ]
   pull_request:
-    branches: [ master, kaustinen-with-shapella, transition-post-genesis, store-transition-state-in-db, lock-overlay-transition  ]
+    branches: [ kaustinen-with-shapella  ]
   workflow_dispatch:
 
 jobs:
