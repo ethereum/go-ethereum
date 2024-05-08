@@ -15,7 +15,7 @@ jobs:
       if: type = push
       os: linux
       arch: amd64
-      dist: bionic
+      dist: noble
       go: 1.22.x
       env:
         - docker
@@ -32,7 +32,7 @@ jobs:
       if: type = push
       os: linux
       arch: arm64
-      dist: bionic
+      dist: noble
       go: 1.22.x
       env:
         - docker
@@ -49,7 +49,7 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      dist: bionic
+      dist: noble
       sudo: required
       go: 1.22.x
       env:
@@ -100,7 +100,7 @@ jobs:
     - stage: build
       os: linux
       arch: amd64
-      dist: bionic
+      dist: noble
       go: 1.22.x
       script:
         - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
@@ -109,14 +109,14 @@ jobs:
       if: type = pull_request
       os: linux
       arch: arm64
-      dist: bionic
+      dist: noble
       go: 1.21.x
       script:
         - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       os: linux
-      dist: bionic
+      dist: noble
       go: 1.21.x
       script:
         - travis_wait 30 go run build/ci.go test $TEST_PACKAGES
@@ -125,7 +125,7 @@ jobs:
     - stage: build
       if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
-      dist: bionic
+      dist: noble
       go: 1.22.x
       env:
         - ubuntu-ppa
@@ -148,7 +148,7 @@ jobs:
     - stage: build
       if: type = cron
       os: linux
-      dist: bionic
+      dist: noble
       go: 1.22.x
       env:
         - azure-purge
@@ -161,7 +161,7 @@ jobs:
     - stage: build
       if: type = cron
       os: linux
-      dist: bionic
+      dist: noble
       go: 1.22.x
       script:
         - travis_wait 30 go run build/ci.go test  -race $TEST_PACKAGES

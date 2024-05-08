@@ -44,6 +44,7 @@ const (
 	// maxBlockFetchers is the max number of goroutines to spin up to pull blocks
 	// for the fee history calculation (mostly relevant for LES).
 	maxBlockFetchers = 4
+	maxQueryLimit    = 100
 )
 
 // blockFees represents a single block for processing
@@ -239,6 +240,9 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 	maxFeeHistory := oracle.maxHeaderHistory
 	if len(rewardPercentiles) != 0 {
 		maxFeeHistory = oracle.maxBlockHistory
+	}
+	if len(rewardPercentiles) > maxQueryLimit {
+		return common.Big0, nil, nil, nil, nil, nil, fmt.Errorf("%w: over the query limit %d", errInvalidPercentile, maxQueryLimit)
 	}
 	if blocks > maxFeeHistory {
 		log.Warn("Sanitizing fee history length", "requested", blocks, "truncated", maxFeeHistory)
