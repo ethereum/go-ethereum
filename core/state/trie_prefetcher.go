@@ -95,6 +95,8 @@ func (p *triePrefetcher) report() {
 		return
 	}
 	for _, fetcher := range p.fetchers {
+		fetcher.wait() // ensure the fetcher's idle before poking in its internals
+
 		if fetcher.root == p.root {
 			p.accountLoadMeter.Mark(int64(len(fetcher.seen)))
 			p.accountDupMeter.Mark(int64(fetcher.dups))
@@ -159,6 +161,7 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) (Trie, error)
 // how useful or wasteful the fetcher is.
 func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte) {
 	if fetcher := p.fetchers[p.trieID(owner, root)]; fetcher != nil {
+		fetcher.wait() // ensure the fetcher's idle before poking in its internals
 		fetcher.used = used
 	}
 }
@@ -236,13 +239,19 @@ func (sf *subfetcher) schedule(keys [][]byte) error {
 	return nil
 }
 
+// wait blocks until the subfetcher terminates. This method is used to block on
+// an async termination before accessing internal fields from the fetcher.
+func (sf *subfetcher) wait() {
+	<-sf.term
+}
+
 // peek retrieves the fetcher's trie, populated with any pre-fetched data. The
 // returned trie will be a shallow copy, so modifying it will break subsequent
 // peeks for the original data. The method will block until all the scheduled
 // data has been loaded and the fethcer terminated.
 func (sf *subfetcher) peek() Trie {
 	// Block until the fertcher terminates, then retrieve the trie
-	<-sf.term
+	sf.wait()
 	return sf.trie
 }
 
