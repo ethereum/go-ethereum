@@ -28,13 +28,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
-
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/mclock"
+	"github.com/XinFinOrg/XDPoSChain/common/prque"
 	"github.com/XinFinOrg/XDPoSChain/common/sort"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
@@ -53,7 +52,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
 	lru "github.com/hashicorp/golang-lru"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 var (
@@ -201,7 +199,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig:         chainConfig,
 		cacheConfig:         cacheConfig,
 		db:                  db,
-		triegc:              prque.New(),
+		triegc:              prque.New(nil),
 		stateCache:          state.NewDatabase(db),
 		quit:                make(chan struct{}),
 		bodyCache:           bodyCache,
@@ -1268,18 +1266,18 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	} else {
 		// Full but not archive node, do proper garbage collection
 		triedb.Reference(root, common.Hash{}) // metadata reference to keep trie alive
-		bc.triegc.Push(root, -float32(block.NumberU64()))
+		bc.triegc.Push(root, -int64(block.NumberU64()))
 		if tradingTrieDb != nil {
 			tradingTrieDb.Reference(tradingRoot, common.Hash{})
 		}
 		if tradingService != nil {
-			tradingService.GetTriegc().Push(tradingRoot, -float32(block.NumberU64()))
+			tradingService.GetTriegc().Push(tradingRoot, -int64(block.NumberU64()))
 		}
 		if lendingTrieDb != nil {
 			lendingTrieDb.Reference(lendingRoot, common.Hash{})
 		}
 		if lendingService != nil {
-			lendingService.GetTriegc().Push(lendingRoot, -float32(block.NumberU64()))
+			lendingService.GetTriegc().Push(lendingRoot, -int64(block.NumberU64()))
 		}
 		if current := block.NumberU64(); current > triesInMemory {
 			// Find the next state trie we need to commit

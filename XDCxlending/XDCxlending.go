@@ -12,14 +12,13 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxDAO"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
-	"github.com/XinFinOrg/XDPoSChain/consensus"
-	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/prque"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -67,7 +66,7 @@ func New(XDCx *XDCx.XDCX) *Lending {
 	lendingTradeCache, _ := lru.New(defaultCacheLimit)
 	lending := &Lending{
 		orderNonce:          make(map[common.Address]*big.Int),
-		Triegc:              prque.New(),
+		Triegc:              prque.New(nil),
 		lendingItemHistory:  itemCache,
 		lendingTradeHistory: lendingTradeCache,
 	}
