@@ -148,5 +148,7 @@ jobs:
       os: linux
       dist: noble
       go: 1.22.x
+      env:
+        - racetests
       script:
         - travis_wait 50 go run build/ci.go test  -race $TEST_PACKAGES
