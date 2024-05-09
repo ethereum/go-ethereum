@@ -100,7 +100,6 @@ func (n *Node) Load(k enr.Entry) error {
 }
 
 // IP returns the IP address of the node. This prefers IPv4 addresses.
-// IP returns the IP address of the node. This prefers IPv4 addresses.
 func (n *Node) IP() net.IP {
 	var (
 		ip4 enr.IPv4
