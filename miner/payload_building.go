@@ -76,7 +76,8 @@ type Payload struct {
 	stop     chan struct{}
 	lock     sync.Mutex
 	cond     *sync.Cond
-	done     chan struct{} // CHANGE(taiko): done channel to communicate we shouldnt write to `stop` channel.
+	// CHANGE(taiko): done channel to communicate we shouldnt write to `stop` channel.
+	done chan struct{}
 }
 
 // newPayload initializes the payload object.
@@ -85,7 +86,8 @@ func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
 		id:    id,
 		empty: empty,
 		stop:  make(chan struct{}),
-		done:  make(chan struct{}, 1), // CHANGE(taiko): buffered channel to communicate done to taiko payload builder
+		// CHANGE(taiko): buffered channel to communicate done to taiko payload builder
+		done: make(chan struct{}, 1),
 	}
 	log.Info("Starting work on payload", "id", payload.id)
 	payload.cond = sync.NewCond(&payload.lock)
@@ -135,7 +137,11 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 	select {
 	case <-payload.stop:
 	default:
-		payload.done <- struct{}{} // CHANGE(taiko): signal to taiko payload builder to not write to `payload.stop` channel
+		// CHANGE(taiko): signal to taiko payload builder to not write to `payload.stop` channel
+		select {
+		case payload.done <- struct{}{}:
+		default:
+		}
 		close(payload.stop)
 	}
 	if payload.full != nil {
@@ -174,7 +180,11 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	select {
 	case <-payload.stop:
 	default:
-		payload.done <- struct{}{} // CHANGE(taiko): signal to taiko payload builder to not write to `payload.stop` channel
+		// CHANGE(taiko): signal to taiko payload builder to not write to `payload.stop` channel
+		select {
+		case payload.done <- struct{}{}:
+		default:
+		}
 		close(payload.stop)
 	}
 	return engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
