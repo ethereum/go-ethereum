@@ -1129,9 +1129,8 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
 
 	config := testTxPoolConfig
-	config.AccountSlots = 10
-	config.GlobalSlots = 0
 	config.AccountSlots = 5
+	config.GlobalSlots = 1
 	pool := NewTxPool(config, params.TestChainConfig, blockchain)
 	defer pool.Stop()
 
@@ -1473,6 +1472,7 @@ func TestTransactionPoolStableUnderpricing(t *testing.T) {
 	config := testTxPoolConfig
 	config.GlobalSlots = common.LimitThresholdNonceInQueue
 	config.GlobalQueue = 0
+	config.AccountSlots = config.GlobalSlots - 1
 
 	pool := NewTxPool(config, params.TestChainConfig, blockchain)
 	defer pool.Stop()
