@@ -549,7 +549,7 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	return pending, queued
 }
 
-// Pending retrieves all currently processable transactions, groupped by origin
+// Pending retrieves all currently processable transactions, grouped by origin
 // account and sorted by nonce. The returned transaction set is a copy and can be
 // freely modified by calling code.
 func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
@@ -571,7 +571,7 @@ func (pool *TxPool) Locals() []common.Address {
 	return pool.locals.flatten()
 }
 
-// local retrieves all currently known local transactions, groupped by origin
+// local retrieves all currently known local transactions, grouped by origin
 // account and sorted by nonce. The returned transaction set is a copy and can be
 // freely modified by calling code.
 func (pool *TxPool) local() map[common.Address]types.Transactions {
