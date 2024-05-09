@@ -279,10 +279,28 @@ func (t *Trie) getBatch(origNode node, keys [][]byte, pos int) ([][]byte, node, 
 			n = n.copy()
 			n.Val = newnode
 		}
-		values = append(make([][]byte, first), values...)
-		values = append(values, make([][]byte, len(keys)-last)...)
-
-		return values, n, didResolve, err
+		if first == 0 && last == len(keys) {
+			// If all the keys are the same (or there's only 1 key), return the
+			// result values without padding them on the two sides with nils.
+			//
+			// A bit of a weird clause, but this is the default, it is possibly
+			// insiginificantly faster, and it avoids a rare Go crash prior to
+			// v1.22.4 per https://github.com/golang/go/issues/67255.
+			//
+			// TODO(karalabe): Simplify when Go v1.24.0 is out.
+			return values, n, didResolve, err
+		} else {
+			// Only a subset of the keys are existent in the trie, pad the value
+			// return slice with nils for the rest.
+			//
+			// We could also use append here, but that can potentially hit the
+			// above Go issue: https://github.com/golang/go/issues/67255.
+			//
+			// TODO(karalabe): Simplify when Go v1.24.0 is out.
+			result := make([][]byte, len(keys))
+			copy(result[first:], values)
+			return result, n, didResolve, err
+		}
 
 	case *fullNode:
 		var (

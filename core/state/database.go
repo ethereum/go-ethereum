@@ -98,7 +98,7 @@ type Trie interface {
 	GetStorage(addr common.Address, key []byte) ([]byte, error)
 
 	// GetStorageBatch is a batched version of GetStorage that simultaneously looks
-	// up multiple slots. The advantage vs. teh singleton version is the potential
+	// up multiple slots. The advantage vs. the singleton version is the potential
 	// for concurrent disk lookups.
 	GetStorageBatch(addrs []common.Address, keys [][]byte) ([][]byte, error)
 

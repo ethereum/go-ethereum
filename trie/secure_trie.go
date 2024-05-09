@@ -101,7 +101,7 @@ func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 func (t *StateTrie) GetStorageBatch(_ []common.Address, keys [][]byte) ([][]byte, error) {
 	hashes := make([][]byte, len(keys))
 	for i, key := range keys {
-		hashes[i] = t.hashKey(key)
+		hashes[i] = common.CopyBytes(t.hashKey(key))
 	}
 	encs, err := t.trie.GetBatch(hashes)
 	if err != nil {
@@ -138,7 +138,7 @@ func (t *StateTrie) GetAccount(address common.Address) (*types.StateAccount, err
 func (t *StateTrie) GetAccountBatch(addrs []common.Address) ([]*types.StateAccount, error) {
 	hashes := make([][]byte, len(addrs))
 	for i, addr := range addrs {
-		hashes[i] = t.hashKey(addr.Bytes())
+		hashes[i] = common.CopyBytes(t.hashKey(addr.Bytes()))
 	}
 	encs, err := t.trie.GetBatch(hashes)
 	if err != nil {
