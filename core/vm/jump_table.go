@@ -83,7 +83,6 @@ func validate(jt JumpTable) JumpTable {
 
 func newVerkleInstructionSet() JumpTable {
 	instructionSet := newCancunInstructionSet()
-	enable6780(&instructionSet)
 	enable4762(&instructionSet)
 	return validate(instructionSet)
 }
