@@ -151,4 +151,4 @@ jobs:
       env:
         - racetests
       script:
-        - travis_wait 50 go run build/ci.go test  -race $TEST_PACKAGES
+        - travis_wait 60 go run build/ci.go test -race $TEST_PACKAGES
