@@ -265,6 +265,7 @@ require (
 	github.com/RichardKnop/logging v0.0.0-20190827224416-1a693bdd4fae // indirect
 	github.com/RichardKnop/machinery v1.7.4 // indirect
 	github.com/RichardKnop/redsync v1.2.0 // indirect
+	github.com/prometheus/tsdb v0.10.0
 	github.com/zclconf/go-cty v1.13.0 // indirect
 	github.com/zondax/hid v0.9.1 // indirect
 	go.mongodb.org/mongo-driver v1.14.0 // indirect

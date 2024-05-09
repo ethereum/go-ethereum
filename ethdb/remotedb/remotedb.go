@@ -83,6 +83,14 @@ func (db *Database) Ancients() (uint64, error) {
 	return resp, err
 }
 
+func (db *Database) AncientOffSet() uint64 {
+	panic("not supported")
+}
+
+func (db *Database) ItemAmountInAncient() (uint64, error) {
+	panic("not supported")
+}
+
 func (db *Database) Tail() (uint64, error) {
 	panic("not supported")
 }
