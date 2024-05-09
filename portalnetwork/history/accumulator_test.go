@@ -12,8 +12,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
+	"github.com/protolambda/zrnt/eth2/configs"
+	"github.com/protolambda/ztyp/tree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestVerifyHeaderWithProofs(t *testing.T) {
@@ -82,6 +85,22 @@ func TestUpdate(t *testing.T) {
 		currIndex := GetHeaderRecordIndex(uint64(i))
 		assert.True(t, bytes.Equal(newEpochAcc.currentEpoch.records[currIndex], epochAcc.HeaderRecords[currIndex]))
 	}
+}
+
+func TestVerifyPostMergePreCapellaHeader(t *testing.T) {
+	acc, err := NewHistoricalRootsAccumulator(configs.Mainnet)
+	require.NoError(t, err)
+	require.True(t, uint64(len(acc.HistoricalRoots)) < uint64(configs.Mainnet.HISTORICAL_ROOTS_LIMIT))
+
+	file, err := os.ReadFile("./testdata/block_proofs_bellatrix/beacon_block_proof-15539558-cdf9ed89b0c43cda17398dc4da9cfc505e5ccd19f7c39e3b43474180f1051e01.yaml")
+	require.NoError(t, err)
+	proof := HistoricalRootsBlockProof{}
+	err = yaml.Unmarshal(file, &proof)
+	require.NoError(t, err)
+	// blockNumber and blockHash are from testfile
+	blockHash := hexutil.MustDecode("0xcdf9ed89b0c43cda17398dc4da9cfc505e5ccd19f7c39e3b43474180f1051e01")
+	err = acc.VerifyPostMergePreCapellaHeader(15539558, tree.Root(blockHash), &proof)
+	require.NoError(t, err)
 }
 
 // all test blocks are in the same epoch

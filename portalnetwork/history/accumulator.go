@@ -12,12 +12,16 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
+	"github.com/protolambda/zrnt/eth2/beacon/common"
+	"github.com/protolambda/zrnt/eth2/util/merkle"
+	"github.com/protolambda/ztyp/codec"
 )
 
 const (
-	epochSize               = 8192
-	mergeBlockNumber uint64 = 15537394
-	preMergeEpochs          = (mergeBlockNumber + epochSize - 1) / epochSize
+	epochSize                  = 8192
+	mergeBlockNumber    uint64 = 15537394
+	shanghaiBlockNumber uint64 = 17_034_870
+	preMergeEpochs             = (mergeBlockNumber + epochSize - 1) / epochSize
 )
 
 var (
@@ -27,6 +31,9 @@ var (
 
 //go:embed assets/merge_macc.txt
 var masterAccumulatorHex string
+
+//go:embed assets/historical_roots.ssz
+var historicalRootsBytes []byte
 
 var zeroRecordBytes = make([]byte, 64)
 
@@ -254,4 +261,40 @@ func NewMasterAccumulator() (MasterAccumulator, error) {
 	}
 	err = masterAcc.UnmarshalSSZ(masterAccumulatorBytes)
 	return masterAcc, err
+}
+
+type HistoricalRootsAccumulator struct {
+	HistoricalRoots HistoricalRoots
+}
+
+func NewHistoricalRootsAccumulator(spec *common.Spec) (HistoricalRootsAccumulator, error) {
+	historicalRoots := new(HistoricalRoots)
+	reader := codec.NewDecodingReader(bytes.NewReader(historicalRootsBytes), uint64(len(historicalRootsBytes)))
+	err := historicalRoots.Deserialize(spec, reader)
+	return HistoricalRootsAccumulator{HistoricalRoots: *historicalRoots}, err
+}
+
+func (h HistoricalRootsAccumulator) VerifyPostMergePreCapellaHeader(blockNumber uint64, headerHash common.Root, proof *HistoricalRootsBlockProof) error {
+	if blockNumber <= mergeBlockNumber {
+		return errors.New("invalid historicalRootsBlockProof found for pre-merge header")
+	}
+	if blockNumber >= shanghaiBlockNumber {
+		return errors.New("invalid historicalRootsBlockProof found for post-Shanghai header")
+	}
+	if !merkle.VerifyMerkleBranch(headerHash, proof.BeaconBlockBodyProof[:], 8, 412, proof.BeaconBlockBodyRoot) {
+		return errors.New("merkle proof validation failed for BeaconBlockBodyProof")
+	}
+	if !merkle.VerifyMerkleBranch(proof.BeaconBlockBodyRoot, proof.BeaconBlockHeaderProof[:], 3, 12, proof.BeaconBlockHeaderRoot) {
+		return errors.New("merkle proof validation failed for BeaconBlockHeaderProof")
+	}
+
+	blockRootIndex := proof.Slot % epochSize
+	genIndex := 2*epochSize + blockRootIndex
+	historicalRootIndex := proof.Slot / epochSize
+	historicalRoot := h.HistoricalRoots[historicalRootIndex]
+
+	if !merkle.VerifyMerkleBranch(proof.BeaconBlockHeaderRoot, proof.HistoricalRootsProof[:], 14, uint64(genIndex), historicalRoot) {
+		return errors.New("merkle proof validation failed for HistoricalRootsProof")
+	}
+	return nil
 }
