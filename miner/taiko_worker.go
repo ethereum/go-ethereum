@@ -271,7 +271,7 @@ func (w *worker) commitL2Transactions(
 			txs.Pop()
 			continue
 		}
-		if len(b) >= int(maxBytesPerTxList) {
+		if len(b) > int(maxBytesPerTxList) {
 			break
 		}
 
