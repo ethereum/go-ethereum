@@ -56,7 +56,7 @@ func TestNodeCloseMultipleTimes(t *testing.T) {
 
 	// Ensure that a stopped node can be stopped again
 	for i := 0; i < 3; i++ {
-		if err := stack.Close(); err != ErrNodeStopped {
+		if err := stack.Close(); !errors.Is(err, ErrNodeStopped) {
 			t.Fatalf("iter %d: stop failure mismatch: have %v, want %v", i, err, ErrNodeStopped)
 		}
 	}
@@ -72,14 +72,14 @@ func TestNodeStartMultipleTimes(t *testing.T) {
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start node: %v", err)
 	}
-	if err := stack.Start(); err != ErrNodeRunning {
+	if err := stack.Start(); !errors.Is(err, ErrNodeRunning) {
 		t.Fatalf("start failure mismatch: have %v, want %v ", err, ErrNodeRunning)
 	}
 	// Ensure that a node can be stopped, but only once
 	if err := stack.Close(); err != nil {
 		t.Fatalf("failed to stop node: %v", err)
 	}
-	if err := stack.Close(); err != ErrNodeStopped {
+	if err := stack.Close(); !errors.Is(err, ErrNodeStopped) {
 		t.Fatalf("stop failure mismatch: have %v, want %v ", err, ErrNodeStopped)
 	}
 }
@@ -101,7 +101,7 @@ func TestNodeUsedDataDir(t *testing.T) {
 
 	// Create a second node based on the same data directory and ensure failure
 	_, err = New(&Config{DataDir: dir})
-	if err != ErrDatadirUsed {
+	if !errors.Is(err, ErrDatadirUsed) {
 		t.Fatalf("duplicate datadir failure mismatch: have %v, want %v", err, ErrDatadirUsed)
 	}
 }
@@ -297,7 +297,7 @@ func TestLifecycleStartupError(t *testing.T) {
 	stack.RegisterLifecycle(failer)
 
 	// Start the protocol stack and ensure all started services stop
-	if err := stack.Start(); err != failure {
+	if err := stack.Start(); !errors.Is(err, failure) {
 		t.Fatalf("stack startup failure mismatch: have %v, want %v", err, failure)
 	}
 	for id := range lifecycles {

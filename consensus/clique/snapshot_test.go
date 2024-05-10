@@ -19,6 +19,7 @@ package clique
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -470,7 +471,7 @@ func (tt *cliqueTest) run(t *testing.T) {
 			break
 		}
 	}
-	if _, err = chain.InsertChain(batches[len(batches)-1]); err != tt.failure {
+	if _, err = chain.InsertChain(batches[len(batches)-1]); !errors.Is(err, tt.failure) {
 		t.Errorf("failure mismatch: have %v, want %v", err, tt.failure)
 	}
 	if tt.failure != nil {

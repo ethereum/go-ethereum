@@ -182,7 +182,7 @@ func (it *RawIterator) Number() uint64 {
 // Error returns the error status of the iterator. It should be called before
 // reading from any of the iterator's values.
 func (it *RawIterator) Error() error {
-	if it.err == io.EOF {
+	if errors.Is(it.err, io.EOF) {
 		return nil
 	}
 	return it.err

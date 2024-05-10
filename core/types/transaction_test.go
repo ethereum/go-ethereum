@@ -76,7 +76,7 @@ func TestDecodeEmptyTypedTx(t *testing.T) {
 	input := []byte{0x80}
 	var tx Transaction
 	err := rlp.DecodeBytes(input, &tx)
-	if err != errShortTypedTx {
+	if !errors.Is(err, errShortTypedTx) {
 		t.Fatal("wrong error:", err)
 	}
 }
@@ -536,7 +536,7 @@ func TestYParityJSONUnmarshalling(t *testing.T) {
 				// Unmarshal the tx
 				var tx Transaction
 				err = tx.UnmarshalJSON(jsonBytes)
-				if err != test.wantErr {
+				if !errors.Is(err, test.wantErr) {
 					t.Fatalf("wrong error: got %v, want %v", err, test.wantErr)
 				}
 			})

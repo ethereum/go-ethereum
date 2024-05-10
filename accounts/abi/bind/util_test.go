@@ -87,7 +87,7 @@ func TestWaitDeployed(t *testing.T) {
 
 		select {
 		case <-mined:
-			if err != test.wantErr {
+			if !errors.Is(err, test.wantErr) {
 				t.Errorf("test %q: error mismatch: want %q, got %q", name, test.wantErr, err)
 			}
 			if address != test.wantAddress {

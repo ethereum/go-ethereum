@@ -17,6 +17,7 @@
 package asm
 
 import (
+	"errors"
 	"testing"
 
 	"encoding/hex"
@@ -47,7 +48,7 @@ func TestInstructionIterator(t *testing.T) {
 		if it.Error() != nil {
 			haveErr = it.Error().Error()
 		}
-		if haveErr != tc.wantErr {
+		if !errors.Is(haveErr, tc.wantErr) {
 			t.Errorf("test %d: encountered error: %q want %q", i, haveErr, tc.wantErr)
 			continue
 		}

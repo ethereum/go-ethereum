@@ -92,7 +92,7 @@ type (
 	// Exceptionally, before the homestead hardfork a contract creation that
 	// ran out of gas when attempting to persist the code to database did not
 	// count as a call failure and did not cause a revert of the call. This will
-	// be indicated by `reverted == false` and `err == ErrCodeStoreOutOfGas`.
+	// be indicated by `reverted == false` and `errors.Is(err, ErrCodeStoreOutOfGas)`.
 	//
 	// Take note that ExitHook, when in the context of a live tracer, can be invoked
 	// outside of the `OnTxStart` and `OnTxEnd` hooks when dealing with system calls,

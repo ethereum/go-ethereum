@@ -228,7 +228,7 @@ func readASCII(buf []byte, r *bufio.Reader) (n int, err error) {
 	for ; n < len(buf); n++ {
 		buf[n], err = r.ReadByte()
 		switch {
-		case err == io.EOF || buf[n] < '!':
+		case errors.Is(err, io.EOF) || buf[n] < '!':
 			return n, nil
 		case err != nil:
 			return n, err
@@ -242,7 +242,7 @@ func checkKeyFileEnd(r *bufio.Reader) error {
 	for i := 0; ; i++ {
 		b, err := r.ReadByte()
 		switch {
-		case err == io.EOF:
+		case errors.Is(err, io.EOF):
 			return nil
 		case err != nil:
 			return err

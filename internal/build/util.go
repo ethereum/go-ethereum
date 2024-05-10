@@ -19,6 +19,7 @@ package build
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"go/parser"
@@ -97,7 +98,7 @@ func RunGit(args ...string) string {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		if e, ok := err.(*exec.Error); ok && e.Err == exec.ErrNotFound {
+		if e, ok := err.(*exec.Error); ok && errors.Is(e.Err, exec.ErrNotFound) {
 			if !warnedAboutGit {
 				log.Println("Warning: can't find 'git' in PATH")
 				warnedAboutGit = true
