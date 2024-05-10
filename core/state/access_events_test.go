@@ -85,7 +85,6 @@ func TestAccountHeaderGas(t *testing.T) {
 	gas = ae.BalanceGas(testAddr2, true)
 	if gas != params.WitnessBranchReadCost+params.WitnessBranchWriteCost+params.WitnessChunkWriteCost+params.WitnessChunkReadCost {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, params.WitnessBranchReadCost+params.WitnessBranchWriteCost+params.WitnessChunkWriteCost+params.WitnessChunkReadCost)
-
 	}
 
 	// Check that a write followed by a read charges nothing
