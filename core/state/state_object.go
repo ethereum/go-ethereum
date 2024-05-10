@@ -146,7 +146,7 @@ func (s *stateObject) GetState(key common.Hash) common.Hash {
 }
 
 // getState retrieves a value associated with the given storage key, along with
-// it's original value.
+// its original value.
 func (s *stateObject) getState(key common.Hash) (common.Hash, common.Hash) {
 	origin := s.GetCommittedState(key)
 	value, dirty := s.dirtyStorage[key]
