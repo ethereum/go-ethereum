@@ -145,16 +145,15 @@ func (s *stateObject) GetState(key common.Hash) common.Hash {
 	return value
 }
 
-// getState retrieves a value from the account storage trie and also returns if
-// the slot is already dirty or not.
-func (s *stateObject) getState(key common.Hash) (common.Hash, bool) {
-	// If we have a dirty value for this state entry, return it
+// getState retrieves a value associated with the given storage key, along with
+// it's original value.
+func (s *stateObject) getState(key common.Hash) (common.Hash, common.Hash) {
+	origin := s.GetCommittedState(key)
 	value, dirty := s.dirtyStorage[key]
 	if dirty {
-		return value, true
+		return value, origin
 	}
-	// Otherwise return the entry's original value
-	return s.GetCommittedState(key), false
+	return origin, origin
 }
 
 // GetCommittedState retrieves a value from the committed account storage trie.
@@ -219,36 +218,32 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 func (s *stateObject) SetState(key, value common.Hash) {
 	// If the new value is the same as old, don't set. Otherwise, track only the
 	// dirty changes, supporting reverting all of it back to no change.
-	prev, dirty := s.getState(key)
+	prev, origin := s.getState(key)
 	if prev == value {
 		return
-	}
-	var prevvalue *common.Hash
-	if dirty {
-		prevvalue = &prev
 	}
 	// New value is different, update and journal the change
 	s.db.journal.append(storageChange{
 		account:   &s.address,
 		key:       key,
-		prevvalue: prevvalue,
+		prevvalue: prev,
+		origvalue: origin,
 	})
 	if s.db.logger != nil && s.db.logger.OnStorageChange != nil {
 		s.db.logger.OnStorageChange(s.address, key, prev, value)
 	}
-	s.setState(key, &value)
+	s.setState(key, value, origin)
 }
 
-// setState updates a value in account dirty storage. If the value being set is
-// nil (assuming journal revert), the dirtyness is removed.
-func (s *stateObject) setState(key common.Hash, value *common.Hash) {
-	// If the first set is being reverted, undo the dirty marker
-	if value == nil {
+// setState updates a value in account dirty storage. The dirtiness will be
+// removed if the value being set equals to the original value.
+func (s *stateObject) setState(key common.Hash, value common.Hash, origin common.Hash) {
+	// Storage slot is set back to its original value, undo the dirty marker
+	if value == origin {
 		delete(s.dirtyStorage, key)
 		return
 	}
-	// Otherwise restore the previous value
-	s.dirtyStorage[key] = *value
+	s.dirtyStorage[key] = value
 }
 
 // finalise moves all dirty storage slots into the pending area to be hashed or
@@ -264,7 +259,7 @@ func (s *stateObject) finalise(prefetch bool) {
 			slotsToPrefetch = append(slotsToPrefetch, common.CopyBytes(key[:])) // Copy needed for closure
 		} else {
 			// Otherwise, the slot was reverted to its original value, remove it
-			// from the pending area to avoid thrashing the data strutures.
+			// from the pending area to avoid thrashing the data structure.
 			delete(s.pendingStorage, key)
 		}
 	}
