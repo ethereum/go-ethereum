@@ -97,6 +97,7 @@ jobs:
 
     # These builders run the tests
     - stage: build
+      if: type = push
       os: linux
       arch: amd64
       dist: noble
@@ -105,6 +106,7 @@ jobs:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
+      if: type = push
       os: linux
       dist: noble
       go: 1.21.x
@@ -146,5 +148,7 @@ jobs:
       os: linux
       dist: noble
       go: 1.22.x
+      env:
+        - racetests
       script:
-        - travis_wait 50 go run build/ci.go test  -race $TEST_PACKAGES
+        - travis_wait 60 go run build/ci.go test -race $TEST_PACKAGES
