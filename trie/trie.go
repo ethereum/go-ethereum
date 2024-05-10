@@ -22,12 +22,14 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"golang.org/x/sync/errgroup"
 )
 
 // Trie is a Merkle Patricia Trie. Use New to create a trie that sits on
@@ -303,13 +305,9 @@ func (t *Trie) getBatch(origNode node, keys [][]byte, pos int) ([][]byte, node, 
 		}
 
 	case *fullNode:
-		var (
-			clone  *fullNode
-			values = make([][]byte, 0, len(keys))
-			fail   error
-			first  int
-		)
-		for first < len(keys) {
+		// Split the keys into subsets groupped by fullnode child nibble
+		offsets := make([][2]int, 0, len(keys))
+		for first := 0; first < len(keys); {
 			last := len(keys)
 			for i, key := range keys[first+1:] {
 				if keys[first][pos] != key[pos] {
@@ -317,18 +315,52 @@ func (t *Trie) getBatch(origNode node, keys [][]byte, pos int) ([][]byte, node, 
 					break
 				}
 			}
-			results, newnode, didResolve, err := t.getBatch(n.Children[keys[first][pos]], keys[first:last], pos+1)
-			if err != nil && fail == nil {
-				fail = err
-			}
-			if err == nil && didResolve {
-				if clone == nil {
-					clone = n.copy()
-				}
-				clone.Children[keys[first][pos]] = newnode
-			}
-			values = append(values, results...)
+			offsets = append(offsets, [2]int{first, last})
 			first = last
+		}
+		// Resolve the subkeys sequentially or parallel based on how many there are
+		var (
+			values = make([][]byte, len(keys))
+			clone  *fullNode
+			fail   error
+		)
+		if len(offsets) < 8 {
+			for _, offset := range offsets {
+				results, newnode, didResolve, err := t.getBatch(n.Children[keys[offset[0]][pos]], keys[offset[0]:offset[1]], pos+1)
+				if err == nil && didResolve {
+					if clone == nil {
+						clone = n.copy()
+					}
+					clone.Children[keys[offset[0]][pos]] = newnode
+				}
+				copy(values[offset[0]:], results)
+				if err != nil && fail == nil {
+					fail = err
+				}
+			}
+		} else {
+			var (
+				workers errgroup.Group
+				lock    sync.Mutex
+			)
+			for _, offset := range offsets {
+				offset := offset // Closure for the worker
+				workers.Go(func() error {
+					results, newnode, didResolve, err := t.getBatch(n.Children[keys[offset[0]][pos]], keys[offset[0]:offset[1]], pos+1)
+					if err == nil && didResolve {
+						lock.Lock()
+						if clone == nil {
+							clone = n.copy()
+						}
+						lock.Unlock()
+
+						clone.Children[keys[offset[0]][pos]] = newnode
+					}
+					copy(values[offset[0]:], results)
+					return err
+				})
+				fail = workers.Wait()
+			}
 		}
 		if clone != nil {
 			n = clone
