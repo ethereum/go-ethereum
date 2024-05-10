@@ -91,6 +91,7 @@ type BlockChain interface {
 
 type txPool interface {
 	AddRemotes(txs []*types.Transaction) []error
+	AddRemotesSync(txs []*types.Transaction) []error
 	Status(hashes []common.Hash) []core.TxStatus
 }
 
