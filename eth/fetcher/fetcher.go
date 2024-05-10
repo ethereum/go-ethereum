@@ -25,10 +25,10 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/prque"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 const (
@@ -171,7 +171,7 @@ func New(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, handlePropose
 		fetching:            make(map[common.Hash]*announce),
 		fetched:             make(map[common.Hash][]*announce),
 		completing:          make(map[common.Hash]*announce),
-		queue:               prque.New(),
+		queue:               prque.New(nil),
 		queues:              make(map[string]int),
 		queued:              make(map[common.Hash]*inject),
 		knowns:              knownBlocks,
@@ -312,7 +312,7 @@ func (f *Fetcher) loop() {
 			// If too high up the chain or phase, continue later
 			number := op.block.NumberU64()
 			if number > height+1 {
-				f.queue.Push(op, -float32(op.block.NumberU64()))
+				f.queue.Push(op, -int64(op.block.NumberU64()))
 				if f.queueChangeHook != nil {
 					f.queueChangeHook(op.block.Hash(), true)
 				}
@@ -642,7 +642,7 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 		f.queues[peer] = count
 		f.queued[hash] = op
 		f.knowns.Add(hash, true)
-		f.queue.Push(op, -float32(block.NumberU64()))
+		f.queue.Push(op, -int64(block.NumberU64()))
 		if f.queueChangeHook != nil {
 			f.queueChangeHook(op.block.Hash(), true)
 		}

@@ -24,18 +24,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
-	"github.com/XinFinOrg/XDPoSChain/consensus"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/prque"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 var (
@@ -671,7 +669,7 @@ func (pool *LendingPool) add(tx *types.LendingTransaction, local bool) (bool, er
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx, local); err != nil {
 		log.Debug("Discarding invalid lending transaction", "hash", hash, "userAddress", tx.UserAddress, "status", tx.Status, "err", err)
-		invalidTxCounter.Inc(1)
+		invalidTxMeter.Mark(1)
 		return false, err
 	}
 	from, _ := types.LendingSender(pool.signer, tx) // already validated
@@ -685,12 +683,12 @@ func (pool *LendingPool) add(tx *types.LendingTransaction, local bool) (bool, er
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		inserted, old := list.Add(tx)
 		if !inserted {
-			pendingDiscardCounter.Inc(1)
+			pendingDiscardMeter.Mark(1)
 			return false, ErrPendingNonceTooLow
 		}
 		if old != nil {
 			delete(pool.all, old.Hash())
-			pendingReplaceCounter.Inc(1)
+			pendingReplaceMeter.Mark(1)
 		}
 		pool.all[tx.Hash()] = tx
 		pool.journalTx(from, tx)
@@ -726,13 +724,13 @@ func (pool *LendingPool) enqueueTx(hash common.Hash, tx *types.LendingTransactio
 	inserted, old := pool.queue[from].Add(tx)
 	if !inserted {
 		// An older transaction was better, discard this
-		queuedDiscardCounter.Inc(1)
+		pendingDiscardMeter.Mark(1)
 		return false, ErrPendingNonceTooLow
 	}
 	// Discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
-		queuedReplaceCounter.Inc(1)
+		queuedReplaceMeter.Mark(1)
 	}
 	pool.all[hash] = tx
 	return old != nil, nil
@@ -764,13 +762,13 @@ func (pool *LendingPool) promoteTx(addr common.Address, hash common.Hash, tx *ty
 	if !inserted {
 		// An older transaction was better, discard this
 		delete(pool.all, hash)
-		pendingDiscardCounter.Inc(1)
+		pendingDiscardMeter.Mark(1)
 		return
 	}
 	// Otherwise discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
-		pendingReplaceCounter.Inc(1)
+		pendingReplaceMeter.Mark(1)
 	}
 	// Failsafe to work around direct pending inserts (tests)
 	if pool.all[hash] == nil {
@@ -981,7 +979,7 @@ func (pool *LendingPool) promoteExecutables(accounts []common.Address) {
 				hash := tx.Hash()
 				delete(pool.all, hash)
 
-				queuedRateLimitCounter.Inc(1)
+				queuedRateLimitMeter.Mark(1)
 				log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
 			}
 		}
@@ -998,11 +996,11 @@ func (pool *LendingPool) promoteExecutables(accounts []common.Address) {
 	if pending > pool.config.GlobalSlots {
 		pendingBeforeCap := pending
 		// Assemble a spam order to penalize large transactors first
-		spammers := prque.New()
+		spammers := prque.New(nil)
 		for addr, list := range pool.pending {
 			// Only evict transactions from high rollers
 			if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.AccountSlots {
-				spammers.Push(addr, float32(list.Len()))
+				spammers.Push(addr, int64(list.Len()))
 			}
 		}
 		// Gradually drop transactions from offenders
@@ -1057,7 +1055,7 @@ func (pool *LendingPool) promoteExecutables(accounts []common.Address) {
 				}
 			}
 		}
-		pendingRateLimitCounter.Inc(int64(pendingBeforeCap - pending))
+		pendingRateLimitMeter.Mark(int64(pendingBeforeCap - pending))
 	}
 	// If we've queued more transactions than the hard limit, drop oldest ones
 	queued := uint64(0)
@@ -1066,7 +1064,7 @@ func (pool *LendingPool) promoteExecutables(accounts []common.Address) {
 	}
 	if queued > pool.config.GlobalQueue {
 		// Sort all accounts with queued transactions by heartbeat
-		addresses := make(addresssByHeartbeat, 0, len(pool.queue))
+		addresses := make(addressesByHeartbeat, 0, len(pool.queue))
 		for addr := range pool.queue {
 			if !pool.locals.contains(addr) { // don't drop locals
 				addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
@@ -1087,7 +1085,7 @@ func (pool *LendingPool) promoteExecutables(accounts []common.Address) {
 					pool.removeTx(tx.Hash())
 				}
 				drop -= size
-				queuedRateLimitCounter.Inc(int64(size))
+				queuedRateLimitMeter.Mark(int64(size))
 				continue
 			}
 			// Otherwise drop only last few transactions
@@ -1095,7 +1093,7 @@ func (pool *LendingPool) promoteExecutables(accounts []common.Address) {
 			for i := len(txs) - 1; i >= 0 && drop > 0; i-- {
 				pool.removeTx(txs[i].Hash())
 				drop--
-				queuedRateLimitCounter.Inc(1)
+				queuedRateLimitMeter.Mark(1)
 			}
 		}
 	}
