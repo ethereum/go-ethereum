@@ -187,52 +187,23 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		s.originStorage[key] = common.Hash{} // track the empty slot as origin value
 		return common.Hash{}
 	}
-	// If no live objects are available, attempt to use snapshots
-	var (
-		enc   []byte
-		err   error
-		value common.Hash
-	)
-	if s.db.snap != nil {
-		start := time.Now()
-		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
-		s.db.SnapshotStorageReads += time.Since(start)
+	s.db.StorageLoaded++
 
-		if len(enc) > 0 {
-			_, content, _, err := rlp.Split(enc)
-			if err != nil {
-				s.db.setError(err)
-			}
-			value.SetBytes(content)
-		}
+	start := time.Now()
+	value, err := s.db.reader.Storage(s.address, key)
+	if err != nil {
+		s.db.setError(err)
+		return common.Hash{}
 	}
-	// If the snapshot is unavailable or reading from it fails, load from the database.
-	if s.db.snap == nil || err != nil {
-		start := time.Now()
-		tr, err := s.getTrie()
-		if err != nil {
-			s.db.setError(err)
-			return common.Hash{}
-		}
-		val, err := tr.GetStorage(s.address, key.Bytes())
-		s.db.StorageReads += time.Since(start)
+	s.db.StorageReads += time.Since(start)
 
-		if err != nil {
-			s.db.setError(err)
-			return common.Hash{}
-		}
-		value.SetBytes(val)
-	}
-	// Independent of where we loaded the data from, add it to the prefetcher.
-	// Whilst this would be a bit weird if snapshots are disabled, but we still
-	// want the trie nodes to end up in the prefetcher too, so just push through.
+	// Schedule the resolved storage slots for prefetching if it's enabled.
 	if s.db.prefetcher != nil && s.data.Root != types.EmptyRootHash {
 		if err = s.db.prefetcher.prefetch(s.addrHash, s.origin.Root, s.address, [][]byte{key[:]}, true); err != nil {
 			log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
 		}
 	}
 	s.originStorage[key] = value
-	s.db.StorageLoaded++
 	return value
 }
 
@@ -527,7 +498,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		newContract:        s.newContract,
 	}
 	if s.trie != nil {
-		obj.trie = db.db.CopyTrie(s.trie)
+		obj.trie = mustCopyTrie(s.trie)
 	}
 	return obj
 }
