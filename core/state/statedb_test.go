@@ -551,7 +551,7 @@ func forEachStorage(s *StateDB, addr common.Address, cb func(key, value common.H
 	if so == nil {
 		return nil
 	}
-	tr, err := so.getTrie(true)
+	tr, err := so.getTrie()
 	if err != nil {
 		return err
 	}
