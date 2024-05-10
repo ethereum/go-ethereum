@@ -151,7 +151,7 @@ func (s *stateObject) getTrie() (Trie, error) {
 // to break the hidden interdependency between retrieving tries from the db or
 // from the prefetcher.
 func (s *stateObject) getPrefetchedTrie() (Trie, error) {
-	// If there's nothing to meaningfully return, let teh user figure it out by
+	// If there's nothing to meaningfully return, let the user figure it out by
 	// pulling the trie from disk.
 	if s.data.Root == types.EmptyRootHash || s.db.prefetcher == nil {
 		return nil, nil
