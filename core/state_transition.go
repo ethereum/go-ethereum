@@ -42,8 +42,10 @@ The state transitioning model does all all the necessary work to work out a vali
 3) Create a new state object if the recipient is \0*32
 4) Value transfer
 == If contract creation ==
-  4a) Attempt to run transaction data
-  4b) If valid, use result as code for the new state object
+
+	4a) Attempt to run transaction data
+	4b) If valid, use result as code for the new state object
+
 == end ==
 5) Run Script section
 6) Derive new state root
@@ -77,10 +79,10 @@ type Message interface {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, contractCreation, homestead bool) (uint64, error) {
+func IntrinsicGas(data []byte, contractCreation, isEIP155 bool, isEIP2028 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
-	if contractCreation && homestead {
+	if contractCreation && isEIP155 {
 		gas = params.TxGasContractCreation
 	} else {
 		gas = params.TxGas
@@ -95,10 +97,14 @@ func IntrinsicGas(data []byte, contractCreation, homestead bool) (uint64, error)
 			}
 		}
 		// Make sure we don't exceed uint64 for all data combinations
-		if (math.MaxUint64-gas)/params.TxDataNonZeroGas < nz {
+		nonZeroGas := params.TxDataNonZeroGasFrontier
+		if isEIP2028 {
+			nonZeroGas = params.TxDataNonZeroGasEIP2028
+		}
+		if (math.MaxUint64-gas)/nonZeroGas < nz {
 			return 0, vm.ErrOutOfGas
 		}
-		gas += nz * params.TxDataNonZeroGas
+		gas += nz * nonZeroGas
 
 		z := uint64(len(data)) - nz
 		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
@@ -223,10 +229,11 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 	sender := st.from() // err checked in preCheck
 
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.BlockNumber)
+	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.BlockNumber)
 	contractCreation := msg.To() == nil
 
 	// Pay intrinsic gas
-	gas, err := IntrinsicGas(st.data, contractCreation, homestead)
+	gas, err := IntrinsicGas(st.data, contractCreation, homestead, istanbul)
 	if err != nil {
 		return nil, 0, false, err, nil
 	}

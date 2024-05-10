@@ -237,6 +237,8 @@ type TxPool struct {
 	signer      types.Signer
 	mu          sync.RWMutex
 
+	istanbul bool // Fork indicator whether we are in the istanbul stage.
+
 	currentState  *state.StateDB // Current state in the blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
 	currentMaxGas uint64         // Current gas limit for transaction caps
@@ -606,7 +608,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	if tx.To() == nil || (tx.To() != nil && !tx.IsSpecialTransaction()) {
 		// Ensure the transaction has more gas than the basic tx fee.
-		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
+		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true, pool.istanbul)
 		if err != nil {
 			return err
 		}
@@ -1258,6 +1260,10 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	senderCacher.recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject, false)
+
+	// Update all fork indicator by next pending block number.
+	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
+	pool.istanbul = pool.chainconfig.IsIstanbul(next)
 }
 
 // promoteExecutables moves transactions that have become processable from the
