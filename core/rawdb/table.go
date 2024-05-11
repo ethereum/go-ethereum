@@ -27,6 +27,11 @@ type table struct {
 	prefix string
 }
 
+func (t *table) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // NewTable returns a database object that prefixes all keys with a given string.
 func NewTable(db ethdb.Database, prefix string) ethdb.Database {
 	return &table{
@@ -214,6 +219,11 @@ type tableBatch struct {
 	prefix string
 }
 
+func (b *tableBatch) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // Put inserts the given value into the batch for later committing.
 func (b *tableBatch) Put(key, value []byte) error {
 	return b.batch.Put(append([]byte(b.prefix), key...), value)
@@ -246,6 +256,11 @@ type tableReplayer struct {
 	prefix string
 }
 
+func (r *tableReplayer) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // Put implements the interface KeyValueWriter.
 func (r *tableReplayer) Put(key []byte, value []byte) error {
 	trimmed := key[len(r.prefix):]
@@ -268,6 +283,11 @@ func (b *tableBatch) Replay(w ethdb.KeyValueWriter) error {
 type tableIterator struct {
 	iter   ethdb.Iterator
 	prefix string
+}
+
+func (iter *tableIterator) Seek(key []byte) bool {
+	// TODO implement me
+	panic("implement me")
 }
 
 // Next moves the iterator to the next key/value pair. It returns whether the

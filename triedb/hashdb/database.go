@@ -493,6 +493,11 @@ type cleaner struct {
 	db *Database
 }
 
+func (c *cleaner) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // Put reacts to database writes and implements dirty data uncaching. This is the
 // post-processing step of a commit operation where the already persisted trie is
 // removed from the dirty cache and moved into the clean cache. The reason behind

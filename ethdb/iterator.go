@@ -44,6 +44,9 @@ type Iterator interface {
 	// may change on the next call to Next.
 	Value() []byte
 
+	// Seek moves the iterator to the target key/value pair. Only support Lower-bound
+	Seek(key []byte) bool
+
 	// Release releases associated resources. Release should always succeed and can
 	// be called multiple times without causing error.
 	Release()

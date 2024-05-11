@@ -17,36 +17,60 @@
 package pathdb
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"sync"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // diskLayer is a low level persistent layer built on top of a key-value store.
 type diskLayer struct {
-	root   common.Hash      // Immutable, root hash to which this layer was made for
-	id     uint64           // Immutable, corresponding state id
-	db     *Database        // Path-based trie database
-	cleans *fastcache.Cache // GC friendly memory cache of clean node RLPs
-	buffer *nodebuffer      // Node buffer to aggregate writes
-	stale  bool             // Signals that the layer became stale (state progressed)
-	lock   sync.RWMutex     // Lock used to protect stale flag
+	root   common.Hash  // Immutable, root hash to which this layer was made for
+	id     uint64       // Immutable, corresponding state id
+	db     *Database    // Path-based trie database
+	cleans *cleanCache  // GC friendly memory cache of clean node RLPs
+	buffer *nodebuffer  // Node buffer to aggregate writes
+	stale  bool         // Signals that the layer became stale (state progressed)
+	lock   sync.RWMutex // Lock used to protect stale flag
+}
+
+type cleanCache struct {
+	nodes       *fastcache.Cache
+	plainStates *fastcache.Cache
+}
+
+func (cc *cleanCache) reset() {
+	if cc.nodes != nil {
+		cc.nodes.Reset()
+	}
+	if cc.plainStates != nil {
+		cc.plainStates.Reset()
+	}
 }
 
 // newDiskLayer creates a new disk layer based on the passing arguments.
-func newDiskLayer(root common.Hash, id uint64, db *Database, cleans *fastcache.Cache, buffer *nodebuffer) *diskLayer {
+func newDiskLayer(root common.Hash, id uint64, db *Database, cleans *cleanCache, buffer *nodebuffer) *diskLayer {
 	// Initialize a clean cache if the memory allowance is not zero
 	// or reuse the provided cache if it is not nil (inherited from
 	// the original disk layer).
 	if cleans == nil && db.config.CleanCacheSize != 0 {
-		cleans = fastcache.New(db.config.CleanCacheSize)
+		cleans = &cleanCache{}
+		nodeCacheSize := db.config.CleanCacheSize * 43 / 100
+		plainStatesCacheSize := db.config.CleanCacheSize * 57 / 100
+		cleans.nodes = fastcache.New(nodeCacheSize)
+		cleans.plainStates = fastcache.New(plainStatesCacheSize)
+		log.Info("Allocate clean cache in disklayer", "nodes", common.StorageSize(nodeCacheSize),
+			"plainStates", common.StorageSize(plainStatesCacheSize))
 	}
 	return &diskLayer{
 		root:   root,
@@ -93,6 +117,82 @@ func (dl *diskLayer) markStale() {
 	dl.stale = true
 }
 
+func (dl *diskLayer) Account(hash common.Hash) ([]byte, error) {
+	// Hold the lock, ensure the parent won't be changed during the
+	// state accessing.
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+	if dl.stale {
+		return nil, errSnapshotStale
+	}
+
+	if data, exist := dl.buffer.account(hash); exist {
+		return data, nil
+	}
+	if data, ok := dl.cleans.plainStates.HasGet(nil, hash.Bytes()); ok {
+		return types.MustFullAccountRLP(data), nil
+	}
+
+	blob := dl.readAccountTrie(hash)
+	dl.cleans.plainStates.Set(hash.Bytes(), types.FullToSlimAccountRLP(blob))
+	return blob, nil
+}
+
+// readAccountTrie return value of the account leaf node directly from the db
+func (dl *diskLayer) readAccountTrie(hash common.Hash) []byte {
+	nBlob, path, nHash := rawdb.ReadAccountFromTrieDirectly(dl.db.diskdb, hash.Bytes())
+	if nBlob == nil {
+		return nil
+	}
+	dl.cleans.nodes.Set(cacheKey(common.Hash{}, path[:]), nBlob)
+	val, key := trie.DecodeLeafNode(nHash.Bytes(), path, nBlob)
+	if bytes.Compare(key, hash.Bytes()) == 0 {
+		return val
+	} else {
+		log.Debug("account short node info ", "account hash", hash.String(), "gotten key", hex.EncodeToString(key), "path", common.Bytes2Hex(path))
+	}
+	return nil
+}
+
+func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	// Hold the lock, ensure the parent won't be changed during the
+	// state accessing.
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if dl.stale {
+		return nil, errSnapshotStale
+	}
+
+	if data, exist := dl.buffer.storage(accountHash, storageHash); exist {
+		return data, nil
+	}
+
+	if data, ok := dl.cleans.plainStates.HasGet(nil, append(accountHash.Bytes(), storageHash.Bytes()...)); ok {
+		return data, nil
+	}
+
+	blob := dl.readStorageTrie(accountHash, storageHash)
+	dl.cleans.plainStates.Set(append(accountHash.Bytes(), storageHash.Bytes()...), blob)
+	return blob, nil
+}
+
+// readStorageTrie return value of the storage leaf node directly from the db
+func (dl *diskLayer) readStorageTrie(accountHash, storageHash common.Hash) []byte {
+	key := storageHash.Bytes()
+	nBlob, path, nHash := rawdb.ReadStorageFromTrieDirectly(dl.db.diskdb, accountHash, key)
+	if nBlob == nil {
+		return nil
+	}
+	dl.cleans.nodes.Set(cacheKey(accountHash, path[common.HashLength:]), nBlob)
+
+	val, key := trie.DecodeLeafNode(nHash.Bytes(), path[common.HashLength:], nBlob)
+	if bytes.Compare(storageHash.Bytes(), key) == 0 {
+		return val
+	}
+	return nil
+}
+
 // node implements the layer interface, retrieving the trie node with the
 // provided node info. No error will be returned if the node is not found.
 func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error) {
@@ -121,7 +221,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 
 	key := cacheKey(owner, path)
 	if dl.cleans != nil {
-		if blob := dl.cleans.Get(nil, key); len(blob) > 0 {
+		if blob := dl.cleans.nodes.Get(nil, key); len(blob) > 0 {
 			cleanHitMeter.Mark(1)
 			cleanReadMeter.Mark(int64(len(blob)))
 			return blob, h.hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
@@ -136,7 +236,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		blob = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
 	}
 	if dl.cleans != nil && len(blob) > 0 {
-		dl.cleans.Set(key, blob)
+		dl.cleans.nodes.Set(key, blob)
 		cleanWriteMeter.Mark(int64(len(blob)))
 	}
 
@@ -292,7 +392,7 @@ func (dl *diskLayer) resetCache() {
 		return
 	}
 	if dl.cleans != nil {
-		dl.cleans.Reset()
+		dl.cleans.reset()
 	}
 }
 

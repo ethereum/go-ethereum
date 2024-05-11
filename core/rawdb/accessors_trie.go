@@ -18,6 +18,8 @@ package rawdb
 
 import (
 	"fmt"
+	"math/big"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -92,6 +94,58 @@ func DeleteAccountTrieNode(db ethdb.KeyValueWriter, path []byte) {
 	if err := db.Delete(accountTrieNodeKey(path)); err != nil {
 		log.Crit("Failed to delete account trie node", "err", err)
 	}
+}
+
+func EncodeNibbles(bytes []byte) []byte {
+	nibbles := make([]byte, len(bytes)*2)
+	for i, b := range bytes {
+		nibbles[i*2] = b >> 4     // 取字节高4位
+		nibbles[i*2+1] = b & 0x0F // 取字节低4位
+	}
+	return nibbles
+}
+
+func ReadAccountFromTrieDirectly(db ethdb.Database, key []byte) ([]byte, []byte, common.Hash) {
+	it := db.NewIterator(TrieNodeAccountPrefix, []byte(""))
+	defer it.Release()
+
+	if it.Seek(accountTrieNodeKey(EncodeNibbles(key))) && it.Error() == nil {
+		dbKey := common.CopyBytes(it.Key())
+		if strings.HasPrefix(string(accountTrieNodeKey(EncodeNibbles(key))), string(dbKey)) {
+			data := common.CopyBytes(it.Value())
+			return data, dbKey[1:], common.Hash{}
+		} else {
+			log.Debug("ReadAccountFromTrieDirectly", "dbKey", common.Bytes2Hex(dbKey), "target key", common.Bytes2Hex(accountTrieNodeKey(EncodeNibbles(key))))
+		}
+	} else {
+		log.Error("ReadAccountFromTrieDirectly", "iterater error", it.Error())
+	}
+	return nil, nil, common.Hash{}
+}
+
+func ReadStorageFromTrieDirectly(db ethdb.Database, accountHash common.Hash, key []byte) ([]byte, []byte, common.Hash) {
+	it := db.NewIterator(append(TrieNodeStoragePrefix, accountHash.Bytes()...), []byte(""))
+	defer it.Release()
+
+	if it.Seek(storageTrieNodeKey(accountHash, EncodeNibbles(key))) && it.Error() == nil {
+		dbKey := common.CopyBytes(it.Key())
+		if strings.HasPrefix(string(storageTrieNodeKey(accountHash, EncodeNibbles(key))), string(dbKey)) {
+			data := common.CopyBytes(it.Value())
+			return data, dbKey[1:], common.Hash{}
+		}
+	}
+	return nil, nil, common.Hash{}
+}
+
+func DeleteStorageTrie(db ethdb.KeyValueWriter, accountHash common.Hash) {
+	nextAccountHash := common.BigToHash(accountHash.Big().Add(accountHash.Big(), big.NewInt(1)))
+	if err := db.DeleteRange(storageTrieNodeKey(accountHash, nil), storageTrieNodeKey(nextAccountHash, nil)); err != nil {
+		log.Crit("Failed to delete storage trie", "err", err)
+	}
+}
+
+func IterateStorageTrieNodes(db ethdb.Iteratee, accountHash common.Hash) ethdb.Iterator {
+	return db.NewIterator(storageTrieNodeKey(accountHash, nil), nil)
 }
 
 // ReadStorageTrieNode retrieves the storage trie node with the specified node path.

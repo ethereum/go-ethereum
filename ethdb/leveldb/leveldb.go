@@ -84,6 +84,11 @@ type Database struct {
 	log log.Logger // Contextual logger tracking the database path
 }
 
+func (db *Database) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // New returns a wrapped LevelDB object. The namespace is the prefix that the
 // metrics reporting should use for surfacing internal stats.
 func New(file string, cache int, handles int, namespace string, readonly bool) (*Database, error) {
@@ -391,6 +396,11 @@ type batch struct {
 	db   *leveldb.DB
 	b    *leveldb.Batch
 	size int
+}
+
+func (b *batch) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
 }
 
 // Put inserts the given value into the batch for later committing.

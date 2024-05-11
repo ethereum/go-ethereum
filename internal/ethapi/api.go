@@ -694,6 +694,11 @@ type StorageResult struct {
 // hex-strings for delivery to rpc-caller.
 type proofList []string
 
+func (n *proofList) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (n *proofList) Put(key []byte, value []byte) error {
 	*n = append(*n, hexutil.Encode(value))
 	return nil

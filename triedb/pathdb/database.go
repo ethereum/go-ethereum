@@ -67,6 +67,13 @@ type layer interface {
 	// Note, no error will be returned if the requested node is not found in database.
 	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error)
 
+	// Account directly retrieves the account data associated with a particular hash
+	Account(hash common.Hash) ([]byte, error)
+
+	// Storage directly retrieves the storage data associated with a particular hash,
+	// within a particular account.
+	Storage(accountHash, storageHash common.Hash) ([]byte, error)
+
 	// rootHash returns the root hash for which this layer was made.
 	rootHash() common.Hash
 
