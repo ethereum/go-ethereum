@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 	"golang.org/x/sync/errgroup"
 )
@@ -1327,7 +1328,10 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	if rules.IsBerlin {
+	if rules.IsEIP2929 && rules.IsEIP4762 {
+		panic("eip2929 and eip4762 are both activated")
+	}
+	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
 		s.accessList = al
@@ -1438,4 +1442,8 @@ func (s *StateDB) markUpdate(addr common.Address) {
 	}
 	s.mutations[addr].applied = false
 	s.mutations[addr].typ = update
+}
+
+func (s *StateDB) PointCache() *utils.PointCache {
+	return s.db.PointCache()
 }
