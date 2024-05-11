@@ -311,7 +311,7 @@ func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]
 	var args []reflect.Value
 	tok, err := dec.Token()
 	switch {
-	case err == io.EOF || tok == nil && err == nil:
+	case errors.Is(err, io.EOF) || tok == nil && err == nil:
 		// "params" is optional and may be empty. Also allow "params":null even though it's
 		// not in the spec because our own client used to send it.
 	case err != nil:

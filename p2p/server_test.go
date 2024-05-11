@@ -355,11 +355,11 @@ func TestServerPeerLimits(t *testing.T) {
 	// Check that server allows a trusted peer despite being full.
 	conn, _ = net.Pipe()
 	srv.SetupConn(conn, flags, dialDest)
-	if tp.closeErr == DiscTooManyPeers {
+	if errors.Is(tp.closeErr, DiscTooManyPeers) {
 		t.Errorf("failed to bypass MaxPeers with trusted node: %q", tp.closeErr)
 	}
 
-	if tp.closeErr != DiscUselessPeer {
+	if !errors.Is(tp.closeErr, DiscUselessPeer) {
 		t.Errorf("unexpected close error: %q", tp.closeErr)
 	}
 	conn.Close()
