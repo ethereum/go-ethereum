@@ -642,6 +642,14 @@ type reader struct {
 	db *Database
 }
 
+func (reader reader) Account(hash common.Hash) ([]byte, error) {
+	panic("Not Supported")
+}
+
+func (reader reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	panic("Not Supported")
+}
+
 // Node retrieves the trie node with the given node hash. No error will be
 // returned if the node is not found.
 func (reader *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {

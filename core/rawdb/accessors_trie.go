@@ -99,8 +99,8 @@ func DeleteAccountTrieNode(db ethdb.KeyValueWriter, path []byte) {
 func EncodeNibbles(bytes []byte) []byte {
 	nibbles := make([]byte, len(bytes)*2)
 	for i, b := range bytes {
-		nibbles[i*2] = b >> 4     // 取字节高4位
-		nibbles[i*2+1] = b & 0x0F // 取字节低4位
+		nibbles[i*2] = b >> 4
+		nibbles[i*2+1] = b & 0x0F
 	}
 	return nibbles
 }

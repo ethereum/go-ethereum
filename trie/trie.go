@@ -153,6 +153,17 @@ func (t *Trie) Get(key []byte) ([]byte, error) {
 	return value, err
 }
 
+func (t *Trie) GetDirectly(key []byte) ([]byte, error) {
+	if t.reader.reader == nil {
+		return nil, nil
+	}
+	if t.owner == (common.Hash{}) {
+		return t.reader.reader.Account(common.BytesToHash(key))
+	} else {
+		return t.reader.reader.Storage(t.owner, common.BytesToHash(key))
+	}
+}
+
 func (t *Trie) get(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
 	switch n := (origNode).(type) {
 	case nil:

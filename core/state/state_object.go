@@ -202,7 +202,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			s.db.setError(err)
 			return common.Hash{}
 		}
-		val, err := tr.GetStorage(s.address, key.Bytes())
+		val, err := tr.GetStorage(s.address, key.Bytes(), true)
 		s.db.StorageReads += time.Since(start)
 
 		if err != nil {
