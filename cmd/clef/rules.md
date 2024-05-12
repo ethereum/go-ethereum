@@ -214,14 +214,15 @@ function OnApprovedTx(resp) {
 ## Example 2: allow destination
 
 ```js
-function ApproveTx(r) {
-	if (r.transaction.from.toLowerCase() == "0x0000000000000000000000000000000000001337") {
-		return "Approve"
-	}
-	if (r.transaction.from.toLowerCase() == "0x000000000000000000000000000000000000dead") {
-		return "Reject"
-	}
-	// Otherwise goes to manual processing
+function ApproveTx(request) {
+    const sender = request.transaction.from.toLowerCase();
+    if (sender === "0x0000000000000000000000000000000000001337") {
+        return "Approve";
+    }
+    if (sender === "0x000000000000000000000000000000000000dead") {
+        return "Reject";
+    }
+    return "Manual Review";  // Explicit return for clarity
 }
 ```
 
