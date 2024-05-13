@@ -459,7 +459,6 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 	if shanghai {
 		engine = beacon.NewFaker()
 		chainCfg := gspec.Config
-		chainCfg.TerminalTotalDifficultyPassed = true
 		chainCfg.TerminalTotalDifficulty = common.Big0
 		// GenerateChain will increment timestamps by 10.
 		// Shanghai upgrade at block 1.

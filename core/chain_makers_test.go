@@ -58,7 +58,6 @@ func TestGeneratePOSChain(t *testing.T) {
 		db    = rawdb.NewMemoryDatabase()
 	)
 
-	config.TerminalTotalDifficultyPassed = true
 	config.TerminalTotalDifficulty = common.Big0
 	config.ShanghaiTime = u64(0)
 	config.CancunTime = u64(0)

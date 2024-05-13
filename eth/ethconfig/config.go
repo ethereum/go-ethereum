@@ -18,7 +18,6 @@
 package ethconfig
 
 import (
-	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -169,11 +168,6 @@ type Config struct {
 // Clique is allowed for now to live standalone, but ethash is forbidden and can
 // only exist on already merged networks.
 func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (consensus.Engine, error) {
-	// Geth v1.14.0 dropped support for non-merged networks in any consensus
-	// mode. If such a network is requested, reject startup.
-	if !config.TerminalTotalDifficultyPassed {
-		return nil, errors.New("only PoS networks are supported, please transition old ones with Geth v1.13.x")
-	}
 	// Wrap previously supported consensus engines into their post-merge counterpart
 	if config.Clique != nil {
 		return beacon.New(clique.New(config.Clique, db)), nil

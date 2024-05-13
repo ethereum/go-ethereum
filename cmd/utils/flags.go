@@ -1871,9 +1871,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 				if err != nil {
 					Fatalf("Could not read genesis from database: %v", err)
 				}
-				if !genesis.Config.TerminalTotalDifficultyPassed {
-					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficultyPassed must be true in developer mode")
-				}
 				if genesis.Config.TerminalTotalDifficulty == nil {
 					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficulty must be specified.")
 				}
