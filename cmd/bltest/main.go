@@ -128,7 +128,7 @@ loop:
 			} else {
 				log.Error("BlockByHash", "hash", head.ParentHash, "error", err)
 			}
-			num := big.NewInt(2)
+			num := big.NewInt(10)
 			num.Sub(head.Number, num)
 			if block, err := client.BlockByNumber(ctx, num); err == nil {
 				log.Info("BlockByNumber", "number", num, "block.Hash", block.Hash(), "block.Number", block.Number(), "len(block.Transactions)", len(block.Transactions()))

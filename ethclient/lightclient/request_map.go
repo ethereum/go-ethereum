@@ -52,6 +52,7 @@ func (rm *requestMap[K, V]) request(key K) *mappedRequest[K, V] {
 		deliveredCh: make(chan struct{}),
 		cancelFn:    cancelFn,
 	}
+	rm.requests[key] = r
 	if rm.requestFn != nil {
 		go func() {
 			result, err := rm.requestFn(ctx, key)
@@ -67,6 +68,17 @@ func (rm *requestMap[K, V]) has(key K) bool {
 
 	_, ok := rm.requests[key]
 	return ok
+}
+
+func (rm *requestMap[K, V]) allKeys() []K {
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	keys := make([]K, 0, len(rm.requests))
+	for key := range rm.requests {
+		keys = append(keys, key)
+	}
+	return keys
 }
 
 // should only be called with validated results of successful requests

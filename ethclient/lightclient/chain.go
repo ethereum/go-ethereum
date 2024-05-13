@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/beacon/light"
@@ -43,20 +44,24 @@ type canonicalChain struct {
 	newHeadCb        func(common.Hash)
 
 	head, finality *btypes.ExecutionHeader
-	recent         map[uint64]common.Hash           // nil until initialized
-	recentTail     uint64                           // if recent != nil then recent hashes are available from recentTail to head
+	recent         map[uint64]common.Hash // nil until initialized
+	recentTail     uint64                 // if recent != nil then recent hashes are available from recentTail to head
+	tailFetchCh    chan struct{}
 	finalized      *lru.Cache[uint64, common.Hash]  // finalized but not recent hashes
 	requests       *requestMap[uint64, common.Hash] // requested; neither recent nor finalized
 }
 
 func newCanonicalChain(headTracker *light.HeadTracker, blocksAndHeaders *blocksAndHeaders, newHeadCb func(common.Hash)) *canonicalChain {
-	return &canonicalChain{
+	c := &canonicalChain{
 		headTracker:      headTracker,
 		blocksAndHeaders: blocksAndHeaders,
 		newHeadCb:        newHeadCb,
 		finalized:        lru.NewCache[uint64, common.Hash](10000),
 		requests:         newRequestMap[uint64, common.Hash](nil),
+		tailFetchCh:      make(chan struct{}),
 	}
+	go c.tailFetcher()
+	return c
 }
 
 // Process implements request.Module in order to get notified about new heads.
@@ -75,6 +80,36 @@ func (c *canonicalChain) Process(requester request.Requester, events []request.E
 	}
 }
 
+func (c *canonicalChain) tailFetcher() { //TODO stop
+	for {
+		c.lock.Lock()
+		var (
+			tailNum  uint64
+			tailHash common.Hash
+		)
+		if c.recent != nil {
+			tailNum, tailHash = c.recentTail, c.recent[c.recentTail]
+		}
+		needTail := tailNum
+		for _, reqNum := range c.requests.allKeys() {
+			if reqNum < needTail {
+				needTail = reqNum
+			}
+		}
+		c.lock.Unlock()
+		if needTail < tailNum { //TODO check recentCanonicalLength
+			log.Debug("Fetching tail headers", "have", tailNum, "need", needTail)
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+			//TODO parallel fetch by number
+			if header, err := c.blocksAndHeaders.getHeader(ctx, tailHash); err == nil {
+				c.addRecentTail(header)
+			}
+		} else {
+			<-c.tailFetchCh
+		}
+	}
+}
+
 func (c *canonicalChain) getHash(ctx context.Context, number uint64) (common.Hash, error) {
 	c.lock.Lock()
 	if hash, ok := c.recent[number]; ok {
@@ -87,6 +122,11 @@ func (c *canonicalChain) getHash(ctx context.Context, number uint64) (common.Has
 	}
 	req := c.requests.request(number)
 	c.lock.Unlock()
+	select {
+	case c.tailFetchCh <- struct{}{}:
+	default:
+	}
+	defer req.release()
 	return req.getResult(ctx)
 }
 
@@ -98,7 +138,7 @@ func (c *canonicalChain) setHead(head *btypes.ExecutionHeader) bool {
 	if c.head != nil && c.head.BlockHash() == headHash {
 		return false
 	}
-	if c.recent == nil || c.head == nil || c.head.BlockNumber()+1 != headNum || headHash != head.ParentHash() {
+	if c.recent == nil || c.head == nil || c.head.BlockNumber()+1 != headNum || c.head.BlockHash() != head.ParentHash() {
 		c.recent = make(map[uint64]common.Hash)
 		if headNum > 0 {
 			c.recent[headNum-1] = head.ParentHash()
@@ -117,6 +157,7 @@ func (c *canonicalChain) setHead(head *btypes.ExecutionHeader) bool {
 		c.recentTail++
 	}
 	c.requests.tryDeliver(headNum, headHash)
+	log.Debug("SetHead", "recentTail", c.recentTail, "head", headNum)
 	return true
 }
 
@@ -186,12 +227,12 @@ func (c *canonicalChain) resolveBlockNumber(number *big.Int) (uint64, *btypes.Ex
 }
 
 func (c *canonicalChain) blockNumberToHash(ctx context.Context, number *big.Int) (common.Hash, error) {
-	num, header, err := c.resolveBlockNumber(number)
+	num, pheader, err := c.resolveBlockNumber(number)
 	if err != nil {
 		return common.Hash{}, err
 	}
-	if header != nil {
-		return header.BlockHash(), nil
+	if pheader != nil {
+		return pheader.BlockHash(), nil
 	}
 	return c.getHash(ctx, num)
 }
