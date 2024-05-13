@@ -23,7 +23,7 @@ require (
 	github.com/dop251/goja v0.0.0-20230605162241-28ee0ee714f3
 	github.com/ethereum/c-kzg-4844 v1.0.0
 	github.com/ethereum/go-verkle v0.1.1-0.20240306133620-7d920df305f0
-	github.com/fatih/color v1.13.0
+	github.com/fatih/color v1.16.0
 	github.com/ferranbt/fastssz v0.1.2
 	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
 	github.com/fjl/memsize v0.0.2
@@ -51,7 +51,7 @@ require (
 	github.com/kilic/bls12-381 v0.1.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mattn/go-colorable v0.1.13
-	github.com/mattn/go-isatty v0.0.17
+	github.com/mattn/go-isatty v0.0.20
 	github.com/naoina/toml v0.1.2-0.20170918210437-9fafd6967416
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
