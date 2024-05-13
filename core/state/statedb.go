@@ -875,9 +875,12 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
+	//
+	// Don't check prefetcher if verkle Trie has been used. In the context of verkle,
+	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
+	// here could result in losing uncommitted changes from storage.
 	start = time.Now()
-
-	if s.prefetcher != nil {
+	if s.prefetcher != nil && (s.trie == nil || !s.trie.IsVerkle()) {
 		if trie, err := s.prefetcher.trie(common.Hash{}, s.originalRoot); err != nil {
 			log.Error("Failed to retrieve account pre-fetcher trie", "err", err)
 		} else if trie != nil {
