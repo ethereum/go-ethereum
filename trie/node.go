@@ -231,6 +231,23 @@ func decodeRef(buf []byte) (node, []byte, error) {
 	}
 }
 
+// DecodeLeafNode return the Key and Val part of the shorNode
+func DecodeLeafNode(hash, path, value []byte) ([]byte, []byte) {
+	n := mustDecodeNode(hash, value)
+	switch sn := n.(type) {
+	case *shortNode:
+		if val, ok := sn.Val.(valueNode); ok {
+			// remove the prefix key of path
+			key := append(path, sn.Key...)
+			if hasTerm(key) {
+				key = key[:len(key)-1]
+			}
+			return val, hexToKeybytes(append(path, sn.Key...))
+		}
+	}
+	return nil, nil
+}
+
 // wraps a decoding error with information about the path to the
 // invalid child node (for debugging encoding issues).
 type decodeError struct {

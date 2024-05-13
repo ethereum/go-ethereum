@@ -51,6 +51,11 @@ type stateBloom struct {
 	bloom *bloomfilter.Filter
 }
 
+func (bloom *stateBloom) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // newStateBloomWithSize creates a brand new state bloom for state generation.
 // The bloom filter will be created by the passing bloom filter size. According
 // to the https://hur.st/bloomfilter/?n=600000000&p=&m=2048MB&k=4, the parameters

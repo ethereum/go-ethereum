@@ -447,9 +447,9 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 		if !ok || n.IsDeleted() {
 			return errors.New("expect new node")
 		}
-		//if len(n.Prev) > 0 {
+		// if len(n.Prev) > 0 {
 		//	return errors.New("unexpected origin value")
-		//}
+		// }
 	}
 	// Check deletion set
 	for path := range deletes {
@@ -457,12 +457,12 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 		if !ok || !n.IsDeleted() {
 			return errors.New("expect deleted node")
 		}
-		//if len(n.Prev) == 0 {
+		// if len(n.Prev) == 0 {
 		//	return errors.New("expect origin value")
-		//}
-		//if !bytes.Equal(n.Prev, blob) {
+		// }
+		// if !bytes.Equal(n.Prev, blob) {
 		//	return errors.New("invalid origin value")
-		//}
+		// }
 	}
 	// Check update set
 	for path := range updates {
@@ -470,12 +470,12 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 		if !ok || n.IsDeleted() {
 			return errors.New("expect updated node")
 		}
-		//if len(n.Prev) == 0 {
+		// if len(n.Prev) == 0 {
 		//	return errors.New("expect origin value")
-		//}
-		//if !bytes.Equal(n.Prev, blob) {
+		// }
+		// if !bytes.Equal(n.Prev, blob) {
 		//	return errors.New("invalid origin value")
-		//}
+		// }
 	}
 	return nil
 }
@@ -696,7 +696,7 @@ func BenchmarkHash(b *testing.B) {
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
-	//trie.hashRoot(nil, nil)
+	// trie.hashRoot(nil, nil)
 	trie.Hash()
 }
 
@@ -793,7 +793,7 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		)
 		// The big.Rand function is not deterministic with regards to 64 vs 32 bit systems,
 		// and will consume different amount of data from the rand source.
-		//balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
+		// balance = new(big.Int).Rand(random, new(big.Int).Exp(common.Big2, common.Big256, nil))
 		// Therefore, we instead just read via byte buffer
 		numBytes := random.Uint32() % 33 // [0, 32] bytes
 		balanceBytes := make([]byte, numBytes)
@@ -812,6 +812,11 @@ type spongeDb struct {
 	journal []string
 	keys    []string
 	values  map[string]string
+}
+
+func (s *spongeDb) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (s *spongeDb) Has(key []byte) (bool, error)             { panic("implement me") }
@@ -859,6 +864,11 @@ func (s *spongeDb) Flush() {
 // spongeBatch is a dummy batch which immediately writes to the underlying spongedb
 type spongeBatch struct {
 	db *spongeDb
+}
+
+func (b *spongeBatch) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (b *spongeBatch) Put(key, value []byte) error {

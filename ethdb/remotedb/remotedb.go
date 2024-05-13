@@ -32,6 +32,11 @@ type Database struct {
 	remote *rpc.Client
 }
 
+func (db *Database) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (db *Database) Has(key []byte) (bool, error) {
 	if _, err := db.Get(key); err != nil {
 		return false, nil

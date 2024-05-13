@@ -17,14 +17,94 @@
 package pathdb
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math"
+	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
+
+var (
+	// aggregatorMemoryLimit is the maximum size of the bottom-most diff layer
+	// that aggregates the writes from above until it's flushed into the disk
+	// layer.
+	//
+	// Note, bumping this up might drastically increase the size of the bloom
+	// filters that's stored in every diff layer. Don't do that without fully
+	// understanding all the implications.
+	aggregatorMemoryLimit = uint64(4 * 1024 * 1024)
+
+	// aggregatorItemLimit is an approximate number of items that will end up
+	// in the aggregator layer before it's flushed out to disk. A plain account
+	// weighs around 14B (+hash), a storage slot 32B (+hash), a deleted slot
+	// 0B (+hash). Slots are mostly set/unset in lockstep, so that average at
+	// 16B (+hash). All in all, the average entry seems to be 15+32=47B. Use a
+	// smaller number to be on the safe side.
+	aggregatorItemLimit = aggregatorMemoryLimit / 42
+	// bloomTargetError is the target false positive rate when the aggregator
+	// layer is at its fullest. The actual value will probably move around up
+	// and down from this number, it's mostly a ballpark figure.
+	//
+	// Note, dropping this down might drastically increase the size of the bloom
+	// filters that's stored in every diff layer. Don't do that without fully
+	// understanding all the implications.
+	bloomTargetError = 0.02
+
+	// bloomSize is the ideal bloom filter size given the maximum number of items
+	// it's expected to hold and the target false positive error rate.
+	bloomSize = math.Ceil(float64(aggregatorItemLimit) * math.Log(bloomTargetError) / math.Log(1/math.Pow(2, math.Log(2))))
+
+	// bloomFuncs is the ideal number of bits a single entry should set in the
+	// bloom filter to keep its size to a minimum (given it's size and maximum
+	// entry count).
+	bloomFuncs = math.Round((bloomSize / float64(aggregatorItemLimit)) * math.Log(2))
+
+	// the bloom offsets are runtime constants which determines which part of the
+	// account/storage hash the hasher functions looks at, to determine the
+	// bloom key for an account/slot. This is randomized at init(), so that the
+	// global population of nodes do not all display the exact same behaviour with
+	// regards to bloom content
+	bloomDestructHasherOffset = 0
+	bloomAccountHasherOffset  = 0
+	bloomStorageHasherOffset  = 0
+)
+
+func init() {
+	// Init the bloom offsets in the range [0:24] (requires 8 bytes)
+	bloomDestructHasherOffset = rand.Intn(25)
+	bloomAccountHasherOffset = rand.Intn(25)
+	bloomStorageHasherOffset = rand.Intn(25)
+
+	// The destruct and account blooms must be different, as the storage slots
+	// will check for destruction too for every bloom miss. It should not collide
+	// with modified accounts.
+	for bloomAccountHasherOffset == bloomDestructHasherOffset {
+		bloomAccountHasherOffset = rand.Intn(25)
+	}
+}
+
+// destructBloomHash is used to convert a destruct event into a 64 bit mini hash.
+func destructBloomHash(h common.Hash) uint64 {
+	return binary.BigEndian.Uint64(h[bloomDestructHasherOffset : bloomDestructHasherOffset+8])
+}
+
+// accountBloomHash is used to convert an account hash into a 64 bit mini hash.
+func accountBloomHash(h common.Hash) uint64 {
+	return binary.BigEndian.Uint64(h[bloomAccountHasherOffset : bloomAccountHasherOffset+8])
+}
+
+// storageBloomHash is used to convert an account hash and a storage hash into a 64 bit mini hash.
+func storageBloomHash(h0, h1 common.Hash) uint64 {
+	return binary.BigEndian.Uint64(h0[bloomStorageHasherOffset:bloomStorageHasherOffset+8]) ^
+		binary.BigEndian.Uint64(h1[bloomStorageHasherOffset:bloomStorageHasherOffset+8])
+}
 
 // diffLayer represents a collection of modifications made to the in-memory tries
 // along with associated state changes after running a block on top.
@@ -42,6 +122,10 @@ type diffLayer struct {
 
 	parent layer        // Parent layer modified by this one, never nil, **can be changed**
 	lock   sync.RWMutex // Lock used to protect parent
+
+	diffed     *bloomfilter.Filter // Bloom filter tracking all the diffed items up to the disk layer
+	selfDiffed *bloomfilter.Filter // Bloom filter tracking all the diffed items of the diff layer
+	origin     *diskLayer          // Base disk layer to directly use on bloom misses
 }
 
 // newDiffLayer creates a new diff layer on top of an existing layer.
@@ -58,6 +142,15 @@ func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes
 		states: states,
 		parent: parent,
 	}
+	switch l := parent.(type) {
+	case *diskLayer:
+		dl.rebloom(l)
+	case *diffLayer:
+		dl.rebloom(l.origin)
+	default:
+		panic("unknown parent type")
+	}
+
 	for _, subset := range nodes {
 		for path, n := range subset {
 			dl.memory += uint64(n.Size() + len(path))
@@ -73,6 +166,61 @@ func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes
 	diffLayerBytesMeter.Mark(int64(dl.memory))
 	log.Debug("Created new diff layer", "id", id, "block", block, "nodes", count, "size", common.StorageSize(dl.memory))
 	return dl
+}
+
+// rebloom discards the layer's current bloom and rebuilds it from scratch based
+// on the parent's and the local diffs.
+func (dl *diffLayer) rebloom(origin *diskLayer) {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	defer func(start time.Time) {
+		bloomIndexTimer.Update(time.Since(start))
+	}(time.Now())
+
+	// Inject the new origin that triggered the rebloom
+	dl.origin = origin
+
+	// Retrieve the parent bloom or create a fresh empty one
+	if parent, ok := dl.parent.(*diffLayer); ok {
+		parent.lock.RLock()
+		dl.diffed, _ = parent.diffed.Copy()
+		parent.lock.RUnlock()
+	} else {
+		if dl.selfDiffed == nil {
+			dl.diffed, _ = bloomfilter.New(uint64(bloomSize), uint64(bloomFuncs))
+		} else {
+			dl.diffed, _ = dl.selfDiffed.NewCompatible()
+		}
+	}
+
+	if dl.selfDiffed == nil {
+		dl.selfDiffed, _ = dl.diffed.NewCompatible()
+		// Iterate over all the accounts and storage slots and index them
+		for h := range dl.states.DestructSet {
+			dl.selfDiffed.AddHash(destructBloomHash(h))
+		}
+		for h := range dl.states.LatestAccounts {
+			dl.selfDiffed.AddHash(accountBloomHash(h))
+		}
+		for accountHash, slots := range dl.states.LatestStorages {
+			for storageHash := range slots {
+				dl.selfDiffed.AddHash(storageBloomHash(accountHash, storageHash))
+			}
+		}
+	}
+	err := dl.diffed.UnionInPlace(dl.selfDiffed)
+	if err != nil {
+		log.Error("diff layer bloom filter failed to union in place", "id", dl.id, "err", err)
+	}
+
+	// Calculate the current false positive rate and update the error rate meter.
+	// This is a bit cheating because subsequent layers will overwrite it, but it
+	// should be fine, we're only interested in ballpark figures.
+	k := float64(dl.diffed.K())
+	n := float64(dl.diffed.N())
+	m := float64(dl.diffed.M())
+	bloomErrorGauge.Update(math.Pow(1.0-math.Exp((-k)*(n+0.5)/(m-1)), k))
 }
 
 // rootHash implements the layer interface, returning the root hash of
@@ -93,6 +241,85 @@ func (dl *diffLayer) parentLayer() layer {
 	defer dl.lock.RUnlock()
 
 	return dl.parent
+}
+
+func (dl *diffLayer) Account(hash common.Hash) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
+	hit := dl.diffed.ContainsHash(accountBloomHash(hash))
+	if !hit {
+		hit = dl.diffed.ContainsHash(destructBloomHash(hash))
+	}
+	var origin *diskLayer
+	if !hit {
+		origin = dl.origin // extract origin while holding the lock
+	}
+	// If the bloom filter misses, don't even bother with traversing the memory
+	// diff layers, reach straight into the bottom persistent disk layer
+	if origin != nil {
+		return origin.Account(hash)
+	}
+
+	return dl.account(hash)
+}
+
+func (dl *diffLayer) account(hash common.Hash) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if data, ok := dl.states.LatestAccounts[hash]; ok {
+		return data, nil
+	}
+
+	if _, ok := dl.states.DestructSet[hash]; ok {
+		return nil, nil
+	}
+
+	if diff, ok := dl.parent.(*diffLayer); ok {
+		return diff.account(hash)
+	}
+	return dl.parent.Account(hash)
+}
+
+func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	hit := dl.diffed.ContainsHash(storageBloomHash(accountHash, storageHash))
+	if !hit {
+		hit = dl.diffed.ContainsHash(destructBloomHash(accountHash))
+	}
+	var origin *diskLayer
+	if !hit {
+		origin = dl.origin // extract origin while holding the lock
+	}
+
+	if origin != nil {
+		return origin.Storage(accountHash, storageHash)
+	}
+	return dl.storage(accountHash, storageHash)
+}
+
+func (dl *diffLayer) storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if storage, ok := dl.states.LatestStorages[accountHash]; ok {
+		if data, ok := storage[storageHash]; ok {
+			return data, nil
+		}
+	}
+
+	if _, ok := dl.states.DestructSet[accountHash]; ok {
+		return nil, nil
+	}
+	// Storage slot unknown to this diff, resolve from parent
+	if diff, ok := dl.parent.(*diffLayer); ok {
+		return diff.storage(accountHash, storageHash)
+	}
+	return dl.parent.Storage(accountHash, storageHash)
 }
 
 // node implements the layer interface, retrieving the trie node blob with the

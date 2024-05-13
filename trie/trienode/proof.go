@@ -36,6 +36,11 @@ type ProofSet struct {
 	lock     sync.RWMutex
 }
 
+func (db *ProofSet) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // NewProofSet creates an empty node set
 func NewProofSet() *ProofSet {
 	return &ProofSet{

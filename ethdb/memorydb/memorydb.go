@@ -49,6 +49,11 @@ type Database struct {
 	lock sync.RWMutex
 }
 
+func (db *Database) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // New returns a wrapped map with all the required database interface methods
 // implemented.
 func New() *Database {
@@ -220,6 +225,11 @@ type batch struct {
 	size   int
 }
 
+func (b *batch) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.writes = append(b.writes, keyvalue{string(key), common.CopyBytes(value), false})
@@ -286,6 +296,11 @@ type iterator struct {
 	index  int
 	keys   []string
 	values [][]byte
+}
+
+func (it *iterator) Seek(key []byte) bool {
+	// TODO implement me
+	panic("implement me")
 }
 
 // Next moves the iterator to the next key/value pair. It returns whether the

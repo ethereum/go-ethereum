@@ -624,7 +624,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if data == nil {
 		start := time.Now()
 		var err error
-		data, err = s.trie.GetAccount(addr)
+		data, err = s.trie.GetAccount(addr, true)
 		s.AccountReads += time.Since(start)
 
 		if err != nil {
@@ -1293,7 +1293,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	}
 	if root != origin {
 		start = time.Now()
-		set := triestate.New(s.accountsOrigin, s.storagesOrigin)
+		set := triestate.New(s.accountsOrigin, s.storagesOrigin, s.mustConvertSlmAccount(s.accounts), s.storages, s.convertAccountSet(s.stateObjectsDestruct))
 		if err := s.db.TrieDB().Update(root, origin, block, nodes, set); err != nil {
 			return common.Hash{}, err
 		}
@@ -1312,6 +1312,18 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 	s.mutations = make(map[common.Address]*mutation)
 	s.stateObjectsDestruct = make(map[common.Address]*types.StateAccount)
 	return root, nil
+}
+
+func (s *StateDB) mustConvertSlmAccount(slmAccounts map[common.Hash][]byte) map[common.Hash][]byte {
+	ret := make(map[common.Hash][]byte)
+	for h, acc := range slmAccounts {
+		fullAccount, err := types.FullAccountRLP(acc)
+		if err != nil {
+			panic(fmt.Sprintf("mustConvertSlmAccount, acc: %v", common.Bytes2Hex(acc)))
+		}
+		ret[h] = fullAccount
+	}
+	return ret
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.

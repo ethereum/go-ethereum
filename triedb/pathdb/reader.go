@@ -52,6 +52,15 @@ type reader struct {
 	noHashCheck bool
 }
 
+func (r *reader) Account(hash common.Hash) ([]byte, error) {
+	return r.layer.Account(hash)
+
+}
+
+func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	return r.layer.Storage(accountHash, storageHash)
+}
+
 // Node implements database.Reader interface, retrieving the node with specified
 // node info. Don't modify the returned byte slice since it's not deep-copied
 // and still be referenced by database.

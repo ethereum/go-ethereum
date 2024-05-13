@@ -493,6 +493,11 @@ type cleaner struct {
 	db *Database
 }
 
+func (c *cleaner) DeleteRange(start, end []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 // Put reacts to database writes and implements dirty data uncaching. This is the
 // post-processing step of a commit operation where the already persisted trie is
 // removed from the dirty cache and moved into the clean cache. The reason behind
@@ -635,6 +640,14 @@ func (db *Database) Reader(root common.Hash) (*reader, error) {
 // reader is a state reader of Database which implements the Reader interface.
 type reader struct {
 	db *Database
+}
+
+func (reader reader) Account(hash common.Hash) ([]byte, error) {
+	panic("Not Supported")
+}
+
+func (reader reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+	panic("Not Supported")
 }
 
 // Node retrieves the trie node with the given node hash. No error will be

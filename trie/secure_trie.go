@@ -86,8 +86,16 @@ func (t *StateTrie) MustGet(key []byte) []byte {
 // and slot key. The value bytes must not be modified by the caller.
 // If the specified storage slot is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
-func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
-	enc, err := t.trie.Get(t.hashKey(key))
+func (t *StateTrie) GetStorage(_ common.Address, key []byte, direct bool) ([]byte, error) {
+	var (
+		enc []byte
+		err error
+	)
+	if direct {
+		enc, err = t.trie.GetDirectly(t.hashKey(key))
+	} else {
+		enc, err = t.trie.Get(t.hashKey(key))
+	}
 	if err != nil || len(enc) == 0 {
 		return nil, err
 	}
@@ -98,8 +106,16 @@ func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 // GetAccount attempts to retrieve an account with provided account address.
 // If the specified account is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.
-func (t *StateTrie) GetAccount(address common.Address) (*types.StateAccount, error) {
-	res, err := t.trie.Get(t.hashKey(address.Bytes()))
+func (t *StateTrie) GetAccount(address common.Address, direct bool) (*types.StateAccount, error) {
+	var (
+		res []byte
+		err error
+	)
+	if direct {
+		res, err = t.trie.GetDirectly(t.hashKey(address.Bytes()))
+	} else {
+		res, err = t.trie.Get(t.hashKey(address.Bytes()))
+	}
 	if res == nil || err != nil {
 		return nil, err
 	}

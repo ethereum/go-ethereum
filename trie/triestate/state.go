@@ -58,16 +58,24 @@ type TrieLoader interface {
 // The value refers to the original content of state before the transition
 // is made. Nil means that the state was not present previously.
 type Set struct {
+	LatestAccounts map[common.Hash][]byte
+	LatestStorages map[common.Hash]map[common.Hash][]byte
+	DestructSet    map[common.Hash]struct{}
+
 	Accounts map[common.Address][]byte                 // Mutated account set, nil means the account was not present
 	Storages map[common.Address]map[common.Hash][]byte // Mutated storage set, nil means the slot was not present
 	size     common.StorageSize                        // Approximate size of set
 }
 
 // New constructs the state set with provided data.
-func New(accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) *Set {
+func New(accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte,
+	latestAccount map[common.Hash][]byte, latestStorages map[common.Hash]map[common.Hash][]byte, destructSet map[common.Hash]struct{}) *Set {
 	return &Set{
-		Accounts: accounts,
-		Storages: storages,
+		Accounts:       accounts,
+		Storages:       storages,
+		LatestAccounts: latestAccount,
+		LatestStorages: latestStorages,
+		DestructSet:    destructSet,
 	}
 }
 
