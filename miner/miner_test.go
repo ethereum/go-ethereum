@@ -18,6 +18,7 @@
 package miner
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -244,7 +245,8 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	// Create Ethash config
 	config := Config{
-		Etherbase: common.HexToAddress("123456789"),
+		Etherbase:      common.HexToAddress("123456789"),
+		MaxAccountsNum: math.MaxInt,
 	}
 	// Create chainConfig
 	memdb := memorydb.New()

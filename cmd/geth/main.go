@@ -131,6 +131,7 @@ var (
 		utils.MinerRecommitIntervalFlag,
 		utils.MinerNoVerifyFlag,
 		utils.MinerStoreSkippedTxTracesFlag,
+		utils.MinerMaxAccountsNumFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,

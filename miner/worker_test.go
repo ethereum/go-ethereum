@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"math"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -70,8 +71,9 @@ var (
 	newTxs     []*types.Transaction
 
 	testConfig = &Config{
-		Recommit: time.Second,
-		GasCeil:  params.GenesisGasLimit,
+		Recommit:       time.Second,
+		GasCeil:        params.GenesisGasLimit,
+		MaxAccountsNum: math.MaxInt,
 	}
 )
 

@@ -537,6 +537,16 @@ func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.
 // transactions and only return those whose **effective** tip is large enough in
 // the next pending execution environment.
 func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transactions {
+	return pool.pendingWithMax(enforceTips, math.MaxInt)
+}
+
+// PendingWithMax works similar to Pending but allows setting an upper limit on how many
+// accounts to return
+func (pool *TxPool) PendingWithMax(enforceTips bool, maxAccountsNum int) map[common.Address]types.Transactions {
+	return pool.pendingWithMax(enforceTips, maxAccountsNum)
+}
+
+func (pool *TxPool) pendingWithMax(enforceTips bool, maxAccountsNum int) map[common.Address]types.Transactions {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -555,6 +565,9 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 		}
 		if len(txs) > 0 {
 			pending[addr] = txs
+			if len(pending) >= maxAccountsNum {
+				break
+			}
 		}
 	}
 	return pending

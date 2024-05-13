@@ -500,6 +500,11 @@ var (
 		Name:  "miner.storeskippedtxtraces",
 		Usage: "Store the wrapped traces when storing a skipped tx",
 	}
+	MinerMaxAccountsNumFlag = cli.IntFlag{
+		Name:  "miner.maxaccountsnum",
+		Usage: "Maximum number of accounts that miner will fetch the pending transactions of when building a new block",
+		Value: math.MaxInt,
+	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
@@ -1518,6 +1523,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 	if ctx.GlobalIsSet(MinerStoreSkippedTxTracesFlag.Name) {
 		cfg.StoreSkippedTxTraces = ctx.GlobalBool(MinerStoreSkippedTxTracesFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerMaxAccountsNumFlag.Name) {
+		cfg.MaxAccountsNum = ctx.GlobalInt(MinerMaxAccountsNumFlag.Name)
 	}
 	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
 		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")

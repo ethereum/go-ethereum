@@ -194,6 +194,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.MinerRecommitIntervalFlag,
 			utils.MinerNoVerifyFlag,
 			utils.MinerStoreSkippedTxTracesFlag,
+			utils.MinerMaxAccountsNumFlag,
 		},
 	},
 	{
