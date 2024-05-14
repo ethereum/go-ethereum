@@ -200,6 +200,8 @@ func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*
 	}
 
 	cfg := new(clientConfig)
+
+	//http1.1 => http2
 	tr := &http.Transport{
 		TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, // İsteğe bağlı, güvenlik önlemleri gerektiğinde uygun şekilde ayarlayın
 		ForceAttemptHTTP2: true,                                  // !!!note: bu kısmı eklersen HTTP/2'yi etkinleştirirsin eklemezsende default olarak http1.1 çalışır
