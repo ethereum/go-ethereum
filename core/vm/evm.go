@@ -530,7 +530,7 @@ func (evm *EVM) CreateWithAddress(caller ContractRef, code []byte, gas uint64, v
 	return evm.create(caller, &codeAndHash{code: code}, gas, value, address, CREATE)
 }
 
-func (evm *EVM) GetDeploymentCode(caller ContractRef, code []byte, gas uint64, value *big.Int, address common.Address) ([]byte, error) {
+func (evm *EVM) GetDeploymentCode(caller ContractRef, code []byte, gas uint64, value *big.Int, address common.Address) ([]byte, uint64, error) {
 	contract := NewContract(caller, AccountRef(address), value, gas)
 	contract.SetCodeOptionalHash(&address, &codeAndHash{code: code})
 
@@ -544,7 +544,23 @@ func (evm *EVM) GetDeploymentCode(caller ContractRef, code []byte, gas uint64, v
 	if err == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
 		err = ErrInvalidCode
 	}
-	return ret, err
+
+	if err == nil {
+		createDataGas := uint64(len(ret)) * params.CreateDataGas
+		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+			err = ErrCodeStoreOutOfGas
+		}
+	}
+
+	// When an error was returned by the EVM or when setting the creation code
+	// above we revert to the snapshot and consume any gas remaining. Additionally,
+	// when we're in homestead this also counts for code storage gas errors.
+	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
+		if err != ErrExecutionReverted {
+			contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
+		}
+	}
+	return ret, contract.Gas, err
 }
 
 // ChainConfig returns the environment's chain configuration
