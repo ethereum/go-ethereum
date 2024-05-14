@@ -18,9 +18,12 @@ package rpc
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"reflect"
@@ -197,6 +200,17 @@ func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*
 	}
 
 	cfg := new(clientConfig)
+	tr := &http.Transport{
+		TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, // İsteğe bağlı, güvenlik önlemleri gerektiğinde uygun şekilde ayarlayın
+		ForceAttemptHTTP2: true,                                  // !!!note: bu kısmı eklersen HTTP/2'yi etkinleştirirsin eklemezsende default olarak http1.1 çalışır
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second, // Bağlantı süresi aşılması durumunda zaman aşımı
+			KeepAlive: 30 * time.Second, // Keep-alive süresi
+			DualStack: true,             // İstemci IPv4/IPv6 desteği
+		}).DialContext,
+	}
+	cfg.httpClient = &http.Client{Transport: tr}
+
 	for _, opt := range options {
 		opt.applyOption(cfg)
 	}
