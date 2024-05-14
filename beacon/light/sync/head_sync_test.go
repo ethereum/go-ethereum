@@ -91,7 +91,7 @@ func TestValidatedHead(t *testing.T) {
 	ts.ServerEvent(EvNewOptimisticUpdate, testServer3, testOptUpdate4)
 	// finality should be requested from both servers
 	ts.Run(4, testServer1, ReqFinality{}, testServer3, ReqFinality{})
-	// future period annonced heads should be queued
+	// future period announced heads should be queued
 	ht.ExpValidated(t, 4, nil)
 
 	chain.SetNextSyncPeriod(2)
