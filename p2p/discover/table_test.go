@@ -63,10 +63,10 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	<-tab.initDone
 
 	// Fill up the sender's bucket.
-	tab.mutex.Lock()
 	replacementNodeKey, _ := crypto.HexToECDSA("45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8")
 	replacementNode := wrapNode(enode.NewV4(&replacementNodeKey.PublicKey, net.IP{127, 0, 0, 1}, 99, 99))
 	last := fillBucket(tab, replacementNode.ID())
+	tab.mutex.Lock()
 	nodeEvents := newNodeEventRecorder(128)
 	tab.nodeAddedHook = nodeEvents.nodeAdded
 	tab.nodeRemovedHook = nodeEvents.nodeRemoved

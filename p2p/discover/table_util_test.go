@@ -104,8 +104,9 @@ func fillBucket(tab *Table, id enode.ID) (last *node) {
 	b := tab.bucket(id)
 	for len(b.entries) < bucketSize {
 		node := nodeAtDistance(tab.self().ID(), ld, intIP(ld))
-		b.entries = append(b.entries, node)
-		tab.nodeAdded(b, node)
+		if !tab.addFoundNode(node) {
+			panic("node not added")
+		}
 	}
 	return b.entries[bucketSize-1]
 }

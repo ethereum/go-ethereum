@@ -79,7 +79,7 @@ type Table struct {
 	refreshReq      chan chan struct{}
 	revalResponseCh chan revalidationResponse
 	addNodeCh       chan addNodeOp
-	addNodeHandled  chan struct{}
+	addNodeHandled  chan bool
 	trackRequestCh  chan trackRequestOp
 	initDone        chan struct{}
 	closeReq        chan struct{}
@@ -128,7 +128,7 @@ func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
 		refreshReq:      make(chan chan struct{}),
 		revalResponseCh: make(chan revalidationResponse),
 		addNodeCh:       make(chan addNodeOp),
-		addNodeHandled:  make(chan struct{}),
+		addNodeHandled:  make(chan bool),
 		trackRequestCh:  make(chan trackRequestOp),
 		initDone:        make(chan struct{}),
 		closeReq:        make(chan struct{}),
@@ -304,12 +304,13 @@ func (tab *Table) len() (n int) {
 // list.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) addFoundNode(n *node) {
+func (tab *Table) addFoundNode(n *node) bool {
 	op := addNodeOp{node: n, isInbound: false}
 	select {
 	case tab.addNodeCh <- op:
-		<-tab.addNodeHandled
+		return <-tab.addNodeHandled
 	case <-tab.closeReq:
+		return false
 	}
 }
 
@@ -321,12 +322,13 @@ func (tab *Table) addFoundNode(n *node) {
 // repeatedly.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) addInboundNode(n *node) {
+func (tab *Table) addInboundNode(n *node) bool {
 	op := addNodeOp{node: n, isInbound: true}
 	select {
 	case tab.addNodeCh <- op:
-		<-tab.addNodeHandled
+		return <-tab.addNodeHandled
 	case <-tab.closeReq:
+		return false
 	}
 }
 
@@ -370,9 +372,9 @@ loop:
 
 		case op := <-tab.addNodeCh:
 			tab.mutex.Lock()
-			tab.handleAddNode(op)
+			ok := tab.handleAddNode(op)
 			tab.mutex.Unlock()
-			tab.addNodeHandled <- struct{}{}
+			tab.addNodeHandled <- ok
 
 		case op := <-tab.trackRequestCh:
 			tab.handleTrackRequest(op)
@@ -495,35 +497,36 @@ func (tab *Table) removeIP(b *bucket, ip net.IP) {
 
 // handleAddNode adds the node in the request to the table, if there is space.
 // The caller must hold tab.mutex.
-func (tab *Table) handleAddNode(req addNodeOp) {
+func (tab *Table) handleAddNode(req addNodeOp) bool {
 	if req.node.ID() == tab.self().ID() {
-		return
+		return false
 	}
 	// For nodes from inbound contact, there is an additional safety measure: if the table
 	// is still initializing the node is not added.
 	if req.isInbound && !tab.isInitDone() {
-		return
+		return false
 	}
 
 	b := tab.bucket(req.node.ID())
 	if tab.bumpInBucket(b, req.node.Node) {
 		// Already in bucket, update record.
-		return
+		return false
 	}
 	if len(b.entries) >= bucketSize {
 		// Bucket full, maybe add as replacement.
 		tab.addReplacement(b, req.node)
-		return
+		return false
 	}
 	if !tab.addIP(b, req.node.IP()) {
 		// Can't add: IP limit reached.
-		return
+		return false
 	}
 
 	// Add to bucket.
 	b.entries = append(b.entries, req.node)
 	b.replacements = deleteNode(b.replacements, req.node)
 	tab.nodeAdded(b, req.node)
+	return true
 }
 
 // addReplacement adds n to the replacement cache of bucket b.
@@ -573,7 +576,7 @@ func (tab *Table) nodeRemoved(b *bucket, n *node) {
 func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
 	index := slices.IndexFunc(b.entries, func(e *node) bool { return e.ID() == id })
 	if index == -1 {
-		// Entry has been removed already, don't replace it.
+		// Entry has been removed already.
 		return nil
 	}
 
