@@ -19,6 +19,7 @@ package state
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -68,7 +69,7 @@ func newJournal() *journal {
 func (j *journal) Reset() {
 	j.entries = j.entries[:0]
 	j.validRevisions = j.validRevisions[:0]
-	j.dirties = make(map[common.Address]int)
+	clear(j.dirties)
 	j.nextRevisionId = 0
 }
 
@@ -140,8 +141,10 @@ func (j *journal) copy() *journal {
 		entries = append(entries, j.entries[i].copy())
 	}
 	return &journal{
-		entries: entries,
-		dirties: maps.Clone(j.dirties),
+		entries:        entries,
+		dirties:        maps.Clone(j.dirties),
+		validRevisions: slices.Clone(j.validRevisions),
+		nextRevisionId: j.nextRevisionId,
 	}
 }
 
