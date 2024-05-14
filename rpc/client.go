@@ -203,12 +203,12 @@ func DialOptions(ctx context.Context, rawurl string, options ...ClientOption) (*
 
 	//http1.1 => http2
 	tr := &http.Transport{
-		TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, // İsteğe bağlı, güvenlik önlemleri gerektiğinde uygun şekilde ayarlayın
-		ForceAttemptHTTP2: true,                                  // !!!note: bu kısmı eklersen HTTP/2'yi etkinleştirirsin eklemezsende default olarak http1.1 çalışır
+		TLSClientConfig:   &tls.Config{InsecureSkipVerify: true}, // Optional, adjust security measures when necessary
+		ForceAttemptHTTP2: true,                                  // !!!note: Including this enables HTTP/2, omitting defaults to HTTP/1.1
 		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second, // Bağlantı süresi aşılması durumunda zaman aşımı
-			KeepAlive: 30 * time.Second, // Keep-alive süresi
-			DualStack: true,             // İstemci IPv4/IPv6 desteği
+			Timeout:   30 * time.Second, // Connection timeout in case of exceeding the time
+			KeepAlive: 30 * time.Second, // Keep-alive time
+			DualStack: true,             // Client IPv4/IPv6 support
 		}).DialContext,
 	}
 	cfg.httpClient = &http.Client{Transport: tr}
