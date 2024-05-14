@@ -76,12 +76,6 @@ func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mcloc
 		tr.slow.schedule(now, &tab.rand)
 	}
 
-	if tr.fast.nextTime == never {
-		return tr.slow.nextTime
-	}
-	if tr.slow.nextTime == never {
-		return tr.fast.nextTime
-	}
 	return min(tr.fast.nextTime, tr.slow.nextTime)
 }
 
