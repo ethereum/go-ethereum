@@ -137,8 +137,7 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, addr string) err
 		Addr:    addr,
 		Handler: server,
 	}
-	httpServer.ListenAndServe()
-	return nil
+	return httpServer.ListenAndServe()
 }
 
 func initDiscV5(config Config, conn discover.UDPConn) (*discover.UDPv5, *enode.LocalNode, error) {

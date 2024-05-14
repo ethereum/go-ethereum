@@ -406,7 +406,7 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 
 	if err != nil {
-		p.Log.Error("ping error:", err)
+		p.Log.Error("ping error:", "ip", node.IP().String(), "port", node.UDP(), "err", err)
 		p.replaceNode(node)
 		return nil, err
 	}
@@ -439,7 +439,7 @@ func (p *PortalProtocol) findNodes(node *enode.Node, distances []uint) ([]*enode
 
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 	if err != nil {
-		p.Log.Error("failed to send find nodes request", "err", err)
+		p.Log.Error("failed to send find nodes request", "ip", node.IP().String(), "port", node.UDP(), "err", err)
 		return nil, err
 	}
 
@@ -464,7 +464,7 @@ func (p *PortalProtocol) findContent(node *enode.Node, contentKey []byte) (byte,
 
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 	if err != nil {
-		p.Log.Error("failed to send find content request", "err", err)
+		p.Log.Error("failed to send find content request", "ip", node.IP().String(), "port", node.UDP(), "err", err)
 		return 0xff, nil, err
 	}
 

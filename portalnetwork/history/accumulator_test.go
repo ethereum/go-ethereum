@@ -92,6 +92,11 @@ func TestVerifyPostMergePreCapellaHeader(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, uint64(len(acc.HistoricalRoots)) < uint64(configs.Mainnet.HISTORICAL_ROOTS_LIMIT))
 
+	root := acc.HistoricalRoots.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
+	hexutil.Encode(root[:])
+
+	require.Equal(t, hexutil.Encode(root[:]), "0x4df6b89755125d4f6c5575039a04e22301a5a49ee893c1d27e559e3eeab73da7")
+
 	file, err := os.ReadFile("./testdata/block_proofs_bellatrix/beacon_block_proof-15539558-cdf9ed89b0c43cda17398dc4da9cfc505e5ccd19f7c39e3b43474180f1051e01.yaml")
 	require.NoError(t, err)
 	proof := HistoricalRootsBlockProof{}
