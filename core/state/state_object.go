@@ -150,11 +150,11 @@ func (s *stateObject) getTrie() (Trie, error) {
 // trie in the state object. The caller might want to do that, but it's cleaner
 // to break the hidden interdependency between retrieving tries from the db or
 // from the prefetcher.
-func (s *stateObject) getPrefetchedTrie() (Trie, error) {
+func (s *stateObject) getPrefetchedTrie() Trie {
 	// If there's nothing to meaningfully return, let the user figure it out by
 	// pulling the trie from disk.
 	if s.data.Root == types.EmptyRootHash || s.db.prefetcher == nil {
-		return nil, nil
+		return nil
 	}
 	// Attempt to retrieve the trie from the pretecher
 	return s.db.prefetcher.trie(s.addrHash, s.data.Root)
@@ -313,25 +313,19 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		return s.trie, nil
 	}
 	// Retrieve a pretecher populated trie, or fall back to the database
-	tr, err := s.getPrefetchedTrie()
-	switch {
-	case err != nil:
-		// Fetcher retrieval failed, something's very wrong, abort
-		s.db.setError(err)
-		return nil, err
-
-	case tr == nil:
+	tr := s.getPrefetchedTrie()
+	if tr == nil {
 		// Fetcher not running or empty trie, fallback to the database trie
-		tr, err = s.getTrie()
+		_, err := s.getTrie()
 		if err != nil {
 			s.db.setError(err)
 			return nil, err
 		}
-
-	default:
+	} else {
 		// Prefetcher returned a live trie, swap it out for the current one
 		s.trie = tr
 	}
+
 	// The snapshot storage map for the object
 	var (
 		storage map[common.Hash][]byte

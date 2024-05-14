@@ -145,16 +145,16 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 // trie returns the trie matching the root hash, blocking until the fetcher of
 // the given trie terminates. If no fetcher exists for the request, nil will be
 // returned.
-func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) (Trie, error) {
+func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// Bail if no trie was prefetched for this root
 	fetcher := p.fetchers[p.trieID(owner, root)]
 	if fetcher == nil {
 		log.Error("Prefetcher missed to load trie", "owner", owner, "root", root)
 		p.deliveryMissMeter.Mark(1)
-		return nil, nil
+		return nil
 	}
 	// Subfetcher exists, retrieve its trie
-	return fetcher.peek(), nil
+	return fetcher.peek()
 }
 
 // used marks a batch of state items used to allow creating statistics as to

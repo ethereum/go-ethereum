@@ -878,9 +878,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	start = time.Now()
 
 	if s.prefetcher != nil {
-		if trie, err := s.prefetcher.trie(common.Hash{}, s.originalRoot); err != nil {
-			log.Error("Failed to retrieve account pre-fetcher trie", "err", err)
-		} else if trie != nil {
+		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
+			log.Error("Failed to retrieve account pre-fetcher trie")
+		} else {
 			s.trie = trie
 		}
 	}
