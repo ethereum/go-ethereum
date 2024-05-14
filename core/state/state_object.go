@@ -315,16 +315,15 @@ func (s *stateObject) updateTrie() (Trie, error) {
 	// Retrieve a pretecher populated trie, or fall back to the database
 	tr := s.getPrefetchedTrie()
 	if tr == nil {
+		var err error
 		// Fetcher not running or empty trie, fallback to the database trie
-		_, err := s.getTrie()
+		tr, err = s.getTrie()
 		if err != nil {
 			s.db.setError(err)
 			return nil, err
 		}
-	} else {
-		// Prefetcher returned a live trie, swap it out for the current one
-		s.trie = tr
 	}
+	s.trie = tr
 
 	// The snapshot storage map for the object
 	var (
