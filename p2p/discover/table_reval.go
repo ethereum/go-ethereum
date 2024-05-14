@@ -189,12 +189,12 @@ type revalidationList struct {
 }
 
 // get returns a random node from the queue. Nodes in the 'exclude' map are not returned.
-func (rq *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude map[enode.ID]struct{}) *node {
-	if now < rq.nextTime || len(rq.nodes) == 0 {
+func (list *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude map[enode.ID]struct{}) *node {
+	if now < list.nextTime || len(list.nodes) == 0 {
 		return nil
 	}
-	for i := 0; i < len(rq.nodes)*3; i++ {
-		n := rq.nodes[rand.Intn(len(rq.nodes))]
+	for i := 0; i < len(list.nodes)*3; i++ {
+		n := list.nodes[rand.Intn(len(list.nodes))]
 		_, excluded := exclude[n.ID()]
 		if !excluded {
 			return n
@@ -203,25 +203,25 @@ func (rq *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude m
 	return nil
 }
 
-func (rq *revalidationList) schedule(now mclock.AbsTime, rand randomSource) {
-	rq.nextTime = now.Add(time.Duration(rand.Int63n(int64(rq.interval))))
+func (list *revalidationList) schedule(now mclock.AbsTime, rand randomSource) {
+	list.nextTime = now.Add(time.Duration(rand.Int63n(int64(list.interval))))
 }
 
-func (rq *revalidationList) push(n *node, now mclock.AbsTime, rand randomSource) {
-	rq.nodes = append(rq.nodes, n)
-	if rq.nextTime == never {
-		rq.schedule(now, rand)
+func (list *revalidationList) push(n *node, now mclock.AbsTime, rand randomSource) {
+	list.nodes = append(list.nodes, n)
+	if list.nextTime == never {
+		list.schedule(now, rand)
 	}
 }
 
-func (rq *revalidationList) remove(n *node) bool {
-	i := slices.Index(rq.nodes, n)
+func (list *revalidationList) remove(n *node) bool {
+	i := slices.Index(list.nodes, n)
 	if i == -1 {
 		return false
 	}
-	rq.nodes = slices.Delete(rq.nodes, i, i+1)
-	if len(rq.nodes) == 0 {
-		rq.nextTime = never
+	list.nodes = slices.Delete(list.nodes, i, i+1)
+	if len(list.nodes) == 0 {
+		list.nextTime = never
 	}
 	return true
 }
