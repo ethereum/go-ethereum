@@ -326,7 +326,6 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			return nil, err
 		}
 	}
-	s.trie = tr
 
 	// The snapshot storage map for the object
 	var (
