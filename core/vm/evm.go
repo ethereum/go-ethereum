@@ -526,6 +526,10 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2)
 }
 
+func (evm *EVM) CreateWithAddress(caller ContractRef, code []byte, gas uint64, value *big.Int, address common.Address) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, address, CREATE)
+}
+
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
