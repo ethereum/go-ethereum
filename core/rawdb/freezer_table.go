@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -219,7 +220,13 @@ func (t *freezerTable) repair() error {
 			return err
 		} // New file can't trigger this path
 	}
-	// Retrieve the file sizes and prepare for truncation
+	// Validate the index file as it might contain some garbage data after the
+	// power failures.
+	if err := t.repairIndex(); err != nil {
+		return err
+	}
+	// Retrieve the file sizes and prepare for truncation. Note the file size
+	// might be changed after index validation.
 	if stat, err = t.index.Stat(); err != nil {
 		return err
 	}
@@ -360,6 +367,122 @@ func (t *freezerTable) repair() error {
 		t.logger.Info("Chain freezer table opened", "items", t.items.Load(), "deleted", t.itemOffset.Load(), "hidden", t.itemHidden.Load(), "tailId", t.tailId, "headId", t.headId, "size", t.headBytes)
 	} else {
 		t.logger.Debug("Chain freezer table opened", "items", t.items.Load(), "size", common.StorageSize(t.headBytes))
+	}
+	return nil
+}
+
+// repairIndex validates the integrity of the index file. According to the design,
+// the initial entry in the file denotes the earliest data file along with the
+// count of deleted items. Following this, all subsequent entries in the file must
+// be in order. This function identifies any corrupted entries and truncates items
+// occurring after the corruption point.
+//
+// The corruption can be made because of the power failure. As in the Linux kernel,
+// the file metadata update and data update are not necessarily performed at the
+// same time. Typically, the metadata will be flushed/journaled ahead of the file
+// data. Therefore, we make the pessimistic assumption that the file is first
+// extended with invalid "garbage" data (normally zero bytes) and that afterwards
+// the correct data replaces the garbage. As all the items in index file are
+// supposed to be in-order, the leftover garbage must be truncated before the
+// index data is utilized.
+//
+// It's important to note an exception that's unfortunately undetectable: when
+// all index entries in the file are zero. Distinguishing whether they represent
+// leftover garbage or if all items in the table have zero size is impossible.
+// In such instances, the file will remain unchanged to prevent potential data
+// loss or misinterpretation.
+func (t *freezerTable) repairIndex() error {
+	// Retrieve the file sizes and prepare for validation
+	stat, err := t.index.Stat()
+	if err != nil {
+		return err
+	}
+	size := stat.Size()
+
+	var (
+		start      = time.Now()
+		batchSize  = int64(indexEntrySize * 1024 * 1024)
+		buffer     = make([]byte, batchSize) // pre-allocate for batch reading
+		prev       indexEntry
+		head       indexEntry
+		readOffset int64
+		consumed   int64
+
+		read = func(offset int64) (indexEntry, error) {
+			if offset+indexEntrySize > size {
+				return indexEntry{}, fmt.Errorf("slice bounds out of range, offset: %d, size: %d", offset, size)
+			}
+			if offset >= readOffset {
+				n, err := t.index.ReadAt(buffer, readOffset)
+				if err != nil && !errors.Is(err, io.EOF) {
+					return indexEntry{}, err
+				}
+				expect := batchSize
+				if size-readOffset < batchSize {
+					expect = size - readOffset
+				}
+				if expect != int64(n) {
+					return indexEntry{}, fmt.Errorf("failed to read from index, want: %d, got: %d", expect, n)
+				}
+				consumed = readOffset
+				readOffset += int64(n)
+			}
+			var entry indexEntry
+			entry.unmarshalBinary(buffer[offset-consumed : offset-consumed+indexEntrySize])
+			return entry, nil
+		}
+		truncate = func(offset int64) error {
+			if t.readonly {
+				return fmt.Errorf("index file is corrupted at %d, size: %d", offset, size)
+			}
+			if err := truncateFreezerFile(t.index, offset); err != nil {
+				return err
+			}
+			log.Warn("Truncated index file", "offset", offset, "truncated", size-offset)
+			return nil
+		}
+	)
+	for offset := int64(0); offset < size; offset += indexEntrySize {
+		entry, err := read(offset)
+		if err != nil {
+			return err
+		}
+		if offset == 0 {
+			head = entry
+			continue
+		}
+		// ensure the first non-head index denotes to the earliest file
+		if offset == indexEntrySize {
+			if entry.filenum != head.filenum {
+				return truncate(offset)
+			}
+			prev = entry
+			continue
+		}
+		// ensure two consecutive index items are in order
+		if err := t.checkIndexItems(prev, entry); err != nil {
+			return truncate(offset)
+		}
+		prev = entry
+	}
+	log.Debug("Verified index file", "items", size/indexEntrySize, "elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+// checkIndexItems checks the validity of two consecutive index items. The index
+// item is regarded as invalid if:
+// - file number of two index items are not same and not monotonically increasing
+// - data offset of two index items with same file number are out of order
+// - zero data offset with an increasing file number
+func (t *freezerTable) checkIndexItems(a, b indexEntry) error {
+	if b.filenum != a.filenum && b.filenum != a.filenum+1 {
+		return fmt.Errorf("index items with inconsistent file number, prev: %d, next: %d", a.filenum, b.filenum)
+	}
+	if b.filenum == a.filenum && b.offset < a.offset {
+		return fmt.Errorf("index items with unordered offset, prev: %d, next: %d", a.offset, b.offset)
+	}
+	if b.filenum == a.filenum+1 && b.offset == 0 {
+		return fmt.Errorf("index items with zero offset, file number: %d", b.filenum)
 	}
 	return nil
 }

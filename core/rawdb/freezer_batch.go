@@ -180,27 +180,19 @@ func (batch *freezerTableBatch) maybeCommit() error {
 	return nil
 }
 
-// commit writes the batched items to the backing freezerTable.
+// commit writes the batched items to the backing freezerTable. Note both index
+// and data file are not fsync'd after the file write, the data could be lost
+// after the power failure.
 func (batch *freezerTableBatch) commit() error {
-	// Write data. The head file is fsync'd after write to ensure the
-	// data is truly transferred to disk.
 	_, err := batch.t.head.Write(batch.dataBuffer)
 	if err != nil {
-		return err
-	}
-	if err := batch.t.head.Sync(); err != nil {
 		return err
 	}
 	dataSize := int64(len(batch.dataBuffer))
 	batch.dataBuffer = batch.dataBuffer[:0]
 
-	// Write indices. The index file is fsync'd after write to ensure the
-	// data indexes are truly transferred to disk.
 	_, err = batch.t.index.Write(batch.indexBuffer)
 	if err != nil {
-		return err
-	}
-	if err := batch.t.index.Sync(); err != nil {
 		return err
 	}
 	indexSize := int64(len(batch.indexBuffer))
