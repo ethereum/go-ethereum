@@ -50,10 +50,25 @@ var chainFreezerNoSnappy = map[string]bool{
 	ChainFreezerDifficultyTable: true,
 }
 
-const (
-	// stateHistoryTableSize defines the maximum size of freezer data files.
-	stateHistoryTableSize = 2 * 1000 * 1000 * 1000
+// chainFreezerSize configures the maximum size for each freezer table data files.
+var chainFreezerSize = map[string]uint32{
+	// The size of each item's value is roughly 650 bytes, about 2 millions
+	// items per data file.
+	ChainFreezerHeaderTable: 2 * 1000 * 1000 * 1000,
 
+	// The size of each item’s value is fixed at 32 bytes, 2 millions items
+	// per data file.
+	ChainFreezerHashTable: 64 * 1000 * 1000,
+
+	// The size of each item’s value is less than 10 bytes, 2 millions items
+	// per data file.
+	ChainFreezerDifficultyTable: 20 * 1000 * 1000,
+
+	ChainFreezerBodiesTable:  2 * 1000 * 1000 * 1000,
+	ChainFreezerReceiptTable: 2 * 1000 * 1000 * 1000,
+}
+
+const (
 	// stateHistoryAccountIndex indicates the name of the freezer state history table.
 	stateHistoryMeta         = "history.meta"
 	stateHistoryAccountIndex = "account.index"
@@ -62,12 +77,24 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
+// stateFreezerNoSnappy configures whether compression is disabled for the state freezer.
 var stateFreezerNoSnappy = map[string]bool{
 	stateHistoryMeta:         true,
 	stateHistoryAccountIndex: false,
 	stateHistoryStorageIndex: false,
 	stateHistoryAccountData:  false,
 	stateHistoryStorageData:  false,
+}
+
+// stateFreezerSize configures the maximum size for each freezer table data files.
+var stateFreezerSize = map[string]uint32{
+	// The size of each item's value is fixed at 73 bytes, about 2 millions
+	// items per data file.
+	stateHistoryMeta:         128 * 1000 * 1000,
+	stateHistoryAccountIndex: 2 * 1000 * 1000 * 1000,
+	stateHistoryStorageIndex: 2 * 1000 * 1000 * 1000,
+	stateHistoryAccountData:  2 * 1000 * 1000 * 1000,
+	stateHistoryStorageData:  2 * 1000 * 1000 * 1000,
 }
 
 // The list of identifiers of ancient stores.
@@ -96,5 +123,5 @@ func NewStateFreezer(ancientDir string, verkle bool, readOnly bool) (ethdb.Reset
 	} else {
 		name = filepath.Join(ancientDir, MerkleStateFreezerName)
 	}
-	return newResettableFreezer(name, "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerNoSnappy)
+	return newResettableFreezer(name, "eth/db/state", readOnly, stateFreezerSize, stateFreezerNoSnappy)
 }

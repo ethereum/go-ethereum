@@ -49,9 +49,6 @@ var (
 	errSymlinkDatadir = errors.New("symbolic link datadir is not supported")
 )
 
-// freezerTableSize defines the maximum size of freezer data files.
-const freezerTableSize = 2 * 1000 * 1000 * 1000
-
 // Freezer is an append-only database to store immutable ordered data into
 // flat files:
 //
@@ -77,7 +74,7 @@ type Freezer struct {
 //
 // The 'tables' argument defines the data tables. If the value of a map
 // entry is true, snappy compression is disabled for the table.
-func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*Freezer, error) {
+func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize map[string]uint32, tables map[string]bool) (*Freezer, error) {
 	// Create the initial freezer object
 	var (
 		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
@@ -116,7 +113,11 @@ func NewFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 
 	// Create the tables.
 	for name, disableSnappy := range tables {
-		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, maxTableSize, disableSnappy, readonly)
+		size, exist := maxTableSize[name]
+		if !exist {
+			return nil, fmt.Errorf("table size for %q is not defined", name)
+		}
+		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, size, disableSnappy, readonly)
 		if err != nil {
 			for _, table := range freezer.tables {
 				table.Close()

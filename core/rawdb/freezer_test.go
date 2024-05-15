@@ -31,7 +31,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var freezerTestTableDef = map[string]bool{"test": true}
+var (
+	freezerTestTableDef  = map[string]bool{"test": true}
+	freezerTestTableSize = map[string]uint32{"test": 2049}
+)
 
 func TestFreezerModify(t *testing.T) {
 	t.Parallel()
@@ -48,7 +51,7 @@ func TestFreezerModify(t *testing.T) {
 	}
 
 	tables := map[string]bool{"raw": true, "rlp": false}
-	f, _ := newFreezerForTesting(t, tables)
+	f, _ := newFreezerForTesting(t, tables, map[string]uint32{"raw": 2049, "rlp": 2049})
 	defer f.Close()
 
 	// Commit test data.
@@ -93,7 +96,7 @@ func TestFreezerModify(t *testing.T) {
 func TestFreezerModifyRollback(t *testing.T) {
 	t.Parallel()
 
-	f, dir := newFreezerForTesting(t, freezerTestTableDef)
+	f, dir := newFreezerForTesting(t, freezerTestTableDef, freezerTestTableSize)
 
 	theError := errors.New("oops")
 	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -112,7 +115,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 
 	// Reopen and check that the rolled-back data doesn't reappear.
 	tables := map[string]bool{"test": true}
-	f2, err := NewFreezer(dir, "", false, 2049, tables)
+	f2, err := NewFreezer(dir, "", false, map[string]uint32{"test": 2049}, tables)
 	if err != nil {
 		t.Fatalf("can't reopen freezer after failed ModifyAncients: %v", err)
 	}
@@ -124,7 +127,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 	t.Parallel()
 
-	f, _ := newFreezerForTesting(t, freezerTestTableDef)
+	f, _ := newFreezerForTesting(t, freezerTestTableDef, freezerTestTableSize)
 	defer f.Close()
 
 	var (
@@ -184,7 +187,7 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 
 // This test runs ModifyAncients and TruncateHead concurrently with each other.
 func TestFreezerConcurrentModifyTruncate(t *testing.T) {
-	f, _ := newFreezerForTesting(t, freezerTestTableDef)
+	f, _ := newFreezerForTesting(t, freezerTestTableDef, freezerTestTableSize)
 	defer f.Close()
 
 	var item = make([]byte, 256)
@@ -253,7 +256,7 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 	dir := t.TempDir()
 	// Open non-readonly freezer and fill individual tables
 	// with different amount of data.
-	f, err := NewFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, map[string]uint32{"a": 2049, "b": 2049}, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -276,7 +279,7 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 
 	// Re-opening as readonly should fail when validating
 	// table lengths.
-	_, err = NewFreezer(dir, "", true, 2049, tables)
+	_, err = NewFreezer(dir, "", true, map[string]uint32{"a": 2049, "b": 2049}, tables)
 	if err == nil {
 		t.Fatal("readonly freezer should fail with differing table lengths")
 	}
@@ -288,7 +291,7 @@ func TestFreezerConcurrentReadonly(t *testing.T) {
 	tables := map[string]bool{"a": true}
 	dir := t.TempDir()
 
-	f, err := NewFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, map[string]uint32{"a": 2049}, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -314,7 +317,7 @@ func TestFreezerConcurrentReadonly(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 
-			f, err := NewFreezer(dir, "", true, 2049, tables)
+			f, err := NewFreezer(dir, "", true, map[string]uint32{"a": 2049}, tables)
 			if err == nil {
 				fs[i] = f
 			} else {
@@ -333,13 +336,13 @@ func TestFreezerConcurrentReadonly(t *testing.T) {
 	}
 }
 
-func newFreezerForTesting(t *testing.T, tables map[string]bool) (*Freezer, string) {
+func newFreezerForTesting(t *testing.T, tables map[string]bool, sizes map[string]uint32) (*Freezer, string) {
 	t.Helper()
 
 	dir := t.TempDir()
 	// note: using low max table size here to ensure the tests actually
 	// switch between multiple files.
-	f, err := NewFreezer(dir, "", false, 2049, tables)
+	f, err := NewFreezer(dir, "", false, sizes, tables)
 	if err != nil {
 		t.Fatal("can't open freezer", err)
 	}
@@ -379,7 +382,7 @@ func checkAncientCount(t *testing.T, f *Freezer, kind string, n uint64) {
 
 func TestFreezerCloseSync(t *testing.T) {
 	t.Parallel()
-	f, _ := newFreezerForTesting(t, map[string]bool{"a": true, "b": true})
+	f, _ := newFreezerForTesting(t, map[string]bool{"a": true, "b": true}, map[string]uint32{"a": 2049, "b": 2049})
 	defer f.Close()
 
 	// Now, close and sync. This mimics the behaviour if the node is shut down,
@@ -401,19 +404,27 @@ func TestFreezerCloseSync(t *testing.T) {
 
 func TestFreezerSuite(t *testing.T) {
 	ancienttest.TestAncientSuite(t, func(kinds []string) ethdb.AncientStore {
-		tables := make(map[string]bool)
+		var (
+			sizes  = make(map[string]uint32)
+			tables = make(map[string]bool)
+		)
 		for _, kind := range kinds {
+			sizes[kind] = 2048
 			tables[kind] = true
 		}
-		f, _ := newFreezerForTesting(t, tables)
+		f, _ := newFreezerForTesting(t, tables, sizes)
 		return f
 	})
 	ancienttest.TestResettableAncientSuite(t, func(kinds []string) ethdb.ResettableAncientStore {
-		tables := make(map[string]bool)
+		var (
+			sizes  = make(map[string]uint32)
+			tables = make(map[string]bool)
+		)
 		for _, kind := range kinds {
+			sizes[kind] = 2048
 			tables[kind] = true
 		}
-		f, _ := newResettableFreezer(t.TempDir(), "", false, 2048, tables)
+		f, _ := newResettableFreezer(t.TempDir(), "", false, sizes, tables)
 		return f
 	})
 }

@@ -879,6 +879,7 @@ func TestHeadersRLPStorage(t *testing.T) {
 		t.Fatalf("failed to create database with ancient backend")
 	}
 	defer db.Close()
+
 	// Create blocks
 	var chain []*types.Block
 	var pHash common.Hash
@@ -894,7 +895,7 @@ func TestHeadersRLPStorage(t *testing.T) {
 		chain = append(chain, block)
 		pHash = block.Hash()
 	}
-	var receipts []types.Receipts = make([]types.Receipts, 100)
+	receipts := make([]types.Receipts, 100)
 	// Write first half to ancients
 	WriteAncientBlocks(db, chain[:50], receipts[:50], big.NewInt(100))
 	// Write second half to db
