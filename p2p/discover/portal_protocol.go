@@ -1473,7 +1473,13 @@ func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, r
 	wrapedNode := make([]*node, 0)
 	flag, content, err := p.findContent(n, contentKey)
 	if err != nil {
+		p.Log.Error("contentLookupWorker failed", "ip", n.IP().String(), "err", err)
 		return nil, err
+	}
+	p.Log.Debug("contentLookupWorker reveice response", "ip", n.IP().String(), "flag", flag)
+	// has find content
+	if len(resChan) > 0 {
+		return []*node{}, nil
 	}
 	switch flag {
 	case portalwire.ContentRawSelector, portalwire.ContentConnIdSelector:
@@ -1609,6 +1615,12 @@ func (p *PortalProtocol) traceContentLookupWorker(n *enode.Node, contentKey []by
 	if err != nil {
 		return nil, err
 	}
+	p.Log.Debug("traceContentLookupWorker reveice response", "ip", n.IP().String(), "flag", flag)
+	// has find content
+	if len(resChan) > 0 {
+		return []*node{}, nil
+	}
+
 	switch flag {
 	case portalwire.ContentRawSelector, portalwire.ContentConnIdSelector:
 		content, ok := content.([]byte)
