@@ -62,6 +62,7 @@ const (
 	stateHistoryStorageData  = "storage.data"
 )
 
+// stateFreezerNoSnappy configures whether compression is disabled for the state freezer.
 var stateFreezerNoSnappy = map[string]bool{
 	stateHistoryMeta:         true,
 	stateHistoryAccountIndex: false,
