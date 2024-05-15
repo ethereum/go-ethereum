@@ -23,16 +23,13 @@ import (
 	"io"
 	"math/big"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
-	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
-	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -155,22 +152,6 @@ func (h *Header) HashNoValidator() common.Hash {
 // to approximate and limit the memory consumption of various caches.
 func (h *Header) Size() common.StorageSize {
 	return common.StorageSize(unsafe.Sizeof(*h)) + common.StorageSize(len(h.Extra)+(h.Difficulty.BitLen()+h.Number.BitLen()+h.Time.BitLen())/8)
-}
-
-// hasherPool holds LegacyKeccak hashers.
-var hasherPool = sync.Pool{
-	New: func() interface{} {
-		return sha3.NewLegacyKeccak256()
-	},
-}
-
-func rlpHash(x interface{}) (h common.Hash) {
-	sha := hasherPool.Get().(crypto.KeccakState)
-	defer hasherPool.Put(sha)
-	sha.Reset()
-	rlp.Encode(sha, x)
-	sha.Read(h[:])
-	return h
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving

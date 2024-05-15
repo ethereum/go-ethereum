@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -35,6 +36,9 @@ var (
 	receiptStatusSuccessfulRLP = []byte{0x01}
 )
 
+// This error is returned when a typed receipt is decoded, but the string is empty.
+var errEmptyTypedReceipt = errors.New("empty typed receipt bytes")
+
 const (
 	// ReceiptStatusFailed is the status code of a transaction if execution failed.
 	ReceiptStatusFailed = uint(0)
@@ -46,6 +50,7 @@ const (
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// Consensus fields: These fields are defined by the Yellow Paper
+	Type              uint8  `json:"type,omitempty"`
 	PostState         []byte `json:"root"`
 	Status            uint   `json:"status"`
 	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
@@ -66,6 +71,7 @@ type Receipt struct {
 }
 
 type receiptMarshaling struct {
+	Type              hexutil.Uint64
 	PostState         hexutil.Bytes
 	Status            hexutil.Uint
 	CumulativeGasUsed hexutil.Uint64
@@ -82,7 +88,18 @@ type receiptRLP struct {
 	Logs              []*Log
 }
 
-type receiptStorageRLP struct {
+// v4StoredReceiptRLP is the storage encoding of a receipt used in database version 4.
+type v4StoredReceiptRLP struct {
+	PostStateOrStatus []byte
+	CumulativeGasUsed uint64
+	TxHash            common.Hash
+	ContractAddress   common.Address
+	Logs              []*LogForStorage
+	GasUsed           uint64
+}
+
+// v3StoredReceiptRLP is the original storage encoding of a receipt including some unnecessary fields.
+type v3StoredReceiptRLP struct {
 	PostStateOrStatus []byte
 	CumulativeGasUsed uint64
 	Bloom             Bloom
@@ -93,8 +110,13 @@ type receiptStorageRLP struct {
 }
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
+// Deprecated: create receipts using a struct literal instead.
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
-	r := &Receipt{PostState: common.CopyBytes(root), CumulativeGasUsed: cumulativeGasUsed}
+	r := &Receipt{
+		Type:              LegacyTxType,
+		PostState:         common.CopyBytes(root),
+		CumulativeGasUsed: cumulativeGasUsed,
+	}
 	if failed {
 		r.Status = ReceiptStatusFailed
 	} else {
@@ -106,21 +128,65 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs})
+	data := &receiptRLP{r.statusEncoding(), r.CumulativeGasUsed, r.Bloom, r.Logs}
+	if r.Type == LegacyTxType {
+		return rlp.Encode(w, data)
+	}
+	// It's an EIP-2718 typed TX receipt.
+	if r.Type != AccessListTxType {
+		return ErrTxTypeNotSupported
+	}
+	buf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(buf)
+	buf.Reset()
+	buf.WriteByte(r.Type)
+	if err := rlp.Encode(buf, data); err != nil {
+		return err
+	}
+	return rlp.Encode(w, buf.Bytes())
 }
 
 // DecodeRLP implements rlp.Decoder, and loads the consensus fields of a receipt
 // from an RLP stream.
 func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
-	var dec receiptRLP
-	if err := s.Decode(&dec); err != nil {
+	kind, _, err := s.Kind()
+	switch {
+	case err != nil:
 		return err
+	case kind == rlp.List:
+		// It's a legacy receipt.
+		var dec receiptRLP
+		if err := s.Decode(&dec); err != nil {
+			return err
+		}
+		r.Type = LegacyTxType
+		return r.setFromRLP(dec)
+	case kind == rlp.String:
+		// It's an EIP-2718 typed tx receipt.
+		b, err := s.Bytes()
+		if err != nil {
+			return err
+		}
+		if len(b) == 0 {
+			return errEmptyTypedReceipt
+		}
+		r.Type = b[0]
+		if r.Type == AccessListTxType {
+			var dec receiptRLP
+			if err := rlp.DecodeBytes(b[1:], &dec); err != nil {
+				return err
+			}
+			return r.setFromRLP(dec)
+		}
+		return ErrTxTypeNotSupported
+	default:
+		return rlp.ErrExpectedList
 	}
-	if err := r.setStatus(dec.PostStateOrStatus); err != nil {
-		return err
-	}
-	r.CumulativeGasUsed, r.Bloom, r.Logs = dec.CumulativeGasUsed, dec.Bloom, dec.Logs
-	return nil
+}
+
+func (r *Receipt) setFromRLP(data receiptRLP) error {
+	r.CumulativeGasUsed, r.Bloom, r.Logs = data.CumulativeGasUsed, data.Bloom, data.Logs
+	return r.setStatus(data.PostStateOrStatus)
 }
 
 func (r *Receipt) setStatus(postStateOrStatus []byte) error {
@@ -151,7 +217,6 @@ func (r *Receipt) statusEncoding() []byte {
 // to approximate and limit the memory consumption of various caches.
 func (r *Receipt) Size() common.StorageSize {
 	size := common.StorageSize(unsafe.Sizeof(*r)) + common.StorageSize(len(r.PostState))
-
 	size += common.StorageSize(len(r.Logs)) * common.StorageSize(unsafe.Sizeof(Log{}))
 	for _, log := range r.Logs {
 		size += common.StorageSize(len(log.Topics)*common.HashLength + len(log.Data))
@@ -174,7 +239,7 @@ type ReceiptForStorage Receipt
 // EncodeRLP implements rlp.Encoder, and flattens all content fields of a receipt
 // into an RLP stream.
 func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
-	enc := &receiptStorageRLP{
+	enc := &v3StoredReceiptRLP{
 		PostStateOrStatus: (*Receipt)(r).statusEncoding(),
 		CumulativeGasUsed: r.CumulativeGasUsed,
 		Bloom:             r.Bloom,
@@ -192,25 +257,64 @@ func (r *ReceiptForStorage) EncodeRLP(w io.Writer) error {
 // DecodeRLP implements rlp.Decoder, and loads both consensus and implementation
 // fields of a receipt from an RLP stream.
 func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
-	var dec receiptStorageRLP
-	if err := s.Decode(&dec); err != nil {
+	// Retrieve the entire receipt blob as we need to try multiple decoders
+	blob, err := s.Raw()
+	if err != nil {
 		return err
 	}
-	if err := (*Receipt)(r).setStatus(dec.PostStateOrStatus); err != nil {
+	// Try decoding from the newest format for future proofness, then the older one
+	// for old nodes that just upgraded. V4 was an intermediate unreleased format so
+	// we do need to decode it, but it's not common (try last).
+	if err := decodeV3StoredReceiptRLP(r, blob); err == nil {
+		return nil
+	}
+	return decodeV4StoredReceiptRLP(r, blob)
+}
+
+func decodeV3StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
+	var stored v3StoredReceiptRLP
+	if err := rlp.DecodeBytes(blob, &stored); err != nil {
+		return err
+	}
+	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
 		return err
 	}
 	// Assign the consensus fields
-	r.CumulativeGasUsed, r.Bloom = dec.CumulativeGasUsed, dec.Bloom
-	r.Logs = make([]*Log, len(dec.Logs))
-	for i, log := range dec.Logs {
+	r.CumulativeGasUsed = stored.CumulativeGasUsed
+	r.Bloom = stored.Bloom
+	r.Logs = make([]*Log, len(stored.Logs))
+	for i, log := range stored.Logs {
 		r.Logs[i] = (*Log)(log)
 	}
 	// Assign the implementation fields
-	r.TxHash, r.ContractAddress, r.GasUsed = dec.TxHash, dec.ContractAddress, dec.GasUsed
+	r.TxHash = stored.TxHash
+	r.ContractAddress = stored.ContractAddress
+	r.GasUsed = stored.GasUsed
 	return nil
 }
 
-// Receipts is a wrapper around a Receipt array to implement DerivableList.
+func decodeV4StoredReceiptRLP(r *ReceiptForStorage, blob []byte) error {
+	var stored v4StoredReceiptRLP
+	if err := rlp.DecodeBytes(blob, &stored); err != nil {
+		return err
+	}
+	if err := (*Receipt)(r).setStatus(stored.PostStateOrStatus); err != nil {
+		return err
+	}
+	r.CumulativeGasUsed = stored.CumulativeGasUsed
+	r.TxHash = stored.TxHash
+	r.ContractAddress = stored.ContractAddress
+	r.GasUsed = stored.GasUsed
+	r.Logs = make([]*Log, len(stored.Logs))
+	for i, log := range stored.Logs {
+		r.Logs[i] = (*Log)(log)
+	}
+	r.Bloom = CreateBloom(Receipts{(*Receipt)(r)})
+
+	return nil
+}
+
+// Receipts implements DerivableList for receipts.
 type Receipts []*Receipt
 
 // Len returns the number of receipts in this list.

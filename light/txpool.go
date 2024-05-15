@@ -19,6 +19,7 @@ package light
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 const (
@@ -67,6 +67,7 @@ type TxPool struct {
 	clearIdx     uint64                               // earliest block nr that can contain mined tx info
 
 	homestead bool
+	eip2718   bool // Fork indicator whether we are in the eip2718 stage.
 }
 
 // TxRelayBackend provides an interface to the mechanism that forwards transacions
@@ -91,7 +92,7 @@ type TxRelayBackend interface {
 func NewTxPool(config *params.ChainConfig, chain *LightChain, relay TxRelayBackend) *TxPool {
 	pool := &TxPool{
 		config:      config,
-		signer:      types.NewEIP155Signer(config.ChainId),
+		signer:      types.LatestSigner(config),
 		nonce:       make(map[common.Address]uint64),
 		pending:     make(map[common.Hash]*types.Transaction),
 		mined:       make(map[common.Hash][]*types.Transaction),
@@ -310,8 +311,11 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	txc, _ := pool.reorgOnNewHead(ctx, head)
 	m, r := txc.getLists()
 	pool.relay.NewHead(pool.head, m, r)
+
+	// Update fork indicator by next pending block number
+	next := new(big.Int).Add(head.Number, big.NewInt(1))
 	pool.homestead = pool.config.IsHomestead(head.Number)
-	pool.signer = types.MakeSigner(pool.config, head.Number)
+	pool.eip2718 = pool.config.IsEIP1559(next)
 }
 
 // Stop stops the light transaction pool
@@ -403,7 +407,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	}
 
 	// Should supply enough intrinsic gas
-	gas, err := core.IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
+	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, pool.homestead)
 	if err != nil {
 		return err
 	}
@@ -452,8 +456,7 @@ func (self *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 func (self *TxPool) Add(ctx context.Context, tx *types.Transaction) error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-
-	data, err := rlp.EncodeToBytes(tx)
+	data, err := tx.MarshalBinary()
 	if err != nil {
 		return err
 	}

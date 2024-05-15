@@ -283,6 +283,7 @@ type TxPool struct {
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
 
+	eip2718          bool // Fork indicator whether we are using EIP-2718 type transactions.
 	IsSigner         func(address common.Address) bool
 	trc21FeeCapacity map[common.Address]*big.Int
 }
@@ -302,7 +303,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		config:           config,
 		chainconfig:      chainconfig,
 		chain:            chain,
-		signer:           types.NewEIP155Signer(chainconfig.ChainId),
+		signer:           types.LatestSigner(chainconfig),
 		pending:          make(map[common.Address]*txList),
 		queue:            make(map[common.Address]*txList),
 		beats:            make(map[common.Address]time.Time),
@@ -565,6 +566,10 @@ func (pool *TxPool) GetSender(tx *types.Transaction) (common.Address, error) {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+	// Accept only legacy transactions until EIP-2718/2930 activates.
+	if !pool.eip2718 && tx.Type() != types.LegacyTxType {
+		return ErrTxTypeNotSupported
+	}
 	// Reject transactions over defined size to prevent DOS attacks
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
@@ -586,7 +591,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
 	}
-	// Make sure the transaction is signed properly
+	// Make sure the transaction is signed properly.
 	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
 		return ErrInvalidSender
@@ -630,7 +635,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	if tx.To() == nil || (tx.To() != nil && !tx.IsSpecialTransaction()) {
 		// Ensure the transaction has more gas than the basic tx fee.
-		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
+		intrGas, err := IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true)
 		if err != nil {
 			return err
 		}
@@ -1094,7 +1099,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 	}
 }
 
-// requestPromoteExecutables requests a pool reset to the new head block.
+// requestReset requests a pool reset to the new head block.
 // The returned channel is closed when the reset has occurred.
 func (pool *TxPool) requestReset(oldHead *types.Header, newHead *types.Header) chan struct{} {
 	select {
@@ -1346,6 +1351,10 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	senderCacher.recover(pool.signer, reinject)
 	pool.addTxsLocked(reinject, false)
+
+	// Update all fork indicator by next pending block number.
+	next := new(big.Int).Add(newHead.Number, big.NewInt(1))
+	pool.eip2718 = pool.chainconfig.IsEIP1559(next)
 }
 
 // promoteExecutables moves transactions that have become processable from the

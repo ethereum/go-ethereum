@@ -108,7 +108,7 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 	to := common.HexToAddress(common.MasternodeVotingSMC)
 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
 
-	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), voterKey)
+	signedTX, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(chainID)), voterKey)
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +285,7 @@ func getMultiCandidatesBackend(t *testing.T, chainConfig *params.ChainConfig, n 
 
 func signingTxWithKey(header *types.Header, nonce uint64, privateKey *ecdsa.PrivateKey) (*types.Transaction, error) {
 	tx := contracts.CreateTxSign(header.Number, header.Hash(), nonce, common.HexToAddress(common.BlockSigners))
-	s := types.NewEIP155Signer(big.NewInt(chainID))
+	s := types.LatestSignerForChainID(big.NewInt(chainID))
 	h := s.Hash(tx)
 	sig, err := crypto.Sign(h[:], privateKey)
 	if err != nil {
@@ -300,7 +300,7 @@ func signingTxWithKey(header *types.Header, nonce uint64, privateKey *ecdsa.Priv
 
 func signingTxWithSignerFn(header *types.Header, nonce uint64, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) (*types.Transaction, error) {
 	tx := contracts.CreateTxSign(header.Number, header.Hash(), nonce, common.HexToAddress(common.BlockSigners))
-	s := types.NewEIP155Signer(big.NewInt(chainID))
+	s := types.LatestSignerForChainID(big.NewInt(chainID))
 	h := s.Hash(tx)
 	sig, err := signFn(accounts.Account{Address: signer}, h[:])
 	if err != nil {

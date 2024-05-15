@@ -19,17 +19,15 @@ package miner
 import (
 	"bytes"
 	"encoding/binary"
-
-	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
-	"github.com/XinFinOrg/XDPoSChain/accounts"
-
+	"errors"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
-
+	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
+	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
@@ -466,10 +464,13 @@ func (self *worker) push(work *Work) {
 
 // makeCurrent creates a new environment for the current cycle.
 func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error {
+	// Retrieve the parent state to execute on top and start a prefetcher for
+	// the miner to speed block sealing up a bit
 	state, err := self.chain.StateAt(parent.Root())
 	if err != nil {
 		return err
 	}
+
 	author, _ := self.chain.Engine().Author(parent.Header())
 	var XDCxState *tradingstate.TradingStateDB
 	var lendingState *lendingstate.LendingStateDB
@@ -490,7 +491,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 
 	work := &Work{
 		config:       self.config,
-		signer:       types.NewEIP155Signer(self.config.ChainId),
+		signer:       types.MakeSigner(self.config, header.Number),
 		state:        state,
 		parentState:  state.Copy(),
 		tradingState: XDCxState,
@@ -981,27 +982,32 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 			continue
 		}
 		err, logs, tokenFeeUsed, gas := env.commitTransaction(balanceFee, tx, bc, coinbase, gp)
-		switch err {
-		case core.ErrGasLimitReached:
+		switch {
+		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Trace("Gas limit exceeded for current block", "sender", from)
 			txs.Pop()
 
-		case core.ErrNonceTooLow:
+		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
 			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
 			txs.Shift()
 
-		case core.ErrNonceTooHigh:
+		case errors.Is(err, core.ErrNonceTooHigh):
 			// Reorg notification data race between the transaction pool and miner, skip account =
 			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
 			txs.Pop()
 
-		case nil:
+		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
 			txs.Shift()
+
+		case errors.Is(err, core.ErrTxTypeNotSupported):
+			// Pop the unsupported transaction without shifting in the next from the account
+			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+			txs.Pop()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
