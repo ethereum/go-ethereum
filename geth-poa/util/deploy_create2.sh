@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Deploys create2 proxy according to https://github.com/primevprotocol/deterministic-deployment-proxy
+# Deploys create2 proxy according to https://github.com/primev/deterministic-deployment-proxy
 
 set -e
 

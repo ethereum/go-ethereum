@@ -22,7 +22,7 @@ Address:     `0x788EBABe5c3dD422Ef92Ca6714A69e2eabcE1Ee4`
 
 ## Create2 Deployment Proxy
 
-A Create2 deployment proxy is can be deployed to this chain at `0x4e59b44847b379578588920ca78fbf26c0b4956c`. see more [here](https://github.com/primevprotocol/deterministic-deployment-proxy). Note this proxy is required to deploy the whitelist bridge contract, and is consistent to foundry's suggested process for create2 deployment. The deployment signer, `0x3fab184622dc19b6109349b94811493bf2a45362` is funded on genesis.
+A Create2 deployment proxy is can be deployed to this chain at `0x4e59b44847b379578588920ca78fbf26c0b4956c`. see more [here](https://github.com/primev/deterministic-deployment-proxy). Note this proxy is required to deploy the whitelist bridge contract, and is consistent to foundry's suggested process for create2 deployment. The deployment signer, `0x3fab184622dc19b6109349b94811493bf2a45362` is funded on genesis.
 
 ## Local Run
 
