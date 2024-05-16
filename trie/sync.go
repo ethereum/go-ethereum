@@ -542,9 +542,6 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 		if _, ok := node.Val.(hashNode); ok && s.scheme == rawdb.PathScheme {
 			owner, inner := ResolvePath(req.path)
 			for i := 1; i < len(key); i++ {
-				// While checking for a non-existent item in Pebble can be less efficient
-				// without a bloom filter, the relatively low frequency of lookups makes
-				// the performance impact negligible.
 				var exists bool
 				if owner == (common.Hash{}) {
 					exists = rawdb.HasAccountTrieNode(s.database, append(inner, key[:i]...))
