@@ -58,27 +58,6 @@ func setupBeaconNetwork(addr string, bootNodes []*enode.Node) (*BeaconNetwork, e
 	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
 	localNode.Set(discover.Tag)
 
-	var addrs []net.Addr
-	if conf.NodeIP != nil {
-		localNode.SetStaticIP(conf.NodeIP)
-	} else {
-		addrs, err = net.InterfaceAddrs()
-
-		if err != nil {
-			return nil, err
-		}
-
-		for _, address := range addrs {
-			// check ip addr is loopback addr
-			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-				if ipnet.IP.To4() != nil {
-					localNode.SetStaticIP(ipnet.IP)
-					break
-				}
-			}
-		}
-	}
-
 	discV5, err := discover.ListenV5(conn, localNode, discCfg)
 	if err != nil {
 		return nil, err

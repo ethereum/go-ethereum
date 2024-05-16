@@ -983,6 +983,13 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.PortalNetworkCategory,
 	}
 
+	PortalNATFlag = &cli.StringFlag{
+		Name:     "nat",
+		Usage:    "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)",
+		Value:    "none",
+		Category: flags.PortalNetworkCategory,
+	}
+
 	PortalUDPListenAddrFlag = &cli.StringFlag{
 		Name:     "udp.addr",
 		Usage:    "protocol UDP server listening interface",

@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/portalnetwork/beacon"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
@@ -44,7 +45,7 @@ var app = flags.NewApp("the go-portal-network command line interface")
 
 var (
 	portalProtocolFlags = []cli.Flag{
-		utils.PortalUDPListenAddrFlag,
+		utils.PortalNATFlag,
 		utils.PortalUDPPortFlag,
 		utils.PortalBootNodesFlag,
 		utils.PortalPrivateKeyFlag,
@@ -158,22 +159,18 @@ func initDiscV5(config Config, conn discover.UDPConn) (*discover.UDPv5, *enode.L
 	localNode.Set(discover.Tag)
 
 	var addrs []net.Addr
-	if config.Protocol.NodeIP != nil {
-		localNode.SetStaticIP(config.Protocol.NodeIP)
-	} else {
-		addrs, err = net.InterfaceAddrs()
+	addrs, err = net.InterfaceAddrs()
 
-		if err != nil {
-			return nil, nil, err
-		}
+	if err != nil {
+		return nil, nil, err
+	}
 
-		for _, address := range addrs {
-			// check ip addr is loopback addr
-			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-				if ipnet.IP.To4() != nil {
-					localNode.SetStaticIP(ipnet.IP)
-					break
-				}
+	for _, address := range addrs {
+		// check ip addr is loopback addr
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				localNode.SetStaticIP(ipnet.IP)
+				break
 			}
 		}
 	}
@@ -280,14 +277,13 @@ func getPortalConfig(ctx *cli.Context) (*Config, error) {
 		config.Protocol.ListenAddr = port
 	}
 
-	udpAddr := ctx.String(utils.PortalUDPListenAddrFlag.Name)
-	if udpAddr != "" {
-		ip := udpAddr
-		netIp := net.ParseIP(ip)
-		if netIp == nil {
-			return config, fmt.Errorf("invalid ip addr: %s", ip)
+	natString := ctx.String(utils.PortalNATFlag.Name)
+	if natString != "" {
+		natInterface, err := nat.Parse(natString)
+		if err != nil {
+			return config, err
 		}
-		config.Protocol.NodeIP = netIp
+		config.Protocol.NAT = natInterface
 	}
 
 	bootNodes := ctx.StringSlice(utils.PortalBootNodesFlag.Name)
