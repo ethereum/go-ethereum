@@ -31,6 +31,7 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/holiman/uint256"
 	"github.com/optimism-java/utp-go"
+	"github.com/optimism-java/utp-go/libutp"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/tetratelabs/wabin/leb128"
 	"go.uber.org/zap"
@@ -168,6 +169,7 @@ type PortalProtocol struct {
 	utp            *utp.Listener
 	utpSm          *utp.SocketManager
 	packetRouter   *utp.PacketRouter
+	connIdGen      libutp.ConnIdGenerator
 	ListenAddr     string
 	localNode      *enode.LocalNode
 	Log            log.Logger
@@ -337,6 +339,7 @@ func (p *PortalProtocol) setupUDPListening() error {
 	}
 	p.utp, err = utp.ListenUTPOptions("utp", (*utp.Addr)(laddr), utp.WithSocketManager(p.utpSm))
 
+	p.connIdGen = utp.NewConnIdGenerator()
 	if err != nil {
 		return err
 	}
@@ -576,7 +579,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				laddr := p.utp.Addr().(*utp.Addr)
 				raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
 				conn, err = utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(connctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
-
+				p.Log.Info("will connect to: ", "addr", raddr.String(), "connId", connId)
 				if err != nil {
 					conncancel()
 					p.Log.Error("failed to dial utp connection", "err", err)
@@ -655,6 +658,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
 		connId := binary.BigEndian.Uint16(connIdMsg.Id[:])
 		conn, err := utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(connctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
+		p.Log.Info("will connect to: ", "addr", raddr.String(), "connId", connId)
 		if err != nil {
 			conncancel()
 			return 0xff, nil, err
@@ -1012,8 +1016,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 
 		return talkRespBytes, nil
 	} else {
-		connIdGen := utp.NewConnIdGenerator()
-		connId := connIdGen.GenCid(id, false)
+		connId := p.connIdGen.GenCid(id, false)
 		connIdSend := connId.SendId()
 
 		go func(bctx context.Context) {
@@ -1025,11 +1028,13 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 					ctx, cancel := context.WithTimeout(bctx, defaultUTPConnectTimeout)
 					var conn *utp.Conn
 					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
+					p.Log.Info("will accept from: ", "source", addr, "connId", connId)
 					if err != nil {
 						p.Log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
 						cancel()
 						return
 					}
+					p.Log.Info("")
 					cancel()
 
 					err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
@@ -1132,8 +1137,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 
 	idBuffer := make([]byte, 2)
 	if contentKeyBitlist.Count() != 0 {
-		connIdGen := utp.NewConnIdGenerator()
-		connId := connIdGen.GenCid(id, false)
+		connId := p.connIdGen.GenCid(id, false)
 		connIdSend := connId.SendId()
 
 		go func(bctx context.Context) {
@@ -1145,6 +1149,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 					ctx, cancel := context.WithTimeout(bctx, defaultUTPConnectTimeout)
 					var conn *utp.Conn
 					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
+					p.Log.Info("will accept from: ", "source", addr, "connId", connId)
 					if err != nil {
 						p.Log.Error("failed to accept utp connection", "connId", connIdSend, "err", err)
 						cancel()
