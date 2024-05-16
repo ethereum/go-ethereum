@@ -280,8 +280,9 @@ func (t *hashTrie) update(key, value []byte) error {
 
 // commit implements genTrie interface, committing the nodes on right boundary.
 func (t *hashTrie) commit(complete bool) common.Hash {
+	hash := t.tr.Hash() // flush the nodes on right boundary
 	if !complete {
 		return common.Hash{} // the hash is meaningless for incomplete commit
 	}
-	return t.tr.Hash() // return hash only if it's claimed as complete
+	return hash // return hash only if it's claimed as complete
 }
