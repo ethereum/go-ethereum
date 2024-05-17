@@ -101,6 +101,10 @@ func setDefaults(cfg *Config) {
 	if cfg.BlobBaseFee == nil {
 		cfg.BlobBaseFee = big.NewInt(params.BlobTxMinBlobGasprice)
 	}
+	// Merge indicators
+	if t := cfg.ChainConfig.ShanghaiTime; cfg.ChainConfig.TerminalTotalDifficultyPassed || (t != nil && *t == 0) {
+		cfg.Random = &(common.Hash{})
+	}
 }
 
 // Execute executes the code using the input as call data during the execution.
