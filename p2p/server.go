@@ -269,16 +269,6 @@ func (c *conn) set(f connFlag, val bool) {
 	atomic.StoreInt32((*int32)(&c.flags), int32(flags))
 }
 
-func (c *conn) set(f connFlag, val bool) {
-	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
-	if val {
-		flags |= f
-	} else {
-		flags &= ^f
-	}
-	atomic.StoreInt32((*int32)(&c.flags), int32(flags))
-}
-
 // Peers returns all connected peers.
 func (srv *Server) Peers() []*Peer {
 	var ps []*Peer
