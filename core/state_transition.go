@@ -178,15 +178,17 @@ func (st *StateTransition) to() vm.AccountRef {
 }
 
 func (st *StateTransition) buyGas() error {
-	var (
-		state           = st.state
-		balanceTokenFee = st.balanceTokenFee()
-		from            = st.from()
-	)
-	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
+	mgval := new(big.Int).SetUint64(st.msg.Gas())
+	mgval = mgval.Mul(mgval, st.gasPrice)
+	balanceTokenFee := st.balanceTokenFee()
 	if balanceTokenFee == nil {
-		if state.GetBalance(from.Address()).Cmp(mgval) < 0 {
-			return errInsufficientBalanceForGas
+		balanceCheck := mgval
+		if st.feeCap != nil {
+			balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
+			balanceCheck = balanceCheck.Mul(balanceCheck, st.feeCap)
+		}
+		if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
+			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 		}
 	} else if balanceTokenFee.Cmp(mgval) < 0 {
 		return errInsufficientBalanceForGas
@@ -198,7 +200,7 @@ func (st *StateTransition) buyGas() error {
 
 	st.initialGas = st.msg.Gas()
 	if balanceTokenFee == nil {
-		state.SubBalance(from.Address(), mgval)
+		st.state.SubBalance(st.msg.From(), mgval)
 	}
 	return nil
 }
@@ -221,6 +223,18 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Make sure that transaction feeCap is greater than the baseFee (post london)
 	if st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber) {
+		if l := st.feeCap.BitLen(); l > 256 {
+			return fmt.Errorf("%w: address %v, feeCap bit length: %d", ErrFeeCapVeryHigh,
+				msg.From().Hex(), l)
+		}
+		if l := st.tip.BitLen(); l > 256 {
+			return fmt.Errorf("%w: address %v, tip bit length: %d", ErrTipVeryHigh,
+				msg.From().Hex(), l)
+		}
+		if st.feeCap.Cmp(st.tip) < 0 {
+			return fmt.Errorf("%w: address %v, tip: %s, feeCap: %s", ErrTipAboveFeeCap,
+				msg.From().Hex(), st.feeCap, st.tip)
+		}
 		// This will panic if baseFee is nil, but basefee presence is verified
 		// as part of header validation.
 		if st.feeCap.Cmp(st.evm.Context.BaseFee) < 0 {
@@ -257,7 +271,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 
 	// Check clauses 1-3, buy gas if everything is correct
 	if err = st.preCheck(); err != nil {
-		return
+		return nil, 0, false, err, nil
 	}
 	msg := st.msg
 	sender := st.from() // err checked in preCheck
