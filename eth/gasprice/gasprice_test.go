@@ -133,6 +133,17 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
+
+	config.ArchimedesBlock = londonBlock
+	config.BernoulliBlock = londonBlock
+	config.CurieBlock = londonBlock
+	config.DescartesBlock = londonBlock
+	config.ShanghaiTime = nil
+	if londonBlock != nil {
+		shanghaiTime := londonBlock.Uint64() * 12
+		config.ShanghaiTime = &shanghaiTime
+	}
+
 	config.TerminalTotalDifficulty = common.Big0
 	engine := ethash.NewFaker()
 

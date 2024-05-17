@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rollup/rcfg"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -29,6 +30,10 @@ var (
 	HoleskyGenesisHash = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
 	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
+
+	ScrollAlphaGenesisHash   = common.HexToHash("0xa4fc62b9b0643e345bdcebe457b3ae898bef59c7203c3db269200055e037afda")
+	ScrollSepoliaGenesisHash = common.HexToHash("0xaa62d1a8b2bffa9e5d2368b63aae0d98d54928bd713125e3fd9e5c896c68592c")
+	ScrollMainnetGenesisHash = common.HexToHash("0xbbc05efd412b7cd47a2ed0e5ddfcf87af251e414ea4c801d78b6784513180a80")
 )
 
 func newUint64(val uint64) *uint64 { return &val }
@@ -152,7 +157,7 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  nil,
+		ShanghaiTime:                  newUint64(0),
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		VerkleTime:                    nil,
@@ -160,6 +165,138 @@ var (
 		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
+		ArchimedesBlock:               big.NewInt(0),
+		BernoulliBlock:                big.NewInt(0),
+		CurieBlock:                    big.NewInt(0),
+		DescartesBlock:                big.NewInt(0),
+		Scroll: ScrollConfig{
+			UseZktrie:                 false,
+			FeeVaultAddress:           nil,
+			MaxTxPerBlock:             nil,
+			MaxTxPayloadBytesPerBlock: nil,
+			L1Config: &L1Config{
+				L1ChainId:             5,
+				L1MessageQueueAddress: common.HexToAddress("0x0000000000000000000000000000000000000000"),
+				NumL1MessagesPerBlock: 0,
+				ScrollChainAddress:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			},
+		},
+	}
+
+	// ScrollAlphaChainConfig contains the chain parameters to run a node on the Scroll Alpha test network.
+	ScrollAlphaChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(534353),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    nil,
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArrowGlacierBlock:   nil,
+		ShanghaiTime:        nil,
+		ArchimedesBlock:     big.NewInt(2646311),
+		BernoulliBlock:      nil,
+		CurieBlock:          nil,
+		DescartesBlock:      nil,
+		Clique: &CliqueConfig{
+			Period: 3,
+			Epoch:  30000,
+		},
+		Scroll: ScrollConfig{
+			UseZktrie:                 true,
+			MaxTxPerBlock:             &rcfg.ScrollMaxTxPerBlock,
+			MaxTxPayloadBytesPerBlock: &rcfg.ScrollMaxTxPayloadBytesPerBlock,
+			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
+			L1Config: &L1Config{
+				L1ChainId:             5,
+				L1MessageQueueAddress: common.HexToAddress("0x79DB48002Aa861C8cb189cabc21c6B1468BC83BB"),
+				NumL1MessagesPerBlock: 0,
+				ScrollChainAddress:    common.HexToAddress("0x3C584eC7f0f2764CC715ac3180Ae9828465E9833"),
+			},
+		},
+	}
+	ScrollSepoliaChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(534351),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    nil,
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArrowGlacierBlock:   nil,
+		ShanghaiTime:        newUint64(0),
+		ArchimedesBlock:     big.NewInt(0),
+		BernoulliBlock:      big.NewInt(3747132),
+		CurieBlock:          nil,
+		DescartesBlock:      nil,
+		Clique: &CliqueConfig{
+			Period: 3,
+			Epoch:  30000,
+		},
+		Scroll: ScrollConfig{
+			UseZktrie:                 true,
+			MaxTxPerBlock:             &rcfg.ScrollMaxTxPerBlock,
+			MaxTxPayloadBytesPerBlock: &rcfg.ScrollMaxTxPayloadBytesPerBlock,
+			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
+			L1Config: &L1Config{
+				L1ChainId:             11155111,
+				L1MessageQueueAddress: common.HexToAddress("0xF0B2293F5D834eAe920c6974D50957A1732de763"),
+				NumL1MessagesPerBlock: 10,
+				ScrollChainAddress:    common.HexToAddress("0x2D567EcE699Eabe5afCd141eDB7A4f2D0D6ce8a0"),
+			},
+		},
+	}
+	ScrollMainnetChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(534352),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    nil,
+		BerlinBlock:         big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArrowGlacierBlock:   nil,
+		ShanghaiTime:        newUint64(0),
+		ArchimedesBlock:     big.NewInt(0),
+		BernoulliBlock:      big.NewInt(5220340),
+		CurieBlock:          nil,
+		DescartesBlock:      nil,
+		Clique: &CliqueConfig{
+			Period: 3,
+			Epoch:  30000,
+		},
+		Scroll: ScrollConfig{
+			UseZktrie:                 true,
+			MaxTxPerBlock:             &rcfg.ScrollMaxTxPerBlock,
+			MaxTxPayloadBytesPerBlock: &rcfg.ScrollMaxTxPayloadBytesPerBlock,
+			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
+			L1Config: &L1Config{
+				L1ChainId:             1,
+				L1MessageQueueAddress: common.HexToAddress("0x0d7E906BD9cAFa154b048cFa766Cc1E54E39AF9B"),
+				NumL1MessagesPerBlock: 10,
+				ScrollChainAddress:    common.HexToAddress("0xa13BAF47339d63B743e7Da8741db5456DAc1E556"),
+			},
+		},
 	}
 
 	AllDevChainProtocolChanges = &ChainConfig{
@@ -203,7 +340,7 @@ var (
 		ArrowGlacierBlock:             nil,
 		GrayGlacierBlock:              nil,
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  nil,
+		ShanghaiTime:                  newUint64(0),
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		VerkleTime:                    nil,
@@ -211,6 +348,22 @@ var (
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        nil,
 		Clique:                        &CliqueConfig{Period: 0, Epoch: 30000},
+		ArchimedesBlock:               big.NewInt(0),
+		BernoulliBlock:                big.NewInt(0),
+		CurieBlock:                    big.NewInt(0),
+		DescartesBlock:                big.NewInt(0),
+		Scroll: ScrollConfig{
+			UseZktrie:                 false,
+			FeeVaultAddress:           nil,
+			MaxTxPerBlock:             nil,
+			MaxTxPayloadBytesPerBlock: nil,
+			L1Config: &L1Config{
+				L1ChainId:             5,
+				L1MessageQueueAddress: common.HexToAddress("0x0000000000000000000000000000000000000000"),
+				NumL1MessagesPerBlock: 0,
+				ScrollChainAddress:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			},
+		},
 	}
 
 	// TestChainConfig contains every protocol change (EIPs) introduced
@@ -233,7 +386,7 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		MergeNetsplitBlock:            nil,
-		ShanghaiTime:                  nil,
+		ShanghaiTime:                  newUint64(0),
 		CancunTime:                    nil,
 		PragueTime:                    nil,
 		VerkleTime:                    nil,
@@ -241,6 +394,66 @@ var (
 		TerminalTotalDifficultyPassed: false,
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
+		ArchimedesBlock:               big.NewInt(0),
+		BernoulliBlock:                big.NewInt(0),
+		CurieBlock:                    big.NewInt(0),
+		DescartesBlock:                big.NewInt(0),
+		Scroll: ScrollConfig{
+			UseZktrie:                 false,
+			FeeVaultAddress:           &common.Address{123},
+			MaxTxPerBlock:             nil,
+			MaxTxPayloadBytesPerBlock: nil,
+			L1Config: &L1Config{
+				L1ChainId:             5,
+				L1MessageQueueAddress: common.HexToAddress("0x0000000000000000000000000000000000000000"),
+				NumL1MessagesPerBlock: 0,
+				ScrollChainAddress:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			},
+		},
+	}
+
+	TestNoL1DataFeeChainConfig = &ChainConfig{
+		ChainID:                       big.NewInt(1),
+		HomesteadBlock:                big.NewInt(0),
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                false,
+		EIP150Block:                   big.NewInt(0),
+		EIP155Block:                   big.NewInt(0),
+		EIP158Block:                   big.NewInt(0),
+		ByzantiumBlock:                big.NewInt(0),
+		ConstantinopleBlock:           big.NewInt(0),
+		PetersburgBlock:               big.NewInt(0),
+		IstanbulBlock:                 big.NewInt(0),
+		MuirGlacierBlock:              big.NewInt(0),
+		BerlinBlock:                   big.NewInt(0),
+		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             big.NewInt(0),
+		GrayGlacierBlock:              big.NewInt(0),
+		MergeNetsplitBlock:            nil,
+		ShanghaiTime:                  newUint64(0),
+		CancunTime:                    nil,
+		PragueTime:                    nil,
+		VerkleTime:                    nil,
+		TerminalTotalDifficulty:       nil,
+		TerminalTotalDifficultyPassed: false,
+		Ethash:                        new(EthashConfig),
+		Clique:                        nil,
+		ArchimedesBlock:               big.NewInt(0),
+		BernoulliBlock:                big.NewInt(0),
+		CurieBlock:                    big.NewInt(0),
+		DescartesBlock:                big.NewInt(0),
+		Scroll: ScrollConfig{
+			UseZktrie:                 false,
+			FeeVaultAddress:           nil,
+			MaxTxPerBlock:             nil,
+			MaxTxPayloadBytesPerBlock: nil,
+			L1Config: &L1Config{
+				L1ChainId:             5,
+				L1MessageQueueAddress: common.HexToAddress("0x0000000000000000000000000000000000000000"),
+				NumL1MessagesPerBlock: 0,
+				ScrollChainAddress:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			},
+		},
 	}
 
 	// NonActivatedConfig defines the chain configuration without activating
@@ -281,6 +494,10 @@ var NetworkNames = map[string]string{
 	GoerliChainConfig.ChainID.String():  "goerli",
 	SepoliaChainConfig.ChainID.String(): "sepolia",
 	HoleskyChainConfig.ChainID.String(): "holesky",
+
+	ScrollAlphaChainConfig.ChainID.String():   "scroll-alpha",
+	ScrollSepoliaChainConfig.ChainID.String(): "scroll-sepolia",
+	ScrollMainnetChainConfig.ChainID.String(): "scroll",
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -309,9 +526,13 @@ type ChainConfig struct {
 	BerlinBlock         *big.Int `json:"berlinBlock,omitempty"`         // Berlin switch block (nil = no fork, 0 = already on berlin)
 	LondonBlock         *big.Int `json:"londonBlock,omitempty"`         // London switch block (nil = no fork, 0 = already on london)
 	ArrowGlacierBlock   *big.Int `json:"arrowGlacierBlock,omitempty"`   // Eip-4345 (bomb delay) switch block (nil = no fork, 0 = already activated)
-	ArchimedesBlock     *big.Int `json:"archimedesBlock,omitempty"`     // Archimedes switch block (nil = no fork, 0 = already on archimedes)
 	GrayGlacierBlock    *big.Int `json:"grayGlacierBlock,omitempty"`    // Eip-5133 (bomb delay) switch block (nil = no fork, 0 = already activated)
 	MergeNetsplitBlock  *big.Int `json:"mergeNetsplitBlock,omitempty"`  // Virtual fork after The Merge to use as a network splitter
+
+	ArchimedesBlock *big.Int `json:"archimedesBlock,omitempty"` // Archimedes switch block (nil = no fork, 0 = already on archimedes)
+	BernoulliBlock  *big.Int `json:"bernoulliBlock,omitempty"`  // Bernoulli switch block (nil = no fork, 0 = already on bernoulli)
+	CurieBlock      *big.Int `json:"curieBlock,omitempty"`      // Curie switch block (nil = no fork, 0 = already on curie)
+	DescartesBlock  *big.Int `json:"descartesBlock,omitempty"`  // Descartes switch block (nil = no fork, 0 = already on descartes)
 
 	// Fork scheduling was switched from blocks to timestamps here
 
@@ -395,6 +616,21 @@ func (s ScrollConfig) IsValidBlockSize(size uint64) bool {
 	return s.MaxTxPayloadBytesPerBlock == nil || size <= uint64(*s.MaxTxPayloadBytesPerBlock)
 }
 
+func (s ScrollConfig) String() string {
+	maxTxPerBlock := "<nil>"
+	if s.MaxTxPerBlock != nil {
+		maxTxPerBlock = fmt.Sprintf("%v", *s.MaxTxPerBlock)
+	}
+
+	maxTxPayloadBytesPerBlock := "<nil>"
+	if s.MaxTxPayloadBytesPerBlock != nil {
+		maxTxPayloadBytesPerBlock = fmt.Sprintf("%v", *s.MaxTxPayloadBytesPerBlock)
+	}
+
+	return fmt.Sprintf("{useZktrie: %v, maxTxPerBlock: %v, MaxTxPayloadBytesPerBlock: %v, feeVaultAddress: %v, l1Config: %v}",
+		s.UseZktrie, maxTxPerBlock, maxTxPayloadBytesPerBlock, s.FeeVaultAddress, s.L1Config.String())
+}
+
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
 type EthashConfig struct{}
 
@@ -469,11 +705,20 @@ func (c *ChainConfig) Description() string {
 	if c.ArrowGlacierBlock != nil {
 		banner += fmt.Sprintf(" - Arrow Glacier:               #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/arrow-glacier.md)\n", c.ArrowGlacierBlock)
 	}
-	if c.ArchimedesBlock != nil {
-		banner += fmt.Sprintf(" - Archimedes:                  #%-8v\n", c.ArchimedesBlock) // TODO: add archimedes execution-specs
-	}
 	if c.GrayGlacierBlock != nil {
 		banner += fmt.Sprintf(" - Gray Glacier:                #%-8v (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/gray-glacier.md)\n", c.GrayGlacierBlock)
+	}
+	if c.ArchimedesBlock != nil {
+		banner += fmt.Sprintf(" - Archimedes:                  #%-8v\n", c.ArchimedesBlock) // TODO: add Archimedes execution-specs
+	}
+	if c.BernoulliBlock != nil {
+		banner += fmt.Sprintf(" - Bernoulli:                   #%-8v\n", c.BernoulliBlock) // TODO: add Bernoulli execution-specs
+	}
+	if c.CurieBlock != nil {
+		banner += fmt.Sprintf(" - Curie:                       #%-8v\n", c.CurieBlock) // TODO: add Curie execution-specs
+	}
+	if c.DescartesBlock != nil {
+		banner += fmt.Sprintf(" - Descartes:                   #%-8v\n", c.DescartesBlock) // TODO: add Descartes execution-specs
 	}
 	banner += "\n"
 
@@ -506,6 +751,12 @@ func (c *ChainConfig) Description() string {
 	if c.VerkleTime != nil {
 		banner += fmt.Sprintf(" - Verkle:                      @%-10v\n", *c.VerkleTime)
 	}
+	banner += "\n"
+
+	banner += "Scroll Config:\n"
+	banner += c.Scroll.String()
+	banner += "\n"
+
 	return banner
 }
 
@@ -576,11 +827,6 @@ func (c *ChainConfig) IsArrowGlacier(num *big.Int) bool {
 	return isBlockForked(c.ArrowGlacierBlock, num)
 }
 
-// IsArchimedes returns whether num is either equal to the Archimedes fork block or greater.
-func (c *ChainConfig) IsArchimedes(num *big.Int) bool {
-	return isBlockForked(c.ArchimedesBlock, num)
-}
-
 // IsGrayGlacier returns whether num is either equal to the Gray Glacier (EIP-5133) fork block or greater.
 func (c *ChainConfig) IsGrayGlacier(num *big.Int) bool {
 	return isBlockForked(c.GrayGlacierBlock, num)
@@ -612,6 +858,26 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 // IsVerkle returns whether num is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
+}
+
+// IsArchimedes returns whether num is either equal to the Archimedes fork block or greater.
+func (c *ChainConfig) IsArchimedes(num *big.Int) bool {
+	return isBlockForked(c.ArchimedesBlock, num)
+}
+
+// IsBernoulli returns whether num is either equal to the Bernoulli fork block or greater.
+func (c *ChainConfig) IsBernoulli(num *big.Int) bool {
+	return isBlockForked(c.BernoulliBlock, num)
+}
+
+// IsCurie returns whether num is either equal to the Curie fork block or greater.
+func (c *ChainConfig) IsCurie(num *big.Int) bool {
+	return isBlockForked(c.CurieBlock, num)
+}
+
+// IsDescartes returns whether num is either equal to the Descartes fork block or greater.
+func (c *ChainConfig) IsDescartes(num *big.Int) bool {
+	return isBlockForked(c.DescartesBlock, num)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -663,13 +929,17 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "berlinBlock", block: c.BerlinBlock},
 		{name: "londonBlock", block: c.LondonBlock},
 		{name: "arrowGlacierBlock", block: c.ArrowGlacierBlock, optional: true},
-		{name: "archimedesBlock", block: c.ArchimedesBlock, optional: true},
 		{name: "grayGlacierBlock", block: c.GrayGlacierBlock, optional: true},
 		{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
-		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
+		// {name: "shanghaiTime", timestamp: c.ShanghaiTime},
 		{name: "cancunTime", timestamp: c.CancunTime, optional: true},
 		{name: "pragueTime", timestamp: c.PragueTime, optional: true},
 		{name: "verkleTime", timestamp: c.VerkleTime, optional: true},
+		{name: "archimedesBlock", block: c.ArchimedesBlock, optional: true},
+		{name: "bernoulliBlock", block: c.BernoulliBlock, optional: true},
+		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
+		{name: "curieBlock", block: c.CurieBlock, optional: true},
+		{name: "descartesBlock", block: c.DescartesBlock, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {
@@ -778,6 +1048,18 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	}
 	if isForkTimestampIncompatible(c.VerkleTime, newcfg.VerkleTime, headTimestamp) {
 		return newTimestampCompatError("Verkle fork timestamp", c.VerkleTime, newcfg.VerkleTime)
+	}
+	if isForkBlockIncompatible(c.ArchimedesBlock, newcfg.ArchimedesBlock, headNumber) {
+		return newBlockCompatError("Archimedes fork block", c.ArchimedesBlock, newcfg.ArchimedesBlock)
+	}
+	if isForkBlockIncompatible(c.BernoulliBlock, newcfg.BernoulliBlock, headNumber) {
+		return newBlockCompatError("Bernoulli fork block", c.BernoulliBlock, newcfg.BernoulliBlock)
+	}
+	if isForkBlockIncompatible(c.CurieBlock, newcfg.CurieBlock, headNumber) {
+		return newBlockCompatError("Curie fork block", c.CurieBlock, newcfg.CurieBlock)
+	}
+	if isForkBlockIncompatible(c.DescartesBlock, newcfg.DescartesBlock, headNumber) {
+		return newBlockCompatError("Descartes fork block", c.DescartesBlock, newcfg.DescartesBlock)
 	}
 	return nil
 }
@@ -923,9 +1205,9 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
-	IsArchimedes                                            bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
 	IsVerkle                                                bool
+	IsArchimedes, IsBernoulli, IsCurie, IsDescartes         bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -946,11 +1228,14 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsIstanbul:       c.IsIstanbul(num),
 		IsBerlin:         c.IsBerlin(num),
 		IsLondon:         c.IsLondon(num),
-		IsArchimedes:     c.IsArchimedes(num),
 		IsMerge:          isMerge,
 		IsShanghai:       c.IsShanghai(num, timestamp),
 		IsCancun:         c.IsCancun(num, timestamp),
 		IsPrague:         c.IsPrague(num, timestamp),
 		IsVerkle:         c.IsVerkle(num, timestamp),
+		IsArchimedes:     c.IsArchimedes(num),
+		IsBernoulli:      c.IsBernoulli(num),
+		IsCurie:          c.IsCurie(num),
+		IsDescartes:      c.IsDescartes(num),
 	}
 }

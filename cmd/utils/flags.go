@@ -81,6 +81,11 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+const (
+	GCModeFull    = "full"
+	GCModeArchive = "archive"
+)
+
 // These are all the command line flags we support.
 // If you add to this list, please remember to include the
 // flag in the appropriate command definition.
@@ -157,6 +162,21 @@ var (
 	HoleskyFlag = &cli.BoolFlag{
 		Name:     "holesky",
 		Usage:    "Holesky network: pre-configured proof-of-stake test network",
+		Category: flags.EthCategory,
+	}
+	ScrollFlag = &cli.BoolFlag{
+		Name:     "scroll",
+		Usage:    "Scroll mainnet",
+		Category: flags.EthCategory,
+	}
+	ScrollAlphaFlag = &cli.BoolFlag{
+		Name:     "scroll-alpha",
+		Usage:    "Scroll Alpha test network",
+		Category: flags.EthCategory,
+	}
+	ScrollSepoliaFlag = &cli.BoolFlag{
+		Name:     "scroll-sepolia",
+		Usage:    "Scroll Sepolia test network",
 		Category: flags.EthCategory,
 	}
 	// Dev mode
@@ -265,7 +285,7 @@ var (
 	GCModeFlag = &cli.StringFlag{
 		Name:     "gcmode",
 		Usage:    `Blockchain garbage collection mode, only relevant in state.scheme=hash ("full", "archive")`,
-		Value:    "full",
+		Value:    GCModeArchive,
 		Category: flags.StateCategory,
 	}
 	StateSchemeFlag = &cli.StringFlag{
@@ -991,9 +1011,11 @@ var (
 		GoerliFlag,
 		SepoliaFlag,
 		HoleskyFlag,
+		ScrollAlphaFlag,
+		ScrollSepoliaFlag,
 	}
 	// NetworkFlags is the flag group of all built-in supported networks.
-	NetworkFlags = append([]cli.Flag{MainnetFlag}, TestnetFlags...)
+	NetworkFlags = append([]cli.Flag{MainnetFlag, ScrollFlag}, TestnetFlags...)
 
 	// DatabaseFlags is the flag group of all database flags.
 	DatabaseFlags = []cli.Flag{
@@ -1019,6 +1041,15 @@ func MakeDataDir(ctx *cli.Context) string {
 		}
 		if ctx.Bool(HoleskyFlag.Name) {
 			return filepath.Join(path, "holesky")
+		}
+		if ctx.Bool(ScrollAlphaFlag.Name) {
+			return filepath.Join(path, "scroll-alpha")
+		}
+		if ctx.Bool(ScrollSepoliaFlag.Name) {
+			return filepath.Join(path, "scroll-sepolia")
+		}
+		if ctx.Bool(ScrollFlag.Name) {
+			return filepath.Join(path, "scroll")
 		}
 		return path
 	}
@@ -1082,6 +1113,12 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 			urls = params.SepoliaBootnodes
 		case ctx.Bool(GoerliFlag.Name):
 			urls = params.GoerliBootnodes
+		case ctx.Bool(ScrollAlphaFlag.Name):
+			urls = params.ScrollAlphaBootnodes
+		case ctx.Bool(ScrollSepoliaFlag.Name):
+			urls = params.ScrollSepoliaBootnodes
+		case ctx.Bool(ScrollFlag.Name):
+			urls = params.ScrollMainnetBootnodes
 		}
 	}
 	cfg.BootstrapNodes = mustParseBootnodes(urls)
@@ -1569,6 +1606,12 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
 	case ctx.Bool(HoleskyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "holesky")
+	case ctx.Bool(ScrollAlphaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "scroll-alpha")
+	case ctx.Bool(ScrollSepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "scroll-sepolia")
+	case ctx.Bool(ScrollFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "scroll")
 	}
 }
 
@@ -1748,7 +1791,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, GoerliFlag, SepoliaFlag, HoleskyFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, GoerliFlag, SepoliaFlag, HoleskyFlag, ScrollAlphaFlag, ScrollSepoliaFlag, ScrollFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
@@ -1799,11 +1842,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.DatabaseFreezer = ctx.String(AncientFlag.Name)
 	}
 
-	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
+	if gcmode := ctx.String(GCModeFlag.Name); gcmode != GCModeFull && gcmode != GCModeArchive {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	if ctx.IsSet(GCModeFlag.Name) {
-		cfg.NoPruning = ctx.String(GCModeFlag.Name) == "archive"
+		cfg.NoPruning = ctx.String(GCModeFlag.Name) == GCModeArchive
 	}
 	if ctx.IsSet(CacheNoPrefetchFlag.Name) {
 		cfg.NoPrefetch = ctx.Bool(CacheNoPrefetchFlag.Name)
@@ -1832,7 +1875,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Warn("The flag --txlookuplimit is deprecated and will be removed, please use --history.transactions")
 		cfg.TransactionHistory = ctx.Uint64(TxLookupLimitFlag.Name)
 	}
-	if ctx.String(GCModeFlag.Name) == "archive" && cfg.TransactionHistory != 0 {
+	if ctx.String(GCModeFlag.Name) == GCModeArchive && cfg.TransactionHistory != 0 {
 		cfg.TransactionHistory = 0
 		log.Warn("Disabled transaction unindexing for archive node")
 	}
@@ -1918,6 +1961,50 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
+	case ctx.Bool(ScrollAlphaFlag.Name):
+		if !ctx.IsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 534353
+		}
+		cfg.Genesis = core.DefaultScrollAlphaGenesisBlock()
+		// SetDNSDiscoveryDefaults(cfg, params.ScrollAlphaGenesisHash)
+	case ctx.Bool(ScrollSepoliaFlag.Name):
+		if !ctx.IsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 534351
+		}
+		cfg.Genesis = core.DefaultScrollSepoliaGenesisBlock()
+		// forced for sepolia
+		log.Info("Setting flag", "--l1.confirmations", "finalized")
+		stack.Config().L1Confirmations = rpc.FinalizedBlockNumber
+		log.Info("Setting flag", "--l1.sync.startblock", "4038000")
+		stack.Config().L1DeploymentBlock = 4038000
+		// disable pruning
+		if ctx.String(GCModeFlag.Name) != GCModeArchive {
+			log.Crit("Must use --gcmode=archive")
+		}
+		log.Info("Pruning disabled")
+		cfg.NoPruning = true
+		// disable prefetch
+		log.Info("Prefetch disabled")
+		cfg.NoPrefetch = true
+	case ctx.Bool(ScrollFlag.Name):
+		if !ctx.IsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 534352
+		}
+		cfg.Genesis = core.DefaultScrollMainnetGenesisBlock()
+		// forced for mainnet
+		log.Info("Setting flag", "--l1.confirmations", "finalized")
+		stack.Config().L1Confirmations = rpc.FinalizedBlockNumber
+		log.Info("Setting flag", "--l1.sync.startblock", "18306000")
+		stack.Config().L1DeploymentBlock = 18306000
+		// disable pruning
+		if ctx.String(GCModeFlag.Name) != GCModeArchive {
+			log.Crit("Must use --gcmode=archive")
+		}
+		log.Info("Pruning disabled")
+		cfg.NoPruning = true
+		// disable prefetch
+		log.Info("Prefetch disabled")
+		cfg.NoPrefetch = true
 	case ctx.Bool(DeveloperFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -2256,6 +2343,12 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultSepoliaGenesisBlock()
 	case ctx.Bool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
+	case ctx.Bool(ScrollAlphaFlag.Name):
+		genesis = core.DefaultScrollAlphaGenesisBlock()
+	case ctx.Bool(ScrollSepoliaFlag.Name):
+		genesis = core.DefaultScrollSepoliaGenesisBlock()
+	case ctx.Bool(ScrollFlag.Name):
+		genesis = core.DefaultScrollMainnetGenesisBlock()
 	case ctx.Bool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
@@ -2276,7 +2369,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if err != nil {
 		Fatalf("%v", err)
 	}
-	if gcmode := ctx.String(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
+	if gcmode := ctx.String(GCModeFlag.Name); gcmode != GCModeFull && gcmode != GCModeArchive {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	scheme, err := rawdb.ParseStateScheme(ctx.String(StateSchemeFlag.Name), chainDb)
@@ -2287,7 +2380,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		TrieCleanLimit:      ethconfig.Defaults.TrieCleanCache,
 		TrieCleanNoPrefetch: ctx.Bool(CacheNoPrefetchFlag.Name),
 		TrieDirtyLimit:      ethconfig.Defaults.TrieDirtyCache,
-		TrieDirtyDisabled:   ctx.String(GCModeFlag.Name) == "archive",
+		TrieDirtyDisabled:   ctx.String(GCModeFlag.Name) == GCModeArchive,
 		TrieTimeLimit:       ethconfig.Defaults.TrieTimeout,
 		SnapshotLimit:       ethconfig.Defaults.SnapshotCache,
 		Preimages:           ctx.Bool(CachePreimagesFlag.Name),

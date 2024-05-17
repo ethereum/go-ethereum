@@ -64,6 +64,29 @@ var GoerliBootnodes = []string{
 	"enode://d2b720352e8216c9efc470091aa91ddafc53e222b32780f505c817ceef69e01d5b0b0797b69db254c586f493872352f5a022b4d8479a00fc92ec55f9ad46a27e@88.99.70.182:30303",
 }
 
+// ScrollAlphaBootnodes are the enode URLs of the P2P bootstrap nodes running on the Scroll Alpha test network.
+var ScrollAlphaBootnodes = []string{
+	"enode://996a655365e731321ca35636f5a62fdf37c0b75dc56a8832c472d077da5af47effe45874196268f6083b8f65e1a9589ed25015f68f47598c7bcc93ac8ea29e8a@35.85.116.190:30303",
+	"enode://a4e90d8108bbcd8b13066567c786f800812a9b6b3eeb92947e64edd19ac9231bf371da1a86796af2ccd7b7e781218ebbe2d04130d63f7b3f25d6372a706fc022@44.224.134.190:30303",
+	"enode://cf85bfa5828239b1f6b21758579ee8aaaba2a1fb4c658d6967c5f7ed4f040d95dee5b5cef0c77d656a191f6b0875dd03f05b30a3b2b3e15bfcf18b500d8f634c@35.155.117.77:30303",
+}
+
+// ScrollSepoliaBootnodes are the enode URLs of the P2P bootstrap nodes running on the Scroll Sepolia test network.
+var ScrollSepoliaBootnodes = []string{
+	"enode://ceb1636bac5cbb262e5ad5b2cd22014bdb35ffe7f58b3506970d337a63099481814a338dbcd15f2d28757151e3ecd40ba38b41350b793cd0d910ff0436654f8c@35.85.84.250:30303",
+	"enode://29cee709c400533ae038a875b9ca975c8abef9eade956dcf3585e940acd5c0ae916968f514bd37d1278775aad1b7db30f7032a70202a87fd7365bd8de3c9f5fc@44.242.39.33:30303",
+	"enode://dd1ac5433c5c2b04ca3166f4cb726f8ff6d2da83dbc16d9b68b1ea83b7079b371eb16ef41c00441b6e85e32e33087f3b7753ea9e8b1e3f26d3e4df9208625e7f@54.148.111.168:30303",
+}
+
+// ScrollMainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the Scroll mainnet.
+var ScrollMainnetBootnodes = []string{
+	"enode://c6ac91f43df3d63916ac1ae411cdd5ba249d55d48a7bec7f8cd5bb351a31aba437e5a69e8a1de74d73fdfeba8af1cfe9caf9846ecd3abf60d1ffdf4925b55b23@54.186.123.248:30303",
+	"enode://fdcc807b5d1353f3a1e98b90208ce6ef1b7d446136e51eaa8ad657b55518a2f8b37655e42375d61622e6ea18f3faf9d070c9bbdf012cf5484bcbad33b7a15fb1@44.227.91.206:30303",
+	"enode://6beb5a3efbb39be73d17630b6da48e94c0ce7ec665172111463cb470197b20c12faa1fa6f835b81c28571277d1017e65c4e426cc92a46141cf69118ecf28ac03@44.237.194.52:30303",
+	"enode://7cf893d444eb8e129dca0f6485b3df579911606e7c728be4fa55fcc5f155a37c3ce07d217ccec5447798bde465ac2bdba2cb8763d107e9f3257e787579e9f27e@52.35.203.107:30303",
+	"enode://c7b2d94e95da343db6e667a01cef90376a592f2d277fbcbf6e9c9186734ed8003d01389571bd10cdbab7a6e5adfa6f0c7b55644d0db24e0b9deb4ec80f842075@54.70.236.187:30303",
+}
+
 var V5Bootnodes = []string{
 	// Teku team's bootnode
 	"enr:-KG4QOtcP9X1FbIMOe17QNMKqDxCpm14jcX5tiOE4_TyMrFqbmhPZHK_ZPG2Gxb1GE2xdtodOfx9-cgvNtxnRyHEmC0ghGV0aDKQ9aX9QgAAAAD__________4JpZIJ2NIJpcIQDE8KdiXNlY3AyNTZrMaEDhpehBDbZjM_L9ek699Y7vhUJ-eAdMyQW_Fil522Y0fODdGNwgiMog3VkcIIjKA",
