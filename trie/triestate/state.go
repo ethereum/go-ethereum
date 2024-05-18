@@ -51,7 +51,7 @@ type TrieLoader interface {
 	OpenTrie(root common.Hash) (Trie, error)
 
 	// OpenStorageTrie opens the storage trie of an account.
-	OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (Trie, error)
+	OpenStorageTrie(stateRoot, addrHash, root common.Hash) (Trie, error)
 }
 
 // Set represents a collection of mutated states during a state transition.

@@ -89,6 +89,6 @@ func (l *MerkleLoader) OpenTrie(root common.Hash) (triestate.Trie, error) {
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (l *MerkleLoader) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (triestate.Trie, error) {
+func (l *MerkleLoader) OpenStorageTrie(stateRoot, addrHash, root common.Hash) (triestate.Trie, error) {
 	return New(StorageTrieID(stateRoot, addrHash, root), l.db)
 }
