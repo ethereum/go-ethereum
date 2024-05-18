@@ -35,7 +35,7 @@ const (
 	DefaultAuthHost = "localhost" // Default host interface for the authenticated apis
 	DefaultAuthPort = 8551        // Default port for the authenticated apis
 	DefaultUDPPort  = 9009        // Default UDP port for the p2p network
-	DetaultLoglevel = 1           // Default loglevel for portal network, which is error level
+	DefaultLoglevel = 1           // Default loglevel for portal network, which is error level
 )
 
 const (
