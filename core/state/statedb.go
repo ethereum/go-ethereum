@@ -105,7 +105,7 @@ type StateDB struct {
 	// resurrection. The account value is tracked as the original value
 	// before the transition. This map is populated at the transaction
 	// boundaries.
-	stateObjectsDestruct map[common.Address]*types.StateAccount
+	stateObjectsDestruct map[common.Address]*stateObject
 
 	// This map tracks the account mutations that occurred during the
 	// transition. Uncommitted mutations belonging to the same account
@@ -163,6 +163,7 @@ type StateDB struct {
 	StorageUpdated atomic.Int64
 	AccountDeleted int
 	StorageDeleted atomic.Int64
+	witness        *Witness
 }
 
 // New creates a new state from a given trie.
@@ -177,7 +178,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		originalRoot:         root,
 		snaps:                snaps,
 		stateObjects:         make(map[common.Address]*stateObject),
-		stateObjectsDestruct: make(map[common.Address]*types.StateAccount),
+		stateObjectsDestruct: make(map[common.Address]*stateObject),
 		mutations:            make(map[common.Address]*mutation),
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
@@ -582,7 +583,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		start := time.Now()
 		acc, err := s.snap.Account(crypto.HashData(s.hasher, addr.Bytes()))
 		s.SnapshotAccountReads += time.Since(start)
-
 		if err == nil {
 			if acc == nil {
 				return nil
@@ -703,6 +703,9 @@ func (s *StateDB) Copy() *StateDB {
 		snaps: s.snaps,
 		snap:  s.snap,
 	}
+	if s.witness != nil {
+		state.witness = s.witness.Copy()
+	}
 	// Deep copy cached state objects.
 	for addr, obj := range s.stateObjects {
 		state.stateObjects[addr] = obj.deepCopy(state)
@@ -755,6 +758,12 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	s.validRevisions = s.validRevisions[:idx]
 }
 
+// EnableWitnessRecording configures the StateDB to build a stateless block
+// witness this must becalled before starting prefetchers or applying state changes
+func (s *StateDB) EnableWitnessBuilding() {
+	s.witness = NewWitness(s.originalRoot)
+}
+
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
 	return s.refund
@@ -788,7 +797,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			// set indefinitely). Note only the first occurred self-destruct
 			// event is tracked.
 			if _, ok := s.stateObjectsDestruct[obj.address]; !ok {
-				s.stateObjectsDestruct[obj.address] = obj.origin
+				s.stateObjectsDestruct[obj.address] = obj
 			}
 		} else {
 			obj.finalise()
@@ -808,6 +817,46 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	s.clearJournalAndRefund()
 }
 
+// collectNonCommittedTrieAccessLists is called if witness building is enabled.
+// It collects witness access lists for accounts that read from storage, and
+// whose tries are not going to be hashed/committed (accounts with non-mutated
+// storage and self-destructed accounts).
+func (s *StateDB) collectNonCommittedTrieAccessLists() {
+	collectAccount := func(obj *stateObject) {
+		if obj.Root() == types.EmptyRootHash {
+			// TODO: unsure if this explicit check is needed
+			return
+		}
+		tr := obj.getPrefetchedTrie()
+		if tr == nil {
+			if obj.trie == nil {
+				// object storage was never read from
+				return
+			}
+			// either the snapshot is not enabled or the object was not present
+			tr = obj.trie
+		}
+
+		al := tr.AccessList()
+		if al == nil {
+			panic("impossible case: storage trie is non-empty and known to have been read from but a nil access list was returned")
+		}
+		if len(al) == 0 {
+			panic("impossible case: storage trie is non-empty and known to have been read from but a zero-length access list was returned")
+		}
+		s.witness.addAccessList(obj.addrHash, al)
+	}
+	for _, obj := range s.stateObjectsDestruct {
+		collectAccount(obj)
+	}
+	for _, obj := range s.stateObjects {
+		if _, ok := s.mutations[obj.address]; ok {
+			continue
+		}
+		collectAccount(obj)
+	}
+}
+
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
@@ -824,6 +873,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			s.prefetcher = nil // Pre-byzantium, unset any used up prefetcher
 		}()
 	}
+
 	// Process all storage updates concurrently. The state object update root
 	// method will internally call a blocking trie fetch from the prefetcher,
 	// so there's no need to explicitly wait for the prefetchers to finish.
@@ -848,6 +898,12 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			obj.updateRoot()
 			return nil
 		})
+	}
+	if s.witness != nil {
+		// if witness building is enabled, collect storage access lists from
+		// tries that will not be committed: accounts with non-mutated storage
+		// and self-destructed accounts.
+		s.collectNonCommittedTrieAccessLists()
 	}
 	workers.Wait()
 	s.StorageUpdates += time.Since(start)
@@ -1060,7 +1116,8 @@ func (s *StateDB) handleDestruction() (map[common.Hash]*accountDelete, []*trieno
 		buf     = crypto.NewKeccakState()
 		deletes = make(map[common.Hash]*accountDelete)
 	)
-	for addr, prev := range s.stateObjectsDestruct {
+	for addr, obj := range s.stateObjectsDestruct {
+		prev := obj.origin
 		// The account was non-existent, and it's marked as destructed in the scope
 		// of block. It can be either case (a) or (b) and will be interpreted as
 		// null->null state transition.
@@ -1168,6 +1225,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 		root    common.Hash
 		workers errgroup.Group
 	)
+
 	// Schedule the account trie first since that will be the biggest, so give
 	// it the most time to crunch.
 	//
@@ -1178,8 +1236,25 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	// Obviously it's not an end of the world issue, just something the original
 	// code didn't anticipate for.
 	workers.Go(func() error {
+		var (
+			newroot common.Hash
+			set     *trienode.NodeSet
+			al      map[string][]byte
+		)
 		// Write the account trie changes, measuring the amount of wasted time
-		newroot, set := s.trie.Commit(true)
+		if s.witness != nil {
+			newroot, set = s.trie.Commit(true)
+			al = s.trie.AccessList()
+			if al == nil {
+				panic("this should only happen if starting with completely empty state")
+			}
+			if len(al) == 0 {
+				panic("blocks without state changes not possible")
+			}
+			s.witness.addAccessList(common.Hash{}, al)
+		} else {
+			newroot, set = s.trie.Commit(true)
+		}
 		root = newroot
 
 		if err := merge(set); err != nil {
@@ -1207,7 +1282,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 		// Run the storage updates concurrently to one another
 		workers.Go(func() error {
 			// Write any storage changes in the state object to its storage trie
-			update, set, err := obj.commit()
+			update, set, al, err := obj.commit()
 			if err != nil {
 				return err
 			}
@@ -1215,9 +1290,12 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 				return err
 			}
 			lock.Lock()
+			defer lock.Unlock()
 			updates[obj.addrHash] = update
 			s.StorageCommits = time.Since(start) // overwrite with the longest storage commit runtime
-			lock.Unlock()
+			if s.witness != nil && len(al) > 0 {
+				s.witness.addAccessList(obj.addrHash, al)
+			}
 			return nil
 		})
 	}
@@ -1239,7 +1317,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 
 	// Clear all internal flags and update state root at the end.
 	s.mutations = make(map[common.Address]*mutation)
-	s.stateObjectsDestruct = make(map[common.Address]*types.StateAccount)
+	s.stateObjectsDestruct = make(map[common.Address]*stateObject)
 
 	origin := s.originalRoot
 	s.originalRoot = root
@@ -1292,6 +1370,12 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 		}
 	}
 	return ret, err
+}
+
+// Witness returns a block witness object being constructed or nil if the
+// StateDB instance is not configured to record stateless witnesses.
+func (s *StateDB) Witness() *Witness {
+	return s.witness
 }
 
 // Commit writes the state mutations into the configured data stores.

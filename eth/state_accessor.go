@@ -146,7 +146,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
 			return nil, nil, fmt.Errorf("block #%d not found", next)
 		}
-		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{})
+		_, _, _, err := eth.blockchain.Processor().Process(current, statedb, vm.Config{}, nil)
 		if err != nil {
 			return nil, nil, fmt.Errorf("processing block %d failed: %v", current.NumberU64(), err)
 		}
@@ -235,7 +235,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	}
 	// Insert parent beacon block root in the state as per EIP-4788.
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, eth.blockchain.Config(), vm.Config{})
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
@@ -248,7 +248,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 		// Assemble the transaction call message and return if the requested offset
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
 		txContext := core.NewEVMTxContext(msg)
-		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
+		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil, nil)
 		if idx == txIndex {
 			return tx, context, statedb, release, nil
 		}

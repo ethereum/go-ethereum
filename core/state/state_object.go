@@ -323,10 +323,6 @@ func (s *stateObject) finalise() {
 //
 // It assumes all the dirty storage slots have been finalized before.
 func (s *stateObject) updateTrie() (Trie, error) {
-	// Short circuit if nothing changed, don't bother with hashing anything
-	if len(s.uncommittedStorage) == 0 {
-		return s.trie, nil
-	}
 	// Retrieve a pretecher populated trie, or fall back to the database
 	tr := s.getPrefetchedTrie()
 	if tr != nil {
@@ -340,6 +336,14 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			s.db.setError(err)
 			return nil, err
 		}
+	}
+	// Short circuit if nothing changed, don't bother with hashing anything.
+	//
+	// We only quit after the prefetched trie is potentially resolved above
+	// because, when building a stateless witness we will need to collect
+	//storage access witnesses from the object's trie when we commit it.
+	if len(s.uncommittedStorage) == 0 {
+		return s.trie, nil
 	}
 	// Perform trie updates before deletions. This prevents resolution of unnecessary trie nodes
 	// in circumstances similar to the following:
@@ -446,7 +450,9 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 //
 // Note, commit may run concurrently across all the state objects. Do not assume
 // thread-safe access to the statedb.
-func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
+func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, map[string][]byte, error) {
+	var al map[string][]byte
+
 	// commit the account metadata changes
 	op := &accountUpdate{
 		address: s.address,
@@ -468,12 +474,18 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 	if len(op.storages) == 0 {
 		// nothing changed, don't bother to commit the trie
 		s.origin = s.data.Copy()
-		return op, nil, nil
+		if s.trie != nil && !s.trie.IsVerkle() {
+			al = s.trie.AccessList()
+		}
+		return op, nil, al, nil
 	}
 	root, nodes := s.trie.Commit(false)
 	s.data.Root = root
 	s.origin = s.data.Copy()
-	return op, nodes, nil
+	if !s.trie.IsVerkle() {
+		al = s.trie.AccessList()
+	}
+	return op, nodes, al, nil
 }
 
 // AddBalance adds amount to s's balance.

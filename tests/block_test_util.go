@@ -26,6 +26,9 @@ import (
 	"os"
 	"reflect"
 
+	"github.com/ethereum/go-ethereum/cmd/utils/stateless"
+	"github.com/ethereum/go-ethereum/core/tracing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -34,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
@@ -111,6 +113,14 @@ type btHeaderMarshaling struct {
 }
 
 func (t *BlockTest) Run(snapshotter bool, scheme string, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
+	return t.run(false, snapshotter, scheme, tracer, postCheck)
+}
+
+func (t *BlockTest) RunStateless(snapshotter bool, scheme string, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
+	return t.run(true, snapshotter, scheme, tracer, postCheck)
+}
+
+func (t *BlockTest) run(isStateless bool, snapshotter bool, scheme string, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -184,7 +194,29 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer *tracing.Hooks, 
 			return err
 		}
 	}
-	return t.validateImportedHeaders(chain, validBlocks)
+	if err := t.validateImportedHeaders(chain, validBlocks); err != nil {
+		return err
+	}
+	if isStateless {
+		for _, blk := range validBlocks {
+			proof, err := stateless.BuildStatelessProof(blk.BlockHeader.Hash, chain)
+			if err != nil {
+				return fmt.Errorf("failed to build proof: %v", err)
+			}
+			witness, err := state.DecodeWitnessRLP(proof)
+			if err != nil {
+				return fmt.Errorf("failed to decode witness RLP: %v", err)
+			}
+			root, err := stateless.StatelessExecute(config, witness)
+			if err != nil {
+				return fmt.Errorf("verification execution error: %v", err)
+			}
+			if root != blk.BlockHeader.StateRoot {
+				return fmt.Errorf("state root mismatch (wanted: %x, got: %x)", blk.BlockHeader.StateRoot, root)
+			}
+		}
+	}
+	return nil
 }
 
 func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {

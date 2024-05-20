@@ -601,6 +601,12 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
+// AccessList returns a map of path->blob containing all trie nodes that have
+// been accessed.
+func (t *Trie) AccessList() map[string][]byte {
+	return t.tracer.accessList
+}
+
 // Commit collects all dirty nodes in the trie and replaces them with the
 // corresponding node hash. All collected nodes (including dirty leaves if
 // collectLeaf is true) will be encapsulated into a nodeset for return.

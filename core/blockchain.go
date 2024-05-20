@@ -1916,7 +1916,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig, nil)
 	if err != nil {
 		bc.reportBlock(block, receipts, err)
 		return nil, err
@@ -1924,7 +1924,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	ptime := time.Since(pstart)
 
 	vstart := time.Now()
-	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
+	if _, err := bc.validator.ValidateState(block, statedb, receipts, usedGas, true); err != nil {
 		bc.reportBlock(block, receipts, err)
 		return nil, err
 	}

@@ -214,6 +214,10 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 	return t.db.Preimage(common.BytesToHash(shaKey))
 }
 
+func (t *StateTrie) AccessList() map[string][]byte {
+	return t.trie.AccessList()
+}
+
 // Commit collects all dirty nodes in the trie and replaces them with the
 // corresponding node hash. All collected nodes (including dirty leaves if
 // collectLeaf is true) will be encapsulated into a nodeset for return.
