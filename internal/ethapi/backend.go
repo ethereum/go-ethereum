@@ -51,6 +51,7 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
 	AccountManager() *accounts.Manager
+	RPCGasCap() uint64 // global gas cap for eth_call over rpc: DoS protection
 	XDCxService() *XDCx.XDCX
 	LendingService() *XDCxlending.Lending
 

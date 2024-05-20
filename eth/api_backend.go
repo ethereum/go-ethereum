@@ -348,6 +348,10 @@ func (b *EthApiBackend) EventMux() *event.TypeMux {
 	return b.eth.EventMux()
 }
 
+func (b *EthApiBackend) RPCGasCap() uint64 {
+	return b.eth.config.RPCGasCap
+}
+
 func (b *EthApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.AccountManager()
 }
@@ -375,6 +379,10 @@ func (b *EthApiBackend) GetIPCClient() (bind.ContractBackend, error) {
 
 func (b *EthApiBackend) GetEngine() consensus.Engine {
 	return b.eth.engine
+}
+
+func (b *EthApiBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
+	return b.eth.stateAtBlock(block, reexec, base, checkLive)
 }
 
 func (s *EthApiBackend) GetRewardByHash(hash common.Hash) map[string]map[string]map[string]*big.Int {

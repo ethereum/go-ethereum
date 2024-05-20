@@ -118,7 +118,7 @@ var (
 	Enable0xPrefixFlag = cli.BoolFlag{
 		Name:  "enable-0x-prefix",
 		Usage: "Addres use 0x-prefix (Deprecated: this is on by default, to use xdc prefix use --enable-xdc-prefix)",
-	}	
+	}
 	EnableXDCPrefixFlag = cli.BoolFlag{
 		Name:  "enable-xdc-prefix",
 		Usage: "Addres use xdc-prefix (default = false)",
@@ -357,6 +357,11 @@ var (
 	VMEnableDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
 		Usage: "Record information useful for VM and contract debugging",
+	}
+	RPCGlobalGasCapFlag = cli.Uint64Flag{
+		Name:  "rpc.gascap",
+		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
+		Value: eth.DefaultConfig.RPCGasCap,
 	}
 	// Logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
@@ -1175,6 +1180,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
+	}
+	if cfg.RPCGasCap != 0 {
+		log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
+	} else {
+		log.Info("Global gas cap disabled")
 	}
 	if ctx.GlobalIsSet(StoreRewardFlag.Name) {
 		common.StoreRewardFolder = filepath.Join(stack.DataDir(), "XDC", "rewards")
