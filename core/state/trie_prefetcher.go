@@ -40,10 +40,11 @@ var (
 //
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
-	db       Database               // Database to fetch trie nodes through
-	root     common.Hash            // Root hash of the account trie for metrics
-	fetchers map[string]*subfetcher // Subfetchers for each trie
-	term     chan struct{}          // Channel to signal interruption
+	db               Database               // Database to fetch trie nodes through
+	root             common.Hash            // Root hash of the account trie for metrics
+	fetchers         map[string]*subfetcher // Subfetchers for each trie
+	term             chan struct{}          // Channel to signal interruption
+	collectWitnesses bool                   // whether to allow prefetch calls for witness collection
 
 	deliveryMissMeter metrics.Meter
 	accountLoadMeter  metrics.Meter
@@ -54,13 +55,14 @@ type triePrefetcher struct {
 	storageWasteMeter metrics.Meter
 }
 
-func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
+func newTriePrefetcher(db Database, root common.Hash, namespace string, collectWitnesses bool) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	return &triePrefetcher{
-		db:       db,
-		root:     root,
-		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
-		term:     make(chan struct{}),
+		db:               db,
+		root:             root,
+		fetchers:         make(map[string]*subfetcher), // Active prefetchers use the fetchers map
+		term:             make(chan struct{}),
+		collectWitnesses: collectWitnesses,
 
 		deliveryMissMeter: metrics.GetOrRegisterMeter(prefix+"/deliverymiss", nil),
 		accountLoadMeter:  metrics.GetOrRegisterMeter(prefix+"/account/load", nil),
@@ -140,6 +142,14 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 		p.fetchers[id] = fetcher
 	}
 	return fetcher.schedule(keys)
+}
+
+// prefetchWitness calls prefetch if witness collection is enabled.
+func (p *triePrefetcher) prefetchWitness(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte) error {
+	if p.collectWitnesses {
+		return p.prefetch(owner, root, addr, keys)
+	}
+	return nil
 }
 
 // trie returns the trie matching the root hash, blocking until the fetcher of

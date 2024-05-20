@@ -604,6 +604,11 @@ var (
 		Usage:    "Disables db compaction after import",
 		Category: flags.LoggingCategory,
 	}
+	DebugCollectWitnessFlag = &cli.BoolFlag{
+		Name:     "collectwitnesses",
+		Usage:    "Enable state witness generation during block execution. Work in progress flag, don't use.",
+		Category: flags.MiscCategory,
+	}
 
 	// MISC settings
 	SyncTargetFlag = &cli.StringFlag{
@@ -2204,6 +2209,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 			vmcfg.Tracer = t
 		}
 	}
+	vmcfg.EnableWitnessCollection = ctx.Bool(DebugCollectWitnessFlag.Name)
 	// Disable transaction indexing/unindexing by default.
 	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {

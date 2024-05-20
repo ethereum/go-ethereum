@@ -212,6 +212,9 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 			}
 			value.SetBytes(content)
 		}
+		if s.data.Root != types.EmptyRootHash {
+			s.db.prefetcher.prefetchWitness(s.addrHash, s.origin.Root, s.address, [][]byte{key[:]})
+		}
 	}
 	// If the snapshot is unavailable or reading from it fails, load from the database.
 	if s.db.snap == nil || err != nil {
