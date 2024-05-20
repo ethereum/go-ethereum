@@ -53,7 +53,7 @@ const (
 
 	portalFindnodesResultLimit = 32
 
-	defaultUTPConnectTimeout = 15 * time.Second
+	defaultUTPConnectTimeout = 60 * time.Second
 
 	defaultUTPWriteTimeout = 60 * time.Second
 
@@ -235,7 +235,6 @@ func (p *PortalProtocol) Start() error {
 	if err != nil {
 		return err
 	}
-
 	p.DiscV5.RegisterTalkHandler(p.protocolId, p.handleTalkRequest)
 	p.DiscV5.RegisterTalkHandler(string(portalwire.UTPNetwork), p.handleUtpTalkRequest)
 
@@ -296,13 +295,19 @@ func (p *PortalProtocol) setupUDPListening() error {
 	var err error
 	p.packetRouter = utp.NewPacketRouter(
 		func(buf []byte, addr *net.UDPAddr) (int, error) {
-			p.Log.Info("will send to target data", "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
+			p.Log.Info("will send to target data", "network", string(portalwire.UTPNetwork), "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
 
 			p.cachedIdsLock.Lock()
 			defer p.cachedIdsLock.Unlock()
 			if id, ok := p.cachedIds[addr.String()]; ok {
-				_, err := p.DiscV5.TalkRequestToID(id, addr, string(portalwire.UTPNetwork), buf)
-				return len(buf), err
+				sendToId := id
+				go func(targetId enode.ID, addr *net.UDPAddr, utpNetwork string, buffer []byte) {
+					_, err := p.DiscV5.TalkRequestToID(targetId, addr, utpNetwork, buffer)
+					if err != nil {
+						p.Log.Error("send utp talk request failed", "err", err)
+					}
+				}(sendToId, addr, string(portalwire.UTPNetwork), buf)
+				return len(buf), nil
 			} else {
 				p.Log.Warn("not found target node info", "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
 				return 0, fmt.Errorf("not found target node id")
@@ -795,7 +800,6 @@ func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, ms
 	if n := p.DiscV5.getNode(id); n != nil {
 		p.table.addSeenNode(wrapNode(n))
 	}
-
 	p.putCacheId(id, addr)
 	p.Log.Trace("receive utp data", "addr", addr, "msg-length", len(msg))
 	p.packetRouter.ReceiveMessage(msg, addr)
