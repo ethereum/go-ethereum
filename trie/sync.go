@@ -157,7 +157,10 @@ type nodeOp struct {
 	hash  common.Hash // hash of the node content (empty for node deletion)
 }
 
-// isDelete indicates if the operation is a database deletion.
+// valid checks whether the node operation is valid.
+//
+//	for node deletion, the node blob must be zero-length.
+//	for node update, the node blob must be non-zero-length.
 func (op *nodeOp) valid() bool {
 	if op.del && len(op.blob) != 0 {
 		return false
