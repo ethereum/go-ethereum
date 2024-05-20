@@ -128,6 +128,7 @@ var (
 		//utils.GpoBlocksFlag,
 		//utils.GpoPercentileFlag,
 		utils.GpoMaxGasPriceFlag,
+		utils.GpoIgnoreGasPriceFlag,
 		//utils.ExtraDataFlag,
 		configFileFlag,
 		utils.AnnounceTxsFlag,
