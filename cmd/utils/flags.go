@@ -1000,7 +1000,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 	PortalLogLevelFlag = &cli.IntFlag{
 		Name:     "loglevel",
 		Usage:    "loglevel of portal network",
-		Value:    node.DetaultLoglevel,
+		Value:    node.DefaultLoglevel,
 		Category: flags.PortalNetworkCategory,
 	}
 
