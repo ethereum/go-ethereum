@@ -33,6 +33,18 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
+// DefaultFullGPOConfig contains default gasprice oracle settings for full node.
+var DefaultFullGPOConfig = gasprice.Config{
+	Blocks:     20,
+	Percentile: 60,
+}
+
+// DefaultLightGPOConfig contains default gasprice oracle settings for light client.
+var DefaultLightGPOConfig = gasprice.Config{
+	Blocks:     2,
+	Percentile: 60,
+}
+
 // DefaultConfig contains default settings for use on the Ethereum main net.
 var DefaultConfig = Config{
 	SyncMode: downloader.FullSync,
@@ -50,12 +62,9 @@ var DefaultConfig = Config{
 	TrieTimeout:   5 * time.Minute,
 	GasPrice:      big.NewInt(0.25 * params.Shannon),
 
-	TxPool:    core.DefaultTxPoolConfig,
-	RPCGasCap: 25000000,
-	GPO: gasprice.Config{
-		Blocks:     20,
-		Percentile: 60,
-	},
+	TxPool:      core.DefaultTxPoolConfig,
+	RPCGasCap:   25000000,
+	GPO:         DefaultFullGPOConfig,
 	RPCTxFeeCap: 1, // 1 ether
 }
 
