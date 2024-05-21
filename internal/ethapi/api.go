@@ -532,6 +532,49 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
+// GetTransactionAndReceiptProof returns the Trie transaction and receipt proof of the given transaction hash.
+func (s *PublicBlockChainAPI) GetTransactionAndReceiptProof(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	tx, blockHash, _, index := core.GetTransaction(s.b.ChainDb(), hash)
+	if tx == nil {
+		return nil, nil
+	}
+	block, err := s.b.GetBlock(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	tx_tr := deriveTrie(block.Transactions())
+
+	keybuf := new(bytes.Buffer)
+	rlp.Encode(keybuf, uint(index))
+	var tx_proof proofPairList
+	if err := tx_tr.Prove(keybuf.Bytes(), 0, &tx_proof); err != nil {
+		return nil, err
+	}
+	receipts, err := s.b.GetReceipts(ctx, blockHash)
+	if err != nil {
+		return nil, err
+	}
+	if len(receipts) <= int(index) {
+		return nil, nil
+	}
+	receipt_tr := deriveTrie(receipts)
+	var receipt_proof proofPairList
+	if err := receipt_tr.Prove(keybuf.Bytes(), 0, &receipt_proof); err != nil {
+		return nil, err
+	}
+	fields := map[string]interface{}{
+		"blockHash":          blockHash,
+		"txRoot":             tx_tr.Hash(),
+		"receiptRoot":        receipt_tr.Hash(),
+		"key":                hexutil.Encode(keybuf.Bytes()),
+		"txProofKeys":        tx_proof.keys,
+		"txProofValues":      tx_proof.values,
+		"receiptProofKeys":   receipt_proof.keys,
+		"receiptProofValues": receipt_proof.values,
+	}
+	return fields, nil
+}
+
 // GetBlockByNumber returns the requested block. When blockNr is -1 the chain head is returned. When fullTx is true all
 // transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, blockNr rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
