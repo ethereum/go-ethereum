@@ -188,11 +188,6 @@ func (miner *Miner) SetExtra(extra []byte) error {
 	return nil
 }
 
-// SetRecommitInterval sets the interval for sealing work resubmitting.
-func (miner *Miner) SetRecommitInterval(interval time.Duration) {
-	miner.worker.setRecommitInterval(interval)
-}
-
 // Pending returns the currently pending block and associated state.
 func (miner *Miner) Pending() (*types.Block, *state.StateDB) {
 	return miner.worker.pending()

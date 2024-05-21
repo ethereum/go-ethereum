@@ -143,11 +143,6 @@ func (api *PrivateMinerAPI) SetEtherbase(etherbase common.Address) bool {
 	return true
 }
 
-// SetRecommitInterval updates the interval for miner sealing work recommitting.
-func (api *PrivateMinerAPI) SetRecommitInterval(interval int) {
-	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
-}
-
 // PrivateAdminAPI is the collection of Ethereum full node-related APIs
 // exposed over the private admin endpoint.
 type PrivateAdminAPI struct {

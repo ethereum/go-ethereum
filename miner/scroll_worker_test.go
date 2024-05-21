@@ -20,7 +20,6 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -213,10 +212,6 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	return w, backend
 }
 
-func TestGenerateBlockAndImportEthash(t *testing.T) {
-	testGenerateBlockAndImport(t, false)
-}
-
 func TestGenerateBlockAndImportClique(t *testing.T) {
 	testGenerateBlockAndImport(t, true)
 }
@@ -235,6 +230,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 		chainConfig = params.AllEthashProtocolChanges
 		engine = ethash.NewFaker()
 	}
+	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
 
 	chainConfig.LondonBlock = big.NewInt(0)
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
@@ -247,11 +243,6 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 		Debug:  true,
 		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
 
 	// Wait for mined blocks.
 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
@@ -276,267 +267,6 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 			t.Fatalf("timeout")
 		}
 	}
-}
-
-func TestEmptyWorkEthash(t *testing.T) {
-	testEmptyWork(t, ethashChainConfig, ethash.NewFaker())
-}
-func TestEmptyWorkClique(t *testing.T) {
-	testEmptyWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
-}
-
-func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
-	defer engine.Close()
-
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
-	defer w.close()
-
-	var (
-		taskIndex int
-		taskCh    = make(chan struct{}, 2)
-	)
-	checkEqual := func(t *testing.T, task *task, index int) {
-		// The first empty work without any txs included
-		receiptLen, balance := 0, big.NewInt(0)
-		if index == 1 {
-			// The second full work with 1 tx included
-			receiptLen, balance = 1, big.NewInt(1000)
-		}
-		if len(task.receipts) != receiptLen {
-			t.Fatalf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
-		}
-		if task.state.GetBalance(testUserAddress).Cmp(balance) != 0 {
-			t.Fatalf("account balance mismatch: have %d, want %d", task.state.GetBalance(testUserAddress), balance)
-		}
-	}
-	w.newTaskHook = func(task *task) {
-		if task.block.NumberU64() == 1 {
-			checkEqual(t, task, taskIndex)
-			taskIndex += 1
-			taskCh <- struct{}{}
-		}
-	}
-	w.skipSealHook = func(task *task) bool { return true }
-	w.fullTaskHook = func() {
-		time.Sleep(100 * time.Millisecond)
-	}
-	w.start() // Start mining!
-	for i := 0; i < 2; i += 1 {
-		select {
-		case <-taskCh:
-		case <-time.NewTimer(3 * time.Second).C:
-			t.Error("new task timeout")
-		}
-	}
-}
-
-func TestStreamUncleBlock(t *testing.T) {
-	ethash := ethash.NewFaker()
-	defer ethash.Close()
-
-	w, b := newTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1)
-	defer w.close()
-
-	var taskCh = make(chan struct{})
-
-	taskIndex := 0
-	w.newTaskHook = func(task *task) {
-		if task.block.NumberU64() == 2 {
-			// The first task is an empty task, the second
-			// one has 1 pending tx, the third one has 1 tx
-			// and 1 uncle.
-			if taskIndex == 2 {
-				have := task.block.Header().UncleHash
-				want := types.CalcUncleHash([]*types.Header{b.uncleBlock.Header()})
-				if have != want {
-					t.Errorf("uncle hash mismatch: have %s, want %s", have.Hex(), want.Hex())
-				}
-			}
-			taskCh <- struct{}{}
-			taskIndex += 1
-		}
-	}
-	w.skipSealHook = func(task *task) bool {
-		return true
-	}
-	w.fullTaskHook = func() {
-		time.Sleep(100 * time.Millisecond)
-	}
-	w.start()
-
-	for i := 0; i < 2; i += 1 {
-		select {
-		case <-taskCh:
-		case <-time.NewTimer(time.Second).C:
-			t.Error("new task timeout")
-		}
-	}
-
-	w.postSideBlock(core.ChainSideEvent{Block: b.uncleBlock})
-
-	select {
-	case <-taskCh:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("new task timeout")
-	}
-}
-
-func TestRegenerateMiningBlockEthash(t *testing.T) {
-	testRegenerateMiningBlock(t, ethashChainConfig, ethash.NewFaker())
-}
-
-func TestRegenerateMiningBlockClique(t *testing.T) {
-	testRegenerateMiningBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
-}
-
-func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
-	defer engine.Close()
-
-	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
-	defer w.close()
-
-	var taskCh = make(chan struct{})
-
-	taskIndex := 0
-	w.newTaskHook = func(task *task) {
-		if task.block.NumberU64() == 1 {
-			// The first task is an empty task, the second
-			// one has 1 pending tx, the third one has 2 txs
-			if taskIndex == 2 {
-				receiptLen, balance := 2, big.NewInt(2000)
-				if len(task.receipts) != receiptLen {
-					t.Errorf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
-				}
-				if task.state.GetBalance(testUserAddress).Cmp(balance) != 0 {
-					t.Errorf("account balance mismatch: have %d, want %d", task.state.GetBalance(testUserAddress), balance)
-				}
-			}
-			taskCh <- struct{}{}
-			taskIndex += 1
-		}
-	}
-	w.skipSealHook = func(task *task) bool {
-		return true
-	}
-	w.fullTaskHook = func() {
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	w.start()
-	// Ignore the first two works
-	for i := 0; i < 2; i += 1 {
-		select {
-		case <-taskCh:
-		case <-time.NewTimer(time.Second).C:
-			t.Error("new task timeout")
-		}
-	}
-	b.txPool.AddLocals(newTxs)
-	time.Sleep(time.Second)
-
-	select {
-	case <-taskCh:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("new task timeout")
-	}
-}
-
-func TestAdjustIntervalEthash(t *testing.T) {
-	testAdjustInterval(t, ethashChainConfig, ethash.NewFaker())
-}
-
-func TestAdjustIntervalClique(t *testing.T) {
-	testAdjustInterval(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
-}
-
-func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
-	defer engine.Close()
-
-	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
-	defer w.close()
-
-	w.skipSealHook = func(task *task) bool {
-		return true
-	}
-	w.fullTaskHook = func() {
-		time.Sleep(100 * time.Millisecond)
-	}
-	var (
-		progress = make(chan struct{}, 10)
-		result   = make([]float64, 0, 10)
-		index    = 0
-		start    uint32
-	)
-	w.resubmitHook = func(minInterval time.Duration, recommitInterval time.Duration) {
-		// Short circuit if interval checking hasn't started.
-		if atomic.LoadUint32(&start) == 0 {
-			return
-		}
-		var wantMinInterval, wantRecommitInterval time.Duration
-
-		switch index {
-		case 0:
-			wantMinInterval, wantRecommitInterval = 3*time.Second, 3*time.Second
-		case 1:
-			origin := float64(3 * time.Second.Nanoseconds())
-			estimate := origin*(1-intervalAdjustRatio) + intervalAdjustRatio*(origin/0.8+intervalAdjustBias)
-			wantMinInterval, wantRecommitInterval = 3*time.Second, time.Duration(estimate)*time.Nanosecond
-		case 2:
-			estimate := result[index-1]
-			min := float64(3 * time.Second.Nanoseconds())
-			estimate = estimate*(1-intervalAdjustRatio) + intervalAdjustRatio*(min-intervalAdjustBias)
-			wantMinInterval, wantRecommitInterval = 3*time.Second, time.Duration(estimate)*time.Nanosecond
-		case 3:
-			wantMinInterval, wantRecommitInterval = time.Second, time.Second
-		}
-
-		// Check interval
-		if minInterval != wantMinInterval {
-			t.Errorf("resubmit min interval mismatch: have %v, want %v ", minInterval, wantMinInterval)
-		}
-		if recommitInterval != wantRecommitInterval {
-			t.Errorf("resubmit interval mismatch: have %v, want %v", recommitInterval, wantRecommitInterval)
-		}
-		result = append(result, float64(recommitInterval.Nanoseconds()))
-		index += 1
-		progress <- struct{}{}
-	}
-	w.start()
-
-	time.Sleep(time.Second) // Ensure two tasks have been summitted due to start opt
-	atomic.StoreUint32(&start, 1)
-
-	w.setRecommitInterval(3 * time.Second)
-	select {
-	case <-progress:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("interval reset timeout")
-	}
-
-	w.resubmitAdjustCh <- &intervalAdjust{inc: true, ratio: 0.8}
-	select {
-	case <-progress:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("interval reset timeout")
-	}
-
-	w.resubmitAdjustCh <- &intervalAdjust{inc: false}
-	select {
-	case <-progress:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("interval reset timeout")
-	}
-
-	w.setRecommitInterval(500 * time.Millisecond)
-	select {
-	case <-progress:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("interval reset timeout")
-	}
-}
-
-func TestGenerateBlockWithL1MsgEthash(t *testing.T) {
-	testGenerateBlockWithL1Msg(t, false)
 }
 
 func TestGenerateBlockWithL1MsgClique(t *testing.T) {
@@ -566,6 +296,7 @@ func testGenerateBlockWithL1Msg(t *testing.T, isClique bool) {
 	chainConfig.Scroll.L1Config = &params.L1Config{
 		NumL1MessagesPerBlock: 1,
 	}
+	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
 
 	chainConfig.LondonBlock = big.NewInt(0)
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
@@ -577,11 +308,6 @@ func testGenerateBlockWithL1Msg(t *testing.T, isClique bool) {
 		Debug:  true,
 		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
 
 	// Wait for mined blocks.
 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
@@ -618,6 +344,7 @@ func TestAcceptableTxlimit(t *testing.T) {
 	)
 	chainConfig = params.AllCliqueProtocolChanges
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
 	engine = clique.New(chainConfig.Clique, db)
 
 	// Set maxTxPerBlock = 4, which >= non-l1msg + non-skipped l1msg txs
@@ -644,11 +371,6 @@ func TestAcceptableTxlimit(t *testing.T) {
 		Debug:  true,
 		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
 
 	// Wait for mined blocks.
 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
@@ -682,6 +404,7 @@ func TestUnacceptableTxlimit(t *testing.T) {
 	)
 	chainConfig = params.AllCliqueProtocolChanges
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
 	engine = clique.New(chainConfig.Clique, db)
 
 	// Set maxTxPerBlock = 3, which < non-l1msg + l1msg txs
@@ -707,11 +430,6 @@ func TestUnacceptableTxlimit(t *testing.T) {
 		Debug:  true,
 		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
 
 	// Wait for mined blocks.
 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
@@ -745,6 +463,7 @@ func TestL1MsgCorrectOrder(t *testing.T) {
 	)
 	chainConfig = params.AllCliqueProtocolChanges
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
 	engine = clique.New(chainConfig.Clique, db)
 
 	maxTxPerBlock := 4
@@ -770,11 +489,6 @@ func TestL1MsgCorrectOrder(t *testing.T) {
 		Debug:  true,
 		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
 
 	// Wait for mined blocks.
 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
@@ -832,11 +546,6 @@ func l1MessageTest(t *testing.T, msgs []types.L1MessageTx, withL2Tx bool, callba
 		Debug:  true,
 		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
 
 	// Wait for mined blocks.
 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
@@ -1124,11 +833,12 @@ func TestPrioritizeOverflowTx(t *testing.T) {
 	var (
 		chainConfig = params.AllCliqueProtocolChanges
 		db          = rawdb.NewMemoryDatabase()
-		engine      = clique.New(chainConfig.Clique, db)
 	)
 
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
 	chainConfig.LondonBlock = big.NewInt(0)
+	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	engine := clique.New(chainConfig.Clique, db)
 
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
 	defer w.close()
@@ -1140,11 +850,6 @@ func TestPrioritizeOverflowTx(t *testing.T) {
 		Debug:  true,
 		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
 
 	// Wait for mined blocks.
 	sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
@@ -1165,7 +870,6 @@ func TestPrioritizeOverflowTx(t *testing.T) {
 
 	select {
 	case ev := <-sub.Chan():
-		w.stop()
 		block := ev.Data.(core.NewMinedBlockEvent).Block
 		assert.Equal(1, len(block.Transactions()))
 		assert.Equal(tx0.Hash(), block.Transactions()[0].Hash())
@@ -1179,7 +883,6 @@ func TestPrioritizeOverflowTx(t *testing.T) {
 	// Process 2 transactions with gas order: tx2 > tx1,
 	// but we will prioritize tx1.
 	b.txPool.AddRemotesSync([]*types.Transaction{tx2})
-	w.start()
 
 	select {
 	case ev := <-sub.Chan():
@@ -1230,7 +933,7 @@ func TestSkippedTransactionDatabaseEntries(t *testing.T) {
 			assert.NotNil(stx)
 			assert.True(stx.Tx.IsL1MessageTx())
 			assert.Equal(uint64(0), stx.Tx.AsL1MessageTx().QueueIndex)
-			assert.Equal("gas limit exceeded", stx.Reason)
+			assert.Equal("gas limit reached", stx.Reason)
 			assert.Equal(block.NumberU64(), stx.BlockNumber)
 			assert.Nil(stx.BlockHash)
 
@@ -1266,6 +969,7 @@ func TestSealBlockAfterCliquePeriod(t *testing.T) {
 	)
 	chainConfig = params.AllCliqueProtocolChanges
 	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
 	engine = clique.New(chainConfig.Clique, db)
 	w, b := newTestWorker(t, chainConfig, engine, db, 0)
 	defer w.close()
@@ -1276,11 +980,6 @@ func TestSealBlockAfterCliquePeriod(t *testing.T) {
 		Debug:  true,
 		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
 	defer chain.Stop()
-
-	// Ignore empty commit here for less noise.
-	w.skipSealHook = func(task *task) bool {
-		return len(task.receipts) == 0
-	}
 
 	// Add artificial delay to transaction processing.
 	w.beforeTxHook = func() {
