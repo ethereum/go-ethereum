@@ -691,7 +691,10 @@ func (api *PrivateDebugAPI) TraceCall(ctx context.Context, args ethapi.Transacti
 		}
 	}
 	// Execute the trace
-	msg := args.ToMessage(api.eth.ApiBackend, block.Number(), api.eth.ApiBackend.RPCGasCap())
+	msg, err := args.ToMessage(api.eth.ApiBackend, block.Number(), api.eth.ApiBackend.RPCGasCap(), block.BaseFee())
+	if err != nil {
+		return nil, err
+	}
 	vmctx := core.NewEVMBlockContext(block.Header(), api.eth.blockchain, nil)
 	var traceConfig *TraceConfig
 	if config != nil {
