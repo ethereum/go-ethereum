@@ -83,19 +83,21 @@ func newNodeWithID(r *enr.Record, id ID) *Node {
 
 // validIP reports whether 'ip' is a valid node endpoint IP address.
 func validIP(ip netip.Addr) bool {
-	return ip.IsValid() && !ip.IsUnspecified() && !ip.IsMulticast()
+	return ip.IsValid() && !ip.IsMulticast()
 }
 
 func localityScore(ip netip.Addr) int {
 	switch {
-	case ip.IsLoopback():
+	case ip.IsUnspecified():
 		return 0
-	case ip.IsLinkLocalUnicast():
+	case ip.IsLoopback():
 		return 1
-	case ip.IsPrivate():
+	case ip.IsLinkLocalUnicast():
 		return 2
-	default:
+	case ip.IsPrivate():
 		return 3
+	default:
+		return 4
 	}
 }
 
@@ -184,7 +186,7 @@ func (n *Node) TCP() int {
 
 // UDPEndpoint returns the announced TCP endpoint.
 func (n *Node) UDPEndpoint() (netip.AddrPort, bool) {
-	if !n.ip.IsValid() || n.udp == 0 {
+	if !n.ip.IsValid() || n.ip.IsUnspecified() || n.udp == 0 {
 		return netip.AddrPort{}, false
 	}
 	return netip.AddrPortFrom(n.ip, n.udp), true
@@ -192,7 +194,7 @@ func (n *Node) UDPEndpoint() (netip.AddrPort, bool) {
 
 // TCPEndpoint returns the announced TCP endpoint.
 func (n *Node) TCPEndpoint() (netip.AddrPort, bool) {
-	if !n.ip.IsValid() || n.tcp == 0 {
+	if !n.ip.IsValid() || n.ip.IsUnspecified() || n.tcp == 0 {
 		return netip.AddrPort{}, false
 	}
 	return netip.AddrPortFrom(n.ip, n.udp), true

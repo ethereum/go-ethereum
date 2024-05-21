@@ -108,6 +108,15 @@ func TestNodeEndpoints(t *testing.T) {
 			wantIP: netip.MustParseAddr("127.0.0.1"),
 		},
 		{
+			name: "ipv4-only-unspecified",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("0.0.0.0")))
+				return SignNull(&r, id)
+			}(),
+			wantIP: netip.MustParseAddr("0.0.0.0"),
+		},
+		{
 			name: "ipv4-only",
 			node: func() *Node {
 				var r enr.Record
@@ -137,6 +146,16 @@ func TestNodeEndpoints(t *testing.T) {
 			}(),
 			wantIP:  netip.MustParseAddr("2001::ff00:0042:8329"),
 			wantUDP: 30306,
+		},
+		{
+			name: "ipv4-unspecified-and-ipv6-loopback",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("0.0.0.0")))
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("::1")))
+				return SignNull(&r, id)
+			}(),
+			wantIP: netip.MustParseAddr("::1"),
 		},
 		{
 			name: "ipv4-private-and-ipv6-global",
