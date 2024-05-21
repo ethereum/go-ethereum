@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"golang.org/x/crypto/sha3"
 )
 
 // Trie is an Ethereum state trie, can be implemented by Ethereum Merkle Patricia
@@ -257,7 +256,7 @@ func deleteAccount(ctx *context, loader TrieLoader, addr common.Address) error {
 type hasher struct{ sha crypto.KeccakState }
 
 var hasherPool = sync.Pool{
-	New: func() interface{} { return &hasher{sha: sha3.NewLegacyKeccak256().(crypto.KeccakState)} },
+	New: func() interface{} { return &hasher{sha: crypto.NewKeccakState()} },
 }
 
 func newHasher() *hasher {
