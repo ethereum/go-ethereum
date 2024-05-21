@@ -30,11 +30,11 @@ import (
 )
 
 type BucketNode struct {
-	Node        *enode.Node `json:"node"`
-	AddedTable  time.Time   `json:"addedToTable"`
-	AddedBucket time.Time   `json:"addedToBucket"`
-	Checks      int         `json:"checks"`
-	Live        bool        `json:"live"`
+	Node          *enode.Node `json:"node"`
+	AddedToTable  time.Time   `json:"addedToTable"`
+	AddedToBucket time.Time   `json:"addedToBucket"`
+	Checks        int         `json:"checks"`
+	Live          bool        `json:"live"`
 }
 
 // node represents a host on the network.

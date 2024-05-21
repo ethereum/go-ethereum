@@ -163,11 +163,11 @@ func (tab *Table) Nodes() [][]BucketNode {
 		nodes[i] = make([]BucketNode, len(b.entries))
 		for j, n := range b.entries {
 			nodes[i][j] = BucketNode{
-				Node:        n.Node,
-				Checks:      int(n.livenessChecks),
-				Live:        n.isValidatedLive,
-				AddedTable:  n.addedToTable,
-				AddedBucket: n.addedToBucket,
+				Node:          n.Node,
+				Checks:        int(n.livenessChecks),
+				Live:          n.isValidatedLive,
+				AddedToTable:  n.addedToTable,
+				AddedToBucket: n.addedToBucket,
 			}
 		}
 	}
