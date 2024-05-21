@@ -229,8 +229,10 @@ func (b *nodebuffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, 
 	)
 	// Explicitly sync the state freezer, ensuring that all written
 	// data is transferred to disk before updating the key-value store.
-	if err := freezer.Sync(); err != nil {
-		return err
+	if freezer != nil {
+		if err := freezer.Sync(); err != nil {
+			return err
+		}
 	}
 	nodes := writeNodes(batch, b.nodes, clean)
 	rawdb.WritePersistentStateID(batch, id)

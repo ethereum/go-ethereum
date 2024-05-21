@@ -180,8 +180,8 @@ func (batch *freezerTableBatch) maybeCommit() error {
 	return nil
 }
 
-// commit writes the batched items to the backing freezerTable. Note both index
-// and data file are not fsync'd after the file write, the data could be lost
+// commit writes the batched items to the backing freezerTable. Note neither index
+// nor data file are fsync'd after the file write, the recent write can be lost
 // after the power failure.
 func (batch *freezerTableBatch) commit() error {
 	_, err := batch.t.head.Write(batch.dataBuffer)

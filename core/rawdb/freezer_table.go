@@ -17,6 +17,7 @@
 package rawdb
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -377,9 +378,9 @@ func (t *freezerTable) repair() error {
 // be in order. This function identifies any corrupted entries and truncates items
 // occurring after the corruption point.
 //
-// The corruption can be made because of the power failure. As in the Linux kernel,
-// the file metadata update and data update are not necessarily performed at the
-// same time. Typically, the metadata will be flushed/journaled ahead of the file
+// corruption can occur because of the power failure. In the Linux kernel, the
+// file metadata update and data update are not necessarily performed at the
+// same time. Typically, the metadata will be flushed/journalled ahead of the file
 // data. Therefore, we make the pessimistic assumption that the file is first
 // extended with invalid "garbage" data (normally zero bytes) and that afterwards
 // the correct data replaces the garbage. As all the items in index file are
@@ -399,36 +400,29 @@ func (t *freezerTable) repairIndex() error {
 	}
 	size := stat.Size()
 
-	var (
-		start      = time.Now()
-		batchSize  = int64(indexEntrySize * 1024 * 1024)
-		buffer     = make([]byte, batchSize) // pre-allocate for batch reading
-		prev       indexEntry
-		head       indexEntry
-		readOffset int64
-		consumed   int64
+	// Move the read cursor to the beginning of the file.
+	_, err = t.index.Seek(0, 0)
+	if err != nil {
+		return err
+	}
+	fr := bufio.NewReader(t.index)
 
-		read = func(offset int64) (indexEntry, error) {
-			if offset+indexEntrySize > size {
-				return indexEntry{}, fmt.Errorf("slice bounds out of range, offset: %d, size: %d", offset, size)
+	var (
+		start = time.Now()
+		buff  = make([]byte, indexEntrySize)
+		prev  indexEntry
+		head  indexEntry
+
+		read = func() (indexEntry, error) {
+			n, err := fr.Read(buff)
+			if err != nil {
+				return indexEntry{}, err
 			}
-			if offset >= readOffset {
-				n, err := t.index.ReadAt(buffer, readOffset)
-				if err != nil && !errors.Is(err, io.EOF) {
-					return indexEntry{}, err
-				}
-				expect := batchSize
-				if size-readOffset < batchSize {
-					expect = size - readOffset
-				}
-				if expect != int64(n) {
-					return indexEntry{}, fmt.Errorf("failed to read from index, want: %d, got: %d", expect, n)
-				}
-				consumed = readOffset
-				readOffset += int64(n)
+			if n != indexEntrySize {
+				return indexEntry{}, fmt.Errorf("failed to read from index, n: %d", n)
 			}
 			var entry indexEntry
-			entry.unmarshalBinary(buffer[offset-consumed : offset-consumed+indexEntrySize])
+			entry.unmarshalBinary(buff)
 			return entry, nil
 		}
 		truncate = func(offset int64) error {
@@ -443,7 +437,7 @@ func (t *freezerTable) repairIndex() error {
 		}
 	)
 	for offset := int64(0); offset < size; offset += indexEntrySize {
-		entry, err := read(offset)
+		entry, err := read()
 		if err != nil {
 			return err
 		}
@@ -451,9 +445,11 @@ func (t *freezerTable) repairIndex() error {
 			head = entry
 			continue
 		}
-		// ensure the first non-head index denotes to the earliest file
+		// Ensure that the first non-head index refers to the earliest file,
+		// or the next file if the earliest file is not sufficient to
+		// place the first item.
 		if offset == indexEntrySize {
-			if entry.filenum != head.filenum {
+			if entry.filenum != head.filenum && entry.filenum != head.filenum+1 {
 				return truncate(offset)
 			}
 			prev = entry
@@ -464,6 +460,13 @@ func (t *freezerTable) repairIndex() error {
 			return truncate(offset)
 		}
 		prev = entry
+	}
+	// Move the read cursor to the end of the file. While theoretically, the
+	// cursor should reach the end by reading all the items in the file, perform
+	// the seek operation anyway as a precaution.
+	_, err = t.index.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
 	}
 	log.Debug("Verified index file", "items", size/indexEntrySize, "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
