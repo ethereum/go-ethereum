@@ -158,9 +158,6 @@ type nodeOp struct {
 }
 
 // valid checks whether the node operation is valid.
-//
-//	for node deletion, the node blob must be zero-length.
-//	for node update, the node blob must be non-zero-length.
 func (op *nodeOp) valid() bool {
 	if op.del && len(op.blob) != 0 {
 		return false
