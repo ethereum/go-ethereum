@@ -128,7 +128,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 
 	if !resp.didRespond {
 		// Revalidation failed.
-		n.livenessChecks /= 5
+		n.livenessChecks /= 3
 		if n.livenessChecks <= 0 {
 			tab.deleteInBucket(b, n.ID())
 		} else {
