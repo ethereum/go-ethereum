@@ -312,7 +312,10 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserve txpool.A
 	// Start the reorg loop early, so it can handle requests generated during
 	// journal loading.
 	pool.wg.Add(1)
-	go pool.scheduleReorgLoop()
+	go func() {
+		defer pool.wg.Done()
+		pool.scheduleReorgLoop()
+	}()
 
 	// If local transactions and journaling is enabled, load from disk
 	if pool.journal != nil {
@@ -324,7 +327,11 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserve txpool.A
 		}
 	}
 	pool.wg.Add(1)
-	go pool.loop()
+	go func() {
+		defer pool.wg.Done()
+		pool.loop()
+	}()
+
 	return nil
 }
 
@@ -332,7 +339,6 @@ func (pool *LegacyPool) Init(gasTip uint64, head *types.Header, reserve txpool.A
 // outside blockchain events as well as for various reporting and transaction
 // eviction events.
 func (pool *LegacyPool) loop() {
-	defer pool.wg.Done()
 
 	var (
 		prevPending, prevQueued, prevStales int
@@ -1188,8 +1194,6 @@ func (pool *LegacyPool) queueTxEvent(tx *types.Transaction) {
 // call those methods directly, but request them being run using requestReset and
 // requestPromoteExecutables instead.
 func (pool *LegacyPool) scheduleReorgLoop() {
-	defer pool.wg.Done()
-
 	var (
 		curDone       chan struct{} // non-nil while runReorg is active
 		nextDone      = make(chan struct{})
