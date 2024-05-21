@@ -981,6 +981,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 			return nil, err
 		}
 	}
+	// The actual TxContext will be created as part of ApplyTransactionWithEVM.
 	vmenv := vm.NewEVM(vmctx, vm.TxContext{GasPrice: message.GasPrice, BlobFeeCap: message.BlobGasFeeCap}, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
 	statedb.SetLogger(tracer.Hooks)
 
