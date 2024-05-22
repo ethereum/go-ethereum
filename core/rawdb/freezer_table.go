@@ -400,8 +400,8 @@ func (t *freezerTable) repairIndex() error {
 	}
 	size := stat.Size()
 
-	// Move the read cursor to the beginning of the file.
-	_, err = t.index.Seek(0, 0)
+	// Move the read cursor to the beginning of the file
+	_, err = t.index.Seek(0, io.SeekStart)
 	if err != nil {
 		return err
 	}
@@ -414,7 +414,7 @@ func (t *freezerTable) repairIndex() error {
 		head  indexEntry
 
 		read = func() (indexEntry, error) {
-			n, err := fr.Read(buff)
+			n, err := io.ReadFull(fr, buff)
 			if err != nil {
 				return indexEntry{}, err
 			}
