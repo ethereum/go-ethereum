@@ -450,6 +450,7 @@ func (t *freezerTable) repairIndex() error {
 		// place the first item.
 		if offset == indexEntrySize {
 			if entry.filenum != head.filenum && entry.filenum != head.filenum+1 {
+				log.Error("Corrupted index item detected", "earliest", head.filenum, "filenumber", entry.filenum)
 				return truncate(offset)
 			}
 			prev = entry
@@ -457,6 +458,7 @@ func (t *freezerTable) repairIndex() error {
 		}
 		// ensure two consecutive index items are in order
 		if err := t.checkIndexItems(prev, entry); err != nil {
+			log.Error("Corrupted index item detected", "err", err)
 			return truncate(offset)
 		}
 		prev = entry
