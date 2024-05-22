@@ -79,7 +79,7 @@ type Table struct {
 	refreshReq      chan chan struct{}
 	revalResponseCh chan revalidationResponse
 	addNodeCh       chan addNodeOp
-	addNodeHandled  chan 1bool
+	addNodeHandled  chan bool
 	trackRequestCh  chan trackRequestOp
 	initDone        chan struct{}
 	closeReq        chan struct{}
@@ -279,12 +279,17 @@ func (tab *Table) appendLiveNodes(dist uint, result []*enode.Node) []*enode.Node
 	}
 
 	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
 	for _, n := range tab.bucketAtDistance(int(dist)).entries {
 		if n.isValidatedLive {
 			result = append(result, n.Node)
 		}
 	}
+	tab.mutex.Unlock()
+
+	// Shuffle result to avoid always returning same nodes in FINDNODE/v5.
+	tab.rand.Shuffle(len(result), func(i, j int) {
+		result[i], result[j] = result[j], result[i]
+	})
 	return result
 }
 

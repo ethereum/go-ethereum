@@ -100,6 +100,7 @@ type ReadPacket struct {
 type randomSource interface {
 	Intn(int) int
 	Int63n(int64) int64
+	Shuffle(int, func(int, int))
 }
 
 // reseedingRandom is a random number generator that tracks when it was last re-seeded.
@@ -129,4 +130,10 @@ func (r *reseedingRandom) Int63n(n int64) int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.cur.Int63n(n)
+}
+
+func (r *reseedingRandom) Shuffle(n int, swap func(i, j int)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cur.Shuffle(n, swap)
 }
