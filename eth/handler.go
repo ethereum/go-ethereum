@@ -29,6 +29,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/forkid"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth/bft"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
@@ -62,6 +63,8 @@ func errResp(code errCode, format string, v ...interface{}) error {
 
 type ProtocolManager struct {
 	networkId uint64
+	// networkID  uint64
+	forkFilter forkid.Filter // Fork ID filter, constant across the lifetime of the node
 
 	fastSync  uint32 // Flag whether fast sync is enabled (gets disabled if we already have blocks)
 	acceptTxs uint32 // Flag whether we're considered synchronised (enables transaction processing)
@@ -134,6 +137,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:  networkID,
+		forkFilter: forkid.NewFilter(blockchain),
 		eventMux:   mux,
 		txpool:     txpool,
 		blockchain: blockchain,
@@ -405,7 +409,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		number  = head.Number.Uint64()
 		td      = pm.blockchain.GetTd(hash, number)
 	)
-	if err := p.Handshake(pm.networkId, td, hash, genesis.Hash()); err != nil {
+	if err := p.Handshake(pm.networkId, td, hash, genesis.Hash(), forkid.NewID(pm.blockchain), pm.forkFilter); err != nil {
 		p.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
