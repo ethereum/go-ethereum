@@ -334,15 +334,20 @@ func (n *ExecNode) ServeRPC(clientConn *websocket.Conn) error {
 	}
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go wsCopy(&wg, conn, clientConn)
-	go wsCopy(&wg, clientConn, conn)
+	go func() {
+		defer wg.Done()
+		wsCopy(conn, clientConn)
+	}()
+	go func() {
+		defer wg.Done()
+		wsCopy(clientConn, conn)
+	}()
 	wg.Wait()
 	conn.Close()
 	return nil
 }
 
-func wsCopy(wg *sync.WaitGroup, src, dst *websocket.Conn) {
-	defer wg.Done()
+func wsCopy(src, dst *websocket.Conn) {
 	for {
 		msgType, r, err := src.NextReader()
 		if err != nil {

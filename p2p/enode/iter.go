@@ -174,10 +174,13 @@ func (m *FairMix) AddSource(it Iterator) {
 	if m.closed == nil {
 		return
 	}
-	m.wg.Add(1)
 	source := &mixSource{it, make(chan *Node), m.timeout}
 	m.sources = append(m.sources, source)
-	go m.runSource(m.closed, source)
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.runSource(m.closed, source)
+	}()
 }
 
 // Close shuts down the mixer and all current sources.
@@ -281,7 +284,6 @@ func (m *FairMix) deleteSource(s *mixSource) {
 
 // runSource reads a single source in a loop.
 func (m *FairMix) runSource(closed chan struct{}, s *mixSource) {
-	defer m.wg.Done()
 	defer close(s.next)
 	for s.it.Next() {
 		n := s.it.Node()

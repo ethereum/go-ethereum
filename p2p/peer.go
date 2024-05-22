@@ -252,8 +252,14 @@ func (p *Peer) run() (remoteRequested bool, err error) {
 		reason     DiscReason // sent to the peer
 	)
 	p.wg.Add(2)
-	go p.readLoop(readErr)
-	go p.pingLoop()
+	go func() {
+		defer p.wg.Done()
+		p.readLoop(readErr)
+	}()
+	go func() {
+		defer p.wg.Done()
+		p.pingLoop()
+	}()
 
 	// Start all protocol handlers.
 	writeStart <- struct{}{}
@@ -295,8 +301,6 @@ loop:
 }
 
 func (p *Peer) pingLoop() {
-	defer p.wg.Done()
-
 	ping := time.NewTimer(pingInterval)
 	defer ping.Stop()
 
@@ -319,7 +323,6 @@ func (p *Peer) pingLoop() {
 }
 
 func (p *Peer) readLoop(errc chan<- error) {
-	defer p.wg.Done()
 	for {
 		msg, err := p.rw.ReadMsg()
 		if err != nil {

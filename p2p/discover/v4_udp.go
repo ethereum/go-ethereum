@@ -150,8 +150,14 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 	go tab.loop()
 
 	t.wg.Add(2)
-	go t.loop()
-	go t.readLoop(cfg.Unhandled)
+	go func() {
+		defer t.wg.Done()
+		t.loop()
+	}()
+	go func() {
+		defer t.wg.Done()
+		t.readLoop(cfg.Unhandled)
+	}()
 	return t, nil
 }
 

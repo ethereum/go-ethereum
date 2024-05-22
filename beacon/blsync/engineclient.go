@@ -47,7 +47,10 @@ func startEngineClient(config *lightClientConfig, rpc *rpc.Client, headCh <-chan
 		cancelRoot: cancel,
 	}
 	ec.wg.Add(1)
-	go ec.updateLoop(headCh)
+	go func() {
+		defer ec.wg.Done()
+		ec.updateLoop(headCh)
+	}()
 	return ec
 }
 
@@ -57,8 +60,6 @@ func (ec *engineClient) stop() {
 }
 
 func (ec *engineClient) updateLoop(headCh <-chan types.ChainHeadEvent) {
-	defer ec.wg.Done()
-
 	for {
 		select {
 		case <-ec.rootCtx.Done():

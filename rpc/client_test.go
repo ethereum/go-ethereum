@@ -352,7 +352,6 @@ func testClientCancel(transport string, t *testing.T) {
 		ncallers = 10
 	)
 	caller := func(index int) {
-		defer wg.Done()
 		for i := 0; i < nreqs; i++ {
 			var (
 				ctx     context.Context
@@ -386,7 +385,10 @@ func testClientCancel(transport string, t *testing.T) {
 	}
 	wg.Add(ncallers)
 	for i := 0; i < ncallers; i++ {
-		go caller(i)
+		go func(idx int) {
+			defer wg.Done()
+			caller(idx)
+		}(i)
 	}
 	wg.Wait()
 }

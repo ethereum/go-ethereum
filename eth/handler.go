@@ -198,7 +198,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 
 // protoTracker tracks the number of active protocol handlers.
 func (h *handler) protoTracker() {
-	defer h.wg.Done()
 	var active int
 	for {
 		select {
@@ -426,14 +425,20 @@ func (h *handler) Start(maxPeers int) {
 	h.wg.Add(1)
 	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
 	h.txsSub = h.txpool.SubscribeTransactions(h.txsCh, false)
-	go h.txBroadcastLoop()
+	go func() {
+		defer h.wg.Done()
+		h.txBroadcastLoop()
+	}()
 
 	// start sync handlers
 	h.txFetcher.Start()
 
 	// start peer handler tracker
 	h.wg.Add(1)
-	go h.protoTracker()
+	go func() {
+		defer h.wg.Done()
+		h.protoTracker()
+	}()
 }
 
 func (h *handler) Stop() {
@@ -535,7 +540,6 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 
 // txBroadcastLoop announces new transactions to connected peers.
 func (h *handler) txBroadcastLoop() {
-	defer h.wg.Done()
 	for {
 		select {
 		case event := <-h.txsCh:

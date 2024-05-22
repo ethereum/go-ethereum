@@ -656,7 +656,12 @@ func (srv *Server) setupListening() error {
 	}
 
 	srv.loopWG.Add(1)
-	go srv.listenLoop()
+	go func() {
+		// Wait for slots to be returned on exit. This ensures all connection goroutines
+		// are down before listenLoop returns.
+		defer srv.loopWG.Done()
+		srv.listenLoop()
+	}()
 	return nil
 }
 
@@ -859,9 +864,6 @@ func (srv *Server) listenLoop() {
 		slots <- struct{}{}
 	}
 
-	// Wait for slots to be returned on exit. This ensures all connection goroutines
-	// are down before listenLoop returns.
-	defer srv.loopWG.Done()
 	defer func() {
 		for i := 0; i < cap(slots); i++ {
 			<-slots
