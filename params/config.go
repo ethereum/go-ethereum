@@ -546,6 +546,26 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
+	berlinBlock := common.BerlinBlock
+	if c.BerlinBlock != nil {
+		berlinBlock = c.BerlinBlock
+	}
+	londonBlock := common.LondonBlock
+	if c.LondonBlock != nil {
+		londonBlock = c.LondonBlock
+	}
+	mergeBlock := common.MergeBlock
+	if c.MergeBlock != nil {
+		mergeBlock = c.MergeBlock
+	}
+	shanghaiBlock := common.ShanghaiBlock
+	if c.ShanghaiBlock != nil {
+		shanghaiBlock = c.ShanghaiBlock
+	}
+	eip1559Block := common.Eip1559Block
+	if c.Eip1559Block != nil {
+		eip1559Block = c.Eip1559Block
+	}
 	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Istanbul: %v  BerlinBlock: %v LondonBlock: %v MergeBlock: %v ShanghaiBlock: %v Eip1559Block: %v Engine: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
@@ -557,11 +577,11 @@ func (c *ChainConfig) String() string {
 		c.ByzantiumBlock,
 		c.ConstantinopleBlock,
 		common.TIPXDCXCancellationFee,
-		common.BerlinBlock,
-		common.LondonBlock,
-		common.MergeBlock,
-		common.ShanghaiBlock,
-		common.Eip1559Block,
+		berlinBlock,
+		londonBlock,
+		mergeBlock,
+		shanghaiBlock,
+		eip1559Block,
 		engine,
 	)
 }
