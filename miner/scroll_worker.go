@@ -708,7 +708,14 @@ func (w *worker) startNewPipeline(timestamp int64) {
 
 	w.currentPipelineStart = time.Now()
 	w.currentPipeline = pipeline.NewPipeline(w.chain, w.chain.GetVMConfig(), parentState, header, nextL1MsgIndex, w.getCCC()).WithBeforeTxHook(w.beforeTxHook)
-	if err := w.currentPipeline.Start(time.Unix(int64(header.Time), 0)); err != nil {
+
+	deadline := time.Unix(int64(header.Time), 0)
+	if w.chainConfig.Clique != nil && w.chainConfig.Clique.RelaxedPeriod {
+		// clique with relaxed period uses time.Now() as the header.Time, calculate the deadline
+		deadline = time.Unix(int64(header.Time+w.chainConfig.Clique.Period), 0)
+	}
+
+	if err := w.currentPipeline.Start(deadline); err != nil {
 		log.Error("failed to start pipeline", "err", err)
 		return
 	}

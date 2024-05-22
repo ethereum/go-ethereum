@@ -602,8 +602,9 @@ func (c *EthashConfig) String() string {
 
 // CliqueConfig is the consensus engine configs for proof-of-authority based sealing.
 type CliqueConfig struct {
-	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
-	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+	Period        uint64 `json:"period"`         // Number of seconds between blocks to enforce
+	Epoch         uint64 `json:"epoch"`          // Epoch length to reset votes and checkpoint
+	RelaxedPeriod bool   `json:"relaxed_period"` // Relaxes the period to be just an upper bound
 }
 
 // String implements the stringer interface, returning the consensus engine details.
