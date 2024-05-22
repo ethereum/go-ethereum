@@ -176,8 +176,25 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBloc
 }
 
 func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header, parent *types.Header, headers []*types.Header, gp *core.GasPool, precompiles vm.PrecompiledContracts, timeout time.Duration) (*simBlockResult, error) {
-	// Set this here for evm.GetHashFn to work.
+	// Set header fields that depend only on parent block.
+	config := sim.b.ChainConfig()
+	// Parent hash is needed for evm.GetHashFn to work.
 	header.ParentHash = parent.Hash()
+	if config.IsLondon(header.Number) {
+		// Base fee could have been overridden.
+		if header.BaseFee == nil {
+			header.BaseFee = eip1559.CalcBaseFee(config, parent)
+		}
+	}
+	if config.IsCancun(header.Number, header.Time) {
+		var excess uint64
+		if config.IsCancun(parent.Number, parent.Time) {
+			excess = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
+		} else {
+			excess = eip4844.CalcExcessBlobGas(0, 0)
+		}
+		header.ExcessBlobGas = &excess
+	}
 	blockContext := core.NewEVMBlockContext(header, sim.newSimulatedChainContext(ctx, headers), nil)
 	if block.BlockOverrides.BlobBaseFee != nil {
 		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
@@ -192,7 +209,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		callResults          = make([]simCallResult, len(block.Calls))
 		receipts             = make([]*types.Receipt, len(block.Calls))
 		tracer               = newTracer(sim.traceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
-		config               = sim.b.ChainConfig()
 		vmConfig             = &vm.Config{
 			NoBaseFee: !sim.validate,
 			// Block hash will be repaired after execution.
@@ -263,19 +279,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		header.ReceiptHash = types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
 		header.Bloom = types.CreateBloom(types.Receipts(receipts))
 	}
-	if config.IsLondon(header.Number) {
-		// BaseFee depends on parent's gasUsed, hence can't be pre-computed.
-		header.BaseFee = eip1559.CalcBaseFee(config, parent)
-	}
 	if config.IsCancun(header.Number, header.Time) {
 		header.BlobGasUsed = &blobGasUsed
-		var excess uint64
-		if config.IsCancun(parent.Number, parent.Time) {
-			excess = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
-		} else {
-			excess = eip4844.CalcExcessBlobGas(0, 0)
-		}
-		header.ExcessBlobGas = &excess
 	}
 	result := simBlockResultFromHeader(header, callResults)
 	result.repairLogs()

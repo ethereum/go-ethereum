@@ -1693,6 +1693,38 @@ func TestSimulateV1(t *testing.T) {
 			want:       nil,
 			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: errCodeNonceTooHigh},
 		},
+		// Successful validation
+		{
+			name: "validation-checks-success",
+			tag:  latest,
+			blocks: []simBlock{{
+				BlockOverrides: &BlockOverrides{
+					BaseFeePerGas: (*hexutil.Big)(big.NewInt(1)),
+				},
+				StateOverrides: &StateOverride{
+					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(10000000))},
+				},
+				Calls: []TransactionArgs{{
+					From:         &randomAccounts[0].addr,
+					To:           &randomAccounts[1].addr,
+					Value:        (*hexutil.Big)(big.NewInt(1000)),
+					MaxFeePerGas: (*hexutil.Big)(big.NewInt(2)),
+				}},
+			}},
+			validation: &validation,
+			want: []blockRes{{
+				Number:       "0xb",
+				GasLimit:     "0x47e7c4",
+				GasUsed:      "0x5208",
+				FeeRecipient: coinbase,
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0x5208",
+					Logs:        []log{},
+					Status:      "0x1",
+				}},
+			}},
+		},
 		// Clear storage.
 		{
 			name: "clear-storage",
