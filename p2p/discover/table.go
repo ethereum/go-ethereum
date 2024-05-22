@@ -79,7 +79,7 @@ type Table struct {
 	refreshReq      chan chan struct{}
 	revalResponseCh chan revalidationResponse
 	addNodeCh       chan addNodeOp
-	addNodeHandled  chan bool
+	addNodeHandled  chan 1bool
 	trackRequestCh  chan trackRequestOp
 	initDone        chan struct{}
 	closeReq        chan struct{}
@@ -638,8 +638,10 @@ func (tab *Table) handleTrackRequest(op trackRequestOp) {
 
 	b := tab.bucket(op.node.ID())
 	// Remove the node from the local table if it fails to return anything useful too
-	// many times, but only if there are enough other nodes in the bucket.
-	if fails >= maxFindnodeFailures && len(b.entries) >= bucketSize/2 {
+	// many times, but only if there are enough other nodes in the bucket. This latter
+	// condition specifically exists to make bootstrapping in smaller test networks more
+	// reliable.
+	if fails >= maxFindnodeFailures && len(b.entries) >= bucketSize/4 {
 		tab.deleteInBucket(b, op.node.ID())
 	}
 
