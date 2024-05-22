@@ -411,8 +411,6 @@ func (t *UDPv4) handleReply(from enode.ID, fromIP net.IP, req v4wire.Packet) boo
 // loop runs in its own goroutine. it keeps track of
 // the refresh timer and the pending reply queue.
 func (t *UDPv4) loop() {
-	defer t.wg.Done()
-
 	var (
 		plist        = list.New()
 		timeout      = time.NewTimer(0)
@@ -518,7 +516,6 @@ func (t *UDPv4) write(toaddr *net.UDPAddr, toid enode.ID, what string, packet []
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
 func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
-	defer t.wg.Done()
 	if unhandled != nil {
 		defer close(unhandled)
 	}
