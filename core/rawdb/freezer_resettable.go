@@ -33,10 +33,11 @@ type freezerOpenFunc = func() (*Freezer, error)
 // resettableFreezer is a wrapper of the freezer which makes the
 // freezer resettable.
 type resettableFreezer struct {
-	freezer *Freezer
-	opener  freezerOpenFunc
-	datadir string
-	lock    sync.RWMutex
+	readOnly bool
+	freezer  *Freezer
+	opener   freezerOpenFunc
+	datadir  string
+	lock     sync.RWMutex
 }
 
 // newResettableFreezer creates a resettable freezer, note freezer is
@@ -60,9 +61,10 @@ func newResettableFreezer(datadir string, namespace string, readonly bool, maxTa
 		return nil, err
 	}
 	return &resettableFreezer{
-		freezer: freezer,
-		opener:  opener,
-		datadir: datadir,
+		readOnly: readonly,
+		freezer:  freezer,
+		opener:   opener,
+		datadir:  datadir,
 	}, nil
 }
 
@@ -74,6 +76,9 @@ func (f *resettableFreezer) Reset() error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	if f.readOnly {
+		return errReadOnly
+	}
 	if err := f.freezer.Close(); err != nil {
 		return err
 	}
