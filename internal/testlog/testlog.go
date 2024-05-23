@@ -58,7 +58,7 @@ func (h *bufHandler) Handle(_ context.Context, r slog.Record) error {
 }
 
 func (h *bufHandler) Enabled(_ context.Context, lvl slog.Level) bool {
-	return lvl <= h.level
+	return lvl >= h.level
 }
 
 func (h *bufHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
