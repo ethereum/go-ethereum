@@ -201,7 +201,7 @@ func (n *Node) URLv4() string {
 	}
 
 	u := url.URL{Scheme: "enode"}
-	if n.Incomplete() {
+	if !n.ip.IsValid() {
 		u.Host = nodeid
 	} else {
 		addr := net.TCPAddr{IP: n.IP(), Port: n.TCP()}
