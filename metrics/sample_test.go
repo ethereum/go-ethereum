@@ -135,11 +135,8 @@ func TestExpDecaySampleNanosecondRegression(t *testing.T) {
 	}
 	s := sw.Snapshot()
 	v := s.(*sampleSnapshot).values
-	avg := float64(0)
-	for i := 0; i < len(v); i++ {
-		avg += float64(v[i])
-	}
-	avg /= float64(len(v))
+	sum := float64(s.Sum())
+	avg := sum / float64(len(v))
 	if avg > 16 || avg < 14 {
 		t.Errorf("out of range [14, 16]: %v\n", avg)
 	}
@@ -206,14 +203,9 @@ func TestUniformSampleIncludesTail(t *testing.T) {
 	for i := 0; i < max; i++ {
 		sw.Update(int64(i))
 	}
-	s := sw.Snapshot()
-	v := s.(*sampleSnapshot).values
-	sum := 0
+	sum := sw.Snapshot().Sum()
 	exp := (max - 1) * max / 2
-	for i := 0; i < len(v); i++ {
-		sum += int(v[i])
-	}
-	if exp != sum {
+	if int64(exp) != sum {
 		t.Errorf("sum: %v != %v\n", exp, sum)
 	}
 }
