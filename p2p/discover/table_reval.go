@@ -28,6 +28,8 @@ import (
 
 const never = mclock.AbsTime(math.MaxInt64)
 
+// tableRevalidation implements the node revalidation process.
+// It tracks all nodes contained in Table, and schedules sending PING to them.
 type tableRevalidation struct {
 	fast      revalidationList
 	slow      revalidationList
