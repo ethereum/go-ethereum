@@ -184,7 +184,7 @@ func (n *Node) TCP() int {
 	return int(n.tcp)
 }
 
-// UDPEndpoint returns the announced TCP endpoint.
+// UDPEndpoint returns the announced UDP endpoint.
 func (n *Node) UDPEndpoint() (netip.AddrPort, bool) {
 	if !n.ip.IsValid() || n.ip.IsUnspecified() || n.udp == 0 {
 		return netip.AddrPort{}, false
@@ -197,7 +197,7 @@ func (n *Node) TCPEndpoint() (netip.AddrPort, bool) {
 	if !n.ip.IsValid() || n.ip.IsUnspecified() || n.tcp == 0 {
 		return netip.AddrPort{}, false
 	}
-	return netip.AddrPortFrom(n.ip, n.udp), true
+	return netip.AddrPortFrom(n.ip, n.tcp), true
 }
 
 // Pubkey returns the secp256k1 public key of the node, if present.
