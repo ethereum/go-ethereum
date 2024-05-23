@@ -127,8 +127,7 @@ func (t *ZkTrie) UpdateContractCode(_ common.Address, _ common.Hash, _ []byte) e
 }
 
 func (t *ZkTrie) UpdateStorage(_ common.Address, key, value []byte) error {
-	v, _ := rlp.EncodeToBytes(value)
-	return t.TryUpdate(key, v)
+	return t.TryUpdate(key, value)
 }
 
 // Delete removes any existing value for key from the trie.

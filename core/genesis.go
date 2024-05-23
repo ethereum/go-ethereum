@@ -450,36 +450,37 @@ func (g *Genesis) ToBlock() *types.Block {
 	if g.Difficulty == nil && g.Mixhash == (common.Hash{}) {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	if g.Config != nil && g.Config.IsLondon(common.Big0) {
-		if g.BaseFee != nil {
-			head.BaseFee = g.BaseFee
-		} else {
-			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
-		}
-	}
+	// TODO: fix basefee
+	// if g.Config != nil && g.Config.IsLondon(common.Big0) {
+	// 	if g.BaseFee != nil {
+	// 		head.BaseFee = g.BaseFee
+	// 	} else {
+	// 		head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
+	// 	}
+	// }
 	var withdrawals []*types.Withdrawal
-	if conf := g.Config; conf != nil {
-		num := big.NewInt(int64(g.Number))
-		if conf.IsShanghai(num, g.Timestamp) {
-			head.WithdrawalsHash = &types.EmptyWithdrawalsHash
-			withdrawals = make([]*types.Withdrawal, 0)
-		}
-		if conf.IsCancun(num, g.Timestamp) {
-			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
-			// the zero hash. This is because the genesis block does not have a parent
-			// by definition.
-			head.ParentBeaconRoot = new(common.Hash)
-			// EIP-4844 fields
-			head.ExcessBlobGas = g.ExcessBlobGas
-			head.BlobGasUsed = g.BlobGasUsed
-			if head.ExcessBlobGas == nil {
-				head.ExcessBlobGas = new(uint64)
-			}
-			if head.BlobGasUsed == nil {
-				head.BlobGasUsed = new(uint64)
-			}
-		}
-	}
+	// if conf := g.Config; conf != nil {
+	// 	num := big.NewInt(int64(g.Number))
+	// 	if conf.IsShanghai(num, g.Timestamp) {
+	// 		head.WithdrawalsHash = &types.EmptyWithdrawalsHash
+	// 		withdrawals = make([]*types.Withdrawal, 0)
+	// 	}
+	// 	if conf.IsCancun(num, g.Timestamp) {
+	// 		// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
+	// 		// the zero hash. This is because the genesis block does not have a parent
+	// 		// by definition.
+	// 		head.ParentBeaconRoot = new(common.Hash)
+	// 		// EIP-4844 fields
+	// 		head.ExcessBlobGas = g.ExcessBlobGas
+	// 		head.BlobGasUsed = g.BlobGasUsed
+	// 		if head.ExcessBlobGas == nil {
+	// 			head.ExcessBlobGas = new(uint64)
+	// 		}
+	// 		if head.BlobGasUsed == nil {
+	// 			head.BlobGasUsed = new(uint64)
+	// 		}
+	// 	}
+	// }
 	return types.NewBlock(head, nil, nil, nil, trie.NewStackTrie(nil)).WithWithdrawals(withdrawals)
 }
 
