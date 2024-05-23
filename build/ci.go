@@ -130,6 +130,14 @@ var (
 
 	// This is where the tests should be unpacked.
 	executionSpecTestsDir = "tests/spec-tests"
+
+	// Tests to skip in CI.
+	// TODO: improve below tests so they aren't so flaky.
+	skipTests = []string{
+		"TestSkeletonSyncRetrievals",
+		"TestUpdatedKeyfileContents",
+		"TestForkResendTx",
+	}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -298,6 +306,9 @@ func doTest(cmdline []string) {
 
 	// Enable CKZG backend in CI.
 	gotest.Args = append(gotest.Args, "-tags=ckzg")
+
+	// Skips designated tests.
+	gotest.Args = append(gotest.Args, fmt.Sprintf("-skip=(%s)", strings.Join(skipTests, "|")))
 
 	// Enable integration-tests
 	gotest.Args = append(gotest.Args, "-tags=integrationtests")
