@@ -616,7 +616,7 @@ func (w *worker) commitNewWork() {
 		Time:       big.NewInt(tstamp),
 	}
 	// Set baseFee if we are on an EIP-1559 chain
-	header.BaseFee = misc.CalcBaseFee(self.config, header)
+	header.BaseFee = misc.CalcBaseFee(w.config, header)
 
 	// Only set the coinbase if we are mining (avoid spurious block rewards)
 	if atomic.LoadInt32(&w.mining) == 1 {
@@ -679,7 +679,7 @@ func (w *worker) commitNewWork() {
 			log.Error("[commitNewWork] fail to check if block is epoch switch block when fetching pending transactions", "BlockNum", header.Number, "Hash", header.Hash())
 		}
 		if !isEpochSwitchBlock {
-			pending, err := w.eth.TxPool().Pending()
+			pending, err := w.eth.TxPool().Pending(true)
 			if err != nil {
 				log.Error("Failed to fetch pending transactions", "err", err)
 				return
