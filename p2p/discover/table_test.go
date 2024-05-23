@@ -364,7 +364,7 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 	transport.updateRecord(n2)
 
 	// Wait for revalidation. We wait for the node to be revalidated two times
-	// in order to synchronize with the update in the able.
+	// in order to synchronize with the update in the table.
 	waitForRevalidationPing(t, transport, tab, n2.ID())
 	waitForRevalidationPing(t, transport, tab, n2.ID())
 
