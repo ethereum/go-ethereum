@@ -363,6 +363,9 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 	n2 := enode.SignNull(&r, id)
 	transport.updateRecord(n2)
 
+	// Wait for revalidation. We wait for the node to be revalidated two times
+	// in order to synchronize with the update in the able.
+	waitForRevalidationPing(t, transport, tab, n2.ID())
 	waitForRevalidationPing(t, transport, tab, n2.ID())
 
 	intable := tab.getNode(id)
