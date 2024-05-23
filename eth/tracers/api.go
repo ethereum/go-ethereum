@@ -804,9 +804,13 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, txContext, statedb, chainConfig, vmConf)
 		statedb.SetTxContext(tx.Hash(), i)
-		vmConf.Tracer.OnTxStart(vmenv.GetVMContext(), tx, msg.From)
+		if vmConf.Tracer.OnTxStart != nil {
+			vmConf.Tracer.OnTxStart(vmenv.GetVMContext(), tx, msg.From)
+		}
 		vmRet, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
-		vmConf.Tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, err)
+		if vmConf.Tracer.OnTxEnd != nil {
+			vmConf.Tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, err)
+		}
 		if writer != nil {
 			writer.Flush()
 		}
