@@ -125,11 +125,19 @@ func TestValidateHeader(t *testing.T) {
 }
 
 func TestReceiptsAndBody(t *testing.T) {
-	entryMap, err := parseDataForBlock14764013()
+	entryMap, err := parseDataForBlock("block_14764013.json")
 	require.NoError(t, err)
+	testReceiptsAndBody(entryMap, t)
 
+	entryMap, err = parseDataForBlock("block_8951059.json")
+	require.NoError(t, err)
+	testReceiptsAndBody(entryMap, t)
+}
+
+func testReceiptsAndBody(entryMap map[string]contentEntry, t *testing.T) {
 	historyNetwork, err := genHistoryNetwork(":7893", nil)
 	require.NoError(t, err)
+	defer historyNetwork.Stop()
 
 	headerEntry := entryMap["header"]
 	// validateContents will store the content
@@ -194,7 +202,7 @@ func TestGetContentByKey(t *testing.T) {
 	// wait node start
 	time.Sleep(10 * time.Second)
 
-	entryMap, err := parseDataForBlock14764013()
+	entryMap, err := parseDataForBlock("block_14764013.json")
 	require.NoError(t, err)
 
 	headerEntry := entryMap["header"]
@@ -450,7 +458,7 @@ func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*HistoryNetwork, e
 	return NewHistoryNetwork(portalProtocol, &accu), nil
 }
 
-func parseDataForBlock14764013() (map[string]contentEntry, error) {
+func parseDataForBlock(fileName string) (map[string]contentEntry, error) {
 	content, err := os.ReadFile("./testdata/block_14764013.json")
 	if err != nil {
 		return nil, err

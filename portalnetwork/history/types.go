@@ -108,7 +108,7 @@ func (p *BlockHeaderProof) HashTreeRootWith(_ ssz.HashWalker) (err error) {
 }
 
 type PortalReceipts struct {
-	Receipts [][]byte `ssz-max:"134217728,16384"`
+	Receipts [][]byte `ssz-max:"16384,134217728"`
 }
 
 // MarshalSSZ ssz marshals the PortalReceipts object
@@ -119,9 +119,9 @@ func (p *PortalReceipts) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the PortalReceipts object to a target array
 func (p *PortalReceipts) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-
-	if size := len(p.Receipts); size > 134217728 {
-		err = ssz.ErrListTooBigFn("PortalReceipts.Receipts", size, 134217728)
+	// Field (0) 'Receipts'
+	if size := len(p.Receipts); size > 16384 {
+		err = ssz.ErrListTooBigFn("PortalReceipts.Receipts", size, 16384)
 		return
 	}
 	{
@@ -132,8 +132,8 @@ func (p *PortalReceipts) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		}
 	}
 	for ii := 0; ii < len(p.Receipts); ii++ {
-		if size := len(p.Receipts[ii]); size > 16384 {
-			err = ssz.ErrBytesLengthFn("PortalReceipts.Receipts[ii]", size, 16384)
+		if size := len(p.Receipts[ii]); size > 134217728 {
+			err = ssz.ErrBytesLengthFn("PortalReceipts.Receipts[ii]", size, 134217728)
 			return
 		}
 		dst = append(dst, p.Receipts[ii]...)
@@ -142,7 +142,7 @@ func (p *PortalReceipts) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshal the PortalReceipts object
+// UnmarshalSSZ ssz unmarshals the PortalReceipts object
 func (p *PortalReceipts) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
@@ -151,13 +151,13 @@ func (p *PortalReceipts) UnmarshalSSZ(buf []byte) error {
 	}
 	// Field (0) 'Receipts'
 	{
-		num, err := ssz.DecodeDynamicLength(buf, 134217728)
+		num, err := ssz.DecodeDynamicLength(buf, 16384)
 		if err != nil {
 			return err
 		}
 		p.Receipts = make([][]byte, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
-			if len(buf) > 16384 {
+			if len(buf) > 134217728 {
 				return ssz.ErrBytesLength
 			}
 			if cap(p.Receipts[indx]) == 0 {
@@ -186,7 +186,43 @@ func (p *PortalReceipts) SizeSSZ() (size int) {
 	return
 }
 
+// HashTreeRoot ssz hashes the PortalReceipts object
+func (p *PortalReceipts) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(p)
+}
+
 // HashTreeRootWith ssz hashes the PortalReceipts object with a hasher
-func (p *PortalReceipts) HashTreeRootWith(_ ssz.HashWalker) (err error) {
-	panic("implement me")
+func (p *PortalReceipts) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	indx := hh.Index()
+
+	// Field (0) 'Receipts'
+	{
+		subIndx := hh.Index()
+		num := uint64(len(p.Receipts))
+		if num > 16384 {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		for _, elem := range p.Receipts {
+			{
+				elemIndx := hh.Index()
+				byteLen := uint64(len(elem))
+				if byteLen > 134217728 {
+					err = ssz.ErrIncorrectListSize
+					return
+				}
+				hh.AppendBytes32(elem)
+				hh.MerkleizeWithMixin(elemIndx, byteLen, (134217728+31)/32)
+			}
+		}
+		hh.MerkleizeWithMixin(subIndx, num, 16384)
+	}
+
+	hh.Merkleize(indx)
+	return
+}
+
+// GetTree ssz hashes the PortalReceipts object
+func (p *PortalReceipts) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(p)
 }
