@@ -103,14 +103,14 @@ func TestExpDecaySample(t *testing.T) {
 		}
 		snap := sample.Snapshot()
 		if have, want := int(snap.Count()), tc.updates; have != want {
-			t.Errorf("have %d want %d", have, want)
+			t.Errorf("unexpected count: have %d want %d", have, want)
 		}
 		if have, want := snap.Size(), min(tc.updates, tc.reservoirSize); have != want {
-			t.Errorf("have %d want %d", have, want)
+			t.Errorf("unexpected size: have %d want %d", have, want)
 		}
 		values := snap.(*sampleSnapshot).values
 		if have, want := len(values), min(tc.updates, tc.reservoirSize); have != want {
-			t.Errorf("have %d want %d", have, want)
+			t.Errorf("unexpected values length: have %d want %d", have, want)
 		}
 		for _, v := range values {
 			if v > int64(tc.updates) || v < 0 {
@@ -251,6 +251,9 @@ func benchmarkSample(b *testing.B, s Sample) {
 }
 
 func testExpDecaySampleStatistics(t *testing.T, s SampleSnapshot) {
+	if sum := s.Sum(); sum != 496598 {
+		t.Errorf("s.Sum(): 496598 != %v\n", sum)
+	}
 	if count := s.Count(); count != 10000 {
 		t.Errorf("s.Count(): 10000 != %v\n", count)
 	}
