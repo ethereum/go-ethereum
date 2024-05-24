@@ -86,8 +86,8 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.AccessList = &tx.AccessList
 		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
 		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
-		enc.MaxFeePerGas = (*hexutil.Big)(tx.FeeCap)
-		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.Tip)
+		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 		enc.To = t.To()
@@ -227,11 +227,11 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.MaxPriorityFeePerGas == nil {
 			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
 		}
-		itx.Tip = (*big.Int)(dec.MaxPriorityFeePerGas)
+		itx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
 		if dec.MaxFeePerGas == nil {
 			return errors.New("missing required field 'maxFeePerGas' for txdata")
 		}
-		itx.FeeCap = (*big.Int)(dec.MaxFeePerGas)
+		itx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' for txdata")
 		}

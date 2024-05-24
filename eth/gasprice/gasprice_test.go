@@ -80,13 +80,13 @@ func newTestBackend(t *testing.T, eip1559Block *big.Int) *testBackend {
 		var tx *types.Transaction
 		if eip1559Block != nil && b.Number().Cmp(eip1559Block) >= 0 {
 			txdata := &types.DynamicFeeTx{
-				ChainID: gspec.Config.ChainId,
-				Nonce:   b.TxNonce(addr),
-				To:      &common.Address{},
-				Gas:     30000,
-				FeeCap:  big.NewInt(100 * params.GWei),
-				Tip:     big.NewInt(int64(i+1) * params.GWei),
-				Data:    []byte{},
+				ChainID:   gspec.Config.ChainId,
+				Nonce:     b.TxNonce(addr),
+				To:        &common.Address{},
+				Gas:       30000,
+				GasFeeCap: big.NewInt(100 * params.GWei),
+				GasTipCap: big.NewInt(int64(i+1) * params.GWei),
+				Data:      []byte{},
 			}
 			tx = types.NewTx(txdata)
 		} else {

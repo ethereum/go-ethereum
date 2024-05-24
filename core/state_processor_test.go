@@ -63,14 +63,14 @@ func TestStateProcessorErrors(t *testing.T) {
 		}
 		return signedTx
 	}
-	var mkDynamicTx = func(nonce uint64, to common.Address, gasLimit uint64, tip, feeCap *big.Int) *types.Transaction {
+	var mkDynamicTx = func(nonce uint64, to common.Address, gasLimit uint64, gasTipCap, gasFeeCap *big.Int) *types.Transaction {
 		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
-			Nonce:  nonce,
-			Tip:    tip,
-			FeeCap: feeCap,
-			Gas:    gasLimit,
-			To:     &to,
-			Value:  big.NewInt(0),
+			Nonce:     nonce,
+			GasTipCap: gasTipCap,
+			GasFeeCap: gasFeeCap,
+			Gas:       gasLimit,
+			To:        &to,
+			Value:     big.NewInt(0),
 		}), signer, testKey)
 		return tx
 	}
@@ -148,25 +148,25 @@ func TestStateProcessorErrors(t *testing.T) {
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(0), big.NewInt(0)),
 				},
-				want: "fee cap less than block base fee: address xdc71562b71999873DB5b286dF957af199Ec94617F7, feeCap: 0 baseFee: 875000000",
+				want: "fee cap less than block base fee: address xdc71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas: 0 baseFee: 875000000",
 			},
 			{ // ErrTipVeryHigh
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas, tooBigNumber, big.NewInt(1)),
 				},
-				want: "tip higher than 2^256-1: address xdc71562b71999873DB5b286dF957af199Ec94617F7, tip bit length: 257",
+				want: "max priority fee per gas higher than 2^256-1: address xdc71562b71999873DB5b286dF957af199Ec94617F7, maxPriorityFeePerGas bit length: 257",
 			},
 			{ // ErrFeeCapVeryHigh
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(1), tooBigNumber),
 				},
-				want: "fee cap higher than 2^256-1: address xdc71562b71999873DB5b286dF957af199Ec94617F7, feeCap bit length: 257",
+				want: "max fee per gas higher than 2^256-1: address xdc71562b71999873DB5b286dF957af199Ec94617F7, maxFeePerGas bit length: 257",
 			},
 			{ // ErrTipAboveFeeCap
 				txs: []*types.Transaction{
 					mkDynamicTx(0, common.Address{}, params.TxGas, big.NewInt(2), big.NewInt(1)),
 				},
-				want: "tip higher than fee cap: address xdc71562b71999873DB5b286dF957af199Ec94617F7, tip: 1, feeCap: 2",
+				want: "max priority fee per gas higher than max fee per gas: address xdc71562b71999873DB5b286dF957af199Ec94617F7, maxPriorityFeePerGas: 2, maxFeePerGas: 1",
 			},
 			{ // ErrInsufficientFunds
 				// Available balance:           1000000000000000000
