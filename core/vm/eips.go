@@ -33,6 +33,8 @@ func EnableEIP(eipNum int, jt *JumpTable) error {
 		enable3855(jt)
 	case 3198:
 		enable3198(jt)
+	case 2929:
+		enable2929(jt)
 	case 2200:
 		enable2200(jt)
 	case 1884:
@@ -65,9 +67,9 @@ func enable1884(jt *JumpTable) {
 	}
 }
 
-func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(callContext.contract.Address()))
-	callContext.stack.push(balance)
+func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	balance, _ := uint256.FromBig(interpreter.evm.StateDB.GetBalance(scope.Contract.Address()))
+	scope.Stack.push(balance)
 	return nil, nil
 }
 
@@ -84,9 +86,9 @@ func enable1344(jt *JumpTable) {
 }
 
 // opChainID implements CHAINID opcode
-func opChainID(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainId)
-	callContext.stack.push(chainId)
+	scope.Stack.push(chainId)
 	return nil, nil
 }
 
@@ -94,6 +96,44 @@ func opChainID(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([
 func enable2200(jt *JumpTable) {
 	jt[SLOAD].constantGas = params.SloadGasEIP2200
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
+}
+
+// enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
+// https://eips.ethereum.org/EIPS/eip-2929
+func enable2929(jt *JumpTable) {
+	jt[SSTORE].dynamicGas = gasSStoreEIP2929
+
+	jt[SLOAD].constantGas = 0
+	jt[SLOAD].dynamicGas = gasSLoadEIP2929
+
+	jt[EXTCODECOPY].constantGas = WarmStorageReadCostEIP2929
+	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP2929
+
+	jt[EXTCODESIZE].constantGas = WarmStorageReadCostEIP2929
+	jt[EXTCODESIZE].dynamicGas = gasEip2929AccountCheck
+
+	jt[EXTCODEHASH].constantGas = WarmStorageReadCostEIP2929
+	jt[EXTCODEHASH].dynamicGas = gasEip2929AccountCheck
+
+	jt[BALANCE].constantGas = WarmStorageReadCostEIP2929
+	jt[BALANCE].dynamicGas = gasEip2929AccountCheck
+
+	jt[CALL].constantGas = WarmStorageReadCostEIP2929
+	jt[CALL].dynamicGas = gasCallEIP2929
+
+	jt[CALLCODE].constantGas = WarmStorageReadCostEIP2929
+	jt[CALLCODE].dynamicGas = gasCallCodeEIP2929
+
+	jt[STATICCALL].constantGas = WarmStorageReadCostEIP2929
+	jt[STATICCALL].dynamicGas = gasStaticCallEIP2929
+
+	jt[DELEGATECALL].constantGas = WarmStorageReadCostEIP2929
+	jt[DELEGATECALL].dynamicGas = gasDelegateCallEIP2929
+
+	// This was previously part of the dynamic cost, but we're using it as a constantGas
+	// factor here
+	jt[SELFDESTRUCT].constantGas = params.SelfdestructGasEIP150
+	jt[SELFDESTRUCT].dynamicGas = gasSelfdestructEIP2929
 }
 
 // enable3198 applies EIP-3198 (BASEFEE Opcode)
@@ -109,9 +149,9 @@ func enable3198(jt *JumpTable) {
 }
 
 // opBaseFee implements BASEFEE opcode
-func opBaseFee(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
+func opBaseFee(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error) {
 	baseFee, _ := uint256.FromBig(common.MinGasPrice50x)
-	callContext.stack.push(baseFee)
+	callContext.Stack.push(baseFee)
 	return nil, nil
 }
 
@@ -127,7 +167,7 @@ func enable3855(jt *JumpTable) {
 }
 
 // opPush0 implements the PUSH0 opcode
-func opPush0(pc *uint64, interpreter *EVMInterpreter, callContext *callCtx) ([]byte, error) {
-	callContext.stack.push(new(uint256.Int))
+func opPush0(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error) {
+	callContext.Stack.push(new(uint256.Int))
 	return nil, nil
 }

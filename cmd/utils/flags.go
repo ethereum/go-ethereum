@@ -117,7 +117,11 @@ var (
 	}
 	Enable0xPrefixFlag = cli.BoolFlag{
 		Name:  "enable-0x-prefix",
-		Usage: "Addres use 0x-prefix (default = false)",
+		Usage: "Addres use 0x-prefix (Deprecated: this is on by default, to use xdc prefix use --enable-xdc-prefix)",
+	}
+	EnableXDCPrefixFlag = cli.BoolFlag{
+		Name:  "enable-xdc-prefix",
+		Usage: "Addres use xdc-prefix (default = false)",
 	}
 	// General settings
 	AnnounceTxsFlag = cli.BoolFlag{
@@ -353,6 +357,11 @@ var (
 	VMEnableDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
 		Usage: "Record information useful for VM and contract debugging",
+	}
+	RPCGlobalGasCapFlag = cli.Uint64Flag{
+		Name:  "rpc.gascap",
+		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
+		Value: eth.DefaultConfig.RPCGasCap,
 	}
 	// Logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
@@ -786,6 +795,10 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
+func setPrefix(ctx *cli.Context, cfg *node.Config) {
+	checkExclusive(ctx, Enable0xPrefixFlag, EnableXDCPrefixFlag)
+}
+
 // MakeDatabaseHandles raises out the number of allowed file handles per process
 // for XDC and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles() int {
@@ -933,6 +946,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setHTTP(ctx, cfg)
 	setWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
+	setPrefix(ctx, cfg)
 
 	switch {
 	case ctx.GlobalIsSet(DataDirFlag.Name):
@@ -1166,6 +1180,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
+	}
+	if cfg.RPCGasCap != 0 {
+		log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
+	} else {
+		log.Info("Global gas cap disabled")
 	}
 	if ctx.GlobalIsSet(StoreRewardFlag.Name) {
 		common.StoreRewardFolder = filepath.Join(stack.DataDir(), "XDC", "rewards")

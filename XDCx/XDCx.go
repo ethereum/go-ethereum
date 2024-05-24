@@ -9,14 +9,13 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxDAO"
-	"github.com/XinFinOrg/XDPoSChain/consensus"
-	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/prque"
+	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/sync/syncmap"
@@ -105,7 +104,7 @@ func New(cfg *Config) *XDCX {
 	}
 	XDCX := &XDCX{
 		orderNonce:        make(map[common.Address]*big.Int),
-		Triegc:            prque.New(),
+		Triegc:            prque.New(nil),
 		tokenDecimalCache: tokenDecimalCache,
 		orderCache:        orderCache,
 	}

@@ -15,8 +15,8 @@ func TestGetMasterNodes(t *testing.T) {
 	snap := newSnapshot(1, common.Hash{}, masterNodes)
 
 	for _, address := range masterNodes {
-		if _, ok := snap.GetMappedMasterNodes()[address]; !ok {
-			t.Error("should get master node from map", address.Hex(), snap.GetMappedMasterNodes())
+		if _, ok := snap.GetMappedCandidates()[address]; !ok {
+			t.Error("should get master node from map", address.Hex(), snap.GetMappedCandidates())
 			return
 		}
 	}

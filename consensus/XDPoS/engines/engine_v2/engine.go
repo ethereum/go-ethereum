@@ -2,6 +2,7 @@ package engine_v2
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -468,7 +469,7 @@ func (x *XDPoS_v2) IsAuthorisedAddress(chain consensus.ChainReader, header *type
 		log.Error("[IsAuthorisedAddress] Can't get snapshot with at ", "number", header.Number, "hash", header.Hash().Hex(), "err", err)
 		return false
 	}
-	for _, mn := range snap.NextEpochMasterNodes {
+	for _, mn := range snap.NextEpochCandidates {
 		if mn == address {
 			return true
 		}
@@ -512,6 +513,15 @@ func (x *XDPoS_v2) UpdateMasternodes(chain consensus.ChainReader, header *types.
 		log.Info("masternode", "index", i, "address", n.Address.String())
 	}
 
+	return nil
+}
+
+// VerifyUncles implements consensus.Engine, always returning an error for any
+// uncles as this consensus mechanism doesn't permit uncles.
+func (x *XDPoS_v2) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+	if len(block.Uncles()) > 0 {
+		return errors.New("uncles not allowed in XDPoS_v2")
+	}
 	return nil
 }
 
@@ -611,9 +621,9 @@ func (x *XDPoS_v2) VerifyVoteMessage(chain consensus.ChainReader, vote *types.Vo
 	verified, signer, err := x.verifyMsgSignature(types.VoteSigHash(&types.VoteForSign{
 		ProposedBlockInfo: vote.ProposedBlockInfo,
 		GapNumber:         vote.GapNumber,
-	}), vote.Signature, snapshot.NextEpochMasterNodes)
+	}), vote.Signature, snapshot.NextEpochCandidates)
 	if err != nil {
-		for i, mn := range snapshot.NextEpochMasterNodes {
+		for i, mn := range snapshot.NextEpochCandidates {
 			log.Warn("[VerifyVoteMessage] Master node list item", "index", i, "Master node", mn.Hex())
 		}
 		log.Warn("[VerifyVoteMessage] Error while verifying vote message", "votedBlockNum", vote.ProposedBlockInfo.Number.Uint64(), "votedBlockHash", vote.ProposedBlockInfo.Hash.Hex(), "voteHash", vote.Hash(), "error", err.Error())
@@ -649,15 +659,15 @@ func (x *XDPoS_v2) VerifyTimeoutMessage(chain consensus.ChainReader, timeoutMsg 
 		log.Error("[VerifyTimeoutMessage] Fail to get snapshot when verifying timeout message!", "messageGapNumber", timeoutMsg.GapNumber, "err", err)
 		return false, err
 	}
-	if len(snap.NextEpochMasterNodes) == 0 {
-		log.Error("[VerifyTimeoutMessage] cannot find nextEpochMasterNodes from snapshot", "messageGapNumber", timeoutMsg.GapNumber)
+	if len(snap.NextEpochCandidates) == 0 {
+		log.Error("[VerifyTimeoutMessage] cannot find NextEpochCandidates from snapshot", "messageGapNumber", timeoutMsg.GapNumber)
 		return false, fmt.Errorf("Empty master node lists from snapshot")
 	}
 
 	verified, signer, err := x.verifyMsgSignature(types.TimeoutSigHash(&types.TimeoutForSign{
 		Round:     timeoutMsg.Round,
 		GapNumber: timeoutMsg.GapNumber,
-	}), timeoutMsg.Signature, snap.NextEpochMasterNodes)
+	}), timeoutMsg.Signature, snap.NextEpochCandidates)
 
 	if err != nil {
 		log.Warn("[VerifyTimeoutMessage] cannot verify timeout signature", "err", err)
@@ -1005,7 +1015,7 @@ func (x *XDPoS_v2) calcMasternodes(chain consensus.ChainReader, blockNum *big.In
 		log.Error("[calcMasternodes] Adaptor v2 getSnapshot has error", "err", err)
 		return nil, nil, err
 	}
-	candidates := snap.NextEpochMasterNodes
+	candidates := snap.NextEpochCandidates
 
 	if blockNum.Uint64() == x.config.V2.SwitchBlock.Uint64()+1 {
 		log.Info("[calcMasternodes] examing first v2 block")

@@ -1,0 +1,11 @@
+// -*- mode: go -*-
+
+package test
+
+import "github.com/XinFinOrg/XDPoSChain/rlp"
+
+type Test struct {
+	RawValue          rlp.RawValue
+	PointerToRawValue *rlp.RawValue
+	SliceOfRawValue   []rlp.RawValue
+}

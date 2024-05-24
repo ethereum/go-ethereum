@@ -45,15 +45,17 @@ var TIPXDCX = big.NewInt(225000)
 var TIPXDCXLending = big.NewInt(225000)
 var TIPXDCXCancellationFee = big.NewInt(225000)
 var TIPXDCXCancellationFeeTestnet = big.NewInt(225000)
-var TIPXDCXDISABLE = big.NewInt(15894900)
-var BerlinBlock = big.NewInt(9999999999)
-var LondonBlock = big.NewInt(9999999999)
-var MergeBlock = big.NewInt(9999999999)
+var TIPXDCXMinerDisable = big.NewInt(15894900)
+var TIPXDCXReceiverDisable = big.NewInt(18018000)
+var BerlinBlock = big.NewInt(16832700)
+var LondonBlock = big.NewInt(16832700)
+var MergeBlock = big.NewInt(16832700)
 var ShanghaiBlock = big.NewInt(16832700)
+var Eip1559Block = big.NewInt(9999999999)
 
 var TIPXDCXTestnet = big.NewInt(0)
 var IsTestnet bool = false
-var Enable0xPrefix bool = false
+var Enable0xPrefix bool = true
 var StoreRewardFolder string
 var RollbackHash Hash
 var BasePrice = big.NewInt(1000000000000000000)                       // 1

@@ -357,9 +357,15 @@ var bn256PairingTests = []precompiledTest{
 }
 
 var XDCxLastPriceTests = []precompiledTest{
+	// {
+	// 	input:    common.Bytes2Hex(append(common.Hex2BytesFixed(BTCAddress, 32), common.Hex2BytesFixed(USDTAddress, 32)...)),
+	// 	expected: common.Bytes2Hex(common.LeftPadBytes(BTCUSDTLastPrice.Bytes(), XDCXPriceNumberOfBytesReturn)),
+	// 	name:     "BTCUSDT",
+	// },
+	// since we diable XDCx precompiles, the test now returns 0
 	{
 		input:    common.Bytes2Hex(append(common.Hex2BytesFixed(BTCAddress, 32), common.Hex2BytesFixed(USDTAddress, 32)...)),
-		expected: common.Bytes2Hex(common.LeftPadBytes(BTCUSDTLastPrice.Bytes(), XDCXPriceNumberOfBytesReturn)),
+		expected: common.Bytes2Hex(common.LeftPadBytes(common.Big0.Bytes(), XDCXPriceNumberOfBytesReturn)),
 		name:     "BTCUSDT",
 	},
 	{
@@ -375,9 +381,15 @@ var XDCxLastPriceTests = []precompiledTest{
 }
 
 var XDCxEpochPriceTests = []precompiledTest{
+	// {
+	// 	input:    common.Bytes2Hex(append(common.Hex2BytesFixed(BTCAddress, 32), common.Hex2BytesFixed(USDTAddress, 32)...)),
+	// 	expected: common.Bytes2Hex(common.LeftPadBytes(BTCUSDTEpochPrice.Bytes(), XDCXPriceNumberOfBytesReturn)),
+	// 	name:     "BTCUSDT",
+	// },
+	// since we diable XDCx precompiles, the test now returns 0
 	{
 		input:    common.Bytes2Hex(append(common.Hex2BytesFixed(BTCAddress, 32), common.Hex2BytesFixed(USDTAddress, 32)...)),
-		expected: common.Bytes2Hex(common.LeftPadBytes(BTCUSDTEpochPrice.Bytes(), XDCXPriceNumberOfBytesReturn)),
+		expected: common.Bytes2Hex(common.LeftPadBytes(common.Big0.Bytes(), XDCXPriceNumberOfBytesReturn)),
 		name:     "BTCUSDT",
 	},
 	{
