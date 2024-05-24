@@ -775,7 +775,7 @@ func (w *worker) handlePipelineResult(res *pipeline.Result) error {
 	if res != nil && res.OverflowingTx != nil {
 		if res.FinalBlock == nil {
 			// first txn overflowed the circuit, skip
-			log.Trace("Circuit capacity limit reached for a single tx", "tx", res.OverflowingTx.Hash().String(),
+			log.Info("Circuit capacity limit reached for a single tx", "tx", res.OverflowingTx.Hash().String(),
 				"isL1Message", res.OverflowingTx.IsL1MessageTx(), "reason", res.CCCErr.Error())
 
 			// Store skipped transaction in local db
@@ -789,6 +789,7 @@ func (w *worker) handlePipelineResult(res *pipeline.Result) error {
 			if overflowingL1MsgTx := res.OverflowingTx.AsL1MessageTx(); overflowingL1MsgTx != nil {
 				rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), w.currentPipeline.Header.ParentHash, overflowingL1MsgTx.QueueIndex+1)
 			} else {
+				w.prioritizedTx = nil
 				w.eth.TxPool().RemoveTx(res.OverflowingTx.Hash(), true)
 			}
 		} else if !res.OverflowingTx.IsL1MessageTx() {

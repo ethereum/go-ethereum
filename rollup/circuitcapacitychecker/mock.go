@@ -5,6 +5,7 @@ package circuitcapacitychecker
 import (
 	"math/rand"
 
+	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 )
 
@@ -12,6 +13,9 @@ type CircuitCapacityChecker struct {
 	ID        uint64
 	countdown int
 	nextError *error
+
+	skipHash  string
+	skipError error
 }
 
 // NewCircuitCapacityChecker creates a new CircuitCapacityChecker
@@ -34,6 +38,11 @@ func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*
 			err := *ccc.nextError
 			ccc.nextError = nil
 			return nil, err
+		}
+	}
+	if ccc.skipError != nil {
+		if traces.Transactions[0].TxHash == ccc.skipHash {
+			return nil, ccc.skipError
 		}
 	}
 	return &types.RowConsumption{types.SubCircuitRowUsage{
@@ -66,4 +75,10 @@ func (ccc *CircuitCapacityChecker) SetLightMode(lightMode bool) error {
 func (ccc *CircuitCapacityChecker) ScheduleError(cnt int, err error) {
 	ccc.countdown = cnt
 	ccc.nextError = &err
+}
+
+// Skip forced CCC to return always an error for a given txn
+func (ccc *CircuitCapacityChecker) Skip(txnHash common.Hash, err error) {
+	ccc.skipHash = txnHash.String()
+	ccc.skipError = err
 }
