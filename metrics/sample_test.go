@@ -114,7 +114,7 @@ func TestExpDecaySample(t *testing.T) {
 		}
 		for _, v := range values {
 			if v > int64(tc.updates) || v < 0 {
-				t.Errorf("out of range [0, %d): %v", tc.updates, v)
+				t.Errorf("out of range [0, %d]: %v", tc.updates, v)
 			}
 		}
 	}
@@ -195,7 +195,7 @@ func TestUniformSample(t *testing.T) {
 	}
 	for _, v := range values {
 		if v > 1000 || v < 0 {
-			t.Errorf("out of range [0, 100): %v\n", v)
+			t.Errorf("out of range [0, 1000]: %v\n", v)
 		}
 	}
 }
