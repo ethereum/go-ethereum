@@ -593,7 +593,7 @@ TraceCallConfig is a superset of [TraceConfig](#traceconfig), providing addition
 
 - `stateOverrides`: `StateOverride`. Overrides for the state data (accounts/storage) for the call, see [StateOverride](/docs/developers/evm-tracing/built-in-tracers#state-overrides) for more details.
 - `blockOverrides`: `BlockOverrides`. Overrides for the block data (number, timestamp etc) for the call, see [BlockOverrides](/docs/developers/evm-tracing/built-in-tracers#block-overrides) for more details.
-- `txIndex`: `NUMBER`. If set, the state at the the given transaction index will be used to tracing (default = the last transaction index in the block).
+- `txIndex`: `NUMBER`. If set, the state at the given transaction index will be used to tracing (default = the last transaction index in the block).
 
 **Example:**
 

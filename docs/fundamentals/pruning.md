@@ -34,7 +34,7 @@ There may be a period of >1 hour during the Compacting Database stage with no lo
 
 ## Pruning command {#pruning-command}
 
-For a normal Geth node, Geth should be stopped and the following command executed to start a offline state prune:
+For a normal Geth node, Geth should be stopped and the following command executed to start an offline state prune:
 
 ```sh
 geth snapshot prune-state
