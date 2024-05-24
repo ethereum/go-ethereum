@@ -12,7 +12,7 @@ Geth provides a simple, yet thorough accounts package that includes all the tool
 Access keys to Ethereum accounts should never be stored in plain-text. Instead, they should be stored encrypted so that even if the mobile device is accessed by a malicious third party the keys are still hidden under an additional layer of security. Geth provides a keystore that enables developers to store keys securely. The Geth keystore uses [Scrypt](https://pkg.go.dev/golang.org/x/crypto/scrypt) to store keys that are encoded using the [`secp256k1`](https://www.secg.org/sec2-v2.pdf) elliptic curve. Accounts are stored on disk in the [Web3 Secret Storage](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) format. Developers should be aware of these implementation details
 but are not required to deeply understand the cryptographic primitives in order to use the keystore.
 
-One thing that should be understood, though, is that the cryptographic primitives underpinning the keystore can operate in light or standard mode.Light mode is computationally cheaper, while standard mode has extra security. Light mode is appropriate for mobile devices, but developers should be aware that there is a security trade-off.
+One thing that should be understood, though, is that the cryptographic primitives underpinning the keystore can operate in light or standard mode. Light mode is computationally cheaper, while standard mode has extra security. Light mode is appropriate for mobile devices, but developers should be aware that there is a security trade-off.
 
 - standard needs 256MB memory and 1 second processing on a modern CPU to access a key
 - light needs 4MB memory and 100 millisecond processing on a modern CPU to access a key
@@ -39,7 +39,7 @@ The last two arguments of [`keystore.NewKeyStore`](https://godoc.org/github.com/
 
 ## Account lifecycle {#account-lifecycle}
 
-Once an encrypted keystore for Ethereum accounts exists it, it can be used to manage accounts for the entire account lifecycle requirements of a Go native application. This includes the basic functionality of creating new accounts and deleting existing ones as well as updating access credentials, exporting existing accounts, and importing them on other devices.
+Once an encrypted keystore for Ethereum accounts exists, it can be used to manage accounts for the entire account lifecycle requirements of a Go native application. This includes the basic functionality of creating new accounts and deleting existing ones as well as updating access credentials, exporting existing accounts, and importing them on other devices.
 
 Although the keystore defines the encryption strength it uses to store accounts, there is no global master password that can grant access to all of them. Rather each account is maintained individually, and stored on disk in its [encrypted format](https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition) individually, ensuring a much cleaner and stricter separation of credentials.
 

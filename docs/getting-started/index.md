@@ -18,7 +18,7 @@ In order to get the most value from the tutorials on this page, the following sk
 - Basic knowledge about HTTP and JavaScript
 - Basic knowledge of node architecture and consensus clients
 
-Users that need to revisit these fundamentals can find helpful resources relating to the command line [here](https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line), Ethereum and its testnets [here](https://ethereum.org/en/developers/tutorials/), http [here](https://developer.mozilla.org/en-US/docs/Web/HTTP) and Javascript [here](https://www.javascript.com/learn). Information on node architecture can be found [here](/docs/fundamentals/node-architecture) and our guide for configuring Geth to connect to a
+Users that need to revisit these fundamentals can find helpful resources relating to the command line [here](https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line), Ethereum and its testnets [here](https://ethereum.org/en/developers/tutorials/), [here](https://developer.mozilla.org/en-US/docs/Web/HTTP) and Javascript [here](https://www.javascript.com/learn). Information on node architecture can be found [here](/docs/fundamentals/node-architecture) and our guide for configuring Geth to connect to a
 consensus client is [here](/docs/getting-started/consensus-clients).
 
 <Note>If Geth was installed from source on Linux, `make` saves the binaries for Geth and the associated tools in `/build/bin`. To run these programs it is convenient to move them to the top level project directory (e.g. running `mv ./build/bin/* ./`) from `/go-ethereum`. Then `./` must be prepended to the commands in the code snippets in order to execute a particular program, e.g. `./geth` instead of simply `geth`. If the executables are not moved then either navigate to the `bin` directory to run them (e.g. `cd ./build/bin` and `./geth`) or provide their path (e.g. `./build/bin/geth`). These instructions can be ignored for other installations.</Note>
@@ -143,7 +143,7 @@ INFO [02-10|13:59:06.997] IPC endpoint opened                      url=/.../geth
 INFO [02-10|13:59:06.998] HTTP server started                      endpoint=127.0.0.1:8545 prefix= cors= vhosts=localhost
 ```
 
-By default, Geth uses snap-sync which download blocks sequentially from a relatively recent block, not the genesis block. It saves the data in files in `/go-ethereum/geth-tutorial/geth/chaindata/`. One the sequence of headers has been verified, Geth downloads the block bodies and state data before starting the "state healing" phase to update the state for newly arriving data. This is confirmed by the logs printed to the terminal. There should be a rapidly-growing sequence of logs in the terminal with the following syntax:
+By default, Geth uses snap-sync which download blocks sequentially from a relatively recent block, not the genesis block. It saves the data in files in `/go-ethereum/geth-tutorial/geth/chaindata/`. Once the sequence of headers has been verified, Geth downloads the block bodies and state data before starting the "state healing" phase to update the state for newly arriving data. This is confirmed by the logs printed to the terminal. There should be a rapidly-growing sequence of logs in the terminal with the following syntax:
 
 ```terminal
 INFO [04-29][15:54:09.238] Looking for peers             peercount=2 tried=0 static=0
@@ -299,7 +299,7 @@ Approve? [y/N]:
 Please enter the password for account 0xca57F3b40B42FCce3c37B8D18aDBca5260ca72EC
 ```
 
-After approving the transaction, the following confirmation screen in displayed in the Clef terminal:
+After approving the transaction, the following confirmation screen is displayed in the Clef terminal:
 
 ```terminal
 -----------------------
@@ -371,7 +371,7 @@ Up to this point this tutorial has interacted with Geth using the convenience li
 
 ### Checking account balance {#checking-balance}
 
-The command below returns the balance of the given account. This is a HTTP POST request to the local port 8545. The `-H` flag is for header information. It is used here to define the format of the incoming payload, which is JSON. The `--data` flag defines the content of the payload, which is a JSON object. That JSON object contains four fields: `jsonrpc` defines the spec version for the JSON-RPC API, `method` is the specific function being invoked, `params` are the function arguments, and `id` is used for ordering transactions. The two arguments passed to `eth_getBalance` are the account address whose balance to check and the block to query (here `latest` is used to check the balance in the most recently mined block).
+The command below returns the balance of the given account. This is an HTTP POST request to the local port 8545. The `-H` flag is for header information. It is used here to define the format of the incoming payload, which is JSON. The `--data` flag defines the content of the payload, which is a JSON object. That JSON object contains four fields: `jsonrpc` defines the spec version for the JSON-RPC API, `method` is the specific function being invoked, `params` are the function arguments, and `id` is used for ordering transactions. The two arguments passed to `eth_getBalance` are the account address whose balance to check and the block to query (here `latest` is used to check the balance in the most recently mined block).
 
 ```sh
 curl -X POST http://127.0.0.1:8545 \

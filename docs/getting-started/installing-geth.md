@@ -159,7 +159,7 @@ The standalone bundles can be downloaded from the [Geth Downloads](/downloads) p
 
 ## Docker container {#docker-container}
 
-A Docker image with recent snapshot builds from our `develop` branch is maintained on DockerHub to support users who prefer to run containerized processes. There four different Docker images available for running the latest stable or development versions of Geth.
+A Docker image with recent snapshot builds from our `develop` branch is maintained on DockerHub to support users who prefer to run containerized processes. There are four different Docker images available for running the latest stable or development versions of Geth.
 
 - `ethereum/client-go:latest` is the latest development version of Geth (default)
 - `ethereum/client-go:stable` is the latest stable version of Geth
