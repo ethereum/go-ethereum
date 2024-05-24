@@ -212,6 +212,7 @@ type BlockFetcher struct {
 // NewBlockFetcher creates a block fetcher to retrieve blocks based on hash announcements.
 
 func NewBlockFetcher(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, handleProposedBlock proposeBlockHandlerFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertChain chainInsertFn, prepareBlock blockPrepareFn, dropPeer peerDropFn) *BlockFetcher {
+	knownBlocks, _ := lru.NewARC(blockLimit)
 	return &BlockFetcher{
 		notify:              make(chan *blockAnnounce),
 		inject:              make(chan *blockInject),
@@ -227,6 +228,7 @@ func NewBlockFetcher(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, h
 		queue:               prque.New(nil),
 		queues:              make(map[string]int),
 		queued:              make(map[common.Hash]*blockInject),
+		knowns:              knownBlocks,
 		getBlock:            getBlock,
 		verifyHeader:        verifyHeader,
 		handleProposedBlock: handleProposedBlock,

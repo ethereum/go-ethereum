@@ -145,12 +145,12 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		networkId:  networkID,
-		forkFilter: forkid.NewFilter(blockchain),
-		eventMux:   mux,
-		txpool:     txpool,
-		blockchain: blockchain,
-		// chainconfig:    config,
+		networkId:   networkID,
+		forkFilter:  forkid.NewFilter(blockchain),
+		eventMux:    mux,
+		txpool:      txpool,
+		blockchain:  blockchain,
+		chainconfig: config,
 		// whitelist: whitelist,
 		peers:          newPeerSet(),
 		newPeerCh:      make(chan *peer),
@@ -465,7 +465,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		// Propagate existing transactions. new transactions appearing
 		// after this will be sent via broadcasts.
 		pm.syncTransactions(p)
-
 		// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork
 		if daoBlock := pm.chainconfig.DAOForkBlock; daoBlock != nil {
 			// Request the peer's DAO fork header for extra-data validation
@@ -1066,16 +1065,24 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 			return
 		}
 		// Send the block to a subset of our peers
-		for _, peer := range peers {
-			peer.SendNewBlock(block, td)
+		transferLen := int(math.Sqrt(float64(len(peers))))
+		if transferLen < minBroadcastPeers {
+			transferLen = minBroadcastPeers
 		}
-		log.Trace("Propagated block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		if transferLen > len(peers) {
+			transferLen = len(peers)
+		}
+		transfer := peers[:transferLen]
+		for _, peer := range transfer {
+			peer.AsyncSendNewBlock(block, td)
+		}
+		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
 	if pm.blockchain.HasBlock(hash, block.NumberU64()) {
 		for _, peer := range peers {
-			peer.SendNewBlockHashes([]common.Hash{hash}, []uint64{block.NumberU64()})
+			peer.AsyncSendNewBlockHash(block)
 		}
 		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}

@@ -316,7 +316,7 @@ func TestSequentialAnnouncements63(t *testing.T) { testSequentialAnnouncements(t
 func TestSequentialAnnouncements64(t *testing.T) { testSequentialAnnouncements(t, 64) }
 func TestSequentialAnnouncements100(t *testing.T) { testSequentialAnnouncements(t, 100) }
 
-func testSequentialAnnouncements(t *testing.T, protocol int) {
+func testSequentialAnnouncements(t *testing.T, protocol int) { 
 	// Create a chain of blocks to import
 	targetBlocks := 4 * hashLimit
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
@@ -352,7 +352,7 @@ func TestConcurrentAnnouncements63(t *testing.T) { testConcurrentAnnouncements(t
 func TestConcurrentAnnouncements64(t *testing.T) { testConcurrentAnnouncements(t, 64) }
 func TestConcurrentAnnouncements100(t *testing.T) { testConcurrentAnnouncements(t, 100) }
 
-func testConcurrentAnnouncements(t *testing.T, protocol int) {
+func testConcurrentAnnouncements(t *testing.T, protocol int) { 
 	// Create a chain of blocks to import
 	targetBlocks := 4 * hashLimit
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
@@ -401,7 +401,7 @@ func TestOverlappingAnnouncements63(t *testing.T) { testOverlappingAnnouncements
 func TestOverlappingAnnouncements64(t *testing.T) { testOverlappingAnnouncements(t, 64) }
 func TestOverlappingAnnouncements100(t *testing.T) { testOverlappingAnnouncements(t, 100) }
 
-func testOverlappingAnnouncements(t *testing.T, protocol int) {
+func testOverlappingAnnouncements(t *testing.T, protocol int) { 
 	// Create a chain of blocks to import
 	targetBlocks := 4 * hashLimit
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
@@ -439,7 +439,7 @@ func TestPendingDeduplication63(t *testing.T) { testPendingDeduplication(t, 63) 
 func TestPendingDeduplication64(t *testing.T) { testPendingDeduplication(t, 64) }
 func TestPendingDeduplication100(t *testing.T) { testPendingDeduplication(t, 100) }
 
-func testPendingDeduplication(t *testing.T, protocol int) {
+func testPendingDeduplication(t *testing.T, protocol int) { 
 	// Create a hash and corresponding block
 	hashes, blocks := makeChain(1, 0, genesis)
 
@@ -483,7 +483,7 @@ func TestRandomArrivalImport63(t *testing.T) { testRandomArrivalImport(t, 63) }
 func TestRandomArrivalImport64(t *testing.T) { testRandomArrivalImport(t, 64) }
 func TestRandomArrivalImport100(t *testing.T) { testRandomArrivalImport(t, 100) }
 
-func testRandomArrivalImport(t *testing.T, protocol int) {
+func testRandomArrivalImport(t *testing.T, protocol int) { 
 	// Create a chain of blocks to import, and choose one to delay
 	targetBlocks := maxQueueDist
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
@@ -518,7 +518,7 @@ func TestQueueGapFill63(t *testing.T) { testQueueGapFill(t, 63) }
 func TestQueueGapFill64(t *testing.T) { testQueueGapFill(t, 64) }
 func TestQueueGapFill100(t *testing.T) { testQueueGapFill(t, 100) }
 
-func testQueueGapFill(t *testing.T, protocol int) {
+func testQueueGapFill(t *testing.T, protocol int) { 
 	// Create a chain of blocks to import, and choose one to not announce at all
 	targetBlocks := maxQueueDist
 	hashes, blocks := makeChain(targetBlocks, 0, genesis)
@@ -553,7 +553,7 @@ func TestImportDeduplication63(t *testing.T) { testImportDeduplication(t, 63) }
 func TestImportDeduplication64(t *testing.T) { testImportDeduplication(t, 64) }
 func TestImportDeduplication100(t *testing.T) { testImportDeduplication(t, 100) }
 
-func testImportDeduplication(t *testing.T, protocol int) {
+func testImportDeduplication(t *testing.T, protocol int) { 
 	// Create two blocks to import (one for duplication, the other for stalling)
 	hashes, blocks := makeChain(2, 0, genesis)
 

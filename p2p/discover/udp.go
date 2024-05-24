@@ -301,7 +301,7 @@ func (t *udp) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) <-ch
 		To:         makeEndpoint(toaddr, 0), // TODO: maybe use known TCP port from DB
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	}
-	packet, hash, err := encodePacket(t.priv, pingPacket, req)
+	packet, hash, err := encodePacket(t.priv, pingXDC, req)
 	if err != nil {
 		errc := make(chan error, 1)
 		errc <- err
@@ -320,7 +320,7 @@ func (t *udp) sendPing(toid enode.ID, toaddr *net.UDPAddr, callback func()) <-ch
 }
 
 func (t *udp) waitping(from enode.ID) error {
-	return <-t.pending(from, pingPacket, func(interface{}) bool { return true })
+	return <-t.pending(from, pingXDC, func(interface{}) bool { return true })
 }
 
 // findnode sends a findnode request to the given node and waits until
@@ -633,7 +633,7 @@ func (req *ping) handle(t *udp, from *net.UDPAddr, fromKey encPubkey, mac []byte
 		Expiration: uint64(time.Now().Add(expiration).Unix()),
 	})
 	n := wrapNode(enode.NewV4(key, from.IP, int(req.From.TCP), from.Port))
-	t.handleReply(n.ID(), pingPacket, req)
+	t.handleReply(n.ID(), pingXDC, req)
 	if time.Since(t.db.LastPongReceived(n.ID())) > bondExpiration {
 		t.sendPing(n.ID(), from, func() { t.tab.addThroughPing(n) })
 	} else {

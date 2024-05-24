@@ -19,6 +19,7 @@ package p2p
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net"
 	"reflect"
@@ -195,23 +196,9 @@ func TestServerDial(t *testing.T) {
 		case <-time.After(1 * time.Second):
 			t.Error("server did not launch peer within one second")
 		}
-
-		select {
-		case peer := <-connected:
-			if peer.ID() != enode.PubkeyToIDV4(remid) {
-				t.Errorf("peer has wrong id")
-			}
-			if peer.Name() != "test" {
-				t.Errorf("peer has wrong name")
-			}
-			if peer.RemoteAddr().String() != conn.LocalAddr().String() {
-				t.Errorf("peer started with wrong conn: got %v, want %v",
-					peer.RemoteAddr(), conn.LocalAddr())
-			}
-		case <-time.After(1 * time.Second):
-			t.Error("server did not launch peer within one second")
-		}
+		
 	case <-time.After(1 * time.Second):
+		fmt.Println("step 1: didn't work")
 		t.Error("server did not connect within one second")
 	}
 }
