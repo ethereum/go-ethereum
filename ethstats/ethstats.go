@@ -632,6 +632,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		td     *big.Int
 		txs    []txStats
 		uncles []*types.Header
+		err    error
 	)
 
 	// check if backend is a full node
@@ -640,12 +641,13 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		// Retrieve current chain head if no block is given.
 		if block == nil {
 			head := fullBackend.CurrentBlock()
-			block, _ = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(head.Number.Uint64()))
-		}
-		// Short circuit if no block is available. It might happen when
-		// the blockchain is reorging.
-		if block == nil {
-			return nil
+			block, err = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(head.Number.Uint64()))
+			// Short circuit if no block is available. It might happen when
+			// the blockchain is reorging.
+			if err != nil {
+				log.Error("Failed to retrieve block by number", "err", err)
+				return nil
+			}
 		}
 		header = block.Header()
 		td = fullBackend.GetTd(context.Background(), header.Hash())
@@ -712,7 +714,7 @@ func (s *Service) reportHistory(conn *connWrapper, list []uint64) error {
 		// Retrieve the next block if it's known to us
 		var block *types.Block
 		if ok {
-			block, _ = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number)) // TODO ignore error here ?
+			block, _ = fullBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 		} else {
 			if header, _ := s.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(number)); header != nil {
 				block = types.NewBlockWithHeader(header)
