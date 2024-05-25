@@ -103,14 +103,14 @@ func TestExpDecaySample(t *testing.T) {
 		}
 		snap := sample.Snapshot()
 		if have, want := int(snap.Count()), tc.updates; have != want {
-			t.Errorf("have %d want %d", have, want)
+			t.Errorf("unexpected count: have %d want %d", have, want)
 		}
 		if have, want := snap.Size(), min(tc.updates, tc.reservoirSize); have != want {
-			t.Errorf("have %d want %d", have, want)
+			t.Errorf("unexpected size: have %d want %d", have, want)
 		}
 		values := snap.(*sampleSnapshot).values
 		if have, want := len(values), min(tc.updates, tc.reservoirSize); have != want {
-			t.Errorf("have %d want %d", have, want)
+			t.Errorf("unexpected values length: have %d want %d", have, want)
 		}
 		for _, v := range values {
 			if v > int64(tc.updates) || v < 0 {
@@ -125,12 +125,12 @@ func TestExpDecaySample(t *testing.T) {
 // The priority becomes +Inf quickly after starting if this is done,
 // effectively freezing the set of samples until a rescale step happens.
 func TestExpDecaySampleNanosecondRegression(t *testing.T) {
-	sw := NewExpDecaySample(100, 0.99)
-	for i := 0; i < 100; i++ {
+	sw := NewExpDecaySample(1000, 0.99)
+	for i := 0; i < 1000; i++ {
 		sw.Update(10)
 	}
 	time.Sleep(1 * time.Millisecond)
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1000; i++ {
 		sw.Update(20)
 	}
 	s := sw.Snapshot()
@@ -251,6 +251,9 @@ func benchmarkSample(b *testing.B, s Sample) {
 }
 
 func testExpDecaySampleStatistics(t *testing.T, s SampleSnapshot) {
+	if sum := s.Sum(); sum != 496598 {
+		t.Errorf("s.Sum(): 496598 != %v\n", sum)
+	}
 	if count := s.Count(); count != 10000 {
 		t.Errorf("s.Count(): 10000 != %v\n", count)
 	}

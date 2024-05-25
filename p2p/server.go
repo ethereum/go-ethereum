@@ -405,7 +405,7 @@ func (srv *Server) DiscoveryV4() *discover.UDPv4 {
 	return srv.discv4
 }
 
-// DiscoveryV4 returns the discovery v5 instance, if configured.
+// DiscoveryV5 returns the discovery v5 instance, if configured.
 func (srv *Server) DiscoveryV5() *discover.UDPv5 {
 	return srv.discv5
 }
