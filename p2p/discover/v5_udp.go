@@ -233,7 +233,7 @@ func (t *UDPv5) AllNodes() []*enode.Node {
 
 	for _, b := range &t.tab.buckets {
 		for _, n := range b.entries {
-			nodes = append(nodes, unwrapNode(n))
+			nodes = append(nodes, n.Node)
 		}
 	}
 	return nodes
@@ -314,26 +314,26 @@ func (t *UDPv5) newRandomLookup(ctx context.Context) *lookup {
 }
 
 func (t *UDPv5) newLookup(ctx context.Context, target enode.ID) *lookup {
-	return newLookup(ctx, t.tab, target, func(n *node) ([]*node, error) {
+	return newLookup(ctx, t.tab, target, func(n *enode.Node) ([]*enode.Node, error) {
 		return t.lookupWorker(n, target)
 	})
 }
 
 // lookupWorker performs FINDNODE calls against a single node during lookup.
-func (t *UDPv5) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
+func (t *UDPv5) lookupWorker(destNode *enode.Node, target enode.ID) ([]*enode.Node, error) {
 	var (
 		dists = lookupDistances(target, destNode.ID())
 		nodes = nodesByDistance{target: target}
 		err   error
 	)
 	var r []*enode.Node
-	r, err = t.findnode(unwrapNode(destNode), dists)
+	r, err = t.findnode(destNode, dists)
 	if errors.Is(err, errClosed) {
 		return nil, err
 	}
 	for _, n := range r {
 		if n.ID() != t.Self().ID() {
-			nodes.push(wrapNode(n), findnodeResultLimit)
+			nodes.push(n, findnodeResultLimit)
 		}
 	}
 	return nodes.entries, err
@@ -699,7 +699,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr *net.UDPAddr) error {
 	}
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
-		t.tab.addInboundNode(wrapNode(fromNode))
+		t.tab.addInboundNode(fromNode)
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/netip"
 	"reflect"
 	"slices"
 	"testing"
@@ -141,7 +142,7 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 
 	// Make node known.
 	n := test.getNode(test.remotekey, test.remoteaddr).Node()
-	test.table.addFoundNode(wrapNode(n))
+	test.table.addFoundNode(n, false)
 
 	test.packetIn(&v5wire.Unknown{Nonce: nonce})
 	test.waitPacketOut(func(p *v5wire.Whoareyou, addr *net.UDPAddr, _ v5wire.Nonce) {
@@ -159,9 +160,9 @@ func TestUDPv5_findnodeHandling(t *testing.T) {
 	nodes253 := nodesAtDistance(test.table.self().ID(), 253, 16)
 	nodes249 := nodesAtDistance(test.table.self().ID(), 249, 4)
 	nodes248 := nodesAtDistance(test.table.self().ID(), 248, 10)
-	fillTable(test.table, wrapNodes(nodes253), true)
-	fillTable(test.table, wrapNodes(nodes249), true)
-	fillTable(test.table, wrapNodes(nodes248), true)
+	fillTable(test.table, nodes253, true)
+	fillTable(test.table, nodes249, true)
+	fillTable(test.table, nodes248, true)
 
 	// Requesting with distance zero should return the node's own record.
 	test.packetIn(&v5wire.Findnode{ReqID: []byte{0}, Distances: []uint{0}})
@@ -589,7 +590,7 @@ func TestUDPv5_lookup(t *testing.T) {
 
 	// Seed table with initial node.
 	initialNode := lookupTestnet.node(256, 0)
-	fillTable(test.table, []*node{wrapNode(initialNode)}, true)
+	fillTable(test.table, []*enode.Node{initialNode}, true)
 
 	// Start the lookup.
 	resultC := make(chan []*enode.Node, 1)
@@ -601,7 +602,7 @@ func TestUDPv5_lookup(t *testing.T) {
 	// Answer lookup packets.
 	asked := make(map[enode.ID]bool)
 	for done := false; !done; {
-		done = test.waitPacketOut(func(p v5wire.Packet, to *net.UDPAddr, _ v5wire.Nonce) {
+		done = test.waitPacketOut(func(p v5wire.Packet, to netip.AddrPort, _ v5wire.Nonce) {
 			recipient, key := lookupTestnet.nodeByAddr(to)
 			switch p := p.(type) {
 			case *v5wire.Ping:
@@ -688,9 +689,9 @@ type udpV5Test struct {
 	db                  *enode.DB
 	udp                 *UDPv5
 	localkey, remotekey *ecdsa.PrivateKey
-	remoteaddr          *net.UDPAddr
+	remoteaddr          netip.AddrPort
 	nodesByID           map[enode.ID]*enode.LocalNode
-	nodesByIP           map[string]*enode.LocalNode
+	nodesByIP           map[netip.Addr]*enode.LocalNode
 }
 
 // testCodec is the packet encoding used by protocol tests. This codec does not perform encryption.
@@ -778,7 +779,7 @@ func (test *udpV5Test) packetIn(packet v5wire.Packet) {
 }
 
 // handles a packet as if it had been sent to the transport by the key/endpoint.
-func (test *udpV5Test) packetInFrom(key *ecdsa.PrivateKey, addr *net.UDPAddr, packet v5wire.Packet) {
+func (test *udpV5Test) packetInFrom(key *ecdsa.PrivateKey, addr netip.AddrPort, packet v5wire.Packet) {
 	test.t.Helper()
 
 	ln := test.getNode(key, addr)
@@ -793,17 +794,17 @@ func (test *udpV5Test) packetInFrom(key *ecdsa.PrivateKey, addr *net.UDPAddr, pa
 }
 
 // getNode ensures the test knows about a node at the given endpoint.
-func (test *udpV5Test) getNode(key *ecdsa.PrivateKey, addr *net.UDPAddr) *enode.LocalNode {
+func (test *udpV5Test) getNode(key *ecdsa.PrivateKey, addr netip.AddrPort) *enode.LocalNode {
 	id := encodePubkey(&key.PublicKey).id()
 	ln := test.nodesByID[id]
 	if ln == nil {
 		db, _ := enode.OpenDB("")
 		ln = enode.NewLocalNode(db, key)
-		ln.SetStaticIP(addr.IP)
-		ln.Set(enr.UDP(addr.Port))
+		ln.SetStaticIP(addr.Addr().AsSlice())
+		ln.Set(enr.UDP(addr.Port()))
 		test.nodesByID[id] = ln
 	}
-	test.nodesByIP[string(addr.IP)] = ln
+	test.nodesByIP[string(addr.Addr().String())] = ln
 	return ln
 }
 

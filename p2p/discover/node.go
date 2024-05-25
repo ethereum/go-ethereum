@@ -37,8 +37,7 @@ type BucketNode struct {
 	Live          bool        `json:"live"`
 }
 
-// node represents a host on the network.
-// The fields of Node may not be modified.
+// node is a node table entry.
 type node struct {
 	*enode.Node
 	revalList       *revalidationList
@@ -75,26 +74,10 @@ func (e encPubkey) id() enode.ID {
 	return enode.ID(crypto.Keccak256Hash(e[:]))
 }
 
-func wrapNode(n *enode.Node) *node {
-	return &node{Node: n}
-}
-
-func wrapNodes(ns []*enode.Node) []*node {
-	result := make([]*node, len(ns))
-	for i, n := range ns {
-		result[i] = wrapNode(n)
-	}
-	return result
-}
-
-func unwrapNode(n *node) *enode.Node {
-	return n.Node
-}
-
 func unwrapNodes(ns []*node) []*enode.Node {
 	result := make([]*enode.Node, len(ns))
 	for i, n := range ns {
-		result[i] = unwrapNode(n)
+		result[i] = n.Node
 	}
 	return result
 }

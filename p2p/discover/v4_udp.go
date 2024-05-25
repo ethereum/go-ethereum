@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -45,6 +46,7 @@ var (
 	errClockWarp        = errors.New("reply deadline too far in the future")
 	errClosed           = errors.New("socket closed")
 	errLowPort          = errors.New("low port")
+	errNoUDPEndpoint    = errors.New("node has no UDP endpoint")
 )
 
 const (
@@ -290,20 +292,25 @@ func (t *UDPv4) newRandomLookup(ctx context.Context) *lookup {
 func (t *UDPv4) newLookup(ctx context.Context, targetKey encPubkey) *lookup {
 	target := enode.ID(crypto.Keccak256Hash(targetKey[:]))
 	ekey := v4wire.Pubkey(targetKey)
-	it := newLookup(ctx, t.tab, target, func(n *node) ([]*node, error) {
-		return t.findnode(n.ID(), n.addr(), ekey)
+	it := newLookup(ctx, t.tab, target, func(n *enode.Node) ([]*enode.Node, error) {
+		addr, ok := n.UDPEndpoint()
+		if !ok {
+			return nil, errNoUDPEndpoint
+		}
+		return t.findnode(n.ID(), addr, ekey)
 	})
 	return it
 }
 
 // findnode sends a findnode request to the given node and waits until
 // the node has sent up to k neighbors.
-func (t *UDPv4) findnode(toid enode.ID, toaddr *net.UDPAddr, target v4wire.Pubkey) ([]*node, error) {
+func (t *UDPv4) findnode(toid enode.ID, toAddrPort netip.AddrPort, target v4wire.Pubkey) ([]*enode.Node, error) {
+	toaddr := &net.UDPAddr{IP: toAddrPort.Addr().AsSlice(), Port: int(toAddrPort.Port())}
 	t.ensureBond(toid, toaddr)
 
 	// Add a matcher for 'neighbours' replies to the pending reply queue. The matcher is
 	// active until enough nodes have been received.
-	nodes := make([]*node, 0, bucketSize)
+	nodes := make([]*enode.Node, 0, bucketSize)
 	nreceived := 0
 	rm := t.pending(toid, toaddr.IP, v4wire.NeighborsPacket, func(r v4wire.Packet) (matched bool, requestDone bool) {
 		reply := r.(*v4wire.Neighbors)
@@ -579,7 +586,7 @@ func (t *UDPv4) ensureBond(toid enode.ID, toaddr *net.UDPAddr) {
 	}
 }
 
-func (t *UDPv4) nodeFromRPC(sender *net.UDPAddr, rn v4wire.Node) (*node, error) {
+func (t *UDPv4) nodeFromRPC(sender *net.UDPAddr, rn v4wire.Node) (*enode.Node, error) {
 	if rn.UDP <= 1024 {
 		return nil, errLowPort
 	}
@@ -593,12 +600,12 @@ func (t *UDPv4) nodeFromRPC(sender *net.UDPAddr, rn v4wire.Node) (*node, error) 
 	if err != nil {
 		return nil, err
 	}
-	n := wrapNode(enode.NewV4(key, rn.IP, int(rn.TCP), int(rn.UDP)))
+	n := enode.NewV4(key, rn.IP, int(rn.TCP), int(rn.UDP))
 	err = n.ValidateComplete()
 	return n, err
 }
 
-func nodeToRPC(n *node) v4wire.Node {
+func nodeToRPC(n *enode.Node) v4wire.Node {
 	var key ecdsa.PublicKey
 	var ekey v4wire.Pubkey
 	if err := n.Load((*enode.Secp256k1)(&key)); err == nil {
@@ -670,7 +677,7 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 	})
 
 	// Ping back if our last pong on file is too far in the past.
-	n := wrapNode(enode.NewV4(h.senderKey, from.IP, int(req.From.TCP), from.Port))
+	n := enode.NewV4(h.senderKey, from.IP, int(req.From.TCP), from.Port)
 	if time.Since(t.db.LastPongReceived(n.ID(), from.IP)) > bondExpiration {
 		t.sendPing(fromID, from, func() {
 			t.tab.addInboundNode(n)
