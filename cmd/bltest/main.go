@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/config"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient/lightclient"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
@@ -110,7 +111,11 @@ func sync(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Could not create RPC client: %v", err)
 	}
-	client := lightclient.NewClient(config.MakeLightClientConfig(ctx), memorydb.New(), rpcClient)
+	genesis := utils.MakeGenesis(ctx)
+	if genesis == nil {
+		genesis = core.DefaultGenesisBlock()
+	}
+	client := lightclient.NewClient(config.MakeLightClientConfig(ctx), genesis.Config, memorydb.New(), rpcClient)
 	client.Start()
 
 	headCh := make(chan *types.Header, 1)
@@ -139,6 +144,11 @@ loop:
 				log.Info("TransactionCount", "hash", head.Hash(), "count", tc)
 			} else {
 				log.Error("TransactionCount", "hash", head.Hash(), "error", err)
+			}
+			if receipts, err := client.BlockReceipts(ctx, rpc.BlockNumberOrHashWithHash(head.Hash(), false)); err == nil {
+				log.Info("BlockReceipts", "hash", head.Hash(), "len(receipts)", len(receipts))
+			} else {
+				log.Error("BlockReceipts", "hash", head.Hash(), "error", err)
 			}
 			testState := func(addr common.Address) {
 				if balance, err := client.BalanceAt(ctx, addr, big.NewInt(int64(rpc.LatestBlockNumber))); err == nil {

@@ -48,7 +48,7 @@ type canonicalChain struct {
 	recentTail     uint64                 // if recent != nil then recent hashes are available from recentTail to head
 	tailFetchCh    chan struct{}
 	finalized      *lru.Cache[uint64, common.Hash]  // finalized but not recent hashes
-	requests       *requestMap[uint64, common.Hash] // requested; neither recent nor finalized
+	requests       *requestMap[uint64, common.Hash] // requested; neither recent nor cached finalized
 }
 
 func newCanonicalChain(headTracker *light.HeadTracker, blocksAndHeaders *blocksAndHeaders, newHeadCb func(common.Hash)) *canonicalChain {
@@ -111,23 +111,26 @@ func (c *canonicalChain) tailFetcher() { //TODO stop
 }
 
 func (c *canonicalChain) getHash(ctx context.Context, number uint64) (common.Hash, error) {
-	c.lock.Lock()
-	if hash, ok := c.recent[number]; ok {
-		c.lock.Unlock()
-		return hash, nil
-	}
-	if hash, ok := c.finalized.Get(number); ok {
-		c.lock.Unlock()
+	if hash, ok := c.getCachedHash(number); ok {
 		return hash, nil
 	}
 	req := c.requests.request(number)
-	c.lock.Unlock()
 	select {
 	case c.tailFetchCh <- struct{}{}:
 	default:
 	}
 	defer req.release()
 	return req.getResult(ctx)
+}
+
+func (c *canonicalChain) getCachedHash(number uint64) (common.Hash, bool) {
+	c.lock.Lock()
+	hash, ok := c.recent[number]
+	c.lock.Unlock()
+	if ok {
+		return hash, true
+	}
+	return c.finalized.Get(number)
 }
 
 func (c *canonicalChain) setHead(head *btypes.ExecutionHeader) bool {
@@ -139,6 +142,8 @@ func (c *canonicalChain) setHead(head *btypes.ExecutionHeader) bool {
 		return false
 	}
 	if c.recent == nil || c.head == nil || c.head.BlockNumber()+1 != headNum || c.head.BlockHash() != head.ParentHash() {
+		// initialize recent canonical hash map when first head is added or when
+		// it is not a descendant of the previous head
 		c.recent = make(map[uint64]common.Hash)
 		if headNum > 0 {
 			c.recent[headNum-1] = head.ParentHash()
@@ -235,6 +240,27 @@ func (c *canonicalChain) blockNumberToHash(ctx context.Context, number *big.Int)
 		return pheader.BlockHash(), nil
 	}
 	return c.getHash(ctx, num)
+}
+
+func (c *canonicalChain) blockNumberOrHashToHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (common.Hash, error) {
+	if blockNrOrHash.BlockNumber != nil {
+		return c.blockNumberToHash(ctx, big.NewInt(int64(*blockNrOrHash.BlockNumber)))
+	}
+	hash := *blockNrOrHash.BlockHash
+	if blockNrOrHash.RequireCanonical {
+		header, err := c.blocksAndHeaders.getHeader(ctx, hash)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		chash, err := c.getHash(ctx, header.Number.Uint64())
+		if err != nil {
+			return common.Hash{}, err
+		}
+		if chash != hash {
+			return common.Hash{}, errors.New("hash is not currently canonical")
+		}
+	}
+	return hash, nil
 }
 
 type blocksAndHeaders struct {

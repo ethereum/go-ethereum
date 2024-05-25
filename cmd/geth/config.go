@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/beacon/blsync"
+	"github.com/ethereum/go-ethereum/beacon/config"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -227,7 +228,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		// Start blsync mode.
 		srv := rpc.NewServer()
 		srv.RegisterName("engine", catalyst.NewConsensusAPI(eth))
-		blsyncer := blsync.NewClient(ctx)
+		blsyncer := blsync.NewClient(config.MakeLightClientConfig(ctx))
 		blsyncer.SetEngineRPC(rpc.DialInProc(srv))
 		stack.RegisterLifecycle(blsyncer)
 	} else {

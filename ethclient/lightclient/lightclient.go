@@ -33,14 +33,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type Client struct {
-	config           config.LightClientConfig
+	clConfig         config.LightClientConfig
+	elConfig         *params.ChainConfig
 	scheduler        *request.Scheduler
 	canonicalChain   *canonicalChain
 	blocksAndHeaders *blocksAndHeaders
+	txAndReceipts    *txAndReceipts
 	state            *lightState
 	headSubLock      ssync.Mutex
 	headSubs         map[*headSub]struct{}
@@ -48,27 +51,30 @@ type Client struct {
 	headFetchCounter int
 }
 
-func NewClient(config config.LightClientConfig, db ethdb.KeyValueStore, rpcClient *rpc.Client) *Client {
+func NewClient(clConfig config.LightClientConfig, elConfig *params.ChainConfig, db ethdb.KeyValueStore, rpcClient *rpc.Client) *Client {
 	// create data structures
 	var (
-		committeeChain = light.NewCommitteeChain(db, config.ChainConfig, config.SignerThreshold, config.EnforceTime)
-		headTracker    = light.NewHeadTracker(committeeChain, config.SignerThreshold)
+		committeeChain = light.NewCommitteeChain(db, clConfig.ChainConfig, clConfig.SignerThreshold, clConfig.EnforceTime)
+		headTracker    = light.NewHeadTracker(committeeChain, clConfig.SignerThreshold)
 	)
 	// set up scheduler and sync modules
 	//chainHeadFeed := new(event.Feed)
 	scheduler := request.NewScheduler()
-	blocksAndHeaders := newBlocksAndHeaders(rpcClient)
 	client := &Client{
-		config:           config,
-		scheduler:        scheduler,
-		blocksAndHeaders: blocksAndHeaders,
-		headSubs:         make(map[*headSub]struct{}),
+		clConfig:  clConfig,
+		elConfig:  elConfig,
+		scheduler: scheduler,
+		headSubs:  make(map[*headSub]struct{}),
 	}
+	blocksAndHeaders := newBlocksAndHeaders(rpcClient)
 	canonicalChain := newCanonicalChain(headTracker, blocksAndHeaders, client.newHead)
+	txAndReceipts := newTxAndReceipts(rpcClient, canonicalChain, blocksAndHeaders, elConfig)
+	client.blocksAndHeaders = blocksAndHeaders
+	client.txAndReceipts = txAndReceipts
 	client.canonicalChain = canonicalChain
 	client.state = newLightState(rpcClient, canonicalChain, blocksAndHeaders)
 
-	checkpointInit := sync.NewCheckpointInit(committeeChain, config.Checkpoint)
+	checkpointInit := sync.NewCheckpointInit(committeeChain, clConfig.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
 	headSync := sync.NewHeadSync(headTracker, committeeChain)
 	scheduler.RegisterTarget(headTracker)
@@ -80,10 +86,12 @@ func NewClient(config config.LightClientConfig, db ethdb.KeyValueStore, rpcClien
 	return client
 }
 
+//TODO return ethereum.NotFound error properly
+
 func (c *Client) Start() {
 	c.scheduler.Start()
-	for _, url := range c.config.ApiUrls {
-		beaconApi := api.NewBeaconLightApi(url, c.config.CustomHeader)
+	for _, url := range c.clConfig.ApiUrls {
+		beaconApi := api.NewBeaconLightApi(url, c.clConfig.CustomHeader)
 		c.scheduler.RegisterServer(request.NewServer(api.NewApiServer(beaconApi), &mclock.System{}))
 	}
 }
@@ -223,4 +231,12 @@ func (c *Client) NonceAt(ctx context.Context, account common.Address, blockNumbe
 		return 0, err
 	}
 	return proof.Nonce, nil
+}
+
+func (c *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
+	hash, err := c.canonicalChain.blockNumberOrHashToHash(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+	return c.txAndReceipts.getBlockReceipts(ctx, hash)
 }
