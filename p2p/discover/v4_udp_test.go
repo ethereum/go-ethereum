@@ -416,7 +416,9 @@ func TestUDPv4_successfulPing(t *testing.T) {
 
 	// Remote is unknown, the table pings back.
 	test.waitPacketOut(func(p *v4wire.Ping, to netip.AddrPort, hash []byte) {
-		if !reflect.DeepEqual(p.From, test.udp.ourEndpoint()) {
+		wantFrom := test.udp.ourEndpoint()
+		wantFrom.IP = net.IP{}
+		if !reflect.DeepEqual(p.From, wantFrom) {
 			t.Errorf("got ping.From %#v, want %#v", p.From, test.udp.ourEndpoint())
 		}
 		// The mirrored UDP address is the UDP packet sender.

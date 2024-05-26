@@ -203,9 +203,12 @@ func (t *UDPv4) Resolve(n *enode.Node) *enode.Node {
 }
 
 func (t *UDPv4) ourEndpoint() v4wire.Endpoint {
-	n := t.Self()
-	addr, _ := n.UDPEndpoint()
-	return v4wire.NewEndpoint(addr, uint16(n.TCP()))
+	node := t.Self()
+	addr, ok := node.UDPEndpoint()
+	if !ok {
+		return v4wire.Endpoint{}
+	}
+	return v4wire.NewEndpoint(addr, uint16(node.TCP()))
 }
 
 // Ping sends a ping message to the given node.
@@ -247,8 +250,8 @@ func (t *UDPv4) sendPing(toid enode.ID, toaddr netip.AddrPort, callback func()) 
 		return matched, matched
 	})
 	// Send the packet.
-	udpAddr := &net.UDPAddr{IP: toaddr.Addr().AsSlice()}
-	t.localNode.UDPContact(udpAddr)
+	toUDPAddr := &net.UDPAddr{IP: toaddr.Addr().AsSlice()}
+	t.localNode.UDPContact(toUDPAddr)
 	t.write(toaddr, toid, req.Name(), packet)
 	return rm
 }
@@ -682,9 +685,9 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from netip.AddrPort, fromID enode
 	})
 
 	// Ping back if our last pong on file is too far in the past.
-	ip := from.Addr().AsSlice()
-	n := enode.NewV4(h.senderKey, ip, int(req.From.TCP), int(from.Port()))
-	if time.Since(t.db.LastPongReceived(n.ID(), ip)) > bondExpiration {
+	fromIP := from.Addr().AsSlice()
+	n := enode.NewV4(h.senderKey, fromIP, int(req.From.TCP), int(from.Port()))
+	if time.Since(t.db.LastPongReceived(n.ID(), fromIP)) > bondExpiration {
 		t.sendPing(fromID, from, func() {
 			t.tab.addInboundNode(n)
 		})
@@ -693,8 +696,8 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from netip.AddrPort, fromID enode
 	}
 
 	// Update node database and endpoint predictor.
-	t.db.UpdateLastPingReceived(n.ID(), ip, time.Now())
-	fromUDPAddr := &net.UDPAddr{IP: ip, Port: int(from.Port())}
+	t.db.UpdateLastPingReceived(n.ID(), fromIP, time.Now())
+	fromUDPAddr := &net.UDPAddr{IP: fromIP, Port: int(from.Port())}
 	toUDPAddr := &net.UDPAddr{IP: req.To.IP, Port: int(req.To.UDP)}
 	t.localNode.UDPEndpointStatement(fromUDPAddr, toUDPAddr)
 }
