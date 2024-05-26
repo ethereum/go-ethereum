@@ -245,9 +245,10 @@ func TestForkIDSplit(t *testing.T) {
 }
 
 // This test checks that received transactions are added to the local pool.
-func TestRecvTransactions63(t *testing.T) { testRecvTransactions(t, 63) }
-func TestRecvTransactions64(t *testing.T) { testRecvTransactions(t, 64) }
-func TestRecvTransactions65(t *testing.T) { testRecvTransactions(t, 65) }
+func TestRecvTransactions63(t *testing.T)  { testRecvTransactions(t, 63) }
+func TestRecvTransactions64(t *testing.T)  { testRecvTransactions(t, 64) }
+func TestRecvTransactions65(t *testing.T)  { testRecvTransactions(t, 65) }
+func TestRecvTransactions100(t *testing.T) { testRecvTransactions(t, 100) }
 
 func testRecvTransactions(t *testing.T, protocol int) {
 	txAdded := make(chan []*types.Transaction)
@@ -274,9 +275,10 @@ func testRecvTransactions(t *testing.T, protocol int) {
 }
 
 // This test checks that pending transactions are sent.
-func TestSendTransactions63(t *testing.T) { testSendTransactions(t, 63) }
-func TestSendTransactions64(t *testing.T) { testSendTransactions(t, 64) }
-func TestSendTransactions65(t *testing.T) { testSendTransactions(t, 65) }
+func TestSendTransactions63(t *testing.T)  { testSendTransactions(t, 63) }
+func TestSendTransactions64(t *testing.T)  { testSendTransactions(t, 64) }
+func TestSendTransactions65(t *testing.T)  { testSendTransactions(t, 65) }
+func TestSendTransactions100(t *testing.T) { testSendTransactions(t, 100) } //TODO: fix
 
 func testSendTransactions(t *testing.T, protocol int) {
 	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, 0, nil, nil)
@@ -327,6 +329,25 @@ func testSendTransactions(t *testing.T, protocol int) {
 					}
 				}
 			case 65:
+				msg, err := p.app.ReadMsg()
+				if err != nil {
+					t.Errorf("%v: read error: %v", p.Peer, err)
+					continue
+				} else if msg.Code != NewPooledTransactionHashesMsg {
+					t.Errorf("%v: got code %d, want NewPooledTransactionHashesMsg", p.Peer, msg.Code)
+					continue
+				}
+				var hashes []common.Hash
+				if err := msg.Decode(&hashes); err != nil {
+					t.Errorf("%v: %v", p.Peer, err)
+					continue
+				}
+				forAllHashes = func(callback func(hash common.Hash)) {
+					for _, h := range hashes {
+						callback(h)
+					}
+				}
+			case 100:
 				msg, err := p.app.ReadMsg()
 				if err != nil {
 					t.Errorf("%v: read error: %v", p.Peer, err)

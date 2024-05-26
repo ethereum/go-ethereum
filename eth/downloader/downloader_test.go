@@ -897,6 +897,9 @@ func TestBoundedHeavyForkedSync63Fast(t *testing.T)  { testBoundedHeavyForkedSyn
 func TestBoundedHeavyForkedSync64Full(t *testing.T)  { testBoundedHeavyForkedSync(t, 64, FullSync) }
 func TestBoundedHeavyForkedSync64Fast(t *testing.T)  { testBoundedHeavyForkedSync(t, 64, FastSync) }
 func TestBoundedHeavyForkedSync64Light(t *testing.T) { testBoundedHeavyForkedSync(t, 64, LightSync) }
+func TestBoundedHeavyForkedSync100Full(t *testing.T)  { testBoundedHeavyForkedSync(t, 100, FullSync) }
+func TestBoundedHeavyForkedSync100Fast(t *testing.T)  { testBoundedHeavyForkedSync(t, 100, FastSync) }
+func TestBoundedHeavyForkedSync100Light(t *testing.T) { testBoundedHeavyForkedSync(t, 100, LightSync) }
 
 func testBoundedHeavyForkedSync(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -967,6 +970,9 @@ func TestCancel63Fast(t *testing.T)  { testCancel(t, 63, FastSync) }
 func TestCancel64Full(t *testing.T)  { testCancel(t, 64, FullSync) }
 func TestCancel64Fast(t *testing.T)  { testCancel(t, 64, FastSync) }
 func TestCancel64Light(t *testing.T) { testCancel(t, 64, LightSync) }
+func TestCancel100Full(t *testing.T)  { testCancel(t, 100, FullSync) }
+func TestCancel100Fast(t *testing.T)  { testCancel(t, 100, FastSync) }
+func TestCancel100Light(t *testing.T) { testCancel(t, 100, LightSync) }
 
 func testCancel(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1008,6 +1014,9 @@ func TestMultiSynchronisation63Fast(t *testing.T)  { testMultiSynchronisation(t,
 func TestMultiSynchronisation64Full(t *testing.T)  { testMultiSynchronisation(t, 64, FullSync) }
 func TestMultiSynchronisation64Fast(t *testing.T)  { testMultiSynchronisation(t, 64, FastSync) }
 func TestMultiSynchronisation64Light(t *testing.T) { testMultiSynchronisation(t, 64, LightSync) }
+func TestMultiSynchronisation100Full(t *testing.T)  { testMultiSynchronisation(t, 100, FullSync) }
+func TestMultiSynchronisation100Fast(t *testing.T)  { testMultiSynchronisation(t, 100, FastSync) }
+func TestMultiSynchronisation100Light(t *testing.T) { testMultiSynchronisation(t, 100, LightSync) }
 
 func testMultiSynchronisation(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1038,6 +1047,9 @@ func TestMultiProtoSynchronisation63Fast(t *testing.T)  { testMultiProtoSync(t, 
 func TestMultiProtoSynchronisation64Full(t *testing.T)  { testMultiProtoSync(t, 64, FullSync) }
 func TestMultiProtoSynchronisation64Fast(t *testing.T)  { testMultiProtoSync(t, 64, FastSync) }
 func TestMultiProtoSynchronisation64Light(t *testing.T) { testMultiProtoSync(t, 64, LightSync) }
+func TestMultiProtoSynchronisation100Full(t *testing.T)  { testMultiProtoSync(t, 100, FullSync) }
+func TestMultiProtoSynchronisation100Fast(t *testing.T)  { testMultiProtoSync(t, 100, FastSync) }
+func TestMultiProtoSynchronisation100Light(t *testing.T) { testMultiProtoSync(t, 100, LightSync) }
 
 func testMultiProtoSync(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1053,6 +1065,7 @@ func testMultiProtoSync(t *testing.T, protocol int, mode SyncMode) {
 	tester.newPeer("peer 62", 62, hashes, headers, blocks, nil)
 	tester.newPeer("peer 63", 63, hashes, headers, blocks, receipts)
 	tester.newPeer("peer 64", 64, hashes, headers, blocks, receipts)
+	tester.newPeer("peer 100", 100, hashes, headers, blocks, receipts)
 
 	// Synchronise with the requested peer and make sure all blocks were retrieved
 	if err := tester.sync(fmt.Sprintf("peer %d", protocol), nil, mode); err != nil {
@@ -1061,7 +1074,7 @@ func testMultiProtoSync(t *testing.T, protocol int, mode SyncMode) {
 	assertOwnChain(t, tester, targetBlocks+1)
 
 	// Check that no peers have been dropped off
-	for _, version := range []int{62, 63, 64} {
+	for _, version := range []int{62, 63, 64, 100} {
 		peer := fmt.Sprintf("peer %d", version)
 		if _, ok := tester.peerHashes[peer]; !ok {
 			t.Errorf("%s dropped", peer)
@@ -1077,6 +1090,9 @@ func TestEmptyShortCircuit63Fast(t *testing.T)  { testEmptyShortCircuit(t, 63, F
 func TestEmptyShortCircuit64Full(t *testing.T)  { testEmptyShortCircuit(t, 64, FullSync) }
 func TestEmptyShortCircuit64Fast(t *testing.T)  { testEmptyShortCircuit(t, 64, FastSync) }
 func TestEmptyShortCircuit64Light(t *testing.T) { testEmptyShortCircuit(t, 64, LightSync) }
+func TestEmptyShortCircuit100Full(t *testing.T)  { testEmptyShortCircuit(t, 100, FullSync) }
+func TestEmptyShortCircuit100Fast(t *testing.T)  { testEmptyShortCircuit(t, 100, FastSync) }
+func TestEmptyShortCircuit100Light(t *testing.T) { testEmptyShortCircuit(t, 100, LightSync) }
 
 func testEmptyShortCircuit(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1132,6 +1148,9 @@ func TestMissingHeaderAttack63Fast(t *testing.T)  { testMissingHeaderAttack(t, 6
 func TestMissingHeaderAttack64Full(t *testing.T)  { testMissingHeaderAttack(t, 64, FullSync) }
 func TestMissingHeaderAttack64Fast(t *testing.T)  { testMissingHeaderAttack(t, 64, FastSync) }
 func TestMissingHeaderAttack64Light(t *testing.T) { testMissingHeaderAttack(t, 64, LightSync) }
+func TestMissingHeaderAttack100Full(t *testing.T)  { testMissingHeaderAttack(t, 100, FullSync) }
+func TestMissingHeaderAttack100Fast(t *testing.T)  { testMissingHeaderAttack(t, 100, FastSync) }
+func TestMissingHeaderAttack100Light(t *testing.T) { testMissingHeaderAttack(t, 100, LightSync) }
 
 func testMissingHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1167,6 +1186,9 @@ func TestShiftedHeaderAttack63Fast(t *testing.T)  { testShiftedHeaderAttack(t, 6
 func TestShiftedHeaderAttack64Full(t *testing.T)  { testShiftedHeaderAttack(t, 64, FullSync) }
 func TestShiftedHeaderAttack64Fast(t *testing.T)  { testShiftedHeaderAttack(t, 64, FastSync) }
 func TestShiftedHeaderAttack64Light(t *testing.T) { testShiftedHeaderAttack(t, 64, LightSync) }
+func TestShiftedHeaderAttack100Full(t *testing.T)  { testShiftedHeaderAttack(t, 100, FullSync) }
+func TestShiftedHeaderAttack100Fast(t *testing.T)  { testShiftedHeaderAttack(t, 100, FastSync) }
+func TestShiftedHeaderAttack100Light(t *testing.T) { testShiftedHeaderAttack(t, 100, LightSync) }
 
 func testShiftedHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1201,6 +1223,8 @@ func testShiftedHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
 func TestInvalidHeaderRollback63Fast(t *testing.T)  { testInvalidHeaderRollback(t, 63, FastSync) }
 func TestInvalidHeaderRollback64Fast(t *testing.T)  { testInvalidHeaderRollback(t, 64, FastSync) }
 func TestInvalidHeaderRollback64Light(t *testing.T) { testInvalidHeaderRollback(t, 64, LightSync) }
+func TestInvalidHeaderRollback100Fast(t *testing.T)  { testInvalidHeaderRollback(t, 100, FastSync) }
+func TestInvalidHeaderRollback100Light(t *testing.T) { testInvalidHeaderRollback(t, 100, LightSync) }
 
 func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1293,6 +1317,9 @@ func TestHighTDStarvationAttack63Fast(t *testing.T)  { testHighTDStarvationAttac
 func TestHighTDStarvationAttack64Full(t *testing.T)  { testHighTDStarvationAttack(t, 64, FullSync) }
 func TestHighTDStarvationAttack64Fast(t *testing.T)  { testHighTDStarvationAttack(t, 64, FastSync) }
 func TestHighTDStarvationAttack64Light(t *testing.T) { testHighTDStarvationAttack(t, 64, LightSync) }
+func TestHighTDStarvationAttack100Full(t *testing.T)  { testHighTDStarvationAttack(t, 100, FullSync) }
+func TestHighTDStarvationAttack100Fast(t *testing.T)  { testHighTDStarvationAttack(t, 100, FastSync) }
+func TestHighTDStarvationAttack100Light(t *testing.T) { testHighTDStarvationAttack(t, 100, LightSync) }
 
 func testHighTDStarvationAttack(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1312,6 +1339,7 @@ func testHighTDStarvationAttack(t *testing.T, protocol int, mode SyncMode) {
 func TestBlockHeaderAttackerDropping62(t *testing.T) { testBlockHeaderAttackerDropping(t, 62) }
 func TestBlockHeaderAttackerDropping63(t *testing.T) { testBlockHeaderAttackerDropping(t, 63) }
 func TestBlockHeaderAttackerDropping64(t *testing.T) { testBlockHeaderAttackerDropping(t, 64) }
+func TestBlockHeaderAttackerDropping100(t *testing.T) { testBlockHeaderAttackerDropping(t, 100) }
 
 func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 	t.Parallel()
@@ -1373,6 +1401,9 @@ func TestSyncProgress63Fast(t *testing.T)  { testSyncProgress(t, 63, FastSync) }
 func TestSyncProgress64Full(t *testing.T)  { testSyncProgress(t, 64, FullSync) }
 func TestSyncProgress64Fast(t *testing.T)  { testSyncProgress(t, 64, FastSync) }
 func TestSyncProgress64Light(t *testing.T) { testSyncProgress(t, 64, LightSync) }
+func TestSyncProgress100Full(t *testing.T)  { testSyncProgress(t, 100, FullSync) }
+func TestSyncProgress100Fast(t *testing.T)  { testSyncProgress(t, 100, FastSync) }
+func TestSyncProgress100Light(t *testing.T) { testSyncProgress(t, 100, LightSync) }
 
 func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1446,6 +1477,9 @@ func TestForkedSyncProgress63Fast(t *testing.T)  { testForkedSyncProgress(t, 63,
 func TestForkedSyncProgress64Full(t *testing.T)  { testForkedSyncProgress(t, 64, FullSync) }
 func TestForkedSyncProgress64Fast(t *testing.T)  { testForkedSyncProgress(t, 64, FastSync) }
 func TestForkedSyncProgress64Light(t *testing.T) { testForkedSyncProgress(t, 64, LightSync) }
+func TestForkedSyncProgress100Full(t *testing.T)  { testForkedSyncProgress(t, 100, FullSync) }
+func TestForkedSyncProgress100Fast(t *testing.T)  { testForkedSyncProgress(t, 100, FastSync) }
+func TestForkedSyncProgress100Light(t *testing.T) { testForkedSyncProgress(t, 100, LightSync) }
 
 func testForkedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1522,6 +1556,9 @@ func TestFailedSyncProgress63Fast(t *testing.T)  { testFailedSyncProgress(t, 63,
 func TestFailedSyncProgress64Full(t *testing.T)  { testFailedSyncProgress(t, 64, FullSync) }
 func TestFailedSyncProgress64Fast(t *testing.T)  { testFailedSyncProgress(t, 64, FastSync) }
 func TestFailedSyncProgress64Light(t *testing.T) { testFailedSyncProgress(t, 64, LightSync) }
+func TestFailedSyncProgress100Full(t *testing.T)  { testFailedSyncProgress(t, 100, FullSync) }
+func TestFailedSyncProgress100Fast(t *testing.T)  { testFailedSyncProgress(t, 100, FastSync) }
+func TestFailedSyncProgress100Light(t *testing.T) { testFailedSyncProgress(t, 100, LightSync) }
 
 func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1599,6 +1636,9 @@ func TestFakedSyncProgress63Fast(t *testing.T)  { testFakedSyncProgress(t, 63, F
 func TestFakedSyncProgress64Full(t *testing.T)  { testFakedSyncProgress(t, 64, FullSync) }
 func TestFakedSyncProgress64Fast(t *testing.T)  { testFakedSyncProgress(t, 64, FastSync) }
 func TestFakedSyncProgress64Light(t *testing.T) { testFakedSyncProgress(t, 64, LightSync) }
+func TestFakedSyncProgress100Full(t *testing.T)  { testFakedSyncProgress(t, 100, FullSync) }
+func TestFakedSyncProgress100Fast(t *testing.T)  { testFakedSyncProgress(t, 100, FastSync) }
+func TestFakedSyncProgress100Light(t *testing.T) { testFakedSyncProgress(t, 100, LightSync) }
 
 func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1686,6 +1726,9 @@ func TestDeliverHeadersHang(t *testing.T) {
 		{64, FullSync},
 		{64, FastSync},
 		{64, LightSync},
+		{100, FullSync},
+		{100, FastSync},
+		{100, LightSync},
 	}
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("protocol %d mode %v", tc.protocol, tc.syncMode), func(t *testing.T) {
