@@ -393,8 +393,8 @@ func TestUDPv4_pingMatchIP(t *testing.T) {
 
 func TestUDPv4_successfulPing(t *testing.T) {
 	test := newUDPTest(t)
-	added := make(chan *node, 1)
-	test.table.nodeAddedHook = func(b *bucket, n *node) { added <- n }
+	added := make(chan *tableNode, 1)
+	test.table.nodeAddedHook = func(b *bucket, n *tableNode) { added <- n }
 	defer test.close()
 
 	// The remote side sends a ping packet to initiate the exchange.

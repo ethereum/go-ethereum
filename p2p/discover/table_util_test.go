@@ -105,7 +105,7 @@ func intIP(i int) net.IP {
 }
 
 // fillBucket inserts nodes into the given bucket until it is full.
-func fillBucket(tab *Table, id enode.ID) (last *node) {
+func fillBucket(tab *Table, id enode.ID) (last *tableNode) {
 	ld := enode.LogDist(tab.self().ID(), id)
 	b := tab.bucket(id)
 	for len(b.entries) < bucketSize {
@@ -302,7 +302,7 @@ type nodeEventRecorder struct {
 }
 
 type recordedNodeEvent struct {
-	node  *node
+	node  *tableNode
 	added bool
 }
 
@@ -312,7 +312,7 @@ func newNodeEventRecorder(buffer int) *nodeEventRecorder {
 	}
 }
 
-func (set *nodeEventRecorder) nodeAdded(b *bucket, n *node) {
+func (set *nodeEventRecorder) nodeAdded(b *bucket, n *tableNode) {
 	select {
 	case set.evc <- recordedNodeEvent{n, true}:
 	default:
@@ -320,7 +320,7 @@ func (set *nodeEventRecorder) nodeAdded(b *bucket, n *node) {
 	}
 }
 
-func (set *nodeEventRecorder) nodeRemoved(b *bucket, n *node) {
+func (set *nodeEventRecorder) nodeRemoved(b *bucket, n *tableNode) {
 	select {
 	case set.evc <- recordedNodeEvent{n, false}:
 	default:

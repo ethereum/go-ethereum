@@ -85,8 +85,8 @@ type Table struct {
 	closeReq        chan struct{}
 	closed          chan struct{}
 
-	nodeAddedHook   func(*bucket, *node)
-	nodeRemovedHook func(*bucket, *node)
+	nodeAddedHook   func(*bucket, *tableNode)
+	nodeRemovedHook func(*bucket, *tableNode)
 }
 
 // transport is implemented by the UDP transports.
@@ -101,8 +101,8 @@ type transport interface {
 // bucket contains nodes, ordered by their last activity. the entry
 // that was most recently active is the first element in entries.
 type bucket struct {
-	entries      []*node // live entries, sorted by time of last contact
-	replacements []*node // recently seen nodes to be used if revalidation fails
+	entries      []*tableNode // live entries, sorted by time of last contact
+	replacements []*tableNode // recently seen nodes to be used if revalidation fails
 	ips          netutil.DistinctNetSet
 	index        int
 }
@@ -531,7 +531,7 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	}
 
 	// Add to bucket.
-	wn := &node{Node: req.node}
+	wn := &tableNode{Node: req.node}
 	if req.forceSetLive {
 		wn.livenessChecks = 1
 		wn.isValidatedLive = true
@@ -552,15 +552,15 @@ func (tab *Table) addReplacement(b *bucket, n *enode.Node) {
 		return
 	}
 
-	wn := &node{Node: n, addedToTable: time.Now()}
-	var removed *node
+	wn := &tableNode{Node: n, addedToTable: time.Now()}
+	var removed *tableNode
 	b.replacements, removed = pushNode(b.replacements, wn, maxReplacements)
 	if removed != nil {
 		tab.removeIP(b, removed.IP())
 	}
 }
 
-func (tab *Table) nodeAdded(b *bucket, n *node) {
+func (tab *Table) nodeAdded(b *bucket, n *tableNode) {
 	if n.addedToTable == (time.Time{}) {
 		n.addedToTable = time.Now()
 	}
@@ -574,7 +574,7 @@ func (tab *Table) nodeAdded(b *bucket, n *node) {
 	}
 }
 
-func (tab *Table) nodeRemoved(b *bucket, n *node) {
+func (tab *Table) nodeRemoved(b *bucket, n *tableNode) {
 	tab.revalidation.nodeRemoved(n)
 	if tab.nodeRemovedHook != nil {
 		tab.nodeRemovedHook(b, n)
@@ -586,8 +586,8 @@ func (tab *Table) nodeRemoved(b *bucket, n *node) {
 
 // deleteInBucket removes node n from the table.
 // If there are replacement nodes in the bucket, the node is replaced.
-func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
-	index := slices.IndexFunc(b.entries, func(e *node) bool { return e.ID() == id })
+func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *tableNode {
+	index := slices.IndexFunc(b.entries, func(e *tableNode) bool { return e.ID() == id })
 	if index == -1 {
 		// Entry has been removed already.
 		return nil
@@ -615,8 +615,8 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
 
 // bumpInBucket updates a node record if it exists in the bucket.
 // The second return value reports whether the node's endpoint (IP/port) was updated.
-func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool) (n *node, endpointChanged bool) {
-	i := slices.IndexFunc(b.entries, func(elem *node) bool {
+func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool) (n *tableNode, endpointChanged bool) {
+	i := slices.IndexFunc(b.entries, func(elem *tableNode) bool {
 		return elem.ID() == newRecord.ID()
 	})
 	if i == -1 {
@@ -697,7 +697,7 @@ func containsID[N nodeType](ns []N, id enode.ID) bool {
 }
 
 // pushNode adds n to the front of list, keeping at most max items.
-func pushNode(list []*node, n *node, max int) ([]*node, *node) {
+func pushNode(list []*tableNode, n *tableNode, max int) ([]*tableNode, *tableNode) {
 	if len(list) < max {
 		list = append(list, nil)
 	}

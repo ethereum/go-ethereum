@@ -37,8 +37,8 @@ type BucketNode struct {
 	Live          bool        `json:"live"`
 }
 
-// node is a node table entry.
-type node struct {
+// tableNode is an entry in Table.
+type tableNode struct {
 	*enode.Node
 	revalList       *revalidationList
 	addedToTable    time.Time // first time node was added to bucket or replacement list
@@ -74,7 +74,7 @@ func (e encPubkey) id() enode.ID {
 	return enode.ID(crypto.Keccak256Hash(e[:]))
 }
 
-func unwrapNodes(ns []*node) []*enode.Node {
+func unwrapNodes(ns []*tableNode) []*enode.Node {
 	result := make([]*enode.Node, len(ns))
 	for i, n := range ns {
 		result[i] = n.Node
@@ -82,10 +82,10 @@ func unwrapNodes(ns []*node) []*enode.Node {
 	return result
 }
 
-func (n *node) addr() *net.UDPAddr {
+func (n *tableNode) addr() *net.UDPAddr {
 	return &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
 }
 
-func (n *node) String() string {
+func (n *tableNode) String() string {
 	return n.Node.String()
 }
