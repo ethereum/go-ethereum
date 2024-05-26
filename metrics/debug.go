@@ -27,9 +27,9 @@ func CaptureDebugGCStats(r Registry, d time.Duration) {
 	}
 }
 
-// CaptureDebugGCStatsOnce captures new values for the Go garbage collector 
-// statistics exported in debug.GCStats. This is designed to be called in 
-// a background goroutine. Giving a registry which has not been given to 
+// CaptureDebugGCStatsOnce captures new values for the Go garbage collector
+// statistics exported in debug.GCStats. This is designed to be called in
+// a background goroutine. Giving a registry which has not been given to
 // RegisterDebugGCStats will panic.
 //
 // Be careful (but much less so) with this because debug.ReadGCStats calls
