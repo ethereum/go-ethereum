@@ -48,7 +48,7 @@ func TestImportRaw(t *testing.T) {
 		// Run clef importraw
 		clef := runClef(t, "--suppress-bootwarn", "--lightkdf", "importraw", keyPath)
 		clef.input("myverylongpassword1").input("myverylongpassword2").WaitExit()
-		if have, want := clef.StderrText(), "Passwords do not match\n"; have != want {
+		if have, want := clef.StderrText(), "passwords do not match\n"; have != want {
 			t.Errorf("have %q, want %q", have, want)
 		}
 	})
