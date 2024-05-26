@@ -97,7 +97,7 @@ func benchmarkLogger(b *testing.B, l Logger) {
 		tt     = time.Now()
 		bigint = big.NewInt(100)
 		nilbig *big.Int
-		err    = errors.New("Oh nooes it's crap")
+		err    = errors.New("oh nooes it's crap")
 	)
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -126,7 +126,7 @@ func TestLoggerOutput(t *testing.T) {
 		tt        = time.Time{}
 		bigint    = big.NewInt(100)
 		nilbig    *big.Int
-		err       = errors.New("Oh nooes it's crap")
+		err       = errors.New("oh nooes it's crap")
 		smallUint = uint256.NewInt(500_000)
 		bigUint   = &uint256.Int{0xff, 0xff, 0xff, 0xff}
 	)
