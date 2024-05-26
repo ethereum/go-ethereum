@@ -552,7 +552,7 @@ func listWallets(c *cli.Context) error {
 // accountImport imports a raw hexadecimal private key via CLI.
 func accountImport(c *cli.Context) error {
 	if c.Args().Len() != 1 {
-		return errors.New("<keyfile> must be given as first argument.")
+		return errors.New("<keyfile> must be given as first argument")
 	}
 	internalApi, ui, err := initInternalApi(c)
 	if err != nil {
@@ -583,7 +583,7 @@ func accountImport(c *cli.Context) error {
 	}
 	if first != second {
 		//lint:ignore ST1005 This is a message for the user
-		return errors.New("Passwords do not match")
+		return errors.New("passwords do not match")
 	}
 	acc, err := internalApi.ImportRawKey(hex.EncodeToString(crypto.FromECDSA(pKey)), first)
 	if err != nil {
