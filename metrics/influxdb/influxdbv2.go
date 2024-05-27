@@ -190,6 +190,7 @@ func (r *v2Reporter) send() {
 				"m5":       ms.Rate5(),
 				"m15":      ms.Rate15(),
 				"meanrate": ms.RateMean(),
+				"total":    int64(ms.Total()),
 			}
 
 			pt := influxdb2.NewPoint(measurement, r.tags, fields, now)

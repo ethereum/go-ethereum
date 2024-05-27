@@ -223,6 +223,7 @@ func (r *reporter) send() error {
 					"m5":       ms.Rate5(),
 					"m15":      ms.Rate15(),
 					"meanrate": ms.RateMean(),
+					"total":    int64(ms.Total()),
 				},
 				Time: now,
 			})
