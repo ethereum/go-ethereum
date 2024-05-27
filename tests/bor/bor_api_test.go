@@ -98,6 +98,15 @@ func testGetTransactionReceiptsByBlock(t *testing.T, publicBlockchainAPI *ethapi
 	assert.Equal(t, 2, len(receiptsOut))
 	assert.True(t, areDifferentHashes(receiptsOut))
 
+	// check 5: Tx hash for state sync txn
+	block, err := publicBlockchainAPI.GetBlockByNumber(context.Background(), rpc.BlockNumber(4), false)
+	assert.Nil(t, err)
+	blockHash := block["hash"].(common.Hash)
+	txHash := types.GetDerivedBorTxHash(types.BorReceiptKey(4, blockHash))
+	// Compare tx hash from GetTransactionReceiptsByBlock with hash computed above
+	txReceipts, err := publicBlockchainAPI.GetTransactionReceiptsByBlock(context.Background(), rpc.BlockNumberOrHashWithNumber(4))
+	assert.Nil(t, err)
+	assert.Equal(t, txHash, txReceipts[1]["transactionHash"].(common.Hash))
 }
 
 // Test for GetTransactionByBlockNumberAndIndex
@@ -122,7 +131,7 @@ func testGetTransactionByBlockNumberAndIndex(t *testing.T, publicTransactionPool
 	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(4), 0)
 	assert.Equal(t, common.HexToAddress("0x1000"), *tx.To)
 
-	// check 5 : Normal Transaction
+	// check 5 : State Sync Transaction
 	tx = publicTransactionPoolAPI.GetTransactionByBlockNumberAndIndex(context.Background(), rpc.BlockNumber(4), 1)
 	assert.Equal(t, common.HexToAddress("0x0"), *tx.To)
 }
