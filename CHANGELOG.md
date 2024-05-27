@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/taikoxyz/taiko-geth/compare/v1.0.0...v1.1.0) (2024-05-27)
+
+
+### Features
+
+* **eth:** add default gpo price flag ([#258](https://github.com/taikoxyz/taiko-geth/issues/258)) ([0fb7ce1](https://github.com/taikoxyz/taiko-geth/commit/0fb7ce1999e6b8f4d39e78787525e236e007948f))
+* **txpool:** update max fee check in `ValidateTransaction()` ([#259](https://github.com/taikoxyz/taiko-geth/issues/259)) ([ef40d46](https://github.com/taikoxyz/taiko-geth/commit/ef40d46c0efbda50f0a2b84987291a4b8f9f2a2d))
+
 ## 1.0.0 (2024-05-22)
 
 
