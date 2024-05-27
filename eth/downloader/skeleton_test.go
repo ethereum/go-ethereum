@@ -514,7 +514,7 @@ func TestSkeletonSyncExtend(t *testing.T) {
 // Tests that the skeleton sync correctly retrieves headers from one or more
 // peers without duplicates or other strange side effects.
 func TestSkeletonSyncRetrievals(t *testing.T) {
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	//log.SetDefault(log.NewLogger(log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))))
 
 	// Since skeleton headers don't need to be meaningful, beyond a parent hash
 	// progression, create a long fake chain to test with.
@@ -876,6 +876,22 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 					return fmt.Errorf("test %d, mid state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.midstate[j].Tail)
 				}
 			}
+			if !tt.unpredictable {
+				var served uint64
+				for _, peer := range tt.peers {
+					served += peer.served.Load()
+				}
+				if served != tt.midserve {
+					t.Errorf("test %d, mid state: served headers mismatch: have %d, want %d", i, served, tt.midserve)
+				}
+				var drops uint64
+				for _, peer := range tt.peers {
+					drops += peer.dropped.Load()
+				}
+				if drops != tt.middrop {
+					return fmt.Errorf("test %d, mid state: dropped peers mismatch: have %d, want %d", i, drops, tt.middrop)
+				}
+			}
 			return nil
 		}
 
@@ -892,30 +908,15 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		if !tt.unpredictable {
-			var served uint64
-			for _, peer := range tt.peers {
-				served += peer.served.Load()
-			}
-			if served != tt.midserve {
-				t.Errorf("test %d, mid state: served headers mismatch: have %d, want %d", i, served, tt.midserve)
-			}
-			var drops uint64
-			for _, peer := range tt.peers {
-				drops += peer.dropped.Load()
-			}
-			if drops != tt.middrop {
-				t.Errorf("test %d, mid state: dropped peers mismatch: have %d, want %d", i, drops, tt.middrop)
-			}
-		}
 		// Apply the post-init events if there's any
-		if tt.newHead != nil {
-			skeleton.Sync(tt.newHead, nil, true)
-		}
 		if tt.newPeer != nil {
 			if err := peerset.Register(newPeerConnection(tt.newPeer.id, eth.ETH68, tt.newPeer, log.New("id", tt.newPeer.id))); err != nil {
 				t.Errorf("test %d: failed to register new peer: %v", i, err)
 			}
+			time.Sleep(time.Millisecond * 50) // given time for peer registration
+		}
+		if tt.newHead != nil {
+			skeleton.Sync(tt.newHead, nil, true)
 		}
 		// Wait a bit (bleah) for the second sync loop to go to idle. This might
 		// be either a finish or a never-start hence why there's no event to hook.
@@ -929,6 +930,28 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 				}
 				if progress.Subchains[j].Tail != tt.endstate[j].Tail {
 					return fmt.Errorf("test %d, end state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.endstate[j].Tail)
+				}
+			}
+			if !tt.unpredictable {
+				served := uint64(0)
+				for _, peer := range tt.peers {
+					served += peer.served.Load()
+				}
+				if tt.newPeer != nil {
+					served += tt.newPeer.served.Load()
+				}
+				if served != tt.endserve {
+					return fmt.Errorf("test %d, end state: served headers mismatch: have %d, want %d", i, served, tt.endserve)
+				}
+				drops := uint64(0)
+				for _, peer := range tt.peers {
+					drops += peer.dropped.Load()
+				}
+				if tt.newPeer != nil {
+					drops += tt.newPeer.dropped.Load()
+				}
+				if drops != tt.enddrop {
+					return fmt.Errorf("test %d, end state: dropped peers mismatch: have %d, want %d", i, drops, tt.middrop)
 				}
 			}
 			return nil
@@ -947,28 +970,6 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			continue
 		}
 		// Check that the peers served no more headers than we actually needed
-		if !tt.unpredictable {
-			served := uint64(0)
-			for _, peer := range tt.peers {
-				served += peer.served.Load()
-			}
-			if tt.newPeer != nil {
-				served += tt.newPeer.served.Load()
-			}
-			if served != tt.endserve {
-				t.Errorf("test %d, end state: served headers mismatch: have %d, want %d", i, served, tt.endserve)
-			}
-			drops := uint64(0)
-			for _, peer := range tt.peers {
-				drops += peer.dropped.Load()
-			}
-			if tt.newPeer != nil {
-				drops += tt.newPeer.dropped.Load()
-			}
-			if drops != tt.enddrop {
-				t.Errorf("test %d, end state: dropped peers mismatch: have %d, want %d", i, drops, tt.middrop)
-			}
-		}
 		// Clean up any leftover skeleton sync resources
 		skeleton.Terminate()
 	}
