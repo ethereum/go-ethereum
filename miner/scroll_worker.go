@@ -651,8 +651,12 @@ func (w *worker) commit(res *pipeline.Result) error {
 	if err := w.engine.Seal(w.chain, block, resultCh, stopCh); err != nil {
 		return err
 	}
-
+	// Clique.Seal() will only wait for a second before giving up on us. So make sure there is nothing computational heavy
+	// or a call that blocks between the call to Seal and the line below
 	block = <-resultCh
+	if block == nil {
+		return errors.New("missed seal response from consensus engine")
+	}
 
 	// verify the generated block with local consensus engine to make sure everything is as expected
 	if err = w.engine.VerifyHeader(w.chain, block.Header(), true); err != nil {
