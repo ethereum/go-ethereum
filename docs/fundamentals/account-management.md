@@ -42,7 +42,7 @@ Enter 'ok' to proceed:
 >
 ```
 
-Geth can be started in a separate terminal. To connect to Clef, ensure the data directory is consistent with the path provided to Clef and pass the location of the the Clef IPC file - which Clef saves to the path provided to its `--configdir` flag - in this case we set it to `~/go-ethereum/sepolia-data/clef`:
+Geth can be started in a separate terminal. To connect to Clef, ensure the data directory is consistent with the path provided to Clef and pass the location of the Clef IPC file - which Clef saves to the path provided to its `--configdir` flag - in this case we set it to `~/go-ethereum/sepolia-data/clef`:
 
 ```sh
 geth --sepolia --datadir sepolia <other flags> --signer=sepolia-data/clef/clef.ipc
