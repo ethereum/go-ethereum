@@ -275,7 +275,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(t)
 }
 
-func TestTable_addVerifiedNode(t *testing.T) {
+func TestTable_addInboundNode(t *testing.T) {
 	tab, db := newTestTable(newPingRecorder(), Config{})
 	<-tab.initDone
 	defer db.Close()
@@ -308,7 +308,7 @@ func TestTable_addVerifiedNode(t *testing.T) {
 	checkIPLimitInvariant(t, tab)
 }
 
-func TestTable_addSeenNode(t *testing.T) {
+func TestTable_addFoundNode(t *testing.T) {
 	tab, db := newTestTable(newPingRecorder(), Config{})
 	<-tab.initDone
 	defer db.Close()

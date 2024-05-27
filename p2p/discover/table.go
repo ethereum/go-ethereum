@@ -513,16 +513,9 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	}
 
 	b := tab.bucket(req.node.ID())
-	if !req.isInbound && req.node.Seq() == 0 && contains(b.entries, req.node.ID()) {
-		// Special case for discv4: because endpoint information is not
-		// authenticated, do not update until the node is successfully communicated
-		// with. Therefore, non-inbounds which are already in the bucket should be
-		// skipped.
-		return false
-
-	}
-	if tab.bumpInBucket(b, req.node.Node) {
-		// Already in bucket, update record.
+	exists, _ := tab.bumpInBucket(b, req.node.Node, req.isInbound)
+	if exists {
+		// Already in bucket.
 		return false
 	}
 	if len(b.entries) >= bucketSize {
@@ -613,26 +606,37 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
 	return rep
 }
 
-// bumpInBucket updates the node record of n in the bucket.
-func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node) bool {
+// bumpInBucket updates a node record if it exists in the bucket.
+func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool) (exists, updated bool) {
 	i := slices.IndexFunc(b.entries, func(elem *node) bool {
 		return elem.ID() == newRecord.ID()
 	})
 	if i == -1 {
-		return false
+		return false, false // node not in bucket
 	}
 
-	if !newRecord.IP().Equal(b.entries[i].IP()) {
-		// Endpoint has changed, ensure that the new IP fits into table limits.
-		tab.removeIP(b, b.entries[i].IP())
+	// Disallow updates unless the sequence number is increased.
+	// Note there is a special case for discv4: if the node contacts us (isInbound),
+	// it is allowed to update its own entry.
+	oldRecord := b.entries[i]
+	isUpdate := newRecord.Seq() > oldRecord.Seq()
+	isDiscv4Update := oldRecord.Seq() == 0 && newRecord.Seq() == 0 && isInbound
+	if !(isUpdate || isDiscv4Update) {
+		return true, false
+	}
+
+	// Check if there is an endpoint update and validate against IP limits.
+	if newRecord.IPAddr() != b.entries[i].IPAddr() {
+		tab.removeIP(b, oldRecord.IP())
 		if !tab.addIP(b, newRecord.IP()) {
-			// It doesn't, put the previous one back.
-			tab.addIP(b, b.entries[i].IP())
-			return false
+			// It doesn't fit with the limit, put the previous record back.
+			tab.addIP(b, oldRecord.IP())
+			return true, false
 		}
 	}
+
 	b.entries[i].Node = newRecord
-	return true
+	return true, true
 }
 
 func (tab *Table) handleTrackRequest(op trackRequestOp) {
