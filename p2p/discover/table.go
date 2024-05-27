@@ -513,9 +513,12 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	}
 
 	b := tab.bucket(req.node.ID())
-	exists, _ := tab.bumpInBucket(b, req.node.Node, req.isInbound)
-	if exists {
+	n, wasUpdated := tab.bumpInBucket(b, req.node.Node, req.isInbound)
+	if n != nil {
 		// Already in bucket.
+		if wasUpdated {
+			n.isValidatedLive = false
+		}
 		return false
 	}
 	if len(b.entries) >= bucketSize {
@@ -607,36 +610,36 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
 }
 
 // bumpInBucket updates a node record if it exists in the bucket.
-func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool) (exists, updated bool) {
+func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool) (n *node, updated bool) {
 	i := slices.IndexFunc(b.entries, func(elem *node) bool {
 		return elem.ID() == newRecord.ID()
 	})
 	if i == -1 {
-		return false, false // node not in bucket
+		return nil, false // node not in bucket
 	}
 
 	// Disallow updates unless the sequence number is increased.
 	// Note there is a special case for discv4: if the node contacts us (isInbound),
 	// it is allowed to update its own entry.
-	oldRecord := b.entries[i]
-	isUpdate := newRecord.Seq() > oldRecord.Seq()
-	isDiscv4Update := oldRecord.Seq() == 0 && newRecord.Seq() == 0 && isInbound
+	n = b.entries[i]
+	isUpdate := newRecord.Seq() > n.Seq()
+	isDiscv4Update := n.Seq() == 0 && newRecord.Seq() == 0 && isInbound
 	if !(isUpdate || isDiscv4Update) {
-		return true, false
+		return n, false
 	}
 
 	// Check if there is an endpoint update and validate against IP limits.
 	if newRecord.IPAddr() != b.entries[i].IPAddr() {
-		tab.removeIP(b, oldRecord.IP())
+		tab.removeIP(b, n.IP())
 		if !tab.addIP(b, newRecord.IP()) {
 			// It doesn't fit with the limit, put the previous record back.
-			tab.addIP(b, oldRecord.IP())
-			return true, false
+			tab.addIP(b, n.IP())
+			return n, false
 		}
 	}
 
-	b.entries[i].Node = newRecord
-	return true, true
+	n.Node = newRecord
+	return n, true
 }
 
 func (tab *Table) handleTrackRequest(op trackRequestOp) {
