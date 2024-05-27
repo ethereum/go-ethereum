@@ -42,9 +42,8 @@ jobs:
       - name: Cache Go build
         uses: actions/cache@v4
         with:
-          enableCrossOsArchive: true
           path: |
-            go-build-platforms
+            ${{ runner.os }}-go_build-platforms
           key: ${{ runner.os }}-go_build-platforms
           restore-keys: |
             ${{ runner.os }}-go_build-platforms
@@ -54,7 +53,7 @@ jobs:
         with:
           cache-map: |
             {
-              "go-build-platforms": "/root/.cache/go-build"
+              "${{ runner.os }}-go_build-platforms": "/root/.cache/go-build"
             }
           skip-extraction: ${{ steps.cache.outputs.cache-hit }}
 
