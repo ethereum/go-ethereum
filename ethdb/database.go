@@ -160,6 +160,7 @@ type StateStoreReader interface {
 type BlockStore interface {
 	BlockStore() Database
 	SetBlockStore(block Database)
+	HasSeparateBlockStore() bool
 }
 
 type BlockStoreReader interface {

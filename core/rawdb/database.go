@@ -122,6 +122,10 @@ func (frdb *freezerdb) SetBlockStore(block ethdb.Database) {
 	frdb.blockStore = block
 }
 
+func (frdb *freezerdb) HasSeparateBlockStore() bool {
+	return frdb.blockStore != nil
+}
+
 // Freeze is a helper method used for external testing to trigger and block until
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
@@ -217,6 +221,10 @@ func (db *nofreezedb) BlockStore() ethdb.Database {
 
 func (db *nofreezedb) SetBlockStore(block ethdb.Database) {
 	db.blockStore = block
+}
+
+func (db *nofreezedb) HasSeparateBlockStore() bool {
+	return db.blockStore != nil
 }
 
 func (db *nofreezedb) BlockStoreReader() ethdb.Reader {
@@ -598,13 +606,14 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 	it := db.NewIterator(keyPrefix, keyStart)
 	defer it.Release()
 
-	var trieIter ethdb.Iterator
-	var blockIter ethdb.Iterator
+	var trieIter ethdb.Iterator  // traverse state data if multi-database has been enabled
+	var blockIter ethdb.Iterator // traverse block data if multi-database has been enabled
 	if db.StateStore() != nil {
 		trieIter = db.StateStore().NewIterator(keyPrefix, nil)
 		defer trieIter.Release()
 	}
-	if db.BlockStore() != db {
+
+	if db.HasSeparateBlockStore() {
 		blockIter = db.BlockStore().NewIterator(keyPrefix, nil)
 		defer blockIter.Release()
 	}
