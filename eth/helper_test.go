@@ -207,6 +207,14 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, genesis common.Hash, forkID forkid.ID, forkFilter forkid.Filter) {
 	var msg interface{}
 	switch {
+	case p.version == xdpos2:
+		msg = &statusData63{
+			ProtocolVersion: uint32(p.version),
+			NetworkId:       DefaultConfig.NetworkId,
+			TD:              td,
+			CurrentBlock:    head,
+			GenesisBlock:    genesis,
+		}
 	case p.version == eth63:
 		msg = &statusData63{
 			ProtocolVersion: uint32(p.version),

@@ -783,6 +783,14 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 	)
 	go func() {
 		switch {
+		case p.version == xdpos2:
+			errc <- p2p.Send(p.rw, StatusMsg, &statusData63{
+				ProtocolVersion: uint32(p.version),
+				NetworkId:       network,
+				TD:              td,
+				CurrentBlock:    head,
+				GenesisBlock:    genesis,
+			})
 		case p.version == eth63:
 			errc <- p2p.Send(p.rw, StatusMsg, &statusData63{
 				ProtocolVersion: uint32(p.version),
@@ -806,6 +814,8 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 	}()
 	go func() {
 		switch {
+		case p.version == xdpos2: 
+			errc <- p.readStatusLegacy(network, &status63, genesis)
 		case p.version == eth63:
 			errc <- p.readStatusLegacy(network, &status63, genesis)
 		case p.version >= eth64:
@@ -827,6 +837,8 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 		}
 	}
 	switch {
+	case p.version == xdpos2:
+		p.td, p.head = status63.TD, status63.CurrentBlock
 	case p.version == eth63:
 		p.td, p.head = status63.TD, status63.CurrentBlock
 	case p.version >= eth64:
