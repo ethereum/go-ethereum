@@ -57,24 +57,33 @@ type Config struct {
 // sets defaults on the config
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
+		var (
+			shanghaiTime = uint64(0)
+			cancunTime   = uint64(0)
+		)
 		cfg.ChainConfig = &params.ChainConfig{
-			ChainID:             big.NewInt(1),
-			HomesteadBlock:      new(big.Int),
-			DAOForkBlock:        new(big.Int),
-			DAOForkSupport:      false,
-			EIP150Block:         new(big.Int),
-			EIP155Block:         new(big.Int),
-			EIP158Block:         new(big.Int),
-			ByzantiumBlock:      new(big.Int),
-			ConstantinopleBlock: new(big.Int),
-			PetersburgBlock:     new(big.Int),
-			IstanbulBlock:       new(big.Int),
-			MuirGlacierBlock:    new(big.Int),
-			BerlinBlock:         new(big.Int),
-			LondonBlock:         new(big.Int),
-		}
+			ChainID:                       big.NewInt(1),
+			HomesteadBlock:                new(big.Int),
+			DAOForkBlock:                  new(big.Int),
+			DAOForkSupport:                false,
+			EIP150Block:                   new(big.Int),
+			EIP155Block:                   new(big.Int),
+			EIP158Block:                   new(big.Int),
+			ByzantiumBlock:                new(big.Int),
+			ConstantinopleBlock:           new(big.Int),
+			PetersburgBlock:               new(big.Int),
+			IstanbulBlock:                 new(big.Int),
+			MuirGlacierBlock:              new(big.Int),
+			BerlinBlock:                   new(big.Int),
+			LondonBlock:                   new(big.Int),
+			ArrowGlacierBlock:             nil,
+			GrayGlacierBlock:              nil,
+			TerminalTotalDifficulty:       big.NewInt(0),
+			TerminalTotalDifficultyPassed: true,
+			MergeNetsplitBlock:            nil,
+			ShanghaiTime:                  &shanghaiTime,
+			CancunTime:                    &cancunTime}
 	}
-
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
 	}
