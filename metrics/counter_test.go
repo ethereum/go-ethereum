@@ -1,12 +1,41 @@
 package metrics
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 func BenchmarkCounter(b *testing.B) {
 	c := NewCounter()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c.Inc(1)
+	}
+}
+
+func BenchmarkCounterParallel(b *testing.B) {
+	c := NewCounter()
+	b.ResetTimer()
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			for i := 0; i < b.N; i++ {
+				c.Inc(1)
+			}
+			wg.Done()
+		}()
+		wg.Add(1)
+		go func() {
+			for i := 0; i < b.N; i++ {
+				c.Dec(1)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	if have, want := c.Snapshot().Count(), int64(0); have != want {
+		b.Fatalf("have %d want %d", have, want)
 	}
 }
 

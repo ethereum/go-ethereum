@@ -25,9 +25,16 @@ func BenchmarkCounterFloat64Parallel(b *testing.B) {
 			}
 			wg.Done()
 		}()
+		wg.Add(1)
+		go func() {
+			for i := 0; i < b.N; i++ {
+				c.Dec(1.0)
+			}
+			wg.Done()
+		}()
 	}
 	wg.Wait()
-	if have, want := c.Snapshot().Count(), 10.0*float64(b.N); have != want {
+	if have, want := c.Snapshot().Count(), float64(0); have != want {
 		b.Fatalf("have %f want %f", have, want)
 	}
 }
