@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net"
 	"sort"
 	"sync"
@@ -729,10 +730,20 @@ running:
 					p.events = &srv.peerFeed
 				}
 				go srv.runPeer(p)
-				peers[c.node.ID()] = p
+
+				name := truncateName(c.name)
+				if peers[c.node.ID()] != nil {
+					peers[c.node.ID()].PairPeer = p
+					srv.log.Debug("Adding p2p pair peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
+				} else {
+					peers[c.node.ID()] = p
+					srv.log.Debug("Adding p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
+				}
 				if p.Inbound() {
 					inboundCount++
 				}
+			} else {
+				srv.log.Debug("Error adding p2p peer", "err", err)
 			}
 			// The dialer logic relies on the assumption that
 			// dial tasks complete after the peer has been added or
@@ -932,6 +943,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	c.caps, c.name = phs.Caps, phs.Name
 	err = srv.checkpoint(c, srv.addpeer)
 	if err != nil {
+		clog.Debug("Rejected peer", "err", err, "c.node.ID()", c.node.ID())
 		clog.Trace("Rejected peer", "err", err)
 		return err
 	}
