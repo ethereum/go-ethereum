@@ -68,6 +68,8 @@ func newTestBackend(t *testing.T, eip1559Block *big.Int) *testBackend {
 	if eip1559Block != nil {
 		gspec.Config.Eip1559Block = eip1559Block
 		signer = types.LatestSigner(gspec.Config)
+	} else {
+		gspec.Config.Eip1559Block = nil
 	}
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
