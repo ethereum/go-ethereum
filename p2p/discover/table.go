@@ -513,6 +513,14 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	}
 
 	b := tab.bucket(req.node.ID())
+	if !req.isInbound && req.node.Seq() == 0 && contains(b.entries, req.node.ID()) {
+		// Special case for discv4: because endpoint information is not
+		// authenticated, do not update until the node is successfully communicated
+		// with. Therefore, non-inbounds which are already in the bucket should be
+		// skipped.
+		return false
+
+	}
 	if tab.bumpInBucket(b, req.node.Node) {
 		// Already in bucket, update record.
 		return false
