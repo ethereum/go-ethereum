@@ -81,6 +81,8 @@ type input struct {
 	Env   *stEnv            `json:"env,omitempty"`
 	Txs   []*txWithKey      `json:"txs,omitempty"`
 	TxRlp string            `json:"txsRlp,omitempty"`
+
+	ParentL1BaseFee *big.Int `json:"parentL1BaseFee,omitempty"`
 }
 
 func Transition(ctx *cli.Context) error {
@@ -195,7 +197,7 @@ func Transition(ctx *cli.Context) error {
 	if txs, err = loadTransactions(txStr, inputData, prestate.Env, chainConfig); err != nil {
 		return err
 	}
-	if err := applyLondonChecks(&prestate.Env, chainConfig); err != nil {
+	if err := applyCurieChecks(&prestate.Env, chainConfig, inputData.ParentL1BaseFee); err != nil {
 		return err
 	}
 	if err := applyShanghaiChecks(&prestate.Env, chainConfig); err != nil {
@@ -338,8 +340,8 @@ func loadTransactions(txStr string, inputData *input, env stEnv, chainConfig *pa
 	return signUnsignedTransactions(txsWithKeys, signer)
 }
 
-func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
-	if !chainConfig.IsLondon(big.NewInt(int64(env.Number))) {
+func applyCurieChecks(env *stEnv, chainConfig *params.ChainConfig, parentL1BaseFee *big.Int) error {
+	if !chainConfig.IsCurie(big.NewInt(int64(env.Number))) {
 		return nil
 	}
 	// Sanity check, to not `panic` in state_transition
@@ -350,12 +352,15 @@ func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	if env.ParentBaseFee == nil || env.Number == 0 {
 		return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 	}
+	if parentL1BaseFee == nil {
+		return errors.New("EIP-1559 config but missing 'parentL1BaseFee' for calculating basefee")
+	}
 	env.BaseFee = eip1559.CalcBaseFee(chainConfig, &types.Header{
 		Number:   new(big.Int).SetUint64(env.Number - 1),
 		BaseFee:  env.ParentBaseFee,
 		GasUsed:  env.ParentGasUsed,
 		GasLimit: env.ParentGasLimit,
-	})
+	}, parentL1BaseFee)
 	return nil
 }
 

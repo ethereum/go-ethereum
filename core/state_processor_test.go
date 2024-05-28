@@ -376,8 +376,9 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		Time:       parent.Time() + 10,
 		UncleHash:  types.EmptyUncleHash,
 	}
-	if config.IsLondon(header.Number) {
-		header.BaseFee = eip1559.CalcBaseFee(config, parent.Header())
+	if config.IsCurie(header.Number) {
+		parentL1BaseFee := big.NewInt(1000000000) // 1 gwei
+		header.BaseFee = eip1559.CalcBaseFee(config, parent.Header(), parentL1BaseFee)
 	}
 	if config.IsShanghai(header.Number, header.Time) {
 		header.WithdrawalsHash = &types.EmptyWithdrawalsHash

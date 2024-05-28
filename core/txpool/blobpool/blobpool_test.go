@@ -109,12 +109,13 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 		mid := new(big.Int).Add(lo, hi)
 		mid.Div(mid, big.NewInt(2))
 
+		parentL1BaseFee := big.NewInt(1000000000) // 1 gwei
 		if eip1559.CalcBaseFee(bc.config, &types.Header{
 			Number:   blockNumber,
 			GasLimit: gasLimit,
 			GasUsed:  0,
 			BaseFee:  mid,
-		}).Cmp(bc.basefee.ToBig()) > 0 {
+		}, parentL1BaseFee).Cmp(bc.basefee.ToBig()) > 0 {
 			hi = mid
 		} else {
 			lo = mid

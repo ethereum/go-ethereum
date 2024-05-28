@@ -277,10 +277,14 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 	// Estimate FeeCap
 	gasFeeCap := opts.GasFeeCap
 	if gasFeeCap == nil {
-		gasFeeCap = new(big.Int).Add(
-			gasTipCap,
-			new(big.Int).Mul(head.BaseFee, big.NewInt(basefeeWiggleMultiplier)),
-		)
+		if head.BaseFee != nil {
+			gasFeeCap = new(big.Int).Add(
+				gasTipCap,
+				new(big.Int).Mul(head.BaseFee, big.NewInt(basefeeWiggleMultiplier)),
+			)
+		} else {
+			gasFeeCap = new(big.Int).Set(gasTipCap)
+		}
 	}
 	if gasFeeCap.Cmp(gasTipCap) < 0 {
 		return nil, fmt.Errorf("maxFeePerGas (%v) < maxPriorityFeePerGas (%v)", gasFeeCap, gasTipCap)
@@ -313,7 +317,7 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 
 func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
 	if opts.GasFeeCap != nil || opts.GasTipCap != nil {
-		return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
+		return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but curie is not active yet")
 	}
 	// Normalize value
 	value := opts.Value

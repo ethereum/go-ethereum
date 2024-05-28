@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -450,14 +451,13 @@ func (g *Genesis) ToBlock() *types.Block {
 	if g.Difficulty == nil && g.Mixhash == (common.Hash{}) {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	// TODO: fix basefee
-	// if g.Config != nil && g.Config.IsLondon(common.Big0) {
-	// 	if g.BaseFee != nil {
-	// 		head.BaseFee = g.BaseFee
-	// 	} else {
-	// 		head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
-	// 	}
-	// }
+	if g.Config != nil && g.Config.IsCurie(common.Big0) {
+		if g.BaseFee != nil {
+			head.BaseFee = g.BaseFee
+		} else {
+			head.BaseFee = eip1559.CalcBaseFee(g.Config, nil, big.NewInt(0))
+		}
+	}
 	var withdrawals []*types.Withdrawal
 	// if conf := g.Config; conf != nil {
 	// 	num := big.NewInt(int64(g.Number))

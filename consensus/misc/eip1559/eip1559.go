@@ -16,6 +16,8 @@
 
 package eip1559
 
+/*
+
 import (
 	"errors"
 	"fmt"
@@ -93,3 +95,5 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header) *big.Int {
 		return math.BigMax(baseFee, common.Big0)
 	}
 }
+
+*/

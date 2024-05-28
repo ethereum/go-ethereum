@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rollup/circuitcapacitychecker"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/ethereum/go-ethereum/rollup/tracing"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -1346,13 +1347,16 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if genParams.random != (common.Hash{}) {
 		header.MixDigest = genParams.random
 	}
-	// Set baseFee and GasLimit if we are on an EIP-1559 chain
-	if w.chainConfig.IsLondon(header.Number) {
-		header.BaseFee = eip1559.CalcBaseFee(w.chainConfig, parent)
-		if !w.chainConfig.IsLondon(parent.Number) {
-			parentGasLimit := parent.GasLimit * w.chainConfig.ElasticityMultiplier()
-			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
+	// Set baseFee if we are on an EIP-1559 chain
+	if w.chainConfig.IsCurie(header.Number) {
+		state, err := w.chain.StateAt(parent.Root)
+		if err != nil {
+			log.Error("Failed to create mining context", "err", err)
+			return nil, err
 		}
+		parentL1BaseFee := fees.GetL1BaseFee(state)
+		header.BaseFee = eip1559.CalcBaseFee(w.chainConfig, parent, parentL1BaseFee)
+
 	}
 	// Apply EIP-4844, EIP-4788.
 	if w.chainConfig.IsCancun(header.Number, header.Time) {

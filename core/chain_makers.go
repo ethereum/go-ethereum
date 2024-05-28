@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -179,7 +180,11 @@ func (b *BlockGen) Timestamp() uint64 {
 
 // BaseFee returns the EIP-1559 base fee of the block being generated.
 func (b *BlockGen) BaseFee() *big.Int {
-	return new(big.Int).Set(b.header.BaseFee)
+	if b.header.BaseFee != nil {
+		return new(big.Int).Set(b.header.BaseFee)
+	} else {
+		return big.NewInt(0)
+	}
 }
 
 // AddUncheckedReceipt forcefully adds a receipts to the block without a
@@ -217,12 +222,9 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 
 	// The gas limit and price should be derived from the parent
 	h.GasLimit = parent.GasLimit
-	if b.config.IsLondon(h.Number) {
-		h.BaseFee = eip1559.CalcBaseFee(b.config, parent)
-		if !b.config.IsLondon(parent.Number) {
-			parentGasLimit := parent.GasLimit * b.config.ElasticityMultiplier()
-			h.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
-		}
+	if b.config.IsCurie(h.Number) {
+		parentL1BaseFee := fees.GetL1BaseFee(b.statedb)
+		h.BaseFee = eip1559.CalcBaseFee(b.config, parent, parentL1BaseFee)
 	}
 	b.uncles = append(b.uncles, h)
 }
@@ -409,12 +411,9 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 		Number:   new(big.Int).Add(parent.Number(), common.Big1),
 		Time:     time,
 	}
-	if chain.Config().IsLondon(header.Number) {
-		header.BaseFee = eip1559.CalcBaseFee(chain.Config(), parent.Header())
-		if !chain.Config().IsLondon(parent.Number()) {
-			parentGasLimit := parent.GasLimit() * chain.Config().ElasticityMultiplier()
-			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
-		}
+	if chain.Config().IsCurie(header.Number) {
+		parentL1BaseFee := fees.GetL1BaseFee(state)
+		header.BaseFee = eip1559.CalcBaseFee(chain.Config(), parent.Header(), parentL1BaseFee)
 	}
 	if chain.Config().IsCancun(header.Number, header.Time) {
 		var (

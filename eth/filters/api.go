@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -164,9 +166,17 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 				// To keep the original behaviour, send a single tx hash in one notification.
 				// TODO(rjl493456442) Send a batch of tx hashes in one notification
 				latest := api.sys.backend.CurrentHeader()
+
+				state, err := api.sys.backend.StateAt(latest.Root)
+				if err != nil || state == nil {
+					log.Error("State not found", "number", latest.Number, "hash", latest.Hash().Hex(), "state", state, "err", err)
+					continue
+				}
+				l1BaseFee := fees.GetL1BaseFee(state)
+
 				for _, tx := range txs {
 					if fullTx != nil && *fullTx {
-						rpcTx := ethapi.NewRPCPendingTransaction(tx, latest, chainConfig)
+						rpcTx := ethapi.NewRPCPendingTransaction(tx, latest, chainConfig, l1BaseFee)
 						notifier.Notify(rpcSub.ID, rpcTx)
 					} else {
 						notifier.Notify(rpcSub.ID, tx.Hash())
@@ -438,9 +448,16 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 			return returnHashes(hashes), nil
 		case PendingTransactionsSubscription:
 			if f.fullTx {
+				state, err := api.sys.backend.StateAt(latest.Root)
+				if err != nil || state == nil {
+					log.Error("State not found", "number", latest.Number, "hash", latest.Hash().Hex(), "state", state, "err", err)
+					return nil, errors.New("state not found")
+				}
+				l1BaseFee := fees.GetL1BaseFee(state)
+
 				txs := make([]*ethapi.RPCTransaction, 0, len(f.txs))
 				for _, tx := range f.txs {
-					txs = append(txs, ethapi.NewRPCPendingTransaction(tx, latest, chainConfig))
+					txs = append(txs, ethapi.NewRPCPendingTransaction(tx, latest, chainConfig, l1BaseFee))
 				}
 				f.txs = nil
 				return txs, nil

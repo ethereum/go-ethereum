@@ -646,7 +646,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	if call.GasPrice != nil && (call.GasFeeCap != nil || call.GasTipCap != nil) {
 		return nil, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
-	if !b.blockchain.Config().IsLondon(header.Number) {
+	if !b.blockchain.Config().IsCurie(header.Number) {
 		// If there's no basefee, then it must be a non-1559 execution
 		if call.GasPrice == nil {
 			call.GasPrice = new(big.Int)
@@ -668,7 +668,11 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			call.GasPrice = new(big.Int)
 			if call.GasFeeCap.BitLen() > 0 || call.GasTipCap.BitLen() > 0 {
-				call.GasPrice = math.BigMin(new(big.Int).Add(call.GasTipCap, header.BaseFee), call.GasFeeCap)
+				if header.BaseFee != nil {
+					call.GasPrice = math.BigMin(new(big.Int).Add(call.GasTipCap, header.BaseFee), call.GasFeeCap)
+				} else {
+					call.GasPrice = math.BigMin(call.GasTipCap, call.GasFeeCap)
+				}
 			}
 		}
 	}
@@ -979,4 +983,8 @@ func nullSubscription() event.Subscription {
 		<-quit
 		return nil
 	})
+}
+
+func (fb *filterBackend) StateAt(root common.Hash) (*state.StateDB, error) {
+	return fb.bc.StateAt(root)
 }

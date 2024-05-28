@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/exp/slices"
 )
@@ -82,8 +83,14 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 	if bf.results.baseFee = bf.header.BaseFee; bf.results.baseFee == nil {
 		bf.results.baseFee = new(big.Int)
 	}
-	if chainconfig.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
-		bf.results.nextBaseFee = eip1559.CalcBaseFee(chainconfig, bf.header)
+	if chainconfig.IsCurie(big.NewInt(int64(bf.blockNumber + 1))) {
+		state, err := oracle.backend.StateAt(bf.header.Root)
+		if err != nil || state == nil {
+			log.Error("State not found", "number", bf.header.Number, "hash", bf.header.Hash().Hex(), "state", state, "err", err)
+			return
+		}
+		l1BaseFee := fees.GetL1BaseFee(state)
+		bf.results.nextBaseFee = eip1559.CalcBaseFee(chainconfig, bf.header, l1BaseFee)
 	} else {
 		bf.results.nextBaseFee = new(big.Int)
 	}

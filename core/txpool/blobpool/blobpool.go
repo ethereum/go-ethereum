@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/holiman/billy"
 	"github.com/holiman/uint256"
 )
@@ -399,7 +400,7 @@ func (p *BlobPool) Init(gasTip *big.Int, head *types.Header, reserve txpool.Addr
 		p.recheck(addr, nil)
 	}
 	var (
-		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head))
+		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head, fees.GetL1BaseFee(p.state)))
 		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinBlobGasprice))
 	)
 	if p.head.ExcessBlobGas != nil {
@@ -782,7 +783,7 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	}
 	// Reset the price heap for the new set of basefee/blobfee pairs
 	var (
-		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), newHead))
+		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), newHead, fees.GetL1BaseFee(p.state)))
 		blobfee = uint256.MustFromBig(big.NewInt(params.BlobTxMinBlobGasprice))
 	)
 	if newHead.ExcessBlobGas != nil {

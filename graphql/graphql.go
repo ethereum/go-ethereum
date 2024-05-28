@@ -36,7 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -769,11 +771,19 @@ func (b *Block) NextBaseFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	chaincfg := b.r.backend.ChainConfig()
 	if header.BaseFee == nil {
 		// Make sure next block doesn't enable EIP-1559
-		if !chaincfg.IsLondon(new(big.Int).Add(header.Number, common.Big1)) {
+		if !chaincfg.IsCurie(new(big.Int).Add(header.Number, common.Big1)) {
 			return nil, nil
 		}
 	}
-	nextBaseFee := eip1559.CalcBaseFee(chaincfg, header)
+
+	state, err := b.r.backend.StateAt(header.Root)
+	if err != nil {
+		log.Error("Failed to get state", "err", err)
+		return nil, err
+	}
+	l1BaseFee := fees.GetL1BaseFee(state)
+
+	nextBaseFee := eip1559.CalcBaseFee(chaincfg, header, l1BaseFee)
 	return (*hexutil.Big)(nextBaseFee), nil
 }
 

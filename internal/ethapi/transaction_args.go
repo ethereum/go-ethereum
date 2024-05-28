@@ -138,7 +138,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
 	}
 	// If the tx has completely specified a fee mechanism, no default is needed. This allows users
-	// who are not yet synced past London to get defaults for other tx values. See
+	// who are not yet synced past Curie to get defaults for other tx values. See
 	// https://github.com/ethereum/go-ethereum/pull/23274 for more information.
 	eip1559ParamsSet := args.MaxFeePerGas != nil && args.MaxPriorityFeePerGas != nil
 	if (args.GasPrice != nil && !eip1559ParamsSet) || (args.GasPrice == nil && eip1559ParamsSet) {
@@ -148,18 +148,18 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 		}
 		return nil
 	}
-	// Now attempt to fill in default value depending on whether London is active or not.
+	// Now attempt to fill in default value depending on whether Curie is active or not.
 	head := b.CurrentHeader()
-	if b.ChainConfig().IsLondon(head.Number) {
-		// London is active, set maxPriorityFeePerGas and maxFeePerGas.
-		if err := args.setLondonFeeDefaults(ctx, head, b); err != nil {
+	if b.ChainConfig().IsCurie(head.Number) {
+		// Curie is active, set maxPriorityFeePerGas and maxFeePerGas.
+		if err := args.setCurieFeeDefaults(ctx, head, b); err != nil {
 			return err
 		}
 	} else {
 		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
-			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
+			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before Curie is active")
 		}
-		// London not active, set gas price.
+		// Curie not active, set gas price.
 		price, err := b.SuggestGasTipCap(ctx)
 		if err != nil {
 			return err
@@ -169,8 +169,8 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	return nil
 }
 
-// setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
-func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
+// setCurieFeeDefaults fills in reasonable default fee values for unspecified fields.
+func (args *TransactionArgs) setCurieFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
 	// Set maxPriorityFeePerGas if it is missing.
 	if args.MaxPriorityFeePerGas == nil {
 		tip, err := b.SuggestGasTipCap(ctx)
@@ -181,13 +181,19 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 	}
 	// Set maxFeePerGas if it is missing.
 	if args.MaxFeePerGas == nil {
-		// Set the max fee to be 2 times larger than the previous block's base fee.
-		// The additional slack allows the tx to not become invalidated if the base
-		// fee is rising.
-		val := new(big.Int).Add(
-			args.MaxPriorityFeePerGas.ToInt(),
-			new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
-		)
+		var val *big.Int
+		if head.BaseFee != nil {
+			// Set the max fee to be 2 times larger than the previous block's base fee.
+			// The additional slack allows the tx to not become invalidated if the base
+			// fee is rising.
+			val = new(big.Int).Add(
+				args.MaxPriorityFeePerGas.ToInt(),
+				new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
+			)
+		} else {
+			val = new(big.Int).Set(
+				(*big.Int)(args.MaxPriorityFeePerGas))
+		}
 		args.MaxFeePerGas = (*hexutil.Big)(val)
 	}
 	// Both EIP-1559 fee parameters are now set; sanity check them.
