@@ -120,7 +120,7 @@ func TestStateProcessorErrors(t *testing.T) {
 				txs: []*types.Transaction{
 					makeTx(0, common.Address{}, big.NewInt(1000000000000000000), params.TxGas, big.NewInt(875000000), nil),
 				},
-				want: "insufficient funds for transfer: address xdc71562b71999873DB5b286dF957af199Ec94617F7",
+				want: "insufficient funds for gas * price + value: address xdc71562b71999873DB5b286dF957af199Ec94617F7",
 			},
 			{ // ErrInsufficientFunds
 				txs: []*types.Transaction{
