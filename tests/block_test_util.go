@@ -181,8 +181,10 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	}
 	// Cross-check the snapshot-to-hash against the trie hash
 	if snapshotter {
-		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
-			return err
+		if chain.Snapshots() != nil {
+			if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
+				return err
+			}
 		}
 	}
 	return t.validateImportedHeaders(chain, validBlocks)
