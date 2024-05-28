@@ -75,7 +75,7 @@ func (d *DiscV5API) NodeInfo() *NodeInfo {
 	n := d.DiscV5.LocalNode().Node()
 
 	return &NodeInfo{
-		NodeId: n.ID().String(),
+		NodeId: "0x" + n.ID().String(),
 		Enr:    n.String(),
 		Ip:     n.IP().String(),
 	}
@@ -83,10 +83,11 @@ func (d *DiscV5API) NodeInfo() *NodeInfo {
 
 func (d *DiscV5API) RoutingTableInfo() *RoutingTableInfo {
 	n := d.DiscV5.LocalNode().Node()
+	bucketNodes := d.DiscV5.RoutingTableInfo()
 
 	return &RoutingTableInfo{
-		Buckets:     d.DiscV5.RoutingTableInfo(),
-		LocalNodeId: n.ID().String(),
+		Buckets:     bucketNodes,
+		LocalNodeId: "0x" + n.ID().String(),
 	}
 }
 
@@ -232,10 +233,11 @@ func (p *PortalProtocolAPI) NodeInfo() *NodeInfo {
 
 func (p *PortalProtocolAPI) RoutingTableInfo() *RoutingTableInfo {
 	n := p.portalProtocol.localNode.Node()
+	bucketNodes := p.portalProtocol.RoutingTableInfo()
 
 	return &RoutingTableInfo{
-		Buckets:     p.portalProtocol.RoutingTableInfo(),
-		LocalNodeId: n.ID().String(),
+		Buckets:     bucketNodes,
+		LocalNodeId: "0x" + n.ID().String(),
 	}
 }
 

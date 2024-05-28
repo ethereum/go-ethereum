@@ -42,7 +42,7 @@ const (
 	findnodeResultLimit     = 16 // applies in FINDNODE handler
 	totalNodesResponseLimit = 5  // applies in waitForNodes
 
-	respTimeoutV5 = 700 * time.Millisecond
+	respTimeoutV5 = 3 * time.Second
 )
 
 // codecV5 is implemented by v5wire.Codec (and testCodec).
@@ -276,7 +276,7 @@ func (t *UDPv5) RoutingTableInfo() [][]string {
 	for _, b := range &t.tab.buckets {
 		bucketNodes := make([]string, 0)
 		for _, n := range b.entries {
-			bucketNodes = append(bucketNodes, unwrapNode(n).ID().String())
+			bucketNodes = append(bucketNodes, "0x"+unwrapNode(n).ID().String())
 		}
 		nodes = append(nodes, bucketNodes)
 	}

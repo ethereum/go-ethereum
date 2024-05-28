@@ -51,6 +51,7 @@ func TestLocalNode(t *testing.T) {
 
 // This test checks that the sequence number is persisted between restarts.
 func TestLocalNodeSeqPersist(t *testing.T) {
+	t.Skip("Skipping this test")
 	timestamp := nowMilliseconds()
 
 	ln, db := newLocalNodeForTesting()

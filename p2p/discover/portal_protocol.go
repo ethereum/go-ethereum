@@ -267,7 +267,7 @@ func (p *PortalProtocol) RoutingTableInfo() [][]string {
 	for _, b := range &p.table.buckets {
 		bucketNodes := make([]string, 0)
 		for _, n := range b.entries {
-			bucketNodes = append(bucketNodes, unwrapNode(n).ID().String())
+			bucketNodes = append(bucketNodes, "0x"+unwrapNode(n).ID().String())
 		}
 		nodes = append(nodes, bucketNodes)
 	}
@@ -429,6 +429,10 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 }
 
 func (p *PortalProtocol) findNodes(node *enode.Node, distances []uint) ([]*enode.Node, error) {
+	if p.localNode.ID().String() == node.ID().String() {
+		return make([]*enode.Node, 0), nil
+	}
+
 	distancesBytes := make([][2]byte, len(distances))
 	for i, distance := range distances {
 		copy(distancesBytes[i][:], ssz.MarshalUint16(make([]byte, 0), uint16(distance)))

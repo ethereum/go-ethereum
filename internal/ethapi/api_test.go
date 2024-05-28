@@ -1248,9 +1248,11 @@ func TestFillBlobTransaction(t *testing.T) {
 			}
 			if err != nil && len(tc.err) == 0 {
 				t.Fatalf("expected no error. have: %s", err)
+				return
 			}
 			if res == nil {
 				t.Fatal("result missing")
+				return
 			}
 			want, err := json.Marshal(tc.want)
 			if err != nil {
