@@ -513,12 +513,9 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	}
 
 	b := tab.bucket(req.node.ID())
-	n, wasUpdated := tab.bumpInBucket(b, req.node.Node, req.isInbound)
+	n, _ := tab.bumpInBucket(b, req.node.Node, req.isInbound)
 	if n != nil {
 		// Already in bucket.
-		if wasUpdated {
-			n.isValidatedLive = false
-		}
 		return false
 	}
 	if len(b.entries) >= bucketSize {
@@ -627,7 +624,9 @@ func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool)
 	}
 
 	// Check if there is an endpoint update and validate against IP limits.
-	if newRecord.IPAddr() != b.entries[i].IPAddr() {
+	ipchanged := newRecord.IPAddr() != n.IPAddr()
+	portchanged := newRecord.UDP() != n.UDP()
+	if ipchanged {
 		tab.removeIP(b, n.IP())
 		if !tab.addIP(b, newRecord.IP()) {
 			// It doesn't fit with the limit, put the previous record back.
@@ -636,8 +635,15 @@ func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool)
 		}
 	}
 
+	// Apply update.
 	n.Node = newRecord
-	return n, true
+
+	// Endpoint changes cause the node to be considered unverified.
+	if ipchanged || portchanged {
+		tab.revalidation.nodeEndpointChanged(tab, n)
+		return n, true
+	}
+	return n, false
 }
 
 func (tab *Table) handleTrackRequest(op trackRequestOp) {
