@@ -58,14 +58,14 @@ func newMeteredConn(conn UDPConn) UDPConn {
 	return &meteredUdpConn{UDPConn: conn}
 }
 
-// ReadFromUDP delegates a network read to the underlying connection, bumping the udp ingress traffic meter along the way.
+// ReadFromUDPAddrPort delegates a network read to the underlying connection, bumping the udp ingress traffic meter along the way.
 func (c *meteredUdpConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
 	n, addr, err = c.UDPConn.ReadFromUDPAddrPort(b)
 	ingressTrafficMeter.Mark(int64(n))
 	return n, addr, err
 }
 
-// Write delegates a network write to the underlying connection, bumping the udp egress traffic meter along the way.
+// WriteToUDP delegates a network write to the underlying connection, bumping the udp egress traffic meter along the way.
 func (c *meteredUdpConn) WriteToUDP(b []byte, addr netip.AddrPort) (n int, err error) {
 	n, err = c.UDPConn.WriteToUDPAddrPort(b, addr)
 	egressTrafficMeter.Mark(int64(n))

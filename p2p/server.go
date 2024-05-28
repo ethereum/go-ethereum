@@ -436,7 +436,7 @@ type sharedUDPConn struct {
 	unhandled chan discover.ReadPacket
 }
 
-// ReadFromUDP implements discover.UDPConn
+// ReadFromUDPAddrPort implements discover.UDPConn
 func (s *sharedUDPConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
 	packet, ok := <-s.unhandled
 	if !ok {

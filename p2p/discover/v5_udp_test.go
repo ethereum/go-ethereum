@@ -776,7 +776,7 @@ func (test *udpV5Test) packetIn(packet v5wire.Packet) {
 	test.packetInFrom(test.remotekey, test.remoteaddr, packet)
 }
 
-// handles a packet as if it had been sent to the transport by the key/endpoint.
+// packetInFrom handles a packet as if it had been sent to the transport by the key/endpoint.
 func (test *udpV5Test) packetInFrom(key *ecdsa.PrivateKey, addr netip.AddrPort, packet v5wire.Packet) {
 	test.t.Helper()
 

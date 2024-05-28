@@ -592,7 +592,7 @@ func newpipe() *dgramPipe {
 	}
 }
 
-// WriteToUDP queues a datagram.
+// WriteToUDPAddrPort queues a datagram.
 func (c *dgramPipe) WriteToUDPAddrPort(b []byte, to netip.AddrPort) (n int, err error) {
 	msg := make([]byte, len(b))
 	copy(msg, b)
@@ -606,7 +606,7 @@ func (c *dgramPipe) WriteToUDPAddrPort(b []byte, to netip.AddrPort) (n int, err 
 	return len(b), nil
 }
 
-// ReadFromUDP just hangs until the pipe is closed.
+// ReadFromUDPAddrPort just hangs until the pipe is closed.
 func (c *dgramPipe) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
 	<-c.closing
 	return 0, netip.AddrPort{}, io.EOF
