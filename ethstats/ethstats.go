@@ -816,11 +816,11 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		sync := s.eth.Downloader().Progress()
 		syncing = s.eth.BlockChain().CurrentHeader().Number.Uint64() >= sync.HighestBlock
 
-		tipcap, _ := s.eth.ApiBackend.SuggestGasTipCap(context.Background())
-		if head := s.eth.ApiBackend.CurrentHeader(); head.BaseFee != nil {
-			tipcap.Add(tipcap, head.BaseFee)
+		price, _ := s.eth.ApiBackend.SuggestGasTipCap(context.Background())
+		gasprice = int(price.Uint64())
+		if basefee := s.eth.ApiBackend.CurrentHeader().BaseFee; basefee != nil {
+			gasprice += int(basefee.Uint64())
 		}
-		gasprice = int(tipcap.Uint64())
 	} else {
 		sync := s.les.Downloader().Progress()
 		syncing = s.les.BlockChain().CurrentHeader().Number.Uint64() >= sync.HighestBlock
