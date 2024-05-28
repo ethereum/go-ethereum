@@ -110,10 +110,10 @@ func TestRevalidation_endpointUpdate(t *testing.T) {
 	}
 	tr.handleResponse(tab, resp)
 
-	if !tr.fast.contains(node.ID()) {
+	if tr.fast.nodes[0].ID() != node.ID() {
 		t.Fatal("node not contained in fast revalidation list")
 	}
-	if node.isValidatedLive {
+	if tr.fast.nodes[0].isValidatedLive {
 		t.Fatal("node is marked live after endpoint change")
 	}
 }
