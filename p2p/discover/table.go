@@ -612,18 +612,19 @@ func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool)
 		return elem.ID() == newRecord.ID()
 	})
 	if i == -1 {
-		return nil, false // node not in bucket
+		return nil, false // not in bucket
 	}
-
-	// Disallow updates unless the sequence number is increased.
-	// Note there is a special case for discv4: if the node contacts us (isInbound),
-	// it is allowed to update its own entry.
 	n = b.entries[i]
+
+	// For inbound updates (from the node itself) we accept any change, even if it sets
+	// back the sequence number. For found nodes (!isInbound), seq has to advance. Note
+	// this check also ensures found discv4 nodes (which always have seq=0) can't be
+	// updated.
 	if newRecord.Seq() <= n.Seq() && !isInbound {
 		return n, false
 	}
 
-	// Check if there is an endpoint update and validate against IP limits.
+	// Check endpoint update against IP limits.
 	ipchanged := newRecord.IPAddr() != n.IPAddr()
 	portchanged := newRecord.UDP() != n.UDP()
 	if ipchanged {
@@ -637,9 +638,8 @@ func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool)
 
 	// Apply update.
 	n.Node = newRecord
-
-	// Endpoint changes cause the node to be considered unverified.
 	if ipchanged || portchanged {
+		// Ensure node is revalidated quickly for endpoint changes.
 		tab.revalidation.nodeEndpointChanged(tab, n)
 		return n, true
 	}
