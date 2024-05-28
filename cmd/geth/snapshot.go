@@ -172,7 +172,7 @@ func pruneState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chaindb := utils.MakeChainDatabase(ctx, stack, false)
+	chaindb := utils.MakeChainDatabase(ctx, stack, false, false)
 	defer chaindb.Close()
 
 	if rawdb.ReadStateScheme(chaindb) != rawdb.HashScheme {
@@ -215,9 +215,8 @@ func verifyState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	chaindb := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer chaindb.Close()
-
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
 		log.Error("Failed to load head block")
@@ -268,7 +267,7 @@ func checkDanglingStorage(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	db := utils.MakeChainDatabase(ctx, stack, true)
+	db := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer db.Close()
 	return snapshot.CheckDanglingStorage(db)
 }
@@ -280,7 +279,7 @@ func traverseState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	chaindb := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer chaindb.Close()
 
 	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
@@ -404,7 +403,7 @@ func traverseRawState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	chaindb := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer chaindb.Close()
 
 	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
@@ -684,7 +683,7 @@ func snapshotExportPreimages(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	chaindb := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer chaindb.Close()
 
 	triedb := utils.MakeTrieDatabase(ctx, chaindb, false, true, false)
@@ -743,7 +742,7 @@ func checkAccount(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chaindb := utils.MakeChainDatabase(ctx, stack, true)
+	chaindb := utils.MakeChainDatabase(ctx, stack, true, false)
 	defer chaindb.Close()
 
 	start := time.Now()

@@ -165,6 +165,23 @@ func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	return &number
 }
 
+// ReadHeaderFromKvStore retrieves the block header corresponding to the hash only
+// from the underlying key-value store and doesn't use ancient freezer for backup.
+func ReadHeaderFromKvStore(db ethdb.KeyValueReader, hash common.Hash, number uint64) *types.Header {
+	data, _ := db.Get(headerKey(number, hash))
+	if len(data) == 0 {
+		return nil
+	}
+
+	header := new(types.Header)
+	if err := rlp.DecodeBytes(data, header); err != nil {
+		log.Error("Invalid block header RLP", "hash", hash, "err", err)
+		return nil
+	}
+
+	return header
+}
+
 // WriteHeaderNumber stores the hash->number mapping.
 func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	key := headerNumberKey(hash)
@@ -362,8 +379,8 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 	if count == 0 {
 		return rlpHeaders
 	}
-	// read remaining from ancients
-	data, err := db.AncientRange(ChainFreezerHeaderTable, i+1-count, count, 0)
+	// read remaining from ancients, cap at 2M
+	data, err := db.AncientRange(ChainFreezerHeaderTable, i+1-count, count, 2*1024*1024)
 	if err != nil {
 		log.Error("Failed to read headers from freezer", "err", err)
 		return rlpHeaders

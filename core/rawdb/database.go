@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path"
 	"path/filepath"
@@ -137,6 +138,16 @@ func (db *nofreezedb) TruncateTail(items uint64) (uint64, error) {
 	return 0, errNotSupported
 }
 
+// ItemAmountInAncient returns an error as we don't have a backing chain freezer.
+func (db *nofreezedb) ItemAmountInAncient() (uint64, error) {
+	return 0, errNotSupported
+}
+
+// AncientOffSet returns 0 as we don't have a backing chain freezer.
+func (db *nofreezedb) AncientOffSet() uint64 {
+	return 0
+}
+
 // Sync returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) Sync() error {
 	return errNotSupported
@@ -175,6 +186,51 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 	return &nofreezedb{KeyValueStore: db}
 }
 
+// ReadOffsetOfCurrentAncientFreezer reads the offset of current ancient freezer
+func ReadOffsetOfCurrentAncientFreezer(db ethdb.KeyValueReader) uint64 {
+	offset, _ := db.Get(offsetOfCurrentAncientFreezer)
+	if offset == nil {
+		return 0
+	}
+
+	return new(big.Int).SetBytes(offset).Uint64()
+}
+
+// ReadOffsetOfLastAncientFreezer reads the offset of last pruned ancient freezer
+func ReadOffsetOfLastAncientFreezer(db ethdb.KeyValueReader) uint64 {
+	offset, _ := db.Get(offsetOfLastAncientFreezer)
+	if offset == nil {
+		return 0
+	}
+
+	return new(big.Int).SetBytes(offset).Uint64()
+}
+
+// WriteOffsetOfCurrentAncientFreezer writes current offset of ancient freezer into ethdb
+func WriteOffsetOfCurrentAncientFreezer(db ethdb.KeyValueWriter, offset uint64) {
+	if err := db.Put(offsetOfCurrentAncientFreezer, new(big.Int).SetUint64(offset).Bytes()); err != nil {
+		log.Crit("Failed to store offSetOfAncientFreezer", "err", err)
+	}
+}
+
+// WriteOffsetOfLastAncientFreezer writes the last offset of ancient freezer into ethdb
+func WriteOffsetOfLastAncientFreezer(db ethdb.KeyValueWriter, offset uint64) {
+	if err := db.Put(offsetOfLastAncientFreezer, new(big.Int).SetUint64(offset).Bytes()); err != nil {
+		log.Crit("Failed to store offSetOfAncientFreezer", "err", err)
+	}
+}
+
+// NewDatabaseWithOnlyFreezer create a freezer db without state
+func NewDatabaseWithOnlyFreezer(db ethdb.KeyValueStore, frz, namespace string, readonly bool, newOffSet uint64) (*Freezer, error) {
+	// Create the idle freezer instance, this operation should be atomic to avoid mismatch between offset and acientDB.
+	frdb, err := NewChainFreezer(frz, namespace, readonly, newOffSet)
+	if err != nil {
+		return nil, err
+	}
+
+	return frdb, nil
+}
+
 // resolveChainFreezerDir is a helper function which resolves the absolute path
 // of chain freezer by considering backward compatibility.
 func resolveChainFreezerDir(ancient string) string {
@@ -199,18 +255,31 @@ func resolveChainFreezerDir(ancient string) string {
 	return freezer
 }
 
+// resolveOffset is a helper function which resolves the value of offset to use
+// while opening a chain freezer.
+func resolveOffset(db ethdb.KeyValueStore, isLastOffset bool) uint64 {
+	// The offset of ancientDB should be handled differently in different scenarios.
+	if isLastOffset {
+		return ReadOffsetOfLastAncientFreezer(db)
+	} else {
+		return ReadOffsetOfCurrentAncientFreezer(db)
+	}
+}
+
 // NewDatabaseWithFreezer creates a high level database on top of a given key-
 // value data store with a freezer moving immutable chain segments into cold
-// storage. The passed ancient indicates the path of root ancient directory
-// where the chain freezer can be opened.
-// nolint:gocognit
-func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
+// storage.
+//
+//nolint:gocognit
+func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly, disableFreeze, isLastOffset bool) (ethdb.Database, error) {
+	offset := resolveOffset(db, isLastOffset)
+
 	// Create the idle freezer instance
-	frdb, err := newChainFreezer(resolveChainFreezerDir(ancient), namespace, readonly)
+	frdb, err := newChainFreezer(resolveChainFreezerDir(ancient), namespace, readonly, offset)
 	if err != nil {
-		printChainMetadata(db)
 		return nil, err
 	}
+
 	// Since the freezer can be stored separately from the user's key-value database,
 	// there's a fairly high probability that the user requests invalid combinations
 	// of the freezer and database. Ensure that we don't shoot ourselves in the foot
@@ -233,65 +302,103 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	// If the genesis hash is empty, we have a new key-value store, so nothing to
 	// validate in this method. If, however, the genesis hash is not nil, compare
 	// it to the freezer content.
+	//nolint:nestif
 	if kvgenesis, _ := db.Get(headerHashKey(0)); len(kvgenesis) > 0 {
-		if frozen, _ := frdb.Ancients(); frozen > 0 {
+		if frozen, _ := frdb.ItemAmountInAncient(); frozen > 0 {
 			// If the freezer already contains something, ensure that the genesis blocks
 			// match, otherwise we might mix up freezers across chains and destroy both
 			// the freezer and the key-value store.
-			frgenesis, err := frdb.Ancient(ChainFreezerHashTable, 0)
-			if err != nil {
-				printChainMetadata(db)
-				return nil, fmt.Errorf("failed to retrieve genesis from ancient %v", err)
-			} else if !bytes.Equal(kvgenesis, frgenesis) {
-				printChainMetadata(db)
-				return nil, fmt.Errorf("genesis mismatch: %#x (leveldb) != %#x (ancients)", kvgenesis, frgenesis)
+			// Only validate genesis if we have `offset` set to 0, which means ancient db pruning
+			// hasn't happened yet. If the pruning would've happened, genesis would have been wiped
+			// from ancient db.
+			if offset == 0 {
+				frgenesis, err := frdb.Ancient(ChainFreezerHashTable, 0)
+				if err != nil {
+					printChainMetadata(db)
+					return nil, fmt.Errorf("failed to retrieve genesis from ancient %v", err)
+				} else if !bytes.Equal(kvgenesis, frgenesis) {
+					printChainMetadata(db)
+					return nil, fmt.Errorf("genesis mismatch: %#x (leveldb) != %#x (ancients)", kvgenesis, frgenesis)
+				}
 			}
+
 			// Key-value store and freezer belong to the same network. Ensure that they
 			// are contiguous, otherwise we might end up with a non-functional freezer.
-			if kvhash, _ := db.Get(headerHashKey(frozen)); len(kvhash) == 0 {
+			//
+			// If ancient db pruning has happened, the number of items in ancient db should
+			// be less and hence we need to calculate the first block of leveldb by adding
+			// the offset to it i.e. start block of leveldb = frozen + offset.
+			startBlock := frozen + offset
+			var kvhash []byte
+			if kvhash, _ = db.Get(headerHashKey(startBlock)); len(kvhash) == 0 {
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup if the database has a more recent head.
-				if head := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); head > frozen-1 {
+				if head := *ReadHeaderNumber(db, ReadHeadHeaderHash(db)); head > startBlock-1 {
 					// Find the smallest block stored in the key-value store
 					// in range of [frozen, head]
 					var number uint64
-					for number = frozen; number <= head; number++ {
+					for number = startBlock; number <= head; number++ {
 						if present, _ := db.Has(headerHashKey(number)); present {
 							break
 						}
 					}
 					// We are about to exit on error. Print database metadata before exiting
 					printChainMetadata(db)
-
-					return nil, fmt.Errorf("gap in the chain between ancients [0 - #%d] and leveldb [#%d - #%d] ",
-						frozen-1, number, head)
+					return nil, fmt.Errorf("gap in the chain between ancients [0 - #%d] and leveldb [#%d - #%d]",
+						startBlock-1, number, head)
 				}
 				// Database contains only older data than the freezer, this happens if the
 				// state was wiped and reinited from an existing freezer.
 			}
 			// Otherwise, key-value store continues where the freezer left off, all is fine.
 			// We might have duplicate blocks (crash after freezer write but before key-value
-			// store deletion, but that's fine).
-		} else {
-			// If the freezer is empty, ensure nothing was moved yet from the key-value
-			// store, otherwise we'll end up missing data. We check block #1 to decide
-			// if we froze anything previously or not, but do take care of databases with
-			// only the genesis block.
-			if ReadHeadHeaderHash(db) != common.BytesToHash(kvgenesis) {
-				// Key-value store contains more data than the genesis block, make sure we
-				// didn't freeze anything yet.
-				if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
+			// store deletion, but that's fine). Still, check if the first block of key-value
+			// store points to last block in freezer.
+			if head := ReadHeaderFromKvStore(db, common.BytesToHash(kvhash), startBlock); head != nil {
+				parentHash := head.ParentHash.Bytes()
+				ancientParentHash, _ := frdb.Ancient(ChainFreezerHashTable, startBlock-1)
+				if ancientParentHash == nil {
 					printChainMetadata(db)
-					return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
+					return nil, fmt.Errorf("missing parent hash for block #%d in ancient", startBlock-1)
 				}
-				// Block #1 is still in the database, we're allowed to init a new freezer
+				if !bytes.Equal(parentHash, ancientParentHash) {
+					printChainMetadata(db)
+					return nil, fmt.Errorf("broken chain due to parent hash mismatch: %#x (leveldb) != %#x (ancients) for block #%d, please set --datadir.ancient to the correct path", parentHash, ancientParentHash, startBlock-1)
+				}
+				// First block of key-value store points back to correct parent in ancient
 			}
-			// Otherwise, the head header is still the genesis, we're allowed to init a new
-			// freezer.
+		} else {
+			// This case means the freezer is empty. Either nothing is moved from the
+			// key-value store or we've pruned all data.
+
+			// No pruning case
+			if offset == 0 {
+				// If the freezer is empty, ensure nothing was moved yet from the key-value
+				// store, otherwise we'll end up missing data. We check block #1 to decide
+				// if we froze anything previously or not, but do take care of databases with
+				// only the genesis block.
+				if ReadHeadHeaderHash(db) != common.BytesToHash(kvgenesis) {
+					// Key-value store contains more data than the genesis block, make sure we
+					// didn't freeze anything yet.
+					if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
+						printChainMetadata(db)
+						return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
+					}
+					// Block #1 is still in the database, we're allowed to init a new feezer
+				}
+				// Otherwise, the head header is still the genesis, we're allowed to init a new
+				// freezer.
+			} else {
+				// Full pruning case. Check if the key-value store isn't missing any block.
+				if kvhash, _ := db.Get(headerHashKey(offset)); len(kvhash) == 0 {
+					printChainMetadata(db)
+					return nil, fmt.Errorf("missing blocks from leveldb post ancientdb pruning, block: %d", offset)
+				}
+			}
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !frdb.readonly {
+	if !disableFreeze && !frdb.readonly {
 		frdb.wg.Add(1)
 
 		go func() {
@@ -377,6 +484,11 @@ type OpenOptions struct {
 	Cache             int    // the capacity(in megabytes) of the data caching
 	Handles           int    // number of files to be open simultaneously
 	ReadOnly          bool
+
+	// Ancient pruner related fields
+	DisableFreeze bool
+	IsLastOffset  bool
+
 	// Ephemeral means that filesystem sync operations should be avoided: data integrity in the face of
 	// a crash is not important. This option should typically be used in tests.
 	Ephemeral bool
@@ -428,7 +540,7 @@ func Open(o OpenOptions) (ethdb.Database, error) {
 		return kvdb, nil
 	}
 
-	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly)
+	frdb, err := NewDatabaseWithFreezer(kvdb, o.AncientsDirectory, o.Namespace, o.ReadOnly, o.DisableFreeze, o.IsLastOffset)
 	if err != nil {
 		kvdb.Close()
 		return nil, err
@@ -465,6 +577,46 @@ func (s *stat) Size() string {
 
 func (s *stat) Count() string {
 	return s.count.String()
+}
+
+// AncientInspect inspects the underlying freezer db and prints stats relevant
+// for ancient data pruning. It prints the start and end blocks of freezer db.
+func AncientInspect(db ethdb.Database) error {
+	offset := counter(ReadOffsetOfCurrentAncientFreezer(db))
+	// Get number of ancient rows inside the freezer.
+	ancients := counter(0)
+
+	if count, err := db.ItemAmountInAncient(); err != nil {
+		log.Error("failed to get the items amount in ancientDB", "err", err)
+		return err
+	} else {
+		ancients = counter(count)
+	}
+
+	var endNumber counter
+
+	if offset+ancients <= 0 {
+		endNumber = 0
+	} else {
+		sum := counter(0)
+		if ancients != 0 {
+			sum = ancients - 1
+		}
+		endNumber = offset + sum
+	}
+
+	stats := [][]string{
+		{"Start block number of ancientDB (offset)", offset.String()},
+		{"End block number of ancientDB", endNumber.String()},
+		{"Remaining items in ancientDB", ancients.String()},
+	}
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Field", "Items"})
+	table.SetFooter([]string{"AncientStore information", ""})
+	table.AppendBulk(stats)
+	table.Render()
+
+	return nil
 }
 
 // InspectDatabase traverses the entire database and checks the size

@@ -317,6 +317,10 @@ func (api *API) GetRootHash(start uint64, end uint64) (string, error) {
 
 	for i := 0; i < len(blockHeaders); i++ {
 		blockHeader := blockHeaders[i]
+		// Handle no header case, which is possible if ancient pruning was done
+		if blockHeader == nil {
+			return "", errUnknownBlock
+		}
 		header := crypto.Keccak256(appendBytes32(
 			blockHeader.Number.Bytes(),
 			new(big.Int).SetUint64(blockHeader.Time).Bytes(),

@@ -20,7 +20,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```bor.withoutheimdall```: Run without Heimdall service (for testing purpose) (default: false)
 
-- ```chain```: Name of the chain to sync ('mumbai', 'mainnet', 'amoy') or path to a genesis file (default: mainnet)
+- ```chain```: Name of the chain to sync ('amoy', 'mumbai', 'mainnet') or path to a genesis file (default: mainnet)
 
 - ```config```: Path to the TOML configuration file
 
@@ -83,6 +83,8 @@ The ```bor server``` command runs the Bor client.
 - ```rpc.returndatalimit```: Maximum size (in bytes) a result of an rpc request could have (use 0 for no limits) (default: 100000)
 
 - ```snapshot```: Enables the snapshot-database mode (default: true)
+
+- ```state.scheme```: Scheme to use for storing ethereum state ('hash' or 'path') (default: hash)
 
 - ```syncmode```: Blockchain sync mode (only "full" sync supported) (default: full)
 

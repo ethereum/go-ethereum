@@ -266,6 +266,7 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(73100),
 		ShanghaiBlock:       big.NewInt(73100),
+		CancunBlock:         big.NewInt(5423600),
 		Bor: &BorConfig{
 			JaipurBlock: big.NewInt(73100),
 			DelhiBlock:  big.NewInt(73100),
@@ -964,9 +965,9 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "arrowGlacierBlock", block: c.ArrowGlacierBlock, optional: true},
 		{name: "grayGlacierBlock", block: c.GrayGlacierBlock, optional: true},
 		{name: "mergeNetsplitBlock", block: c.MergeNetsplitBlock, optional: true},
-		{name: "ShanghaiBlock", block: c.ShanghaiBlock},
-		{name: "CancunBlock", block: c.CancunBlock, optional: true},
-		{name: "pragueTime", block: c.PragueBlock, optional: true},
+		{name: "shanghaiBlock", block: c.ShanghaiBlock},
+		{name: "cancunBlock", block: c.CancunBlock, optional: true},
+		{name: "pragueBlock", block: c.PragueBlock, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {

@@ -95,6 +95,16 @@ func (t *table) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) (err e
 	return t.db.ReadAncients(fn)
 }
 
+// ItemAmountInAncient returns the actual length of current ancientDB.
+func (t *table) ItemAmountInAncient() (uint64, error) {
+	return t.db.ItemAmountInAncient()
+}
+
+// AncientOffSet returns the offset of current ancientDB.
+func (t *table) AncientOffSet() uint64 {
+	return t.db.AncientOffSet()
+}
+
 // TruncateHead is a noop passthrough that just forwards the request to the underlying
 // database.
 func (t *table) TruncateHead(items uint64) (uint64, error) {

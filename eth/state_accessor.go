@@ -76,6 +76,10 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, reexec u
 		// The optional base statedb is given, mark the start point as parent block
 		statedb, database, triedb, report = base, base.Database(), base.Database().TrieDB(), false
 		current = eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+
+		if current == nil {
+			return nil, nil, fmt.Errorf("missing parent block %v %d", block.ParentHash(), block.NumberU64()-1)
+		}
 	} else {
 		// Otherwise, try to reexec blocks until we find a state or reach our limit
 		current = block

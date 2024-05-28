@@ -28,7 +28,7 @@ func (p *DumpconfigCommand) MarkDown() string {
 func (c *DumpconfigCommand) Help() string {
 	return `Usage: bor dumpconfig <your-favourite-flags>
 
-  This command will will export the user provided flags into a configuration file`
+  This command will export the user provided flags into a configuration file`
 }
 
 // Synopsis implements the cli.Command interface

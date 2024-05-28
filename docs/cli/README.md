@@ -46,6 +46,10 @@
 
 - [```snapshot```](./snapshot.md)
 
+- [```snapshot inspect-ancient-db```](./snapshot_inspect-ancient-db.md)
+
+- [```snapshot prune-block```](./snapshot_prune-block.md)
+
 - [```snapshot prune-state```](./snapshot_prune-state.md)
 
 - [```status```](./status.md)
