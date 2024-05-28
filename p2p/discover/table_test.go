@@ -131,7 +131,7 @@ func waitForRevalidationPing(t *testing.T, transport *pingRecorder, tab *Table, 
 	simclock := tab.cfg.Clock.(*mclock.Simulated)
 	maxAttempts := tab.len() * 8
 	for i := 0; i < maxAttempts; i++ {
-		simclock.Run(tab.cfg.PingInterval)
+		simclock.Run(tab.cfg.PingInterval * slowRevalidationFactor)
 		p := transport.waitPing(2 * time.Second)
 		if p == nil {
 			t.Fatal("Table did not send revalidation ping")

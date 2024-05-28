@@ -28,6 +28,8 @@ import (
 
 const never = mclock.AbsTime(math.MaxInt64)
 
+const slowRevalidationFactor = 3
+
 // tableRevalidation implements the node revalidation process.
 // It tracks all nodes contained in Table, and schedules sending PING to them.
 type tableRevalidation struct {
@@ -48,7 +50,7 @@ func (tr *tableRevalidation) init(cfg *Config) {
 	tr.fast.interval = cfg.PingInterval
 	tr.fast.name = "fast"
 	tr.slow.nextTime = never
-	tr.slow.interval = cfg.PingInterval * 3
+	tr.slow.interval = cfg.PingInterval * slowRevalidationFactor
 	tr.slow.name = "slow"
 }
 
