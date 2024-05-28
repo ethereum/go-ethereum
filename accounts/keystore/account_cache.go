@@ -220,6 +220,7 @@ func (ac *accountCache) maybeReload() {
 	ac.watcher.start()
 	ac.throttle.Reset(minReloadInterval)
 	ac.mu.Unlock()
+	ac.watcher.wg.Wait()
 	ac.scanAccounts()
 }
 
