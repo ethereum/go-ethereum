@@ -131,7 +131,7 @@ func waitForRevalidationPing(t *testing.T, transport *pingRecorder, tab *Table, 
 	simclock := tab.cfg.Clock.(*mclock.Simulated)
 	maxAttempts := tab.len() * 8
 	for i := 0; i < maxAttempts; i++ {
-		simclock.Run(tab.cfg.PingInterval)
+		simclock.Run(tab.cfg.PingInterval * slowRevalidationFactor)
 		p := transport.waitPing(2 * time.Second)
 		if p == nil {
 			t.Fatal("Table did not send revalidation ping")
@@ -275,7 +275,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(t)
 }
 
-func TestTable_addVerifiedNode(t *testing.T) {
+func TestTable_addInboundNode(t *testing.T) {
 	tab, db := newTestTable(newPingRecorder(), Config{})
 	<-tab.initDone
 	defer db.Close()
@@ -286,29 +286,26 @@ func TestTable_addVerifiedNode(t *testing.T) {
 	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
 	tab.addFoundNode(n1)
 	tab.addFoundNode(n2)
-	bucket := tab.bucket(n1.ID())
+	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2.Node})
 
-	// Verify bucket content:
-	bcontent := []*node{n1, n2}
-	if !reflect.DeepEqual(unwrapNodes(bucket.entries), unwrapNodes(bcontent)) {
-		t.Fatalf("wrong bucket content: %v", bucket.entries)
-	}
-
-	// Add a changed version of n2.
+	// Add a changed version of n2. The bucket should be updated.
 	newrec := n2.Record()
 	newrec.Set(enr.IP{99, 99, 99, 99})
-	newn2 := wrapNode(enode.SignNull(newrec, n2.ID()))
-	tab.addInboundNode(newn2)
+	n2v2 := enode.SignNull(newrec, n2.ID())
+	tab.addInboundNode(wrapNode(n2v2))
+	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v2})
 
-	// Check that bucket is updated correctly.
-	newBcontent := []*node{n1, newn2}
-	if !reflect.DeepEqual(unwrapNodes(bucket.entries), unwrapNodes(newBcontent)) {
-		t.Fatalf("wrong bucket content after update: %v", bucket.entries)
-	}
-	checkIPLimitInvariant(t, tab)
+	// Try updating n2 without sequence number change. The update is accepted
+	// because it's inbound.
+	newrec = n2.Record()
+	newrec.Set(enr.IP{100, 100, 100, 100})
+	newrec.SetSeq(n2.Seq())
+	n2v3 := enode.SignNull(newrec, n2.ID())
+	tab.addInboundNode(wrapNode(n2v3))
+	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v3})
 }
 
-func TestTable_addSeenNode(t *testing.T) {
+func TestTable_addFoundNode(t *testing.T) {
 	tab, db := newTestTable(newPingRecorder(), Config{})
 	<-tab.initDone
 	defer db.Close()
@@ -319,23 +316,84 @@ func TestTable_addSeenNode(t *testing.T) {
 	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
 	tab.addFoundNode(n1)
 	tab.addFoundNode(n2)
+	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2.Node})
 
-	// Verify bucket content:
-	bcontent := []*node{n1, n2}
-	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
-		t.Fatalf("wrong bucket content: %v", tab.bucket(n1.ID()).entries)
-	}
-
-	// Add a changed version of n2.
+	// Add a changed version of n2. The bucket should be updated.
 	newrec := n2.Record()
 	newrec.Set(enr.IP{99, 99, 99, 99})
-	newn2 := wrapNode(enode.SignNull(newrec, n2.ID()))
-	tab.addFoundNode(newn2)
+	n2v2 := enode.SignNull(newrec, n2.ID())
+	tab.addFoundNode(wrapNode(n2v2))
+	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v2})
 
-	// Check that bucket content is unchanged.
-	if !reflect.DeepEqual(tab.bucket(n1.ID()).entries, bcontent) {
-		t.Fatalf("wrong bucket content after update: %v", tab.bucket(n1.ID()).entries)
+	// Try updating n2 without a sequence number change.
+	// The update should not be accepted.
+	newrec = n2.Record()
+	newrec.Set(enr.IP{100, 100, 100, 100})
+	newrec.SetSeq(n2.Seq())
+	n2v3 := enode.SignNull(newrec, n2.ID())
+	tab.addFoundNode(wrapNode(n2v3))
+	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v2})
+}
+
+// This test checks that discv4 nodes can update their own endpoint via PING.
+func TestTable_addInboundNodeUpdateV4Accept(t *testing.T) {
+	tab, db := newTestTable(newPingRecorder(), Config{})
+	<-tab.initDone
+	defer db.Close()
+	defer tab.close()
+
+	// Add a v4 node.
+	key, _ := crypto.HexToECDSA("dd3757a8075e88d0f2b1431e7d3c5b1562e1c0aab9643707e8cbfcc8dae5cfe3")
+	n1 := enode.NewV4(&key.PublicKey, net.IP{88, 77, 66, 1}, 9000, 9000)
+	tab.addInboundNode(wrapNode(n1))
+	checkBucketContent(t, tab, []*enode.Node{n1})
+
+	// Add an updated version with changed IP.
+	// The update will be accepted because it is inbound.
+	n1v2 := enode.NewV4(&key.PublicKey, net.IP{99, 99, 99, 99}, 9000, 9000)
+	tab.addInboundNode(wrapNode(n1v2))
+	checkBucketContent(t, tab, []*enode.Node{n1v2})
+}
+
+// This test checks that discv4 node entries will NOT be updated when a
+// changed record is found.
+func TestTable_addFoundNodeV4UpdateReject(t *testing.T) {
+	tab, db := newTestTable(newPingRecorder(), Config{})
+	<-tab.initDone
+	defer db.Close()
+	defer tab.close()
+
+	// Add a v4 node.
+	key, _ := crypto.HexToECDSA("dd3757a8075e88d0f2b1431e7d3c5b1562e1c0aab9643707e8cbfcc8dae5cfe3")
+	n1 := enode.NewV4(&key.PublicKey, net.IP{88, 77, 66, 1}, 9000, 9000)
+	tab.addFoundNode(wrapNode(n1))
+	checkBucketContent(t, tab, []*enode.Node{n1})
+
+	// Add an updated version with changed IP.
+	// The update won't be accepted because it isn't inbound.
+	n1v2 := enode.NewV4(&key.PublicKey, net.IP{99, 99, 99, 99}, 9000, 9000)
+	tab.addFoundNode(wrapNode(n1v2))
+	checkBucketContent(t, tab, []*enode.Node{n1})
+}
+
+func checkBucketContent(t *testing.T, tab *Table, nodes []*enode.Node) {
+	t.Helper()
+
+	b := tab.bucket(nodes[0].ID())
+	if reflect.DeepEqual(unwrapNodes(b.entries), nodes) {
+		return
 	}
+	t.Log("wrong bucket content. have nodes:")
+	for _, n := range b.entries {
+		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IP())
+	}
+	t.Log("want nodes:")
+	for _, n := range nodes {
+		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IP())
+	}
+	t.FailNow()
+
+	// Also check IP limits.
 	checkIPLimitInvariant(t, tab)
 }
 

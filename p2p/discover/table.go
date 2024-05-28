@@ -513,8 +513,9 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	}
 
 	b := tab.bucket(req.node.ID())
-	if tab.bumpInBucket(b, req.node.Node) {
-		// Already in bucket, update record.
+	n, _ := tab.bumpInBucket(b, req.node.Node, req.isInbound)
+	if n != nil {
+		// Already in bucket.
 		return false
 	}
 	if len(b.entries) >= bucketSize {
@@ -605,26 +606,45 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
 	return rep
 }
 
-// bumpInBucket updates the node record of n in the bucket.
-func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node) bool {
+// bumpInBucket updates a node record if it exists in the bucket.
+// The second return value reports whether the node's endpoint (IP/port) was updated.
+func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool) (n *node, endpointChanged bool) {
 	i := slices.IndexFunc(b.entries, func(elem *node) bool {
 		return elem.ID() == newRecord.ID()
 	})
 	if i == -1 {
-		return false
+		return nil, false // not in bucket
+	}
+	n = b.entries[i]
+
+	// For inbound updates (from the node itself) we accept any change, even if it sets
+	// back the sequence number. For found nodes (!isInbound), seq has to advance. Note
+	// this check also ensures found discv4 nodes (which always have seq=0) can't be
+	// updated.
+	if newRecord.Seq() <= n.Seq() && !isInbound {
+		return n, false
 	}
 
-	if !newRecord.IP().Equal(b.entries[i].IP()) {
-		// Endpoint has changed, ensure that the new IP fits into table limits.
-		tab.removeIP(b, b.entries[i].IP())
+	// Check endpoint update against IP limits.
+	ipchanged := newRecord.IPAddr() != n.IPAddr()
+	portchanged := newRecord.UDP() != n.UDP()
+	if ipchanged {
+		tab.removeIP(b, n.IP())
 		if !tab.addIP(b, newRecord.IP()) {
-			// It doesn't, put the previous one back.
-			tab.addIP(b, b.entries[i].IP())
-			return false
+			// It doesn't fit with the limit, put the previous record back.
+			tab.addIP(b, n.IP())
+			return n, false
 		}
 	}
-	b.entries[i].Node = newRecord
-	return true
+
+	// Apply update.
+	n.Node = newRecord
+	if ipchanged || portchanged {
+		// Ensure node is revalidated quickly for endpoint changes.
+		tab.revalidation.nodeEndpointChanged(tab, n)
+		return n, true
+	}
+	return n, false
 }
 
 func (tab *Table) handleTrackRequest(op trackRequestOp) {
