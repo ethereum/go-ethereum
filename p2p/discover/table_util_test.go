@@ -43,9 +43,15 @@ func init() {
 }
 
 func newTestTable(t transport, cfg Config) (*Table, *enode.DB) {
+	tab, db := newInactiveTestTable(t, cfg)
+	go tab.loop()
+	return tab, db
+}
+
+// newInactiveTestTable creates a Table without running the main loop.
+func newInactiveTestTable(t transport, cfg Config) (*Table, *enode.DB) {
 	db, _ := enode.OpenDB("")
 	tab, _ := newTable(t, db, cfg)
-	go tab.loop()
 	return tab, db
 }
 
