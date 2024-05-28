@@ -1,6 +1,7 @@
 version: 1
 
 project_name: mev-commit-geth
+dist: /tmp/goreleaser/mev-commit-geth
 
 builds:
   - env:
