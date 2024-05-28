@@ -172,7 +172,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	if resp.newRecord != nil {
 		_, endpointChanged = tab.bumpInBucket(b, resp.newRecord, false)
 	}
-	
+
 	// Node moves to slow list if it passed and hasn't changed.
 	if !endpointChanged {
 		tr.moveToList(&tr.slow, n, now, &tab.rand)
