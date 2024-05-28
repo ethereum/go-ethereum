@@ -41,6 +41,7 @@ type BucketNode struct {
 // The fields of Node may not be modified.
 type node struct {
 	*enode.Node
+	revalList       *revalidationList
 	addedToTable    time.Time // first time node was added to bucket or replacement list
 	addedToBucket   time.Time // time it was added in the actual bucket
 	livenessChecks  uint      // how often liveness was checked

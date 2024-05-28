@@ -58,8 +58,13 @@ func TestRevalidationNodeRemoved(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		t.Fatal("timed out waiting for revalidation")
 	}
-	status := tr.handleResponse(tab, resp)
-	if status != revalStatusGone {
-		t.Fatal("wrong revalidation status: got", status, ", want", revalStatusGone)
+	tr.handleResponse(tab, resp)
+
+	// Ensure the node was not re-added to the table.
+	if tab.getNode(node.ID()) != nil {
+		t.Fatal("node was re-added to Table")
+	}
+	if tr.fast.contains(node.ID()) || tr.slow.contains(node.ID()) {
+		t.Fatal("removed node contained in revalidation list")
 	}
 }
