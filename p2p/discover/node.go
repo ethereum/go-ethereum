@@ -21,7 +21,6 @@ import (
 	"crypto/elliptic"
 	"errors"
 	"math/big"
-	"net"
 	"slices"
 	"sort"
 	"time"
