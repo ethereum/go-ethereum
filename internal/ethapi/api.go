@@ -2044,11 +2044,11 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if value, ok := feeCapacity[to]; ok {
 			balanceTokenFee = value
 		}
-		msg := types.NewMessage(args.from(), args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), nil, nil, args.data(), accessList, false, balanceTokenFee, header.Number)
+		msg := types.NewMessage(args.from(), args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), big.NewInt(0), big.NewInt(0), args.data(), accessList, false, balanceTokenFee, header.Number)
 
 		// Apply the transaction with the access list tracer
 		tracer := vm.NewAccessListTracer(accessList, args.from(), to, precompiles)
-		config := vm.Config{Tracer: tracer, Debug: true}
+		config := vm.Config{Tracer: tracer, Debug: true, NoBaseFee: true}
 		vmenv, _, err := b.GetEVM(ctx, msg, statedb, XDCxState, header, &config)
 		if err != nil {
 			return nil, 0, nil, err
