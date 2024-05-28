@@ -376,3 +376,7 @@ func (b *LesApiBackend) GetWhitelistedMilestone() (bool, uint64, common.Hash) {
 
 func (b *LesApiBackend) PurgeWhitelistedMilestone() {
 }
+
+func (b *LesApiBackend) PeerStats() interface{} {
+	return nil
+}

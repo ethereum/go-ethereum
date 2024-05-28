@@ -644,6 +644,10 @@ func (b testBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) even
 	panic("implement me")
 }
 
+func (b testBackend) PeerStats() interface{} {
+	panic("implement me")
+}
+
 func (b testBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
 	receipt, err := b.GetBorBlockReceipt(ctx, hash)
 	if err != nil || receipt == nil {
