@@ -2063,12 +2063,19 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 		// Copy the original db so we don't modify it
 		statedb := db.Copy()
+		// Set the accesslist to the last al
+		args.AccessList = &accessList
+		msg, err := args.ToMessage(b, block.Number(), b.RPCGasCap(), header.BaseFee)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+
 		feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
 		var balanceTokenFee *big.Int
 		if value, ok := feeCapacity[to]; ok {
 			balanceTokenFee = value
 		}
-		msg := types.NewMessage(args.from(), args.To, uint64(*args.Nonce), args.Value.ToInt(), uint64(*args.Gas), args.GasPrice.ToInt(), big.NewInt(0), big.NewInt(0), args.data(), accessList, false, balanceTokenFee, header.Number)
+		msg.SetBalanceTokenFee(balanceTokenFee)
 
 		// Apply the transaction with the access list tracer
 		tracer := vm.NewAccessListTracer(accessList, args.from(), to, precompiles)

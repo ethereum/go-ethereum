@@ -861,3 +861,7 @@ func (m *Message) SetBalanceTokenFeeForCall() {
 	m.balanceTokenFee = new(big.Int).SetUint64(m.gasLimit)
 	m.balanceTokenFee.Mul(m.balanceTokenFee, m.gasPrice)
 }
+
+func (m *Message) SetBalanceTokenFee(balanceTokenFee *big.Int) {
+	m.balanceTokenFee = balanceTokenFee
+}
