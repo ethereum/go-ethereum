@@ -224,16 +224,16 @@ func (list *revalidationList) push(n *node, now mclock.AbsTime, rand randomSourc
 	n.revalList = list
 }
 
-func (list *revalidationList) remove(n *node) bool {
+func (list *revalidationList) remove(n *node) {
 	i := slices.Index(list.nodes, n)
 	if i == -1 {
-		return false
+		panic(fmt.Errorf("node %v not found in list", n.ID()))
 	}
 	list.nodes = slices.Delete(list.nodes, i, i+1)
+	n.revalList = nil
 	if len(list.nodes) == 0 {
 		list.nextTime = never
 	}
-	return true
 }
 
 func (list *revalidationList) contains(id enode.ID) bool {
