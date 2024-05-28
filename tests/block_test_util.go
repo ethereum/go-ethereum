@@ -181,7 +181,17 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	}
 	// Cross-check the snapshot-to-hash against the trie hash
 	if snapshotter {
-		if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
+		if chain.Snapshots() != nil {
+			if err := chain.Snapshots().Verify(chain.CurrentBlock().Root); err != nil {
+				return err
+			}
+		}
+	}
+	if scheme == rawdb.PathScheme {
+		if err := chain.TrieDB().WaitGeneration(); err != nil {
+			return err
+		}
+		if err := chain.TrieDB().VerifyState(chain.CurrentBlock().Root); err != nil {
 			return err
 		}
 	}

@@ -1790,7 +1790,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		}
 	)
 	defer engine.Close()
-	if snapshots {
+	if snapshots && scheme == rawdb.HashScheme {
 		config.SnapshotLimit = 256
 		config.SnapshotWait = true
 	}
@@ -1819,7 +1819,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 		if err := chain.triedb.Commit(canonblocks[tt.commitBlock-1].Root(), false); err != nil {
 			t.Fatalf("Failed to flush trie state: %v", err)
 		}
-		if snapshots {
+		if snapshots && scheme == rawdb.HashScheme {
 			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
 			}
@@ -1950,8 +1950,10 @@ func testIssue23496(t *testing.T, scheme string) {
 	if _, err := chain.InsertChain(blocks[1:2]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	if err := chain.snaps.Cap(blocks[1].Root(), 0); err != nil {
-		t.Fatalf("Failed to flatten snapshots: %v", err)
+	if scheme == rawdb.HashScheme {
+		if err := chain.snaps.Cap(blocks[1].Root(), 0); err != nil {
+			t.Fatalf("Failed to flatten snapshots: %v", err)
+		}
 	}
 
 	// Insert block B3 and commit the state into disk
@@ -1995,15 +1997,21 @@ func testIssue23496(t *testing.T, scheme string) {
 	}
 	expHead := uint64(1)
 	if scheme == rawdb.PathScheme {
-		expHead = uint64(2)
+		expHead = uint64(3)
 	}
 	if head := chain.CurrentBlock(); head.Number.Uint64() != expHead {
 		t.Errorf("Head block mismatch: have %d, want %d", head.Number, expHead)
 	}
-
-	// Reinsert B2-B4
-	if _, err := chain.InsertChain(blocks[1:]); err != nil {
-		t.Fatalf("Failed to import canonical chain tail: %v", err)
+	if scheme == rawdb.PathScheme {
+		// Reinsert B3-B4
+		if _, err := chain.InsertChain(blocks[2:]); err != nil {
+			t.Fatalf("Failed to import canonical chain tail: %v", err)
+		}
+	} else {
+		// Reinsert B2-B4
+		if _, err := chain.InsertChain(blocks[1:]); err != nil {
+			t.Fatalf("Failed to import canonical chain tail: %v", err)
+		}
 	}
 	if head := chain.CurrentHeader(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head header mismatch: have %d, want %d", head.Number, 4)
@@ -2014,7 +2022,9 @@ func testIssue23496(t *testing.T, scheme string) {
 	if head := chain.CurrentBlock(); head.Number.Uint64() != uint64(4) {
 		t.Errorf("Head block mismatch: have %d, want %d", head.Number, uint64(4))
 	}
-	if layer := chain.Snapshots().Snapshot(blocks[2].Root()); layer == nil {
-		t.Error("Failed to regenerate the snapshot of known state")
+	if scheme == rawdb.HashScheme {
+		if layer := chain.Snapshots().Snapshot(blocks[2].Root()); layer == nil {
+			t.Error("Failed to regenerate the snapshot of known state")
+		}
 	}
 }
