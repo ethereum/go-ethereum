@@ -50,53 +50,6 @@ type simBlock struct {
 	Calls          []TransactionArgs
 }
 
-type simBlockResult struct {
-	Number        hexutil.Uint64    `json:"number"`
-	Hash          common.Hash       `json:"hash"`
-	Time          hexutil.Uint64    `json:"timestamp"`
-	GasLimit      hexutil.Uint64    `json:"gasLimit"`
-	GasUsed       hexutil.Uint64    `json:"gasUsed"`
-	FeeRecipient  common.Address    `json:"feeRecipient"`
-	BaseFee       *hexutil.Big      `json:"baseFeePerGas"`
-	PrevRandao    common.Hash       `json:"prevRandao"`
-	Withdrawals   types.Withdrawals `json:"withdrawals"`
-	BlobGasUsed   hexutil.Uint64    `json:"blobGasUsed"`
-	ExcessBlobGas hexutil.Uint64    `json:"excessBlobGas"`
-	Calls         []simCallResult   `json:"calls"`
-}
-
-func simBlockResultFromHeader(header *types.Header, callResults []simCallResult) simBlockResult {
-	r := simBlockResult{
-		Number:       hexutil.Uint64(header.Number.Uint64()),
-		Hash:         header.Hash(),
-		Time:         hexutil.Uint64(header.Time),
-		GasLimit:     hexutil.Uint64(header.GasLimit),
-		GasUsed:      hexutil.Uint64(header.GasUsed),
-		FeeRecipient: header.Coinbase,
-		BaseFee:      (*hexutil.Big)(header.BaseFee),
-		PrevRandao:   header.MixDigest,
-		// Withdrawals will be always empty in the context of a simulated block.
-		Withdrawals: make(types.Withdrawals, 0),
-		Calls:       callResults,
-	}
-	if header.BlobGasUsed != nil && header.ExcessBlobGas != nil {
-		r.BlobGasUsed = hexutil.Uint64(*header.BlobGasUsed)
-		r.ExcessBlobGas = hexutil.Uint64(*header.ExcessBlobGas)
-	}
-	return r
-}
-
-// repairLogs updates the block hash in the logs present in the result of
-// a simulated block. This is needed as during execution when logs are collected
-// the block hash is not known.
-func (b *simBlockResult) repairLogs() {
-	for i := range b.Calls {
-		for j := range b.Calls[i].Logs {
-			b.Calls[i].Logs[j].BlockHash = b.Hash
-		}
-	}
-}
-
 type simCallResult struct {
 	ReturnValue hexutil.Bytes  `json:"returnData"`
 	Logs        []*types.Log   `json:"logs"`
@@ -129,7 +82,7 @@ type simulator struct {
 	validate       bool
 }
 
-func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBlockResult, error) {
+func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[string]interface{}, error) {
 	// Setup context so it may be cancelled before the calls completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var (
@@ -155,7 +108,7 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBloc
 		return nil, err
 	}
 	var (
-		results = make([]simBlockResult, len(blocks))
+		results = make([]map[string]interface{}, len(blocks))
 		// Each tx and all the series of txes shouldn't consume more gas than cap
 		gp          = new(core.GasPool).AddGas(sim.b.RPCGasCap())
 		precompiles = sim.activePrecompiles(ctx, sim.base)
@@ -169,13 +122,13 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]simBloc
 		if err != nil {
 			return nil, err
 		}
-		results[bi] = *result
+		results[bi] = result
 		parent = headers[bi]
 	}
 	return results, nil
 }
 
-func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header, parent *types.Header, headers []*types.Header, gp *core.GasPool, precompiles vm.PrecompiledContracts, timeout time.Duration) (*simBlockResult, error) {
+func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header, parent *types.Header, headers []*types.Header, gp *core.GasPool, precompiles vm.PrecompiledContracts, timeout time.Duration) (map[string]interface{}, error) {
 	// Set header fields that depend only on parent block.
 	config := sim.b.ChainConfig()
 	// Parent hash is needed for evm.GetHashFn to work.
@@ -272,19 +225,30 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	header.Root = sim.state.IntermediateRoot(true)
 	header.GasUsed = gasUsed
-	if len(txes) > 0 {
-		header.TxHash = types.DeriveSha(types.Transactions(txes), trie.NewStackTrie(nil))
-	}
-	if len(receipts) > 0 {
-		header.ReceiptHash = types.DeriveSha(types.Receipts(receipts), trie.NewStackTrie(nil))
-		header.Bloom = types.CreateBloom(types.Receipts(receipts))
-	}
 	if config.IsCancun(header.Number, header.Time) {
 		header.BlobGasUsed = &blobGasUsed
 	}
-	result := simBlockResultFromHeader(header, callResults)
-	result.repairLogs()
-	return &result, nil
+	var withdrawals types.Withdrawals
+	if config.IsShanghai(header.Number, header.Time) {
+		withdrawals = make([]*types.Withdrawal, 0)
+	}
+	b := types.NewBlockWithWithdrawals(header, txes, nil, receipts, withdrawals, trie.NewStackTrie(nil))
+	res := RPCMarshalBlock(b, true, false, config)
+	repairLogs(callResults, res["hash"].(common.Hash))
+	res["calls"] = callResults
+
+	return res, nil
+}
+
+// repairLogs updates the block hash in the logs present in the result of
+// a simulated block. This is needed as during execution when logs are collected
+// the block hash is not known.
+func repairLogs(calls []simCallResult, hash common.Hash) {
+	for i := range calls {
+		for j := range calls[i].Logs {
+			calls[i].Logs[j].BlockHash = hash
+		}
+	}
 }
 
 func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, gasUsed *uint64, blockContext vm.BlockContext) error {

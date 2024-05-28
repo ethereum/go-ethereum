@@ -1108,11 +1108,11 @@ func TestSimulateV1(t *testing.T) {
 		Number string
 		//Hash   string
 		// Ignore timestamp
-		GasLimit     string
-		GasUsed      string
-		FeeRecipient string
-		BaseFee      string
-		Calls        []callRes
+		GasLimit string
+		GasUsed  string
+		Miner    string
+		BaseFee  string
+		Calls    []callRes
 	}
 	var testSuite = []struct {
 		name             string
@@ -1146,10 +1146,10 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xf618",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xf618",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
@@ -1199,10 +1199,10 @@ func TestSimulateV1(t *testing.T) {
 				},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xa410",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xa410",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
@@ -1215,10 +1215,10 @@ func TestSimulateV1(t *testing.T) {
 					Status:      "0x1",
 				}},
 			}, {
-				Number:       "0xc",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x5208",
-				FeeRecipient: coinbase,
+				Number:   "0xc",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x5208",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
@@ -1253,10 +1253,10 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x47e7c4",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x47e7c4",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					Error:       callErr{Message: "stack underflow (0 <=> 2)", Code: errCodeVMError},
@@ -1298,10 +1298,10 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xe891",
-				FeeRecipient: strings.ToLower(cac.String()),
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xe891",
+				Miner:    strings.ToLower(cac.String()),
 				Calls: []callRes{{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
 					GasUsed:     "0xe891",
@@ -1309,10 +1309,10 @@ func TestSimulateV1(t *testing.T) {
 					Status:      "0x1",
 				}},
 			}, {
-				Number:       "0xc",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xe891",
-				FeeRecipient: strings.ToLower(cac.String()),
+				Number:   "0xc",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xe891",
+				Miner:    strings.ToLower(cac.String()),
 				Calls: []callRes{{
 					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
 					GasUsed:     "0xe891",
@@ -1377,10 +1377,10 @@ func TestSimulateV1(t *testing.T) {
 				},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x10683",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x10683",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xaacc",
@@ -1418,10 +1418,10 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x5508",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x5508",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					Logs: []log{{
@@ -1486,10 +1486,10 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x52f6",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x52f6",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					// Caller is in this case the contract that invokes ecrecover.
 					ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
@@ -1536,10 +1536,10 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xa58c",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xa58c",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0xec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5",
 					GasUsed:     "0x52dc",
@@ -1584,10 +1584,10 @@ func TestSimulateV1(t *testing.T) {
 			}},
 			includeTransfers: &includeTransfers,
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xd984",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xd984",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xd984",
@@ -1650,10 +1650,10 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x1b83f",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x1b83f",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xd166",
@@ -1666,10 +1666,10 @@ func TestSimulateV1(t *testing.T) {
 					Status:      "0x1",
 				}},
 			}, {
-				Number:       "0xc",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xe6d9",
-				FeeRecipient: coinbase,
+				Number:   "0xc",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xe6d9",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0xe6d9",
@@ -1713,10 +1713,10 @@ func TestSimulateV1(t *testing.T) {
 			}},
 			validation: &validation,
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x5208",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x5208",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x5208",
@@ -1765,10 +1765,10 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xc542",
-				FeeRecipient: coinbase,
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xc542",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x0000000000000000000000000000000200000000000000000000000000000003",
 					GasUsed:     "0x62a1",
@@ -1781,10 +1781,10 @@ func TestSimulateV1(t *testing.T) {
 					Status:      "0x1",
 				}},
 			}, {
-				Number:       "0xc",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x62a1",
-				FeeRecipient: coinbase,
+				Number:   "0xc",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x62a1",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x0000000000000000000000000000000500000000000000000000000000000000",
 					GasUsed:     "0x62a1",
@@ -1838,16 +1838,16 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want: []blockRes{{
-				Number:       "0xb",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x0",
-				FeeRecipient: coinbase,
-				Calls:        []callRes{},
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x0",
+				Miner:    coinbase,
+				Calls:    []callRes{},
 			}, {
-				Number:       "0xc",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xf864",
-				FeeRecipient: coinbase,
+				Number:   "0xc",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xf864",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x52cc",
@@ -1866,28 +1866,28 @@ func TestSimulateV1(t *testing.T) {
 					Status:      "0x1",
 				}},
 			}, {
-				Number:       "0xd",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x0",
-				FeeRecipient: coinbase,
-				Calls:        []callRes{},
+				Number:   "0xd",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x0",
+				Miner:    coinbase,
+				Calls:    []callRes{},
 			}, {
-				Number:       "0xe",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x0",
-				FeeRecipient: coinbase,
-				Calls:        []callRes{},
+				Number:   "0xe",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x0",
+				Miner:    coinbase,
+				Calls:    []callRes{},
 			}, {
-				Number:       "0xf",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0x0",
-				FeeRecipient: coinbase,
-				Calls:        []callRes{},
+				Number:   "0xf",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x0",
+				Miner:    coinbase,
+				Calls:    []callRes{},
 			}, {
-				Number:       "0x10",
-				GasLimit:     "0x47e7c4",
-				GasUsed:      "0xa598",
-				FeeRecipient: coinbase,
+				Number:   "0x10",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xa598",
+				Miner:    coinbase,
 				Calls: []callRes{{
 					ReturnValue: "0x",
 					GasUsed:     "0x52cc",
