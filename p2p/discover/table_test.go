@@ -349,7 +349,7 @@ func TestTable_addInboundNodeUpdateV4Accept(t *testing.T) {
 	checkBucketContent(t, tab, []*enode.Node{n1})
 
 	// Add an updated version with changed IP.
-	// The update will be accepted because it has seq=0.
+	// The update will be accepted because it is inbound.
 	n1v2 := enode.NewV4(&key.PublicKey, net.IP{99, 99, 99, 99}, 9000, 9000)
 	tab.addInboundNode(wrapNode(n1v2))
 	checkBucketContent(t, tab, []*enode.Node{n1v2})
