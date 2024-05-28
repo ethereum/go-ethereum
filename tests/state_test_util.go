@@ -19,6 +19,7 @@ package tests
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -276,6 +277,9 @@ func (tx *stTransaction) toMessage(ps stPostState, number *big.Int, baseFee *big
 		}
 		gasPrice = math.BigMin(new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee),
 			tx.MaxFeePerGas)
+	}
+	if gasPrice == nil {
+		return nil, errors.New("no gas price provided")
 	}
 
 	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, tx.GasPrice, tx.MaxFeePerGas, tx.MaxPriorityFeePerGas, data, accessList, true, nil, number)
