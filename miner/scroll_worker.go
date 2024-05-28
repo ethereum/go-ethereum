@@ -556,6 +556,14 @@ func (w *worker) startNewPipeline(timestamp int64) {
 }
 
 func (w *worker) handlePipelineResult(res *pipeline.Result) error {
+	if !w.isRunning() {
+		if res != nil && res.FinalBlock != nil {
+			w.updateSnapshot(res.FinalBlock)
+		}
+		w.currentPipeline = nil
+		return nil
+	}
+
 	if res != nil && res.OverflowingTx != nil {
 		if res.FinalBlock == nil {
 			// first txn overflowed the circuit, skip
@@ -600,14 +608,6 @@ func (w *worker) handlePipelineResult(res *pipeline.Result) error {
 			errors.Is(res.CCCErr, circuitcapacitychecker.ErrUnknown):
 			l2TxCccUnknownErrCounter.Inc(1)
 		}
-	}
-
-	if !w.isRunning() {
-		if res != nil && res.FinalBlock != nil {
-			w.updateSnapshot(res.FinalBlock)
-		}
-		w.currentPipeline = nil
-		return nil
 	}
 
 	var commitError error
@@ -747,6 +747,10 @@ func (w *worker) postSideBlock(event core.ChainSideEvent) {
 }
 
 func (w *worker) onTxFailingInPipeline(txIndex int, tx *types.Transaction, err error) bool {
+	if !w.isRunning() {
+		return false
+	}
+
 	writeTrace := func() {
 		var trace *types.BlockTrace
 		var errWithTrace *pipeline.ErrorWithTrace
