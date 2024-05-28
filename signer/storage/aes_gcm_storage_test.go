@@ -26,11 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/mattn/go-colorable"
-	"golang.org/x/exp/slog"
 )
 
 func TestEncryption(t *testing.T) {
-	t.Parallel()
 	//	key := []byte("AES256Key-32Characters1234567890")
 	//	plaintext := []byte(value)
 	key := []byte("AES256Key-32Characters1234567890")
@@ -56,7 +54,6 @@ func TestEncryption(t *testing.T) {
 }
 
 func TestFileStorage(t *testing.T) {
-	t.Parallel()
 	a := map[string]storedCredential{
 		"secret": {
 			Iv:         common.Hex2Bytes("cdb30036279601aeee60f16b"),
@@ -99,8 +96,7 @@ func TestFileStorage(t *testing.T) {
 	}
 }
 func TestEnd2End(t *testing.T) {
-	t.Parallel()
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.LevelInfo, true)))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 
 	d := t.TempDir()
 
@@ -121,10 +117,9 @@ func TestEnd2End(t *testing.T) {
 }
 
 func TestSwappedKeys(t *testing.T) {
-	t.Parallel()
 	// It should not be possible to swap the keys/values, so that
 	// K1:V1, K2:V2 can be swapped into K1:V2, K2:V1
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), slog.LevelInfo, true)))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 
 	d := t.TempDir()
 

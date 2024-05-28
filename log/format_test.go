@@ -5,20 +5,18 @@ import (
 	"testing"
 )
 
-var sink []byte
+var sink string
 
 func BenchmarkPrettyInt64Logfmt(b *testing.B) {
-	buf := make([]byte, 100)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		sink = appendInt64(buf, rand.Int63())
+		sink = FormatLogfmtInt64(rand.Int63())
 	}
 }
 
 func BenchmarkPrettyUint64Logfmt(b *testing.B) {
-	buf := make([]byte, 100)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		sink = appendUint64(buf, rand.Uint64(), false)
+		sink = FormatLogfmtUint64(rand.Uint64())
 	}
 }

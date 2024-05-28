@@ -129,8 +129,7 @@ func NewDBForFakes(t TensingObject) (ethdb.Database, *core.Genesis, *params.Chai
 
 	memdb := memorydb.New()
 	chainDB := rawdb.NewDatabase(memdb)
-	addr := common.HexToAddress("12345")
-	genesis := core.DeveloperGenesisBlock(11_500_000, &addr)
+	genesis := core.DeveloperGenesisBlock(11_500_000, common.HexToAddress("12345"))
 
 	chainConfig, _, err := core.SetupGenesisBlock(chainDB, trie.NewDatabase(chainDB, trie.HashDefaults), genesis)
 	if err != nil {

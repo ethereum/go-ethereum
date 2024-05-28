@@ -61,12 +61,13 @@ type Interface interface {
 //	"pmp:192.168.0.1"    uses NAT-PMP with the given gateway address
 func Parse(spec string) (Interface, error) {
 	var (
-		before, after, found = strings.Cut(spec, ":")
-		mech                 = strings.ToLower(before)
-		ip                   net.IP
+		parts = strings.SplitN(spec, ":", 2)
+		mech  = strings.ToLower(parts[0])
+		ip    net.IP
 	)
-	if found {
-		ip = net.ParseIP(after)
+
+	if len(parts) > 1 {
+		ip = net.ParseIP(parts[1])
 		if ip == nil {
 			return nil, errors.New("invalid IP address")
 		}
@@ -88,7 +89,7 @@ func Parse(spec string) (Interface, error) {
 	case "pmp", "natpmp", "nat-pmp":
 		return PMP(ip), nil
 	default:
-		return nil, fmt.Errorf("unknown mechanism %q", before)
+		return nil, fmt.Errorf("unknown mechanism %q", parts[0])
 	}
 }
 

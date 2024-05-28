@@ -334,7 +334,6 @@ func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine cons
 }
 
 func TestGenerateAndImportBlock(t *testing.T) {
-	t.Parallel()
 	var (
 		db     = rawdb.NewMemoryDatabase()
 		config = *params.AllCliqueProtocolChanges
@@ -551,17 +550,14 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 }
 
 func TestGetSealingWorkEthash(t *testing.T) {
-	t.Parallel()
 	testGetSealingWork(t, ethashChainConfig, ethash.NewFaker())
 }
 
 func TestGetSealingWorkClique(t *testing.T) {
-	t.Parallel()
 	testGetSealingWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
 }
 
 func TestGetSealingWorkPostMerge(t *testing.T) {
-	t.Parallel()
 	local := new(params.ChainConfig)
 	*local = *ethashChainConfig
 	local.TerminalTotalDifficulty = big.NewInt(0)
@@ -746,7 +742,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 
 	chainConfig = params.BorUnittestChainConfig
 
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	engine, _ = getFakeBorFromConfig(t, chainConfig)
 
@@ -800,7 +796,7 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 
 	chainConfig = params.BorUnittestChainConfig
 
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 

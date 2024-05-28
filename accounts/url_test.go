@@ -21,7 +21,6 @@ import (
 )
 
 func TestURLParsing(t *testing.T) {
-	t.Parallel()
 	url, err := parseURL("https://ethereum.org")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -43,7 +42,6 @@ func TestURLParsing(t *testing.T) {
 }
 
 func TestURLString(t *testing.T) {
-	t.Parallel()
 	url := URL{Scheme: "https", Path: "ethereum.org"}
 	if url.String() != "https://ethereum.org" {
 		t.Errorf("expected: %v, got: %v", "https://ethereum.org", url.String())
@@ -56,7 +54,6 @@ func TestURLString(t *testing.T) {
 }
 
 func TestURLMarshalJSON(t *testing.T) {
-	t.Parallel()
 	url := URL{Scheme: "https", Path: "ethereum.org"}
 
 	json, err := url.MarshalJSON()
@@ -70,7 +67,6 @@ func TestURLMarshalJSON(t *testing.T) {
 }
 
 func TestURLUnmarshalJSON(t *testing.T) {
-	t.Parallel()
 	url := &URL{}
 
 	err := url.UnmarshalJSON([]byte("\"https://ethereum.org\""))
@@ -88,7 +84,6 @@ func TestURLUnmarshalJSON(t *testing.T) {
 }
 
 func TestURLComparison(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		urlA   URL
 		urlB   URL

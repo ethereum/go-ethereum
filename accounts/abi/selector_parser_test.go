@@ -24,7 +24,6 @@ import (
 )
 
 func TestParseSelector(t *testing.T) {
-	t.Parallel()
 	mkType := func(types ...interface{}) []ArgumentMarshaling {
 		var result []ArgumentMarshaling
 

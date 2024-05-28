@@ -18,6 +18,7 @@ package abi
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -84,11 +85,11 @@ func (e Error) String() string {
 
 func (e *Error) Unpack(data []byte) (interface{}, error) {
 	if len(data) < 4 {
-		return "", fmt.Errorf("insufficient data for unpacking: have %d, want at least 4", len(data))
+		return "", errors.New("invalid data for unpacking")
 	}
 
 	if !bytes.Equal(data[:4], e.ID[:4]) {
-		return "", fmt.Errorf("invalid identifier, have %#x want %#x", data[:4], e.ID[:4])
+		return "", errors.New("invalid data for unpacking")
 	}
 
 	return e.Inputs.Unpack(data[4:])

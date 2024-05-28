@@ -49,24 +49,21 @@ type DumpCollector interface {
 
 // DumpAccount represents an account in the state.
 type DumpAccount struct {
-	Balance     string                 `json:"balance"`
-	Nonce       uint64                 `json:"nonce"`
-	Root        hexutil.Bytes          `json:"root"`
-	CodeHash    hexutil.Bytes          `json:"codeHash"`
-	Code        hexutil.Bytes          `json:"code,omitempty"`
-	Storage     map[common.Hash]string `json:"storage,omitempty"`
-	Address     *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
-	AddressHash hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
+	Balance   string                 `json:"balance"`
+	Nonce     uint64                 `json:"nonce"`
+	Root      hexutil.Bytes          `json:"root"`
+	CodeHash  hexutil.Bytes          `json:"codeHash"`
+	Code      hexutil.Bytes          `json:"code,omitempty"`
+	Storage   map[common.Hash]string `json:"storage,omitempty"`
+	Address   *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
+	SecureKey hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
 
 }
 
 // Dump represents the full dump in a collected format, as one large map.
 type Dump struct {
-	Root     string                 `json:"root"`
-	Accounts map[string]DumpAccount `json:"accounts"`
-	// Next can be set to represent that this dump is only partial, and Next
-	// is where an iterator should be positioned in order to continue the dump.
-	Next []byte `json:"next,omitempty"` // nil if no more accounts
+	Root     string                         `json:"root"`
+	Accounts map[common.Address]DumpAccount `json:"accounts"`
 }
 
 // OnRoot implements DumpCollector interface
@@ -76,11 +73,27 @@ func (d *Dump) OnRoot(root common.Hash) {
 
 // OnAccount implements DumpCollector interface
 func (d *Dump) OnAccount(addr *common.Address, account DumpAccount) {
-	if addr == nil {
-		d.Accounts[fmt.Sprintf("pre(%s)", account.AddressHash)] = account
-	}
 	if addr != nil {
-		d.Accounts[(*addr).String()] = account
+		d.Accounts[*addr] = account
+	}
+}
+
+// IteratorDump is an implementation for iterating over data.
+type IteratorDump struct {
+	Root     string                         `json:"root"`
+	Accounts map[common.Address]DumpAccount `json:"accounts"`
+	Next     []byte                         `json:"next,omitempty"` // nil if no more accounts
+}
+
+// OnRoot implements DumpCollector interface
+func (d *IteratorDump) OnRoot(root common.Hash) {
+	d.Root = fmt.Sprintf("%x", root)
+}
+
+// OnAccount implements DumpCollector interface
+func (d *IteratorDump) OnAccount(addr *common.Address, account DumpAccount) {
+	if addr != nil {
+		d.Accounts[*addr] = account
 	}
 }
 
@@ -92,14 +105,14 @@ type iterativeDump struct {
 // OnAccount implements DumpCollector interface
 func (d iterativeDump) OnAccount(addr *common.Address, account DumpAccount) {
 	dumpAccount := &DumpAccount{
-		Balance:     account.Balance,
-		Nonce:       account.Nonce,
-		Root:        account.Root,
-		CodeHash:    account.CodeHash,
-		Code:        account.Code,
-		Storage:     account.Storage,
-		AddressHash: account.AddressHash,
-		Address:     addr,
+		Balance:   account.Balance,
+		Nonce:     account.Nonce,
+		Root:      account.Root,
+		CodeHash:  account.CodeHash,
+		Code:      account.Code,
+		Storage:   account.Storage,
+		SecureKey: account.SecureKey,
+		Address:   addr,
 	}
 
 	d.Encode(dumpAccount)
@@ -132,7 +145,6 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 
 	trieIt, err := s.trie.NodeIterator(conf.Start)
 	if err != nil {
-		log.Error("Trie dumping error", "err", err)
 		return nil
 	}
 	it := trie.NewIterator(trieIt)
@@ -141,28 +153,28 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
 		}
+
+		account := DumpAccount{
+			Balance:   data.Balance.String(),
+			Nonce:     data.Nonce,
+			Root:      data.Root[:],
+			CodeHash:  data.CodeHash,
+			SecureKey: it.Key,
+		}
 		var (
-			account = DumpAccount{
-				Balance:     data.Balance.String(),
-				Nonce:       data.Nonce,
-				Root:        data.Root[:],
-				CodeHash:    data.CodeHash,
-				AddressHash: it.Key,
-			}
-			address   *common.Address
-			addr      common.Address
 			addrBytes = s.trie.GetKey(it.Key)
+			addr      = common.BytesToAddress(addrBytes)
+			address   *common.Address
 		)
 		if addrBytes == nil {
+			// Preimage missing
 			missingPreimages++
 
 			if conf.OnlyWithAddresses {
 				continue
 			}
 		} else {
-			addr = common.BytesToAddress(addrBytes)
 			address = &addr
-			account.Address = address
 		}
 		obj := newObject(s, addr, &data)
 		if !conf.SkipCode {
@@ -220,13 +232,13 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 	return nextKey
 }
 
-// RawDump returns the state. If the processing is aborted e.g. due to options
-// reaching Max, the `Next` key is set on the returned Dump.
+// RawDump returns the entire state an a single large object
 func (s *StateDB) RawDump(opts *DumpConfig) Dump {
 	dump := &Dump{
-		Accounts: make(map[string]DumpAccount),
+		Accounts: make(map[common.Address]DumpAccount),
 	}
-	dump.Next = s.DumpToCollector(dump, opts)
+	s.DumpToCollector(dump, opts)
+
 	return *dump
 }
 
@@ -236,7 +248,7 @@ func (s *StateDB) Dump(opts *DumpConfig) []byte {
 
 	json, err := json.MarshalIndent(dump, "", "    ")
 	if err != nil {
-		log.Error("Error dumping state", "err", err)
+		fmt.Println("Dump err", err)
 	}
 
 	return json
@@ -245,4 +257,14 @@ func (s *StateDB) Dump(opts *DumpConfig) []byte {
 // IterativeDump dumps out accounts as json-objects, delimited by linebreaks on stdout
 func (s *StateDB) IterativeDump(opts *DumpConfig, output *json.Encoder) {
 	s.DumpToCollector(iterativeDump{output}, opts)
+}
+
+// IteratorDump dumps out a batch of accounts starts with the given start key
+func (s *StateDB) IteratorDump(opts *DumpConfig) IteratorDump {
+	iterator := &IteratorDump{
+		Accounts: make(map[common.Address]DumpAccount),
+	}
+	iterator.Next = s.DumpToCollector(iterator, opts)
+
+	return *iterator
 }

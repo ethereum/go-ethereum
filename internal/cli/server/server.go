@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/mattn/go-colorable"
@@ -62,8 +63,9 @@ type serverOption func(srv *Server, config *Config) error
 var glogger *log.GlogHandler
 
 func init() {
-	handler := log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, false)
-	log.SetDefault(log.NewLogger(handler))
+	glogger = log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
+	glogger.Verbosity(log.LvlInfo)
+	log.Root().SetHandler(glogger)
 }
 
 func WithGRPCAddress() serverOption {
@@ -120,7 +122,7 @@ func NewServer(config *Config, opts ...serverOption) (*Server, error) {
 	}
 
 	// start the logger
-	setupLogger(config.Verbosity, *config.Logging)
+	setupLogger(VerbosityIntToString(config.Verbosity), *config.Logging)
 
 	var err error
 
@@ -463,23 +465,31 @@ func (s *Server) loggingServerInterceptor(ctx context.Context, req interface{}, 
 	return h, err
 }
 
-func setupLogger(logLevel int, loggingInfo LoggingConfig) {
+func setupLogger(logLevel string, loggingInfo LoggingConfig) {
+	var ostream log.Handler
+
 	output := io.Writer(os.Stderr)
 
 	if loggingInfo.Json {
-		glogger = log.NewGlogHandler(log.JSONHandler(os.Stderr))
+		ostream = log.StreamHandler(output, log.JSONFormat())
 	} else {
 		usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 		if usecolor {
 			output = colorable.NewColorableStderr()
 		}
 
-		glogger = log.NewGlogHandler(log.NewTerminalHandler(output, usecolor))
+		ostream = log.StreamHandler(output, log.TerminalFormat(usecolor))
 	}
 
+	glogger.SetHandler(ostream)
+
 	// logging
-	lvl := log.FromLegacyLevel(logLevel)
-	glogger.Verbosity(lvl)
+	lvl, err := log.LvlFromString(strings.ToLower(logLevel))
+	if err == nil {
+		glogger.Verbosity(lvl)
+	} else {
+		glogger.Verbosity(log.LvlInfo)
+	}
 
 	if loggingInfo.Vmodule != "" {
 		if err := glogger.Vmodule(loggingInfo.Vmodule); err != nil {
@@ -487,7 +497,15 @@ func setupLogger(logLevel int, loggingInfo LoggingConfig) {
 		}
 	}
 
-	log.SetDefault(log.NewLogger(glogger))
+	log.PrintOrigins(loggingInfo.Debug)
+
+	if loggingInfo.Backtrace != "" {
+		if err := glogger.BacktraceAt(loggingInfo.Backtrace); err != nil {
+			log.Error("failed to set BacktraceAt", "err", err)
+		}
+	}
+
+	log.Root().SetHandler(glogger)
 }
 
 func (s *Server) GetLatestBlockNumber() *big.Int {

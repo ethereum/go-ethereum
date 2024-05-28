@@ -57,18 +57,18 @@ func (tx *txJSON) yParityValue() (*big.Int, error) {
 	if tx.YParity != nil {
 		val := uint64(*tx.YParity)
 		if val != 0 && val != 1 {
-			return nil, errInvalidYParity
+			return nil, errors.New("'yParity' field must be 0 or 1")
 		}
 		bigval := new(big.Int).SetUint64(val)
 		if tx.V != nil && tx.V.ToInt().Cmp(bigval) != 0 {
-			return nil, errVYParityMismatch
+			return nil, errors.New("'v' and 'yParity' fields do not match")
 		}
 		return bigval, nil
 	}
 	if tx.V != nil {
 		return tx.V.ToInt(), nil
 	}
-	return nil, errVYParityMissing
+	return nil, errors.New("missing 'yParity' or 'v' field in transaction")
 }
 
 // MarshalJSON marshals as JSON with a hash.
@@ -294,6 +294,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'input' in transaction")
 		}
 		itx.Data = *dec.Input
+		if dec.V == nil {
+			return errors.New("missing required field 'v' in transaction")
+		}
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
 		}
@@ -358,6 +361,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'input' in transaction")
 		}
 		itx.Data = *dec.Input
+		if dec.V == nil {
+			return errors.New("missing required field 'v' in transaction")
+		}
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
 		}

@@ -47,7 +47,7 @@ import (
 var runCommand = &cli.Command{
 	Action:      runCmd,
 	Name:        "run",
-	Usage:       "Run arbitrary evm binary",
+	Usage:       "run arbitrary evm binary",
 	ArgsUsage:   "<code>",
 	Description: `The run command runs arbitrary EVM code.`,
 	Flags:       flags.Merge(vmFlags, traceFlags),
@@ -152,7 +152,7 @@ func runCmd(ctx *cli.Context) error {
 			initialGas = genesisConfig.GasLimit
 		}
 	} else {
-		genesisConfig.Config = params.AllDevChainProtocolChanges
+		genesisConfig.Config = params.AllEthashProtocolChanges
 	}
 
 	db := rawdb.NewMemoryDatabase()

@@ -88,7 +88,7 @@ type Env struct {
     CurrentTimestamp uint64              `json:"currentTimestamp"`
     Withdrawals      []*Withdrawal       `json:"withdrawals"`
     // optional
-    CurrentDifficulty *big.Int           `json:"currentDifficulty"`
+    CurrentDifficulty *big.Int           `json:"currentDifficuly"`
     CurrentRandom     *big.Int           `json:"currentRandom"`
     CurrentBaseFee    *big.Int           `json:"currentBaseFee"`
     ParentDifficulty  *big.Int           `json:"parentDifficulty"`

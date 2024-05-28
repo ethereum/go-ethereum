@@ -23,5 +23,5 @@ import "errors"
 
 // ReadDiskStats retrieves the disk IO stats belonging to the current process.
 func ReadDiskStats(stats *DiskStats) error {
-	return errors.New("not implemented")
+	return errors.New("Not implemented")
 }

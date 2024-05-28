@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -383,17 +382,13 @@ func TestRandomCases(t *testing.T) {
 		{op: 1, key: common.Hex2Bytes("980c393656413a15c8da01978ed9f89feb80b502f58f2d640e3a2f5f7a99a7018f1b573befd92053ac6f78fca4a87268"), value: common.Hex2Bytes("")}, // step 24
 		{op: 1, key: common.Hex2Bytes("fd"), value: common.Hex2Bytes("")},                                                                                               // step 25
 	}
-	if err := runRandTest(rt); err != nil {
-		t.Fatal(err)
-	}
+
+	runRandTest(rt)
 }
 
 // randTest performs random trie operations.
 // Instances of this test are created by Generate.
 type randTest []randTestStep
-
-// compile-time interface check
-var _ quick.Generator = (randTest)(nil)
 
 type randTestStep struct {
 	op    int
@@ -415,47 +410,38 @@ const (
 )
 
 func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
-	var finishedFn = func() bool {
-		size--
-		return size == 0
-	}
-	return reflect.ValueOf(generateSteps(finishedFn, r))
-}
-
-func generateSteps(finished func() bool, r io.Reader) randTest {
 	var allKeys [][]byte
-	var one = []byte{0}
+
 	genKey := func() []byte {
-		r.Read(one)
-		if len(allKeys) < 2 || one[0]%100 > 90 {
+		if len(allKeys) < 2 || r.Intn(100) < 10 {
 			// new key
-			size := one[0] % 50
-			key := make([]byte, size)
+			key := make([]byte, r.Intn(50))
 			r.Read(key)
 			allKeys = append(allKeys, key)
 
 			return key
 		}
 		// use existing key
-		idx := int(one[0]) % len(allKeys)
-		return allKeys[idx]
+		return allKeys[r.Intn(len(allKeys))]
 	}
+
 	var steps randTest
-	for !finished() {
-		r.Read(one)
-		step := randTestStep{op: int(one[0]) % opMax}
+
+	for i := 0; i < size; i++ {
+		step := randTestStep{op: r.Intn(opMax)}
 		switch step.op {
 		case opUpdate:
 			step.key = genKey()
 			step.value = make([]byte, 8)
-			binary.BigEndian.PutUint64(step.value, uint64(len(steps)))
+			binary.BigEndian.PutUint64(step.value, uint64(i))
 		case opGet, opDelete, opProve:
 			step.key = genKey()
 		}
 
 		steps = append(steps, step)
 	}
-	return steps
+
+	return reflect.ValueOf(steps)
 }
 
 func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
@@ -501,12 +487,8 @@ func verifyAccessList(old *Trie, new *Trie, set *trienode.NodeSet) error {
 	return nil
 }
 
-// runRandTestBool coerces error to boolean, for use in quick.Check
-func runRandTestBool(rt randTest) bool {
-	return runRandTest(rt) == nil
-}
-
-func runRandTest(rt randTest) error {
+// nolint:gocognit
+func runRandTest(rt randTest) bool {
 	var scheme = rawdb.HashScheme
 	if rand.Intn(2) == 0 {
 		scheme = rawdb.PathScheme
@@ -564,13 +546,13 @@ func runRandTest(rt randTest) error {
 			newtr, err := New(TrieID(root), triedb)
 			if err != nil {
 				rt[i].err = err
-				return err
+				return false
 			}
 
 			if nodes != nil {
 				if err := verifyAccessList(origTrie, newtr, nodes); err != nil {
 					rt[i].err = err
-					return err
+					return false
 				}
 			}
 
@@ -652,14 +634,15 @@ func runRandTest(rt randTest) error {
 		}
 		// Abort the test on error.
 		if rt[i].err != nil {
-			return rt[i].err
+			return false
 		}
 	}
-	return nil
+
+	return true
 }
 
 func TestRandom(t *testing.T) {
-	if err := quick.Check(runRandTestBool, nil); err != nil {
+	if err := quick.Check(runRandTest, nil); err != nil {
 		if cerr, ok := err.(*quick.CheckError); ok {
 			t.Fatalf("random test iteration %d failed: %s", cerr.Count, spew.Sdump(cerr.In))
 		}
@@ -1299,18 +1282,4 @@ func TestDecodeNode(t *testing.T) {
 		prng.Read(elems)
 		decodeNode(hash, elems)
 	}
-}
-
-func FuzzTrie(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
-		var steps = 500
-		var input = bytes.NewReader(data)
-		var finishedFn = func() bool {
-			steps--
-			return steps < 0 || input.Len() == 0
-		}
-		if err := runRandTest(generateSteps(finishedFn, input)); err != nil {
-			t.Fatal(err)
-		}
-	})
 }

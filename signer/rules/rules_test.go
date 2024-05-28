@@ -126,7 +126,6 @@ func initRuleEngine(js string) (*rulesetUI, error) {
 }
 
 func TestListRequest(t *testing.T) {
-	t.Parallel()
 	accs := make([]accounts.Account, 5)
 
 	for i := range accs {
@@ -156,7 +155,6 @@ func TestListRequest(t *testing.T) {
 }
 
 func TestSignTxRequest(t *testing.T) {
-	t.Parallel()
 	js := `
 	function ApproveTx(r){
 		console.log("transaction.from", r.transaction.from);
@@ -254,7 +252,6 @@ func (d *dummyUI) OnSignerStartup(info core.StartupInfo) {
 
 // TestForwarding tests that the rule-engine correctly dispatches requests to the next caller
 func TestForwarding(t *testing.T) {
-	t.Parallel()
 	js := ""
 	ui := &dummyUI{make([]string, 0)}
 	jsBackend := storage.NewEphemeralStorage()
@@ -285,7 +282,6 @@ func TestForwarding(t *testing.T) {
 }
 
 func TestMissingFunc(t *testing.T) {
-	t.Parallel()
 	r, err := initRuleEngine(JS)
 	if err != nil {
 		t.Errorf("Couldn't create evaluator %v", err)
@@ -310,7 +306,6 @@ func TestMissingFunc(t *testing.T) {
 	t.Logf("Err %v", err)
 }
 func TestStorage(t *testing.T) {
-	t.Parallel()
 	js := `
 	function testStorage(){
 		storage.put("mykey", "myvalue")
@@ -479,7 +474,6 @@ func dummySigned(value *big.Int) *types.Transaction {
 }
 
 func TestLimitWindow(t *testing.T) {
-	t.Parallel()
 	r, err := initRuleEngine(ExampleTxWindow)
 	if err != nil {
 		t.Errorf("Couldn't create evaluator %v", err)
@@ -567,7 +561,6 @@ func (d *dontCallMe) OnApprovedTx(tx ethapi.SignTransactionResult) {
 // if it does, that would be bad since developers may rely on that to store data,
 // instead of using the disk-based data storage
 func TestContextIsCleared(t *testing.T) {
-	t.Parallel()
 	js := `
 	function ApproveTx(){
 		if (typeof foobar == 'undefined') {
@@ -603,7 +596,6 @@ func TestContextIsCleared(t *testing.T) {
 }
 
 func TestSignData(t *testing.T) {
-	t.Parallel()
 	js := `function ApproveListing(){
     return "Approve"
 }

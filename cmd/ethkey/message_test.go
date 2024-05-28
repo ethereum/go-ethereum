@@ -22,7 +22,6 @@ import (
 )
 
 func TestMessageSignVerify(t *testing.T) {
-	t.Parallel()
 	tmpdir := t.TempDir()
 
 	keyfile := filepath.Join(tmpdir, "the-keyfile")

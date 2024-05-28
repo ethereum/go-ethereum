@@ -36,7 +36,6 @@ import (
 var testSigData = make([]byte, 32)
 
 func TestKeyStore(t *testing.T) {
-	t.Parallel()
 	dir, ks := tmpKeyStore(t, true)
 
 	a, err := ks.NewAccount("foo")
@@ -79,7 +78,6 @@ func TestKeyStore(t *testing.T) {
 }
 
 func TestSign(t *testing.T) {
-	t.Parallel()
 	_, ks := tmpKeyStore(t, true)
 
 	pass := "" // not used but required by API
@@ -98,7 +96,6 @@ func TestSign(t *testing.T) {
 }
 
 func TestSignWithPassphrase(t *testing.T) {
-	t.Parallel()
 	_, ks := tmpKeyStore(t, true)
 
 	pass := "passwd"
@@ -304,7 +301,6 @@ type walletEvent struct {
 // Tests that wallet notifications and correctly fired when accounts are added
 // or deleted from the keystore.
 func TestWalletNotifications(t *testing.T) {
-	t.Parallel()
 	_, ks := tmpKeyStore(t, false)
 
 	// Subscribe to the wallet feed and collect events.
@@ -374,7 +370,6 @@ func TestWalletNotifications(t *testing.T) {
 
 // TestImportExport tests the import functionality of a keystore.
 func TestImportECDSA(t *testing.T) {
-	t.Parallel()
 	_, ks := tmpKeyStore(t, true)
 
 	key, err := crypto.GenerateKey()
@@ -397,7 +392,6 @@ func TestImportECDSA(t *testing.T) {
 
 // TestImportECDSA tests the import and export functionality of a keystore.
 func TestImportExport(t *testing.T) {
-	t.Parallel()
 	_, ks := tmpKeyStore(t, true)
 
 	acc, err := ks.NewAccount("old")
@@ -432,7 +426,6 @@ func TestImportExport(t *testing.T) {
 // TestImportRace tests the keystore on races.
 // This test should fail under -race if importing races.
 func TestImportRace(t *testing.T) {
-	t.Parallel()
 	_, ks := tmpKeyStore(t, true)
 
 	acc, err := ks.NewAccount("old")

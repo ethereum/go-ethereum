@@ -23,7 +23,6 @@
 package discover
 
 import (
-	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -341,10 +340,8 @@ func (tab *Table) loadSeedNodes() {
 
 	for i := range seeds {
 		seed := seeds[i]
-		if tab.log.Enabled(context.Background(), log.LevelTrace) {
-			age := time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP()))
-			tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
-		}
+		age := log.Lazy{Fn: func() interface{} { return time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP())) }}
+		tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", seed.addr(), "age", age)
 		tab.addSeenNode(seed)
 	}
 }
@@ -474,26 +471,6 @@ func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *
 	}
 
 	return nodes
-}
-
-// appendLiveNodes adds nodes at the given distance to the result slice.
-func (tab *Table) appendLiveNodes(dist uint, result []*enode.Node) []*enode.Node {
-	if dist > 256 {
-		return result
-	}
-	if dist == 0 {
-		return append(result, tab.self())
-	}
-
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
-	for _, n := range tab.bucketAtDistance(int(dist)).entries {
-		if n.livenessChecks >= 1 {
-			node := n.Node // avoid handing out pointer to struct field
-			result = append(result, &node)
-		}
-	}
-	return result
 }
 
 // len returns the number of nodes in the table.

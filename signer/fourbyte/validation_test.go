@@ -77,7 +77,6 @@ type txtestcase struct {
 }
 
 func TestTransactionValidation(t *testing.T) {
-	t.Parallel()
 	var (
 		// use empty db, there are other tests for the abi-specific stuff
 		db = newEmpty()

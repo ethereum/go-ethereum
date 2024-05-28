@@ -110,7 +110,8 @@ func MigrateGlobalFlags(ctx *cli.Context) {
 func doMigrateFlags(ctx *cli.Context) {
 	// Figure out if there are any aliases of commands. If there are, we want
 	// to ignore them when iterating over the flags.
-	aliases := make(map[string]bool)
+	var aliases = make(map[string]bool)
+
 	for _, fl := range ctx.Command.Flags {
 		for _, alias := range fl.Names()[1:] {
 			aliases[alias] = true
@@ -255,22 +256,13 @@ func AutoEnvVars(flags []cli.Flag, prefix string) {
 		case *cli.StringFlag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
 
-		case *cli.StringSliceFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
 		case *cli.BoolFlag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
 
 		case *cli.IntFlag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
 
-		case *cli.Int64Flag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
 		case *cli.Uint64Flag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
-		case *cli.Float64Flag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
 
 		case *cli.DurationFlag:
