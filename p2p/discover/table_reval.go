@@ -28,6 +28,8 @@ import (
 
 const never = mclock.AbsTime(math.MaxInt64)
 
+const slowRevalidationFactor = 3
+
 // tableRevalidation implements the node revalidation process.
 // It tracks all nodes contained in Table, and schedules sending PING to them.
 type tableRevalidation struct {
@@ -48,7 +50,7 @@ func (tr *tableRevalidation) init(cfg *Config) {
 	tr.fast.interval = cfg.PingInterval
 	tr.fast.name = "fast"
 	tr.slow.nextTime = never
-	tr.slow.interval = cfg.PingInterval * 3
+	tr.slow.interval = cfg.PingInterval * slowRevalidationFactor
 	tr.slow.name = "slow"
 }
 
@@ -63,6 +65,12 @@ func (tr *tableRevalidation) nodeRemoved(n *node) {
 		panic(fmt.Errorf("removed node %v has nil revalList", n.ID()))
 	}
 	n.revalList.remove(n)
+}
+
+// nodeEndpointChanged is called when a change in IP or port is detected.
+func (tr *tableRevalidation) nodeEndpointChanged(tab *Table, n *node) {
+	n.isValidatedLive = false
+	tr.moveToList(&tr.fast, n, tab.cfg.Clock.Now(), &tab.rand)
 }
 
 // run performs node revalidation.
@@ -146,11 +154,11 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	defer tab.mutex.Unlock()
 
 	if !resp.didRespond {
-		// Revalidation failed.
 		n.livenessChecks /= 3
 		if n.livenessChecks <= 0 {
 			tab.deleteInBucket(b, n.ID())
 		} else {
+			tab.log.Debug("Node revalidation failed", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "q", n.revalList.name)
 			tr.moveToList(&tr.fast, n, now, &tab.rand)
 		}
 		return
@@ -159,22 +167,15 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	// The node responded.
 	n.livenessChecks++
 	n.isValidatedLive = true
+	tab.log.Debug("Node revalidated", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "q", n.revalList.name)
 	var endpointChanged bool
 	if resp.newRecord != nil {
-		endpointChanged = tab.bumpInBucket(b, resp.newRecord)
-		if endpointChanged {
-			// If the node changed its advertised endpoint, the updated ENR is not served
-			// until it has been revalidated.
-			n.isValidatedLive = false
-		}
+		_, endpointChanged = tab.bumpInBucket(b, resp.newRecord, false)
 	}
-	tab.log.Debug("Revalidated node", "b", b.index, "id", n.ID(), "checks", n.livenessChecks, "q", n.revalList)
 
-	// Move node over to slow queue after first validation.
+	// Node moves to slow list if it passed and hasn't changed.
 	if !endpointChanged {
 		tr.moveToList(&tr.slow, n, now, &tab.rand)
-	} else {
-		tr.moveToList(&tr.fast, n, now, &tab.rand)
 	}
 }
 
