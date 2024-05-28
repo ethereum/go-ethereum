@@ -68,9 +68,10 @@ func (r *simCallResult) MarshalJSON() ([]byte, error) {
 }
 
 type simOpts struct {
-	BlockStateCalls []simBlock
-	TraceTransfers  bool
-	Validation      bool
+	BlockStateCalls        []simBlock
+	TraceTransfers         bool
+	Validation             bool
+	ReturnFullTransactions bool
 }
 
 type simulator struct {
@@ -80,6 +81,7 @@ type simulator struct {
 	base           *types.Header
 	traceTransfers bool
 	validate       bool
+	fullTx         bool
 }
 
 func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[string]interface{}, error) {
@@ -233,7 +235,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
 	b := types.NewBlockWithWithdrawals(header, txes, nil, receipts, withdrawals, trie.NewStackTrie(nil))
-	res := RPCMarshalBlock(b, true, false, config)
+	res := RPCMarshalBlock(b, true, sim.fullTx, config)
 	repairLogs(callResults, res["hash"].(common.Hash))
 	res["calls"] = callResults
 

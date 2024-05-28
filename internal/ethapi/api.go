@@ -1241,7 +1241,7 @@ func (s *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrOrH
 	if state == nil || err != nil {
 		return nil, err
 	}
-	sim := &simulator{b: s.b, state: state, base: base, traceTransfers: opts.TraceTransfers, validate: opts.Validation}
+	sim := &simulator{b: s.b, state: state, base: base, traceTransfers: opts.TraceTransfers, validate: opts.Validation, fullTx: opts.ReturnFullTransactions}
 	return sim.execute(ctx, opts.BlockStateCalls)
 }
 
