@@ -71,9 +71,11 @@ type txPool interface {
 	// Add should add the given transactions to the pool.
 	Add(txs []*types.Transaction, local bool, sync bool) []error
 
-	// Pending should return pending transactions.
-	// The slice should be modifiable by the caller.
-	Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction
+	// Pending return pending transactions.
+	Pending(filter txpool.PendingFilter) txpool.Pending
+
+	// PendingHashes returns a list of the hashes for all pending transactions.
+	PendingHashes(filter txpool.PendingFilter) []common.Hash
 
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
 	// can decide whether to receive notifications only for newly seen transactions

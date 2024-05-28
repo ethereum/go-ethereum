@@ -522,57 +522,94 @@ func (pool *LegacyPool) ContentFrom(addr common.Address) ([]*types.Transaction, 
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
-func (pool *LegacyPool) Pending(filter txpool.PendingFilter) map[common.Address][]*txpool.LazyTransaction {
+func (pool *LegacyPool) Pending(filter txpool.PendingFilter) txpool.Pending {
 	// If only blob transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.
+	if filter.OnlyBlobTxs {
+		return txpool.EmptyPending
+	}
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	var (
+		baseFee = new(uint256.Int)
+		minTip  = new(uint256.Int)
+		heads   = make(txpool.TipList, 0, len(pool.pending))
+		tails   = make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
+	)
+	if filter.MinTip != nil {
+		minTip = filter.MinTip
+	}
+	if filter.BaseFee != nil {
+		baseFee = filter.BaseFee
+	}
+	baseFeeBig := baseFee.ToBig()
+	for addr, list := range pool.pending {
+		if filter.NoLocals && pool.locals.contains(addr) {
+			continue
+		}
+		if filter.OnlyLocals && !pool.locals.contains(addr) {
+			continue
+		}
+		var (
+			tail []*txpool.LazyTransaction
+			txs  = list.Flatten()
+		)
+		for i, tx := range txs {
+			bigTip, err := tx.EffectiveGasTip(baseFeeBig)
+			if err != nil {
+				break // basefee too low, cannot be included, discard rest of txs from the account
+			}
+			tip := uint256.MustFromBig(bigTip)
+			if tip.Lt(minTip) {
+				break // allowed or remaining tip too low, cannot be included, discard rest of txs from the account
+			}
+			lazyTx := &txpool.LazyTransaction{
+				Pool:    pool,
+				Hash:    txs[i].Hash(),
+				Tx:      txs[i],
+				Time:    txs[i].Time(),
+				Fees:    *tip,
+				Gas:     txs[i].Gas(),
+				BlobGas: txs[i].BlobGas(),
+			}
+			if len(tail) == 0 {
+				tail = make([]*txpool.LazyTransaction, 0, len(txs)-i)
+				heads = append(heads, &txpool.TxTips{
+					From: addr,
+					Tips: lazyTx.Fees,
+					Time: lazyTx.Time.UnixNano(),
+				})
+			}
+			tail = append(tail, lazyTx)
+		}
+		if len(tail) > 0 {
+			tails[addr] = tail
+		}
+	}
+	return txpool.NewPendingSet(heads, tails)
+}
+
+// PendingHashes retrieves the hashes of all currently processable transactions.
+// The returned list is grouped by origin account and sorted by nonce
+func (pool *LegacyPool) PendingHashes(filter txpool.PendingFilter) []common.Hash {
 	if filter.OnlyBlobTxs {
 		return nil
 	}
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	// Convert the new uint256.Int types to the old big.Int ones used by the legacy pool
-	var (
-		minTipBig  *big.Int
-		baseFeeBig *big.Int
-	)
-	if filter.MinTip != nil {
-		minTipBig = filter.MinTip.ToBig()
-	}
-	if filter.BaseFee != nil {
-		baseFeeBig = filter.BaseFee.ToBig()
-	}
-	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
+	var hashes = make([]common.Hash, 0, len(pool.pending))
 	for addr, list := range pool.pending {
-		txs := list.Flatten()
-
-		// If the miner requests tip enforcement, cap the lists now
-		if minTipBig != nil && !pool.locals.contains(addr) {
-			for i, tx := range txs {
-				if tx.EffectiveGasTipIntCmp(minTipBig, baseFeeBig) < 0 {
-					txs = txs[:i]
-					break
-				}
-			}
+		if filter.NoLocals && pool.locals.contains(addr) {
+			continue
 		}
-		if len(txs) > 0 {
-			lazies := make([]*txpool.LazyTransaction, len(txs))
-			for i := 0; i < len(txs); i++ {
-				lazies[i] = &txpool.LazyTransaction{
-					Pool:      pool,
-					Hash:      txs[i].Hash(),
-					Tx:        txs[i],
-					Time:      txs[i].Time(),
-					GasFeeCap: uint256.MustFromBig(txs[i].GasFeeCap()),
-					GasTipCap: uint256.MustFromBig(txs[i].GasTipCap()),
-					Gas:       txs[i].Gas(),
-					BlobGas:   txs[i].BlobGas(),
-				}
-			}
-			pending[addr] = lazies
+		if filter.OnlyLocals && !pool.locals.contains(addr) {
+			continue
 		}
+		hashes = list.AppendHashes(hashes)
 	}
-	return pending
+	return hashes
 }
 
 // Locals retrieves the accounts currently considered local by the pool.

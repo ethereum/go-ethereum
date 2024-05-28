@@ -35,9 +35,8 @@ type LazyTransaction struct {
 	Hash common.Hash        // Transaction hash to pull up if needed
 	Tx   *types.Transaction // Transaction if already resolved
 
-	Time      time.Time    // Time when the transaction was first seen
-	GasFeeCap *uint256.Int // Maximum fee per gas the transaction may consume
-	GasTipCap *uint256.Int // Maximum miner tip per gas the transaction can pay
+	Time time.Time // Time when the transaction was first seen
+	Fees uint256.Int
 
 	Gas     uint64 // Amount of gas required by the transaction
 	BlobGas uint64 // Amount of blob gas required by the transaction
@@ -69,21 +68,6 @@ type LazyResolver interface {
 // AddressReserver is passed by the main transaction pool to subpools, so they
 // may request (and relinquish) exclusive access to certain addresses.
 type AddressReserver func(addr common.Address, reserve bool) error
-
-// PendingFilter is a collection of filter rules to allow retrieving a subset
-// of transactions for announcement or mining.
-//
-// Note, the entries here are not arbitrary useful filters, rather each one has
-// a very specific call site in mind and each one can be evaluated very cheaply
-// by the pool implementations. Only add new ones that satisfy those constraints.
-type PendingFilter struct {
-	MinTip  *uint256.Int // Minimum miner tip required to include a transaction
-	BaseFee *uint256.Int // Minimum 1559 basefee needed to include a transaction
-	BlobFee *uint256.Int // Minimum 4844 blobfee needed to include a blob transaction
-
-	OnlyPlainTxs bool // Return only plain EVM transactions (peer-join announces, block space filling)
-	OnlyBlobTxs  bool // Return only blob transactions (block blob-space filling)
-}
 
 // SubPool represents a specialized transaction pool that lives on its own (e.g.
 // blob pool). Since independent of how many specialized pools we have, they do
@@ -133,7 +117,11 @@ type SubPool interface {
 	//
 	// The transactions can also be pre-filtered by the dynamic fee components to
 	// reduce allocations and load on downstream subsystems.
-	Pending(filter PendingFilter) map[common.Address][]*LazyTransaction
+	Pending(filter PendingFilter) Pending
+
+	// PendingHashes retrieves the hashes of all currently processable transactions.
+	// The returned list is grouped by origin account and sorted by nonce
+	PendingHashes(filter PendingFilter) []common.Hash
 
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
 	// can decide whether to receive notifications only for newly seen transactions

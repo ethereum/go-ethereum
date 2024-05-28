@@ -290,12 +290,15 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 	pending := b.eth.txPool.Pending(txpool.PendingFilter{})
 	var txs types.Transactions
-	for _, batch := range pending {
-		for _, lazy := range batch {
-			if tx := lazy.Resolve(); tx != nil {
-				txs = append(txs, tx)
-			}
+	for {
+		lazy, _ := pending.Peek()
+		if lazy == nil {
+			break
 		}
+		if tx := lazy.Resolve(); tx != nil {
+			txs = append(txs, tx)
+		}
+		pending.Shift()
 	}
 	return txs, nil
 }
