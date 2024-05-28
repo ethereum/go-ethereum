@@ -33,7 +33,11 @@ var (
 	ErrApplyStageDone           = errors.New("apply stage is done")
 	ErrUnexpectedL1MessageIndex = errors.New("unexpected L1 message index")
 
-	lifetimeTimer   = metrics.NewRegisteredTimer("pipeline/lifetime", nil)
+	lifetimeTimer = func() metrics.Timer {
+		t := metrics.NewCustomTimer(metrics.NewHistogram(metrics.NewExpDecaySample(128, 0.015)), metrics.NewMeter())
+		metrics.DefaultRegistry.Register("pipeline/lifetime", t)
+		return t
+	}()
 	applyTimer      = metrics.NewRegisteredTimer("pipeline/apply", nil)
 	applyIdleTimer  = metrics.NewRegisteredTimer("pipeline/apply_idle", nil)
 	applyStallTimer = metrics.NewRegisteredTimer("pipeline/apply_stall", nil)
