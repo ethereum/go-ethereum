@@ -59,9 +59,10 @@ func (tr *tableRevalidation) nodeAdded(tab *Table, n *node) {
 
 // nodeRemoved is called when a node was removed from the table.
 func (tr *tableRevalidation) nodeRemoved(n *node) {
-	if n.revalList != nil {
-		n.revalList.remove(n)
+	if n.revalList == nil {
+		panic(fmt.Errorf("removed node %v has nil revalList", n.ID()))
 	}
+	n.revalList.remove(n)
 }
 
 // run performs node revalidation.
