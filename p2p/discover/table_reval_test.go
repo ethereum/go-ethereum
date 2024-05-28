@@ -43,7 +43,7 @@ func TestRevalidationNodeRemoved(t *testing.T) {
 	// then advance the clock to that point and schedule again to start.
 	next := tr.run(tab, clock.Now())
 	clock.Run(time.Duration(next + 1))
-	next = tr.run(tab, clock.Now())
+	tr.run(tab, clock.Now())
 	if len(tr.activeReq) != 1 {
 		t.Fatal("revalidation request did not start:", tr.activeReq)
 	}
