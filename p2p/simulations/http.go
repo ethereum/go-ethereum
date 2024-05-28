@@ -516,12 +516,14 @@ func NewMsgFilters(filterParam string) (MsgFilters, error) {
 	filters := make(MsgFilters)
 
 	for _, filter := range strings.Split(filterParam, "-") {
-		proto, codes, found := strings.Cut(filter, ":")
-		if !found || proto == "" || codes == "" {
+		protoCodes := strings.SplitN(filter, ":", 2)
+		if len(protoCodes) != 2 || protoCodes[0] == "" || protoCodes[1] == "" {
 			return nil, fmt.Errorf("invalid message filter: %s", filter)
 		}
 
-		for _, code := range strings.Split(codes, ",") {
+		proto := protoCodes[0]
+
+		for _, code := range strings.Split(protoCodes[1], ",") {
 			if code == "*" || code == "-1" {
 				filters[MsgFilter{Proto: proto, Code: -1}] = struct{}{}
 				continue

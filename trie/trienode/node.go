@@ -39,7 +39,7 @@ func (n *Node) Size() int {
 
 // IsDeleted returns the indicator if the node is marked as deleted.
 func (n *Node) IsDeleted() bool {
-	return len(n.Blob) == 0
+	return n.Hash == (common.Hash{})
 }
 
 // New constructs a node with provided node information.

@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
-	"golang.org/x/exp/slog"
 )
 
 // Node represents a node in a simulation network which is created by a
@@ -130,7 +129,7 @@ type NodeConfig struct {
 	// LogVerbosity is the log verbosity of the p2p node at runtime.
 	//
 	// The default verbosity is INFO.
-	LogVerbosity slog.Level
+	LogVerbosity log.Lvl
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding
@@ -201,7 +200,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	n.Port = confJSON.Port
 	n.EnableMsgEvents = confJSON.EnableMsgEvents
 	n.LogFile = confJSON.LogFile
-	n.LogVerbosity = slog.Level(confJSON.LogVerbosity)
+	n.LogVerbosity = log.Lvl(confJSON.LogVerbosity)
 
 	return nil
 }

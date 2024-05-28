@@ -19,14 +19,12 @@ package core
 import (
 	"context"
 	"encoding/json"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
-	"golang.org/x/exp/slog"
 )
 
 type AuditLogger struct {
@@ -127,13 +125,14 @@ func (l *AuditLogger) Version(ctx context.Context) (string, error) {
 }
 
 func NewAuditLogger(path string, api ExternalAPI) (*AuditLogger, error) {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	l := log.New("api", "signer")
+
+	handler, err := log.FileHandler(path, log.LogfmtFormat())
 	if err != nil {
 		return nil, err
 	}
 
-	handler := slog.NewTextHandler(f, nil)
-	l := log.NewLogger(handler).With("api", "signer")
+	l.SetHandler(handler)
 	l.Info("Configured", "audit log", path)
 
 	return &AuditLogger{l, api}, nil

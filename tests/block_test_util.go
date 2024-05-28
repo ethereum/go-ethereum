@@ -108,7 +108,7 @@ type btHeaderMarshaling struct {
 	ExcessBlobGas *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger) error {
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -116,9 +116,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	// import pre accounts & construct test genesis block & state root
 	var (
 		db    = rawdb.NewMemoryDatabase()
-		tconf = &trie.Config{
-			Preimages: true,
-		}
+		tconf = &trie.Config{}
 	)
 	if scheme == rawdb.PathScheme {
 		tconf.PathDB = pathdb.Defaults
@@ -144,7 +142,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	// Wrap the original engine within the beacon-engine
 	engine := beacon.New(ethash.NewFaker())
 
-	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme, Preimages: true}
+	cache := &core.CacheConfig{TrieCleanLimit: 0, StateScheme: scheme}
 	if snapshotter {
 		cache.SnapshotLimit = 1
 		cache.SnapshotWait = true
@@ -161,11 +159,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, tracer vm.EVMLogger, po
 	if err != nil {
 		return err
 	}
-	// Import succeeded: regardless of whether the _test_ succeeds or not, schedule
-	// the post-check to run
-	if postCheck != nil {
-		defer postCheck(result, chain)
-	}
+
 	cmlast := chain.CurrentBlock().Hash()
 	if common.Hash(t.json.BestBlock) != cmlast {
 		return fmt.Errorf("last block hash validation mismatch: want: %x, have: %x", t.json.BestBlock, cmlast)
@@ -364,12 +358,6 @@ func (t *BlockTest) validatePostState(statedb *state.StateDB) error {
 
 		if nonce2 != acct.Nonce {
 			return fmt.Errorf("account nonce mismatch for addr: %s want: %d have: %d", addr, acct.Nonce, nonce2)
-		}
-		for k, v := range acct.Storage {
-			v2 := statedb.GetState(addr, k)
-			if v2 != v {
-				return fmt.Errorf("account storage mismatch for addr: %s, slot: %x, want: %x, have: %x", addr, k, v, v2)
-			}
 		}
 	}
 

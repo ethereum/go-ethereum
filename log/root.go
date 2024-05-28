@@ -2,33 +2,31 @@ package log
 
 import (
 	"os"
-	"sync/atomic"
-
-	"golang.org/x/exp/slog"
 )
 
-var root atomic.Value
+var (
+	root          = &logger{[]interface{}{}, new(swapHandler)}
+	StdoutHandler = StreamHandler(os.Stdout, LogfmtFormat())
+	StderrHandler = StreamHandler(os.Stderr, LogfmtFormat())
+)
 
 func init() {
-	defaultLogger := &logger{slog.New(DiscardHandler())}
-	SetDefault(defaultLogger)
+	root.SetHandler(DiscardHandler())
 }
 
-// SetDefault sets the default global logger
-func SetDefault(l Logger) {
-	root.Store(l)
-	if lg, ok := l.(*logger); ok {
-		slog.SetDefault(lg.inner)
-	}
+// New returns a new logger with the given context.
+// New is a convenient alias for Root().New
+func New(ctx ...interface{}) Logger {
+	return root.New(ctx...)
 }
 
 // Root returns the root logger
 func Root() Logger {
-	return root.Load().(Logger)
+	return root
 }
 
 // The following functions bypass the exported logger methods (logger.Debug,
-// etc.) to keep the call depth the same for all paths to logger.Write so
+// etc.) to keep the call depth the same for all paths to logger.write so
 // runtime.Caller(2) always refers to the call site in client code.
 
 // Trace is a convenient alias for Root().Trace
@@ -41,7 +39,7 @@ func Root() Logger {
 //	log.Trace("msg", "key1", val1)
 //	log.Trace("msg", "key1", val1, "key2", val2)
 func Trace(msg string, ctx ...interface{}) {
-	Root().Write(LevelTrace, msg, ctx...)
+	root.write(msg, LvlTrace, ctx, skipLevel)
 }
 
 // Debug is a convenient alias for Root().Debug
@@ -54,7 +52,7 @@ func Trace(msg string, ctx ...interface{}) {
 //	log.Debug("msg", "key1", val1)
 //	log.Debug("msg", "key1", val1, "key2", val2)
 func Debug(msg string, ctx ...interface{}) {
-	Root().Write(slog.LevelDebug, msg, ctx...)
+	root.write(msg, LvlDebug, ctx, skipLevel)
 }
 
 // Info is a convenient alias for Root().Info
@@ -67,7 +65,7 @@ func Debug(msg string, ctx ...interface{}) {
 //	log.Info("msg", "key1", val1)
 //	log.Info("msg", "key1", val1, "key2", val2)
 func Info(msg string, ctx ...interface{}) {
-	Root().Write(slog.LevelInfo, msg, ctx...)
+	root.write(msg, LvlInfo, ctx, skipLevel)
 }
 
 // Warn is a convenient alias for Root().Warn
@@ -80,7 +78,7 @@ func Info(msg string, ctx ...interface{}) {
 //	log.Warn("msg", "key1", val1)
 //	log.Warn("msg", "key1", val1, "key2", val2)
 func Warn(msg string, ctx ...interface{}) {
-	Root().Write(slog.LevelWarn, msg, ctx...)
+	root.write(msg, LvlWarn, ctx, skipLevel)
 }
 
 // Error is a convenient alias for Root().Error
@@ -93,7 +91,7 @@ func Warn(msg string, ctx ...interface{}) {
 //	log.Error("msg", "key1", val1)
 //	log.Error("msg", "key1", val1, "key2", val2)
 func Error(msg string, ctx ...interface{}) {
-	Root().Write(slog.LevelError, msg, ctx...)
+	root.write(msg, LvlError, ctx, skipLevel)
 }
 
 // Crit is a convenient alias for Root().Crit
@@ -106,12 +104,47 @@ func Error(msg string, ctx ...interface{}) {
 //	log.Crit("msg", "key1", val1)
 //	log.Crit("msg", "key1", val1, "key2", val2)
 func Crit(msg string, ctx ...interface{}) {
-	Root().Write(LevelCrit, msg, ctx...)
+	root.write(msg, LvlCrit, ctx, skipLevel)
 	os.Exit(1)
 }
 
-// New returns a new logger with the given context.
-// New is a convenient alias for Root().New
-func New(ctx ...interface{}) Logger {
-	return Root().With(ctx...)
+// Output is a convenient alias for write, allowing for the modification of
+// the calldepth (number of stack frames to skip).
+// calldepth influences the reported line number of the log message.
+// A calldepth of zero reports the immediate caller of Output.
+// Non-zero calldepth skips as many stack frames.
+func Output(msg string, lvl Lvl, calldepth int, ctx ...interface{}) {
+	root.write(msg, lvl, ctx, calldepth+skipLevel)
+}
+
+func OnTrace(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlTrace {
+		fn(root.Trace)
+	}
+}
+
+func OnDebug(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlDebug {
+		fn(root.Debug)
+	}
+}
+func OnInfo(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlInfo {
+		fn(root.Info)
+	}
+}
+func OnWarn(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlWarn {
+		fn(root.Warn)
+	}
+}
+func OnError(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlError {
+		fn(root.Error)
+	}
+}
+func OnCrit(fn func(l Logging)) {
+	if root.GetHandler().Level() >= LvlCrit {
+		fn(root.Crit)
+	}
 }

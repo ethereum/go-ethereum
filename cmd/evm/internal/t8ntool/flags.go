@@ -29,15 +29,12 @@ import (
 var (
 	TraceFlag = &cli.BoolFlag{
 		Name:  "trace",
-		Usage: "Configures the use of the JSON opcode tracer. This tracer emits traces to files as trace-<txIndex>-<txHash>.jsonl",
+		Usage: "Output full trace logs to files <txhash>.jsonl",
 	}
-	TraceTracerFlag = &cli.StringFlag{
-		Name:  "trace.tracer",
-		Usage: "Configures the use of a custom tracer, e.g native or js tracers. Examples are callTracer and 4byteTracer. These tracers emit results into files as trace-<txIndex>-<txHash>.json",
-	}
-	TraceTracerConfigFlag = &cli.StringFlag{
-		Name:  "trace.jsonconfig",
-		Usage: "The configurations for the custom tracer specified by --trace.tracer. If provided, must be in JSON format",
+	TraceDisableMemoryFlag = &cli.BoolFlag{
+		Name:  "trace.nomemory",
+		Value: true,
+		Usage: "Disable full memory dump in traces (deprecated)",
 	}
 	TraceEnableMemoryFlag = &cli.BoolFlag{
 		Name:  "trace.memory",
@@ -46,6 +43,11 @@ var (
 	TraceDisableStackFlag = &cli.BoolFlag{
 		Name:  "trace.nostack",
 		Usage: "Disable stack output in traces",
+	}
+	TraceDisableReturnDataFlag = &cli.BoolFlag{
+		Name:  "trace.noreturndata",
+		Value: true,
+		Usage: "Disable return data output in traces (deprecated)",
 	}
 	TraceEnableReturnDataFlag = &cli.BoolFlag{
 		Name:  "trace.returndata",

@@ -34,7 +34,6 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/exp/slog"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -74,6 +73,17 @@ var (
 	logFileFlag = &cli.StringFlag{
 		Name:     "log.file",
 		Usage:    "Write logs to a file",
+		Category: flags.LoggingCategory,
+	}
+	backtraceAtFlag = &cli.StringFlag{
+		Name:     "log.backtrace",
+		Usage:    "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
+		Value:    "",
+		Category: flags.LoggingCategory,
+	}
+	debugFlag = &cli.BoolFlag{
+		Name:     "log.debug",
+		Usage:    "Prepends log messages with call-site location (file and line number)",
 		Category: flags.LoggingCategory,
 	}
 	logRotateFlag = &cli.BoolFlag{
@@ -150,6 +160,8 @@ var Flags = []cli.Flag{
 	verbosityFlag,
 	logVmoduleFlag,
 	vmoduleFlag,
+	backtraceAtFlag,
+	debugFlag,
 	logjsonFlag,
 	logFormatFlag,
 	logFileFlag,
@@ -168,34 +180,45 @@ var Flags = []cli.Flag{
 }
 
 var (
-	glogger                *log.GlogHandler
-	logOutputFile          io.WriteCloser
-	defaultTerminalHandler *log.TerminalHandler
+	glogger         *log.GlogHandler
+	logOutputStream log.Handler
 )
 
 func init() {
-	defaultTerminalHandler = log.NewTerminalHandler(os.Stderr, false)
-	glogger = log.NewGlogHandler(defaultTerminalHandler)
+	glogger = log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.LvlInfo)
-	log.SetDefault(log.NewLogger(glogger))
-}
-
-func ResetLogging() {
-	if defaultTerminalHandler != nil {
-		defaultTerminalHandler.ResetFieldPadding()
-	}
+	log.Root().SetHandler(glogger)
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
 	var (
-		handler        slog.Handler
-		terminalOutput = io.Writer(os.Stderr)
-		output         io.Writer
-		logFmtFlag     = ctx.String(logFormatFlag.Name)
+		logfmt     log.Format
+		output     = io.Writer(os.Stderr)
+		logFmtFlag = ctx.String(logFormatFlag.Name)
 	)
+	switch {
+	case ctx.Bool(logjsonFlag.Name):
+		// Retain backwards compatibility with `--log.json` flag if `--log.format` not set
+		defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
+		logfmt = log.JSONFormat()
+	case logFmtFlag == "json":
+		logfmt = log.JSONFormat()
+	case logFmtFlag == "logfmt":
+		logfmt = log.LogfmtFormat()
+	case logFmtFlag == "", logFmtFlag == "terminal":
+		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		if useColor {
+			output = colorable.NewColorableStderr()
+		}
+		logfmt = log.TerminalFormat(useColor)
+	default:
+		// Unknown log format specified
+		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
+	}
 	var (
+		ostream  = log.StreamHandler(output, logfmt)
 		logFile  = ctx.String(logFileFlag.Name)
 		rotation = ctx.Bool(logRotateFlag.Name)
 	)
@@ -218,55 +241,27 @@ func Setup(ctx *cli.Context) error {
 		} else {
 			context = append(context, "location", filepath.Join(os.TempDir(), "geth-lumberjack.log"))
 		}
-		logOutputFile = &lumberjack.Logger{
+		lumberWriter := &lumberjack.Logger{
 			Filename:   logFile,
 			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
 			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
 			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
 			Compress:   ctx.Bool(logCompressFlag.Name),
 		}
-		output = io.MultiWriter(terminalOutput, logOutputFile)
+		ostream = log.StreamHandler(io.MultiWriter(output, lumberWriter), logfmt)
 	} else if logFile != "" {
-		var err error
-		if logOutputFile, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
 			return err
 		}
-		output = io.MultiWriter(logOutputFile, terminalOutput)
+		ostream = log.StreamHandler(io.MultiWriter(output, f), logfmt)
 		context = append(context, "location", logFile)
-	} else {
-		output = terminalOutput
 	}
-
-	switch {
-	case ctx.Bool(logjsonFlag.Name):
-		// Retain backwards compatibility with `--log.json` flag if `--log.format` not set
-		defer log.Warn("The flag '--log.json' is deprecated, please use '--log.format=json' instead")
-		handler = log.JSONHandler(output)
-	case logFmtFlag == "json":
-		handler = log.JSONHandler(output)
-	case logFmtFlag == "logfmt":
-		handler = log.LogfmtHandler(output)
-	case logFmtFlag == "", logFmtFlag == "terminal":
-		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-		if useColor {
-			terminalOutput = colorable.NewColorableStderr()
-			if logOutputFile != nil {
-				output = io.MultiWriter(logOutputFile, terminalOutput)
-			} else {
-				output = terminalOutput
-			}
-		}
-		handler = log.NewTerminalHandler(output, useColor)
-	default:
-		// Unknown log format specified
-		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
-	}
-
-	glogger = log.NewGlogHandler(handler)
+	glogger.SetHandler(ostream)
 
 	// logging
-	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
-	glogger.Verbosity(verbosity)
+	verbosity := ctx.Int(verbosityFlag.Name)
+	glogger.Verbosity(log.Lvl(verbosity))
 	vmodule := ctx.String(logVmoduleFlag.Name)
 	if vmodule == "" {
 		// Retain backwards compatibility with `--vmodule` flag if `--log.vmodule` not set
@@ -277,7 +272,16 @@ func Setup(ctx *cli.Context) error {
 	}
 	glogger.Vmodule(vmodule)
 
-	log.SetDefault(log.NewLogger(glogger))
+	debug := ctx.Bool(debugFlag.Name)
+	if ctx.IsSet(debugFlag.Name) {
+		debug = ctx.Bool(debugFlag.Name)
+	}
+	log.PrintOrigins(debug)
+
+	backtrace := ctx.String(backtraceAtFlag.Name)
+	glogger.BacktraceAt(backtrace)
+
+	log.Root().SetHandler(glogger)
 
 	// profiling, tracing
 	runtime.MemProfileRate = memprofilerateFlag.Value
@@ -337,8 +341,8 @@ func StartPProf(address string, withMetrics bool) {
 func Exit() {
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
-	if logOutputFile != nil {
-		logOutputFile.Close()
+	if closer, ok := logOutputStream.(io.Closer); ok {
+		closer.Close()
 	}
 }
 

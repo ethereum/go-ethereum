@@ -250,7 +250,7 @@ func discv4Crawl(ctx *cli.Context) error {
 func discv4Test(ctx *cli.Context) error {
 	// Configure test package globals.
 	if !ctx.IsSet(remoteEnodeFlag.Name) {
-		return fmt.Errorf("missing -%v", remoteEnodeFlag.Name)
+		return fmt.Errorf("Missing -%v", remoteEnodeFlag.Name)
 	}
 
 	v4test.Remote = ctx.String(remoteEnodeFlag.Name)

@@ -26,7 +26,6 @@ import (
 )
 
 func TestMakeTopics(t *testing.T) {
-	t.Parallel()
 	type args struct {
 		query [][]interface{}
 	}
@@ -119,9 +118,7 @@ func TestMakeTopics(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := MakeTopics(tt.args.query...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("makeTopics() error = %v, wantErr %v", err, tt.wantErr)
@@ -352,13 +349,10 @@ func setupTopicsTests() []topicTest {
 }
 
 func TestParseTopics(t *testing.T) {
-	t.Parallel()
 	tests := setupTopicsTests()
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			createObj := tt.args.createObj()
 			if err := ParseTopics(createObj, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
 				t.Errorf("parseTopics() error = %v, wantErr %v", err, tt.wantErr)
@@ -373,13 +367,10 @@ func TestParseTopics(t *testing.T) {
 }
 
 func TestParseTopicsIntoMap(t *testing.T) {
-	t.Parallel()
 	tests := setupTopicsTests()
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			outMap := make(map[string]interface{})
 			if err := ParseTopicsIntoMap(outMap, tt.args.fields, tt.args.topics); (err != nil) != tt.wantErr {
 				t.Errorf("parseTopicsIntoMap() error = %v, wantErr %v", err, tt.wantErr)

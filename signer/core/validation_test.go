@@ -19,7 +19,6 @@ package core
 import "testing"
 
 func TestPasswordValidation(t *testing.T) {
-	t.Parallel()
 	testcases := []struct {
 		pw         string
 		shouldFail bool
