@@ -43,6 +43,14 @@ type revalidationResponse struct {
 	didRespond bool
 }
 
+type revalStatus byte
+
+const (
+	revalStatusGone revalStatus = iota
+	revalStatusFailed
+	revalStatusOK
+)
+
 func (tr *tableRevalidation) init(cfg *Config) {
 	tr.activeReq = make(map[enode.ID]struct{})
 	tr.fast.nextTime = never
@@ -119,12 +127,27 @@ func (tab *Table) doRevalidate(resp revalidationResponse, node *enode.Node) {
 }
 
 // handleResponse processes the result of a revalidation request.
-func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationResponse) {
-	now := tab.cfg.Clock.Now()
-	n := resp.n
-	b := tab.bucket(n.ID())
+func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationResponse) revalStatus {
+	var (
+		now = tab.cfg.Clock.Now()
+		n   = resp.n
+		b   = tab.bucket(n.ID())
+	)
 	delete(tr.activeReq, n.ID())
+	if !resp.list.contains(n) {
+		tab.log.Debug("Revalidated node is gone", "b", b.index, "id", n.ID(), "checks", "q", resp.list.name)
+		return revalStatusGone
+	}
 
+	// Store potential seeds in database.
+	// This is done via defer to avoid holding Table lock while writing to DB.
+	defer func() {
+		if n.isValidatedLive && n.livenessChecks > 5 {
+			tab.db.UpdateNode(resp.n.Node)
+		}
+	}()
+
+	// Remaining logic needs access to Table internals.
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 
@@ -136,7 +159,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 		} else {
 			tr.moveToList(&tr.fast, resp.list, n, now, &tab.rand)
 		}
-		return
+		return revalStatusFailed
 	}
 
 	// The node responded.
@@ -159,11 +182,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 	} else {
 		tr.moveToList(&tr.fast, resp.list, n, now, &tab.rand)
 	}
-
-	// Store potential seeds in database.
-	if n.isValidatedLive && n.livenessChecks > 5 {
-		tab.db.UpdateNode(resp.n.Node)
-	}
+	return revalStatusOK
 }
 
 func (tr *tableRevalidation) moveToList(dest, source *revalidationList, n *node, now mclock.AbsTime, rand randomSource) {
@@ -220,4 +239,8 @@ func (list *revalidationList) remove(n *node) bool {
 		list.nextTime = never
 	}
 	return true
+}
+
+func (list *revalidationList) contains(n *node) bool {
+	return slices.Contains(list.nodes, n)
 }
