@@ -22,11 +22,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 // This test checks that revalidation can handle a node disappearing while
 // a request is active.
-func TestRevalidationNodeRemoved(t *testing.T) {
+func TestRevalidation_nodeRemoved(t *testing.T) {
 	var (
 		clock     mclock.Simulated
 		transport = newPingRecorder()
@@ -35,7 +37,7 @@ func TestRevalidationNodeRemoved(t *testing.T) {
 	)
 	defer db.Close()
 
-	// Fill a bucket.
+	// Add a node to the table.
 	node := nodeAtDistance(tab.self().ID(), 255, net.IP{77, 88, 99, 1})
 	tab.handleAddNode(addNodeOp{node: node})
 
@@ -66,5 +68,52 @@ func TestRevalidationNodeRemoved(t *testing.T) {
 	}
 	if tr.fast.contains(node.ID()) || tr.slow.contains(node.ID()) {
 		t.Fatal("removed node contained in revalidation list")
+	}
+}
+
+// This test checks that nodes with an updated endpoint remain in the fast revalidation list.
+func TestRevalidation_endpointUpdate(t *testing.T) {
+	var (
+		clock     mclock.Simulated
+		transport = newPingRecorder()
+		tab, db   = newInactiveTestTable(transport, Config{Clock: &clock})
+		tr        = &tab.revalidation
+	)
+	defer db.Close()
+
+	// Add node to table.
+	node := nodeAtDistance(tab.self().ID(), 255, net.IP{77, 88, 99, 1})
+	tab.handleAddNode(addNodeOp{node: node})
+
+	// Update the record in transport, including endpoint update.
+	record := node.Record()
+	record.Set(enr.IP{100, 100, 100, 100})
+	record.Set(enr.UDP(9999))
+	nodev2 := enode.SignNull(record, node.ID())
+	transport.updateRecord(nodev2)
+
+	// Start a revalidation request. Schedule once to get the next start time,
+	// then advance the clock to that point and schedule again to start.
+	next := tr.run(tab, clock.Now())
+	clock.Run(time.Duration(next + 1))
+	tr.run(tab, clock.Now())
+	if len(tr.activeReq) != 1 {
+		t.Fatal("revalidation request did not start:", tr.activeReq)
+	}
+
+	// Now finish the revalidation request.
+	var resp revalidationResponse
+	select {
+	case resp = <-tab.revalResponseCh:
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for revalidation")
+	}
+	tr.handleResponse(tab, resp)
+
+	if !tr.fast.contains(node.ID()) {
+		t.Fatal("node not contained in fast revalidation list")
+	}
+	if node.isValidatedLive {
+		t.Fatal("node is marked live after endpoint change")
 	}
 }
