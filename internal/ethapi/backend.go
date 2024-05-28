@@ -112,6 +112,9 @@ type Backend interface {
 	PurgeWhitelistedCheckpoint()
 	GetWhitelistedMilestone() (bool, uint64, common.Hash)
 	PurgeWhitelistedMilestone()
+
+	// Networking related APIs
+	PeerStats() interface{}
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

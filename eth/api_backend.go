@@ -474,3 +474,7 @@ func (b *EthAPIBackend) GetWhitelistedMilestone() (bool, uint64, common.Hash) {
 func (b *EthAPIBackend) PurgeWhitelistedMilestone() {
 	b.eth.Downloader().ChainValidator.PurgeWhitelistedMilestone()
 }
+
+func (b *EthAPIBackend) PeerStats() interface{} {
+	return b.eth.handler.GetPeerStats()
+}

@@ -2623,6 +2623,12 @@ func (api *DebugAPI) GetTraceStack() string {
 	}
 }
 
+// PeerStats returns the current head height and td of all the connected peers
+// along with few additional identifiers.
+func (api *DebugAPI) PeerStats() interface{} {
+	return api.b.PeerStats()
+}
+
 // NetAPI offers network related RPC methods
 type NetAPI struct {
 	net            *p2p.Server

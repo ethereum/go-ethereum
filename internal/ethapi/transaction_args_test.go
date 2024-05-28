@@ -412,3 +412,7 @@ func (b *backendMock) GetWhitelistedMilestone() (bool, uint64, common.Hash) {
 func (b *backendMock) PurgeWhitelistedCheckpoint() {}
 
 func (b *backendMock) PurgeWhitelistedMilestone() {}
+
+func (b backendMock) PeerStats() interface{} {
+	return nil
+}
