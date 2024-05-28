@@ -189,9 +189,19 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	// is optional and may be partially useful if it's not fully
 	// generated.
 	if db.snap != nil {
-		sr, err := newSnapReader(stateRoot, db.snap)
+		// If standalone state snapshot is available (hash scheme),
+		// then construct the legacy snap reader.
+		snap := db.snap.Snapshot(stateRoot)
+		if snap != nil {
+			readers = append(readers, newStateReader(snap)) // snap reader is optional
+		}
+	} else {
+		// If standalone state snapshot is not available (path scheme
+		// or the state snapshot is explicitly disabled in hash mode),
+		// try to construct the state reader with database.
+		reader, err := db.triedb.StateReader(stateRoot)
 		if err == nil {
-			readers = append(readers, sr) // snap reader is optional
+			readers = append(readers, newStateReader(reader)) // state reader is optional
 		}
 	}
 	// Set up the trie reader, which is expected to always be available

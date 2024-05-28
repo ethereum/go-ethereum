@@ -146,7 +146,7 @@ func testNodeIteratorCoverage(t *testing.T, scheme string) {
 		}
 	}
 	// Cross check the hashes and the database itself
-	reader, err := nodeDb.Reader(trie.Hash())
+	reader, err := nodeDb.NodeReader(trie.Hash())
 	if err != nil {
 		t.Fatalf("state is not available %x", trie.Hash())
 	}
