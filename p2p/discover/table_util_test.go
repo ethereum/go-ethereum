@@ -121,8 +121,6 @@ func fillBucket(tab *Table, id enode.ID) (last *tableNode) {
 // if the bucket is not full. The caller must not hold tab.mutex.
 func fillTable(tab *Table, nodes []*enode.Node, setLive bool) {
 	for _, n := range nodes {
-		if setLive {
-		}
 		tab.addFoundNode(n, setLive)
 	}
 }

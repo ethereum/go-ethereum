@@ -473,18 +473,6 @@ func nodeIDEqual[N nodeType](n1, n2 N) bool {
 	return n1.ID() == n2.ID()
 }
 
-func slicesEqual[T any](s1, s2 []T, check func(e1, e2 T) bool) bool {
-	if len(s1) != len(s2) {
-		return false
-	}
-	for i := range s1 {
-		if !check(s1[i], s2[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 // gen wraps quick.Value so it's easier to use.
 // it generates a random value of the given value's type.
 func gen(typ interface{}, rand *rand.Rand) interface{} {

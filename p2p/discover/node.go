@@ -84,10 +84,6 @@ func unwrapNodes(ns []*tableNode) []*enode.Node {
 	return result
 }
 
-func (n *tableNode) addr() *net.UDPAddr {
-	return &net.UDPAddr{IP: n.IP(), Port: n.UDP()}
-}
-
 func (n *tableNode) String() string {
 	return n.Node.String()
 }
