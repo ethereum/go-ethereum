@@ -607,7 +607,8 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *node {
 }
 
 // bumpInBucket updates a node record if it exists in the bucket.
-func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool) (n *node, updated bool) {
+// The second return value reports whether the node's endpoint (IP/port) was updated.
+func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool) (n *node, endpointChanged bool) {
 	i := slices.IndexFunc(b.entries, func(elem *node) bool {
 		return elem.ID() == newRecord.ID()
 	})
