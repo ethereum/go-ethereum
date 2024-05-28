@@ -173,7 +173,7 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 			return msg, context, statedb, nil
 		}
 		vmenv := vm.NewEVM(context, txContext, statedb, b.chainConfig, vm.Config{})
-		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, b.chainConfig, block.Number())
 		if err != nil {
 			return nil, vm.BlockContext{}, nil, err
 		}

@@ -197,9 +197,13 @@ var genesis = &core.Genesis{
 		rcfg.L1GasPriceOracleAddress: {
 			Balance: big.NewInt(0),
 			Storage: map[common.Hash]common.Hash{
-				rcfg.L1BaseFeeSlot: common.BigToHash(big.NewInt(10000)),
-				rcfg.OverheadSlot:  common.BigToHash(big.NewInt(10000)),
-				rcfg.ScalarSlot:    common.BigToHash(big.NewInt(10000)),
+				rcfg.L1BaseFeeSlot:     common.BigToHash(big.NewInt(10000)),
+				rcfg.OverheadSlot:      common.BigToHash(big.NewInt(10000)),
+				rcfg.ScalarSlot:        common.BigToHash(big.NewInt(10000)),
+				rcfg.L1BlobBaseFeeSlot: common.BigToHash(big.NewInt(10000)),
+				rcfg.CommitScalarSlot:  common.BigToHash(big.NewInt(10000)),
+				rcfg.BlobScalarSlot:    common.BigToHash(big.NewInt(10000)),
+				rcfg.IsCurieSlot:       common.BytesToHash([]byte{1}),
 			},
 		},
 	},

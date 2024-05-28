@@ -201,7 +201,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		vmenv := vm.NewEVM(context, txContext, st, config, vm.Config{NoBaseFee: true})
 		gp := new(core.GasPool).AddGas(math.MaxUint64)
 		signer := types.MakeSigner(config, header.Number)
-		l1DataFee, _ := fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, config.ChainID, signer, st)
+		l1DataFee, _ := fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, config, signer, st, header.Number)
 		result, _ := core.ApplyMessage(vmenv, msg, gp, l1DataFee)
 		res = append(res, result.Return()...)
 		if st.Error() != nil {

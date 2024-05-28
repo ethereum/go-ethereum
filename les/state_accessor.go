@@ -65,7 +65,7 @@ func (leth *LightEthereum) stateAtTransaction(ctx context.Context, block *types.
 		}
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, leth.blockchain.Config(), vm.Config{})
-		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, leth.blockchain.Config(), block.Number())
 		if err != nil {
 			return nil, vm.BlockContext{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}

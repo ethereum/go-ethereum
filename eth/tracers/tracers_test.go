@@ -112,7 +112,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		snap := statedb.Snapshot()
-		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, params.AllEthashProtocolChanges, context.BlockNumber)
 		if err != nil {
 			b.Fatal(err)
 		}

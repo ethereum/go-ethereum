@@ -72,6 +72,8 @@ type TxPool struct {
 	istanbul bool // Fork indicator whether we are in the istanbul stage.
 	eip2718  bool // Fork indicator whether we are in the eip2718 stage.
 	shanghai bool // Fork indicator whether we are in the shanghai stage.
+
+	currentHead *big.Int // Current blockchain head
 }
 
 // TxRelayBackend provides an interface to the mechanism that forwards transacions
@@ -79,10 +81,13 @@ type TxPool struct {
 //
 // Send instructs backend to forward new transactions
 // NewHead notifies backend about a new head after processed by the tx pool,
-//  including  mined and rolled back transactions since the last event
+//
+//	including  mined and rolled back transactions since the last event
+//
 // Discard notifies backend about transactions that should be discarded either
-//  because they have been replaced by a re-send or because they have been mined
-//  long ago and no rollback is expected
+//
+//	because they have been replaced by a re-send or because they have been mined
+//	long ago and no rollback is expected
 type TxRelayBackend interface {
 	Send(txs types.Transactions)
 	NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash)
@@ -319,6 +324,8 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	pool.istanbul = pool.config.IsIstanbul(next)
 	pool.eip2718 = pool.config.IsBerlin(next)
 	pool.shanghai = pool.config.IsShanghai(next)
+
+	pool.currentHead = next
 }
 
 // Stop stops the light transaction pool
@@ -387,7 +394,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	// 2. If FeeVault is enabled, perform an additional check for L1 data fees.
 	if pool.config.Scroll.FeeVaultEnabled() {
 		// Get L1 data fee in current state
-		l1DataFee, err := fees.CalculateL1DataFee(tx, currentState)
+		l1DataFee, err := fees.CalculateL1DataFee(tx, currentState, pool.config, pool.currentHead)
 		if err != nil {
 			return fmt.Errorf("failed to calculate L1 data fee, err: %w", err)
 		}

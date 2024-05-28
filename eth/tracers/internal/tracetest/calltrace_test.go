@@ -193,7 +193,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+			l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, test.Genesis.Config, context.BlockNumber)
 			if err != nil {
 				t.Fatalf("failed to calculate l1DataFee: %v", err)
 			}
@@ -308,7 +308,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		}
 		evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Debug: true, Tracer: tracer})
 		snap := statedb.Snapshot()
-		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, test.Genesis.Config, context.BlockNumber)
 		if err != nil {
 			b.Fatalf("failed to calculate l1DataFee: %v", err)
 		}
@@ -381,7 +381,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
-	l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+	l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, params.MainnetChainConfig, context.BlockNumber)
 	if err != nil {
 		t.Fatalf("failed to calculate l1DataFee: %v", err)
 	}

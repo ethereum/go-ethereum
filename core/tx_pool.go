@@ -248,6 +248,7 @@ type TxPool struct {
 	shanghai bool // Fork indicator whether we are in the Shanghai stage.
 
 	currentState  *state.StateDB // Current state in the blockchain head
+	currentHead   *big.Int       // Current blockchain head
 	pendingNonces *txNoncer      // Pending state tracking virtual nonces
 	currentMaxGas uint64         // Current gas limit for transaction caps
 
@@ -664,7 +665,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// 2. If FeeVault is enabled, perform an additional check for L1 data fees.
 	if pool.chainconfig.Scroll.FeeVaultEnabled() {
 		// Get L1 data fee in current state
-		l1DataFee, err := fees.CalculateL1DataFee(tx, pool.currentState)
+		l1DataFee, err := fees.CalculateL1DataFee(tx, pool.currentState, pool.chainconfig, pool.currentHead)
 		if err != nil {
 			return fmt.Errorf("failed to calculate L1 data fee, err: %w", err)
 		}
@@ -751,7 +752,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	from, _ := types.Sender(pool.signer, tx) // already validated
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
 		// Nonce already pending, check if required price bump is met
-		inserted, old := list.Add(tx, pool.currentState, pool.config.PriceBump)
+		inserted, old := list.Add(tx, pool.currentState, pool.config.PriceBump, pool.chainconfig, pool.currentHead)
 		if !inserted {
 			pendingDiscardMeter.Mark(1)
 			return false, ErrReplaceUnderpriced
@@ -802,7 +803,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 		pool.queue[from] = newTxList(false)
 	}
 
-	inserted, old := pool.queue[from].Add(tx, pool.currentState, pool.config.PriceBump)
+	inserted, old := pool.queue[from].Add(tx, pool.currentState, pool.config.PriceBump, pool.chainconfig, pool.currentHead)
 	if !inserted {
 		// An older transaction was better, discard this
 		queuedDiscardMeter.Mark(1)
@@ -856,7 +857,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	}
 	list := pool.pending[addr]
 
-	inserted, old := list.Add(tx, pool.currentState, pool.config.PriceBump)
+	inserted, old := list.Add(tx, pool.currentState, pool.config.PriceBump, pool.chainconfig, pool.currentHead)
 	if !inserted {
 		// An older transaction was better, discard this
 		pool.all.Remove(hash)
@@ -1357,6 +1358,9 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	pool.eip2718 = pool.chainconfig.IsCurie(next)
 	pool.eip1559 = pool.chainconfig.IsCurie(next)
 	pool.shanghai = pool.chainconfig.IsShanghai(next)
+
+	// Update current head
+	pool.currentHead = next
 }
 
 // promoteExecutables moves transactions that have become processable from the
@@ -1435,7 +1439,7 @@ func (pool *TxPool) executableTxFilter(costLimit *big.Int) func(tx *types.Transa
 
 		if pool.chainconfig.Scroll.FeeVaultEnabled() {
 			// recheck L1 data fee, as the oracle price may have changed
-			l1DataFee, err := fees.CalculateL1DataFee(tx, pool.currentState)
+			l1DataFee, err := fees.CalculateL1DataFee(tx, pool.currentState, pool.chainconfig, pool.currentHead)
 			if err != nil {
 				log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
 				return false

@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -39,6 +40,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/params"
+	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
 
@@ -3710,5 +3712,80 @@ func TestTransientStorageReset(t *testing.T) {
 	slot := state.GetState(destAddress, loc)
 	if slot != (common.Hash{}) {
 		t.Fatalf("Unexpected dirty storage slot")
+	}
+}
+
+func TestCurieTransition(t *testing.T) {
+	// Set fork blocks in config
+	// (we make a deep copy to avoid interference with other tests)
+	var config *params.ChainConfig
+	b, _ := json.Marshal(params.AllEthashProtocolChanges)
+	json.Unmarshal(b, &config)
+	config.CurieBlock = big.NewInt(2)
+	config.DescartesBlock = nil
+
+	var (
+		db      = rawdb.NewMemoryDatabase()
+		gspec   = &Genesis{Config: config}
+		genesis = gspec.MustCommit(db)
+	)
+
+	blockchain, _ := NewBlockChain(db, nil, gspec.Config, ethash.NewFaker(), vm.Config{}, nil, nil)
+	defer blockchain.Stop()
+	blocks, _ := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, 4, nil)
+
+	if _, err := blockchain.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+
+	latestBlock := uint64(4)
+	assert.Equal(t, latestBlock, blockchain.CurrentHeader().Number.Uint64())
+
+	for ii := uint64(0); ii <= latestBlock; ii++ {
+		block := blockchain.GetBlockByNumber(ii)
+
+		number := block.Number().Uint64()
+		baseFee := block.BaseFee()
+
+		statedb, _ := state.New(block.Root(), state.NewDatabase(db), nil)
+
+		code := statedb.GetCode(rcfg.L1GasPriceOracleAddress)
+		codeSize := statedb.GetCodeSize(rcfg.L1GasPriceOracleAddress)
+		keccakCodeHash := statedb.GetKeccakCodeHash(rcfg.L1GasPriceOracleAddress)
+		poseidonCodeHash := statedb.GetPoseidonCodeHash(rcfg.L1GasPriceOracleAddress)
+
+		l1BlobBaseFee := statedb.GetState(rcfg.L1GasPriceOracleAddress, rcfg.L1BlobBaseFeeSlot)
+		commitScalar := statedb.GetState(rcfg.L1GasPriceOracleAddress, rcfg.CommitScalarSlot)
+		blobScalar := statedb.GetState(rcfg.L1GasPriceOracleAddress, rcfg.BlobScalarSlot)
+		isCurie := statedb.GetState(rcfg.L1GasPriceOracleAddress, rcfg.IsCurieSlot)
+
+		if number < config.CurieBlock.Uint64() {
+			assert.Nil(t, baseFee, "Expected zero base fee before Curie")
+
+			// we don't have predeploys configured in this test,
+			// so there is no gas oracle deployed before Curie
+			assert.Nil(t, code)
+			assert.Equal(t, uint64(0), codeSize)
+			assert.Equal(t, common.Hash{}, keccakCodeHash)
+			assert.Equal(t, common.Hash{}, poseidonCodeHash)
+
+			assert.Equal(t, common.Hash{}, l1BlobBaseFee)
+			assert.Equal(t, common.Hash{}, commitScalar)
+			assert.Equal(t, common.Hash{}, blobScalar)
+			assert.Equal(t, common.Hash{}, isCurie)
+		} else {
+			assert.NotNil(t, baseFee, "Expected nonzero base fee after Curie")
+
+			// all gas oracle entries updated
+			assert.NotNil(t, code)
+			assert.NotEqual(t, uint64(0), codeSize)
+			assert.NotEqual(t, common.Hash{}, keccakCodeHash)
+			assert.NotEqual(t, common.Hash{}, poseidonCodeHash)
+
+			assert.NotEqual(t, common.Hash{}, l1BlobBaseFee)
+			assert.NotEqual(t, common.Hash{}, commitScalar)
+			assert.NotEqual(t, common.Hash{}, blobScalar)
+			assert.NotEqual(t, common.Hash{}, isCurie)
+		}
 	}
 }
