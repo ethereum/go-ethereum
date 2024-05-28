@@ -113,21 +113,6 @@ func BuyGasRip7560Transaction(st *types.Rip7560AccountAbstractionTx, state vm.St
 	return nil
 }
 
-func ApplyRip7560FrameMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
-	return NewRip7560StateTransition(evm, msg, gp).TransitionDb()
-}
-
-// NewRip7560StateTransition initialises and returns a new state transition object.
-func NewRip7560StateTransition(evm *vm.EVM, msg *Message, gp *GasPool) *StateTransition {
-	return &StateTransition{
-		gp:           gp,
-		evm:          evm,
-		msg:          msg,
-		state:        evm.StateDB,
-		rip7560Frame: true,
-	}
-}
-
 func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, cfg vm.Config) (*ValidationPhaseResult, error) {
 	stubMsg := prepareStubMessage(tx, chainConfig)
 	blockContext := NewEVMBlockContext(header, bc, author)
@@ -138,7 +123,7 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 	deployerMsg := prepareDeployerMessage(tx, chainConfig)
 	var deploymentUsedGas uint64
 	if deployerMsg != nil {
-		resultDeployer, err := ApplyRip7560FrameMessage(evm, deployerMsg, gp)
+		resultDeployer, err := ApplyMessage(evm, deployerMsg, gp)
 		if err != nil {
 			return nil, err
 		}
@@ -154,7 +139,7 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 	signer := types.MakeSigner(chainConfig, header.Number, header.Time)
 	signingHash := signer.Hash(tx)
 	accountValidationMsg, err := prepareAccountValidationMessage(tx, chainConfig, signingHash, deploymentUsedGas)
-	resultAccountValidation, err := ApplyRip7560FrameMessage(evm, accountValidationMsg, gp)
+	resultAccountValidation, err := ApplyMessage(evm, accountValidationMsg, gp)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +184,7 @@ func applyPaymasterValidationFrame(tx *types.Transaction, chainConfig *params.Ch
 		return nil, 0, 0, 0, err
 	}
 	if paymasterMsg != nil {
-		resultPm, err := ApplyRip7560FrameMessage(evm, paymasterMsg, gp)
+		resultPm, err := ApplyMessage(evm, paymasterMsg, gp)
 		if err != nil {
 			return nil, 0, 0, 0, err
 		}
@@ -226,7 +211,7 @@ func applyPaymasterPostOpFrame(vpr *ValidationPhaseResult, executionResult *Exec
 	if err != nil {
 		return nil, err
 	}
-	paymasterPostOpResult, err = ApplyRip7560FrameMessage(evm, paymasterPostOpMsg, gp)
+	paymasterPostOpResult, err = ApplyMessage(evm, paymasterPostOpMsg, gp)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +230,7 @@ func ApplyRip7560ExecutionPhase(config *params.ChainConfig, vpr *ValidationPhase
 	evm := vm.NewEVM(blockContext, txContext, statedb, config, cfg)
 
 	accountExecutionMsg := prepareAccountExecutionMessage(vpr.Tx, evm.ChainConfig())
-	executionResult, err := ApplyRip7560FrameMessage(evm, accountExecutionMsg, gp)
+	executionResult, err := ApplyMessage(evm, accountExecutionMsg, gp)
 	if err != nil {
 		return nil, err
 	}

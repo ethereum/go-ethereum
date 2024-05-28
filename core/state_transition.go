@@ -217,7 +217,6 @@ type StateTransition struct {
 	initialGas   uint64
 	state        vm.StateDB
 	evm          *vm.EVM
-	rip7560Frame bool
 }
 
 // NewStateTransition initialises and returns a new state transition object.
@@ -364,7 +363,7 @@ func (st *StateTransition) preCheck() error {
 
 	// no need to "buy gus" for individual frames
 	// there is a single shared gas pre-charge
-	if st.rip7560Frame {
+	if st.msg.IsRip7560Frame {
 		st.gasRemaining += st.msg.GasLimit
 		st.initialGas = st.msg.GasLimit
 		return nil
