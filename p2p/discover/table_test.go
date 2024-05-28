@@ -295,14 +295,14 @@ func TestTable_addInboundNode(t *testing.T) {
 	tab.addInboundNode(wrapNode(n2v2))
 	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v2})
 
-	// Try updating n2 without sequence number change. The update
-	// should not be accepted.
+	// Try updating n2 without sequence number change. The update is accepted
+	// because it's inbound.
 	newrec = n2.Record()
 	newrec.Set(enr.IP{100, 100, 100, 100})
 	newrec.SetSeq(n2.Seq())
 	n2v3 := enode.SignNull(newrec, n2.ID())
 	tab.addInboundNode(wrapNode(n2v3))
-	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v2})
+	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v3})
 }
 
 func TestTable_addFoundNode(t *testing.T) {

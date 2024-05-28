@@ -622,9 +622,7 @@ func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool)
 	// Note there is a special case for discv4: if the node contacts us (isInbound),
 	// it is allowed to update its own entry.
 	n = b.entries[i]
-	isUpdate := newRecord.Seq() > n.Seq()
-	isDiscv4Update := n.Seq() == 0 && newRecord.Seq() == 0 && isInbound
-	if !(isUpdate || isDiscv4Update) {
+	if newRecord.Seq() <= n.Seq() && !isInbound {
 		return n, false
 	}
 
