@@ -238,12 +238,9 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
 		}
 		if opts.GasPrice == nil {
-			price, err := c.transactor.SuggestGasTipCap(opts.Context)
+			price, err := c.transactor.SuggestGasPrice(ensureContext(opts.Context))
 			if err != nil {
 				return nil, err
-			}
-			if head.BaseFee != nil {
-				price.Add(price, head.BaseFee)
 			}
 			opts.GasPrice = price
 		}
