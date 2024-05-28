@@ -140,32 +140,13 @@ func (it *lookup) slowdown() {
 }
 
 func (it *lookup) query(n *node, reply chan<- []*node) {
-	fails := it.tab.db.FindFails(n.ID(), n.IP())
 	r, err := it.queryfunc(n)
-	if errors.Is(err, errClosed) {
-		// Avoid recording failures on shutdown.
-		reply <- nil
-		return
-	} else if len(r) == 0 {
-		fails++
-		it.tab.db.UpdateFindFails(n.ID(), n.IP(), fails)
-		// Remove the node from the local table if it fails to return anything useful too
-		// many times, but only if there are enough other nodes in the bucket.
-		dropped := false
-		if fails >= maxFindnodeFailures && it.tab.bucketLen(n.ID()) >= bucketSize/2 {
-			dropped = true
-			it.tab.delete(n)
+	if !errors.Is(err, errClosed) { // avoid recording failures on shutdown.
+		success := len(r) > 0
+		it.tab.trackRequest(n, success, r)
+		if err != nil {
+			it.tab.log.Trace("FINDNODE failed", "id", n.ID(), "err", err)
 		}
-		it.tab.log.Trace("FINDNODE failed", "id", n.ID(), "failcount", fails, "dropped", dropped, "err", err)
-	} else if fails > 0 {
-		// Reset failure counter because it counts _consecutive_ failures.
-		it.tab.db.UpdateFindFails(n.ID(), n.IP(), 0)
-	}
-
-	// Grab as many nodes as possible. Some of them might not be alive anymore, but we'll
-	// just remove those again during revalidation.
-	for _, n := range r {
-		it.tab.addSeenNode(n)
 	}
 	reply <- r
 }

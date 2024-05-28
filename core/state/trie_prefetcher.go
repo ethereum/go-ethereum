@@ -72,7 +72,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 	}
 }
 
-// terminate iterates over all the subfetchers and issues a terminateion request
+// terminate iterates over all the subfetchers and issues a termination request
 // to all of them. Depending on the async parameter, the method will either block
 // until all subfetchers spin down, or return immediately.
 func (p *triePrefetcher) terminate(async bool) {
@@ -234,7 +234,7 @@ func (sf *subfetcher) schedule(keys [][]byte) error {
 	case sf.wake <- struct{}{}:
 		// Wake signal sent
 	default:
-		// Wake signal not sent as a previous is already queued
+		// Wake signal not sent as a previous one is already queued
 	}
 	return nil
 }
@@ -250,7 +250,7 @@ func (sf *subfetcher) wait() {
 // peeks for the original data. The method will block until all the scheduled
 // data has been loaded and the fethcer terminated.
 func (sf *subfetcher) peek() Trie {
-	// Block until the fertcher terminates, then retrieve the trie
+	// Block until the fetcher terminates, then retrieve the trie
 	sf.wait()
 	return sf.trie
 }
@@ -296,7 +296,7 @@ func (sf *subfetcher) loop() {
 	for {
 		select {
 		case <-sf.wake:
-			// Execute all remaining tasks in single run
+			// Execute all remaining tasks in a single run
 			sf.lock.Lock()
 			tasks := sf.tasks
 			sf.tasks = nil

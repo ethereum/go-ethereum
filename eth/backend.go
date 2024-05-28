@@ -208,7 +208,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		}
 		t, err := tracers.LiveDirectory.New(config.VMTrace, traceConfig)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to create tracer %s: %v", config.VMTrace, err)
+			return nil, fmt.Errorf("failed to create tracer %s: %v", config.VMTrace, err)
 		}
 		vmConfig.Tracer = t
 	}

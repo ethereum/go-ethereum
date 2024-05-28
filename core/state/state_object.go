@@ -127,7 +127,7 @@ func (s *stateObject) touch() {
 	}
 }
 
-// getTrie returns the associated storage trie. The trie will be opened if it'
+// getTrie returns the associated storage trie. The trie will be opened if it's
 // not loaded previously. An error will be returned if trie can't be loaded.
 //
 // If a new trie is opened, it will be cached within the state object to allow
@@ -156,7 +156,7 @@ func (s *stateObject) getPrefetchedTrie() Trie {
 	if s.data.Root == types.EmptyRootHash || s.db.prefetcher == nil {
 		return nil
 	}
-	// Attempt to retrieve the trie from the pretecher
+	// Attempt to retrieve the trie from the prefetcher
 	return s.db.prefetcher.trie(s.addrHash, s.data.Root)
 }
 
@@ -304,10 +304,9 @@ func (s *stateObject) finalise() {
 // loading or updating of the trie, an error will be returned. Furthermore,
 // this function will return the mutated storage trie, or nil if there is no
 // storage change at all.
+//
+// It assumes all the dirty storage slots have been finalized before.
 func (s *stateObject) updateTrie() (Trie, error) {
-	// Make sure all dirty slots are finalized into the pending storage area
-	s.finalise()
-
 	// Short circuit if nothing changed, don't bother with hashing anything
 	if len(s.pendingStorage) == 0 {
 		return s.trie, nil
