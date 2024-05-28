@@ -230,10 +230,10 @@ func (list *revalidationList) remove(n *node) {
 		panic(fmt.Errorf("node %v not found in list", n.ID()))
 	}
 	list.nodes = slices.Delete(list.nodes, i, i+1)
-	n.revalList = nil
 	if len(list.nodes) == 0 {
 		list.nextTime = never
 	}
+	n.revalList = nil
 }
 
 func (list *revalidationList) contains(id enode.ID) bool {
