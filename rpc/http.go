@@ -31,7 +31,8 @@ import (
 )
 
 const (
-	maxRequestContentLength = 1024 * 1024 * 5
+	// ZEKO NOTE: We allow much larger requests than the default 5MB
+	maxRequestContentLength = 1024 * 1024 * 1024 * 5 // 5GB
 	contentType             = "application/json"
 )
 
