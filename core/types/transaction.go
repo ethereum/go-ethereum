@@ -528,7 +528,7 @@ func (tx *Transaction) IsXDCXApplyTransaction() bool {
 	if common.IsTestnet {
 		addr = common.XDCXListingSMCTestNet
 	}
-	if tx.To().String() != addr.String() {
+	if *tx.To() != addr {
 		return false
 	}
 
@@ -555,7 +555,7 @@ func (tx *Transaction) IsXDCZApplyTransaction() bool {
 	if common.IsTestnet {
 		addr = common.TRC21IssuerSMCTestNet
 	}
-	if tx.To().String() != addr.String() {
+	if *tx.To() != addr {
 		return false
 	}
 

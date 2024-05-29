@@ -596,7 +596,7 @@ func (XDCx *XDCX) GetTriegc() *prque.Prque {
 func (XDCx *XDCX) GetTradingStateRoot(block *types.Block, author common.Address) (common.Hash, error) {
 	for _, tx := range block.Transactions() {
 		from := *(tx.From())
-		if tx.To() != nil && tx.To().Hex() == common.TradingStateAddr && from.String() == author.String() {
+		if tx.To() != nil && tx.To().Hex() == common.TradingStateAddr && from == author {
 			if len(tx.Data()) >= 32 {
 				return common.BytesToHash(tx.Data()[:32]), nil
 			}

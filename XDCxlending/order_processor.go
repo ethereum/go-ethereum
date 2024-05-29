@@ -447,7 +447,7 @@ func (l *Lending) getLendQuantity(
 	if err != nil || collateralTokenDecimal.Sign() == 0 {
 		return lendingstate.Zero, lendingstate.Zero, false, nil, fmt.Errorf("fail to get tokenDecimal. Token: %v . Err: %v", collateralToken.String(), err)
 	}
-	if takerOrder.Relayer.String() == makerOrder.Relayer.String() {
+	if takerOrder.Relayer == makerOrder.Relayer {
 		if err := lendingstate.CheckRelayerFee(takerOrder.Relayer, new(big.Int).Mul(common.RelayerLendingFee, big.NewInt(2)), statedb); err != nil {
 			log.Debug("Reject order Taker Exchnage = Maker Exchange , relayer not enough fee ", "err", err)
 			return lendingstate.Zero, lendingstate.Zero, false, nil, nil
@@ -789,10 +789,10 @@ func (l *Lending) ProcessTopUp(lendingStateDB *lendingstate.LendingStateDB, stat
 	if lendingTrade == lendingstate.EmptyLendingTrade {
 		return fmt.Errorf("process deposit for emptyLendingTrade is not allowed. lendingTradeId: %v", lendingTradeId.Hex()), true, nil
 	}
-	if order.UserAddress.String() != lendingTrade.Borrower.String() {
+	if order.UserAddress != lendingTrade.Borrower {
 		return fmt.Errorf("ProcessTopUp: invalid userAddress . UserAddress: %s . Borrower: %s", order.UserAddress.Hex(), lendingTrade.Borrower.Hex()), true, nil
 	}
-	if order.Relayer.String() != lendingTrade.BorrowingRelayer.String() {
+	if order.Relayer != lendingTrade.BorrowingRelayer {
 		return fmt.Errorf("ProcessTopUp: invalid relayerAddress . Got: %s . Expect: %s", order.Relayer.Hex(), lendingTrade.BorrowingRelayer.Hex()), true, nil
 	}
 	if order.Quantity.Sign() <= 0 || lendingTrade.TradeId != lendingTradeId.Big().Uint64() {
@@ -810,10 +810,10 @@ func (l *Lending) ProcessRepay(header *types.Header, chain consensus.ChainContex
 	if lendingTrade == lendingstate.EmptyLendingTrade || lendingTrade.TradeId != lendingTradeIdHash.Big().Uint64() {
 		return nil, fmt.Errorf("ProcessRepay for emptyLendingTrade is not allowed. lendingTradeId: %v", lendingTradeId)
 	}
-	if order.UserAddress.String() != lendingTrade.Borrower.String() {
+	if order.UserAddress != lendingTrade.Borrower {
 		return nil, fmt.Errorf("ProcessRepay: invalid userAddress . UserAddress: %s . Borrower: %s", order.UserAddress.Hex(), lendingTrade.Borrower.Hex())
 	}
-	if order.Relayer.String() != lendingTrade.BorrowingRelayer.String() {
+	if order.Relayer != lendingTrade.BorrowingRelayer {
 		return nil, fmt.Errorf("ProcessRepay: invalid relayerAddress . Got: %s . Expect: %s", order.Relayer.Hex(), lendingTrade.BorrowingRelayer.Hex())
 	}
 	return l.ProcessRepayLendingTrade(header, chain, lendingStateDB, statedb, tradingstateDB, lendingBook, lendingTradeId)

@@ -260,7 +260,7 @@ func (l *LendingItem) VerifyCollateral(state *state.StateDB) error {
 	validCollateral := false
 	collateralList := GetCollaterals(state, l.Relayer, l.LendingToken, l.Term)
 	for _, collateral := range collateralList {
-		if l.CollateralToken.String() == collateral.String() {
+		if l.CollateralToken == collateral {
 			validCollateral = true
 			break
 		}
