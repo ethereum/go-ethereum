@@ -318,9 +318,6 @@ func getValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, e
 	// Get secrets and opening at epoc block checkpoint.
 
 	var candidates []int64
-	if err != nil {
-		return nil, err
-	}
 	lenSigners := int64(len(masternodes))
 	if lenSigners > 0 {
 		for _, addr := range masternodes {
