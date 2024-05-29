@@ -82,7 +82,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
 	if p.config.IsPrague(block.Number(), block.Time()) {
-		ProcessBlockHashHistory(statedb, block.Header(), p.config, p.bc)
+		// This should not underflow as genesis block is not processed.
+		ProcessParentBlockHash(statedb, block.ParentHash(), block.NumberU64()-1)
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
@@ -214,34 +215,9 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	statedb.Finalise(true)
 }
 
-// ProcessBlockHashHistory is called at every block to insert the parent block hash
-// in the history storage contract as per EIP-2935. At the EIP-2935 fork block, it
-// populates the whole buffer with block hashes.
-func ProcessBlockHashHistory(statedb *state.StateDB, header *types.Header, chainConfig *params.ChainConfig, chain consensus.ChainHeaderReader) {
-	var (
-		prevHash   = header.ParentHash
-		parent     = chain.GetHeaderByHash(prevHash)
-		number     = header.Number.Uint64()
-		prevNumber = parent.Number.Uint64()
-	)
-	ProcessParentBlockHash(statedb, prevNumber, prevHash)
-	// History already inserted.
-	if chainConfig.IsPrague(parent.Number, parent.Time) || prevNumber == 0 {
-		return
-	}
-	var low uint64
-	if number > params.HistoryServeWindow {
-		low = number - params.HistoryServeWindow
-	}
-	for i := prevNumber; i > low; i-- {
-		ProcessParentBlockHash(statedb, i-1, parent.ParentHash)
-		parent = chain.GetHeader(parent.ParentHash, i-1)
-	}
-}
-
 // ProcessParentBlockHash stores the parent block hash in the history storage contract
 // as per EIP-2935.
-func ProcessParentBlockHash(statedb *state.StateDB, prevNumber uint64, prevHash common.Hash) {
+func ProcessParentBlockHash(statedb *state.StateDB, prevHash common.Hash, prevNumber uint64) {
 	ringIndex := prevNumber % params.HistoryServeWindow
 	var key common.Hash
 	binary.BigEndian.PutUint64(key[24:], ringIndex)

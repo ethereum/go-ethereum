@@ -552,21 +552,18 @@ func (m *MockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	return m.chain[hash]
 }
 
-func TestProcessBlockHashHistory(t *testing.T) {
-	hashA := common.Hash{0x01}
-	hashB := common.Hash{0x02}
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-	header := &types.Header{ParentHash: hashA, Number: big.NewInt(2)}
-	parent := &types.Header{ParentHash: hashB, Number: big.NewInt(1)}
-	parentParent := &types.Header{ParentHash: common.Hash{}, Number: big.NewInt(0)}
-	chainConfig := params.AllDevChainProtocolChanges
-	chainConfig.PragueTime = nil
-	chain := new(MockChain)
-	chain.chain = make(map[common.Hash]*types.Header)
-	chain.chain[hashA] = parent
-	chain.chain[hashB] = parentParent
+func TestProcessParentBlockHash(t *testing.T) {
+	var (
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		hashA      = common.Hash{0x01}
+		hashB      = common.Hash{0x02}
+		header     = &types.Header{ParentHash: hashA, Number: big.NewInt(2)}
+		parent     = &types.Header{ParentHash: hashB, Number: big.NewInt(1)}
+		genesis    = &types.Header{ParentHash: common.Hash{}, Number: big.NewInt(0)}
+	)
 
-	ProcessBlockHashHistory(statedb, header, chainConfig, chain)
+	ProcessParentBlockHash(statedb, header.ParentHash, parent.Number.Uint64())
+	ProcessParentBlockHash(statedb, parent.ParentHash, genesis.Number.Uint64())
 
 	// make sure that the state is correct
 	if have := getParentBlockHash(statedb, 1); have != hashA {
