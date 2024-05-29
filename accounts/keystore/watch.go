@@ -21,7 +21,6 @@ package keystore
 
 import (
 	"os"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -29,19 +28,17 @@ import (
 )
 
 type watcher struct {
-	ac        *accountCache
-	running   bool // set to true when runloop begins
-	runEnded  bool // set to true when runloop ends
-	starting  bool // set to true prior to runloop starting
-	quit      chan struct{}
-	startupWG sync.WaitGroup // wait for watcher loop to start
+	ac       *accountCache
+	running  bool // set to true when runloop begins
+	runEnded bool // set to true when runloop ends
+	starting bool // set to true prior to runloop starting
+	quit     chan struct{}
 }
 
 func newWatcher(ac *accountCache) *watcher {
 	return &watcher{
-		ac:        ac,
-		quit:      make(chan struct{}),
-		startupWG: sync.WaitGroup{},
+		ac:   ac,
+		quit: make(chan struct{}),
 	}
 }
 
@@ -55,7 +52,6 @@ func (w *watcher) start() {
 	if w.starting || w.running {
 		return
 	}
-	w.startupWG.Add(1)
 	w.starting = true
 	go w.loop()
 }
@@ -85,7 +81,6 @@ func (w *watcher) loop() {
 		if !os.IsNotExist(err) {
 			logger.Warn("Failed to watch keystore folder", "err", err)
 		}
-		w.startupWG.Done()
 		return
 	}
 
@@ -109,7 +104,6 @@ func (w *watcher) loop() {
 		<-debounce.C
 	}
 	defer debounce.Stop()
-	w.startupWG.Done()
 	for {
 		select {
 		case <-w.quit:
