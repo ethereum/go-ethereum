@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -43,7 +44,8 @@ func main() {
 		nodeKeyHex  = flag.String("nodekeyhex", "", "private key as hex (for testing)")
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)")
 		netrestrict = flag.String("netrestrict", "", "restrict network communication to the given IP networks (CIDR masks)")
-		runv5       = flag.Bool("v5", false, "run a v5 topic discovery bootnode")
+		runv5       = flag.Bool("v5", true, "run a v5 topic discovery bootnode")
+		runv4       = flag.Bool("v4", false, "run a v4 topic discovery bootnode")
 		verbosity   = flag.Int("verbosity", 3, "log verbosity (0-5)")
 		vmodule     = flag.String("vmodule", "", "log verbosity pattern")
 
@@ -123,16 +125,45 @@ func main() {
 	}
 
 	printNotice(&nodeKey.PublicKey, *listenerAddr)
-	cfg := discover.Config{
-		PrivateKey:  nodeKey,
-		NetRestrict: restrictList,
+
+	//support v4 & v5
+	var (
+		sharedconn discover.UDPConn = conn
+		unhandled  chan discover.ReadPacket
+	)
+
+	if !*runv5 && !*runv4 {
+		utils.Fatalf("%v", fmt.Errorf("at least one protocol need to be set (v4/v5)"))
 	}
-	if *runv5 {
-		if _, err := discover.ListenV5(conn, ln, cfg); err != nil {
+
+	// If both versions of discovery are running, setup a shared
+	// connection, so v5 can read unhandled messages from v4.
+	if *runv5 && *runv4 {
+		unhandled = make(chan discover.ReadPacket, 100)
+		sharedconn = p2p.NewSharedUDPConn(conn, unhandled)
+	}
+
+	// Start discovery services.
+	if *runv4 {
+		cfg := discover.Config{
+			PrivateKey:  nodeKey,
+			NetRestrict: restrictList,
+			Unhandled:   unhandled,
+		}
+		_, err := discover.ListenV4(conn, ln, cfg)
+		log.Info("discv4 protocol enabled")
+		if err != nil {
 			utils.Fatalf("%v", err)
 		}
-	} else {
-		if _, err := discover.ListenUDP(conn, ln, cfg); err != nil {
+	}
+	if *runv5 {
+		cfg := discover.Config{
+			PrivateKey:  nodeKey,
+			NetRestrict: restrictList,
+		}
+		_, err := discover.ListenV5(sharedconn, ln, cfg)
+		log.Info("discv5 protocol enabled")
+		if err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
