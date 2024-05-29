@@ -85,21 +85,19 @@ func nodeBloomHash(h common.Hash, p []byte) uint64 {
 }
 
 func pathBloomHash(p []byte) uint64 {
-	if len(p)&1 != 0 {
-		panic("can't convert hex key of odd length")
+	if len(p) > 16 {
+		panic("invalid path")
 	}
-	hashLen := len(p) / 2
-	if hashLen > 8 {
-		panic("hash value too long")
-	}
-
-	var hashValue uint64
-	for i := 0; i < hashLen; i++ {
-		hashValue <<= 8
-		hashValue |= uint64(p[i*2])<<4 | uint64(p[i*2+1])
+	var result uint64
+	for _, nibble := range p {
+		// 检查每个 nibble 是否在有效范围内（0-15）
+		if nibble > 0x0F {
+			panic("invalid path nibble value")
+		}
+		result = (result << 4) | uint64(nibble)
 	}
 
-	return (uint64(hashLen) << 32) | (hashValue << 1)
+	return uint64(len(p))<<32 + result
 }
 
 // diffLayer represents a collection of modifications made to the in-memory tries
