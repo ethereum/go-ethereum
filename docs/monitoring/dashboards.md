@@ -16,7 +16,7 @@ To follow along with the instructions on this page it will be useful to have:
 
 ## Monitoring stack {#monitoring-stack}
 
-An Ethereum client collects lots of data which can be read in the form of a chronological database. To make monitoring easier, this data can be fed into data visualisation software. On this page, a Geth client will be configured to push data into a InfluxDB database and Grafana will be used to visualize the data.
+An Ethereum client collects lots of data which can be read in the form of a chronological database. To make monitoring easier, this data can be fed into data visualisation software. On this page, a Geth client will be configured to push data into an InfluxDB database and Grafana will be used to visualize the data.
 
 ## Setting up InfluxDB {#setting-up-influxdb}
 
@@ -35,7 +35,7 @@ sudo systemctl start influxdb
 sudo apt install influxdb-client
 ```
 
-By default, InfluxDB it is reachable at `localhost:8086`. Before using the `influx` client, a new user with admin privileges needs to be created. This user will serve for high level management, creating databases and users.
+By default, InfluxDB is reachable at `localhost:8086`. Before using the `influx` client, a new user with admin privileges needs to be created. This user will serve for high level management, creating databases and users.
 
 ```sh
 curl -XPOST "http://localhost:8086/query" --data-urlencode "q=CREATE USER username WITH PASSWORD 'password' WITH ALL PRIVILEGES"
@@ -80,7 +80,7 @@ docker run \
     prom/prometheus:latest
 ```
 
-Here a example directory of `/path/to/prometheus`:
+Here is an example directory of `/path/to/prometheus`:
 
 ```sh
 prometheus/

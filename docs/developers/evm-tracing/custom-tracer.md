@@ -91,7 +91,7 @@ To test out this tracer the source is first compiled with `make geth`. Then in t
 
 Transaction traces include the complete status of the EVM at every point during the transaction execution, which can be a very large amount of data. Often, users are only interested in a small subset of that data. Javascript trace filters are available to isolate the useful information.
 
-Specifying the `tracer` option in one of the tracing methods (see list in [reference](/docs/interacting-with-geth/rpc/ns-debug)) enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate to an object which must expose the `result` and `fault` methods. There exist 4 additional methods, namely: `setup`, `step`, `enter`, and `exit`. `enter` and `exit` must be present or omitted together.
+Specifying the `tracer` option in one of the tracing methods (see list in [reference](/docs/interacting-with-geth/rpc/ns-debug)) enables JavaScript-based tracing. In this mode, `tracer` is interpreted as a JavaScript expression that is expected to evaluate an object which must expose the `result` and `fault` methods. There exist 4 additional methods, namely: `setup`, `step`, `enter`, and `exit`. `enter` and `exit` must be present or omitted together.
 
 ### Setup
 
