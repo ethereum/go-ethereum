@@ -70,7 +70,22 @@ func (t *txAndReceipts) getTxByHash(ctx context.Context, txHash common.Hash) (tx
 			}
 		}
 	}
-	return t.requestTxByHash(ctx, txHash)
+	tx, isPending, err = t.requestTxByHash(ctx, txHash)
+	if err == nil && !isPending {
+		receipt, err := t.requestReceiptByTxHash(ctx, txHash)
+		if err == ethereum.NotFound {
+			return tx, false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if head := t.canonicalChain.getHead(); head == nil ||
+			!receipt.BlockNumber.IsUint64() || head.BlockNumber() < receipt.BlockNumber.Uint64() {
+			// consider it pending if it's reported to be included higher than the light chain head
+			isPending = true
+		}
+	}
+	return
 }
 
 func (t *txAndReceipts) getReceiptByTxHash(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
@@ -81,8 +96,52 @@ func (t *txAndReceipts) getReceiptByTxHash(ctx context.Context, txHash common.Ha
 			}
 		}
 	}
-	return t.requestReceiptByTxHash(ctx, txHash)
-	//TODO validate position
+	receipt, err := t.requestReceiptByTxHash(ctx, txHash)
+	if err != nil {
+		return nil, err
+	}
+	// check if it indeed belongs to the requested transaction
+	if receipt.TxHash != txHash {
+		return nil, errors.New("receipt references another transaction")
+	}
+	// check if its inclusion position is canonical
+	if !receipt.BlockNumber.IsUint64() {
+		return nil, errors.New("receipt references non-canonical block")
+	}
+	blockNumber := receipt.BlockNumber.Uint64()
+	if head := t.canonicalChain.getHead(); head == nil || head.BlockNumber() < blockNumber {
+		// consider it pending if it's reported to be included higher than the light chain head
+		return nil, ethereum.NotFound
+	}
+	canonicalHash, err := t.canonicalChain.getHash(ctx, blockNumber)
+	if err != nil {
+		return nil, err
+	}
+	if receipt.BlockHash != canonicalHash {
+		return nil, errors.New("receipt references non-canonical block")
+	}
+	// check if it is the actual canonical receipt at the given position
+	receipts, err := t.getBlockReceipts(ctx, receipt.BlockHash)
+	if err != nil {
+		return nil, err
+	}
+	if receipt.TransactionIndex >= uint(len(receipts)) {
+		return nil, errors.New("receipt references out-of-range transaction index")
+	}
+	// compare the JSON encoding of received and canonical versions
+	jsonReceived, err := json.Marshal(receipt)
+	if err != nil {
+		return nil, err
+	}
+	jsonCanonical, err := json.Marshal(receipts[receipt.TransactionIndex])
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(jsonReceived, jsonCanonical) {
+		return nil, errors.New("received and derived receipts do not match")
+	}
+	t.txPosCache.Add(receipt.TxHash, txInBlock{blockNumber: blockNumber, blockHash: receipt.BlockHash, index: receipt.TransactionIndex})
+	return receipt, err
 }
 
 func (t *txAndReceipts) getBlockReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
@@ -186,7 +245,7 @@ func (t *txAndReceipts) requestBlockReceipts(ctx context.Context, blockHash comm
 	return types.Receipts(r), err
 }
 
-func (t *txAndReceipts) addBlockTxs(block *types.Block) {
+func (t *txAndReceipts) cacheBlockTxPositions(block *types.Block) {
 	blockNumber, blockHash := block.NumberU64(), block.Hash()
 	for i, tx := range block.Transactions() {
 		t.txPosCache.Add(tx.Hash(), txInBlock{blockNumber: blockNumber, blockHash: blockHash, index: uint(i)})

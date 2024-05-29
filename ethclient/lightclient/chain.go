@@ -265,6 +265,7 @@ func (c *canonicalChain) blockNumberOrHashToHash(ctx context.Context, blockNrOrH
 
 type blocksAndHeaders struct {
 	client             *rpc.Client
+	txAndReceipts      *txAndReceipts
 	headerCache        *lru.Cache[common.Hash, *types.Header]
 	headerRequests     *requestMap[common.Hash, *types.Header]
 	payloadHeaderCache *lru.Cache[common.Hash, *btypes.ExecutionHeader]
@@ -358,6 +359,7 @@ func (b *blocksAndHeaders) getBlock(ctx context.Context, hash common.Hash) (*typ
 		b.headerCache.Add(hash, header)
 		b.headerRequests.tryDeliver(hash, header)
 		b.blockCache.Add(hash, block)
+		b.txAndReceipts.cacheBlockTxPositions(block)
 	}
 	req.release()
 	return block, err

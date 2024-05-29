@@ -69,6 +69,7 @@ func NewClient(clConfig config.LightClientConfig, elConfig *params.ChainConfig, 
 	blocksAndHeaders := newBlocksAndHeaders(rpcClient)
 	canonicalChain := newCanonicalChain(headTracker, blocksAndHeaders, client.newHead)
 	txAndReceipts := newTxAndReceipts(rpcClient, canonicalChain, blocksAndHeaders, elConfig)
+	blocksAndHeaders.txAndReceipts = txAndReceipts
 	client.blocksAndHeaders = blocksAndHeaders
 	client.txAndReceipts = txAndReceipts
 	client.canonicalChain = canonicalChain
@@ -99,6 +100,8 @@ func (c *Client) Start() {
 func (c *Client) Stop() {
 	c.scheduler.Stop()
 }
+
+// ChainReader interface
 
 func (c *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return c.blocksAndHeaders.getBlock(ctx, hash)
@@ -203,6 +206,18 @@ func (h *headSub) Unsubscribe() {
 func (h *headSub) Err() <-chan error {
 	return h.errCh
 }
+
+// TransactionReader interface
+
+func (c *Client) TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
+	return c.txAndReceipts.getTxByHash(ctx, txHash)
+}
+
+func (c *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
+	return c.txAndReceipts.getReceiptByTxHash(ctx, txHash)
+}
+
+// ChainStateReader interface {
 
 func (c *Client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
 	proof, _, err := c.state.getProof(ctx, blockNumber, account, nil, false)
