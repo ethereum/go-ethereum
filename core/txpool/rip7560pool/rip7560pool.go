@@ -261,13 +261,10 @@ func (pool *Rip7560BundlerPool) GetRip7560BundleStatus(hash common.Hash) (*types
 	return pool.includedBundles[hash], nil
 }
 
-// Simply returns the bundle with the highest promised revenue by fully trusting the bundler-provided value.
+// return first bundle
 func (pool *Rip7560BundlerPool) selectExternalBundle() *types.ExternallyReceivedBundle {
-	var selectedBundle *types.ExternallyReceivedBundle
-	for _, bundle := range pool.pendingBundles {
-		if selectedBundle == nil || selectedBundle.ExpectedRevenue.Cmp(bundle.ExpectedRevenue) == -1 {
-			selectedBundle = bundle
-		}
+	if len(pool.pendingBundles) == 0 {
+		return nil
 	}
-	return selectedBundle
+	return pool.pendingBundles[0]
 }

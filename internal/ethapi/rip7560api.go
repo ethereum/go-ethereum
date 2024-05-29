@@ -10,7 +10,7 @@ import (
 	"math/big"
 )
 
-func (s *TransactionAPI) SendRip7560TransactionsBundle(ctx context.Context, args []TransactionArgs, creationBlock *big.Int, expectedRevenue *big.Int, bundlerId string) (common.Hash, error) {
+func (s *TransactionAPI) SendRip7560TransactionsBundle(ctx context.Context, args []TransactionArgs, creationBlock *big.Int, bundlerId string) (common.Hash, error) {
 	if len(args) == 0 {
 		return common.Hash{}, errors.New("submitted bundle has zero length")
 	}
@@ -19,10 +19,9 @@ func (s *TransactionAPI) SendRip7560TransactionsBundle(ctx context.Context, args
 		txs[i] = args[i].ToTransaction()
 	}
 	bundle := &types.ExternallyReceivedBundle{
-		BundlerId:       bundlerId,
-		ExpectedRevenue: expectedRevenue,
-		ValidForBlock:   creationBlock,
-		Transactions:    txs,
+		BundlerId:     bundlerId,
+		ValidForBlock: creationBlock,
+		Transactions:  txs,
 	}
 	bundleHash := calculateBundleHash(txs)
 	bundle.BundleHash = bundleHash
