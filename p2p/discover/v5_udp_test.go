@@ -141,7 +141,7 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 
 	// Make node known.
 	n := test.getNode(test.remotekey, test.remoteaddr).Node()
-	test.table.addSeenNode(wrapNode(n))
+	test.table.addFoundNode(wrapNode(n))
 
 	test.packetIn(&v5wire.Unknown{Nonce: nonce})
 	test.waitPacketOut(func(p *v5wire.Whoareyou, addr *net.UDPAddr, _ v5wire.Nonce) {

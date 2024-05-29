@@ -42,7 +42,6 @@ import (
 //
 //   - SimNode, an in-memory node in the same process
 //   - ExecNode, a child process node
-//   - DockerNode, a node running in a Docker container
 type Node interface {
 	// Addr returns the node's address (e.g. an Enode URL)
 	Addr() []byte

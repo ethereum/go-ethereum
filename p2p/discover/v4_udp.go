@@ -142,7 +142,7 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		log:             cfg.Log,
 	}
 
-	tab, err := newMeteredTable(t, ln.Database(), cfg)
+	tab, err := newTable(t, ln.Database(), cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -373,6 +373,10 @@ func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 		return nil, fmt.Errorf("invalid IP in response record: %v", err)
 	}
 	return respN, nil
+}
+
+func (t *UDPv4) TableBuckets() [][]BucketNode {
+	return t.tab.Nodes()
 }
 
 // pending adds a reply matcher to the pending reply queue.
@@ -669,10 +673,10 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from *net.UDPAddr, fromID enode.I
 	n := wrapNode(enode.NewV4(h.senderKey, from.IP, int(req.From.TCP), from.Port))
 	if time.Since(t.db.LastPongReceived(n.ID(), from.IP)) > bondExpiration {
 		t.sendPing(fromID, from, func() {
-			t.tab.addVerifiedNode(n)
+			t.tab.addInboundNode(n)
 		})
 	} else {
-		t.tab.addVerifiedNode(n)
+		t.tab.addInboundNode(n)
 	}
 
 	// Update node database and endpoint predictor.

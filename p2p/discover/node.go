@@ -29,12 +29,23 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
+type BucketNode struct {
+	Node          *enode.Node `json:"node"`
+	AddedToTable  time.Time   `json:"addedToTable"`
+	AddedToBucket time.Time   `json:"addedToBucket"`
+	Checks        int         `json:"checks"`
+	Live          bool        `json:"live"`
+}
+
 // node represents a host on the network.
 // The fields of Node may not be modified.
 type node struct {
-	enode.Node
-	addedAt        time.Time // time when the node was added to the table
-	livenessChecks uint      // how often liveness was checked
+	*enode.Node
+	revalList       *revalidationList
+	addedToTable    time.Time // first time node was added to bucket or replacement list
+	addedToBucket   time.Time // time it was added in the actual bucket
+	livenessChecks  uint      // how often liveness was checked
+	isValidatedLive bool      // true if existence of node is considered validated right now
 }
 
 type encPubkey [64]byte
@@ -65,7 +76,7 @@ func (e encPubkey) id() enode.ID {
 }
 
 func wrapNode(n *enode.Node) *node {
-	return &node{Node: *n}
+	return &node{Node: n}
 }
 
 func wrapNodes(ns []*enode.Node) []*node {
@@ -77,7 +88,7 @@ func wrapNodes(ns []*enode.Node) []*node {
 }
 
 func unwrapNode(n *node) *enode.Node {
-	return &n.Node
+	return n.Node
 }
 
 func unwrapNodes(ns []*node) []*enode.Node {
