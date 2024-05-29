@@ -128,7 +128,7 @@ func (te *testenv) localEndpoint(c net.PacketConn) v4wire.Endpoint {
 }
 
 func (te *testenv) remoteEndpoint() v4wire.Endpoint {
-	return v4wire.NewEndpoint(te.remoteAddr, 0)
+	return v4wire.NewEndpoint(te.remoteAddr.AddrPort(), 0)
 }
 
 func contains(ns []v4wire.Node, key v4wire.Pubkey) bool {
