@@ -351,7 +351,7 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 	return common.Hash{}
 }
 
-// TxIndex returns the current transaction index set by Prepare.
+// TxIndex returns the current transaction index set by SetTxContext.
 func (s *StateDB) TxIndex() int {
 	return s.txIndex
 }
