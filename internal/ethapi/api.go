@@ -102,6 +102,40 @@ func (s *PublicEthereumAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.
 	return (*hexutil.Big)(tipcap), err
 }
 
+type feeHistoryResults struct {
+	FirstBlock   rpc.BlockNumber
+	Reward       [][]*hexutil.Big
+	BaseFee      []*hexutil.Big
+	GasUsedRatio []float64
+}
+
+func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (feeHistoryResults, error) {
+	firstBlock, reward, baseFee, gasUsedRatio, err := s.b.FeeHistory(ctx, blockCount, lastBlock, rewardPercentiles)
+	if err != nil {
+		return feeHistoryResults{}, err
+	}
+	results := feeHistoryResults{
+		FirstBlock:   firstBlock,
+		GasUsedRatio: gasUsedRatio,
+	}
+	if reward != nil {
+		results.Reward = make([][]*hexutil.Big, len(reward))
+		for j, w := range reward {
+			results.Reward[j] = make([]*hexutil.Big, len(w))
+			for i, v := range w {
+				results.Reward[j][i] = (*hexutil.Big)(v)
+			}
+		}
+	}
+	if baseFee != nil {
+		results.BaseFee = make([]*hexutil.Big, len(baseFee))
+		for i, v := range baseFee {
+			results.BaseFee[i] = (*hexutil.Big)(v)
+		}
+	}
+	return results, nil
+}
+
 // ProtocolVersion returns the current Ethereum protocol version this node supports
 func (s *PublicEthereumAPI) ProtocolVersion() hexutil.Uint {
 	return hexutil.Uint(s.b.ProtocolVersion())
