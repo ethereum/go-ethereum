@@ -532,26 +532,6 @@ func TestProcessVerkle(t *testing.T) {
 	}
 }
 
-type MockChain struct {
-	chain map[common.Hash]*types.Header
-}
-
-func (m *MockChain) Config() *params.ChainConfig { return nil }
-
-func (m *MockChain) CurrentHeader() *types.Header { return nil }
-
-func (m *MockChain) GetHeaderByNumber(number uint64) *types.Header { return nil }
-
-func (m *MockChain) GetTd(hash common.Hash, number uint64) *big.Int { return nil }
-
-func (m *MockChain) GetHeaderByHash(hash common.Hash) *types.Header {
-	return m.chain[hash]
-}
-
-func (m *MockChain) GetHeader(hash common.Hash, number uint64) *types.Header {
-	return m.chain[hash]
-}
-
 func TestProcessParentBlockHash(t *testing.T) {
 	var (
 		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
