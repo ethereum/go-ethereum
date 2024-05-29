@@ -1159,6 +1159,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 		start   = time.Now()
 		root    common.Hash
 		workers errgroup.Group
+		set     *trienode.NodeSet
 	)
 	// Schedule the account trie first since that will be the biggest, so give
 	// it the most time to crunch.
@@ -1171,11 +1172,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	// code didn't anticipate for.
 	workers.Go(func() error {
 		// Write the account trie changes, measuring the amount of wasted time
-		newroot, set, err := s.trie.Commit(true)
-		if err != nil {
-			return err
-		}
-		root = newroot
+		root, set = s.trie.Commit(true)
 
 		if err := merge(set); err != nil {
 			return err

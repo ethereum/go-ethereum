@@ -217,22 +217,16 @@ func (t *VerkleTrie) Hash() common.Hash {
 }
 
 // Commit writes all nodes to the tree's memory database.
-func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
-	root, ok := t.root.(*verkle.InternalNode)
-	if !ok {
-		return common.Hash{}, nil, errors.New("unexpected root node type")
-	}
-	nodes, err := root.BatchSerialize()
-	if err != nil {
-		return common.Hash{}, nil, fmt.Errorf("serializing tree nodes: %s", err)
-	}
+func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
+	root := t.root.(*verkle.InternalNode)
+	nodes, _ := root.BatchSerialize()
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
 		// hash parameter is not used in pathdb
 		nodeset.AddNode(node.Path, trienode.New(common.Hash{}, node.SerializedBytes))
 	}
 	// Serialize root commitment form
-	return t.Hash(), nodeset, nil
+	return t.Hash(), nodeset
 }
 
 // NodeIterator implements state.Trie, returning an iterator that returns

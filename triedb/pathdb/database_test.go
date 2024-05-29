@@ -46,10 +46,7 @@ func updateTrie(addrHash common.Hash, root common.Hash, dirties, cleans map[comm
 			h.Update(key.Bytes(), val)
 		}
 	}
-	root, nodes, err := h.Commit(false)
-	if err != nil {
-		panic(fmt.Errorf("failed to commit hasher, err: %w", err))
-	}
+	root, nodes := h.Commit(false)
 	return root, nodes
 }
 
