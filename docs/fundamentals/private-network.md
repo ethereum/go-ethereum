@@ -31,6 +31,10 @@ Geth's PoW algorithm, [Ethash](https://ethereum.org/en/developers/docs/consensus
 
 #### Clique {#clique}
 
+> ⚠️
+> **Since geth v1.14 clique has been deprecated**
+
+
 Clique consensus is a PoA system where new blocks can be created by authorized 'signers' only. The clique consensus protocol is specified in [EIP-225](https://eips.ethereum.org/EIPS/eip-225). The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Clique can be configured to target any block time (within reasonable limits) since it isn't tied to the difficulty adjustment.
 
 ### Creating The Genesis Block {#creating-genesis-block}
@@ -44,6 +48,9 @@ Every blockchain starts with a genesis block. When Geth is run with default sett
 - Initial allocation of ether (`alloc`). This determines how much ether is available to the addresses listed in the genesis block. Additional ether can be created through mining as the chain progresses.
 
 #### Clique Example {#clique-example}
+
+> ⚠️
+> **Since geth v1.14 clique has been deprecated**
 
 Below is an example of a `genesis.json` file for a PoA network. The `config` section ensures that all known protocol changes are available and configures the 'clique' engine to be used for consensus. Note that the initial signer set must be configured through the `extradata` field. This field is required for Clique to work.
 
@@ -202,6 +209,8 @@ geth attach data2/geth.ipc --exec admin.peers
 ```
 
 ### Running A Signer (Clique) {#running-a-signer}
+
+> :> [!WARNING] **Since geth v1.14 clique is not an option anymore**
 
 To set up Geth for signing blocks in Clique, a signer account must be available. The account must already be available as a keyfile in the keystore. To use it for signing blocks, it must be unlocked. The following command, for address `0x7df9a875a174b3bc565e6424a0050ebc1b2d1d82` will prompt for the account password, then start signing blocks:
 

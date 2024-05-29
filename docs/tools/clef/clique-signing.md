@@ -3,6 +3,9 @@ title: Clique signing
 description: Instructions for setting up Clef to seal blocks on a Clique network
 ---
 
+> ⚠️
+> **Since geth v1.14 clique has been deprecated**
+
 Clique is a proof-of-authority system where new blocks can be created by authorized ‘signers’ only. The initial set of authorized signers is configured in the genesis block. Signers can be authorized and de-authorized using a voting mechanism, thus allowing the set of signers to change while the blockchain operates. Signing blocks in Clique networks classically uses the "unlock" feature of Geth so that each node is always ready to sign without requiring a user to manually provide authorization.
 
 However, using the `--unlock` flag is generally a highly dangerous thing to do because it is indiscriminate, i.e. if an account is unlocked and an attacker obtains access to the RPC api, the attacker can sign anything without supplying a password.
