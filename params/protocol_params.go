@@ -195,7 +195,4 @@ var (
 	HistoryStorageAddress = common.HexToAddress("0x25a219378dad9b3503c8268c9ca836a52427a4fb")
 	// HistoryStorageCode is the code with getters for historical block hashes.
 	HistoryStorageCode = common.FromHex("60203611603157600143035f35116029575f356120000143116029576120005f3506545f5260205ff35b5f5f5260205ff35b5f5ffd00")
-
-	// Magic prefix for EIP-3074 AUTH messages.
-	AuthMagic = byte(0x04)
 )
