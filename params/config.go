@@ -843,6 +843,9 @@ type ConfigCompatError struct {
 	// the block number to which the local chain must be rewound to correct the error
 	RewindToBlock uint64
 
+	// the flag to tell whether it's rewinding by block or time
+	RewindByBlock bool
+
 	// the timestamp to which the local chain must be rewound to correct the error
 	RewindToTime uint64
 }
@@ -862,6 +865,7 @@ func newBlockCompatError(what string, storedblock, newblock *big.Int) *ConfigCom
 		StoredBlock:   storedblock,
 		NewBlock:      newblock,
 		RewindToBlock: 0,
+		RewindByBlock: true,
 	}
 	if rew != nil && rew.Sign() > 0 {
 		err.RewindToBlock = rew.Uint64() - 1

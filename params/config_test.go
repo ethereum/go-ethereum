@@ -52,6 +52,7 @@ func TestCheckCompatible(t *testing.T) {
 				StoredBlock:   big.NewInt(0),
 				NewBlock:      nil,
 				RewindToBlock: 0,
+				RewindByBlock: true,
 			},
 		},
 		{
@@ -63,6 +64,7 @@ func TestCheckCompatible(t *testing.T) {
 				StoredBlock:   big.NewInt(0),
 				NewBlock:      big.NewInt(1),
 				RewindToBlock: 0,
+				RewindByBlock: true,
 			},
 		},
 		{
@@ -74,6 +76,7 @@ func TestCheckCompatible(t *testing.T) {
 				StoredBlock:   big.NewInt(10),
 				NewBlock:      big.NewInt(20),
 				RewindToBlock: 9,
+				RewindByBlock: true,
 			},
 		},
 		{
@@ -91,6 +94,7 @@ func TestCheckCompatible(t *testing.T) {
 				StoredBlock:   nil,
 				NewBlock:      big.NewInt(31),
 				RewindToBlock: 30,
+				RewindByBlock: true,
 			},
 		},
 		{
