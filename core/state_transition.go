@@ -34,6 +34,7 @@ import (
 // message no matter the execution itself is successful or not.
 type ExecutionResult struct {
 	UsedGas              uint64 // Total used gas but include the refunded gas
+	RefundedGas          uint64 // Total gas refunded after execution
 	Err                  error  // Any error encountered during the execution(listed in core/vm/errors.go)
 	ReturnData           []byte // Returned data from evm(function result or data supplied with revert opcode)
 	SenderInitBalance    *big.Int
@@ -467,12 +468,13 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value, interruptCtx)
 	}
 
+	var gasRefund uint64
 	if !rules.IsLondon {
 		// Before EIP-3529: refunds were capped to gasUsed / 2
-		st.refundGas(params.RefundQuotient)
+		gasRefund = st.refundGas(params.RefundQuotient)
 	} else {
 		// After EIP-3529: refunds are capped to gasUsed / 5
-		st.refundGas(params.RefundQuotientEIP3529)
+		gasRefund = st.refundGas(params.RefundQuotientEIP3529)
 	}
 
 	effectiveTip := msg.GasPrice
@@ -531,6 +533,7 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 
 	return &ExecutionResult{
 		UsedGas:              st.gasUsed(),
+		RefundedGas:          gasRefund,
 		Err:                  vmerr,
 		ReturnData:           ret,
 		SenderInitBalance:    input1,
@@ -540,7 +543,7 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	}, nil
 }
 
-func (st *StateTransition) refundGas(refundQuotient uint64) {
+func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 	// Apply refund counter, capped to a refund quotient
 	refund := st.gasUsed() / refundQuotient
 	if refund > st.state.GetRefund() {
@@ -556,6 +559,8 @@ func (st *StateTransition) refundGas(refundQuotient uint64) {
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.
 	st.gp.AddGas(st.gasRemaining)
+
+	return refund
 }
 
 // gasUsed returns the amount of gas used up by the state transition.

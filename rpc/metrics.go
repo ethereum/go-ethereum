@@ -47,7 +47,7 @@ func updateServeTimeHistogram(method string, success bool, elapsed time.Duration
 			metrics.NewExpDecaySample(1028, 0.015),
 		)
 	}
-	metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(elapsed.Microseconds())
+	metrics.GetOrRegisterHistogramLazy(h, nil, sampler).Update(elapsed.Nanoseconds())
 }
 
 func newEpMetrics(service string) (metrics.Gauge, metrics.Gauge, metrics.Histogram) {

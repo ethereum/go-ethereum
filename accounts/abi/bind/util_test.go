@@ -54,6 +54,7 @@ var waitDeployedTests = map[string]struct {
 }
 
 func TestWaitDeployed(t *testing.T) {
+	t.Parallel()
 	for name, test := range waitDeployedTests {
 		backend := backends.NewSimulatedBackend(
 			core.GenesisAlloc{
@@ -104,6 +105,7 @@ func TestWaitDeployed(t *testing.T) {
 }
 
 func TestWaitDeployedCornerCases(t *testing.T) {
+	t.Parallel()
 	backend := backends.NewSimulatedBackend(
 		core.GenesisAlloc{
 			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
@@ -124,10 +126,9 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 	defer cancel()
 	backend.SendTransaction(ctx, tx)
 	backend.Commit()
-
-	notContentCreation := errors.New("tx is not contract creation")
-	if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != notContentCreation.Error() {
-		t.Errorf("error mismatch: want %q, got %q, ", notContentCreation, err)
+	notContractCreation := errors.New("tx is not contract creation")
+	if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != notContractCreation.Error() {
+		t.Errorf("error mismatch: want %q, got %q, ", notContractCreation, err)
 	}
 
 	// Create a transaction that is not mined.

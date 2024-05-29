@@ -116,6 +116,7 @@ func (args *t8nOutput) get() (out []string) {
 }
 
 func TestT8n(t *testing.T) {
+	t.Parallel()
 	tt := new(testT8n)
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
 
@@ -358,6 +359,7 @@ func (args *t9nInput) get(base string) []string {
 }
 
 func TestT9n(t *testing.T) {
+	t.Parallel()
 	tt := new(testT8n)
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
 
@@ -507,6 +509,7 @@ func (args *b11rInput) get(base string) []string {
 }
 
 func TestB11r(t *testing.T) {
+	t.Parallel()
 	tt := new(testT8n)
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
 

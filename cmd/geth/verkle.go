@@ -153,9 +153,7 @@ func verifyVerkle(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
 	root, err := verkle.ParseNode(serializedRoot, 0)
-
 	if err != nil {
 		return err
 	}
@@ -212,9 +210,7 @@ func expandVerkle(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-
 	root, err := verkle.ParseNode(serializedRoot, 0)
-
 	if err != nil {
 		return err
 	}
