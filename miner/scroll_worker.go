@@ -401,7 +401,7 @@ func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx
 func (w *worker) startNewPipeline(timestamp int64) {
 
 	if w.currentPipeline != nil {
-		w.currentPipeline.Kill()
+		w.currentPipeline.Release()
 		w.currentPipeline = nil
 	}
 
@@ -586,6 +586,7 @@ func (w *worker) handlePipelineResult(res *pipeline.Result) error {
 		if res != nil && res.FinalBlock != nil {
 			w.updateSnapshot(res.FinalBlock)
 		}
+		w.currentPipeline.Release()
 		w.currentPipeline = nil
 		return nil
 	}
@@ -750,6 +751,7 @@ func (w *worker) commit(res *pipeline.Result) error {
 	// Broadcast the block and announce chain insertion event
 	w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
+	w.currentPipeline.Release()
 	w.currentPipeline = nil
 	return nil
 }

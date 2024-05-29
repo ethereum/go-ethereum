@@ -165,9 +165,11 @@ func (p *Pipeline) TryPushTxn(tx *types.Transaction) (*Result, error) {
 	}
 }
 
-func (p *Pipeline) Kill() {
+// Release releases all resources related to the pipeline
+func (p *Pipeline) Release() {
 	if p.txnQueue != nil {
 		close(p.txnQueue)
+		p.txnQueue = nil
 	}
 
 	select {
