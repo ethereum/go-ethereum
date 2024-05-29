@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"slices"
 	"testing"
 	"testing/quick"
 	"time"
@@ -64,7 +65,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 
 	// Fill up the sender's bucket.
 	replacementNodeKey, _ := crypto.HexToECDSA("45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8")
-	replacementNode := wrapNode(enode.NewV4(&replacementNodeKey.PublicKey, net.IP{127, 0, 0, 1}, 99, 99))
+	replacementNode := enode.NewV4(&replacementNodeKey.PublicKey, net.IP{127, 0, 0, 1}, 99, 99)
 	last := fillBucket(tab, replacementNode.ID())
 	tab.mutex.Lock()
 	nodeEvents := newNodeEventRecorder(128)
@@ -78,7 +79,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	transport.dead[replacementNode.ID()] = !newNodeIsResponding
 
 	// Add replacement node to table.
-	tab.addFoundNode(replacementNode)
+	tab.addFoundNode(replacementNode, false)
 
 	t.Log("last:", last.ID())
 	t.Log("replacement:", replacementNode.ID())
@@ -115,11 +116,11 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	if l := len(bucket.entries); l != wantSize {
 		t.Errorf("wrong bucket size after revalidation: got %d, want %d", l, wantSize)
 	}
-	if ok := contains(bucket.entries, last.ID()); ok != lastInBucketIsResponding {
+	if ok := containsID(bucket.entries, last.ID()); ok != lastInBucketIsResponding {
 		t.Errorf("revalidated node found: %t, want: %t", ok, lastInBucketIsResponding)
 	}
 	wantNewEntry := newNodeIsResponding && !lastInBucketIsResponding
-	if ok := contains(bucket.entries, replacementNode.ID()); ok != wantNewEntry {
+	if ok := containsID(bucket.entries, replacementNode.ID()); ok != wantNewEntry {
 		t.Errorf("replacement node found: %t, want: %t", ok, wantNewEntry)
 	}
 }
@@ -153,7 +154,7 @@ func TestTable_IPLimit(t *testing.T) {
 
 	for i := 0; i < tableIPLimit+1; i++ {
 		n := nodeAtDistance(tab.self().ID(), i, net.IP{172, 0, 1, byte(i)})
-		tab.addFoundNode(n)
+		tab.addFoundNode(n, false)
 	}
 	if tab.len() > tableIPLimit {
 		t.Errorf("too many nodes in table")
@@ -171,7 +172,7 @@ func TestTable_BucketIPLimit(t *testing.T) {
 	d := 3
 	for i := 0; i < bucketIPLimit+1; i++ {
 		n := nodeAtDistance(tab.self().ID(), d, net.IP{172, 0, 1, byte(i)})
-		tab.addFoundNode(n)
+		tab.addFoundNode(n, false)
 	}
 	if tab.len() > bucketIPLimit {
 		t.Errorf("too many nodes in table")
@@ -232,7 +233,7 @@ func TestTable_findnodeByID(t *testing.T) {
 		// check that the result nodes have minimum distance to target.
 		for _, b := range tab.buckets {
 			for _, n := range b.entries {
-				if contains(result, n.ID()) {
+				if containsID(result, n.ID()) {
 					continue // don't run the check below for nodes in result
 				}
 				farthestResult := result[len(result)-1].ID()
@@ -255,7 +256,7 @@ func TestTable_findnodeByID(t *testing.T) {
 type closeTest struct {
 	Self   enode.ID
 	Target enode.ID
-	All    []*node
+	All    []*enode.Node
 	N      int
 }
 
@@ -268,8 +269,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	for _, id := range gen([]enode.ID{}, rand).([]enode.ID) {
 		r := new(enr.Record)
 		r.Set(enr.IP(genIP(rand)))
-		n := wrapNode(enode.SignNull(r, id))
-		n.livenessChecks = 1
+		n := enode.SignNull(r, id)
 		t.All = append(t.All, n)
 	}
 	return reflect.ValueOf(t)
@@ -284,16 +284,16 @@ func TestTable_addInboundNode(t *testing.T) {
 	// Insert two nodes.
 	n1 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 1})
 	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
-	tab.addFoundNode(n1)
-	tab.addFoundNode(n2)
-	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2.Node})
+	tab.addFoundNode(n1, false)
+	tab.addFoundNode(n2, false)
+	checkBucketContent(t, tab, []*enode.Node{n1, n2})
 
 	// Add a changed version of n2. The bucket should be updated.
 	newrec := n2.Record()
 	newrec.Set(enr.IP{99, 99, 99, 99})
 	n2v2 := enode.SignNull(newrec, n2.ID())
-	tab.addInboundNode(wrapNode(n2v2))
-	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v2})
+	tab.addInboundNode(n2v2)
+	checkBucketContent(t, tab, []*enode.Node{n1, n2v2})
 
 	// Try updating n2 without sequence number change. The update is accepted
 	// because it's inbound.
@@ -301,8 +301,8 @@ func TestTable_addInboundNode(t *testing.T) {
 	newrec.Set(enr.IP{100, 100, 100, 100})
 	newrec.SetSeq(n2.Seq())
 	n2v3 := enode.SignNull(newrec, n2.ID())
-	tab.addInboundNode(wrapNode(n2v3))
-	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v3})
+	tab.addInboundNode(n2v3)
+	checkBucketContent(t, tab, []*enode.Node{n1, n2v3})
 }
 
 func TestTable_addFoundNode(t *testing.T) {
@@ -314,16 +314,16 @@ func TestTable_addFoundNode(t *testing.T) {
 	// Insert two nodes.
 	n1 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 1})
 	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
-	tab.addFoundNode(n1)
-	tab.addFoundNode(n2)
-	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2.Node})
+	tab.addFoundNode(n1, false)
+	tab.addFoundNode(n2, false)
+	checkBucketContent(t, tab, []*enode.Node{n1, n2})
 
 	// Add a changed version of n2. The bucket should be updated.
 	newrec := n2.Record()
 	newrec.Set(enr.IP{99, 99, 99, 99})
 	n2v2 := enode.SignNull(newrec, n2.ID())
-	tab.addFoundNode(wrapNode(n2v2))
-	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v2})
+	tab.addFoundNode(n2v2, false)
+	checkBucketContent(t, tab, []*enode.Node{n1, n2v2})
 
 	// Try updating n2 without a sequence number change.
 	// The update should not be accepted.
@@ -331,8 +331,8 @@ func TestTable_addFoundNode(t *testing.T) {
 	newrec.Set(enr.IP{100, 100, 100, 100})
 	newrec.SetSeq(n2.Seq())
 	n2v3 := enode.SignNull(newrec, n2.ID())
-	tab.addFoundNode(wrapNode(n2v3))
-	checkBucketContent(t, tab, []*enode.Node{n1.Node, n2v2})
+	tab.addFoundNode(n2v3, false)
+	checkBucketContent(t, tab, []*enode.Node{n1, n2v2})
 }
 
 // This test checks that discv4 nodes can update their own endpoint via PING.
@@ -345,13 +345,13 @@ func TestTable_addInboundNodeUpdateV4Accept(t *testing.T) {
 	// Add a v4 node.
 	key, _ := crypto.HexToECDSA("dd3757a8075e88d0f2b1431e7d3c5b1562e1c0aab9643707e8cbfcc8dae5cfe3")
 	n1 := enode.NewV4(&key.PublicKey, net.IP{88, 77, 66, 1}, 9000, 9000)
-	tab.addInboundNode(wrapNode(n1))
+	tab.addInboundNode(n1)
 	checkBucketContent(t, tab, []*enode.Node{n1})
 
 	// Add an updated version with changed IP.
 	// The update will be accepted because it is inbound.
 	n1v2 := enode.NewV4(&key.PublicKey, net.IP{99, 99, 99, 99}, 9000, 9000)
-	tab.addInboundNode(wrapNode(n1v2))
+	tab.addInboundNode(n1v2)
 	checkBucketContent(t, tab, []*enode.Node{n1v2})
 }
 
@@ -366,13 +366,13 @@ func TestTable_addFoundNodeV4UpdateReject(t *testing.T) {
 	// Add a v4 node.
 	key, _ := crypto.HexToECDSA("dd3757a8075e88d0f2b1431e7d3c5b1562e1c0aab9643707e8cbfcc8dae5cfe3")
 	n1 := enode.NewV4(&key.PublicKey, net.IP{88, 77, 66, 1}, 9000, 9000)
-	tab.addFoundNode(wrapNode(n1))
+	tab.addFoundNode(n1, false)
 	checkBucketContent(t, tab, []*enode.Node{n1})
 
 	// Add an updated version with changed IP.
 	// The update won't be accepted because it isn't inbound.
 	n1v2 := enode.NewV4(&key.PublicKey, net.IP{99, 99, 99, 99}, 9000, 9000)
-	tab.addFoundNode(wrapNode(n1v2))
+	tab.addFoundNode(n1v2, false)
 	checkBucketContent(t, tab, []*enode.Node{n1})
 }
 
@@ -413,8 +413,8 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 	var r enr.Record
 	r.Set(enr.IP(net.IP{127, 0, 0, 1}))
 	id := enode.ID{1}
-	n1 := wrapNode(enode.SignNull(&r, id))
-	tab.addFoundNode(n1)
+	n1 := enode.SignNull(&r, id)
+	tab.addFoundNode(n1, false)
 
 	// Update the node record.
 	r.Set(enr.WithEntry("foo", "bar"))
@@ -437,7 +437,7 @@ func TestNodesPush(t *testing.T) {
 	n1 := nodeAtDistance(target, 255, intIP(1))
 	n2 := nodeAtDistance(target, 254, intIP(2))
 	n3 := nodeAtDistance(target, 253, intIP(3))
-	perm := [][]*node{
+	perm := [][]*enode.Node{
 		{n3, n2, n1},
 		{n3, n1, n2},
 		{n2, n3, n1},
@@ -452,7 +452,7 @@ func TestNodesPush(t *testing.T) {
 		for _, n := range nodes {
 			list.push(n, 3)
 		}
-		if !slicesEqual(list.entries, perm[0], nodeIDEqual) {
+		if !slices.EqualFunc(list.entries, perm[0], nodeIDEqual) {
 			t.Fatal("not equal")
 		}
 	}
@@ -463,26 +463,14 @@ func TestNodesPush(t *testing.T) {
 		for _, n := range nodes {
 			list.push(n, 2)
 		}
-		if !slicesEqual(list.entries, perm[0][:2], nodeIDEqual) {
+		if !slices.EqualFunc(list.entries, perm[0][:2], nodeIDEqual) {
 			t.Fatal("not equal")
 		}
 	}
 }
 
-func nodeIDEqual(n1, n2 *node) bool {
+func nodeIDEqual[N nodeType](n1, n2 N) bool {
 	return n1.ID() == n2.ID()
-}
-
-func slicesEqual[T any](s1, s2 []T, check func(e1, e2 T) bool) bool {
-	if len(s1) != len(s2) {
-		return false
-	}
-	for i := range s1 {
-		if !check(s1[i], s2[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // gen wraps quick.Value so it's easier to use.

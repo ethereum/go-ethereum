@@ -39,7 +39,7 @@ type tableRevalidation struct {
 }
 
 type revalidationResponse struct {
-	n          *node
+	n          *tableNode
 	newRecord  *enode.Node
 	didRespond bool
 }
@@ -55,12 +55,12 @@ func (tr *tableRevalidation) init(cfg *Config) {
 }
 
 // nodeAdded is called when the table receives a new node.
-func (tr *tableRevalidation) nodeAdded(tab *Table, n *node) {
+func (tr *tableRevalidation) nodeAdded(tab *Table, n *tableNode) {
 	tr.fast.push(n, tab.cfg.Clock.Now(), &tab.rand)
 }
 
 // nodeRemoved is called when a node was removed from the table.
-func (tr *tableRevalidation) nodeRemoved(n *node) {
+func (tr *tableRevalidation) nodeRemoved(n *tableNode) {
 	if n.revalList == nil {
 		panic(fmt.Errorf("removed node %v has nil revalList", n.ID()))
 	}
@@ -68,7 +68,7 @@ func (tr *tableRevalidation) nodeRemoved(n *node) {
 }
 
 // nodeEndpointChanged is called when a change in IP or port is detected.
-func (tr *tableRevalidation) nodeEndpointChanged(tab *Table, n *node) {
+func (tr *tableRevalidation) nodeEndpointChanged(tab *Table, n *tableNode) {
 	n.isValidatedLive = false
 	tr.moveToList(&tr.fast, n, tab.cfg.Clock.Now(), &tab.rand)
 }
@@ -90,7 +90,7 @@ func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mcloc
 }
 
 // startRequest spawns a revalidation request for node n.
-func (tr *tableRevalidation) startRequest(tab *Table, n *node) {
+func (tr *tableRevalidation) startRequest(tab *Table, n *tableNode) {
 	if _, ok := tr.activeReq[n.ID()]; ok {
 		panic(fmt.Errorf("duplicate startRequest (node %v)", n.ID()))
 	}
@@ -180,7 +180,7 @@ func (tr *tableRevalidation) handleResponse(tab *Table, resp revalidationRespons
 }
 
 // moveToList ensures n is in the 'dest' list.
-func (tr *tableRevalidation) moveToList(dest *revalidationList, n *node, now mclock.AbsTime, rand randomSource) {
+func (tr *tableRevalidation) moveToList(dest *revalidationList, n *tableNode, now mclock.AbsTime, rand randomSource) {
 	if n.revalList == dest {
 		return
 	}
@@ -192,14 +192,14 @@ func (tr *tableRevalidation) moveToList(dest *revalidationList, n *node, now mcl
 
 // revalidationList holds a list nodes and the next revalidation time.
 type revalidationList struct {
-	nodes    []*node
+	nodes    []*tableNode
 	nextTime mclock.AbsTime
 	interval time.Duration
 	name     string
 }
 
 // get returns a random node from the queue. Nodes in the 'exclude' map are not returned.
-func (list *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude map[enode.ID]struct{}) *node {
+func (list *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude map[enode.ID]struct{}) *tableNode {
 	if now < list.nextTime || len(list.nodes) == 0 {
 		return nil
 	}
@@ -217,7 +217,7 @@ func (list *revalidationList) schedule(now mclock.AbsTime, rand randomSource) {
 	list.nextTime = now.Add(time.Duration(rand.Int63n(int64(list.interval))))
 }
 
-func (list *revalidationList) push(n *node, now mclock.AbsTime, rand randomSource) {
+func (list *revalidationList) push(n *tableNode, now mclock.AbsTime, rand randomSource) {
 	list.nodes = append(list.nodes, n)
 	if list.nextTime == never {
 		list.schedule(now, rand)
@@ -225,7 +225,7 @@ func (list *revalidationList) push(n *node, now mclock.AbsTime, rand randomSourc
 	n.revalList = list
 }
 
-func (list *revalidationList) remove(n *node) {
+func (list *revalidationList) remove(n *tableNode) {
 	i := slices.Index(list.nodes, n)
 	if i == -1 {
 		panic(fmt.Errorf("node %v not found in list", n.ID()))
@@ -238,7 +238,7 @@ func (list *revalidationList) remove(n *node) {
 }
 
 func (list *revalidationList) contains(id enode.ID) bool {
-	return slices.ContainsFunc(list.nodes, func(n *node) bool {
+	return slices.ContainsFunc(list.nodes, func(n *tableNode) bool {
 		return n.ID() == id
 	})
 }
