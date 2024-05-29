@@ -145,6 +145,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 			return nil
 		}
 	}
+	var persisted *diskLayer
 	// We're out of layers, flatten anything below, stopping if it's the disk or if
 	// the memory limit is not yet exceeded.
 	switch parent := diff.parentLayer().(type) {
@@ -163,6 +164,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		}
 		tree.layers[base.rootHash()] = base
 		diff.parent = base
+		persisted = base.(*diskLayer)
 
 		diff.lock.Unlock()
 
@@ -189,6 +191,19 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		if dl, ok := layer.(*diskLayer); ok && dl.isStale() {
 			remove(root)
 		}
+	}
+	// If the disk layer was modified, regenerate all the cumulative blooms
+	if persisted != nil {
+		var rebloom func(root common.Hash)
+		rebloom = func(root common.Hash) {
+			if diff, ok := tree.layers[root].(*diffLayer); ok {
+				diff.rebloom(persisted)
+			}
+			for _, child := range children[root] {
+				rebloom(child)
+			}
+		}
+		rebloom(persisted.root)
 	}
 	return nil
 }

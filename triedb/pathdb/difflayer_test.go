@@ -18,6 +18,7 @@ package pathdb
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -25,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/stretchr/testify/assert"
 )
 
 func emptyLayer() *diskLayer {
@@ -169,4 +171,21 @@ func BenchmarkJournal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		layer.journal(new(bytes.Buffer))
 	}
+}
+
+func TestBloomHash(t *testing.T) {
+	n1 := nodeBloomHash(common.Hash{}, common.Hex2Bytes("0101"))
+	n2 := nodeBloomHash(common.Hash{}, common.Hex2Bytes("00000101"))
+	n3 := nodeBloomHash(common.Hash{}, common.Hex2Bytes("0000000000000000000000000101"))
+	n4 := nodeBloomHash(common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffff1ffffdfffffffffaf"), common.Hex2Bytes("0101"))
+	n5 := nodeBloomHash(common.HexToHash("0xf1234ffffffffffffffffffffffffffffffffffffffffff1ffffdfffffffffaf"), common.Hex2Bytes("00000101"))
+	fmt.Printf("hash: %x\n", n1)
+	fmt.Printf("hash: %x\n", n2)
+	fmt.Printf("hash: %x\n", n3)
+	fmt.Printf("hash: %x\n", n4)
+	fmt.Printf("hash: %x\n", n5)
+	assert.NotEqual(t, n1, n2)
+	assert.NotEqual(t, n1, n3)
+	assert.NotEqual(t, n1, n4)
+	assert.NotEqual(t, n4, n5)
 }
