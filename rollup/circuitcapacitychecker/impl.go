@@ -3,7 +3,7 @@
 package circuitcapacitychecker
 
 /*
-#cgo LDFLAGS: -lm -ldl -lzkp
+#cgo LDFLAGS: -lm -ldl -lzkp -lzktrie
 #include <stdlib.h>
 #include "./libzkp/libzkp.h"
 */

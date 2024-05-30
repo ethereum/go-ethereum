@@ -7,3 +7,4 @@ clean:
 libzkp:
 	cargo build --release
 	cp $(PWD)/target/release/libzkp.so $(PWD)/
+	find $(PWD)/target | grep libzktrie.so | xargs -I{} cp {} $(PWD)/
