@@ -180,9 +180,9 @@ func BenchmarkByteAtOld(b *testing.B) {
 func TestReadBits(t *testing.T) {
 	check := func(input string) {
 		want, _ := hex.DecodeString(input)
-		int, _ := new(big.Int).SetString(input, 16)
+		in, _ := new(big.Int).SetString(input, 16)
 		buf := make([]byte, len(want))
-		ReadBits(int, buf)
+		ReadBits(in, buf)
 		if !bytes.Equal(buf, want) {
 			t.Errorf("have: %x\nwant: %x", buf, want)
 		}
