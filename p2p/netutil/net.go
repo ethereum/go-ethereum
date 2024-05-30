@@ -145,6 +145,9 @@ func IsLAN(ip net.IP) bool {
 
 // IsLAN reports whether an IP is a local network address.
 func AddrIsLAN(ip netip.Addr) bool {
+	if ip.Is4In6() {
+		ip = netip.AddrFrom4(ip.As4())
+	}
 	if ip.IsLoopback() {
 		return true
 	}
@@ -160,10 +163,13 @@ func IsSpecialNetwork(ip net.IP) bool {
 // AddrIsSpecialNetwork reports whether an IP is located in a special-use network range
 // This includes broadcast, multicast and documentation addresses.
 func AddrIsSpecialNetwork(ip netip.Addr) bool {
+	if ip.Is4In6() {
+		ip = netip.AddrFrom4(ip.As4())
+	}
 	if ip.IsMulticast() {
 		return true
 	}
-	if ip.Is4() || ip.Is4In6() {
+	if ip.Is4() {
 		return special4.ContainsAddr(ip)
 	}
 	return special6.ContainsAddr(ip)

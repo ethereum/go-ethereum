@@ -74,11 +74,11 @@ func TestParseNetlist(t *testing.T) {
 
 func TestNilNetListContains(t *testing.T) {
 	var list *Netlist
-	checkContains(t, list.Contains, nil, []string{"1.2.3.4"})
+	checkContains(t, list.Contains, list.ContainsAddr, nil, []string{"1.2.3.4"})
 }
 
 func TestIsLAN(t *testing.T) {
-	checkContains(t, IsLAN,
+	checkContains(t, IsLAN, AddrIsLAN,
 		[]string{ // included
 			"127.0.0.1",
 			"10.0.1.1",
@@ -88,18 +88,23 @@ func TestIsLAN(t *testing.T) {
 			"fe80::f4a1:8eff:fec5:9d9d",
 			"febf::ab32:2233",
 			"fc00::4",
+			// 4-in-6
+			"::ffff:127.0.0.1",
+			"::ffff:10.10.0.2",
 		},
 		[]string{ // excluded
 			"192.0.2.1",
 			"1.0.0.0",
 			"172.32.0.1",
 			"fec0::2233",
+			// 4-in-6
+			"::ffff:88.99.100.2",
 		},
 	)
 }
 
 func TestIsSpecialNetwork(t *testing.T) {
-	checkContains(t, IsSpecialNetwork,
+	checkContains(t, IsSpecialNetwork, AddrIsSpecialNetwork,
 		[]string{ // included
 			"0.0.0.0",
 			"0.2.0.8",
@@ -109,6 +114,9 @@ func TestIsSpecialNetwork(t *testing.T) {
 			"255.255.255.255",
 			"224.0.0.22", // IPv4 multicast
 			"ff05::1:3",  // IPv6 multicast
+			// 4-in-6
+			"::ffff:255.255.255.255",
+			"::ffff:192.0.2.1",
 		},
 		[]string{ // excluded
 			"192.0.3.1",
@@ -119,15 +127,21 @@ func TestIsSpecialNetwork(t *testing.T) {
 	)
 }
 
-func checkContains(t *testing.T, fn func(net.IP) bool, inc, exc []string) {
+func checkContains(t *testing.T, fn func(net.IP) bool, fn2 func(netip.Addr) bool, inc, exc []string) {
 	for _, s := range inc {
 		if !fn(parseIP(s)) {
-			t.Error("returned false for included address", s)
+			t.Error("returned false for included net.IP", s)
+		}
+		if !fn2(netip.MustParseAddr(s)) {
+			t.Error("returned false for included netip.Addr", s)
 		}
 	}
 	for _, s := range exc {
 		if fn(parseIP(s)) {
-			t.Error("returned true for excluded address", s)
+			t.Error("returned true for excluded net.IP", s)
+		}
+		if fn2(netip.MustParseAddr(s)) {
+			t.Error("returned true for excluded netip.Addr", s)
 		}
 	}
 }
