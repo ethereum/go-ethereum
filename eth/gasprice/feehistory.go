@@ -44,8 +44,7 @@ const (
 	// maxBlockFetchers is the max number of goroutines to spin up to pull blocks
 	// for the fee history calculation (mostly relevant for LES).
 	maxBlockFetchers = 4
-	// maxQueryLimit is the max number of requested percentiles
-	// for defending DDoS attacks.
+	// maxQueryLimit is the max number of requested percentiles.
 	maxQueryLimit = 100
 )
 
