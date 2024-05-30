@@ -46,8 +46,7 @@ func updateTrie(addrHash common.Hash, root common.Hash, dirties, cleans map[comm
 			h.Update(key.Bytes(), val)
 		}
 	}
-	root, nodes := h.Commit(false)
-	return root, nodes
+	return h.Commit(false)
 }
 
 func generateAccount(storageRoot common.Hash) types.StateAccount {
