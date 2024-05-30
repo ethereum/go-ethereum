@@ -72,7 +72,7 @@ func handleRip7560Transactions(transactions []*types.Transaction, index int, sta
 		validatedTransactions = append(validatedTransactions, tx)
 
 		// This is the line separating the Validation and Execution phases
-		// It should be separated to implement the mempool-friendly AA RIP (number not assigned yet)
+		// It should be separated to implement the mempool-friendly AA RIP-7711
 		// for i, vpr := range validationPhaseResults
 
 		// TODO: this will miss all validation phase events - pass in 'vpr'
