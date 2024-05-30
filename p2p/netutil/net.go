@@ -356,7 +356,7 @@ func IPToAddr(ip net.IP) netip.Addr {
 // RandomAddr creates a random IP address.
 func RandomAddr(rng *rand.Rand) netip.Addr {
 	var bytes []byte
-	if rng.Intn(1) == 0 {
+	if rng.Intn(2) == 0 {
 		bytes = make([]byte, 4)
 	} else {
 		bytes = make([]byte, 16)
