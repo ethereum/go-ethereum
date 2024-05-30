@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -27,10 +28,24 @@ type supplyInfoIssuance struct {
 	Withdrawals  *big.Int `json:"withdrawals"`
 }
 
+//go:generate go run github.com/fjl/gencodec -type supplyInfoIssuance -field-override supplyInfoIssuanceMarshaling -out gen_supplyinfoissuance.go
+type supplyInfoIssuanceMarshaling struct {
+	GenesisAlloc *hexutil.Big
+	Reward       *hexutil.Big
+	Withdrawals  *hexutil.Big
+}
+
 type supplyInfoBurn struct {
 	EIP1559 *big.Int `json:"1559"`
 	Blob    *big.Int `json:"blob"`
 	Misc    *big.Int `json:"misc"`
+}
+
+//go:generate go run github.com/fjl/gencodec -type supplyInfoBurn -field-override supplyInfoBurnMarshaling -out gen_supplyinfoburn.go
+type supplyInfoBurnMarshaling struct {
+	EIP1559 *hexutil.Big
+	Blob    *hexutil.Big
+	Misc    *hexutil.Big
 }
 
 type supplyInfo struct {
