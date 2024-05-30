@@ -494,7 +494,7 @@ func (tab *Table) addIP(b *bucket, ip netip.Addr) bool {
 }
 
 func (tab *Table) removeIP(b *bucket, ip netip.Addr) {
-	if !ip.IsValid() || ip.IsUnspecified() || netutil.AddrIsLAN(ip) {
+	if netutil.AddrIsLAN(ip) {
 		return
 	}
 	tab.ips.RemoveAddr(ip)
