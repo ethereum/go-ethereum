@@ -290,11 +290,7 @@ func (s *DistinctNetSet) RemoveAddr(ip netip.Addr) {
 
 // Contains whether the given IP is contained in the set.
 func (s DistinctNetSet) Contains(ip net.IP) bool {
-	addr, ok := netip.AddrFromSlice(ip)
-	if !ok {
-		panic(fmt.Errorf("invalid IP %v", ip))
-	}
-	return s.ContainsAddr(addr)
+	return s.ContainsAddr(IPToAddr(ip))
 }
 
 // Contains whether the given IP is contained in the set.
