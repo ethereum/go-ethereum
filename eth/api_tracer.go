@@ -765,7 +765,7 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 	// Recompute transactions up to the target index.
 	feeCapacity := state.GetTRC21FeeCapacityFromState(statedb)
 	if common.TIPSigning.Cmp(block.Header().Number) == 0 {
-		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
+		statedb.DeleteAddress(common.BlockSignersBinary)
 	}
 	core.InitSignerInTransactions(api.config, block.Header(), block.Transactions())
 	balanceUpdated := map[common.Address]*big.Int{}

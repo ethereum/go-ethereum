@@ -410,8 +410,8 @@ func (tx *Transaction) IsSpecialTransaction() bool {
 		return false
 	}
 	toBytes := tx.To().Bytes()
-	randomizeSMCBytes := common.HexToAddress(common.RandomizeSMC).Bytes()
-	blockSignersBytes := common.HexToAddress(common.BlockSigners).Bytes()
+	randomizeSMCBytes := common.RandomizeSMCBinary.Bytes()
+	blockSignersBytes := common.BlockSignersBinary.Bytes()
 	return bytes.Equal(toBytes, randomizeSMCBytes) || bytes.Equal(toBytes, blockSignersBytes)
 }
 
@@ -420,7 +420,7 @@ func (tx *Transaction) IsTradingTransaction() bool {
 		return false
 	}
 
-	if tx.To().String() != common.XDCXAddr {
+	if *tx.To() != common.XDCXAddrBinary {
 		return false
 	}
 
@@ -432,7 +432,7 @@ func (tx *Transaction) IsLendingTransaction() bool {
 		return false
 	}
 
-	if tx.To().String() != common.XDCXLendingAddress {
+	if *tx.To() != common.XDCXLendingAddressBinary {
 		return false
 	}
 	return true
@@ -443,7 +443,7 @@ func (tx *Transaction) IsLendingFinalizedTradeTransaction() bool {
 		return false
 	}
 
-	if tx.To().String() != common.XDCXLendingFinalizedTradeAddress {
+	if *tx.To() != common.XDCXLendingFinalizedTradeAddressBinary {
 		return false
 	}
 	return true
@@ -464,7 +464,7 @@ func (tx *Transaction) IsSigningTransaction() bool {
 		return false
 	}
 
-	if tx.To().String() != common.BlockSigners {
+	if *tx.To() != common.BlockSignersBinary {
 		return false
 	}
 
@@ -485,7 +485,7 @@ func (tx *Transaction) IsVotingTransaction() (bool, *common.Address) {
 	if tx.To() == nil {
 		return false, nil
 	}
-	b := (tx.To().String() == common.MasternodeVotingSMC)
+	b := (*tx.To() == common.MasternodeVotingSMCBinary)
 
 	if !b {
 		return b, nil

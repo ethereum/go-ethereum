@@ -796,6 +796,6 @@ func (s *StateDB) GetOwner(candidate common.Address) common.Address {
 	// validatorsState[_candidate].owner;
 	locValidatorsState := GetLocMappingAtKey(candidate.Hash(), slot)
 	locCandidateOwner := locValidatorsState.Add(locValidatorsState, new(big.Int).SetUint64(uint64(0)))
-	ret := s.GetState(common.HexToAddress(common.MasternodeVotingSMC), common.BigToHash(locCandidateOwner))
+	ret := s.GetState(common.MasternodeVotingSMCBinary, common.BigToHash(locCandidateOwner))
 	return common.HexToAddress(ret.Hex())
 }

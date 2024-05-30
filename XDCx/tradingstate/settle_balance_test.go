@@ -1,10 +1,11 @@
 package tradingstate
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/common"
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
 func TestGetSettleBalance(t *testing.T) {
@@ -89,7 +90,7 @@ func TestGetSettleBalance(t *testing.T) {
 				takerSide:         Bid,
 				takerFeeRate:      big.NewInt(10), // feeRate 0.1%
 				baseToken:         testToken,
-				quoteToken:        common.HexToAddress(common.XDCNativeAddress),
+				quoteToken:        common.XDCNativeAddressBinary,
 				makerPrice:        common.BasePrice,
 				makerFeeRate:      big.NewInt(10), // feeRate 0.1%
 				baseTokenDecimal:  common.BasePrice,
@@ -106,7 +107,7 @@ func TestGetSettleBalance(t *testing.T) {
 				takerSide:         Bid,
 				takerFeeRate:      big.NewInt(5), // feeRate 0.05%
 				baseToken:         testToken,
-				quoteToken:        common.HexToAddress(common.XDCNativeAddress),
+				quoteToken:        common.XDCNativeAddressBinary,
 				makerPrice:        common.BasePrice,
 				makerFeeRate:      big.NewInt(10), // feeRate 0.1%
 				baseTokenDecimal:  common.BasePrice,
@@ -124,7 +125,7 @@ func TestGetSettleBalance(t *testing.T) {
 				takerSide:         Bid,
 				takerFeeRate:      big.NewInt(10), // feeRate 0.1%
 				baseToken:         testToken,
-				quoteToken:        common.HexToAddress(common.XDCNativeAddress),
+				quoteToken:        common.XDCNativeAddressBinary,
 				makerPrice:        common.BasePrice,
 				makerFeeRate:      big.NewInt(10), // feeRate 0.1%
 				baseTokenDecimal:  common.BasePrice,
@@ -132,8 +133,8 @@ func TestGetSettleBalance(t *testing.T) {
 				quantityToTrade:   new(big.Int).Mul(big.NewInt(1000), common.BasePrice),
 			},
 			&SettleBalance{
-				Taker: TradeResult{Fee: testFee, InToken: testToken, InTotal: tradeQuantity, OutToken: common.HexToAddress(common.XDCNativeAddress), OutTotal: tradeQuantityIncludedFee},
-				Maker: TradeResult{Fee: testFee, InToken: common.HexToAddress(common.XDCNativeAddress), InTotal: tradeQuantityExcludedFee, OutToken: testToken, OutTotal: tradeQuantity},
+				Taker: TradeResult{Fee: testFee, InToken: testToken, InTotal: tradeQuantity, OutToken: common.XDCNativeAddressBinary, OutTotal: tradeQuantityIncludedFee},
+				Maker: TradeResult{Fee: testFee, InToken: common.XDCNativeAddressBinary, InTotal: tradeQuantityExcludedFee, OutToken: testToken, OutTotal: tradeQuantity},
 			},
 			false,
 		},
@@ -196,7 +197,7 @@ func TestGetSettleBalance(t *testing.T) {
 				takerSide:         Ask,
 				takerFeeRate:      big.NewInt(10), // feeRate 0.1%
 				baseToken:         testToken,
-				quoteToken:        common.HexToAddress(common.XDCNativeAddress),
+				quoteToken:        common.XDCNativeAddressBinary,
 				makerPrice:        common.BasePrice,
 				makerFeeRate:      big.NewInt(10), // feeRate 0.1%
 				baseTokenDecimal:  common.BasePrice,
@@ -213,7 +214,7 @@ func TestGetSettleBalance(t *testing.T) {
 				takerSide:         Ask,
 				takerFeeRate:      big.NewInt(5), // feeRate 0.05%
 				baseToken:         testToken,
-				quoteToken:        common.HexToAddress(common.XDCNativeAddress),
+				quoteToken:        common.XDCNativeAddressBinary,
 				makerPrice:        common.BasePrice,
 				makerFeeRate:      big.NewInt(10), // feeRate 0.1%
 				baseTokenDecimal:  common.BasePrice,
@@ -231,7 +232,7 @@ func TestGetSettleBalance(t *testing.T) {
 				takerSide:         Ask,
 				takerFeeRate:      big.NewInt(10), // feeRate 15%
 				baseToken:         testToken,
-				quoteToken:        common.HexToAddress(common.XDCNativeAddress),
+				quoteToken:        common.XDCNativeAddressBinary,
 				makerPrice:        common.BasePrice,
 				makerFeeRate:      big.NewInt(10), // feeRate 0.1%
 				baseTokenDecimal:  common.BasePrice,
@@ -239,8 +240,8 @@ func TestGetSettleBalance(t *testing.T) {
 				quantityToTrade:   new(big.Int).Mul(big.NewInt(1000), common.BasePrice),
 			},
 			&SettleBalance{
-				Maker: TradeResult{Fee: testFee, InToken: testToken, InTotal: tradeQuantity, OutToken: common.HexToAddress(common.XDCNativeAddress), OutTotal: tradeQuantityIncludedFee},
-				Taker: TradeResult{Fee: testFee, InToken: common.HexToAddress(common.XDCNativeAddress), InTotal: tradeQuantityExcludedFee, OutToken: testToken, OutTotal: tradeQuantity},
+				Maker: TradeResult{Fee: testFee, InToken: testToken, InTotal: tradeQuantity, OutToken: common.XDCNativeAddressBinary, OutTotal: tradeQuantityIncludedFee},
+				Taker: TradeResult{Fee: testFee, InToken: common.XDCNativeAddressBinary, InTotal: tradeQuantityExcludedFee, OutToken: testToken, OutTotal: tradeQuantity},
 			},
 			false,
 		},

@@ -614,7 +614,7 @@ func (self *worker) commitNewWork() {
 		misc.ApplyDAOHardFork(work.state)
 	}
 	if common.TIPSigning.Cmp(header.Number) == 0 {
-		work.state.DeleteAddress(common.HexToAddress(common.BlockSigners))
+		work.state.DeleteAddress(common.BlockSignersBinary)
 	}
 	// won't grasp txs at checkpoint
 	var (
@@ -699,7 +699,7 @@ func (self *worker) commitNewWork() {
 						return
 					}
 					nonce := work.state.GetNonce(self.coinbase)
-					tx := types.NewTransaction(nonce, common.HexToAddress(common.XDCXAddr), big.NewInt(0), txMatchGasLimit, big.NewInt(0), txMatchBytes)
+					tx := types.NewTransaction(nonce, common.XDCXAddrBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), txMatchBytes)
 					txM, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, tx, self.config.ChainId)
 					if err != nil {
 						log.Error("Fail to create tx matches", "error", err)
@@ -729,7 +729,7 @@ func (self *worker) commitNewWork() {
 						return
 					}
 					nonce := work.state.GetNonce(self.coinbase)
-					lendingTx := types.NewTransaction(nonce, common.HexToAddress(common.XDCXLendingAddress), big.NewInt(0), txMatchGasLimit, big.NewInt(0), lendingDataBytes)
+					lendingTx := types.NewTransaction(nonce, common.XDCXLendingAddressBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), lendingDataBytes)
 					signedLendingTx, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, lendingTx, self.config.ChainId)
 					if err != nil {
 						log.Error("Fail to create lending tx", "error", err)
@@ -753,7 +753,7 @@ func (self *worker) commitNewWork() {
 						return
 					}
 					nonce := work.state.GetNonce(self.coinbase)
-					finalizedTx := types.NewTransaction(nonce, common.HexToAddress(common.XDCXLendingFinalizedTradeAddress), big.NewInt(0), txMatchGasLimit, big.NewInt(0), finalizedTradeData)
+					finalizedTx := types.NewTransaction(nonce, common.XDCXLendingFinalizedTradeAddressBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), finalizedTradeData)
 					signedFinalizedTx, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, finalizedTx, self.config.ChainId)
 					if err != nil {
 						log.Error("Fail to create lending tx", "error", err)
@@ -772,7 +772,7 @@ func (self *worker) commitNewWork() {
 			XDCxStateRoot := work.tradingState.IntermediateRoot()
 			LendingStateRoot := work.lendingState.IntermediateRoot()
 			txData := append(XDCxStateRoot.Bytes(), LendingStateRoot.Bytes()...)
-			tx := types.NewTransaction(work.state.GetNonce(self.coinbase), common.HexToAddress(common.TradingStateAddr), big.NewInt(0), txMatchGasLimit, big.NewInt(0), txData)
+			tx := types.NewTransaction(work.state.GetNonce(self.coinbase), common.TradingStateAddrBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), txData)
 			txStateRoot, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, tx, self.config.ChainId)
 			if err != nil {
 				log.Error("Fail to create tx state root", "error", err)
@@ -857,7 +857,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 			log.Trace("Ignoring reply protected special transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
 			continue
 		}
-		if tx.To().Hex() == common.BlockSigners {
+		if *tx.To() == common.BlockSignersBinary {
 			if len(tx.Data()) < 68 {
 				log.Trace("Data special transaction invalid length", "hash", tx.Hash(), "data", len(tx.Data()))
 				continue

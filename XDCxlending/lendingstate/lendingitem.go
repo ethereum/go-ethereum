@@ -411,7 +411,7 @@ func VerifyBalance(isXDCXLendingFork bool, statedb *state.StateDB, lendingStateD
 					defaultFee := new(big.Int).Mul(quantity, new(big.Int).SetUint64(DefaultFeeRate))
 					defaultFee = new(big.Int).Div(defaultFee, common.XDCXBaseFee)
 					defaultFeeInXDC := common.Big0
-					if lendingToken.String() != common.XDCNativeAddress {
+					if lendingToken != common.XDCNativeAddressBinary {
 						defaultFeeInXDC = new(big.Int).Mul(defaultFee, lendTokenXDCPrice)
 						defaultFeeInXDC = new(big.Int).Div(defaultFeeInXDC, lendingTokenDecimal)
 					} else {

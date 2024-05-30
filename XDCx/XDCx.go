@@ -292,10 +292,10 @@ func (XDCx *XDCX) GetAveragePriceLastEpoch(chain consensus.ChainContext, statedb
 
 // return tokenQuantity (after convert from XDC to token), tokenPriceInXDC, error
 func (XDCx *XDCX) ConvertXDCToToken(chain consensus.ChainContext, statedb *state.StateDB, tradingStateDb *tradingstate.TradingStateDB, token common.Address, quantity *big.Int) (*big.Int, *big.Int, error) {
-	if token.String() == common.XDCNativeAddress {
+	if token == common.XDCNativeAddressBinary {
 		return quantity, common.BasePrice, nil
 	}
-	tokenPriceInXDC, err := XDCx.GetAveragePriceLastEpoch(chain, statedb, tradingStateDb, token, common.HexToAddress(common.XDCNativeAddress))
+	tokenPriceInXDC, err := XDCx.GetAveragePriceLastEpoch(chain, statedb, tradingStateDb, token, common.XDCNativeAddressBinary)
 	if err != nil || tokenPriceInXDC == nil || tokenPriceInXDC.Sign() <= 0 {
 		return common.Big0, common.Big0, err
 	}
@@ -596,7 +596,7 @@ func (XDCx *XDCX) GetTriegc() *prque.Prque {
 func (XDCx *XDCX) GetTradingStateRoot(block *types.Block, author common.Address) (common.Hash, error) {
 	for _, tx := range block.Transactions() {
 		from := *(tx.From())
-		if tx.To() != nil && tx.To().Hex() == common.TradingStateAddr && from == author {
+		if tx.To() != nil && *tx.To() == common.TradingStateAddrBinary && from == author {
 			if len(tx.Data()) >= 32 {
 				return common.BytesToHash(tx.Data()[:32]), nil
 			}

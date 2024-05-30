@@ -259,7 +259,7 @@ func (api *API) GetV2BlockByHash(blockHash common.Hash) *V2BlockInfo {
 func (api *API) NetworkInformation() NetworkInformation {
 	info := NetworkInformation{}
 	info.NetworkId = api.chain.Config().ChainId
-	info.XDCValidatorAddress = common.HexToAddress(common.MasternodeVotingSMC)
+	info.XDCValidatorAddress = common.MasternodeVotingSMCBinary
 	if common.IsTestnet {
 		info.LendingAddress = common.HexToAddress(common.LendingRegistrationSMCTestnet)
 		info.RelayerRegistrationAddress = common.HexToAddress(common.RelayerRegistrationSMCTestnet)

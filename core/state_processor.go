@@ -80,7 +80,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 		misc.ApplyDAOHardFork(statedb)
 	}
 	if common.TIPSigning.Cmp(header.Number) == 0 {
-		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
+		statedb.DeleteAddress(common.BlockSignersBinary)
 	}
 	parentState := statedb.Copy()
 	InitSignerInTransactions(p.config, header, block.Transactions())
@@ -146,7 +146,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 		misc.ApplyDAOHardFork(statedb)
 	}
 	if common.TIPSigning.Cmp(header.Number) == 0 {
-		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
+		statedb.DeleteAddress(common.BlockSignersBinary)
 	}
 	if cBlock.stop {
 		return nil, nil, 0, ErrStopPreparingBlock
@@ -215,13 +215,13 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error, bool) {
-	if tx.To() != nil && tx.To().String() == common.BlockSigners && config.IsTIPSigning(header.Number) {
+	if tx.To() != nil && *tx.To() == common.BlockSignersBinary && config.IsTIPSigning(header.Number) {
 		return ApplySignTransaction(config, statedb, header, tx, usedGas)
 	}
-	if tx.To() != nil && tx.To().String() == common.TradingStateAddr && config.IsTIPXDCXReceiver(header.Number) {
+	if tx.To() != nil && *tx.To() == common.TradingStateAddrBinary && config.IsTIPXDCXReceiver(header.Number) {
 		return ApplyEmptyTransaction(config, statedb, header, tx, usedGas)
 	}
-	if tx.To() != nil && tx.To().String() == common.XDCXLendingAddress && config.IsTIPXDCXReceiver(header.Number) {
+	if tx.To() != nil && *tx.To() == common.XDCXLendingAddressBinary && config.IsTIPXDCXReceiver(header.Number) {
 		return ApplyEmptyTransaction(config, statedb, header, tx, usedGas)
 	}
 	if tx.IsTradingTransaction() && config.IsTIPXDCXReceiver(header.Number) {
@@ -473,7 +473,7 @@ func ApplySignTransaction(config *params.ChainConfig, statedb *state.StateDB, he
 	// if the transaction created a contract, store the creation address in the receipt.
 	// Set the receipt logs and create a bloom for filtering
 	log := &types.Log{}
-	log.Address = common.HexToAddress(common.BlockSigners)
+	log.Address = common.BlockSignersBinary
 	log.BlockNumber = header.Number.Uint64()
 	statedb.AddLog(log)
 	receipt.Logs = statedb.GetLogs(tx.Hash())
