@@ -241,6 +241,9 @@ func (c *Client) CodeAt(ctx context.Context, account common.Address, blockNumber
 }
 
 func (c *Client) NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error) {
+	if blockNumber.IsInt64() && rpc.BlockNumber(blockNumber.Int64()) == rpc.PendingBlockNumber {
+		return c.PendingNonceAt(ctx, account)
+	}
 	proof, _, err := c.state.getProof(ctx, blockNumber, account, nil, false)
 	if err != nil {
 		return 0, err
@@ -254,4 +257,45 @@ func (c *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumbe
 		return nil, err
 	}
 	return c.txAndReceipts.getBlockReceipts(ctx, hash)
+}
+
+// TransactionSender interface {
+func (c *Client) SendTransaction(ctx context.Context, tx *types.Transaction) error {
+	return c.txAndReceipts.sendTransaction(ctx, tx)
+	//TODO
+}
+
+// PendingStateReader interface {
+func (c *Client) PendingBalanceAt(ctx context.Context, account common.Address) (*big.Int, error) {
+	return c.BalanceAt(ctx, account, big.NewInt(int64(rpc.LatestBlockNumber)))
+	//TODO subtract upper estimate for pending tx costs?
+}
+
+func (c *Client) PendingStorageAt(ctx context.Context, account common.Address, key common.Hash) ([]byte, error) {
+	return c.StorageAt(ctx, account, key, big.NewInt(int64(rpc.LatestBlockNumber)))
+}
+
+func (c *Client) PendingCodeAt(ctx context.Context, account common.Address) ([]byte, error) {
+	return c.CodeAt(ctx, account, big.NewInt(int64(rpc.LatestBlockNumber)))
+}
+
+func (c *Client) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+	nonce, err := c.NonceAt(ctx, account, big.NewInt(int64(rpc.LatestBlockNumber)))
+	if err != nil {
+		return 0, err
+	}
+	//TODO
+	return nonce, err
+}
+
+func (c *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
+	return 0, nil //TODO
+}
+
+// BlockNumberReader interface {
+func (c *Client) BlockNumber(ctx context.Context) (uint64, error) {
+	if head := c.canonicalChain.getHead(); head != nil {
+		return head.BlockNumber(), nil
+	}
+	return 0, errors.New("chain head unknown")
 }

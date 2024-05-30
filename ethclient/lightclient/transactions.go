@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -250,4 +251,18 @@ func (t *txAndReceipts) cacheBlockTxPositions(block *types.Block) {
 	for i, tx := range block.Transactions() {
 		t.txPosCache.Add(tx.Hash(), txInBlock{blockNumber: blockNumber, blockHash: blockHash, index: uint(i)})
 	}
+}
+
+func (t *txAndReceipts) sendTransaction(ctx context.Context, tx *types.Transaction) error {
+	data, err := tx.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	if err := t.client.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data)); err != nil {
+		return err
+	}
+	/*t.sentTxLock.Lock()
+	t.sentTxs[tx.]
+	t.sentTxLock.Unlock()*/
+	return nil
 }
