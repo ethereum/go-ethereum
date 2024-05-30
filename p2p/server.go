@@ -912,7 +912,7 @@ func (srv *Server) listenLoop() {
 			slots <- struct{}{}
 			continue
 		}
-		if remoteIP != nil {
+		if remoteIP.IsValid() {
 			fd = newMeteredConn(fd)
 			serveMeter.Mark(1)
 			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
