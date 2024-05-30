@@ -91,7 +91,7 @@ data, and verifies that all snapshot storage data has a corresponding account.
 			},
 			{
 				Name:      "inspect-account",
-				Usage:     "Check all snapshot layers for the a specific account",
+				Usage:     "Check all snapshot layers for the specific account",
 				ArgsUsage: "<address | hash>",
 				Action:    checkAccount,
 				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),

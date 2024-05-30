@@ -151,7 +151,7 @@ func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if err := rlp.Decode(r, &body); err != nil {
 		return nil, err
 	}
-	return types.NewBlockWithHeader(&header).WithBody(body.Transactions, body.Uncles), nil
+	return types.NewBlockWithHeader(&header).WithBody(body), nil
 }
 
 // Accumulator reads the accumulator entry in the Era1 file.

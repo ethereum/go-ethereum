@@ -312,11 +312,10 @@ func (ks *KeyStore) Unlock(a accounts.Account, passphrase string) error {
 // Lock removes the private key with the given address from memory.
 func (ks *KeyStore) Lock(addr common.Address) error {
 	ks.mu.Lock()
-	if unl, found := ks.unlocked[addr]; found {
-		ks.mu.Unlock()
+	unl, found := ks.unlocked[addr]
+	ks.mu.Unlock()
+	if found {
 		ks.expire(addr, unl, time.Duration(0)*time.Nanosecond)
-	} else {
-		ks.mu.Unlock()
 	}
 	return nil
 }

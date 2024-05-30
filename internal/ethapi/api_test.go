@@ -751,7 +751,7 @@ func TestEstimateGas(t *testing.T) {
 				From:       &accounts[0].addr,
 				To:         &accounts[1].addr,
 				Value:      (*hexutil.Big)(big.NewInt(1)),
-				BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+				BlobHashes: []common.Hash{{0x01, 0x22}},
 				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
 			},
 			want: 21000,
@@ -939,7 +939,7 @@ func TestCall(t *testing.T) {
 			call: TransactionArgs{
 				From:       &accounts[1].addr,
 				To:         &randomAccounts[2].addr,
-				BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+				BlobHashes: []common.Hash{{0x01, 0x22}},
 				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
 			},
 			overrides: StateOverride{
@@ -1063,7 +1063,7 @@ func TestSendBlobTransaction(t *testing.T) {
 		From:       &b.acc.Address,
 		To:         &to,
 		Value:      (*hexutil.Big)(big.NewInt(1)),
-		BlobHashes: []common.Hash{common.Hash{0x01, 0x22}},
+		BlobHashes: []common.Hash{{0x01, 0x22}},
 	})
 	if err != nil {
 		t.Fatalf("failed to fill tx defaults: %v\n", err)
@@ -1348,7 +1348,7 @@ func TestRPCMarshalBlock(t *testing.T) {
 		}
 		txs = append(txs, tx)
 	}
-	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, txs, nil, nil, blocktest.NewHasher())
+	block := types.NewBlock(&types.Header{Number: big.NewInt(100)}, &types.Body{Transactions: txs}, nil, blocktest.NewHasher())
 
 	var testSuite = []struct {
 		inclTx bool
@@ -1559,7 +1559,7 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 			Address:   common.Address{0x12, 0x34},
 			Amount:    10,
 		}
-		pending = types.NewBlockWithWithdrawals(&types.Header{Number: big.NewInt(11), Time: 42}, []*types.Transaction{tx}, nil, nil, []*types.Withdrawal{withdrawal}, blocktest.NewHasher())
+		pending = types.NewBlock(&types.Header{Number: big.NewInt(11), Time: 42}, &types.Body{Transactions: types.Transactions{tx}, Withdrawals: types.Withdrawals{withdrawal}}, nil, blocktest.NewHasher())
 	)
 	backend := newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]

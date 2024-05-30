@@ -114,7 +114,12 @@ func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*Node) error {
 				set.updates -= 1
 			}
 		}
-		set.AddNode([]byte(path), node)
+		if node.IsDeleted() {
+			set.deletes += 1
+		} else {
+			set.updates += 1
+		}
+		set.Nodes[path] = node
 	}
 	return nil
 }
@@ -128,16 +133,6 @@ func (set *NodeSet) AddLeaf(parent common.Hash, blob []byte) {
 // Size returns the number of dirty nodes in set.
 func (set *NodeSet) Size() (int, int) {
 	return set.updates, set.deletes
-}
-
-// Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
-// we get rid of it?
-func (set *NodeSet) Hashes() []common.Hash {
-	ret := make([]common.Hash, 0, len(set.Nodes))
-	for _, node := range set.Nodes {
-		ret = append(ret, node.Hash)
-	}
-	return ret
 }
 
 // Summary returns a string-representation of the NodeSet.

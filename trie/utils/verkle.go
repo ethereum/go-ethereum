@@ -23,7 +23,7 @@ import (
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 )
 
@@ -219,7 +219,7 @@ func CodeChunkKey(address []byte, chunk *uint256.Int) []byte {
 	return GetTreeKey(address, treeIndex, subIndex)
 }
 
-func storageIndex(bytes []byte) (*uint256.Int, byte) {
+func StorageIndex(bytes []byte) (*uint256.Int, byte) {
 	// If the storage slot is in the header, we need to add the header offset.
 	var key uint256.Int
 	key.SetBytes(bytes)
@@ -245,7 +245,7 @@ func storageIndex(bytes []byte) (*uint256.Int, byte) {
 // StorageSlotKey returns the verkle tree key of the storage slot for the
 // specified account.
 func StorageSlotKey(address []byte, storageKey []byte) []byte {
-	treeIndex, subIndex := storageIndex(storageKey)
+	treeIndex, subIndex := StorageIndex(storageKey)
 	return GetTreeKey(address, treeIndex, subIndex)
 }
 
@@ -296,7 +296,7 @@ func CodeChunkKeyWithEvaluatedAddress(addressPoint *verkle.Point, chunk *uint256
 // slot for the specified account. The difference between StorageSlotKey is the
 // address evaluation is already computed to minimize the computational overhead.
 func StorageSlotKeyWithEvaluatedAddress(evaluated *verkle.Point, storageKey []byte) []byte {
-	treeIndex, subIndex := storageIndex(storageKey)
+	treeIndex, subIndex := StorageIndex(storageKey)
 	return GetTreeKeyWithEvaluatedAddress(evaluated, treeIndex, subIndex)
 }
 
