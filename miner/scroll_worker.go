@@ -517,7 +517,11 @@ func (w *worker) startNewPipeline(timestamp int64) {
 	}
 
 	w.currentPipelineStart = time.Now()
-	w.currentPipeline = pipeline.NewPipeline(w.chain, w.chain.GetVMConfig(), parentState, header, nextL1MsgIndex, w.getCCC()).WithBeforeTxHook(w.beforeTxHook)
+	pipelineCCC := w.getCCC()
+	if !w.isRunning() {
+		pipelineCCC = nil
+	}
+	w.currentPipeline = pipeline.NewPipeline(w.chain, w.chain.GetVMConfig(), parentState, header, nextL1MsgIndex, pipelineCCC).WithBeforeTxHook(w.beforeTxHook)
 
 	deadline := time.Unix(int64(header.Time), 0)
 	if w.chainConfig.Clique != nil && w.chainConfig.Clique.RelaxedPeriod {
@@ -579,11 +583,19 @@ func (w *worker) startNewPipeline(timestamp int64) {
 			return
 		}
 	}
+
+	// pipelineCCC was nil, so the block was built for RPC purposes only. Stop the pipeline immediately
+	// and update the pending block.
+	if pipelineCCC == nil {
+		w.currentPipeline.Stop()
+	}
 }
 
 func (w *worker) handlePipelineResult(res *pipeline.Result) error {
-	if !w.isRunning() {
-		if res != nil && res.FinalBlock != nil {
+	// Rows being nil without an OverflowingTx means that block didn't go thru CCC,
+	// which means that we are not the sequencer. Do not attempt to commit.
+	if res != nil && res.Rows == nil && res.OverflowingTx == nil {
+		if res.FinalBlock != nil {
 			w.updateSnapshot(res.FinalBlock)
 		}
 		w.currentPipeline.Release()

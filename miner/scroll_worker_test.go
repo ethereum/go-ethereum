@@ -1045,3 +1045,47 @@ func TestSealBlockAfterCliquePeriod(t *testing.T) {
 		t.Fatalf("timeout")
 	}
 }
+
+func TestPending(t *testing.T) {
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	chainConfig = params.AllCliqueProtocolChanges
+	chainConfig.Clique = &params.CliqueConfig{Period: 1, Epoch: 30000}
+	chainConfig.Scroll.FeeVaultAddress = &common.Address{}
+	engine = clique.New(chainConfig.Clique, db)
+	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	defer w.close()
+
+	// This test chain imports the mined blocks.
+	b.genesis.MustCommit(db)
+	chain, _ := core.NewBlockChain(db, nil, b.chain.Config(), engine, vm.Config{
+		Debug:  true,
+		Tracer: vm.NewStructLogger(&vm.LogConfig{EnableMemory: true, EnableReturnData: true})}, nil, nil)
+	defer chain.Stop()
+
+	// Define 3 transactions:
+	// A --> B (nonce: 0, gas: 20)
+	tx0, _ := types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(100000000000000000), params.TxGas, big.NewInt(20*params.InitialBaseFee), nil), types.HomesteadSigner{}, testBankKey)
+	// A --> B (nonce: 1, gas: 5)
+	tx1, _ := types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress)+1, testUserAddress, big.NewInt(0), params.TxGas, big.NewInt(5*params.InitialBaseFee), nil), types.HomesteadSigner{}, testBankKey)
+	// B --> A (nonce: 0, gas: 20)
+	tx2, _ := types.SignTx(types.NewTransaction(b.txPool.Nonce(testUserAddress), testBankAddress, big.NewInt(0), params.TxGas, big.NewInt(20*params.InitialBaseFee), nil), types.HomesteadSigner{}, testUserKey)
+	// B --> A (nonce: 1, gas: 20)
+	tx3, _ := types.SignTx(types.NewTransaction(b.txPool.Nonce(testUserAddress)+1, testBankAddress, big.NewInt(0), params.TxGas, big.NewInt(20*params.InitialBaseFee), nil), types.HomesteadSigner{}, testUserKey)
+	// B --> A (nonce: 2, gas: 20)
+	tx4, _ := types.SignTx(types.NewTransaction(b.txPool.Nonce(testUserAddress)+2, testBankAddress, big.NewInt(0), params.TxGas, big.NewInt(20*params.InitialBaseFee), nil), types.HomesteadSigner{}, testUserKey)
+	// A --> B (nonce: 2, gas: 5)
+	tx5, _ := types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress)+2, testUserAddress, big.NewInt(0), params.TxGas, big.NewInt(5*params.InitialBaseFee), nil), types.HomesteadSigner{}, testBankKey)
+
+	b.txPool.AddRemotesSync([]*types.Transaction{tx0, tx1, tx2, tx3, tx4, tx5})
+	// start building pending block
+	w.startCh <- struct{}{}
+
+	time.Sleep(time.Second)
+	pending := w.pendingBlock()
+	assert.NotNil(t, pending)
+	assert.NotEmpty(t, pending.Transactions())
+}
