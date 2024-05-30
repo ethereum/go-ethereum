@@ -119,7 +119,7 @@ func TestLocalNodeEndpoint(t *testing.T) {
 		assert.Equal(t, fallback.Port, ln.Node().UDP())
 		assert.Equal(t, initialSeq+1, ln.Node().Seq())
 
-		from := netip.AddrPortFrom(netutil.RandomAddr(rng), 9000)
+		from := netip.AddrPortFrom(netutil.RandomAddr(rng, true), 9000)
 		endpoint := netip.AddrPortFrom(netutil.IPToAddr(predicted.IP), uint16(predicted.Port))
 		ln.UDPEndpointStatement(from, endpoint)
 	}

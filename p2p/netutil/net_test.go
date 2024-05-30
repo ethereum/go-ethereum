@@ -252,7 +252,7 @@ func TestDistinctNetSetAddRemove(t *testing.T) {
 		Values: func(s []reflect.Value, rng *rand.Rand) {
 			slice := make([]netip.Addr, rng.Intn(20)+1)
 			for i := range slice {
-				slice[i] = RandomAddr(rng)
+				slice[i] = RandomAddr(rng, false)
 			}
 			s[0] = reflect.ValueOf(slice)
 		},
