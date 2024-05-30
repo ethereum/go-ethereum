@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/netip"
 	"slices"
@@ -338,33 +337,4 @@ func (s DistinctNetSet) String() string {
 	}
 	buf.WriteString("}")
 	return buf.String()
-}
-
-// IPToAddr converts net.IP to netip.Addr. Note that unlike netip.AddrFromSlice, this
-// function will always ensure that the resulting Addr is IPv4 when the input is.
-func IPToAddr(ip net.IP) netip.Addr {
-	if ip4 := ip.To4(); ip4 != nil {
-		addr, _ := netip.AddrFromSlice(ip4)
-		return addr
-	} else if ip6 := ip.To16(); ip6 != nil {
-		addr, _ := netip.AddrFromSlice(ip6)
-		return addr
-	}
-	return netip.Addr{}
-}
-
-// RandomAddr creates a random IP address.
-func RandomAddr(rng *rand.Rand, ipv4 bool) netip.Addr {
-	var bytes []byte
-	if ipv4 || rng.Intn(2) == 0 {
-		bytes = make([]byte, 4)
-	} else {
-		bytes = make([]byte, 16)
-	}
-	rng.Read(bytes)
-	addr, ok := netip.AddrFromSlice(bytes)
-	if !ok {
-		panic(fmt.Errorf("BUG! invalid IP %v", bytes))
-	}
-	return addr
 }
