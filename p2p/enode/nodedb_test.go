@@ -50,7 +50,9 @@ func TestDBNodeKey(t *testing.T) {
 
 func TestDBNodeItemKey(t *testing.T) {
 	wantIP := netip.MustParseAddr("127.0.0.3")
+	wantIP4in6 := netip.AddrFrom16(wantIP.As16())
 	wantField := "foobar"
+
 	enc := nodeItemKey(keytestID, wantIP, wantField)
 	want := []byte{
 		'n', ':',
@@ -70,7 +72,7 @@ func TestDBNodeItemKey(t *testing.T) {
 	if id != keytestID {
 		t.Errorf("splitNodeItemKey returned wrong ID: %v", id)
 	}
-	if ip != wantIP {
+	if ip != wantIP4in6 {
 		t.Errorf("splitNodeItemKey returned wrong IP: %v", ip)
 	}
 	if field != wantField {
