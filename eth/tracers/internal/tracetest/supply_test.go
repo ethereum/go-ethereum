@@ -18,13 +18,13 @@ package tracetest
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -92,9 +92,7 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 
 	actual := out[expected.Number]
 
-	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
-	}
+	compareAsJSON(t, expected, actual)
 }
 
 func TestSupplyRewards(t *testing.T) {
@@ -123,9 +121,7 @@ func TestSupplyRewards(t *testing.T) {
 
 	actual := out[expected.Number]
 
-	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
-	}
+	compareAsJSON(t, expected, actual)
 }
 
 func TestSupplyEip1559Burn(t *testing.T) {
@@ -185,9 +181,7 @@ func TestSupplyEip1559Burn(t *testing.T) {
 	)
 
 	actual := out[expected.Number]
-	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
-	}
+	compareAsJSON(t, expected, actual)
 }
 
 func TestSupplyWithdrawals(t *testing.T) {
@@ -227,9 +221,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 		actual = out[expected.Number]
 	)
 
-	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
-	}
+	compareAsJSON(t, expected, actual)
 }
 
 // Tests fund retrieval after contract's selfdestruct.
@@ -325,9 +317,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 
 	actual := preCancunOutput[expected.Number]
 
-	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("Pre-cancun incorrect supply info: expected %+v, got %+v", expected, actual)
-	}
+	compareAsJSON(t, expected, actual)
 
 	// 2. Test post Cancun
 	cancunTime := uint64(0)
@@ -368,9 +358,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 
 	actual = postCancunOutput[expected.Number]
 
-	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("Post-cancun incorrect supply info: expected %+v, got %+v", expected, actual)
-	}
+	compareAsJSON(t, expected, actual)
 }
 
 // Tests selfdestructing contract to send its balance to itself (burn).
@@ -518,9 +506,7 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 
 	actual := output[expected.Number]
 
-	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("incorrect supply info: expected %+v, got %+v", expected, actual)
-	}
+	compareAsJSON(t, expected, actual)
 }
 
 func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, *core.BlockChain, error) {
@@ -574,4 +560,20 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 	}
 
 	return output, chain, nil
+}
+
+func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
+	want, err := json.Marshal(expected)
+	if err != nil {
+		t.Fatalf("failed to marshal expected value to JSON: %v", err)
+	}
+
+	have, err := json.Marshal(actual)
+	if err != nil {
+		t.Fatalf("failed to marshal actual value to JSON: %v", err)
+	}
+
+	if !bytes.Equal(want, have) {
+		t.Fatalf("incorrect supply info: expected %s, got %s", string(want), string(have))
+	}
 }
