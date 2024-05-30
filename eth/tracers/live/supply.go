@@ -21,21 +21,26 @@ func init() {
 	tracers.LiveDirectory.Register("supply", newSupply)
 }
 
+type supplyInfoIssuance struct {
+	GenesisAlloc *big.Int `json:"genesisAlloc,omitempty"`
+	Reward       *big.Int `json:"reward"`
+	Withdrawals  *big.Int `json:"withdrawals"`
+}
+
+type supplyInfoBurn struct {
+	EIP1559 *big.Int `json:"1559"`
+	Blob    *big.Int `json:"blob"`
+	Misc    *big.Int `json:"misc"`
+}
+
 type supplyInfo struct {
-	Delta       *big.Int `json:"delta"`
-	Reward      *big.Int `json:"reward"`
-	Withdrawals *big.Int `json:"withdrawals"`
-	Burn        *big.Int `json:"burn"`
+	Issuance *supplyInfoIssuance `json:"issuance"`
+	Burn     *supplyInfoBurn     `json:"burn"`
 
 	// Block info
 	Number     uint64      `json:"blockNumber"`
 	Hash       common.Hash `json:"hash"`
 	ParentHash common.Hash `json:"parentHash"`
-}
-
-func (s *supplyInfo) burn(amount *big.Int) {
-	s.Burn.Add(s.Burn, amount)
-	s.Delta.Sub(s.Delta, amount)
 }
 
 type supplyTxCallstack struct {
@@ -91,10 +96,15 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 
 func newSupplyInfo() supplyInfo {
 	return supplyInfo{
-		Delta:       big.NewInt(0),
-		Reward:      big.NewInt(0),
-		Withdrawals: big.NewInt(0),
-		Burn:        big.NewInt(0),
+		Issuance: &supplyInfoIssuance{
+			Reward:      big.NewInt(0),
+			Withdrawals: big.NewInt(0),
+		},
+		Burn: &supplyInfoBurn{
+			EIP1559: big.NewInt(0),
+			Blob:    big.NewInt(0),
+			Misc:    big.NewInt(0),
+		},
 
 		Number:     0,
 		Hash:       common.Hash{},
@@ -116,7 +126,7 @@ func (s *supply) OnBlockStart(ev tracing.BlockEvent) {
 	// Calculate Burn for this block
 	if ev.Block.BaseFee() != nil {
 		burn := new(big.Int).Mul(new(big.Int).SetUint64(ev.Block.GasUsed()), ev.Block.BaseFee())
-		s.delta.burn(burn)
+		s.delta.Burn.EIP1559.Add(s.delta.Burn.EIP1559, burn)
 	}
 	// Blob burnt gas
 	if blobGas := ev.Block.BlobGasUsed(); blobGas != nil && *blobGas > 0 && ev.Block.ExcessBlobGas() != nil {
@@ -125,7 +135,7 @@ func (s *supply) OnBlockStart(ev tracing.BlockEvent) {
 			baseFee = eip4844.CalcBlobFee(excess)
 			burn    = new(big.Int).Mul(new(big.Int).SetUint64(*blobGas), baseFee)
 		)
-		s.delta.burn(burn)
+		s.delta.Burn.Blob.Add(s.delta.Burn.Blob, burn)
 	}
 }
 
@@ -140,9 +150,11 @@ func (s *supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 	s.delta.Hash = b.Hash()
 	s.delta.ParentHash = b.ParentHash()
 
+	s.delta.Issuance.GenesisAlloc = big.NewInt(0)
+
 	// Initialize supply with total allocation in genesis block
 	for _, account := range alloc {
-		s.delta.Delta.Add(s.delta.Delta, account.Balance)
+		s.delta.Issuance.GenesisAlloc.Add(s.delta.Issuance.GenesisAlloc, account.Balance)
 	}
 
 	s.write(s.delta)
@@ -155,18 +167,16 @@ func (s *supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 	switch reason {
 	case tracing.BalanceIncreaseRewardMineUncle:
 	case tracing.BalanceIncreaseRewardMineBlock:
-		s.delta.Reward.Add(s.delta.Reward, diff)
+		s.delta.Issuance.Reward.Add(s.delta.Issuance.Reward, diff)
 	case tracing.BalanceIncreaseWithdrawal:
-		s.delta.Withdrawals.Add(s.delta.Withdrawals, diff)
+		s.delta.Issuance.Withdrawals.Add(s.delta.Issuance.Withdrawals, diff)
 	case tracing.BalanceDecreaseSelfdestructBurn:
 		// BalanceDecreaseSelfdestructBurn is non-reversible as it happens
 		// at the end of the transaction.
-		s.delta.Burn.Sub(s.delta.Burn, diff)
+		s.delta.Burn.Misc.Sub(s.delta.Burn.Misc, diff)
 	default:
 		return
 	}
-
-	s.delta.Delta.Add(s.delta.Delta, diff)
 }
 
 func (s *supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
@@ -177,7 +187,7 @@ func (s *supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from co
 func (s *supply) internalTxsHandler(call *supplyTxCallstack) {
 	// Handle Burned amount
 	if call.burn != nil {
-		s.delta.burn(call.burn)
+		s.delta.Burn.Misc.Add(s.delta.Burn.Misc, call.burn)
 	}
 
 	if len(call.calls) > 0 {

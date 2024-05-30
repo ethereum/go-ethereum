@@ -42,11 +42,21 @@ import (
 	_ "github.com/ethereum/go-ethereum/eth/tracers/live"
 )
 
+type supplyInfoIssuance struct {
+	GenesisAlloc *big.Int `json:"genesisAlloc,omitempty"`
+	Reward       *big.Int `json:"reward"`
+	Withdrawals  *big.Int `json:"withdrawals"`
+}
+
+type supplyInfoBurn struct {
+	EIP1559 *big.Int `json:"1559"`
+	Blob    *big.Int `json:"blob"`
+	Misc    *big.Int `json:"misc"`
+}
+
 type supplyInfo struct {
-	Delta       *big.Int `json:"delta"`
-	Reward      *big.Int `json:"reward"`
-	Withdrawals *big.Int `json:"withdrawals"`
-	Burn        *big.Int `json:"burn"`
+	Issuance *supplyInfoIssuance `json:"issuance"`
+	Burn     *supplyInfoBurn     `json:"burn"`
 
 	// Block info
 	Number     uint64      `json:"blockNumber"`
@@ -76,13 +86,19 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 	)
 
 	expected := supplyInfo{
-		Delta:       new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
-		Reward:      common.Big0,
-		Withdrawals: common.Big0,
-		Burn:        common.Big0,
-		Number:      0,
-		Hash:        common.HexToHash("0xbcc9466e9fc6a8b56f4b29ca353a421ff8b51a0c1a58ca4743b427605b08f2ca"),
-		ParentHash:  common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		Issuance: &supplyInfoIssuance{
+			GenesisAlloc: new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
+			Reward:       common.Big0,
+			Withdrawals:  common.Big0,
+		},
+		Burn: &supplyInfoBurn{
+			EIP1559: common.Big0,
+			Blob:    common.Big0,
+			Misc:    common.Big0,
+		},
+		Number:     0,
+		Hash:       common.HexToHash("0xbcc9466e9fc6a8b56f4b29ca353a421ff8b51a0c1a58ca4743b427605b08f2ca"),
+		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 
 	out, _, err := testSupplyTracer(t, gspec, emptyBlockGenerationFunc)
@@ -105,13 +121,18 @@ func TestSupplyRewards(t *testing.T) {
 	)
 
 	expected := supplyInfo{
-		Delta:       new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
-		Reward:      new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
-		Withdrawals: common.Big0,
-		Burn:        common.Big0,
-		Number:      1,
-		Hash:        common.HexToHash("0xcbb08370505be503dafedc4e96d139ea27aba3cbc580148568b8a307b3f51052"),
-		ParentHash:  common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
+		Issuance: &supplyInfoIssuance{
+			Reward:      new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
+			Withdrawals: common.Big0,
+		},
+		Burn: &supplyInfoBurn{
+			EIP1559: common.Big0,
+			Blob:    common.Big0,
+			Misc:    common.Big0,
+		},
+		Number:     1,
+		Hash:       common.HexToHash("0xcbb08370505be503dafedc4e96d139ea27aba3cbc580148568b8a307b3f51052"),
+		ParentHash: common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
 	}
 
 	out, _, err := testSupplyTracer(t, gspec, emptyBlockGenerationFunc)
@@ -170,13 +191,18 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		reward   = new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))
 		burn     = new(big.Int).Mul(big.NewInt(21000), head.BaseFee)
 		expected = supplyInfo{
-			Delta:       new(big.Int).Sub(reward, burn),
-			Reward:      reward,
-			Withdrawals: common.Big0,
-			Burn:        burn,
-			Number:      1,
-			Hash:        head.Hash(),
-			ParentHash:  head.ParentHash,
+			Issuance: &supplyInfoIssuance{
+				Reward:      reward,
+				Withdrawals: common.Big0,
+			},
+			Burn: &supplyInfoBurn{
+				EIP1559: burn,
+				Blob:    common.Big0,
+				Misc:    common.Big0,
+			},
+			Number:     1,
+			Hash:       head.Hash(),
+			ParentHash: head.ParentHash,
 		}
 	)
 
@@ -210,13 +236,18 @@ func TestSupplyWithdrawals(t *testing.T) {
 	var (
 		head     = chain.CurrentBlock()
 		expected = supplyInfo{
-			Delta:       big.NewInt(1337000000000),
-			Reward:      common.Big0,
-			Withdrawals: big.NewInt(1337000000000),
-			Burn:        common.Big0,
-			Number:      1,
-			Hash:        head.Hash(),
-			ParentHash:  head.ParentHash,
+			Issuance: &supplyInfoIssuance{
+				Reward:      common.Big0,
+				Withdrawals: big.NewInt(1337000000000),
+			},
+			Burn: &supplyInfoBurn{
+				EIP1559: common.Big0,
+				Blob:    common.Big0,
+				Misc:    common.Big0,
+			},
+			Number:     1,
+			Hash:       head.Hash(),
+			ParentHash: head.ParentHash,
 		}
 		actual = out[expected.Number]
 	)
@@ -306,13 +337,18 @@ func TestSupplySelfdestruct(t *testing.T) {
 	head := preCancunChain.CurrentBlock()
 	// Check live trace output
 	expected := supplyInfo{
-		Delta:       big.NewInt(-55294500000000),
-		Reward:      common.Big0,
-		Withdrawals: common.Big0,
-		Burn:        big.NewInt(55294500000000),
-		Number:      1,
-		Hash:        head.Hash(),
-		ParentHash:  head.ParentHash,
+		Issuance: &supplyInfoIssuance{
+			Reward:      common.Big0,
+			Withdrawals: common.Big0,
+		},
+		Burn: &supplyInfoBurn{
+			EIP1559: big.NewInt(55289500000000),
+			Blob:    common.Big0,
+			Misc:    big.NewInt(5000000000),
+		},
+		Number:     1,
+		Hash:       head.Hash(),
+		ParentHash: head.ParentHash,
 	}
 
 	actual := preCancunOutput[expected.Number]
@@ -347,13 +383,18 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// Check live trace output
 	head = postCancunChain.CurrentBlock()
 	expected = supplyInfo{
-		Delta:       big.NewInt(-55289500000000),
-		Reward:      common.Big0,
-		Withdrawals: common.Big0,
-		Burn:        big.NewInt(55289500000000),
-		Number:      1,
-		Hash:        head.Hash(),
-		ParentHash:  head.ParentHash,
+		Issuance: &supplyInfoIssuance{
+			Reward:      common.Big0,
+			Withdrawals: common.Big0,
+		},
+		Burn: &supplyInfoBurn{
+			EIP1559: big.NewInt(55289500000000),
+			Blob:    common.Big0,
+			Misc:    common.Big0,
+		},
+		Number:     1,
+		Hash:       head.Hash(),
+		ParentHash: head.ParentHash,
 	}
 
 	actual = postCancunOutput[expected.Number]
@@ -491,17 +532,20 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 
 	// Check live trace output
 	block := chain.GetBlockByNumber(1)
-	blockBurn := new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed())))
-	totalBurn := new(big.Int).Add(blockBurn, eth5) // 5ETH burned from contract B
 
 	expected := supplyInfo{
-		Delta:       new(big.Int).Neg(totalBurn),
-		Reward:      common.Big0,
-		Withdrawals: common.Big0,
-		Burn:        totalBurn,
-		Number:      1,
-		Hash:        block.Hash(),
-		ParentHash:  block.ParentHash(),
+		Issuance: &supplyInfoIssuance{
+			Reward:      common.Big0,
+			Withdrawals: common.Big0,
+		},
+		Burn: &supplyInfoBurn{
+			EIP1559: new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed()))),
+			Blob:    common.Big0,
+			Misc:    eth5, // 5ETH burned from contract B
+		},
+		Number:     1,
+		Hash:       block.Hash(),
+		ParentHash: block.ParentHash(),
 	}
 
 	actual := output[expected.Number]
