@@ -29,6 +29,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
@@ -88,6 +89,10 @@ func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {
 	return b.chain.Config()
+}
+
+func (b *testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+	return nil
 }
 
 func newTestBackend(t *testing.T, eip1559Block *big.Int, pending bool) *testBackend {
