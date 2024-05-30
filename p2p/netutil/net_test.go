@@ -18,7 +18,9 @@ package netutil
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
+	"net/netip"
 	"reflect"
 	"testing"
 	"testing/quick"
@@ -29,7 +31,7 @@ import (
 func TestParseNetlist(t *testing.T) {
 	var tests = []struct {
 		input    string
-		wantErr  error
+		wantErr  string
 		wantList *Netlist
 	}{
 		{
@@ -38,25 +40,27 @@ func TestParseNetlist(t *testing.T) {
 		},
 		{
 			input:    "127.0.0.0/8",
-			wantErr:  nil,
-			wantList: &Netlist{{IP: net.IP{127, 0, 0, 0}, Mask: net.CIDRMask(8, 32)}},
+			wantList: &Netlist{netip.MustParsePrefix("127.0.0.0/8")},
 		},
 		{
 			input:   "127.0.0.0/44",
-			wantErr: &net.ParseError{Type: "CIDR address", Text: "127.0.0.0/44"},
+			wantErr: `netip.ParsePrefix("127.0.0.0/44"): prefix length out of range`,
 		},
 		{
 			input: "127.0.0.0/16, 23.23.23.23/24,",
 			wantList: &Netlist{
-				{IP: net.IP{127, 0, 0, 0}, Mask: net.CIDRMask(16, 32)},
-				{IP: net.IP{23, 23, 23, 0}, Mask: net.CIDRMask(24, 32)},
+				netip.MustParsePrefix("127.0.0.0/16"),
+				netip.MustParsePrefix("23.23.23.23/24"),
 			},
 		},
 	}
 
 	for _, test := range tests {
 		l, err := ParseNetlist(test.input)
-		if !reflect.DeepEqual(err, test.wantErr) {
+		if err == nil && test.wantErr != "" {
+			t.Errorf("%q: got no error, expected %q", test.input, test.wantErr)
+			continue
+		} else if err != nil && err.Error() != test.wantErr {
 			t.Errorf("%q: got error %q, want %q", test.input, err, test.wantErr)
 			continue
 		}
@@ -244,14 +248,22 @@ func TestDistinctNetSet(t *testing.T) {
 }
 
 func TestDistinctNetSetAddRemove(t *testing.T) {
-	cfg := &quick.Config{}
-	fn := func(ips []net.IP) bool {
+	cfg := &quick.Config{
+		Values: func(s []reflect.Value, rng *rand.Rand) {
+			slice := make([]netip.Addr, rng.Intn(20)+1)
+			for i := range slice {
+				slice[i] = RandomAddr(rng)
+			}
+			s[0] = reflect.ValueOf(slice)
+		},
+	}
+	fn := func(ips []netip.Addr) bool {
 		s := DistinctNetSet{Limit: 3, Subnet: 2}
 		for _, ip := range ips {
-			s.Add(ip)
+			s.AddAddr(ip)
 		}
 		for _, ip := range ips {
-			s.Remove(ip)
+			s.RemoveAddr(ip)
 		}
 		return s.Len() == 0
 	}

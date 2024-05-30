@@ -188,7 +188,7 @@ func checkIPLimitInvariant(t *testing.T, tab *Table) {
 	tabset := netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit}
 	for _, b := range tab.buckets {
 		for _, n := range b.entries {
-			tabset.Add(n.IP())
+			tabset.AddAddr(n.IPAddr())
 		}
 	}
 	if tabset.String() != tab.ips.String() {
@@ -385,11 +385,11 @@ func checkBucketContent(t *testing.T, tab *Table, nodes []*enode.Node) {
 	}
 	t.Log("wrong bucket content. have nodes:")
 	for _, n := range b.entries {
-		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IP())
+		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IPAddr())
 	}
 	t.Log("want nodes:")
 	for _, n := range nodes {
-		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IP())
+		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IPAddr())
 	}
 	t.FailNow()
 

@@ -1108,7 +1108,7 @@ func (srv *Server) NodeInfo() *NodeInfo {
 		Name:       srv.Name,
 		Enode:      node.URLv4(),
 		ID:         node.ID().String(),
-		IP:         node.IP().String(),
+		IP:         node.IPAddr().String(),
 		ListenAddr: srv.ListenAddr,
 		Protocols:  make(map[string]interface{}),
 	}
