@@ -31,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
+var errNotSupported = errors.New("not supported")
+
 // Config defines all necessary options for database.
 type Config struct {
 	Preimages bool           // Flag whether the preimage of node key is recorded
@@ -222,14 +224,13 @@ func (db *Database) InsertPreimage(preimages map[common.Hash][]byte) {
 //
 // It's only supported by hash-based database and will return an error for others.
 func (db *Database) Cap(limit common.StorageSize) error {
-	hdb, ok := db.backend.(*hashdb.Database)
-	if !ok {
-		return errors.New("not supported")
+	if hdb, ok := db.backend.(*hashdb.Database); ok {
+		if db.preimages != nil {
+			db.preimages.commit(false)
+		}
+		return hdb.Cap(limit)
 	}
-	if db.preimages != nil {
-		db.preimages.commit(false)
-	}
-	return hdb.Cap(limit)
+	return errNotSupported
 }
 
 // Reference adds a new reference from a parent node to a child node. This function
@@ -238,23 +239,21 @@ func (db *Database) Cap(limit common.StorageSize) error {
 //
 // It's only supported by hash-based database and will return an error for others.
 func (db *Database) Reference(root common.Hash, parent common.Hash) error {
-	hdb, ok := db.backend.(*hashdb.Database)
-	if !ok {
-		return errors.New("not supported")
+	if hdb, ok := db.backend.(*hashdb.Database); ok {
+		hdb.Reference(root, parent)
+		return nil
 	}
-	hdb.Reference(root, parent)
-	return nil
+	return errNotSupported
 }
 
 // Dereference removes an existing reference from a root node. It's only
 // supported by hash-based database and will return an error for others.
 func (db *Database) Dereference(root common.Hash) error {
-	hdb, ok := db.backend.(*hashdb.Database)
-	if !ok {
-		return errors.New("not supported")
+	if hdb, ok := db.backend.(*hashdb.Database); ok {
+		hdb.Dereference(root)
+		return nil
 	}
-	hdb.Dereference(root)
-	return nil
+	return errNotSupported
 }
 
 // Recover rollbacks the database to a specified historical point. The state is
@@ -262,29 +261,27 @@ func (db *Database) Dereference(root common.Hash) error {
 // corresponding trie histories are existent. It's only supported by path-based
 // database and will return an error for others.
 func (db *Database) Recover(target common.Hash) error {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return errors.New("not supported")
+	if pdb, ok := db.backend.(*pathdb.Database); ok {
+		var loader triestate.TrieLoader
+		if db.config.IsVerkle {
+			// TODO define verkle loader
+			log.Crit("Verkle loader is not defined")
+		} else {
+			loader = trie.NewMerkleLoader(db)
+		}
+		return pdb.Recover(target, loader)
 	}
-	var loader triestate.TrieLoader
-	if db.config.IsVerkle {
-		// TODO define verkle loader
-		log.Crit("Verkle loader is not defined")
-	} else {
-		loader = trie.NewMerkleLoader(db)
-	}
-	return pdb.Recover(target, loader)
+	return errNotSupported
 }
 
 // Recoverable returns the indicator if the specified state is enabled to be
 // recovered. It's only supported by path-based database and will return an
 // error for others.
 func (db *Database) Recoverable(root common.Hash) (bool, error) {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return false, errors.New("not supported")
+	if pdb, ok := db.backend.(*pathdb.Database); ok {
+		return pdb.Recoverable(root), nil
 	}
-	return pdb.Recoverable(root), nil
+	return false, errNotSupported
 }
 
 // Disable deactivates the database and invalidates all available state layers
@@ -293,21 +290,19 @@ func (db *Database) Recoverable(root common.Hash) (bool, error) {
 //
 // It's only supported by path-based database and will return an error for others.
 func (db *Database) Disable() error {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return errors.New("not supported")
+	if pdb, ok := db.backend.(*pathdb.Database); ok {
+		return pdb.Disable()
 	}
-	return pdb.Disable()
+	return errNotSupported
 }
 
 // Enable activates database and resets the state tree with the provided persistent
 // state root once the state sync is finished.
 func (db *Database) Enable(root common.Hash) error {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return errors.New("not supported")
+	if pdb, ok := db.backend.(*pathdb.Database); ok {
+		return pdb.Enable(root)
 	}
-	return pdb.Enable(root)
+	return errNotSupported
 }
 
 // Journal commits an entire diff hierarchy to disk into a single journal entry.
@@ -315,22 +310,20 @@ func (db *Database) Enable(root common.Hash) error {
 // flattening everything down (bad for reorgs). It's only supported by path-based
 // database and will return an error for others.
 func (db *Database) Journal(root common.Hash) error {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return errors.New("not supported")
+	if pdb, ok := db.backend.(*pathdb.Database); ok {
+		return pdb.Journal(root)
 	}
-	return pdb.Journal(root)
+	return errNotSupported
 }
 
 // SetBufferSize sets the node buffer size to the provided value(in bytes).
 // It's only supported by path-based database and will return an error for
 // others.
 func (db *Database) SetBufferSize(size int) error {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return errors.New("not supported")
+	if pdb, ok := db.backend.(*pathdb.Database); ok {
+		return pdb.SetBufferSize(size)
 	}
-	return pdb.SetBufferSize(size)
+	return errNotSupported
 }
 
 // IsVerkle returns the indicator if the database is holding a verkle tree.
