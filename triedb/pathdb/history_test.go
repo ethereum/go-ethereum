@@ -51,7 +51,7 @@ func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[co
 
 func makeHistory() *history {
 	accounts, storages := randomStateSet(3)
-	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages)
+	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages, false)
 }
 
 func makeHistories(n int) []*history {
@@ -62,7 +62,7 @@ func makeHistories(n int) []*history {
 	for i := 0; i < n; i++ {
 		root := testrand.Hash()
 		accounts, storages := randomStateSet(3)
-		h := newHistory(root, parent, uint64(i), accounts, storages)
+		h := newHistory(root, parent, uint64(i), accounts, storages, false)
 		parent = root
 		result = append(result, h)
 	}

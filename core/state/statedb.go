@@ -1051,7 +1051,7 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 // with their values be tracked as original value.
 // In case (d), **original** account along with its storages should be deleted,
 // with their values be tracked as original value.
-func (s *StateDB) handleDestruction() (map[common.Hash]*accountDelete, []*trienode.NodeSet, error) {
+func (s *StateDB) handleDestruction(noStorageWiping bool) (map[common.Hash]*accountDelete, []*trienode.NodeSet, error) {
 	var (
 		nodes   []*trienode.NodeSet
 		buf     = crypto.NewKeccakState()
@@ -1080,6 +1080,9 @@ func (s *StateDB) handleDestruction() (map[common.Hash]*accountDelete, []*trieno
 		if prev.Root == types.EmptyRootHash || s.db.TrieDB().IsVerkle() {
 			continue
 		}
+		if noStorageWiping {
+			return nil, nil, fmt.Errorf("unexpected storage wiping, %x", addr)
+		}
 		// Remove storage slots belonging to the account.
 		storages, storagesOrigin, set, err := s.deleteStorage(addr, addrHash, prev.Root)
 		if err != nil {
@@ -1101,7 +1104,7 @@ func (s *StateDB) GetTrie() Trie {
 
 // commit gathers the state mutations accumulated along with the associated
 // trie changes, resetting all internal flags with the new state as the base.
-func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
+func (s *StateDB) commit(deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1155,7 +1158,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	// the same block, account deletions must be processed first. This ensures
 	// that the storage trie nodes deleted during destruction and recreated
 	// during subsequent resurrection can be combined correctly.
-	deletes, delNodes, err := s.handleDestruction()
+	deletes, delNodes, err := s.handleDestruction(noStorageWiping)
 	if err != nil {
 		return nil, err
 	}
@@ -1252,13 +1255,14 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 
 	origin := s.originalRoot
 	s.originalRoot = root
-	return newStateUpdate(origin, root, deletes, updates, nodes), nil
+
+	return newStateUpdate(noStorageWiping, origin, root, deletes, updates, nodes), nil
 }
 
 // commitAndFlush is a wrapper of commit which also commits the state mutations
 // to the configured data stores.
-func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateUpdate, error) {
-	ret, err := s.commit(deleteEmptyObjects)
+func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (*stateUpdate, error) {
+	ret, err := s.commit(deleteEmptyObjects, noStorageWiping)
 	if err != nil {
 		return nil, err
 	}
@@ -1310,8 +1314,13 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 //
 // The associated block number of the state transition is also provided
 // for more chain context.
-func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
-	ret, err := s.commitAndFlush(block, deleteEmptyObjects)
+//
+// noStorageWiping is a flag indicating whether storage wiping is permitted.
+// Since self-destruction was deprecated with the Cancun fork and there are
+// no empty accounts left that could be deleted by EIP-158, storage wiping
+// should not occur.
+func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, noStorageWiping bool) (common.Hash, error) {
+	ret, err := s.commitAndFlush(block, deleteEmptyObjects, noStorageWiping)
 	if err != nil {
 		return common.Hash{}, err
 	}
