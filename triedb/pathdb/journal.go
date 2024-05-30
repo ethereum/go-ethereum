@@ -47,7 +47,8 @@ var (
 //
 // - Version 0: initial version
 // - Version 1: storage.Incomplete field is removed
-const journalVersion uint64 = 1
+// - Version 2: a flag has been added to indicate whether the storage slot key is the raw key or a hash
+const journalVersion uint64 = 2
 
 // journalNode represents a trie node persisted in the journal.
 type journalNode struct {
@@ -196,6 +197,10 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 	if err := r.Decode(&block); err != nil {
 		return nil, fmt.Errorf("load block number: %v", err)
 	}
+	var rawStorageKey bool
+	if err := r.Decode(&rawStorageKey); err != nil {
+		return nil, fmt.Errorf("load raw storage key flag: %v", err)
+	}
 	// Read in-memory trie nodes from journal
 	var encoded []journalNodes
 	if err := r.Decode(&encoded); err != nil {
@@ -240,7 +245,7 @@ func (db *Database) loadDiffLayer(parent layer, r *rlp.Stream) (layer, error) {
 		}
 		storages[entry.Account] = set
 	}
-	return db.loadDiffLayer(newDiffLayer(parent, root, parent.stateID()+1, block, nodes, triestate.New(accounts, storages)), r)
+	return db.loadDiffLayer(newDiffLayer(parent, root, parent.stateID()+1, block, nodes, triestate.New(accounts, storages, rawStorageKey)), r)
 }
 
 // journal implements the layer interface, marshaling the un-flushed trie nodes
@@ -292,6 +297,9 @@ func (dl *diffLayer) journal(w io.Writer) error {
 		return err
 	}
 	if err := rlp.Encode(w, dl.block); err != nil {
+		return err
+	}
+	if err := rlp.Encode(w, dl.states.RawStorageKey); err != nil {
 		return err
 	}
 	// Write the accumulated trie nodes into buffer

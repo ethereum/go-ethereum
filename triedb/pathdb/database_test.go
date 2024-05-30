@@ -92,29 +92,47 @@ func newCtx(stateRoot common.Hash) *genctx {
 	}
 }
 
+func (ctx *genctx) storageOriginSet(rawStorageKey bool, t *tester) map[common.Address]map[common.Hash][]byte {
+	if !rawStorageKey {
+		return ctx.storageOrigin
+	}
+	set := make(map[common.Address]map[common.Hash][]byte)
+	for addr, storage := range ctx.storageOrigin {
+		subset := make(map[common.Hash][]byte)
+		for hash, val := range storage {
+			key := t.hashPreimage(hash)
+			subset[key] = val
+		}
+		set[addr] = subset
+	}
+	return set
+}
+
 type tester struct {
 	db        *Database
 	roots     []common.Hash
-	preimages map[common.Hash]common.Address
-	accounts  map[common.Hash][]byte
-	storages  map[common.Hash]map[common.Hash][]byte
+	preimages map[common.Hash][]byte
+
+	// current state set
+	accounts map[common.Hash][]byte
+	storages map[common.Hash]map[common.Hash][]byte
 
 	// state snapshots
 	snapAccounts map[common.Hash]map[common.Hash][]byte
 	snapStorages map[common.Hash]map[common.Hash]map[common.Hash][]byte
 }
 
-func newTester(t *testing.T, historyLimit uint64) *tester {
+func newTester(t *testing.T, historyLimit uint64, isVerkle bool) *tester {
 	var (
 		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 		db      = New(disk, &Config{
 			StateHistory:   historyLimit,
 			CleanCacheSize: 16 * 1024,
 			DirtyCacheSize: 16 * 1024,
-		}, false)
+		}, isVerkle)
 		obj = &tester{
 			db:           db,
-			preimages:    make(map[common.Hash]common.Address),
+			preimages:    make(map[common.Hash][]byte),
 			accounts:     make(map[common.Hash][]byte),
 			storages:     make(map[common.Hash]map[common.Hash][]byte),
 			snapAccounts: make(map[common.Hash]map[common.Hash][]byte),
@@ -126,13 +144,22 @@ func newTester(t *testing.T, historyLimit uint64) *tester {
 		if len(obj.roots) != 0 {
 			parent = obj.roots[len(obj.roots)-1]
 		}
-		root, nodes, states := obj.generate(parent)
+		root, nodes, states := obj.generate(parent, i > 6)
+
 		if err := db.Update(root, parent, uint64(i), nodes, states); err != nil {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
 		obj.roots = append(obj.roots, root)
 	}
 	return obj
+}
+
+func (t *tester) accountPreimage(hash common.Hash) common.Address {
+	return common.BytesToAddress(t.preimages[hash])
+}
+
+func (t *tester) hashPreimage(hash common.Hash) common.Hash {
+	return common.BytesToHash(t.preimages[hash])
 }
 
 func (t *tester) release() {
@@ -142,7 +169,7 @@ func (t *tester) release() {
 
 func (t *tester) randAccount() (common.Address, []byte) {
 	for addrHash, account := range t.accounts {
-		return t.preimages[addrHash], account
+		return t.accountPreimage(addrHash), account
 	}
 	return common.Address{}, nil
 }
@@ -155,7 +182,9 @@ func (t *tester) generateStorage(ctx *genctx, addr common.Address) common.Hash {
 	)
 	for i := 0; i < 10; i++ {
 		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
-		hash := testrand.Hash()
+		key := testrand.Bytes(32)
+		hash := crypto.Keccak256Hash(key)
+		t.preimages[hash] = key
 
 		storage[hash] = v
 		origin[hash] = nil
@@ -184,7 +213,9 @@ func (t *tester) mutateStorage(ctx *genctx, addr common.Address, root common.Has
 	}
 	for i := 0; i < 3; i++ {
 		v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
-		hash := testrand.Hash()
+		key := testrand.Bytes(32)
+		hash := crypto.Keccak256Hash(key)
+		t.preimages[hash] = key
 
 		storage[hash] = v
 		origin[hash] = nil
@@ -217,7 +248,7 @@ func (t *tester) clearStorage(ctx *genctx, addr common.Address, root common.Hash
 	return root
 }
 
-func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNodeSet, *triestate.Set) {
+func (t *tester) generate(parent common.Hash, rawStorageKey bool) (common.Hash, *trienode.MergedNodeSet, *triestate.Set) {
 	var (
 		ctx     = newCtx(parent)
 		dirties = make(map[common.Hash]struct{})
@@ -228,9 +259,12 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 			// account creation
 			addr := testrand.Address()
 			addrHash := crypto.Keccak256Hash(addr.Bytes())
+
+			// short circuit if the account was already existent
 			if _, ok := t.accounts[addrHash]; ok {
 				continue
 			}
+			// short circuit if the account has been modified within the same transition
 			if _, ok := dirties[addrHash]; ok {
 				continue
 			}
@@ -239,7 +273,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 			root := t.generateStorage(ctx, addr)
 			ctx.accounts[addrHash] = types.SlimAccountRLP(generateAccount(root))
 			ctx.accountOrigin[addr] = nil
-			t.preimages[addrHash] = addr
+			t.preimages[addrHash] = addr.Bytes()
 
 		case modifyAccountOp:
 			// account mutation
@@ -248,6 +282,8 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 				continue
 			}
 			addrHash := crypto.Keccak256Hash(addr.Bytes())
+
+			// short circuit if the account has been modified within the same transition
 			if _, ok := dirties[addrHash]; ok {
 				continue
 			}
@@ -267,6 +303,8 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 				continue
 			}
 			addrHash := crypto.Keccak256Hash(addr.Bytes())
+
+			// short circuit if the account has been modified within the same transition
 			if _, ok := dirties[addrHash]; ok {
 				continue
 			}
@@ -310,7 +348,8 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 			delete(t.storages, addrHash)
 		}
 	}
-	return root, ctx.nodes, triestate.New(ctx.accountOrigin, ctx.storageOrigin)
+	storageOrigin := ctx.storageOriginSet(rawStorageKey, t)
+	return root, ctx.nodes, triestate.New(ctx.accountOrigin, storageOrigin, rawStorageKey)
 }
 
 // lastHash returns the latest root hash, or empty if nothing is cached.
@@ -405,7 +444,7 @@ func TestDatabaseRollback(t *testing.T) {
 	}()
 
 	// Verify state histories
-	tester := newTester(t, 0)
+	tester := newTester(t, 0, false)
 	defer tester.release()
 
 	if err := tester.verifyHistory(); err != nil {
@@ -439,7 +478,7 @@ func TestDatabaseRecoverable(t *testing.T) {
 	}()
 
 	var (
-		tester = newTester(t, 0)
+		tester = newTester(t, 0, false)
 		index  = tester.bottomIndex()
 	)
 	defer tester.release()
@@ -483,7 +522,7 @@ func TestDisable(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0)
+	tester := newTester(t, 0, false)
 	defer tester.release()
 
 	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
@@ -525,7 +564,7 @@ func TestCommit(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0)
+	tester := newTester(t, 0, false)
 	defer tester.release()
 
 	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
@@ -555,7 +594,7 @@ func TestJournal(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0)
+	tester := newTester(t, 0, false)
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -585,7 +624,7 @@ func TestCorruptedJournal(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 0)
+	tester := newTester(t, 0, false)
 	defer tester.release()
 
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
@@ -633,7 +672,7 @@ func TestTailTruncateHistory(t *testing.T) {
 		maxDiffLayers = 128
 	}()
 
-	tester := newTester(t, 10)
+	tester := newTester(t, 10, false)
 	defer tester.release()
 
 	tester.db.Close()

@@ -22,16 +22,18 @@ import "github.com/ethereum/go-ethereum/common"
 // The value refers to the original content of state before the transition
 // is made. Nil means that the state was not present previously.
 type Set struct {
-	Accounts map[common.Address][]byte                 // Mutated account set, nil means the account was not present
-	Storages map[common.Address]map[common.Hash][]byte // Mutated storage set, nil means the slot was not present
-	size     common.StorageSize                        // Approximate size of set
+	Accounts      map[common.Address][]byte                 // Mutated account set, nil means the account was not present
+	Storages      map[common.Address]map[common.Hash][]byte // Mutated storage set, nil means the slot was not present
+	RawStorageKey bool                                      // Flag whether the storage set uses the raw slot key or the hash
+	size          common.StorageSize                        // Approximate size of set
 }
 
 // New constructs the state set with provided data.
-func New(accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) *Set {
+func New(accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte, rawStorageKey bool) *Set {
 	return &Set{
-		Accounts: accounts,
-		Storages: storages,
+		Accounts:      accounts,
+		Storages:      storages,
+		RawStorageKey: rawStorageKey,
 	}
 }
 

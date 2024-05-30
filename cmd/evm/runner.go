@@ -272,7 +272,7 @@ func runCmd(ctx *cli.Context) error {
 	output, leftOverGas, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
-		root, err := statedb.Commit(genesisConfig.Number, true)
+		root, err := statedb.Commit(genesisConfig.Number, true, false)
 		if err != nil {
 			fmt.Printf("Failed to commit changes %v\n", err)
 			return err
