@@ -979,10 +979,9 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 }
 
 // deleteStorage is designed to delete the storage trie of a designated account.
-// It could potentially be terminated if the storage size is excessively large,
-// potentially leading to an out-of-memory panic. The function will make an attempt
-// to utilize an efficient strategy if the associated state snapshot is reachable;
-// otherwise, it will resort to a less-efficient approach.
+// The function will make an attempt to utilize an efficient strategy if the
+// associated state snapshot is reachable; otherwise, it will resort to a less
+// efficient approach.
 func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, *trienode.NodeSet, error) {
 	var (
 		start = time.Now()
