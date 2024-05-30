@@ -378,27 +378,6 @@ func prepareAccountExecutionMessage(baseTx *types.Transaction, config *params.Ch
 	}
 }
 
-func prepareEOATargetExecutionMessage(baseTx *types.Transaction) (*Message, error) {
-	tx := baseTx.Rip7560TransactionData()
-	if len(tx.Data) < 20 {
-		return nil, errors.New("RIP-7560 sent by an EOA but the transaction data is too short")
-	}
-	var to common.Address = [20]byte(tx.Data[0:20])
-	return &Message{
-		From:              *tx.Sender,
-		To:                &to,
-		Value:             tx.Value,
-		GasLimit:          tx.Gas,
-		GasPrice:          tx.GasFeeCap,
-		GasFeeCap:         tx.GasFeeCap,
-		GasTipCap:         tx.GasTipCap,
-		Data:              tx.Data[20:],
-		AccessList:        make(types.AccessList, 0),
-		SkipAccountChecks: true,
-		IsRip7560Frame:    true,
-	}, nil
-}
-
 func preparePostOpMessage(vpr *ValidationPhaseResult, chainConfig *params.ChainConfig, executionResult *ExecutionResult) (*Message, error) {
 	if len(vpr.PaymasterContext) == 0 {
 		return nil, nil
