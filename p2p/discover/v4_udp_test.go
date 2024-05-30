@@ -41,7 +41,7 @@ import (
 
 // shared test variables
 var (
-	futureExp          = uint64(time.Now().Add(10 * time.Hour).Unix())
+	futureExp          = time.Now().Add(10 * time.Hour).Unix()
 	testTarget         = v4wire.Pubkey{0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}
 	testRemote         = v4wire.Endpoint{IP: net.ParseIP("1.1.1.1").To4(), UDP: 1, TCP: 2}
 	testLocalAnnounced = v4wire.Endpoint{IP: net.ParseIP("2.2.2.2").To4(), UDP: 3, TCP: 4}

@@ -261,7 +261,7 @@ func (t *UDPv4) makePing(toaddr netip.AddrPort) *v4wire.Ping {
 		Version:    4,
 		From:       t.ourEndpoint(),
 		To:         v4wire.NewEndpoint(toaddr, 0),
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
+		Expiration: time.Now().Add(expiration).Unix(),
 		ENRSeq:     t.localNode.Node().Seq(),
 	}
 }
@@ -334,7 +334,7 @@ func (t *UDPv4) findnode(toid enode.ID, toAddrPort netip.AddrPort, target v4wire
 	})
 	t.send(toAddrPort, toid, &v4wire.Findnode{
 		Target:     target,
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
+		Expiration: time.Now().Add(expiration).Unix(),
 	})
 	// Ensure that callers don't see a timeout if the node actually responded. Since
 	// findnode can receive more than one neighbors response, the reply matcher will be
@@ -354,7 +354,7 @@ func (t *UDPv4) RequestENR(n *enode.Node) (*enode.Node, error) {
 	t.ensureBond(n.ID(), addr)
 
 	req := &v4wire.ENRRequest{
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
+		Expiration: time.Now().Add(expiration).Unix(),
 	}
 	packet, hash, err := v4wire.Encode(t.priv, req)
 	if err != nil {
@@ -680,7 +680,7 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from netip.AddrPort, fromID enode
 	t.send(from, fromID, &v4wire.Pong{
 		To:         v4wire.NewEndpoint(from, req.From.TCP),
 		ReplyTok:   mac,
-		Expiration: uint64(time.Now().Add(expiration).Unix()),
+		Expiration: time.Now().Add(expiration).Unix(),
 		ENRSeq:     t.localNode.Node().Seq(),
 	})
 
@@ -750,7 +750,7 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from netip.AddrPort, fromID e
 
 	// Send neighbors in chunks with at most maxNeighbors per packet
 	// to stay below the packet size limit.
-	p := v4wire.Neighbors{Expiration: uint64(time.Now().Add(expiration).Unix())}
+	p := v4wire.Neighbors{Expiration: time.Now().Add(expiration).Unix()}
 	var sent bool
 	for _, n := range closest {
 		fromIP := from.Addr().AsSlice()

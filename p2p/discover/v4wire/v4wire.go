@@ -50,7 +50,7 @@ type (
 	Ping struct {
 		Version    uint
 		From, To   Endpoint
-		Expiration uint64
+		Expiration int64
 		ENRSeq     uint64 `rlp:"optional"` // Sequence number of local record, added by EIP-868.
 
 		// Ignore additional fields (for forward compatibility).
@@ -64,7 +64,7 @@ type (
 		// external address (after NAT).
 		To         Endpoint
 		ReplyTok   []byte // This contains the hash of the ping packet.
-		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
+		Expiration int64  // Absolute timestamp at which the packet becomes invalid.
 		ENRSeq     uint64 `rlp:"optional"` // Sequence number of local record, added by EIP-868.
 
 		// Ignore additional fields (for forward compatibility).
@@ -74,7 +74,7 @@ type (
 	// Findnode is a query for nodes close to the given target.
 	Findnode struct {
 		Target     Pubkey
-		Expiration uint64
+		Expiration int64
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
@@ -82,14 +82,14 @@ type (
 	// Neighbors is the reply to findnode.
 	Neighbors struct {
 		Nodes      []Node
-		Expiration uint64
+		Expiration int64
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// ENRRequest queries for the remote node's record.
 	ENRRequest struct {
-		Expiration uint64
+		Expiration int64
 		// Ignore additional fields (for forward compatibility).
 		Rest []rlp.RawValue `rlp:"tail"`
 	}
@@ -105,27 +105,6 @@ type (
 
 // MaxNeighbors is the maximum number of neighbor nodes in a Neighbors packet.
 const MaxNeighbors = 12
-
-// This code computes the MaxNeighbors constant value.
-
-// func init() {
-// 	var maxNeighbors int
-// 	p := Neighbors{Expiration: ^uint64(0)}
-// 	maxSizeNode := Node{IP: make(net.IP, 16), UDP: ^uint16(0), TCP: ^uint16(0)}
-// 	for n := 0; ; n++ {
-// 		p.Nodes = append(p.Nodes, maxSizeNode)
-// 		size, _, err := rlp.EncodeToReader(p)
-// 		if err != nil {
-// 			// If this ever happens, it will be caught by the unit tests.
-// 			panic("cannot encode: " + err.Error())
-// 		}
-// 		if headSize+size+1 >= 1280 {
-// 			maxNeighbors = n
-// 			break
-// 		}
-// 	}
-// 	fmt.Println("maxNeighbors", maxNeighbors)
-// }
 
 // Pubkey represents an encoded 64-byte secp256k1 public key.
 type Pubkey [64]byte
@@ -188,8 +167,8 @@ func (req *ENRResponse) Name() string { return "ENRRESPONSE/v4" }
 func (req *ENRResponse) Kind() byte   { return ENRResponsePacket }
 
 // Expired checks whether the given UNIX time stamp is in the past.
-func Expired(ts uint64) bool {
-	return time.Unix(int64(ts), 0).Before(time.Now())
+func Expired(ts int64) bool {
+	return time.Unix(ts, 0).Before(time.Now())
 }
 
 // Encoder/decoder.

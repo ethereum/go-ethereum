@@ -48,7 +48,7 @@ var (
 type pingWithJunk struct {
 	Version    uint
 	From, To   v4wire.Endpoint
-	Expiration uint64
+	Expiration int64
 	JunkData1  uint
 	JunkData2  []byte
 }
@@ -59,14 +59,14 @@ func (req *pingWithJunk) Kind() byte   { return v4wire.PingPacket }
 type pingWrongType struct {
 	Version    uint
 	From, To   v4wire.Endpoint
-	Expiration uint64
+	Expiration int64
 }
 
 func (req *pingWrongType) Name() string { return "WRONG/v4" }
 func (req *pingWrongType) Kind() byte   { return wrongPacket }
 
-func futureExpiration() uint64 {
-	return uint64(time.Now().Add(expiration).Unix())
+func futureExpiration() int64 {
+	return time.Now().Add(expiration).Unix()
 }
 
 // BasicPing just sends a PING packet and expects a response.
