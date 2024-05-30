@@ -80,8 +80,6 @@ func TestNilNetListContains(t *testing.T) {
 func TestIsLAN(t *testing.T) {
 	checkContains(t, IsLAN,
 		[]string{ // included
-			"0.0.0.0",
-			"0.2.0.8",
 			"127.0.0.1",
 			"10.0.1.1",
 			"10.22.0.3",
@@ -103,6 +101,8 @@ func TestIsLAN(t *testing.T) {
 func TestIsSpecialNetwork(t *testing.T) {
 	checkContains(t, IsSpecialNetwork,
 		[]string{ // included
+			"0.0.0.0",
+			"0.2.0.8",
 			"192.0.2.1",
 			"192.0.2.44",
 			"2001:db8:85a3:8d3:1319:8a2e:370:7348",
