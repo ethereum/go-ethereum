@@ -2,21 +2,27 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth android ios evm all test clean libzkp
+.PHONY: geth android ios evm all test clean libzkp libzstd
 
 GOBIN = ./build/bin
 GO ?= latest
-GORUN = env GO111MODULE=on go run
+GORUN = go run
+LIBSCROLL_ZSTD_VERSION = v0.1.0-rc0-ubuntu20.04
+SCROLL_LIB_PATH = /scroll/lib
 
 libzkp:
 	cd $(PWD)/rollup/circuitcapacitychecker/libzkp && make libzkp
 
-nccc_geth: ## geth without circuit capacity checker
-	$(GORUN) build/ci.go install ./cmd/geth
+libzstd:
+	@sudo mkdir -p $(SCROLL_LIB_PATH)
+	@sudo wget -O $(SCROLL_LIB_PATH)/libscroll_zstd.so https://github.com/scroll-tech/da-codec/releases/download/$(LIBSCROLL_ZSTD_VERSION)/libscroll_zstd.so
+
+nccc_geth: libzstd ## geth without circuit capacity checker
+	@LD_LIBRARY_PATH="$(LD_LIBRARY_PATH):$(SCROLL_LIB_PATH)" CGO_LDFLAGS="-L$(SCROLL_LIB_PATH) -Wl,-rpath,$(SCROLL_LIB_PATH)" $(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
-geth: libzkp
+geth: libzkp libzstd
 	$(GORUN) build/ci.go install -buildtags circuit_capacity_checker ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
@@ -36,17 +42,14 @@ ios:
 	@echo "Done building."
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
-test: all
-	# genesis test
-	cd ${PWD}/cmd/geth; go test -test.run TestCustomGenesis
-	# module test
-	$(GORUN) build/ci.go test ./consensus ./core ./eth ./miner ./node ./trie ./rollup/fees
+test:
+	./run_test.sh
 
 lint: ## Run linters.
 	$(GORUN) build/ci.go lint
 
 clean:
-	env GO111MODULE=on go clean -cache
+	go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
 # The devtools target installs tools required for 'go generate'.

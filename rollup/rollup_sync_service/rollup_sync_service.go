@@ -8,6 +8,11 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/scroll-tech/da-codec/encoding"
+	"github.com/scroll-tech/da-codec/encoding/codecv0"
+	"github.com/scroll-tech/da-codec/encoding/codecv1"
+	"github.com/scroll-tech/da-codec/encoding/codecv2"
+
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core"
@@ -20,9 +25,6 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
-	"github.com/scroll-tech/go-ethereum/rollup/types/encoding"
-	"github.com/scroll-tech/go-ethereum/rollup/types/encoding/codecv0"
-	"github.com/scroll-tech/go-ethereum/rollup/types/encoding/codecv1"
 	"github.com/scroll-tech/go-ethereum/rollup/withdrawtrie"
 )
 
@@ -325,6 +327,10 @@ func (s *RollupSyncService) getChunkRanges(batchIndex uint64, vLog *types.Log) (
 			return nil, fmt.Errorf("failed to get block by hash, block number: %v, block hash: %v, err: %w", vLog.BlockNumber, vLog.BlockHash.Hex(), err)
 		}
 
+		if block == nil {
+			return nil, fmt.Errorf("failed to get block by hash, block not found, block number: %v, block hash: %v", vLog.BlockNumber, vLog.BlockHash.Hex())
+		}
+
 		found := false
 		for _, txInBlock := range block.Transactions() {
 			if txInBlock.Hash() == vLog.TxHash {
@@ -421,8 +427,14 @@ func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.Finalized
 			return 0, nil, fmt.Errorf("failed to create codecv0 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 		}
 		localBatchHash = daBatch.Hash()
-	} else {
+	} else if !chainCfg.IsCurie(startBlock.Header.Number) { // codecv1: batches after Bernoulli and before Curie
 		daBatch, err := codecv1.NewDABatch(batch)
+		if err != nil {
+			return 0, nil, fmt.Errorf("failed to create codecv1 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
+		}
+		localBatchHash = daBatch.Hash()
+	} else { // codecv2: batches after Curie
+		daBatch, err := codecv2.NewDABatch(batch)
 		if err != nil {
 			return 0, nil, fmt.Errorf("failed to create codecv1 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 		}
@@ -474,11 +486,10 @@ func decodeBlockRangesFromEncodedChunks(codecVersion encoding.CodecVersion, chun
 			for i := 0; i < numBlocks; i++ {
 				startIdx := 1 + i*60 // add 1 to skip numBlocks byte
 				endIdx := startIdx + 60
-				daBlock, err := codecv0.DecodeDABlock(chunk[startIdx:endIdx])
-				if err != nil {
+				daBlocks[i] = &codecv0.DABlock{}
+				if err := daBlocks[i].Decode(chunk[startIdx:endIdx]); err != nil {
 					return nil, err
 				}
-				daBlocks[i] = daBlock
 			}
 
 			chunkBlockRanges = append(chunkBlockRanges, &rawdb.ChunkBlockRange{
@@ -493,11 +504,28 @@ func decodeBlockRangesFromEncodedChunks(codecVersion encoding.CodecVersion, chun
 			for i := 0; i < numBlocks; i++ {
 				startIdx := 1 + i*60 // add 1 to skip numBlocks byte
 				endIdx := startIdx + 60
-				daBlock, err := codecv1.DecodeDABlock(chunk[startIdx:endIdx])
-				if err != nil {
+				daBlocks[i] = &codecv1.DABlock{}
+				if err := daBlocks[i].Decode(chunk[startIdx:endIdx]); err != nil {
 					return nil, err
 				}
-				daBlocks[i] = daBlock
+			}
+
+			chunkBlockRanges = append(chunkBlockRanges, &rawdb.ChunkBlockRange{
+				StartBlockNumber: daBlocks[0].BlockNumber,
+				EndBlockNumber:   daBlocks[len(daBlocks)-1].BlockNumber,
+			})
+		case encoding.CodecV2:
+			if len(chunk) != 1+numBlocks*60 {
+				return nil, fmt.Errorf("invalid chunk byte length, expected: %v, got: %v", 1+numBlocks*60, len(chunk))
+			}
+			daBlocks := make([]*codecv2.DABlock, numBlocks)
+			for i := 0; i < numBlocks; i++ {
+				startIdx := 1 + i*60 // add 1 to skip numBlocks byte
+				endIdx := startIdx + 60
+				daBlocks[i] = &codecv2.DABlock{}
+				if err := daBlocks[i].Decode(chunk[startIdx:endIdx]); err != nil {
+					return nil, err
+				}
 			}
 
 			chunkBlockRanges = append(chunkBlockRanges, &rawdb.ChunkBlockRange{
