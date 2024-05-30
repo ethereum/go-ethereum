@@ -37,7 +37,9 @@ type Rip7560AccountAbstractionTx struct {
 	// extra fields
 	Sender        *common.Address
 	Signature     []byte
+	Paymaster     *common.Address `rlp:"nil"`
 	PaymasterData []byte
+	Deployer      *common.Address `rlp:"nil"`
 	DeployerData  []byte
 	BuilderFee    *big.Int
 	ValidationGas uint64
@@ -45,7 +47,7 @@ type Rip7560AccountAbstractionTx struct {
 	PostOpGas     uint64
 
 	// removed fields
-	To    *common.Address
+	To    *common.Address `rlp:"nil"`
 	Nonce uint64
 	Value *big.Int
 }
@@ -65,11 +67,14 @@ func (tx *Rip7560AccountAbstractionTx) copy() TxData {
 
 		Sender:        copyAddressPtr(tx.Sender),
 		Signature:     common.CopyBytes(tx.Signature),
+		Paymaster:     copyAddressPtr(tx.Paymaster),
 		PaymasterData: common.CopyBytes(tx.PaymasterData),
+		Deployer:      copyAddressPtr(tx.Deployer),
 		DeployerData:  common.CopyBytes(tx.DeployerData),
 		BuilderFee:    new(big.Int),
 		ValidationGas: tx.ValidationGas,
 		PaymasterGas:  tx.PaymasterGas,
+		PostOpGas:     tx.PostOpGas,
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	if tx.Value != nil {
@@ -138,11 +143,14 @@ type Rip7560Transaction struct {
 	Nonce                *big.Int
 	ValidationGasLimit   *big.Int
 	PaymasterGasLimit    *big.Int
+	PostOpGasLimit       *big.Int
 	CallGasLimit         *big.Int
 	MaxFeePerGas         *big.Int
 	MaxPriorityFeePerGas *big.Int
 	BuilderFee           *big.Int
+	Paymaster            *common.Address
 	PaymasterData        []byte
+	Deployer             *common.Address
 	DeployerData         []byte
 	CallData             []byte
 	Signature            []byte

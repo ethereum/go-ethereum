@@ -78,7 +78,9 @@ type TransactionArgs struct {
 	// Introduced by RIP-7560 Transaction
 	Sender        *common.Address `json:"sender"`
 	Signature     *hexutil.Bytes
-	PaymasterData *hexutil.Bytes `json:"paymasterData"`
+	Paymaster     *common.Address `json:"paymaster,omitempty"`
+	PaymasterData *hexutil.Bytes  `json:"paymasterData"`
+	Deployer      *common.Address `json:"deployer,omitempty"`
 	DeployerData  *hexutil.Bytes
 	BuilderFee    *hexutil.Big
 	ValidationGas *hexutil.Uint64
@@ -499,7 +501,9 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			// RIP-7560 parameters
 			Sender:        args.Sender,
 			Signature:     *args.Signature,
+			Paymaster:     args.Paymaster,
 			PaymasterData: *args.PaymasterData,
+			Deployer:      args.Deployer,
 			DeployerData:  *args.DeployerData,
 			BuilderFee:    (*big.Int)(args.BuilderFee),
 			ValidationGas: uint64(*args.ValidationGas),
