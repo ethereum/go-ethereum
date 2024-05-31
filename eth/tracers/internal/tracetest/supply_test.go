@@ -67,6 +67,33 @@ type supplyInfo struct {
 
 func emptyBlockGenerationFunc(b *core.BlockGen) {}
 
+func TestSupplyOmittedFields(t *testing.T) {
+	var (
+		config = *params.MergedTestChainConfig
+		gspec  = &core.Genesis{
+			Config: &config,
+		}
+	)
+
+	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
+
+	out, _, err := testSupplyTracer(t, gspec, func(b *core.BlockGen) {
+		b.SetPoS()
+	})
+	if err != nil {
+		t.Fatalf("failed to test supply tracer: %v", err)
+	}
+
+	expected := supplyInfo{
+		Number:     0,
+		Hash:       common.HexToHash("0x52f276d96f0afaaf2c3cb358868bdc2779c4b0cb8de3e7e5302e247c0b66a703"),
+		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+	}
+	actual := out[expected.Number]
+
+	compareAsJSON(t, expected, actual)
+}
+
 func TestSupplyGenesisAlloc(t *testing.T) {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

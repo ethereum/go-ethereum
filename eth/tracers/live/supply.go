@@ -112,11 +112,14 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 func newSupplyInfo() supplyInfo {
 	return supplyInfo{
 		Issuance: &supplyInfoIssuance{
-			Reward:      big.NewInt(0),
-			Withdrawals: big.NewInt(0),
+			GenesisAlloc: big.NewInt(0),
+			Reward:       big.NewInt(0),
+			Withdrawals:  big.NewInt(0),
 		},
 		Burn: &supplyInfoBurn{
-			Misc: big.NewInt(0),
+			EIP1559: big.NewInt(0),
+			Blob:    big.NewInt(0),
+			Misc:    big.NewInt(0),
 		},
 
 		Number:     0,
@@ -139,9 +142,7 @@ func (s *supply) OnBlockStart(ev tracing.BlockEvent) {
 	// Calculate Burn for this block
 	if ev.Block.BaseFee() != nil {
 		burn := new(big.Int).Mul(new(big.Int).SetUint64(ev.Block.GasUsed()), ev.Block.BaseFee())
-		if burn.Sign() != 0 {
-			s.delta.Burn.EIP1559 = burn
-		}
+		s.delta.Burn.EIP1559 = burn
 	}
 	// Blob burnt gas
 	if blobGas := ev.Block.BlobGasUsed(); blobGas != nil && *blobGas > 0 && ev.Block.ExcessBlobGas() != nil {
@@ -164,8 +165,6 @@ func (s *supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 	s.delta.Number = b.NumberU64()
 	s.delta.Hash = b.Hash()
 	s.delta.ParentHash = b.ParentHash()
-
-	s.delta.Issuance.GenesisAlloc = big.NewInt(0)
 
 	// Initialize supply with total allocation in genesis block
 	for _, account := range alloc {
@@ -269,6 +268,10 @@ func (s *supply) write(data any) {
 	}
 
 	// Remove empty fields
+	if supply.Issuance.GenesisAlloc.Sign() == 0 {
+		supply.Issuance.GenesisAlloc = nil
+	}
+
 	if supply.Issuance.Reward.Sign() == 0 {
 		supply.Issuance.Reward = nil
 	}
@@ -279,6 +282,14 @@ func (s *supply) write(data any) {
 
 	if supply.Issuance.GenesisAlloc == nil && supply.Issuance.Reward == nil && supply.Issuance.Withdrawals == nil {
 		supply.Issuance = nil
+	}
+
+	if supply.Burn.EIP1559.Sign() == 0 {
+		supply.Burn.EIP1559 = nil
+	}
+
+	if supply.Burn.Blob.Sign() == 0 {
+		supply.Burn.Blob = nil
 	}
 
 	if supply.Burn.Misc.Sign() == 0 {
