@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/prysmaticlabs/go-bitfield"
 	"golang.org/x/exp/slices"
@@ -78,6 +79,7 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 			}
 		}
 	}
+	localNode.Set(enr.UDP(addr1.Port))
 
 	discV5, err := ListenV5(conn, localNode, discCfg)
 	if err != nil {
@@ -112,6 +114,15 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 	err = node3.Start()
 	assert.NoError(t, err)
 	time.Sleep(10 * time.Second)
+
+	node1.putCacheNodeId(node2.localNode.Node())
+	node1.putCacheNodeId(node3.localNode.Node())
+
+	node2.putCacheNodeId(node1.localNode.Node())
+	node2.putCacheNodeId(node3.localNode.Node())
+
+	node3.putCacheNodeId(node1.localNode.Node())
+	node3.putCacheNodeId(node2.localNode.Node())
 
 	udpAddrStr1 := fmt.Sprintf("%s:%d", node1.localNode.Node().IP(), node1.localNode.Node().UDP())
 	udpAddrStr2 := fmt.Sprintf("%s:%d", node2.localNode.Node().IP(), node2.localNode.Node().UDP())

@@ -1044,6 +1044,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 		connIdSend := connId.SendId()
 
 		go func(bctx context.Context) {
+			defer p.connIdGen.Remove(connId)
 			for {
 				select {
 				case <-bctx.Done():
@@ -1166,6 +1167,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 		connIdSend := connId.SendId()
 
 		go func(bctx context.Context) {
+			defer p.connIdGen.Remove(connId)
 			for {
 				select {
 				case <-bctx.Done():
