@@ -201,7 +201,7 @@ func (api *BeaconLightApi) GetOptimisticUpdate() (types.OptimisticUpdate, error)
 
 func decodeOptimisticUpdate(enc []byte) (types.OptimisticUpdate, error) {
 	var data struct {
-		Version string
+		Version string `json:"Version"`
 		Data    struct {
 			Attested      jsonHeaderWithExecProof `json:"attested_header"`
 			Aggregate     types.SyncAggregate     `json:"sync_aggregate"`
@@ -254,7 +254,7 @@ func (api *BeaconLightApi) GetFinalityUpdate() (types.FinalityUpdate, error) {
 
 func decodeFinalityUpdate(enc []byte) (types.FinalityUpdate, error) {
 	var data struct {
-		Version string
+		Version string `json:"Version"`
 		Data    struct {
 			Attested       jsonHeaderWithExecProof `json:"attested_header"`
 			Finalized      jsonHeaderWithExecProof `json:"finalized_header"`
@@ -390,7 +390,7 @@ func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconB
 	}
 
 	var beaconBlockMessage struct {
-		Version string
+		Version string `json:"Version"`
 		Data    struct {
 			Message json.RawMessage `json:"message"`
 		}

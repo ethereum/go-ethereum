@@ -193,9 +193,9 @@ func (t *TestCommitteeChain) NextSyncPeriod() (uint64, bool) {
 	return t.nsp, t.init
 }
 
-func (tc *TestCommitteeChain) ExpInit(t *testing.T, ExpInit bool) {
-	if tc.init != ExpInit {
-		t.Errorf("Incorrect init flag (expected %v, got %v)", ExpInit, tc.init)
+func (tc *TestCommitteeChain) ExpInit(t *testing.T, expInit bool) {
+	if tc.init != expInit {
+		t.Errorf("Incorrect init flag (expected %v, got %v)", expInit, tc.init)
 	}
 }
 
