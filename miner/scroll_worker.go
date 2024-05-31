@@ -592,18 +592,20 @@ func (w *worker) startNewPipeline(timestamp int64) {
 }
 
 func (w *worker) handlePipelineResult(res *pipeline.Result) error {
+	startingHeader := w.currentPipeline.Header
+	w.currentPipeline.Release()
+	w.currentPipeline = nil
+
 	// Rows being nil without an OverflowingTx means that block didn't go thru CCC,
 	// which means that we are not the sequencer. Do not attempt to commit.
-	if res != nil && res.Rows == nil && res.OverflowingTx == nil {
+	if res.Rows == nil && res.OverflowingTx == nil {
 		if res.FinalBlock != nil {
 			w.updateSnapshot(res.FinalBlock)
 		}
-		w.currentPipeline.Release()
-		w.currentPipeline = nil
 		return nil
 	}
 
-	if res != nil && res.OverflowingTx != nil {
+	if res.OverflowingTx != nil {
 		if res.FinalBlock == nil {
 			// first txn overflowed the circuit, skip
 			log.Info("Circuit capacity limit reached for a single tx", "tx", res.OverflowingTx.Hash().String(),
@@ -615,10 +617,10 @@ func (w *worker) handlePipelineResult(res *pipeline.Result) error {
 				overflowingTrace = nil
 			}
 			rawdb.WriteSkippedTransaction(w.eth.ChainDb(), res.OverflowingTx, overflowingTrace, res.CCCErr.Error(),
-				w.currentPipeline.Header.Number.Uint64(), nil)
+				startingHeader.Number.Uint64(), nil)
 
 			if overflowingL1MsgTx := res.OverflowingTx.AsL1MessageTx(); overflowingL1MsgTx != nil {
-				rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), w.currentPipeline.Header.ParentHash, overflowingL1MsgTx.QueueIndex+1)
+				rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), startingHeader.ParentHash, overflowingL1MsgTx.QueueIndex+1)
 			} else {
 				w.prioritizedTx = nil
 				w.eth.TxPool().RemoveTx(res.OverflowingTx.Hash(), true)
@@ -628,7 +630,7 @@ func (w *worker) handlePipelineResult(res *pipeline.Result) error {
 			// no need to prioritize L1 messages, they are fetched in order
 			// and processed first in every block anyways
 			w.prioritizedTx = &prioritizedTransaction{
-				blockNumber: w.currentPipeline.Header.Number.Uint64() + 1,
+				blockNumber: startingHeader.Number.Uint64() + 1,
 				tx:          res.OverflowingTx,
 			}
 		}
@@ -650,14 +652,30 @@ func (w *worker) handlePipelineResult(res *pipeline.Result) error {
 	}
 
 	var commitError error
-	if res != nil && res.FinalBlock != nil {
+	if res.FinalBlock != nil {
 		if commitError = w.commit(res); commitError == nil {
 			return nil
 		}
 		log.Error("Commit failed", "header", res.FinalBlock.Header, "reason", commitError)
+		if _, isRetryable := commitError.(retryableCommitError); !isRetryable {
+			return commitError
+		}
 	}
 	w.startNewPipeline(time.Now().Unix())
-	return commitError
+	return nil
+}
+
+// retryableCommitError wraps an error that happened during commit phase and indicates that worker can retry to build a new block
+type retryableCommitError struct {
+	inner error
+}
+
+func (e retryableCommitError) Error() string {
+	return e.inner.Error()
+}
+
+func (e retryableCommitError) Unwrap() error {
+	return e.inner
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
@@ -699,7 +717,7 @@ func (w *worker) commit(res *pipeline.Result) error {
 
 	// verify the generated block with local consensus engine to make sure everything is as expected
 	if err = w.engine.VerifyHeader(w.chain, block.Header(), true); err != nil {
-		return err
+		return retryableCommitError{inner: err}
 	}
 
 	blockHash := block.Hash()
@@ -763,8 +781,6 @@ func (w *worker) commit(res *pipeline.Result) error {
 	// Broadcast the block and announce chain insertion event
 	w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
-	w.currentPipeline.Release()
-	w.currentPipeline = nil
 	return nil
 }
 
