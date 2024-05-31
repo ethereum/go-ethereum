@@ -458,6 +458,10 @@ func TestTraceContentLookup(t *testing.T) {
 	err = node3.Start()
 	assert.NoError(t, err)
 
+	defer node1.Stop()
+	defer node2.Stop()
+	defer node3.Stop()
+
 	contentKey := []byte{0x3, 0x4}
 	content := []byte{0x1, 0x2}
 	contentId := node1.toContentId(contentKey)
@@ -495,15 +499,11 @@ func TestTraceContentLookup(t *testing.T) {
 
 	// check response
 	node3Response := res.Trace.Responses[node3Id]
-	assert.Equal(t, node3Response, []string{node2Id})
+	assert.Equal(t, node3Response.RespondedWith, []string{node2Id})
 
 	node2Response := res.Trace.Responses[node2Id]
-	assert.Equal(t, node2Response, []string{node1Id})
+	assert.Equal(t, node2Response.RespondedWith, []string{node1Id})
 
 	node1Response := res.Trace.Responses[node1Id]
-	assert.Equal(t, node1Response, []string{})
-
-	// res, _, err = node1.ContentLookup([]byte{0x2, 0x4})
-	// assert.Equal(t, ContentNotFound, err)
-	// assert.Nil(t, res)
+	assert.Equal(t, node1Response.RespondedWith, ([]string)(nil))
 }

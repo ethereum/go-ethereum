@@ -16,6 +16,7 @@ import (
 	"slices"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -1488,64 +1489,44 @@ func (p *PortalProtocol) collectTableNodes(rip net.IP, distances []uint, limit i
 
 func (p *PortalProtocol) ContentLookup(contentKey, contentId []byte) ([]byte, bool, error) {
 	lookupContext, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	resChan := make(chan *ContentInfoResp, 1)
-	defer close(resChan)
+
+	resChan := make(chan *traceContentInfoResp, alpha)
+	hasResult := int32(0)
+
+	result := ContentInfoResp{}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		for res := range resChan {
+			if res.Flag != portalwire.ContentEnrsSelector {
+				result.Content = res.Content.([]byte)
+				result.UtpTransfer = res.UtpTransfer
+			}
+		}
+	}()
+
 	newLookup(lookupContext, p.table, enode.ID(contentId), func(n *node) ([]*node, error) {
-		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan)
+		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan, cancel, &hasResult)
 	}).run()
+	close(resChan)
 
-	if len(resChan) > 0 {
-		res := <-resChan
-		return res.Content, res.UtpTransfer, nil
+	wg.Wait()
+	if hasResult == 1 {
+		return result.Content, result.UtpTransfer, nil
 	}
+	defer cancel()
 	return nil, false, ContentNotFound
-}
-
-func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *ContentInfoResp) ([]*node, error) {
-	wrapedNode := make([]*node, 0)
-	flag, content, err := p.findContent(n, contentKey)
-	if err != nil {
-		p.Log.Error("contentLookupWorker failed", "ip", n.IP().String(), "err", err)
-		return nil, err
-	}
-	p.Log.Debug("contentLookupWorker reveice response", "ip", n.IP().String(), "flag", flag)
-	// has find content
-	if len(resChan) > 0 {
-		return []*node{}, nil
-	}
-	switch flag {
-	case portalwire.ContentRawSelector, portalwire.ContentConnIdSelector:
-		content, ok := content.([]byte)
-		if !ok {
-			return wrapedNode, fmt.Errorf("failed to assert to raw content, value is: %v", content)
-		}
-		res := &ContentInfoResp{
-			Content: content,
-		}
-		if flag == portalwire.ContentConnIdSelector {
-			res.UtpTransfer = true
-		}
-		resChan <- res
-		return wrapedNode, err
-	case portalwire.ContentEnrsSelector:
-		nodes, ok := content.([]*enode.Node)
-		if !ok {
-			return wrapedNode, fmt.Errorf("failed to assert to enrs content, value is: %v", content)
-		}
-		return wrapNodes(nodes), nil
-	}
-	return wrapedNode, nil
 }
 
 func (p *PortalProtocol) TraceContentLookup(contentKey, contentId []byte) (*TraceContentResult, error) {
 	lookupContext, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	requestNodeChan := make(chan *enode.Node, 3)
-	resChan := make(chan *traceContentInfoResp, 3)
+	// resp channel
+	resChan := make(chan *traceContentInfoResp, alpha)
 
-	requestNode := make([]*enode.Node, 0)
-	requestRes := make(map[string]*traceContentInfoResp)
+	hasResult := int32(0)
 
 	traceContentRes := &TraceContentResult{}
 
@@ -1555,7 +1536,7 @@ func (p *PortalProtocol) TraceContentLookup(contentKey, contentId []byte) (*Trac
 		Origin:      selfHexId,
 		TargetId:    hexutil.Encode(contentId),
 		StartedAtMs: int(time.Now().UnixMilli()),
-		Responses:   make(map[string][]string),
+		Responses:   make(map[string]RespByNode),
 		Metadata:    make(map[string]*NodeMetadata),
 		Cancelled:   make([]string, 0),
 	}
@@ -1567,7 +1548,10 @@ func (p *PortalProtocol) TraceContentLookup(contentKey, contentId []byte) (*Trac
 		id := "0x" + node.ID().String()
 		localResponse = append(localResponse, id)
 	}
-	trace.Responses[selfHexId] = localResponse
+	trace.Responses[selfHexId] = RespByNode{
+		DurationMs:    0,
+		RespondedWith: localResponse,
+	}
 
 	dis := p.Distance(p.Self().ID(), enode.ID(contentId))
 
@@ -1577,82 +1561,73 @@ func (p *PortalProtocol) TraceContentLookup(contentKey, contentId []byte) (*Trac
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for node := range requestNodeChan {
-			requestNode = append(requestNode, node)
-		}
-	}()
+	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
 		for res := range resChan {
-			key := res.Node.ID().String()
-			requestRes[key] = res
-			if res.Flag == portalwire.ContentRawSelector || res.Flag == portalwire.ContentConnIdSelector {
-				// get the content
-				return
+			node := res.Node
+			hexId := "0x" + node.ID().String()
+			dis := p.Distance(node.ID(), enode.ID(contentId))
+			p.Log.Debug("reveice res", "id", hexId, "flag", res.Flag)
+			trace.Metadata[hexId] = &NodeMetadata{
+				Enr:      node.String(),
+				Distance: hexutil.Encode(dis[:]),
+			}
+			// 没有返回 content
+			if traceContentRes.Content == "" {
+				if res.Flag == portalwire.ContentRawSelector || res.Flag == portalwire.ContentConnIdSelector {
+					trace.ReceivedFrom = hexId
+					content := res.Content.([]byte)
+					traceContentRes.Content = hexutil.Encode(content)
+					traceContentRes.UtpTransfer = res.UtpTransfer
+					trace.Responses[hexId] = RespByNode{}
+				} else {
+					nodes := res.Content.([]*enode.Node)
+					respByNode := RespByNode{
+						RespondedWith: make([]string, 0, len(nodes)),
+					}
+					for _, node := range nodes {
+						idInner := "0x" + node.ID().String()
+						respByNode.RespondedWith = append(respByNode.RespondedWith, idInner)
+						if _, ok := trace.Metadata[idInner]; !ok {
+							dis := p.Distance(node.ID(), enode.ID(contentId))
+							trace.Metadata[idInner] = &NodeMetadata{
+								Enr:      node.String(),
+								Distance: hexutil.Encode(dis[:]),
+							}
+						}
+						trace.Responses[hexId] = respByNode
+					}
+				}
+			} else {
+				trace.Cancelled = append(trace.Cancelled, hexId)
 			}
 		}
 	}()
 
-	newLookup(lookupContext, p.table, enode.ID(contentId), func(n *node) ([]*node, error) {
-		node := unwrapNode(n)
-		requestNodeChan <- node
-		return p.traceContentLookupWorker(node, contentKey, resChan)
-	}).run()
-
-	close(requestNodeChan)
+	lookup := newLookup(lookupContext, p.table, enode.ID(contentId), func(n *node) ([]*node, error) {
+		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan, cancel, &hasResult)
+	})
+	lookup.run()
 	close(resChan)
 
 	wg.Wait()
-
-	for _, node := range requestNode {
-		id := node.ID().String()
-		hexId := "0x" + id
-		dis := p.Distance(node.ID(), enode.ID(contentId))
-		trace.Metadata[hexId] = &NodeMetadata{
-			Enr:      node.String(),
-			Distance: hexutil.Encode(dis[:]),
-		}
-		if res, ok := requestRes[id]; ok {
-			if res.Flag == portalwire.ContentRawSelector || res.Flag == portalwire.ContentConnIdSelector {
-				trace.ReceivedFrom = hexId
-				content := res.Content.([]byte)
-				traceContentRes.Content = hexutil.Encode(content)
-				traceContentRes.UtpTransfer = res.UtpTransfer
-				trace.Responses[hexId] = make([]string, 0)
-			} else {
-				content := res.Content.([]*enode.Node)
-				ids := make([]string, 0)
-				for _, n := range content {
-					hexId := "0x" + n.ID().String()
-					ids = append(ids, hexId)
-				}
-				trace.Responses[hexId] = ids
-			}
-		} else {
-			trace.Cancelled = append(trace.Cancelled, id)
-		}
+	if hasResult == 0 {
+		cancel()
 	}
-
 	traceContentRes.Trace = *trace
 
 	return traceContentRes, nil
 }
 
-func (p *PortalProtocol) traceContentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *traceContentInfoResp) ([]*node, error) {
+func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *traceContentInfoResp, cancel context.CancelFunc, done *int32) ([]*node, error) {
 	wrapedNode := make([]*node, 0)
 	flag, content, err := p.findContent(n, contentKey)
 	if err != nil {
 		return nil, err
 	}
 	p.Log.Debug("traceContentLookupWorker reveice response", "ip", n.IP().String(), "flag", flag)
-	// has find content
-	if len(resChan) > 0 {
-		return []*node{}, nil
-	}
 
 	switch flag {
 	case portalwire.ContentRawSelector, portalwire.ContentConnIdSelector:
@@ -1669,17 +1644,23 @@ func (p *PortalProtocol) traceContentLookupWorker(n *enode.Node, contentKey []by
 		if flag == portalwire.ContentConnIdSelector {
 			res.UtpTransfer = true
 		}
-		resChan <- res
+		if atomic.CompareAndSwapInt32(done, 0, 1) {
+			p.Log.Debug("contentLookupWorker find content", "ip", n.IP().String(), "port", n.UDP())
+			resChan <- res
+			cancel()
+		}
 		return wrapedNode, err
 	case portalwire.ContentEnrsSelector:
 		nodes, ok := content.([]*enode.Node)
 		if !ok {
 			return wrapedNode, fmt.Errorf("failed to assert to enrs content, value is: %v", content)
 		}
-		resChan <- &traceContentInfoResp{Node: n,
+		resChan <- &traceContentInfoResp{
+			Node:        n,
 			Flag:        flag,
 			Content:     content,
-			UtpTransfer: false}
+			UtpTransfer: false,
+		}
 		return wrapNodes(nodes), nil
 	}
 	return wrapedNode, nil

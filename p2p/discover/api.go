@@ -56,7 +56,7 @@ type Trace struct {
 	Origin       string                   `json:"origin"`       // local node id
 	TargetId     string                   `json:"targetId"`     // target content id
 	ReceivedFrom string                   `json:"receivedFrom"` // the node id of which content from
-	Responses    map[string][]string      `json:"responses"`    // the node id and there response nodeIds
+	Responses    map[string]RespByNode    `json:"responses"`    // the node id and there response nodeIds
 	Metadata     map[string]*NodeMetadata `json:"metadata"`     // node id and there metadata object
 	StartedAtMs  int                      `json:"startedAtMs"`  // timestamp of the beginning of this request in milliseconds
 	Cancelled    []string                 `json:"cancelled"`    // the node ids which are send but cancelled
@@ -65,6 +65,11 @@ type Trace struct {
 type NodeMetadata struct {
 	Enr      string `json:"enr"`
 	Distance string `json:"distance"`
+}
+
+type RespByNode struct {
+	DurationMs    int32    `json:"durationMs"`
+	RespondedWith []string `json:"respondedWith"`
 }
 
 type Enrs struct {
