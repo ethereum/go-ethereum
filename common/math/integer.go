@@ -54,11 +54,11 @@ func (i *HexOrDecimal64) UnmarshalJSON(input []byte) error {
 
 // UnmarshalText implements encoding.TextUnmarshaler.
 func (i *HexOrDecimal64) UnmarshalText(input []byte) error {
-	in, ok := ParseUint64(string(input))
+	n, ok := ParseUint64(string(input))
 	if !ok {
 		return fmt.Errorf("invalid hex or decimal integer %q", input)
 	}
-	*i = HexOrDecimal64(in)
+	*i = HexOrDecimal64(n)
 	return nil
 }
 
