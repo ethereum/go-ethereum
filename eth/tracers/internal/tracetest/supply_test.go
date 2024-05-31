@@ -45,19 +45,19 @@ import (
 
 type supplyInfoIssuance struct {
 	GenesisAlloc *hexutil.Big `json:"genesisAlloc,omitempty"`
-	Reward       *hexutil.Big `json:"reward"`
-	Withdrawals  *hexutil.Big `json:"withdrawals"`
+	Reward       *hexutil.Big `json:"reward,omitempty"`
+	Withdrawals  *hexutil.Big `json:"withdrawals,omitempty"`
 }
 
 type supplyInfoBurn struct {
-	EIP1559 *hexutil.Big `json:"1559"`
-	Blob    *hexutil.Big `json:"blob"`
-	Misc    *hexutil.Big `json:"misc"`
+	EIP1559 *hexutil.Big `json:"1559,omitempty"`
+	Blob    *hexutil.Big `json:"blob,omitempty"`
+	Misc    *hexutil.Big `json:"misc,omitempty"`
 }
 
 type supplyInfo struct {
-	Issuance *supplyInfoIssuance `json:"issuance"`
-	Burn     *supplyInfoBurn     `json:"burn"`
+	Issuance *supplyInfoIssuance `json:"issuance,omitempty"`
+	Burn     *supplyInfoBurn     `json:"burn,omitempty"`
 
 	// Block info
 	Number     uint64      `json:"blockNumber"`
@@ -89,13 +89,6 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 	expected := supplyInfo{
 		Issuance: &supplyInfoIssuance{
 			GenesisAlloc: (*hexutil.Big)(new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))),
-			Reward:       (*hexutil.Big)(common.Big0),
-			Withdrawals:  (*hexutil.Big)(common.Big0),
-		},
-		Burn: &supplyInfoBurn{
-			EIP1559: (*hexutil.Big)(common.Big0),
-			Blob:    (*hexutil.Big)(common.Big0),
-			Misc:    (*hexutil.Big)(common.Big0),
 		},
 		Number:     0,
 		Hash:       common.HexToHash("0xbcc9466e9fc6a8b56f4b29ca353a421ff8b51a0c1a58ca4743b427605b08f2ca"),
@@ -123,13 +116,7 @@ func TestSupplyRewards(t *testing.T) {
 
 	expected := supplyInfo{
 		Issuance: &supplyInfoIssuance{
-			Reward:      (*hexutil.Big)(new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))),
-			Withdrawals: (*hexutil.Big)(common.Big0),
-		},
-		Burn: &supplyInfoBurn{
-			EIP1559: (*hexutil.Big)(common.Big0),
-			Blob:    (*hexutil.Big)(common.Big0),
-			Misc:    (*hexutil.Big)(common.Big0),
+			Reward: (*hexutil.Big)(new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))),
 		},
 		Number:     1,
 		Hash:       common.HexToHash("0xcbb08370505be503dafedc4e96d139ea27aba3cbc580148568b8a307b3f51052"),
@@ -193,13 +180,10 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		burn     = new(big.Int).Mul(big.NewInt(21000), head.BaseFee)
 		expected = supplyInfo{
 			Issuance: &supplyInfoIssuance{
-				Reward:      (*hexutil.Big)(reward),
-				Withdrawals: (*hexutil.Big)(common.Big0),
+				Reward: (*hexutil.Big)(reward),
 			},
 			Burn: &supplyInfoBurn{
 				EIP1559: (*hexutil.Big)(burn),
-				Blob:    (*hexutil.Big)(common.Big0),
-				Misc:    (*hexutil.Big)(common.Big0),
 			},
 			Number:     1,
 			Hash:       head.Hash(),
@@ -238,13 +222,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 		head     = chain.CurrentBlock()
 		expected = supplyInfo{
 			Issuance: &supplyInfoIssuance{
-				Reward:      (*hexutil.Big)(common.Big0),
 				Withdrawals: (*hexutil.Big)(big.NewInt(1337000000000)),
-			},
-			Burn: &supplyInfoBurn{
-				EIP1559: (*hexutil.Big)(common.Big0),
-				Blob:    (*hexutil.Big)(common.Big0),
-				Misc:    (*hexutil.Big)(common.Big0),
 			},
 			Number:     1,
 			Hash:       head.Hash(),
@@ -338,13 +316,8 @@ func TestSupplySelfdestruct(t *testing.T) {
 	head := preCancunChain.CurrentBlock()
 	// Check live trace output
 	expected := supplyInfo{
-		Issuance: &supplyInfoIssuance{
-			Reward:      (*hexutil.Big)(common.Big0),
-			Withdrawals: (*hexutil.Big)(common.Big0),
-		},
 		Burn: &supplyInfoBurn{
 			EIP1559: (*hexutil.Big)(big.NewInt(55289500000000)),
-			Blob:    (*hexutil.Big)(common.Big0),
 			Misc:    (*hexutil.Big)(big.NewInt(5000000000)),
 		},
 		Number:     1,
@@ -384,14 +357,8 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// Check live trace output
 	head = postCancunChain.CurrentBlock()
 	expected = supplyInfo{
-		Issuance: &supplyInfoIssuance{
-			Reward:      (*hexutil.Big)(common.Big0),
-			Withdrawals: (*hexutil.Big)(common.Big0),
-		},
 		Burn: &supplyInfoBurn{
 			EIP1559: (*hexutil.Big)(big.NewInt(55289500000000)),
-			Blob:    (*hexutil.Big)(common.Big0),
-			Misc:    (*hexutil.Big)(common.Big0),
 		},
 		Number:     1,
 		Hash:       head.Hash(),
@@ -535,13 +502,8 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 	block := chain.GetBlockByNumber(1)
 
 	expected := supplyInfo{
-		Issuance: &supplyInfoIssuance{
-			Reward:      (*hexutil.Big)(common.Big0),
-			Withdrawals: (*hexutil.Big)(common.Big0),
-		},
 		Burn: &supplyInfoBurn{
 			EIP1559: (*hexutil.Big)(new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed())))),
-			Blob:    (*hexutil.Big)(common.Big0),
 			Misc:    (*hexutil.Big)(eth5), // 5ETH burned from contract B
 		},
 		Number:     1,

@@ -24,8 +24,8 @@ func init() {
 
 type supplyInfoIssuance struct {
 	GenesisAlloc *big.Int `json:"genesisAlloc,omitempty"`
-	Reward       *big.Int `json:"reward"`
-	Withdrawals  *big.Int `json:"withdrawals"`
+	Reward       *big.Int `json:"reward,omitempty"`
+	Withdrawals  *big.Int `json:"withdrawals,omitempty"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type supplyInfoIssuance -field-override supplyInfoIssuanceMarshaling -out gen_supplyinfoissuance.go
@@ -36,9 +36,9 @@ type supplyInfoIssuanceMarshaling struct {
 }
 
 type supplyInfoBurn struct {
-	EIP1559 *big.Int `json:"1559"`
-	Blob    *big.Int `json:"blob"`
-	Misc    *big.Int `json:"misc"`
+	EIP1559 *big.Int `json:"1559,omitempty"`
+	Blob    *big.Int `json:"blob,omitempty"`
+	Misc    *big.Int `json:"misc,omitempty"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type supplyInfoBurn -field-override supplyInfoBurnMarshaling -out gen_supplyinfoburn.go
@@ -49,8 +49,8 @@ type supplyInfoBurnMarshaling struct {
 }
 
 type supplyInfo struct {
-	Issuance *supplyInfoIssuance `json:"issuance"`
-	Burn     *supplyInfoBurn     `json:"burn"`
+	Issuance *supplyInfoIssuance `json:"issuance,omitempty"`
+	Burn     *supplyInfoBurn     `json:"burn,omitempty"`
 
 	// Block info
 	Number     uint64      `json:"blockNumber"`
@@ -116,9 +116,7 @@ func newSupplyInfo() supplyInfo {
 			Withdrawals: big.NewInt(0),
 		},
 		Burn: &supplyInfoBurn{
-			EIP1559: big.NewInt(0),
-			Blob:    big.NewInt(0),
-			Misc:    big.NewInt(0),
+			Misc: big.NewInt(0),
 		},
 
 		Number:     0,
@@ -141,7 +139,9 @@ func (s *supply) OnBlockStart(ev tracing.BlockEvent) {
 	// Calculate Burn for this block
 	if ev.Block.BaseFee() != nil {
 		burn := new(big.Int).Mul(new(big.Int).SetUint64(ev.Block.GasUsed()), ev.Block.BaseFee())
-		s.delta.Burn.EIP1559.Add(s.delta.Burn.EIP1559, burn)
+		if burn.Sign() != 0 {
+			s.delta.Burn.EIP1559 = burn
+		}
 	}
 	// Blob burnt gas
 	if blobGas := ev.Block.BlobGasUsed(); blobGas != nil && *blobGas > 0 && ev.Block.ExcessBlobGas() != nil {
@@ -150,7 +150,7 @@ func (s *supply) OnBlockStart(ev tracing.BlockEvent) {
 			baseFee = eip4844.CalcBlobFee(excess)
 			burn    = new(big.Int).Mul(new(big.Int).SetUint64(*blobGas), baseFee)
 		)
-		s.delta.Burn.Blob.Add(s.delta.Burn.Blob, burn)
+		s.delta.Burn.Blob = burn
 	}
 }
 
@@ -262,7 +262,34 @@ func (s *supply) OnClose() {
 }
 
 func (s *supply) write(data any) {
-	out, _ := json.Marshal(data)
+	supply, ok := data.(supplyInfo)
+	if !ok {
+		log.Warn("failed to cast supply tracer data on write to log file")
+		return
+	}
+
+	// Remove empty fields
+	if supply.Issuance.Reward.Sign() == 0 {
+		supply.Issuance.Reward = nil
+	}
+
+	if supply.Issuance.Withdrawals.Sign() == 0 {
+		supply.Issuance.Withdrawals = nil
+	}
+
+	if supply.Issuance.GenesisAlloc == nil && supply.Issuance.Reward == nil && supply.Issuance.Withdrawals == nil {
+		supply.Issuance = nil
+	}
+
+	if supply.Burn.Misc.Sign() == 0 {
+		supply.Burn.Misc = nil
+	}
+
+	if supply.Burn.EIP1559 == nil && supply.Burn.Blob == nil && supply.Burn.Misc == nil {
+		supply.Burn = nil
+	}
+
+	out, _ := json.Marshal(supply)
 	if _, err := s.logger.Write(out); err != nil {
 		log.Warn("failed to write to supply tracer log file", "error", err)
 	}

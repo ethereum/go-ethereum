@@ -14,9 +14,9 @@ var _ = (*supplyInfoBurnMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (s supplyInfoBurn) MarshalJSON() ([]byte, error) {
 	type supplyInfoBurn struct {
-		EIP1559 *hexutil.Big `json:"1559"`
-		Blob    *hexutil.Big `json:"blob"`
-		Misc    *hexutil.Big `json:"misc"`
+		EIP1559 *hexutil.Big `json:"1559,omitempty"`
+		Blob    *hexutil.Big `json:"blob,omitempty"`
+		Misc    *hexutil.Big `json:"misc,omitempty"`
 	}
 	var enc supplyInfoBurn
 	enc.EIP1559 = (*hexutil.Big)(s.EIP1559)
@@ -28,9 +28,9 @@ func (s supplyInfoBurn) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (s *supplyInfoBurn) UnmarshalJSON(input []byte) error {
 	type supplyInfoBurn struct {
-		EIP1559 *hexutil.Big `json:"1559"`
-		Blob    *hexutil.Big `json:"blob"`
-		Misc    *hexutil.Big `json:"misc"`
+		EIP1559 *hexutil.Big `json:"1559,omitempty"`
+		Blob    *hexutil.Big `json:"blob,omitempty"`
+		Misc    *hexutil.Big `json:"misc,omitempty"`
 	}
 	var dec supplyInfoBurn
 	if err := json.Unmarshal(input, &dec); err != nil {
