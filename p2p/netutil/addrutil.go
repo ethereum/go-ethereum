@@ -23,7 +23,8 @@ import (
 	"net/netip"
 )
 
-// AddrAddr gets the IP address contained in addr. It returns nil if no address is present.
+// AddrAddr gets the IP address contained in addr. The result will be invalid if the
+// address type is unsupported.
 func AddrAddr(addr net.Addr) netip.Addr {
 	switch a := addr.(type) {
 	case *net.IPAddr:

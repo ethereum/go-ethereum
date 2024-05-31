@@ -143,7 +143,7 @@ func IsLAN(ip net.IP) bool {
 	return AddrIsLAN(IPToAddr(ip))
 }
 
-// IsLAN reports whether an IP is a local network address.
+// AddrIsLAN reports whether an IP is a local network address.
 func AddrIsLAN(ip netip.Addr) bool {
 	if ip.Is4In6() {
 		ip = netip.AddrFrom4(ip.As4())
@@ -276,7 +276,7 @@ func (s *DistinctNetSet) Remove(ip net.IP) {
 	s.RemoveAddr(IPToAddr(ip))
 }
 
-// Remove removes an IP from the set.
+// RemoveAddr removes an IP from the set.
 func (s *DistinctNetSet) RemoveAddr(ip netip.Addr) {
 	key := s.key(ip)
 	if n, ok := s.members[key]; ok {
@@ -293,7 +293,7 @@ func (s DistinctNetSet) Contains(ip net.IP) bool {
 	return s.ContainsAddr(IPToAddr(ip))
 }
 
-// Contains whether the given IP is contained in the set.
+// ContainsAddr whether the given IP is contained in the set.
 func (s DistinctNetSet) ContainsAddr(ip netip.Addr) bool {
 	key := s.key(ip)
 	_, ok := s.members[key]
