@@ -227,6 +227,7 @@ func runCmd(ctx *cli.Context) error {
 		EVMConfig: vm.Config{
 			Tracer: tracer,
 		},
+		Random: &genesisConfig.Mixhash,
 	}
 
 	if chainConfig != nil {
