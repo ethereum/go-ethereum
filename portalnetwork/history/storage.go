@@ -204,17 +204,16 @@ func (p *ContentStorage) Close() error {
 }
 
 func (p *ContentStorage) createTable() error {
-	stat, err := p.sqliteDB.Prepare(createSql)
+	stmt, err := p.sqliteDB.Prepare(createSql)
 	if err != nil {
 		return err
 	}
 	defer func(stat *sql.Stmt) {
-		err = stat.Close()
-		if err != nil {
+		if err = stat.Close(); err != nil {
 			p.log.Error("failed to close statement", "err", err)
 		}
-	}(stat)
-	_, err = stat.Exec()
+	}(stmt)
+	_, err = stmt.Exec()
 	return err
 }
 
@@ -243,13 +242,7 @@ func (p *ContentStorage) initStmts() error {
 // Size get database size, content size and similar
 func (p *ContentStorage) Size() (uint64, error) {
 	sql := "SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size();"
-	stmt, err := p.sqliteDB.Prepare(sql)
-	if err != nil {
-		return 0, err
-	}
-	var res uint64
-	err = stmt.QueryRow().Scan(&res)
-	return res, err
+	return p.queryRowUint64(sql)
 }
 
 func (p *ContentStorage) UnusedSize() (uint64, error) {
@@ -281,12 +274,17 @@ func (p *ContentStorage) ContentSize() (uint64, error) {
 	return p.queryRowUint64(sql)
 }
 
-func (p *ContentStorage) queryRowUint64(sql string) (uint64, error) {
+func (p *ContentStorage) queryRowUint64(sqlStr string) (uint64, error) {
 	// sql := "SELECT SUM(length(value)) FROM kvstore"
-	stmt, err := p.sqliteDB.Prepare(sql)
+	stmt, err := p.sqliteDB.Prepare(sqlStr)
 	if err != nil {
 		return 0, err
 	}
+	defer func(stat *sql.Stmt) {
+		if err = stat.Close(); err != nil {
+			p.log.Error("failed to close statement", "err", err)
+		}
+	}(stmt)
 	var res uint64
 	err = stmt.QueryRow().Scan(&res)
 	return res, err
@@ -298,6 +296,11 @@ func (p *ContentStorage) GetLargestDistance() (*uint256.Int, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func(stat *sql.Stmt) {
+		if err = stat.Close(); err != nil {
+			p.log.Error("failed to close statement", "err", err)
+		}
+	}(stmt)
 	var distance []byte
 
 	err = stmt.QueryRow(p.nodeId[:]).Scan(&distance)
