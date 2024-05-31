@@ -96,21 +96,18 @@ func (b *testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) eve
 }
 
 func newTestBackend(t *testing.T, eip1559Block *big.Int, pending bool) *testBackend {
+	config := *params.TestChainConfig // needs copy because it is modified below
+	config.Eip1559Block = eip1559Block
+
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
 		gspec  = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: &config,
 			Alloc:  core.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
-	if eip1559Block != nil {
-		gspec.Config.Eip1559Block = eip1559Block
-		signer = types.LatestSigner(gspec.Config)
-	} else {
-		gspec.Config.Eip1559Block = nil
-	}
 	engine := ethash.NewFaker()
 	db := rawdb.NewMemoryDatabase()
 	genesis, _ := gspec.Commit(db)
@@ -119,9 +116,9 @@ func newTestBackend(t *testing.T, eip1559Block *big.Int, pending bool) *testBack
 	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, testHead+1, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
-		var tx *types.Transaction
+		var txdata types.TxData
 		if eip1559Block != nil && b.Number().Cmp(eip1559Block) >= 0 {
-			txdata := &types.DynamicFeeTx{
+			txdata = &types.DynamicFeeTx{
 				ChainID:   gspec.Config.ChainId,
 				Nonce:     b.TxNonce(addr),
 				To:        &common.Address{},
@@ -130,9 +127,8 @@ func newTestBackend(t *testing.T, eip1559Block *big.Int, pending bool) *testBack
 				GasTipCap: big.NewInt(int64(i+1) * params.GWei),
 				Data:      []byte{},
 			}
-			tx = types.NewTx(txdata)
 		} else {
-			txdata := &types.LegacyTx{
+			txdata = &types.LegacyTx{
 				Nonce:    b.TxNonce(addr),
 				To:       &common.Address{},
 				Gas:      21000,
@@ -140,13 +136,8 @@ func newTestBackend(t *testing.T, eip1559Block *big.Int, pending bool) *testBack
 				Value:    big.NewInt(100),
 				Data:     []byte{},
 			}
-			tx = types.NewTx(txdata)
 		}
-		tx, err := types.SignTx(tx, signer, key)
-		if err != nil {
-			t.Fatalf("failed to create tx: %v", err)
-		}
-		b.AddTx(tx)
+		b.AddTx(types.MustSignNewTx(key, signer, txdata))
 	})
 	// Construct testing chain
 	diskdb := rawdb.NewMemoryDatabase()
