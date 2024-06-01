@@ -476,6 +476,13 @@ func TestDatabaseRecoverable(t *testing.T) {
 	}
 }
 
+func TestDisableManyTimes(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		t.Log(i)
+		TestDisable(t)
+	}
+}
+
 func TestDisable(t *testing.T) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4
@@ -486,13 +493,14 @@ func TestDisable(t *testing.T) {
 	tester := newTester(t, 0)
 	defer tester.release()
 
-	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
 	if err := tester.db.Disable(); err != nil {
 		t.Fatalf("Failed to deactivate database: %v", err)
 	}
+	fmt.Println(tester.db.diskdb.Has(nil))
 	if err := tester.db.Enable(types.EmptyRootHash); err == nil {
 		t.Fatal("Invalid activation should be rejected")
 	}
+	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
 	if err := tester.db.Enable(stored); err != nil {
 		t.Fatalf("Failed to activate database: %v", err)
 	}

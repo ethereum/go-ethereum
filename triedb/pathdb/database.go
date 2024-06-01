@@ -310,6 +310,10 @@ func (db *Database) Enable(root common.Hash) error {
 	stored := types.EmptyRootHash
 	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
 		stored = crypto.Keccak256Hash(blob)
+	} else {
+		has, err := db.diskdb.Has(nil)
+		fmt.Println("len(blob) == 0", has, err)
+		fmt.Printf("state root mismatch: stored %x, synced %x\n", stored, root)
 	}
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
