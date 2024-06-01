@@ -690,7 +690,6 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 		// Read ALL the data from the connection until EOF and return it
 		data, err := io.ReadAll(conn)
-		conn.Close()
 		if err != nil {
 			p.Log.Error("failed to read from utp connection", "err", err)
 			return 0xff, nil, err
@@ -1190,7 +1189,6 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 					// Read ALL the data from the connection until EOF and return it
 					var data []byte
 					data, err = io.ReadAll(conn)
-					conn.Close()
 					if err != nil {
 						p.Log.Error("failed to read from utp connection", "err", err)
 						return
