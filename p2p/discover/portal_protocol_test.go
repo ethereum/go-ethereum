@@ -1,6 +1,7 @@
 package discover
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -233,9 +234,6 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		assert.Equal(t, largeTestContent, data)
 	}()
 	workGroup.Wait()
-	node1.Stop()
-	node2.Stop()
-	node3.Stop()
 }
 
 func TestPortalWireProtocol(t *testing.T) {
@@ -375,6 +373,23 @@ func TestPortalWireProtocol(t *testing.T) {
 	node3.Stop()
 }
 
+func TestCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func(ctx context.Context) {
+		defer func() {
+			t.Log("goroutine cancel")
+		}()
+
+		time.Sleep(time.Second * 5)
+	}(ctx)
+
+	cancel()
+	t.Log("after main cancel")
+
+	time.Sleep(time.Second * 3)
+}
+
 func TestContentLookup(t *testing.T) {
 	node1, err := setupLocalPortalNode(":17777", nil)
 	assert.NoError(t, err)
@@ -413,10 +428,6 @@ func TestContentLookup(t *testing.T) {
 	res, _, err = node1.ContentLookup(nonExist, node1.toContentId(nonExist))
 	assert.Equal(t, ContentNotFound, err)
 	assert.Nil(t, res)
-
-	node1.Stop()
-	node2.Stop()
-	node3.Stop()
 }
 
 func TestTraceContentLookup(t *testing.T) {
@@ -486,8 +497,4 @@ func TestTraceContentLookup(t *testing.T) {
 	// res, _, err = node1.ContentLookup([]byte{0x2, 0x4})
 	// assert.Equal(t, ContentNotFound, err)
 	// assert.Nil(t, res)
-
-	node1.Stop()
-	node2.Stop()
-	node3.Stop()
 }
