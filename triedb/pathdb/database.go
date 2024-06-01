@@ -232,7 +232,7 @@ func (db *Database) repairHistory() error {
 // to only keep 128 diff layers in memory by default.
 //
 // The passed in maps(nodes, states) will be retained to avoid copying everything.
-// Therefore, these maps must not be changed afterwards.
+// Therefore, these maps must not be changed afterward.
 func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	// Hold the lock to prevent concurrent mutations.
 	db.lock.Lock()
