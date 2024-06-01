@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -98,9 +99,22 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	if tx.GasFeeCapIntCmp(tx.GasTipCap()) < 0 {
 		return core.ErrTipAboveFeeCap
 	}
-	// CHANGE(taiko): ensure gasFeeCap fee cap larger than 0.
-	if os.Getenv("TAIKO_TEST") == "" && tx.GasFeeCap().Cmp(common.Big0) == 0 {
-		return errors.New("max fee per gas is 0")
+	// CHANGE(taiko): check gasFeeCap.
+	if os.Getenv("TAIKO_TEST") == "" {
+		if os.Getenv("TAIKO_MIN_TIP") != "" {
+			minTip, err := strconv.Atoi(os.Getenv("TAIKO_MIN_TIP"))
+			if err != nil {
+				log.Error("Failed to parse TAIKO_MIN_TIP", "err", err)
+			} else {
+				if tx.GasTipCapIntCmp(new(big.Int).SetUint64(uint64(minTip))) < 0 {
+					return fmt.Errorf("max fee per gas is less than %d Gwei", minTip)
+				}
+			}
+		} else {
+			if tx.GasFeeCap().Cmp(common.Big0) == 0 {
+				return errors.New("max fee per gas is 0")
+			}
+		}
 	}
 	// Make sure the transaction is signed properly
 	if _, err := types.Sender(signer, tx); err != nil {
