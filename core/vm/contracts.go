@@ -97,20 +97,6 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{9}): &blake2F{},
 }
 
-// PrecompiledContractsArchimedes contains the default set of pre-compiled Ethereum
-// contracts used in the Archimedes release. Same as Berlin but without sha2, blake2f, ripemd160
-var PrecompiledContractsArchimedes = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256hashDisabled{},
-	common.BytesToAddress([]byte{3}): &ripemd160hashDisabled{},
-	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
-	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
-	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
-	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
-	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
-}
-
 // PrecompiledContractsCancun contains the default set of pre-compiled Ethereum
 // contracts used in the Cancun release.
 var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
@@ -140,9 +126,38 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
+// PrecompiledContractsArchimedes contains the default set of pre-compiled Ethereum
+// contracts used in the Archimedes release. Same as Berlin but without sha2, blake2f, ripemd160
+var PrecompiledContractsArchimedes = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hashDisabled{},
+	common.BytesToAddress([]byte{3}): &ripemd160hashDisabled{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
+}
+
+// PrecompiledContractsBernoulli contains the default set of pre-compiled Ethereum
+// contracts used in the Bernoulli release. Same as Archimedes but with sha256hash enabled again
+var PrecompiledContractsBernoulli = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hashDisabled{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}): &blake2FDisabled{},
+}
+
 var (
-	PrecompiledAddressesCancun     []common.Address
+	PrecompiledAddressesBernoulli  []common.Address
 	PrecompiledAddressesArchimedes []common.Address
+	PrecompiledAddressesCancun     []common.Address
 	PrecompiledAddressesBerlin     []common.Address
 	PrecompiledAddressesIstanbul   []common.Address
 	PrecompiledAddressesByzantium  []common.Address
@@ -168,15 +183,23 @@ func init() {
 	for k := range PrecompiledContractsCancun {
 		PrecompiledAddressesCancun = append(PrecompiledAddressesCancun, k)
 	}
+	for k := range PrecompiledContractsArchimedes {
+		PrecompiledAddressesArchimedes = append(PrecompiledAddressesArchimedes, k)
+	}
+	for k := range PrecompiledContractsBernoulli {
+		PrecompiledAddressesBernoulli = append(PrecompiledAddressesBernoulli, k)
+	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
-	case rules.IsCancun:
-		return PrecompiledAddressesCancun
+	case rules.IsBernoulli:
+		return PrecompiledAddressesBernoulli
 	case rules.IsArchimedes:
 		return PrecompiledAddressesArchimedes
+	case rules.IsCancun:
+		return PrecompiledAddressesCancun
 	case rules.IsBerlin:
 		return PrecompiledAddressesBerlin
 	case rules.IsIstanbul:

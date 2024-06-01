@@ -71,6 +71,10 @@ func setDefaults(cfg *Config) {
 			BerlinBlock:         new(big.Int),
 			LondonBlock:         new(big.Int),
 			ArchimedesBlock:     new(big.Int),
+			ShanghaiTime:        new(uint64),
+			BernoulliBlock:      new(big.Int),
+			CurieBlock:          new(big.Int),
+			DescartesBlock:      new(big.Int),
 		}
 	}
 

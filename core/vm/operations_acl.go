@@ -196,9 +196,10 @@ var (
 	gasDelegateCallEIP2929 = makeCallVariantGasCallEIP2929(gasDelegateCall)
 	gasStaticCallEIP2929   = makeCallVariantGasCallEIP2929(gasStaticCall)
 	gasCallCodeEIP2929     = makeCallVariantGasCallEIP2929(gasCallCode)
-	gasSelfdestructEIP2929 = makeSelfdestructGasFn(true)
-	// gasSelfdestructEIP3529 implements the changes in EIP-2539 (no refunds)
-	gasSelfdestructEIP3529 = makeSelfdestructGasFn(false)
+	// SELFDESTRUCT is disabled in Scroll.
+	// gasSelfdestructEIP2929 = makeSelfdestructGasFn(true)
+	// // gasSelfdestructEIP3529 implements the changes in EIP-2539 (no refunds)
+	// gasSelfdestructEIP3529 = makeSelfdestructGasFn(false)
 
 	// gasSStoreEIP2929 implements gas cost for SSTORE according to EIP-2929
 	//
@@ -219,6 +220,8 @@ var (
 	gasSStoreEIP3529 = makeGasSStoreFunc(params.SstoreClearsScheduleRefundEIP3529)
 )
 
+// SELFDESTRUCT is disabled in Scroll.
+/*
 // makeSelfdestructGasFn can create the selfdestruct dynamic gas function for EIP-2929 and EIP-2539
 func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	gasFunc := func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
@@ -242,3 +245,4 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 	}
 	return gasFunc
 }
+*/

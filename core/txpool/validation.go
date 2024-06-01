@@ -59,10 +59,10 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure only transactions that have been enabled are accepted
 	if !opts.Config.IsCurie(head.Number) && tx.Type() != types.LegacyTxType {
-		return fmt.Errorf("%w: type %d rejected, pool not yet in Berlin", core.ErrTxTypeNotSupported, tx.Type())
+		return fmt.Errorf("%w: type %d rejected, pool not yet in Curie", core.ErrTxTypeNotSupported, tx.Type())
 	}
 	if !opts.Config.IsCurie(head.Number) && tx.Type() == types.DynamicFeeTxType {
-		return fmt.Errorf("%w: type %d rejected, pool not yet in London", core.ErrTxTypeNotSupported, tx.Type())
+		return fmt.Errorf("%w: type %d rejected, pool not yet in Curie", core.ErrTxTypeNotSupported, tx.Type())
 	}
 	if !opts.Config.IsCancun(head.Number, head.Time) && tx.Type() == types.BlobTxType {
 		return fmt.Errorf("%w: type %d rejected, pool not yet in Cancun", core.ErrTxTypeNotSupported, tx.Type())

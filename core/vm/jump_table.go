@@ -57,6 +57,8 @@ var (
 	mergeInstructionSet            = newMergeInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
+	curieInstructionSet            = newCurieInstructionSet()
+	descartesInstructionSet        = newDescartesInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -80,13 +82,31 @@ func validate(jt JumpTable) JumpTable {
 	return jt
 }
 
+// newDescartesInstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul, petersburg, berlin, london, shanghai, curie, and descartes instructions.
+func newDescartesInstructionSet() JumpTable {
+	instructionSet := newCurieInstructionSet()
+	return instructionSet
+}
+
+// newCurieInstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul, petersburg, berlin, london, shanghai, and curie instructions.
+func newCurieInstructionSet() JumpTable {
+	instructionSet := newShanghaiInstructionSet()
+	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
+	enable5656(&instructionSet) // EIP-5656 (MCOPY opcode)
+	enable1153(&instructionSet) // EIP-1153 (TLOAD, TSTORE opcodes)
+	return instructionSet
+}
+
 func newCancunInstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable4844(&instructionSet) // EIP-4844 (BLOBHASH opcode)
 	enable7516(&instructionSet) // EIP-7516 (BLOBBASEFEE opcode)
 	enable1153(&instructionSet) // EIP-1153 "Transient Storage"
 	enable5656(&instructionSet) // EIP-5656 (MCOPY opcode)
-	enable6780(&instructionSet) // EIP-6780 SELFDESTRUCT only in same transaction
+	// SELFDESTRUCT is disabled in Scroll.
+	// enable6780(&instructionSet) // EIP-6780 SELFDESTRUCT only in same transaction
 	return validate(instructionSet)
 }
 
@@ -114,7 +134,7 @@ func newMergeInstructionSet() JumpTable {
 func newLondonInstructionSet() JumpTable {
 	instructionSet := newBerlinInstructionSet()
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
-	enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
+	// enable3198(&instructionSet) // Base fee opcode https://eips.ethereum.org/EIPS/eip-3198
 	return validate(instructionSet)
 }
 
@@ -1046,12 +1066,9 @@ func newFrontierInstructionSet() JumpTable {
 			maxStack:   maxStack(2, 0),
 			memorySize: memoryReturn,
 		},
-		SELFDESTRUCT: {
-			execute:    opSelfdestruct,
-			dynamicGas: gasSelfdestruct,
-			minStack:   minStack(1, 0),
-			maxStack:   maxStack(1, 0),
-		},
+		// SELFDESTRUCT is disabled in Scroll.
+		// SELFDESTRUCT has the same behavior as INVALID.
+		SELFDESTRUCT: nil,
 	}
 
 	// Fill all unassigned slots with opUndefined.
