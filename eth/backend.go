@@ -195,6 +195,8 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 			StateHistory:        config.StateHistory,
 			StateScheme:         scheme,
+			AllowForceUpdate:    config.AllowForceUpdate,
+			CommitThreshold:     config.CommitThreshold,
 		}
 	)
 	if config.VMTrace != "" {

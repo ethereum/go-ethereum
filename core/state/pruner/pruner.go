@@ -192,7 +192,7 @@ func prune(snaptree *snapshot.Tree, root common.Hash, maindb ethdb.Database, sta
 	// Pruning is done, now drop the "useless" layers from the snapshot.
 	// Firstly, flushing the target layer into the disk. After that all
 	// diff layers below the target will all be merged into the disk.
-	if err := snaptree.Cap(root, 0); err != nil {
+	if err := snaptree.Cap(root, 0, false); err != nil {
 		return err
 	}
 	// Secondly, flushing the snapshot journal into the disk. All diff

@@ -50,6 +50,12 @@ const (
 	// Do not increase the buffer size arbitrarily, otherwise the system
 	// pause time will increase when the database writes happen.
 	DefaultBufferSize = 64 * 1024 * 1024
+
+	// Count for number of commits before force disk update
+	// after the first 128 layers, the 129th layer would be
+	// flattened and committed to disk forming the default
+	// 128 diff layers + 1 disk layer
+	defaultCommitThreshold = 128
 )
 
 var (
@@ -90,10 +96,12 @@ type layer interface {
 
 // Config contains the settings for database.
 type Config struct {
-	StateHistory   uint64 // Number of recent blocks to maintain state history for
-	CleanCacheSize int    // Maximum memory allowance (in bytes) for caching clean nodes
-	DirtyCacheSize int    // Maximum memory allowance (in bytes) for caching dirty nodes
-	ReadOnly       bool   // Flag whether the database is opened in read only mode.
+	StateHistory     uint64 // Number of recent blocks to maintain state history for
+	CleanCacheSize   int    // Maximum memory allowance (in bytes) for caching clean nodes
+	DirtyCacheSize   int    // Maximum memory allowance (in bytes) for caching dirty nodes
+	ReadOnly         bool   // Flag whether the database is opened in read only mode.
+	AllowForceUpdate bool   // Enable forcing snap root generation on a commit count
+	CommitThreshold  int    // Number of commit after which to attempt root update
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -104,14 +112,20 @@ func (c *Config) sanitize() *Config {
 		log.Warn("Sanitizing invalid node buffer size", "provided", common.StorageSize(conf.DirtyCacheSize), "updated", common.StorageSize(maxBufferSize))
 		conf.DirtyCacheSize = maxBufferSize
 	}
+
+	if conf.CommitThreshold == 0 {
+		log.Warn("Sanitizing invalid commit threshold to default", "defaultThreshold", defaultCommitThreshold)
+		conf.CommitThreshold = defaultCommitThreshold
+	}
 	return &conf
 }
 
 // Defaults contains default settings for Ethereum mainnet.
 var Defaults = &Config{
-	StateHistory:   params.FullImmutabilityThreshold,
-	CleanCacheSize: defaultCleanSize,
-	DirtyCacheSize: DefaultBufferSize,
+	StateHistory:     params.FullImmutabilityThreshold,
+	CleanCacheSize:   defaultCleanSize,
+	DirtyCacheSize:   DefaultBufferSize,
+	AllowForceUpdate: false,
 }
 
 // ReadOnly is the config in order to open database in read only mode.
@@ -132,15 +146,16 @@ type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
 	// the shutdown to reject all following unexpected mutations.
-	readOnly   bool                         // Flag if database is opened in read only mode
-	waitSync   bool                         // Flag if database is deactivated due to initial state sync
-	isVerkle   bool                         // Flag if database is used for verkle tree
-	bufferSize int                          // Memory allowance (in bytes) for caching dirty nodes
-	config     *Config                      // Configuration for database
-	diskdb     ethdb.Database               // Persistent storage for matured trie nodes
-	tree       *layerTree                   // The group for all known layers
-	freezer    ethdb.ResettableAncientStore // Freezer for storing trie histories, nil possible in tests
-	lock       sync.RWMutex                 // Lock to prevent mutations from happening at the same time
+	readOnly      bool                         // Flag if database is opened in read only mode
+	waitSync      bool                         // Flag if database is deactivated due to initial state sync
+	isVerkle      bool                         // Flag if database is used for verkle tree
+	bufferSize    int                          // Memory allowance (in bytes) for caching dirty nodes
+	config        *Config                      // Configuration for database
+	diskdb        ethdb.Database               // Persistent storage for matured trie nodes
+	tree          *layerTree                   // The group for all known layers
+	freezer       ethdb.ResettableAncientStore // Freezer for storing trie histories, nil possible in tests
+	lock          sync.RWMutex                 // Lock to prevent mutations from happening at the same time
+	commitCounter int                          // Counter for number of commits
 }
 
 // New attempts to load an already existing layer from a persistent key-value
@@ -250,7 +265,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 	// - head-1 layer is paired with HEAD-1 state
 	// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
 	// - head-128 layer(disk layer) is paired with HEAD-128 state
-	return db.tree.cap(root, maxDiffLayers)
+	return db.tree.cap(root, maxDiffLayers, db.compareThreshold())
 }
 
 // Commit traverses downwards the layer tree from a specified layer with the
@@ -265,7 +280,7 @@ func (db *Database) Commit(root common.Hash, report bool) error {
 	if err := db.modifyAllowed(); err != nil {
 		return err
 	}
-	return db.tree.cap(root, 0)
+	return db.tree.cap(root, 0, false)
 }
 
 // Disable deactivates the database and invalidates all available state layers
@@ -523,4 +538,21 @@ func (db *Database) StorageHistory(address common.Address, slot common.Hash, sta
 // state history in the local store.
 func (db *Database) HistoryRange() (uint64, uint64, error) {
 	return historyRange(db.freezer)
+}
+
+// Checks the config to compare if count of commits is above threshold
+func (db *Database) compareThreshold() bool {
+	if !db.config.AllowForceUpdate {
+		return false
+	}
+
+	log.Debug("PathDB Commit counters", "counter", db.commitCounter, "threshold", db.config.CommitThreshold)
+	if db.commitCounter > db.config.CommitThreshold {
+		db.commitCounter = 0
+		return true
+	}
+
+	db.commitCounter++
+
+	return false
 }

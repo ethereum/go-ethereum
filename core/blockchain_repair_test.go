@@ -1820,7 +1820,7 @@ func testRepairWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme s
 			t.Fatalf("Failed to flush trie state: %v", err)
 		}
 		if snapshots {
-			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
+			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0, false); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
 			}
 		}
@@ -1950,7 +1950,7 @@ func testIssue23496(t *testing.T, scheme string) {
 	if _, err := chain.InsertChain(blocks[1:2]); err != nil {
 		t.Fatalf("Failed to import canonical chain start: %v", err)
 	}
-	if err := chain.snaps.Cap(blocks[1].Root(), 0); err != nil {
+	if err := chain.snaps.Cap(blocks[1].Root(), 0, false); err != nil {
 		t.Fatalf("Failed to flatten snapshots: %v", err)
 	}
 

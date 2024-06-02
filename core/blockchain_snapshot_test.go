@@ -108,7 +108,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 			// Flushing the entire snap tree into the disk, the
 			// relevant (a) snapshot root and (b) snapshot generator
 			// will be persisted atomically.
-			chain.snaps.Cap(blocks[point-1].Root(), 0)
+			chain.snaps.Cap(blocks[point-1].Root(), 0, false)
 			diskRoot, blockRoot := chain.snaps.DiskRoot(), blocks[point-1].Root()
 			if !bytes.Equal(diskRoot.Bytes(), blockRoot.Bytes()) {
 				t.Fatalf("Failed to flush disk layer change, want %x, got %x", blockRoot, diskRoot)

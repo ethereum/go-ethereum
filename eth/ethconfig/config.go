@@ -59,6 +59,8 @@ var Defaults = Config{
 	TrieDirtyCache:     256,
 	TrieTimeout:        60 * time.Minute,
 	SnapshotCache:      102,
+	AllowForceUpdate:   false,
+	CommitThreshold:    128,
 	FilterLogCacheSize: 32,
 	Miner:              miner.DefaultConfig,
 	TxPool:             legacypool.DefaultConfig,
@@ -119,11 +121,13 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseFreezer    string
 
-	TrieCleanCache int
-	TrieDirtyCache int
-	TrieTimeout    time.Duration
-	SnapshotCache  int
-	Preimages      bool
+	TrieCleanCache   int
+	TrieDirtyCache   int
+	TrieTimeout      time.Duration
+	SnapshotCache    int
+	Preimages        bool
+	AllowForceUpdate bool
+	CommitThreshold  int
 
 	// This is the number of blocks for which logs will be cached in the filter system.
 	FilterLogCacheSize int
