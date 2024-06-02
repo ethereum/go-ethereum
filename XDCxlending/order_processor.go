@@ -856,7 +856,7 @@ func (l *Lending) LiquidationExpiredTrade(header *types.Header, chain consensus.
 	}
 	err = lendingstate.SubTokenBalance(common.LendingLockAddressBinary, lendingTrade.CollateralLockedAmount, lendingTrade.CollateralToken, statedb)
 	if err != nil {
-		log.Warn("LiquidationExpiredTrade SubTokenBalance", "err", err, "LendingLockAddress", common.HexToAddress(common.LendingLockAddress), "lendingTrade.CollateralLockedAmount", *lendingTrade.CollateralLockedAmount, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
+		log.Warn("LiquidationExpiredTrade SubTokenBalance", "err", err, "LendingLockAddress", common.LendingLockAddress, "lendingTrade.CollateralLockedAmount", *lendingTrade.CollateralLockedAmount, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
 	}
 	err = lendingstate.AddTokenBalance(lendingTrade.Investor, repayAmount, lendingTrade.CollateralToken, statedb)
 	if err != nil {
@@ -899,7 +899,7 @@ func (l *Lending) LiquidationTrade(lendingStateDB *lendingstate.LendingStateDB, 
 	}
 	err := lendingstate.SubTokenBalance(common.LendingLockAddressBinary, lendingTrade.CollateralLockedAmount, lendingTrade.CollateralToken, statedb)
 	if err != nil {
-		log.Warn("LiquidationTrade SubTokenBalance", "err", err, "LendingLockAddress", common.HexToAddress(common.LendingLockAddress), "lendingTrade.CollateralLockedAmount", *lendingTrade.CollateralLockedAmount, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
+		log.Warn("LiquidationTrade SubTokenBalance", "err", err, "LendingLockAddress", common.LendingLockAddress, "lendingTrade.CollateralLockedAmount", *lendingTrade.CollateralLockedAmount, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
 	}
 	err = lendingstate.AddTokenBalance(lendingTrade.Investor, lendingTrade.CollateralLockedAmount, lendingTrade.CollateralToken, statedb)
 	if err != nil {
@@ -1135,7 +1135,7 @@ func (l *Lending) ProcessTopUpLendingTrade(lendingStateDB *lendingstate.LendingS
 	}
 	err = lendingstate.AddTokenBalance(common.LendingLockAddressBinary, quantity, lendingTrade.CollateralToken, statedb)
 	if err != nil {
-		log.Warn("ProcessTopUpLendingTrade AddTokenBalance", "err", err, "LendingLockAddress", common.HexToAddress(common.LendingLockAddress), "quantity", *quantity, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
+		log.Warn("ProcessTopUpLendingTrade AddTokenBalance", "err", err, "LendingLockAddress", common.LendingLockAddress, "quantity", *quantity, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
 	}
 	oldLockedAmount := lendingTrade.CollateralLockedAmount
 	newLockedAmount := new(big.Int).Add(quantity, oldLockedAmount)
@@ -1201,7 +1201,7 @@ func (l *Lending) ProcessRepayLendingTrade(header *types.Header, chain consensus
 		}
 		err = lendingstate.SubTokenBalance(common.LendingLockAddressBinary, lendingTrade.CollateralLockedAmount, lendingTrade.CollateralToken, statedb)
 		if err != nil {
-			log.Warn("ProcessRepayLendingTrade SubTokenBalance", "err", err, "LendingLockAddress", common.HexToAddress(common.LendingLockAddress), "lendingTrade.CollateralLockedAmount", *lendingTrade.CollateralLockedAmount, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
+			log.Warn("ProcessRepayLendingTrade SubTokenBalance", "err", err, "LendingLockAddress", common.LendingLockAddress, "lendingTrade.CollateralLockedAmount", *lendingTrade.CollateralLockedAmount, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
 		}
 		err = lendingstate.AddTokenBalance(lendingTrade.Borrower, lendingTrade.CollateralLockedAmount, lendingTrade.CollateralToken, statedb)
 		if err != nil {
@@ -1257,7 +1257,7 @@ func (l *Lending) ProcessRecallLendingTrade(lendingStateDB *lendingstate.Lending
 	}
 	err = lendingstate.SubTokenBalance(common.LendingLockAddressBinary, recallAmount, lendingTrade.CollateralToken, statedb)
 	if err != nil {
-		log.Warn("ProcessRecallLendingTrade SubTokenBalance", "err", err, "LendingLockAddress", common.HexToAddress(common.LendingLockAddress), "recallAmount", *recallAmount, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
+		log.Warn("ProcessRecallLendingTrade SubTokenBalance", "err", err, "LendingLockAddress", common.LendingLockAddress, "recallAmount", *recallAmount, "lendingTrade.CollateralToken", lendingTrade.CollateralToken)
 	}
 
 	lendingStateDB.UpdateLiquidationPrice(lendingBook, lendingTrade.TradeId, newLiquidationPrice)

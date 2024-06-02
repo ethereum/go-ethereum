@@ -161,7 +161,7 @@ func AddTokenBalance(addr common.Address, value *big.Int, token common.Address, 
 	// XDC native
 	if token == common.XDCNativeAddressBinary {
 		balance := statedb.GetBalance(addr)
-		log.Debug("ApplyXDCXMatchedTransaction settle balance: ADD TOKEN XDC NATIVE BEFORE", "token", token.String(), "address", addr.String(), "balance", balance, "orderValue", value)
+		log.Debug("ApplyXDCXMatchedTransaction settle balance: ADD TOKEN XDC NATIVE BEFORE", "token", common.XDCNativeAddress, "address", addr.String(), "balance", balance, "orderValue", value)
 		statedb.AddBalance(addr, value)
 		balance = statedb.GetBalance(addr)
 		log.Debug("ApplyXDCXMatchedTransaction settle balance: ADD XDC NATIVE BALANCE AFTER", "token", token.String(), "address", addr.String(), "balance", balance, "orderValue", value)
@@ -187,9 +187,8 @@ func AddTokenBalance(addr common.Address, value *big.Int, token common.Address, 
 func SubTokenBalance(addr common.Address, value *big.Int, token common.Address, statedb *state.StateDB) error {
 	// XDC native
 	if token == common.XDCNativeAddressBinary {
-
 		balance := statedb.GetBalance(addr)
-		log.Debug("ApplyXDCXMatchedTransaction settle balance: SUB XDC NATIVE BALANCE BEFORE", "token", token.String(), "address", addr.String(), "balance", balance, "orderValue", value)
+		log.Debug("ApplyXDCXMatchedTransaction settle balance: SUB XDC NATIVE BALANCE BEFORE", "token", common.XDCNativeAddress, "address", addr.String(), "balance", balance, "orderValue", value)
 		if balance.Cmp(value) < 0 {
 			return errors.Errorf("value %s in token %s not enough , have : %s , want : %s  ", addr.String(), token.String(), balance, value)
 		}
