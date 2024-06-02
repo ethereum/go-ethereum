@@ -107,7 +107,7 @@ type Logger interface {
 	// With returns a new Logger that has this logger's attributes plus the given attributes
 	With(ctx ...interface{}) Logger
 
-	// With returns a new Logger that has this logger's attributes plus the given attributes. Identical to 'With'.
+	// New returns a new Logger that has this logger's attributes plus the given attributes. Identical to 'With'.
 	New(ctx ...interface{}) Logger
 
 	// Log logs a message at the specified level with context key/value pairs
