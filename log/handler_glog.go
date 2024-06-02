@@ -168,8 +168,8 @@ func (h *GlogHandler) WithGroup(name string) slog.Handler {
 	panic("not implemented")
 }
 
-// Log implements Handler.Log, filtering a log record through the global, local
-// and backtrace filters, finally emitting it if either allow it through.
+// Handle implements slog.Handler.Handle, filtering a log record through the global, local
+// and backtrace filters, finally emitting it if either allows it through.
 func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
 	// If the global log level allows, fast track logging
 	if slog.Level(h.level.Load()) <= r.Level {
