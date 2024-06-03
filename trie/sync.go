@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -149,15 +150,42 @@ type CodeSyncResult struct {
 // nodeOp represents an operation upon the trie node. It can either represent a
 // deletion to the specific node or a node write for persisting retrieved node.
 type nodeOp struct {
+	del   bool        // flag if op stands for a delete operation
 	owner common.Hash // identifier of the trie (empty for account trie)
 	path  []byte      // path from the root to the specified node.
 	blob  []byte      // the content of the node (nil for deletion)
 	hash  common.Hash // hash of the node content (empty for node deletion)
 }
 
-// isDelete indicates if the operation is a database deletion.
-func (op *nodeOp) isDelete() bool {
-	return len(op.blob) == 0
+// valid checks whether the node operation is valid.
+func (op *nodeOp) valid() bool {
+	if op.del && len(op.blob) != 0 {
+		return false
+	}
+	if !op.del && len(op.blob) == 0 {
+		return false
+	}
+	return true
+}
+
+// string returns the node operation in string representation.
+func (op *nodeOp) string() string {
+	var node string
+	if op.owner == (common.Hash{}) {
+		node = fmt.Sprintf("node: (%v)", op.path)
+	} else {
+		node = fmt.Sprintf("node: (%x-%v)", op.owner, op.path)
+	}
+	var blobHex string
+	if len(op.blob) == 0 {
+		blobHex = "nil"
+	} else {
+		blobHex = hexutil.Encode(op.blob)
+	}
+	if op.del {
+		return fmt.Sprintf("del %s %s %s", node, blobHex, op.hash.Hex())
+	}
+	return fmt.Sprintf("write %s %s %s", node, blobHex, op.hash.Hex())
 }
 
 // syncMemBatch is an in-memory buffer of successfully downloaded but not yet
@@ -220,6 +248,7 @@ func (batch *syncMemBatch) delNode(owner common.Hash, path []byte) {
 		batch.size += common.HashLength + uint64(len(path))
 	}
 	batch.nodes = append(batch.nodes, nodeOp{
+		del:   true,
 		owner: owner,
 		path:  path,
 	})
@@ -428,7 +457,10 @@ func (s *Sync) Commit(dbw ethdb.Batch) error {
 		storage int
 	)
 	for _, op := range s.membatch.nodes {
-		if op.isDelete() {
+		if !op.valid() {
+			return fmt.Errorf("invalid op, %s", op.string())
+		}
+		if op.del {
 			// node deletion is only supported in path mode.
 			if op.owner == (common.Hash{}) {
 				rawdb.DeleteAccountTrieNode(dbw, op.path)

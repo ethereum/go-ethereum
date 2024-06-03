@@ -58,6 +58,7 @@ type jsonLogger struct {
 	encoder *json.Encoder
 	cfg     *Config
 	env     *tracing.VMContext
+	hooks   *tracing.Hooks
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
@@ -67,12 +68,14 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	return &tracing.Hooks{
-		OnTxStart: l.OnTxStart,
-		OnExit:    l.OnExit,
-		OnOpcode:  l.OnOpcode,
-		OnFault:   l.OnFault,
+	l.hooks = &tracing.Hooks{
+		OnTxStart:         l.OnTxStart,
+		OnSystemCallStart: l.onSystemCallStart,
+		OnExit:            l.OnEnd,
+		OnOpcode:          l.OnOpcode,
+		OnFault:           l.OnFault,
 	}
+	return l.hooks
 }
 
 // NewJSONLoggerWithCallFrames creates a new EVM tracer that prints execution steps as JSON objects
@@ -82,13 +85,15 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	return &tracing.Hooks{
-		OnTxStart: l.OnTxStart,
-		OnEnter:   l.OnEnter,
-		OnExit:    l.OnExit,
-		OnOpcode:  l.OnOpcode,
-		OnFault:   l.OnFault,
+	l.hooks = &tracing.Hooks{
+		OnTxStart:         l.OnTxStart,
+		OnSystemCallStart: l.onSystemCallStart,
+		OnEnter:           l.OnEnter,
+		OnExit:            l.OnExit,
+		OnOpcode:          l.OnOpcode,
+		OnFault:           l.OnFault,
 	}
+	return l.hooks
 }
 
 func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
@@ -120,6 +125,16 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracin
 		log.ReturnData = rData
 	}
 	l.encoder.Encode(log)
+}
+
+func (l *jsonLogger) onSystemCallStart() {
+	// Process no events while in system call.
+	hooks := *l.hooks
+	*l.hooks = tracing.Hooks{
+		OnSystemCallEnd: func() {
+			*l.hooks = hooks
+		},
+	}
 }
 
 // OnEnter is not enabled by default.

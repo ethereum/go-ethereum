@@ -199,6 +199,8 @@ type Hooks struct {
 // for tracing and reporting.
 type BalanceChangeReason byte
 
+//go:generate stringer -type=BalanceChangeReason -output gen_balance_change_reason_stringer.go
+
 const (
 	BalanceChangeUnspecified BalanceChangeReason = 0
 
@@ -298,6 +300,12 @@ const (
 	GasChangeCallStorageColdAccess GasChangeReason = 13
 	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert.
 	GasChangeCallFailedExecution GasChangeReason = 14
+	// GasChangeWitnessContractInit is the amount charged for adding to the witness during the contract creation initialization step
+	GasChangeWitnessContractInit GasChangeReason = 15
+	// GasChangeWitnessContractCreation is the amount charged for adding to the witness during the contract creation finalization step
+	GasChangeWitnessContractCreation GasChangeReason = 16
+	// GasChangeWitnessCodeChunk is the amount charged for touching one or more contract code chunks
+	GasChangeWitnessCodeChunk GasChangeReason = 17
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.
