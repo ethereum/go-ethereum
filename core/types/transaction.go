@@ -40,7 +40,6 @@ var (
 	ErrInvalidTxType        = errors.New("transaction type not valid in this context")
 	ErrTxTypeNotSupported   = errors.New("transaction type not supported")
 	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
-	errEmptyTypedTx         = errors.New("empty typed transaction bytes")
 	errShortTypedTx         = errors.New("typed transaction too short")
 	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
 	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")

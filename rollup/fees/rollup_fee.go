@@ -2,6 +2,7 @@ package fees
 
 import (
 	"bytes"
+	"math"
 	"math/big"
 
 	"github.com/scroll-tech/go-ethereum/common"
@@ -40,7 +41,6 @@ type Message interface {
 // required to compute the L1 fee
 type StateDB interface {
 	GetState(common.Address, common.Hash) common.Hash
-	GetBalance(addr common.Address) *big.Int
 }
 
 type gpoState struct {
@@ -64,7 +64,7 @@ func EstimateL1DataFeeForMessage(msg Message, baseFee *big.Int, config *params.C
 		return nil, err
 	}
 
-	raw, err := rlpEncode(tx)
+	raw, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -131,16 +131,6 @@ func asUnsignedDynamicTx(msg Message, chainID *big.Int) *types.Transaction {
 		AccessList: msg.AccessList(),
 		ChainID:    chainID,
 	})
-}
-
-// rlpEncode RLP encodes the transaction into bytes
-func rlpEncode(tx *types.Transaction) ([]byte, error) {
-	raw := new(bytes.Buffer)
-	if err := tx.EncodeRLP(raw); err != nil {
-		return nil, err
-	}
-
-	return raw.Bytes(), nil
 }
 
 func readGPOStorageSlots(addr common.Address, state StateDB) gpoState {
@@ -216,7 +206,7 @@ func CalculateL1DataFee(tx *types.Transaction, state StateDB, config *params.Cha
 		return big.NewInt(0), nil
 	}
 
-	raw, err := rlpEncode(tx)
+	raw, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +219,12 @@ func CalculateL1DataFee(tx *types.Transaction, state StateDB, config *params.Cha
 		l1DataFee = calculateEncodedL1DataFee(raw, gpoState.overhead, gpoState.l1BaseFee, gpoState.scalar)
 	} else {
 		l1DataFee = calculateEncodedL1DataFeeCurie(raw, gpoState.l1BaseFee, gpoState.l1BlobBaseFee, gpoState.commitScalar, gpoState.blobScalar)
+	}
+
+	// ensure l1DataFee fits into uint64 for circuit compatibility
+	// (note: in practice this value should never be this big)
+	if !l1DataFee.IsUint64() {
+		l1DataFee.SetUint64(math.MaxUint64)
 	}
 
 	return l1DataFee, nil
