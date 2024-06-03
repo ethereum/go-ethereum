@@ -165,21 +165,23 @@ var (
 					Address: common.BytesToAddress([]byte{0x11}),
 					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
-					BlockNumber: blockNumber.Uint64(),
-					TxHash:      txs[0].Hash(),
-					TxIndex:     0,
-					BlockHash:   blockHash,
-					Index:       0,
+					BlockNumber:    blockNumber.Uint64(),
+					TxHash:         txs[0].Hash(),
+					TxIndex:        0,
+					BlockHash:      blockHash,
+					Index:          0,
+					BlockTimestamp: blockTime,
 				},
 				{
 					Address: common.BytesToAddress([]byte{0x01, 0x11}),
 					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
-					BlockNumber: blockNumber.Uint64(),
-					TxHash:      txs[0].Hash(),
-					TxIndex:     0,
-					BlockHash:   blockHash,
-					Index:       1,
+					BlockNumber:    blockNumber.Uint64(),
+					TxHash:         txs[0].Hash(),
+					TxIndex:        0,
+					BlockHash:      blockHash,
+					Index:          1,
+					BlockTimestamp: blockTime,
 				},
 			},
 			// derived fields:
@@ -199,21 +201,23 @@ var (
 					Address: common.BytesToAddress([]byte{0x22}),
 					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
-					BlockNumber: blockNumber.Uint64(),
-					TxHash:      txs[1].Hash(),
-					TxIndex:     1,
-					BlockHash:   blockHash,
-					Index:       2,
+					BlockNumber:    blockNumber.Uint64(),
+					TxHash:         txs[1].Hash(),
+					TxIndex:        1,
+					BlockHash:      blockHash,
+					Index:          2,
+					BlockTimestamp: blockTime,
 				},
 				{
 					Address: common.BytesToAddress([]byte{0x02, 0x22}),
 					Topics:  []common.Hash{common.HexToHash("dead"), common.HexToHash("beef")},
 					// derived fields:
-					BlockNumber: blockNumber.Uint64(),
-					TxHash:      txs[1].Hash(),
-					TxIndex:     1,
-					BlockHash:   blockHash,
-					Index:       3,
+					BlockNumber:    blockNumber.Uint64(),
+					TxHash:         txs[1].Hash(),
+					TxIndex:        1,
+					BlockHash:      blockHash,
+					Index:          3,
+					BlockTimestamp: blockTime,
 				},
 			},
 			// derived fields:
@@ -523,6 +527,7 @@ func clearComputedFieldsOnLogs(logs []*Log) []*Log {
 		cpy.TxHash = common.Hash{}
 		cpy.TxIndex = math.MaxUint32
 		cpy.Index = math.MaxUint32
+		cpy.BlockTimestamp = math.MaxUint32
 		l[i] = &cpy
 	}
 	return l
