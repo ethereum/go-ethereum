@@ -234,7 +234,7 @@ func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	for _, abiArg := range abiArgs {
 		inputOffset += getTypeSize(abiArg.Type)
 	}
-	var ret = make([]byte, 0, len(args))
+	var ret []byte
 	for i, a := range args {
 		input := abiArgs[i]
 		// pack the input
