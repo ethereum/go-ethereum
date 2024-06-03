@@ -364,7 +364,7 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	resp := batchresp[0]
 	switch {
 	case resp.Error != nil:
-		return resp.Error
+		return resp.Error.FullError()
 	case len(resp.Result) == 0:
 		return ErrNoResult
 	default:
