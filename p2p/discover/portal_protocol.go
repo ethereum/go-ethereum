@@ -694,6 +694,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			p.Log.Error("failed to read from utp connection", "err", err)
 			return 0xff, nil, err
 		}
+		conn.Close()
 		p.Log.Trace("Received content response", "id", target.ID(), "size", len(data), "data", data)
 		return resp[1], data, nil
 	case portalwire.ContentEnrsSelector:
@@ -1043,6 +1044,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 		connIdSend := connId.SendId()
 
 		go func(bctx context.Context) {
+			defer p.connIdGen.Remove(connId)
 			for {
 				select {
 				case <-bctx.Done():
@@ -1165,6 +1167,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 		connIdSend := connId.SendId()
 
 		go func(bctx context.Context) {
+			defer p.connIdGen.Remove(connId)
 			for {
 				select {
 				case <-bctx.Done():
@@ -1193,6 +1196,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 						p.Log.Error("failed to read from utp connection", "err", err)
 						return
 					}
+					conn.Close()
 					p.Log.Trace("Received offer content response", "id", id, "size", len(data), "data", data)
 
 					err = p.handleOfferedContents(id, contentKeys, data)
