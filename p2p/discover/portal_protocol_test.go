@@ -114,6 +114,15 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 	assert.NoError(t, err)
 	time.Sleep(10 * time.Second)
 
+	node1.putCacheNodeId(node2.localNode.Node())
+	node1.putCacheNodeId(node3.localNode.Node())
+
+	node2.putCacheNodeId(node1.localNode.Node())
+	node2.putCacheNodeId(node3.localNode.Node())
+
+	node3.putCacheNodeId(node1.localNode.Node())
+	node3.putCacheNodeId(node2.localNode.Node())
+
 	udpAddrStr1 := fmt.Sprintf("%s:%d", node1.localNode.Node().IP(), node1.localNode.Node().UDP())
 	udpAddrStr2 := fmt.Sprintf("%s:%d", node2.localNode.Node().IP(), node2.localNode.Node().UDP())
 
