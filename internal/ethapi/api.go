@@ -1199,15 +1199,16 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		State:      state,
 		ErrorRatio: estimateGasErrorRatio,
 	}
+	// Set any required transaction default, but make sure the gas cap itself is not messed with
+	nilGas := args.Gas == nil
 	if err := args.CallDefaults(gasCap, header.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return 0, err
 	}
-	// when gas is over header.GasLimit, just recap with header.GasLimit
-	if uint64(*args.Gas) > header.GasLimit {
-		*args.Gas = (hexutil.Uint64)(header.GasLimit)
+	if nilGas && args.Gas != nil {
+		args.Gas = nil
 	}
-
 	call := args.ToMessage(header.BaseFee)
+	
 	// Run the gas estimation andwrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
 	if err != nil {
