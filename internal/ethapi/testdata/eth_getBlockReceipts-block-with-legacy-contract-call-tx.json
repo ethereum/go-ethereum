@@ -21,6 +21,7 @@
         "transactionIndex": "0x0",
         "blockHash": "0xa1410af902e98b32e0bbe464f8637ff464f1d4344b585127d2ce71f9cb39cb8a",
         "logIndex": "0x0",
+        "blockTimestamp": 30,
         "removed": false
       }
     ],
