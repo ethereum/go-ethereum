@@ -96,7 +96,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 
 	for new(big.Int).Add(lo, big.NewInt(1)).Cmp(hi) != 0 {
 		mid := new(big.Int).Add(lo, hi)
-		mid.Div(mid, big.NewInt(2))
+		mid.Rsh(mid, 1)
 
 		if eip1559.CalcBaseFee(bc.config, &types.Header{
 			Number:   blockNumber,
@@ -118,7 +118,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 
 	for new(big.Int).Add(lo, big.NewInt(1)).Cmp(hi) != 0 {
 		mid := new(big.Int).Add(lo, hi)
-		mid.Div(mid, big.NewInt(2))
+		mid.Rsh(mid, 1)
 
 		if eip4844.CalcBlobFee(mid.Uint64()).Cmp(bc.blobfee.ToBig()) > 0 {
 			hi = mid
