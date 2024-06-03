@@ -208,6 +208,9 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 	}
 	if s.snap != nil {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
+		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, [][]byte{}); err != nil {
+			log.Error("Failed to prefetch account trie", "pre-state root", s.originalRoot.String(), "err", err)
+		}
 	}
 }
 
