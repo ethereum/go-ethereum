@@ -62,7 +62,7 @@ func newTestEnv(remote string, listen1, listen2 string) *testenv {
 		if tcpPort = node.TCP(); tcpPort == 0 {
 			tcpPort = 30303
 		}
-		if udpPort = node.TCP(); udpPort == 0 {
+		if udpPort = node.UDP(); udpPort == 0 {
 			udpPort = 30303
 		}
 		node = enode.NewV4(node.Pubkey(), ip, tcpPort, udpPort)
@@ -110,7 +110,7 @@ func (te *testenv) localEndpoint(c net.PacketConn) v4wire.Endpoint {
 }
 
 func (te *testenv) remoteEndpoint() v4wire.Endpoint {
-	return v4wire.NewEndpoint(te.remoteAddr, 0)
+	return v4wire.NewEndpoint(te.remoteAddr.AddrPort(), 0)
 }
 
 func contains(ns []v4wire.Node, key v4wire.Pubkey) bool {
