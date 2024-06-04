@@ -208,6 +208,19 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 	}
 	if s.snap != nil {
 		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
+
+		// With the switch to the Proof-of-Stake consensus algorithm, block production
+		// rewards are now handled at the consensus layer. Consequently, a block may
+		// have no state transitions if it contains no transactions and no withdrawals.
+		// In such cases, the account trie won't be scheduled for prefetching, leading
+		// to unnecessary error logs.
+		//
+		// To prevent this, the account trie is always scheduled for prefetching once
+		// the prefetcher is constructed. For more details, see:
+		// https://github.com/ethereum/go-ethereum/issues/29880
+		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, nil); err != nil {
+			log.Error("Failed to prefetch account trie", "root", s.originalRoot, "err", err)
+		}
 	}
 }
 
