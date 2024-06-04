@@ -215,13 +215,14 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error, bool) {
-	if tx.To() != nil && *tx.To() == common.BlockSignersBinary && config.IsTIPSigning(header.Number) {
+	to := tx.To()
+	if to != nil && *to == common.BlockSignersBinary && config.IsTIPSigning(header.Number) {
 		return ApplySignTransaction(config, statedb, header, tx, usedGas)
 	}
-	if tx.To() != nil && *tx.To() == common.TradingStateAddrBinary && config.IsTIPXDCXReceiver(header.Number) {
+	if to != nil && *to == common.TradingStateAddrBinary && config.IsTIPXDCXReceiver(header.Number) {
 		return ApplyEmptyTransaction(config, statedb, header, tx, usedGas)
 	}
-	if tx.To() != nil && *tx.To() == common.XDCXLendingAddressBinary && config.IsTIPXDCXReceiver(header.Number) {
+	if to != nil && *to == common.XDCXLendingAddressBinary && config.IsTIPXDCXReceiver(header.Number) {
 		return ApplyEmptyTransaction(config, statedb, header, tx, usedGas)
 	}
 	if tx.IsTradingTransaction() && config.IsTIPXDCXReceiver(header.Number) {
@@ -233,8 +234,8 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	}
 
 	var balanceFee *big.Int
-	if tx.To() != nil {
-		if value, ok := tokensFee[*tx.To()]; ok {
+	if to != nil {
+		if value, ok := tokensFee[*to]; ok {
 			balanceFee = value
 		}
 	}
@@ -441,7 +442,7 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
 	if balanceFee != nil && failed {
-		state.PayFeeWithTRC21TxFail(statedb, msg.From(), *tx.To())
+		state.PayFeeWithTRC21TxFail(statedb, msg.From(), *to)
 	}
 	return receipt, gas, err, balanceFee != nil
 }
