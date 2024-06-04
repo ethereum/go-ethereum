@@ -64,9 +64,9 @@ func newStateBloomWithSize(size uint64) (*stateBloom, error) {
 	return &stateBloom{bloom: bloom}, nil
 }
 
-// NewStateBloomFromDisk loads the state bloom from the given file.
+// newStateBloomFromDisk loads the state bloom from the given file.
 // In this case the assumption is held the bloom filter is complete.
-func NewStateBloomFromDisk(filename string) (*stateBloom, error) {
+func newStateBloomFromDisk(filename string) (*stateBloom, error) {
 	bloom, _, err := bloomfilter.ReadFile(filename)
 	if err != nil {
 		return nil, err

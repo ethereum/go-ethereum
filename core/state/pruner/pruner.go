@@ -372,7 +372,7 @@ func RecoverPruning(datadir string, db ethdb.Database) error {
 	if err != nil {
 		return err // The relevant snapshot(s) might not exist
 	}
-	stateBloom, err := NewStateBloomFromDisk(stateBloomPath)
+	stateBloom, err := newStateBloomFromDisk(stateBloomPath)
 	if err != nil {
 		return err
 	}
