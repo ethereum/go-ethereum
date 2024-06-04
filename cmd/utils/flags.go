@@ -735,6 +735,11 @@ var (
 		Usage: "Gas price below which gpo will ignore transactions",
 		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
 	}
+	GpoCongestionThresholdFlag = cli.IntFlag{
+		Name:  "gpo.congestionthreshold",
+		Usage: "Number of pending transactions to consider the network congested and suggest a minimum tip cap",
+		Value: ethconfig.Defaults.GPO.CongestedThreshold,
+	}
 
 	// Metrics flags
 	MetricsEnabledFlag = cli.BoolFlag{
@@ -1428,6 +1433,9 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
 	}
 	if ctx.GlobalIsSet(GpoIgnoreGasPriceFlag.Name) {
 		cfg.IgnorePrice = big.NewInt(ctx.GlobalInt64(GpoIgnoreGasPriceFlag.Name))
+	}
+	if ctx.GlobalIsSet(GpoCongestionThresholdFlag.Name) {
+		cfg.CongestedThreshold = ctx.GlobalInt(GpoCongestionThresholdFlag.Name)
 	}
 }
 
