@@ -1211,8 +1211,8 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 			}
 			lock.Lock()
 			updates[obj.addrHash] = update
-			lock.Unlock()
 			s.StorageCommits = time.Since(start) // overwrite with the longest storage commit runtime
+			lock.Unlock()
 			return nil
 		})
 	}
