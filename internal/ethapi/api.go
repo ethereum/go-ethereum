@@ -966,7 +966,7 @@ func (s *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.
 // of a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
 // set, message execution will only use the data in the given state. Otherwise
-// if statDiff is set, all diff will be applied first and then execute the call
+// if stateDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
 	Nonce     *hexutil.Uint64              `json:"nonce"`
@@ -1203,7 +1203,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		return 0, err
 	}
 	call := args.ToMessage(header.BaseFee)
-	// Run the gas estimation andwrap any revertals into a custom return
+	// Run the gas estimation and wrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
 	if err != nil {
 		if len(revert) > 0 {
@@ -1524,6 +1524,9 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		prevTracer = logger.NewAccessListTracer(*args.AccessList, args.from(), to, precompiles)
 	}
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, nil, err
+		}
 		// Retrieve the current access list to expand
 		accessList := prevTracer.AccessList()
 		log.Trace("Creating access list", "input", accessList)

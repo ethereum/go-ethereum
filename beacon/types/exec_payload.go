@@ -63,11 +63,9 @@ func convertPayload[T payloadType](payload T, parentRoot *zrntcommon.Root) (*typ
 		panic("unsupported block type")
 	}
 
-	block := types.NewBlockWithHeader(&header)
-	block = block.WithBody(transactions, nil)
-	block = block.WithWithdrawals(withdrawals)
+	block := types.NewBlockWithHeader(&header).WithBody(types.Body{Transactions: transactions, Withdrawals: withdrawals})
 	if hash := block.Hash(); hash != expectedHash {
-		return nil, fmt.Errorf("Sanity check failed, payload hash does not match (expected %x, got %x)", expectedHash, hash)
+		return nil, fmt.Errorf("sanity check failed, payload hash does not match (expected %x, got %x)", expectedHash, hash)
 	}
 	return block, nil
 }

@@ -43,12 +43,11 @@ func TestGeneratePOSChain(t *testing.T) {
 		bb      = common.Address{0xbb}
 		funds   = big.NewInt(0).Mul(big.NewInt(1337), big.NewInt(params.Ether))
 		config  = *params.AllEthashProtocolChanges
-		asm4788 = common.Hex2Bytes("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500")
 		gspec   = &Genesis{
 			Config: &config,
 			Alloc: types.GenesisAlloc{
 				address:                   {Balance: funds},
-				params.BeaconRootsAddress: {Balance: common.Big0, Code: asm4788},
+				params.BeaconRootsAddress: {Code: params.BeaconRootsCode},
 			},
 			BaseFee:    big.NewInt(params.InitialBaseFee),
 			Difficulty: common.Big1,

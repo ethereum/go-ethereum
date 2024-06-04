@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -217,13 +218,19 @@ type extblock struct {
 // NewBlock creates a new block. The input data is copied, changes to header and to the
 // field values will not affect the block.
 //
-// The values of TxHash, UncleHash, ReceiptHash and Bloom in header
-// are ignored and set to values derived from the given txs, uncles
-// and receipts.
-func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, hasher TrieHasher) *Block {
-	b := &Block{header: CopyHeader(header)}
+// The body elements and the receipts are used to recompute and overwrite the
+// relevant portions of the header.
+func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher) *Block {
+	if body == nil {
+		body = &Body{}
+	}
+	var (
+		b           = NewBlockWithHeader(header)
+		txs         = body.Transactions
+		uncles      = body.Uncles
+		withdrawals = body.Withdrawals
+	)
 
-	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
 		b.header.TxHash = EmptyTxsHash
 	} else {
@@ -249,27 +256,18 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 		}
 	}
 
-	return b
-}
-
-// NewBlockWithWithdrawals creates a new block with withdrawals. The input data is copied,
-// changes to header and to the field values will not affect the block.
-//
-// The values of TxHash, UncleHash, ReceiptHash and Bloom in header are ignored and set to
-// values derived from the given txs, uncles and receipts.
-func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt, withdrawals []*Withdrawal, hasher TrieHasher) *Block {
-	b := NewBlock(header, txs, uncles, receipts, hasher)
-
 	if withdrawals == nil {
 		b.header.WithdrawalsHash = nil
 	} else if len(withdrawals) == 0 {
 		b.header.WithdrawalsHash = &EmptyWithdrawalsHash
+		b.withdrawals = Withdrawals{}
 	} else {
-		h := DeriveSha(Withdrawals(withdrawals), hasher)
-		b.header.WithdrawalsHash = &h
+		hash := DeriveSha(Withdrawals(withdrawals), hasher)
+		b.header.WithdrawalsHash = &hash
+		b.withdrawals = slices.Clone(withdrawals)
 	}
 
-	return b.WithWithdrawals(withdrawals)
+	return b
 }
 
 // CopyHeader creates a deep copy of a block header.
@@ -453,31 +451,17 @@ func (b *Block) WithSeal(header *Header) *Block {
 	}
 }
 
-// WithBody returns a copy of the block with the given transaction and uncle contents.
-func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
+// WithBody returns a new block with the original header and a deep copy of the
+// provided body.
+func (b *Block) WithBody(body Body) *Block {
 	block := &Block{
 		header:       b.header,
-		transactions: make([]*Transaction, len(transactions)),
-		uncles:       make([]*Header, len(uncles)),
-		withdrawals:  b.withdrawals,
+		transactions: slices.Clone(body.Transactions),
+		uncles:       make([]*Header, len(body.Uncles)),
+		withdrawals:  slices.Clone(body.Withdrawals),
 	}
-	copy(block.transactions, transactions)
-	for i := range uncles {
-		block.uncles[i] = CopyHeader(uncles[i])
-	}
-	return block
-}
-
-// WithWithdrawals returns a copy of the block containing the given withdrawals.
-func (b *Block) WithWithdrawals(withdrawals []*Withdrawal) *Block {
-	block := &Block{
-		header:       b.header,
-		transactions: b.transactions,
-		uncles:       b.uncles,
-	}
-	if withdrawals != nil {
-		block.withdrawals = make([]*Withdrawal, len(withdrawals))
-		copy(block.withdrawals, withdrawals)
+	for i := range body.Uncles {
+		block.uncles[i] = CopyHeader(body.Uncles[i])
 	}
 	return block
 }

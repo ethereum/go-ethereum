@@ -54,14 +54,6 @@ func initMatcher(st *testMatcher) {
 	// Uses 1GB RAM per tested fork
 	st.skipLoad(`^stStaticCall/static_Call1MB`)
 
-	// These tests fail as of https://github.com/ethereum/go-ethereum/pull/28666, since we
-	// no longer delete "leftover storage" when deploying a contract.
-	st.skipLoad(`^stSStoreTest/InitCollision\.json`)
-	st.skipLoad(`^stRevertTest/RevertInCreateInInit\.json`)
-	st.skipLoad(`^stExtCodeHash/dynamicAccountOverwriteEmpty\.json`)
-	st.skipLoad(`^stCreate2/create2collisionStorage\.json`)
-	st.skipLoad(`^stCreate2/RevertInCreateInInitCreate2\.json`)
-
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)

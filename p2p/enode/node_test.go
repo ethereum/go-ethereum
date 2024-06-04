@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"net/netip"
 	"testing"
 	"testing/quick"
 
@@ -61,6 +62,167 @@ func TestPythonInterop(t *testing.T) {
 		if assert.NoError(t, n.Load(k), desc) {
 			assert.Equal(t, k, v, desc)
 		}
+	}
+}
+
+func TestNodeEndpoints(t *testing.T) {
+	id := HexID("00000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
+	type endpointTest struct {
+		name    string
+		node    *Node
+		wantIP  netip.Addr
+		wantUDP int
+		wantTCP int
+	}
+	tests := []endpointTest{
+		{
+			name: "no-addr",
+			node: func() *Node {
+				var r enr.Record
+				return SignNull(&r, id)
+			}(),
+		},
+		{
+			name: "udp-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.UDP(9000))
+				return SignNull(&r, id)
+			}(),
+		},
+		{
+			name: "tcp-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.TCP(9000))
+				return SignNull(&r, id)
+			}(),
+		},
+		{
+			name: "ipv4-only-loopback",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("127.0.0.1")))
+				return SignNull(&r, id)
+			}(),
+			wantIP: netip.MustParseAddr("127.0.0.1"),
+		},
+		{
+			name: "ipv4-only-unspecified",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("0.0.0.0")))
+				return SignNull(&r, id)
+			}(),
+			wantIP: netip.MustParseAddr("0.0.0.0"),
+		},
+		{
+			name: "ipv4-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")))
+				return SignNull(&r, id)
+			}(),
+			wantIP: netip.MustParseAddr("99.22.33.1"),
+		},
+		{
+			name: "ipv6-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")))
+				return SignNull(&r, id)
+			}(),
+			wantIP: netip.MustParseAddr("2001::ff00:0042:8329"),
+		},
+		{
+			name: "ipv4-loopback-and-ipv6-global",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("127.0.0.1")))
+				r.Set(enr.UDP(30304))
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")))
+				r.Set(enr.UDP6(30306))
+				return SignNull(&r, id)
+			}(),
+			wantIP:  netip.MustParseAddr("2001::ff00:0042:8329"),
+			wantUDP: 30306,
+		},
+		{
+			name: "ipv4-unspecified-and-ipv6-loopback",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("0.0.0.0")))
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("::1")))
+				return SignNull(&r, id)
+			}(),
+			wantIP: netip.MustParseAddr("::1"),
+		},
+		{
+			name: "ipv4-private-and-ipv6-global",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("192.168.2.2")))
+				r.Set(enr.UDP(30304))
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")))
+				r.Set(enr.UDP6(30306))
+				return SignNull(&r, id)
+			}(),
+			wantIP:  netip.MustParseAddr("2001::ff00:0042:8329"),
+			wantUDP: 30306,
+		},
+		{
+			name: "ipv4-local-and-ipv6-global",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("169.254.2.6")))
+				r.Set(enr.UDP(30304))
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")))
+				r.Set(enr.UDP6(30306))
+				return SignNull(&r, id)
+			}(),
+			wantIP:  netip.MustParseAddr("2001::ff00:0042:8329"),
+			wantUDP: 30306,
+		},
+		{
+			name: "ipv4-private-and-ipv6-private",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("192.168.2.2")))
+				r.Set(enr.UDP(30304))
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("fd00::abcd:1")))
+				r.Set(enr.UDP6(30306))
+				return SignNull(&r, id)
+			}(),
+			wantIP:  netip.MustParseAddr("192.168.2.2"),
+			wantUDP: 30304,
+		},
+		{
+			name: "ipv4-private-and-ipv6-link-local",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.IPv4Addr(netip.MustParseAddr("192.168.2.2")))
+				r.Set(enr.UDP(30304))
+				r.Set(enr.IPv6Addr(netip.MustParseAddr("fe80::1")))
+				r.Set(enr.UDP6(30306))
+				return SignNull(&r, id)
+			}(),
+			wantIP:  netip.MustParseAddr("192.168.2.2"),
+			wantUDP: 30304,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.wantIP != test.node.IPAddr() {
+				t.Errorf("node has wrong IP %v, want %v", test.node.IPAddr(), test.wantIP)
+			}
+			if test.wantUDP != test.node.UDP() {
+				t.Errorf("node has wrong UDP port %d, want %d", test.node.UDP(), test.wantUDP)
+			}
+			if test.wantTCP != test.node.TCP() {
+				t.Errorf("node has wrong TCP port %d, want %d", test.node.TCP(), test.wantTCP)
+			}
+		})
 	}
 }
 

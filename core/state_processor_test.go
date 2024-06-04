@@ -417,10 +417,11 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		header.ParentBeaconRoot = &beaconRoot
 	}
 	// Assemble and return the final block for sealing
+	body := &types.Body{Transactions: txs}
 	if config.IsShanghai(header.Number, header.Time) {
-		return types.NewBlockWithWithdrawals(header, txs, nil, receipts, []*types.Withdrawal{}, trie.NewStackTrie(nil))
+		body.Withdrawals = []*types.Withdrawal{}
 	}
-	return types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 }
 
 var (
@@ -481,7 +482,7 @@ func TestProcessVerkle(t *testing.T) {
 	txCost1 := params.TxGas
 	txCost2 := params.TxGas
 	contractCreationCost := intrinsicContractCreationGas + uint64(2039 /* execution costs */)
-	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(293644 /* execution costs */)
+	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(57444 /* execution costs */)
 	blockGasUsagesExpected := []uint64{
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
