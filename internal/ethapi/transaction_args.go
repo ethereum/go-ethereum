@@ -79,13 +79,13 @@ type TransactionArgs struct {
 	Sender        *common.Address `json:"sender"`
 	Signature     *hexutil.Bytes
 	Paymaster     *common.Address `json:"paymaster,omitempty"`
-	PaymasterData *hexutil.Bytes  `json:"paymasterData"`
-	Deployer      *common.Address `json:"deployer,omitempty"`
-	DeployerData  *hexutil.Bytes
+	PaymasterData *hexutil.Bytes  `json:"paymasterData,omitempty"`
+	Deployer      *common.Address `json:"factory,omitempty"`
+	DeployerData  *hexutil.Bytes  `json:"factoryData,omitempty"`
 	BuilderFee    *hexutil.Big
-	ValidationGas *hexutil.Uint64
-	PaymasterGas  *hexutil.Uint64
-	PostOpGas     *hexutil.Uint64
+	ValidationGas *hexutil.Uint64 `json:"verificationGasLimit"`
+	PaymasterGas  *hexutil.Uint64 `json:"paymasterVerificationGasLimit"`
+	PostOpGas     *hexutil.Uint64 `json:"paymasterPostOpGasLimit"`
 }
 
 // from retrieves the transaction sender address.
