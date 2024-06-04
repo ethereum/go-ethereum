@@ -24,10 +24,8 @@ func TestValidation_OOG(t *testing.T) {
 }
 
 func TestValidation_ok(t *testing.T) {
-	magic := big.NewInt(0xbf45c166)
-	magic.Lsh(magic, 256-32)
 
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnData(magic.Bytes()), 0), types.Rip7560AccountAbstractionTx{
+	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
 	}, "")

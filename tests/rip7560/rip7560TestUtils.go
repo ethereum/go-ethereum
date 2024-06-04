@@ -109,6 +109,14 @@ func returnData(data []byte) []byte {
 	return ret
 }
 
+// create bytecode for account
+func createAccountCode() []byte {
+	magic := big.NewInt(0xbf45c166)
+	magic.Lsh(magic, 256-32)
+
+	return returnData(magic.Bytes())
+}
+
 // create EVM code from OpCode, byte and []bytes
 func createCode(items ...interface{}) []byte {
 	var buffer bytes.Buffer
