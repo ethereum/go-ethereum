@@ -1209,7 +1209,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	call := args.ToMessage(header.BaseFee)
 
-  	// Run the gas estimation and wrap any revertals into a custom return
+	// Run the gas estimation and wrap any revertals into a custom return
 	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
 	if err != nil {
 		if len(revert) > 0 {
