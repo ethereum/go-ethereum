@@ -16,6 +16,21 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: 1.21.4
+
+      - name: Cache Go modules
+        id: cache-go-mod
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+    
+      - name: Install dependencies
+        run: go mod download
+
       - name: Run tests
         run: go test -short ./...
         env:
