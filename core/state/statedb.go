@@ -219,7 +219,7 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 		// the prefetcher is constructed. For more details, see:
 		// https://github.com/ethereum/go-ethereum/issues/29880
 		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, nil); err != nil {
-			log.Error("Failed to prefetch account trie", "root", s.originalRoot.String(), "err", err)
+			log.Error("Failed to prefetch account trie", "root", s.originalRoot, "err", err)
 		}
 	}
 }
