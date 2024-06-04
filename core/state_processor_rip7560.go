@@ -114,10 +114,11 @@ func BuyGasRip7560Transaction(st *types.Rip7560AccountAbstractionTx, state vm.St
 }
 
 func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, cfg vm.Config) (*ValidationPhaseResult, error) {
-	stubMsg := prepareStubMessage(tx, chainConfig)
 	blockContext := NewEVMBlockContext(header, bc, author)
-	txContext := NewEVMTxContext(stubMsg)
-	txContext.Origin = *tx.Rip7560TransactionData().Sender
+	txContext := vm.TxContext{
+		Origin:   *tx.Rip7560TransactionData().Sender,
+		GasPrice: tx.GasFeeCap(),
+	}
 	evm := vm.NewEVM(blockContext, txContext, statedb, chainConfig, cfg)
 	/*** Deployer Frame ***/
 	deployerMsg := prepareDeployerMessage(tx, chainConfig)
@@ -265,20 +266,6 @@ func ApplyRip7560ExecutionPhase(config *params.ChainConfig, vpr *ValidationPhase
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
 	return receipt, err
-}
-func prepareStubMessage(baseTx *types.Transaction, chainConfig *params.ChainConfig) *Message {
-	tx := baseTx.Rip7560TransactionData()
-	return &Message{
-		From:              chainConfig.EntryPointAddress,
-		Value:             big.NewInt(0),
-		GasLimit:          100000,
-		GasPrice:          tx.GasFeeCap,
-		GasFeeCap:         tx.GasFeeCap,
-		GasTipCap:         tx.GasTipCap,
-		AccessList:        make(types.AccessList, 0),
-		SkipAccountChecks: true,
-		IsRip7560Frame:    true,
-	}
 }
 
 func prepareDeployerMessage(baseTx *types.Transaction, config *params.ChainConfig) *Message {
