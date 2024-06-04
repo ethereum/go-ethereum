@@ -32,6 +32,8 @@
       to: /docs/fundamentals/peer-to-peer
     - id: Pruning
       to: /docs/fundamentals/pruning
+    - id: Private networks via Kurtosis
+      to: /docs/fundamentals/kurtosis
     - id: Private networks
       to: /docs/fundamentals/private-network
     - id: Config files

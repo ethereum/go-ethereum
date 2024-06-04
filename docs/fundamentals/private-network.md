@@ -3,6 +3,9 @@ title: Private Networks
 description: Tutorial on setting up private Ethereum networks
 ---
 
+> ⚠️
+> **This article is outdated. By now geth is not able to seal Ethash or Clique blocks. It only works in PoS mode and in concert with a consensus client. It is recommended to read [Private network via Kurtosis](/docs/fundamentals/kurtosis) instead.**
+
 This guide explains how to set up a private network of multiple Geth nodes. An Ethereum network is private if the nodes are not connected to the main network. In this context private only means reserved or isolated, rather than protected or secure. A fully controlled, private Ethereum network is useful as a backend for core developers working on issues relating to networking/blockchain syncing etc. Private networks are also useful for Dapp developers testing multi-block and multi-user scenarios.
 
 ## Prerequisites {#prerequisites}
