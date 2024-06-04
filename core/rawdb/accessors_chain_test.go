@@ -819,7 +819,7 @@ func TestDeriveLogFields(t *testing.T) {
 	// Derive log metadata fields
 	number := big.NewInt(1)
 	hash := common.BytesToHash([]byte{0x03, 0x14})
-	types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, number.Uint64(), uint64(time.Now().Unix()), big.NewInt(0), big.NewInt(0), txs)
+	types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, number.Uint64(), 0, big.NewInt(0), big.NewInt(0), txs)
 
 	// Iterate over all the computed fields and check that they're correct
 	logIndex := uint(0)
