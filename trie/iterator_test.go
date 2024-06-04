@@ -182,14 +182,14 @@ func testNodeIteratorCoverage(t *testing.T, scheme string) {
 type kvs struct{ k, v string }
 
 var testdata1 = []kvs{
+	{"bar", "b"},
 	{"barb", "ba"},
 	{"bard", "bc"},
 	{"bars", "bb"},
-	{"bar", "b"},
 	{"fab", "z"},
+	{"foo", "a"},
 	{"food", "ab"},
 	{"foos", "aa"},
-	{"foo", "a"},
 }
 
 var testdata2 = []kvs{
@@ -218,13 +218,19 @@ func TestIteratorSeek(t *testing.T) {
 
 	// Seek to a non-existent key.
 	it = NewIterator(trie.MustNodeIterator([]byte("barc")))
-	if err := checkIteratorOrder(testdata1[1:], it); err != nil {
+	if err := checkIteratorOrder(testdata1[2:], it); err != nil {
 		t.Fatal(err)
 	}
 
 	// Seek beyond the end.
 	it = NewIterator(trie.MustNodeIterator([]byte("z")))
 	if err := checkIteratorOrder(nil, it); err != nil {
+		t.Fatal(err)
+	}
+
+	// Seek to a key for which a prefixing key exists.
+	it = NewIterator(trie.MustNodeIterator([]byte("food")))
+	if err := checkIteratorOrder(testdata1[6:], it); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -311,16 +317,16 @@ func TestUnionIterator(t *testing.T) {
 
 	all := []struct{ k, v string }{
 		{"aardvark", "c"},
+		{"bar", "b"},
 		{"barb", "ba"},
 		{"barb", "bd"},
 		{"bard", "bc"},
 		{"bars", "bb"},
 		{"bars", "be"},
-		{"bar", "b"},
 		{"fab", "z"},
+		{"foo", "a"},
 		{"food", "ab"},
 		{"foos", "aa"},
-		{"foo", "a"},
 		{"jars", "d"},
 	}
 
@@ -512,7 +518,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool, scheme strin
 		rawdb.WriteTrieNode(diskdb, common.Hash{}, barNodePath, barNodeHash, barNodeBlob, triedb.Scheme())
 	}
 	// Check that iteration produces the right set of values.
-	if err := checkIteratorOrder(testdata1[2:], NewIterator(it)); err != nil {
+	if err := checkIteratorOrder(testdata1[3:], NewIterator(it)); err != nil {
 		t.Fatal(err)
 	}
 }
