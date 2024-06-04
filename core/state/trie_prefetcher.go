@@ -72,7 +72,7 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 	}
 }
 
-// terminate iterates over all the subfetchers and issues a terminateion request
+// terminate iterates over all the subfetchers and issues a termination request
 // to all of them. Depending on the async parameter, the method will either block
 // until all subfetchers spin down, or return immediately.
 func (p *triePrefetcher) terminate(async bool) {
@@ -145,16 +145,16 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 // trie returns the trie matching the root hash, blocking until the fetcher of
 // the given trie terminates. If no fetcher exists for the request, nil will be
 // returned.
-func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) (Trie, error) {
+func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 	// Bail if no trie was prefetched for this root
 	fetcher := p.fetchers[p.trieID(owner, root)]
 	if fetcher == nil {
 		log.Error("Prefetcher missed to load trie", "owner", owner, "root", root)
 		p.deliveryMissMeter.Mark(1)
-		return nil, nil
+		return nil
 	}
 	// Subfetcher exists, retrieve its trie
-	return fetcher.peek(), nil
+	return fetcher.peek()
 }
 
 // used marks a batch of state items used to allow creating statistics as to
@@ -234,7 +234,7 @@ func (sf *subfetcher) schedule(keys [][]byte) error {
 	case sf.wake <- struct{}{}:
 		// Wake signal sent
 	default:
-		// Wake signal not sent as a previous is already queued
+		// Wake signal not sent as a previous one is already queued
 	}
 	return nil
 }
@@ -250,7 +250,7 @@ func (sf *subfetcher) wait() {
 // peeks for the original data. The method will block until all the scheduled
 // data has been loaded and the fethcer terminated.
 func (sf *subfetcher) peek() Trie {
-	// Block until the fertcher terminates, then retrieve the trie
+	// Block until the fetcher terminates, then retrieve the trie
 	sf.wait()
 	return sf.trie
 }
@@ -296,7 +296,7 @@ func (sf *subfetcher) loop() {
 	for {
 		select {
 		case <-sf.wake:
-			// Execute all remaining tasks in single run
+			// Execute all remaining tasks in a single run
 			sf.lock.Lock()
 			tasks := sf.tasks
 			sf.tasks = nil

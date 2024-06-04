@@ -19,7 +19,7 @@ package discover
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"net"
+	"net/netip"
 	"slices"
 	"testing"
 
@@ -40,7 +40,7 @@ func TestUDPv4_Lookup(t *testing.T) {
 	}
 
 	// Seed table with initial node.
-	fillTable(test.table, []*node{wrapNode(lookupTestnet.node(256, 0))}, true)
+	fillTable(test.table, []*enode.Node{lookupTestnet.node(256, 0)}, true)
 
 	// Start the lookup.
 	resultC := make(chan []*enode.Node, 1)
@@ -70,9 +70,9 @@ func TestUDPv4_LookupIterator(t *testing.T) {
 	defer test.close()
 
 	// Seed table with initial nodes.
-	bootnodes := make([]*node, len(lookupTestnet.dists[256]))
+	bootnodes := make([]*enode.Node, len(lookupTestnet.dists[256]))
 	for i := range lookupTestnet.dists[256] {
-		bootnodes[i] = wrapNode(lookupTestnet.node(256, i))
+		bootnodes[i] = lookupTestnet.node(256, i)
 	}
 	fillTable(test.table, bootnodes, true)
 	go serveTestnet(test, lookupTestnet)
@@ -105,9 +105,9 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 	defer test.close()
 
 	// Seed table with initial nodes.
-	bootnodes := make([]*node, len(lookupTestnet.dists[256]))
+	bootnodes := make([]*enode.Node, len(lookupTestnet.dists[256]))
 	for i := range lookupTestnet.dists[256] {
-		bootnodes[i] = wrapNode(lookupTestnet.node(256, i))
+		bootnodes[i] = lookupTestnet.node(256, i)
 	}
 	fillTable(test.table, bootnodes, true)
 	go serveTestnet(test, lookupTestnet)
@@ -136,7 +136,7 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 
 func serveTestnet(test *udpTest, testnet *preminedTestnet) {
 	for done := false; !done; {
-		done = test.waitPacketOut(func(p v4wire.Packet, to *net.UDPAddr, hash []byte) {
+		done = test.waitPacketOut(func(p v4wire.Packet, to netip.AddrPort, hash []byte) {
 			n, key := testnet.nodeByAddr(to)
 			switch p.(type) {
 			case *v4wire.Ping:
@@ -158,10 +158,10 @@ func checkLookupResults(t *testing.T, tn *preminedTestnet, results []*enode.Node
 	for _, e := range results {
 		t.Logf("  ld=%d, %x", enode.LogDist(tn.target.id(), e.ID()), e.ID().Bytes())
 	}
-	if hasDuplicates(wrapNodes(results)) {
+	if hasDuplicates(results) {
 		t.Errorf("result set contains duplicate entries")
 	}
-	if !sortedByDistanceTo(tn.target.id(), wrapNodes(results)) {
+	if !sortedByDistanceTo(tn.target.id(), results) {
 		t.Errorf("result set not sorted by distance to target")
 	}
 	wantNodes := tn.closest(len(results))
@@ -264,9 +264,10 @@ func (tn *preminedTestnet) node(dist, index int) *enode.Node {
 	return n
 }
 
-func (tn *preminedTestnet) nodeByAddr(addr *net.UDPAddr) (*enode.Node, *ecdsa.PrivateKey) {
-	dist := int(addr.IP[1])<<8 + int(addr.IP[2])
-	index := int(addr.IP[3])
+func (tn *preminedTestnet) nodeByAddr(addr netip.AddrPort) (*enode.Node, *ecdsa.PrivateKey) {
+	ip := addr.Addr().As4()
+	dist := int(ip[1])<<8 + int(ip[2])
+	index := int(ip[3])
 	key := tn.dists[dist][index]
 	return tn.node(dist, index), key
 }
@@ -274,7 +275,7 @@ func (tn *preminedTestnet) nodeByAddr(addr *net.UDPAddr) (*enode.Node, *ecdsa.Pr
 func (tn *preminedTestnet) nodesAtDistance(dist int) []v4wire.Node {
 	result := make([]v4wire.Node, len(tn.dists[dist]))
 	for i := range result {
-		result[i] = nodeToRPC(wrapNode(tn.node(dist, i)))
+		result[i] = nodeToRPC(tn.node(dist, i))
 	}
 	return result
 }
