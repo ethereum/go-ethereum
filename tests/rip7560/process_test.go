@@ -98,7 +98,8 @@ func runProcess(t *testContext, aatxs []*types.Rip7560AccountAbstractionTx) erro
 	}
 	txs = append(txs, tx3)
 
-	b := types.NewBlock(blockchain.CurrentBlock(), txs, nil, nil, trie.NewStackTrie(nil))
+	body := types.Body{Transactions: txs}
+	b := types.NewBlock(blockchain.CurrentBlock(), &body, nil, trie.NewStackTrie(nil))
 	_, _, _, err = blockchain.Processor().Process(b, state.StateDB, vm.Config{})
 	if err != nil {
 		return err
