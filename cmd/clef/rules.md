@@ -83,7 +83,7 @@ Some security precautions can be made, such as:
 
 * Never load `ruleset.js` unless the file is `readonly` (`r-??-??-?`). If the user wishes to modify the ruleset, he must make it writeable and then set back to readonly.
   * This is to prevent attacks where files are dropped on the users disk.
-* Since we're going to have to have some form of secure storage (not defined in this section), we could also store the `sha3` of the `ruleset.js` file in there.
+* Since we're going to have some form of secure storage (not defined in this section), we could also store the `sha3` of the `ruleset.js` file in there.
   * If the user wishes to modify the ruleset, he'd then have to perform e.g. `signer --attest /path/to/ruleset --credential <creds>`
 
 ##### Security of implementation
