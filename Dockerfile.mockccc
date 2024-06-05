@@ -21,6 +21,8 @@ RUN wget -O $SCROLL_LIB_PATH/libscroll_zstd.so https://github.com/scroll-tech/da
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SCROLL_LIB_PATH
 ENV CGO_LDFLAGS="-L$SCROLL_LIB_PATH -Wl,-rpath,$SCROLL_LIB_PATH"
 
+RUN cd /go-ethereum && env GO111MODULE=on go run build/ci.go install ./cmd/geth
+
 # Pull Geth into a second stage deploy alpine container
 FROM ubuntu:20.04
 
