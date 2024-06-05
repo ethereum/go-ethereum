@@ -39,10 +39,7 @@ type testContextBuilder struct {
 
 func newTestContextBuilder(t *testing.T) *testContextBuilder {
 	genesisAlloc := types.GenesisAlloc{}
-
 	chainConfig := params.AllDevChainProtocolChanges
-	// probably bug in geth..
-	chainConfig.PragueTime = chainConfig.CancunTime
 
 	return &testContextBuilder{
 		t:            t,
@@ -53,9 +50,11 @@ func newTestContextBuilder(t *testing.T) *testContextBuilder {
 
 func (tb *testContextBuilder) build() *testContext {
 	genesis := &core.Genesis{
-		Config: params.AllDevChainProtocolChanges,
-		Alloc:  tb.genesisAlloc,
+		Config:     tb.chainConfig,
+		Alloc:      tb.genesisAlloc,
+		Difficulty: big.NewInt(0),
 	}
+	genesis = core.DeveloperGenesisBlock(10_000_000, &common.Address{})
 	genesisBlock := genesis.ToBlock()
 	gaspool := new(core.GasPool).AddGas(genesisBlock.GasLimit())
 
