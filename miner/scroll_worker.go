@@ -521,7 +521,7 @@ func (w *worker) startNewPipeline(timestamp int64) {
 	if !w.isRunning() {
 		pipelineCCC = nil
 	}
-	w.currentPipeline = pipeline.NewPipeline(w.chain, w.chain.GetVMConfig(), parentState, header, nextL1MsgIndex, pipelineCCC).WithBeforeTxHook(w.beforeTxHook)
+	w.currentPipeline = pipeline.NewPipeline(w.chain, *w.chain.GetVMConfig(), parentState, header, nextL1MsgIndex, pipelineCCC).WithBeforeTxHook(w.beforeTxHook)
 
 	deadline := time.Unix(int64(header.Time), 0)
 	if w.chainConfig.Clique != nil && w.chainConfig.Clique.RelaxedPeriod {

@@ -47,7 +47,7 @@ var (
 
 type Pipeline struct {
 	chain    *core.BlockChain
-	vmConfig *vm.Config
+	vmConfig vm.Config
 	parent   *types.Block
 	start    time.Time
 
@@ -73,13 +73,16 @@ type Pipeline struct {
 
 func NewPipeline(
 	chain *core.BlockChain,
-	vmConfig *vm.Config,
+	vmConfig vm.Config,
 	state *state.StateDB,
 
 	header *types.Header,
 	nextL1MsgIndex uint64,
 	ccc *circuitcapacitychecker.CircuitCapacityChecker,
 ) *Pipeline {
+	// make sure we are not sharing a tracer with the caller and not in debug mode
+	vmConfig.Tracer = nil
+	vmConfig.Debug = false
 	return &Pipeline{
 		chain:          chain,
 		vmConfig:       vmConfig,
@@ -417,7 +420,7 @@ func (p *Pipeline) traceAndApply(tx *types.Transaction) (*types.Receipt, *types.
 
 	var receipt *types.Receipt
 	receipt, err = core.ApplyTransaction(p.chain.Config(), p.chain, nil /* coinbase will default to chainConfig.Scroll.FeeVaultAddress */, p.gasPool,
-		p.state, &p.Header, tx, &p.Header.GasUsed, *p.vmConfig)
+		p.state, &p.Header, tx, &p.Header.GasUsed, p.vmConfig)
 	if err != nil {
 		p.state.RevertToSnapshot(snap)
 		return nil, trace, err
