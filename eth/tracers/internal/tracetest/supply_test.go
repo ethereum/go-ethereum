@@ -398,7 +398,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 }
 
 // Tests selfdestructing contract to send its balance to itself (burn).
-// It tests both cases of selfdestructing succeding and being reverted.
+// It tests both cases of selfdestructing succeeding and being reverted.
 //   - Contract A calls B and D.
 //   - Contract B selfdestructs and sends the eth1 to itself (Burn amount to be counted).
 //   - Contract C selfdestructs and sends the eth1 to itself.
