@@ -107,7 +107,7 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 				log.Error("Failed to parse TAIKO_MIN_TIP", "err", err)
 			} else {
 				if tx.GasTipCapIntCmp(new(big.Int).SetUint64(uint64(minTip))) < 0 {
-					return fmt.Errorf("max fee per gas is less than %d Gwei", minTip)
+					return fmt.Errorf("max fee per gas is less than %d wei", minTip)
 				}
 			}
 		} else {
