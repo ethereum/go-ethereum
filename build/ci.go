@@ -232,6 +232,9 @@ func doInstall(cmdline []string) {
 	// Show packages during build.
 	gobuild.Args = append(gobuild.Args, "-v")
 
+	// Add -ldl flags for libscroll_zstd.a.
+	gobuild.Args = append(gobuild.Args, "-ldflags", "-extldflags -ldl")
+
 	// Now we choose what we're even building.
 	// Default: collect all 'main' packages in cmd/ and build those.
 	packages := flag.Args()
