@@ -25,7 +25,7 @@ package discover
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/netip"
 	"slices"
 	"sync"
 	"time"
@@ -207,8 +207,8 @@ func (tab *Table) setFallbackNodes(nodes []*enode.Node) error {
 		if err := n.ValidateComplete(); err != nil {
 			return fmt.Errorf("bad bootstrap node %q: %v", n, err)
 		}
-		if tab.cfg.NetRestrict != nil && !tab.cfg.NetRestrict.Contains(n.IP()) {
-			tab.log.Error("Bootstrap node filtered by netrestrict", "id", n.ID(), "ip", n.IP())
+		if tab.cfg.NetRestrict != nil && !tab.cfg.NetRestrict.ContainsAddr(n.IPAddr()) {
+			tab.log.Error("Bootstrap node filtered by netrestrict", "id", n.ID(), "ip", n.IPAddr())
 			continue
 		}
 		nursery = append(nursery, n)
@@ -448,7 +448,7 @@ func (tab *Table) loadSeedNodes() {
 	for i := range seeds {
 		seed := seeds[i]
 		if tab.log.Enabled(context.Background(), log.LevelTrace) {
-			age := time.Since(tab.db.LastPongReceived(seed.ID(), seed.IP()))
+			age := time.Since(tab.db.LastPongReceived(seed.ID(), seed.IPAddr()))
 			addr, _ := seed.UDPEndpoint()
 			tab.log.Trace("Found seed node in database", "id", seed.ID(), "addr", addr, "age", age)
 		}
@@ -474,31 +474,31 @@ func (tab *Table) bucketAtDistance(d int) *bucket {
 	return tab.buckets[d-bucketMinDistance-1]
 }
 
-func (tab *Table) addIP(b *bucket, ip net.IP) bool {
-	if len(ip) == 0 {
+func (tab *Table) addIP(b *bucket, ip netip.Addr) bool {
+	if !ip.IsValid() || ip.IsUnspecified() {
 		return false // Nodes without IP cannot be added.
 	}
-	if netutil.IsLAN(ip) {
+	if netutil.AddrIsLAN(ip) {
 		return true
 	}
-	if !tab.ips.Add(ip) {
+	if !tab.ips.AddAddr(ip) {
 		tab.log.Debug("IP exceeds table limit", "ip", ip)
 		return false
 	}
-	if !b.ips.Add(ip) {
+	if !b.ips.AddAddr(ip) {
 		tab.log.Debug("IP exceeds bucket limit", "ip", ip)
-		tab.ips.Remove(ip)
+		tab.ips.RemoveAddr(ip)
 		return false
 	}
 	return true
 }
 
-func (tab *Table) removeIP(b *bucket, ip net.IP) {
-	if netutil.IsLAN(ip) {
+func (tab *Table) removeIP(b *bucket, ip netip.Addr) {
+	if netutil.AddrIsLAN(ip) {
 		return
 	}
-	tab.ips.Remove(ip)
-	b.ips.Remove(ip)
+	tab.ips.RemoveAddr(ip)
+	b.ips.RemoveAddr(ip)
 }
 
 // handleAddNode adds the node in the request to the table, if there is space.
@@ -524,7 +524,7 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 		tab.addReplacement(b, req.node)
 		return false
 	}
-	if !tab.addIP(b, req.node.IP()) {
+	if !tab.addIP(b, req.node.IPAddr()) {
 		// Can't add: IP limit reached.
 		return false
 	}
@@ -547,7 +547,7 @@ func (tab *Table) addReplacement(b *bucket, n *enode.Node) {
 		// TODO: update ENR
 		return
 	}
-	if !tab.addIP(b, n.IP()) {
+	if !tab.addIP(b, n.IPAddr()) {
 		return
 	}
 
@@ -555,7 +555,7 @@ func (tab *Table) addReplacement(b *bucket, n *enode.Node) {
 	var removed *tableNode
 	b.replacements, removed = pushNode(b.replacements, wn, maxReplacements)
 	if removed != nil {
-		tab.removeIP(b, removed.IP())
+		tab.removeIP(b, removed.IPAddr())
 	}
 }
 
@@ -595,12 +595,12 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *tableNode {
 	// Remove the node.
 	n := b.entries[index]
 	b.entries = slices.Delete(b.entries, index, index+1)
-	tab.removeIP(b, n.IP())
+	tab.removeIP(b, n.IPAddr())
 	tab.nodeRemoved(b, n)
 
 	// Add replacement.
 	if len(b.replacements) == 0 {
-		tab.log.Debug("Removed dead node", "b", b.index, "id", n.ID(), "ip", n.IP())
+		tab.log.Debug("Removed dead node", "b", b.index, "id", n.ID(), "ip", n.IPAddr())
 		return nil
 	}
 	rindex := tab.rand.Intn(len(b.replacements))
@@ -608,7 +608,7 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *tableNode {
 	b.replacements = slices.Delete(b.replacements, rindex, rindex+1)
 	b.entries = append(b.entries, rep)
 	tab.nodeAdded(b, rep)
-	tab.log.Debug("Replaced dead node", "b", b.index, "id", n.ID(), "ip", n.IP(), "r", rep.ID(), "rip", rep.IP())
+	tab.log.Debug("Replaced dead node", "b", b.index, "id", n.ID(), "ip", n.IPAddr(), "r", rep.ID(), "rip", rep.IPAddr())
 	return rep
 }
 
@@ -635,10 +635,10 @@ func (tab *Table) bumpInBucket(b *bucket, newRecord *enode.Node, isInbound bool)
 	ipchanged := newRecord.IPAddr() != n.IPAddr()
 	portchanged := newRecord.UDP() != n.UDP()
 	if ipchanged {
-		tab.removeIP(b, n.IP())
-		if !tab.addIP(b, newRecord.IP()) {
+		tab.removeIP(b, n.IPAddr())
+		if !tab.addIP(b, newRecord.IPAddr()) {
 			// It doesn't fit with the limit, put the previous record back.
-			tab.addIP(b, n.IP())
+			tab.addIP(b, n.IPAddr())
 			return n, false
 		}
 	}
@@ -657,11 +657,11 @@ func (tab *Table) handleTrackRequest(op trackRequestOp) {
 	var fails int
 	if op.success {
 		// Reset failure counter because it counts _consecutive_ failures.
-		tab.db.UpdateFindFails(op.node.ID(), op.node.IP(), 0)
+		tab.db.UpdateFindFails(op.node.ID(), op.node.IPAddr(), 0)
 	} else {
-		fails = tab.db.FindFails(op.node.ID(), op.node.IP())
+		fails = tab.db.FindFails(op.node.ID(), op.node.IPAddr())
 		fails++
-		tab.db.UpdateFindFails(op.node.ID(), op.node.IP(), fails)
+		tab.db.UpdateFindFails(op.node.ID(), op.node.IPAddr(), fails)
 	}
 
 	tab.mutex.Lock()
