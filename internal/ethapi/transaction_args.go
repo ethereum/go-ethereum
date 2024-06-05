@@ -80,8 +80,8 @@ type TransactionArgs struct {
 	Signature     *hexutil.Bytes
 	Paymaster     *common.Address `json:"paymaster,omitempty"`
 	PaymasterData *hexutil.Bytes  `json:"paymasterData,omitempty"`
-	Deployer      *common.Address `json:"factory,omitempty"`
-	DeployerData  *hexutil.Bytes  `json:"factoryData,omitempty"`
+	Deployer      *common.Address `json:"deployer,omitempty"`
+	DeployerData  *hexutil.Bytes  `json:"deployerData,omitempty"`
 	BuilderFee    *hexutil.Big
 	ValidationGas *hexutil.Uint64 `json:"verificationGasLimit"`
 	PaymasterGas  *hexutil.Uint64 `json:"paymasterVerificationGasLimit"`

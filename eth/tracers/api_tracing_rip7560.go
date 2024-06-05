@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -49,14 +50,14 @@ func (api *Rip7560API) TraceRip7560Validation(
 		return nil, err
 	}
 	var (
-		msg         = args.ToMessage(vmctx.BaseFee)
+		//msg         = args.ToMessage(vmctx.BaseFee)
 		tx          = args.ToTransaction()
 		traceConfig *TraceConfig
 	)
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}
-	traceResult, err := api.traceTx(ctx, tx, msg, new(Context), vmctx, statedb, traceConfig)
+	traceResult, err := api.traceTx(ctx, tx, new(Context), block, vmctx, statedb, traceConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -86,12 +87,12 @@ func (api *Rip7560API) chainContext(ctx context.Context) core.ChainContext {
 	return ethapi.NewChainContext(ctx, api.backend)
 }
 
-func (api *Rip7560API) traceTx(ctx context.Context, tx *types.Transaction, message *core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
+func (api *Rip7560API) traceTx(ctx context.Context, tx *types.Transaction, txctx *Context, block *types.Block, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	var (
 		tracer  *Tracer
 		err     error
 		timeout = defaultTraceTimeout
-		usedGas uint64
+		//usedGas uint64
 	)
 	if config == nil {
 		config = &TraceConfig{}
@@ -132,8 +133,15 @@ func (api *Rip7560API) traceTx(ctx context.Context, tx *types.Transaction, messa
 
 	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-	message.IsRip7560Frame = true
-	_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, vmenv)
+	gp := new(core.GasPool).AddGas(10000000)
+
+	// TODO: this is added to allow our bundler checking the 'TraceValidation' API is supported on Geth
+	if tx.Rip7560TransactionData().Sender.Cmp(common.HexToAddress("0x0000000000000000000000000000000000000000")) == 0 {
+		return tracer.GetResult()
+	}
+
+	_, err = core.ApplyRip7560ValidationPhases(api.backend.ChainConfig(), api.chainContext(ctx), nil, gp, statedb, block.Header(), tx, vmenv.Config)
+	//_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, vmenv)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
