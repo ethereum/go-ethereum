@@ -383,13 +383,42 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil,
-		ScrollConfig{
+	AllEthashProtocolChanges = &ChainConfig{
+		ChainID:                 big.NewInt(1337),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(0),
+		EIP150Hash:              common.Hash{},
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		ArchimedesBlock:         big.NewInt(0),
+		ShanghaiBlock:           big.NewInt(0),
+		BernoulliBlock:          big.NewInt(0),
+		CurieBlock:              big.NewInt(0),
+		DescartesBlock:          big.NewInt(0),
+		TerminalTotalDifficulty: nil,
+		Ethash:                  new(EthashConfig),
+		Clique:                  nil,
+		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           nil,
 			MaxTxPerBlock:             nil,
 			MaxTxPayloadBytesPerBlock: nil,
-			L1Config:                  &L1Config{5, common.HexToAddress("0x0000000000000000000000000000000000000000"), 0, common.HexToAddress("0x0000000000000000000000000000000000000000")},
+			L1Config: &L1Config{
+				L1ChainId:             5,
+				L1MessageQueueAddress: common.HexToAddress("0x0000000000000000000000000000000000000000"),
+				NumL1MessagesPerBlock: 0,
+				ScrollChainAddress:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			},
 		}}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
@@ -397,32 +426,119 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000},
-		ScrollConfig{
+	AllCliqueProtocolChanges = &ChainConfig{
+		ChainID:                 big.NewInt(1337),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(0),
+		EIP150Hash:              common.Hash{},
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		ArchimedesBlock:         big.NewInt(0),
+		ShanghaiBlock:           big.NewInt(0),
+		BernoulliBlock:          big.NewInt(0),
+		CurieBlock:              big.NewInt(0),
+		DescartesBlock:          big.NewInt(0),
+		TerminalTotalDifficulty: nil,
+		Ethash:                  nil,
+		Clique:                  &CliqueConfig{Period: 0, Epoch: 30000},
+		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           nil,
 			MaxTxPerBlock:             nil,
 			MaxTxPayloadBytesPerBlock: nil,
-			L1Config:                  &L1Config{5, common.HexToAddress("0x0000000000000000000000000000000000000000"), 0, common.HexToAddress("0x0000000000000000000000000000000000000000")},
+			L1Config: &L1Config{
+				L1ChainId:             5,
+				L1MessageQueueAddress: common.HexToAddress("0x0000000000000000000000000000000000000000"),
+				NumL1MessagesPerBlock: 0,
+				ScrollChainAddress:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			},
 		}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil,
-		ScrollConfig{
+	TestChainConfig = &ChainConfig{
+		ChainID:                 big.NewInt(1),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(0),
+		EIP150Hash:              common.Hash{},
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		ArchimedesBlock:         big.NewInt(0),
+		ShanghaiBlock:           big.NewInt(0),
+		BernoulliBlock:          big.NewInt(0),
+		CurieBlock:              big.NewInt(0),
+		DescartesBlock:          big.NewInt(0),
+		TerminalTotalDifficulty: nil,
+		Ethash:                  new(EthashConfig),
+		Clique:                  nil,
+		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           &common.Address{123},
 			MaxTxPerBlock:             nil,
 			MaxTxPayloadBytesPerBlock: nil,
-			L1Config:                  &L1Config{5, common.HexToAddress("0x0000000000000000000000000000000000000000"), 0, common.HexToAddress("0x0000000000000000000000000000000000000000")},
+			L1Config: &L1Config{
+				L1ChainId:             5,
+				L1MessageQueueAddress: common.HexToAddress("0x0000000000000000000000000000000000000000"),
+				NumL1MessagesPerBlock: 0,
+				ScrollChainAddress:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			},
 		}}
 	TestRules = TestChainConfig.Rules(new(big.Int))
 
-	TestNoL1DataFeeChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil,
-		ScrollConfig{
+	TestNoL1DataFeeChainConfig = &ChainConfig{
+		ChainID:                 big.NewInt(1),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(0),
+		EIP150Hash:              common.Hash{},
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		ArchimedesBlock:         big.NewInt(0),
+		ShanghaiBlock:           big.NewInt(0),
+		BernoulliBlock:          big.NewInt(0),
+		CurieBlock:              big.NewInt(0),
+		DescartesBlock:          big.NewInt(0),
+		TerminalTotalDifficulty: nil,
+		Ethash:                  new(EthashConfig),
+		Clique:                  nil,
+		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           nil,
 			MaxTxPerBlock:             nil,
 			MaxTxPayloadBytesPerBlock: nil,
-			L1Config:                  &L1Config{5, common.HexToAddress("0x0000000000000000000000000000000000000000"), 0, common.HexToAddress("0x0000000000000000000000000000000000000000")},
+			L1Config: &L1Config{
+				L1ChainId:             5,
+				L1MessageQueueAddress: common.HexToAddress("0x0000000000000000000000000000000000000000"),
+				NumL1MessagesPerBlock: 0,
+				ScrollChainAddress:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
+			},
 		}}
 )
 
