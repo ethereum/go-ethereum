@@ -205,7 +205,7 @@ func (s *supply) internalTxsHandler(call *supplyTxCallstack) {
 	}
 
 	if len(call.calls) > 0 {
-		// Recursivelly handle internal calls
+		// Recursively handle internal calls
 		for _, call := range call.calls {
 			callCopy := call
 			s.internalTxsHandler(&callCopy)
