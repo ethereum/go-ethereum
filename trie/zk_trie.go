@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/poseidon"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
@@ -83,12 +82,7 @@ func (t *ZkTrie) GetAccount(address common.Address) (*types.StateAccount, error)
 
 func (t *ZkTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	sanityCheckByte32Key(key)
-	enc, err := t.TryGet(key)
-	if err != nil || len(enc) == 0 {
-		return nil, err
-	}
-	_, content, _, err := rlp.Split(enc)
-	return content, err
+	return t.TryGet(key)
 }
 
 func (t *ZkTrie) UpdateAccount(address common.Address, acc *types.StateAccount) error {
