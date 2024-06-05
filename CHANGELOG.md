@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/taikoxyz/taiko-geth/compare/v1.1.0...v1.2.0) (2024-06-05)
+
+
+### Features
+
+* **txpool:** introduce `TAIKO_MIN_TIP` env ([#264](https://github.com/taikoxyz/taiko-geth/issues/264)) ([a29520e](https://github.com/taikoxyz/taiko-geth/commit/a29520e066809dda21af463272b6ec1ef1cdfcae))
+
+
+### Bug Fixes
+
+* **txpool:** fix the unit in a log ([#266](https://github.com/taikoxyz/taiko-geth/issues/266)) ([9594e0a](https://github.com/taikoxyz/taiko-geth/commit/9594e0a6a87d14bdaa594b3a31eec116ce24c948))
+
 ## [1.1.0](https://github.com/taikoxyz/taiko-geth/compare/v1.0.0...v1.1.0) (2024-05-27)
 
 
