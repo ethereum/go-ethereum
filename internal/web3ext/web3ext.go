@@ -577,6 +577,22 @@ web3._extend({
 			params: 3,
 			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter, null]
 		}),
+		new web3._extend.Method({
+			name: 'getLogs',
+			call: 'eth_getLogs',
+			params: 1,
+		}),
+		new web3._extend.Method({
+			name: 'call',
+			call: 'eth_call',
+			params: 4,
+			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null, null],
+		}),
+		new web3._extend.Method({
+			name: 'getBlockReceipts',
+			call: 'eth_getBlockReceipts',
+			params: 1,
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

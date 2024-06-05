@@ -859,6 +859,40 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 	return res[:], state.Error()
 }
 
+// GetBlockReceipts returns the block receipts for the given block hash or number or tag.
+func (s *PublicBlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if block == nil || err != nil {
+		// When the block doesn't exist, the RPC method should return JSON null
+		// as per specification.
+		return nil, nil
+	}
+	receipts, err := s.b.GetReceipts(ctx, block.Hash())
+	if err != nil {
+		return nil, err
+	}
+	txs := block.Transactions()
+	if len(txs) != len(receipts) {
+		return nil, fmt.Errorf("receipts length mismatch: %d vs %d", len(txs), len(receipts))
+	}
+
+	// Derive the sender.
+
+	result := make([]map[string]interface{}, len(receipts))
+	for i, receipt := range receipts {
+		blockNumber := block.NumberU64()
+		bigblock := new(big.Int).SetUint64(blockNumber)
+		signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
+		res, err := marshalReceipt(ctx, s.b, receipt, bigblock, block.Hash(), blockNumber, signer, txs[i], i)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal receipt %d: %w", i, err)
+		}
+		result[i] = res
+	}
+
+	return result, nil
+}
+
 // OverrideAccount indicates the overriding fields of account during the execution
 // of a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
@@ -1663,13 +1697,18 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	// Derive the sender.
 	bigblock := new(big.Int).SetUint64(blockNumber)
 	signer := types.MakeSigner(s.b.ChainConfig(), bigblock)
+	return marshalReceipt(ctx, s.b, receipt, bigblock, blockHash, blockNumber, signer, tx, int(index))
+}
+
+// marshalReceipt marshals a transaction receipt into a JSON object.
+func marshalReceipt(ctx context.Context, b Backend, receipt *types.Receipt, bigblock *big.Int, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int) (map[string]interface{}, error) {
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
 		"blockHash":         blockHash,
 		"blockNumber":       hexutil.Uint64(blockNumber),
-		"transactionHash":   hash,
-		"transactionIndex":  hexutil.Uint64(index),
+		"transactionHash":   tx.Hash(),
+		"transactionIndex":  hexutil.Uint64(txIndex),
 		"from":              from,
 		"to":                tx.To(),
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
@@ -1681,10 +1720,10 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		"l1Fee":             (*hexutil.Big)(receipt.L1Fee),
 	}
 	// Assign the effective gas price paid
-	if !s.b.ChainConfig().IsCurie(bigblock) {
+	if !b.ChainConfig().IsCurie(bigblock) {
 		fields["effectiveGasPrice"] = hexutil.Uint64(tx.GasPrice().Uint64())
 	} else {
-		header, err := s.b.HeaderByHash(ctx, blockHash)
+		header, err := b.HeaderByHash(ctx, blockHash)
 		if err != nil {
 			return nil, err
 		}
