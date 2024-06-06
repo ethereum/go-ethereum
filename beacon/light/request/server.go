@@ -230,13 +230,12 @@ func (s *serverWithTimeout) startTimeout(reqData RequestResponse) {
 // unsubscribe stops all goroutines associated with the server.
 func (s *serverWithTimeout) unsubscribe() {
 	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	for _, timer := range s.timeouts {
 		if timer != nil {
 			timer.Stop()
 		}
 	}
+	s.lock.Unlock()
 	s.parent.Unsubscribe()
 }
 
@@ -354,13 +353,12 @@ func (s *serverWithLimits) sendRequest(request Request) (reqId ID) {
 // unsubscribe stops all goroutines associated with the server.
 func (s *serverWithLimits) unsubscribe() {
 	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	if s.delayTimer != nil {
 		s.delayTimer.Stop()
 		s.delayTimer = nil
 	}
 	s.childEventCb = nil
+	s.lock.Unlock()
 	s.serverWithTimeout.unsubscribe()
 }
 
