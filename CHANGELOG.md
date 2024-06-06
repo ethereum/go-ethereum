@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/taikoxyz/taiko-geth/compare/v1.2.0...v1.3.0) (2024-06-06)
+
+
+### Features
+
+* **miner:** compress the txlist bytes after checking the transaction is executable ([#269](https://github.com/taikoxyz/taiko-geth/issues/269)) ([aa70708](https://github.com/taikoxyz/taiko-geth/commit/aa70708a69d9612bf2dffd218db7e703de1654c1))
+* **miner:** move `TAIKO_MIN_TIP` check to `commitL2Transactions` ([#272](https://github.com/taikoxyz/taiko-geth/issues/272)) ([f3a7fb6](https://github.com/taikoxyz/taiko-geth/commit/f3a7fb6311e9d59ba2fb55799b9eab614d488095))
+
 ## [1.2.0](https://github.com/taikoxyz/taiko-geth/compare/v1.1.0...v1.2.0) (2024-06-05)
 
 
