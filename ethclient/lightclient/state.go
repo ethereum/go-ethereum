@@ -252,71 +252,8 @@ func (s *lightState) getProof(ctx context.Context, blockNumber *big.Int, account
 	if stateRootErr != nil {
 		return nil, nil, stateRootErr
 	}
-	proofReader, err := makeProofReader(proof.AccountProof)
-	if err != nil {
+	if err := s.validateProof(proof, stateRoot, account, storageKeys); err != nil {
 		return nil, nil, err
-	}
-	value, err := trie.VerifyProof(stateRoot, crypto.Keccak256(account.Bytes()), proofReader)
-	if err != nil {
-		return nil, nil, err
-	}
-	if proof.Balance == nil {
-		return nil, nil, errors.New("account balance is nil")
-	}
-	balance, overflow := uint256.FromBig(proof.Balance)
-	if overflow {
-		return nil, nil, errors.New("account balance overflow")
-	}
-	stateAccount := types.StateAccount{
-		Nonce:    proof.Nonce,
-		Balance:  balance,
-		Root:     proof.StorageHash,
-		CodeHash: proof.CodeHash.Bytes(),
-	}
-	enc, _ := rlp.EncodeToBytes(&stateAccount)
-	if !bytes.Equal(enc, value) {
-		return nil, nil, errors.New("account RLP mismatch")
-	}
-	if len(storageKeys) != len(proof.StorageProof) {
-		return nil, nil, errors.New("invalid number of storage proofs")
-	}
-	for i, st := range proof.StorageProof {
-		if proof.StorageHash == types.EmptyRootHash {
-			// no storage trie, expect empty proofs and values
-			if len(st.Proof) != 0 {
-				return nil, nil, errors.New("non-empty storage proof from empty storage")
-			}
-			value, err := stValueBytes(st.Value)
-			if err != nil {
-				return nil, nil, err
-			}
-			if value != nil {
-				return nil, nil, errors.New("non-empty storage value from empty storage")
-			}
-			continue
-		}
-		proofReader, err := makeProofReader(st.Proof)
-		if err != nil {
-			return nil, nil, err
-		}
-		key, err := hexutil.Decode(storageKeys[i])
-		if err != nil {
-			return nil, nil, err
-		}
-		key = common.BytesToHash(key).Bytes() // TODO 32 byte padding needed???
-		value, err := trie.VerifyProof(proof.StorageHash, crypto.Keccak256(key), proofReader)
-		if err != nil {
-			return nil, nil, err
-		}
-		stv, err := stValueBytes(st.Value)
-		if err != nil {
-			return nil, nil, err
-		}
-		enc, _ := rlp.EncodeToBytes(stv)
-		if !bytes.Equal(enc, value) { //TODO check for empty value
-			//log.Info("storage value mismatch", "value", enc, "proven", value)
-			return nil, nil, errors.New("storage value mismatch")
-		}
 	}
 	if getCode {
 		<-codeCh
@@ -328,4 +265,77 @@ func (s *lightState) getProof(ctx context.Context, blockNumber *big.Int, account
 		}
 	}
 	return proof, code, nil
+}
+
+func (s *lightState) validateProof(proof *gethclient.AccountResult, stateRoot common.Hash, account common.Address, storageKeys []string) error {
+	// validate account proof
+	proofReader, err := makeProofReader(proof.AccountProof)
+	if err != nil {
+		return err
+	}
+	value, err := trie.VerifyProof(stateRoot, crypto.Keccak256(account.Bytes()), proofReader)
+	if err != nil {
+		return err
+	}
+	if proof.Balance == nil {
+		return errors.New("account balance is nil")
+	}
+	balance, overflow := uint256.FromBig(proof.Balance)
+	if overflow {
+		return errors.New("account balance overflow")
+	}
+	stateAccount := types.StateAccount{
+		Nonce:    proof.Nonce,
+		Balance:  balance,
+		Root:     proof.StorageHash,
+		CodeHash: proof.CodeHash.Bytes(),
+	}
+	enc, _ := rlp.EncodeToBytes(&stateAccount)
+	if !bytes.Equal(enc, value) {
+		return errors.New("account RLP mismatch")
+	}
+
+	// validate storage proofs
+	if len(storageKeys) != len(proof.StorageProof) {
+		return errors.New("invalid number of storage proofs")
+	}
+	for i, st := range proof.StorageProof {
+		if proof.StorageHash == types.EmptyRootHash {
+			// no storage trie, expect empty proofs and values
+			if len(st.Proof) != 0 {
+				return errors.New("non-empty storage proof from empty storage")
+			}
+			value, err := stValueBytes(st.Value)
+			if err != nil {
+				return err
+			}
+			if value != nil {
+				return errors.New("non-empty storage value from empty storage")
+			}
+			continue
+		}
+		proofReader, err := makeProofReader(st.Proof)
+		if err != nil {
+			return err
+		}
+		key, err := hexutil.Decode(storageKeys[i])
+		if err != nil {
+			return err
+		}
+		key = common.BytesToHash(key).Bytes() // TODO 32 byte padding needed???
+		value, err := trie.VerifyProof(proof.StorageHash, crypto.Keccak256(key), proofReader)
+		if err != nil {
+			return err
+		}
+		stv, err := stValueBytes(st.Value)
+		if err != nil {
+			return err
+		}
+		enc, _ := rlp.EncodeToBytes(stv)
+		if !bytes.Equal(enc, value) { //TODO check for empty value
+			//log.Info("storage value mismatch", "value", enc, "proven", value)
+			return errors.New("storage value mismatch")
+		}
+	}
+	return nil
 }

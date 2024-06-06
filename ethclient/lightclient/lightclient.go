@@ -74,6 +74,7 @@ func NewClient(clConfig config.LightClientConfig, elConfig *params.ChainConfig, 
 	client.txAndReceipts = txAndReceipts
 	client.canonicalChain = canonicalChain
 	client.state = newLightState(rpcClient, canonicalChain, blocksAndHeaders)
+	txAndReceipts.lightState = client.state //TODO init these refs in a nicer way???
 
 	checkpointInit := sync.NewCheckpointInit(committeeChain, clConfig.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
@@ -159,11 +160,16 @@ func (c *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) 
 	return sub, nil
 }
 
-func (c *Client) newHead(hash common.Hash) {
+func (c *Client) newHead(number uint64, hash common.Hash) {
 	go func() {
 		log.Trace("New execution payload header received", "hash", hash)
+		c.txAndReceipts.newHead(number, hash)
 		ctx, cancel := context.WithCancel(context.Background())
 		c.headSubLock.Lock()
+		if len(c.headSubs) == 0 {
+			c.headSubLock.Unlock()
+			return
+		}
 		if c.cancelHeadFetch != nil {
 			c.cancelHeadFetch()
 		}

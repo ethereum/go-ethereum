@@ -41,7 +41,7 @@ type canonicalChain struct {
 	lock             sync.Mutex
 	headTracker      *light.HeadTracker
 	blocksAndHeaders *blocksAndHeaders
-	newHeadCb        func(common.Hash)
+	newHeadCb        func(uint64, common.Hash)
 
 	head, finality *btypes.ExecutionHeader
 	recent         map[uint64]common.Hash // nil until initialized
@@ -51,7 +51,7 @@ type canonicalChain struct {
 	requests       *requestMap[uint64, common.Hash] // requested; neither recent nor cached finalized
 }
 
-func newCanonicalChain(headTracker *light.HeadTracker, blocksAndHeaders *blocksAndHeaders, newHeadCb func(common.Hash)) *canonicalChain {
+func newCanonicalChain(headTracker *light.HeadTracker, blocksAndHeaders *blocksAndHeaders, newHeadCb func(uint64, common.Hash)) *canonicalChain {
 	c := &canonicalChain{
 		headTracker:      headTracker,
 		blocksAndHeaders: blocksAndHeaders,
@@ -75,7 +75,7 @@ func (c *canonicalChain) Process(requester request.Requester, events []request.E
 		head := optimistic.Attested.PayloadHeader
 		c.blocksAndHeaders.addPayloadHeader(head)
 		if c.setHead(head) {
-			c.newHeadCb(head.BlockHash()) // should not block
+			c.newHeadCb(head.BlockNumber(), head.BlockHash()) // should not block
 		}
 	}
 }

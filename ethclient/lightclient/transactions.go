@@ -22,8 +22,11 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum"
+	btypes "github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -34,14 +37,23 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+const maxTxAge = 300 // sent transactions are typically remembered for an hour after last seen pending
+
 type txAndReceipts struct {
 	client           *rpc.Client
 	canonicalChain   *canonicalChain
 	blocksAndHeaders *blocksAndHeaders
+	lightState       *lightState
 	elConfig         *params.ChainConfig
+	signer           types.Signer
+
 	receiptsCache    *lru.Cache[common.Hash, types.Receipts]
 	receiptsRequests *requestMap[common.Hash, types.Receipts]
 	txPosCache       *lru.Cache[common.Hash, txInBlock]
+
+	sentTxLock                  sync.Mutex
+	sentTxs                     map[common.Address]senderTxs
+	headCounter, lastHeadNumber uint64
 }
 
 type txInBlock struct {
@@ -49,6 +61,13 @@ type txInBlock struct {
 	blockHash   common.Hash // only considered valid if the block is canonical
 	index       uint
 }
+
+type sentTx struct {
+	nonce    uint64
+	lastSeen uint64 // headCounter value where the tx has been sent or last seen pending
+}
+
+type senderTxs map[common.Hash]sentTx
 
 func newTxAndReceipts(client *rpc.Client, canonicalChain *canonicalChain, blocksAndHeaders *blocksAndHeaders, elConfig *params.ChainConfig) *txAndReceipts {
 	t := &txAndReceipts{
@@ -58,6 +77,8 @@ func newTxAndReceipts(client *rpc.Client, canonicalChain *canonicalChain, blocks
 		elConfig:         elConfig,
 		receiptsCache:    lru.NewCache[common.Hash, types.Receipts](10),
 		txPosCache:       lru.NewCache[common.Hash, txInBlock](10000),
+		sentTxs:          make(map[common.Address]senderTxs),
+		signer:           types.LatestSigner(elConfig),
 	}
 	t.receiptsRequests = newRequestMap[common.Hash, types.Receipts](t.requestBlockReceipts)
 	return t
@@ -71,6 +92,14 @@ func (t *txAndReceipts) getTxByHash(ctx context.Context, txHash common.Hash) (tx
 			}
 		}
 	}
+	var headBlockNumber uint64
+	if head := t.canonicalChain.getHead(); head != nil {
+		headBlockNumber = head.BlockNumber()
+	}
+	return t.getUncachedTxByHash(ctx, txHash, headBlockNumber)
+}
+
+func (t *txAndReceipts) getUncachedTxByHash(ctx context.Context, txHash common.Hash, headBlockNumber uint64) (tx *types.Transaction, isPending bool, err error) {
 	tx, isPending, err = t.requestTxByHash(ctx, txHash)
 	if err == nil && !isPending {
 		receipt, err := t.requestReceiptByTxHash(ctx, txHash)
@@ -80,8 +109,7 @@ func (t *txAndReceipts) getTxByHash(ctx context.Context, txHash common.Hash) (tx
 		if err != nil {
 			return nil, false, err
 		}
-		if head := t.canonicalChain.getHead(); head == nil ||
-			!receipt.BlockNumber.IsUint64() || head.BlockNumber() < receipt.BlockNumber.Uint64() {
+		if !receipt.BlockNumber.IsUint64() || headBlockNumber < receipt.BlockNumber.Uint64() {
 			// consider it pending if it's reported to be included higher than the light chain head
 			isPending = true
 		}
@@ -221,6 +249,8 @@ func (t *txAndReceipts) requestTxByHash(ctx context.Context, hash common.Hash) (
 		return nil, false, ethereum.NotFound
 	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
 		return nil, false, errors.New("server returned transaction without signature")
+	} else if json.tx.Hash() != hash {
+		return nil, false, errors.New("invalid transaction hash")
 	}
 	if json.From != nil && json.BlockHash != nil {
 		setSenderFromServer(json.tx, *json.From, *json.BlockHash)
@@ -254,6 +284,10 @@ func (t *txAndReceipts) cacheBlockTxPositions(block *types.Block) {
 }
 
 func (t *txAndReceipts) sendTransaction(ctx context.Context, tx *types.Transaction) error {
+	sender, err := types.Sender(t.signer, tx)
+	if err != nil {
+		return nil
+	}
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return err
@@ -261,8 +295,93 @@ func (t *txAndReceipts) sendTransaction(ctx context.Context, tx *types.Transacti
 	if err := t.client.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data)); err != nil {
 		return err
 	}
-	/*t.sentTxLock.Lock()
-	t.sentTxs[tx.]
-	t.sentTxLock.Unlock()*/
+	t.sentTxLock.Lock()
+	t.markTxAsSeen(sender, tx)
+	t.sentTxLock.Unlock()
 	return nil
+}
+
+func (t *txAndReceipts) markTxAsSeen(sender common.Address, tx *types.Transaction) {
+	senderTxs := t.sentTxs[sender]
+	if senderTxs == nil {
+		senderTxs = make(map[common.Hash]sentTx)
+		t.sentTxs[sender] = senderTxs
+	}
+	senderTxs[tx.Hash()] = sentTx{nonce: tx.Nonce(), lastSeen: t.headCounter}
+}
+
+func (t *txAndReceipts) newHead(number uint64, hash common.Hash) {
+	t.sentTxLock.Lock()
+	if number > t.lastHeadNumber {
+		t.lastHeadNumber = number
+		t.headCounter++
+		t.discardOldTxs()
+	}
+	t.sentTxLock.Unlock()
+}
+
+func (t *txAndReceipts) discardOldTxs() {
+	for sender, senderTxs := range t.sentTxs {
+		for txHash, sentTx := range senderTxs {
+			if sentTx.lastSeen+maxTxAge < t.headCounter {
+				delete(senderTxs, txHash)
+			}
+		}
+		if len(senderTxs) == 0 {
+			delete(t.sentTxs, sender)
+		}
+	}
+}
+
+func (t *txAndReceipts) nonceAndPendingTxs(ctx context.Context, head *btypes.ExecutionHeader, sender common.Address) (uint64, types.Transactions, error) {
+	proof, err := t.lightState.fetchProof(ctx, proofRequest{blockNumber: head.BlockNumber(), address: sender, storageKeys: ""})
+	if err != nil {
+		return 0, nil, err
+	}
+	if err := t.lightState.validateProof(proof, head.StateRoot(), sender, nil); err != nil {
+		return 0, nil, err
+	}
+
+	t.sentTxLock.Lock()
+	senderTxs := t.sentTxs[sender]
+	t.sentTxLock.Unlock()
+
+	type pendingResult struct {
+		pendingTx *types.Transaction
+		err       error
+	}
+
+	resultCh := make(chan pendingResult, len(senderTxs))
+	var reqCount int
+	for txHash, sentTx := range senderTxs {
+		if sentTx.nonce <= proof.Nonce {
+			continue
+		}
+		reqCount++
+		go func() {
+			tx, isPending, err := t.getUncachedTxByHash(ctx, txHash, head.BlockNumber())
+			if err == nil && isPending {
+				resultCh <- pendingResult{pendingTx: tx}
+			} else {
+				resultCh <- pendingResult{err: err}
+			}
+		}()
+	}
+	pendingList := make(types.Transactions, 0, len(senderTxs))
+	for ; reqCount > 0; reqCount-- {
+		res := <-resultCh
+		if res.err != nil {
+			return 0, nil, err
+		}
+		if res.pendingTx != nil {
+			pendingList = append(pendingList, res.pendingTx)
+		}
+	}
+	sort.Sort(types.TxByNonce(pendingList))
+	t.sentTxLock.Lock()
+	for _, tx := range pendingList {
+		t.markTxAsSeen(sender, tx)
+	}
+	t.sentTxLock.Unlock()
+	return proof.Nonce, pendingList, nil
 }
