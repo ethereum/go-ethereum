@@ -79,7 +79,7 @@ func (db *ChecksumDB) DownloadFile(url, dstPath string) error {
 		return nil
 	}
 	fmt.Printf("%s is stale\n", dstPath)
-	fmt.Printf("downloading from %s\n", url)
+	fmt.Printf("Downloading from %s\n", url)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -130,10 +130,7 @@ func (w *downloadWriter) Write(buf []byte) (int, error) {
 	w.written += int64(n)
 	pct := w.written * 10 / w.size * 10
 	if pct != w.lastpct {
-		if w.lastpct != 0 {
-			fmt.Print("...")
-		}
-		fmt.Print(pct, "%")
+		fmt.Print("\rProgress: ", pct, "%")
 		w.lastpct = pct
 	}
 	return n, err
@@ -141,7 +138,7 @@ func (w *downloadWriter) Write(buf []byte) (int, error) {
 
 func (w *downloadWriter) Close() error {
 	if w.lastpct > 0 {
-		fmt.Println() // Finish the progress line.
+		fmt.Println("\rDownload complete.") // Finish the progress line.
 	}
 	flushErr := w.dstBuf.Flush()
 	closeErr := w.file.Close()
