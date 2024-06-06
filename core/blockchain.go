@@ -1809,7 +1809,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// while processing transactions. Before Byzantium the prefetcher is mostly
 		// useless due to the intermediate root hashing after each transaction.
 		if bc.chainConfig.IsByzantium(block.Number()) {
-			statedb.StartPrefetcher("chain", bc.vmConfig.EnableWitnessCollection)
+			statedb.StartPrefetcher("chain", !bc.vmConfig.EnableWitnessCollection)
 		}
 		activeState = statedb
 
