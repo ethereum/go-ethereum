@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -261,6 +263,20 @@ func (w *worker) commitL2Transactions(
 			txs.Pop()
 			continue
 		}
+
+		if os.Getenv("TAIKO_MIN_TIP") != "" {
+			minTip, err := strconv.Atoi(os.Getenv("TAIKO_MIN_TIP"))
+			if err != nil {
+				log.Error("Failed to parse TAIKO_MIN_TIP", "err", err)
+			} else {
+				if tx.GasTipCapIntCmp(new(big.Int).SetUint64(uint64(minTip))) < 0 {
+					log.Trace("Ignoring transaction with low tip", "hash", tx.Hash(), "tip", tx.GasTipCap(), "minTip", minTip)
+					txs.Pop()
+					continue
+				}
+			}
+		}
+
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
