@@ -407,7 +407,7 @@ func checkStateContent(ctx *cli.Context) error {
 	return nil
 }
 
-func showLeveldbStats(db ethdb.KeyValueStater) {
+func showDBStats(db ethdb.KeyValueStater) {
 	if stats, err := db.Stat("leveldb.stats"); err != nil {
 		log.Warn("Failed to read database stats", "error", err)
 	} else {
@@ -427,7 +427,7 @@ func dbStats(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	showLeveldbStats(db)
+	showDBStats(db)
 	return nil
 }
 
@@ -439,7 +439,7 @@ func dbCompact(ctx *cli.Context) error {
 	defer db.Close()
 
 	log.Info("Stats before compaction")
-	showLeveldbStats(db)
+	showDBStats(db)
 
 	log.Info("Triggering compaction")
 	if err := db.Compact(nil, nil); err != nil {
@@ -447,7 +447,7 @@ func dbCompact(ctx *cli.Context) error {
 		return err
 	}
 	log.Info("Stats after compaction")
-	showLeveldbStats(db)
+	showDBStats(db)
 	return nil
 }
 

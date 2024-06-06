@@ -416,7 +416,7 @@ func upperBound(prefix []byte) (limit []byte) {
 }
 
 // Stat returns the internal metrics of Pebble in a text format. It's a developer
-// method to read everything there is to read independent of Pebble version.
+// method to read everything there is to read, independent of Pebble version.
 //
 // The property is unused in Pebble as there's only one thing to retrieve.
 func (d *Database) Stat(property string) (string, error) {
