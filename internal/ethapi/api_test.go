@@ -1902,6 +1902,95 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 		},
+		{
+			name: "basefee-non-validation",
+			tag:  latest,
+			blocks: []simBlock{{
+				StateOverrides: &StateOverride{
+					randomAccounts[2].addr: {
+						Code: hex2Bytes("3a489060005260205260406000f3"),
+					},
+				},
+				Calls: []TransactionArgs{{
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+					// 0 gas price
+				}, {
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+					// non-zero gas price
+					MaxPriorityFeePerGas: newInt(1),
+					MaxFeePerGas:         newInt(2),
+				},
+				},
+			}, {
+				BlockOverrides: &BlockOverrides{
+					BaseFeePerGas: (*hexutil.Big)(big.NewInt(1)),
+				},
+				Calls: []TransactionArgs{{
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+					// 0 gas price
+				}, {
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+					// non-zero gas price
+					MaxPriorityFeePerGas: newInt(1),
+					MaxFeePerGas:         newInt(2),
+				},
+				},
+			}, {
+				// Base fee should be 0 to zero even if it was set in previous block.
+				Calls: []TransactionArgs{{
+					From: &accounts[0].addr,
+					To:   &randomAccounts[2].addr,
+				}},
+			}},
+			want: []blockRes{{
+				Number:   "0xb",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xa44e",
+				Miner:    coinbase,
+				Calls: []callRes{{
+					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+					GasUsed:     "0x5227",
+					Logs:        []log{},
+					Status:      "0x1",
+				}, {
+					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000",
+					GasUsed:     "0x5227",
+					Logs:        []log{},
+					Status:      "0x1",
+				}},
+			}, {
+				Number:   "0xc",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0xa44e",
+				Miner:    coinbase,
+				Calls: []callRes{{
+					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+					GasUsed:     "0x5227",
+					Logs:        []log{},
+					Status:      "0x1",
+				}, {
+					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
+					GasUsed:     "0x5227",
+					Logs:        []log{},
+					Status:      "0x1",
+				}},
+			}, {
+				Number:   "0xd",
+				GasLimit: "0x47e7c4",
+				GasUsed:  "0x5227",
+				Miner:    coinbase,
+				Calls: []callRes{{
+					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+					GasUsed:     "0x5227",
+					Logs:        []log{},
+					Status:      "0x1",
+				}},
+			}},
+		},
 	}
 
 	for _, tc := range testSuite {
