@@ -735,6 +735,12 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 			}
 		}
 
+		// It's weird, but it's possible that the block is nil here.
+		// even though the check for error is done above.
+		if block == nil {
+			return nil
+		}
+
 		header = block.Header()
 		td = fullBackend.GetTd(context.Background(), header.Hash())
 
