@@ -55,7 +55,7 @@ echo "Running a node with wallet: ${wallet} at local"
 --datadir ./tmp/xdcchain --networkid 551 \
 -port 30303 --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 \
 --rpcport 8545 \
---rpcapi admin,db,eth,debug,miner,net,shh,txpool,personal,web3,XDPoS \
+--rpcapi db,eth,debug,miner,net,shh,txpool,personal,web3,XDPoS \
 --rpcvhosts "*" --unlock "${wallet}" --password ./tmp/.pwd --mine \
 --gasprice "1" --targetgaslimit "420000000" --verbosity ${log_level} \
 --ws --wsaddr=0.0.0.0 --wsport 8555 \
