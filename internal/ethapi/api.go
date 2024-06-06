@@ -2238,7 +2238,8 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 func marshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int, borTx bool) map[string]interface{} {
 	from, _ := types.Sender(signer, tx)
 
-	txHash := common.Hash{}
+	var txHash common.Hash
+
 	if borTx {
 		txHash = types.GetDerivedBorTxHash(types.BorReceiptKey(blockNumber, blockHash))
 	} else {
