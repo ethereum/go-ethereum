@@ -77,7 +77,11 @@ var (
 
 func rlpxPing(ctx *cli.Context) error {
 	n := getNodeArg(ctx)
-	fd, err := net.Dial("tcp", fmt.Sprintf("%v:%d", n.IP(), n.TCP()))
+	tcpEndpoint, ok := n.TCPEndpoint()
+	if !ok {
+		return fmt.Errorf("node has no TCP endpoint")
+	}
+	fd, err := net.Dial("tcp", tcpEndpoint.String())
 	if err != nil {
 		return err
 	}

@@ -428,10 +428,10 @@ func (t *UDPv5) verifyResponseNode(c *callV5, r *enr.Record, distances []uint, s
 	if err != nil {
 		return nil, err
 	}
-	if err := netutil.CheckRelayIP(c.addr.Addr().AsSlice(), node.IP()); err != nil {
+	if err := netutil.CheckRelayAddr(c.addr.Addr(), node.IPAddr()); err != nil {
 		return nil, err
 	}
-	if t.netrestrict != nil && !t.netrestrict.Contains(node.IP()) {
+	if t.netrestrict != nil && !t.netrestrict.ContainsAddr(node.IPAddr()) {
 		return nil, errors.New("not contained in netrestrict list")
 	}
 	if node.UDP() <= 1024 {
@@ -674,6 +674,10 @@ func (t *UDPv5) readLoop() {
 
 // dispatchReadPacket sends a packet into the dispatch loop.
 func (t *UDPv5) dispatchReadPacket(from netip.AddrPort, content []byte) bool {
+	// Unwrap IPv4-in-6 source address.
+	if from.Addr().Is4In6() {
+		from = netip.AddrPortFrom(netip.AddrFrom4(from.Addr().As4()), from.Port())
+	}
 	select {
 	case t.packetInCh <- ReadPacket{content, from}:
 		return true
@@ -754,9 +758,8 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort
 		t.handlePing(p, fromID, fromAddr)
 	case *v5wire.Pong:
 		if t.handleCallResponse(fromID, fromAddr, p) {
-			fromUDPAddr := &net.UDPAddr{IP: fromAddr.Addr().AsSlice(), Port: int(fromAddr.Port())}
-			toUDPAddr := &net.UDPAddr{IP: p.ToIP, Port: int(p.ToPort)}
-			t.localNode.UDPEndpointStatement(fromUDPAddr, toUDPAddr)
+			toAddr := netip.AddrPortFrom(netutil.IPToAddr(p.ToIP), p.ToPort)
+			t.localNode.UDPEndpointStatement(fromAddr, toAddr)
 		}
 	case *v5wire.Findnode:
 		t.handleFindnode(p, fromID, fromAddr)
@@ -848,7 +851,6 @@ func (t *UDPv5) handleFindnode(p *v5wire.Findnode, fromID enode.ID, fromAddr net
 
 // collectTableNodes creates a FINDNODE result set for the given distances.
 func (t *UDPv5) collectTableNodes(rip netip.Addr, distances []uint, limit int) []*enode.Node {
-	ripSlice := rip.AsSlice()
 	var bn []*enode.Node
 	var nodes []*enode.Node
 	var processed = make(map[uint]struct{})
@@ -863,7 +865,7 @@ func (t *UDPv5) collectTableNodes(rip netip.Addr, distances []uint, limit int) [
 		for _, n := range t.tab.appendLiveNodes(dist, bn[:0]) {
 			// Apply some pre-checks to avoid sending invalid nodes.
 			// Note liveness is checked by appendLiveNodes.
-			if netutil.CheckRelayIP(ripSlice, n.IP()) != nil {
+			if netutil.CheckRelayAddr(rip, n.IPAddr()) != nil {
 				continue
 			}
 			nodes = append(nodes, n)
