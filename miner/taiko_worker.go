@@ -265,16 +265,6 @@ func (w *worker) commitL2Transactions(
 		// during transaction acceptance is the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
 
-		b, err := encodeAndComporeessTxList(append(env.txs, tx))
-		if err != nil {
-			log.Trace("Failed to rlp encode and compress the pending transaction %s: %w", tx.Hash(), err)
-			txs.Pop()
-			continue
-		}
-		if len(b) > int(maxBytesPerTxList) {
-			break
-		}
-
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
@@ -286,7 +276,7 @@ func (w *worker) commitL2Transactions(
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
-		_, err = w.commitTransaction(env, tx)
+		_, err := w.commitTransaction(env, tx)
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
@@ -303,6 +293,18 @@ func (w *worker) commitL2Transactions(
 			// the same sender because of `nonce-too-high` clause.
 			log.Trace("Transaction failed, account skipped", "hash", ltx.Hash, "err", err)
 			txs.Pop()
+		}
+
+		// Encode and compress the txList, if the byte length is > maxBytesPerTxList, remove the latest tx and break.
+		b, err := encodeAndComporeessTxList(append(env.txs, tx))
+		if err != nil {
+			log.Trace("Failed to rlp encode and compress the pending transaction %s: %w", tx.Hash(), err)
+			txs.Pop()
+			continue
+		}
+		if len(b) > int(maxBytesPerTxList) {
+			env.txs = env.txs[0 : env.tcount-1]
+			break
 		}
 	}
 }
