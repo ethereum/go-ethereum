@@ -569,6 +569,15 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 	connId := binary.BigEndian.Uint16(accept.ConnectionId[:])
 	go func(ctx context.Context) {
 		var conn net.Conn
+		defer func() {
+			if conn == nil {
+				return
+			}
+			err := conn.Close()
+			if err != nil {
+				p.Log.Error("failed to close connection", "err", err)
+			}
+		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -611,22 +620,15 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
 				p.Log.Info("will connect to: ", "addr", raddr.String(), "connId", connId)
 				conn, err = utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(connctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
+				conncancel()
 				if err != nil {
-					conncancel()
 					p.Log.Error("failed to dial utp connection", "err", err)
 					return
 				}
-				conncancel()
 
 				err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
 				if err != nil {
 					p.Log.Error("failed to set write deadline", "err", err)
-					err = conn.Close()
-					if err != nil {
-						p.Log.Error("failed to close utp connection", "err", err)
-						return
-					}
-
 					return
 				}
 
@@ -634,19 +636,9 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				written, err = conn.Write(contentsPayload)
 				if err != nil {
 					p.Log.Error("failed to write to utp connection", "err", err)
-					err = conn.Close()
-					if err != nil {
-						p.Log.Error("failed to close utp connection", "err", err)
-						return
-					}
 					return
 				}
 				p.Log.Trace("Sent content response", "id", target.ID(), "contents", contents, "size", written)
-				err = conn.Close()
-				if err != nil {
-					p.Log.Error("failed to close utp connection", "err", err)
-					return
-				}
 				return
 			}
 		}
@@ -693,11 +685,19 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		connId := binary.BigEndian.Uint16(connIdMsg.Id[:])
 		p.Log.Info("will connect to: ", "addr", raddr.String(), "connId", connId)
 		conn, err := utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(connctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
+		defer func() {
+			if conn == nil {
+				return
+			}
+			err := conn.Close()
+			if err != nil {
+				p.Log.Error("failed to close connection", "err", err)
+			}
+		}()
+		conncancel()
 		if err != nil {
-			conncancel()
 			return 0xff, nil, err
 		}
-		conncancel()
 
 		err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
 		if err != nil {
@@ -709,7 +709,6 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			p.Log.Error("failed to read from utp connection", "err", err)
 			return 0xff, nil, err
 		}
-		conn.Close()
 		p.Log.Trace("Received content response", "id", target.ID(), "size", len(data), "data", data)
 		return resp[1], data, nil
 	case portalwire.ContentEnrsSelector:
@@ -1059,31 +1058,35 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 		connIdSend := connId.SendId()
 
 		go func(bctx context.Context) {
-			defer p.connIdGen.Remove(connId)
+			var conn *utp.Conn
+			defer func() {
+				p.connIdGen.Remove(connId)
+				if conn == nil {
+					return
+				}
+				err := conn.Close()
+				if err != nil {
+					p.Log.Error("failed to close connection", "err", err)
+				}
+			}()
 			for {
 				select {
 				case <-bctx.Done():
 					return
 				default:
 					ctx, cancel := context.WithTimeout(bctx, defaultUTPConnectTimeout)
-					var conn *utp.Conn
+
 					p.Log.Debug("will accept find content conn from: ", "source", addr, "connId", connId)
 					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
+					cancel()
 					if err != nil {
 						p.Log.Error("failed to accept utp connection for handle find content", "connId", connIdSend, "err", err)
-						cancel()
 						return
 					}
-					cancel()
 
 					err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
 					if err != nil {
 						p.Log.Error("failed to set write deadline", "err", err)
-						err = conn.Close()
-						if err != nil {
-							p.Log.Error("failed to close utp connection", "err", err)
-							return
-						}
 						return
 					}
 
@@ -1091,17 +1094,6 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 					n, err = conn.Write(content)
 					if err != nil {
 						p.Log.Error("failed to write content to utp connection", "err", err)
-						err = conn.Close()
-						if err != nil {
-							p.Log.Error("failed to close utp connection", "err", err)
-							return
-						}
-						return
-					}
-
-					err = conn.Close()
-					if err != nil {
-						p.Log.Error("failed to close utp connection", "err", err)
 						return
 					}
 
@@ -1182,22 +1174,31 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 		connIdSend := connId.SendId()
 
 		go func(bctx context.Context) {
-			defer p.connIdGen.Remove(connId)
+			var conn *utp.Conn
+			defer func() {
+				p.connIdGen.Remove(connId)
+				if conn == nil {
+					return
+				}
+				err := conn.Close()
+				if err != nil {
+					p.Log.Error("failed to close connection", "err", err)
+				}
+			}()
 			for {
 				select {
 				case <-bctx.Done():
 					return
 				default:
 					ctx, cancel := context.WithTimeout(bctx, defaultUTPConnectTimeout)
-					var conn *utp.Conn
+
 					p.Log.Debug("will accept offer conn from: ", "source", addr, "connId", connId)
 					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
+					cancel()
 					if err != nil {
 						p.Log.Error("failed to accept utp connection for handle offer", "connId", connIdSend, "err", err)
-						cancel()
 						return
 					}
-					cancel()
 
 					err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
 					if err != nil {
@@ -1211,7 +1212,6 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 						p.Log.Error("failed to read from utp connection", "err", err)
 						return
 					}
-					conn.Close()
 					p.Log.Trace("Received offer content response", "id", id, "size", len(data), "data", data)
 
 					err = p.handleOfferedContents(id, contentKeys, data)
