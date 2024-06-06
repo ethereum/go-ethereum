@@ -288,12 +288,12 @@ func (s *DistinctNetSet) RemoveAddr(ip netip.Addr) {
 	}
 }
 
-// Contains whether the given IP is contained in the set.
+// Contains reports whether the given IP is contained in the set.
 func (s DistinctNetSet) Contains(ip net.IP) bool {
 	return s.ContainsAddr(IPToAddr(ip))
 }
 
-// ContainsAddr whether the given IP is contained in the set.
+// ContainsAddr reports whether the given IP is contained in the set.
 func (s DistinctNetSet) ContainsAddr(ip netip.Addr) bool {
 	key := s.key(ip)
 	_, ok := s.members[key]
