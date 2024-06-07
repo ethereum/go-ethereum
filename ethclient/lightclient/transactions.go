@@ -333,6 +333,16 @@ func (t *txAndReceipts) discardOldTxs() {
 	}
 }
 
+func (t *txAndReceipts) allSenders() []common.Address {
+	t.sentTxLock.Lock()
+	allSenders := make([]common.Address, 0, len(t.sentTxs))
+	for sender := range t.sentTxs {
+		allSenders = append(allSenders, sender)
+	}
+	t.sentTxLock.Unlock()
+	return allSenders
+}
+
 func (t *txAndReceipts) nonceAndPendingTxs(ctx context.Context, head *btypes.ExecutionHeader, sender common.Address) (uint64, types.Transactions, error) {
 	proof, err := t.lightState.fetchProof(ctx, proofRequest{blockNumber: head.BlockNumber(), address: sender, storageKeys: ""})
 	if err != nil {

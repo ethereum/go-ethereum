@@ -223,7 +223,7 @@ func (c *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*t
 	return c.txAndReceipts.getReceiptByTxHash(ctx, txHash)
 }
 
-// ChainStateReader interface {
+// ChainStateReader interface
 
 func (c *Client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
 	proof, _, err := c.state.getProof(ctx, blockNumber, account, nil, false)
@@ -234,7 +234,7 @@ func (c *Client) BalanceAt(ctx context.Context, account common.Address, blockNum
 }
 
 func (c *Client) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
-	proof, _, err := c.state.getProof(ctx, blockNumber, account, []string{key.Hex()}, false) //TODO hashed key?
+	proof, _, err := c.state.getProof(ctx, blockNumber, account, []string{key.Hex()}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -265,13 +265,14 @@ func (c *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumbe
 	return c.txAndReceipts.getBlockReceipts(ctx, hash)
 }
 
-// TransactionSender interface {
+// TransactionSender interface
+
 func (c *Client) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	return c.txAndReceipts.sendTransaction(ctx, tx)
-	//TODO
 }
 
-// PendingStateReader interface {
+// PendingStateReader interface
+
 func (c *Client) PendingBalanceAt(ctx context.Context, account common.Address) (*big.Int, error) {
 	return c.BalanceAt(ctx, account, big.NewInt(int64(rpc.LatestBlockNumber)))
 	//TODO subtract upper estimate for pending tx costs?
@@ -286,19 +287,47 @@ func (c *Client) PendingCodeAt(ctx context.Context, account common.Address) ([]b
 }
 
 func (c *Client) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
-	nonce, err := c.NonceAt(ctx, account, big.NewInt(int64(rpc.LatestBlockNumber)))
+	head := c.canonicalChain.getHead()
+	if head == nil {
+		return 0, errors.New("chain head unknown")
+	}
+	headNonce, pendingTxs, err := c.txAndReceipts.nonceAndPendingTxs(ctx, head, account)
 	if err != nil {
 		return 0, err
 	}
-	//TODO
-	return nonce, err
+	if len(pendingTxs) == 0 {
+		return headNonce, nil
+	}
+	return pendingTxs[len(pendingTxs)-1].Nonce(), nil
 }
 
 func (c *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
-	return 0, nil //TODO
+	head := c.canonicalChain.getHead()
+	if head == nil {
+		return 0, errors.New("chain head unknown")
+	}
+	allSenders := c.txAndReceipts.allSenders()
+	countCh := make(chan uint, len(allSenders))
+	errCh := make(chan error, len(allSenders))
+	for _, sender := range allSenders {
+		go func() {
+			_, pendingTxs, err := c.txAndReceipts.nonceAndPendingTxs(ctx, head, sender)
+			errCh <- err
+			countCh <- uint(len(pendingTxs))
+		}()
+	}
+	var count uint
+	for range allSenders {
+		if err := <-errCh; err != nil {
+			return 0, err
+		}
+		count += <-countCh
+	}
+	return count, nil
 }
 
-// BlockNumberReader interface {
+// BlockNumberReader interface
+
 func (c *Client) BlockNumber(ctx context.Context) (uint64, error) {
 	if head := c.canonicalChain.getHead(); head != nil {
 		return head.BlockNumber(), nil
