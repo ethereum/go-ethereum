@@ -681,8 +681,9 @@ func (e retryableCommitError) Unwrap() error {
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 func (w *worker) commit(res *pipeline.Result) error {
+	sealDelay := time.Duration(0)
 	defer func(t0 time.Time) {
-		l2CommitTimer.Update(time.Since(t0))
+		l2CommitTimer.Update(time.Since(t0) - sealDelay)
 	}(time.Now())
 
 	if res.CCCErr != nil {
@@ -709,8 +710,11 @@ func (w *worker) commit(res *pipeline.Result) error {
 		return err
 	}
 	// Clique.Seal() will only wait for a second before giving up on us. So make sure there is nothing computational heavy
-	// or a call that blocks between the call to Seal and the line below
+	// or a call that blocks between the call to Seal and the line below. Seal might introduce some delay, so we keep track of
+	// that artificially added delay and subtract it from overall runtime of commit().
+	sealStart := time.Now()
 	block = <-resultCh
+	sealDelay = time.Since(sealStart)
 	if block == nil {
 		return errors.New("missed seal response from consensus engine")
 	}
