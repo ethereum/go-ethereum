@@ -77,8 +77,8 @@ var (
 	// PinRegexp is the regular expression used to validate PIN codes.
 	PinRegexp = regexp.MustCompile(`^[0-9]{6,}$`)
 
-	// PunRegexp is the regular expression used to validate PUN codes.
-	PunRegexp = regexp.MustCompile(`^[0-9]{12,}$`)
+	// PukRegexp is the regular expression used to validate PUK codes.
+	PukRegexp = regexp.MustCompile(`^[0-9]{12,}$`)
 )
 
 // List of APDU command-related constants
@@ -396,7 +396,7 @@ func (w *Wallet) Open(passphrase string) error {
 			return err
 		}
 	default:
-		if !PunRegexp.MatchString(passphrase) {
+		if !PukRegexp.MatchString(passphrase) {
 			w.log.Error("PUK needs to be at least 12 digits")
 			return ErrPINUnblockNeeded
 		}
