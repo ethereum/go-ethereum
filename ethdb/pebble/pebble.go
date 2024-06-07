@@ -417,10 +417,21 @@ func upperBound(prefix []byte) (limit []byte) {
 
 // Stat returns the internal metrics of Pebble in a text format. It's a developer
 // method to read everything there is to read, independent of Pebble version.
-//
-// The property is unused in Pebble as there's only one thing to retrieve.
 func (d *Database) Stat(property string) (string, error) {
-	return d.db.Metrics().String(), nil
+	metrics := d.db.Metrics()
+	if property == "iostats" {
+		total := metrics.Total()
+		return fmt.Sprintf("Read(MB):%.5f Write(MB):%.5f",
+			float64(total.BytesRead)/1048576.0, // 1024*1024
+			float64(total.BytesFlushed+total.BytesCompacted)/1048576.0), nil
+	}
+	if property == "disk.size" {
+		return fmt.Sprintf("%d", metrics.Total().Size), nil
+	}
+	if property == "stats" {
+		return metrics.String(), nil
+	}
+	return "", fmt.Errorf("pebble stat property %s does not exists", property)
 }
 
 // Compact flattens the underlying data store for the given key range. In essence,
