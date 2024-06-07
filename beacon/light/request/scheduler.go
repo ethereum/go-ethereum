@@ -65,7 +65,7 @@ type Requester interface {
 // allow new operations.
 type Scheduler struct {
 	lock    sync.Mutex
-	modules []Module // first has highest priority
+	modules []Module // first has the highest priority
 	names   map[Module]string
 	servers map[server]struct{}
 	targets map[targetData]uint64
@@ -93,7 +93,9 @@ type (
 	// the modules that do not interact with them directly.
 	// In order to make module testing easier, Server interface is used in
 	// events and modules.
-	Server      any
+	Server interface {
+		Name() string
+	}
 	Request     any
 	Response    any
 	ID          uint64

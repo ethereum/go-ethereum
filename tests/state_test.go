@@ -57,6 +57,11 @@ func initMatcher(st *testMatcher) {
 	// Broken tests:
 	// EOF is not part of cancun
 	st.skipLoad(`^stEOF/`)
+
+	// The tests under Pyspecs are the ones that are published as execution-spec tests.
+	// We run these tests separately, no need to _also_ run them as part of the
+	// reference tests.
+	st.skipLoad(`^Pyspecs/`)
 }
 
 func TestState(t *testing.T) {

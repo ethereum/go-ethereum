@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -116,7 +117,7 @@ func TestLifecycleRegistry_Successful(t *testing.T) {
 	noop := NewNoop()
 	stack.RegisterLifecycle(noop)
 
-	if !containsLifecycle(stack.lifecycles, noop) {
+	if !slices.Contains(stack.lifecycles, Lifecycle(noop)) {
 		t.Fatalf("lifecycle was not properly registered on the node, %v", err)
 	}
 }

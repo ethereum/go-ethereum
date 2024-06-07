@@ -208,6 +208,14 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   FuzzCrossPairing fuzz_cross_pairing\
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+  FuzzG1SubgroupChecks fuzz_g1_subgroup_checks\
+  $repo/tests/fuzzers/bls12381/bls12381_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+  FuzzG2SubgroupChecks fuzz_g2_subgroup_checks\
+  $repo/tests/fuzzers/bls12381/bls12381_test.go
+
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/secp256k1 \
   Fuzz fuzzSecp256k1\
   $repo/tests/fuzzers/secp256k1/secp_test.go

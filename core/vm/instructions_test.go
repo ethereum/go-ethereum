@@ -643,7 +643,7 @@ func BenchmarkOpKeccak256(bench *testing.B) {
 	}
 }
 
-func TestCreate2Addreses(t *testing.T) {
+func TestCreate2Addresses(t *testing.T) {
 	type testcase struct {
 		origin   string
 		salt     string

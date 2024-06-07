@@ -50,4 +50,4 @@ contains the password.
 
 ## JSON
 
-In case you need to output the result in a JSON format, you shall by using the `--json` flag.
+In case you need to output the result in a JSON format, you shall use the `--json` flag.

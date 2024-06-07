@@ -381,7 +381,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		}
 	})
 
-	t.Run("OperatonsAfterClose", func(t *testing.T) {
+	t.Run("OperationsAfterClose", func(t *testing.T) {
 		db := New()
 		db.Put([]byte("key"), []byte("value"))
 		db.Close()
@@ -530,7 +530,7 @@ func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
 		vals = append(vals, randBytes(vsize))
 	}
 	if order {
-		slices.SortFunc(keys, func(a, b []byte) int { return bytes.Compare(a, b) })
+		slices.SortFunc(keys, bytes.Compare)
 	}
 	return keys, vals
 }

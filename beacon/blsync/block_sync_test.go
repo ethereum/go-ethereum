@@ -28,8 +28,8 @@ import (
 )
 
 var (
-	testServer1 = "testServer1"
-	testServer2 = "testServer2"
+	testServer1 = testServer("testServer1")
+	testServer2 = testServer("testServer2")
 
 	testBlock1 = types.NewBeaconBlock(&deneb.BeaconBlock{
 		Slot: 123,
@@ -50,6 +50,12 @@ var (
 		},
 	})
 )
+
+type testServer string
+
+func (t testServer) Name() string {
+	return string(t)
+}
 
 func TestBlockSync(t *testing.T) {
 	ht := &testHeadTracker{}
@@ -134,8 +140,12 @@ func (h *testHeadTracker) PrefetchHead() types.HeadInfo {
 	return h.prefetch
 }
 
-func (h *testHeadTracker) ValidatedHead() (types.SignedHeader, bool) {
-	return h.validated, h.validated.Header != (types.Header{})
+func (h *testHeadTracker) ValidatedOptimistic() (types.OptimisticUpdate, bool) {
+	return types.OptimisticUpdate{
+		Attested:      types.HeaderWithExecProof{Header: h.validated.Header},
+		Signature:     h.validated.Signature,
+		SignatureSlot: h.validated.SignatureSlot,
+	}, h.validated.Header != (types.Header{})
 }
 
 // TODO add test case for finality

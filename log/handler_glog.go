@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -145,10 +146,7 @@ func (h *GlogHandler) Enabled(ctx context.Context, lvl slog.Level) bool {
 
 func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	h.lock.RLock()
-	siteCache := make(map[uintptr]slog.Level)
-	for k, v := range h.siteCache {
-		siteCache[k] = v
-	}
+	siteCache := maps.Clone(h.siteCache)
 	h.lock.RUnlock()
 
 	patterns := []pattern{}

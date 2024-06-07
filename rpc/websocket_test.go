@@ -187,6 +187,7 @@ func TestWebsocketPeerInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer c.Close()
 
 	// Request peer information.
 	var connInfo PeerInfo
@@ -273,6 +274,7 @@ func TestClientWebsocketLargeMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer c.Close()
 
 	var r string
 	if err := c.Call(&r, "test_largeResp"); err != nil {

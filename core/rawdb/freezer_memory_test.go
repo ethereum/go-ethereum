@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,12 +14,28 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build amd64 && blsadx
-// +build amd64,blsadx
+package rawdb
 
-package bls12381
+import (
+	"testing"
 
-// enableADX is true if the ADX/BMI2 instruction set was requested for the BLS
-// implementation. The system may still fall back to plain ASM if the necessary
-// instructions are unavailable on the CPU.
-const enableADX = true
+	"github.com/ethereum/go-ethereum/core/rawdb/ancienttest"
+	"github.com/ethereum/go-ethereum/ethdb"
+)
+
+func TestMemoryFreezer(t *testing.T) {
+	ancienttest.TestAncientSuite(t, func(kinds []string) ethdb.AncientStore {
+		tables := make(map[string]bool)
+		for _, kind := range kinds {
+			tables[kind] = true
+		}
+		return NewMemoryFreezer(false, tables)
+	})
+	ancienttest.TestResettableAncientSuite(t, func(kinds []string) ethdb.ResettableAncientStore {
+		tables := make(map[string]bool)
+		for _, kind := range kinds {
+			tables[kind] = true
+		}
+		return NewMemoryFreezer(false, tables)
+	})
+}

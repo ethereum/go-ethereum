@@ -240,7 +240,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if config.IsShanghai(header.Number, header.Time) {
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
-	b := types.NewBlockWithWithdrawals(header, txes, nil, receipts, withdrawals, trie.NewStackTrie(nil))
+	b := types.NewBlock(header, &types.Body{Transactions: txes, Withdrawals: withdrawals}, receipts, trie.NewStackTrie(nil))
 	res := RPCMarshalBlock(b, true, sim.fullTx, config)
 	repairLogs(callResults, res["hash"].(common.Hash))
 	res["calls"] = callResults

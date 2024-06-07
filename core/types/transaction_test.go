@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"reflect"
 	"testing"
@@ -378,7 +379,7 @@ func assertEqual(orig *Transaction, cpy *Transaction) error {
 	}
 	if orig.AccessList() != nil {
 		if !reflect.DeepEqual(orig.AccessList(), cpy.AccessList()) {
-			return errors.New("access list wrong!")
+			return errors.New("access list wrong")
 		}
 	}
 	return nil
@@ -515,10 +516,7 @@ func TestYParityJSONUnmarshalling(t *testing.T) {
 			test := test
 			t.Run(fmt.Sprintf("txType=%d: %s", txType, test.name), func(t *testing.T) {
 				// Copy the base json
-				testJson := make(map[string]interface{})
-				for k, v := range baseJson {
-					testJson[k] = v
-				}
+				testJson := maps.Clone(baseJson)
 
 				// Set v, yParity and type
 				if test.v != "" {
