@@ -26,6 +26,7 @@ import (
 	"net"
 	"net/netip"
 	"slices"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1140,12 +1141,9 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	// Sort the result array alphabetically by node identifier
-	for i := 0; i < len(infos); i++ {
-		for j := i + 1; j < len(infos); j++ {
-			if infos[i].ID > infos[j].ID {
-				infos[i], infos[j] = infos[j], infos[i]
-			}
-		}
-	}
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].ID < infos[j].ID
+	})
+
 	return infos
 }
