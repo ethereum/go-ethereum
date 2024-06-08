@@ -14,15 +14,15 @@ The `evm t8n` tool is a stateless state transition utility. It is a utility
 which can
 
 1. Take a prestate, including
-  - Accounts,
-  - Block context information,
-  - Previous blockshashes (*optional)
+   - Accounts,
+   - Block context information,
+   - Previous blockshashes (*optional)
 2. Apply a set of transactions,
 3. Apply a mining-reward (*optional),
 4. And generate a post-state, including
-  - State root, transaction root, receipt root,
-  - Information about rejected transactions,
-  - Optionally: a full or partial post-state dump
+   - State root, transaction root, receipt root,
+   - Information about rejected transactions,
+   - Optionally: a full or partial post-state dump
 
 ### Specification
 
