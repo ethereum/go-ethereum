@@ -67,7 +67,7 @@ func (c *Client) fetchProof(ctx context.Context, req proofRequest) (*gethclient.
 	request := c.proofRequests.request(req)
 	proof, err := request.getResult(ctx)
 	if err == nil {
-		c.proofCache.Add(req, proof) //TODO cached before validation; remove and retry if invalid
+		c.proofCache.Add(req, proof) // cached before validation; remove and retry if invalid
 	}
 	request.release()
 	return proof, err
@@ -129,7 +129,7 @@ func (c *Client) fetchCode(ctx context.Context, req codeRequest) ([]byte, error)
 	request := c.codeRequests.request(req)
 	code, err := request.getResult(ctx)
 	if err == nil {
-		c.codeCache.Add(req, code) //TODO cached before validation; remove and retry if invalid
+		c.codeCache.Add(req, code) // cached before validation; remove and retry if invalid
 	}
 	request.release()
 	return code, err
@@ -190,9 +190,17 @@ func stValueBytes(value *big.Int) ([]byte, error) {
 }
 
 func (c *Client) getProof(ctx context.Context, blockNumber *big.Int, account common.Address, storageKeys []string, getCode bool) (*gethclient.AccountResult, []byte, error) {
+	proof, code, retry, err := c.getProofOnce(ctx, blockNumber, account, storageKeys, getCode)
+	if retry {
+		proof, code, _, err = c.getProofOnce(ctx, blockNumber, account, storageKeys, getCode)
+	}
+	return proof, code, err
+}
+
+func (c *Client) getProofOnce(ctx context.Context, blockNumber *big.Int, account common.Address, storageKeys []string, getCode bool) (*gethclient.AccountResult, []byte, bool, error) {
 	num, pheader, err := c.resolveBlockNumber(blockNumber)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	var (
 		stateRoot    common.Hash
@@ -227,34 +235,44 @@ func (c *Client) getProof(ctx context.Context, blockNumber *big.Int, account com
 		code    []byte
 		codeErr error
 		codeCh  = make(chan struct{})
+		codeReq codeRequest
 	)
 	if getCode {
 		go func() {
-			code, codeErr = c.fetchCode(ctx, codeRequest{blockNumber: num, address: account})
+			codeReq = codeRequest{blockNumber: num, address: account}
+			code, codeErr = c.fetchCode(ctx, codeReq)
 			close(codeCh)
 		}()
 	}
-	proof, proofErr := c.fetchProof(ctx, proofRequest{blockNumber: num, address: account, storageKeys: strings.Join(storageKeys, ",")})
+	proofReq := proofRequest{blockNumber: num, address: account, storageKeys: strings.Join(storageKeys, ",")}
+	proof, proofErr := c.fetchProof(ctx, proofReq)
 	if proofErr != nil {
-		return nil, nil, proofErr
+		return nil, nil, false, proofErr
 	}
 	<-stateRootCh
 	if stateRootErr != nil {
-		return nil, nil, stateRootErr
+		return nil, nil, false, stateRootErr
 	}
 	if err := c.validateProof(proof, stateRoot, account, storageKeys); err != nil {
-		return nil, nil, err
+		if getCode {
+			<-codeCh
+			c.codeCache.Remove(codeReq)
+		}
+		c.proofCache.Remove(proofReq)
+		return nil, nil, true, err
 	}
 	if getCode {
 		<-codeCh
 		if codeErr != nil {
-			return nil, nil, codeErr
+			return nil, nil, false, codeErr
 		}
 		if crypto.Keccak256Hash(code) != proof.CodeHash {
-			return nil, nil, errors.New("code hash mismatch")
+			c.codeCache.Remove(codeReq)
+			c.proofCache.Remove(proofReq)
+			return nil, nil, true, errors.New("code hash mismatch")
 		}
 	}
-	return proof, code, nil
+	return proof, code, false, nil
 }
 
 func (c *Client) validateProof(proof *gethclient.AccountResult, stateRoot common.Hash, account common.Address, storageKeys []string) error {
@@ -312,7 +330,7 @@ func (c *Client) validateProof(proof *gethclient.AccountResult, stateRoot common
 		if err != nil {
 			return err
 		}
-		key = common.BytesToHash(key).Bytes() // TODO 32 byte padding needed???
+		key = common.BytesToHash(key).Bytes()
 		value, err := trie.VerifyProof(proof.StorageHash, crypto.Keccak256(key), proofReader)
 		if err != nil {
 			return err
@@ -322,8 +340,7 @@ func (c *Client) validateProof(proof *gethclient.AccountResult, stateRoot common
 			return err
 		}
 		enc, _ := rlp.EncodeToBytes(stv)
-		if !bytes.Equal(enc, value) { //TODO check for empty value
-			//log.Info("storage value mismatch", "value", enc, "proven", value)
+		if !bytes.Equal(enc, value) {
 			return errors.New("storage value mismatch")
 		}
 	}

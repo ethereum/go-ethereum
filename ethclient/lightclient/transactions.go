@@ -74,7 +74,11 @@ func (c *Client) getTxByHash(ctx context.Context, txHash common.Hash) (tx *types
 	if pos, ok := c.txPosCache.Get(txHash); ok {
 		if hash, ok := c.getCachedHash(pos.blockNumber); ok && hash == pos.blockHash {
 			if block, ok := c.blockCache.Get(pos.blockHash); ok {
-				return block.Transactions()[pos.index], false, nil //TODO index range check
+				transactions := block.Transactions()
+				if pos.index >= uint(len(transactions)) {
+					return nil, false, errors.New("transaction index out of range")
+				}
+				return transactions[pos.index], false, nil
 			}
 		}
 	}
@@ -107,7 +111,10 @@ func (c *Client) getReceiptByTxHash(ctx context.Context, txHash common.Hash) (*t
 	if pos, ok := c.txPosCache.Get(txHash); ok {
 		if hash, ok := c.getCachedHash(pos.blockNumber); ok && hash == pos.blockHash {
 			if receipts, ok := c.receiptsCache.Get(pos.blockHash); ok {
-				return receipts[pos.index], nil //TODO index range check
+				if pos.index >= uint(len(receipts)) {
+					return nil, errors.New("transaction index out of range")
+				}
+				return receipts[pos.index], nil
 			}
 		}
 	}
