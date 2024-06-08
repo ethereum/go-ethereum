@@ -91,7 +91,7 @@ func (a *Account) getState(ctx context.Context) (*state.StateDB, error) {
 	return state, err
 }
 
-func (a *Account) Address(ctx context.Context) (common.Address, error) {
+func (a *Account) Address(_ context.Context) (common.Address, error) {
 	return a.address, nil
 }
 
@@ -146,7 +146,7 @@ type Log struct {
 	log         *types.Log
 }
 
-func (l *Log) Transaction(ctx context.Context) *Transaction {
+func (l *Log) Transaction(_ context.Context) *Transaction {
 	return l.transaction
 }
 
@@ -158,15 +158,15 @@ func (l *Log) Account(ctx context.Context, args BlockNumberArgs) *Account {
 	}
 }
 
-func (l *Log) Index(ctx context.Context) hexutil.Uint64 {
+func (l *Log) Index(_ context.Context) hexutil.Uint64 {
 	return hexutil.Uint64(l.log.Index)
 }
 
-func (l *Log) Topics(ctx context.Context) []common.Hash {
+func (l *Log) Topics(_ context.Context) []common.Hash {
 	return l.log.Topics
 }
 
-func (l *Log) Data(ctx context.Context) hexutil.Bytes {
+func (l *Log) Data(_ context.Context) hexutil.Bytes {
 	return l.log.Data
 }
 
@@ -176,11 +176,11 @@ type AccessTuple struct {
 	storageKeys []common.Hash
 }
 
-func (at *AccessTuple) Address(ctx context.Context) common.Address {
+func (at *AccessTuple) Address(_ context.Context) common.Address {
 	return at.address
 }
 
-func (at *AccessTuple) StorageKeys(ctx context.Context) []common.Hash {
+func (at *AccessTuple) StorageKeys(_ context.Context) []common.Hash {
 	return at.storageKeys
 }
 
@@ -193,19 +193,19 @@ type Withdrawal struct {
 	amount    uint64
 }
 
-func (w *Withdrawal) Index(ctx context.Context) hexutil.Uint64 {
+func (w *Withdrawal) Index(_ context.Context) hexutil.Uint64 {
 	return hexutil.Uint64(w.index)
 }
 
-func (w *Withdrawal) Validator(ctx context.Context) hexutil.Uint64 {
+func (w *Withdrawal) Validator(_ context.Context) hexutil.Uint64 {
 	return hexutil.Uint64(w.validator)
 }
 
-func (w *Withdrawal) Address(ctx context.Context) common.Address {
+func (w *Withdrawal) Address(_ context.Context) common.Address {
 	return w.address
 }
 
-func (w *Withdrawal) Amount(ctx context.Context) hexutil.Uint64 {
+func (w *Withdrawal) Amount(_ context.Context) hexutil.Uint64 {
 	return hexutil.Uint64(w.amount)
 }
 
@@ -247,7 +247,7 @@ func (t *Transaction) resolve(ctx context.Context) (*types.Transaction, *Block) 
 	return t.tx, nil
 }
 
-func (t *Transaction) Hash(ctx context.Context) common.Hash {
+func (t *Transaction) Hash(_ context.Context) common.Hash {
 	return t.hash
 }
 
@@ -728,7 +728,7 @@ func (b *Block) Number(ctx context.Context) (hexutil.Uint64, error) {
 	return hexutil.Uint64(header.Number.Uint64()), nil
 }
 
-func (b *Block) Hash(ctx context.Context) (common.Hash, error) {
+func (b *Block) Hash(_ context.Context) (common.Hash, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.hash, nil
@@ -1149,7 +1149,7 @@ func (b *Block) Logs(ctx context.Context, args struct{ Filter BlockFilterCriteri
 	return runFilter(ctx, b.r, filter)
 }
 
-func (b *Block) Account(ctx context.Context, args struct {
+func (b *Block) Account(_ context.Context, args struct {
 	Address common.Address
 }) (*Account, error) {
 	return &Account{
@@ -1220,12 +1220,12 @@ type Pending struct {
 	r *Resolver
 }
 
-func (p *Pending) TransactionCount(ctx context.Context) (hexutil.Uint64, error) {
+func (p *Pending) TransactionCount(_ context.Context) (hexutil.Uint64, error) {
 	txs, err := p.r.backend.GetPoolTransactions()
 	return hexutil.Uint64(len(txs)), err
 }
 
-func (p *Pending) Transactions(ctx context.Context) (*[]*Transaction, error) {
+func (p *Pending) Transactions(_ context.Context) (*[]*Transaction, error) {
 	txs, err := p.r.backend.GetPoolTransactions()
 	if err != nil {
 		return nil, err
@@ -1242,7 +1242,7 @@ func (p *Pending) Transactions(ctx context.Context) (*[]*Transaction, error) {
 	return &ret, nil
 }
 
-func (p *Pending) Account(ctx context.Context, args struct {
+func (p *Pending) Account(_ context.Context, args struct {
 	Address common.Address
 }) *Account {
 	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
@@ -1364,7 +1364,7 @@ func (r *Resolver) Blocks(ctx context.Context, args struct {
 	return ret, nil
 }
 
-func (r *Resolver) Pending(ctx context.Context) *Pending {
+func (r *Resolver) Pending(_ context.Context) *Pending {
 	return &Pending{r}
 }
 
@@ -1455,7 +1455,7 @@ func (r *Resolver) MaxPriorityFeePerGas(ctx context.Context) (hexutil.Big, error
 	return (hexutil.Big)(*tipcap), nil
 }
 
-func (r *Resolver) ChainID(ctx context.Context) (hexutil.Big, error) {
+func (r *Resolver) ChainID(_ context.Context) (hexutil.Big, error) {
 	return hexutil.Big(*r.backend.ChainConfig().ChainID), nil
 }
 
