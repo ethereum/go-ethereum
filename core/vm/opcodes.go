@@ -89,13 +89,14 @@ const (
 
 // 0x40 range - block operations.
 const (
-	BLOCKHASH   OpCode = 0x40
-	COINBASE    OpCode = 0x41
-	TIMESTAMP   OpCode = 0x42
-	NUMBER      OpCode = 0x43
-	DIFFICULTY  OpCode = 0x44
-	RANDOM      OpCode = 0x44 // Same as DIFFICULTY
-	PREVRANDAO  OpCode = 0x44 // Same as DIFFICULTY
+	BLOCKHASH  OpCode = 0x40
+	COINBASE   OpCode = 0x41
+	TIMESTAMP  OpCode = 0x42
+	NUMBER     OpCode = 0x43
+	DIFFICULTY OpCode = 0x44
+	// RANDOM & PREVRANDAO are not supported in scroll
+	// RANDOM      OpCode = 0x44 // Same as DIFFICULTY
+	// PREVRANDAO  OpCode = 0x44 // Same as DIFFICULTY
 	GASLIMIT    OpCode = 0x45
 	CHAINID     OpCode = 0x46
 	SELFBALANCE OpCode = 0x47

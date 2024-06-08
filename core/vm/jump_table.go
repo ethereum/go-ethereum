@@ -120,12 +120,12 @@ func newShanghaiInstructionSet() JumpTable {
 
 func newMergeInstructionSet() JumpTable {
 	instructionSet := newLondonInstructionSet()
-	instructionSet[PREVRANDAO] = &operation{
-		execute:     opRandom,
-		constantGas: GasQuickStep,
-		minStack:    minStack(0, 1),
-		maxStack:    maxStack(0, 1),
-	}
+	// instructionSet[PREVRANDAO] = &operation{
+	// 	execute:     opRandom,
+	// 	constantGas: GasQuickStep,
+	// 	minStack:    minStack(0, 1),
+	// 	maxStack:    maxStack(0, 1),
+	// }
 	return validate(instructionSet)
 }
 
