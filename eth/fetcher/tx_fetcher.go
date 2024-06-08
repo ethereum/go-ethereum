@@ -40,7 +40,7 @@ const (
 	maxTxAnnounces = 4096
 
 	// maxTxRetrievals is the maximum number of transactions that can be fetched
-	// in one request. The rationale for picking 256 is to have a reasonabe lower
+	// in one request. The rationale for picking 256 is to have a reasonable lower
 	// bound for the transferred data (don't waste RTTs, transfer more meaningful
 	// batch sizes), but also have an upper bound on the sequentiality to allow
 	// using our entire peerset for deliveries.
