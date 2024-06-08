@@ -19,6 +19,7 @@ package p2p
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
@@ -26,7 +27,6 @@ import (
 	"net"
 	"net/netip"
 	"slices"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1141,8 +1141,8 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	// Sort the result array alphabetically by node identifier
-	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].ID < infos[j].ID
+	slices.SortFunc(infos, func(a, b *PeerInfo) int {
+		return cmp.Compare(a.ID, b.ID)
 	})
 
 	return infos
