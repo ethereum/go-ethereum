@@ -57,7 +57,7 @@ type TerminalHandler struct {
 //
 // Example:
 //
-//	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
+//	[DEBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
 func NewTerminalHandler(wr io.Writer, useColor bool) *TerminalHandler {
 	return NewTerminalHandlerWithLevel(wr, levelMaxVerbosity, useColor)
 }
@@ -101,10 +101,10 @@ func (h *TerminalHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 // ResetFieldPadding zeroes the field-padding for all attribute pairs.
-func (t *TerminalHandler) ResetFieldPadding() {
-	t.mu.Lock()
-	t.fieldPadding = make(map[string]int)
-	t.mu.Unlock()
+func (h *TerminalHandler) ResetFieldPadding() {
+	h.mu.Lock()
+	h.fieldPadding = make(map[string]int)
+	h.mu.Unlock()
 }
 
 type leveler struct{ minLevel slog.Level }
