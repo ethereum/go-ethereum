@@ -89,7 +89,7 @@ func (api *SignerAPI) SignData(ctx context.Context, contentType string, addr com
 
 // determineSignatureFormat determines which signature method should be used based upon the mime type
 // In the cases where it matters ensure that the charset is handled. The charset
-// resides in the 'params' returned as the second returnvalue from mime.ParseMediaType
+// resides in the 'params' returned as the second return value from mime.ParseMediaType
 // charset, ok := params["charset"]
 // As it is now, we accept any charset and just treat it as 'raw'.
 // This method returns the mimetype for signing along with the request
