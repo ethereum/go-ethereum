@@ -38,13 +38,18 @@ import (
 )
 
 type Client struct {
-	clConfig         config.LightClientConfig
-	elConfig         *params.ChainConfig
-	scheduler        *request.Scheduler
-	canonicalChain   *canonicalChain
-	blocksAndHeaders *blocksAndHeaders
-	txAndReceipts    *txAndReceipts
-	state            *lightState
+	canonicalChainFields
+	blocksAndHeadersFields
+	lightStateFields
+	txAndReceiptsFields
+
+	clConfig config.LightClientConfig
+	elConfig *params.ChainConfig
+
+	client      *rpc.Client
+	scheduler   *request.Scheduler
+	headTracker *light.HeadTracker
+
 	headSubLock      ssync.Mutex
 	headSubs         map[*headSub]struct{}
 	cancelHeadFetch  func()
@@ -53,38 +58,29 @@ type Client struct {
 
 func NewClient(clConfig config.LightClientConfig, elConfig *params.ChainConfig, db ethdb.KeyValueStore, rpcClient *rpc.Client) *Client {
 	// create data structures
-	var (
-		committeeChain = light.NewCommitteeChain(db, clConfig.ChainConfig, clConfig.SignerThreshold, clConfig.EnforceTime)
-		headTracker    = light.NewHeadTracker(committeeChain, clConfig.SignerThreshold)
-	)
-	// set up scheduler and sync modules
-	//chainHeadFeed := new(event.Feed)
-	scheduler := request.NewScheduler()
+	committeeChain := light.NewCommitteeChain(db, clConfig.ChainConfig, clConfig.SignerThreshold, clConfig.EnforceTime)
 	client := &Client{
-		clConfig:  clConfig,
-		elConfig:  elConfig,
-		scheduler: scheduler,
-		headSubs:  make(map[*headSub]struct{}),
+		client:      rpcClient,
+		clConfig:    clConfig,
+		elConfig:    elConfig,
+		scheduler:   request.NewScheduler(),
+		headTracker: light.NewHeadTracker(committeeChain, clConfig.SignerThreshold),
+		headSubs:    make(map[*headSub]struct{}),
 	}
-	blocksAndHeaders := newBlocksAndHeaders(rpcClient)
-	canonicalChain := newCanonicalChain(headTracker, blocksAndHeaders, client.newHead)
-	txAndReceipts := newTxAndReceipts(rpcClient, canonicalChain, blocksAndHeaders, elConfig)
-	blocksAndHeaders.txAndReceipts = txAndReceipts
-	client.blocksAndHeaders = blocksAndHeaders
-	client.txAndReceipts = txAndReceipts
-	client.canonicalChain = canonicalChain
-	client.state = newLightState(rpcClient, canonicalChain, blocksAndHeaders)
-	txAndReceipts.lightState = client.state //TODO init these refs in a nicer way???
+	client.initBlocksAndHeaders()
+	client.initCanonicalChain()
+	client.initTxAndReceipts()
+	client.initLightState()
 
 	checkpointInit := sync.NewCheckpointInit(committeeChain, clConfig.Checkpoint)
 	forwardSync := sync.NewForwardUpdateSync(committeeChain)
-	headSync := sync.NewHeadSync(headTracker, committeeChain)
-	scheduler.RegisterTarget(headTracker)
-	scheduler.RegisterTarget(committeeChain)
-	scheduler.RegisterModule(checkpointInit, "checkpointInit")
-	scheduler.RegisterModule(forwardSync, "forwardSync")
-	scheduler.RegisterModule(headSync, "headSync")
-	scheduler.RegisterModule(client.canonicalChain, "canonicalChain")
+	headSync := sync.NewHeadSync(client.headTracker, committeeChain)
+	client.scheduler.RegisterTarget(client.headTracker)
+	client.scheduler.RegisterTarget(committeeChain)
+	client.scheduler.RegisterModule(checkpointInit, "checkpointInit")
+	client.scheduler.RegisterModule(forwardSync, "forwardSync")
+	client.scheduler.RegisterModule(headSync, "headSync")
+	client.scheduler.RegisterModule(client, "canonicalChain")
 	return client
 }
 
@@ -105,11 +101,11 @@ func (c *Client) Stop() {
 // ChainReader interface
 
 func (c *Client) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	return c.blocksAndHeaders.getBlock(ctx, hash)
+	return c.getBlock(ctx, hash)
 }
 
 func (c *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Block, error) {
-	hash, err := c.canonicalChain.blockNumberToHash(ctx, number)
+	hash, err := c.blockNumberToHash(ctx, number)
 	if err != nil {
 		return nil, err
 	}
@@ -117,11 +113,11 @@ func (c *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Blo
 }
 
 func (c *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	return c.blocksAndHeaders.getHeader(ctx, hash)
+	return c.getHeader(ctx, hash)
 }
 
 func (c *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
-	hash, err := c.canonicalChain.blockNumberToHash(ctx, number)
+	hash, err := c.blockNumberToHash(ctx, number)
 	if err != nil {
 		return nil, err
 	}
@@ -160,36 +156,34 @@ func (c *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) 
 	return sub, nil
 }
 
-func (c *Client) newHead(number uint64, hash common.Hash) {
-	go func() {
-		log.Trace("New execution payload header received", "hash", hash)
-		c.txAndReceipts.newHead(number, hash)
-		ctx, cancel := context.WithCancel(context.Background())
-		c.headSubLock.Lock()
-		if len(c.headSubs) == 0 {
-			c.headSubLock.Unlock()
-			return
-		}
-		if c.cancelHeadFetch != nil {
-			c.cancelHeadFetch()
-		}
-		c.cancelHeadFetch = cancel
-		c.headFetchCounter++
-		hfc := c.headFetchCounter
+func (c *Client) processNewHead(number uint64, hash common.Hash) {
+	log.Trace("New execution payload header received", "hash", hash)
+	c.txAndReceiptsNewHead(number, hash)
+	ctx, cancel := context.WithCancel(context.Background())
+	c.headSubLock.Lock()
+	if len(c.headSubs) == 0 {
 		c.headSubLock.Unlock()
+		return
+	}
+	if c.cancelHeadFetch != nil {
+		c.cancelHeadFetch()
+	}
+	c.cancelHeadFetch = cancel
+	c.headFetchCounter++
+	hfc := c.headFetchCounter
+	c.headSubLock.Unlock()
 
-		head, err := c.blocksAndHeaders.getHeader(ctx, hash)
-		c.headSubLock.Lock()
-		if c.headFetchCounter == hfc {
-			c.cancelHeadFetch = nil
+	head, err := c.getHeader(ctx, hash)
+	c.headSubLock.Lock()
+	if c.headFetchCounter == hfc {
+		c.cancelHeadFetch = nil
+	}
+	if err == nil {
+		for sub := range c.headSubs {
+			sub.headCh <- head
 		}
-		if err == nil {
-			for sub := range c.headSubs {
-				sub.headCh <- head
-			}
-		}
-		c.headSubLock.Unlock()
-	}()
+	}
+	c.headSubLock.Unlock()
 }
 
 func (c *Client) unsubscribeNewHead(sub *headSub) {
@@ -216,17 +210,17 @@ func (h *headSub) Err() <-chan error {
 // TransactionReader interface
 
 func (c *Client) TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
-	return c.txAndReceipts.getTxByHash(ctx, txHash)
+	return c.getTxByHash(ctx, txHash)
 }
 
 func (c *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
-	return c.txAndReceipts.getReceiptByTxHash(ctx, txHash)
+	return c.getReceiptByTxHash(ctx, txHash)
 }
 
 // ChainStateReader interface
 
 func (c *Client) BalanceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
-	proof, _, err := c.state.getProof(ctx, blockNumber, account, nil, false)
+	proof, _, err := c.getProof(ctx, blockNumber, account, nil, false)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +228,7 @@ func (c *Client) BalanceAt(ctx context.Context, account common.Address, blockNum
 }
 
 func (c *Client) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
-	proof, _, err := c.state.getProof(ctx, blockNumber, account, []string{key.Hex()}, false)
+	proof, _, err := c.getProof(ctx, blockNumber, account, []string{key.Hex()}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +236,7 @@ func (c *Client) StorageAt(ctx context.Context, account common.Address, key comm
 }
 
 func (c *Client) CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error) {
-	_, code, err := c.state.getProof(ctx, blockNumber, account, nil, true)
+	_, code, err := c.getProof(ctx, blockNumber, account, nil, true)
 	return code, err
 }
 
@@ -250,7 +244,7 @@ func (c *Client) NonceAt(ctx context.Context, account common.Address, blockNumbe
 	if blockNumber.IsInt64() && rpc.BlockNumber(blockNumber.Int64()) == rpc.PendingBlockNumber {
 		return c.PendingNonceAt(ctx, account)
 	}
-	proof, _, err := c.state.getProof(ctx, blockNumber, account, nil, false)
+	proof, _, err := c.getProof(ctx, blockNumber, account, nil, false)
 	if err != nil {
 		return 0, err
 	}
@@ -258,17 +252,17 @@ func (c *Client) NonceAt(ctx context.Context, account common.Address, blockNumbe
 }
 
 func (c *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]*types.Receipt, error) {
-	hash, err := c.canonicalChain.blockNumberOrHashToHash(ctx, blockNrOrHash)
+	hash, err := c.blockNumberOrHashToHash(ctx, blockNrOrHash)
 	if err != nil {
 		return nil, err
 	}
-	return c.txAndReceipts.getBlockReceipts(ctx, hash)
+	return c.getBlockReceipts(ctx, hash)
 }
 
 // TransactionSender interface
 
 func (c *Client) SendTransaction(ctx context.Context, tx *types.Transaction) error {
-	return c.txAndReceipts.sendTransaction(ctx, tx)
+	return c.sendTransaction(ctx, tx)
 }
 
 // PendingStateReader interface
@@ -287,11 +281,11 @@ func (c *Client) PendingCodeAt(ctx context.Context, account common.Address) ([]b
 }
 
 func (c *Client) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
-	head := c.canonicalChain.getHead()
+	head := c.getHead()
 	if head == nil {
 		return 0, errors.New("chain head unknown")
 	}
-	headNonce, pendingTxs, err := c.txAndReceipts.nonceAndPendingTxs(ctx, head, account)
+	headNonce, pendingTxs, err := c.nonceAndPendingTxs(ctx, head, account)
 	if err != nil {
 		return 0, err
 	}
@@ -302,16 +296,16 @@ func (c *Client) PendingNonceAt(ctx context.Context, account common.Address) (ui
 }
 
 func (c *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
-	head := c.canonicalChain.getHead()
+	head := c.getHead()
 	if head == nil {
 		return 0, errors.New("chain head unknown")
 	}
-	allSenders := c.txAndReceipts.allSenders()
+	allSenders := c.allSenders()
 	countCh := make(chan uint, len(allSenders))
 	errCh := make(chan error, len(allSenders))
 	for _, sender := range allSenders {
 		go func() {
-			_, pendingTxs, err := c.txAndReceipts.nonceAndPendingTxs(ctx, head, sender)
+			_, pendingTxs, err := c.nonceAndPendingTxs(ctx, head, sender)
 			errCh <- err
 			countCh <- uint(len(pendingTxs))
 		}()
@@ -329,7 +323,7 @@ func (c *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 // BlockNumberReader interface
 
 func (c *Client) BlockNumber(ctx context.Context) (uint64, error) {
-	if head := c.canonicalChain.getHead(); head != nil {
+	if head := c.getHead(); head != nil {
 		return head.BlockNumber(), nil
 	}
 	return 0, errors.New("chain head unknown")

@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	btypes "github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -37,12 +36,8 @@ import (
 
 const recentCanonicalLength = 256
 
-type canonicalChain struct {
-	lock             sync.Mutex
-	headTracker      *light.HeadTracker
-	blocksAndHeaders *blocksAndHeaders
-	newHeadCb        func(uint64, common.Hash)
-
+type canonicalChainFields struct {
+	chainLock      sync.Mutex
 	head, finality *btypes.ExecutionHeader
 	recent         map[uint64]common.Hash // nil until initialized
 	recentTail     uint64                 // if recent != nil then recent hashes are available from recentTail to head
@@ -51,38 +46,32 @@ type canonicalChain struct {
 	requests       *requestMap[uint64, common.Hash] // requested; neither recent nor cached finalized
 }
 
-func newCanonicalChain(headTracker *light.HeadTracker, blocksAndHeaders *blocksAndHeaders, newHeadCb func(uint64, common.Hash)) *canonicalChain {
-	c := &canonicalChain{
-		headTracker:      headTracker,
-		blocksAndHeaders: blocksAndHeaders,
-		newHeadCb:        newHeadCb,
-		finalized:        lru.NewCache[uint64, common.Hash](10000),
-		requests:         newRequestMap[uint64, common.Hash](nil),
-		tailFetchCh:      make(chan struct{}),
-	}
+func (c *Client) initCanonicalChain() {
+	c.finalized = lru.NewCache[uint64, common.Hash](10000)
+	c.requests = newRequestMap[uint64, common.Hash](nil)
+	c.tailFetchCh = make(chan struct{})
 	go c.tailFetcher()
-	return c
 }
 
 // Process implements request.Module in order to get notified about new heads.
-func (c *canonicalChain) Process(requester request.Requester, events []request.Event) {
+func (c *Client) Process(requester request.Requester, events []request.Event) {
 	if finality, ok := c.headTracker.ValidatedFinality(); ok {
 		finalized := finality.Finalized.PayloadHeader
 		c.setFinality(finalized)
-		c.blocksAndHeaders.addPayloadHeader(finalized)
+		c.addPayloadHeader(finalized)
 	}
 	if optimistic, ok := c.headTracker.ValidatedOptimistic(); ok {
 		head := optimistic.Attested.PayloadHeader
-		c.blocksAndHeaders.addPayloadHeader(head)
+		c.addPayloadHeader(head)
 		if c.setHead(head) {
-			c.newHeadCb(head.BlockNumber(), head.BlockHash()) // should not block
+			go c.processNewHead(head.BlockNumber(), head.BlockHash())
 		}
 	}
 }
 
-func (c *canonicalChain) tailFetcher() { //TODO stop
+func (c *Client) tailFetcher() { //TODO stop
 	for {
-		c.lock.Lock()
+		c.chainLock.Lock()
 		var (
 			tailNum  uint64
 			tailHash common.Hash
@@ -96,12 +85,12 @@ func (c *canonicalChain) tailFetcher() { //TODO stop
 				needTail = reqNum
 			}
 		}
-		c.lock.Unlock()
+		c.chainLock.Unlock()
 		if needTail < tailNum { //TODO check recentCanonicalLength
 			log.Debug("Fetching tail headers", "have", tailNum, "need", needTail)
 			ctx, _ := context.WithTimeout(context.Background(), time.Second*10)
 			//TODO parallel fetch by number
-			if header, err := c.blocksAndHeaders.getHeader(ctx, tailHash); err == nil {
+			if header, err := c.getHeader(ctx, tailHash); err == nil {
 				c.addRecentTail(header)
 			}
 		} else {
@@ -110,7 +99,7 @@ func (c *canonicalChain) tailFetcher() { //TODO stop
 	}
 }
 
-func (c *canonicalChain) getHash(ctx context.Context, number uint64) (common.Hash, error) {
+func (c *Client) getHash(ctx context.Context, number uint64) (common.Hash, error) {
 	if hash, ok := c.getCachedHash(number); ok {
 		return hash, nil
 	}
@@ -123,19 +112,19 @@ func (c *canonicalChain) getHash(ctx context.Context, number uint64) (common.Has
 	return req.getResult(ctx)
 }
 
-func (c *canonicalChain) getCachedHash(number uint64) (common.Hash, bool) {
-	c.lock.Lock()
+func (c *Client) getCachedHash(number uint64) (common.Hash, bool) {
+	c.chainLock.Lock()
 	hash, ok := c.recent[number]
-	c.lock.Unlock()
+	c.chainLock.Unlock()
 	if ok {
 		return hash, true
 	}
 	return c.finalized.Get(number)
 }
 
-func (c *canonicalChain) setHead(head *btypes.ExecutionHeader) bool {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *Client) setHead(head *btypes.ExecutionHeader) bool {
+	c.chainLock.Lock()
+	defer c.chainLock.Unlock()
 
 	headNum, headHash := head.BlockNumber(), head.BlockHash()
 	if c.head != nil && c.head.BlockHash() == headHash {
@@ -166,9 +155,9 @@ func (c *canonicalChain) setHead(head *btypes.ExecutionHeader) bool {
 	return true
 }
 
-func (c *canonicalChain) setFinality(finality *btypes.ExecutionHeader) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *Client) setFinality(finality *btypes.ExecutionHeader) {
+	c.chainLock.Lock()
+	defer c.chainLock.Unlock()
 
 	c.finality = finality
 	finalNum := finality.BlockNumber()
@@ -178,9 +167,9 @@ func (c *canonicalChain) setFinality(finality *btypes.ExecutionHeader) {
 	c.requests.tryDeliver(finalNum, finality.BlockHash())
 }
 
-func (c *canonicalChain) addRecentTail(tail *types.Header) bool {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *Client) addRecentTail(tail *types.Header) bool {
+	c.chainLock.Lock()
+	defer c.chainLock.Unlock()
 
 	if c.recent == nil || tail.Number.Uint64() != c.recentTail || c.recent[c.recentTail] != tail.Hash() {
 		return false
@@ -193,21 +182,21 @@ func (c *canonicalChain) addRecentTail(tail *types.Header) bool {
 	return true
 }
 
-func (c *canonicalChain) getHead() *btypes.ExecutionHeader {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *Client) getHead() *btypes.ExecutionHeader {
+	c.chainLock.Lock()
+	defer c.chainLock.Unlock()
 
 	return c.head
 }
 
-func (c *canonicalChain) getFinality() *btypes.ExecutionHeader {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (c *Client) getFinality() *btypes.ExecutionHeader {
+	c.chainLock.Lock()
+	defer c.chainLock.Unlock()
 
 	return c.finality
 }
 
-func (c *canonicalChain) resolveBlockNumber(number *big.Int) (uint64, *btypes.ExecutionHeader, error) {
+func (c *Client) resolveBlockNumber(number *big.Int) (uint64, *btypes.ExecutionHeader, error) {
 	if !number.IsInt64() {
 		return 0, nil, errors.New("Invalid block number")
 	}
@@ -231,7 +220,7 @@ func (c *canonicalChain) resolveBlockNumber(number *big.Int) (uint64, *btypes.Ex
 	return uint64(num), nil, nil
 }
 
-func (c *canonicalChain) blockNumberToHash(ctx context.Context, number *big.Int) (common.Hash, error) {
+func (c *Client) blockNumberToHash(ctx context.Context, number *big.Int) (common.Hash, error) {
 	num, pheader, err := c.resolveBlockNumber(number)
 	if err != nil {
 		return common.Hash{}, err
@@ -242,13 +231,13 @@ func (c *canonicalChain) blockNumberToHash(ctx context.Context, number *big.Int)
 	return c.getHash(ctx, num)
 }
 
-func (c *canonicalChain) blockNumberOrHashToHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (common.Hash, error) {
+func (c *Client) blockNumberOrHashToHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (common.Hash, error) {
 	if blockNrOrHash.BlockNumber != nil {
 		return c.blockNumberToHash(ctx, big.NewInt(int64(*blockNrOrHash.BlockNumber)))
 	}
 	hash := *blockNrOrHash.BlockHash
 	if blockNrOrHash.RequireCanonical {
-		header, err := c.blocksAndHeaders.getHeader(ctx, hash)
+		header, err := c.getHeader(ctx, hash)
 		if err != nil {
 			return common.Hash{}, err
 		}
@@ -263,9 +252,7 @@ func (c *canonicalChain) blockNumberOrHashToHash(ctx context.Context, blockNrOrH
 	return hash, nil
 }
 
-type blocksAndHeaders struct {
-	client             *rpc.Client
-	txAndReceipts      *txAndReceipts
+type blocksAndHeadersFields struct {
 	headerCache        *lru.Cache[common.Hash, *types.Header]
 	headerRequests     *requestMap[common.Hash, *types.Header]
 	payloadHeaderCache *lru.Cache[common.Hash, *btypes.ExecutionHeader]
@@ -273,22 +260,18 @@ type blocksAndHeaders struct {
 	blockRequests      *requestMap[common.Hash, *types.Block]
 }
 
-func newBlocksAndHeaders(client *rpc.Client) *blocksAndHeaders {
-	b := &blocksAndHeaders{
-		client:             client,
-		headerCache:        lru.NewCache[common.Hash, *types.Header](1000),
-		payloadHeaderCache: lru.NewCache[common.Hash, *btypes.ExecutionHeader](1000),
-		blockCache:         lru.NewCache[common.Hash, *types.Block](10),
-	}
-	b.headerRequests = newRequestMap[common.Hash, *types.Header](b.requestHeader)
-	b.blockRequests = newRequestMap[common.Hash, *types.Block](b.requestBlock)
-	return b
+func (c *Client) initBlocksAndHeaders() {
+	c.headerCache = lru.NewCache[common.Hash, *types.Header](1000)
+	c.payloadHeaderCache = lru.NewCache[common.Hash, *btypes.ExecutionHeader](1000)
+	c.blockCache = lru.NewCache[common.Hash, *types.Block](10)
+	c.headerRequests = newRequestMap[common.Hash, *types.Header](c.requestHeader)
+	c.blockRequests = newRequestMap[common.Hash, *types.Block](c.requestBlock)
 }
 
-func (b *blocksAndHeaders) requestHeader(ctx context.Context, hash common.Hash) (*types.Header, error) {
+func (c *Client) requestHeader(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	var header *types.Header
 	log.Debug("Starting RPC request", "type", "eth_getBlockByHash", "hash", hash, "full", false)
-	err := b.client.CallContext(ctx, &header, "eth_getBlockByHash", hash, false)
+	err := c.client.CallContext(ctx, &header, "eth_getBlockByHash", hash, false)
 	if err == nil && header.Hash() != hash {
 		header, err = nil, errors.New("header hash does not match")
 	}
@@ -296,13 +279,13 @@ func (b *blocksAndHeaders) requestHeader(ctx context.Context, hash common.Hash) 
 	return header, err
 }
 
-func (b *blocksAndHeaders) requestBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
+func (c *Client) requestBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	var (
 		raw   json.RawMessage
 		block *types.Block
 	)
 	log.Debug("Starting RPC request", "type", "eth_getBlockByHash", "hash", hash, "full", true)
-	err := b.client.CallContext(ctx, &raw, "eth_getBlockByHash", hash, true)
+	err := c.client.CallContext(ctx, &raw, "eth_getBlockByHash", hash, true)
 	log.Debug("Finished RPC request", "type", "eth_getBlockByHash", "hash", hash, "full", true, "error", err)
 	if err == nil {
 		block, err = decodeBlock(raw)
@@ -313,20 +296,20 @@ func (b *blocksAndHeaders) requestBlock(ctx context.Context, hash common.Hash) (
 	return block, err
 }
 
-func (b *blocksAndHeaders) getHeader(ctx context.Context, hash common.Hash) (*types.Header, error) {
-	if header, ok := b.headerCache.Get(hash); ok {
+func (c *Client) getHeader(ctx context.Context, hash common.Hash) (*types.Header, error) {
+	if header, ok := c.headerCache.Get(hash); ok {
 		return header, nil
 	}
-	if block, ok := b.blockCache.Get(hash); ok {
+	if block, ok := c.blockCache.Get(hash); ok {
 		return block.Header(), nil
 	}
-	if b.blockRequests.has(hash) && !b.headerRequests.has(hash) {
-		req := b.blockRequests.request(hash)
+	if c.blockRequests.has(hash) && !c.headerRequests.has(hash) {
+		req := c.blockRequests.request(hash)
 		block, err := req.getResult(ctx)
 		if err == nil {
 			header := block.Header()
-			b.headerCache.Add(hash, header)
-			b.blockCache.Add(hash, block)
+			c.headerCache.Add(hash, header)
+			c.blockCache.Add(hash, block)
 			req.release()
 			return header, nil
 		} else {
@@ -334,32 +317,32 @@ func (b *blocksAndHeaders) getHeader(ctx context.Context, hash common.Hash) (*ty
 			return nil, err
 		}
 	}
-	req := b.headerRequests.request(hash)
+	req := c.headerRequests.request(hash)
 	header, err := req.getResult(ctx)
 	if err == nil {
-		b.headerCache.Add(hash, header)
+		c.headerCache.Add(hash, header)
 	}
 	req.release()
 	return header, err
 }
 
-func (b *blocksAndHeaders) getPayloadHeader(hash common.Hash) *btypes.ExecutionHeader {
-	pheader, _ := b.payloadHeaderCache.Get(hash)
+func (c *Client) getPayloadHeader(hash common.Hash) *btypes.ExecutionHeader {
+	pheader, _ := c.payloadHeaderCache.Get(hash)
 	return pheader
 }
 
-func (b *blocksAndHeaders) getBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
-	if block, ok := b.blockCache.Get(hash); ok {
+func (c *Client) getBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	if block, ok := c.blockCache.Get(hash); ok {
 		return block, nil
 	}
-	req := b.blockRequests.request(hash)
+	req := c.blockRequests.request(hash)
 	block, err := req.getResult(ctx)
 	if err == nil {
 		header := block.Header()
-		b.headerCache.Add(hash, header)
-		b.headerRequests.tryDeliver(hash, header)
-		b.blockCache.Add(hash, block)
-		b.txAndReceipts.cacheBlockTxPositions(block)
+		c.headerCache.Add(hash, header)
+		c.headerRequests.tryDeliver(hash, header)
+		c.blockCache.Add(hash, block)
+		c.cacheBlockTxPositions(block)
 	}
 	req.release()
 	return block, err
@@ -467,6 +450,6 @@ func decodeBlock(raw json.RawMessage) (*types.Block, error) {
 	return types.NewBlockWithHeader(head).WithBody(types.Body{Transactions: txs, Withdrawals: body.Withdrawals}), nil
 }
 
-func (b *blocksAndHeaders) addPayloadHeader(header *btypes.ExecutionHeader) {
-	b.payloadHeaderCache.Add(header.BlockHash(), header)
+func (c *Client) addPayloadHeader(header *btypes.ExecutionHeader) {
+	c.payloadHeaderCache.Add(header.BlockHash(), header)
 }

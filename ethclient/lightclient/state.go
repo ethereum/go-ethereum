@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient/gethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
 )
@@ -47,43 +46,34 @@ type codeRequest struct {
 	address     common.Address
 }
 
-type lightState struct {
-	client           *rpc.Client
-	canonicalChain   *canonicalChain
-	blocksAndHeaders *blocksAndHeaders
-	proofCache       *lru.Cache[proofRequest, *gethclient.AccountResult]
-	proofRequests    *requestMap[proofRequest, *gethclient.AccountResult]
-	codeCache        *lru.Cache[codeRequest, []byte]
-	codeRequests     *requestMap[codeRequest, []byte]
+type lightStateFields struct {
+	proofCache    *lru.Cache[proofRequest, *gethclient.AccountResult]
+	proofRequests *requestMap[proofRequest, *gethclient.AccountResult]
+	codeCache     *lru.Cache[codeRequest, []byte]
+	codeRequests  *requestMap[codeRequest, []byte]
 }
 
-func newLightState(client *rpc.Client, canonicalChain *canonicalChain, blocksAndHeaders *blocksAndHeaders) *lightState {
-	s := &lightState{
-		client:           client,
-		canonicalChain:   canonicalChain,
-		blocksAndHeaders: blocksAndHeaders,
-		proofCache:       lru.NewCache[proofRequest, *gethclient.AccountResult](100),
-		codeCache:        lru.NewCache[codeRequest, []byte](10),
-	}
-	s.proofRequests = newRequestMap[proofRequest, *gethclient.AccountResult](s.requestProof)
-	s.codeRequests = newRequestMap[codeRequest, []byte](s.requestCode)
-	return s
+func (c *Client) initLightState() {
+	c.proofCache = lru.NewCache[proofRequest, *gethclient.AccountResult](100)
+	c.codeCache = lru.NewCache[codeRequest, []byte](10)
+	c.proofRequests = newRequestMap[proofRequest, *gethclient.AccountResult](c.requestProof)
+	c.codeRequests = newRequestMap[codeRequest, []byte](c.requestCode)
 }
 
-func (s *lightState) fetchProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
-	if proof, ok := s.proofCache.Get(req); ok {
+func (c *Client) fetchProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
+	if proof, ok := c.proofCache.Get(req); ok {
 		return proof, nil
 	}
-	request := s.proofRequests.request(req)
+	request := c.proofRequests.request(req)
 	proof, err := request.getResult(ctx)
 	if err == nil {
-		s.proofCache.Add(req, proof) //TODO cached before validation; remove and retry if invalid
+		c.proofCache.Add(req, proof) //TODO cached before validation; remove and retry if invalid
 	}
 	request.release()
 	return proof, err
 }
 
-func (s *lightState) requestProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
+func (c *Client) requestProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
 	type storageResult struct {
 		Key   string       `json:"key"`
 		Value *hexutil.Big `json:"value"`
@@ -106,7 +96,7 @@ func (s *lightState) requestProof(ctx context.Context, req proofRequest) (*gethc
 	}
 	log.Debug("Starting RPC request", "type", "eth_getProof", "blockNumber", req.blockNumber, "address", req.address, "storageKeys", len(storageKeys))
 	var res accountResult
-	err := s.client.CallContext(ctx, &res, "eth_getProof", req.address, storageKeys, hexutil.EncodeUint64(req.blockNumber))
+	err := c.client.CallContext(ctx, &res, "eth_getProof", req.address, storageKeys, hexutil.EncodeUint64(req.blockNumber))
 	log.Debug("Finished RPC request", "type", "eth_getProof", "blockNumber", req.blockNumber, "address", req.address, "storageKeys", len(storageKeys), "error", err)
 	var proof *gethclient.AccountResult
 	if err == nil { //TODO de-duplicate
@@ -132,23 +122,23 @@ func (s *lightState) requestProof(ctx context.Context, req proofRequest) (*gethc
 	return proof, err
 }
 
-func (s *lightState) fetchCode(ctx context.Context, req codeRequest) ([]byte, error) {
-	if code, ok := s.codeCache.Get(req); ok {
+func (c *Client) fetchCode(ctx context.Context, req codeRequest) ([]byte, error) {
+	if code, ok := c.codeCache.Get(req); ok {
 		return code, nil
 	}
-	request := s.codeRequests.request(req)
+	request := c.codeRequests.request(req)
 	code, err := request.getResult(ctx)
 	if err == nil {
-		s.codeCache.Add(req, code) //TODO cached before validation; remove and retry if invalid
+		c.codeCache.Add(req, code) //TODO cached before validation; remove and retry if invalid
 	}
 	request.release()
 	return code, err
 }
 
-func (s *lightState) requestCode(ctx context.Context, req codeRequest) ([]byte, error) {
+func (c *Client) requestCode(ctx context.Context, req codeRequest) ([]byte, error) {
 	var code hexutil.Bytes
 	log.Debug("Starting RPC request", "type", "eth_getCode", "blockNumber", req.blockNumber, "address", req.address)
-	err := s.client.CallContext(ctx, &code, "eth_getCode", req.address, hexutil.EncodeUint64(req.blockNumber))
+	err := c.client.CallContext(ctx, &code, "eth_getCode", req.address, hexutil.EncodeUint64(req.blockNumber))
 	log.Debug("Finished RPC request", "type", "eth_getCode", "blockNumber", req.blockNumber, "address", req.address, "error", err)
 	return code, err
 }
@@ -199,8 +189,8 @@ func stValueBytes(value *big.Int) ([]byte, error) {
 	}
 }
 
-func (s *lightState) getProof(ctx context.Context, blockNumber *big.Int, account common.Address, storageKeys []string, getCode bool) (*gethclient.AccountResult, []byte, error) {
-	num, pheader, err := s.canonicalChain.resolveBlockNumber(blockNumber)
+func (c *Client) getProof(ctx context.Context, blockNumber *big.Int, account common.Address, storageKeys []string, getCode bool) (*gethclient.AccountResult, []byte, error) {
+	num, pheader, err := c.resolveBlockNumber(blockNumber)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -216,16 +206,16 @@ func (s *lightState) getProof(ctx context.Context, blockNumber *big.Int, account
 		go func() {
 			defer close(stateRootCh)
 
-			blockHash, err := s.canonicalChain.getHash(ctx, num)
+			blockHash, err := c.getHash(ctx, num)
 			if err != nil {
 				stateRootErr = err
 				return
 			}
-			if pheader := s.blocksAndHeaders.getPayloadHeader(blockHash); pheader != nil {
+			if pheader := c.getPayloadHeader(blockHash); pheader != nil {
 				stateRoot = pheader.StateRoot()
 				return
 			}
-			header, err := s.blocksAndHeaders.getHeader(ctx, blockHash)
+			header, err := c.getHeader(ctx, blockHash)
 			if err != nil {
 				stateRootErr = err
 				return
@@ -240,11 +230,11 @@ func (s *lightState) getProof(ctx context.Context, blockNumber *big.Int, account
 	)
 	if getCode {
 		go func() {
-			code, codeErr = s.fetchCode(ctx, codeRequest{blockNumber: num, address: account})
+			code, codeErr = c.fetchCode(ctx, codeRequest{blockNumber: num, address: account})
 			close(codeCh)
 		}()
 	}
-	proof, proofErr := s.fetchProof(ctx, proofRequest{blockNumber: num, address: account, storageKeys: strings.Join(storageKeys, ",")})
+	proof, proofErr := c.fetchProof(ctx, proofRequest{blockNumber: num, address: account, storageKeys: strings.Join(storageKeys, ",")})
 	if proofErr != nil {
 		return nil, nil, proofErr
 	}
@@ -252,7 +242,7 @@ func (s *lightState) getProof(ctx context.Context, blockNumber *big.Int, account
 	if stateRootErr != nil {
 		return nil, nil, stateRootErr
 	}
-	if err := s.validateProof(proof, stateRoot, account, storageKeys); err != nil {
+	if err := c.validateProof(proof, stateRoot, account, storageKeys); err != nil {
 		return nil, nil, err
 	}
 	if getCode {
@@ -267,7 +257,7 @@ func (s *lightState) getProof(ctx context.Context, blockNumber *big.Int, account
 	return proof, code, nil
 }
 
-func (s *lightState) validateProof(proof *gethclient.AccountResult, stateRoot common.Hash, account common.Address, storageKeys []string) error {
+func (c *Client) validateProof(proof *gethclient.AccountResult, stateRoot common.Hash, account common.Address, storageKeys []string) error {
 	// validate account proof
 	proofReader, err := makeProofReader(proof.AccountProof)
 	if err != nil {
