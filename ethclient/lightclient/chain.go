@@ -39,7 +39,7 @@ const recentCanonicalLength = 256
 type canonicalChainFields struct {
 	chainLock      sync.Mutex
 	head, finality *btypes.ExecutionHeader
-	recent         map[uint64]common.Hash // nil until initialized
+	recent         map[uint64]common.Hash // nil while head == nil
 	recentTail     uint64                 // if recent != nil then recent hashes are available from recentTail to head
 	tailFetchCh    chan struct{}
 	finalized      *lru.Cache[uint64, common.Hash]  // finalized but not recent hashes
@@ -51,6 +51,10 @@ func (c *Client) initCanonicalChain() {
 	c.requests = newRequestMap[uint64, common.Hash](nil)
 	c.tailFetchCh = make(chan struct{})
 	go c.tailFetcher()
+}
+
+func (c *Client) closeCanonicalChain() {
+	c.requests.close()
 }
 
 // Process implements request.Module in order to get notified about new heads.
@@ -266,6 +270,11 @@ func (c *Client) initBlocksAndHeaders() {
 	c.blockCache = lru.NewCache[common.Hash, *types.Block](10)
 	c.headerRequests = newRequestMap[common.Hash, *types.Header](c.requestHeader)
 	c.blockRequests = newRequestMap[common.Hash, *types.Block](c.requestBlock)
+}
+
+func (c *Client) closeBlocksAndHeaders() {
+	c.headerRequests.close()
+	c.blockRequests.close()
 }
 
 func (c *Client) requestHeader(ctx context.Context, hash common.Hash) (*types.Header, error) {

@@ -173,7 +173,6 @@ loop:
 			break loop
 		}
 	}
-
-	client.Stop()
+	client.Close()
 	return nil
 }

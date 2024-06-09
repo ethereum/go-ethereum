@@ -70,6 +70,10 @@ func (c *Client) initTxAndReceipts() {
 	c.receiptsRequests = newRequestMap[common.Hash, types.Receipts](c.requestBlockReceipts)
 }
 
+func (c *Client) closeTxAndReceipts() {
+	c.receiptsRequests.close()
+}
+
 func (c *Client) getTxByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
 	if pos, ok := c.txPosCache.Get(txHash); ok {
 		if hash, ok := c.getCachedHash(pos.blockNumber); ok && hash == pos.blockHash {

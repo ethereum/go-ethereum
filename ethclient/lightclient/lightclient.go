@@ -92,7 +92,11 @@ func (c *Client) Start() {
 	}
 }
 
-func (c *Client) Stop() {
+func (c *Client) Close() {
+	c.closeBlocksAndHeaders()
+	c.closeCanonicalChain()
+	c.closeTxAndReceipts()
+	c.closeLightState()
 	c.scheduler.Stop()
 }
 

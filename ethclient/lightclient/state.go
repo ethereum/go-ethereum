@@ -60,6 +60,11 @@ func (c *Client) initLightState() {
 	c.codeRequests = newRequestMap[codeRequest, []byte](c.requestCode)
 }
 
+func (c *Client) closeLightState() {
+	c.proofRequests.close()
+	c.codeRequests.close()
+}
+
 func (c *Client) fetchProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
 	if proof, ok := c.proofCache.Get(req); ok {
 		return proof, nil

@@ -18,13 +18,27 @@ package lightclient
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
 
 type requestMap[K comparable, V any] struct {
 	lock      sync.Mutex
+	closed    bool
 	requestFn func(context.Context, K) (V, error)
 	requests  map[K]*mappedRequest[K, V]
+}
+
+type mappedRequest[K comparable, V any] struct {
+	lock              sync.Mutex
+	rm                *requestMap[K, V]
+	key               K
+	refCount          int
+	delivered, closed bool
+	deliveredCh       chan struct{}
+	cancelFn          func() // called when delivered || closed || refCount == 0 becomes true
+	result            V
+	err               error
 }
 
 func newRequestMap[K comparable, V any](requestFn func(context.Context, K) (V, error)) *requestMap[K, V] {
@@ -32,6 +46,22 @@ func newRequestMap[K comparable, V any](requestFn func(context.Context, K) (V, e
 		requestFn: requestFn,
 		requests:  make(map[K]*mappedRequest[K, V]),
 	}
+}
+
+func (rm *requestMap[K, V]) close() {
+	rm.lock.Lock()
+	defer rm.lock.Unlock()
+
+	if rm.closed {
+		return
+	}
+	for _, req := range rm.requests {
+		if !req.delivered && req.refCount != 0 {
+			req.cancelFn()
+			req.closed = true
+		}
+	}
+	rm.closed = true
 }
 
 func (rm *requestMap[K, V]) request(key K) *mappedRequest[K, V] {
@@ -53,6 +83,14 @@ func (rm *requestMap[K, V]) request(key K) *mappedRequest[K, V] {
 		cancelFn:    cancelFn,
 	}
 	rm.requests[key] = r
+	if rm.closed {
+		// return a closed dummy request for simplicity
+		r.closed = true
+		r.cancelFn()
+		var null V
+		r.deliver(null, errors.New("request map is closed"))
+		return r
+	}
 	if rm.requestFn != nil {
 		go func() {
 			result, err := rm.requestFn(ctx, key)
@@ -91,25 +129,13 @@ func (rm *requestMap[K, V]) tryDeliver(key K, result V) {
 	}
 }
 
-type mappedRequest[K comparable, V any] struct {
-	lock        sync.Mutex
-	rm          *requestMap[K, V]
-	key         K
-	refCount    int
-	delivered   bool
-	deliveredCh chan struct{}
-	cancelFn    func() // called when delivered || refCount == 0 becomes true
-	result      V
-	err         error
-}
-
 func (r *mappedRequest[K, V]) deliver(result V, err error) {
 	r.lock.Lock()
 	if !r.delivered {
 		r.result, r.err = result, err
 		r.delivered = true
 		close(r.deliveredCh)
-		if r.refCount != 0 {
+		if !r.closed && r.refCount != 0 {
 			r.cancelFn()
 		}
 	}
@@ -133,7 +159,7 @@ func (r *mappedRequest[K, V]) release() {
 	r.refCount--
 	if r.refCount == 0 {
 		delete(r.rm.requests, r.key)
-		if !r.delivered {
+		if !r.delivered && !r.closed {
 			r.cancelFn()
 		}
 	}
