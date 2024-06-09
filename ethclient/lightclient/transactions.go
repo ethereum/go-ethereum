@@ -40,13 +40,20 @@ const maxTxAge = 300 // sent transactions are typically remembered for an hour a
 type txAndReceiptsFields struct {
 	signer types.Signer
 
-	receiptsCache    *lru.Cache[common.Hash, types.Receipts]
-	receiptsRequests *requestMap[common.Hash, types.Receipts]
-	txPosCache       *lru.Cache[common.Hash, txInBlock]
+	blockReceiptsCache    *lru.Cache[common.Hash, types.Receipts]
+	blockReceiptsRequests *requestMap[common.Hash, types.Receipts]
+	txPosCache            *lru.Cache[common.Hash, txInBlock]
+	txByHashRequests      *requestMap[common.Hash, txResult]
+	receiptByHashRequests *requestMap[common.Hash, *types.Receipt]
 
 	sentTxLock                  sync.Mutex
 	sentTxs                     map[common.Address]senderTxs
 	headCounter, lastHeadNumber uint64
+}
+
+type txResult struct {
+	tx        *types.Transaction
+	isPending bool
 }
 
 type txInBlock struct {
@@ -63,15 +70,19 @@ type sentTx struct {
 type senderTxs map[common.Hash]sentTx
 
 func (c *Client) initTxAndReceipts() {
-	c.receiptsCache = lru.NewCache[common.Hash, types.Receipts](10)
+	c.blockReceiptsCache = lru.NewCache[common.Hash, types.Receipts](10)
 	c.txPosCache = lru.NewCache[common.Hash, txInBlock](10000)
 	c.sentTxs = make(map[common.Address]senderTxs)
 	c.signer = types.LatestSigner(c.elConfig)
-	c.receiptsRequests = newRequestMap[common.Hash, types.Receipts](c.requestBlockReceipts)
+	c.blockReceiptsRequests = newRequestMap[common.Hash, types.Receipts](c.requestBlockReceipts)
+	c.txByHashRequests = newRequestMap[common.Hash, txResult](c.requestTxByHash)
+	c.receiptByHashRequests = newRequestMap[common.Hash, *types.Receipt](c.requestReceiptByTxHash)
 }
 
 func (c *Client) closeTxAndReceipts() {
-	c.receiptsRequests.close()
+	c.blockReceiptsRequests.close()
+	c.txByHashRequests.close()
+	c.receiptByHashRequests.close()
 }
 
 func (c *Client) getTxByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
@@ -94,9 +105,15 @@ func (c *Client) getTxByHash(ctx context.Context, txHash common.Hash) (tx *types
 }
 
 func (c *Client) getUncachedTxByHash(ctx context.Context, txHash common.Hash, headBlockNumber uint64) (tx *types.Transaction, isPending bool, err error) {
-	tx, isPending, err = c.requestTxByHash(ctx, txHash)
+	req := c.txByHashRequests.request(txHash)
+	var txResult txResult
+	txResult, err = req.getResult(ctx)
+	req.release()
+	tx, isPending = txResult.tx, txResult.isPending
 	if err == nil && !isPending {
-		receipt, err := c.requestReceiptByTxHash(ctx, txHash)
+		req := c.receiptByHashRequests.request(txHash)
+		receipt, err := req.getResult(ctx)
+		req.release()
 		if err == ethereum.NotFound {
 			return tx, false, nil
 		}
@@ -114,7 +131,7 @@ func (c *Client) getUncachedTxByHash(ctx context.Context, txHash common.Hash, he
 func (c *Client) getReceiptByTxHash(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	if pos, ok := c.txPosCache.Get(txHash); ok {
 		if hash, ok := c.getCachedHash(pos.blockNumber); ok && hash == pos.blockHash {
-			if receipts, ok := c.receiptsCache.Get(pos.blockHash); ok {
+			if receipts, ok := c.blockReceiptsCache.Get(pos.blockHash); ok {
 				if pos.index >= uint(len(receipts)) {
 					return nil, errors.New("transaction index out of range")
 				}
@@ -122,7 +139,9 @@ func (c *Client) getReceiptByTxHash(ctx context.Context, txHash common.Hash) (*t
 			}
 		}
 	}
-	receipt, err := c.requestReceiptByTxHash(ctx, txHash)
+	req := c.receiptByHashRequests.request(txHash)
+	receipt, err := req.getResult(ctx)
+	req.release()
 	if err != nil {
 		return nil, err
 	}
@@ -171,10 +190,10 @@ func (c *Client) getReceiptByTxHash(ctx context.Context, txHash common.Hash) (*t
 }
 
 func (c *Client) getBlockReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
-	if receipts, ok := c.receiptsCache.Get(blockHash); ok {
+	if receipts, ok := c.blockReceiptsCache.Get(blockHash); ok {
 		return receipts, nil
 	}
-	request := c.receiptsRequests.request(blockHash)
+	request := c.blockReceiptsRequests.request(blockHash)
 	block, err := c.getBlock(ctx, blockHash)
 	if err != nil {
 		return nil, err
@@ -184,7 +203,7 @@ func (c *Client) getBlockReceipts(ctx context.Context, blockHash common.Hash) (t
 		receipts, err = c.validateBlockReceipts(block, receipts)
 	}
 	if err == nil {
-		c.receiptsCache.Add(blockHash, receipts)
+		c.blockReceiptsCache.Add(blockHash, receipts)
 	}
 	request.release()
 	return receipts, err
@@ -237,22 +256,22 @@ func (c *Client) validateBlockReceipts(block *types.Block, receipts types.Receip
 	return newReceipts, nil
 }
 
-func (c *Client) requestTxByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
+func (c *Client) requestTxByHash(ctx context.Context, hash common.Hash) (txResult, error) {
 	var json *rpcTransaction
-	err = c.client.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
+	err := c.client.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
 	if err != nil {
-		return nil, false, err
+		return txResult{}, err
 	} else if json == nil {
-		return nil, false, ethereum.NotFound
+		return txResult{}, ethereum.NotFound
 	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
-		return nil, false, errors.New("server returned transaction without signature")
+		return txResult{}, errors.New("server returned transaction without signature")
 	} else if json.tx.Hash() != hash {
-		return nil, false, errors.New("invalid transaction hash")
+		return txResult{}, errors.New("invalid transaction hash")
 	}
 	if json.From != nil && json.BlockHash != nil {
 		setSenderFromServer(json.tx, *json.From, *json.BlockHash)
 	}
-	return json.tx, json.BlockNumber == nil, nil
+	return txResult{tx: json.tx, isPending: json.BlockNumber == nil}, nil
 }
 
 func (c *Client) requestReceiptByTxHash(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
