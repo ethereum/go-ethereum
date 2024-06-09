@@ -84,8 +84,6 @@ func NewClient(clConfig config.LightClientConfig, elConfig *params.ChainConfig, 
 	return client
 }
 
-//TODO return ethereum.NotFound error properly
-
 func (c *Client) Start() {
 	c.scheduler.Start()
 	for _, url := range c.clConfig.ApiUrls {

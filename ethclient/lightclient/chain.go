@@ -272,6 +272,9 @@ func (c *Client) requestHeader(ctx context.Context, hash common.Hash) (*types.He
 	var header *types.Header
 	log.Debug("Starting RPC request", "type", "eth_getBlockByHash", "hash", hash, "full", false)
 	err := c.client.CallContext(ctx, &header, "eth_getBlockByHash", hash, false)
+	if err == nil && header == nil {
+		err = ethereum.NotFound
+	}
 	if err == nil && header.Hash() != hash {
 		header, err = nil, errors.New("header hash does not match")
 	}
@@ -287,13 +290,17 @@ func (c *Client) requestBlock(ctx context.Context, hash common.Hash) (*types.Blo
 	log.Debug("Starting RPC request", "type", "eth_getBlockByHash", "hash", hash, "full", true)
 	err := c.client.CallContext(ctx, &raw, "eth_getBlockByHash", hash, true)
 	log.Debug("Finished RPC request", "type", "eth_getBlockByHash", "hash", hash, "full", true, "error", err)
-	if err == nil {
-		block, err = decodeBlock(raw)
-		if block.Hash() != hash {
-			block, err = nil, errors.New("block hash does not match")
-		}
+	if err != nil {
+		return nil, err
 	}
-	return block, err
+	block, err = decodeBlock(raw) // returns ethereum.NotFound if block not found
+	if err != nil {
+		return nil, err
+	}
+	if block.Hash() != hash {
+		return nil, errors.New("block hash does not match")
+	}
+	return block, nil
 }
 
 func (c *Client) getHeader(ctx context.Context, hash common.Hash) (*types.Header, error) {
