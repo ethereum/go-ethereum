@@ -1284,7 +1284,7 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 			return tx.Hash()
 		}
 		if fullTx {
-			formatTx = func(idx int, tx *types.Transaction) interface{} {
+			formatTx = func(idx int, _ *types.Transaction) interface{} {
 				return newRPCTransactionFromBlockIndex(block, uint64(idx), config)
 			}
 		}

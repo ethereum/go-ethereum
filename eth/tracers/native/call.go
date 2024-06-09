@@ -126,7 +126,7 @@ type callTracerConfig struct {
 // newCallTracer returns a native go tracer which tracks
 // call frames of a tx, and implements vm.EVMLogger.
 func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
-	t, err := newCallTracerObject(ctx, cfg)
+	t, err := newCallTracerObject(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, 
 	}, nil
 }
 
-func newCallTracerObject(ctx *tracers.Context, cfg json.RawMessage) (*callTracer, error) {
+func newCallTracerObject(cfg json.RawMessage) (*callTracer, error) {
 	var config callTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -185,7 +185,7 @@ func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common
 // execute any code.
 func (t *callTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth == 0 {
-		t.captureEnd(output, gasUsed, err, reverted)
+		t.captureEnd(output, err, reverted)
 		return
 	}
 
@@ -209,7 +209,7 @@ func (t *callTracer) OnExit(depth int, output []byte, gasUsed uint64, err error,
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (t *callTracer) captureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *callTracer) captureEnd(output []byte, err error, reverted bool) {
 	if len(t.callstack) != 1 {
 		return
 	}

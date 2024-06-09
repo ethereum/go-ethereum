@@ -97,7 +97,7 @@ func (args *TransactionArgs) data() []byte {
 
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGasEstimation bool) error {
-	if err := args.setBlobTxSidecar(ctx); err != nil {
+	if err := args.setBlobTxSidecar(); err != nil {
 		return err
 	}
 	if err := args.setFeeDefaults(ctx, b); err != nil {
@@ -189,7 +189,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
 		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
 	}
-	if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
+	if err := args.setCancunFeeDefaults(head); err != nil {
 		return err
 	}
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
@@ -243,7 +243,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 }
 
 // setCancunFeeDefaults fills in reasonable default fee values for unspecified fields.
-func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
+func (args *TransactionArgs) setCancunFeeDefaults(head *types.Header) error {
 	// Set maxFeePerBlobGas if it is missing.
 	if args.BlobHashes != nil && args.BlobFeeCap == nil {
 		var excessBlobGas uint64
@@ -290,7 +290,7 @@ func (args *TransactionArgs) setLondonFeeDefaults(ctx context.Context, head *typ
 }
 
 // setBlobTxSidecar adds the blob tx
-func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context) error {
+func (args *TransactionArgs) setBlobTxSidecar() error {
 	// No blobs, we're done.
 	if args.Blobs == nil {
 		return nil

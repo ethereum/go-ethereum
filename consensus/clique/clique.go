@@ -378,7 +378,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 		}
 	}
 	// All basic checks passed, verify the seal and return
-	return c.verifySeal(snap, header, parents)
+	return c.verifySeal(snap, header)
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
@@ -388,7 +388,7 @@ func (c *Clique) snapshot(chain consensus.ChainHeaderReader, number uint64, hash
 		headers []*types.Header
 		snap    *Snapshot
 	)
-	for snap == nil {
+	for {
 		// If an in-memory snapshot was found, use that
 		if s, ok := c.recents.Get(hash); ok {
 			snap = s
@@ -475,7 +475,7 @@ func (c *Clique) VerifyUncles(chain consensus.ChainReader, block *types.Block) e
 // consensus protocol requirements. The method accepts an optional list of parent
 // headers that aren't yet part of the local blockchain to generate the snapshots
 // from.
-func (c *Clique) verifySeal(snap *Snapshot, header *types.Header, parents []*types.Header) error {
+func (c *Clique) verifySeal(snap *Snapshot, header *types.Header) error {
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {

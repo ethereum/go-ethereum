@@ -289,7 +289,7 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 	re.Do(func(vm *goja.Runtime) {
 		val, err := vm.RunString(code)
 		if err != nil {
-			prettyError(vm, err, w)
+			prettyError(err, w)
 		} else {
 			prettyPrint(vm, val, w)
 		}

@@ -753,7 +753,7 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort
 	case *v5wire.Unknown:
 		t.handleUnknown(p, fromID, fromAddr)
 	case *v5wire.Whoareyou:
-		t.handleWhoareyou(p, fromID, fromAddr)
+		t.handleWhoareyou(p, fromAddr)
 	case *v5wire.Ping:
 		t.handlePing(p, fromID, fromAddr)
 	case *v5wire.Pong:
@@ -789,8 +789,8 @@ var (
 )
 
 // handleWhoareyou resends the active call as a handshake packet.
-func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr netip.AddrPort) {
-	c, err := t.matchWithCall(fromID, p.Nonce)
+func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromAddr netip.AddrPort) {
+	c, err := t.matchWithCall(p.Nonce)
 	if err != nil {
 		t.log.Debug("Invalid "+p.Name(), "addr", fromAddr, "err", err)
 		return
@@ -811,7 +811,7 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr n
 }
 
 // matchWithCall checks whether a handshake attempt matches the active call.
-func (t *UDPv5) matchWithCall(fromID enode.ID, nonce v5wire.Nonce) (*callV5, error) {
+func (t *UDPv5) matchWithCall(nonce v5wire.Nonce) (*callV5, error) {
 	c := t.activeCallByAuth[nonce]
 	if c == nil {
 		return nil, errChallengeNoCall

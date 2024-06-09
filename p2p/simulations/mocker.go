@@ -52,7 +52,7 @@ func GetMockerList() []string {
 }
 
 // The boot mockerFn only connects the node in a ring and doesn't do anything else
-func boot(net *Network, quit chan struct{}, nodeCount int) {
+func boot(net *Network, _ chan struct{}, nodeCount int) {
 	_, err := connectNodesInRing(net, nodeCount)
 	if err != nil {
 		panic("Could not startup node network for mocker")

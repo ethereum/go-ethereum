@@ -273,7 +273,7 @@ func (t *jsTracer) OnTxEnd(receipt *types.Receipt, err error) {
 }
 
 // onStart implements the Tracer interface to initialize the tracing operation.
-func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (t *jsTracer) onStart(from common.Address, to common.Address, create bool, input []byte, value *big.Int) {
 	if t.err != nil {
 		return
 	}
@@ -346,7 +346,7 @@ func (t *jsTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.O
 }
 
 // onEnd is called after the call finishes to finalize the tracing.
-func (t *jsTracer) onEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *jsTracer) onEnd(output []byte, err error) {
 	if t.err != nil {
 		return
 	}
@@ -367,7 +367,7 @@ func (t *jsTracer) OnEnter(depth int, typ byte, from common.Address, to common.A
 		return
 	}
 	if depth == 0 {
-		t.onStart(from, to, vm.OpCode(typ) == vm.CREATE, input, gas, value)
+		t.onStart(from, to, vm.OpCode(typ) == vm.CREATE, input, value)
 		return
 	}
 	if !t.traceFrame {
@@ -396,7 +396,7 @@ func (t *jsTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 		return
 	}
 	if depth == 0 {
-		t.onEnd(output, gasUsed, err, reverted)
+		t.onEnd(output, err)
 		return
 	}
 	if !t.traceFrame {

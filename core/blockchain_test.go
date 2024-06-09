@@ -2182,10 +2182,10 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 	genDb, blocks, receipts := GenerateChainWithGenesis(genesis, engine, 32, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// A longer chain but total difficulty is lower.
-	blocks2, receipts2 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 65, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks2, _ := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 65, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
 
 	// A shorter chain but total difficulty is higher.
-	blocks3, receipts3 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 64, func(i int, b *BlockGen) {
+	blocks3, _ := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 64, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
 		b.OffsetTime(-9) // A higher difficulty
 	})
@@ -2203,11 +2203,11 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 	defer chain.Stop()
 
 	var (
-		inserter func(blocks []*types.Block, receipts []types.Receipts) error
+		inserter func(blocks []*types.Block) error
 		asserter func(t *testing.T, block *types.Block)
 	)
 	if typ == "headers" {
-		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+		inserter = func(blocks []*types.Block) error {
 			headers := make([]*types.Header, 0, len(blocks))
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
@@ -2221,7 +2221,7 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 			}
 		}
 	} else if typ == "receipts" {
-		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+		inserter = func(blocks []*types.Block) error {
 			headers := make([]*types.Header, 0, len(blocks))
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
@@ -2239,7 +2239,7 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 			}
 		}
 	} else {
-		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+		inserter = func(blocks []*types.Block) error {
 			_, err := chain.InsertChain(blocks)
 			return err
 		}
@@ -2250,13 +2250,13 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 		}
 	}
 
-	if err := inserter(blocks, receipts); err != nil {
+	if err := inserter(blocks); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 
 	// Reimport the chain data again. All the imported
 	// chain data are regarded "known" data.
-	if err := inserter(blocks, receipts); err != nil {
+	if err := inserter(blocks); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	asserter(t, blocks[len(blocks)-1])
@@ -2265,19 +2265,19 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 	rollback := blocks[len(blocks)/2].NumberU64()
 
 	chain.SetHead(rollback - 1)
-	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+	if err := inserter(append(blocks, blocks2...)); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	asserter(t, blocks2[len(blocks2)-1])
 
 	// Import a heavier shorter but higher total difficulty chain with some known data as prefix.
-	if err := inserter(append(blocks, blocks3...), append(receipts, receipts3...)); err != nil {
+	if err := inserter(append(blocks, blocks3...)); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	asserter(t, blocks3[len(blocks3)-1])
 
 	// Import a longer but lower total difficulty chain with some known data as prefix.
-	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+	if err := inserter(append(blocks, blocks2...)); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	// The head shouldn't change.
@@ -2285,7 +2285,7 @@ func testInsertKnownChainData(t *testing.T, typ string, scheme string) {
 
 	// Rollback the heavier chain and re-insert the longer chain again
 	chain.SetHead(rollback - 1)
-	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+	if err := inserter(append(blocks, blocks2...)); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	asserter(t, blocks2[len(blocks2)-1])
@@ -2347,13 +2347,13 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 		mergeBlock = uint64(len(blocks))
 	}
 	// Longer chain and shorter chain
-	blocks2, receipts2 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 65, func(i int, b *BlockGen) {
+	blocks2, _ := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 65, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
 		if b.header.Number.Uint64() >= mergeBlock {
 			b.SetPoS()
 		}
 	})
-	blocks3, receipts3 := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 64, func(i int, b *BlockGen) {
+	blocks3, _ := GenerateChain(genesis.Config, blocks[len(blocks)-1], engine, genDb, 64, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{1})
 		b.OffsetTime(-9) // Time shifted, difficulty shouldn't be changed
 		if b.header.Number.Uint64() >= mergeBlock {
@@ -2374,11 +2374,11 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 	defer chain.Stop()
 
 	var (
-		inserter func(blocks []*types.Block, receipts []types.Receipts) error
+		inserter func(blocks []*types.Block) error
 		asserter func(t *testing.T, block *types.Block)
 	)
 	if typ == "headers" {
-		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+		inserter = func(blocks []*types.Block) error {
 			headers := make([]*types.Header, 0, len(blocks))
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
@@ -2395,7 +2395,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			}
 		}
 	} else if typ == "receipts" {
-		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+		inserter = func(blocks []*types.Block) error {
 			headers := make([]*types.Header, 0, len(blocks))
 			for _, block := range blocks {
 				headers = append(headers, block.Header())
@@ -2413,7 +2413,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			}
 		}
 	} else {
-		inserter = func(blocks []*types.Block, receipts []types.Receipts) error {
+		inserter = func(blocks []*types.Block) error {
 			i, err := chain.InsertChain(blocks)
 			if err != nil {
 				return fmt.Errorf("index %d: %w", i, err)
@@ -2426,13 +2426,13 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			}
 		}
 	}
-	if err := inserter(blocks, receipts); err != nil {
+	if err := inserter(blocks); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 
 	// Reimport the chain data again. All the imported
 	// chain data are regarded "known" data.
-	if err := inserter(blocks, receipts); err != nil {
+	if err := inserter(blocks); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	asserter(t, blocks[len(blocks)-1])
@@ -2440,13 +2440,13 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 	// Import a long canonical chain with some known data as prefix.
 	rollback := blocks[len(blocks)/2].NumberU64()
 	chain.SetHead(rollback - 1)
-	if err := inserter(blocks, receipts); err != nil {
+	if err := inserter(blocks); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	asserter(t, blocks[len(blocks)-1])
 
 	// Import a longer chain with some known data as prefix.
-	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+	if err := inserter(append(blocks, blocks2...)); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	asserter(t, blocks2[len(blocks2)-1])
@@ -2454,7 +2454,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 	// Import a shorter chain with some known data as prefix.
 	// The reorg is expected since the fork choice rule is
 	// already changed.
-	if err := inserter(append(blocks, blocks3...), append(receipts, receipts3...)); err != nil {
+	if err := inserter(append(blocks, blocks3...)); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	// The head shouldn't change.
@@ -2462,7 +2462,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 
 	// Reimport the longer chain again, the reorg is still expected
 	chain.SetHead(rollback - 1)
-	if err := inserter(append(blocks, blocks2...), append(receipts, receipts2...)); err != nil {
+	if err := inserter(append(blocks, blocks2...)); err != nil {
 		t.Fatalf("failed to insert chain data: %v", err)
 	}
 	asserter(t, blocks2[len(blocks2)-1])
@@ -2618,7 +2618,7 @@ func testReorgToShorterRemovesCanonMappingHeaderChain(t *testing.T, scheme strin
 }
 
 // Benchmarks large blocks with value transfers to non-existing accounts
-func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks int, recipientFn func(uint64) common.Address, dataFn func(uint64) []byte) {
+func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks int, recipientFn func(uint64) common.Address) {
 	var (
 		signer          = types.HomesteadSigner{}
 		testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -2681,10 +2681,8 @@ func BenchmarkBlockChain_1x1000ValueTransferToNonexisting(b *testing.B) {
 	recipientFn := func(nonce uint64) common.Address {
 		return common.BigToAddress(new(big.Int).SetUint64(1337 + nonce))
 	}
-	dataFn := func(nonce uint64) []byte {
-		return nil
-	}
-	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+
+	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn)
 }
 
 func BenchmarkBlockChain_1x1000ValueTransferToExisting(b *testing.B) {
@@ -2698,10 +2696,8 @@ func BenchmarkBlockChain_1x1000ValueTransferToExisting(b *testing.B) {
 	recipientFn := func(nonce uint64) common.Address {
 		return common.BigToAddress(new(big.Int).SetUint64(1337))
 	}
-	dataFn := func(nonce uint64) []byte {
-		return nil
-	}
-	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+
+	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn)
 }
 
 func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
@@ -2715,10 +2711,7 @@ func BenchmarkBlockChain_1x1000Executions(b *testing.B) {
 	recipientFn := func(nonce uint64) common.Address {
 		return common.BigToAddress(new(big.Int).SetUint64(0xc0de))
 	}
-	dataFn := func(nonce uint64) []byte {
-		return nil
-	}
-	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn, dataFn)
+	benchmarkLargeNumberOfValueToNonexisting(b, numTxs, numBlocks, recipientFn)
 }
 
 // Tests that importing a some old blocks, where all blocks are before the

@@ -58,7 +58,7 @@ func prettyPrint(vm *goja.Runtime, value goja.Value, w io.Writer) {
 }
 
 // prettyError writes err to standard output.
-func prettyError(vm *goja.Runtime, err error, w io.Writer) {
+func prettyError(err error, w io.Writer) {
 	failure := err.Error()
 	if gojaErr, ok := err.(*goja.Exception); ok {
 		failure = gojaErr.String()
