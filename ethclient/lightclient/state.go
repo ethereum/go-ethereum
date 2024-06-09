@@ -35,6 +35,13 @@ import (
 	"github.com/holiman/uint256"
 )
 
+type lightStateFields struct {
+	proofCache    *lru.Cache[proofRequest, *gethclient.AccountResult]
+	proofRequests *requestMap[proofRequest, *gethclient.AccountResult]
+	codeCache     *lru.Cache[codeRequest, []byte]
+	codeRequests  *requestMap[codeRequest, []byte]
+}
+
 type proofRequest struct {
 	blockNumber uint64
 	address     common.Address
@@ -44,13 +51,6 @@ type proofRequest struct {
 type codeRequest struct {
 	blockNumber uint64
 	address     common.Address
-}
-
-type lightStateFields struct {
-	proofCache    *lru.Cache[proofRequest, *gethclient.AccountResult]
-	proofRequests *requestMap[proofRequest, *gethclient.AccountResult]
-	codeCache     *lru.Cache[codeRequest, []byte]
-	codeRequests  *requestMap[codeRequest, []byte]
 }
 
 func (c *Client) initLightState() {
@@ -63,135 +63,6 @@ func (c *Client) initLightState() {
 func (c *Client) closeLightState() {
 	c.proofRequests.close()
 	c.codeRequests.close()
-}
-
-func (c *Client) fetchProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
-	if proof, ok := c.proofCache.Get(req); ok {
-		return proof, nil
-	}
-	request := c.proofRequests.request(req)
-	proof, err := request.getResult(ctx)
-	if err == nil {
-		c.proofCache.Add(req, proof) // cached before validation; remove and retry if invalid
-	}
-	request.release()
-	return proof, err
-}
-
-func (c *Client) requestProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
-	type storageResult struct {
-		Key   string       `json:"key"`
-		Value *hexutil.Big `json:"value"`
-		Proof []string     `json:"proof"`
-	}
-
-	type accountResult struct {
-		Address      common.Address  `json:"address"`
-		AccountProof []string        `json:"accountProof"`
-		Balance      *hexutil.Big    `json:"balance"`
-		CodeHash     common.Hash     `json:"codeHash"`
-		Nonce        hexutil.Uint64  `json:"nonce"`
-		StorageHash  common.Hash     `json:"storageHash"`
-		StorageProof []storageResult `json:"storageProof"`
-	}
-
-	var storageKeys []string
-	if len(req.storageKeys) > 0 {
-		storageKeys = strings.Split(req.storageKeys, ",")
-	}
-	log.Debug("Starting RPC request", "type", "eth_getProof", "blockNumber", req.blockNumber, "address", req.address, "storageKeys", len(storageKeys))
-	var res accountResult
-	err := c.client.CallContext(ctx, &res, "eth_getProof", req.address, storageKeys, hexutil.EncodeUint64(req.blockNumber))
-	log.Debug("Finished RPC request", "type", "eth_getProof", "blockNumber", req.blockNumber, "address", req.address, "storageKeys", len(storageKeys), "error", err)
-	var proof *gethclient.AccountResult
-	if err == nil { //TODO de-duplicate
-		// Turn hexutils back to normal datatypes
-		storageResults := make([]gethclient.StorageResult, 0, len(res.StorageProof))
-		for _, st := range res.StorageProof {
-			storageResults = append(storageResults, gethclient.StorageResult{
-				Key:   st.Key,
-				Value: st.Value.ToInt(),
-				Proof: st.Proof,
-			})
-		}
-		proof = &gethclient.AccountResult{
-			Address:      res.Address,
-			AccountProof: res.AccountProof,
-			Balance:      res.Balance.ToInt(),
-			Nonce:        uint64(res.Nonce),
-			CodeHash:     res.CodeHash,
-			StorageHash:  res.StorageHash,
-			StorageProof: storageResults,
-		}
-	}
-	return proof, err
-}
-
-func (c *Client) fetchCode(ctx context.Context, req codeRequest) ([]byte, error) {
-	if code, ok := c.codeCache.Get(req); ok {
-		return code, nil
-	}
-	request := c.codeRequests.request(req)
-	code, err := request.getResult(ctx)
-	if err == nil {
-		c.codeCache.Add(req, code) // cached before validation; remove and retry if invalid
-	}
-	request.release()
-	return code, err
-}
-
-func (c *Client) requestCode(ctx context.Context, req codeRequest) ([]byte, error) {
-	var code hexutil.Bytes
-	log.Debug("Starting RPC request", "type", "eth_getCode", "blockNumber", req.blockNumber, "address", req.address)
-	err := c.client.CallContext(ctx, &code, "eth_getCode", req.address, hexutil.EncodeUint64(req.blockNumber))
-	log.Debug("Finished RPC request", "type", "eth_getCode", "blockNumber", req.blockNumber, "address", req.address, "error", err)
-	return code, err
-}
-
-// proofReader implements ethdb.KeyValueReader.
-type proofReader map[string][]byte
-
-func (p proofReader) Has(key []byte) (bool, error) {
-	_, ok := p[string(key)]
-	return ok, nil
-}
-
-func (p proofReader) Get(key []byte) ([]byte, error) {
-	if value, ok := p[string(key)]; ok {
-		return value, nil
-	}
-	return nil, errors.New("not found")
-}
-
-func makeProofReader(proof []string) (proofReader, error) {
-	pr := make(proofReader)
-	for _, s := range proof {
-		node, err := hexutil.Decode(s)
-		if err != nil {
-			return nil, err
-		}
-		pr[string(crypto.Keccak256(node))] = node
-	}
-	return pr, nil
-}
-
-func stValueBytes(value *big.Int) ([]byte, error) {
-	if value == nil {
-		return nil, errors.New("storage value is nil")
-	}
-	switch value.Sign() {
-	case -1:
-		return nil, errors.New("negative storage value")
-	case 1:
-		if value.BitLen() > 256 {
-			return nil, errors.New("storage value bigger than uint256")
-		}
-		stv := make([]byte, 32)
-		value.FillBytes(stv)
-		return stv, nil
-	default:
-		return nil, nil
-	}
 }
 
 func (c *Client) getProof(ctx context.Context, blockNumber *big.Int, account common.Address, storageKeys []string, getCode bool) (*gethclient.AccountResult, []byte, error) {
@@ -350,4 +221,133 @@ func (c *Client) validateProof(proof *gethclient.AccountResult, stateRoot common
 		}
 	}
 	return nil
+}
+
+// proofReader implements ethdb.KeyValueReader.
+type proofReader map[string][]byte
+
+func makeProofReader(proof []string) (proofReader, error) {
+	pr := make(proofReader)
+	for _, s := range proof {
+		node, err := hexutil.Decode(s)
+		if err != nil {
+			return nil, err
+		}
+		pr[string(crypto.Keccak256(node))] = node
+	}
+	return pr, nil
+}
+
+func (p proofReader) Has(key []byte) (bool, error) {
+	_, ok := p[string(key)]
+	return ok, nil
+}
+
+func (p proofReader) Get(key []byte) ([]byte, error) {
+	if value, ok := p[string(key)]; ok {
+		return value, nil
+	}
+	return nil, errors.New("not found")
+}
+
+func stValueBytes(value *big.Int) ([]byte, error) {
+	if value == nil {
+		return nil, errors.New("storage value is nil")
+	}
+	switch value.Sign() {
+	case -1:
+		return nil, errors.New("negative storage value")
+	case 1:
+		if value.BitLen() > 256 {
+			return nil, errors.New("storage value bigger than uint256")
+		}
+		stv := make([]byte, 32)
+		value.FillBytes(stv)
+		return stv, nil
+	default:
+		return nil, nil
+	}
+}
+
+func (c *Client) fetchProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
+	if proof, ok := c.proofCache.Get(req); ok {
+		return proof, nil
+	}
+	request := c.proofRequests.request(req)
+	proof, err := request.getResult(ctx)
+	if err == nil {
+		c.proofCache.Add(req, proof) // cached before validation; remove and retry if invalid
+	}
+	request.release()
+	return proof, err
+}
+
+func (c *Client) fetchCode(ctx context.Context, req codeRequest) ([]byte, error) {
+	if code, ok := c.codeCache.Get(req); ok {
+		return code, nil
+	}
+	request := c.codeRequests.request(req)
+	code, err := request.getResult(ctx)
+	if err == nil {
+		c.codeCache.Add(req, code) // cached before validation; remove and retry if invalid
+	}
+	request.release()
+	return code, err
+}
+
+func (c *Client) requestProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
+	type storageResult struct {
+		Key   string       `json:"key"`
+		Value *hexutil.Big `json:"value"`
+		Proof []string     `json:"proof"`
+	}
+
+	type accountResult struct {
+		Address      common.Address  `json:"address"`
+		AccountProof []string        `json:"accountProof"`
+		Balance      *hexutil.Big    `json:"balance"`
+		CodeHash     common.Hash     `json:"codeHash"`
+		Nonce        hexutil.Uint64  `json:"nonce"`
+		StorageHash  common.Hash     `json:"storageHash"`
+		StorageProof []storageResult `json:"storageProof"`
+	}
+
+	var storageKeys []string
+	if len(req.storageKeys) > 0 {
+		storageKeys = strings.Split(req.storageKeys, ",")
+	}
+	log.Debug("Starting RPC request", "type", "eth_getProof", "blockNumber", req.blockNumber, "address", req.address, "storageKeys", len(storageKeys))
+	var res accountResult
+	err := c.client.CallContext(ctx, &res, "eth_getProof", req.address, storageKeys, hexutil.EncodeUint64(req.blockNumber))
+	log.Debug("Finished RPC request", "type", "eth_getProof", "blockNumber", req.blockNumber, "address", req.address, "storageKeys", len(storageKeys), "error", err)
+	var proof *gethclient.AccountResult
+	if err == nil { //TODO de-duplicate
+		// Turn hexutils back to normal datatypes
+		storageResults := make([]gethclient.StorageResult, 0, len(res.StorageProof))
+		for _, st := range res.StorageProof {
+			storageResults = append(storageResults, gethclient.StorageResult{
+				Key:   st.Key,
+				Value: st.Value.ToInt(),
+				Proof: st.Proof,
+			})
+		}
+		proof = &gethclient.AccountResult{
+			Address:      res.Address,
+			AccountProof: res.AccountProof,
+			Balance:      res.Balance.ToInt(),
+			Nonce:        uint64(res.Nonce),
+			CodeHash:     res.CodeHash,
+			StorageHash:  res.StorageHash,
+			StorageProof: storageResults,
+		}
+	}
+	return proof, err
+}
+
+func (c *Client) requestCode(ctx context.Context, req codeRequest) ([]byte, error) {
+	var code hexutil.Bytes
+	log.Debug("Starting RPC request", "type", "eth_getCode", "blockNumber", req.blockNumber, "address", req.address)
+	err := c.client.CallContext(ctx, &code, "eth_getCode", req.address, hexutil.EncodeUint64(req.blockNumber))
+	log.Debug("Finished RPC request", "type", "eth_getCode", "blockNumber", req.blockNumber, "address", req.address, "error", err)
+	return code, err
 }

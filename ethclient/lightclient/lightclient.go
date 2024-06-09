@@ -80,7 +80,7 @@ func NewClient(clConfig config.LightClientConfig, elConfig *params.ChainConfig, 
 	client.scheduler.RegisterModule(checkpointInit, "checkpointInit")
 	client.scheduler.RegisterModule(forwardSync, "forwardSync")
 	client.scheduler.RegisterModule(headSync, "headSync")
-	client.scheduler.RegisterModule(client, "canonicalChain")
+	client.scheduler.RegisterModule((*schedulerModule)(client), "lightClient")
 	return client
 }
 
@@ -98,6 +98,25 @@ func (c *Client) Close() {
 	c.closeTxAndReceipts()
 	c.closeLightState()
 	c.scheduler.Stop()
+}
+
+type schedulerModule Client
+
+// Process implements request.Module in order to get notified about new heads.
+func (s *schedulerModule) Process(requester request.Requester, events []request.Event) {
+	c := (*Client)(s)
+	if finality, ok := c.headTracker.ValidatedFinality(); ok {
+		finalized := finality.Finalized.PayloadHeader
+		c.setFinality(finalized)
+		c.addPayloadHeader(finalized)
+	}
+	if optimistic, ok := c.headTracker.ValidatedOptimistic(); ok {
+		head := optimistic.Attested.PayloadHeader
+		c.addPayloadHeader(head)
+		if c.setHead(head) {
+			go c.processNewHead(head.BlockNumber(), head.BlockHash())
+		}
+	}
 }
 
 // ChainReader interface

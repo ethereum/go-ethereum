@@ -317,48 +317,6 @@ func (c *Client) sendTransaction(ctx context.Context, tx *types.Transaction) err
 	return nil
 }
 
-func (c *Client) markTxAsSeen(sender common.Address, tx *types.Transaction) {
-	senderTxs := c.sentTxs[sender]
-	if senderTxs == nil {
-		senderTxs = make(map[common.Hash]sentTx)
-		c.sentTxs[sender] = senderTxs
-	}
-	senderTxs[tx.Hash()] = sentTx{nonce: tx.Nonce(), lastSeen: c.headCounter}
-}
-
-func (c *Client) txAndReceiptsNewHead(number uint64, hash common.Hash) {
-	c.sentTxLock.Lock()
-	if number > c.lastHeadNumber {
-		c.lastHeadNumber = number
-		c.headCounter++
-		c.discardOldTxs()
-	}
-	c.sentTxLock.Unlock()
-}
-
-func (c *Client) discardOldTxs() {
-	for sender, senderTxs := range c.sentTxs {
-		for txHash, sentTx := range senderTxs {
-			if sentTx.lastSeen+maxTxAge < c.headCounter {
-				delete(senderTxs, txHash)
-			}
-		}
-		if len(senderTxs) == 0 {
-			delete(c.sentTxs, sender)
-		}
-	}
-}
-
-func (c *Client) allSenders() []common.Address {
-	c.sentTxLock.Lock()
-	allSenders := make([]common.Address, 0, len(c.sentTxs))
-	for sender := range c.sentTxs {
-		allSenders = append(allSenders, sender)
-	}
-	c.sentTxLock.Unlock()
-	return allSenders
-}
-
 func (c *Client) nonceAndPendingTxs(ctx context.Context, head *btypes.ExecutionHeader, sender common.Address) (uint64, types.Transactions, error) {
 	proof, err := c.fetchProof(ctx, proofRequest{blockNumber: head.BlockNumber(), address: sender, storageKeys: ""})
 	if err != nil {
@@ -410,4 +368,46 @@ func (c *Client) nonceAndPendingTxs(ctx context.Context, head *btypes.ExecutionH
 	}
 	c.sentTxLock.Unlock()
 	return proof.Nonce, pendingList, nil
+}
+
+func (c *Client) allSenders() []common.Address {
+	c.sentTxLock.Lock()
+	allSenders := make([]common.Address, 0, len(c.sentTxs))
+	for sender := range c.sentTxs {
+		allSenders = append(allSenders, sender)
+	}
+	c.sentTxLock.Unlock()
+	return allSenders
+}
+
+func (c *Client) txAndReceiptsNewHead(number uint64, hash common.Hash) {
+	c.sentTxLock.Lock()
+	if number > c.lastHeadNumber {
+		c.lastHeadNumber = number
+		c.headCounter++
+		c.discardOldTxs()
+	}
+	c.sentTxLock.Unlock()
+}
+
+func (c *Client) discardOldTxs() {
+	for sender, senderTxs := range c.sentTxs {
+		for txHash, sentTx := range senderTxs {
+			if sentTx.lastSeen+maxTxAge < c.headCounter {
+				delete(senderTxs, txHash)
+			}
+		}
+		if len(senderTxs) == 0 {
+			delete(c.sentTxs, sender)
+		}
+	}
+}
+
+func (c *Client) markTxAsSeen(sender common.Address, tx *types.Transaction) {
+	senderTxs := c.sentTxs[sender]
+	if senderTxs == nil {
+		senderTxs = make(map[common.Hash]sentTx)
+		c.sentTxs[sender] = senderTxs
+	}
+	senderTxs[tx.Hash()] = sentTx{nonce: tx.Nonce(), lastSeen: c.headCounter}
 }
