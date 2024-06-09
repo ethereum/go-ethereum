@@ -34,24 +34,26 @@ import (
 const recentCanonicalLength = 256
 
 type canonicalChainFields struct {
-	chainLock      sync.Mutex
-	head, finality *btypes.ExecutionHeader
-	recent         map[uint64]common.Hash // nil while head == nil
-	recentTail     uint64                 // if recent != nil then recent hashes are available from recentTail to head
-	tailFetchCh    chan struct{}
-	finalized      *lru.Cache[uint64, common.Hash]  // finalized but not recent hashes
-	requests       *requestMap[uint64, common.Hash] // requested; neither recent nor cached finalized
+	chainLock            sync.Mutex
+	head, finality       *btypes.ExecutionHeader
+	recent               map[uint64]common.Hash // nil while head == nil
+	recentTail           uint64                 // if recent != nil then recent hashes are available from recentTail to head
+	tailFetchCh, closeCh chan struct{}
+	finalized            *lru.Cache[uint64, common.Hash]  // finalized but not recent hashes
+	requests             *requestMap[uint64, common.Hash] // requested; neither recent nor cached finalized
 }
 
 func (c *Client) initCanonicalChain() {
 	c.finalized = lru.NewCache[uint64, common.Hash](10000)
 	c.requests = newRequestMap[uint64, common.Hash](nil)
 	c.tailFetchCh = make(chan struct{})
+	c.closeCh = make(chan struct{})
 	go c.tailFetcher()
 }
 
 func (c *Client) closeCanonicalChain() {
 	c.requests.close()
+	close(c.closeCh)
 }
 
 func (c *Client) setHead(head *btypes.ExecutionHeader) bool {
@@ -117,7 +119,9 @@ func (c *Client) addRecentTail(tail *types.Header) bool {
 	c.chainLock.Lock()
 	defer c.chainLock.Unlock()
 
-	if c.recent == nil || tail.Number.Uint64() != c.recentTail || c.recent[c.recentTail] != tail.Hash() {
+	if c.recent == nil || c.head == nil || c.recentTail+recentCanonicalLength <= c.head.BlockNumber() ||
+		tail.Number.Uint64() != c.recentTail ||
+		c.recent[c.recentTail] != tail.Hash() {
 		return false
 	}
 	if c.recentTail > 0 {
@@ -128,24 +132,27 @@ func (c *Client) addRecentTail(tail *types.Header) bool {
 	return true
 }
 
-func (c *Client) tailFetcher() { //TODO stop
+func (c *Client) tailFetcher() {
 	for {
 		c.chainLock.Lock()
 		var (
-			tailNum  uint64
-			tailHash common.Hash
+			tailNum, needTail uint64
+			tailHash          common.Hash
 		)
-		if c.recent != nil {
+		if c.recent != nil && c.head != nil {
 			tailNum, tailHash = c.recentTail, c.recent[c.recentTail]
-		}
-		needTail := tailNum
-		for _, reqNum := range c.requests.allKeys() {
-			if reqNum < needTail {
-				needTail = reqNum
+			needTail = tailNum
+			for _, reqNum := range c.requests.allKeys() {
+				if reqNum < needTail {
+					needTail = reqNum
+				}
+			}
+			if headNum := c.head.BlockNumber(); needTail+recentCanonicalLength <= headNum {
+				needTail = headNum + 1 - recentCanonicalLength
 			}
 		}
 		c.chainLock.Unlock()
-		if needTail < tailNum { //TODO check recentCanonicalLength
+		if needTail < tailNum {
 			log.Debug("Fetching tail headers", "have", tailNum, "need", needTail)
 			ctx, _ := context.WithTimeout(context.Background(), time.Second*10)
 			//TODO parallel fetch by number
@@ -153,7 +160,11 @@ func (c *Client) tailFetcher() { //TODO stop
 				c.addRecentTail(header)
 			}
 		} else {
-			<-c.tailFetchCh
+			select {
+			case <-c.tailFetchCh:
+			case <-c.closeCh:
+				return
+			}
 		}
 	}
 }
