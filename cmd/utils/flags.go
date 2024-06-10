@@ -1765,6 +1765,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.Bool(VMEnableDebugFlag.Name)
 	}
+	if ctx.IsSet(CollectWitnessFlag.Name) {
+		cfg.EnableWitnessCollection = ctx.Bool(CollectWitnessFlag.Name)
+	}
 
 	if ctx.IsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = ctx.Uint64(RPCGlobalGasCapFlag.Name)
@@ -2195,7 +2198,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
 		cache.TrieDirtyLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
-	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
+	vmcfg := vm.Config{
+		EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name),
+		EnableWitnessCollection: ctx.Bool(CollectWitnessFlag.Name),
+	}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
 			var config json.RawMessage
@@ -2209,8 +2215,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 			vmcfg.Tracer = t
 		}
 	}
-	vmcfg.EnableWitnessCollection = ctx.Bool(CollectWitnessFlag.Name)
-
 	// Disable transaction indexing/unindexing by default.
 	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {
