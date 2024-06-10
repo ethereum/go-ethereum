@@ -14,10 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package txpool
 
 import (
-	"errors"
 	"io"
 	"os"
 
@@ -27,36 +26,23 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
-// errNoActiveJournal is returned if a transaction is attempted to be inserted
-// into the journal, but no such file is currently open.
-var errNoActiveJournal = errors.New("no active journal")
-
-// devNull is a WriteCloser that just discards anything written into it. Its
-// goal is to allow the transaction journal to write into a fake journal when
-// loading transactions on startup without printing warnings due to no file
-// being readt for write.
-type devNull struct{}
-
-func (*devNull) Write(p []byte) (n int, err error) { return len(p), nil }
-func (*devNull) Close() error                      { return nil }
-
-// txJournal is a rotating log of transactions with the aim of storing locally
+// lendingtxJournal is a rotating log of transactions with the aim of storing locally
 // created transactions to allow non-executed ones to survive node restarts.
-type txJournal struct {
+type lendingtxJournal struct {
 	path   string         // Filesystem path to store the transactions at
 	writer io.WriteCloser // Output stream to write new transactions into
 }
 
-// newTxJournal creates a new transaction journal to
-func newTxJournal(path string) *txJournal {
-	return &txJournal{
+// newLendingTxJournal creates a new transaction journal to
+func newLendingTxJournal(path string) *lendingtxJournal {
+	return &lendingtxJournal{
 		path: path,
 	}
 }
 
 // load parses a transaction journal dump from disk, loading its contents into
 // the specified pool.
-func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
+func (journal *lendingtxJournal) load(add func(*types.LendingTransaction) error) error {
 	// Skip the parsing if the journal file doens't exist at all
 	if _, err := os.Stat(journal.path); os.IsNotExist(err) {
 		return nil
@@ -76,38 +62,22 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	stream := rlp.NewStream(input, 0)
 	total, dropped := 0, 0
 
-	// Create a method to load a limited batch of transactions and bump the
-	// appropriate progress counters. Then use this method to load all the
-	// journalled transactions in small-ish batches.
-	loadBatch := func(txs types.Transactions) {
-		for _, err := range add(txs) {
-			if err != nil {
-				log.Debug("Failed to add journaled transaction", "err", err)
-				dropped++
-			}
-		}
-	}
-	var (
-		failure error
-		batch   types.Transactions
-	)
+	var failure error
 	for {
 		// Parse the next transaction and terminate on error
-		tx := new(types.Transaction)
+		tx := new(types.LendingTransaction)
 		if err = stream.Decode(tx); err != nil {
 			if err != io.EOF {
 				failure = err
 			}
-			if batch.Len() > 0 {
-				loadBatch(batch)
-			}
 			break
 		}
-		// New transaction parsed, queue up for later, import if threnshold is reached
+		// Import the transaction and bump the appropriate progress counters
 		total++
-		if batch = append(batch, tx); batch.Len() > 1024 {
-			loadBatch(batch)
-			batch = batch[:0]
+		if err = add(tx); err != nil {
+			log.Debug("Failed to add journaled transaction", "err", err)
+			dropped++
+			continue
 		}
 	}
 	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
@@ -116,7 +86,7 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 }
 
 // insert adds the specified transaction to the local disk journal.
-func (journal *txJournal) insert(tx *types.Transaction) error {
+func (journal *lendingtxJournal) insert(tx *types.LendingTransaction) error {
 	if journal.writer == nil {
 		return errNoActiveJournal
 	}
@@ -128,7 +98,7 @@ func (journal *txJournal) insert(tx *types.Transaction) error {
 
 // rotate regenerates the transaction journal based on the current contents of
 // the transaction pool.
-func (journal *txJournal) rotate(all map[common.Address]types.Transactions) error {
+func (journal *lendingtxJournal) rotate(all map[common.Address]types.LendingTransactions) error {
 	// Close the current journal (if any is open)
 	if journal.writer != nil {
 		if err := journal.writer.Close(); err != nil {
@@ -168,7 +138,7 @@ func (journal *txJournal) rotate(all map[common.Address]types.Transactions) erro
 }
 
 // close flushes the transaction journal contents to disk and closes the file.
-func (journal *txJournal) close() error {
+func (journal *lendingtxJournal) close() error {
 	var err error
 
 	if journal.writer != nil {

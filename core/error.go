@@ -26,12 +26,12 @@ var (
 	// ErrKnownBlock is returned when a block to import is already known locally.
 	ErrKnownBlock = errors.New("block already known")
 
-	// ErrGasLimitReached is returned by the gas pool if the amount of gas required
-	// by a transaction is higher than what's left in the block.
-	ErrGasLimitReached = errors.New("gas limit reached")
-
 	// ErrBlacklistedHash is returned if a block to import is on the blacklist.
 	ErrBlacklistedHash = errors.New("blacklisted hash")
+
+	// ErrNonceTooLow is returned if the nonce of a transaction is lower than the
+	// one present in the local chain.
+	ErrNonceTooLow = errors.New("nonce too low")
 
 	// ErrNonceTooHigh is returned if the nonce of a transaction is higher than the
 	// next one expected based on the local chain.
@@ -41,18 +41,24 @@ var (
 	// maximum allowed value and would become invalid if incremented.
 	ErrNonceMax = errors.New("nonce has max value")
 
-	ErrNotXDPoS = errors.New("XDPoS not found in config")
+	// ErrGasLimitReached is returned by the gas pool if the amount of gas required
+	// by a transaction is higher than what's left in the block.
+	ErrGasLimitReached = errors.New("gas limit reached")
 
-	ErrNotFoundM1 = errors.New("list M1 not found ")
+	// ErrInsufficientFunds is returned if the total cost of executing a transaction
+	// is higher than the balance of the user's account.
+	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
 
-	ErrStopPreparingBlock = errors.New("stop calculating a block not verified by M2")
+	// ErrGasUintOverflow is returned when calculating gas usage.
+	ErrGasUintOverflow = errors.New("gas uint64 overflow")
+
+	// ErrIntrinsicGas is returned if the transaction is specified to use less gas
+	// than required to start the invocation.
+	ErrIntrinsicGas = errors.New("intrinsic gas too low")
 
 	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
 	// current network configuration.
 	ErrTxTypeNotSupported = types.ErrTxTypeNotSupported
-
-	// ErrGasUintOverflow is returned when calculating gas usage.
-	ErrGasUintOverflow = errors.New("gas uint64 overflow")
 
 	// ErrTipAboveFeeCap is a sanity error to ensure no one is able to specify a
 	// transaction with a tip higher than the total fee cap.
@@ -72,4 +78,10 @@ var (
 
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	ErrNotXDPoS = errors.New("XDPoS not found in config")
+
+	ErrNotFoundM1 = errors.New("list M1 not found ")
+
+	ErrStopPreparingBlock = errors.New("stop calculating a block not verified by M2")
 )
