@@ -1064,7 +1064,7 @@ func (s *Stream) readKind() (kind Kind, size uint64, err error) {
 		return String, uint64(b - 0x80), nil
 	case b < 0xC0:
 		// If a string is more than 55 bytes long, the RLP encoding consists of a
-		// single byte with value 0xB7 plus the length of the length of the
+		// single byte with value 0xB7 plus the length of the
 		// string in binary form, followed by the length of the string, followed
 		// by the string. For example, a length-1024 string would be encoded as
 		// 0xB90400 followed by the string. The range of the first byte is thus
