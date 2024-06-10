@@ -19,6 +19,7 @@ package p2p
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
@@ -1140,12 +1141,9 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	// Sort the result array alphabetically by node identifier
-	for i := 0; i < len(infos); i++ {
-		for j := i + 1; j < len(infos); j++ {
-			if infos[i].ID > infos[j].ID {
-				infos[i], infos[j] = infos[j], infos[i]
-			}
-		}
-	}
+	slices.SortFunc(infos, func(a, b *PeerInfo) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
+
 	return infos
 }
