@@ -754,10 +754,12 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	if tx.Type() == types.BlobTxType {
 		return w.commitBlobTransaction(env, tx)
 	}
+	start := time.Now()
 	receipt, err := w.applyTransaction(env, tx)
 	if err != nil {
 		return nil, err
 	}
+	log.Info("apply transaction time", "hash", tx.Hash(), "to", tx.To(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "took", time.Since(start).Milliseconds())
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 	return receipt.Logs, nil
