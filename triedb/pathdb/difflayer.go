@@ -85,12 +85,8 @@ func nodeBloomHash(h common.Hash, p []byte) uint64 {
 }
 
 func pathBloomHash(p []byte) uint64 {
-	if len(p) > 16 {
-		panic("invalid path")
-	}
 	var result uint64
 	for _, nibble := range p {
-		// 检查每个 nibble 是否在有效范围内（0-15）
 		if nibble > 0x0F {
 			panic("invalid path nibble value")
 		}
@@ -191,7 +187,7 @@ func (dl *diffLayer) rebloom(origin *diskLayer) {
 	if dl.selfDiffed == nil {
 		dl.selfDiffed, _ = dl.diffed.NewCompatible()
 		for owner, subset := range dl.nodes {
-			for path, _ := range subset {
+			for path := range subset {
 				dl.selfDiffed.AddHash(nodeBloomHash(owner, []byte(path)))
 			}
 		}
