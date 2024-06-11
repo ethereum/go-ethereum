@@ -1,0 +1,19 @@
+name: Build Docker image for project
+
+on:
+  push:
+    types: [labeled]
+  pull_request:
+    types: [labeled]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+    if: ${{ (github.event_name == 'pull_request' && github.event.label.name == 'CI:Build') }}
+    steps:
+    
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      run: docker build . --file Dockerfile --tag go-etherium-devops:$(date +%s)
