@@ -1,4 +1,4 @@
-name: Build Docker image for project
+name: Build & Push Docker image for project
 
 on:
   push:
@@ -8,12 +8,20 @@ on:
 
 jobs:
 
-  build:
+  build-and-push:
 
     runs-on: ubuntu-latest
     if: ${{ (github.event_name == 'pull_request' && github.event.label.name == 'CI:Build') }}
-    steps:
     
+    steps:
     - uses: actions/checkout@v4
+    - name: Login to Github Container repository
+    - uses: docker/login-action@v3.2.0
+      with: 
+        registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
     - name: Build the Docker image
       run: docker build . --file Dockerfile --tag go-etherium-devops:$(date +%s)
+    - name: Push Docker image to Github container repository
+      run: docker push ghcr.io/go-etherium-devops:$(date +%s)
