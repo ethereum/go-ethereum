@@ -1,0 +1,81 @@
+INFO [06-11|22:59:37.322] Maximum peer count                       ETH=50 LES=0 total=50
+INFO [06-11|22:59:37.323] Smartcard socket not found, disabling    err="stat /run/pcscd/pcscd.comm: no such file or directory"
+WARN [06-11|22:59:37.326] Sanitizing cache to Go's GC limits       provided=1024 updated=653
+INFO [06-11|22:59:37.326] Set global gas cap                       cap=50,000,000
+INFO [06-11|22:59:37.329] Allocated trie memory caches             clean=97.00MiB dirty=163.00MiB
+INFO [06-11|22:59:37.329] Allocated cache and file handles         database=/home/teodor/limechain/go-ethereum/node2/geth/chaindata cache=325.00MiB handles=524,288
+INFO [06-11|22:59:37.345] Opened ancient database                  database=/home/teodor/limechain/go-ethereum/node2/geth/chaindata/ancient/chain readonly=false
+INFO [06-11|22:59:37.346]  
+INFO [06-11|22:59:37.346] --------------------------------------------------------------------------------------------------------------------------------------------------------- 
+INFO [06-11|22:59:37.346] Chain ID:  2345 (unknown) 
+INFO [06-11|22:59:37.346] Consensus: unknown 
+INFO [06-11|22:59:37.346]  
+INFO [06-11|22:59:37.346] Pre-Merge hard forks: 
+INFO [06-11|22:59:37.346]  - Homestead:                   0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/homestead.md) 
+INFO [06-11|22:59:37.346]  - Tangerine Whistle (EIP 150): 0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/tangerine-whistle.md) 
+INFO [06-11|22:59:37.346]  - Spurious Dragon/1 (EIP 155): 0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md) 
+INFO [06-11|22:59:37.346]  - Spurious Dragon/2 (EIP 158): 0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/spurious-dragon.md) 
+INFO [06-11|22:59:37.346]  - Byzantium:                   0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/byzantium.md) 
+INFO [06-11|22:59:37.346]  - Constantinople:              0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/constantinople.md) 
+INFO [06-11|22:59:37.346]  - Petersburg:                  0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/petersburg.md) 
+INFO [06-11|22:59:37.346]  - Istanbul:                    0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/istanbul.md) 
+INFO [06-11|22:59:37.346]  - Muir Glacier:                0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/muir-glacier.md) 
+INFO [06-11|22:59:37.346]  - Berlin:                      0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/berlin.md) 
+INFO [06-11|22:59:37.346]  - London:                      0        (https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/london.md) 
+INFO [06-11|22:59:37.346]  
+INFO [06-11|22:59:37.346] The Merge is not yet available for this network! 
+INFO [06-11|22:59:37.346]  - Hard-fork specification: https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md 
+INFO [06-11|22:59:37.346] --------------------------------------------------------------------------------------------------------------------------------------------------------- 
+INFO [06-11|22:59:37.346]  
+INFO [06-11|22:59:37.346] Disk storage enabled for ethash caches   dir=/home/teodor/limechain/go-ethereum/node2/geth/ethash count=3
+INFO [06-11|22:59:37.346] Disk storage enabled for ethash DAGs     dir=/home/teodor/.ethash count=2
+INFO [06-11|22:59:37.346] Initialising Ethereum protocol           network=2345 dbversion=8
+INFO [06-11|22:59:37.349] Loaded most recent local header          number=282 hash=d70008..0b0722 td=37,826,996 age=6m16s
+INFO [06-11|22:59:37.349] Loaded most recent local full block      number=282 hash=d70008..0b0722 td=37,826,996 age=6m16s
+INFO [06-11|22:59:37.349] Loaded most recent local fast block      number=282 hash=d70008..0b0722 td=37,826,996 age=6m16s
+INFO [06-11|22:59:37.359] Loaded local transaction journal         transactions=0 dropped=0
+INFO [06-11|22:59:37.359] Regenerated local transaction journal    transactions=0 accounts=0
+INFO [06-11|22:59:37.360] Gasprice oracle is ignoring threshold set threshold=2
+WARN [06-11|22:59:37.360] Engine API enabled                       protocol=eth
+WARN [06-11|22:59:37.360] Engine API started but chain not configured for merge yet 
+INFO [06-11|22:59:37.360] Starting peer-to-peer node               instance=Geth/v1.10.26-stable-e5eb32ac/linux-amd64/go1.22.4
+INFO [06-11|22:59:37.385] New local node record                    seq=1,718,124,051,689 id=ec6e7be280fcb04f ip=127.0.0.1 udp=30304 tcp=30304
+INFO [06-11|22:59:37.386] IPC endpoint opened                      url=/home/teodor/limechain/go-ethereum/node2/geth.ipc
+INFO [06-11|22:59:37.386] Loaded JWT secret file                   path=/home/teodor/limechain/go-ethereum/node2/geth/jwtsecret crc32=0xa11b7fc3
+INFO [06-11|22:59:37.392] Started P2P networking                   self=enode://b36e7cc99fb3dbcbe4572eef9cf8aaf6477856e3e9f74c0bef84e4334cd1f72d4cad2a66edf3f7151230381b0d26384c00c2dea59691f6a2d512fd2c7706ad2c@127.0.0.1:30304
+INFO [06-11|22:59:37.393] HTTP server started                      endpoint=127.0.0.1:8552 auth=false prefix= cors=* vhosts=localhost
+INFO [06-11|22:59:37.393] WebSocket enabled                        url=ws://127.0.0.1:8553
+INFO [06-11|22:59:37.393] HTTP server started                      endpoint=127.0.0.1:8553 auth=true  prefix= cors=localhost vhosts=localhost
+INFO [06-11|22:59:37.393] Transaction pool price threshold updated price=0
+INFO [06-11|22:59:37.393] Updated mining threads                   threads=0
+INFO [06-11|22:59:37.393] Transaction pool price threshold updated price=1,000,000,000
+INFO [06-11|22:59:37.400] Commit new sealing work                  number=283 sealhash=e70ce6..aa04b3 uncles=0 txs=0 gas=0 fees=0 elapsed="179.096µs"
+INFO [06-11|22:59:37.400] Commit new sealing work                  number=283 sealhash=e70ce6..aa04b3 uncles=0 txs=0 gas=0 fees=0 elapsed="335.069µs"
+Welcome to the Geth JavaScript console!
+
+instance: Geth/v1.10.26-stable-e5eb32ac/linux-amd64/go1.22.4
+coinbase: 0x248fd25790319c25826ea76b26aa63b1127df87a
+at block: 282 (Tue Jun 11 2024 22:53:21 GMT+0300 (EEST))
+ datadir: /home/teodor/limechain/go-ethereum/node2
+ modules: admin:1.0 debug:1.0 engine:1.0 eth:1.0 ethash:1.0 miner:1.0 net:1.0 personal:1.0 rpc:1.0 txpool:1.0 web3:1.0
+
+To exit, press ctrl-d or type exit
+> 
+WARN [06-11|22:59:37.450] HTTP server graceful shutdown timed out 
+INFO [06-11|22:59:37.450] HTTP server stopped                      endpoint=127.0.0.1:8552
+WARN [06-11|22:59:37.450] HTTP server graceful shutdown timed out 
+INFO [06-11|22:59:37.450] HTTP server stopped                      endpoint=127.0.0.1:8553
+INFO [06-11|22:59:37.450] IPC endpoint closed                      url=/home/teodor/limechain/go-ethereum/node2/geth.ipc
+INFO [06-11|22:59:37.450] Ethereum protocol stopped 
+INFO [06-11|22:59:37.450] Transaction pool stopped 
+INFO [06-11|22:59:37.451] Writing cached state to disk             block=282 hash=d70008..0b0722 root=32c9f2..978e25
+INFO [06-11|22:59:37.451] Persisted trie from memory database      nodes=0 size=0.00B time="2.986µs" gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [06-11|22:59:37.451] Writing cached state to disk             block=281 hash=618ece..755341 root=bedbeb..2685bd
+INFO [06-11|22:59:37.451] Persisted trie from memory database      nodes=0 size=0.00B time=691ns     gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [06-11|22:59:37.451] Writing cached state to disk             block=155 hash=c31364..b8a83c root=d5e95e..b52108
+INFO [06-11|22:59:37.451] Persisted trie from memory database      nodes=0 size=0.00B time=951ns     gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [06-11|22:59:37.451] Writing snapshot state to disk           root=7fc800..5eb482
+INFO [06-11|22:59:37.451] Persisted trie from memory database      nodes=0 size=0.00B time=622ns     gcnodes=0 gcsize=0.00B gctime=0s livenodes=1 livesize=0.00B
+INFO [06-11|22:59:37.451] Writing clean trie cache to disk         path=/home/teodor/limechain/go-ethereum/node2/geth/triecache threads=1
+INFO [06-11|22:59:37.453] Persisted the clean trie cache           path=/home/teodor/limechain/go-ethereum/node2/geth/triecache elapsed=1.301ms
+INFO [06-11|22:59:37.453] Blockchain stopped 

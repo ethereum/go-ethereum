@@ -1,0 +1,34 @@
+npm install --save-dev hardhat @nomiclabs/hardhat-waffle @nomiclabs/hardhat-ethers @nomicfoundation/hardhat-ignition ethers
+npx hardhat init -y  ( still i had to press y and choose javascript project )
+npx hardhat compile
+npx hardhat ignition deploy ./ignition/modules/Lock.js --network gethDev
+
+
+
+build/bin/geth --datadir node1/ account new
+Public address of the key:   0x80DE34CaE5490B1f8e92caa5b1B194B4E68546a0
+Paste public address in node1/genesis.json
+
+gather private key with this script . paste in hardhat/hardhat.config.js
+prerequisites for the script. npm install ethereumjs-wallet keythereum --legacy-peer-deps
+node extractPrivateKey.js 
+Private key: 0xd3d245fd385b65ed722a4b91dcf6691c0a8aaf4a542edfba80f53d077fc504d1  
+
+
+initializing the private blockchain
+build/bin/geth init --datadir node2 node2/genesis.json
+
+node2 - 0x248fD25790319C25826ea76b26aA63B1127DF87a
+node2 - 0x10db3a848996cd5b190ab083a2a3836c16ea2e16bc30447f3964e76dc5aa8594
+
+
+
+build/bin/geth --datadir node2 --syncmode "full" --port 30304 --http --http.addr "localhost" --http.port 8552 --http.api "personal,eth,net,web3,txpool,miner,admin" --http.corsdomain="*" --networkid 2345 --allow-insecure-unlock --authrpc.port 8553 console
+
+build/bin/geth attach http://127.0.0.1:8552 <<EOF
+miner.start()
+EOF
+
+
+check balance in console
+eth.getBalance(eth.accounts[0])
