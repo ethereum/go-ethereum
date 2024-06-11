@@ -23,6 +23,7 @@ linters:
     - durationcheck
     - exportloopref
     - whitespace
+    - revive # only certain checks enabled
 
     ### linters we tried and will not be using:
     ###
@@ -38,6 +39,15 @@ linters:
 linters-settings:
   gofmt:
     simplify: true
+  revive:
+    enable-all-rules: false
+    # here we enable specific useful rules
+    # see https://golangci-lint.run/usage/linters/#revive for supported rules
+    rules:
+      - name: receiver-naming
+        severity: warning
+        disabled: false
+        exclude: [""]
 
 issues:
   exclude-files:
@@ -47,6 +57,9 @@ issues:
       linters:
         - deadcode
         - staticcheck
+    - path: crypto/bn256/
+      linters:
+        - revive
     - path: internal/build/pgp.go
       text: 'SA1019: "golang.org/x/crypto/openpgp" is deprecated: this package is unmaintained except for security fixes.'
     - path: core/vm/contracts.go
