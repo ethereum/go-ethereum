@@ -299,13 +299,7 @@ func (tx *Transaction) Nonce() uint64 { return tx.inner.nonce() }
 // To returns the recipient address of the transaction.
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
-	// Copy the pointed-to address.
-	ito := tx.inner.to()
-	if ito == nil {
-		return nil
-	}
-	cpy := *ito
-	return &cpy
+	return copyAddressPtr(tx.inner.to())
 }
 
 func (tx *Transaction) From() *common.Address {
@@ -864,4 +858,13 @@ func (m *Message) SetBalanceTokenFeeForCall() {
 
 func (m *Message) SetBalanceTokenFee(balanceTokenFee *big.Int) {
 	m.balanceTokenFee = balanceTokenFee
+}
+
+// copyAddressPtr copies an address.
+func copyAddressPtr(a *common.Address) *common.Address {
+	if a == nil {
+		return nil
+	}
+	cpy := *a
+	return &cpy
 }
