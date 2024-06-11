@@ -32,6 +32,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/misc"
+	"github.com/XinFinOrg/XDPoSChain/consensus/misc/eip1559"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -616,7 +617,7 @@ func (w *worker) commitNewWork() {
 		Time:       big.NewInt(tstamp),
 	}
 	// Set baseFee if we are on an EIP-1559 chain
-	header.BaseFee = misc.CalcBaseFee(w.config, header)
+	header.BaseFee = eip1559.CalcBaseFee(w.config, header)
 
 	// Only set the coinbase if we are mining (avoid spurious block rewards)
 	if atomic.LoadInt32(&w.mining) == 1 {
