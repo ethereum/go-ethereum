@@ -159,9 +159,9 @@ func CheckRelayerFee(relayer common.Address, fee *big.Int, statedb *state.StateD
 }
 func AddTokenBalance(addr common.Address, value *big.Int, token common.Address, statedb *state.StateDB) error {
 	// XDC native
-	if token.String() == common.XDCNativeAddress {
+	if token == common.XDCNativeAddressBinary {
 		balance := statedb.GetBalance(addr)
-		log.Debug("ApplyXDCXMatchedTransaction settle balance: ADD TOKEN XDC NATIVE BEFORE", "token", token.String(), "address", addr.String(), "balance", balance, "orderValue", value)
+		log.Debug("ApplyXDCXMatchedTransaction settle balance: ADD TOKEN XDC NATIVE BEFORE", "token", common.XDCNativeAddress, "address", addr.String(), "balance", balance, "orderValue", value)
 		statedb.AddBalance(addr, value)
 		balance = statedb.GetBalance(addr)
 		log.Debug("ApplyXDCXMatchedTransaction settle balance: ADD XDC NATIVE BALANCE AFTER", "token", token.String(), "address", addr.String(), "balance", balance, "orderValue", value)
@@ -186,10 +186,9 @@ func AddTokenBalance(addr common.Address, value *big.Int, token common.Address, 
 
 func SubTokenBalance(addr common.Address, value *big.Int, token common.Address, statedb *state.StateDB) error {
 	// XDC native
-	if token.String() == common.XDCNativeAddress {
-
+	if token == common.XDCNativeAddressBinary {
 		balance := statedb.GetBalance(addr)
-		log.Debug("ApplyXDCXMatchedTransaction settle balance: SUB XDC NATIVE BALANCE BEFORE", "token", token.String(), "address", addr.String(), "balance", balance, "orderValue", value)
+		log.Debug("ApplyXDCXMatchedTransaction settle balance: SUB XDC NATIVE BALANCE BEFORE", "token", common.XDCNativeAddress, "address", addr.String(), "balance", balance, "orderValue", value)
 		if balance.Cmp(value) < 0 {
 			return errors.Errorf("value %s in token %s not enough , have : %s , want : %s  ", addr.String(), token.String(), balance, value)
 		}
@@ -219,7 +218,7 @@ func SubTokenBalance(addr common.Address, value *big.Int, token common.Address, 
 
 func CheckSubTokenBalance(addr common.Address, value *big.Int, token common.Address, statedb *state.StateDB, mapBalances map[common.Address]map[common.Address]*big.Int) (*big.Int, error) {
 	// XDC native
-	if token.String() == common.XDCNativeAddress {
+	if token == common.XDCNativeAddressBinary {
 		var balance *big.Int
 		if value := mapBalances[token][addr]; value != nil {
 			balance = value
@@ -256,7 +255,7 @@ func CheckSubTokenBalance(addr common.Address, value *big.Int, token common.Addr
 
 func CheckAddTokenBalance(addr common.Address, value *big.Int, token common.Address, statedb *state.StateDB, mapBalances map[common.Address]map[common.Address]*big.Int) (*big.Int, error) {
 	// XDC native
-	if token.String() == common.XDCNativeAddress {
+	if token == common.XDCNativeAddressBinary {
 		var balance *big.Int
 		if value := mapBalances[token][addr]; value != nil {
 			balance = value
@@ -308,7 +307,7 @@ func CheckSubRelayerFee(relayer common.Address, fee *big.Int, statedb *state.Sta
 
 func GetTokenBalance(addr common.Address, token common.Address, statedb *state.StateDB) *big.Int {
 	// XDC native
-	if token.String() == common.XDCNativeAddress {
+	if token == common.XDCNativeAddressBinary {
 		return statedb.GetBalance(addr)
 	}
 	// TRC tokens
@@ -323,7 +322,7 @@ func GetTokenBalance(addr common.Address, token common.Address, statedb *state.S
 
 func SetTokenBalance(addr common.Address, balance *big.Int, token common.Address, statedb *state.StateDB) error {
 	// XDC native
-	if token.String() == common.XDCNativeAddress {
+	if token == common.XDCNativeAddressBinary {
 		statedb.SetBalance(addr, balance)
 		return nil
 	}

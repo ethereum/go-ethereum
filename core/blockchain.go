@@ -2562,7 +2562,7 @@ func (bc *BlockChain) UpdateM1() error {
 	if err != nil {
 		return err
 	}
-	addr := common.HexToAddress(common.MasternodeVotingSMC)
+	addr := common.MasternodeVotingSMCBinary
 	validator, err := contractValidator.NewXDCValidator(addr, client)
 	if err != nil {
 		return err

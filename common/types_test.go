@@ -167,3 +167,39 @@ func TestRemoveItemInArray(t *testing.T) {
 		t.Error("fail remove item from array address")
 	}
 }
+
+var testCases = []struct {
+	bin Address
+	str string
+}{
+	{BlockSignersBinary, BlockSigners},
+	{MasternodeVotingSMCBinary, MasternodeVotingSMC},
+	{RandomizeSMCBinary, RandomizeSMC},
+	{FoudationAddrBinary, FoudationAddr},
+	{TeamAddrBinary, TeamAddr},
+	{XDCXAddrBinary, XDCXAddr},
+	{TradingStateAddrBinary, TradingStateAddr},
+	{XDCXLendingAddressBinary, XDCXLendingAddress},
+	{XDCXLendingFinalizedTradeAddressBinary, XDCXLendingFinalizedTradeAddress},
+	{XDCNativeAddressBinary, XDCNativeAddress},
+	{LendingLockAddressBinary, LendingLockAddress},
+}
+
+func TestBinaryAddressToString(t *testing.T) {
+	for _, tt := range testCases {
+		have := tt.bin.String()
+		want := tt.str
+		if have != want {
+			t.Errorf("fail to convert binary address to string address\nwant:%s\nhave:%s", have, want)
+		}
+	}
+}
+func TestStringToBinaryAddress(t *testing.T) {
+	for _, tt := range testCases {
+		want := tt.bin
+		have := HexToAddress(tt.str)
+		if have != want {
+			t.Errorf("fail to convert string address to binary address\nwant:%s\nhave:%s", have, want)
+		}
+	}
+}

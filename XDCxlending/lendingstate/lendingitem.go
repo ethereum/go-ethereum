@@ -260,7 +260,7 @@ func (l *LendingItem) VerifyCollateral(state *state.StateDB) error {
 	validCollateral := false
 	collateralList := GetCollaterals(state, l.Relayer, l.LendingToken, l.Term)
 	for _, collateral := range collateralList {
-		if l.CollateralToken.String() == collateral.String() {
+		if l.CollateralToken == collateral {
 			validCollateral = true
 			break
 		}
@@ -411,7 +411,7 @@ func VerifyBalance(isXDCXLendingFork bool, statedb *state.StateDB, lendingStateD
 					defaultFee := new(big.Int).Mul(quantity, new(big.Int).SetUint64(DefaultFeeRate))
 					defaultFee = new(big.Int).Div(defaultFee, common.XDCXBaseFee)
 					defaultFeeInXDC := common.Big0
-					if lendingToken.String() != common.XDCNativeAddress {
+					if lendingToken != common.XDCNativeAddressBinary {
 						defaultFeeInXDC = new(big.Int).Mul(defaultFee, lendTokenXDCPrice)
 						defaultFeeInXDC = new(big.Int).Div(defaultFeeInXDC, lendingTokenDecimal)
 					} else {

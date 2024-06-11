@@ -614,7 +614,7 @@ func (self *worker) commitNewWork() {
 		misc.ApplyDAOHardFork(work.state)
 	}
 	if common.TIPSigning.Cmp(header.Number) == 0 {
-		work.state.DeleteAddress(common.HexToAddress(common.BlockSigners))
+		work.state.DeleteAddress(common.BlockSignersBinary)
 	}
 	// won't grasp txs at checkpoint
 	var (
@@ -699,7 +699,7 @@ func (self *worker) commitNewWork() {
 						return
 					}
 					nonce := work.state.GetNonce(self.coinbase)
-					tx := types.NewTransaction(nonce, common.HexToAddress(common.XDCXAddr), big.NewInt(0), txMatchGasLimit, big.NewInt(0), txMatchBytes)
+					tx := types.NewTransaction(nonce, common.XDCXAddrBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), txMatchBytes)
 					txM, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, tx, self.config.ChainId)
 					if err != nil {
 						log.Error("Fail to create tx matches", "error", err)
@@ -729,7 +729,7 @@ func (self *worker) commitNewWork() {
 						return
 					}
 					nonce := work.state.GetNonce(self.coinbase)
-					lendingTx := types.NewTransaction(nonce, common.HexToAddress(common.XDCXLendingAddress), big.NewInt(0), txMatchGasLimit, big.NewInt(0), lendingDataBytes)
+					lendingTx := types.NewTransaction(nonce, common.XDCXLendingAddressBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), lendingDataBytes)
 					signedLendingTx, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, lendingTx, self.config.ChainId)
 					if err != nil {
 						log.Error("Fail to create lending tx", "error", err)
@@ -753,7 +753,7 @@ func (self *worker) commitNewWork() {
 						return
 					}
 					nonce := work.state.GetNonce(self.coinbase)
-					finalizedTx := types.NewTransaction(nonce, common.HexToAddress(common.XDCXLendingFinalizedTradeAddress), big.NewInt(0), txMatchGasLimit, big.NewInt(0), finalizedTradeData)
+					finalizedTx := types.NewTransaction(nonce, common.XDCXLendingFinalizedTradeAddressBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), finalizedTradeData)
 					signedFinalizedTx, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, finalizedTx, self.config.ChainId)
 					if err != nil {
 						log.Error("Fail to create lending tx", "error", err)
@@ -772,7 +772,7 @@ func (self *worker) commitNewWork() {
 			XDCxStateRoot := work.tradingState.IntermediateRoot()
 			LendingStateRoot := work.lendingState.IntermediateRoot()
 			txData := append(XDCxStateRoot.Bytes(), LendingStateRoot.Bytes()...)
-			tx := types.NewTransaction(work.state.GetNonce(self.coinbase), common.HexToAddress(common.TradingStateAddr), big.NewInt(0), txMatchGasLimit, big.NewInt(0), txData)
+			tx := types.NewTransaction(work.state.GetNonce(self.coinbase), common.TradingStateAddrBinary, big.NewInt(0), txMatchGasLimit, big.NewInt(0), txData)
 			txStateRoot, err := wallet.SignTx(accounts.Account{Address: self.coinbase}, tx, self.config.ChainId)
 			if err != nil {
 				log.Error("Fail to create tx state root", "error", err)
@@ -808,26 +808,27 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 	var coalescedLogs []*types.Log
 	// first priority for special Txs
 	for _, tx := range specialTxs {
-
+		to := tx.To()
 		//HF number for black-list
 		if (env.header.Number.Uint64() >= common.BlackListHFNumber) && !common.IsTestnet {
+			from := tx.From()
 			// check if sender is in black list
-			if tx.From() != nil && common.Blacklist[*tx.From()] {
-				log.Debug("Skipping transaction with sender in black-list", "sender", tx.From().Hex())
+			if from != nil && common.Blacklist[*from] {
+				log.Debug("Skipping transaction with sender in black-list", "sender", from.Hex())
 				continue
 			}
 			// check if receiver is in black list
-			if tx.To() != nil && common.Blacklist[*tx.To()] {
-				log.Debug("Skipping transaction with receiver in black-list", "receiver", tx.To().Hex())
+			if to != nil && common.Blacklist[*to] {
+				log.Debug("Skipping transaction with receiver in black-list", "receiver", to.Hex())
 				continue
 			}
 		}
-
+		data := tx.Data()
 		// validate minFee slot for XDCZ
 		if tx.IsXDCZApplyTransaction() {
 			copyState, _ := bc.State()
-			if err := core.ValidateXDCZApplyTransaction(bc, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
-				log.Debug("XDCZApply: invalid token", "token", common.BytesToAddress(tx.Data()[4:]).Hex())
+			if err := core.ValidateXDCZApplyTransaction(bc, nil, copyState, common.BytesToAddress(data[4:])); err != nil {
+				log.Debug("XDCZApply: invalid token", "token", common.BytesToAddress(data[4:]).Hex())
 				txs.Pop()
 				continue
 			}
@@ -835,8 +836,8 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		// validate balance slot, token decimal for XDCX
 		if tx.IsXDCXApplyTransaction() {
 			copyState, _ := bc.State()
-			if err := core.ValidateXDCXApplyTransaction(bc, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
-				log.Debug("XDCXApply: invalid token", "token", common.BytesToAddress(tx.Data()[4:]).Hex())
+			if err := core.ValidateXDCXApplyTransaction(bc, nil, copyState, common.BytesToAddress(data[4:])); err != nil {
+				log.Debug("XDCXApply: invalid token", "token", common.BytesToAddress(data[4:]).Hex())
 				txs.Pop()
 				continue
 			}
@@ -853,38 +854,39 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		from, _ := types.Sender(env.signer, tx)
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
+		hash := tx.Hash()
 		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring reply protected special transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
+			log.Trace("Ignoring reply protected special transaction", "hash", hash, "eip155", env.config.EIP155Block)
 			continue
 		}
-		if tx.To().Hex() == common.BlockSigners {
-			if len(tx.Data()) < 68 {
-				log.Trace("Data special transaction invalid length", "hash", tx.Hash(), "data", len(tx.Data()))
+		if *to == common.BlockSignersBinary {
+			if len(data) < 68 {
+				log.Trace("Data special transaction invalid length", "hash", hash, "data", len(data))
 				continue
 			}
-			blkNumber := binary.BigEndian.Uint64(tx.Data()[8:40])
+			blkNumber := binary.BigEndian.Uint64(data[8:40])
 			if blkNumber >= env.header.Number.Uint64() || blkNumber <= env.header.Number.Uint64()-env.config.XDPoS.Epoch*2 {
-				log.Trace("Data special transaction invalid number", "hash", tx.Hash(), "blkNumber", blkNumber, "miner", env.header.Number)
+				log.Trace("Data special transaction invalid number", "hash", hash, "blkNumber", blkNumber, "miner", env.header.Number)
 				continue
 			}
 		}
 		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
+		env.state.Prepare(hash, common.Hash{}, env.tcount)
 
 		nonce := env.state.GetNonce(from)
 		if nonce != tx.Nonce() && !tx.IsSkipNonceTransaction() {
-			log.Trace("Skipping account with special transaction invalid nonce", "sender", from, "nonce", nonce, "tx nonce ", tx.Nonce(), "to", tx.To())
+			log.Trace("Skipping account with special transaction invalid nonce", "sender", from, "nonce", nonce, "tx nonce ", tx.Nonce(), "to", to)
 			continue
 		}
 		err, logs, tokenFeeUsed, gas := env.commitTransaction(balanceFee, tx, bc, coinbase, gp)
 		switch err {
 		case core.ErrNonceTooLow:
 			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping special transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "to", tx.To())
+			log.Trace("Skipping special transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "to", to)
 
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with special transaction hight nonce", "sender", from, "nonce", tx.Nonce(), "to", tx.To())
+			log.Trace("Skipping account with special transaction hight nonce", "sender", from, "nonce", tx.Nonce(), "to", to)
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
@@ -893,12 +895,12 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Add Special Transaction failed, account skipped", "hash", tx.Hash(), "sender", from, "nonce", tx.Nonce(), "to", tx.To(), "err", err)
+			log.Debug("Add Special Transaction failed, account skipped", "hash", hash, "sender", from, "nonce", tx.Nonce(), "to", to, "err", err)
 		}
 		if tokenFeeUsed {
 			fee := common.GetGasFee(env.header.Number.Uint64(), gas)
-			balanceFee[*tx.To()] = new(big.Int).Sub(balanceFee[*tx.To()], fee)
-			balanceUpdated[*tx.To()] = balanceFee[*tx.To()]
+			balanceFee[*to] = new(big.Int).Sub(balanceFee[*to], fee)
+			balanceUpdated[*to] = balanceFee[*to]
 			totalFeeUsed = totalFeeUsed.Add(totalFeeUsed, fee)
 		}
 	}
@@ -920,26 +922,28 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		}
 
 		//HF number for black-list
+		to := tx.To()
 		if (env.header.Number.Uint64() >= common.BlackListHFNumber) && !common.IsTestnet {
+			from := tx.From()
 			// check if sender is in black list
-			if tx.From() != nil && common.Blacklist[*tx.From()] {
-				log.Debug("Skipping transaction with sender in black-list", "sender", tx.From().Hex())
+			if from != nil && common.Blacklist[*from] {
+				log.Debug("Skipping transaction with sender in black-list", "sender", from.Hex())
 				txs.Pop()
 				continue
 			}
 			// check if receiver is in black list
-			if tx.To() != nil && common.Blacklist[*tx.To()] {
-				log.Debug("Skipping transaction with receiver in black-list", "receiver", tx.To().Hex())
+			if to != nil && common.Blacklist[*to] {
+				log.Debug("Skipping transaction with receiver in black-list", "receiver", to.Hex())
 				txs.Shift()
 				continue
 			}
 		}
-
+		data := tx.Data()
 		// validate minFee slot for XDCZ
 		if tx.IsXDCZApplyTransaction() {
 			copyState, _ := bc.State()
-			if err := core.ValidateXDCZApplyTransaction(bc, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
-				log.Debug("XDCZApply: invalid token", "token", common.BytesToAddress(tx.Data()[4:]).Hex())
+			if err := core.ValidateXDCZApplyTransaction(bc, nil, copyState, common.BytesToAddress(data[4:])); err != nil {
+				log.Debug("XDCZApply: invalid token", "token", common.BytesToAddress(data[4:]).Hex())
 				txs.Pop()
 				continue
 			}
@@ -947,8 +951,8 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		// validate balance slot, token decimal for XDCX
 		if tx.IsXDCXApplyTransaction() {
 			copyState, _ := bc.State()
-			if err := core.ValidateXDCXApplyTransaction(bc, nil, copyState, common.BytesToAddress(tx.Data()[4:])); err != nil {
-				log.Debug("XDCXApply: invalid token", "token", common.BytesToAddress(tx.Data()[4:]).Hex())
+			if err := core.ValidateXDCXApplyTransaction(bc, nil, copyState, common.BytesToAddress(data[4:])); err != nil {
+				log.Debug("XDCXApply: invalid token", "token", common.BytesToAddress(data[4:]).Hex())
 				txs.Pop()
 				continue
 			}
@@ -959,15 +963,16 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		//
 		// We use the eip155 signer regardless of the current hf.
 		from, _ := types.Sender(env.signer, tx)
+		hash := tx.Hash()
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
+			log.Trace("Ignoring reply protected transaction", "hash", hash, "eip155", env.config.EIP155Block)
 			txs.Pop()
 			continue
 		}
 		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
+		env.state.Prepare(hash, common.Hash{}, env.tcount)
 		nonce := env.state.GetNonce(from)
 		if nonce > tx.Nonce() {
 			// New head notification data race between the transaction pool and miner, shift
@@ -1012,13 +1017,13 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			log.Debug("Transaction failed, account skipped", "hash", hash, "err", err)
 			txs.Shift()
 		}
 		if tokenFeeUsed {
 			fee := common.GetGasFee(env.header.Number.Uint64(), gas)
-			balanceFee[*tx.To()] = new(big.Int).Sub(balanceFee[*tx.To()], fee)
-			balanceUpdated[*tx.To()] = balanceFee[*tx.To()]
+			balanceFee[*to] = new(big.Int).Sub(balanceFee[*to], fee)
+			balanceUpdated[*to] = balanceFee[*to]
 			totalFeeUsed = totalFeeUsed.Add(totalFeeUsed, fee)
 		}
 	}

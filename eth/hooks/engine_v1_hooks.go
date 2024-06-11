@@ -216,7 +216,7 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 		if err != nil {
 			return nil, err
 		}
-		addr := common.HexToAddress(common.MasternodeVotingSMC)
+		addr := common.MasternodeVotingSMCBinary
 		validator, err := contractValidator.NewXDCValidator(addr, client)
 		if err != nil {
 			return nil, err

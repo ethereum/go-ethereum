@@ -64,7 +64,7 @@ func (s *SnapshotV2) GetMappedCandidates() map[common.Address]struct{} {
 
 func (s *SnapshotV2) IsCandidates(address common.Address) bool {
 	for _, n := range s.NextEpochCandidates {
-		if n.String() == address.String() {
+		if n == address {
 			return true
 		}
 	}

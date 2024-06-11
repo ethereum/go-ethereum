@@ -2,17 +2,18 @@ package core
 
 import (
 	"context"
-	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/ethclient"
-	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"log"
 	"math/big"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/ethclient"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
 type OrderMsg struct {
@@ -89,7 +90,7 @@ func testSendOrder(t *testing.T, amount, price *big.Int, side string, status str
 		Price:           price,
 		ExchangeAddress: common.HexToAddress("0x0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"),
 		UserAddress:     crypto.PubkeyToAddress(privateKey.PublicKey),
-		BaseToken:       common.HexToAddress(common.XDCNativeAddress),
+		BaseToken:       common.XDCNativeAddressBinary,
 		QuoteToken:      BTCAddress,
 		Status:          status,
 		Side:            side,
@@ -124,7 +125,7 @@ func testSendOrderXDCUSD(t *testing.T, amount, price *big.Int, side string, stat
 		Price:           price,
 		ExchangeAddress: common.HexToAddress("0x0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"),
 		UserAddress:     crypto.PubkeyToAddress(privateKey.PublicKey),
-		BaseToken:       common.HexToAddress(common.XDCNativeAddress),
+		BaseToken:       common.XDCNativeAddressBinary,
 		QuoteToken:      USDAddress,
 		Status:          status,
 		Side:            side,
@@ -194,7 +195,7 @@ func testSendOrderXDCBTC(t *testing.T, amount, price *big.Int, side string, stat
 		Price:           price,
 		ExchangeAddress: common.HexToAddress("0x0D3ab14BBaD3D99F4203bd7a11aCB94882050E7e"),
 		UserAddress:     crypto.PubkeyToAddress(privateKey.PublicKey),
-		BaseToken:       common.HexToAddress(common.XDCNativeAddress),
+		BaseToken:       common.XDCNativeAddressBinary,
 		QuoteToken:      BTCAddress,
 		Status:          status,
 		Side:            side,

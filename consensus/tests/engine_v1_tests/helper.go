@@ -144,11 +144,11 @@ func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.S
 
 	// create test backend with smart contract in it
 	contractBackend2 := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
-		acc1Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		acc2Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		acc3Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
-		common.HexToAddress(common.MasternodeVotingSMC): {Balance: new(big.Int).SetUint64(1), Code: code, Storage: storage}, // Binding the MasternodeVotingSMC with newly created 'code' for SC execution
+		acc1Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		acc2Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		acc3Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		voterAddr:                        {Balance: new(big.Int).SetUint64(10000000000)},
+		common.MasternodeVotingSMCBinary: {Balance: new(big.Int).SetUint64(1), Code: code, Storage: storage}, // Binding the MasternodeVotingSMC with newly created 'code' for SC execution
 	}, 10000000, chainConfig)
 
 	return contractBackend2
@@ -180,7 +180,7 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 	if !ok {
 		return nil, fmt.Errorf("big int init failed")
 	}
-	to := common.HexToAddress(common.MasternodeVotingSMC)
+	to := common.MasternodeVotingSMCBinary
 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
 
 	signedTX, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(chainID)), voterKey)
@@ -213,7 +213,7 @@ func GetSnapshotSigner(bc *BlockChain, header *types.Header) (signersList, error
 }
 
 func GetCandidateFromCurrentSmartContract(backend bind.ContractBackend, t *testing.T) masterNodes {
-	addr := common.HexToAddress(common.MasternodeVotingSMC)
+	addr := common.MasternodeVotingSMCBinary
 	validator, err := contractValidator.NewXDCValidator(addr, backend)
 	if err != nil {
 		t.Fatal(err)
