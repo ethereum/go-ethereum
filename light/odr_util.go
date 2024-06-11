@@ -159,7 +159,7 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		genesis := core.GetCanonicalHash(odr.Database(), 0)
 		config, _ := core.GetChainConfig(odr.Database(), genesis)
 
-		if err := receipts.DeriveFields(config, hash, number, block.Transactions()); err != nil {
+		if err := receipts.DeriveFields(config, hash, number, block.BaseFee(), block.Transactions()); err != nil {
 			return nil, err
 		}
 		core.WriteBlockReceipts(odr.Database(), hash, number, receipts)

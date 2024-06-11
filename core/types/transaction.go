@@ -99,6 +99,14 @@ type TxData interface {
 
 	rawSignatureValues() (v, r, s *big.Int)
 	setSignatureValues(chainID, v, r, s *big.Int)
+
+	// effectiveGasPrice computes the gas price paid by the transaction, given
+	// the inclusion block baseFee.
+	//
+	// Unlike other TxData methods, the returned *big.Int should be an independent
+	// copy of the computed value, i.e. callers are allowed to mutate the result.
+	// Method implementations can use 'dst' to store the result.
+	effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -410,6 +418,10 @@ func (tx *Transaction) Size() common.StorageSize {
 	rlp.Encode(&c, &tx.inner)
 	tx.size.Store(common.StorageSize(c))
 	return common.StorageSize(c)
+}
+
+func (tx *Transaction) EffectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
+	return tx.inner.effectiveGasPrice(dst, baseFee)
 }
 
 // AsMessage returns the transaction as a core.Message.

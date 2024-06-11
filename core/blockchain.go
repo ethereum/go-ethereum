@@ -1067,7 +1067,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			continue
 		}
 		// Compute all the non-consensus fields of the receipts
-		if err := receipts.DeriveFields(bc.chainConfig, blockHash, blockNumber, block.Transactions()); err != nil {
+		if err := receipts.DeriveFields(bc.chainConfig, blockHash, blockNumber, block.BaseFee(), block.Transactions()); err != nil {
 			return i, fmt.Errorf("failed to set receipts data: %v", err)
 		}
 		// Write all the data out into the database
@@ -2088,6 +2088,25 @@ func countTransactions(chain []*types.Block) (c int) {
 	return c
 }
 
+// collectLogs collects the logs that were generated or removed during
+// the processing of a block. These logs are later announced as deleted or reborn.
+func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
+	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
+	if err := receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.BaseFee(), b.Transactions()); err != nil {
+		log.Error("Failed to derive block receipts fields", "hash", b.Hash(), "number", b.NumberU64(), "err", err)
+	}
+
+	var logs []*types.Log
+	for _, receipt := range receipts {
+		for _, log := range receipt.Logs {
+			l := *log
+			l.Removed = removed
+			logs = append(logs, &l)
+		}
+	}
+	return logs
+}
+
 // reorgs takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
 // to be part of the new canonical chain and accumulates potential missing transactions and post an
 // event about them
@@ -2098,20 +2117,6 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		commonBlock *types.Block
 		deletedTxs  types.Transactions
 		deletedLogs []*types.Log
-		// collectLogs collects the logs that were generated during the
-		// processing of the block that corresponds with the given hash.
-		// These logs are later announced as deleted.
-		collectLogs = func(h common.Hash) {
-			// Coalesce logs and set 'Removed'.
-			receipts := GetBlockReceipts(bc.db, h, bc.hc.GetBlockNumber(h))
-			for _, receipt := range receipts {
-				for _, log := range receipt.Logs {
-					del := *log
-					del.Removed = true
-					deletedLogs = append(deletedLogs, &del)
-				}
-			}
-		}
 	)
 	log.Warn("Reorg", "oldBlock hash", oldBlock.Hash().Hex(), "number", oldBlock.NumberU64(), "newBlock hash", newBlock.Hash().Hex(), "number", newBlock.NumberU64())
 
@@ -2121,8 +2126,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
 			oldChain = append(oldChain, oldBlock)
 			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
-
-			collectLogs(oldBlock.Hash())
+			if logs := bc.collectLogs(oldBlock, true); len(logs) > 0 {
+				deletedLogs = append(deletedLogs, logs...)
+			}
 		}
 	} else {
 		// reduce new chain and append new chain blocks for inserting later on
@@ -2146,7 +2152,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		oldChain = append(oldChain, oldBlock)
 		newChain = append(newChain, newBlock)
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
-		collectLogs(oldBlock.Hash())
+		if logs := bc.collectLogs(oldBlock, true); len(logs) > 0 {
+			deletedLogs = append(deletedLogs, logs...)
+		}
 
 		oldBlock, newBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1), bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if oldBlock == nil {
