@@ -57,7 +57,7 @@ type TerminalHandler struct {
 //
 // Example:
 //
-//	[DEBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
+//	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
 func NewTerminalHandler(wr io.Writer, useColor bool) *TerminalHandler {
 	return NewTerminalHandlerWithLevel(wr, levelMaxVerbosity, useColor)
 }
