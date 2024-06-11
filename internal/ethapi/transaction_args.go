@@ -421,7 +421,7 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
 // Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
-func (args *TransactionArgs) ToMessage(baseFee *big.Int) *core.Message {
+func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipChecks bool) *core.Message {
 	var (
 		gasPrice  *big.Int
 		gasFeeCap *big.Int
@@ -455,6 +455,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int) *core.Message {
 		From:              args.from(),
 		To:                args.To,
 		Value:             (*big.Int)(args.Value),
+		Nonce:             uint64(*args.Nonce),
 		GasLimit:          uint64(*args.Gas),
 		GasPrice:          gasPrice,
 		GasFeeCap:         gasFeeCap,
@@ -463,13 +464,13 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int) *core.Message {
 		AccessList:        accessList,
 		BlobGasFeeCap:     (*big.Int)(args.BlobFeeCap),
 		BlobHashes:        args.BlobHashes,
-		SkipAccountChecks: true,
+		SkipAccountChecks: skipChecks,
 	}
 }
 
 // ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
-func (args *TransactionArgs) ToTransaction() *types.Transaction {
+func (args *TransactionArgs) ToTransaction(type2 bool) *types.Transaction {
 	var data types.TxData
 	switch {
 	case args.BlobHashes != nil:
@@ -498,7 +499,7 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			}
 		}
 
-	case args.MaxFeePerGas != nil:
+	case args.MaxFeePerGas != nil || type2:
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
