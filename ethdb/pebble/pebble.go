@@ -488,11 +488,11 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		writeDelayCounts[i%2] = writeDelayCount
 		compTimes[i%2] = compTime
 
-		for _, levelMetrics := range stats.Levels {
-			nWrite += int64(levelMetrics.BytesCompacted)
-			nWrite += int64(levelMetrics.BytesFlushed)
-			compWrite += int64(levelMetrics.BytesCompacted)
-			compRead += int64(levelMetrics.BytesRead)
+		for _, level := range &stats.Levels {
+			nWrite += int64(level.BytesCompacted)
+			nWrite += int64(level.BytesFlushed)
+			compWrite += int64(level.BytesCompacted)
+			compRead += int64(level.BytesRead)
 		}
 
 		nWrite += int64(stats.WAL.BytesWritten)
@@ -540,7 +540,7 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		d.level0CompGauge.Update(level0CompCount)
 		d.seekCompGauge.Update(stats.Compact.ReadCount)
 
-		for i, level := range stats.Levels {
+		for i, level := range &stats.Levels {
 			// Append metrics for additional layers
 			if i >= len(d.levelsGauge) {
 				d.levelsGauge = append(d.levelsGauge, metrics.GetOrRegisterGauge(namespace+fmt.Sprintf("tables/level%v", i), nil))
