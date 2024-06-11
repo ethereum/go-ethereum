@@ -84,6 +84,9 @@ test_meter 9999999
 # TYPE test_timer_count counter
 test_timer_count 6
 
+# TYPE test_timer_total_count counter
+test_timer_total_count 230000000
+
 # TYPE test_timer summary
 test_timer {quantile="0.5"} 2.25e+07
 test_timer {quantile="0.75"} 4.8e+07

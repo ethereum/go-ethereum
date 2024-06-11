@@ -77,6 +77,7 @@ func (c *collector) addTimer(name string, m metrics.Timer) {
 	pv := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
 	ps := m.Percentiles(pv)
 	c.writeSummaryCounter(name, m.Count())
+	c.writeSummaryCounter(mutateKey(name+"_total"), m.Total().Nanoseconds())
 	c.buff.WriteString(fmt.Sprintf(typeSummaryTpl, mutateKey(name)))
 	for i := range pv {
 		c.writeSummaryPercentile(name, strconv.FormatFloat(pv[i], 'f', -1, 64), ps[i])
