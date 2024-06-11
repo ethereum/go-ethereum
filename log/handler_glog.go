@@ -146,7 +146,7 @@ func (h *GlogHandler) Enabled(ctx context.Context, lvl slog.Level) bool {
 	return h.override.Load() || slog.Level(h.level.Load()) <= lvl
 }
 
-// WithAttrs implements slog.Handler, returning a new Handler whose attributes 
+// WithAttrs implements slog.Handler, returning a new Handler whose attributes
 // consist of both the receiver's attributes and the arguments.
 func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	h.lock.RLock()
@@ -176,7 +176,7 @@ func (h *GlogHandler) WithGroup(name string) slog.Handler {
 	panic("not implemented")
 }
 
-// Handle implements slog.Handler, filtering a log record through the global, 
+// Handle implements slog.Handler, filtering a log record through the global,
 // local and backtrace filters, finally emitting it if either allow it through.
 func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
 	// If the global log level allows, fast track logging
