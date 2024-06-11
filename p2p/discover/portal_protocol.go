@@ -153,16 +153,13 @@ type PortalProtocolConfig struct {
 }
 
 func DefaultPortalProtocolConfig() *PortalProtocolConfig {
-	nodeRadius, _ := uint256.FromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 	return &PortalProtocolConfig{
 		BootstrapNodes:  make([]*enode.Node, 0),
 		ListenAddr:      ":9009",
 		NetRestrict:     nil,
-		NodeRadius:      nodeRadius,
 		RadiusCacheSize: 32 * 1024 * 1024,
 		NodeDBPath:      "",
-		// NAT:             nat.Any(),
-		clock: mclock.System{},
+		clock:           mclock.System{},
 	}
 }
 
@@ -174,7 +171,6 @@ type PortalProtocol struct {
 	protocolId   string
 	protocolName string
 
-	nodeRadius     *uint256.Int
 	DiscV5         *UDPv5
 	utp            *utp.Listener
 	utpSm          *utp.SocketManager
@@ -221,7 +217,6 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateK
 		PrivateKey:     privateKey,
 		NetRestrict:    config.NetRestrict,
 		BootstrapNodes: config.BootstrapNodes,
-		nodeRadius:     config.NodeRadius,
 		radiusCache:    fastcache.New(config.RadiusCacheSize),
 		closeCtx:       closeCtx,
 		cancelCloseCtx: cancelCloseCtx,
@@ -294,6 +289,10 @@ func (p *PortalProtocol) AddEnr(n *enode.Node) {
 	p.setJustSeen(n)
 	id := n.ID().String()
 	p.radiusCache.Set([]byte(id), MaxDistance)
+}
+
+func (p *PortalProtocol) Radius() *uint256.Int {
+	return p.storage.Radius()
 }
 
 func (p *PortalProtocol) setupUDPListening() error {
@@ -402,7 +401,7 @@ func (p *PortalProtocol) ping(node *enode.Node) (uint64, error) {
 
 func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 	enrSeq := p.Self().Seq()
-	radiusBytes, err := p.nodeRadius.MarshalSSZ()
+	radiusBytes, err := p.Radius().MarshalSSZ()
 	if err != nil {
 		return nil, err
 	}
@@ -913,7 +912,7 @@ func (p *PortalProtocol) handlePing(id enode.ID, ping *portalwire.Ping) ([]byte,
 	p.radiusCache.Set([]byte(id.String()), pingCustomPayload.Radius)
 
 	enrSeq := p.Self().Seq()
-	radiusBytes, err := p.nodeRadius.MarshalSSZ()
+	radiusBytes, err := p.Radius().MarshalSSZ()
 	if err != nil {
 		return nil, err
 	}
@@ -1155,7 +1154,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 	for i, contentKey := range request.ContentKeys {
 		contentId := p.toContentId(contentKey)
 		if contentId != nil {
-			if inRange(p.Self().ID(), p.nodeRadius, contentId) {
+			if inRange(p.Self().ID(), p.Radius(), contentId) {
 				if _, err = p.storage.Get(contentKey, contentId); err != nil {
 					contentKeyBitlist.SetBitAt(uint64(i), true)
 					contentKeys = append(contentKeys, contentKey)
@@ -1685,7 +1684,7 @@ func (p *PortalProtocol) ToContentId(contentKey []byte) []byte {
 }
 
 func (p *PortalProtocol) InRange(contentId []byte) bool {
-	return inRange(p.Self().ID(), p.nodeRadius, contentId)
+	return inRange(p.Self().ID(), p.Radius(), contentId)
 }
 
 func (p *PortalProtocol) Get(contentKey []byte, contentId []byte) ([]byte, error) {

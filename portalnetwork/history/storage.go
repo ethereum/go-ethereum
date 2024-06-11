@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -47,7 +48,7 @@ var once sync.Once
 type ContentStorage struct {
 	nodeId                 enode.ID
 	storageCapacityInBytes uint64
-	radius                 *uint256.Int
+	radius                 atomic.Value
 	sqliteDB               *sql.DB
 	getStmt                *sql.Stmt
 	putStmt                *sql.Stmt
@@ -105,9 +106,9 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 		nodeId:                 config.NodeId,
 		sqliteDB:               config.DB,
 		storageCapacityInBytes: config.StorageCapacityMB * 1000000,
-		radius:                 maxDistance,
 		log:                    log.New("history_storage"),
 	}
+	hs.radius.Store(maxDistance)
 	err := hs.createTable()
 	if err != nil {
 		return nil, err
@@ -152,6 +153,12 @@ func newPutResultWithErr(err error) PutResult {
 	return PutResult{
 		err: err,
 	}
+}
+
+func (p *ContentStorage) Radius() *uint256.Int {
+	radius := p.radius.Load()
+	val := radius.(*uint256.Int)
+	return val
 }
 
 func (p *ContentStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
@@ -311,11 +318,6 @@ func (p *ContentStorage) GetLargestDistance() (*uint256.Int, error) {
 	err = res.UnmarshalSSZ(distance)
 
 	return res, err
-	// reverse the distance, because big.SetBytes is big-endian
-	// utils.ReverseBytesInPlace(distance)
-	// bigNum := new(big.Int).SetBytes(distance)
-	// res := uint256.MustFromBig(bigNum)
-	// return res, nil
 }
 
 // EstimateNewRadius calculates an estimated new radius based on the current radius, used size, and storage capacity.
@@ -374,6 +376,22 @@ func (p *ContentStorage) deleteContentFraction(fraction float64) (deleteCount in
 		}
 		deleteBytes += payloadLen
 		deleteCount++
+	}
+	// set the largest distince
+	if rows.Next() {
+		var contentId []byte
+		var payloadLen int
+		var distance []byte
+		err = rows.Scan(&contentId, &payloadLen, &distance)
+		if err != nil {
+			return 0, err
+		}
+		dis := uint256.NewInt(0)
+		err = dis.UnmarshalSSZ(distance)
+		if err != nil {
+			return 0, err
+		}
+		p.radius.Store(dis)
 	}
 	// row must close first, or database is locked
 	// rows.Close() can call multi times

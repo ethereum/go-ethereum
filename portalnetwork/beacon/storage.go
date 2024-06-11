@@ -6,6 +6,7 @@ import (
 	"database/sql"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/holiman/uint256"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/ztyp/codec"
 
@@ -116,6 +117,11 @@ func (bs *BeaconStorage) Put(contentKey []byte, contentId []byte, content []byte
 		return nil
 	}
 	return nil
+}
+
+func (m *BeaconStorage) Radius() *uint256.Int {
+	// TODO
+	panic("implement me")
 }
 
 func (bs *BeaconStorage) getContentValue(contentId []byte) ([]byte, error) {

@@ -1,6 +1,10 @@
 package storage
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/holiman/uint256"
+)
 
 var ErrContentNotFound = fmt.Errorf("content not found")
 
@@ -29,6 +33,8 @@ type ContentStorage interface {
 	Get(contentKey []byte, contentId []byte) ([]byte, error)
 
 	Put(contentKey []byte, contentId []byte, content []byte) error
+
+	Radius() *uint256.Int
 }
 
 type MockStorage struct {
@@ -45,4 +51,8 @@ func (m *MockStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
 func (m *MockStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
 	m.Db[string(contentId)] = content
 	return nil
+}
+
+func (m *MockStorage) Radius() *uint256.Int {
+	return uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 }
