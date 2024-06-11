@@ -804,6 +804,14 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*typ
 }
 
 func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *big.Int) error {
+	var c int
+	for _, ttxs := range txs.txs {
+		for range ttxs {
+			c++
+		}
+	}
+	log.Info("committing transactions", "count", c)
+
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -811,6 +819,7 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 	var coalescedLogs []*types.Log
 
 	for {
+		start := time.Now()
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
 			if signal := interrupt.Load(); signal != commitInterruptNone {
@@ -883,6 +892,7 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 			log.Debug("Transaction failed, account skipped", "hash", ltx.Hash, "err", err)
 			txs.Pop()
 		}
+		log.Info("transaction processing time", "hash", tx.Hash(), "txProcessingTime", time.Since(start).Milliseconds())
 	}
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
