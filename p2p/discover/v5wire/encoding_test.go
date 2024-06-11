@@ -606,7 +606,7 @@ func (n *handshakeTestNode) n() *enode.Node {
 }
 
 func (n *handshakeTestNode) addr() string {
-	return n.ln.Node().IP().String()
+	return n.ln.Node().IPAddr().String()
 }
 
 func (n *handshakeTestNode) id() enode.ID {

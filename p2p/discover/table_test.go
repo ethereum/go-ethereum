@@ -188,7 +188,7 @@ func checkIPLimitInvariant(t *testing.T, tab *Table) {
 	tabset := netutil.DistinctNetSet{Subnet: tableSubnet, Limit: tableIPLimit}
 	for _, b := range tab.buckets {
 		for _, n := range b.entries {
-			tabset.Add(n.IP())
+			tabset.AddAddr(n.IPAddr())
 		}
 	}
 	if tabset.String() != tab.ips.String() {
@@ -268,7 +268,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	}
 	for _, id := range gen([]enode.ID{}, rand).([]enode.ID) {
 		r := new(enr.Record)
-		r.Set(enr.IP(genIP(rand)))
+		r.Set(enr.IPv4Addr(netutil.RandomAddr(rand, true)))
 		n := enode.SignNull(r, id)
 		t.All = append(t.All, n)
 	}
@@ -385,11 +385,11 @@ func checkBucketContent(t *testing.T, tab *Table, nodes []*enode.Node) {
 	}
 	t.Log("wrong bucket content. have nodes:")
 	for _, n := range b.entries {
-		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IP())
+		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IPAddr())
 	}
 	t.Log("want nodes:")
 	for _, n := range nodes {
-		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IP())
+		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IPAddr())
 	}
 	t.FailNow()
 
@@ -481,12 +481,6 @@ func gen(typ interface{}, rand *rand.Rand) interface{} {
 		panic(fmt.Sprintf("couldn't generate random value of type %T", typ))
 	}
 	return v.Interface()
-}
-
-func genIP(rand *rand.Rand) net.IP {
-	ip := make(net.IP, 4)
-	rand.Read(ip)
-	return ip
 }
 
 func quickcfg() *quick.Config {

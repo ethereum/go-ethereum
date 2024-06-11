@@ -225,8 +225,8 @@ Response
      - `value` [number:optional]: amount of Wei to send with the transaction
      - `data` [data:optional]:  input data
      - `nonce` [number]: account nonce
-  1. method signature [string:optional]
-     - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
+  2. method signature [string:optional]
+       - The method signature, if present, is to aid decoding the calldata. Should consist of `methodname(paramtype,...)`, e.g. `transfer(uint256,address)`. The signer may use this data to parse the supplied calldata, and show the user. The data, however, is considered totally untrusted, and reliability is not expected.
 
 
 #### Result
