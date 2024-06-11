@@ -45,12 +45,24 @@ docker run -d -p 8545:8545 -p 9009:9009/udp ghcr.io/optimism-java/shisui:latest
 * `--rpc.port` HTTP-RPC server listening port(default: `8545`)
 * `--data.dir` data dir of where the data file located(default: `./`)
 * `--data.capacity` the capacity of the data stored, the unit is MB(default: `10GB`)
-* `--udp.addr` protocol UDP server listening interface(default: local ip)
+* `--nat` p2p address(default `none`)
+    * `none`, find local address
+    * `any` uses the first auto-detected mechanism
+	* `extip:77.12.33.4` will assume the local machine is reachable on the given IP               
+	* `upnp`               uses the Universal Plug and Play protocol
+	* `pmp`                uses NAT-PMP with an auto-detected gateway address
+	* `pmp:192.168.0.1`    uses NAT-PMP with the given gateway address
 * `--udp.addr` protocol UDP server listening port(default: `9009`)
 * `--loglevel` loglevel of portal network, `1` to `5`, from `error` to `trace`(default: `1`)
 * `--private.key` private key of p2p node, hex format without `0x` prifix
 * `--bootnodes` bootnode of p2p network with ENR format
 * `--networks` portal sub networks: history, beacon, state
+
+all the options above can be set with envs.
+
+the env is prefixed with `SHISUI` and change the `.` to `_`.
+
+eg `--rpc.add` can be replaced with env `SHISUI_RPC_ADDR`
 
 ### Hardware Requirements
 
