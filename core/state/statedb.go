@@ -200,14 +200,14 @@ func (s *StateDB) SetLogger(l *tracing.Hooks) {
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string) {
+func (s *StateDB) StartPrefetcher(namespace string, noreads bool) {
 	if s.prefetcher != nil {
 		s.prefetcher.terminate(false)
 		s.prefetcher.report()
 		s.prefetcher = nil
 	}
 	if s.snap != nil {
-		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace)
+		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, noreads)
 
 		// With the switch to the Proof-of-Stake consensus algorithm, block production
 		// rewards are now handled at the consensus layer. Consequently, a block may
@@ -218,7 +218,7 @@ func (s *StateDB) StartPrefetcher(namespace string) {
 		// To prevent this, the account trie is always scheduled for prefetching once
 		// the prefetcher is constructed. For more details, see:
 		// https://github.com/ethereum/go-ethereum/issues/29880
-		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, nil); err != nil {
+		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, nil, false); err != nil {
 			log.Error("Failed to prefetch account trie", "root", s.originalRoot, "err", err)
 		}
 	}
@@ -616,6 +616,14 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 			return nil
 		}
 	}
+	// Independent of where we loaded the data from, add it to the prefetcher.
+	// Whilst this would be a bit weird if snapshots are disabled, but we still
+	// want the trie nodes to end up in the prefetcher too, so just push through.
+	if s.prefetcher != nil {
+		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, [][]byte{addr[:]}, true); err != nil {
+			log.Error("Failed to prefetch account", "addr", addr, "err", err)
+		}
+	}
 	// Insert into the live set
 	obj := newObject(s, addr, data)
 	s.setStateObject(obj)
@@ -792,7 +800,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		addressesToPrefetch = append(addressesToPrefetch, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
 	if s.prefetcher != nil && len(addressesToPrefetch) > 0 {
-		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch); err != nil {
+		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, addressesToPrefetch, false); err != nil {
 			log.Error("Failed to prefetch addresses", "addresses", len(addressesToPrefetch), "err", err)
 		}
 	}
