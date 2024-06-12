@@ -212,16 +212,14 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		gasUsed += result.UsedGas
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, tx, gasUsed, root)
 		blobGasUsed += receipts[i].BlobGasUsed
-		// If the result contains a revert reason, try to unpack it.
-		if len(result.Revert()) > 0 {
-			result.Err = newRevertError(result.Revert())
-		}
 		logs := tracer.Logs()
 		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
 		if result.Failed() {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
 			if errors.Is(result.Err, vm.ErrExecutionReverted) {
-				callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeReverted}
+				// If the result contains a revert reason, try to unpack it.
+				revertErr := newRevertError(result.Revert())
+				callRes.Error = &callError{Message: revertErr.Error(), Code: errCodeReverted, Data: revertErr.ErrorData().(string)}
 			} else {
 				callRes.Error = &callError{Message: result.Err.Error(), Code: errCodeVMError}
 			}
