@@ -470,6 +470,16 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	})
 }
 
+// IsTrusted returns whether the peer is a trusted peer or not.
+func (p *Peer) IsTrusted() bool {
+	return p.Info().Network.Trusted
+}
+
+// IsStatic returns whether the peer is a static peer or not.
+func (p *Peer) IsStatic() bool {
+	return p.Info().Network.Static
+}
+
 // knownCache is a cache for known hashes.
 type knownCache struct {
 	hashes mapset.Set[common.Hash]
