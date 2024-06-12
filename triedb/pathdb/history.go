@@ -383,12 +383,13 @@ func (r *decoder) readAccount(pos int) (accountIndex, []byte, error) {
 // readStorage parses the storage slots from the byte stream with specified account.
 func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.Hash][]byte, error) {
 	var (
-		last    common.Hash
-		list    []common.Hash
-		storage = make(map[common.Hash][]byte)
+		count   = int(accIndex.storageSlots)
+		list    = make([]common.Hash, 0, count)
+		storage = make(map[common.Hash][]byte, count)
 	)
-	for j := 0; j < int(accIndex.storageSlots); j++ {
+	for j := 0; j < count; j++ {
 		var (
+			last  common.Hash
 			index slotIndex
 			start = (accIndex.storageOffset + uint32(j)) * uint32(slotIndexSize)
 			end   = (accIndex.storageOffset + uint32(j+1)) * uint32(slotIndexSize)
@@ -430,9 +431,10 @@ func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.
 // decode deserializes the account and storage data from the provided byte stream.
 func (h *history) decode(accountData, storageData, accountIndexes, storageIndexes []byte) error {
 	var (
-		accounts    = make(map[common.Address][]byte)
+		count       = len(accountIndexes) / accountIndexSize
+		accounts    = make(map[common.Address][]byte, count)
 		storages    = make(map[common.Address]map[common.Hash][]byte)
-		accountList []common.Address
+		accountList = make([]common.Address, 0, count)
 		storageList = make(map[common.Address][]common.Hash)
 
 		r = &decoder{
@@ -445,7 +447,7 @@ func (h *history) decode(accountData, storageData, accountIndexes, storageIndexe
 	if err := r.verify(); err != nil {
 		return err
 	}
-	for i := 0; i < len(accountIndexes)/accountIndexSize; i++ {
+	for i := 0; i < count; i++ {
 		// Resolve account first
 		accIndex, accData, err := r.readAccount(i)
 		if err != nil {
