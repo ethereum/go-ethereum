@@ -221,13 +221,13 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	root := t.root.(*verkle.InternalNode)
 	nodes, err := root.BatchSerialize()
 	if err != nil {
-		// error return from this function indicates error in the code logic
+		// Error return from this function indicates error in the code logic
 		// of BatchSerialize, and we fail catastrophically if this is the case.
 		panic(fmt.Errorf("BatchSerialize failed: %v", err))
 	}
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
-		// hash parameter is not used in pathdb
+		// Hash parameter is not used in pathdb
 		nodeset.AddNode(node.Path, trienode.New(common.Hash{}, node.SerializedBytes))
 	}
 	// Serialize root commitment form
