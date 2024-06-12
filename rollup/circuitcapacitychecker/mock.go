@@ -3,7 +3,9 @@
 package circuitcapacitychecker
 
 import (
+	"bytes"
 	"math/rand"
+	"unsafe"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
@@ -51,6 +53,10 @@ func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*
 	}}, nil
 }
 
+func (ccc *CircuitCapacityChecker) ApplyTransactionRustTrace(rustTrace unsafe.Pointer) (*types.RowConsumption, error) {
+	return ccc.ApplyTransaction(goTraces[rustTrace])
+}
+
 // ApplyBlock gets a block's RowConsumption.
 // Will only return a dummy value in mock_ccc.
 func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.RowConsumption, error) {
@@ -81,4 +87,12 @@ func (ccc *CircuitCapacityChecker) ScheduleError(cnt int, err error) {
 func (ccc *CircuitCapacityChecker) Skip(txnHash common.Hash, err error) {
 	ccc.skipHash = txnHash.String()
 	ccc.skipError = err
+}
+
+var goTraces = make(map[unsafe.Pointer]*types.BlockTrace)
+
+func MakeRustTrace(trace *types.BlockTrace, buffer *bytes.Buffer) unsafe.Pointer {
+	rustTrace := new(struct{})
+	goTraces[unsafe.Pointer(rustTrace)] = trace
+	return unsafe.Pointer(rustTrace)
 }
