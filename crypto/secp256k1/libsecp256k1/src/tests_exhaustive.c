@@ -262,7 +262,7 @@ void test_exhaustive_sign(const secp256k1_context *ctx, const secp256k1_ge *grou
 
                 secp256k1_ecdsa_signature_load(ctx, &r, &s, &sig);
                 /* Note that we compute expected_r *after* signing -- this is important
-                 * because our nonce-computing function function might change k during
+                 * because our nonce-computing function might change k during
                  * signing. */
                 r_from_k(&expected_r, group, k);
                 CHECK(r == expected_r);
@@ -335,7 +335,7 @@ void test_exhaustive_recovery_sign(const secp256k1_context *ctx, const secp256k1
                 secp256k1_ecdsa_recoverable_signature_convert(ctx, &sig, &rsig);
                 secp256k1_ecdsa_signature_load(ctx, &r, &s, &sig);
                 /* Note that we compute expected_r *after* signing -- this is important
-                 * because our nonce-computing function function might change k during
+                 * because our nonce-computing function might change k during
                  * signing. */
                 r_from_k(&expected_r, group, k);
                 CHECK(r == expected_r);
