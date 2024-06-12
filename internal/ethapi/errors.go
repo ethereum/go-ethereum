@@ -82,6 +82,7 @@ func (e *TxIndexingError) ErrorData() interface{} { return "transaction indexing
 type callError struct {
 	Message string `json:"message"`
 	Code    int    `json:"code"`
+	Data    string `json:"data,omitempty"`
 }
 
 type invalidTxError struct {
