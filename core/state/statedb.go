@@ -1179,10 +1179,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	// code didn't anticipate for.
 	workers.Go(func() error {
 		// Write the account trie changes, measuring the amount of wasted time
-		newroot, set, err := s.trie.Commit(true)
-		if err != nil {
-			return err
-		}
+		newroot, set := s.trie.Commit(true)
 		root = newroot
 
 		if err := merge(set); err != nil {
