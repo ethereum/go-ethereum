@@ -241,6 +241,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	b := types.NewBlock(header, &types.Body{Transactions: txes, Withdrawals: withdrawals}, receipts, trie.NewStackTrie(nil))
 	res := RPCMarshalBlock(b, true, sim.fullTx, config)
+	res["totalDifficulty"] = (*hexutil.Big)(sim.b.GetTd(ctx, sim.base.Hash()))
 	repairLogs(callResults, res["hash"].(common.Hash))
 	res["calls"] = callResults
 
