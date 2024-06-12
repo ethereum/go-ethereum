@@ -1720,6 +1720,41 @@ func TestSimulateV1(t *testing.T) {
 			want:       nil,
 			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: errCodeNonceTooHigh},
 		},
+		// Contract sends tx in validation mode.
+		{
+			name: "validation-checks-from-contract",
+			tag:  latest,
+			blocks: []simBlock{{
+				StateOverrides: &StateOverride{
+					randomAccounts[2].addr: OverrideAccount{
+						Balance: newRPCBalance(big.NewInt(2098640803896784)),
+						Code:    hex2Bytes("00"),
+						Nonce:   newUint64(1),
+					},
+				},
+				Calls: []TransactionArgs{{
+					From:                 &randomAccounts[2].addr,
+					To:                   &cac,
+					Nonce:                newUint64(1),
+					MaxFeePerGas:         newInt(233138868),
+					MaxPriorityFeePerGas: newInt(1),
+				}},
+			}},
+			validation: &validation,
+			want: []blockRes{{
+				Number:        "0xb",
+				GasLimit:      "0x47e7c4",
+				GasUsed:       "0xd166",
+				Miner:         coinbase,
+				BaseFeePerGas: "0xde56ab3",
+				Calls: []callRes{{
+					ReturnValue: "0x",
+					GasUsed:     "0xd166",
+					Logs:        []log{},
+					Status:      "0x1",
+				}},
+			}},
+		},
 		// Successful validation
 		{
 			name: "validation-checks-success",

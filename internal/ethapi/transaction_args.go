@@ -421,7 +421,7 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 // core evm. This method is used in calls and traces that do not require a real
 // live transaction.
 // Assumes that fields are not nil, i.e. setDefaults or CallDefaults has been called.
-func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipChecks bool) *core.Message {
+func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoACheck bool) *core.Message {
 	var (
 		gasPrice  *big.Int
 		gasFeeCap *big.Int
@@ -452,19 +452,20 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipChecks bool) *core.
 		accessList = *args.AccessList
 	}
 	return &core.Message{
-		From:              args.from(),
-		To:                args.To,
-		Value:             (*big.Int)(args.Value),
-		Nonce:             uint64(*args.Nonce),
-		GasLimit:          uint64(*args.Gas),
-		GasPrice:          gasPrice,
-		GasFeeCap:         gasFeeCap,
-		GasTipCap:         gasTipCap,
-		Data:              args.data(),
-		AccessList:        accessList,
-		BlobGasFeeCap:     (*big.Int)(args.BlobFeeCap),
-		BlobHashes:        args.BlobHashes,
-		SkipAccountChecks: skipChecks,
+		From:             args.from(),
+		To:               args.To,
+		Value:            (*big.Int)(args.Value),
+		Nonce:            uint64(*args.Nonce),
+		GasLimit:         uint64(*args.Gas),
+		GasPrice:         gasPrice,
+		GasFeeCap:        gasFeeCap,
+		GasTipCap:        gasTipCap,
+		Data:             args.data(),
+		AccessList:       accessList,
+		BlobGasFeeCap:    (*big.Int)(args.BlobFeeCap),
+		BlobHashes:       args.BlobHashes,
+		SkipNonceChecks:  skipNonceCheck,
+		SkipFromEoACheck: skipEoACheck,
 	}
 }
 

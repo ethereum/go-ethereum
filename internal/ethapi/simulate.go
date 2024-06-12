@@ -194,7 +194,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		}
 		tx := call.ToTransaction(call.GasPrice == nil)
 		txes[i] = tx
-		msg := call.ToMessage(header.BaseFee, !sim.validate)
+		// EoA check is always skipped, even in validation mode.
+		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
 		tracer.reset(tx.Hash(), uint(i))
 		evm.Reset(core.NewEVMTxContext(msg), sim.state)
 		result, err := applyMessageWithEVM(ctx, evm, msg, sim.state, timeout, gp)
