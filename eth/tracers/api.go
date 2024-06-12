@@ -162,7 +162,7 @@ type TraceConfig struct {
 // field to override the state for tracing.
 type TraceCallConfig struct {
 	TraceConfig
-	StateOverrides *ethapi.StateOverride
+	StateOverrides map[common.Address]state.OverrideAccount
 	BlockOverrides *ethapi.BlockOverrides
 	TxIndex        *hexutil.Uint
 }
@@ -935,11 +935,14 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	}
 	defer release()
 
-	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	// Apply the customization rules if required.
+	vmctx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	if config != nil {
-		if err := config.StateOverrides.Apply(statedb); err != nil {
-			return nil, err
+		if len(config.StateOverrides) != 0 {
+			statedb, err = state.OverrideState(statedb, config.StateOverrides)
+			if err != nil {
+				return nil, err
+			}
 		}
 		config.BlockOverrides.Apply(&vmctx)
 	}
