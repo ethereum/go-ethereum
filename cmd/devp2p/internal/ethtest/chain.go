@@ -332,7 +332,7 @@ func readState(file string) (map[common.Address]state.DumpAccount, error) {
 func readAccounts(file string) (map[common.Address]*senderInfo, error) {
 	f, err := os.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read state: %v", err)
+		return nil, fmt.Errorf("unable to read accounts: %v", err)
 	}
 	type account struct {
 		Key hexutil.Bytes `json:"key"`
