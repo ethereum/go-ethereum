@@ -805,12 +805,14 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*typ
 
 func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *big.Int) error {
 	var c int
+	var gas uint64
 	for _, ttxs := range txs.txs {
-		for range ttxs {
+		for _, tx := range ttxs {
 			c++
+			gas += tx.Gas
 		}
 	}
-	log.Info("committing transactions", "count", c)
+	log.Info("committing transactions", "count", c, "gas", gas)
 
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
