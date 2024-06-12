@@ -30,7 +30,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: your-dockerhub-username/your-repo-name:${{ github.sha }}
+          tags: e1018mc/limechain:${{ github.sha }}
 
       - name: Log out from Docker Hub
         run: docker logout
