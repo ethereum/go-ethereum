@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  app:
+    image: e1018mc/limechain:2774314c84293f015c42ffe332f8a216fe54054c
+    platform: linux/x86_64
+    ports:
+      - "8545:8545"
+    environment:
+      - ENV_VAR=Test
+    networks:
+      - devnet
+
+networks:
+  devnet:
+    driver: bridge
