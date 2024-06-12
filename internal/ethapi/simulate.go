@@ -189,12 +189,11 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		if err := sim.sanitizeCall(&call, sim.state, &gasUsed, blockContext); err != nil {
 			return nil, err
 		}
-		tx := call.ToTransaction(call.GasPrice == nil)
-		txes[i] = tx
-
 		if err := call.CallDefaults(gp.Gas(), header.BaseFee, config.ChainID); err != nil {
 			return nil, err
 		}
+		tx := call.ToTransaction(call.GasPrice == nil)
+		txes[i] = tx
 		msg := call.ToMessage(header.BaseFee, !sim.validate)
 		tracer.reset(tx.Hash(), uint(i))
 		evm.Reset(core.NewEVMTxContext(msg), sim.state)
@@ -275,11 +274,6 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, 
 	if call.Gas == nil {
 		remaining := blockContext.GasLimit - *gasUsed
 		call.Gas = (*hexutil.Uint64)(&remaining)
-	}
-	// TODO: check chainID and against current header for london fees
-	if call.GasPrice == nil && call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil {
-		call.MaxFeePerGas = (*hexutil.Big)(big.NewInt(0))
-		call.MaxPriorityFeePerGas = (*hexutil.Big)(big.NewInt(0))
 	}
 	return nil
 }
