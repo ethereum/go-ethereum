@@ -10,7 +10,7 @@ GETH_SYNC_MODE=${GETH_SYNC_MODE:-full}
 GETH_DATA_DIR=${GETH_DATA_DIR:-/data}
 GETH_CHAINDATA_DIR="$GETH_DATA_DIR/geth/chaindata"
 GETH_KEYSTORE_DIR="$GETH_DATA_DIR/keystore"
-MEV_COMMIT_GETH_PASSWORD=${MEV_COMMIT_GETH_PASSWORD:-"pwd"}
+GETH_KEYSTORE_PASSWORD=${GETH_KEYSTORE_PASSWORD:-"primev"}
 CHAIN_ID=$(cat "$GENESIS_L1_PATH" | jq -r .config.chainId)
 RPC_PORT="${RPC_PORT:-8545}"
 WS_PORT="${WS_PORT:-8546}"
@@ -25,7 +25,7 @@ fi
 # Generate signer key if needed
 if [ "$GETH_NODE_TYPE" = "signer" ]; then
 	if [ ! -f "$GETH_DATA_DIR/password" ]; then
-		echo -n "$MEV_COMMIT_GETH_PASSWORD" > "$GETH_DATA_DIR"/password
+		echo -n "$GETH_KEYSTORE_PASSWORD" > "$GETH_DATA_DIR"/password
 	fi
 	if [ ! -d "$GETH_KEYSTORE_DIR" ]; then
 		if [ -n "$BLOCK_SIGNER_PRIVATE_KEY" ]; then

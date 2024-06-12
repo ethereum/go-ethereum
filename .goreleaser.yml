@@ -1,7 +1,7 @@
 version: 1
 
 project_name: mev-commit-geth
-dist: /tmp/goreleaser/mev-commit-geth
+dist: /tmp/dist/mev-commit-geth
 
 builds:
   - env:
@@ -45,15 +45,9 @@ archives:
       - src: ./external/geth/geth-poa/entrypoint.sh
         dst: ./
         strip_parent: true
-      - src: ./external/geth/geth-poa/genesis.json
-        dst: ./
-        strip_parent: true
       - src: ./external/geth/geth-poa/util/deploy_create2.sh
         dst: ./
         strip_parent: true
-      - src: ./external/geth/geth-poa/signer-node*/**/*
-        dst: ./
-        strip_parent: false
 
 checksum:
   name_template: >-
