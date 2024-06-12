@@ -1,10 +1,14 @@
 package server
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestConfigDefault(t *testing.T) {
@@ -15,8 +19,15 @@ func TestConfigDefault(t *testing.T) {
 	_, err := config.buildNode()
 	assert.NoError(t, err)
 
-	_, err = config.buildEth(nil, nil)
+	ethConfig, err := config.buildEth(nil, nil)
 	assert.NoError(t, err)
+	assertBorDefaultGasPrice(t, ethConfig)
+}
+
+// assertBorDefaultGasPrice asserts the bor default gas price is set correctly.
+func assertBorDefaultGasPrice(t *testing.T, ethConfig *ethconfig.Config) {
+	assert.NotNil(t, ethConfig)
+	assert.Equal(t, ethConfig.Miner.GasPrice, big.NewInt(params.BorDefaultMinerGasPrice))
 }
 
 func TestConfigMerge(t *testing.T) {

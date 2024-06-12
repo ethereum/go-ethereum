@@ -61,6 +61,14 @@ const (
 func init() {
 	testTxPoolConfig = DefaultConfig
 	testTxPoolConfig.Journal = ""
+	/*
+		Given the introduction of `BorDefaultTxPoolPriceLimit=30gwei`,
+		we set `testTxPoolConfig.PriceLimit = 1` to avoid rewriting all `legacypool_test.go` tests,
+		causing code divergence from geth, as this has been widely tested on different networks.
+		Also, `worker_test.go` has been adapted to reflect such changes.
+		Furthermore, config test can be found in `TestTxPoolDefaultPriceLimit`
+	*/
+	testTxPoolConfig.PriceLimit = 1
 
 	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
@@ -284,6 +292,18 @@ func (c *testChain) State() (*state.StateDB, error) {
 	}
 
 	return stdb, nil
+}
+
+// TestTxPoolDefaultPriceLimit ensures the bor default tx pool price limit is set correctly.
+func TestTxPoolDefaultPriceLimit(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupPool()
+	defer pool.Close()
+
+	if have, want := pool.config.PriceLimit, uint64(params.BorDefaultTxPoolPriceLimit); have != want {
+		t.Fatalf("txpool price limit incorrect: have %d, want %d", have, want)
+	}
 }
 
 // This test simulates a scenario where a new block is imported during a

@@ -147,7 +147,7 @@ var DefaultConfig = Config{
 	Journal:   "transactions.rlp",
 	Rejournal: time.Hour,
 
-	PriceLimit: 1,
+	PriceLimit: params.BorDefaultTxPoolPriceLimit,
 	PriceBump:  10,
 
 	AccountSlots: 16,
@@ -167,7 +167,8 @@ func (config *Config) sanitize() Config {
 		log.Warn("Sanitizing invalid txpool journal time", "provided", conf.Rejournal, "updated", time.Second)
 		conf.Rejournal = time.Second
 	}
-	if conf.PriceLimit < 1 {
+	// enforce txpool price limit to 30gwei in bor
+	if conf.PriceLimit != params.BorDefaultTxPoolPriceLimit {
 		log.Warn("Sanitizing invalid txpool price limit", "provided", conf.PriceLimit, "updated", DefaultConfig.PriceLimit)
 		conf.PriceLimit = DefaultConfig.PriceLimit
 	}
