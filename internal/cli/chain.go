@@ -28,9 +28,9 @@ func (c *ChainCommand) Help() string {
 	return `Usage: bor chain <subcommand>
 
   This command groups actions to interact with the chain.
-	
+
   Set the new head of the chain:
-  
+
     $ bor chain sethead <number>`
 }
 

@@ -834,8 +834,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 
 				if stateSyncPresent && task.index == len(txs)-1 {
 					if *config.BorTraceEnabled {
-						config.BorTx = newBoolPtr(true)
-						res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config)
+						// avoid data race
+						newConfig := *config
+						newConfig.BorTx = newBoolPtr(true)
+						res, err = api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, &newConfig)
 					} else {
 						break
 					}

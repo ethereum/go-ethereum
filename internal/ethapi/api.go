@@ -2238,7 +2238,8 @@ func (s *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.
 func marshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber uint64, signer types.Signer, tx *types.Transaction, txIndex int, borTx bool) map[string]interface{} {
 	from, _ := types.Sender(signer, tx)
 
-	txHash := common.Hash{}
+	var txHash common.Hash
+
 	if borTx {
 		txHash = types.GetDerivedBorTxHash(types.BorReceiptKey(blockNumber, blockHash))
 	} else {
@@ -2727,6 +2728,12 @@ func (api *DebugAPI) GetTraceStack() string {
 
 		buf = make([]byte, 2*len(buf))
 	}
+}
+
+// PeerStats returns the current head height and td of all the connected peers
+// along with few additional identifiers.
+func (api *DebugAPI) PeerStats() interface{} {
+	return api.b.PeerStats()
 }
 
 // NetAPI offers network related RPC methods
