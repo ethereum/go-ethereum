@@ -230,6 +230,14 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		}
 		value.SetBytes(val)
 	}
+	// Independent of where we loaded the data from, add it to the prefetcher.
+	// Whilst this would be a bit weird if snapshots are disabled, but we still
+	// want the trie nodes to end up in the prefetcher too, so just push through.
+	if s.db.prefetcher != nil && s.data.Root != types.EmptyRootHash {
+		if err = s.db.prefetcher.prefetch(s.addrHash, s.origin.Root, s.address, [][]byte{key[:]}, true); err != nil {
+			log.Error("Failed to prefetch storage slot", "addr", s.address, "key", key, "err", err)
+		}
+	}
 	s.originStorage[key] = value
 	return value
 }
@@ -293,7 +301,7 @@ func (s *stateObject) finalise() {
 		s.pendingStorage[key] = value
 	}
 	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
-		if err := s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch); err != nil {
+		if err := s.db.prefetcher.prefetch(s.addrHash, s.data.Root, s.address, slotsToPrefetch, false); err != nil {
 			log.Error("Failed to prefetch slots", "addr", s.address, "slots", len(slotsToPrefetch), "err", err)
 		}
 	}
@@ -462,10 +470,7 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
-	root, nodes, err := s.trie.Commit(false)
-	if err != nil {
-		return nil, nil, err
-	}
+	root, nodes := s.trie.Commit(false)
 	s.data.Root = root
 	s.origin = s.data.Copy()
 	return op, nodes, nil

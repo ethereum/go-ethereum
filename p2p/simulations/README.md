@@ -123,20 +123,25 @@ The API is initialised with a particular node adapter and has the following
 endpoints:
 
 ```
-GET    /                            Get network information
-POST   /start                       Start all nodes in the network
-POST   /stop                        Stop all nodes in the network
-GET    /events                      Stream network events
-GET    /snapshot                    Take a network snapshot
-POST   /snapshot                    Load a network snapshot
-POST   /nodes                       Create a node
-GET    /nodes                       Get all nodes in the network
-GET    /nodes/:nodeid               Get node information
-POST   /nodes/:nodeid/start         Start a node
-POST   /nodes/:nodeid/stop          Stop a node
-POST   /nodes/:nodeid/conn/:peerid  Connect two nodes
-DELETE /nodes/:nodeid/conn/:peerid  Disconnect two nodes
-GET    /nodes/:nodeid/rpc           Make RPC requests to a node via WebSocket
+OPTIONS  /                            Response 200 with "Access-Control-Allow-Headers"" header set to "Content-Type""
+GET      /                            Get network information
+POST     /start                       Start all nodes in the network
+POST     /stop                        Stop all nodes in the network
+POST     /mocker/start                Start the mocker node simulation
+POST     /mocker/stop                 Stop the mocker node simulation
+GET      /mocker                      Get a list of available mockers
+POST     /reset                       Reset all properties of a network to initial (empty) state
+GET      /events                      Stream network events
+GET      /snapshot                    Take a network snapshot
+POST     /snapshot                    Load a network snapshot
+POST     /nodes                       Create a node
+GET      /nodes                       Get all nodes in the network
+GET      /nodes/:nodeid               Get node information
+POST     /nodes/:nodeid/start         Start a node
+POST     /nodes/:nodeid/stop          Stop a node
+POST     /nodes/:nodeid/conn/:peerid  Connect two nodes
+DELETE   /nodes/:nodeid/conn/:peerid  Disconnect two nodes
+GET      /nodes/:nodeid/rpc           Make RPC requests to a node via WebSocket
 ```
 
 For convenience, `nodeid` in the URL can be the name of a node rather than its

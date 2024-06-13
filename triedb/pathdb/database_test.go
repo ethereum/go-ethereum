@@ -46,11 +46,7 @@ func updateTrie(addrHash common.Hash, root common.Hash, dirties, cleans map[comm
 			h.Update(key.Bytes(), val)
 		}
 	}
-	root, nodes, err := h.Commit(false)
-	if err != nil {
-		panic(fmt.Errorf("failed to commit hasher, err: %w", err))
-	}
-	return root, nodes
+	return h.Commit(false)
 }
 
 func generateAccount(storageRoot common.Hash) types.StateAccount {
