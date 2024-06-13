@@ -151,22 +151,26 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		handlerStartCh: make(chan struct{}),
 	}
 	if config.Sync == downloader.FullSync {
-		// The database seems empty as the current block is the genesis. Yet the snap
-		// block is ahead, so snap sync was enabled for this node at a certain point.
-		// The scenarios where this can happen is
-		// * if the user manually (or via a bad block) rolled back a snap sync node
-		//   below the sync point.
-		// * the last snap sync is not finished while user specifies a full sync this
-		//   time. But we don't have any recent state for full sync.
-		// In these cases however it's safe to reenable snap sync.
-		fullBlock, snapBlock := h.chain.CurrentBlock(), h.chain.CurrentSnapBlock()
-		if fullBlock.Number.Uint64() == 0 && snapBlock.Number.Uint64() > 0 {
-			h.snapSync.Store(true)
-			log.Warn("Switch sync mode from full sync to snap sync", "reason", "snap sync incomplete")
-		} else if !h.chain.HasState(fullBlock.Root) {
-			h.snapSync.Store(true)
-			log.Warn("Switch sync mode from full sync to snap sync", "reason", "head state missing")
-		}
+		// Currently in Scroll we only support full sync,
+		// so we should never switch to snap sync.
+		// TODO: revert this change when we support snap sync.
+
+		// // The database seems empty as the current block is the genesis. Yet the snap
+		// // block is ahead, so snap sync was enabled for this node at a certain point.
+		// // The scenarios where this can happen is
+		// // * if the user manually (or via a bad block) rolled back a snap sync node
+		// //   below the sync point.
+		// // * the last snap sync is not finished while user specifies a full sync this
+		// //   time. But we don't have any recent state for full sync.
+		// // In these cases however it's safe to reenable snap sync.
+		// fullBlock, snapBlock := h.chain.CurrentBlock(), h.chain.CurrentSnapBlock()
+		// if fullBlock.Number.Uint64() == 0 && snapBlock.Number.Uint64() > 0 {
+		// 	h.snapSync.Store(true)
+		// 	log.Warn("Switch sync mode from full sync to snap sync", "reason", "snap sync incomplete")
+		// } else if !h.chain.HasState(fullBlock.Root) {
+		// 	h.snapSync.Store(true)
+		// 	log.Warn("Switch sync mode from full sync to snap sync", "reason", "head state missing")
+		// }
 	} else {
 		head := h.chain.CurrentBlock()
 		if head.Number.Uint64() > 0 && h.chain.HasState(head.Root) {
