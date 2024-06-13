@@ -232,7 +232,7 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, dept
 
 	diffHashCacheMissMeter.Mark(1)
 	persistLayer := dl.originDiskLayer()
-	if persistLayer != nil {
+	if hash != (common.Hash{}) && persistLayer != nil {
 		blob, rhash, nloc, err := persistLayer.node(owner, path, hash, depth+1)
 		if err != nil || rhash != hash {
 			// This is a bad case with a very low probability.
@@ -248,7 +248,8 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, hash common.Hash, dept
 		}
 	}
 	diffHashCacheSlowPathMeter.Mark(1)
-	log.Debug("Retry difflayer due to origin is nil", "owner", owner, "path", path, "hash", hash.String())
+	log.Debug("Retry difflayer due to origin is nil or hash is empty",
+		"owner", owner, "path", path, "query_hash", hash.String(), "disk_layer_is_empty", persistLayer == nil)
 	return dl.intervalNode(owner, path, hash, 0)
 }
 
