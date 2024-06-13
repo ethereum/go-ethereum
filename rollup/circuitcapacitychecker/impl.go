@@ -73,19 +73,7 @@ func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*
 	}
 
 	encodeStart := time.Now()
-	ccc.jsonBuffer.Reset()
-	err := json.NewEncoder(&ccc.jsonBuffer).Encode(traces)
-	if err != nil {
-		log.Error("fail to json marshal traces in ApplyTransaction", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash, "err", err)
-		return nil, ErrUnknown
-	}
-
-	tracesStr := C.CString(string(ccc.jsonBuffer.Bytes()))
-	defer func() {
-		C.free(unsafe.Pointer(tracesStr))
-	}()
-
-	rustTrace := C.parse_json_to_rust_trace(tracesStr)
+	rustTrace := MakeRustTrace(traces, &ccc.jsonBuffer)
 	if rustTrace == nil {
 		log.Error("fail to parse json in to rust trace", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash)
 		return nil, ErrUnknown
@@ -93,26 +81,34 @@ func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*
 	encodeTimer.UpdateSince(encodeStart)
 
 	log.Debug("start to check circuit capacity for tx", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash)
+	return ccc.applyTransactionRustTrace(rustTrace)
+}
+
+func (ccc *CircuitCapacityChecker) ApplyTransactionRustTrace(rustTrace unsafe.Pointer) (*types.RowConsumption, error) {
+	ccc.Lock()
+	defer ccc.Unlock()
+	return ccc.applyTransactionRustTrace(rustTrace)
+}
+
+func (ccc *CircuitCapacityChecker) applyTransactionRustTrace(rustTrace unsafe.Pointer) (*types.RowConsumption, error) {
 	rawResult := C.apply_tx(C.uint64_t(ccc.ID), rustTrace)
 	defer func() {
 		C.free_c_chars(rawResult)
 	}()
-	log.Debug("check circuit capacity for tx done", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash)
 
 	result := &WrappedRowUsage{}
-	if err = json.Unmarshal([]byte(C.GoString(rawResult)), result); err != nil {
-		log.Error("fail to json unmarshal apply_tx result", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash, "err", err)
+	if err := json.Unmarshal([]byte(C.GoString(rawResult)), result); err != nil {
+		log.Error("fail to json unmarshal apply_tx result", "id", ccc.ID, "err", err)
 		return nil, ErrUnknown
 	}
 
 	if result.Error != "" {
-		log.Error("fail to apply_tx in CircuitCapacityChecker", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash, "err", result.Error)
+		log.Error("fail to apply_tx in CircuitCapacityChecker", "id", ccc.ID, "err", result.Error)
 		return nil, ErrUnknown
 	}
 	if result.AccRowUsage == nil {
 		log.Error("fail to apply_tx in CircuitCapacityChecker",
-			"id", ccc.ID, "TxHash", traces.Transactions[0].TxHash,
-			"result.AccRowUsage == nil", result.AccRowUsage == nil,
+			"id", ccc.ID, "result.AccRowUsage == nil", result.AccRowUsage == nil,
 			"err", "AccRowUsage is empty unexpectedly")
 		return nil, ErrUnknown
 	}
@@ -128,19 +124,7 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 	defer ccc.Unlock()
 
 	encodeStart := time.Now()
-	ccc.jsonBuffer.Reset()
-	err := json.NewEncoder(&ccc.jsonBuffer).Encode(traces)
-	if err != nil {
-		log.Error("fail to json marshal traces in ApplyBlock", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash(), "err", err)
-		return nil, ErrUnknown
-	}
-
-	tracesStr := C.CString(string(ccc.jsonBuffer.Bytes()))
-	defer func() {
-		C.free(unsafe.Pointer(tracesStr))
-	}()
-
-	rustTrace := C.parse_json_to_rust_trace(tracesStr)
+	rustTrace := MakeRustTrace(traces, &ccc.jsonBuffer)
 	if rustTrace == nil {
 		log.Error("fail to parse json in to rust trace", "id", ccc.ID, "TxHash", traces.Transactions[0].TxHash)
 		return nil, ErrUnknown
@@ -155,7 +139,7 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 	log.Debug("check circuit capacity for block done", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash())
 
 	result := &WrappedRowUsage{}
-	if err = json.Unmarshal([]byte(C.GoString(rawResult)), result); err != nil {
+	if err := json.Unmarshal([]byte(C.GoString(rawResult)), result); err != nil {
 		log.Error("fail to json unmarshal apply_block result", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash(), "err", err)
 		return nil, ErrUnknown
 	}
@@ -218,4 +202,24 @@ func (ccc *CircuitCapacityChecker) SetLightMode(lightMode bool) error {
 	}
 
 	return nil
+}
+
+func MakeRustTrace(trace *types.BlockTrace, buffer *bytes.Buffer) unsafe.Pointer {
+	if buffer == nil {
+		buffer = new(bytes.Buffer)
+	}
+	buffer.Reset()
+
+	err := json.NewEncoder(buffer).Encode(trace)
+	if err != nil {
+		log.Error("fail to json marshal traces in MakeRustTrace", "err", err)
+		return nil
+	}
+
+	tracesStr := C.CString(string(buffer.Bytes()))
+	defer func() {
+		C.free(unsafe.Pointer(tracesStr))
+	}()
+
+	return C.parse_json_to_rust_trace(tracesStr)
 }
