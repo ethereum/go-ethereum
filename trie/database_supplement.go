@@ -25,8 +25,8 @@ func (db *Database) GetCleans() *fastcache.Cache {
 // EmptyRoot indicate what root is for an empty trie, it depends on its underlying implement (zktrie or common trie)
 func (db *Database) EmptyRoot() common.Hash {
 	if db.IsUsingZktrie() {
-		return common.Hash{}
+		return types.EmptyZkTrieRootHash
 	} else {
-		return types.EmptyRootHash
+		return types.EmptyLegacyTrieRootHash
 	}
 }

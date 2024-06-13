@@ -89,7 +89,7 @@ func New(id *ID, db *Database) (*Trie, error) {
 		reader: reader,
 		tracer: newTracer(),
 	}
-	if id.Root != (common.Hash{}) && id.Root != types.EmptyRootHash {
+	if id.Root != (common.Hash{}) && id.Root != types.EmptyLegacyTrieRootHash {
 		rootnode, err := trie.resolveAndTrack(id.Root[:], nil)
 		if err != nil {
 			return nil, err
@@ -101,7 +101,7 @@ func New(id *ID, db *Database) (*Trie, error) {
 
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
 func NewEmpty(db *Database) *Trie {
-	tr, _ := New(TrieID(types.EmptyRootHash), db)
+	tr, _ := New(TrieID(types.EmptyLegacyTrieRootHash), db)
 	return tr
 }
 
@@ -619,13 +619,13 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 	if t.root == nil {
 		paths := t.tracer.deletedNodes()
 		if len(paths) == 0 {
-			return types.EmptyRootHash, nil, nil // case (a)
+			return types.EmptyLegacyTrieRootHash, nil, nil // case (a)
 		}
 		nodes := trienode.NewNodeSet(t.owner)
 		for _, path := range paths {
 			nodes.AddNode([]byte(path), trienode.NewDeleted())
 		}
-		return types.EmptyRootHash, nodes, nil // case (b)
+		return types.EmptyLegacyTrieRootHash, nodes, nil // case (b)
 	}
 	// Derive the hash for all dirty nodes first. We hold the assumption
 	// in the following procedure that all nodes are hashed.
@@ -650,7 +650,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) 
 // hashRoot calculates the root hash of the given trie
 func (t *Trie) hashRoot() (node, node) {
 	if t.root == nil {
-		return hashNode(types.EmptyRootHash.Bytes()), nil
+		return hashNode(types.EmptyLegacyTrieRootHash.Bytes()), nil
 	}
 	// If the number of changes is below 100, we let one thread handle it
 	h := newHasher(t.unhashed >= 100)

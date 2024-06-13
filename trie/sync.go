@@ -211,7 +211,7 @@ func NewSync(root common.Hash, database ethdb.KeyValueReader, callback LeafCallb
 // hex format and contain all the parent path if it's layered trie node.
 func (s *Sync) AddSubTrie(root common.Hash, path []byte, parent common.Hash, parentPath []byte, callback LeafCallback) {
 	// Short circuit if the trie is empty or already known
-	if root == types.EmptyRootHash {
+	if root == types.EmptyLegacyTrieRootHash {
 		return
 	}
 	if s.membatch.hasNode(path) {
