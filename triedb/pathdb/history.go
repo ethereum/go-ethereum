@@ -383,13 +383,13 @@ func (r *decoder) readAccount(pos int) (accountIndex, []byte, error) {
 // readStorage parses the storage slots from the byte stream with specified account.
 func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.Hash][]byte, error) {
 	var (
+		last    common.Hash
 		count   = int(accIndex.storageSlots)
 		list    = make([]common.Hash, 0, count)
 		storage = make(map[common.Hash][]byte, count)
 	)
 	for j := 0; j < count; j++ {
 		var (
-			last  common.Hash
 			index slotIndex
 			start = (accIndex.storageOffset + uint32(j)) * uint32(slotIndexSize)
 			end   = (accIndex.storageOffset + uint32(j+1)) * uint32(slotIndexSize)
