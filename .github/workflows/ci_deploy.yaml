@@ -41,11 +41,11 @@ jobs:
         run: npx hardhat run scripts/deploy.js --network localhost
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: e1018mc/limechain:latest
+          tags: e1018mc/limechain:deployed
 #          tags: your-docker-username/your-image-name:deployed
 
       - name: Tear down local devnet
