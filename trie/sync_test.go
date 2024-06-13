@@ -58,7 +58,7 @@ func makeTestTrie(scheme string) (ethdb.Database, *testDb, *StateTrie, map[strin
 			trie.MustUpdate(key, val)
 		}
 	}
-	root, nodes, _ := trie.Commit(false)
+	root, nodes := trie.Commit(false)
 	if err := triedb.Update(root, types.EmptyRootHash, trienode.NewWithNodeSet(nodes)); err != nil {
 		panic(fmt.Errorf("failed to commit db %v", err))
 	}
@@ -771,7 +771,7 @@ func testSyncMovingTarget(t *testing.T, scheme string) {
 		srcTrie.MustUpdate(key, val)
 		diff[string(key)] = val
 	}
-	root, nodes, _ := srcTrie.Commit(false)
+	root, nodes := srcTrie.Commit(false)
 	if err := srcDb.Update(root, preRoot, trienode.NewWithNodeSet(nodes)); err != nil {
 		panic(err)
 	}
@@ -796,7 +796,7 @@ func testSyncMovingTarget(t *testing.T, scheme string) {
 		srcTrie.MustUpdate([]byte(k), val)
 		reverted[k] = val
 	}
-	root, nodes, _ = srcTrie.Commit(false)
+	root, nodes = srcTrie.Commit(false)
 	if err := srcDb.Update(root, preRoot, trienode.NewWithNodeSet(nodes)); err != nil {
 		panic(err)
 	}
@@ -847,7 +847,7 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 	writeFn([]byte{0x02, 0x34}, nil, srcTrie, stateA)
 	writeFn([]byte{0x13, 0x44}, nil, srcTrie, stateA)
 
-	rootA, nodesA, _ := srcTrie.Commit(false)
+	rootA, nodesA := srcTrie.Commit(false)
 	if err := srcTrieDB.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodesA)); err != nil {
 		panic(err)
 	}
@@ -866,7 +866,7 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 	deleteFn([]byte{0x13, 0x44}, srcTrie, stateB)
 	writeFn([]byte{0x01, 0x24}, nil, srcTrie, stateB)
 
-	rootB, nodesB, _ := srcTrie.Commit(false)
+	rootB, nodesB := srcTrie.Commit(false)
 	if err := srcTrieDB.Update(rootB, rootA, trienode.NewWithNodeSet(nodesB)); err != nil {
 		panic(err)
 	}
@@ -884,7 +884,7 @@ func testPivotMove(t *testing.T, scheme string, tiny bool) {
 	writeFn([]byte{0x02, 0x34}, nil, srcTrie, stateC)
 	writeFn([]byte{0x13, 0x44}, nil, srcTrie, stateC)
 
-	rootC, nodesC, _ := srcTrie.Commit(false)
+	rootC, nodesC := srcTrie.Commit(false)
 	if err := srcTrieDB.Update(rootC, rootB, trienode.NewWithNodeSet(nodesC)); err != nil {
 		panic(err)
 	}
@@ -946,7 +946,7 @@ func testSyncAbort(t *testing.T, scheme string) {
 	}
 	writeFn(key, val, srcTrie, stateA)
 
-	rootA, nodesA, _ := srcTrie.Commit(false)
+	rootA, nodesA := srcTrie.Commit(false)
 	if err := srcTrieDB.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodesA)); err != nil {
 		panic(err)
 	}
@@ -963,7 +963,7 @@ func testSyncAbort(t *testing.T, scheme string) {
 	srcTrie, _ = New(TrieID(rootA), srcTrieDB)
 	deleteFn(key, srcTrie, stateB)
 
-	rootB, nodesB, _ := srcTrie.Commit(false)
+	rootB, nodesB := srcTrie.Commit(false)
 	if err := srcTrieDB.Update(rootB, rootA, trienode.NewWithNodeSet(nodesB)); err != nil {
 		panic(err)
 	}
@@ -990,7 +990,7 @@ func testSyncAbort(t *testing.T, scheme string) {
 	srcTrie, _ = New(TrieID(rootB), srcTrieDB)
 
 	writeFn(key, val, srcTrie, stateC)
-	rootC, nodesC, _ := srcTrie.Commit(false)
+	rootC, nodesC := srcTrie.Commit(false)
 	if err := srcTrieDB.Update(rootC, rootB, trienode.NewWithNodeSet(nodesC)); err != nil {
 		panic(err)
 	}

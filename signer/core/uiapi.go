@@ -52,9 +52,9 @@ func NewUIServerAPI(extapi *SignerAPI) *UIServerAPI {
 // the full Account object and not only Address.
 // Example call
 // {"jsonrpc":"2.0","method":"clef_listAccounts","params":[], "id":4}
-func (s *UIServerAPI) ListAccounts(ctx context.Context) ([]accounts.Account, error) {
+func (api *UIServerAPI) ListAccounts(ctx context.Context) ([]accounts.Account, error) {
 	var accs []accounts.Account
-	for _, wallet := range s.am.Wallets() {
+	for _, wallet := range api.am.Wallets() {
 		accs = append(accs, wallet.Accounts()...)
 	}
 	return accs, nil
@@ -72,9 +72,9 @@ type rawWallet struct {
 // ListWallets will return a list of wallets that clef manages
 // Example call
 // {"jsonrpc":"2.0","method":"clef_listWallets","params":[], "id":5}
-func (s *UIServerAPI) ListWallets() []rawWallet {
+func (api *UIServerAPI) ListWallets() []rawWallet {
 	wallets := make([]rawWallet, 0) // return [] instead of nil if empty
-	for _, wallet := range s.am.Wallets() {
+	for _, wallet := range api.am.Wallets() {
 		status, failure := wallet.Status()
 
 		raw := rawWallet{
@@ -94,8 +94,8 @@ func (s *UIServerAPI) ListWallets() []rawWallet {
 // it for later reuse.
 // Example call
 // {"jsonrpc":"2.0","method":"clef_deriveAccount","params":["ledger://","m/44'/60'/0'", false], "id":6}
-func (s *UIServerAPI) DeriveAccount(url string, path string, pin *bool) (accounts.Account, error) {
-	wallet, err := s.am.Wallet(url)
+func (api *UIServerAPI) DeriveAccount(url string, path string, pin *bool) (accounts.Account, error) {
+	wallet, err := api.am.Wallet(url)
 	if err != nil {
 		return accounts.Account{}, err
 	}
@@ -122,7 +122,7 @@ func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
 // encrypting it with the passphrase.
 // Example call (should fail on password too short)
 // {"jsonrpc":"2.0","method":"clef_importRawKey","params":["1111111111111111111111111111111111111111111111111111111111111111","test"], "id":6}
-func (s *UIServerAPI) ImportRawKey(privkey string, password string) (accounts.Account, error) {
+func (api *UIServerAPI) ImportRawKey(privkey string, password string) (accounts.Account, error) {
 	key, err := crypto.HexToECDSA(privkey)
 	if err != nil {
 		return accounts.Account{}, err
@@ -131,7 +131,7 @@ func (s *UIServerAPI) ImportRawKey(privkey string, password string) (accounts.Ac
 		return accounts.Account{}, fmt.Errorf("password requirements not met: %v", err)
 	}
 	// No error
-	return fetchKeystore(s.am).ImportECDSA(key, password)
+	return fetchKeystore(api.am).ImportECDSA(key, password)
 }
 
 // OpenWallet initiates a hardware wallet opening procedure, establishing a USB
@@ -140,8 +140,8 @@ func (s *UIServerAPI) ImportRawKey(privkey string, password string) (accounts.Ac
 // Trezor PIN matrix challenge).
 // Example
 // {"jsonrpc":"2.0","method":"clef_openWallet","params":["ledger://",""], "id":6}
-func (s *UIServerAPI) OpenWallet(url string, passphrase *string) error {
-	wallet, err := s.am.Wallet(url)
+func (api *UIServerAPI) OpenWallet(url string, passphrase *string) error {
+	wallet, err := api.am.Wallet(url)
 	if err != nil {
 		return err
 	}
@@ -155,24 +155,24 @@ func (s *UIServerAPI) OpenWallet(url string, passphrase *string) error {
 // ChainId returns the chainid in use for Eip-155 replay protection
 // Example call
 // {"jsonrpc":"2.0","method":"clef_chainId","params":[], "id":8}
-func (s *UIServerAPI) ChainId() math.HexOrDecimal64 {
-	return (math.HexOrDecimal64)(s.extApi.chainID.Uint64())
+func (api *UIServerAPI) ChainId() math.HexOrDecimal64 {
+	return (math.HexOrDecimal64)(api.extApi.chainID.Uint64())
 }
 
 // SetChainId sets the chain id to use when signing transactions.
 // Example call to set Ropsten:
 // {"jsonrpc":"2.0","method":"clef_setChainId","params":["3"], "id":8}
-func (s *UIServerAPI) SetChainId(id math.HexOrDecimal64) math.HexOrDecimal64 {
-	s.extApi.chainID = new(big.Int).SetUint64(uint64(id))
-	return s.ChainId()
+func (api *UIServerAPI) SetChainId(id math.HexOrDecimal64) math.HexOrDecimal64 {
+	api.extApi.chainID = new(big.Int).SetUint64(uint64(id))
+	return api.ChainId()
 }
 
 // Export returns encrypted private key associated with the given address in web3 keystore format.
 // Example
 // {"jsonrpc":"2.0","method":"clef_export","params":["0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"], "id":4}
-func (s *UIServerAPI) Export(ctx context.Context, addr common.Address) (json.RawMessage, error) {
+func (api *UIServerAPI) Export(ctx context.Context, addr common.Address) (json.RawMessage, error) {
 	// Look up the wallet containing the requested signer
-	wallet, err := s.am.Find(accounts.Account{Address: addr})
+	wallet, err := api.am.Find(accounts.Account{Address: addr})
 	if err != nil {
 		return nil, err
 	}

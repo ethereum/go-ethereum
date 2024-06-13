@@ -470,10 +470,7 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
-	root, nodes, err := s.trie.Commit(false)
-	if err != nil {
-		return nil, nil, err
-	}
+	root, nodes := s.trie.Commit(false)
 	s.data.Root = root
 	s.origin = s.data.Copy()
 	return op, nodes, nil
