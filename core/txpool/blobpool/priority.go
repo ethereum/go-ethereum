@@ -84,7 +84,7 @@ func intLog2(n uint) int {
 	default:
 		// The input is log1.125(uint256) = log2(uint256) / log2(1.125). At the
 		// most extreme, log2(uint256) will be a bit below 257, and the constant
-		// log2(1.125) ~= 0.17. The larges input thus is ~257 / ~0.17 ~= ~1511.
+		// log2(1.125) ~= 0.17. The largest input thus is ~257 / ~0.17 ~= ~1511.
 		panic("dynamic fee jump diffs cannot reach this")
 	}
 }
