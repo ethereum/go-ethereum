@@ -55,20 +55,20 @@ type TransactionArgs struct {
 }
 
 // from retrieves the transaction sender address.
-func (arg *TransactionArgs) from() common.Address {
-	if arg.From == nil {
+func (args *TransactionArgs) from() common.Address {
+	if args.From == nil {
 		return common.Address{}
 	}
-	return *arg.From
+	return *args.From
 }
 
 // data retrieves the transaction calldata. Input field is preferred.
-func (arg *TransactionArgs) data() []byte {
-	if arg.Input != nil {
-		return *arg.Input
+func (args *TransactionArgs) data() []byte {
+	if args.Input != nil {
+		return *args.Input
 	}
-	if arg.Data != nil {
-		return *arg.Data
+	if args.Data != nil {
+		return *args.Data
 	}
 	return nil
 }
