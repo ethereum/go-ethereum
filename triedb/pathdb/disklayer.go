@@ -95,7 +95,7 @@ func (dl *diskLayer) markStale() {
 
 // node implements the layer interface, retrieving the trie node with the
 // provided node info. No error will be returned if the node is not found.
-func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error) {
+func (dl *diskLayer) node(owner common.Hash, path []byte, hash common.Hash, depth int) ([]byte, common.Hash, *nodeLoc, error) {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -215,6 +215,8 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 		}
 		log.Debug("Pruned state history", "items", pruned, "tailid", oldest)
 	}
+	// The bottom has been eaten by disklayer, releasing the hash cache of bottom difflayer.
+	bottom.cache.Remove(bottom)
 	return ndl, nil
 }
 
