@@ -494,9 +494,6 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 
 		for {
 			select {
-			case <-ctx.Done():
-				stream.Close()
-
 			case event, ok := <-stream.Events:
 				if !ok {
 					log.Trace("Event stream closed")

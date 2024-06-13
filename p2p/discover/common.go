@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -34,8 +35,8 @@ import (
 
 // UDPConn is a network connection on which discovery can operate.
 type UDPConn interface {
-	ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error)
-	WriteToUDP(b []byte, addr *net.UDPAddr) (n int, err error)
+	ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error)
+	WriteToUDPAddrPort(b []byte, addr netip.AddrPort) (n int, err error)
 	Close() error
 	LocalAddr() net.Addr
 }
@@ -94,7 +95,7 @@ func ListenUDP(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 // channel if configured.
 type ReadPacket struct {
 	Data []byte
-	Addr *net.UDPAddr
+	Addr netip.AddrPort
 }
 
 type randomSource interface {
