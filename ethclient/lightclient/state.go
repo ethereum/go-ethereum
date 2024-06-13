@@ -35,6 +35,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
+// lightStateFields defines Client fields related to state proofs.
 type lightStateFields struct {
 	proofCache    *lru.Cache[proofRequest, *gethclient.AccountResult]
 	proofRequests *requestMap[proofRequest, *gethclient.AccountResult]
@@ -42,17 +43,22 @@ type lightStateFields struct {
 	codeRequests  *requestMap[codeRequest, []byte]
 }
 
+// proofRequest defines a proof request. This structure is used as a key for the
+// proof cache and the proof request map.
 type proofRequest struct {
 	blockNumber uint64
 	address     common.Address
 	storageKeys string
 }
 
+// codeRequest defines a contract code request. This structure is used as a key
+// for the code cache and the code request map.
 type codeRequest struct {
 	blockNumber uint64
 	address     common.Address
 }
 
+// initLightState initializes the structures related to state proofs.
 func (c *Client) initLightState() {
 	c.proofCache = lru.NewCache[proofRequest, *gethclient.AccountResult](100)
 	c.codeCache = lru.NewCache[codeRequest, []byte](10)
@@ -60,11 +66,13 @@ func (c *Client) initLightState() {
 	c.codeRequests = newRequestMap[codeRequest, []byte](c.requestCode)
 }
 
+// closeLightState shuts down the structures related to state proofs.
 func (c *Client) closeLightState() {
 	c.proofRequests.close()
 	c.codeRequests.close()
 }
 
+// getProof retrieves and validates a state account with an optional set of storage keys.
 func (c *Client) getProof(ctx context.Context, blockNumber *big.Int, account common.Address, storageKeys []string, getCode bool) (*gethclient.AccountResult, []byte, error) {
 	proof, code, retry, err := c.getProofOnce(ctx, blockNumber, account, storageKeys, getCode)
 	if retry {
@@ -73,6 +81,13 @@ func (c *Client) getProof(ctx context.Context, blockNumber *big.Int, account com
 	return proof, code, err
 }
 
+// getProofOnce makes an attempt to retrieve and validate a state account with
+// an optional set of storage keys. Note that since the queried state is selected
+// by block number both in this function and the underlying RPC request and the
+// client can validate the state root against the local canonical chain, it is
+// possible that a request happening very close to a reorg might cause a state
+// root or code hash mismatch. In this case the function clears the block number
+// to proof association from the cache and returns retry == true.
 func (c *Client) getProofOnce(ctx context.Context, blockNumber *big.Int, account common.Address, storageKeys []string, getCode bool) (*gethclient.AccountResult, []byte, bool, error) {
 	num, pheader, err := c.resolveBlockNumber(blockNumber)
 	if err != nil {
@@ -133,8 +148,10 @@ func (c *Client) getProofOnce(ctx context.Context, blockNumber *big.Int, account
 		if getCode {
 			<-codeCh
 			c.codeCache.Remove(codeReq)
+			c.codeRequests.remove(codeReq)
 		}
 		c.proofCache.Remove(proofReq)
+		c.proofRequests.remove(proofReq)
 		return nil, nil, true, err
 	}
 	if getCode {
@@ -144,13 +161,16 @@ func (c *Client) getProofOnce(ctx context.Context, blockNumber *big.Int, account
 		}
 		if crypto.Keccak256Hash(code) != proof.CodeHash {
 			c.codeCache.Remove(codeReq)
+			c.codeRequests.remove(codeReq)
 			c.proofCache.Remove(proofReq)
+			c.proofRequests.remove(proofReq)
 			return nil, nil, true, errors.New("code hash mismatch")
 		}
 	}
 	return proof, code, false, nil
 }
 
+// validateProof validates the given state proof against the specified state root.
 func (c *Client) validateProof(proof *gethclient.AccountResult, stateRoot common.Hash, account common.Address, storageKeys []string) error {
 	// validate account proof
 	proofReader, err := makeProofReader(proof.AccountProof)
@@ -226,6 +246,8 @@ func (c *Client) validateProof(proof *gethclient.AccountResult, stateRoot common
 // proofReader implements ethdb.KeyValueReader.
 type proofReader map[string][]byte
 
+// makeProofReader takes a list of hex encoded proof nodes and creates an
+// ethdb.KeyValueReader that returns these proof nodes based on their hashes.
 func makeProofReader(proof []string) (proofReader, error) {
 	pr := make(proofReader)
 	for _, s := range proof {
@@ -238,11 +260,13 @@ func makeProofReader(proof []string) (proofReader, error) {
 	return pr, nil
 }
 
+// Has implements ethdb.KeyValueReader.
 func (p proofReader) Has(key []byte) (bool, error) {
 	_, ok := p[string(key)]
 	return ok, nil
 }
 
+// Get implements ethdb.KeyValueReader.
 func (p proofReader) Get(key []byte) ([]byte, error) {
 	if value, ok := p[string(key)]; ok {
 		return value, nil
@@ -250,6 +274,7 @@ func (p proofReader) Get(key []byte) ([]byte, error) {
 	return nil, errors.New("not found")
 }
 
+// stValueBytes converts a big.Int storage value into a byte slice of 32 bytes.
 func stValueBytes(value *big.Int) ([]byte, error) {
 	if value == nil {
 		return nil, errors.New("storage value is nil")
@@ -269,12 +294,17 @@ func stValueBytes(value *big.Int) ([]byte, error) {
 	}
 }
 
+// fetchProof either requests a merkle proof of a state account and optional set
+// of storage keys from the RPC client or returns it from the cache if available.
+// Note that proofs can only be validated in the context of the belonging canonical
+// header which might be retrieved later, therefore proofs are cached before
+// validation and removed later if proven invalid.
 func (c *Client) fetchProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
 	if proof, ok := c.proofCache.Get(req); ok {
 		return proof, nil
 	}
 	request := c.proofRequests.request(req)
-	proof, err := request.getResult(ctx)
+	proof, err := request.waitForResult(ctx)
 	if err == nil {
 		c.proofCache.Add(req, proof) // cached before validation; remove and retry if invalid
 	}
@@ -282,12 +312,17 @@ func (c *Client) fetchProof(ctx context.Context, req proofRequest) (*gethclient.
 	return proof, err
 }
 
+// fetchCode either requests the contract code at a state account from the RPC
+// client or returns it from the cache if available.
+// Note that proofs can only be validated in the context of the belonging canonical
+// header which might be retrieved later, therefore proofs are cached before
+// validation and removed later if proven invalid.
 func (c *Client) fetchCode(ctx context.Context, req codeRequest) ([]byte, error) {
 	if code, ok := c.codeCache.Get(req); ok {
 		return code, nil
 	}
 	request := c.codeRequests.request(req)
-	code, err := request.getResult(ctx)
+	code, err := request.waitForResult(ctx)
 	if err == nil {
 		c.codeCache.Add(req, code) // cached before validation; remove and retry if invalid
 	}
@@ -295,6 +330,18 @@ func (c *Client) fetchCode(ctx context.Context, req codeRequest) ([]byte, error)
 	return code, err
 }
 
+// clearStateCache removes all cached proof and code entries.
+// Note that since the queried states are identified by a block number of the
+// canonical chain, cached entries can be invalidated by a reorg. The canonical
+// chain tracker calls this function whenever an already existing block number
+// to hash association is changed.
+func (c *Client) clearStateCache() {
+	c.proofCache.Purge()
+	c.codeCache.Purge()
+}
+
+// requestProof requests a merkle proof of a state account and optional set of
+// storage keys from the RPC client.
 func (c *Client) requestProof(ctx context.Context, req proofRequest) (*gethclient.AccountResult, error) {
 	type storageResult struct {
 		Key   string       `json:"key"`
@@ -344,6 +391,7 @@ func (c *Client) requestProof(ctx context.Context, req proofRequest) (*gethclien
 	return proof, err
 }
 
+// requestCode requests the contract code at the given account from the RPC server.
 func (c *Client) requestCode(ctx context.Context, req codeRequest) ([]byte, error) {
 	var code hexutil.Bytes
 	log.Debug("Starting RPC request", "type", "eth_getCode", "blockNumber", req.blockNumber, "address", req.address)

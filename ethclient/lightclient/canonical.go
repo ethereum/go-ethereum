@@ -33,6 +33,7 @@ import (
 
 const recentCanonicalLength = 256
 
+// canonicalChainFields defines Client fields related to canonical chain tracking.
 type canonicalChainFields struct {
 	chainLock            sync.Mutex
 	head, finality       *btypes.ExecutionHeader
@@ -43,6 +44,7 @@ type canonicalChainFields struct {
 	requests             *requestMap[uint64, common.Hash] // requested; neither recent nor cached finalized
 }
 
+// initCanonicalChain initializes the structures related to canonical chain tracking.
 func (c *Client) initCanonicalChain() {
 	c.finalized = lru.NewCache[uint64, common.Hash](10000)
 	c.requests = newRequestMap[uint64, common.Hash](nil)
@@ -51,6 +53,7 @@ func (c *Client) initCanonicalChain() {
 	go c.tailFetcher()
 }
 
+// closeCanonicalChain shuts down the structures related to canonical chain tracking.
 func (c *Client) closeCanonicalChain() {
 	c.requests.close()
 	close(c.closeCh)
@@ -67,6 +70,7 @@ func (c *Client) setHead(head *btypes.ExecutionHeader) bool {
 	if c.recent == nil || c.head == nil || c.head.BlockNumber()+1 != headNum || c.head.BlockHash() != head.ParentHash() {
 		// initialize recent canonical hash map when first head is added or when
 		// it is not a descendant of the previous head
+		c.clearStateCache()
 		c.recent = make(map[uint64]common.Hash)
 		if headNum > 0 {
 			c.recent[headNum-1] = head.ParentHash()
@@ -179,7 +183,7 @@ func (c *Client) getHash(ctx context.Context, number uint64) (common.Hash, error
 	default:
 	}
 	defer req.release()
-	return req.getResult(ctx)
+	return req.waitForResult(ctx)
 }
 
 func (c *Client) getCachedHash(number uint64) (common.Hash, bool) {

@@ -37,6 +37,7 @@ import (
 
 const maxTxAge = 300 // sent transactions are typically remembered for an hour after last seen pending
 
+// txAndReceiptsFields defines Client fields related to transactions and receipts.
 type txAndReceiptsFields struct {
 	signer types.Signer
 
@@ -46,45 +47,61 @@ type txAndReceiptsFields struct {
 	txByHashRequests      *requestMap[common.Hash, txResult]
 	receiptByHashRequests *requestMap[common.Hash, *types.Receipt]
 
-	sentTxLock                  sync.Mutex
-	sentTxs                     map[common.Address]senderTxs
+	trackedTxLock               sync.Mutex
+	trackedTxs                  map[common.Address]senderTxs
 	headCounter, lastHeadNumber uint64
 }
 
+// txResult represents the results of a transaction by hash request.
 type txResult struct {
 	tx        *types.Transaction
 	isPending bool
 }
 
+// txInBlock stores the known inclusion positions of a transaction.
+// Note that any cached position is only considered valid if the block is canonical.
 type txInBlock struct {
 	blockNumber uint64
-	blockHash   common.Hash // only considered valid if the block is canonical
+	blockHash   common.Hash
 	index       uint
 }
 
-type sentTx struct {
+// trackedTx stores the information associated with the hashes of tracked transactions.
+type trackedTx struct {
 	nonce    uint64
 	lastSeen uint64 // headCounter value where the tx has been sent or last seen pending
 }
 
-type senderTxs map[common.Hash]sentTx
+// senderTxs stores all tracked transactions originating from a single sender.
+type senderTxs map[common.Hash]trackedTx
 
+// initTxAndReceipts initializes the structures related to transactions and receipts.
 func (c *Client) initTxAndReceipts() {
 	c.blockReceiptsCache = lru.NewCache[common.Hash, types.Receipts](10)
 	c.txPosCache = lru.NewCache[common.Hash, txInBlock](10000)
-	c.sentTxs = make(map[common.Address]senderTxs)
+	c.trackedTxs = make(map[common.Address]senderTxs)
 	c.signer = types.LatestSigner(c.elConfig)
 	c.blockReceiptsRequests = newRequestMap[common.Hash, types.Receipts](c.requestBlockReceipts)
 	c.txByHashRequests = newRequestMap[common.Hash, txResult](c.requestTxByHash)
 	c.receiptByHashRequests = newRequestMap[common.Hash, *types.Receipt](c.requestReceiptByTxHash)
 }
 
+// closeTxAndReceipts shuts down the structures related to transactions and receipts.
 func (c *Client) closeTxAndReceipts() {
 	c.blockReceiptsRequests.close()
 	c.txByHashRequests.close()
 	c.receiptByHashRequests.close()
 }
 
+// getTxByHash requests and validates the transaction with the specified hash or
+// returns it from cache if available as part of the local canonical chain.
+// The pending status of the transaction is also returned. Note that the pending
+// status cannot be directly validated, unless it is known to be canonical.
+// Also note that if a transaction belongs to the server's latest block that is
+// not proven by an optimistic update to the beacon light client yet then this
+// function will report isPending == true even though the server has reported
+// it as non-pending. This behavior ensures the consistency between the local
+// canonical chain and the results of getTxByHash and getReceiptByTxHash.
 func (c *Client) getTxByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
 	if pos, ok := c.txPosCache.Get(txHash); ok {
 		if hash, ok := c.getCachedHash(pos.blockNumber); ok && hash == pos.blockHash {
@@ -104,15 +121,21 @@ func (c *Client) getTxByHash(ctx context.Context, txHash common.Hash) (tx *types
 	return c.getUncachedTxByHash(ctx, txHash, headBlockNumber)
 }
 
+// getUncachedTxByHash requests a transaction and its pending status without
+// checking in the cache whether it's already canonical. It does check for future
+// inclusion and returns isPending == true if it has a receipt in a block over
+// headBlockNumber.
+// The purpose of this function is sharing code between getTxByHash and
+// nonceAndPendingTxs.
 func (c *Client) getUncachedTxByHash(ctx context.Context, txHash common.Hash, headBlockNumber uint64) (tx *types.Transaction, isPending bool, err error) {
 	req := c.txByHashRequests.request(txHash)
 	var txResult txResult
-	txResult, err = req.getResult(ctx)
+	txResult, err = req.waitForResult(ctx)
 	req.release()
 	tx, isPending = txResult.tx, txResult.isPending
 	if err == nil && !isPending {
 		req := c.receiptByHashRequests.request(txHash)
-		receipt, err := req.getResult(ctx)
+		receipt, err := req.waitForResult(ctx)
 		req.release()
 		if err == ethereum.NotFound {
 			return tx, false, nil
@@ -128,6 +151,12 @@ func (c *Client) getUncachedTxByHash(ctx context.Context, txHash common.Hash, he
 	return
 }
 
+// getReceiptByTxHash requests and validates the receipt belonging to the transaction
+// with the specified hash or returns it from cache if available. Results are only
+// returned if they can be validated as part of the current local canonical chain.
+// Note that if a receipt belongs to the server's latest block that is not proven
+// by an optimistic update to the beacon light client yet then this function cannot
+// validate it and will treat it like a pending transaction and return ethereum.NotFound.
 func (c *Client) getReceiptByTxHash(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	if pos, ok := c.txPosCache.Get(txHash); ok {
 		if hash, ok := c.getCachedHash(pos.blockNumber); ok && hash == pos.blockHash {
@@ -140,7 +169,7 @@ func (c *Client) getReceiptByTxHash(ctx context.Context, txHash common.Hash) (*t
 		}
 	}
 	req := c.receiptByHashRequests.request(txHash)
-	receipt, err := req.getResult(ctx)
+	receipt, err := req.waitForResult(ctx)
 	req.release()
 	if err != nil {
 		return nil, err
@@ -189,6 +218,8 @@ func (c *Client) getReceiptByTxHash(ctx context.Context, txHash common.Hash) (*t
 	return receipt, err
 }
 
+// getBlockReceipts requests and validates a set of block receipts or returns them
+// from cache if available.
 func (c *Client) getBlockReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
 	if receipts, ok := c.blockReceiptsCache.Get(blockHash); ok {
 		return receipts, nil
@@ -198,7 +229,7 @@ func (c *Client) getBlockReceipts(ctx context.Context, blockHash common.Hash) (t
 	if err != nil {
 		return nil, err
 	}
-	receipts, err := request.getResult(ctx)
+	receipts, err := request.waitForResult(ctx)
 	if err == nil {
 		receipts, err = c.validateBlockReceipts(block, receipts)
 	}
@@ -209,6 +240,13 @@ func (c *Client) getBlockReceipts(ctx context.Context, blockHash common.Hash) (t
 	return receipts, err
 }
 
+// validateBlockReceipts verifies that the given set of receipts belongs to the
+// given block. Non-consensus fields of the returned set of receipts are derived
+// from the block and the consensus fields of the received receipts which are also
+// validated against the receipts root of the block.
+// Note that the non-consensus fields of the received receipts could be ignored
+// but they are also verified against the derived version in order to detect any
+// potential inconsistencies between the server responses and the validation logic.
 func (c *Client) validateBlockReceipts(block *types.Block, receipts types.Receipts) (types.Receipts, error) {
 	// verify consensus fields agains receipts hash in block
 	var hash common.Hash
@@ -242,11 +280,12 @@ func (c *Client) validateBlockReceipts(block *types.Block, receipts types.Receip
 		return nil, err
 	}
 	// compare the JSON encoding of received and derived versions
+	// Note: this step could be skipped but it is performed as a sanity check.
 	jsonReceived, err := json.Marshal(receipts)
 	if err != nil {
 		return nil, err
 	}
-	jsonDerived, err := json.Marshal(receipts)
+	jsonDerived, err := json.Marshal(newReceipts)
 	if err != nil {
 		return nil, err
 	}
@@ -256,6 +295,11 @@ func (c *Client) validateBlockReceipts(block *types.Block, receipts types.Receip
 	return newReceipts, nil
 }
 
+// requestTxByHash requests the transaction belonging to the specified hash from
+// the RPC client, along with the current pending status.
+// Either a transaction with the specified hash or an error is returned. Note that
+// the pending status cannot be directly validated because the light client does
+// not track the set of pending transactions.
 func (c *Client) requestTxByHash(ctx context.Context, hash common.Hash) (txResult, error) {
 	var json *rpcTransaction
 	err := c.client.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
@@ -274,6 +318,12 @@ func (c *Client) requestTxByHash(ctx context.Context, hash common.Hash) (txResul
 	return txResult{tx: json.tx, isPending: json.BlockNumber == nil}, nil
 }
 
+// requestReceiptByTxHash requests the receipt belonging to the transaction with
+// the specified hash from the RPC client.
+// Either a receipt or an error is returned. Note that the results are not validated
+// at this level as it also requires the block in which the transaction is included.
+// Also note that since the receipt depends on the inclusion block, the hash to
+// receipt association also depends on the current canonical chain.
 func (c *Client) requestReceiptByTxHash(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	var r *types.Receipt
 	err := c.client.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
@@ -283,6 +333,10 @@ func (c *Client) requestReceiptByTxHash(ctx context.Context, txHash common.Hash)
 	return r, err
 }
 
+// requestBlockReceipts requests the set of receipts belonging to the block with
+// the specified hash from the RPC client.
+// Either a set of receipts or an error is returned. Note that the results are not
+// validated at this level as it also requires the belonging block.
 func (c *Client) requestBlockReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
 	var r []*types.Receipt
 	err := c.client.CallContext(ctx, &r, "eth_getBlockReceipts", blockHash)
@@ -292,6 +346,9 @@ func (c *Client) requestBlockReceipts(ctx context.Context, blockHash common.Hash
 	return types.Receipts(r), err
 }
 
+// cacheBlockTxPositions iterates through the transactions of a block and caches
+// transaction position information. This function should be called for all
+// new canonical blocks.
 func (c *Client) cacheBlockTxPositions(block *types.Block) {
 	blockNumber, blockHash := block.NumberU64(), block.Hash()
 	for i, tx := range block.Transactions() {
@@ -299,6 +356,8 @@ func (c *Client) cacheBlockTxPositions(block *types.Block) {
 	}
 }
 
+// sendTransaction sends a transaction to the RPC server and adds it to the set of
+// tracked transactions.
 func (c *Client) sendTransaction(ctx context.Context, tx *types.Transaction) error {
 	sender, err := types.Sender(c.signer, tx)
 	if err != nil {
@@ -311,12 +370,15 @@ func (c *Client) sendTransaction(ctx context.Context, tx *types.Transaction) err
 	if err := c.client.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data)); err != nil {
 		return err
 	}
-	c.sentTxLock.Lock()
+	c.trackedTxLock.Lock()
 	c.markTxAsSeen(sender, tx)
-	c.sentTxLock.Unlock()
+	c.trackedTxLock.Unlock()
 	return nil
 }
 
+// nonceAndPendingTxs obtains the latest nonce of the given sender account and checks
+// the pending status of the tracked transactions originating from that server.
+// It returns the current nonce and a nonce-ordered list of pending transactions.
 func (c *Client) nonceAndPendingTxs(ctx context.Context, head *btypes.ExecutionHeader, sender common.Address) (uint64, types.Transactions, error) {
 	proof, err := c.fetchProof(ctx, proofRequest{blockNumber: head.BlockNumber(), address: sender, storageKeys: ""})
 	if err != nil {
@@ -326,9 +388,9 @@ func (c *Client) nonceAndPendingTxs(ctx context.Context, head *btypes.ExecutionH
 		return 0, nil, err
 	}
 
-	c.sentTxLock.Lock()
-	senderTxs := c.sentTxs[sender]
-	c.sentTxLock.Unlock()
+	c.trackedTxLock.Lock()
+	senderTxs := c.trackedTxs[sender]
+	c.trackedTxLock.Unlock()
 
 	type pendingResult struct {
 		pendingTx *types.Transaction
@@ -337,8 +399,8 @@ func (c *Client) nonceAndPendingTxs(ctx context.Context, head *btypes.ExecutionH
 
 	resultCh := make(chan pendingResult, len(senderTxs))
 	var reqCount int
-	for txHash, sentTx := range senderTxs {
-		if sentTx.nonce <= proof.Nonce {
+	for txHash, trackedTx := range senderTxs {
+		if trackedTx.nonce <= proof.Nonce {
 			continue
 		}
 		reqCount++
@@ -362,52 +424,59 @@ func (c *Client) nonceAndPendingTxs(ctx context.Context, head *btypes.ExecutionH
 		}
 	}
 	sort.Sort(types.TxByNonce(pendingList))
-	c.sentTxLock.Lock()
+	c.trackedTxLock.Lock()
 	for _, tx := range pendingList {
 		c.markTxAsSeen(sender, tx)
 	}
-	c.sentTxLock.Unlock()
+	c.trackedTxLock.Unlock()
 	return proof.Nonce, pendingList, nil
 }
 
+// allSenders returns the list of all senders that have belonging tracked transactions.
 func (c *Client) allSenders() []common.Address {
-	c.sentTxLock.Lock()
-	allSenders := make([]common.Address, 0, len(c.sentTxs))
-	for sender := range c.sentTxs {
+	c.trackedTxLock.Lock()
+	allSenders := make([]common.Address, 0, len(c.trackedTxs))
+	for sender := range c.trackedTxs {
 		allSenders = append(allSenders, sender)
 	}
-	c.sentTxLock.Unlock()
+	c.trackedTxLock.Unlock()
 	return allSenders
 }
 
+// txAndReceiptsNewHead should be called for every new head. It counts the head
+// updates that increase the current block height and discards transactions that
+// have not been seen as pending lately based on this head counter.
 func (c *Client) txAndReceiptsNewHead(number uint64, hash common.Hash) {
-	c.sentTxLock.Lock()
+	c.trackedTxLock.Lock()
 	if number > c.lastHeadNumber {
 		c.lastHeadNumber = number
 		c.headCounter++
 		c.discardOldTxs()
 	}
-	c.sentTxLock.Unlock()
+	c.trackedTxLock.Unlock()
 }
 
+// discardOldTxs discards transactions that have not been seen as pending lately.
 func (c *Client) discardOldTxs() {
-	for sender, senderTxs := range c.sentTxs {
-		for txHash, sentTx := range senderTxs {
-			if sentTx.lastSeen+maxTxAge < c.headCounter {
+	for sender, senderTxs := range c.trackedTxs {
+		for txHash, trackedTx := range senderTxs {
+			if trackedTx.lastSeen+maxTxAge < c.headCounter {
 				delete(senderTxs, txHash)
 			}
 		}
 		if len(senderTxs) == 0 {
-			delete(c.sentTxs, sender)
+			delete(c.trackedTxs, sender)
 		}
 	}
 }
 
+// markTxAsSeen adds a transaction to the tracked set or updates its last seen
+// counter in order to keep it in the set.
 func (c *Client) markTxAsSeen(sender common.Address, tx *types.Transaction) {
-	senderTxs := c.sentTxs[sender]
+	senderTxs := c.trackedTxs[sender]
 	if senderTxs == nil {
-		senderTxs = make(map[common.Hash]sentTx)
-		c.sentTxs[sender] = senderTxs
+		senderTxs = make(map[common.Hash]trackedTx)
+		c.trackedTxs[sender] = senderTxs
 	}
-	senderTxs[tx.Hash()] = sentTx{nonce: tx.Nonce(), lastSeen: c.headCounter}
+	senderTxs[tx.Hash()] = trackedTx{nonce: tx.Nonce(), lastSeen: c.headCounter}
 }

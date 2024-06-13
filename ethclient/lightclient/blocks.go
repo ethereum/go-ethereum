@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// blocksAndHeadersFields defines Client fields related to blocks and headers.
 type blocksAndHeadersFields struct {
 	headerCache        *lru.Cache[common.Hash, *types.Header]
 	headerRequests     *requestMap[common.Hash, *types.Header]
@@ -38,6 +39,7 @@ type blocksAndHeadersFields struct {
 	blockRequests      *requestMap[common.Hash, *types.Block]
 }
 
+// initBlocksAndHeaders initializes the structures related to blocks and headers.
 func (c *Client) initBlocksAndHeaders() {
 	c.headerCache = lru.NewCache[common.Hash, *types.Header](1000)
 	c.payloadHeaderCache = lru.NewCache[common.Hash, *btypes.ExecutionHeader](1000)
@@ -46,6 +48,7 @@ func (c *Client) initBlocksAndHeaders() {
 	c.blockRequests = newRequestMap[common.Hash, *types.Block](c.requestBlock)
 }
 
+// closeBlocksAndHeaders shuts down the structures related to blocks and headers.
 func (c *Client) closeBlocksAndHeaders() {
 	c.headerRequests.close()
 	c.blockRequests.close()
@@ -60,7 +63,7 @@ func (c *Client) getHeader(ctx context.Context, hash common.Hash) (*types.Header
 	}
 	if c.blockRequests.has(hash) && !c.headerRequests.has(hash) {
 		req := c.blockRequests.request(hash)
-		block, err := req.getResult(ctx)
+		block, err := req.waitForResult(ctx)
 		if err == nil {
 			header := block.Header()
 			c.headerCache.Add(hash, header)
@@ -73,7 +76,7 @@ func (c *Client) getHeader(ctx context.Context, hash common.Hash) (*types.Header
 		}
 	}
 	req := c.headerRequests.request(hash)
-	header, err := req.getResult(ctx)
+	header, err := req.waitForResult(ctx)
 	if err == nil {
 		c.headerCache.Add(hash, header)
 	}
@@ -95,7 +98,7 @@ func (c *Client) getBlock(ctx context.Context, hash common.Hash) (*types.Block, 
 		return block, nil
 	}
 	req := c.blockRequests.request(hash)
-	block, err := req.getResult(ctx)
+	block, err := req.waitForResult(ctx)
 	if err == nil {
 		header := block.Header()
 		c.headerCache.Add(hash, header)
@@ -107,6 +110,8 @@ func (c *Client) getBlock(ctx context.Context, hash common.Hash) (*types.Block, 
 	return block, err
 }
 
+// requestHeader requests the header with the specified hash from the RPC client.
+// Either the header with the given hash or an error is returned.
 func (c *Client) requestHeader(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	var header *types.Header
 	log.Debug("Starting RPC request", "type", "eth_getBlockByHash", "hash", hash, "full", false)
@@ -121,6 +126,8 @@ func (c *Client) requestHeader(ctx context.Context, hash common.Hash) (*types.He
 	return header, err
 }
 
+// requestBlock requests the block with the specified hash from the RPC client.
+// Either the block with the given hash or an error is returned.
 func (c *Client) requestBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	var (
 		raw   json.RawMessage
