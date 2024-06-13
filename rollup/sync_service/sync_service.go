@@ -149,6 +149,9 @@ func (s *SyncService) fetchMessages() {
 
 	log.Trace("Sync service fetchMessages", "latestProcessedBlock", s.latestProcessedBlock, "latestConfirmed", latestConfirmed)
 
+	// keep track of next queue index we're expecting to see
+	queueIndex := rawdb.ReadHighestSyncedQueueIndex(s.db)
+
 	batchWriter := s.db.NewBatch()
 	numBlocksPendingDbWrite := uint64(0)
 	numMessagesPendingDbWrite := 0
@@ -216,7 +219,18 @@ func (s *SyncService) fetchMessages() {
 			numMsgsCollected += len(msgs)
 		}
 
-		numBlocksPendingDbWrite += to - from
+		for _, msg := range msgs {
+			if msg.QueueIndex > 0 {
+				queueIndex++
+			}
+			// check if received queue index matches expected queue index
+			if msg.QueueIndex != queueIndex {
+				log.Error("Unexpected queue index in SyncService", "expected", queueIndex, "got", msg.QueueIndex, "msg", msg)
+				return // do not flush inconsistent data to disk
+			}
+		}
+
+		numBlocksPendingDbWrite += to - from + 1
 		numMessagesPendingDbWrite += len(msgs)
 
 		// flush new messages to database periodically

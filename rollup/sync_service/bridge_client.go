@@ -86,6 +86,10 @@ func (c *BridgeClient) fetchMessagesInRange(ctx context.Context, from, to uint64
 		})
 	}
 
+	if err := it.Error(); err != nil {
+		return nil, err
+	}
+
 	return msgs, nil
 }
 

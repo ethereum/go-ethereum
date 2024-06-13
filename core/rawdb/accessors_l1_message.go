@@ -202,6 +202,12 @@ func (it *L1MessageIterator) Release() {
 	it.inner.Release()
 }
 
+// Error returns any accumulated error.
+// Exhausting all the key/value pairs is not considered to be an error.
+func (it *L1MessageIterator) Error() error {
+	return it.inner.Error()
+}
+
 // ReadL1MessagesFrom retrieves up to `maxCount` L1 messages starting at `startIndex`.
 func ReadL1MessagesFrom(db ethdb.Database, startIndex, maxCount uint64) []types.L1MessageTx {
 	msgs := make([]types.L1MessageTx, 0, maxCount)
@@ -234,6 +240,10 @@ func ReadL1MessagesFrom(db ethdb.Database, startIndex, maxCount uint64) []types.
 		if msg.QueueIndex == it.maxQueueIndex {
 			break
 		}
+	}
+
+	if err := it.Error(); err != nil {
+		log.Crit("Failed to read L1 messages", "err", err)
 	}
 
 	return msgs
