@@ -52,6 +52,7 @@ type Backend interface {
 	EventMux() *event.TypeMux
 	AccountManager() *accounts.Manager
 	RPCGasCap() uint64 // global gas cap for eth_call over rpc: DoS protection
+	RPCTxFeeCap() float64 // global tx fee cap for all transaction related APIs
 	XDCxService() *XDCx.XDCX
 	LendingService() *XDCxlending.Lending
 
