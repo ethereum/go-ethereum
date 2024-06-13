@@ -102,6 +102,10 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	if err := rlp.DecodeBytes(generatorBlob, &generator); err != nil {
 		return nil, journalGenerator{}, fmt.Errorf("failed to decode snapshot generator: %v", err)
 	}
+	// Nilness is lost after rlp decoding, explicitly set it back to empty.
+	if !generator.Done && generator.Marker == nil {
+		generator.Marker = []byte{}
+	}
 	// Retrieve the diff layer journal. It's possible that the journal is
 	// not existent, e.g. the disk layer is generating while that the Geth
 	// crashes without persisting the diff journal.
@@ -134,7 +138,6 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 	}
 	base := &diskLayer{
 		diskdb: diskdb,
-		triedb: triedb,
 		cache:  fastcache.New(cache * 1024 * 1024),
 		root:   baseRoot,
 	}
@@ -167,27 +170,22 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 	// Load the disk layer status from the generator if it's not complete
 	if !generator.Done {
 		base.genMarker = generator.Marker
-		if base.genMarker == nil {
-			base.genMarker = []byte{}
-		}
 	}
 	// Everything loaded correctly, resume any suspended operations
 	// if the background generation is allowed
 	if !generator.Done && !noBuild {
-		base.genPending = make(chan struct{})
-		base.genAbort = make(chan chan *generatorStats)
-
 		var origin uint64
 		if len(generator.Marker) >= 8 {
 			origin = binary.BigEndian.Uint64(generator.Marker)
 		}
-		go base.generate(&generatorStats{
+		base.generator = newGenerator(diskdb, triedb, &generatorStats{
 			origin:   origin,
 			start:    time.Now(),
 			accounts: generator.Accounts,
 			slots:    generator.Slots,
 			storage:  common.StorageSize(generator.Storage),
 		})
+		base.generator.run(baseRoot, generator.Marker, base.setGenMarker)
 	}
 	return snapshot, false, nil
 }
@@ -196,14 +194,12 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 // the progress into the database.
 func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	// If the snapshot is currently being generated, abort it
-	var stats *generatorStats
-	if dl.genAbort != nil {
-		abort := make(chan *generatorStats)
-		dl.genAbort <- abort
+	if dl.generator != nil {
+		dl.generator.stop()
 
-		if stats = <-abort; stats != nil {
-			stats.Log("Journalling in-progress snapshot", dl.root, dl.genMarker)
-		}
+		// safe to access dl.genMarker as the only mutator dl.generator
+		// has been terminated.
+		dl.generator.stats.log("Journalling in-progress snapshot", dl.root, dl.genMarker)
 	}
 	// Ensure the layer didn't get stale
 	dl.lock.RLock()
@@ -212,9 +208,6 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if dl.stale {
 		return common.Hash{}, ErrSnapshotStale
 	}
-	// Ensure the generator stats is written even if none was ran this cycle
-	journalProgress(dl.diskdb, dl.genMarker, stats)
-
 	log.Debug("Journalled disk layer", "root", dl.root)
 	return dl.root, nil
 }

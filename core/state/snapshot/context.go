@@ -36,7 +36,9 @@ const (
 )
 
 // generatorStats is a collection of statistics gathered by the snapshot generator
-// for logging purposes.
+// for logging purposes. This data structure is used throughout the entire
+// lifecycle of the snapshot generation process and is shared across multiple
+// generation cycles.
 type generatorStats struct {
 	origin   uint64             // Origin prefix where generation started
 	start    time.Time          // Timestamp when generation started
@@ -46,9 +48,9 @@ type generatorStats struct {
 	storage  common.StorageSize // Total account and storage slot size(generation or recovery)
 }
 
-// Log creates a contextual log with the given message and the context pulled
+// log creates a contextual log with the given message and the context pulled
 // from the internally maintained statistics.
-func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
+func (gs *generatorStats) log(msg string, root common.Hash, marker []byte) {
 	var ctx []interface{}
 	if root != (common.Hash{}) {
 		ctx = append(ctx, []interface{}{"root", root}...)
@@ -85,27 +87,40 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 	log.Info(msg, ctx...)
 }
 
-// generatorContext carries a few global values to be shared by all generation functions.
+// generatorContext holds several global fields that are used throughout the
+// current generation cycle.
 type generatorContext struct {
-	stats   *generatorStats     // Generation statistic collection
-	db      ethdb.KeyValueStore // Key-value store containing the snapshot data
-	account *holdableIterator   // Iterator of account snapshot data
-	storage *holdableIterator   // Iterator of storage snapshot data
-	batch   ethdb.Batch         // Database batch for writing batch data atomically
-	logged  time.Time           // The timestamp when last generation progress was displayed
+	root      common.Hash         // State root of the generation target
+	marker    []byte              // Generation progress marker
+	setMarker func(marker []byte) // Function to notify the generation progress
+	account   *holdableIterator   // Iterator of account snapshot data
+	storage   *holdableIterator   // Iterator of storage snapshot data
+	db        ethdb.KeyValueStore // Key-value store containing the snapshot data
+	batch     ethdb.Batch         // Database batch for writing data atomically
+	logged    time.Time           // The timestamp when last generation progress was displayed
 }
 
 // newGeneratorContext initializes the context for generation.
-func newGeneratorContext(stats *generatorStats, db ethdb.KeyValueStore, accMarker []byte, storageMarker []byte) *generatorContext {
+func newGeneratorContext(root common.Hash, marker []byte, setMarker func(marker []byte), db ethdb.KeyValueStore) *generatorContext {
 	ctx := &generatorContext{
-		stats:  stats,
-		db:     db,
-		batch:  db.NewBatch(),
-		logged: time.Now(),
+		root:      root,
+		marker:    marker,
+		setMarker: setMarker,
+		db:        db,
+		batch:     db.NewBatch(),
+		logged:    time.Now(),
 	}
+	accMarker, storageMarker := splitMarker(marker)
 	ctx.openIterator(snapAccount, accMarker)
 	ctx.openIterator(snapStorage, storageMarker)
 	return ctx
+}
+
+// setGenMarker updates the generation progress marker locally and cascades it
+// to associated disk layer.
+func (ctx *generatorContext) setGenMarker(marker []byte) {
+	ctx.marker = marker
+	ctx.setMarker(marker)
 }
 
 // openIterator constructs global account and storage snapshot iterators
@@ -164,7 +179,7 @@ func (ctx *generatorContext) iterator(kind string) *holdableIterator {
 // the specified account. When the iterator touches the storage entry which
 // is located in or outside the given account, it stops and holds the current
 // iterated element locally.
-func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
+func (ctx *generatorContext) removeStorageBefore(account common.Hash) uint64 {
 	var (
 		count uint64
 		start = time.Now()
@@ -183,8 +198,8 @@ func (ctx *generatorContext) removeStorageBefore(account common.Hash) {
 			ctx.batch.Reset()
 		}
 	}
-	ctx.stats.dangling += count
 	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
+	return count
 }
 
 // removeStorageAt deletes all storage entries which are located in the specified
@@ -221,7 +236,7 @@ func (ctx *generatorContext) removeStorageAt(account common.Hash) error {
 
 // removeStorageLeft deletes all storage entries which are located after
 // the current iterator position.
-func (ctx *generatorContext) removeStorageLeft() {
+func (ctx *generatorContext) removeStorageLeft() uint64 {
 	var (
 		count uint64
 		start = time.Now()
@@ -235,7 +250,7 @@ func (ctx *generatorContext) removeStorageLeft() {
 			ctx.batch.Reset()
 		}
 	}
-	ctx.stats.dangling += count
 	snapDanglingStorageMeter.Mark(int64(count))
 	snapStorageCleanCounter.Inc(time.Since(start).Nanoseconds())
+	return count
 }

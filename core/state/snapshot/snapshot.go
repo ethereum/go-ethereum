@@ -235,7 +235,9 @@ func (t *Tree) waitBuild() {
 	t.lock.RLock()
 	for _, layer := range t.layers {
 		if layer, ok := layer.(*diskLayer); ok {
-			done = layer.genPending
+			if layer.generator != nil {
+				done = layer.generator.done
+			}
 			break
 		}
 	}
@@ -259,15 +261,11 @@ func (t *Tree) Disable() {
 		switch layer := layer.(type) {
 		case *diskLayer:
 			// If the base layer is generating, abort it
-			if layer.genAbort != nil {
-				abort := make(chan *generatorStats)
-				layer.genAbort <- abort
-				<-abort
+			if layer.generator != nil {
+				layer.generator.stop()
 			}
 			// Layer should be inactive now, mark it as stale
-			layer.lock.Lock()
-			layer.stale = true
-			layer.lock.Unlock()
+			layer.markStale()
 			layer.Release()
 
 		case *diffLayer:
@@ -385,7 +383,8 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	if !ok {
 		return fmt.Errorf("snapshot [%#x] is disk layer", root)
 	}
-	// If the generator is still running, use a more aggressive cap
+	// If the generator is still running, use a more aggressive cap.
+	// Hold the read lock as the genMarker is not thread safe.
 	diff.origin.lock.RLock()
 	if diff.origin.genMarker != nil && layers > 8 {
 		layers = 8
@@ -498,7 +497,7 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 			// there's a snapshot being generated currently. In that case, the trie
 			// will move from underneath the generator so we **must** merge all the
 			// partial data down into the snapshot and restart the generation.
-			if flattened.parent.(*diskLayer).genAbort == nil {
+			if flattened.parent.(*diskLayer).generator == nil {
 				return nil
 			}
 		}
@@ -526,26 +525,21 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	var (
 		base  = bottom.parent.(*diskLayer)
 		batch = base.diskdb.NewBatch()
-		stats *generatorStats
 	)
 	// If the disk layer is running a snapshot generator, abort it
-	if base.genAbort != nil {
-		abort := make(chan *generatorStats)
-		base.genAbort <- abort
-		stats = <-abort
+	if base.generator != nil {
+		base.generator.stop()
 	}
 	// Put the deletion in the batch writer, flush all updates in the final step.
 	rawdb.DeleteSnapshotRoot(batch)
 
 	// Mark the original base as stale as we're going to create a new wrapper
-	base.lock.Lock()
-	if base.stale {
-		panic("parent disk layer is stale") // we've committed into the same base from two children, boo
-	}
-	base.stale = true
-	base.lock.Unlock()
+	base.markStale()
 
 	// Destroy all the destructed accounts from the database
+	//
+	// Note it's safe to access base.genMarker here as the only mutator
+	// base.generator has been terminated.
 	for hash := range bottom.destructSet {
 		// Skip any account not covered yet by the snapshot
 		if base.genMarker != nil && bytes.Compare(hash[:], base.genMarker) > 0 {
@@ -627,9 +621,6 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	// Update the snapshot block marker and write any remainder data
 	rawdb.WriteSnapshotRoot(batch, bottom.root)
 
-	// Write out the generator progress marker and report
-	journalProgress(batch, base.genMarker, stats)
-
 	// Flush all the updates in the single db operation. Ensure the
 	// disk layer transition is atomic.
 	if err := batch.Write(); err != nil {
@@ -637,22 +628,19 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	}
 	log.Debug("Journalled disk layer", "root", bottom.root, "complete", base.genMarker == nil)
 	res := &diskLayer{
-		root:       bottom.root,
-		cache:      base.cache,
-		diskdb:     base.diskdb,
-		triedb:     base.triedb,
-		genMarker:  base.genMarker,
-		genPending: base.genPending,
+		root:      bottom.root,
+		cache:     base.cache,
+		diskdb:    base.diskdb,
+		genMarker: base.genMarker,
 	}
 	// If snapshot generation hasn't finished yet, port over all the starts and
 	// continue where the previous round left off.
 	//
-	// Note, the `base.genAbort` comparison is not used normally, it's checked
+	// Note, the base.generator comparison is not used normally, it's checked
 	// to allow the tests to play with the marker without triggering this path.
-	if base.genMarker != nil && base.genAbort != nil {
-		res.genMarker = base.genMarker
-		res.genAbort = make(chan chan *generatorStats)
-		go res.generate(stats)
+	if res.genMarker != nil && base.generator != nil {
+		res.generator = base.generator
+		res.generator.run(res.root, res.genMarker, res.setGenMarker)
 	}
 	return res
 }
@@ -724,15 +712,11 @@ func (t *Tree) Rebuild(root common.Hash) {
 		switch layer := layer.(type) {
 		case *diskLayer:
 			// If the base layer is generating, abort it and save
-			if layer.genAbort != nil {
-				abort := make(chan *generatorStats)
-				layer.genAbort <- abort
-				<-abort
+			if layer.generator != nil {
+				layer.generator.stop()
 			}
 			// Layer should be inactive now, mark it as stale
-			layer.lock.Lock()
-			layer.stale = true
-			layer.lock.Unlock()
+			layer.markStale()
 			layer.Release()
 
 		case *diffLayer:
