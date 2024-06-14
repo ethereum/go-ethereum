@@ -169,6 +169,20 @@ loop:
 			}
 			testState(common.Address{})
 			testState(common.HexToAddress("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2")) // WETH contract
+
+			if txs, err := client.RandomPendingTxs(ctx, 5); err == nil {
+				log.Info("Tracking random pending transactions", "count", len(txs))
+				for _, tx := range txs {
+					client.TrackTransaction(tx)
+				}
+			} else {
+				log.Error("Tracking random pending transactions", "error", err)
+			}
+			if count, err := client.PendingTransactionCount(ctx); err == nil {
+				log.Info("PendingTransactionCount ", "count", count)
+			} else {
+				log.Error("PendingTransactionCount ", "error", err)
+			}
 		case <-ctx.Done():
 			break loop
 		}

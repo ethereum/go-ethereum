@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"math/rand"
 	"sort"
 	"sync"
 
@@ -359,15 +360,19 @@ func (c *Client) cacheBlockTxPositions(block *types.Block) {
 // sendTransaction sends a transaction to the RPC server and adds it to the set of
 // tracked transactions.
 func (c *Client) sendTransaction(ctx context.Context, tx *types.Transaction) error {
-	sender, err := types.Sender(c.signer, tx)
-	if err != nil {
-		return nil
-	}
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return err
 	}
 	if err := c.client.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data)); err != nil {
+		return err
+	}
+	return c.TrackTransaction(tx)
+}
+
+func (c *Client) TrackTransaction(tx *types.Transaction) error {
+	sender, err := types.Sender(c.signer, tx)
+	if err != nil {
 		return err
 	}
 	c.trackedTxLock.Lock()
@@ -400,10 +405,11 @@ func (c *Client) nonceAndPendingTxs(ctx context.Context, head *btypes.ExecutionH
 	resultCh := make(chan pendingResult, len(senderTxs))
 	var reqCount int
 	for txHash, trackedTx := range senderTxs {
-		if trackedTx.nonce <= proof.Nonce {
+		if trackedTx.nonce < proof.Nonce {
 			continue
 		}
 		reqCount++
+		txHash := txHash
 		go func() {
 			tx, isPending, err := c.getUncachedTxByHash(ctx, txHash, head.BlockNumber())
 			if err == nil && isPending {
@@ -479,4 +485,34 @@ func (c *Client) markTxAsSeen(sender common.Address, tx *types.Transaction) {
 		c.trackedTxs[sender] = senderTxs
 	}
 	senderTxs[tx.Hash()] = trackedTx{nonce: tx.Nonce(), lastSeen: c.headCounter}
+}
+
+func (c *Client) RandomPendingTxs(ctx context.Context, count int) (types.Transactions, error) {
+	var txc hexutil.Uint
+	err := c.client.CallContext(ctx, &txc, "eth_getBlockTransactionCountByNumber", "pending")
+	if err != nil {
+		return nil, err
+	}
+	txCount := int(txc)
+	if txCount == 0 {
+		return nil, errors.New("no pending transactions")
+	}
+	txs := make(types.Transactions, count)
+	for i := range txs {
+		var json *rpcTransaction
+		index := rand.Intn(txCount)
+		err := c.client.CallContext(ctx, &json, "eth_getTransactionByBlockNumberAndIndex", "pending", hexutil.Uint64(index))
+		if err != nil {
+			return nil, err
+		} else if json == nil {
+			return nil, ethereum.NotFound
+		} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
+			return nil, errors.New("server returned transaction without signature")
+		}
+		if json.From != nil && json.BlockHash != nil {
+			setSenderFromServer(json.tx, *json.From, *json.BlockHash)
+		}
+		txs[i] = json.tx
+	}
+	return txs, nil
 }

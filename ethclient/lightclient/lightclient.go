@@ -313,7 +313,7 @@ func (c *Client) PendingNonceAt(ctx context.Context, account common.Address) (ui
 	if len(pendingTxs) == 0 {
 		return headNonce, nil
 	}
-	return pendingTxs[len(pendingTxs)-1].Nonce(), nil
+	return pendingTxs[len(pendingTxs)-1].Nonce() + 1, nil
 }
 
 func (c *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
@@ -325,8 +325,16 @@ func (c *Client) PendingTransactionCount(ctx context.Context) (uint, error) {
 	countCh := make(chan uint, len(allSenders))
 	errCh := make(chan error, len(allSenders))
 	for _, sender := range allSenders {
+		sender := sender
 		go func() {
-			_, pendingTxs, err := c.nonceAndPendingTxs(ctx, head, sender)
+			nonce, pendingTxs, err := c.nonceAndPendingTxs(ctx, head, sender)
+			if len(pendingTxs) > 0 {
+				txNonces := make([]uint64, len(pendingTxs))
+				for i, tx := range pendingTxs {
+					txNonces[i] = tx.Nonce()
+				}
+				log.Info("Pending transactions", "sender", sender, "head nonce", nonce, "tx nonces", txNonces)
+			}
 			errCh <- err
 			countCh <- uint(len(pendingTxs))
 		}()
