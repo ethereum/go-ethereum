@@ -1336,12 +1336,6 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		return nil, 0, false, err, nil
 	}
 
-	msg, err := args.ToMessage(b, header.Number, globalGasCap, header.BaseFee)
-	if err != nil {
-		return nil, 0, false, err, nil
-	}
-	msg.SetBalanceTokenFeeForCall()
-
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
 	var cancel context.CancelFunc
@@ -1369,6 +1363,14 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	if err != nil {
 		return nil, 0, false, err, nil
 	}
+
+	// TODO: replace header.BaseFee with blockCtx.BaseFee
+	// reference: https://github.com/ethereum/go-ethereum/pull/29051
+	msg, err := args.ToMessage(b, header.Number, globalGasCap, header.BaseFee)
+	if err != nil {
+		return nil, 0, false, err, nil
+	}
+	msg.SetBalanceTokenFeeForCall()
 
 	// Get a new instance of the EVM.
 	evm, vmError, err := b.GetEVM(ctx, msg, statedb, XDCxState, header, &vm.Config{NoBaseFee: true})

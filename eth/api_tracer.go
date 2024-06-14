@@ -691,6 +691,8 @@ func (api *PrivateDebugAPI) TraceCall(ctx context.Context, args ethapi.Transacti
 		}
 	}
 	// Execute the trace
+	// TODO: replace block.BaseFee() with vmctx.BaseFee
+	// reference: https://github.com/ethereum/go-ethereum/pull/29051
 	msg, err := args.ToMessage(api.eth.ApiBackend, block.Number(), api.eth.ApiBackend.RPCGasCap(), block.BaseFee())
 	if err != nil {
 		return nil, err
