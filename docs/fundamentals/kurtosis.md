@@ -13,7 +13,7 @@ To follow the tutorial on this page it is necessary to have a working Kurtosis i
 
 ## Private Networks {#private-networks}
 
-A private network is composed of multiple Ethereum nodes that can only connect to each other. There are many details to setting up a fresh PoS network. To name a few: a genesis block must be generated for the execution as well as consensus client. The genesis will also contain the deposit contract which validators will use to stake on the network. Then ELs and CLs must be set-up in a concert off of the genesis files. The Kurtosis [ethereum-package](https://github.com/kurtosis-tech/ethereum-package/) will handle all of that behind the scenes with the ability to costumize where needed.
+A private network is composed of multiple Ethereum nodes that can only connect to each other. There are many details to setting up a fresh PoS network. To name a few: a genesis block must be generated for the execution as well as consensus client. The genesis will also contain the deposit contract which validators will use to stake on the network. Then ELs and CLs must be set-up in a concert off of the genesis files. The Kurtosis [ethereum-package](https://github.com/ethpandaops/ethereum-package) will handle all of that behind the scenes with the ability to costumize where needed.
 
 ### Choosing A Network ID {#choosing-network-id}
 
@@ -158,4 +158,4 @@ at block: 830 (Tue Jun 04 2024 09:07:29 GMT+0000 (UTC))
 
 ## Further reading
 
-This tutorial covered the basics of spinning up a network via Kurtosis. The [ethereum-package](https://github.com/kurtosis-tech/ethereum-package/) has far more features and options than the scope of this tutorial. The [guide](https://ethpandaops.io/posts/kurtosis-deep-dive/) by ethPandaOps also goes over more advanced functionality such as deploying a MEV stack, shadowforking etc.
+This tutorial covered the basics of spinning up a network via Kurtosis. The [ethereum-package](https://github.com/ethpandaops/ethereum-package) has far more features and options than the scope of this tutorial. The [guide](https://ethpandaops.io/posts/kurtosis-deep-dive/) by ethPandaOps also goes over more advanced functionality such as deploying a MEV stack, shadowforking etc.
