@@ -1,12 +1,18 @@
 'use strict'
 
-const { stringify } = require('jsonfile/utils')
-const { outputFileSync } = require('../output-file')
+const fs = require('graceful-fs')
+const path = require('path')
+const mkdir = require('../mkdirs')
+const jsonFile = require('./jsonfile')
 
 function outputJsonSync (file, data, options) {
-  const str = stringify(data, options)
+  const dir = path.dirname(file)
 
-  outputFileSync(file, str, options)
+  if (!fs.existsSync(dir)) {
+    mkdir.mkdirsSync(dir)
+  }
+
+  jsonFile.writeJsonSync(file, data, options)
 }
 
 module.exports = outputJsonSync
