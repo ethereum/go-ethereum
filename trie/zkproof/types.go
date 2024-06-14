@@ -4,14 +4,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 )
 
-type MPTWitnessType int
-
-const (
-	MPTWitnessNothing MPTWitnessType = iota
-	MPTWitnessNatural
-	MPTWitnessRWTbl
-)
-
 // SMTPathNode represent a node in the SMT Path, all hash is saved by the present of
 // zktype.Hash
 type SMTPathNode struct {

@@ -252,10 +252,6 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 		if !l.cfg.DisableStorage {
 			structLog.Storage = l.storage[contractAddress].Copy()
 		}
-
-		if err := traceStorage(l, scope, structLog.getOrInitExtraData()); err != nil {
-			log.Error("Failed to trace data", "opcode", op.String(), "err", err)
-		}
 	}
 	if l.cfg.EnableReturnData {
 		structLog.ReturnData.Write(rData)

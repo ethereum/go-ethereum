@@ -46,7 +46,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/trie"
-	"github.com/scroll-tech/go-ethereum/trie/zkproof"
 )
 
 var (
@@ -135,7 +134,6 @@ type CacheConfig struct {
 	TrieTimeLimit       time.Duration // Time limit after which to flush the current in-memory trie to disk
 	SnapshotLimit       int           // Memory allowance (MB) to use for caching snapshot entries in memory
 	Preimages           bool          // Whether to store preimage of trie key to the disk
-	MPTWitness          int           // How to generate witness data for mpt circuit, 0: nothing, 1: natural
 
 	SnapshotWait bool // Wait for snapshot construction on startup. TODO(karalabe): This is a dirty hack for testing, nuke it
 }
@@ -148,7 +146,6 @@ var defaultCacheConfig = &CacheConfig{
 	TrieTimeLimit:  5 * time.Minute,
 	SnapshotLimit:  256,
 	SnapshotWait:   true,
-	MPTWitness:     int(zkproof.MPTWitnessNothing),
 }
 
 // BlockChain represents the canonical chain given a database with a genesis

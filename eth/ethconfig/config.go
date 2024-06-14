@@ -206,9 +206,6 @@ type Config struct {
 	// Arrow Glacier block override (TODO: remove after the fork)
 	OverrideArrowGlacier *big.Int `toml:",omitempty"`
 
-	// Trace option
-	MPTWitness int
-
 	// Check circuit capacity in block validator
 	CheckCircuitCapacity bool
 
