@@ -34,9 +34,6 @@ jobs:
       - name: Install dependencies
         run: npm install --save-dev hardhat
 
-      - name: Compile contracts
-        run: npx hardhat compile
-
       - name: Run local devnet
         run: |
           docker-compose up -d
