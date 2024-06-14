@@ -1,0 +1,48 @@
+{
+  "_ethers.alias": {
+    "base64.js": "browser-base64.js"
+  },
+  "author": "Richard Moore <me@ricmoo.com>",
+  "browser": {
+    "./lib/base64": "./lib/browser-base64.js"
+  },
+  "dependencies": {
+    "@ethersproject/bytes": "^5.7.0"
+  },
+  "description": "Base64 coder.",
+  "ethereum": "donations.ethers.eth",
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://gitcoin.co/grants/13/ethersjs-complete-simple-and-tiny-2"
+    },
+    {
+      "type": "individual",
+      "url": "https://www.buymeacoffee.com/ricmoo"
+    }
+  ],
+  "gitHead": "ec1b9583039a14a0e0fa15d0a2a6082a2f41cf5b",
+  "keywords": [
+    "Ethereum",
+    "ethers"
+  ],
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "module": "./lib.esm/index.js",
+  "name": "@ethersproject/base64",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/base64",
+    "type": "git",
+    "url": "git://github.com/ethers-io/ethers.js.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "sideEffects": false,
+  "tarballHash": "0x67fc747be8ad32f055e61ea73984a8a1e7030ea19dff1a8c7d8301ad0139078b",
+  "types": "./lib/index.d.ts",
+  "version": "5.7.0"
+}

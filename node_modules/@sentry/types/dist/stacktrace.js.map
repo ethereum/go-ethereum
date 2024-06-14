@@ -1,0 +1,1 @@
+{"version":3,"file":"stacktrace.js","sourceRoot":"","sources":["../src/stacktrace.ts"],"names":[],"mappings":"","sourcesContent":["import { StackFrame } from './stackframe';\n\n/** JSDoc */\nexport interface Stacktrace {\n  frames?: StackFrame[];\n  frames_omitted?: [number, number];\n}\n"]}

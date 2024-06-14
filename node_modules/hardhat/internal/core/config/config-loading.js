@@ -1,0 +1,246 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getConfiguredCompilers = exports.analyzeModuleNotFoundError = exports.loadConfigAndTasks = exports.resolveConfigPath = exports.importCsjOrEsModule = void 0;
+const chalk_1 = __importDefault(require("chalk"));
+const debug_1 = __importDefault(require("debug"));
+const fs_extra_1 = __importDefault(require("fs-extra"));
+const path_1 = __importDefault(require("path"));
+const semver_1 = __importDefault(require("semver"));
+const context_1 = require("../../context");
+const packageInfo_1 = require("../../util/packageInfo");
+const errors_1 = require("../errors");
+const errors_list_1 = require("../errors-list");
+const project_structure_1 = require("../project-structure");
+const constants_1 = require("../../hardhat-network/stack-traces/constants");
+const config_resolution_1 = require("./config-resolution");
+const default_config_1 = require("./default-config");
+const log = (0, debug_1.default)("hardhat:core:config");
+function importCsjOrEsModule(filePath) {
+    try {
+        const imported = require(filePath);
+        return imported.default !== undefined ? imported.default : imported;
+    }
+    catch (e) {
+        if (e.code === "ERR_REQUIRE_ESM") {
+            throw new errors_1.HardhatError(errors_list_1.ERRORS.GENERAL.ESM_PROJECT_WITHOUT_CJS_CONFIG, {}, e);
+        }
+        // eslint-disable-next-line @nomicfoundation/hardhat-internal-rules/only-hardhat-error
+        throw e;
+    }
+}
+exports.importCsjOrEsModule = importCsjOrEsModule;
+function resolveConfigPath(configPath) {
+    if (configPath === undefined) {
+        configPath = (0, project_structure_1.getUserConfigPath)();
+    }
+    else {
+        if (!path_1.default.isAbsolute(configPath)) {
+            configPath = path_1.default.join(process.cwd(), configPath);
+            configPath = path_1.default.normalize(configPath);
+        }
+    }
+    return configPath;
+}
+exports.resolveConfigPath = resolveConfigPath;
+function loadConfigAndTasks(hardhatArguments, { showEmptyConfigWarning = false, showSolidityConfigWarnings = false, } = {
+    showEmptyConfigWarning: false,
+    showSolidityConfigWarnings: false,
+}) {
+    const { validateConfig, validateResolvedConfig } = require("./config-validation");
+    let configPath = hardhatArguments !== undefined ? hardhatArguments.config : undefined;
+    configPath = resolveConfigPath(configPath);
+    log(`Loading Hardhat config from ${configPath}`);
+    // Before loading the builtin tasks, the default and user's config we expose
+    // the config env in the global object.
+    const configEnv = require("./config-env");
+    const globalAsAny = global;
+    Object.entries(configEnv).forEach(([key, value]) => (globalAsAny[key] = value));
+    const ctx = context_1.HardhatContext.getHardhatContext();
+    ctx.setConfigLoadingAsStarted();
+    let userConfig;
+    try {
+        require("../tasks/builtin-tasks");
+        userConfig = importCsjOrEsModule(configPath);
+    }
+    catch (e) {
+        analyzeModuleNotFoundError(e, configPath);
+        // eslint-disable-next-line @nomicfoundation/hardhat-internal-rules/only-hardhat-error
+        throw e;
+    }
+    finally {
+        ctx.setConfigLoadingAsFinished();
+    }
+    if (showEmptyConfigWarning) {
+        checkEmptyConfig(userConfig, { showSolidityConfigWarnings });
+    }
+    validateConfig(userConfig);
+    if (showSolidityConfigWarnings) {
+        checkMissingSolidityConfig(userConfig);
+    }
+    // To avoid bad practices we remove the previously exported stuff
+    Object.keys(configEnv).forEach((key) => (globalAsAny[key] = undefined));
+    const frozenUserConfig = deepFreezeUserConfig(userConfig);
+    const resolved = (0, config_resolution_1.resolveConfig)(configPath, userConfig);
+    for (const extender of context_1.HardhatContext.getHardhatContext().configExtenders) {
+        extender(resolved, frozenUserConfig);
+    }
+    validateResolvedConfig(resolved);
+    if (showSolidityConfigWarnings) {
+        checkUnsupportedSolidityConfig(resolved);
+        checkUnsupportedRemappings(resolved);
+    }
+    return { resolvedConfig: resolved, userConfig: frozenUserConfig };
+}
+exports.loadConfigAndTasks = loadConfigAndTasks;
+function deepFreezeUserConfig(config, propertyPath = []) {
+    if (typeof config !== "object" || config === null) {
+        return config;
+    }
+    return new Proxy(config, {
+        get(target, property, receiver) {
+            return deepFreezeUserConfig(Reflect.get(target, property, receiver), [
+                ...propertyPath,
+                property,
+            ]);
+        },
+        set(target, property, _value, _receiver) {
+            throw new errors_1.HardhatError(errors_list_1.ERRORS.GENERAL.USER_CONFIG_MODIFIED, {
+                path: [...propertyPath, property]
+                    .map((pathPart) => pathPart.toString())
+                    .join("."),
+            });
+        },
+    });
+}
+/**
+ * Receives an Error and checks if it's a MODULE_NOT_FOUND and the reason that
+ * caused it.
+ *
+ * If it can infer the reason, it throws an appropiate error. Otherwise it does
+ * nothing.
+ */
+function analyzeModuleNotFoundError(error, configPath) {
+    const stackTraceParser = require("stacktrace-parser");
+    if (error.code !== "MODULE_NOT_FOUND") {
+        return;
+    }
+    const stackTrace = stackTraceParser.parse(error.stack);
+    const throwingFile = stackTrace
+        .filter((x) => x.file !== null)
+        .map((x) => x.file)
+        // ignore frames related to source map support
+        .filter((x) => !x.includes(path_1.default.join("@cspotcode", "source-map-support")))
+        .find((x) => path_1.default.isAbsolute(x));
+    if (throwingFile === null || throwingFile === undefined) {
+        return;
+    }
+    // if the error comes from the config file, we ignore it because we know it's
+    // a direct import that's missing
+    if (throwingFile === configPath) {
+        return;
+    }
+    const packageJsonPath = (0, packageInfo_1.findClosestPackageJson)(throwingFile);
+    if (packageJsonPath === null) {
+        return;
+    }
+    const packageJson = fs_extra_1.default.readJsonSync(packageJsonPath);
+    const peerDependencies = packageJson.peerDependencies ?? {};
+    if (peerDependencies["@nomiclabs/buidler"] !== undefined) {
+        throw new errors_1.HardhatError(errors_list_1.ERRORS.PLUGINS.BUIDLER_PLUGIN, {
+            plugin: packageJson.name,
+        });
+    }
+    // if the problem doesn't come from a hardhat plugin, we ignore it
+    if (peerDependencies.hardhat === undefined) {
+        return;
+    }
+    const missingPeerDependencies = {};
+    for (const [peerDependency, version] of Object.entries(peerDependencies)) {
+        const peerDependencyPackageJson = readPackageJson(peerDependency, configPath);
+        if (peerDependencyPackageJson === undefined) {
+            missingPeerDependencies[peerDependency] = version;
+        }
+    }
+    const missingPeerDependenciesNames = Object.keys(missingPeerDependencies);
+    if (missingPeerDependenciesNames.length > 0) {
+        throw new errors_1.HardhatError(errors_list_1.ERRORS.PLUGINS.MISSING_DEPENDENCIES, {
+            plugin: packageJson.name,
+            missingDependencies: missingPeerDependenciesNames.join(", "),
+            missingDependenciesVersions: Object.entries(missingPeerDependencies)
+                .map(([name, version]) => `"${name}@${version}"`)
+                .join(" "),
+        });
+    }
+}
+exports.analyzeModuleNotFoundError = analyzeModuleNotFoundError;
+function readPackageJson(packageName, configPath) {
+    const resolve = require("resolve");
+    try {
+        const packageJsonPath = resolve.sync(path_1.default.join(packageName, "package.json"), {
+            basedir: path_1.default.dirname(configPath),
+        });
+        return require(packageJsonPath);
+    }
+    catch {
+        return undefined;
+    }
+}
+function checkEmptyConfig(userConfig, { showSolidityConfigWarnings }) {
+    if (userConfig === undefined || Object.keys(userConfig).length === 0) {
+        let warning = `Hardhat config is returning an empty config object, check the export from the config file if this is unexpected.\n`;
+        // This 'learn more' section is also printed by the solidity config warning,
+        // so we need to check to avoid printing it twice
+        if (!showSolidityConfigWarnings) {
+            warning += `\nLearn more about configuring Hardhat at https://hardhat.org/config\n`;
+        }
+        console.warn(chalk_1.default.yellow(warning));
+    }
+}
+function checkMissingSolidityConfig(userConfig) {
+    if (userConfig.solidity === undefined) {
+        console.warn(chalk_1.default.yellow(`Solidity compiler is not configured. Version ${default_config_1.DEFAULT_SOLC_VERSION} will be used by default. Add a 'solidity' entry to your configuration to suppress this warning.
+
+Learn more about compiler configuration at https://hardhat.org/config
+`));
+    }
+}
+function checkUnsupportedSolidityConfig(resolvedConfig) {
+    const configuredCompilers = getConfiguredCompilers(resolvedConfig.solidity);
+    const solcVersions = configuredCompilers.map((x) => x.version);
+    const unsupportedVersions = [];
+    for (const solcVersion of solcVersions) {
+        if (!semver_1.default.satisfies(solcVersion, constants_1.SUPPORTED_SOLIDITY_VERSION_RANGE) &&
+            !unsupportedVersions.includes(solcVersion)) {
+            unsupportedVersions.push(solcVersion);
+        }
+    }
+    if (unsupportedVersions.length > 0) {
+        console.warn(chalk_1.default.yellow(`Solidity ${unsupportedVersions.join(", ")} ${unsupportedVersions.length === 1 ? "is" : "are"} not fully supported yet. You can still use Hardhat, but some features, like stack traces, might not work correctly.
+
+Learn more at https://hardhat.org/hardhat-runner/docs/reference/solidity-support
+`));
+    }
+}
+function checkUnsupportedRemappings({ solidity }) {
+    const solcConfigs = [
+        ...solidity.compilers,
+        ...Object.values(solidity.overrides),
+    ];
+    const remappings = solcConfigs.filter(({ settings }) => settings.remappings !== undefined);
+    if (remappings.length > 0) {
+        console.warn(chalk_1.default.yellow(`Solidity remappings are not currently supported; you may experience unexpected compilation results. Remove any 'remappings' fields from your configuration to suppress this warning.
+
+Learn more about compiler configuration at https://hardhat.org/config
+`));
+    }
+}
+function getConfiguredCompilers(solidityConfig) {
+    const compilerVersions = solidityConfig.compilers;
+    const overrideVersions = Object.values(solidityConfig.overrides);
+    return [...compilerVersions, ...overrideVersions];
+}
+exports.getConfiguredCompilers = getConfiguredCompilers;
+//# sourceMappingURL=config-loading.js.map

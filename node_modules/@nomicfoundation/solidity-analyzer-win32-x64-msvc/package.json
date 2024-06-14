@@ -1,0 +1,13 @@
+{
+  "name": "@nomicfoundation/solidity-analyzer-win32-x64-msvc",
+  "version": "0.1.2",
+  "main": "solidity-analyzer.win32-x64-msvc.node",
+  "files": [
+    "solidity-analyzer.win32-x64-msvc.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 12"
+  },
+  "repository": "github:NomicFoundation/solidity-analyzer"
+}

@@ -1,0 +1,1 @@
+{"version":3,"file":"wrappedfunction.d.ts","sourceRoot":"","sources":["../src/wrappedfunction.ts"],"names":[],"mappings":"AAAA,YAAY;AACZ,MAAM,WAAW,eAAgB,SAAQ,QAAQ;IAC/C,CAAC,GAAG,EAAE,MAAM,GAAG,GAAG,CAAC;IACnB,UAAU,CAAC,EAAE,OAAO,CAAC;IACrB,kBAAkB,CAAC,EAAE,eAAe,CAAC;IACrC,mBAAmB,CAAC,EAAE,eAAe,CAAC;CACvC"}

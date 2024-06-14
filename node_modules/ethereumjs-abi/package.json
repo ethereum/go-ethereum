@@ -1,0 +1,49 @@
+{
+  "name": "ethereumjs-abi",
+  "version": "0.6.8",
+  "description": "Decoder and encoder for the Ethereum ABI",
+  "main": "index.js",
+  "dependencies": {
+    "bn.js": "^4.11.8",
+    "ethereumjs-util": "^6.0.0"
+  },
+  "devDependencies": {
+    "coveralls": "^3.0.3",
+    "husky": "^2.1.0",
+    "istanbul": "^0.4.5",
+    "mocha": "^6.0.2",
+    "standard": "^12.0.1"
+  },
+  "scripts": {
+    "coverage": "istanbul cover _mocha",
+    "coveralls": "npm run coverage && coveralls <coverage/lcov.info",
+    "lint": "standard",
+    "prepublish": "npm run lint && npm run test",
+    "test": "istanbul test _mocha -- --reporter spec"
+  },
+  "husky": {
+    "hooks": {
+      "pre-push": "npm run lint"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axic/ethereumjs-abi.git"
+  },
+  "keywords": [
+    "ethereum",
+    "ABI"
+  ],
+  "author": "Alex Beregszaszi <alex@rtfs.hu>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/axic/ethereumjs-abi/issues"
+  },
+  "homepage": "https://github.com/axic/ethereumjs-abi",
+  "standard": {
+    "globals": [
+      "describe",
+      "it"
+    ]
+  }
+}

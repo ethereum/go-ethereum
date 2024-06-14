@@ -1,0 +1,1 @@
+{"version":3,"file":"secp256k1.d.ts","sourceRoot":"","sources":["src/secp256k1.ts"],"names":[],"mappings":"AAKA,wBAAsB,gBAAgB,IAAI,OAAO,CAAC,UAAU,CAAC,CAO5D;AAED,wBAAgB,oBAAoB,IAAI,UAAU,CAOjD;AAED,cAAc,WAAW,CAAC"}

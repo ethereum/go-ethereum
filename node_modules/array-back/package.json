@@ -1,0 +1,46 @@
+{
+  "name": "array-back",
+  "author": "Lloyd Brookes <75pound@gmail.com>",
+  "version": "3.1.0",
+  "description": "Guarantees an array back",
+  "repository": "https://github.com/75lb/array-back.git",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "keywords": [
+    "to",
+    "convert",
+    "return",
+    "array",
+    "arrayify"
+  ],
+  "engines": {
+    "node": ">=6"
+  },
+  "files": [
+    "index.mjs",
+    "dist/index.js"
+  ],
+  "scripts": {
+    "test": "npm run test:esm && npm run test:js",
+    "test:esm": "node --experimental-modules test.mjs",
+    "test:js": "npm run dist:test && node dist/test.js",
+    "docs": "jsdoc2md -t README.hbs index.mjs -c build/jsdoc.conf > README.md; echo",
+    "cover": "nyc test-runner test.js && nyc report --reporter=text-lcov | coveralls",
+    "dist": "rollup -c build/index.config.js",
+    "dist:test": "rollup -c build/test.config.js",
+    "lint": "standard **/*.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "coveralls": "^3.0.3",
+    "jsdoc-to-markdown": "^4.0.1",
+    "rollup": "^1.9.0",
+    "test-runner": "^0.5.1"
+  },
+  "standard": {
+    "ignore": [
+      "dist",
+      "build"
+    ]
+  }
+}

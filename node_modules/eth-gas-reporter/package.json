@@ -1,0 +1,72 @@
+{
+  "name": "eth-gas-reporter",
+  "version": "0.2.27",
+  "description": "Mocha reporter which shows gas used per unit test.",
+  "main": "index.js",
+  "scripts": {
+    "geth": "./scripts/geth.sh",
+    "test": "./mock/scripts/test.sh",
+    "ci": "./scripts/ci.sh"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "pretty-quick --staged"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cgewecke/eth-gas-reporter.git"
+  },
+  "keywords": [
+    "Ethereum",
+    "solidity",
+    "unit-testing",
+    "truffle",
+    "gas."
+  ],
+  "author": "cgewecke <github.com/cgewecke>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cgewecke/eth-gas-reporter/issues"
+  },
+  "homepage": "https://github.com/cgewecke/eth-gas-reporter#readme",
+  "peerDependencies": {
+    "@codechecks/client": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@codechecks/client": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@solidity-parser/parser": "^0.14.0",
+    "axios": "^1.5.1",
+    "cli-table3": "^0.5.0",
+    "colors": "1.4.0",
+    "ethereum-cryptography": "^1.0.3",
+    "ethers": "^5.7.2",
+    "fs-readdir-recursive": "^1.1.0",
+    "lodash": "^4.17.14",
+    "markdown-table": "^1.1.3",
+    "mocha": "^10.2.0",
+    "req-cwd": "^2.0.0",
+    "sha1": "^1.1.1",
+    "sync-request": "^6.0.0"
+  },
+  "devDependencies": {
+    "@codechecks/client": "^0.1.10",
+    "@nomiclabs/buidler": "^1.4.7",
+    "@nomiclabs/buidler-truffle5": "^1.3.4",
+    "@nomiclabs/buidler-web3": "^1.3.4",
+    "fp-ts": "^1.19.0",
+    "ganache-cli": "^6.12.2",
+    "geth-dev-assistant": "^0.1.7",
+    "husky": "^2.3.0",
+    "prettier": "1.17.1",
+    "pretty-quick": "^1.11.0",
+    "randomstring": "^1.1.5",
+    "truffle": "5.0.12",
+    "web3": "^1.3.0",
+    "yarn": "^1.16.0"
+  }
+}

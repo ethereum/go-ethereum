@@ -1,0 +1,27 @@
+// @flow
+// Generated using flowgen2
+
+import type {Options as AsyncOptions} from 'then-request';
+import {FormData} from './FormData';
+import type {FormDataEntry} from './FormData';
+
+interface BaseOptions {
+  agent?: boolean;
+  cache?: 'file';
+  retry?: boolean;
+  retryDelay?: number;
+  socketTimeout?: number;
+  timeout?: number;
+  body?: string | Buffer;
+}
+export type {BaseOptions};
+
+interface Options {
+  form?: FormData;
+}
+export type {Options};
+
+interface MessageOptions {
+  form?: Array<FormDataEntry>;
+}
+export type {MessageOptions};

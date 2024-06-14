@@ -1,0 +1,79 @@
+{
+  "name": "@nomicfoundation/hardhat-chai-matchers",
+  "version": "2.0.7",
+  "description": "Hardhat utils for testing",
+  "homepage": "https://github.com/nomicfoundation/hardhat/tree/main/packages/hardhat-chai-matchers",
+  "repository": "github:nomicfoundation/hardhat",
+  "author": "Nomic Foundation",
+  "license": "MIT",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "keywords": [
+    "ethereum",
+    "smart-contracts",
+    "hardhat",
+    "testing"
+  ],
+  "files": [
+    "src/",
+    "internal/",
+    "types/",
+    "*.d.ts",
+    "*.d.ts.map",
+    "*.js",
+    "*.js.map",
+    "LICENSE",
+    "README.md"
+  ],
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@types/bn.js": "^5.1.0",
+    "@types/chai": "^4.2.0",
+    "@types/mocha": ">=9.1.0",
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "5.61.0",
+    "@typescript-eslint/parser": "5.61.0",
+    "bignumber.js": "^9.0.2",
+    "bn.js": "^5.1.0",
+    "chai": "^4.2.0",
+    "eslint": "^8.44.0",
+    "eslint-config-prettier": "8.3.0",
+    "eslint-plugin-import": "2.27.5",
+    "eslint-plugin-mocha": "10.4.1",
+    "eslint-plugin-prettier": "3.4.0",
+    "ethers": "^6.1.0",
+    "get-port": "^5.1.1",
+    "hardhat": "^2.9.4",
+    "mocha": "^10.0.0",
+    "prettier": "2.4.1",
+    "rimraf": "^3.0.2",
+    "ts-node": "^10.8.0",
+    "typescript": "~5.0.0",
+    "@nomicfoundation/eslint-plugin-hardhat-internal-rules": "^1.0.2",
+    "@nomicfoundation/eslint-plugin-slow-imports": "^1.0.0",
+    "@nomicfoundation/hardhat-chai-matchers": "2.0.7"
+  },
+  "peerDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "chai": "^4.2.0",
+    "ethers": "^6.1.0",
+    "hardhat": "^2.9.4"
+  },
+  "dependencies": {
+    "@types/chai-as-promised": "^7.1.3",
+    "chai-as-promised": "^7.1.1",
+    "deep-eql": "^4.0.1",
+    "ordinal": "^1.0.3"
+  },
+  "scripts": {
+    "lint": "pnpm prettier --check && pnpm eslint",
+    "lint:fix": "pnpm prettier --write && pnpm eslint --fix",
+    "eslint": "eslint 'src/**/*.ts' 'test/**/*.ts'",
+    "prettier": "prettier \"**/*.{js,md,json}\"",
+    "pretest": "cd ../.. && pnpm build",
+    "test": "mocha --recursive \"test/**/*.ts\" --exit",
+    "test:ci": "pnpm test && node scripts/check-subpath-exports.js",
+    "build": "tsc --build .",
+    "clean": "rimraf dist internal types *.{d.ts,js}{,.map} build-test tsconfig.tsbuildinfo"
+  }
+}

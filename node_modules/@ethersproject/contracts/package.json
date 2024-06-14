@@ -1,0 +1,51 @@
+{
+  "author": "Richard Moore <me@ricmoo.com>",
+  "dependencies": {
+    "@ethersproject/abi": "^5.7.0",
+    "@ethersproject/abstract-provider": "^5.7.0",
+    "@ethersproject/abstract-signer": "^5.7.0",
+    "@ethersproject/address": "^5.7.0",
+    "@ethersproject/bignumber": "^5.7.0",
+    "@ethersproject/bytes": "^5.7.0",
+    "@ethersproject/constants": "^5.7.0",
+    "@ethersproject/logger": "^5.7.0",
+    "@ethersproject/properties": "^5.7.0",
+    "@ethersproject/transactions": "^5.7.0"
+  },
+  "description": "Contract abstraction meta-class for ethers.",
+  "ethereum": "donations.ethers.eth",
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://gitcoin.co/grants/13/ethersjs-complete-simple-and-tiny-2"
+    },
+    {
+      "type": "individual",
+      "url": "https://www.buymeacoffee.com/ricmoo"
+    }
+  ],
+  "gitHead": "ec1b9583039a14a0e0fa15d0a2a6082a2f41cf5b",
+  "keywords": [
+    "Ethereum",
+    "ethers"
+  ],
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "module": "./lib.esm/index.js",
+  "name": "@ethersproject/contracts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/contracts",
+    "type": "git",
+    "url": "git://github.com/ethers-io/ethers.js.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "sideEffects": false,
+  "tarballHash": "0x186a0093d358545fe0bf9282147dc719ccce205447b02766489e395d0b8af9fc",
+  "types": "./lib/index.d.ts",
+  "version": "5.7.0"
+}

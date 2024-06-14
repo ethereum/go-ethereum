@@ -1,0 +1,1 @@
+{"version":3,"file":"debugTraceTransaction.d.ts","sourceRoot":"","sources":["../../../../../src/internal/core/jsonrpc/types/input/debugTraceTransaction.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,CAAC,MAAM,OAAO,CAAC;AAI3B,eAAO,MAAM,qBAAqB;;;;;;;;;;uBAUjC,CAAC;AAEF,MAAM,MAAM,qBAAqB,GAAG,CAAC,CAAC,MAAM,CAAC,OAAO,qBAAqB,CAAC,CAAC"}

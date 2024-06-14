@@ -1,0 +1,1 @@
+{"version":3,"file":"extra.js","sourceRoot":"","sources":["../src/extra.ts"],"names":[],"mappings":"","sourcesContent":["export type Extra = unknown;\nexport type Extras = Record<string, Extra>;\n"]}

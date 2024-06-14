@@ -1,0 +1,69 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.shouldBeJournaled = exports.applyNewMessage = exports.initializeDeploymentState = exports.loadDeploymentState = void 0;
+const deployment_state_reducer_1 = require("./reducers/deployment-state-reducer");
+const execution_result_1 = require("./types/execution-result");
+const messages_1 = require("./types/messages");
+/**
+ * Loads a previous deployment state from its existing messages.
+ * @param messages An async iterator of journal messages.
+ * @returns The deployment state or undefined if no messages were provided.
+ */
+async function loadDeploymentState(deploymentLoader) {
+    let deploymentState;
+    for await (const message of deploymentLoader.readFromJournal()) {
+        deploymentState = (0, deployment_state_reducer_1.deploymentStateReducer)(deploymentState, message);
+    }
+    return deploymentState;
+}
+exports.loadDeploymentState = loadDeploymentState;
+/**
+ * Ininitalizes the deployment state and records the run start message to the journal.
+ *
+ * @param chainId The chain ID.
+ * @param deploymentLoader The deployment loader that will be used to record the message.
+ * @returns The new DeploymentState.
+ */
+async function initializeDeploymentState(chainId, deploymentLoader) {
+    const message = {
+        type: messages_1.JournalMessageType.DEPLOYMENT_INITIALIZE,
+        chainId,
+    };
+    await deploymentLoader.recordToJournal(message);
+    return (0, deployment_state_reducer_1.deploymentStateReducer)(undefined, message);
+}
+exports.initializeDeploymentState = initializeDeploymentState;
+/**
+ * This function applies a new message to the deployment state, recording it to the
+ * journal if needed.
+ *
+ * @param message The message to apply.
+ * @param deploymentState The original deployment state.
+ * @param deploymentLoader The deployment loader that will be used to record the message.
+ * @returns The new deployment state.
+ */
+async function applyNewMessage(message, deploymentState, deploymentLoader) {
+    if (shouldBeJournaled(message)) {
+        await deploymentLoader.recordToJournal(message);
+    }
+    return (0, deployment_state_reducer_1.deploymentStateReducer)(deploymentState, message);
+}
+exports.applyNewMessage = applyNewMessage;
+/**
+ * Returns true if a message should be recorded to the jorunal.
+ */
+function shouldBeJournaled(message) {
+    if (message.type === messages_1.JournalMessageType.DEPLOYMENT_EXECUTION_STATE_COMPLETE ||
+        message.type === messages_1.JournalMessageType.CALL_EXECUTION_STATE_COMPLETE ||
+        message.type === messages_1.JournalMessageType.SEND_DATA_EXECUTION_STATE_COMPLETE) {
+        // We do not journal simulation errors, as we want to re-run those simulations
+        // if the deployment gets resumed.
+        if (message.result.type === execution_result_1.ExecutionResultType.SIMULATION_ERROR ||
+            message.result.type === execution_result_1.ExecutionResultType.STRATEGY_SIMULATION_ERROR) {
+            return false;
+        }
+    }
+    return true;
+}
+exports.shouldBeJournaled = shouldBeJournaled;
+//# sourceMappingURL=deployment-state-helpers.js.map

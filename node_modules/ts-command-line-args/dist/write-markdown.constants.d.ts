@@ -1,0 +1,12 @@
+import { ArgumentConfig, IWriteMarkDown, ParseOptions, UsageGuideConfig } from './contracts';
+export declare const replaceBelowDefault = "[//]: ####ts-command-line-args_write-markdown_replaceBelow";
+export declare const replaceAboveDefault = "[//]: ####ts-command-line-args_write-markdown_replaceAbove";
+export declare const insertCodeBelowDefault = "[//]: # (ts-command-line-args_write-markdown_insertCodeBelow";
+export declare const insertCodeAboveDefault = "[//]: # (ts-command-line-args_write-markdown_insertCodeAbove)";
+export declare const copyCodeBelowDefault = "// ts-command-line-args_write-markdown_copyCodeBelow";
+export declare const copyCodeAboveDefault = "// ts-command-line-args_write-markdown_copyCodeAbove";
+export declare const configImportNameDefault = "usageGuideInfo";
+export declare const footerReplaceBelowMarker = "[//]: ####ts-command-line-args_generated-by-footer";
+export declare const argumentConfig: ArgumentConfig<IWriteMarkDown>;
+export declare const parseOptions: ParseOptions<IWriteMarkDown>;
+export declare const usageGuideInfo: UsageGuideConfig<IWriteMarkDown>;

@@ -1,0 +1,1 @@
+{"version":3,"file":"eip2930.js","sourceRoot":"","sources":["../../../src/capabilities/eip2930.ts"],"names":[],"mappings":";;;AAAA,wCAAwC;AAExC,sCAAqC;AAIrC;;GAEG;AACH,SAAgB,UAAU,CAAC,EAAuB;IAChD,OAAO,MAAM,CAAC,UAAU,CAAC,EAAE,EAAE,MAAM,CAAC,qBAAW,CAAC,iBAAiB,CAAC,EAAE,CAAC,UAAU,EAAE,EAAE,CAAC,MAAM,CAAC,CAAC,CAAC,CAAA;AAC/F,CAAC;AAFD,gCAEC"}

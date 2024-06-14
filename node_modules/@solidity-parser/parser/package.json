@@ -1,0 +1,81 @@
+{
+  "name": "@solidity-parser/parser",
+  "version": "0.14.5",
+  "description": "A Solidity parser built from a robust ANTLR 4 grammar",
+  "main": "dist/index.cjs.js",
+  "browser": {
+    "fs": false,
+    "path": false
+  },
+  "files": [
+    "dist/**/*",
+    "src/**/*"
+  ],
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "antlr": "antlr4ts -visitor antlr/Solidity.g4 -o src",
+    "build:browser": "esbuild src/index.ts --outfile=dist/index.iife.js --bundle --loader:.tokens=file --sourcemap --format=iife --global-name=SolidityParser --define:__dirname=true --define:BROWSER=true --inject:./process-shim.js",
+    "build:node": "esbuild src/index.ts --outfile=dist/index.cjs.js --bundle  --loader:.tokens=file --sourcemap --format=cjs --platform=node --target=node12",
+    "build": "npm run build:node && npm run build:browser && npm run generate-types && npm run copy-files",
+    "generate-types": "tsc",
+    "copy-files": "shx mkdir -p dist/antlr && shx cp './src/antlr/*tokens' dist/antlr",
+    "prettier": "prettier --write 'src/**/*' 'test/**/*'",
+    "prepack": "npm run build",
+    "lint": "eslint src test",
+    "test": "npm run test:node && npm run test:browser",
+    "test:node": "mocha",
+    "test:browser": "karma start karma.conf.js",
+    "test:integration": "mocha --config ./.mocharc-integration.js test-integration",
+    "test:coverage": "nyc mocha"
+  },
+  "authors": [
+    "Franco Victorio",
+    "Nick Addison",
+    "Gonçalo Sá <goncalo.sa@consensys.net>",
+    "Federico Bond <federicobond@gmail.com>"
+  ],
+  "homepage": "https://github.com/solidity-parser/parser",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/solidity-parser/parser"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "antlr4ts": "^0.5.0-alpha.4"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.2.16",
+    "@types/mocha": "^8.2.2",
+    "@types/node": "^14.14.41",
+    "@typescript-eslint/eslint-plugin": "^4.9.0",
+    "@typescript-eslint/parser": "^4.9.0",
+    "antlr4": "^4.9.0",
+    "antlr4ts-cli": "^0.5.0-alpha.4",
+    "assert": "^2.0.0",
+    "chai": "^4.2.0",
+    "esbuild": "^0.11.13",
+    "esbuild-register": "^2.5.0",
+    "eslint": "^7.15.0",
+    "eslint-plugin-import": "^2.18.2",
+    "eslint-plugin-node": "^9.2.0",
+    "eslint-plugin-promise": "^4.2.1",
+    "eslint-plugin-standard": "^4.0.1",
+    "karma": "^6.3.2",
+    "karma-chrome-launcher": "^3.1.0",
+    "karma-mocha": "^2.0.1",
+    "mocha": "^6.2.0",
+    "nyc": "^14.1.1",
+    "prettier": "^2.2.1",
+    "puppeteer": "^9.0.0",
+    "shx": "^0.3.3",
+    "ts-node": "^9.1.1",
+    "typescript": "^4.1.2",
+    "util": "^0.12.3",
+    "yarn": "^1.17.3"
+  },
+  "nyc": {
+    "extension": [
+      ".ts"
+    ]
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "workerpool",
+  "license": "Apache-2.0",
+  "version": "6.2.1",
+  "description": "Offload tasks to a pool of workers on node.js and in the browser",
+  "homepage": "https://github.com/josdejong/workerpool",
+  "author": "Jos de Jong <wjosdejong@gmail.com> (https://github.com/josdejong)",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/josdejong/workerpool.git"
+  },
+  "keywords": [
+    "worker",
+    "web worker",
+    "cluster",
+    "pool",
+    "isomorphic"
+  ],
+  "main": "src/index.js",
+  "browser": "dist/workerpool.js",
+  "files": [
+    "dist",
+    "src",
+    "HISTORY.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "gulp",
+    "watch": "gulp watch",
+    "test": "npm run build && mocha test --timeout 2000",
+    "test:debug": "npm run build && mocha debug test --timeout 10000",
+    "coverage": "npm run build && istanbul cover _mocha -- test; echo \"\nCoverage report is available at ./coverage/lcov-report/index.html\"",
+    "prepublishOnly": "npm run test"
+  },
+  "devDependencies": {
+    "@babel/core": "7.17.9",
+    "@babel/preset-env": "7.16.11",
+    "babel-loader": "8.2.4",
+    "date-format": "4.0.6",
+    "del": "6.0.0",
+    "fancy-log": "2.0.0",
+    "find-process": "1.4.7",
+    "gulp": "4.0.2",
+    "handlebars": "4.7.7",
+    "istanbul": "0.4.5",
+    "mocha": "9.2.2",
+    "uglify-js": "3.15.4",
+    "webpack": "5.72.0"
+  },
+  "dependencies": {}
+}

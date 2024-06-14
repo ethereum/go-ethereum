@@ -1,0 +1,1 @@
+{"version":3,"file":"user.js","sourceRoot":"","sources":["../src/user.ts"],"names":[],"mappings":"","sourcesContent":["/** JSDoc */\nexport interface User {\n  [key: string]: any;\n  id?: string;\n  ip_address?: string;\n  email?: string;\n  username?: string;\n}\n"]}

@@ -1,0 +1,15 @@
+// @flow
+// Generated using flowgen2
+
+type HttpVerb =
+  | 'GET'
+  | 'HEAD'
+  | 'POST'
+  | 'PUT'
+  | 'DELETE'
+  | 'CONNECT'
+  | 'OPTIONS'
+  | 'TRACE'
+  | 'PATCH';
+
+export type {HttpVerb};

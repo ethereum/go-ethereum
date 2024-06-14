@@ -1,0 +1,17 @@
+// @flow
+// Generated using flowgen2
+
+import type {Response} from 'then-request';
+import type {HttpVerb} from 'then-request';
+import type {MessageOptions} from './Options';
+
+type Req = {m: HttpVerb, u: string, o?: MessageOptions};
+export type {Req};
+
+interface Res {
+  s: $PropertyType<Response, 'statusCode'>;
+  h: $PropertyType<Response, 'headers'>;
+  b: $PropertyType<Response, 'body'>;
+  u: $PropertyType<Response, 'url'>;
+}
+export type {Res};

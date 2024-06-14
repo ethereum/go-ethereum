@@ -1,0 +1,64 @@
+{
+  "name": "cbor",
+  "version": "8.1.0",
+  "description": "Encode and parse data in the Concise Binary Object Representation (CBOR) data format (RFC8949).",
+  "main": "./lib/cbor.js",
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/hildjj/node-cbor.git",
+    "directory": "packages/cbor"
+  },
+  "homepage": "https://github.com/hildjj/node-cbor/tree/main/packages/cbor",
+  "directories": {
+    "lib": "lib"
+  },
+  "browser": {
+    "fs": false
+  },
+  "scripts": {
+    "clean": "rimraf coverage .nyc_output/ docs",
+    "lint": "eslint lib/*.js test/*.js",
+    "coverage": "nyc -r lcov npm test",
+    "test": "ava test/*.ava.js",
+    "release": "npm version patch && git push --follow-tags && npm publish",
+    "predev": "npm run coverage",
+    "dev": "light-server -q -s. -w 'lib/*.js,test/*.js # npm run coverage' -o /coverage/lcov-report/index.html",
+    "types": "tsc"
+  },
+  "keywords": [
+    "coap",
+    "cbor",
+    "json",
+    "rfc7049",
+    "rfc8949"
+  ],
+  "author": {
+    "name": "Joe Hildebrand",
+    "email": "joe-github@cursive.net"
+  },
+  "contributors": [
+    "Patrick Gansterer <paroga@paroga.com> (http://paroga.com/)",
+    "Artyom Yagilev <github@scorpi.org> (http://scorpi.org/)",
+    "Denis Lapaev <den@lapaev.me> (http://lapaev.me/)",
+    "Ruben Bridgewater <ruben@bridgewater.de>",
+    "Burt Harris <Burt_Harris_cbor@azxs.33mail.com>",
+    "Jakub Arbet <hi@jakubarbet.me> (https://jakubarbet.me/)"
+  ],
+  "types": "./types/lib/cbor.d.ts",
+  "dependencies": {
+    "nofilter": "^3.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "bignumber.js": "^9.0.1",
+    "garbage": "~0.0.0",
+    "p-event": "^4.2.0",
+    "rimraf": "^3.0.2"
+  },
+  "license": "MIT",
+  "readmeFilename": "README.md",
+  "engines": {
+    "node": ">=12.19"
+  },
+  "gitHead": "0b4f6e3fc2c92bda222e0249ec70e59d4d7bca4a"
+}

@@ -41,6 +41,11 @@ jobs:
       - name: Deploy contracts
         run: npx hardhat ignition deploy ./ignition/modules/Lock.js
 
+      - name: Install Hardhat and dependencies
+        run: |
+            npm install --save-dev hardhat @nomicfoundation/hardhat-toolbox
+
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:

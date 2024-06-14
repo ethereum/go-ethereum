@@ -1,0 +1,40 @@
+{
+  "name": "klaw",
+  "version": "1.3.1",
+  "description": "File system walker with Readable stream interface.",
+  "main": "./src/index.js",
+  "scripts": {
+    "lint": "standard",
+    "test": "npm run lint && npm run unit",
+    "unit": "tape tests/**/*.js | tap-spec"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jprichardson/node-klaw.git"
+  },
+  "keywords": [
+    "walk",
+    "walker",
+    "fs",
+    "fs-extra",
+    "readable",
+    "streams"
+  ],
+  "author": "JP Richardson",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jprichardson/node-klaw/issues"
+  },
+  "homepage": "https://github.com/jprichardson/node-klaw#readme",
+  "devDependencies": {
+    "mkdirp": "^0.5.1",
+    "mock-fs": "^3.8.0",
+    "rimraf": "^2.4.3",
+    "standard": "^8.4.0",
+    "tap-spec": "^4.1.1",
+    "tape": "^4.2.2"
+  },
+  "optionalDependencies": {
+    "graceful-fs": "^4.1.9"
+  }
+}

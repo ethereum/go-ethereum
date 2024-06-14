@@ -1,0 +1,5 @@
+// @flow
+// Generated using flowgen2
+
+declare function handleQs(url: string, query: {[key: string]: any}): string;
+export default handleQs;

@@ -1,0 +1,63 @@
+{
+  "name": "@nomicfoundation/solidity-analyzer",
+  "version": "0.1.2",
+  "repository": "github:NomicFoundation/solidity-analyzer",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "Cargo.toml",
+    "Cargo.lock",
+    "build.rs",
+    "src/**/*.rs"
+  ],
+  "napi": {
+    "name": "solidity-analyzer",
+    "triples": {
+      "defaults": false,
+      "additional": [
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-unknown-linux-musl",
+        "x86_64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "x86_64-pc-windows-msvc"
+      ]
+    }
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@napi-rs/cli": "2.18.3",
+    "ava": "5.1.1",
+    "prettier": "2.6.2"
+  },
+  "ava": {
+    "timeout": "3m"
+  },
+  "engines": {
+    "node": ">= 12"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "ava",
+    "universal": "napi universal",
+    "version": "napi version",
+    "clean": "rm -rf index.js index.d.ts *.node target",
+    "prettier": "prettier --write *.md *.json *.js *.d.ts __test__/*.mjs"
+  },
+  "packageManager": "yarn@4.2.2",
+  "optionalDependencies": {
+    "@nomicfoundation/solidity-analyzer-darwin-arm64": "0.1.2",
+    "@nomicfoundation/solidity-analyzer-darwin-x64": "0.1.2",
+    "@nomicfoundation/solidity-analyzer-linux-arm64-gnu": "0.1.2",
+    "@nomicfoundation/solidity-analyzer-linux-arm64-musl": "0.1.2",
+    "@nomicfoundation/solidity-analyzer-linux-x64-gnu": "0.1.2",
+    "@nomicfoundation/solidity-analyzer-linux-x64-musl": "0.1.2",
+    "@nomicfoundation/solidity-analyzer-win32-x64-msvc": "0.1.2"
+  }
+}
