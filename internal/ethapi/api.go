@@ -404,13 +404,13 @@ func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args SendTxArgs
 	// No need to obtain the noncelock mutex, since we won't be sending this
 	// tx into the transaction pool, but right back to the user
 	if args.Gas == nil {
-		return nil, fmt.Errorf("gas not specified")
+		return nil, errors.New("gas not specified")
 	}
 	if args.GasPrice == nil {
-		return nil, fmt.Errorf("gasPrice not specified")
+		return nil, errors.New("gasPrice not specified")
 	}
 	if args.Nonce == nil {
-		return nil, fmt.Errorf("nonce not specified")
+		return nil, errors.New("nonce not specified")
 	}
 	signed, err := s.signTransaction(ctx, args, passwd)
 	if err != nil {
@@ -478,7 +478,7 @@ func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Byt
 		return common.Address{}, fmt.Errorf("signature must be %d bytes long", crypto.SignatureLength)
 	}
 	if sig[crypto.RecoveryIDOffset] != 27 && sig[crypto.RecoveryIDOffset] != 28 {
-		return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
+		return common.Address{}, errors.New("invalid Ethereum signature (V is not 27 or 28)")
 	}
 	sig[crypto.RecoveryIDOffset] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
@@ -915,7 +915,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 			}
 			maxMasternodes = s.b.ChainConfig().XDPoS.V2.Config(uint64(round)).MaxMasternodes
 		} else {
-			return result, fmt.Errorf("undefined XDPoS consensus engine")
+			return result, errors.New("undefined XDPoS consensus engine")
 		}
 	} else if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
 		maxMasternodes = common.MaxMasternodesV2
@@ -1106,7 +1106,7 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 			}
 			maxMasternodes = s.b.ChainConfig().XDPoS.V2.Config(uint64(round)).MaxMasternodes
 		} else {
-			return result, fmt.Errorf("undefined XDPoS consensus engine")
+			return result, errors.New("undefined XDPoS consensus engine")
 		}
 	} else if s.b.ChainConfig().IsTIPIncreaseMasternodes(block.Number()) {
 		maxMasternodes = common.MaxMasternodesV2
@@ -3348,13 +3348,13 @@ type SignTransactionResult struct {
 // the given from address and it needs to be unlocked.
 func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args SendTxArgs) (*SignTransactionResult, error) {
 	if args.Gas == nil {
-		return nil, fmt.Errorf("gas not specified")
+		return nil, errors.New("gas not specified")
 	}
 	if args.GasPrice == nil {
-		return nil, fmt.Errorf("gasPrice not specified")
+		return nil, errors.New("gasPrice not specified")
 	}
 	if args.Nonce == nil {
-		return nil, fmt.Errorf("nonce not specified")
+		return nil, errors.New("nonce not specified")
 	}
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
@@ -3397,7 +3397,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 // the given transaction from the pool and reinsert it with the new gas price and limit.
 func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxArgs, gasPrice *hexutil.Big, gasLimit *hexutil.Uint64) (common.Hash, error) {
 	if sendArgs.Nonce == nil {
-		return common.Hash{}, fmt.Errorf("missing transaction nonce in transaction spec")
+		return common.Hash{}, errors.New("missing transaction nonce in transaction spec")
 	}
 	if err := sendArgs.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err
@@ -3494,7 +3494,7 @@ func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
 		LDB() *leveldb.DB
 	})
 	if !ok {
-		return "", fmt.Errorf("chaindbProperty does not work for memory databases")
+		return "", errors.New("chaindbProperty does not work for memory databases")
 	}
 	if property == "" {
 		property = "leveldb.stats"
@@ -3509,7 +3509,7 @@ func (api *PrivateDebugAPI) ChaindbCompact() error {
 		LDB() *leveldb.DB
 	})
 	if !ok {
-		return fmt.Errorf("chaindbCompact does not work for memory databases")
+		return errors.New("chaindbCompact does not work for memory databases")
 	}
 	for b := byte(0); b < 255; b++ {
 		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1))

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -178,7 +179,7 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 	amountInt := new(big.Int)
 	amount, ok := amountInt.SetString("60000", 10)
 	if !ok {
-		return nil, fmt.Errorf("big int init failed")
+		return nil, errors.New("big int init failed")
 	}
 	to := common.MasternodeVotingSMCBinary
 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
@@ -321,7 +322,7 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 		// Sign all the things for v1 block use v1 sigHash function
 		sighash, err := signFn(accounts.Account{Address: signer}, blockchain.Engine().(*XDPoS.XDPoS).SigHash(header).Bytes())
 		if err != nil {
-			panic(fmt.Errorf("Error when sign last v1 block hash during test block creation"))
+			panic(errors.New("Error when sign last v1 block hash during test block creation"))
 		}
 		copy(header.Extra[len(header.Extra)-utils.ExtraSeal:], sighash)
 	}

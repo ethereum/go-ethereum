@@ -17,6 +17,7 @@
 package network
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -77,7 +78,7 @@ type HiveParams struct {
 	*kademlia.KadParams
 }
 
-//create default params
+// create default params
 func NewDefaultHiveParams() *HiveParams {
 	kad := kademlia.NewDefaultKadParams()
 	// kad.BucketSize = bucketSize
@@ -90,8 +91,8 @@ func NewDefaultHiveParams() *HiveParams {
 	}
 }
 
-//this can only finally be set after all config options (file, cmd line, env vars)
-//have been evaluated
+// this can only finally be set after all config options (file, cmd line, env vars)
+// have been evaluated
 func (self *HiveParams) Init(path string) {
 	self.KadDbPath = filepath.Join(path, "bzz-peers.json")
 }
@@ -338,7 +339,7 @@ func (self *peer) LastActive() time.Time {
 func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
 	p, ok := node.(*peer)
 	if !ok {
-		return fmt.Errorf("invalid type")
+		return errors.New("invalid type")
 	}
 	if record.Meta == nil {
 		log.Debug(fmt.Sprintf("no sync state for node record %v setting default", record))

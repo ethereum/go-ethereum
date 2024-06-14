@@ -46,7 +46,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/swarm/storage"
 )
 
-//metrics variables
+// metrics variables
 var (
 	storeRequestMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.storerequest.count", nil)
 	retrieveRequestMsgCounter = metrics.NewRegisteredCounter("network.protocol.msg.retrieverequest.count", nil)
@@ -133,15 +133,15 @@ func Bzz(cloud StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess 
 
 /*
 the main protocol loop that
- * does the handshake by exchanging statusMsg
- * if peer is valid and accepted, registers with the hive
- * then enters into a forever loop handling incoming messages
- * storage and retrieval related queries coming via bzz are dispatched to StorageHandler
- * peer-related messages are dispatched to the hive
- * payment related messages are relayed to SWAP service
- * on disconnect, unregister the peer in the hive (note RemovePeer in the post-disconnect hook)
- * whenever the loop terminates, the peer will disconnect with Subprotocol error
- * whenever handlers return an error the loop terminates
+  - does the handshake by exchanging statusMsg
+  - if peer is valid and accepted, registers with the hive
+  - then enters into a forever loop handling incoming messages
+  - storage and retrieval related queries coming via bzz are dispatched to StorageHandler
+  - peer-related messages are dispatched to the hive
+  - payment related messages are relayed to SWAP service
+  - on disconnect, unregister the peer in the hive (note RemovePeer in the post-disconnect hook)
+  - whenever the loop terminates, the peer will disconnect with Subprotocol error
+  - whenever handlers return an error the loop terminates
 */
 func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, networkId uint64, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 
@@ -246,7 +246,7 @@ func (self *bzz) handle() error {
 		if req.isLookup() {
 			log.Trace(fmt.Sprintf("self lookup for %v: responding with peers only...", req.from))
 		} else if req.Key == nil {
-			return fmt.Errorf("protocol handler: req.Key == nil || req.Timeout == nil")
+			return errors.New("protocol handler: req.Key == nil || req.Timeout == nil")
 		} else {
 			// swap accounting is done within netStore
 			self.storage.HandleRetrieveRequestMsg(&req, &peer{bzz: self})
@@ -523,7 +523,7 @@ func (self *bzz) peers(req *peersMsgData) error {
 
 func (self *bzz) send(msg uint64, data interface{}) error {
 	if self.hive.blockWrite {
-		return fmt.Errorf("network write blocked")
+		return errors.New("network write blocked")
 	}
 	log.Trace(fmt.Sprintf("-> %v: %v (%T) to %v", msg, data, data, self))
 	err := p2p.Send(self.rw, msg, data)

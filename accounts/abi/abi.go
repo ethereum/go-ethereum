@@ -79,19 +79,19 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 // Unpack output in v according to the abi specification
 func (abi ABI) Unpack(v interface{}, name string, output []byte) (err error) {
 	if len(output) == 0 {
-		return fmt.Errorf("abi: unmarshalling empty output")
+		return errors.New("abi: unmarshalling empty output")
 	}
 	// since there can't be naming collisions with contracts and events,
 	// we need to decide whether we're calling a method or an event
 	if method, ok := abi.Methods[name]; ok {
 		if len(output)%32 != 0 {
-			return fmt.Errorf("abi: improperly formatted output")
+			return errors.New("abi: improperly formatted output")
 		}
 		return method.Outputs.Unpack(v, output)
 	} else if event, ok := abi.Events[name]; ok {
 		return event.Inputs.Unpack(v, output)
 	}
-	return fmt.Errorf("abi: could not locate named method or event")
+	return errors.New("abi: could not locate named method or event")
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface

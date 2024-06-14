@@ -335,7 +335,7 @@ func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) 
 		return errNoEventSignature
 	}
 	if log.Topics[0] != c.abi.Events[event].Id() {
-		return fmt.Errorf("event signature mismatch")
+		return errors.New("event signature mismatch")
 	}
 	if len(log.Data) > 0 {
 		if err := c.abi.Unpack(out, event, log.Data); err != nil {

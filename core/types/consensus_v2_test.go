@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -15,11 +16,11 @@ import (
 // Decode extra fields for consensus version >= 2 (XDPoS 2.0 and future versions)
 func DecodeBytesExtraFields(b []byte, val interface{}) error {
 	if len(b) == 0 {
-		return fmt.Errorf("extra field is 0 length")
+		return errors.New("extra field is 0 length")
 	}
 	switch b[0] {
 	case 1:
-		return fmt.Errorf("consensus version 1 is not applicable for decoding extra fields")
+		return errors.New("consensus version 1 is not applicable for decoding extra fields")
 	case 2:
 		return rlp.DecodeBytes(b[1:], val)
 	default:

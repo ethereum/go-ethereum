@@ -19,6 +19,7 @@ package network
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -143,8 +144,8 @@ func NewDefaultSyncParams() *SyncParams {
 	}
 }
 
-//this can only finally be set after all config options (file, cmd line, env vars)
-//have been evaluated
+// this can only finally be set after all config options (file, cmd line, env vars)
+// have been evaluated
 func (self *SyncParams) Init(path string) {
 	self.RequestDbPath = filepath.Join(path, "requests")
 }
@@ -237,11 +238,11 @@ func encodeSync(state *syncState) (*json.RawMessage, error) {
 
 func decodeSync(meta *json.RawMessage) (*syncState, error) {
 	if meta == nil {
-		return nil, fmt.Errorf("unable to deserialise sync state from <nil>")
+		return nil, errors.New("unable to deserialise sync state from <nil>")
 	}
 	data := []byte(*(meta))
 	if len(data) == 0 {
-		return nil, fmt.Errorf("unable to deserialise sync state from <nil>")
+		return nil, errors.New("unable to deserialise sync state from <nil>")
 	}
 	state := &syncState{DbSyncState: &storage.DbSyncState{}}
 	err := json.Unmarshal(data, state)
@@ -249,22 +250,22 @@ func decodeSync(meta *json.RawMessage) (*syncState, error) {
 }
 
 /*
- sync implements the syncing script
- * first all items left in the request Db are replayed
-   * type = StaleSync
-   * Mode: by default once again via confirmation roundtrip
-   * Priority: the items are replayed as the proirity specified for StaleSync
-   * but within the order respects earlier priority level of request
- * after all items are consumed for a priority level, the the respective
-  queue for delivery requests is open (this way new reqs not written to db)
-  (TODO: this should be checked)
- * the sync state provided by the remote peer is used to sync history
-   * all the backlog from earlier (aborted) syncing is completed starting from latest
-   * if Last  < LastSeenAt then all items in between then process all
-     backlog from upto last disconnect
-   * if Last > 0 &&
+sync implements the syncing script
+* first all items left in the request Db are replayed
+  - type = StaleSync
+  - Mode: by default once again via confirmation roundtrip
+  - Priority: the items are replayed as the proirity specified for StaleSync
+  - but within the order respects earlier priority level of request
+  - after all items are consumed for a priority level, the the respective
+    queue for delivery requests is open (this way new reqs not written to db)
+    (TODO: this should be checked)
+  - the sync state provided by the remote peer is used to sync history
+  - all the backlog from earlier (aborted) syncing is completed starting from latest
+  - if Last  < LastSeenAt then all items in between then process all
+    backlog from upto last disconnect
+  - if Last > 0 &&
 
- sync is called from the syncer constructor and is not supposed to be used externally
+sync is called from the syncer constructor and is not supposed to be used externally
 */
 func (self *syncer) sync() {
 	state := self.state
@@ -406,11 +407,11 @@ func (self *syncer) sendUnsyncedKeys() {
 }
 
 // assembles a new batch of unsynced keys
-// * keys are drawn from the key buffers in order of priority queue
-// * if the queues of priority for History (HistoryReq) or higher are depleted,
-//   historical data is used so historical items are lower priority within
-//   their priority group.
-// * Order of historical data is unspecified
+//   - keys are drawn from the key buffers in order of priority queue
+//   - if the queues of priority for History (HistoryReq) or higher are depleted,
+//     historical data is used so historical items are lower priority within
+//     their priority group.
+//   - Order of historical data is unspecified
 func (self *syncer) syncUnsyncedKeys() {
 	// send out new
 	var unsynced []*syncRequest
@@ -621,19 +622,19 @@ func (self *syncer) syncDeliveries() {
 }
 
 /*
- addRequest handles requests for delivery
- it accepts 4 types:
+addRequest handles requests for delivery
+it accepts 4 types:
 
- * storeRequestMsgData: coming from netstore propagate response
- * chunk: coming from forwarding (questionable: id?)
- * key: from incoming syncRequest
- * syncDbEntry: key,id encoded in db
+* storeRequestMsgData: coming from netstore propagate response
+* chunk: coming from forwarding (questionable: id?)
+* key: from incoming syncRequest
+* syncDbEntry: key,id encoded in db
 
- If sync mode is on for the type of request, then
- it sends the request to the keys queue of the correct priority
- channel buffered with capacity (SyncBufferSize)
+If sync mode is on for the type of request, then
+it sends the request to the keys queue of the correct priority
+channel buffered with capacity (SyncBufferSize)
 
- If sync mode is off then, requests are directly sent to deliveries
+If sync mode is off then, requests are directly sent to deliveries
 */
 func (self *syncer) addRequest(req interface{}, ty int) {
 	// retrieve priority for request type name int8

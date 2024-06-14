@@ -2197,10 +2197,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 	if oldBlock == nil {
-		return fmt.Errorf("Invalid old chain")
+		return errors.New("Invalid old chain")
 	}
 	if newBlock == nil {
-		return fmt.Errorf("Invalid new chain")
+		return errors.New("Invalid new chain")
 	}
 
 	for {
@@ -2216,10 +2216,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 		oldBlock, newBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1), bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if oldBlock == nil {
-			return fmt.Errorf("Invalid old chain")
+			return errors.New("Invalid old chain")
 		}
 		if newBlock == nil {
-			return fmt.Errorf("Invalid new chain")
+			return errors.New("Invalid new chain")
 		}
 	}
 	// Ensure XDPoS engine committed block will be not reverted

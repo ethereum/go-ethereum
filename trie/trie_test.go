@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -446,7 +447,7 @@ func runRandTest(rt randTest) bool {
 				checktr.Update(it.Key, it.Value)
 			}
 			if tr.Hash() != checktr.Hash() {
-				rt[i].err = fmt.Errorf("hash mismatch in opItercheckhash")
+				rt[i].err = errors.New("hash mismatch in opItercheckhash")
 			}
 		}
 		// Abort the test on error.

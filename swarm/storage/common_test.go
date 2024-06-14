@@ -19,6 +19,7 @@ package storage
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -48,7 +49,7 @@ func testDataReader(l int) (r io.Reader) {
 
 func (self *brokenLimitedReader) Read(buf []byte) (int, error) {
 	if self.off+len(buf) > self.errAt {
-		return 0, fmt.Errorf("Broken reader")
+		return 0, errors.New("Broken reader")
 	}
 	self.off += len(buf)
 	return self.lr.Read(buf)

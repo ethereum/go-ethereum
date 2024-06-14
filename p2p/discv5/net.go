@@ -1063,7 +1063,7 @@ func (net *Network) checkPacket(n *Node, ev nodeEvent, pkt *ingressPacket) error
 	case pongPacket:
 		if !bytes.Equal(pkt.data.(*pong).ReplyTok, n.pingEcho) {
 			// fmt.Println("pong reply token mismatch")
-			return fmt.Errorf("pong reply token mismatch")
+			return errors.New("pong reply token mismatch")
 		}
 		n.pingEcho = nil
 	}

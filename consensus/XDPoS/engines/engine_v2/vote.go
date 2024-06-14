@@ -1,6 +1,7 @@
 package engine_v2
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -78,7 +79,7 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 	epochInfo, err := x.getEpochSwitchInfo(chain, chain.CurrentHeader(), chain.CurrentHeader().Hash())
 	if err != nil {
 		log.Error("[voteHandler] Error when getting epoch switch Info", "error", err)
-		return fmt.Errorf("Fail on voteHandler due to failure in getting epoch switch info")
+		return errors.New("Fail on voteHandler due to failure in getting epoch switch info")
 	}
 
 	certThreshold := x.config.V2.Config(uint64(voteMsg.ProposedBlockInfo.Round)).CertThreshold
@@ -177,7 +178,7 @@ func (x *XDPoS_v2) onVotePoolThresholdReached(chain consensus.ChainReader, poole
 	epochInfo, err := x.getEpochSwitchInfo(chain, chain.CurrentHeader(), chain.CurrentHeader().Hash())
 	if err != nil {
 		log.Error("[voteHandler] Error when getting epoch switch Info", "error", err)
-		return fmt.Errorf("Fail on voteHandler due to failure in getting epoch switch info")
+		return errors.New("Fail on voteHandler due to failure in getting epoch switch info")
 	}
 
 	// Skip and wait for the next vote to process again if valid votes is less than what we required

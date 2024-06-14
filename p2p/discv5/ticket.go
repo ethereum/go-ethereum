@@ -19,6 +19,7 @@ package discv5
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -95,7 +96,7 @@ func pongToTicket(localTime mclock.AbsTime, topics []Topic, node *Node, p *ingre
 		return nil, fmt.Errorf("bad wait period list: got %d values, want %d", len(topics), len(wps))
 	}
 	if rlpHash(topics) != p.data.(*pong).TopicHash {
-		return nil, fmt.Errorf("bad topic hash")
+		return nil, errors.New("bad topic hash")
 	}
 	t := &ticket{
 		issueTime: localTime,

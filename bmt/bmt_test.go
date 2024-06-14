@@ -19,6 +19,7 @@ package bmt
 import (
 	"bytes"
 	crand "crypto/rand"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -288,7 +289,7 @@ func TestHasherConcurrency(t *testing.T) {
 	var err error
 	select {
 	case <-time.NewTimer(5 * time.Second).C:
-		err = fmt.Errorf("timed out")
+		err = errors.New("timed out")
 	case err = <-errc:
 	}
 	if err != nil {
@@ -321,7 +322,7 @@ func testHasherCorrectness(bmt hash.Hash, hasher BaseHasher, d []byte, n, count 
 	}()
 	select {
 	case <-timeout.C:
-		err = fmt.Errorf("BMT hash calculation timed out")
+		err = errors.New("BMT hash calculation timed out")
 	case err = <-c:
 	}
 	return err

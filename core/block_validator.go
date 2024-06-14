@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
@@ -113,7 +114,7 @@ func (v *BlockValidator) ValidateTradingOrder(statedb *state.StateDB, XDCxStated
 	}
 	XDCXService := XDPoSEngine.GetXDCXService()
 	if XDCXService == nil {
-		return fmt.Errorf("XDCx not found")
+		return errors.New("XDCx not found")
 	}
 	log.Debug("verify matching transaction found a TxMatches Batch", "numTxMatches", len(txMatchBatch.Data))
 	tradingResult := map[common.Hash]tradingstate.MatchingResult{}
@@ -149,11 +150,11 @@ func (v *BlockValidator) ValidateLendingOrder(statedb *state.StateDB, lendingSta
 	}
 	XDCXService := XDPoSEngine.GetXDCXService()
 	if XDCXService == nil {
-		return fmt.Errorf("XDCx not found")
+		return errors.New("XDCx not found")
 	}
 	lendingService := XDPoSEngine.GetLendingService()
 	if lendingService == nil {
-		return fmt.Errorf("lendingService not found")
+		return errors.New("lendingService not found")
 	}
 	log.Debug("verify lendingItem ", "numItems", len(batch.Data))
 	lendingResult := map[common.Hash]lendingstate.MatchingResult{}

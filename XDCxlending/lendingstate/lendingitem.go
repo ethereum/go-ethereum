@@ -1,6 +1,7 @@
 package lendingstate
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -359,7 +360,7 @@ func (l *LendingItem) VerifyLendingSignature() error {
 	tx.ImportSignature(V, R, S)
 	from, _ := types.LendingSender(types.LendingTxSigner{}, tx)
 	if from != tx.UserAddress() {
-		return fmt.Errorf("verify lending item: invalid signature")
+		return errors.New("verify lending item: invalid signature")
 	}
 	return nil
 }
@@ -473,10 +474,10 @@ func VerifyBalance(isXDCXLendingFork bool, statedb *state.StateDB, lendingStateD
 			}
 			return nil
 		default:
-			return fmt.Errorf("VerifyBalance: unknown lending side")
+			return errors.New("VerifyBalance: unknown lending side")
 		}
 	default:
-		return fmt.Errorf("VerifyBalance: unknown lending type")
+		return errors.New("VerifyBalance: unknown lending type")
 	}
 	return nil
 }

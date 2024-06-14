@@ -18,6 +18,7 @@ package api
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -69,7 +70,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 		err = filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
 			if (err == nil) && !info.IsDir() {
 				if len(path) <= start {
-					return fmt.Errorf("Path is too short")
+					return errors.New("Path is too short")
 				}
 				if path[:start] != localpath {
 					return fmt.Errorf("Path prefix of '%s' does not match localpath '%s'", path, localpath)
@@ -86,7 +87,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 		dir := filepath.Dir(localpath)
 		start = len(dir)
 		if len(localpath) <= start {
-			return "", fmt.Errorf("Path is too short")
+			return "", errors.New("Path is too short")
 		}
 		if localpath[:start] != dir {
 			return "", fmt.Errorf("Path prefix of '%s' does not match dir '%s'", localpath, dir)
@@ -240,7 +241,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 		case done <- true:
 			wg.Add(1)
 		case <-quitC:
-			return fmt.Errorf("aborted")
+			return errors.New("aborted")
 		}
 		go func(i int, entry *downloadListEntry) {
 			defer wg.Done()
@@ -263,7 +264,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	case err = <-errC:
 		return err
 	case <-quitC:
-		return fmt.Errorf("aborted")
+		return errors.New("aborted")
 	}
 }
 

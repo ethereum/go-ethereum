@@ -291,7 +291,7 @@ func (p *peer) RequestHelperTrieProofs(reqID, cost uint64, reqs []HelperTrieReq)
 		reqsV1 := make([]ChtReq, len(reqs))
 		for i, req := range reqs {
 			if req.Type != htCanonical || req.AuxReq != auxHeader || len(req.Key) != 8 {
-				return fmt.Errorf("Request invalid in LES/1 mode")
+				return errors.New("Request invalid in LES/1 mode")
 			}
 			blockNum := binary.BigEndian.Uint64(req.Key)
 			// convert HelperTrie request to old CHT request
