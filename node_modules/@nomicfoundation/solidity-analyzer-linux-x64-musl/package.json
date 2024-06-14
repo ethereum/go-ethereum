@@ -1,0 +1,13 @@
+{
+  "name": "@nomicfoundation/solidity-analyzer-linux-x64-musl",
+  "version": "0.1.2",
+  "main": "solidity-analyzer.linux-x64-musl.node",
+  "files": [
+    "solidity-analyzer.linux-x64-musl.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 12"
+  },
+  "repository": "github:NomicFoundation/solidity-analyzer"
+}

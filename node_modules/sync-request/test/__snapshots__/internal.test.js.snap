@@ -1,0 +1,9 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`DELETE request 1`] = `"ok"`;
+
+exports[`GET request 1`] = `"ok"`;
+
+exports[`POST request 1`] = `"ok"`;
+
+exports[`PUT request 1`] = `"ok"`;

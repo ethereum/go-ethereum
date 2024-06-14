@@ -1,0 +1,1 @@
+{"version":3,"file":"wrappedfunction.js","sourceRoot":"","sources":["../src/wrappedfunction.ts"],"names":[],"mappings":"","sourcesContent":["/** JSDoc */\nexport interface WrappedFunction extends Function {\n  [key: string]: any;\n  __sentry__?: boolean;\n  __sentry_wrapped__?: WrappedFunction;\n  __sentry_original__?: WrappedFunction;\n}\n"]}

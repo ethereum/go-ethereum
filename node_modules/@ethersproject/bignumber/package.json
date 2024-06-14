@@ -1,0 +1,45 @@
+{
+  "author": "Richard Moore <me@ricmoo.com>",
+  "dependencies": {
+    "@ethersproject/bytes": "^5.7.0",
+    "@ethersproject/logger": "^5.7.0",
+    "bn.js": "^5.2.1"
+  },
+  "description": "BigNumber library used in ethers.js.",
+  "ethereum": "donations.ethers.eth",
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://gitcoin.co/grants/13/ethersjs-complete-simple-and-tiny-2"
+    },
+    {
+      "type": "individual",
+      "url": "https://www.buymeacoffee.com/ricmoo"
+    }
+  ],
+  "gitHead": "ec1b9583039a14a0e0fa15d0a2a6082a2f41cf5b",
+  "keywords": [
+    "Ethereum",
+    "bignumber",
+    "bn"
+  ],
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "module": "./lib.esm/index.js",
+  "name": "@ethersproject/bignumber",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/bignumber",
+    "type": "git",
+    "url": "git://github.com/ethers-io/ethers.js.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "sideEffects": false,
+  "tarballHash": "0x98470bc3e3f959c3912641c94cfb20b381527a6b4cfa3bdb265d9a2f3b27ff85",
+  "types": "./lib/index.d.ts",
+  "version": "5.7.0"
+}

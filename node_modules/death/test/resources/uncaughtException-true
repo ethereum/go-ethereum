@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+
+var P = require('autoresolve')
+  , ON_DEATH = require(P('lib/death'))({uncaughtException: true})
+
+var ret = 0x0
+console.log('HI FROM PROGRAM')
+
+ON_DEATH(function(signal, err) {
+  console.error(signal)
+  console.error(err.message)
+  process.exit(70)
+})
+
+throw new Error('UNCAUGHT SELF')

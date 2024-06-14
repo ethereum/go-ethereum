@@ -1,0 +1,63 @@
+{
+  "name": "@scure/base",
+  "version": "1.1.7",
+  "description": "Secure, audited & 0-dep implementation of base64, bech32, base58, base32 & base16",
+  "files": [
+    "lib/index.js",
+    "lib/index.js.map",
+    "lib/esm/index.js",
+    "lib/esm/index.js.map",
+    "lib/esm/package.json",
+    "lib/index.d.ts",
+    "lib/index.d.ts.map",
+    "index.ts"
+  ],
+  "main": "lib/index.js",
+  "module": "lib/esm/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/esm/index.js",
+      "default": "./lib/index.js"
+    }
+  },
+  "scripts": {
+    "bench": "node test/benchmark/index.js",
+    "build": "tsc && tsc -p tsconfig.esm.json",
+    "lint": "prettier --check index.ts",
+    "format": "prettier --write index.ts",
+    "test": "node test/index.js",
+    "test:deno": "deno test test/deno.ts"
+  },
+  "sideEffects": false,
+  "author": "Paul Miller (https://paulmillr.com)",
+  "license": "MIT",
+  "homepage": "https://paulmillr.com/noble/#scure",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paulmillr/scure-base.git"
+  },
+  "devDependencies": {
+    "@paulmillr/jsbt": "0.1.0",
+    "micro-should": "0.4.0",
+    "prettier": "3.1.1",
+    "typescript": "5.3.2"
+  },
+  "keywords": [
+    "bech32",
+    "bech32m",
+    "base64",
+    "base58",
+    "base32",
+    "base16",
+    "rfc4648",
+    "rfc3548",
+    "crockford",
+    "encode",
+    "encoder",
+    "base-x",
+    "base"
+  ],
+  "funding": "https://paulmillr.com/funding/"
+}

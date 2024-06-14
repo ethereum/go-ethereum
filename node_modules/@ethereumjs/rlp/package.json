@@ -1,0 +1,54 @@
+{
+  "name": "@ethereumjs/rlp",
+  "version": "4.0.1",
+  "description": "Recursive Length Prefix Encoding Module",
+  "keywords": [
+    "rlp",
+    "ethereum"
+  ],
+  "homepage": "https://github.com/ethereumjs/ethereumjs-monorepo/tree/master/packages/rlp#readme",
+  "bugs": {
+    "url": "https://github.com/ethereumjs/ethereumjs-monorepo/issues?q=is%3Aissue+label%3A%22package%3A+rlp%22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethereumjs/ethereumjs-monorepo.git"
+  },
+  "license": "MPL-2.0",
+  "author": {
+    "name": "martin becze",
+    "email": "mjbecze@gmail.com"
+  },
+  "contributors": [
+    "Alex Beregszaszi <alex@rtfs.hu>",
+    "Holger Drewes <Holger.Drewes@gmail.com>",
+    "Paul Miller <pkg@paulmillr.com>"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "rlp": "bin/rlp"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "build": "../../config/cli/ts-build.sh node",
+    "clean": "../../config/cli/clean-package.sh",
+    "coverage": "../../config/cli/coverage.sh",
+    "lint": "../../config/cli/lint.sh",
+    "lint:diff": "../../config/cli/lint-diff.sh",
+    "lint:fix": "../../config/cli/lint-fix.sh",
+    "prepublishOnly": "../../config/cli/prepublish.sh",
+    "tape": "tape -r ts-node/register",
+    "test": "npm run test:node && npm run test:browser",
+    "test:browser": "karma start karma.conf.js",
+    "test:node": "npm run tape -- test/*.spec.ts",
+    "tsc": "../../config/cli/ts-compile.sh"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

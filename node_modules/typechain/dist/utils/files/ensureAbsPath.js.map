@@ -1,0 +1,1 @@
+{"version":3,"file":"ensureAbsPath.js","sourceRoot":"","sources":["../../../src/utils/files/ensureAbsPath.ts"],"names":[],"mappings":";;;AAAA,+BAAuC;AAEvC,SAAgB,aAAa,CAAC,IAAY;IACxC,IAAI,IAAA,iBAAU,EAAC,IAAI,CAAC,EAAE;QACpB,OAAO,IAAI,CAAA;KACZ;IACD,OAAO,IAAA,WAAI,EAAC,OAAO,CAAC,GAAG,EAAE,EAAE,IAAI,CAAC,CAAA;AAClC,CAAC;AALD,sCAKC"}

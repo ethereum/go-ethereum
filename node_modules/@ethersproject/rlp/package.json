@@ -1,0 +1,44 @@
+{
+  "author": "Richard Moore <me@ricmoo.com>",
+  "dependencies": {
+    "@ethersproject/bytes": "^5.7.0",
+    "@ethersproject/logger": "^5.7.0"
+  },
+  "description": "Recursive-Length Prefix (RLP) coder.",
+  "ethereum": "donations.ethers.eth",
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://gitcoin.co/grants/13/ethersjs-complete-simple-and-tiny-2"
+    },
+    {
+      "type": "individual",
+      "url": "https://www.buymeacoffee.com/ricmoo"
+    }
+  ],
+  "gitHead": "ec1b9583039a14a0e0fa15d0a2a6082a2f41cf5b",
+  "keywords": [
+    "Ethereum",
+    "ethers",
+    "rlp"
+  ],
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "module": "./lib.esm/index.js",
+  "name": "@ethersproject/rlp",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/rlp",
+    "type": "git",
+    "url": "git://github.com/ethers-io/ethers.js.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "sideEffects": false,
+  "tarballHash": "0x93c77ed49afe2043ac918ada4f24d3d1edbb4ce4f0f40e62eeeeed396d30ef45",
+  "types": "./lib/index.d.ts",
+  "version": "5.7.0"
+}

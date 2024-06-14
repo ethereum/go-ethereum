@@ -1,0 +1,22 @@
+// @flow
+// Generated using flowgen2
+
+type IncomingHttpHeaders = Object;
+
+declare class Response<TBody> {
+  +statusCode: number;
+  +headers: IncomingHttpHeaders;
+  +body: TBody;
+  +url: string;
+  constructor(
+    statusCode: number,
+    headers: IncomingHttpHeaders,
+    body: TBody,
+    url: string,
+  ): void;
+  isError(): boolean;
+  getBody(encoding: string): string;
+  getBody(): TBody;
+}
+
+module.exports = Response;

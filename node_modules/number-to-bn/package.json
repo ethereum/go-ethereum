@@ -1,0 +1,66 @@
+{
+  "name": "number-to-bn",
+  "version": "1.7.0",
+  "description": "A simple method that will convert numbers, hex, BN or bignumber.js object into a BN.js object.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "npm test",
+    "release": "npmpub",
+    "prepublish": "npm run build",
+    "prebuild": "npm run build:clean && npm run test",
+    "build:clean": "npm run test:clean && rimraf ./dist",
+    "build:umd": "cross-env BABEL_ENV=commonjs NODE_ENV=development webpack --config ./internals/webpack/webpack.config.js --progress",
+    "build:umd:min": "cross-env BABEL_ENV=commonjs NODE_ENV=production webpack --config ./internals/webpack/webpack.config.js --progress",
+    "build:stats": "cross-env BABEL_ENV=commonjs NODE_ENV=production webpack --config ./internals/webpack/webpack.config.js --progress --profile --json > dist/stats.json",
+    "build": "npm run build:umd && npm run build:umd:min",
+    "test:clean": "rimraf ./coverage",
+    "test": "mocha ./src/tests/**/*.js -R spec --timeout 2000000",
+    "test-travis": "node ./node_modules/istanbul/lib/cli.js cover ./node_modules/mocha/bin/_mocha -- src/tests/**/*.js -R spec --timeout 2000000",
+    "test:browser": "zuul -- ./src/tests/*.js",
+    "test:browser-local": "zuul --local -- ./src/tests/*.js",
+    "coveralls": "npm run test-travis && cat ./coverage/lcov.info | coveralls"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/SilentCicero/number-to-bn.git"
+  },
+  "engines": {
+    "npm": ">=3",
+    "node": ">=6.5.0"
+  },
+  "keywords": [
+    "number",
+    "to",
+    "bn",
+    "convert",
+    "hex",
+    "bn.js"
+  ],
+  "author": "Nick Dodson <thenickdodson@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/SilentCicero/number-to-bn/issues"
+  },
+  "homepage": "https://github.com/SilentCicero/number-to-bn#readme",
+  "dependencies": {
+    "bn.js": "4.11.6",
+    "strip-hex-prefix": "1.0.0"
+  },
+  "testling": {
+    "files": "src/tests/*.js"
+  },
+  "devDependencies": {
+    "bignumber.js": "3.0.1",
+    "chai": "3.5.0",
+    "coveralls": "2.11.9",
+    "istanbul": "0.4.5",
+    "mocha": "3.2.0",
+    "zuul": "3.0.0",
+
+    "cross-env": "1.0.7",
+    "pre-commit": "1.1.3",
+    "rimraf": "2.3.4",
+    "webpack": "2.1.0-beta.15"
+  },
+  "pre-commit": "build"
+}

@@ -1,0 +1,52 @@
+// @flow
+// Generated using flowgen2
+
+import {Agent} from 'http';
+type IncomingHttpHeaders = Object;
+const Response = require('http-response-object');
+import type {ICache} from 'http-basic';
+import type {CachedResponse} from 'http-basic';
+const FormData = require('form-data');
+
+interface Options {
+  allowRedirectHeaders?: Array<string>;
+  cache?: 'file' | 'memory' | ICache;
+  agent?: boolean | Agent;
+  followRedirects?: boolean;
+  gzip?: boolean;
+  headers?: IncomingHttpHeaders;
+  maxRedirects?: number;
+  maxRetries?: number;
+  retry?:
+    | boolean
+    | ((
+        err: ErrnoError | null,
+        res: Response<stream$Readable | Buffer | string> | void,
+        attemptNumber: number,
+      ) => boolean);
+  retryDelay?:
+    | number
+    | ((
+        err: ErrnoError | null,
+        res: Response<stream$Readable | Buffer | string> | void,
+        attemptNumber: number,
+      ) => number);
+  socketTimeout?: number;
+  timeout?: number;
+  isMatch?: (
+    requestHeaders: IncomingHttpHeaders,
+    cachedResponse: CachedResponse,
+    defaultValue: boolean,
+  ) => boolean;
+  isExpired?: (
+    cachedResponse: CachedResponse,
+    defaultValue: boolean,
+  ) => boolean;
+  canCache?: (res: Response<stream$Readable>, defaultValue: boolean) => boolean;
+  qs?: {[key: string]: any};
+  json?: any;
+  form?: FormData;
+  body?: string | Buffer | stream$Readable;
+}
+
+export type {Options};

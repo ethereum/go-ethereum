@@ -1,0 +1,40 @@
+{
+  "name": "chai-as-promised",
+  "description": "Extends Chai with assertions about promises.",
+  "keywords": [
+    "chai",
+    "chai-plugin",
+    "browser",
+    "async",
+    "testing",
+    "assertions",
+    "promises",
+    "promises-aplus"
+  ],
+  "version": "7.1.2",
+  "author": "Domenic Denicola <d@domenic.me> (https://domenic.me)",
+  "license": "WTFPL",
+  "repository": "domenic/chai-as-promised",
+  "main": "./lib/chai-as-promised.js",
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "test": "mocha",
+    "test-travis": "npm install chai@$CHAI_VERSION && npm test",
+    "lint": "eslint .",
+    "cover": "istanbul cover node_modules/mocha/bin/_mocha && opener ./coverage/lcov-report/lib/chai-as-promised.js.html"
+  },
+  "dependencies": {
+    "check-error": "^1.0.2"
+  },
+  "peerDependencies": {
+    "chai": ">= 2.1.2 < 6"
+  },
+  "devDependencies": {
+    "chai": "^4.0.2",
+    "eslint": "^3.19.0",
+    "istanbul": "0.4.5",
+    "mocha": "^3.4.2"
+  }
+}

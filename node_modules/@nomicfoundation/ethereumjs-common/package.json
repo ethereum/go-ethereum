@@ -1,0 +1,54 @@
+{
+  "name": "@nomicfoundation/ethereumjs-common",
+  "version": "4.0.4",
+  "description": "Resources common to all Ethereum implementations",
+  "keywords": [
+    "ethereum",
+    "ethereumjs",
+    "constants",
+    "parameters",
+    "genesis",
+    "networks",
+    "bootstrap"
+  ],
+  "homepage": "https://github.com/ethereumjs/ethereumjs-monorepo/tree/master/packages/common#readme",
+  "bugs": {
+    "url": "https://github.com/ethereumjs/ethereumjs-monorepo/issues?q=is%3Aissue+label%3A%22package%3A+common%22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethereumjs/ethereumjs-monorepo.git"
+  },
+  "license": "MIT",
+  "maintainers": [
+    {
+      "name": "Holger Drewes",
+      "email": "Holger.Drewes@gmail.com"
+    }
+  ],
+  "type": "commonjs",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "../../config/cli/ts-build.sh",
+    "clean": "../../config/cli/clean-package.sh",
+    "coverage": "DEBUG=ethjs npx vitest run --coverage.enabled --coverage.reporter=lcov",
+    "docs:build": "typedoc --options typedoc.cjs",
+    "examples": "tsx ../../scripts/examples-runner.ts -- common",
+    "examples:build": "npx embedme README.md",
+    "lint": "../../config/cli/lint.sh",
+    "lint:diff": "../../config/cli/lint-diff.sh",
+    "lint:fix": "../../config/cli/lint-fix.sh",
+    "test": "npm run test:node && npm run test:browser",
+    "test:browser": "npx vitest run --browser.name=chrome --browser.headless",
+    "test:node": "npx vitest run",
+    "tsc": "../../config/cli/ts-compile.sh"
+  },
+  "dependencies": {
+    "@nomicfoundation/ethereumjs-util": "9.0.4"
+  }
+}

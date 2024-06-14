@@ -1,0 +1,63 @@
+{
+  "name": "@scure/bip39",
+  "version": "1.1.1",
+  "description": "Secure, audited & minimal implementation of BIP39 mnemonic phrases",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "wordlists/*.js",
+    "wordlists/*.d.ts"
+  ],
+  "types": "index.d.ts",
+  "dependencies": {
+    "@noble/hashes": "~1.2.0",
+    "@scure/base": "~1.1.0"
+  },
+  "devDependencies": {
+    "micro-should": "0.4.0",
+    "prettier": "2.6.2",
+    "typescript": "4.7.3"
+  },
+  "author": "Paul Miller (https://paulmillr.com)",
+  "homepage": "https://paulmillr.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/paulmillr/scure-bip39.git"
+  },
+  "contributors": [
+    {
+      "name": "Patricio Palladino",
+      "email": "patricio@nomiclabs.io"
+    },
+    {
+      "name": "Paul Miller",
+      "url": "https://paulmillr.com"
+    }
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "lint": "prettier --check 'src/**/*.ts' 'test/*.test.ts'",
+    "format": "prettier --write 'src/**/*.ts' 'test/*.test.ts'",
+    "test": "cd test && tsc && node bip39.test.js"
+  },
+  "keywords": [
+    "bip39",
+    "mnemonic",
+    "phrase",
+    "code",
+    "bip0039",
+    "bip-39",
+    "micro",
+    "scure",
+    "wordlist",
+    "noble"
+  ],
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://paulmillr.com/funding/"
+    }
+  ]
+}

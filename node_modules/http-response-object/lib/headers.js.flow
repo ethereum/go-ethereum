@@ -1,0 +1,5 @@
+// @flow
+// Generated using flowgen2
+
+type Headers = {+[name: string]: string | Array<string>};
+export type {Headers};

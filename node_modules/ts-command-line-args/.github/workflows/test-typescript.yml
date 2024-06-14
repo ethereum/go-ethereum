@@ -1,0 +1,27 @@
+name: Compatible Typescript Versions
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        typescript-version: [4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9 ]
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Use Node.js 16.x
+      uses: actions/setup-node@v1
+      with:
+        node-version: 16.x
+    - run: npm ci
+    - run: npm install typescript@${{ matrix.typescript-version }} 
+    - run: npm run build-release

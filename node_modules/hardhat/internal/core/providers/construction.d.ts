@@ -1,0 +1,5 @@
+import type { Artifacts, BoundExperimentalHardhatNetworkMessageTraceHook, EIP1193Provider, EthereumProvider, HardhatConfig, HDAccountsUserConfig, HttpNetworkAccountsUserConfig, NetworkConfig, ProviderExtender } from "../../../types";
+export declare function isHDAccountsConfig(accounts?: HttpNetworkAccountsUserConfig): accounts is HDAccountsUserConfig;
+export declare function createProvider(config: HardhatConfig, networkName: string, artifacts?: Artifacts, experimentalHardhatNetworkMessageTraceHooks?: BoundExperimentalHardhatNetworkMessageTraceHook[], extenders?: ProviderExtender[]): Promise<EthereumProvider>;
+export declare function applyProviderWrappers(provider: EIP1193Provider, netConfig: Partial<NetworkConfig>, extenders: ProviderExtender[]): EIP1193Provider;
+//# sourceMappingURL=construction.d.ts.map

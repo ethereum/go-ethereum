@@ -1,0 +1,1 @@
+{"version":3,"file":"makeCommon.d.ts","sourceRoot":"","sources":["../../../../src/internal/hardhat-network/provider/utils/makeCommon.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,oCAAoC,CAAC;AAE5D,OAAO,EAAE,eAAe,EAAE,MAAM,eAAe,CAAC;AAGhD,wBAAgB,UAAU,CAAC,EAAE,OAAO,EAAE,SAAS,EAAE,QAAQ,EAAE,EAAE,eAAe,UAc3E"}

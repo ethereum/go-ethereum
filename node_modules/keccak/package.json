@@ -1,0 +1,38 @@
+{
+  "name": "keccak",
+  "version": "3.0.4",
+  "description": "Keccak sponge function family",
+  "keywords": [
+    "sha3",
+    "sha-3",
+    "keccak",
+    "shake"
+  ],
+  "bugs": {
+    "url": "https://github.com/cryptocoinjs/keccak/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cryptocoinjs/keccak.git"
+  },
+  "license": "MIT",
+  "contributors": [
+    "Kirill Fomichev <fanatid@ya.ru> (https://github.com/fanatid)"
+  ],
+  "main": "./index.js",
+  "browser": {
+    "./index.js": "./js.js"
+  },
+  "scripts": {
+    "install": "node-gyp-build || exit 0"
+  },
+  "dependencies": {
+    "node-addon-api": "^2.0.0",
+    "node-gyp-build": "^4.2.0",
+    "readable-stream": "^3.6.0"
+  },
+  "engines": {
+    "node": ">=10.0.0"
+  },
+  "gypfile": true
+}

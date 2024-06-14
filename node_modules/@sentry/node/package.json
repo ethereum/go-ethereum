@@ -1,0 +1,90 @@
+{
+  "name": "@sentry/node",
+  "version": "5.30.0",
+  "description": "Official Sentry SDK for Node.js",
+  "repository": "git://github.com/getsentry/sentry-javascript.git",
+  "homepage": "https://github.com/getsentry/sentry-javascript/tree/master/packages/node",
+  "author": "Sentry",
+  "license": "BSD-3-Clause",
+  "engines": {
+    "node": ">=6"
+  },
+  "main": "dist/index.js",
+  "module": "esm/index.js",
+  "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@sentry/core": "5.30.0",
+    "@sentry/hub": "5.30.0",
+    "@sentry/tracing": "5.30.0",
+    "@sentry/types": "5.30.0",
+    "@sentry/utils": "5.30.0",
+    "cookie": "^0.4.1",
+    "https-proxy-agent": "^5.0.0",
+    "lru_map": "^0.3.3",
+    "tslib": "^1.9.3"
+  },
+  "devDependencies": {
+    "@sentry-internal/eslint-config-sdk": "5.30.0",
+    "@types/cookie": "0.3.2",
+    "@types/express": "^4.17.2",
+    "@types/lru-cache": "^5.1.0",
+    "@types/node": "~10.17.0",
+    "eslint": "7.6.0",
+    "express": "^4.17.1",
+    "jest": "^24.7.1",
+    "nock": "^13.0.5",
+    "npm-run-all": "^4.1.2",
+    "prettier": "1.19.0",
+    "rimraf": "^2.6.3",
+    "typescript": "3.7.5"
+  },
+  "scripts": {
+    "build": "run-p build:es5 build:esm",
+    "build:es5": "tsc -p tsconfig.build.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:watch": "run-p build:watch:es5 build:watch:esm",
+    "build:watch:es5": "tsc -p tsconfig.build.json -w --preserveWatchOutput",
+    "build:watch:esm": "tsc -p tsconfig.esm.json -w --preserveWatchOutput",
+    "clean": "rimraf dist coverage",
+    "link:yarn": "yarn link",
+    "lint": "run-s lint:prettier lint:eslint",
+    "lint:prettier": "prettier --check \"{src,test}/**/*.ts\"",
+    "lint:eslint": "eslint . --cache --cache-location '../../eslintcache/' --format stylish",
+    "fix": "run-s fix:eslint fix:prettier",
+    "fix:prettier": "prettier --write \"{src,test}/**/*.ts\"",
+    "fix:eslint": "eslint . --format stylish --fix",
+    "test": "run-s test:jest test:express test:webpack",
+    "test:jest": "jest",
+    "test:watch": "jest --watch",
+    "test:express": "node test/manual/express-scope-separation/start.js",
+    "test:webpack": "cd test/manual/webpack-domain/ && yarn && node npm-build.js",
+    "version": "node ../../scripts/versionbump.js src/version.ts",
+    "pack": "npm pack"
+  },
+  "volta": {
+    "extends": "../../package.json"
+  },
+  "jest": {
+    "collectCoverage": true,
+    "transform": {
+      "^.+\\.ts$": "ts-jest"
+    },
+    "moduleFileExtensions": [
+      "js",
+      "ts"
+    ],
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/*.test.ts"
+    ],
+    "globals": {
+      "ts-jest": {
+        "tsConfig": "./tsconfig.json",
+        "diagnostics": false
+      }
+    }
+  }
+}

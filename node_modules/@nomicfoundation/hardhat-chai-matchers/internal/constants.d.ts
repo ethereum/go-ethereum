@@ -1,0 +1,13 @@
+export declare const ASSERTION_ABORTED = "hh-chai-matchers-assertion-aborted";
+export declare const PREVIOUS_MATCHER_NAME = "previousMatcherName";
+export declare const CHANGE_ETHER_BALANCE_MATCHER = "changeEtherBalance";
+export declare const CHANGE_ETHER_BALANCES_MATCHER = "changeEtherBalances";
+export declare const CHANGE_TOKEN_BALANCE_MATCHER = "changeTokenBalance";
+export declare const CHANGE_TOKEN_BALANCES_MATCHER = "changeTokenBalances";
+export declare const EMIT_MATCHER = "emit";
+export declare const REVERTED_MATCHER = "reverted";
+export declare const REVERTED_WITH_MATCHER = "revertedWith";
+export declare const REVERTED_WITH_CUSTOM_ERROR_MATCHER = "revertedWithCustomError";
+export declare const REVERTED_WITH_PANIC_MATCHER = "revertedWithPanic";
+export declare const REVERTED_WITHOUT_REASON_MATCHER = "revertedWithoutReason";
+//# sourceMappingURL=constants.d.ts.map

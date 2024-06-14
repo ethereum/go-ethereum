@@ -1,0 +1,17 @@
+// @flow
+// Generated using flowgen2
+
+const Promise = require('promise');
+const Response = require('http-response-object');
+
+declare class ResponsePromise extends Promise<Response<Buffer | string>> {
+  getBody(encoding: string): Promise<string>;
+  getBody(): Promise<Buffer | string>;
+}
+export {ResponsePromise};
+
+declare function toResponsePromise(
+  result: Promise<Response<Buffer | string>>,
+): ResponsePromise;
+
+export default toResponsePromise;

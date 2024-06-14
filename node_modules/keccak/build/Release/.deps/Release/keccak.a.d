@@ -1,0 +1,1 @@
+cmd_Release/keccak.a := rm -f Release/keccak.a && ./gyp-mac-tool filter-libtool libtool  -static -o Release/keccak.a Release/obj.target/keccak/src/libkeccak-64/KeccakSpongeWidth1600.o Release/obj.target/keccak/src/libkeccak-64/KeccakP-1600-opt64.o

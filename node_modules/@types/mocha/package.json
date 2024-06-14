@@ -1,0 +1,55 @@
+{
+    "name": "@types/mocha",
+    "version": "10.0.6",
+    "description": "TypeScript definitions for mocha",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/mocha",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Kazi Manzur Rashid",
+            "githubUsername": "kazimanzurrashid",
+            "url": "https://github.com/kazimanzurrashid"
+        },
+        {
+            "name": "otiai10",
+            "githubUsername": "otiai10",
+            "url": "https://github.com/otiai10"
+        },
+        {
+            "name": "Vadim Macagon",
+            "githubUsername": "enlight",
+            "url": "https://github.com/enlight"
+        },
+        {
+            "name": "Andrew Bradley",
+            "githubUsername": "cspotcode",
+            "url": "https://github.com/cspotcode"
+        },
+        {
+            "name": "Dmitrii Sorin",
+            "githubUsername": "1999",
+            "url": "https://github.com/1999"
+        },
+        {
+            "name": "Noah Hummel",
+            "githubUsername": "strangedev",
+            "url": "https://github.com/strangedev"
+        },
+        {
+            "name": "nicojs",
+            "githubUsername": "nicojs",
+            "url": "https://github.com/nicojs"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/mocha"
+    },
+    "scripts": {},
+    "dependencies": {},
+    "typesPublisherContentHash": "de34ee99a18094486419f8e3b6c2a3f81f623ecdcbc5f6f4cfe46236c7df5831",
+    "typeScriptVersion": "4.5"
+}

@@ -1,0 +1,127 @@
+{
+  "name": "ethereumjs-util",
+  "version": "6.2.1",
+  "description": "a collection of utility functions for Ethereum",
+  "main": "dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "ethereumjs-config-build",
+    "prepublishOnly": "npm run test && npm run build",
+    "coverage": "npm run build && istanbul cover _mocha",
+    "coveralls": "npm run coverage && coveralls <coverage/lcov.info",
+    "docs:build": "typedoc --out docs --mode file --readme none --theme markdown --mdEngine github --gitRevision master --excludeNotExported src",
+    "format": "ethereumjs-config-format",
+    "format:fix": "ethereumjs-config-format-fix",
+    "lint": "ethereumjs-config-lint",
+    "lint:fix": "ethereumjs-config-lint-fix",
+    "test": "npm run lint && npm run test:node && npm run test:browser",
+    "test:browser": "npm run build && karma start karma.conf.js",
+    "test:node": "npm run build && istanbul test mocha -- --reporter spec",
+    "tsc": "ethereumjs-config-tsc",
+    "tslint": "ethereumjs-config-tslint",
+    "tslint:fix": "ethereumjs-config-tslint-fix"
+  },
+  "husky": {
+    "hooks": {
+      "pre-push": "npm run lint"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethereumjs/ethereumjs-util.git"
+  },
+  "keywords": [
+    "ethereum",
+    "utilties"
+  ],
+  "author": "mjbecze <mjbecze@gmail.com>",
+  "contributors": [
+    {
+      "name": "Tim Coulter",
+      "email": "tim@timothyjcoulter.com",
+      "url": "https://github.com/tcoulter"
+    },
+    {
+      "name": "Nick Dodson",
+      "url": "https://github.com/SilentCicero"
+    },
+    {
+      "name": "Mr. Chico",
+      "url": "https://github.com/MrChico"
+    },
+    {
+      "name": "Dũng Trần",
+      "email": "tad88.dev@gmail.com",
+      "url": "https://github.com/tad88dev"
+    },
+    {
+      "name": "Alex Beregszaszi",
+      "email": "alex@rtfs.hu",
+      "url": "https://github.com/axic"
+    },
+    {
+      "name": "Taylor Gerring",
+      "url": "https://github.com/tgerring"
+    },
+    {
+      "name": "Kirill Fomichev",
+      "email": "fanatid@ya.ru",
+      "url": "https://github.com/fanatid"
+    },
+    {
+      "name": "kumavis",
+      "email": "aaron@kumavis.me",
+      "url": "https://github.com/kumavis"
+    },
+    {
+      "name": "Alexander Sinyagin",
+      "email": "sinyagin.alexander@gmail.com",
+      "url": "https://github.com/asinyagin"
+    }
+  ],
+  "license": "MPL-2.0",
+  "bugs": {
+    "url": "https://github.com/ethereumjs/ethereumjs-util/issues"
+  },
+  "homepage": "https://github.com/ethereumjs/ethereumjs-util",
+  "dependencies": {
+    "@types/bn.js": "^4.11.3",
+    "bn.js": "^4.11.0",
+    "create-hash": "^1.1.2",
+    "ethereum-cryptography": "^0.1.3",
+    "elliptic": "^6.5.2",
+    "ethjs-util": "0.1.6",
+    "rlp": "^2.2.3"
+  },
+  "devDependencies": {
+    "@ethereumjs/config-prettier": "^1.1.0",
+    "@ethereumjs/config-tsc": "^1.1.0",
+    "@ethereumjs/config-tslint": "^1.1.0",
+    "@types/node": "^11.9.0",
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.6.1",
+    "babelify": "^8.0.0",
+    "browserify": "^14.0.0",
+    "contributor": "^0.1.25",
+    "coveralls": "^3.0.0",
+    "husky": "^2.1.0",
+    "istanbul": "^0.4.1",
+    "karma": "^4.0.0",
+    "karma-browserify": "^5.0.0",
+    "karma-chrome-launcher": "^2.0.0",
+    "karma-detect-browsers": "2.2.6",
+    "karma-env-preprocessor": "^0.1.1",
+    "karma-firefox-launcher": "^1.0.0",
+    "karma-mocha": "^1.3.0",
+    "mocha": "^6.0.0",
+    "prettier": "^1.15.3",
+    "tslint": "^5.12.0",
+    "typedoc": "^0.14.0",
+    "typedoc-plugin-markdown": "^1.1.21",
+    "typescript": "^3.2.2",
+    "typestrict": "^1.0.2"
+  }
+}

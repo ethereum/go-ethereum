@@ -1,0 +1,17 @@
+// @flow
+// Generated using flowgen2
+
+interface FormDataEntry {
+  key: string;
+  value: string | Blob | Buffer;
+  fileName?: string;
+}
+export type {FormDataEntry};
+
+declare class FormData {
+  append(key: string, value: string | Blob | Buffer, fileName?: string): void;
+}
+export {FormData};
+
+declare function getFormDataEntries(fd: FormData): Array<FormDataEntry>;
+export {getFormDataEntries};

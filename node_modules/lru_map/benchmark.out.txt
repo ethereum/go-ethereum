@@ -1,0 +1,123 @@
+> lru_map@0.3.0 benchmark /src/js-lru
+> node --expose-gc benchmark.js
+
+N = 10000, Iterations = 1000
+
+----------
+  function (){
+    // 1. put
+    //    Simply append a new entry.
+    //    There will be no reordering since we simply append to the tail.
+    for (var i=N; --i;)
+      c.set('key'+i, i);
+  }
+   rss:        +9,380 kB -- (19,564 kB -> 28,944 kB)
+   heap total: +6,144 kB -- (11,260 kB -> 17,404 kB)
+   heap used:  +1,640 kB -- (3,819 kB -> 5,459 kB)
+
+  -- 1.192 ms avg per iteration --
+
+----------
+  function (){
+    // 2. get recent -> old
+    //    Get entries starting with newest, effectively reversing the list.
+    //
+    // a. For each get, a find is first executed implemented as a native object with
+    //    keys mapping to entries, so this should be reasonably fast as most native
+    //    objects are implemented as hash maps.
+    //
+    // b. For each get, the aquired item will be moved to tail which includes a
+    //    maximum of 7 assignment operations (minimum 3).
+    for (var i=1,L=N+1; i<L; ++i)
+      c.get('key'+i, i);
+  }
+   rss:        +340 kB -- (29,112 kB -> 29,452 kB)
+   heap total: +0 kB -- (18,428 kB -> 18,428 kB)
+   heap used:  -255 kB -- (5,479 kB -> 5,224 kB)
+
+  -- 1.197 ms avg per iteration --
+
+----------
+  function (){
+    // 3. get old -> recent
+    //    Get entries starting with oldest, effectively reversing the list.
+    //
+    //  - Same conditions apply as for test 2.
+    for (var i=1,L=N+1; i<L; ++i)
+      c.get('key'+i);
+  }
+   rss:        -344 kB -- (29,476 kB -> 29,132 kB)
+   heap total: +0 kB -- (18,428 kB -> 18,428 kB)
+   heap used:  +3 kB -- (5,211 kB -> 5,215 kB)
+
+  -- 1.161 ms avg per iteration --
+
+----------
+  function (){
+    // 4. get missing
+    //    Get try to get entries not in the cache.
+    //  - Same conditions apply as for test 2, section a.
+    for (var i=1,L=N+1; i<L; ++i)
+      c.get('xkey'+i);
+  }
+   rss:        +0 kB -- (29,132 kB -> 29,132 kB)
+   heap total: +0 kB -- (18,428 kB -> 18,428 kB)
+   heap used:  +5 kB -- (5,210 kB -> 5,215 kB)
+
+  -- 1.035 ms avg per iteration --
+
+----------
+  function (){
+    // 5. put overflow
+    //    Overflow the cache with N more items than it can hold.
+    // a. The complexity of put in this case should be:
+    //    ( <get whith enough space> + <shift> )
+    for (var i=N; --i;)
+      c.set('key2_'+i, i);
+  }
+   rss:        +2,036 kB -- (29,132 kB -> 31,168 kB)
+   heap total: +916 kB -- (18,428 kB -> 19,344 kB)
+   heap used:  +542 kB -- (5,211 kB -> 5,752 kB)
+
+  -- 1.185 ms avg per iteration --
+
+----------
+  function (){
+    // 6. shift head -> tail
+    //    Remove all entries going from head to tail
+    for (var i=1,L=N+1; i<L; ++i)
+      c.shift();
+  }
+   rss:        -1,528 kB -- (31,288 kB -> 29,760 kB)
+   heap total: +108 kB -- (18,320 kB -> 18,428 kB)
+   heap used:  -1,819 kB -- (5,748 kB -> 3,929 kB)
+
+  -- 0.023 ms avg per iteration --
+
+----------
+  function (){
+    // 7. put 
+    //    Simply put N new items into an empty cache with exactly N space.
+    for (var i=N; --i;)
+      c.set('key'+i, i);
+  }
+   rss:        +8,064 kB -- (29,876 kB -> 37,940 kB)
+   heap total: +8,192 kB -- (17,404 kB -> 25,596 kB)
+   heap used:  +1,327 kB -- (3,904 kB -> 5,232 kB)
+
+  -- 1.264 ms avg per iteration --
+
+----------
+  function (){
+    // 8. delete random
+    // a. Most operations (which are not entries at head or tail) will cause closes
+    //    siblings to be relinked.
+    for (var i=shuffledKeys.length, key; key = shuffledKeys[--i]; ) {
+      c.delete('key'+i, i);
+    }
+  }
+   rss:        +132 kB -- (38,088 kB -> 38,220 kB)
+   heap total: +0 kB -- (25,596 kB -> 25,596 kB)
+   heap used:  +410 kB -- (5,380 kB -> 5,789 kB)
+
+  -- 1.914 ms avg per iteration --

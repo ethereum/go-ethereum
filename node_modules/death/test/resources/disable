@@ -1,0 +1,18 @@
+#!/usr/bin/env node
+
+var P = require('autoresolve')
+  , ON_DEATH = require(P('lib/death'))({SIGQUIT: false})
+
+var ret = 0x0
+console.log('HI FROM PROGRAM')
+
+ON_DEATH(function(signal, err) {
+  console.error(signal)
+  ret += 1
+})
+
+setTimeout(function() {
+  //twiddle thumbls
+  process.exit(ret)
+}, 30000)
+

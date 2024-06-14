@@ -1,0 +1,9 @@
+{
+  "extends": "../../config/typescript/tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "composite": true,
+    "jsx": "react-jsx"
+  },
+  "references": [{ "path": "../core" }]
+}

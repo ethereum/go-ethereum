@@ -1,0 +1,46 @@
+{
+  "author": "Richard Moore <me@ricmoo.com>",
+  "dependencies": {
+    "@ethersproject/bignumber": "^5.6.2",
+    "@ethersproject/bytes": "^5.6.1",
+    "@ethersproject/keccak256": "^5.6.1",
+    "@ethersproject/logger": "^5.6.0",
+    "@ethersproject/rlp": "^5.6.1"
+  },
+  "description": "Utilities for handling Ethereum Addresses for ethers.",
+  "ethereum": "donations.ethers.eth",
+  "funding": [
+    {
+      "type": "individual",
+      "url": "https://gitcoin.co/grants/13/ethersjs-complete-simple-and-tiny-2"
+    },
+    {
+      "type": "individual",
+      "url": "https://www.buymeacoffee.com/ricmoo"
+    }
+  ],
+  "gitHead": "a71f51825571d1ea0fa997c1352d5b4d85643416",
+  "keywords": [
+    "Ethereum",
+    "ethers"
+  ],
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "module": "./lib.esm/index.js",
+  "name": "@ethersproject/address",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "packages/address",
+    "type": "git",
+    "url": "git://github.com/ethers-io/ethers.js.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "sideEffects": false,
+  "tarballHash": "0x74659cdbe2073e760b0538ae0bf3f61e5e7f237026f59a8c72af0f9b91c0b980",
+  "types": "./lib/index.d.ts",
+  "version": "5.6.1"
+}

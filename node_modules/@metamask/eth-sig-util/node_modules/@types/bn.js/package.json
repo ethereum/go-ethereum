@@ -1,0 +1,36 @@
+{
+    "name": "@types/bn.js",
+    "version": "4.11.6",
+    "description": "TypeScript definitions for bn.js",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Leonid Logvinov",
+            "url": "https://github.com/LogvinovLeon",
+            "githubUsername": "LogvinovLeon"
+        },
+        {
+            "name": "Henry Nguyen",
+            "url": "https://github.com/HenryNguyen5",
+            "githubUsername": "HenryNguyen5"
+        },
+        {
+            "name": "Gaylor Bosson",
+            "url": "https://github.com/Gilthoniel",
+            "githubUsername": "Gilthoniel"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/bn.js"
+    },
+    "scripts": {},
+    "dependencies": {
+        "@types/node": "*"
+    },
+    "typesPublisherContentHash": "ca69ec916d802a517fb065f342c3de9fdb96529c8876e50e1a2021da7c6a7cf6",
+    "typeScriptVersion": "2.8"
+}

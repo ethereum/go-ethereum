@@ -1,0 +1,22 @@
+{
+  "name": "parse-cache-control",
+  "version": "1.0.1",
+  "description": "Parse Cache-Control headers.",
+  "main": "index.js",
+  "scripts": {
+    "test": "tape test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/roryf/parse-cache-control.git"
+  },
+  "devDependencies": {
+    "tape": "^3.5.0"
+  },
+  "licenses": [
+    {
+      "type": "BSD",
+      "url": "http://github.com/hapijs/wreck/raw/master/LICENSE"
+    }
+  ]
+}

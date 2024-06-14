@@ -1,0 +1,36 @@
+{
+  "author": "Paul Vorbach <paul@vorb.de> (http://vorb.de)",
+  "name": "sha1",
+  "description": "native js function for hashing messages with SHA-1",
+  "tags": [
+    "sha1",
+    "hash",
+    "encryption",
+    "native",
+    "secure hashing algorithm"
+  ],
+  "version": "1.1.1",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/pvorb/node-sha1.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pvorb/node-sha1/issues"
+  },
+  "license": "BSD-3-Clause",
+  "main": "sha1.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "engines": {
+    "node": "*"
+  },
+  "dependencies": {
+    "charenc": ">= 0.0.1",
+    "crypt": ">= 0.0.1"
+  },
+  "devDependencies": {
+    "mocha": "~ 1.4.2"
+  },
+  "optionalDependencies": {}
+}

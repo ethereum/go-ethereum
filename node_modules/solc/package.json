@@ -1,0 +1,74 @@
+{
+  "name": "solc",
+  "version": "0.7.3",
+  "description": "Solidity compiler",
+  "main": "index.js",
+  "bin": {
+    "solcjs": "solcjs"
+  },
+  "scripts": {
+    "lint": "node ./node_modules/semistandard/bin/cmd.js",
+    "prepublish": "node downloadCurrentVersion.js && node verifyVersion.js",
+    "pretest": "npm run lint",
+    "test": "tape ./test/index.js",
+    "coverage": "node ./node_modules/nyc/bin/nyc.js --reporter=lcov --reporter=text-summary ./node_modules/tape/bin/tape ./test/index.js",
+    "coveralls": "npm run coverage && node ./node_modules/coveralls/bin/coveralls.js <coverage/lcov.info"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ethereum/solc-js.git"
+  },
+  "keywords": [
+    "ethereum",
+    "solidity",
+    "compiler"
+  ],
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "files": [
+    "abi.js",
+    "index.js",
+    "linker.js",
+    "smtchecker.js",
+    "smtsolver.js",
+    "solcjs",
+    "soljson.js",
+    "translate.js",
+    "wrapper.js"
+  ],
+  "author": "chriseth",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ethereum/solc-js/issues"
+  },
+  "homepage": "https://github.com/ethereum/solc-js#readme",
+  "dependencies": {
+    "command-exists": "^1.2.8",
+    "commander": "3.0.2",
+    "fs-extra": "^0.30.0",
+    "js-sha3": "0.8.0",
+    "memorystream": "^0.3.1",
+    "require-from-string": "^2.0.0",
+    "semver": "^5.5.0",
+    "tmp": "0.0.33",
+    "follow-redirects": "^1.12.1"
+  },
+  "devDependencies": {
+    "coveralls": "^3.0.0",
+    "nyc": "^14.1.0",
+    "semistandard": "^12.0.0",
+    "tape": "^4.11.0",
+    "tape-spawn": "^1.4.2"
+  },
+  "semistandard": {
+    "ignore": [
+      "soljson.js"
+    ]
+  },
+  "nyc": {
+    "exclude": [
+      "soljson.js"
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+{"version":3,"file":"sdkinfo.js","sourceRoot":"","sources":["../src/sdkinfo.ts"],"names":[],"mappings":"","sourcesContent":["import { Package } from './package';\n\n/** JSDoc */\nexport interface SdkInfo {\n  name: string;\n  version: string;\n  integrations?: string[];\n  packages?: Package[];\n}\n"]}

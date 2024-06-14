@@ -1,0 +1,1 @@
+{"version":3,"file":"getCurrentTimestamp.js","sourceRoot":"","sources":["../../../../src/internal/hardhat-network/provider/utils/getCurrentTimestamp.ts"],"names":[],"mappings":";;;AAAA,SAAgB,mBAAmB;IACjC,OAAO,IAAI,CAAC,IAAI,CAAC,IAAI,IAAI,EAAE,CAAC,OAAO,EAAE,GAAG,IAAI,CAAC,CAAC;AAChD,CAAC;AAFD,kDAEC"}
