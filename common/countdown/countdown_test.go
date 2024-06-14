@@ -1,7 +1,7 @@
 package countdown
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -76,7 +76,7 @@ func TestCountdownShouldResetEvenIfErrored(t *testing.T) {
 	called := make(chan int)
 	OnTimeoutFn := func(time.Time, interface{}) error {
 		called <- 1
-		return fmt.Errorf("ERROR!")
+		return errors.New("ERROR!")
 	}
 
 	countdown := NewCountDown(5000 * time.Millisecond)

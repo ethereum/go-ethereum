@@ -27,6 +27,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -562,7 +563,7 @@ type dbSyncIterator struct {
 // initialises a sync iterator from a syncToken (passed in with the handshake)
 func (self *DbStore) NewSyncIterator(state DbSyncState) (si *dbSyncIterator, err error) {
 	if state.First > state.Last {
-		return nil, fmt.Errorf("no entries found")
+		return nil, errors.New("no entries found")
 	}
 	si = &dbSyncIterator{
 		it:          self.db.NewIterator(),

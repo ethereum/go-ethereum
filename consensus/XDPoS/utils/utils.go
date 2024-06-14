@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -79,7 +80,7 @@ func CompareSignersLists(list1 []common.Address, list2 []common.Address) bool {
 // Decode extra fields for consensus version >= 2 (XDPoS 2.0 and future versions)
 func DecodeBytesExtraFields(b []byte, val interface{}) error {
 	if len(b) == 0 {
-		return fmt.Errorf("extra field is 0 length")
+		return errors.New("extra field is 0 length")
 	}
 	switch b[0] {
 	case 2:

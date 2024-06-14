@@ -43,7 +43,7 @@ type kill struct {
 type drop struct {
 }
 
-/// protoHandshake represents module-independent aspects of the protocol and is
+// / protoHandshake represents module-independent aspects of the protocol and is
 // the first message peers send and receive as part the initial exchange
 type protoHandshake struct {
 	Version   uint   // local and remote peer should have identical version
@@ -241,7 +241,7 @@ func runModuleHandshake(t *testing.T, resp uint, errs ...error) {
 }
 
 func TestModuleHandshakeError(t *testing.T) {
-	runModuleHandshake(t, 43, fmt.Errorf("handshake mismatch remote 43 > local 42"))
+	runModuleHandshake(t, 43, errors.New("handshake mismatch remote 43 > local 42"))
 }
 
 func TestModuleHandshakeSuccess(t *testing.T) {
@@ -376,14 +376,14 @@ WAIT:
 
 func TestMultiplePeersDropSelf(t *testing.T) {
 	runMultiplePeers(t, 0,
-		fmt.Errorf("subprotocol error"),
-		fmt.Errorf("Message handler error: (msg code 3): dropped"),
+		errors.New("subprotocol error"),
+		errors.New("Message handler error: (msg code 3): dropped"),
 	)
 }
 
 func TestMultiplePeersDropOther(t *testing.T) {
 	runMultiplePeers(t, 1,
-		fmt.Errorf("Message handler error: (msg code 3): dropped"),
-		fmt.Errorf("subprotocol error"),
+		errors.New("Message handler error: (msg code 3): dropped"),
+		errors.New("subprotocol error"),
 	)
 }

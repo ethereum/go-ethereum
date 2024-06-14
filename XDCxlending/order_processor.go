@@ -2,6 +2,7 @@ package XDCxlending
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -264,7 +265,7 @@ func (l *Lending) processOrderList(header *types.Header, coinbase common.Address
 			borrowFee = lendingstate.GetFee(statedb, oldestOrder.Relayer)
 		}
 		if collateralToken.IsZero() {
-			return nil, nil, nil, fmt.Errorf("empty collateral")
+			return nil, nil, nil, errors.New("empty collateral")
 		}
 		depositRate, liquidationRate, recallRate := lendingstate.GetCollateralDetail(statedb, collateralToken)
 		if depositRate == nil || depositRate.Sign() <= 0 {
@@ -282,10 +283,10 @@ func (l *Lending) processOrderList(header *types.Header, coinbase common.Address
 			return nil, nil, nil, err
 		}
 		if lendTokenXDCPrice == nil || lendTokenXDCPrice.Sign() <= 0 {
-			return nil, nil, nil, fmt.Errorf("invalid lendToken price")
+			return nil, nil, nil, errors.New("invalid lendToken price")
 		}
 		if collateralPrice == nil || collateralPrice.Sign() <= 0 {
-			return nil, nil, nil, fmt.Errorf("invalid collateral price")
+			return nil, nil, nil, errors.New("invalid collateral price")
 		}
 		tradedQuantity, collateralLockedAmount, rejectMaker, settleBalanceResult, err := l.getLendQuantity(lendTokenXDCPrice, collateralPrice, depositRate, borrowFee, coinbase, chain, header, statedb, order, &oldestOrder, maxTradedQuantity)
 		if err != nil && err == lendingstate.ErrQuantityTradeTooSmall && tradedQuantity != nil && tradedQuantity.Sign() >= 0 {

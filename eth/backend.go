@@ -447,7 +447,7 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 			return etherbase, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
+	return common.Address{}, errors.New("etherbase must be explicitly specified")
 }
 
 // set in js console via admin interface or wrapper from cli flags
@@ -475,7 +475,7 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 			return false, nil
 		}
 	} else {
-		return false, fmt.Errorf("Only verify masternode permission in XDPoS protocol")
+		return false, errors.New("Only verify masternode permission in XDPoS protocol")
 	}
 	return true, nil
 }
@@ -487,7 +487,7 @@ func (s *Ethereum) ValidateMasternodeTestnet() (bool, error) {
 		return false, err
 	}
 	if s.chainConfig.XDPoS == nil {
-		return false, fmt.Errorf("Only verify masternode permission in XDPoS protocol")
+		return false, errors.New("Only verify masternode permission in XDPoS protocol")
 	}
 	masternodes := []common.Address{
 		common.HexToAddress("0x3Ea0A3555f9B1dE983572BfF6444aeb1899eC58C"),

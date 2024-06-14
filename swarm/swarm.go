@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -94,10 +95,10 @@ func (self *Swarm) API() *SwarmAPI {
 // implements node.Service
 func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config) (self *Swarm, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
-		return nil, fmt.Errorf("empty public key")
+		return nil, errors.New("empty public key")
 	}
 	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroKey) {
-		return nil, fmt.Errorf("empty bzz key")
+		return nil, errors.New("empty bzz key")
 	}
 
 	self = &Swarm{

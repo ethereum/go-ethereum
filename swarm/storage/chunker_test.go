@@ -183,7 +183,7 @@ func testRandomBrokenData(splitter Splitter, n int, tester *chunkerTester) {
 	chunkC := make(chan *Chunk, 1000)
 	swg := &sync.WaitGroup{}
 
-	expectedError := fmt.Errorf("Broken reader")
+	expectedError := errors.New("Broken reader")
 	key, err := tester.Split(splitter, brokendata, int64(n), chunkC, swg, expectedError)
 	if err == nil || err.Error() != expectedError.Error() {
 		tester.t.Fatalf("Not receiving the correct error! Expected %v, received %v", expectedError, err)

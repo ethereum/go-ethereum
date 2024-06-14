@@ -519,7 +519,7 @@ func (pool *LendingPool) validateBalance(cloneStateDb *state.StateDB, cloneLendi
 	XDCXServ := XDPoSEngine.GetXDCXService()
 	lendingServ := XDPoSEngine.GetLendingService()
 	if XDCXServ == nil {
-		return fmt.Errorf("XDCx not found in order validation")
+		return errors.New("XDCx not found in order validation")
 	}
 	lendingTokenDecimal, err := XDCXServ.GetTokenDecimal(pool.chain, cloneStateDb, tx.LendingToken())
 	if err != nil {

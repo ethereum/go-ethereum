@@ -490,7 +490,7 @@ func (api *PublicWhisperAPI) GetFilterMessages(id string) ([]*Message, error) {
 	f := api.w.GetFilter(id)
 	if f == nil {
 		api.mu.Unlock()
-		return nil, fmt.Errorf("filter not found")
+		return nil, errors.New("filter not found")
 	}
 	api.lastUsed[id] = time.Now()
 	api.mu.Unlock()

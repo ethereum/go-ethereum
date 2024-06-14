@@ -29,6 +29,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -446,7 +447,7 @@ type Inbox struct {
 // from blockchain when first cheque is received.
 func NewInbox(prvKey *ecdsa.PrivateKey, contractAddr, beneficiary common.Address, signer *ecdsa.PublicKey, abigen bind.ContractBackend) (self *Inbox, err error) {
 	if signer == nil {
-		return nil, fmt.Errorf("signer is null")
+		return nil, errors.New("signer is null")
 	}
 	chbook, err := contract.NewChequebook(contractAddr, abigen)
 	if err != nil {
@@ -583,7 +584,7 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary common.Address, sum *big.Int) (*big.Int, error) {
 	log.Trace("Verifying chequebook cheque", "cheque", self, "sum", sum)
 	if sum == nil {
-		return nil, fmt.Errorf("invalid amount")
+		return nil, errors.New("invalid amount")
 	}
 
 	if self.Beneficiary != beneficiary {

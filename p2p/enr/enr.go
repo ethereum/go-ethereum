@@ -275,7 +275,7 @@ func (r *Record) verifySignature() error {
 	if err := r.Load(&entry); err != nil {
 		return err
 	} else if len(entry) != 33 {
-		return fmt.Errorf("invalid public key")
+		return errors.New("invalid public key")
 	}
 
 	// Verify the signature.

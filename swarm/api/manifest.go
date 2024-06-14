@@ -195,7 +195,7 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 	size, err := manifestReader.Size(quitC)
 	if err != nil { // size == 0
 		// can't determine size means we don't have the root chunk
-		err = fmt.Errorf("Manifest not Found")
+		err = errors.New("Manifest not Found")
 		return
 	}
 	manifestData := make([]byte, size)
@@ -381,7 +381,7 @@ func (self *manifestTrie) listWithPrefixInt(prefix, rp string, quitC chan bool, 
 	for i := start; i <= stop; i++ {
 		select {
 		case <-quitC:
-			return fmt.Errorf("aborted")
+			return errors.New("aborted")
 		default:
 		}
 		entry := self.entries[i]

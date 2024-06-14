@@ -14,13 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build linux || darwin || freebsd
 // +build linux darwin freebsd
 
 package fuse
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os/exec"
 	"runtime"
 
@@ -42,7 +43,7 @@ func externalUnmount(mountPoint string) error {
 	case "linux":
 		return exec.CommandContext(ctx, "fusermount", "-u", mountPoint).Run()
 	default:
-		return fmt.Errorf("unmount: unimplemented")
+		return errors.New("unmount: unimplemented")
 	}
 }
 

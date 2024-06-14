@@ -17,6 +17,7 @@
 package kademlia
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -27,10 +28,10 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 )
 
-//metrics variables
-//For metrics, we want to count how many times peers are added/removed
-//at a certain index. Thus we do that with an array of counters with
-//entry for each index
+// metrics variables
+// For metrics, we want to count how many times peers are added/removed
+// at a certain index. Thus we do that with an array of counters with
+// entry for each index
 var (
 	bucketAddIndexCount []metrics.Counter
 	bucketRmIndexCount  []metrics.Counter
@@ -172,7 +173,7 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	}
 	if replaced == nil {
 		log.Debug(fmt.Sprintf("all peers wanted, PO%03d bucket full", index))
-		return fmt.Errorf("bucket full")
+		return errors.New("bucket full")
 	}
 	log.Debug(fmt.Sprintf("node %v replaced by %v (idle for %v  > %v)", replaced, node, idle, self.MaxIdleInterval))
 	replaced.Drop()
@@ -310,7 +311,7 @@ func (self *Kademlia) Suggest() (*NodeRecord, bool, int) {
 	return self.db.findBest(self.BucketSize, func(i int) int { return len(self.buckets[i]) })
 }
 
-//  adds node records to kaddb (persisted node record db)
+// adds node records to kaddb (persisted node record db)
 func (self *Kademlia) Add(nrs []*NodeRecord) {
 	self.db.add(nrs, self.proximityBin)
 }
@@ -441,7 +442,7 @@ func (self *Kademlia) String() string {
 	return strings.Join(rows, "\n")
 }
 
-//We have to build up the array of counters for each index
+// We have to build up the array of counters for each index
 func (self *Kademlia) initMetricsVariables() {
 	//create the arrays
 	bucketAddIndexCount = make([]metrics.Counter, self.MaxProx+1)
