@@ -370,6 +370,7 @@ func (c *Client) sendTransaction(ctx context.Context, tx *types.Transaction) err
 	return c.TrackTransaction(tx)
 }
 
+// TrackTransaction adds a transaction to the set of tracked transactions.
 func (c *Client) TrackTransaction(tx *types.Transaction) error {
 	sender, err := types.Sender(c.signer, tx)
 	if err != nil {

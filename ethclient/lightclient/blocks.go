@@ -54,6 +54,7 @@ func (c *Client) closeBlocksAndHeaders() {
 	c.blockRequests.close()
 }
 
+// getHeader returns the header with the given block hash.
 func (c *Client) getHeader(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	if header, ok := c.headerCache.Get(hash); ok {
 		return header, nil
@@ -84,15 +85,25 @@ func (c *Client) getHeader(ctx context.Context, hash common.Hash) (*types.Header
 	return header, err
 }
 
+// getPayloadHeader returns the payload header with the given block hash.
+// Note that types.Header and the CL execution payload header (btypes.ExecutionHeader)
+// both contain the information relevant to the light client but they are not
+// interchangeable. Payload headers are received from head/finality updates and
+// are cached but they are not obtainable later on demand as they are not directly
+// chained to each other by hash reference. If reverse syncing is required then
+// EL headers should be used.
 func (c *Client) getPayloadHeader(hash common.Hash) *btypes.ExecutionHeader {
 	pheader, _ := c.payloadHeaderCache.Get(hash)
 	return pheader
 }
 
+// addPayloadHeader caches the given payload header.
 func (c *Client) addPayloadHeader(header *btypes.ExecutionHeader) {
 	c.payloadHeaderCache.Add(header.BlockHash(), header)
 }
 
+// getBlock returns the block with the given hash. If the block has been retrieved
+// from the server then the transaction inclusion positions are also cached.
 func (c *Client) getBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	if block, ok := c.blockCache.Get(hash); ok {
 		return block, nil
@@ -149,7 +160,8 @@ func (c *Client) requestBlock(ctx context.Context, hash common.Hash) (*types.Blo
 	return block, nil
 }
 
-//TODO de-duplicate json block decoding
+// decodeBlock decodes a JSON encoded block.
+//TODO de-duplicate
 func decodeBlock(raw json.RawMessage) (*types.Block, error) {
 	// Decode header and transactions.
 	var head *types.Header
