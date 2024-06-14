@@ -39,9 +39,7 @@ jobs:
           docker-compose up -d
 
       - name: Deploy contracts
-        run: |
-          cd /Users/ruslangladov/PycharmProjects/DevOps_LC/go-ethereum/hardhat/
-          npx hardhat run scripts/deploy.js --network localhost
+        run: npx hardhat ignition deploy ./ignition/modules/Lock.js
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
