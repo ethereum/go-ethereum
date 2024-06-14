@@ -33,6 +33,7 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+        working-directory: /Users/ruslangladov/PycharmProjects/DevOps_LC/go-ethereum/hardhat
 
       - name: Run local devnet
         run: |
