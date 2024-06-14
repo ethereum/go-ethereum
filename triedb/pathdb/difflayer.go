@@ -152,5 +152,8 @@ func diffToDisk(layer *diffLayer, force bool) (layer, error) {
 	if !ok {
 		panic(fmt.Sprintf("unknown layer type: %T", layer.parentLayer()))
 	}
-	return disk.commit(layer, force)
+	if err := disk.commit(layer, force); err != nil {
+		return nil, err
+	}
+	return disk, nil
 }

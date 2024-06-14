@@ -152,7 +152,7 @@ func (dl *diskLayer) update(root common.Hash, id uint64, block uint64, nodes map
 // commit merges the given bottom-most diff layer into the node buffer
 // and returns a newly constructed disk layer. Note the current disk
 // layer must be tagged as stale first to prevent re-access.
-func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
+func (dl *diskLayer) commit(bottom *diffLayer, force bool) error {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -166,13 +166,13 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	if dl.db.freezer != nil {
 		err := writeHistory(dl.db.freezer, bottom)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		// Determine if the persisted history object has exceeded the configured
 		// limitation, set the overflow as true if so.
 		tail, err := dl.db.freezer.Tail()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		limit := dl.db.config.StateHistory
 		if limit != 0 && bottom.stateID()-tail > limit {
@@ -194,7 +194,8 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	// Construct a new disk layer by merging the nodes from the provided diff
 	// layer, and flush the content in disk layer if there are too many nodes
 	// cached. The clean cache is inherited from the original disk layer.
-	ndl := newDiskLayer(bottom.root, bottom.stateID(), dl.db, dl.cleans, dl.buffer.commit(bottom.nodes))
+	dl.buffer.commit(bottom.nodes)
+	dl.root, dl.id = bottom.root, bottom.stateID()
 
 	// In a unique scenario where the ID of the oldest history object (after tail
 	// truncation) surpasses the persisted state ID, we take the necessary action
@@ -203,35 +204,35 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	if !force && rawdb.ReadPersistentStateID(dl.db.diskdb) < oldest {
 		force = true
 	}
-	if err := ndl.buffer.flush(ndl.db.diskdb, ndl.cleans, ndl.id, force); err != nil {
-		return nil, err
+	if err := dl.buffer.flush(dl.db.diskdb, dl.cleans, dl.id, force); err != nil {
+		return err
 	}
 	// To remove outdated history objects from the end, we set the 'tail' parameter
 	// to 'oldest-1' due to the offset between the freezer index and the history ID.
 	if overflow {
-		pruned, err := truncateFromTail(ndl.db.diskdb, ndl.db.freezer, oldest-1)
+		pruned, err := truncateFromTail(dl.db.diskdb, dl.db.freezer, oldest-1)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		log.Debug("Pruned state history", "items", pruned, "tailid", oldest)
 	}
-	return ndl, nil
+	return nil
 }
 
 // revert applies the given state history and return a reverted disk layer.
-func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer, error) {
+func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) error {
 	if h.meta.root != dl.rootHash() {
-		return nil, errUnexpectedHistory
+		return errUnexpectedHistory
 	}
 	if dl.id == 0 {
-		return nil, fmt.Errorf("%w: zero state id", errStateUnrecoverable)
+		return fmt.Errorf("%w: zero state id", errStateUnrecoverable)
 	}
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
 	// layer.
 	nodes, err := triestate.Apply(h.meta.parent, h.meta.root, h.accounts, h.storages, loader)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.lock.Lock()
@@ -247,7 +248,7 @@ func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer
 	if !dl.buffer.empty() {
 		err := dl.buffer.revert(dl.db.diskdb, nodes)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	} else {
 		batch := dl.db.diskdb.NewBatch()
@@ -257,7 +258,10 @@ func (dl *diskLayer) revert(h *history, loader triestate.TrieLoader) (*diskLayer
 			log.Crit("Failed to write states", "err", err)
 		}
 	}
-	return newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.cleans, dl.buffer), nil
+
+	dl.root, dl.id = h.meta.parent, dl.id-1
+
+	return nil
 }
 
 // setBufferSize sets the node buffer size to the provided value.

@@ -35,6 +35,8 @@ import (
 type layerTree struct {
 	lock   sync.RWMutex
 	layers map[common.Hash]layer
+
+	origin *diskLayer
 }
 
 // newLayerTree constructs the layerTree with the given head layer.
@@ -52,6 +54,9 @@ func (tree *layerTree) reset(head layer) {
 
 	var layers = make(map[common.Hash]layer)
 	for head != nil {
+		if disk, ok := head.(*diskLayer); ok {
+			tree.origin = disk
+		}
 		layers[head.rootHash()] = head
 		head = head.parentLayer()
 	}
@@ -131,6 +136,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		if err != nil {
 			return err
 		}
+		tree.origin = base.(*diskLayer)
 		// Replace the entire layer tree with the flat base
 		tree.layers = map[common.Hash]layer{base.rootHash(): base}
 		return nil
@@ -161,6 +167,7 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 			diff.lock.Unlock()
 			return err
 		}
+		tree.origin = base.(*diskLayer)
 		tree.layers[base.rootHash()] = base
 		diff.parent = base
 
@@ -201,14 +208,10 @@ func (tree *layerTree) bottom() *diskLayer {
 	if len(tree.layers) == 0 {
 		return nil // Shouldn't happen, empty tree
 	}
-	// pick a random one as the entry point
-	var current layer
-	for _, layer := range tree.layers {
-		current = layer
-		break
+
+	if tree.origin == nil {
+		return nil
 	}
-	for current.parentLayer() != nil {
-		current = current.parentLayer()
-	}
-	return current.(*diskLayer)
+
+	return tree.origin
 }
