@@ -39,6 +39,7 @@ jobs:
           docker-compose up -d
 
       - name: Deploy contracts
+        working-directory: go-ethereum/hardhat
         run: npx hardhat run scripts/deploy.js --network localhost
 
       - name: Build and push Docker image
