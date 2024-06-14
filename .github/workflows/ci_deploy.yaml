@@ -47,7 +47,6 @@ jobs:
           context: .
           push: true
           tags: e1018mc/limechain:deployed
-#          tags: your-docker-username/your-image-name:deployed
 
       - name: Tear down local devnet
         run: |
