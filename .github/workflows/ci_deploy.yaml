@@ -32,8 +32,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install
-        working-directory: ./go-ethereum/hardhat/package.json
+        run: npm install --save-dev hardhat
 
       - name: Run local devnet
         run: |
