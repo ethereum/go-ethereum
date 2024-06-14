@@ -1,6 +1,6 @@
 'use strict'
 
-const u = require('universalify').fromPromise
+const u = require('universalify').fromCallback
 const jsonFile = require('./jsonfile')
 
 jsonFile.outputJson = u(require('./output-json'))

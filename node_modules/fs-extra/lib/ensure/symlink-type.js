@@ -19,7 +19,7 @@ function symlinkTypeSync (srcpath, type) {
   if (type) return type
   try {
     stats = fs.lstatSync(srcpath)
-  } catch {
+  } catch (e) {
     return 'file'
   }
   return (stats && stats.isDirectory()) ? 'dir' : 'file'

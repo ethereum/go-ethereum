@@ -1,27 +1,36 @@
 'use strict'
 
-const u = require('universalify').fromPromise
-const fs = require('../fs')
+const u = require('universalify').fromCallback
+const fs = require('fs')
 const path = require('path')
 const mkdir = require('../mkdirs')
 const remove = require('../remove')
 
-const emptyDir = u(async function emptyDir (dir) {
-  let items
-  try {
-    items = await fs.readdir(dir)
-  } catch {
-    return mkdir.mkdirs(dir)
-  }
+const emptyDir = u(function emptyDir (dir, callback) {
+  callback = callback || function () {}
+  fs.readdir(dir, (err, items) => {
+    if (err) return mkdir.mkdirs(dir, callback)
 
-  return Promise.all(items.map(item => remove.remove(path.join(dir, item))))
+    items = items.map(item => path.join(dir, item))
+
+    deleteItem()
+
+    function deleteItem () {
+      const item = items.pop()
+      if (!item) return callback()
+      remove.remove(item, err => {
+        if (err) return callback(err)
+        deleteItem()
+      })
+    }
+  })
 })
 
 function emptyDirSync (dir) {
   let items
   try {
     items = fs.readdirSync(dir)
-  } catch {
+  } catch (err) {
     return mkdir.mkdirsSync(dir)
   }
 
