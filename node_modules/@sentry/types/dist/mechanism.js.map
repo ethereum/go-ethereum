@@ -1,1 +1,0 @@
-{"version":3,"file":"mechanism.js","sourceRoot":"","sources":["../src/mechanism.ts"],"names":[],"mappings":"","sourcesContent":["/** JSDoc */\nexport interface Mechanism {\n  type: string;\n  handled: boolean;\n  data?: {\n    [key: string]: string | boolean;\n  };\n  synthetic?: boolean;\n}\n"]}

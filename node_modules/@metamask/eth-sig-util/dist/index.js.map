@@ -1,1 +1,0 @@
-{"version":3,"file":"index.js","sourceRoot":"","sources":["../src/index.ts"],"names":[],"mappings":";;;;;;;;;;;;;AAAA,kDAAgC;AAChC,oDAAkC;AAClC,+CAA6B;AAC7B,iCAA+C;AAAtC,kGAAA,SAAS,OAAA;AAAE,kGAAA,SAAS,OAAA","sourcesContent":["export * from './personal-sign';\nexport * from './sign-typed-data';\nexport * from './encryption';\nexport { concatSig, normalize } from './utils';\n"]}

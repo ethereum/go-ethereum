@@ -1,1 +1,0 @@
-{"version":3,"file":"context.js","sourceRoot":"","sources":["../src/context.ts"],"names":[],"mappings":"","sourcesContent":["export type Context = Record<string, unknown>;\nexport type Contexts = Record<string, Context>;\n"]}

@@ -1,1 +1,0 @@
-{"version":3,"file":"thread.js","sourceRoot":"","sources":["../src/thread.ts"],"names":[],"mappings":"","sourcesContent":["import { Stacktrace } from './stacktrace';\n\n/** JSDoc */\nexport interface Thread {\n  id?: number;\n  name?: string;\n  stacktrace?: Stacktrace;\n  crashed?: boolean;\n  current?: boolean;\n}\n"]}

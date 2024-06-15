@@ -1,5 +1,0 @@
-import { ContractCallFuture, ContractDeploymentFuture, LibraryDeploymentFuture, NamedArtifactContractDeploymentFuture, NamedArtifactLibraryDeploymentFuture, SendDataFuture, StaticCallFuture } from "../../../types/module";
-import { CallExecutionState, DeploymentExecutionState, SendDataExecutionState, StaticCallExecutionState } from "../../execution/types/execution-state";
-import { ReconciliationContext, ReconciliationFutureResultFailure } from "../types";
-export declare function reconcileFrom(future: NamedArtifactContractDeploymentFuture<string> | ContractDeploymentFuture | NamedArtifactLibraryDeploymentFuture<string> | LibraryDeploymentFuture | ContractCallFuture<string, string> | StaticCallFuture<string, string> | SendDataFuture, exState: DeploymentExecutionState | CallExecutionState | SendDataExecutionState | StaticCallExecutionState, context: ReconciliationContext): ReconciliationFutureResultFailure | undefined;
-//# sourceMappingURL=reconcile-from.d.ts.map

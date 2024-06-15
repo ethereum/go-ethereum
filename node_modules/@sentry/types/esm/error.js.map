@@ -1,1 +1,0 @@
-{"version":3,"file":"error.js","sourceRoot":"","sources":["../src/error.ts"],"names":[],"mappings":"","sourcesContent":["/**\n * Just an Error object with arbitrary attributes attached to it.\n */\nexport interface ExtendedError extends Error {\n  [key: string]: any;\n}\n"]}

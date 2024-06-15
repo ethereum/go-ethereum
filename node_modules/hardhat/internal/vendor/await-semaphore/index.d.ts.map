@@ -1,1 +1,0 @@
-{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../../src/internal/vendor/await-semaphore/index.ts"],"names":[],"mappings":"AAKA,qBAAa,SAAS;IACb,KAAK,EAAE,MAAM,CAAC;IACrB,OAAO,CAAC,MAAM,CAAyB;gBAE3B,KAAK,EAAE,MAAM;IAIlB,OAAO,kBACa,IAAI;IAoBxB,GAAG,CAAC,CAAC,EAAE,CAAC,EAAE,MAAM,OAAO,CAAC,CAAC,CAAC;IAcjC,OAAO,CAAC,MAAM;CAWf;AAED,qBAAa,KAAM,SAAQ,SAAS;;CAInC"}

@@ -1,5 +1,0 @@
-import { ContractAtFuture, ContractDeploymentFuture, LibraryDeploymentFuture, NamedArtifactContractAtFuture, NamedArtifactContractDeploymentFuture, NamedArtifactLibraryDeploymentFuture } from "../../../types/module";
-import { ContractAtExecutionState, DeploymentExecutionState } from "../../execution/types/execution-state";
-import { ReconciliationContext, ReconciliationFutureResultFailure } from "../types";
-export declare function reconcileArtifacts(future: NamedArtifactContractDeploymentFuture<string> | ContractDeploymentFuture | NamedArtifactLibraryDeploymentFuture<string> | LibraryDeploymentFuture | NamedArtifactContractAtFuture<string> | ContractAtFuture, exState: DeploymentExecutionState | ContractAtExecutionState, context: ReconciliationContext): Promise<ReconciliationFutureResultFailure | undefined>;
-//# sourceMappingURL=reconcile-artifacts.d.ts.map

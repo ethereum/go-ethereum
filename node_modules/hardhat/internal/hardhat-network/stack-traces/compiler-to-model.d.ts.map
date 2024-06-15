@@ -1,1 +1,0 @@
-{"version":3,"file":"compiler-to-model.d.ts","sourceRoot":"","sources":["../../../src/internal/hardhat-network/stack-traces/compiler-to-model.ts"],"names":[],"mappings":"AAEA,OAAO,EACL,aAAa,EACb,cAAc,EAEf,MAAM,gBAAgB,CAAC;AAMxB,OAAO,EACL,QAAQ,EAST,MAAM,SAAS,CAAC;AAgBjB,wBAAgB,8BAA8B,CAC5C,WAAW,EAAE,MAAM,EACnB,aAAa,EAAE,aAAa,EAC5B,cAAc,EAAE,cAAc,GAC7B,QAAQ,EAAE,CAqBZ"}
