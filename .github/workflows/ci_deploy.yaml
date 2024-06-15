@@ -41,6 +41,7 @@ jobs:
       - name: Deploy contracts
         run: |
           cd /home/runner/work/go-ethereum/go-ethereum/hardhat
+          npm install --save-dev @nomicfoundation/hardhat-toolbox
           npx hardhat ignition deploy ./ignition/modules/Lock.js
 
 
