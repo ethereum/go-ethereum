@@ -47,7 +47,8 @@ jobs:
 #          npx hardhat ignition deploy ./ignition/modules/Lock.js
 
       - name: Run docker container with the Apollo contract
-        run: docker run  hardhat-ignition
+        run: docker run -p 127.0.0.1:8551:8545 --rm hardhat-ignition
+
 
       - name: Hardhat test
         run: npx hardhat test
