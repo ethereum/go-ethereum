@@ -1,1 +1,0 @@
-{"version":3,"file":"stacktrace.d.ts","sourceRoot":"","sources":["../src/stacktrace.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,UAAU,EAAE,MAAM,cAAc,CAAC;AAE1C,YAAY;AACZ,MAAM,WAAW,UAAU;IACzB,MAAM,CAAC,EAAE,UAAU,EAAE,CAAC;IACtB,cAAc,CAAC,EAAE,CAAC,MAAM,EAAE,MAAM,CAAC,CAAC;CACnC"}

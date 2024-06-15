@@ -39,7 +39,9 @@ jobs:
           docker-compose up -d
 
       - name: Deploy contracts
-        run: npx hardhat ignition deploy /home/runner/work/go-ethereum/go-ethereum/test/Lock.js
+        run: |
+          cd ./hardhat
+          npx hardhat ignition deploy ./ignition/modules/Lock.js
 
 
       - name: Build and push Docker image

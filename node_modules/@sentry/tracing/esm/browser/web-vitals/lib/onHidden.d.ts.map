@@ -1,1 +1,0 @@
-{"version":3,"file":"onHidden.d.ts","sourceRoot":"","sources":["../../../../src/browser/web-vitals/lib/onHidden.ts"],"names":[],"mappings":"AAgBA,MAAM,WAAW,gBAAgB;IAE/B,CAAC,EAAE,SAAS,EAAE,WAAW,EAAE,EAAE;QAAE,SAAS,EAAE,MAAM,CAAC;QAAC,WAAW,EAAE,OAAO,CAAA;KAAE,GAAG,IAAI,CAAC;CACjF;AAkBD,eAAO,MAAM,QAAQ,gDAepB,CAAC"}

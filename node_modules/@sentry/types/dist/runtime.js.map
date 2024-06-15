@@ -1,1 +1,0 @@
-{"version":3,"file":"runtime.js","sourceRoot":"","sources":["../src/runtime.ts"],"names":[],"mappings":"","sourcesContent":["/** Runtime Context. */\nexport interface Runtime {\n  name?: string;\n  version?: string;\n}\n"]}
