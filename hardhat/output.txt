@@ -1,0 +1,61 @@
+Downloading compiler 0.8.24
+Downloading compiler 0.8.24
+Compiled 2 Solidity files successfully (evm target: paris).
+You are running Hardhat Ignition against an in-process instance of Hardhat Network.
+This will execute the deployment, but the results will be lost.
+You can use --network <network-name> to deploy to a different network.
+
+Hardhat Ignition starting for [ Apollo ]...[2K[1GHardhat Ignition 🚀
+
+Deploying [ Apollo ]
+
+Batch #1
+  Executing Apollo#Rocket...
+
+[3A[0JBatch #1
+  Executing Apollo#Rocket...
+
+[3A[0JBatch #1
+  Executed Apollo#Rocket
+
+[3A[0JBatch #1
+  Executed Apollo#Rocket
+
+Batch #2
+  Executing Apollo#Rocket.launch...
+
+[3A[0JBatch #2
+  Executing Apollo#Rocket.launch...
+
+[3A[0JBatch #2
+  Executed Apollo#Rocket.launch
+
+[3A[0JBatch #2
+  Executed Apollo#Rocket.launch
+
+[ Apollo ] successfully deployed 🚀
+
+Deployed Addresses
+
+Apollo#Rocket - 0x5FbDB2315678afecb367f032d93F642f64180aa3
+
+
+  Lock
+    Deployment
+      ✔ Should set the right unlockTime (437ms)
+      ✔ Should set the right owner
+      ✔ Should receive and store the funds to lock
+      ✔ Should fail if the unlockTime is not in the future
+    Withdrawals
+      Validations
+        ✔ Should revert with the right error if called too soon
+        ✔ Should revert with the right error if called from another account
+        ✔ Shouldn't fail if the unlockTime has arrived and the owner calls it
+      Events
+        ✔ Should emit an event on withdrawals
+      Transfers
+        ✔ Should transfer the funds to the owner
+
+
+  9 passing (480ms)
+
