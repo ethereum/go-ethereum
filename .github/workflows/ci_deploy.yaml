@@ -46,13 +46,18 @@ jobs:
 #          npm install --save-dev @nomicfoundation/hardhat-toolbox
 #          npx hardhat ignition deploy ./ignition/modules/Lock.js
 
+      - name: Run docker container with the Apollo contract
+        run: docker run  hardhat-ignition
+
+      - name: Hardhat test
+        run: npx hardhat test
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: e1018mc/limechain:deployed
+          tags: e1018mc/limechain:apollo_contract
 
       - name: Destroy local devnet
         run: docker-compose down
