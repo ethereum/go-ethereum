@@ -224,7 +224,7 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
-		preimages := make(map[common.Hash][]byte)
+		preimages := make(map[common.Hash][]byte, len(t.secKeyCache))
 		for hk, key := range t.secKeyCache {
 			preimages[common.BytesToHash([]byte(hk))] = key
 		}
