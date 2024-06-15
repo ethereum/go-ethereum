@@ -17,6 +17,9 @@ RUN cd /go-ethereum && go run build/ci.go install ./cmd/geth
 # Pull Geth into a second stage deploy alpine container
 FROM ubuntu:20.04
 
+RUN apt-get -qq update \
+    && apt-get -qq install -y --no-install-recommends ca-certificates
+
 COPY --from=builder /go-ethereum/build/bin/geth /usr/local/bin/
 
 EXPOSE 8545 8546 30303 30303/udp
