@@ -40,8 +40,8 @@ jobs:
 
       - name: Deploy contracts
         run: pwd
-#          cd ./hardhat
-#          npx hardhat ignition deploy ./ignition/modules/Lock.js
+          cd /home/runner/work/go-ethereum/go-ethereum/hardhat
+          npx hardhat ignition deploy ./ignition/modules/Lock.js
 
 
       - name: Build and push Docker image
