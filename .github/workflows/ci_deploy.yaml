@@ -39,9 +39,9 @@ jobs:
           docker-compose up -d
 
       - name: Deploy contracts
-        run: |
-          cd ./hardhat
-          npx hardhat ignition deploy ./ignition/modules/Lock.js
+        run: pwd
+#          cd ./hardhat
+#          npx hardhat ignition deploy ./ignition/modules/Lock.js
 
 
       - name: Build and push Docker image
