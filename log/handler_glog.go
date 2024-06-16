@@ -37,22 +37,21 @@ var errVmoduleSyntax = errors.New("expect comma-separated list of filename=N")
 // glog logger: setting global log levels; overriding with callsite pattern
 // matches; and requesting backtraces at certain positions.
 type GlogHandler struct {
-	origin slog.Handler // The origin handler this wraps
-
-	level    atomic.Int32 // Current log level, atomically accessible
-	override atomic.Bool  // Flag whether overrides are used, atomically accessible
-
-	patterns  []pattern              // Current list of patterns to override with
+	origin    slog.Handler     // The origin handler this wraps
+	level     atomic.Int32     // Current log level, atomically accessible
+	override  atomic.Bool      // Flag whether overrides are used, atomically accessible
+	patterns  []pattern        // Current list of patterns to override with
 	siteCache map[uintptr]slog.Level // Cache of callsite pattern evaluations
-	location  string                 // file:line location where to do a stackdump at
-	lock      sync.RWMutex           // Lock protecting the override pattern list
+	location  string           // file:line location where to do a stackdump at
+	lock      sync.RWMutex     // Lock protecting the override pattern list
 }
 
 // NewGlogHandler creates a new log handler with filtering functionality similar
 // to Google's glog logger. The returned handler implements Handler.
 func NewGlogHandler(h slog.Handler) *GlogHandler {
 	return &GlogHandler{
-		origin: h,
+		origin:    h,
+		siteCache: make(map[uintptr]slog.Level),
 	}
 }
 
@@ -96,13 +95,13 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 		if len(parts) != 2 {
 			return errVmoduleSyntax
 		}
-		parts[0] = strings.TrimSpace(parts[0])
-		parts[1] = strings.TrimSpace(parts[1])
-		if len(parts[0]) == 0 || len(parts[1]) == 0 {
+		pattern := strings.TrimSpace(parts[0])
+		levelStr := strings.TrimSpace(parts[1])
+		if len(pattern) == 0 || len(levelStr) == 0 {
 			return errVmoduleSyntax
 		}
 		// Parse the level and if correct, assemble the filter rule
-		l, err := strconv.Atoi(parts[1])
+		l, err := strconv.Atoi(levelStr)
 		if err != nil {
 			return errVmoduleSyntax
 		}
@@ -112,19 +111,7 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 			continue // Ignore. It's harmless but no point in paying the overhead.
 		}
 		// Compile the rule pattern into a regular expression
-		matcher := ".*"
-		for _, comp := range strings.Split(parts[0], "/") {
-			if comp == "*" {
-				matcher += "(/.*)?"
-			} else if comp != "" {
-				matcher += "/" + regexp.QuoteMeta(comp)
-			}
-		}
-		if !strings.HasSuffix(parts[0], ".go") {
-			matcher += "/[^/]+\\.go"
-		}
-		matcher = matcher + "$"
-
+		matcher := compilePattern(pattern)
 		re, _ := regexp.Compile(matcher)
 		filter = append(filter, pattern{re, level})
 	}
@@ -139,8 +126,24 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 	return nil
 }
 
+// compilePattern converts a vmodule pattern to a regular expression string.
+func compilePattern(pattern string) string {
+	matcher := ".*"
+	for _, comp := range strings.Split(pattern, "/") {
+		if comp == "*" {
+			matcher += "(/.*)?"
+		} else if comp != "" {
+			matcher += "/" + regexp.QuoteMeta(comp)
+		}
+	}
+	if !strings.HasSuffix(pattern, ".go") {
+		matcher += "/[^/]+\\.go"
+	}
+	return matcher + "$"
+}
+
 func (h *GlogHandler) Enabled(ctx context.Context, lvl slog.Level) bool {
-	// fast-track skipping logging if override not enabled and the provided verbosity is above configured
+	// Fast-track skipping logging if override not enabled and the provided verbosity is above configured
 	return h.override.Load() || slog.Level(h.level.Load()) <= lvl
 }
 
@@ -149,8 +152,7 @@ func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	siteCache := maps.Clone(h.siteCache)
 	h.lock.RUnlock()
 
-	patterns := []pattern{}
-	patterns = append(patterns, h.patterns...)
+	patterns := append([]pattern{}, h.patterns...)
 
 	res := GlogHandler{
 		origin:    h.origin.WithAttrs(attrs),
@@ -168,7 +170,7 @@ func (h *GlogHandler) WithGroup(name string) slog.Handler {
 	panic("not implemented")
 }
 
-// Log implements Handler.Log, filtering a log record through the global, local
+// Handle implements Handler.Handle, filtering a log record through the global, local
 // and backtrace filters, finally emitting it if either allow it through.
 func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
 	// If the global log level allows, fast track logging
@@ -184,6 +186,7 @@ func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
 	// If we didn't cache the callsite yet, calculate it
 	if !ok {
 		h.lock.Lock()
+		defer h.lock.Unlock()
 
 		fs := runtime.CallersFrames([]uintptr{r.PC})
 		frame, _ := fs.Next()
@@ -191,13 +194,13 @@ func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
 		for _, rule := range h.patterns {
 			if rule.pattern.MatchString(fmt.Sprintf("+%s", frame.File)) {
 				h.siteCache[r.PC], lvl, ok = rule.level, rule.level, true
+				break
 			}
 		}
 		// If no rule matched, remember to drop log the next time
 		if !ok {
 			h.siteCache[r.PC] = 0
 		}
-		h.lock.Unlock()
 	}
 	if lvl <= r.Level {
 		return h.origin.Handle(context.Background(), r)

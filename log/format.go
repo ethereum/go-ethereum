@@ -30,70 +30,42 @@ type TerminalStringer interface {
 	TerminalString() string
 }
 
+// format formats the log record for terminal output
 func (h *TerminalHandler) format(buf []byte, r slog.Record, usecolor bool) []byte {
 	msg := escapeMessage(r.Message)
-	var color = ""
-	if usecolor {
-		switch r.Level {
-		case LevelCrit:
-			color = "\x1b[35m"
-		case slog.LevelError:
-			color = "\x1b[31m"
-		case slog.LevelWarn:
-			color = "\x1b[33m"
-		case slog.LevelInfo:
-			color = "\x1b[32m"
-		case slog.LevelDebug:
-			color = "\x1b[36m"
-		case LevelTrace:
-			color = "\x1b[34m"
-		}
-	}
+	color := determineColor(usecolor, r.Level)
+
 	if buf == nil {
 		buf = make([]byte, 0, 30+termMsgJust)
 	}
 	b := bytes.NewBuffer(buf)
 
-	if color != "" { // Start color
-		b.WriteString(color)
-		b.WriteString(LevelAlignedString(r.Level))
-		b.WriteString("\x1b[0m")
-	} else {
-		b.WriteString(LevelAlignedString(r.Level))
-	}
+	b.WriteString(color)
+	b.WriteString(LevelAlignedString(r.Level))
+	b.WriteString("\x1b[0m")
 	b.WriteString("[")
 	writeTimeTermFormat(b, r.Time)
 	b.WriteString("] ")
 	b.WriteString(msg)
 
-	// try to justify the log output for short messages
-	//length := utf8.RuneCountInString(msg)
 	length := len(msg)
 	if (r.NumAttrs()+len(h.attrs)) > 0 && length < termMsgJust {
 		b.Write(spaces[:termMsgJust-length])
 	}
-	// print the attributes
 	h.formatAttributes(b, r, color)
 
 	return b.Bytes()
 }
 
+// formatAttributes formats the attributes of the log record
 func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, color string) {
 	writeAttr := func(attr slog.Attr, first, last bool) {
 		buf.WriteByte(' ')
-
-		if color != "" {
-			buf.WriteString(color)
-			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
-			buf.WriteString("\x1b[0m=")
-		} else {
-			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
-			buf.WriteByte('=')
-		}
+		buf.WriteString(color)
+		buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
+		buf.WriteString("\x1b[0m=")
 		val := FormatSlogValue(attr.Value, buf.AvailableBuffer())
-
 		padding := h.fieldPadding[attr.Key]
-
 		length := utf8.RuneCount(val)
 		if padding < length && length <= termCtxMaxPadding {
 			padding = length
@@ -104,6 +76,7 @@ func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, col
 			buf.Write(spaces[:padding-length])
 		}
 	}
+
 	var n = 0
 	var nAttrs = len(h.attrs) + r.NumAttrs()
 	for _, attr := range h.attrs {
@@ -116,6 +89,29 @@ func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, col
 		return true
 	})
 	buf.WriteByte('\n')
+}
+
+// determineColor determines the color code for the log level
+func determineColor(usecolor bool, level slog.Level) string {
+	if !usecolor {
+		return ""
+	}
+	switch level {
+	case LevelCrit:
+		return "\x1b[35m"
+	case slog.LevelError:
+		return "\x1b[31m"
+	case slog.LevelWarn:
+		return "\x1b[33m"
+	case slog.LevelInfo:
+		return "\x1b[32m"
+	case slog.LevelDebug:
+		return "\x1b[36m"
+	case LevelTrace:
+		return "\x1b[34m"
+	default:
+		return ""
+	}
 }
 
 // FormatSlogValue formats a slog.Value for serialization to terminal.
@@ -188,9 +184,8 @@ func appendUint64(dst []byte, n uint64, neg bool) []byte {
 	if n < 100000 {
 		if neg {
 			return strconv.AppendInt(dst, -int64(n), 10)
-		} else {
-			return strconv.AppendInt(dst, int64(n), 10)
 		}
+		return strconv.AppendInt(dst, int64(n), 10)
 	}
 	// Large numbers should be split
 	const maxLength = 26
@@ -268,8 +263,7 @@ func appendU256(dst []byte, n *uint256.Int) []byte {
 // appendEscapeString writes the string s to the given writer, with
 // escaping/quoting if needed.
 func appendEscapeString(dst []byte, s string) []byte {
-	needsQuoting := false
-	needsEscaping := false
+	needsQuoting, needsEscaping := false, false
 	for _, r := range s {
 		// If it contains spaces or equal-sign, we need to quote it.
 		if r == ' ' || r == '=' {
@@ -357,7 +351,6 @@ func writePosIntWidth(b *bytes.Buffer, i, width int) {
 		bp--
 		i = q
 	}
-	// i < 10
 	bb[bp] = byte('0' + i)
 	b.Write(bb[bp:])
 }

@@ -7,6 +7,7 @@ import (
 
 var sink []byte
 
+// Benchmark for formatting int64 using logfmt
 func BenchmarkPrettyInt64Logfmt(b *testing.B) {
 	buf := make([]byte, 100)
 	b.ReportAllocs()
@@ -15,6 +16,7 @@ func BenchmarkPrettyInt64Logfmt(b *testing.B) {
 	}
 }
 
+// Benchmark for formatting uint64 using logfmt
 func BenchmarkPrettyUint64Logfmt(b *testing.B) {
 	buf := make([]byte, 100)
 	b.ReportAllocs()
