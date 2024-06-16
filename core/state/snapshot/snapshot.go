@@ -818,10 +818,12 @@ func (t *Tree) Verify(root common.Hash) error {
 // The lock of snapTree is assumed to be held already.
 func (t *Tree) disklayer() *diskLayer {
 	var snap snapshot
+	t.lock.RLock()
 	for _, s := range t.layers {
 		snap = s
 		break
 	}
+	t.lock.RUnlock()
 	if snap == nil {
 		return nil
 	}
@@ -829,6 +831,8 @@ func (t *Tree) disklayer() *diskLayer {
 	case *diskLayer:
 		return layer
 	case *diffLayer:
+		layer.lock.RLock()
+		defer layer.lock.RUnlock()
 		return layer.origin
 	default:
 		panic(fmt.Sprintf("%T: undefined layer", snap))
@@ -848,9 +852,6 @@ func (t *Tree) diskRoot() common.Hash {
 // generating is an internal helper function which reports whether the snapshot
 // is still under the construction.
 func (t *Tree) generating() (bool, error) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
 	layer := t.disklayer()
 	if layer == nil {
 		return false, errors.New("disk layer is missing")
@@ -862,9 +863,6 @@ func (t *Tree) generating() (bool, error) {
 
 // DiskRoot is a external helper function to return the disk layer root.
 func (t *Tree) DiskRoot() common.Hash {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-
 	return t.diskRoot()
 }
 
