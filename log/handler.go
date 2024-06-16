@@ -37,16 +37,13 @@ func (h *discardHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 type TerminalHandler struct {
-	mu       sync.Mutex
-	wr       io.Writer
-	lvl      slog.Level
-	useColor bool
-	attrs    []slog.Attr
-	// fieldPadding is a map with maximum field value lengths seen until now
-	// to allow padding log contexts in a bit smarter way.
-	fieldPadding map[string]int
-
-	buf []byte
+	mu       sync.Mutex   // Mutex for thread safety
+	wr       io.Writer    // Writer to output logs
+	lvl      slog.Level   // Minimum log level to output
+	useColor bool         // Flag for enabling color-coded output
+	attrs    []slog.Attr  // Additional attributes
+	fieldPadding map[string]int // Map to track field padding lengths
+	buf      []byte       // Buffer for log formatting
 }
 
 // NewTerminalHandler returns a handler which formats log records at all levels optimized for human readability on
@@ -132,9 +129,7 @@ func JSONHandlerWithLevel(wr io.Writer, level slog.Level) slog.Handler {
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
 func LogfmtHandler(wr io.Writer) slog.Handler {
-	return slog.NewTextHandler(wr, &slog.HandlerOptions{
-		ReplaceAttr: builtinReplaceLogfmt,
-	})
+	return LogfmtHandlerWithLevel(wr, levelMaxVerbosity)
 }
 
 // LogfmtHandlerWithLevel returns the same handler as LogfmtHandler but it only outputs
