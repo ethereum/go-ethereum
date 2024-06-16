@@ -173,8 +173,8 @@ func (l *logger) Write(level slog.Level, msg string, attrs ...any) {
 	l.inner.Handler().Handle(context.Background(), r)
 }
 
-func (l *logger) Log(level slog.Level, msg string, attrs ...any) {
-	l.Write(level, msg, attrs...)
+func (l *logger) Log(level slog.Level, msg string, ctx ...interface{}) {
+	l.Write(level, msg, ctx...)
 }
 
 func (l *logger) With(ctx ...interface{}) Logger {
@@ -202,7 +202,7 @@ func (l *logger) Info(msg string, ctx ...interface{}) {
 	l.Write(slog.LevelInfo, msg, ctx...)
 }
 
-func (l *logger) Warn(msg string, ctx ...any) {
+func (l *logger) Warn(msg string, ctx ...interface{}) {
 	l.Write(slog.LevelWarn, msg, ctx...)
 }
 
