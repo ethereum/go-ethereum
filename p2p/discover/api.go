@@ -9,7 +9,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// json-rpc spec
+// DiscV5API json-rpc spec
 // https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/ethereum/portal-network-specs/assembled-spec/jsonrpc/openrpc.json&uiSchema%5BappBar%5D%5Bui:splitView%5D=false&uiSchema%5BappBar%5D%5Bui:input%5D=false&uiSchema%5BappBar%5D%5Bui:examplesDropdown%5D=false
 type DiscV5API struct {
 	DiscV5 *UDPv5
@@ -102,9 +102,7 @@ func (d *DiscV5API) AddEnr(enr string) (bool, error) {
 		return false, err
 	}
 
-	wn := wrapNode(n)
-	wn.livenessChecks++
-	d.DiscV5.tab.addVerifiedNode(wn)
+	d.DiscV5.tab.addFoundNode(n, true)
 	return true, nil
 }
 
@@ -132,7 +130,8 @@ func (d *DiscV5API) DeleteEnr(nodeId string) (bool, error) {
 		return false, errors.New("record not in local routing table")
 	}
 
-	d.DiscV5.tab.delete(wrapNode(n))
+	b := d.DiscV5.tab.bucket(n.ID())
+	d.DiscV5.tab.deleteInBucket(b, n.ID())
 	return true, nil
 }
 
@@ -297,7 +296,8 @@ func (p *PortalProtocolAPI) DeleteEnr(nodeId string) (bool, error) {
 		return false, nil
 	}
 
-	p.portalProtocol.table.delete(wrapNode(n))
+	b := p.portalProtocol.table.bucket(n.ID())
+	p.portalProtocol.table.deleteInBucket(b, n.ID())
 	return true, nil
 }
 

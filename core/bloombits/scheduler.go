@@ -23,7 +23,7 @@ import (
 // request represents a bloom retrieval task to prioritize and pull from the local
 // database or remotely from the network.
 type request struct {
-	section uint64 // Section index to retrieve the a bit-vector from
+	section uint64 // Section index to retrieve the bit-vector from
 	bit     uint   // Bit index within the section to retrieve the vector of
 }
 

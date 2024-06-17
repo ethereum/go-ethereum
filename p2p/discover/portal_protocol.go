@@ -277,7 +277,7 @@ func (p *PortalProtocol) RoutingTableInfo() [][]string {
 	for _, b := range &p.table.buckets {
 		bucketNodes := make([]string, 0)
 		for _, n := range b.entries {
-			bucketNodes = append(bucketNodes, "0x"+unwrapNode(n).ID().String())
+			bucketNodes = append(bucketNodes, "0x"+n.ID().String())
 		}
 		nodes = append(nodes, bucketNodes)
 	}
@@ -286,7 +286,7 @@ func (p *PortalProtocol) RoutingTableInfo() [][]string {
 }
 
 func (p *PortalProtocol) AddEnr(n *enode.Node) {
-	p.setJustSeen(n)
+	p.table.addFoundNode(n, true)
 	id := n.ID().String()
 	p.radiusCache.Set([]byte(id), MaxDistance)
 }
@@ -318,7 +318,7 @@ func (p *PortalProtocol) setupUDPListening() error {
 			if id, ok := p.cachedIds[addr.String()]; ok {
 				//_, err := p.DiscV5.TalkRequestToID(id, addr, string(portalwire.UTPNetwork), buf)
 				req := &v5wire.TalkRequest{Protocol: string(portalwire.UTPNetwork), Message: buf}
-				p.DiscV5.sendFromAnotherThread(id, addr, req)
+				p.DiscV5.sendFromAnotherThread(id, addr.AddrPort(), req)
 
 				return len(buf), err
 			} else {
@@ -365,7 +365,7 @@ func (p *PortalProtocol) setupDiscV5AndTable() error {
 		Log:         p.Log,
 	}
 
-	p.table, err = newMeteredTable(p, p.localNode.Database(), cfg)
+	p.table, err = newTable(p, p.localNode.Database(), cfg)
 	if err != nil {
 		return err
 	}
@@ -432,8 +432,7 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 
 	if err != nil {
-		p.Log.Error("ping error:", "ip", node.IP().String(), "port", node.UDP(), "err", err)
-		p.replaceNode(node)
+		p.deleteNode(node)
 		return nil, err
 	}
 
@@ -547,7 +546,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 	}
 
 	p.Log.Trace("Received accept response", "id", target.ID(), "accept", accept)
-	p.setJustSeen(target)
+	p.table.addFoundNode(target, true)
 
 	var contentKeyLen int
 	if request.Kind == TransientOfferRequestKind {
@@ -667,7 +666,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.Log.Trace("Received content response", "id", target.ID(), "content", content)
-		p.setJustSeen(target)
+		p.table.addFoundNode(target, true)
 		return resp[1], content.Content, nil
 	case portalwire.ContentConnIdSelector:
 		connIdMsg := &portalwire.ConnectionId{}
@@ -677,7 +676,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.Log.Trace("Received returned content response", "id", target.ID(), "connIdMsg", connIdMsg)
-		p.setJustSeen(target)
+		p.table.addFoundNode(target, true)
 		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
 		laddr := p.utp.Addr().(*utp.Addr)
 		raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
@@ -719,7 +718,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.Log.Trace("Received content response", "id", target.ID(), "enrs", enrs)
-		p.setJustSeen(target)
+		p.table.addFoundNode(target, true)
 		nodes := p.filterNodes(target, enrs.Enrs, nil)
 		return resp[1], nodes, nil
 	default:
@@ -742,16 +741,10 @@ func (p *PortalProtocol) processNodes(target *enode.Node, resp []byte, distances
 		return nil, err
 	}
 
-	p.setJustSeen(target)
+	p.table.addFoundNode(target, true)
 	nodes := p.filterNodes(target, nodesResp.Enrs, distances)
 
 	return nodes, nil
-}
-
-func (p *PortalProtocol) setJustSeen(target *enode.Node) {
-	wn := wrapNode(target)
-	wn.livenessChecks++
-	p.table.addVerifiedNode(wn)
 }
 
 func (p *PortalProtocol) filterNodes(target *enode.Node, enrs [][]byte, distances []uint) []*enode.Node {
@@ -793,7 +786,7 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 	pong := &portalwire.Pong{}
 	err := pong.UnmarshalSSZ(resp[1:])
 	if err != nil {
-		p.replaceNode(target)
+		p.deleteNode(target)
 		return nil, err
 	}
 
@@ -802,20 +795,25 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 	customPayload := &portalwire.PingPongCustomData{}
 	err = customPayload.UnmarshalSSZ(pong.CustomPayload)
 	if err != nil {
-		p.replaceNode(target)
+		p.deleteNode(target)
 		return nil, err
 	}
 
 	p.Log.Trace("Received pong response", "id", target.ID(), "pong", pong, "customPayload", customPayload)
-	p.setJustSeen(target)
+	p.table.addFoundNode(target, true)
 
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
 	return pong, nil
 }
 
+func (p *PortalProtocol) deleteNode(target *enode.Node) {
+	b := p.table.bucket(target.ID())
+	p.table.deleteInBucket(b, target.ID())
+}
+
 func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
 	if n := p.DiscV5.getNode(id); n != nil {
-		p.table.addSeenNode(wrapNode(n))
+		p.table.addInboundNode(n)
 	}
 
 	p.putCacheId(id, addr)
@@ -826,7 +824,7 @@ func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, ms
 
 func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
 	if n := p.DiscV5.getNode(id); n != nil {
-		p.table.addSeenNode(wrapNode(n))
+		p.table.addInboundNode(n)
 	}
 	p.putCacheId(id, addr)
 
@@ -1313,13 +1311,6 @@ func (p *PortalProtocol) verifyResponseNode(sender *enode.Node, r *enr.Record, d
 	return n, nil
 }
 
-func (p *PortalProtocol) replaceNode(node *enode.Node) {
-	p.table.mutex.Lock()
-	defer p.table.mutex.Unlock()
-	b := p.table.bucket(node.ID())
-	p.table.replace(b, wrapNode(node))
-}
-
 // lookupRandom looks up a random target.
 // This is needed to satisfy the transport interface.
 func (p *PortalProtocol) lookupRandom() []*enode.Node {
@@ -1339,13 +1330,13 @@ func (p *PortalProtocol) newRandomLookup(ctx context.Context) *lookup {
 }
 
 func (p *PortalProtocol) newLookup(ctx context.Context, target enode.ID) *lookup {
-	return newLookup(ctx, p.table, target, func(n *node) ([]*node, error) {
+	return newLookup(ctx, p.table, target, func(n *enode.Node) ([]*enode.Node, error) {
 		return p.lookupWorker(n, target)
 	})
 }
 
 // lookupWorker performs FINDNODE calls against a single node during lookup.
-func (p *PortalProtocol) lookupWorker(destNode *node, target enode.ID) ([]*node, error) {
+func (p *PortalProtocol) lookupWorker(destNode *enode.Node, target enode.ID) ([]*enode.Node, error) {
 	var (
 		dists = lookupDistances(target, destNode.ID())
 		nodes = nodesByDistance{target: target}
@@ -1353,15 +1344,14 @@ func (p *PortalProtocol) lookupWorker(destNode *node, target enode.ID) ([]*node,
 	)
 	var r []*enode.Node
 
-	r, err = p.findNodes(unwrapNode(destNode), dists)
+	r, err = p.findNodes(destNode, dists)
 	if errors.Is(err, errClosed) {
 		return nil, err
 	}
 	for _, n := range r {
 		if n.ID() != p.Self().ID() {
-			wn := wrapNode(n)
-			p.table.addSeenNode(wn)
-			nodes.push(wn, portalFindnodesResultLimit)
+			p.table.addFoundNode(n, false)
+			nodes.push(n, portalFindnodesResultLimit)
 		}
 	}
 	return nodes.entries, err
@@ -1403,7 +1393,7 @@ func (p *PortalProtocol) truncateNodes(nodes []*enode.Node, maxSize int, enrOver
 }
 
 func (p *PortalProtocol) findNodesCloseToContent(contentId []byte, limit int) []*enode.Node {
-	allNodes := p.table.Nodes()
+	allNodes := p.table.NodeList()
 	sort.Slice(allNodes, func(i, j int) bool {
 		return enode.LogDist(allNodes[i].ID(), enode.ID(contentId)) < enode.LogDist(allNodes[j].ID(), enode.ID(contentId))
 	})
@@ -1521,8 +1511,8 @@ func (p *PortalProtocol) ContentLookup(contentKey, contentId []byte) ([]byte, bo
 		}
 	}()
 
-	newLookup(lookupContext, p.table, enode.ID(contentId), func(n *node) ([]*node, error) {
-		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan, cancel, &hasResult)
+	newLookup(lookupContext, p.table, enode.ID(contentId), func(n *enode.Node) ([]*enode.Node, error) {
+		return p.contentLookupWorker(n, contentKey, resChan, cancel, &hasResult)
 	}).run()
 	close(resChan)
 
@@ -1587,7 +1577,7 @@ func (p *PortalProtocol) TraceContentLookup(contentKey, contentId []byte) (*Trac
 				Enr:      node.String(),
 				Distance: hexutil.Encode(dis[:]),
 			}
-			// 没有返回 content
+			// no content return
 			if traceContentRes.Content == "" {
 				if res.Flag == portalwire.ContentRawSelector || res.Flag == portalwire.ContentConnIdSelector {
 					trace.ReceivedFrom = hexId
@@ -1619,8 +1609,8 @@ func (p *PortalProtocol) TraceContentLookup(contentKey, contentId []byte) (*Trac
 		}
 	}()
 
-	lookup := newLookup(lookupContext, p.table, enode.ID(contentId), func(n *node) ([]*node, error) {
-		return p.contentLookupWorker(unwrapNode(n), contentKey, resChan, cancel, &hasResult)
+	lookup := newLookup(lookupContext, p.table, enode.ID(contentId), func(n *enode.Node) ([]*enode.Node, error) {
+		return p.contentLookupWorker(n, contentKey, resChan, cancel, &hasResult)
 	})
 	lookup.run()
 	close(resChan)
@@ -1634,8 +1624,8 @@ func (p *PortalProtocol) TraceContentLookup(contentKey, contentId []byte) (*Trac
 	return traceContentRes, nil
 }
 
-func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *traceContentInfoResp, cancel context.CancelFunc, done *int32) ([]*node, error) {
-	wrapedNode := make([]*node, 0)
+func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, resChan chan<- *traceContentInfoResp, cancel context.CancelFunc, done *int32) ([]*enode.Node, error) {
+	wrapedNode := make([]*enode.Node, 0)
 	flag, content, err := p.findContent(n, contentKey)
 	if err != nil {
 		return nil, err
@@ -1674,7 +1664,7 @@ func (p *PortalProtocol) contentLookupWorker(n *enode.Node, contentKey []byte, r
 			Content:     content,
 			UtpTransfer: false,
 		}
-		return wrapNodes(nodes), nil
+		return nodes, nil
 	}
 	return wrapedNode, nil
 }
@@ -1845,33 +1835,5 @@ func getContentKeys(request *OfferRequest) [][]byte {
 		return contentKeys
 	} else {
 		return request.Request.(*PersistOfferRequest).ContentKeys
-	}
-}
-
-func RandomNodes(table *Table, maxCount int, pred func(node *enode.Node) bool) []*enode.Node {
-	maxAmount := maxCount
-	tableCount := table.len()
-	if maxAmount > tableCount {
-		maxAmount = tableCount
-	}
-
-	var result []*enode.Node
-	var seen = make(map[enode.ID]struct{})
-
-	for {
-		if len(result) >= maxAmount {
-			return result
-		}
-
-		b := table.buckets[rand.Intn(len(table.buckets))]
-		if len(b.entries) != 0 {
-			n := b.entries[rand.Intn(len(b.entries))]
-			if _, ok := seen[n.ID()]; !ok {
-				seen[n.ID()] = struct{}{}
-				if pred == nil || pred(&n.Node) {
-					result = append(result, &n.Node)
-				}
-			}
-		}
 	}
 }

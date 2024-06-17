@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
+	"github.com/optimism-java/utp-go"
 	"github.com/prysmaticlabs/go-bitfield"
 	"golang.org/x/exp/slices"
 
@@ -20,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/optimism-java/utp-go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -99,19 +99,21 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 	node1.Log = testlog.Logger(t, log.LvlTrace)
 	err = node1.Start()
 	assert.NoError(t, err)
+	time.Sleep(12 * time.Second)
 
 	node2, err := setupLocalPortalNode(":8778", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
 	node2.Log = testlog.Logger(t, log.LvlTrace)
 	err = node2.Start()
 	assert.NoError(t, err)
+	time.Sleep(12 * time.Second)
 
 	node3, err := setupLocalPortalNode(":8779", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
 	node3.Log = testlog.Logger(t, log.LvlTrace)
 	err = node3.Start()
 	assert.NoError(t, err)
-	time.Sleep(15 * time.Second)
+	time.Sleep(12 * time.Second)
 
 	node1.putCacheNodeId(node2.localNode.Node())
 	node1.putCacheNodeId(node3.localNode.Node())
@@ -251,15 +253,13 @@ func TestPortalWireProtocol(t *testing.T) {
 	err = node1.Start()
 	assert.NoError(t, err)
 
-	// time.Sleep(15 * time.Second)
-
 	node2, err := setupLocalPortalNode(":7778", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
 	node2.Log = testlog.Logger(t, log.LevelDebug)
 	err = node2.Start()
 	assert.NoError(t, err)
 
-	time.Sleep(15 * time.Second)
+	time.Sleep(12 * time.Second)
 
 	node3, err := setupLocalPortalNode(":7779", []*enode.Node{node1.localNode.Node()})
 	assert.NoError(t, err)
@@ -267,30 +267,30 @@ func TestPortalWireProtocol(t *testing.T) {
 	err = node3.Start()
 	assert.NoError(t, err)
 
-	time.Sleep(15 * time.Second)
+	time.Sleep(12 * time.Second)
 
-	// assert.Equal(t, 2, len(node1.table.Nodes()))
-	// assert.Equal(t, 2, len(node2.table.Nodes()))
-	// assert.Equal(t, 2, len(node3.table.Nodes()))
+	assert.Equal(t, 2, len(node1.table.NodeList()))
+	assert.Equal(t, 2, len(node2.table.NodeList()))
+	assert.Equal(t, 2, len(node3.table.NodeList()))
 
-	slices.ContainsFunc(node1.table.Nodes(), func(n *enode.Node) bool {
+	slices.ContainsFunc(node1.table.NodeList(), func(n *enode.Node) bool {
 		return n.ID() == node2.localNode.Node().ID()
 	})
-	slices.ContainsFunc(node1.table.Nodes(), func(n *enode.Node) bool {
+	slices.ContainsFunc(node1.table.NodeList(), func(n *enode.Node) bool {
 		return n.ID() == node3.localNode.Node().ID()
 	})
 
-	slices.ContainsFunc(node2.table.Nodes(), func(n *enode.Node) bool {
+	slices.ContainsFunc(node2.table.NodeList(), func(n *enode.Node) bool {
 		return n.ID() == node1.localNode.Node().ID()
 	})
-	slices.ContainsFunc(node2.table.Nodes(), func(n *enode.Node) bool {
+	slices.ContainsFunc(node2.table.NodeList(), func(n *enode.Node) bool {
 		return n.ID() == node3.localNode.Node().ID()
 	})
 
-	slices.ContainsFunc(node3.table.Nodes(), func(n *enode.Node) bool {
+	slices.ContainsFunc(node3.table.NodeList(), func(n *enode.Node) bool {
 		return n.ID() == node1.localNode.Node().ID()
 	})
-	slices.ContainsFunc(node3.table.Nodes(), func(n *enode.Node) bool {
+	slices.ContainsFunc(node3.table.NodeList(), func(n *enode.Node) bool {
 		return n.ID() == node2.localNode.Node().ID()
 	})
 
@@ -414,8 +414,6 @@ func TestContentLookup(t *testing.T) {
 	node3.Log = testlog.Logger(t, log.LvlTrace)
 	err = node3.Start()
 	assert.NoError(t, err)
-	fmt.Println(node3.localNode.Node().String())
-	time.Sleep(10 * time.Second)
 
 	contentKey := []byte{0x3, 0x4}
 	content := []byte{0x1, 0x2}

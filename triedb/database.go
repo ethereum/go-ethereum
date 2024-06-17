@@ -74,6 +74,10 @@ type backend interface {
 
 	// Close closes the trie database backend and releases all held resources.
 	Close() error
+
+	// Reader returns a reader for accessing all trie nodes with provided state
+	// root. An error will be returned if the requested state is not available.
+	Reader(root common.Hash) (database.Reader, error)
 }
 
 // Database is the wrapper of the underlying backend which is shared by different
@@ -123,13 +127,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 // Reader returns a reader for accessing all trie nodes with provided state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
-	switch b := db.backend.(type) {
-	case *hashdb.Database:
-		return b.Reader(blockRoot)
-	case *pathdb.Database:
-		return b.Reader(blockRoot)
-	}
-	return nil, errors.New("unknown backend")
+	return db.backend.Reader(blockRoot)
 }
 
 // Update performs a state transition by committing dirty nodes contained in the

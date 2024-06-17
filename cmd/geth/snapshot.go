@@ -91,7 +91,7 @@ data, and verifies that all snapshot storage data has a corresponding account.
 			},
 			{
 				Name:      "inspect-account",
-				Usage:     "Check all snapshot layers for the a specific account",
+				Usage:     "Check all snapshot layers for the specific account",
 				ArgsUsage: "<address | hash>",
 				Action:    checkAccount,
 				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
@@ -544,7 +544,7 @@ func dumpState(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	conf, root, err := parseDumpConfig(ctx, stack, db)
+	conf, root, err := parseDumpConfig(ctx, db)
 	if err != nil {
 		return err
 	}

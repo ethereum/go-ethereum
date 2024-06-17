@@ -312,7 +312,7 @@ func TestTraceCall(t *testing.T) {
 			config:    &TraceCallConfig{TxIndex: uintPtr(1)},
 			expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
 		},
-		// After the target transaction, should be succeed
+		// After the target transaction, should be succeeded
 		{
 			blockNumber: rpc.BlockNumber(genBlocks - 1),
 			call: ethapi.TransactionArgs{
