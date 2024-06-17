@@ -28,6 +28,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -73,11 +74,17 @@ func NewKeccakState() KeccakState {
 	return sha3.NewLegacyKeccak256().(KeccakState)
 }
 
+var hasherPool = sync.Pool{
+	New: func() interface{} { return NewKeccakState() },
+}
+
 // HashData hashes the provided data using the KeccakState and returns a 32 byte hash
-func HashData(kh KeccakState, data []byte) (h common.Hash) {
+func HashData(data []byte) (h common.Hash) {
+	kh := hasherPool.Get().(KeccakState)
 	kh.Reset()
 	kh.Write(data)
 	kh.Read(h[:])
+	hasherPool.Put(kh)
 	return h
 }
 

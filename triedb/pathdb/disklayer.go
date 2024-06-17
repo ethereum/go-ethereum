@@ -115,16 +115,12 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	}
 	dirtyMissMeter.Mark(1)
 
-	// Try to retrieve the trie node from the clean memory cache
-	h := newHasher()
-	defer h.release()
-
 	key := cacheKey(owner, path)
 	if dl.cleans != nil {
 		if blob := dl.cleans.Get(nil, key); len(blob) > 0 {
 			cleanHitMeter.Mark(1)
 			cleanReadMeter.Mark(int64(len(blob)))
-			return blob, h.hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
+			return blob, crypto.HashData(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanMissMeter.Mark(1)
 	}
@@ -140,7 +136,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		cleanWriteMeter.Mark(int64(len(blob)))
 	}
 
-	return blob, h.hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
+	return blob, crypto.HashData(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // update implements the layer interface, returning a new diff layer on top
@@ -294,23 +290,4 @@ func (dl *diskLayer) resetCache() {
 	if dl.cleans != nil {
 		dl.cleans.Reset()
 	}
-}
-
-// hasher is used to compute the sha256 hash of the provided data.
-type hasher struct{ sha crypto.KeccakState }
-
-var hasherPool = sync.Pool{
-	New: func() interface{} { return &hasher{sha: crypto.NewKeccakState()} },
-}
-
-func newHasher() *hasher {
-	return hasherPool.Get().(*hasher)
-}
-
-func (h *hasher) hash(data []byte) common.Hash {
-	return crypto.HashData(h.sha, data)
-}
-
-func (h *hasher) release() {
-	hasherPool.Put(h)
 }

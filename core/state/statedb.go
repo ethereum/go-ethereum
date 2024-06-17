@@ -580,7 +580,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	var data *types.StateAccount
 	if s.snap != nil {
 		start := time.Now()
-		acc, err := s.snap.Account(crypto.HashData(s.hasher, addr.Bytes()))
+		acc, err := s.snap.Account(crypto.HashData(addr.Bytes()))
 		s.SnapshotAccountReads += time.Since(start)
 
 		if err == nil {
@@ -1057,7 +1057,6 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 func (s *StateDB) handleDestruction() (map[common.Hash]*accountDelete, []*trienode.NodeSet, error) {
 	var (
 		nodes   []*trienode.NodeSet
-		buf     = crypto.NewKeccakState()
 		deletes = make(map[common.Hash]*accountDelete)
 	)
 	for addr, prev := range s.stateObjectsDestruct {
@@ -1070,7 +1069,7 @@ func (s *StateDB) handleDestruction() (map[common.Hash]*accountDelete, []*trieno
 			continue
 		}
 		// The account was existent, it can be either case (c) or (d).
-		addrHash := crypto.HashData(buf, addr.Bytes())
+		addrHash := crypto.HashData(addr.Bytes())
 		op := &accountDelete{
 			address: addr,
 			origin:  types.SlimAccountRLP(*prev),

@@ -19,7 +19,6 @@ package triestate
 import (
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -139,12 +138,7 @@ func Apply(prevRoot common.Hash, postRoot common.Hash, accounts map[common.Addre
 // existent in post-state. Apply the reverse diff and verify if the storage
 // root matches the one in prev-state account.
 func updateAccount(ctx *context, loader TrieLoader, addr common.Address) error {
-	// The account was present in prev-state, decode it from the
-	// 'slim-rlp' format bytes.
-	h := newHasher()
-	defer h.release()
-
-	addrHash := h.hash(addr.Bytes())
+	addrHash := crypto.HashData(addr.Bytes())
 	prev, err := types.FullAccount(ctx.accounts[addr])
 	if err != nil {
 		return err
@@ -201,10 +195,7 @@ func updateAccount(ctx *context, loader TrieLoader, addr common.Address) error {
 // account and storage is wiped out correctly.
 func deleteAccount(ctx *context, loader TrieLoader, addr common.Address) error {
 	// The account must be existent in post-state, load the account.
-	h := newHasher()
-	defer h.release()
-
-	addrHash := h.hash(addr.Bytes())
+	addrHash := crypto.HashData(addr.Bytes())
 	blob, err := ctx.accountTrie.Get(addrHash.Bytes())
 	if err != nil {
 		return err
@@ -241,23 +232,4 @@ func deleteAccount(ctx *context, loader TrieLoader, addr common.Address) error {
 	}
 	// Delete the post-state account from the main trie.
 	return ctx.accountTrie.Delete(addrHash.Bytes())
-}
-
-// hasher is used to compute the sha256 hash of the provided data.
-type hasher struct{ sha crypto.KeccakState }
-
-var hasherPool = sync.Pool{
-	New: func() interface{} { return &hasher{sha: crypto.NewKeccakState()} },
-}
-
-func newHasher() *hasher {
-	return hasherPool.Get().(*hasher)
-}
-
-func (h *hasher) hash(data []byte) common.Hash {
-	return crypto.HashData(h.sha, data)
-}
-
-func (h *hasher) release() {
-	hasherPool.Put(h)
 }
