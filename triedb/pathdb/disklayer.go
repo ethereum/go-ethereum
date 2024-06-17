@@ -120,7 +120,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		if blob := dl.cleans.Get(nil, key); len(blob) > 0 {
 			cleanHitMeter.Mark(1)
 			cleanReadMeter.Mark(int64(len(blob)))
-			return blob, crypto.HashData(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
+			return blob, crypto.Keccak256Hash(blob), &nodeLoc{loc: locCleanCache, depth: depth}, nil
 		}
 		cleanMissMeter.Mark(1)
 	}
@@ -136,7 +136,7 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		cleanWriteMeter.Mark(int64(len(blob)))
 	}
 
-	return blob, crypto.HashData(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
+	return blob, crypto.Keccak256Hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
 // update implements the layer interface, returning a new diff layer on top

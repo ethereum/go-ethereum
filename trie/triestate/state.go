@@ -138,7 +138,7 @@ func Apply(prevRoot common.Hash, postRoot common.Hash, accounts map[common.Addre
 // existent in post-state. Apply the reverse diff and verify if the storage
 // root matches the one in prev-state account.
 func updateAccount(ctx *context, loader TrieLoader, addr common.Address) error {
-	addrHash := crypto.HashData(addr.Bytes())
+	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	prev, err := types.FullAccount(ctx.accounts[addr])
 	if err != nil {
 		return err
@@ -195,7 +195,7 @@ func updateAccount(ctx *context, loader TrieLoader, addr common.Address) error {
 // account and storage is wiped out correctly.
 func deleteAccount(ctx *context, loader TrieLoader, addr common.Address) error {
 	// The account must be existent in post-state, load the account.
-	addrHash := crypto.HashData(addr.Bytes())
+	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	blob, err := ctx.accountTrie.Get(addrHash.Bytes())
 	if err != nil {
 		return err
