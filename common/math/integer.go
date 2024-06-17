@@ -46,7 +46,7 @@ type HexOrDecimal64 uint64
 // It is similar to UnmarshalText, but allows parsing real decimals too, not just
 // quoted decimal strings.
 func (i *HexOrDecimal64) UnmarshalJSON(input []byte) error {
-	if len(input) > 0 && input[0] == '"' {
+	if len(input) > 1 && input[0] == '"' {
 		input = input[1 : len(input)-1]
 	}
 	return i.UnmarshalText(input)
