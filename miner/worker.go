@@ -754,12 +754,10 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	if tx.Type() == types.BlobTxType {
 		return w.commitBlobTransaction(env, tx)
 	}
-	start := time.Now()
 	receipt, err := w.applyTransaction(env, tx)
 	if err != nil {
 		return nil, err
 	}
-	log.Info("apply transaction time", "hash", tx.Hash(), "to", tx.To(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "took", time.Since(start).Milliseconds())
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 	return receipt.Logs, nil
@@ -804,16 +802,6 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*typ
 }
 
 func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *big.Int) error {
-	var c int
-	var gas uint64
-	for _, ttxs := range txs.txs {
-		for _, tx := range ttxs {
-			c++
-			gas += tx.Gas
-		}
-	}
-	log.Info("committing transactions", "count", c, "gas", gas)
-
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -821,7 +809,6 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 	var coalescedLogs []*types.Log
 
 	for {
-		start := time.Now()
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
 			if signal := interrupt.Load(); signal != commitInterruptNone {
@@ -894,7 +881,6 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 			log.Debug("Transaction failed, account skipped", "hash", ltx.Hash, "err", err)
 			txs.Pop()
 		}
-		log.Info("transaction processing time", "hash", tx.Hash(), "txProcessingTime", time.Since(start).Milliseconds())
 	}
 	if !w.isRunning() && len(coalescedLogs) > 0 {
 		// We don't push the pendingLogsEvent while we are sealing. The reason is that
