@@ -360,10 +360,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
-		root, nodes, err := snapTrie.Commit(false)
-		if err != nil {
-			return false, nil, err
-		}
+		root, nodes := snapTrie.Commit(false)
 		if nodes != nil {
 			tdb.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 			tdb.Commit(root, false)

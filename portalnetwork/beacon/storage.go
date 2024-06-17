@@ -119,7 +119,7 @@ func (bs *BeaconStorage) Put(contentKey []byte, contentId []byte, content []byte
 	return nil
 }
 
-func (m *BeaconStorage) Radius() *uint256.Int {
+func (bs *BeaconStorage) Radius() *uint256.Int {
 	// TODO
 	panic("implement me")
 }

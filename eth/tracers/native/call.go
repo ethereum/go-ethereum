@@ -74,6 +74,11 @@ func (f callFrame) failed() bool {
 
 func (f *callFrame) processOutput(output []byte, err error, reverted bool) {
 	output = common.CopyBytes(output)
+	// Clear error if tx wasn't reverted. This happened
+	// for pre-homestead contract storage OOG.
+	if err != nil && !reverted {
+		err = nil
+	}
 	if err == nil {
 		f.Output = output
 		return
