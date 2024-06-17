@@ -666,6 +666,9 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 
 // Release releases resources
 func (t *Tree) Release() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	if dl := t.disklayer(); dl != nil {
 		dl.Release()
 	}
