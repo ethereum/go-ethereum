@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/triestate"
-	"golang.org/x/exp/maps"
 )
 
 // State history records the state changes involved in executing a block. The
