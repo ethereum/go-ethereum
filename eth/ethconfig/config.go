@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+// Package ethconfig contains the configuration of the ETH and LES protocols.
+package ethconfig
 
 import (
 	"math/big"
@@ -33,22 +34,22 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
 
-// DefaultFullGPOConfig contains default gasprice oracle settings for full node.
-var DefaultFullGPOConfig = gasprice.Config{
+// FullNodeGPO contains default gasprice oracle settings for full node.
+var FullNodeGPO = gasprice.Config{
 	Blocks:     20,
 	Percentile: 60,
 	MaxPrice:   gasprice.DefaultMaxPrice,
 }
 
-// DefaultLightGPOConfig contains default gasprice oracle settings for light client.
-var DefaultLightGPOConfig = gasprice.Config{
+// LightClientGPO contains default gasprice oracle settings for light client.
+var LightClientGPO = gasprice.Config{
 	Blocks:     2,
 	Percentile: 60,
 	MaxPrice:   gasprice.DefaultMaxPrice,
 }
 
-// DefaultConfig contains default settings for use on the Ethereum main net.
-var DefaultConfig = Config{
+// Defaults contains default settings for use on the Ethereum main net.
+var Defaults = Config{
 	SyncMode: downloader.FullSync,
 	Ethash: ethash.Config{
 		CacheDir:       "ethash",
@@ -66,7 +67,7 @@ var DefaultConfig = Config{
 
 	TxPool:      core.DefaultTxPoolConfig,
 	RPCGasCap:   25000000,
-	GPO:         DefaultFullGPOConfig,
+	GPO:         FullNodeGPO,
 	RPCTxFeeCap: 1, // 1 ether
 }
 
@@ -78,14 +79,15 @@ func init() {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "AppData", "Ethash")
+		Defaults.Ethash.DatasetDir = filepath.Join(home, "AppData", "Ethash")
 	} else {
-		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, ".ethash")
+		Defaults.Ethash.DatasetDir = filepath.Join(home, ".ethash")
 	}
 }
 
 //go:generate gencodec -type Config -field-override configMarshaling -formats toml -out gen_config.go
 
+// Config contains configuration options for of the ETH and LES protocols.
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
 	// If nil, the Ethereum main net block is used.
