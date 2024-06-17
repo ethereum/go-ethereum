@@ -21,6 +21,7 @@ shisui-image:
 
 #? geth: Build geth
 #? geth: Build geth.
+#? geth: Build geth.
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
