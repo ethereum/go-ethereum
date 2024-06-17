@@ -41,8 +41,7 @@ func TestAccountHeaderGas(t *testing.T) {
 
 	// Check cold read cost
 	gas := ae.VersionGas(testAddr, false)
-	want := params.WitnessBranchReadCost+params.WitnessChunkReadCost
-	if gas != want {
+	if want := params.WitnessBranchReadCost+params.WitnessChunkReadCost; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
@@ -72,8 +71,7 @@ func TestAccountHeaderGas(t *testing.T) {
 
 	// Check cold write cost
 	gas = ae.VersionGas(testAddr, true)
-	want := params.WitnessBranchWriteCost+params.WitnessChunkWriteCost
-	if gas != want {
+	if want := params.WitnessBranchWriteCost+params.WitnessChunkWriteCost; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
@@ -85,8 +83,7 @@ func TestAccountHeaderGas(t *testing.T) {
 
 	// Check a write without a read charges both read and write costs
 	gas = ae.BalanceGas(testAddr2, true)
-	want := params.WitnessBranchReadCost+params.WitnessBranchWriteCost+params.WitnessChunkWriteCost+params.WitnessChunkReadCost
-	if gas != want {
+	if want := params.WitnessBranchReadCost+params.WitnessBranchWriteCost+params.WitnessChunkWriteCost+params.WitnessChunkReadCost; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
@@ -116,8 +113,7 @@ func TestContractCreateInitGas(t *testing.T) {
 
 	// Check cold read cost, without a value
 	gas := ae.ContractCreateInitGas(testAddr, false)
-	want := params.WitnessBranchWriteCost+params.WitnessBranchReadCost+params.WitnessChunkWriteCost*2+params.WitnessChunkReadCost*2
-	if gas != want {
+	if want := params.WitnessBranchWriteCost+params.WitnessBranchReadCost+params.WitnessChunkWriteCost*2+params.WitnessChunkReadCost*2; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
@@ -135,8 +131,7 @@ func TestMessageCallGas(t *testing.T) {
 
 	// Check cold read cost, without a value
 	gas := ae.MessageCallGas(testAddr)
-	want := params.WitnessBranchReadCost+params.WitnessChunkReadCost*2
-	if gas != want {
+	if want := params.WitnessBranchReadCost+params.WitnessChunkReadCost*2; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
