@@ -17,5 +17,3 @@ COPY entrypoint.sh /usr/app/entrypoint.sh
 RUN chmod +x /usr/app/entrypoint.sh
 
 ENTRYPOINT ["/usr/app/entrypoint.sh"]
-
-#CMD ["npx", "hardhat", "ignition", "deploy", "/usr/app/ignition/modules/Apollo.js"]

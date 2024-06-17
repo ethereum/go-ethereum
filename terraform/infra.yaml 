@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smart-contract
+spec:
+  selector:
+    matchLabels:
+      name: smart-contract
+  template:
+    metadata:
+      labels:
+        name: smart-contract
+    spec:
+      imagePullSecrets:
+        - name: regcred
+      containers:
+        - name: app
+          image: e1018mc/limechain:apollo_contract
+          ports:
+            - containerPort: 8545
