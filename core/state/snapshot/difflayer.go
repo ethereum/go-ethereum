@@ -525,20 +525,19 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 		dl.lock.RUnlock()
 		return list, destructed // the cached list can't be nil
 	}
-	storageMap := dl.storageData[accountHash]
 	dl.lock.RUnlock()
 
+	// No old sorted account list exists, generate a new one
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	storageMap := dl.storageData[accountHash]
 	storageList := make([]common.Hash, 0, len(storageMap))
 	for k := range storageMap {
 		storageList = append(storageList, k)
 	}
 	slices.SortFunc(storageList, common.Hash.Cmp)
-
-	// No old sorted account list exists, generate a new one
-	dl.lock.Lock()
 	dl.storageList[accountHash] = storageList
 	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
-	dl.lock.Unlock()
-
 	return storageList, destructed
 }
