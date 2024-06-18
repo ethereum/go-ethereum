@@ -433,7 +433,6 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 	talkResp, err := p.DiscV5.TalkRequest(node, p.protocolId, talkRequestBytes)
 
 	if err != nil {
-		p.deleteNode(node)
 		return nil, err
 	}
 
@@ -787,7 +786,6 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 	pong := &portalwire.Pong{}
 	err := pong.UnmarshalSSZ(resp[1:])
 	if err != nil {
-		p.deleteNode(target)
 		return nil, err
 	}
 
@@ -796,7 +794,6 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 	customPayload := &portalwire.PingPongCustomData{}
 	err = customPayload.UnmarshalSSZ(pong.CustomPayload)
 	if err != nil {
-		p.deleteNode(target)
 		return nil, err
 	}
 
@@ -805,11 +802,6 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
 	return pong, nil
-}
-
-func (p *PortalProtocol) deleteNode(target *enode.Node) {
-	b := p.table.bucket(target.ID())
-	p.table.deleteInBucket(b, target.ID())
 }
 
 func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
