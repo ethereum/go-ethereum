@@ -65,7 +65,7 @@ func (n *Nibbles) Deserialize(dr *codec.DecodingReader) error {
 		return err
 	}
 	flag, first := unpackNibblePair(firstByte)
-	nibbles := make([]byte, 1+2*len(packedNibbles))
+	nibbles := make([]byte, 0, 1+2*len(packedNibbles))
 
 	if flag == 0 {
 		if first != 0 {
@@ -77,10 +77,9 @@ func (n *Nibbles) Deserialize(dr *codec.DecodingReader) error {
 		return fmt.Errorf("nibbles: The highest 4 bits of the first byte must be 0 or 1, but was: %x", flag)
 	}
 
-	for i, b := range packedNibbles {
+	for _, b := range packedNibbles {
 		left, right := unpackNibblePair(b)
-		nibbles[1+2*i] = left
-		nibbles[1+2*i+1] = right
+		nibbles = append(nibbles, left, right)
 	}
 
 	unpackedNibbles, err := FromUnpackedNibbles(nibbles)
@@ -113,4 +112,122 @@ func FromUnpackedNibbles(nibbles []byte) (*Nibbles, error) {
 
 func unpackNibblePair(pair byte) (byte, byte) {
 	return pair >> 4, pair & 0xf
+}
+
+// test data from
+// https://github.com/ethereum/portal-network-specs/blob/master/state/state-network-test-vectors.md
+type AccountTrieNodeKey struct {
+	Path     Nibbles
+	NodeHash common.Bytes32
+}
+
+func (a *AccountTrieNodeKey) Deserialize(dr *codec.DecodingReader) error {
+	return dr.Container(
+		&a.Path,
+		&a.NodeHash,
+	)
+}
+
+func (a *AccountTrieNodeKey) Serialize(w *codec.EncodingWriter) error {
+	return w.Container(
+		&a.Path,
+		&a.NodeHash,
+	)
+}
+
+func (a *AccountTrieNodeKey) ByteLength(spec *common.Spec) uint64 {
+	return codec.ContainerLength(
+		&a.Path,
+		&a.NodeHash,
+	)
+}
+
+func (a *AccountTrieNodeKey) FixedLength(spec *common.Spec) uint64 {
+	return 0
+}
+
+func (a *AccountTrieNodeKey) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) common.Root {
+	return hFn.HashTreeRoot(
+		&a.Path,
+		&a.NodeHash,
+	)
+}
+
+type ContractStorageTrieNodeKey struct {
+	Address  common.Eth1Address
+	Path     Nibbles
+	NodeHash common.Bytes32
+}
+
+func (c *ContractStorageTrieNodeKey) Deserialize(dr *codec.DecodingReader) error {
+	return dr.Container(
+		&c.Address,
+		&c.Path,
+		&c.NodeHash,
+	)
+}
+
+func (c *ContractStorageTrieNodeKey) Serialize(w *codec.EncodingWriter) error {
+	return w.Container(
+		&c.Address,
+		&c.Path,
+		&c.NodeHash,
+	)
+}
+
+func (c *ContractStorageTrieNodeKey) ByteLength(spec *common.Spec) uint64 {
+	return codec.ContainerLength(
+		&c.Address,
+		&c.Path,
+		&c.NodeHash,
+	)
+}
+
+func (c *ContractStorageTrieNodeKey) FixedLength(spec *common.Spec) uint64 {
+	return 0
+}
+
+func (c *ContractStorageTrieNodeKey) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) common.Root {
+	return hFn.HashTreeRoot(
+		&c.Address,
+		&c.Path,
+		&c.NodeHash,
+	)
+}
+
+type ContractBytecodeKey struct {
+	Address  common.Eth1Address
+	NodeHash common.Bytes32
+}
+
+func (c *ContractBytecodeKey) Deserialize(dr *codec.DecodingReader) error {
+	return dr.FixedLenContainer(
+		&c.Address,
+		&c.NodeHash,
+	)
+}
+
+func (c *ContractBytecodeKey) Serialize(w *codec.EncodingWriter) error {
+	return w.FixedLenContainer(
+		&c.Address,
+		&c.NodeHash,
+	)
+}
+
+func (c *ContractBytecodeKey) ByteLength(spec *common.Spec) uint64 {
+	return codec.ContainerLength(
+		&c.Address,
+		&c.NodeHash,
+	)
+}
+
+func (c *ContractBytecodeKey) FixedLength(spec *common.Spec) uint64 {
+	return 0
+}
+
+func (c *ContractBytecodeKey) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) common.Root {
+	return hFn.HashTreeRoot(
+		&c.Address,
+		&c.NodeHash,
+	)
 }
