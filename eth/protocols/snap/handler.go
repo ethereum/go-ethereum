@@ -332,11 +332,7 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 			return nil, nil
 		}
 	}
-	var proofs [][]byte
-	for _, blob := range proof.List() {
-		proofs = append(proofs, blob)
-	}
-	return accounts, proofs
+	return accounts, proof.ByteList()
 }
 
 func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesPacket) ([][]*StorageData, [][]byte) {
@@ -438,7 +434,7 @@ func ServiceGetStorageRangesQuery(chain *core.BlockChain, req *GetStorageRangesP
 					return nil, nil
 				}
 			}
-			for _, blob := range proof.List() {
+			for _, blob := range proof.ByteList() {
 				proofs = append(proofs, blob)
 			}
 			// Proof terminates the reply as proofs are only added if a node
