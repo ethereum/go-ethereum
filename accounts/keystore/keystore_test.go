@@ -292,7 +292,6 @@ func TestWalletNotifications(t *testing.T) {
 		updates = make(chan accounts.WalletEvent)
 		sub     = ks.Subscribe(updates)
 	)
-	defer sub.Unsubscribe()
 	go func() {
 		for {
 			select {
