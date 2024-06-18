@@ -642,7 +642,7 @@ func TestDecimalUnmarshalJSON(t *testing.T) {
 		{
 			name:        "valid number MaxInt64 string",
 			d:           &d,
-			args:        args{[]byte(fmt.Sprintf(`"%d"`, math.MaxInt64))},
+			args:        args{[]byte(fmt.Sprintf(`"%d"`, int64(math.MaxInt64)))},
 			wantErr:     false,
 			expectedVal: math.MaxInt64,
 		},
