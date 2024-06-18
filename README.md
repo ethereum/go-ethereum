@@ -3,14 +3,16 @@
 ![AppVeyor Build (with branch)](https://ci.appveyor.com/api/projects/status/github/optimism-java/shisui?branch=portal&svg=true)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/HBAgaHCBuY)
 
-Shisui is an [Ethereum portal client](https://github.com/ethereum/portal-network-specs) written in Go language based on [go-ethereum](https://github.com/ethereum/go-ethereum).
+Shisui is an [Ethereum portal client](https://github.com/ethereum/portal-network-specs) written in Go language based
+on [go-ethereum](https://github.com/ethereum/go-ethereum).
 The name is inspired by Uchiha Shisui from the anime Naruto, who is renowned as "Shisui of the Body Flicker".
 
 > **Note:** Shisui is still **under heavy development** and is not yet ready for production use.
 
 ## Building the source
 
-For prerequisites and detailed build instructions please read the [Installation Instructions](https://geth.ethereum.org/docs/getting-started/installing-geth).
+For prerequisites and detailed build instructions please read
+the [Installation Instructions](https://geth.ethereum.org/docs/getting-started/installing-geth).
 
 Building `shisui` requires both a Go (version 1.19 or later) and a C compiler. You can install
 them using your favourite package manager. Once the dependencies are installed, run
@@ -48,14 +50,14 @@ docker run -d -p 8545:8545 -p 9009:9009/udp ghcr.io/optimism-java/shisui:latest
 * `--nat` p2p address(default `none`)
     * `none`, find local address
     * `any` uses the first auto-detected mechanism
-	* `extip:77.12.33.4` will assume the local machine is reachable on the given IP               
-	* `upnp`               uses the Universal Plug and Play protocol
-	* `pmp`                uses NAT-PMP with an auto-detected gateway address
-	* `pmp:192.168.0.1`    uses NAT-PMP with the given gateway address
+    * `extip:77.12.33.4` will assume the local machine is reachable on the given IP
+    * `upnp`               uses the Universal Plug and Play protocol
+    * `pmp`                uses NAT-PMP with an auto-detected gateway address
+    * `pmp:192.168.0.1`    uses NAT-PMP with the given gateway address
 * `--udp.addr` protocol UDP server listening port(default: `9009`)
 * `--loglevel` loglevel of portal network, `1` to `5`, from `error` to `trace`(default: `1`)
 * `--private.key` private key of p2p node, hex format without `0x` prifix
-* `--bootnodes` bootnode of p2p network with ENR format
+* `--bootnodes` bootnode of p2p network with ENR format, use `none` to config empty bootnodes
 * `--networks` portal sub networks: history, beacon, state
 
 all the options above can be set with envs.

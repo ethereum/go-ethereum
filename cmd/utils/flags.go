@@ -976,14 +976,14 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 
 	PortalDataDirFlag = &cli.StringFlag{
 		Name:     "data.dir",
-		Usage:    "data dir of where the data file located",
+		Usage:    "Data dir of where the data file located",
 		Value:    "./",
 		Category: flags.PortalNetworkCategory,
 	}
 
 	PortalDataCapacityFlag = &cli.Uint64Flag{
 		Name:     "data.capacity",
-		Usage:    "the capacity of the data stored, the unit is MB",
+		Usage:    "The capacity of the data stored, the unit is MB",
 		Value:    1000 * 10, // 10 GB
 		Category: flags.PortalNetworkCategory,
 	}
@@ -997,40 +997,40 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 
 	PortalUDPListenAddrFlag = &cli.StringFlag{
 		Name:     "udp.addr",
-		Usage:    "protocol UDP server listening interface",
+		Usage:    "Protocol UDP server listening interface",
 		Value:    "",
 		Category: flags.PortalNetworkCategory,
 	}
 
 	PortalUDPPortFlag = &cli.IntFlag{
 		Name:     "udp.port",
-		Usage:    "protocol UDP server listening port",
+		Usage:    "Protocol UDP server listening port",
 		Value:    node.DefaultUDPPort,
 		Category: flags.PortalNetworkCategory,
 	}
 
 	PortalLogLevelFlag = &cli.IntFlag{
 		Name:     "loglevel",
-		Usage:    "loglevel of portal network",
+		Usage:    "Loglevel of portal network",
 		Value:    node.DefaultLoglevel,
 		Category: flags.PortalNetworkCategory,
 	}
 
 	PortalPrivateKeyFlag = &cli.StringFlag{
 		Name:     "private.key",
-		Usage:    "private key of p2p node, hex format without 0x prifix",
+		Usage:    "Private key of p2p node, hex format without 0x prifix",
 		Category: flags.PortalNetworkCategory,
 	}
 
-	PortalBootNodesFlag = &cli.StringSliceFlag{
+	PortalBootNodesFlag = &cli.StringFlag{
 		Name:     "bootnodes",
-		Usage:    "bootnode of p2p network with ENR format for portal hive test",
+		Usage:    "Comma separated enode URLs for P2P discovery bootstrap",
 		Category: flags.PortalNetworkCategory,
 	}
 
 	PortalNetworksFlag = &cli.StringSliceFlag{
 		Name:     "networks",
-		Usage:    "portal sub networks: history, beacon, state",
+		Usage:    "Portal sub networks: history, beacon, state",
 		Category: flags.PortalNetworkCategory,
 		Value:    cli.NewStringSlice(portalwire.HistoryNetworkName),
 	}

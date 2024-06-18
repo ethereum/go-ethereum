@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/portalnetwork/beacon"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
@@ -269,17 +270,7 @@ func getPortalConfig(ctx *cli.Context) (*Config, error) {
 		config.Protocol.NAT = natInterface
 	}
 
-	bootNodes := ctx.StringSlice(utils.PortalBootNodesFlag.Name)
-	if len(bootNodes) > 0 {
-		for _, node := range bootNodes {
-			bootNode := new(enode.Node)
-			err = bootNode.UnmarshalText([]byte(node))
-			if err != nil {
-				return config, err
-			}
-			config.Protocol.BootstrapNodes = append(config.Protocol.BootstrapNodes, bootNode)
-		}
-	}
+	setPortalBootstrapNodes(ctx, config)
 	config.Networks = ctx.StringSlice(utils.PortalNetworksFlag.Name)
 	return config, nil
 }
@@ -305,4 +296,28 @@ func setPrivateKey(ctx *cli.Context, config *Config) error {
 	}
 	config.PrivateKey = privateKey
 	return nil
+}
+
+// setPortalBootstrapNodes creates a list of bootstrap nodes from the command line
+// flags, reverting to pre-configured ones if none have been specified.
+func setPortalBootstrapNodes(ctx *cli.Context, config *Config) {
+	urls := params.PortalBootnodes
+	if ctx.IsSet(utils.PortalBootNodesFlag.Name) {
+		flag := ctx.String(utils.PortalBootNodesFlag.Name)
+		if flag == "none" {
+			return
+		}
+		urls = utils.SplitAndTrim(flag)
+	}
+
+	for _, url := range urls {
+		if url != "" {
+			node, err := enode.Parse(enode.ValidSchemes, url)
+			if err != nil {
+				log.Error("Bootstrap URL invalid", "enode", url, "err", err)
+				continue
+			}
+			config.Protocol.BootstrapNodes = append(config.Protocol.BootstrapNodes, node)
+		}
+	}
 }
