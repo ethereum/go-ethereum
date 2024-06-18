@@ -423,7 +423,9 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 
 	// Wait for revalidation. We wait for the node to be revalidated two times
 	// in order to synchronize with the update in the table.
+	time.Sleep(5 * time.Millisecond)
 	waitForRevalidationPing(t, transport, tab, n2.ID())
+	time.Sleep(5 * time.Millisecond)
 	waitForRevalidationPing(t, transport, tab, n2.ID())
 
 	intable := tab.getNode(id)
