@@ -695,15 +695,11 @@ func retryHeimdallHandler(fn heimdallHandler, tickerDuration time.Duration, time
 		return
 	}
 
-	// first run for fetching milestones
+	// first run
 	firstCtx, cancel := context.WithTimeout(context.Background(), timeout)
-	err = fn(firstCtx, ethHandler, bor)
+	_ = fn(firstCtx, ethHandler, bor)
 
 	cancel()
-
-	if err != nil {
-		log.Warn(fmt.Sprintf("unable to start the %s service - first run", fnName), "err", err)
-	}
 
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
@@ -712,13 +708,11 @@ func retryHeimdallHandler(fn heimdallHandler, tickerDuration time.Duration, time
 		select {
 		case <-ticker.C:
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			err := fn(ctx, ethHandler, bor)
+
+			// Skip any error reporting here as it's handled in respective functions
+			_ = fn(ctx, ethHandler, bor)
 
 			cancel()
-
-			if err != nil {
-				log.Warn(fmt.Sprintf("unable to handle %s", fnName), "err", err)
-			}
 		case <-closeCh:
 			return
 		}
@@ -754,7 +748,7 @@ func (s *Ethereum) handleMilestone(ctx context.Context, ethHandler *ethHandler, 
 	// If the current chain head is behind the received milestone, add it to the future milestone
 	// list. Also, the hash mismatch (end block hash) error will lead to rewind so also
 	// add that milestone to the future milestone list.
-	if errors.Is(err, errMissingBlocks) || errors.Is(err, errHashMismatch) {
+	if errors.Is(err, errChainOutOfSync) || errors.Is(err, errHashMismatch) {
 		ethHandler.downloader.ProcessFutureMilestone(num, hash)
 	}
 

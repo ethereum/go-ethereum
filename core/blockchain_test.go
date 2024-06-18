@@ -4500,10 +4500,12 @@ func TestTxIndexer(t *testing.T) {
 	}
 	verify := func(db ethdb.Database, expTail uint64) {
 		tail := rawdb.ReadTxIndexTail(db)
+		//nolint:staticcheck
 		if tail == nil {
 			t.Fatal("Failed to write tx index tail")
 		}
 
+		//nolint:staticcheck
 		if *tail != expTail {
 			t.Fatalf("Unexpected tx index tail, want %v, got %d", expTail, *tail)
 		}
