@@ -445,6 +445,28 @@ func (c *PruneBlockCommand) validateAgainstSnapshot(stack *node.Node, dbHandles 
 	return nil
 }
 
+// checkDeletePermissions checks if the user has the permission to
+// delete the given `path`.
+func checkDeletePermissions(path string) (bool, error) {
+	dirInfo, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	// Check if the user has write and execute permissions on the directory
+	if dirInfo.Mode().Perm()&(0200|0100) == (0200 | 0100) {
+		// Also check if the parent directory has write permissions because delete needs them
+		parentDir := filepath.Dir(path)
+		parentDirInfo, err := os.Stat(parentDir)
+		if err != nil {
+			return false, err
+		}
+		if parentDirInfo.Mode().Perm()&0200 != 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // pruneBlock is the entry point for the ancient pruning process. Based on the user specified
 // params, it will prune the ancient data. It also handles the case where the pruning process
 // was interrupted earlier.
@@ -466,6 +488,17 @@ func (c *PruneBlockCommand) pruneBlock(stack *node.Node, fdHandles int) error {
 	}
 
 	newAncientPath := filepath.Join(path, "ancient_back")
+
+	// Check if we have delete permissions on the ancient datadir path beforehand
+	allow, err := checkDeletePermissions(oldAncientPath)
+	if err != nil {
+		log.Error("Failed to check delete permissions for ancient datadir", "path", oldAncientPath, "err", err)
+		return err
+	}
+	if !allow {
+		return fmt.Errorf("user doesn't have delete permissions on ancient datadir: %s", oldAncientPath)
+	}
+
 	blockpruner := pruner.NewBlockPruner(stack, oldAncientPath, newAncientPath, c.blockAmountReserved)
 
 	lock, exist, err := fileutil.Flock(filepath.Join(oldAncientPath, "PRUNEFLOCK"))
