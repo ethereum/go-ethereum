@@ -287,7 +287,8 @@ func (p *PortalProtocol) RoutingTableInfo() [][]string {
 }
 
 func (p *PortalProtocol) AddEnr(n *enode.Node) {
-	p.table.addFoundNode(n, true)
+	// immediately add the node to the routing table
+	p.table.handleAddNode(addNodeOp{node: n, isInbound: false, forceSetLive: true})
 	id := n.ID().String()
 	p.radiusCache.Set([]byte(id), MaxDistance)
 }

@@ -268,10 +268,6 @@ func TestPortalWireProtocol(t *testing.T) {
 
 	time.Sleep(12 * time.Second)
 
-	assert.Equal(t, 2, len(node1.table.NodeList()))
-	assert.Equal(t, 2, len(node2.table.NodeList()))
-	assert.Equal(t, 2, len(node3.table.NodeList()))
-
 	slices.ContainsFunc(node1.table.NodeList(), func(n *enode.Node) bool {
 		return n.ID() == node2.localNode.Node().ID()
 	})

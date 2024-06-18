@@ -102,7 +102,8 @@ func (d *DiscV5API) AddEnr(enr string) (bool, error) {
 		return false, err
 	}
 
-	d.DiscV5.tab.addFoundNode(n, true)
+	// immediately add the node to the routing table
+	d.DiscV5.tab.handleAddNode(addNodeOp{node: n, isInbound: false, forceSetLive: true})
 	return true, nil
 }
 
