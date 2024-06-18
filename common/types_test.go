@@ -598,70 +598,27 @@ func BenchmarkPrettyDuration(b *testing.B) {
 }
 
 func TestDecimalUnmarshalJSON(t *testing.T) {
-	type args struct {
-		input []byte
+	// These should error
+	for _, tc := range []string{``, `"`, `""`, `"-1"`} {
+		if err := new(Decimal).UnmarshalJSON([]byte(tc)); err == nil {
+			t.Errorf("input %s should cause error", tc)
+		}
 	}
-	d := Decimal(0)
-	tests := []struct {
-		name        string
-		d           *Decimal
-		args        args
-		wantErr     bool
-		expectedVal uint64
+	// These should succeed
+	for _, tc := range []struct {
+		input string
+		want  uint64
 	}{
-		{
-			name:    "invalid number string",
-			d:       &d,
-			args:    args{[]byte(``)},
-			wantErr: true,
-		}, {
-			name:    "invalid number string",
-			d:       &d,
-			args:    args{[]byte(`"`)},
-			wantErr: true,
-		},
-		{
-			name:    "invalid empty string",
-			d:       &d,
-			args:    args{[]byte(`""`)},
-			wantErr: true,
-		},
-		{
-			name:    "invalid negetive number string",
-			d:       &d,
-			args:    args{[]byte(`"-1"`)},
-			wantErr: true,
-		},
-		{
-			name:        "valid number 0 string",
-			d:           &d,
-			args:        args{[]byte(`"0"`)},
-			wantErr:     false,
-			expectedVal: 0,
-		},
-		{
-			name:        "valid number MaxInt64 string",
-			d:           &d,
-			args:        args{[]byte(fmt.Sprintf(`"%d"`, int64(math.MaxInt64)))},
-			wantErr:     false,
-			expectedVal: math.MaxInt64,
-		},
-		{
-			name:        "valid number MaxUint64 string",
-			d:           &d,
-			args:        args{[]byte(fmt.Sprintf(`"%d"`, uint64(math.MaxUint64)))},
-			wantErr:     false,
-			expectedVal: math.MaxUint64,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.d.UnmarshalJSON(tt.args.input); (err != nil) != tt.wantErr {
-				t.Errorf("Decimal.UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if !tt.wantErr && uint64(d) != tt.expectedVal {
-				t.Errorf("Decimal.UnmarshalJSON() doesn't expected:\n got %d\nwant %d", uint64(d), tt.expectedVal)
-			}
-		})
+		{`"0"`, 0},
+		{`"9223372036854775807"`, math.MaxInt64},
+		{`"18446744073709551615"`, math.MaxUint64},
+	} {
+		have := new(Decimal)
+		if err := have.UnmarshalJSON([]byte(tc.input)); err != nil {
+			t.Errorf("input %q triggered error: %v", tc.input, err)
+		}
+		if uint64(*have) != tc.want {
+			t.Errorf("input %q, have %d want %d", tc.input, *have, tc.want)
+		}
 	}
 }
