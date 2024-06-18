@@ -21,6 +21,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"strings"
@@ -594,4 +595,73 @@ func BenchmarkPrettyDuration(b *testing.B) {
 		a = x.String()
 	}
 	b.Logf("Post %s", a)
+}
+
+func TestDecimalUnmarshalJSON(t *testing.T) {
+	type args struct {
+		input []byte
+	}
+	d := Decimal(0)
+	tests := []struct {
+		name        string
+		d           *Decimal
+		args        args
+		wantErr     bool
+		expectedVal uint64
+	}{
+		{
+			name:    "invalid number string",
+			d:       &d,
+			args:    args{[]byte(``)},
+			wantErr: true,
+		}, {
+			name:    "invalid number string",
+			d:       &d,
+			args:    args{[]byte(`"`)},
+			wantErr: true,
+		},
+		{
+			name:    "invalid empty string",
+			d:       &d,
+			args:    args{[]byte(`""`)},
+			wantErr: true,
+		},
+		{
+			name:    "invalid negetive number string",
+			d:       &d,
+			args:    args{[]byte(`"-1"`)},
+			wantErr: true,
+		},
+		{
+			name:        "valid number 0 string",
+			d:           &d,
+			args:        args{[]byte(`"0"`)},
+			wantErr:     false,
+			expectedVal: 0,
+		},
+		{
+			name:        "valid number MaxInt64 string",
+			d:           &d,
+			args:        args{[]byte(fmt.Sprintf(`"%d"`, math.MaxInt64))},
+			wantErr:     false,
+			expectedVal: math.MaxInt64,
+		},
+		{
+			name:        "valid number MaxUint64 string",
+			d:           &d,
+			args:        args{[]byte(fmt.Sprintf(`"%d"`, uint64(math.MaxUint64)))},
+			wantErr:     false,
+			expectedVal: math.MaxUint64,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.d.UnmarshalJSON(tt.args.input); (err != nil) != tt.wantErr {
+				t.Errorf("Decimal.UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && uint64(d) != tt.expectedVal {
+				t.Errorf("Decimal.UnmarshalJSON() doesn't expected:\n got %d\nwant %d", uint64(d), tt.expectedVal)
+			}
+		})
+	}
 }
