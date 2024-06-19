@@ -314,6 +314,8 @@ func TestWalletNotifications(t *testing.T) {
 			// Add a new account and ensure wallet notifications arrives
 			account, err := ks.NewAccount("")
 			if err != nil {
+				// Shut down the event collector and check events.
+				sub.Unsubscribe()
 				t.Fatalf("failed to create test account: %v", err)
 			}
 			live[account.Address] = account
@@ -326,6 +328,8 @@ func TestWalletNotifications(t *testing.T) {
 				break
 			}
 			if err := ks.Delete(account, ""); err != nil {
+				// Shut down the event collector and check events.
+				sub.Unsubscribe()
 				t.Fatalf("failed to delete test account: %v", err)
 			}
 			delete(live, account.Address)
