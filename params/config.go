@@ -605,7 +605,7 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time u
 		if err.RewindToTime > 0 {
 			btime = err.RewindToTime
 		} else {
-			bhead.SetUint64(err.RewindToBlock)
+			bhead.SetUint64(uint64(err.RewindToBlock))
 		}
 	}
 	return lasterr
@@ -841,10 +841,8 @@ type ConfigCompatError struct {
 	StoredTime, NewTime *uint64
 
 	// the block number to which the local chain must be rewound to correct the error
-	RewindToBlock uint64
-
-	// the flag to tell whether it's rewinding by block or time
-	RewindByBlock bool
+	// "-1" is used as a "not used" flag to denote it's rewinding by time instead
+	RewindToBlock int64
 
 	// the timestamp to which the local chain must be rewound to correct the error
 	RewindToTime uint64
@@ -865,10 +863,9 @@ func newBlockCompatError(what string, storedblock, newblock *big.Int) *ConfigCom
 		StoredBlock:   storedblock,
 		NewBlock:      newblock,
 		RewindToBlock: 0,
-		RewindByBlock: true,
 	}
 	if rew != nil && rew.Sign() > 0 {
-		err.RewindToBlock = rew.Uint64() - 1
+		err.RewindToBlock = int64(rew.Uint64() - 1)
 	}
 	return err
 }
@@ -884,15 +881,20 @@ func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCo
 		rew = newtime
 	}
 	err := &ConfigCompatError{
-		What:         what,
-		StoredTime:   storedtime,
-		NewTime:      newtime,
-		RewindToTime: 0,
+		What:          what,
+		StoredTime:    storedtime,
+		NewTime:       newtime,
+		RewindToBlock: -1,
+		RewindToTime:  0,
 	}
 	if rew != nil && *rew != 0 {
 		err.RewindToTime = *rew - 1
 	}
 	return err
+}
+
+func (err *ConfigCompatError) IsRewindByBlock() bool {
+	return err.RewindToBlock != -1
 }
 
 func (err *ConfigCompatError) Error() string {

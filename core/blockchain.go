@@ -454,7 +454,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		if compat.RewindToTime > 0 {
 			bc.SetHeadWithTimestamp(compat.RewindToTime)
 		} else {
-			bc.SetHead(compat.RewindToBlock)
+			bc.SetHead(uint64(compat.RewindToBlock))
 		}
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}

@@ -148,7 +148,6 @@ func testSetupGenesis(t *testing.T, scheme string) {
 				What:          "Homestead fork block",
 				StoredBlock:   big.NewInt(2),
 				NewBlock:      big.NewInt(3),
-				RewindByBlock: true,
 				RewindToBlock: 1,
 			},
 		},

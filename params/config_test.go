@@ -52,7 +52,6 @@ func TestCheckCompatible(t *testing.T) {
 				StoredBlock:   big.NewInt(0),
 				NewBlock:      nil,
 				RewindToBlock: 0,
-				RewindByBlock: true,
 			},
 		},
 		{
@@ -64,7 +63,6 @@ func TestCheckCompatible(t *testing.T) {
 				StoredBlock:   big.NewInt(0),
 				NewBlock:      big.NewInt(1),
 				RewindToBlock: 0,
-				RewindByBlock: true,
 			},
 		},
 		{
@@ -76,7 +74,6 @@ func TestCheckCompatible(t *testing.T) {
 				StoredBlock:   big.NewInt(10),
 				NewBlock:      big.NewInt(20),
 				RewindToBlock: 9,
-				RewindByBlock: true,
 			},
 		},
 		{
@@ -94,7 +91,6 @@ func TestCheckCompatible(t *testing.T) {
 				StoredBlock:   nil,
 				NewBlock:      big.NewInt(31),
 				RewindToBlock: 30,
-				RewindByBlock: true,
 			},
 		},
 		{
@@ -108,18 +104,19 @@ func TestCheckCompatible(t *testing.T) {
 			new:           &ChainConfig{ShanghaiTime: newUint64(20)},
 			headTimestamp: 25,
 			wantErr: &ConfigCompatError{
-				What:         "Shanghai fork timestamp",
-				StoredTime:   newUint64(10),
-				NewTime:      newUint64(20),
-				RewindToTime: 9,
+				What:          "Shanghai fork timestamp",
+				StoredTime:    newUint64(10),
+				NewTime:       newUint64(20),
+				RewindToTime:  9,
+				RewindToBlock: -1,
 			},
 		},
 	}
 
-	for _, test := range tests {
+	for i, test := range tests {
 		err := test.stored.CheckCompatible(test.new, test.headBlock, test.headTimestamp)
 		if !reflect.DeepEqual(err, test.wantErr) {
-			t.Errorf("error mismatch:\nstored: %v\nnew: %v\nheadBlock: %v\nheadTimestamp: %v\nerr: %v\nwant: %v", test.stored, test.new, test.headBlock, test.headTimestamp, err, test.wantErr)
+			t.Errorf("error mismatch:\nstored: %v\nnew: %v\nheadBlock: %v\nheadTimestamp: %v\nerr: %v\nwant: %v\nindex:%d", test.stored, test.new, test.headBlock, test.headTimestamp, err, test.wantErr, i)
 		}
 	}
 }
