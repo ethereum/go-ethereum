@@ -408,11 +408,12 @@ func checkStateContent(ctx *cli.Context) error {
 }
 
 func showDBStats(db ethdb.KeyValueStater) {
-	if stats, err := db.Stat(); err != nil {
+	stats, err := db.Stat()
+	if err != nil {
 		log.Warn("Failed to read database stats", "error", err)
-	} else {
-		fmt.Println(stats)
+		return
 	}
+	fmt.Println(stats)
 }
 
 func dbStats(ctx *cli.Context) error {

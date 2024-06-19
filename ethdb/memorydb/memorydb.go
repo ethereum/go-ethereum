@@ -182,7 +182,7 @@ func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
 	return newSnapshot(db), nil
 }
 
-// Stat returns a particular internal stat of the database.
+// Stat returns the statistic data of the database.
 func (db *Database) Stat() (string, error) {
 	return "", nil
 }
