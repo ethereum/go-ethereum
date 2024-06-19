@@ -131,6 +131,8 @@ func (d *DiscV5API) DeleteEnr(nodeId string) (bool, error) {
 		return false, errors.New("record not in local routing table")
 	}
 
+	d.DiscV5.tab.mutex.Lock()
+	defer d.DiscV5.tab.mutex.Unlock()
 	b := d.DiscV5.tab.bucket(n.ID())
 	d.DiscV5.tab.deleteInBucket(b, n.ID())
 	return true, nil
@@ -297,6 +299,8 @@ func (p *PortalProtocolAPI) DeleteEnr(nodeId string) (bool, error) {
 		return false, nil
 	}
 
+	p.portalProtocol.table.mutex.Lock()
+	defer p.portalProtocol.table.mutex.Unlock()
 	b := p.portalProtocol.table.bucket(n.ID())
 	p.portalProtocol.table.deleteInBucket(b, n.ID())
 	return true, nil
