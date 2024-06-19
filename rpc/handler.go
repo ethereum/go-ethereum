@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// callErrorDataLogDTruncateLimit is the before truncation limit of the error data field in the log.
+// callErrorDataLogTruncateLimit is the before truncation limit of the error data field in the log.
 const callErrorDataLogTruncateLimit = 1024
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
