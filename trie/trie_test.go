@@ -820,7 +820,7 @@ func (s *spongeDb) Delete(key []byte) error                  { panic("implement 
 func (s *spongeDb) NewBatch() ethdb.Batch                    { return &spongeBatch{s} }
 func (s *spongeDb) NewBatchWithSize(size int) ethdb.Batch    { return &spongeBatch{s} }
 func (s *spongeDb) NewSnapshot() (ethdb.Snapshot, error)     { panic("implement me") }
-func (s *spongeDb) Stat(property string) (string, error)     { panic("implement me") }
+func (s *spongeDb) Stat() (string, error)                    { panic("implement me") }
 func (s *spongeDb) Compact(start []byte, limit []byte) error { panic("implement me") }
 func (s *spongeDb) Close() error                             { return nil }
 func (s *spongeDb) Put(key []byte, value []byte) error {
