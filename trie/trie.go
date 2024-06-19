@@ -53,7 +53,6 @@ type Trie struct {
 	reader *trieReader
 
 	// tracer is the tool to track the trie changes.
-	// It will be reset after each commit operation.
 	tracer *tracer
 }
 
