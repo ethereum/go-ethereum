@@ -126,8 +126,8 @@ func (db *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	panic("not supported")
 }
 
-func (db *Database) Stat(property string) (string, error) {
-	panic("not supported")
+func (db *Database) Stat() (string, error) {
+	return "", nil
 }
 
 func (db *Database) AncientDatadir() (string, error) {
