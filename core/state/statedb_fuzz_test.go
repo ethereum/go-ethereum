@@ -236,15 +236,15 @@ func (test *stateTest) run() bool {
 		} else {
 			state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
 		}
-		ret, err := state.commitAndFlush(0, true) // call commit at the block boundary
+		_, err = state.Commit(0, true) // call commit at the block boundary
 		if err != nil {
 			panic(err)
 		}
-		if ret.empty() {
+		if state.commit.empty() {
 			return true
 		}
-		copyUpdate(ret)
-		roots = append(roots, ret.root)
+		copyUpdate(state.commit)
+		roots = append(roots, state.commit.root)
 	}
 	for i := 0; i < len(test.actions); i++ {
 		root := types.EmptyRootHash

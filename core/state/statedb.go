@@ -146,6 +146,9 @@ type StateDB struct {
 	validRevisions []revision
 	nextRevisionId int
 
+	// Temporary storage area for comitted but not yet flushed state updates
+	commit *stateUpdate
+
 	// Measurements gathered during execution for debugging purposes
 	AccountReads         time.Duration
 	AccountHashes        time.Duration
@@ -1099,12 +1102,17 @@ func (s *StateDB) GetTrie() Trie {
 	return s.trie
 }
 
-// commit gathers the state mutations accumulated along with the associated
-// trie changes, resetting all internal flags with the new state as the base.
-func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
+// CommitWithoutFlush gathers the state mutations accumulated along with the
+// associated trie changes, resetting all internal flags with the new state
+// as the base.
+//
+// The mutations will be stored in the statedb but will not be flushed to disk.
+// This can be useful in cases where additional validation (stateless witness
+// checks across clients) it be be performed on the state before storing it.
+func (s *StateDB) CommitWithoutFlush(deleteEmptyObjects bool) error {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
-		return nil, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
+		return fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
 	}
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
@@ -1153,11 +1161,11 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	// during subsequent resurrection can be combined correctly.
 	deletes, delNodes, err := s.handleDestruction()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, set := range delNodes {
 		if err := merge(set); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	// Handle all state updates afterwards, concurrently to one another to shave
@@ -1202,7 +1210,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 		// Write any contract code associated with the state object
 		obj := s.stateObjects[addr]
 		if obj == nil {
-			return nil, errors.New("missing state object")
+			return errors.New("missing state object")
 		}
 		// Run the storage updates concurrently to one another
 		workers.Go(func() error {
@@ -1223,7 +1231,7 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	}
 	// Wait for everything to finish and update the metrics
 	if err := workers.Wait(); err != nil {
-		return nil, err
+		return err
 	}
 	accountUpdatedMeter.Mark(int64(s.AccountUpdated))
 	storageUpdatedMeter.Mark(s.StorageUpdated.Load())
@@ -1243,55 +1251,59 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 
 	origin := s.originalRoot
 	s.originalRoot = root
-	return newStateUpdate(origin, root, deletes, updates, nodes), nil
+
+	s.commit = newStateUpdate(origin, root, deletes, updates, nodes)
+	return nil
 }
 
-// commitAndFlush is a wrapper of commit which also commits the state mutations
-// to the configured data stores.
-func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateUpdate, error) {
-	ret, err := s.commit(deleteEmptyObjects)
-	if err != nil {
-		return nil, err
+// Flush operates on a comitted-but-not-flushed state database to iterate and
+// push the state diffs into the database. Unless you need to do something in
+// between commit and flush, just use statedb.Commit directly.
+func (s *StateDB) Flush(block uint64) (common.Hash, error) {
+	// Sanity check that commit was called before flush
+	if s.commit == nil {
+		log.Error("Statedb not committed before flush")
+		return common.Hash{}, errors.New("statedb uncomitted")
 	}
 	// Commit dirty contract code if any exists
-	if db := s.db.DiskDB(); db != nil && len(ret.codes) > 0 {
+	if db := s.db.DiskDB(); db != nil && len(s.commit.codes) > 0 {
 		batch := db.NewBatch()
-		for _, code := range ret.codes {
+		for _, code := range s.commit.codes {
 			rawdb.WriteCode(batch, code.hash, code.blob)
 		}
 		if err := batch.Write(); err != nil {
-			return nil, err
+			return common.Hash{}, err
 		}
 	}
-	if !ret.empty() {
+	if !s.commit.empty() {
 		// If snapshotting is enabled, update the snapshot tree with this new version
 		if s.snap != nil {
 			s.snap = nil
 
 			start := time.Now()
-			if err := s.snaps.Update(ret.root, ret.originRoot, ret.destructs, ret.accounts, ret.storages); err != nil {
-				log.Warn("Failed to update snapshot tree", "from", ret.originRoot, "to", ret.root, "err", err)
+			if err := s.snaps.Update(s.commit.root, s.commit.originRoot, s.commit.destructs, s.commit.accounts, s.commit.storages); err != nil {
+				log.Warn("Failed to update snapshot tree", "from", s.commit.originRoot, "to", s.commit.root, "err", err)
 			}
 			// Keep 128 diff layers in the memory, persistent layer is 129th.
 			// - head layer is paired with HEAD state
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := s.snaps.Cap(ret.root, TriesInMemory); err != nil {
-				log.Warn("Failed to cap snapshot tree", "root", ret.root, "layers", TriesInMemory, "err", err)
+			if err := s.snaps.Cap(s.commit.root, TriesInMemory); err != nil {
+				log.Warn("Failed to cap snapshot tree", "root", s.commit.root, "layers", TriesInMemory, "err", err)
 			}
 			s.SnapshotCommits += time.Since(start)
 		}
 		// If trie database is enabled, commit the state update as a new layer
 		if db := s.db.TrieDB(); db != nil {
 			start := time.Now()
-			set := triestate.New(ret.accountsOrigin, ret.storagesOrigin)
-			if err := db.Update(ret.root, ret.originRoot, block, ret.nodes, set); err != nil {
-				return nil, err
+			set := triestate.New(s.commit.accountsOrigin, s.commit.storagesOrigin)
+			if err := db.Update(s.commit.root, s.commit.originRoot, block, s.commit.nodes, set); err != nil {
+				return common.Hash{}, err
 			}
 			s.TrieDBCommits += time.Since(start)
 		}
 	}
-	return ret, err
+	return s.commit.root, nil
 }
 
 // Commit writes the state mutations into the configured data stores.
@@ -1304,11 +1316,10 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 // The associated block number of the state transition is also provided
 // for more chain context.
 func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
-	ret, err := s.commitAndFlush(block, deleteEmptyObjects)
-	if err != nil {
+	if err := s.CommitWithoutFlush(deleteEmptyObjects); err != nil {
 		return common.Hash{}, err
 	}
-	return ret.root, nil
+	return s.Flush(block)
 }
 
 // Prepare handles the preparatory steps for executing a state transition with.

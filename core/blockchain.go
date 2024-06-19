@@ -1472,8 +1472,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
-	// Commit all cached state changes into underlying memory database.
-	root, err := statedb.Commit(block.NumberU64(), bc.chainConfig.IsEIP158(block.Number()))
+	// Flush all cached state changes into underlying memory database.
+	root, err := statedb.Flush(block.NumberU64())
 	if err != nil {
 		return err
 	}
@@ -1929,6 +1929,13 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 		return nil, err
 	}
 	vtime := time.Since(vstart)
+
+	// Commit the tries to in-memory buffers to finish populating any witnesses
+	if err = statedb.CommitWithoutFlush(bc.chainConfig.IsEIP158(block.Number())); err != nil {
+		return nil, err
+	}
+	// TODO(karalabe): Do the stateless cross validation here when merging it
+
 	proctime := time.Since(start) // processing + validation
 
 	// Update the metrics touched during block processing and validation
