@@ -26,7 +26,6 @@ import (
 
 func TestBlockchain(t *testing.T) {
 	bt := new(testMatcher)
-	bt.skipLoad(`^GeneralStateTests/VMTests/vmPerformance`)
 
 	// Skip random failures due to selfish mining test
 	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)
@@ -38,6 +37,7 @@ func TestBlockchain(t *testing.T) {
 	bt.slow(`.*/bcForkStressTest/`)
 	bt.slow(`.*/bcGasPricerTest/RPC_API_Test.json`)
 	bt.slow(`.*/bcWalletTest/`)
+	bt.skipLoad(`^GeneralStateTests/VMTests/vmPerformance`)
 
 	// Very slow test
 	bt.skipLoad(`.*/stTimeConsuming/.*`)
