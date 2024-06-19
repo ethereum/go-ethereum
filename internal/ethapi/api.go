@@ -1249,7 +1249,6 @@ type CallArgs struct {
 }
 
 // ToMessage converts CallArgs to the Message type used by the core evm
-// TODO: set balanceTokenFee
 func (args *CallArgs) ToMessage(b Backend, number *big.Int, globalGasCap uint64) types.Message {
 	// Set sender address or use a default if none specified
 	var addr common.Address
@@ -1298,11 +1297,7 @@ func (args *CallArgs) ToMessage(b Backend, number *big.Int, globalGasCap uint64)
 		accessList = *args.AccessList
 	}
 
-	balanceTokenFee := big.NewInt(0).SetUint64(gas)
-	balanceTokenFee = balanceTokenFee.Mul(balanceTokenFee, gasPrice)
-
-	// Create new call message
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, accessList, false, balanceTokenFee, number)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, accessList, false, nil, number)
 	return msg
 }
 
@@ -1321,6 +1316,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	}
 
 	msg := args.ToMessage(b, header.Number, globalGasCap)
+	msg.SetBalanceTokenFeeForCall()
 
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
