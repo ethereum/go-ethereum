@@ -139,11 +139,15 @@ func (h *GlogHandler) Vmodule(ruleset string) error {
 	return nil
 }
 
+// Enabled implements slog.Handler, reporting whether the handler handles records
+// at the given level.
 func (h *GlogHandler) Enabled(ctx context.Context, lvl slog.Level) bool {
 	// fast-track skipping logging if override not enabled and the provided verbosity is above configured
 	return h.override.Load() || slog.Level(h.level.Load()) <= lvl
 }
 
+// WithAttrs implements slog.Handler, returning a new Handler whose attributes
+// consist of both the receiver's attributes and the arguments.
 func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	h.lock.RLock()
 	siteCache := maps.Clone(h.siteCache)
@@ -164,12 +168,16 @@ func (h *GlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &res
 }
 
+// WithGroup implements slog.Handler, returning a new Handler with the given
+// group appended to the receiver's existing groups.
+//
+// Note, this function is not implemented.
 func (h *GlogHandler) WithGroup(name string) slog.Handler {
 	panic("not implemented")
 }
 
-// Log implements Handler.Log, filtering a log record through the global, local
-// and backtrace filters, finally emitting it if either allow it through.
+// Handle implements slog.Handler, filtering a log record through the global,
+// local and backtrace filters, finally emitting it if either allow it through.
 func (h *GlogHandler) Handle(_ context.Context, r slog.Record) error {
 	// If the global log level allows, fast track logging
 	if slog.Level(h.level.Load()) <= r.Level {
