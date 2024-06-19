@@ -147,7 +147,7 @@ func readProtocolHandshake(rw MsgReader, our *protoHandshake) (*protoHandshake, 
 		return nil, err
 	}
 	if msg.Size > baseProtocolMaxMsgSize {
-		return nil, fmt.Errorf("message too big")
+		return nil, errors.New("message too big")
 	}
 	if msg.Code == discMsg {
 		// Disconnect before protocol handshake is valid according to the
@@ -528,9 +528,9 @@ func importPublicKey(pubKey []byte) (*ecies.PublicKey, error) {
 		return nil, fmt.Errorf("invalid public key length %v (expect 64/65)", len(pubKey))
 	}
 	// TODO: fewer pointless conversions
-	pub := crypto.ToECDSAPub(pubKey65)
-	if pub.X == nil {
-		return nil, fmt.Errorf("invalid public key")
+	pub, err := crypto.UnmarshalPubkey(pubKey65)
+	if err != nil {
+		return nil, err
 	}
 	return ecies.ImportECDSAPublic(pub), nil
 }

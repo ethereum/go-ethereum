@@ -27,13 +27,13 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/usbwallet/internal/trezor"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/log"
+	"github.com/golang/protobuf/proto"
 )
 
 // ErrTrezorPINNeeded is returned if opening the trezor requires a PIN code. In
@@ -80,13 +80,13 @@ func (w *trezorDriver) Status() (string, error) {
 
 // Open implements usbwallet.driver, attempting to initialize the connection to
 // the Trezor hardware wallet. Initializing the Trezor is a two phase operation:
-//  * The first phase is to initialize the connection and read the wallet's
-//    features. This phase is invoked is the provided passphrase is empty. The
-//    device will display the pinpad as a result and will return an appropriate
-//    error to notify the user that a second open phase is needed.
-//  * The second phase is to unlock access to the Trezor, which is done by the
-//    user actually providing a passphrase mapping a keyboard keypad to the pin
-//    number of the user (shuffled according to the pinpad displayed).
+//   - The first phase is to initialize the connection and read the wallet's
+//     features. This phase is invoked is the provided passphrase is empty. The
+//     device will display the pinpad as a result and will return an appropriate
+//     error to notify the user that a second open phase is needed.
+//   - The second phase is to unlock access to the Trezor, which is done by the
+//     user actually providing a passphrase mapping a keyboard keypad to the pin
+//     number of the user (shuffled according to the pinpad displayed).
 func (w *trezorDriver) Open(device io.ReadWriter, passphrase string) error {
 	w.device, w.failure = device, nil
 
@@ -220,9 +220,11 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 	if chainID == nil {
 		signer = new(types.HomesteadSigner)
 	} else {
+		// Trezor backend does not support typed transactions yet.
 		signer = types.NewEIP155Signer(chainID)
 		signature[64] = signature[64] - byte(chainID.Uint64()*2+35)
 	}
+
 	// Inject the final signature into the transaction and sanity check the sender
 	signed, err := tx.WithSignature(signer, signature)
 	if err != nil {

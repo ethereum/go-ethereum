@@ -1,14 +1,15 @@
 package XDCxlending
 
 import (
+	"math/big"
+	"reflect"
+	"testing"
+
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending/lendingstate"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-	"math/big"
-	"reflect"
-	"testing"
 )
 
 func Test_getCancelFeeV1(t *testing.T) {
@@ -107,9 +108,9 @@ func Test_getCancelFee(t *testing.T) {
 	XDCx.SetTokenDecimal(testTokenB, new(big.Int).Exp(big.NewInt(10), big.NewInt(8), nil))
 
 	// set tokenAPrice = 1 XDC
-	tradingStateDb.SetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(testTokenA, common.HexToAddress(common.XDCNativeAddress)), common.BasePrice)
+	tradingStateDb.SetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(testTokenA, common.XDCNativeAddressBinary), common.BasePrice)
 	// set tokenBPrice = 1 XDC
-	tradingStateDb.SetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(testTokenB, common.HexToAddress(common.XDCNativeAddress)), common.BasePrice)
+	tradingStateDb.SetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(testTokenB, common.XDCNativeAddressBinary), common.BasePrice)
 
 	l := New(XDCx)
 
@@ -132,7 +133,7 @@ func Test_getCancelFee(t *testing.T) {
 				borrowFeeRate: common.Big0,
 				order: &lendingstate.LendingItem{
 					LendingToken:    testTokenA,
-					CollateralToken: common.HexToAddress(common.XDCNativeAddress),
+					CollateralToken: common.XDCNativeAddressBinary,
 					Quantity:        new(big.Int).SetUint64(10000),
 					Side:            lendingstate.Investing,
 				},
@@ -147,7 +148,7 @@ func Test_getCancelFee(t *testing.T) {
 				borrowFeeRate: common.Big0,
 				order: &lendingstate.LendingItem{
 					LendingToken:    testTokenA,
-					CollateralToken: common.HexToAddress(common.XDCNativeAddress),
+					CollateralToken: common.XDCNativeAddressBinary,
 					Quantity:        new(big.Int).SetUint64(10000),
 					Side:            lendingstate.Borrowing,
 				},
@@ -162,7 +163,7 @@ func Test_getCancelFee(t *testing.T) {
 				borrowFeeRate: new(big.Int).SetUint64(30), // 30/10000= 0.3%
 				order: &lendingstate.LendingItem{
 					LendingToken:    testTokenA,
-					CollateralToken: common.HexToAddress(common.XDCNativeAddress),
+					CollateralToken: common.XDCNativeAddressBinary,
 					Quantity:        new(big.Int).SetUint64(10000),
 					Side:            lendingstate.Investing,
 				},
@@ -177,7 +178,7 @@ func Test_getCancelFee(t *testing.T) {
 				borrowFeeRate: new(big.Int).SetUint64(30), // 30/10000= 0.3%
 				order: &lendingstate.LendingItem{
 					LendingToken:    testTokenA,
-					CollateralToken: common.HexToAddress(common.XDCNativeAddress),
+					CollateralToken: common.XDCNativeAddressBinary,
 					Quantity:        new(big.Int).SetUint64(10000),
 					Side:            lendingstate.Borrowing,
 				},
@@ -194,7 +195,7 @@ func Test_getCancelFee(t *testing.T) {
 			CancelFeeArg{
 				borrowFeeRate: common.Big0,
 				order: &lendingstate.LendingItem{
-					LendingToken:    common.HexToAddress(common.XDCNativeAddress),
+					LendingToken:    common.XDCNativeAddressBinary,
 					CollateralToken: testTokenA,
 					Quantity:        new(big.Int).SetUint64(10000),
 					Side:            lendingstate.Investing,
@@ -209,7 +210,7 @@ func Test_getCancelFee(t *testing.T) {
 			CancelFeeArg{
 				borrowFeeRate: common.Big0,
 				order: &lendingstate.LendingItem{
-					LendingToken:    common.HexToAddress(common.XDCNativeAddress),
+					LendingToken:    common.XDCNativeAddressBinary,
 					CollateralToken: testTokenA,
 					Quantity:        new(big.Int).SetUint64(10000),
 					Side:            lendingstate.Borrowing,
@@ -224,7 +225,7 @@ func Test_getCancelFee(t *testing.T) {
 			CancelFeeArg{
 				borrowFeeRate: new(big.Int).SetUint64(30), // 30/10000= 0.3%
 				order: &lendingstate.LendingItem{
-					LendingToken:    common.HexToAddress(common.XDCNativeAddress),
+					LendingToken:    common.XDCNativeAddressBinary,
 					CollateralToken: testTokenA,
 					Quantity:        new(big.Int).SetUint64(10000),
 					Side:            lendingstate.Investing,
@@ -239,7 +240,7 @@ func Test_getCancelFee(t *testing.T) {
 			CancelFeeArg{
 				borrowFeeRate: new(big.Int).SetUint64(30), // 30/10000= 0.3%
 				order: &lendingstate.LendingItem{
-					LendingToken:    common.HexToAddress(common.XDCNativeAddress),
+					LendingToken:    common.XDCNativeAddressBinary,
 					CollateralToken: testTokenA,
 					Quantity:        new(big.Int).SetUint64(10000),
 					Side:            lendingstate.Borrowing,

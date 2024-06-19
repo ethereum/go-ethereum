@@ -686,7 +686,7 @@ func (x *XDPoS_v1) GetValidator(creator common.Address, chain consensus.ChainRea
 		if no%epoch == 0 {
 			cpHeader = header
 		} else {
-			return common.Address{}, fmt.Errorf("couldn't find checkpoint header")
+			return common.Address{}, errors.New("couldn't find checkpoint header")
 		}
 	}
 	m, err := getM1M2FromCheckpointHeader(cpHeader, header, chain.Config())

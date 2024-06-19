@@ -33,15 +33,23 @@ type JSONLogger struct {
 }
 
 func NewJSONLogger(cfg *vm.LogConfig, writer io.Writer) *JSONLogger {
-	return &JSONLogger{json.NewEncoder(writer), cfg}
+	l := &JSONLogger{json.NewEncoder(writer), cfg}
+	if l.cfg == nil {
+		l.cfg = &vm.LogConfig{}
+	}
+	return l
 }
 
-func (l *JSONLogger) CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error {
-	return nil
+func (l *JSONLogger) CaptureStart(env *vm.EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+}
+
+func (l *JSONLogger) CaptureFault(*vm.EVM, uint64, vm.OpCode, uint64, uint64, *vm.ScopeContext, int, error) {
 }
 
 // CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
+func (l *JSONLogger) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+	memory := scope.Memory
+	stack := scope.Stack
 	log := vm.StructLog{
 		Pc:         pc,
 		Op:         op,
@@ -63,24 +71,20 @@ func (l *JSONLogger) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cos
 		}
 		log.Stack = logstack
 	}
-	return l.encoder.Encode(log)
-}
-
-// CaptureFault outputs state information on the logger.
-func (l *JSONLogger) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
-	return nil
+	l.encoder.Encode(log)
 }
 
 // CaptureEnd is triggered at end of execution.
-func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error {
+func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
 	type endLog struct {
 		Output  string              `json:"output"`
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
 		Time    time.Duration       `json:"time"`
 		Err     string              `json:"error,omitempty"`
 	}
+	var errMsg string
 	if err != nil {
-		return l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t, err.Error()})
+		errMsg = err.Error()
 	}
-	return l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t, ""})
+	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t, errMsg})
 }

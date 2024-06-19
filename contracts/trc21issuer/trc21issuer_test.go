@@ -91,10 +91,13 @@ func TestFeeTxWithTRC21Token(t *testing.T) {
 		t.Fatal("check balance after fail transfer in tr20: ", err, "get", balance, "transfer", airDropAmount)
 	}
 
-	//check balance fee
+	// check balance fee
 	balanceIssuerFee, err = trc21Issuer.GetTokenCapacity(trc21TokenAddr)
-	if err != nil || balanceIssuerFee.Cmp(remainFee) != 0 {
-		t.Fatal("can't get balance token fee in  smart contract: ", err, "got", balanceIssuerFee, "wanted", remainFee)
+	if err != nil {
+		t.Fatal("can't get balance token fee in smart contract: ", err)
+	}
+	if balanceIssuerFee.Cmp(remainFee) != 0 {
+		t.Fatal("check balance token fee in smart contract: got", balanceIssuerFee, "wanted", remainFee)
 	}
 	//check trc21 SMC balance
 	balance, err = contractBackend.BalanceAt(nil, trc21IssuerAddr, nil)

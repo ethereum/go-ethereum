@@ -19,6 +19,7 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -85,10 +86,10 @@ func (t *VMTest) Run(vmconfig vm.Config) error {
 
 	if t.json.GasRemaining == nil {
 		if err == nil {
-			return fmt.Errorf("gas unspecified (indicating an error), but VM returned no error")
+			return errors.New("gas unspecified (indicating an error), but VM returned no error")
 		}
 		if gasRemaining > 0 {
-			return fmt.Errorf("gas unspecified (indicating an error), but VM returned gas remaining > 0")
+			return errors.New("gas unspecified (indicating an error), but VM returned gas remaining > 0")
 		}
 		return nil
 	}

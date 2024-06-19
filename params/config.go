@@ -363,6 +363,14 @@ type ChainConfig struct {
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
+	PetersburgBlock *big.Int `json:"petersburgBlock,omitempty"`
+	IstanbulBlock   *big.Int `json:"istanbulBlock,omitempty"`
+	BerlinBlock     *big.Int `json:"berlinBlock,omitempty"`
+	LondonBlock     *big.Int `json:"londonBlock,omitempty"`
+	MergeBlock      *big.Int `json:"mergeBlock,omitempty"`
+	ShanghaiBlock   *big.Int `json:"shanghaiBlock,omitempty"`
+	Eip1559Block    *big.Int `json:"eip1559Block,omitempty"`
+
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
@@ -552,37 +560,37 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 // - equal to or greater than the PetersburgBlock fork block,
 // - OR is nil, and Constantinople is active
 func (c *ChainConfig) IsPetersburg(num *big.Int) bool {
-	return isForked(common.TIPXDCXCancellationFee, num)
+	return isForked(common.TIPXDCXCancellationFee, num) || isForked(c.PetersburgBlock, num)
 }
 
 // IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
 func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
-	return isForked(common.TIPXDCXCancellationFee, num)
+	return isForked(common.TIPXDCXCancellationFee, num) || isForked(c.IstanbulBlock, num)
 }
 
 // IsBerlin returns whether num is either equal to the Berlin fork block or greater.
 func (c *ChainConfig) IsBerlin(num *big.Int) bool {
-	return isForked(common.BerlinBlock, num)
+	return isForked(common.BerlinBlock, num) || isForked(c.BerlinBlock, num)
 }
 
 // IsLondon returns whether num is either equal to the London fork block or greater.
 func (c *ChainConfig) IsLondon(num *big.Int) bool {
-	return isForked(common.LondonBlock, num)
+	return isForked(common.LondonBlock, num) || isForked(c.LondonBlock, num)
 }
 
 // IsMerge returns whether num is either equal to the Merge fork block or greater.
 // Different from Geth which uses `block.difficulty != nil`
 func (c *ChainConfig) IsMerge(num *big.Int) bool {
-	return isForked(common.MergeBlock, num)
+	return isForked(common.MergeBlock, num) || isForked(c.MergeBlock, num)
 }
 
 // IsShanghai returns whether num is either equal to the Shanghai fork block or greater.
 func (c *ChainConfig) IsShanghai(num *big.Int) bool {
-	return isForked(common.ShanghaiBlock, num)
+	return isForked(common.ShanghaiBlock, num) || isForked(c.ShanghaiBlock, num)
 }
 
 func (c *ChainConfig) IsEIP1559(num *big.Int) bool {
-	return isForked(common.Eip1559Block, num)
+	return isForked(common.Eip1559Block, num) || isForked(c.Eip1559Block, num)
 }
 
 func (c *ChainConfig) IsTIP2019(num *big.Int) bool {

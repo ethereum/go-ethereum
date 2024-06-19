@@ -28,7 +28,7 @@ var (
 	cacheSize    = flag.Int("size", 1000000, "LRU cache size")
 	sercureKey   = []byte("secure-key-")
 	nWorker      = runtime.NumCPU() / 2
-	cleanAddress = []common.Address{common.HexToAddress(common.BlockSigners)}
+	cleanAddress = []common.Address{common.BlockSignersBinary}
 	cache        *lru.Cache
 	finish       = int32(0)
 	running      = true

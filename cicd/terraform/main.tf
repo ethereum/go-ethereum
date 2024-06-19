@@ -86,6 +86,7 @@ module "devnet_rpc" {
   instance_type = "t3.large"
   ssh_key_name = local.ssh_key_name
   rpc_image = local.rpc_image 
+  volume_size = 1500
 
   providers = {
     aws = aws.ap-southeast-1
@@ -101,6 +102,7 @@ module "testnet_rpc" {
   instance_type = "t3.large"
   ssh_key_name = local.ssh_key_name
   rpc_image = local.rpc_image 
+  volume_size = 1500
 
   providers = {
     aws = aws.ap-southeast-1
@@ -116,6 +118,7 @@ module "mainnet_rpc" {
   instance_type = "t3.large"
   ssh_key_name = local.ssh_key_name
   rpc_image = local.rpc_image 
+  volume_size = 3000
 
   providers = {
     aws = aws.ap-southeast-1

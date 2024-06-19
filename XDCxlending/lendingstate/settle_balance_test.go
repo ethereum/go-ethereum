@@ -1,10 +1,11 @@
 package lendingstate
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/common"
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
 func TestCalculateInterestRate(t *testing.T) {
@@ -171,7 +172,7 @@ func TestGetSettleBalance(t *testing.T) {
 				common.BasePrice,
 				big.NewInt(150),
 				big.NewInt(100), // 1%
-				common.HexToAddress(common.XDCNativeAddress),
+				common.XDCNativeAddressBinary,
 				common.Address{},
 				common.BasePrice,
 				common.BasePrice,
@@ -277,7 +278,7 @@ func TestGetSettleBalance(t *testing.T) {
 				common.BasePrice,
 				big.NewInt(150),
 				big.NewInt(100), // 1%
-				common.HexToAddress(common.XDCNativeAddress),
+				common.XDCNativeAddressBinary,
 				collateral,
 				common.BasePrice,
 				common.BasePrice,
@@ -288,12 +289,12 @@ func TestGetSettleBalance(t *testing.T) {
 					Fee:      common.Big0,
 					InToken:  common.Address{},
 					InTotal:  common.Big0,
-					OutToken: common.HexToAddress(common.XDCNativeAddress),
+					OutToken: common.XDCNativeAddressBinary,
 					OutTotal: lendQuantity,
 				},
 				Maker: TradeResult{
 					Fee:      fee,
-					InToken:  common.HexToAddress(common.XDCNativeAddress),
+					InToken:  common.XDCNativeAddressBinary,
 					InTotal:  lendQuantityExcluded,
 					OutToken: collateral,
 					OutTotal: collateralLocked,
@@ -312,7 +313,7 @@ func TestGetSettleBalance(t *testing.T) {
 				common.BasePrice,
 				big.NewInt(150),
 				big.NewInt(100), // 1%
-				common.HexToAddress(common.XDCNativeAddress),
+				common.XDCNativeAddressBinary,
 				collateral,
 				common.BasePrice,
 				common.BasePrice,
@@ -323,12 +324,12 @@ func TestGetSettleBalance(t *testing.T) {
 					Fee:      common.Big0,
 					InToken:  common.Address{},
 					InTotal:  common.Big0,
-					OutToken: common.HexToAddress(common.XDCNativeAddress),
+					OutToken: common.XDCNativeAddressBinary,
 					OutTotal: lendQuantity,
 				},
 				Taker: TradeResult{
 					Fee:      fee,
-					InToken:  common.HexToAddress(common.XDCNativeAddress),
+					InToken:  common.XDCNativeAddressBinary,
 					InTotal:  lendQuantityExcluded,
 					OutToken: collateral,
 					OutTotal: collateralLocked,

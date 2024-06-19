@@ -2,6 +2,7 @@ package engine_v2
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -49,7 +50,7 @@ func (f *Forensics) SetCommittedQCs(headers []types.Header, incomingQC types.Quo
 	// highestCommitQCs is an array, assign the parentBlockQc and its child as well as its grandchild QC into this array for forensics purposes.
 	if len(headers) != NUM_OF_FORENSICS_QC-1 {
 		log.Error("[SetCommittedQcs] Received input length not equal to 2", len(headers))
-		return fmt.Errorf("received headers length not equal to 2 ")
+		return errors.New("received headers length not equal to 2 ")
 	}
 
 	var committedQCs []types.QuorumCert
@@ -64,11 +65,11 @@ func (f *Forensics) SetCommittedQCs(headers []types.Header, incomingQC types.Quo
 		if i != 0 {
 			if decodedExtraField.QuorumCert.ProposedBlockInfo.Hash != headers[i-1].Hash() {
 				log.Error("[SetCommittedQCs] Headers shall be on the same chain and in the right order", "parentHash", h.ParentHash.Hex(), "headers[i-1].Hash()", headers[i-1].Hash().Hex())
-				return fmt.Errorf("headers shall be on the same chain and in the right order")
+				return errors.New("headers shall be on the same chain and in the right order")
 			} else if i == len(headers)-1 { // The last header shall be pointed by the incoming QC
 				if incomingQC.ProposedBlockInfo.Hash != h.Hash() {
 					log.Error("[SetCommittedQCs] incomingQc is not pointing at the last header received", "hash", h.Hash().Hex(), "incomingQC.ProposedBlockInfo.Hash", incomingQC.ProposedBlockInfo.Hash.Hex())
-					return fmt.Errorf("incomingQc is not pointing at the last header received")
+					return errors.New("incomingQc is not pointing at the last header received")
 				}
 			}
 		}
@@ -91,7 +92,7 @@ func (f *Forensics) ProcessForensics(chain consensus.ChainReader, engine *XDPoS_
 	highestCommittedQCs := f.HighestCommittedQCs
 	if len(highestCommittedQCs) != NUM_OF_FORENSICS_QC {
 		log.Error("[ProcessForensics] HighestCommittedQCs value not set", "incomingQcProposedBlockHash", incomingQC.ProposedBlockInfo.Hash, "incomingQcProposedBlockNumber", incomingQC.ProposedBlockInfo.Number.Uint64(), "incomingQcProposedBlockRound", incomingQC.ProposedBlockInfo.Round)
-		return fmt.Errorf("HighestCommittedQCs value not set")
+		return errors.New("HighestCommittedQCs value not set")
 	}
 	// Find the QC1 and QC2. We only care 2 parents in front of the incomingQC. The returned value contains QC1, QC2 and QC3(the incomingQC)
 	incomingQuorunCerts, err := f.findAncestorQCs(chain, incomingQC, 2)
@@ -163,7 +164,7 @@ func (f *Forensics) SendForensicProof(chain consensus.ChainReader, engine *XDPoS
 
 	if ancestorBlock == nil {
 		log.Error("[SendForensicProof] Unable to find the ancestor block by its hash", "Hash", ancestorHash)
-		return fmt.Errorf("Can't find ancestor block via hash")
+		return errors.New("Can't find ancestor block via hash")
 	}
 
 	content, err := json.Marshal(&types.ForensicsContent{
@@ -209,7 +210,7 @@ func (f *Forensics) findAncestorQCs(chain consensus.ChainReader, currentQc types
 		parentHeader := chain.GetHeaderByHash(parentHash)
 		if parentHeader == nil {
 			log.Error("[findAncestorQCs] Forensics findAncestorQCs unable to find its parent block header", "BlockNum", parentHeader.Number.Int64(), "ParentHash", parentHash.Hex())
-			return nil, fmt.Errorf("unable to find parent block header in forensics")
+			return nil, errors.New("unable to find parent block header in forensics")
 		}
 		var decodedExtraField types.ExtraFields_v2
 		err := utils.DecodeBytesExtraFields(parentHeader.Extra, &decodedExtraField)
@@ -318,7 +319,7 @@ func (f *Forensics) findAncestorQcThroughRound(chain consensus.ChainReader, high
 		}
 		ancestorQC = *decodedExtraField.QuorumCert
 	}
-	return ancestorQC, lowerRoundQCs, higherRoundQCs, fmt.Errorf("[findAncestorQcThroughRound] Could not find ancestor QC")
+	return ancestorQC, lowerRoundQCs, higherRoundQCs, errors.New("[findAncestorQcThroughRound] Could not find ancestor QC")
 }
 
 func (f *Forensics) FindAncestorBlockHash(chain consensus.ChainReader, firstBlockInfo *types.BlockInfo, secondBlockInfo *types.BlockInfo) (common.Hash, []string, []string, error) {
@@ -398,7 +399,7 @@ func (f *Forensics) ProcessVoteEquivocation(chain consensus.ChainReader, engine 
 	highestCommittedQCs := f.HighestCommittedQCs
 	if len(highestCommittedQCs) != NUM_OF_FORENSICS_QC {
 		log.Error("[ProcessVoteEquivocation] HighestCommittedQCs value not set", "incomingVoteProposedBlockHash", incomingVote.ProposedBlockInfo.Hash, "incomingVoteProposedBlockNumber", incomingVote.ProposedBlockInfo.Number.Uint64(), "incomingVoteProposedBlockRound", incomingVote.ProposedBlockInfo.Round)
-		return fmt.Errorf("HighestCommittedQCs value not set")
+		return errors.New("HighestCommittedQCs value not set")
 	}
 	if incomingVote.ProposedBlockInfo.Round < highestCommittedQCs[NUM_OF_FORENSICS_QC-1].ProposedBlockInfo.Round {
 		log.Debug("Received a too old vote in forensics", "vote", incomingVote)

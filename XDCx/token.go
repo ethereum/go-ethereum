@@ -48,7 +48,7 @@ func (XDCx *XDCX) GetTokenDecimal(chain consensus.ChainContext, statedb *state.S
 	if tokenDecimal, ok := XDCx.tokenDecimalCache.Get(tokenAddr); ok {
 		return tokenDecimal.(*big.Int), nil
 	}
-	if tokenAddr.String() == common.XDCNativeAddress {
+	if tokenAddr == common.XDCNativeAddressBinary {
 		XDCx.tokenDecimalCache.Add(tokenAddr, common.BasePrice)
 		return common.BasePrice, nil
 	}

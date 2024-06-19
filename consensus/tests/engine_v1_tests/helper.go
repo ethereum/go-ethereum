@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -144,11 +145,11 @@ func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.S
 
 	// create test backend with smart contract in it
 	contractBackend2 := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
-		acc1Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		acc2Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		acc3Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
-		common.HexToAddress(common.MasternodeVotingSMC): {Balance: new(big.Int).SetUint64(1), Code: code, Storage: storage}, // Binding the MasternodeVotingSMC with newly created 'code' for SC execution
+		acc1Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		acc2Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		acc3Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		voterAddr:                        {Balance: new(big.Int).SetUint64(10000000000)},
+		common.MasternodeVotingSMCBinary: {Balance: new(big.Int).SetUint64(1), Code: code, Storage: storage}, // Binding the MasternodeVotingSMC with newly created 'code' for SC execution
 	}, 10000000, chainConfig)
 
 	return contractBackend2
@@ -163,7 +164,7 @@ func transferTx(t *testing.T, to common.Address, transferAmount int64) *types.Tr
 	amount := big.NewInt(transferAmount)
 	nonce := uint64(1)
 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
-	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), voterKey)
+	signedTX, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(chainID)), voterKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,12 +179,12 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 	amountInt := new(big.Int)
 	amount, ok := amountInt.SetString("60000", 10)
 	if !ok {
-		return nil, fmt.Errorf("big int init failed")
+		return nil, errors.New("big int init failed")
 	}
-	to := common.HexToAddress(common.MasternodeVotingSMC)
+	to := common.MasternodeVotingSMCBinary
 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
 
-	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), voterKey)
+	signedTX, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(chainID)), voterKey)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +214,7 @@ func GetSnapshotSigner(bc *BlockChain, header *types.Header) (signersList, error
 }
 
 func GetCandidateFromCurrentSmartContract(backend bind.ContractBackend, t *testing.T) masterNodes {
-	addr := common.HexToAddress(common.MasternodeVotingSMC)
+	addr := common.MasternodeVotingSMCBinary
 	validator, err := contractValidator.NewXDCValidator(addr, backend)
 	if err != nil {
 		t.Fatal(err)
@@ -321,7 +322,7 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 		// Sign all the things for v1 block use v1 sigHash function
 		sighash, err := signFn(accounts.Account{Address: signer}, blockchain.Engine().(*XDPoS.XDPoS).SigHash(header).Bytes())
 		if err != nil {
-			panic(fmt.Errorf("Error when sign last v1 block hash during test block creation"))
+			panic(errors.New("Error when sign last v1 block hash during test block creation"))
 		}
 		copy(header.Extra[len(header.Extra)-utils.ExtraSeal:], sighash)
 	}
@@ -411,7 +412,7 @@ func createBlockFromHeader(bc *BlockChain, customHeader *types.Header, txs []*ty
 // 	nonce := uint64(0)
 // 	to := common.HexToAddress("xdc35658f7b2a9e7701e65e7a654659eb1c481d1dc5")
 // 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
-// 	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), acc4Key)
+// 	signedTX, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(chainID)), acc4Key)
 // 	if err != nil {
 // 		t.Fatal(err)
 // 	}

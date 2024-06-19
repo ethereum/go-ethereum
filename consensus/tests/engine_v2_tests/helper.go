@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -103,12 +104,12 @@ func voteTX(gasLimit uint64, nonce uint64, addr string) (*types.Transaction, err
 	amountInt := new(big.Int)
 	amount, ok := amountInt.SetString("60000", 10)
 	if !ok {
-		return nil, fmt.Errorf("big int init failed")
+		return nil, errors.New("big int init failed")
 	}
-	to := common.HexToAddress(common.MasternodeVotingSMC)
+	to := common.MasternodeVotingSMCBinary
 	tx := types.NewTransaction(nonce, to, amount, gasLimit, gasPrice, data)
 
-	signedTX, err := types.SignTx(tx, types.NewEIP155Signer(big.NewInt(chainID)), voterKey)
+	signedTX, err := types.SignTx(tx, types.LatestSignerForChainID(big.NewInt(chainID)), voterKey)
 	if err != nil {
 		return nil, err
 	}
@@ -189,11 +190,11 @@ func getCommonBackend(t *testing.T, chainConfig *params.ChainConfig) *backends.S
 
 	// create test backend with smart contract in it
 	contractBackend2 := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
-		acc1Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		acc2Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		acc3Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
-		common.HexToAddress(common.MasternodeVotingSMC): {Balance: new(big.Int).SetUint64(1), Code: code, Storage: storage}, // Binding the MasternodeVotingSMC with newly created 'code' for SC execution
+		acc1Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		acc2Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		acc3Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		voterAddr:                        {Balance: new(big.Int).SetUint64(10000000000)},
+		common.MasternodeVotingSMCBinary: {Balance: new(big.Int).SetUint64(1), Code: code, Storage: storage}, // Binding the MasternodeVotingSMC with newly created 'code' for SC execution
 	}, 10000000, chainConfig)
 
 	return contractBackend2
@@ -273,19 +274,19 @@ func getMultiCandidatesBackend(t *testing.T, chainConfig *params.ChainConfig, n 
 
 	// create test backend with smart contract in it
 	contractBackend2 := backends.NewXDCSimulatedBackend(core.GenesisAlloc{
-		acc1Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		acc2Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		acc3Addr:  {Balance: new(big.Int).SetUint64(10000000000)},
-		voterAddr: {Balance: new(big.Int).SetUint64(10000000000)},
-		common.HexToAddress(common.MasternodeVotingSMC): {Balance: new(big.Int).SetUint64(1), Code: code, Storage: storage}, // Binding the MasternodeVotingSMC with newly created 'code' for SC execution
+		acc1Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		acc2Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		acc3Addr:                         {Balance: new(big.Int).SetUint64(10000000000)},
+		voterAddr:                        {Balance: new(big.Int).SetUint64(10000000000)},
+		common.MasternodeVotingSMCBinary: {Balance: new(big.Int).SetUint64(1), Code: code, Storage: storage}, // Binding the MasternodeVotingSMC with newly created 'code' for SC execution
 	}, 10000000, chainConfig)
 
 	return contractBackend2
 }
 
 func signingTxWithKey(header *types.Header, nonce uint64, privateKey *ecdsa.PrivateKey) (*types.Transaction, error) {
-	tx := contracts.CreateTxSign(header.Number, header.Hash(), nonce, common.HexToAddress(common.BlockSigners))
-	s := types.NewEIP155Signer(big.NewInt(chainID))
+	tx := contracts.CreateTxSign(header.Number, header.Hash(), nonce, common.BlockSignersBinary)
+	s := types.LatestSignerForChainID(big.NewInt(chainID))
 	h := s.Hash(tx)
 	sig, err := crypto.Sign(h[:], privateKey)
 	if err != nil {
@@ -299,8 +300,8 @@ func signingTxWithKey(header *types.Header, nonce uint64, privateKey *ecdsa.Priv
 }
 
 func signingTxWithSignerFn(header *types.Header, nonce uint64, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) (*types.Transaction, error) {
-	tx := contracts.CreateTxSign(header.Number, header.Hash(), nonce, common.HexToAddress(common.BlockSigners))
-	s := types.NewEIP155Signer(big.NewInt(chainID))
+	tx := contracts.CreateTxSign(header.Number, header.Hash(), nonce, common.BlockSignersBinary)
+	s := types.LatestSignerForChainID(big.NewInt(chainID))
 	h := s.Hash(tx)
 	sig, err := signFn(accounts.Account{Address: signer}, h[:])
 	if err != nil {
@@ -335,7 +336,7 @@ func GetSnapshotSigner(bc *BlockChain, header *types.Header) (signersList, error
 }
 
 func GetCandidateFromCurrentSmartContract(backend bind.ContractBackend, t *testing.T) masterNodes {
-	addr := common.HexToAddress(common.MasternodeVotingSMC)
+	addr := common.MasternodeVotingSMCBinary
 	validator, err := contractValidator.NewXDCValidator(addr, backend)
 	if err != nil {
 		t.Fatal(err)
@@ -633,7 +634,7 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 			// Sign all the things for v1 block use v1 sigHash function
 			sighash, err := signFn(accounts.Account{Address: signer}, blockchain.Engine().(*XDPoS.XDPoS).SigHash(header).Bytes())
 			if err != nil {
-				panic(fmt.Errorf("Error when sign last v1 block hash during test block creation"))
+				panic(errors.New("Error when sign last v1 block hash during test block creation"))
 			}
 			copy(header.Extra[len(header.Extra)-utils.ExtraSeal:], sighash)
 		}
@@ -737,7 +738,7 @@ func findSignerAndSignFn(bc *BlockChain, header *types.Header, signer common.Add
 		var decodedExtraField types.ExtraFields_v2
 		err := utils.DecodeBytesExtraFields(header.Extra, &decodedExtraField)
 		if err != nil {
-			panic(fmt.Errorf("fail to seal header for v2 block"))
+			panic(errors.New("fail to seal header for v2 block"))
 		}
 		round := decodedExtraField.Round
 		masterNodes := getMasternodesList(signer)
@@ -757,7 +758,7 @@ func findSignerAndSignFn(bc *BlockChain, header *types.Header, signer common.Add
 		}
 		addressedSignFn = signFn
 		if err != nil {
-			panic(fmt.Errorf("Error trying to use one of the pre-defined private key to sign"))
+			panic(errors.New("Error trying to use one of the pre-defined private key to sign"))
 		}
 	}
 

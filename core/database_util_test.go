@@ -18,11 +18,11 @@ package core
 
 import (
 	"bytes"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
@@ -335,6 +335,10 @@ func TestLookupStorage(t *testing.T) {
 func TestBlockReceiptStorage(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 
+	// Create a live block since we need metadata to reconstruct the receipt
+	tx1 := types.NewTransaction(1, common.HexToAddress("0x1"), big.NewInt(1), 1, big.NewInt(1), nil)
+	tx2 := types.NewTransaction(2, common.HexToAddress("0x2"), big.NewInt(2), 2, big.NewInt(2), nil)
+
 	receipt1 := &types.Receipt{
 		Status:            types.ReceiptStatusFailed,
 		CumulativeGasUsed: 1,
@@ -342,10 +346,12 @@ func TestBlockReceiptStorage(t *testing.T) {
 			{Address: common.BytesToAddress([]byte{0x11})},
 			{Address: common.BytesToAddress([]byte{0x01, 0x11})},
 		},
-		TxHash:          common.BytesToHash([]byte{0x11, 0x11}),
+		TxHash:          tx1.Hash(),
 		ContractAddress: common.BytesToAddress([]byte{0x01, 0x11, 0x11}),
 		GasUsed:         111111,
 	}
+	receipt1.Bloom = types.CreateBloom(types.Receipts{receipt1})
+
 	receipt2 := &types.Receipt{
 		PostState:         common.Hash{2}.Bytes(),
 		CumulativeGasUsed: 2,
@@ -353,10 +359,12 @@ func TestBlockReceiptStorage(t *testing.T) {
 			{Address: common.BytesToAddress([]byte{0x22})},
 			{Address: common.BytesToAddress([]byte{0x02, 0x22})},
 		},
-		TxHash:          common.BytesToHash([]byte{0x22, 0x22}),
+		TxHash:          tx2.Hash(),
 		ContractAddress: common.BytesToAddress([]byte{0x02, 0x22, 0x22}),
 		GasUsed:         222222,
 	}
+	receipt2.Bloom = types.CreateBloom(types.Receipts{receipt2})
+
 	receipts := []*types.Receipt{receipt1, receipt2}
 
 	// Check that no receipt entries are in a pristine database

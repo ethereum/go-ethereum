@@ -1,6 +1,7 @@
 package lendingstate
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -260,7 +261,7 @@ func (l *LendingItem) VerifyCollateral(state *state.StateDB) error {
 	validCollateral := false
 	collateralList := GetCollaterals(state, l.Relayer, l.LendingToken, l.Term)
 	for _, collateral := range collateralList {
-		if l.CollateralToken.String() == collateral.String() {
+		if l.CollateralToken == collateral {
 			validCollateral = true
 			break
 		}
@@ -359,7 +360,7 @@ func (l *LendingItem) VerifyLendingSignature() error {
 	tx.ImportSignature(V, R, S)
 	from, _ := types.LendingSender(types.LendingTxSigner{}, tx)
 	if from != tx.UserAddress() {
-		return fmt.Errorf("verify lending item: invalid signature")
+		return errors.New("verify lending item: invalid signature")
 	}
 	return nil
 }
@@ -411,7 +412,7 @@ func VerifyBalance(isXDCXLendingFork bool, statedb *state.StateDB, lendingStateD
 					defaultFee := new(big.Int).Mul(quantity, new(big.Int).SetUint64(DefaultFeeRate))
 					defaultFee = new(big.Int).Div(defaultFee, common.XDCXBaseFee)
 					defaultFeeInXDC := common.Big0
-					if lendingToken.String() != common.XDCNativeAddress {
+					if lendingToken != common.XDCNativeAddressBinary {
 						defaultFeeInXDC = new(big.Int).Mul(defaultFee, lendTokenXDCPrice)
 						defaultFeeInXDC = new(big.Int).Div(defaultFeeInXDC, lendingTokenDecimal)
 					} else {
@@ -473,10 +474,10 @@ func VerifyBalance(isXDCXLendingFork bool, statedb *state.StateDB, lendingStateD
 			}
 			return nil
 		default:
-			return fmt.Errorf("VerifyBalance: unknown lending side")
+			return errors.New("VerifyBalance: unknown lending side")
 		}
 	default:
-		return fmt.Errorf("VerifyBalance: unknown lending type")
+		return errors.New("VerifyBalance: unknown lending type")
 	}
 	return nil
 }

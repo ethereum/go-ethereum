@@ -58,6 +58,11 @@ var (
 	blockInsertTimer = metrics.NewRegisteredTimer("chain/inserts", nil)
 	CheckpointCh     = make(chan int)
 	ErrNoGenesis     = errors.New("Genesis not found in chain")
+
+	blockReorgMeter         = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
+	blockReorgAddMeter      = metrics.NewRegisteredMeter("chain/reorg/add", nil)
+	blockReorgDropMeter     = metrics.NewRegisteredMeter("chain/reorg/drop", nil)
+	blockReorgInvalidatedTx = metrics.NewRegisteredMeter("chain/reorg/invalidTx", nil)
 )
 
 const (
@@ -250,6 +255,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	// Take ownership of this particular state
 	go bc.update()
 	return bc, nil
+}
+
+// GetVMConfig returns the block chain VM config.
+func (bc *BlockChain) GetVMConfig() *vm.Config {
+	return &bc.vmConfig
 }
 
 // NewBlockChainEx extend old blockchain, add order state db
@@ -2187,10 +2197,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 	if oldBlock == nil {
-		return fmt.Errorf("Invalid old chain")
+		return errors.New("Invalid old chain")
 	}
 	if newBlock == nil {
-		return fmt.Errorf("Invalid new chain")
+		return errors.New("Invalid new chain")
 	}
 
 	for {
@@ -2206,10 +2216,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 		oldBlock, newBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1), bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if oldBlock == nil {
-			return fmt.Errorf("Invalid old chain")
+			return errors.New("Invalid old chain")
 		}
 		if newBlock == nil {
-			return fmt.Errorf("Invalid new chain")
+			return errors.New("Invalid new chain")
 		}
 	}
 	// Ensure XDPoS engine committed block will be not reverted
@@ -2245,6 +2255,9 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 		logFn("Chain split detected", "number", commonBlock.Number(), "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
+		blockReorgAddMeter.Mark(int64(len(newChain)))
+		blockReorgDropMeter.Mark(int64(len(oldChain)))
+		blockReorgMeter.Mark(1)
 	} else {
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
 	}
@@ -2549,7 +2562,7 @@ func (bc *BlockChain) UpdateM1() error {
 	if err != nil {
 		return err
 	}
-	addr := common.HexToAddress(common.MasternodeVotingSMC)
+	addr := common.MasternodeVotingSMCBinary
 	validator, err := contractValidator.NewXDCValidator(addr, client)
 	if err != nil {
 		return err

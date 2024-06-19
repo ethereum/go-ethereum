@@ -245,12 +245,14 @@ func (b *EthApiBackend) GetTd(blockHash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
-	state.SetBalance(msg.From(), math.MaxBig256)
+func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
-
+	if vmConfig == nil {
+		vmConfig = b.eth.blockchain.GetVMConfig()
+	}
+	state.SetBalance(msg.From(), math.MaxBig256)
 	context := core.NewEVMContext(msg, header, b.eth.BlockChain(), nil)
-	return vm.NewEVM(context, state, XDCxState, b.eth.chainConfig, vmCfg), vmError, nil
+	return vm.NewEVM(context, state, XDCxState, b.eth.chainConfig, *vmConfig), vmError, nil
 }
 
 func (b *EthApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
@@ -346,6 +348,10 @@ func (b *EthApiBackend) EventMux() *event.TypeMux {
 	return b.eth.EventMux()
 }
 
+func (b *EthApiBackend) RPCGasCap() uint64 {
+	return b.eth.config.RPCGasCap
+}
+
 func (b *EthApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.AccountManager()
 }
@@ -373,6 +379,10 @@ func (b *EthApiBackend) GetIPCClient() (bind.ContractBackend, error) {
 
 func (b *EthApiBackend) GetEngine() consensus.Engine {
 	return b.eth.engine
+}
+
+func (b *EthApiBackend) StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool) (*state.StateDB, error) {
+	return b.eth.stateAtBlock(block, reexec, base, checkLive)
 }
 
 func (s *EthApiBackend) GetRewardByHash(hash common.Hash) map[string]map[string]map[string]*big.Int {

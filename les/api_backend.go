@@ -171,10 +171,13 @@ func (b *LesApiBackend) GetTd(blockHash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
+func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
+	if vmConfig == nil {
+		vmConfig = new(vm.Config)
+	}
 	state.SetBalance(msg.From(), math.MaxBig256)
 	context := core.NewEVMContext(msg, header, b.eth.blockchain, nil)
-	return vm.NewEVM(context, state, XDCxState, b.eth.chainConfig, vmCfg), state.Error, nil
+	return vm.NewEVM(context, state, XDCxState, b.eth.chainConfig, *vmConfig), state.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
@@ -264,6 +267,10 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 
 func (b *LesApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
+}
+
+func (b *LesApiBackend) RPCGasCap() uint64 {
+	return b.eth.config.RPCGasCap
 }
 
 func (b *LesApiBackend) BloomStatus() (uint64, uint64) {

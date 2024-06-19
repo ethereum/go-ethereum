@@ -145,8 +145,8 @@ func (w *wizard) makeGenesis() {
 		genesis.Config.XDPoS.V2.CurrentConfig.TimeoutSyncThreshold = w.readDefaultInt(3)
 
 		fmt.Println()
-		fmt.Printf("How many v2 vote collection to generate a QC, should be two thirds of masternodes? (default = %f)\n", 0.666)
-		genesis.Config.XDPoS.V2.CurrentConfig.CertThreshold = w.readDefaultFloat(0.666)
+		fmt.Printf("Proportion of total masternodes v2 vote collection to generate a QC (float value), should be two thirds of masternodes? (default = %f)\n", 0.667)
+		genesis.Config.XDPoS.V2.CurrentConfig.CertThreshold = w.readDefaultFloat(0.667)
 
 		genesis.Config.XDPoS.V2.AllConfigs[0] = genesis.Config.XDPoS.V2.CurrentConfig
 
@@ -197,7 +197,7 @@ func (w *wizard) makeGenesis() {
 
 		fmt.Println()
 		fmt.Println("What is foundation wallet address? (default = xdc0000000000000000000000000000000000000068)")
-		genesis.Config.XDPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
+		genesis.Config.XDPoS.FoudationWalletAddr = w.readDefaultAddress(common.FoudationAddrBinary)
 
 		// Validator Smart Contract Code
 		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -225,7 +225,7 @@ func (w *wizard) makeGenesis() {
 			return true
 		}
 		contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)
-		genesis.Alloc[common.HexToAddress(common.MasternodeVotingSMC)] = core.GenesisAccount{
+		genesis.Alloc[common.MasternodeVotingSMCBinary] = core.GenesisAccount{
 			Balance: validatorCap.Mul(validatorCap, big.NewInt(int64(len(validatorCaps)))),
 			Code:    code,
 			Storage: storage,
@@ -259,7 +259,7 @@ func (w *wizard) makeGenesis() {
 		fBalance := big.NewInt(0) // 16m
 		fBalance.Add(fBalance, big.NewInt(16*1000*1000))
 		fBalance.Mul(fBalance, big.NewInt(1000000000000000000))
-		genesis.Alloc[common.HexToAddress(common.FoudationAddr)] = core.GenesisAccount{
+		genesis.Alloc[common.FoudationAddrBinary] = core.GenesisAccount{
 			Balance: fBalance,
 			Code:    code,
 			Storage: storage,
@@ -275,7 +275,7 @@ func (w *wizard) makeGenesis() {
 		code, _ = contractBackend.CodeAt(ctx, blockSignerAddress, nil)
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, blockSignerAddress, nil, f)
-		genesis.Alloc[common.HexToAddress(common.BlockSigners)] = core.GenesisAccount{
+		genesis.Alloc[common.BlockSignersBinary] = core.GenesisAccount{
 			Balance: big.NewInt(0),
 			Code:    code,
 			Storage: storage,
@@ -291,7 +291,7 @@ func (w *wizard) makeGenesis() {
 		code, _ = contractBackend.CodeAt(ctx, randomizeAddress, nil)
 		storage = make(map[common.Hash]common.Hash)
 		contractBackend.ForEachStorageAt(ctx, randomizeAddress, nil, f)
-		genesis.Alloc[common.HexToAddress(common.RandomizeSMC)] = core.GenesisAccount{
+		genesis.Alloc[common.RandomizeSMCBinary] = core.GenesisAccount{
 			Balance: big.NewInt(0),
 			Code:    code,
 			Storage: storage,
@@ -330,7 +330,7 @@ func (w *wizard) makeGenesis() {
 		subBalance.Add(subBalance, big.NewInt(int64(len(signers))*50*1000))
 		subBalance.Mul(subBalance, big.NewInt(1000000000000000000))
 		balance.Sub(balance, subBalance) // 12m - i * 50k
-		genesis.Alloc[common.HexToAddress(common.TeamAddr)] = core.GenesisAccount{
+		genesis.Alloc[common.TeamAddrBinary] = core.GenesisAccount{
 			Balance: balance,
 			Code:    code,
 			Storage: storage,

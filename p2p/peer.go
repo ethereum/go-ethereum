@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -409,7 +410,7 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 		// as well but we don't want to rely on that.
 		rw.werr <- err
 	case <-rw.closed:
-		err = fmt.Errorf("shutting down")
+		err = errors.New("shutting down")
 	}
 	return err
 }

@@ -696,10 +696,11 @@ func (l *Lending) GetTriegc() *prque.Prque {
 
 func (l *Lending) GetLendingStateRoot(block *types.Block, author common.Address) (common.Hash, error) {
 	for _, tx := range block.Transactions() {
-		from := *(tx.From())
-		if tx.To() != nil && tx.To().Hex() == common.TradingStateAddr && from.String() == author.String() {
-			if len(tx.Data()) >= 64 {
-				return common.BytesToHash(tx.Data()[32:]), nil
+		to := tx.To()
+		if to != nil && *to == common.TradingStateAddrBinary && *tx.From() == author {
+			data := tx.Data()
+			if len(data) >= 64 {
+				return common.BytesToHash(data[32:]), nil
 			}
 		}
 	}

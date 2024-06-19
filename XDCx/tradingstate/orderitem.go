@@ -239,7 +239,7 @@ func (o *OrderItem) verifyRelayer(state *state.StateDB) error {
 	return nil
 }
 
-//verify signatures
+// verify signatures
 func (o *OrderItem) verifySignature() error {
 	bigstr := o.Nonce.String()
 	n, err := strconv.ParseInt(bigstr, 10, 64)
@@ -269,7 +269,7 @@ func (o *OrderItem) verifyOrderType() error {
 	return nil
 }
 
-//verify order side
+// verify order side
 func (o *OrderItem) verifyOrderSide() error {
 
 	if o.Side != Bid && o.Side != Ask {
@@ -356,11 +356,11 @@ func VerifyPair(statedb *state.StateDB, exchangeAddress, baseToken, quoteToken c
 
 func VerifyBalance(statedb *state.StateDB, XDCxStateDb *TradingStateDB, order *types.OrderTransaction, baseDecimal, quoteDecimal *big.Int) error {
 	var quotePrice *big.Int
-	if order.QuoteToken().String() != common.XDCNativeAddress {
-		quotePrice = XDCxStateDb.GetLastPrice(GetTradingOrderBookHash(order.QuoteToken(), common.HexToAddress(common.XDCNativeAddress)))
+	if order.QuoteToken() != common.XDCNativeAddressBinary {
+		quotePrice = XDCxStateDb.GetLastPrice(GetTradingOrderBookHash(order.QuoteToken(), common.XDCNativeAddressBinary))
 		log.Debug("TryGet quotePrice QuoteToken/XDC", "quotePrice", quotePrice)
 		if quotePrice == nil || quotePrice.Sign() == 0 {
-			inversePrice := XDCxStateDb.GetLastPrice(GetTradingOrderBookHash(common.HexToAddress(common.XDCNativeAddress), order.QuoteToken()))
+			inversePrice := XDCxStateDb.GetLastPrice(GetTradingOrderBookHash(common.XDCNativeAddressBinary, order.QuoteToken()))
 			log.Debug("TryGet inversePrice XDC/QuoteToken", "inversePrice", inversePrice)
 			if inversePrice != nil && inversePrice.Sign() > 0 {
 				quotePrice = new(big.Int).Mul(common.BasePrice, quoteDecimal)

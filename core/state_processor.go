@@ -80,7 +80,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 		misc.ApplyDAOHardFork(statedb)
 	}
 	if common.TIPSigning.Cmp(header.Number) == 0 {
-		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
+		statedb.DeleteAddress(common.BlockSignersBinary)
 	}
 	parentState := statedb.Copy()
 	InitSignerInTransactions(p.config, header, block.Transactions())
@@ -146,7 +146,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 		misc.ApplyDAOHardFork(statedb)
 	}
 	if common.TIPSigning.Cmp(header.Number) == 0 {
-		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
+		statedb.DeleteAddress(common.BlockSignersBinary)
 	}
 	if cBlock.stop {
 		return nil, nil, 0, ErrStopPreparingBlock
@@ -215,13 +215,14 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error, bool) {
-	if tx.To() != nil && tx.To().String() == common.BlockSigners && config.IsTIPSigning(header.Number) {
+	to := tx.To()
+	if to != nil && *to == common.BlockSignersBinary && config.IsTIPSigning(header.Number) {
 		return ApplySignTransaction(config, statedb, header, tx, usedGas)
 	}
-	if tx.To() != nil && tx.To().String() == common.TradingStateAddr && config.IsTIPXDCXReceiver(header.Number) {
+	if to != nil && *to == common.TradingStateAddrBinary && config.IsTIPXDCXReceiver(header.Number) {
 		return ApplyEmptyTransaction(config, statedb, header, tx, usedGas)
 	}
-	if tx.To() != nil && tx.To().String() == common.XDCXLendingAddress && config.IsTIPXDCXReceiver(header.Number) {
+	if to != nil && *to == common.XDCXLendingAddressBinary && config.IsTIPXDCXReceiver(header.Number) {
 		return ApplyEmptyTransaction(config, statedb, header, tx, usedGas)
 	}
 	if tx.IsTradingTransaction() && config.IsTIPXDCXReceiver(header.Number) {
@@ -233,8 +234,8 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	}
 
 	var balanceFee *big.Int
-	if tx.To() != nil {
-		if value, ok := tokensFee[*tx.To()]; ok {
+	if to != nil {
+		if value, ok := tokensFee[*to]; ok {
 			balanceFee = value
 		}
 	}
@@ -242,22 +243,11 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	if err != nil {
 		return nil, 0, err, false
 	}
-	// Create a new context to be used in the EVM environment
+	// Create a new context to be used in the EVM environment.
 	context := NewEVMContext(msg, header, bc, author)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(context, statedb, XDCxState, config, cfg)
-
-	if config.IsEIP1559(header.Number) {
-		statedb.AddAddressToAccessList(msg.From())
-		if dst := msg.To(); dst != nil {
-			statedb.AddAddressToAccessList(*dst)
-			// If it's a create-tx, the destination will be added inside evm.create
-		}
-		for _, addr := range vmenv.ActivePrecompiles() {
-			statedb.AddAddressToAccessList(addr)
-		}
-	}
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	var beneficiary common.Address
@@ -419,7 +409,8 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	if err != nil {
 		return nil, 0, err, false
 	}
-	// Update the state with pending changes
+
+	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(header.Number) {
 		statedb.Finalise(true)
@@ -428,23 +419,30 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	}
 	*usedGas += gas
 
-	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
-	// based on the eip phase, we're passing wether the root touch-delete accounts.
-	receipt := types.NewReceipt(root, failed, *usedGas)
+	// Create a new receipt for the transaction, storing the intermediate root and gas used
+	// by the tx.
+	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+	if failed {
+		receipt.Status = types.ReceiptStatusFailed
+	} else {
+		receipt.Status = types.ReceiptStatusSuccessful
+	}
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = gas
-	// if the transaction created a contract, store the creation address in the receipt.
+
+	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
 		receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
 	}
-	// Set the receipt logs and create a bloom for filtering
+
+	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	receipt.BlockHash = statedb.BlockHash()
 	receipt.BlockNumber = header.Number
 	receipt.TransactionIndex = uint(statedb.TxIndex())
 	if balanceFee != nil && failed {
-		state.PayFeeWithTRC21TxFail(statedb, msg.From(), *tx.To())
+		state.PayFeeWithTRC21TxFail(statedb, msg.From(), *to)
 	}
 	return receipt, gas, err, balanceFee != nil
 }
@@ -476,7 +474,7 @@ func ApplySignTransaction(config *params.ChainConfig, statedb *state.StateDB, he
 	// if the transaction created a contract, store the creation address in the receipt.
 	// Set the receipt logs and create a bloom for filtering
 	log := &types.Log{}
-	log.Address = common.HexToAddress(common.BlockSigners)
+	log.Address = common.BlockSignersBinary
 	log.BlockNumber = header.Number.Uint64()
 	statedb.AddLog(log)
 	receipt.Logs = statedb.GetLogs(tx.Hash())
@@ -532,7 +530,6 @@ func InitSignerInTransactions(config *params.ChainConfig, header *types.Header, 
 		go func(from int, to int) {
 			for j := from; j < to; j++ {
 				types.CacheSigner(signer, txs[j])
-				txs[j].CacheHash()
 			}
 			wg.Done()
 		}(from, to)

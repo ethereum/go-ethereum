@@ -20,11 +20,14 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"io/ioutil"
 	"math/big"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 )
 
 var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"
@@ -55,6 +58,33 @@ func BenchmarkSha3(b *testing.B) {
 	}
 }
 
+func TestUnmarshalPubkey(t *testing.T) {
+	key, err := UnmarshalPubkey(nil)
+	if err != errInvalidPubkey || key != nil {
+		t.Fatalf("expected error, got %v, %v", err, key)
+	}
+	key, err = UnmarshalPubkey([]byte{1, 2, 3})
+	if err != errInvalidPubkey || key != nil {
+		t.Fatalf("expected error, got %v, %v", err, key)
+	}
+
+	var (
+		enc, _ = hex.DecodeString("04760c4460e5336ac9bbd87952a3c7ec4363fc0a97bd31c86430806e287b437fd1b01abc6e1db640cf3106b520344af1d58b00b57823db3e1407cbc433e1b6d04d")
+		dec    = &ecdsa.PublicKey{
+			Curve: S256(),
+			X:     hexutil.MustDecodeBig("0x760c4460e5336ac9bbd87952a3c7ec4363fc0a97bd31c86430806e287b437fd1"),
+			Y:     hexutil.MustDecodeBig("0xb01abc6e1db640cf3106b520344af1d58b00b57823db3e1407cbc433e1b6d04d"),
+		}
+	)
+	key, err = UnmarshalPubkey(enc)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !reflect.DeepEqual(key, dec) {
+		t.Fatal("wrong result")
+	}
+}
+
 func TestSign(t *testing.T) {
 	key, _ := HexToECDSA(testPrivHex)
 	addr := common.HexToAddress(testAddrHex)
@@ -68,7 +98,7 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Errorf("ECRecover error: %s", err)
 	}
-	pubKey := ToECDSAPub(recoveredPub)
+	pubKey, _ := UnmarshalPubkey(recoveredPub)
 	recoveredAddr := PubkeyToAddress(*pubKey)
 	if addr != recoveredAddr {
 		t.Errorf("Address mismatch: want: %x have: %x", addr, recoveredAddr)
@@ -109,39 +139,82 @@ func TestNewContractAddress(t *testing.T) {
 	checkAddr(t, common.HexToAddress("c9ddedf451bc62ce88bf9292afb13df35b670699"), caddr2)
 }
 
-func TestLoadECDSAFile(t *testing.T) {
-	keyBytes := common.FromHex(testPrivHex)
-	fileName0 := "test_key0"
-	fileName1 := "test_key1"
-	checkKey := func(k *ecdsa.PrivateKey) {
-		checkAddr(t, PubkeyToAddress(k.PublicKey), common.HexToAddress(testAddrHex))
-		loadedKeyBytes := FromECDSA(k)
-		if !bytes.Equal(loadedKeyBytes, keyBytes) {
-			t.Fatalf("private key mismatch: want: %x have: %x", keyBytes, loadedKeyBytes)
+func TestLoadECDSA(t *testing.T) {
+	tests := []struct {
+		input string
+		err   string
+	}{
+		// good
+		{input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+		{input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"},
+		{input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n\r"},
+		{input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\r\n"},
+		{input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n\n"},
+		{input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n\r"},
+		// bad
+		{
+			input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde",
+			err:   "key file too short, want 64 hex characters",
+		},
+		{
+			input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n",
+			err:   "key file too short, want 64 hex characters",
+		},
+		{
+			input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeX",
+			err:   "invalid hex character 'X' in private key",
+		},
+		{
+			input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdefX",
+			err:   "invalid character 'X' at end of key file",
+		},
+		{
+			input: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n\n\n",
+			err:   "key file too long, want 64 hex characters",
+		},
+	}
+
+	for _, test := range tests {
+		f, err := ioutil.TempFile("", "loadecdsa_test.*.txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := f.Name()
+		f.WriteString(test.input)
+		f.Close()
+
+		_, err = LoadECDSA(filename)
+		switch {
+		case err != nil && test.err == "":
+			t.Fatalf("unexpected error for input %q:\n  %v", test.input, err)
+		case err != nil && err.Error() != test.err:
+			t.Fatalf("wrong error for input %q:\n  %v", test.input, err)
+		case err == nil && test.err != "":
+			t.Fatalf("LoadECDSA did not return error for input %q", test.input)
 		}
 	}
+}
 
-	os.WriteFile(fileName0, []byte(testPrivHex), 0600)
-	defer os.Remove(fileName0)
-
-	key0, err := LoadECDSA(fileName0)
+func TestSaveECDSA(t *testing.T) {
+	f, err := ioutil.TempFile("", "saveecdsa_test.*.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkKey(key0)
+	file := f.Name()
+	f.Close()
+	defer os.Remove(file)
 
-	// again, this time with SaveECDSA instead of manual save:
-	err = SaveECDSA(fileName1, key0)
+	key, _ := HexToECDSA(testPrivHex)
+	if err := SaveECDSA(file, key); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadECDSA(file)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(fileName1)
-
-	key1, err := LoadECDSA(fileName1)
-	if err != nil {
-		t.Fatal(err)
+	if !reflect.DeepEqual(key, loaded) {
+		t.Fatal("loaded key not equal to saved key")
 	}
-	checkKey(key1)
 }
 
 func TestValidateSignatureValues(t *testing.T) {
@@ -153,7 +226,7 @@ func TestValidateSignatureValues(t *testing.T) {
 	minusOne := big.NewInt(-1)
 	one := common.Big1
 	zero := common.Big0
-	secp256k1nMinus1 := new(big.Int).Sub(secp256k1_N, common.Big1)
+	secp256k1nMinus1 := new(big.Int).Sub(secp256k1N, common.Big1)
 
 	// correct v,r,s
 	check(true, 0, one, one)
@@ -180,9 +253,9 @@ func TestValidateSignatureValues(t *testing.T) {
 	// correct sig with max r,s
 	check(true, 0, secp256k1nMinus1, secp256k1nMinus1)
 	// correct v, combinations of incorrect r,s at upper limit
-	check(false, 0, secp256k1_N, secp256k1nMinus1)
-	check(false, 0, secp256k1nMinus1, secp256k1_N)
-	check(false, 0, secp256k1_N, secp256k1_N)
+	check(false, 0, secp256k1N, secp256k1nMinus1)
+	check(false, 0, secp256k1nMinus1, secp256k1N)
+	check(false, 0, secp256k1N, secp256k1N)
 
 	// current callers ensures r,s cannot be negative, but let's test for that too
 	// as crypto package could be used stand-alone

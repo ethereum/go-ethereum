@@ -3,9 +3,10 @@ package lendingstate
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"math/big"
 )
 
 const DefaultFeeRate = 100 // 100 / XDCXBaseFee = 100 / 10000 = 1%
@@ -71,7 +72,7 @@ func GetSettleBalance(isXDCXLendingFork bool,
 				log.Debug("quantity lending too small", "quantityToLend", quantityToLend, "takerFee", takerFee)
 				return result, ErrQuantityTradeTooSmall
 			}
-			if lendingToken.String() != common.XDCNativeAddress && lendTokenXDCPrice != nil && lendTokenXDCPrice.Cmp(common.Big0) > 0 {
+			if lendingToken != common.XDCNativeAddressBinary && lendTokenXDCPrice != nil && lendTokenXDCPrice.Cmp(common.Big0) > 0 {
 				exTakerReceivedFee := new(big.Int).Mul(takerFee, lendTokenXDCPrice)
 				exTakerReceivedFee = new(big.Int).Div(exTakerReceivedFee, lendTokenDecimal)
 
@@ -82,7 +83,7 @@ func GetSettleBalance(isXDCXLendingFork bool,
 					log.Debug("takerFee too small", "quantityToLend", quantityToLend, "takerFee", takerFee, "exTakerReceivedFee", exTakerReceivedFee, "borrowFeeRate", borrowFeeRate, "defaultFeeInXDC", defaultFeeInXDC)
 					return result, ErrQuantityTradeTooSmall
 				}
-			} else if lendingToken.String() == common.XDCNativeAddress {
+			} else if lendingToken == common.XDCNativeAddressBinary {
 				exTakerReceivedFee := takerFee
 				if (exTakerReceivedFee.Cmp(common.RelayerLendingFee) <= 0 && exTakerReceivedFee.Sign() > 0) || defaultFee.Cmp(common.RelayerLendingFee) <= 0 {
 					log.Debug("takerFee too small", "quantityToLend", quantityToLend, "takerFee", takerFee, "exTakerReceivedFee", exTakerReceivedFee, "borrowFeeRate", borrowFeeRate, "defaultFee", defaultFee)
@@ -121,7 +122,7 @@ func GetSettleBalance(isXDCXLendingFork bool,
 				log.Debug("quantity lending too small", "quantityToLend", quantityToLend, "makerFee", makerFee)
 				return result, ErrQuantityTradeTooSmall
 			}
-			if lendingToken.String() != common.XDCNativeAddress && lendTokenXDCPrice != nil && lendTokenXDCPrice.Cmp(common.Big0) > 0 {
+			if lendingToken != common.XDCNativeAddressBinary && lendTokenXDCPrice != nil && lendTokenXDCPrice.Cmp(common.Big0) > 0 {
 				exMakerReceivedFee := new(big.Int).Mul(makerFee, lendTokenXDCPrice)
 				exMakerReceivedFee = new(big.Int).Div(exMakerReceivedFee, lendTokenDecimal)
 
@@ -132,7 +133,7 @@ func GetSettleBalance(isXDCXLendingFork bool,
 					log.Debug("makerFee too small", "quantityToLend", quantityToLend, "makerFee", makerFee, "exMakerReceivedFee", exMakerReceivedFee, "borrowFeeRate", borrowFeeRate, "defaultFeeInXDC", defaultFeeInXDC)
 					return result, ErrQuantityTradeTooSmall
 				}
-			} else if lendingToken.String() == common.XDCNativeAddress {
+			} else if lendingToken == common.XDCNativeAddressBinary {
 				exMakerReceivedFee := makerFee
 				if (exMakerReceivedFee.Cmp(common.RelayerLendingFee) <= 0 && exMakerReceivedFee.Sign() > 0) || defaultFee.Cmp(common.RelayerLendingFee) <= 0 {
 					log.Debug("makerFee too small", "quantityToLend", quantityToLend, "makerFee", makerFee, "exMakerReceivedFee", exMakerReceivedFee, "borrowFeeRate", borrowFeeRate, "defaultFee", defaultFee)
@@ -171,7 +172,7 @@ func GetSettleBalance(isXDCXLendingFork bool,
 			log.Debug("quantity lending too small", "quantityToLend", quantityToLend, "borrowFee", borrowFee)
 			return result, ErrQuantityTradeTooSmall
 		}
-		if lendingToken.String() != common.XDCNativeAddress && lendTokenXDCPrice != nil && lendTokenXDCPrice.Cmp(common.Big0) > 0 {
+		if lendingToken != common.XDCNativeAddressBinary && lendTokenXDCPrice != nil && lendTokenXDCPrice.Cmp(common.Big0) > 0 {
 			// exReceivedFee: the fee amount which borrowingRelayer will receive
 			exReceivedFee := new(big.Int).Mul(borrowFee, lendTokenXDCPrice)
 			exReceivedFee = new(big.Int).Div(exReceivedFee, lendTokenDecimal)
@@ -183,7 +184,7 @@ func GetSettleBalance(isXDCXLendingFork bool,
 				log.Debug("takerFee too small", "quantityToLend", quantityToLend, "borrowFee", borrowFee, "exReceivedFee", exReceivedFee, "borrowFeeRate", borrowFeeRate, "defaultFeeInXDC", defaultFeeInXDC)
 				return result, ErrQuantityTradeTooSmall
 			}
-		} else if lendingToken.String() == common.XDCNativeAddress {
+		} else if lendingToken == common.XDCNativeAddressBinary {
 			exReceivedFee := borrowFee
 			if (exReceivedFee.Cmp(common.RelayerLendingFee) <= 0 && exReceivedFee.Sign() > 0) || defaultFee.Cmp(common.RelayerLendingFee) <= 0 {
 				log.Debug("takerFee too small", "quantityToLend", quantityToLend, "borrowFee", borrowFee, "exReceivedFee", exReceivedFee, "borrowFeeRate", borrowFeeRate, "defaultFee", defaultFee)
