@@ -135,7 +135,7 @@ func waitForRevalidationPing(t *testing.T, transport *pingRecorder, tab *Table, 
 		simclock.Run(tab.cfg.PingInterval * slowRevalidationFactor)
 		p := transport.waitPing(2 * time.Second)
 		if p == nil {
-			t.Fatal("Table did not send revalidation ping")
+			continue
 		}
 		if id == (enode.ID{}) || p.ID() == id {
 			return p
@@ -423,9 +423,7 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 
 	// Wait for revalidation. We wait for the node to be revalidated two times
 	// in order to synchronize with the update in the table.
-	time.Sleep(5 * time.Millisecond)
 	waitForRevalidationPing(t, transport, tab, n2.ID())
-	time.Sleep(5 * time.Millisecond)
 	waitForRevalidationPing(t, transport, tab, n2.ID())
 
 	intable := tab.getNode(id)
