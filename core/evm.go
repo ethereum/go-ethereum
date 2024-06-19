@@ -19,8 +19,6 @@ package core
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/state"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -40,9 +38,8 @@ type ChainContext interface {
 	GetHeader(common.Hash, uint64) *types.Header
 }
 
-// NewEVMBlockContext creates a new context for use in the EVM.  If witness is non-nil, the context sources block hashes
-// for the BLOCKHASH opcode from the witness.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address, witness *state.Witness) vm.BlockContext {
+// NewEVMBlockContext creates a new context for use in the EVM.
+func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
 	var (
 		beneficiary common.Address
 		baseFee     *big.Int
@@ -65,18 +62,10 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.Difficulty.Sign() == 0 {
 		random = &header.MixDigest
 	}
-	var getHash vm.GetHashFunc
-	if witness != nil {
-		getHash = func(n uint64) common.Hash {
-			return witness.BlockHash(n)
-		}
-	} else {
-		getHash = GetHashFn(header, chain)
-	}
 	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
-		GetHash:     getHash,
+		GetHash:     GetHashFn(header, chain),
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        header.Time,

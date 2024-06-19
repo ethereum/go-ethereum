@@ -370,8 +370,7 @@ func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
 	return t.reader.node(path, common.Hash{})
 }
 
-// AccessList returns a map of path->blob containing all trie nodes that have
-// been accessed.
-func (t *VerkleTrie) AccessList() map[string][]byte {
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *VerkleTrie) Witness() map[string]struct{} {
 	panic("not implemented")
 }

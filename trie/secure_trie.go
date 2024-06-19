@@ -214,8 +214,9 @@ func (t *StateTrie) GetKey(shaKey []byte) []byte {
 	return t.db.Preimage(common.BytesToHash(shaKey))
 }
 
-func (t *StateTrie) AccessList() map[string][]byte {
-	return t.trie.AccessList()
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *StateTrie) Witness() map[string]struct{} {
+	return t.trie.Witness()
 }
 
 // Commit collects all dirty nodes in the trie and replaces them with the

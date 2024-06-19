@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils/stateless"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -444,18 +442,4 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 		return "", errors.New("trie flush interval is undefined for path-based scheme")
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
-}
-
-// BuildStatelessProof executes a block, collecting the accessed pre-state into
-// a Witness.  The RLP-encoded witness is returned.
-func (api *DebugAPI) BuildStatelessProof(numOrHash rpc.BlockNumberOrHash) ([]byte, error) {
-	var blockHash common.Hash
-	if numOrHash.BlockNumber != nil {
-		number := numOrHash.BlockNumber.Int64()
-		block := api.eth.blockchain.GetBlockByNumber(uint64(number))
-		blockHash = block.Hash()
-	} else {
-		blockHash = *numOrHash.BlockHash
-	}
-	return stateless.BuildStatelessProof(blockHash, api.eth.blockchain)
 }

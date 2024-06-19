@@ -323,7 +323,17 @@ func (s *stateObject) finalise() {
 //
 // It assumes all the dirty storage slots have been finalized before.
 func (s *stateObject) updateTrie() (Trie, error) {
-	// Retrieve a pretecher populated trie, or fall back to the database
+	// Short circuit if nothing was accessed, don't trigger a prefetcher warning
+	if len(s.uncommittedStorage) == 0 {
+		// Nothing was written, so we could stop early. Unless we have both reads
+		// and witness collection enabled, in which case we need to fetch the trie.
+		if s.db.witness == nil || len(s.originStorage) == 0 {
+			return s.trie, nil
+		}
+	}
+	// Retrieve a pretecher populated trie, or fall back to the database. This will
+	// block until all prefetch tasks are done, which are needed for witnesses even
+	// for unmodified state objects.
 	tr := s.getPrefetchedTrie()
 	if tr != nil {
 		// Prefetcher returned a live trie, swap it out for the current one
@@ -337,11 +347,7 @@ func (s *stateObject) updateTrie() (Trie, error) {
 			return nil, err
 		}
 	}
-	// Short circuit if nothing changed, don't bother with hashing anything.
-	//
-	// We only quit after the prefetched trie is potentially resolved above
-	// because, when building a stateless witness we will need to collect
-	//storage access witnesses from the object's trie when we commit it.
+	// Short circuit if nothing changed, don't bother with hashing anything
 	if len(s.uncommittedStorage) == 0 {
 		return s.trie, nil
 	}
@@ -450,9 +456,7 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 //
 // Note, commit may run concurrently across all the state objects. Do not assume
 // thread-safe access to the statedb.
-func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, map[string][]byte, error) {
-	var al map[string][]byte
-
+func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 	// commit the account metadata changes
 	op := &accountUpdate{
 		address: s.address,
@@ -474,18 +478,12 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, map[string][]
 	if len(op.storages) == 0 {
 		// nothing changed, don't bother to commit the trie
 		s.origin = s.data.Copy()
-		if s.trie != nil && !s.trie.IsVerkle() {
-			al = s.trie.AccessList()
-		}
-		return op, nil, al, nil
+		return op, nil, nil
 	}
 	root, nodes := s.trie.Commit(false)
 	s.data.Root = root
 	s.origin = s.data.Copy()
-	if !s.trie.IsVerkle() {
-		al = s.trie.AccessList()
-	}
-	return op, nodes, al, nil
+	return op, nodes, nil
 }
 
 // AddBalance adds amount to s's balance.

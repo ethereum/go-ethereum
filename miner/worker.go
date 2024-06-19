@@ -196,7 +196,7 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 		return nil, err
 	}
 	if header.ParentBeaconRoot != nil {
-		context := core.NewEVMBlockContext(header, miner.chain, nil, nil)
+		context := core.NewEVMBlockContext(header, miner.chain, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, miner.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
 	}

@@ -342,9 +342,7 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	slot := scope.Stack.peek()
 	address := slot.Bytes20()
 	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
-		code := interpreter.evm.StateDB.GetCode(address)
-		codeHash := interpreter.evm.StateDB.GetCodeHash(address)
-		witness.AddCode(codeHash, code)
+		witness.AddCode(interpreter.evm.StateDB.GetCode(address))
 	}
 	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
 	return nil, nil
@@ -384,12 +382,11 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
+	code := interpreter.evm.StateDB.GetCode(addr)
 	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
-		hash := interpreter.evm.StateDB.GetCodeHash(addr)
-		code := interpreter.evm.StateDB.GetCode(addr)
-		witness.AddCode(hash, code)
+		witness.AddCode(code)
 	}
-	codeCopy := getData(interpreter.evm.StateDB.GetCode(addr), uint64CodeOffset, length.Uint64())
+	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
 	return nil, nil
@@ -427,11 +424,6 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
-		if witness := interpreter.evm.StateDB.Witness(); witness != nil {
-			hash := interpreter.evm.StateDB.GetCodeHash(address)
-			code := interpreter.evm.StateDB.GetCode(address)
-			witness.AddCode(hash, code)
-		}
 		slot.SetBytes(interpreter.evm.StateDB.GetCodeHash(address).Bytes())
 	}
 	return nil, nil
@@ -461,7 +453,7 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	if num64 >= lower && num64 < upper {
 		res := interpreter.evm.Context.GetHash(num64)
 		if witness := interpreter.evm.StateDB.Witness(); witness != nil {
-			witness.AddBlockHash(res, num64)
+			witness.AddBlockHash(num64)
 		}
 		num.SetBytes(res[:])
 	} else {

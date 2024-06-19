@@ -601,12 +601,6 @@ func (t *Trie) Hash() common.Hash {
 	return common.BytesToHash(hash.(hashNode))
 }
 
-// AccessList returns a map of path->blob containing all trie nodes that have
-// been accessed.
-func (t *Trie) AccessList() map[string][]byte {
-	return t.tracer.accessList
-}
-
 // Commit collects all dirty nodes in the trie and replaces them with the
 // corresponding node hash. All collected nodes (including dirty leaves if
 // collectLeaf is true) will be encapsulated into a nodeset for return.
@@ -665,6 +659,18 @@ func (t *Trie) hashRoot() (node, node) {
 	}()
 	hashed, cached := h.hash(t.root, true)
 	return hashed, cached
+}
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *Trie) Witness() map[string]struct{} {
+	if len(t.tracer.accessList) == 0 {
+		return nil
+	}
+	witness := make(map[string]struct{})
+	for _, node := range t.tracer.accessList {
+		witness[string(node)] = struct{}{}
+	}
+	return witness
 }
 
 // Reset drops the referenced root node and cleans all internal state.

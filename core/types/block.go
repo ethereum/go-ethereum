@@ -174,18 +174,6 @@ type Body struct {
 	Withdrawals  []*Withdrawal `rlp:"optional"`
 }
 
-// EncodeRLPWithZeroRoot encodes a block (with header state root set to 0x00...0) to RLP
-func (b *Block) EncodeRLPWithZeroRoot(w io.Writer) error {
-	old := b.header.Root
-	b.header.Root = common.Hash{}
-	err := b.EncodeRLP(w)
-	b.header.Root = old
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // Block represents an Ethereum block.
 //
 // Note the Block type tries to be 'immutable', and contains certain caches that rely
