@@ -103,6 +103,8 @@ func (d *DiscV5API) AddEnr(enr string) (bool, error) {
 	}
 
 	// immediately add the node to the routing table
+	d.DiscV5.tab.mutex.Lock()
+	defer d.DiscV5.tab.mutex.Unlock()
 	d.DiscV5.tab.handleAddNode(addNodeOp{node: n, isInbound: false, forceSetLive: true})
 	return true, nil
 }
