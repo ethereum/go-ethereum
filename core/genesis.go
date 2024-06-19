@@ -316,7 +316,8 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, gen
 		// overwrite triedb IsUsingZktrie config to be safe
 		triedb.SetIsUsingZktrie(storedcfg.Scroll.ZktrieEnabled())
 	}
-	if header.Root != types.EmptyRootHash && !triedb.Initialized(header.Root) {
+	// if header.Root != types.EmptyRootHash && !triedb.Initialized(header.Hash()) {
+	if _, err := state.New(header.Root, state.NewDatabaseWithNodeDB(db, triedb), nil); err != nil {
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
@@ -420,6 +421,12 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.SepoliaChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
+	case ghash == params.ScrollAlphaGenesisHash:
+		return params.ScrollAlphaChainConfig
+	case ghash == params.ScrollSepoliaGenesisHash:
+		return params.ScrollSepoliaChainConfig
+	case ghash == params.ScrollMainnetGenesisHash:
+		return params.ScrollMainnetChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
