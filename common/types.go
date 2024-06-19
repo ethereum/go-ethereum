@@ -468,7 +468,7 @@ func (d *Decimal) UnmarshalJSON(input []byte) error {
 	if !isString(input) {
 		return &json.UnmarshalTypeError{Value: "non-string", Type: reflect.TypeOf(uint64(0))}
 	}
-	if i, err := strconv.ParseInt(string(input[1:len(input)-1]), 10, 64); err == nil {
+	if i, err := strconv.ParseUint(string(input[1:len(input)-1]), 10, 64); err == nil {
 		*d = Decimal(i)
 		return nil
 	} else {
