@@ -811,7 +811,6 @@ func (api *ConsensusAPI) heartbeat() {
 			}
 			offlineLogged = time.Now()
 		}
-		continue
 	}
 }
 
