@@ -26,11 +26,7 @@ import (
 
 func TestBlockchain(t *testing.T) {
 	bt := new(testMatcher)
-	// General state tests are 'exported' as blockchain tests, but we can run them natively.
-	// For speedier CI-runs, the line below can be uncommented, so those are skipped.
-	// For now, in hardfork-times (Berlin), we run the tests both as StateTests and
-	// as blockchain tests, since the latter also covers things like receipt root
-	bt.skipLoad(`^GeneralStateTests/`)
+	bt.skipLoad(`^GeneralStateTests/VMTests/vmPerformance`)
 
 	// Skip random failures due to selfish mining test
 	bt.skipLoad(`.*bcForgedTest/bcForkUncle\.json`)
