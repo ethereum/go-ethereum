@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -27,6 +28,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 )
+
+// callErrorDataLogDTruncateLimit is the before truncation limit of the error data field in the log.
+const callErrorDataLogTruncateLimit = 1024
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
 // handler is not safe for concurrent use. Message handling never blocks indefinitely
@@ -468,16 +472,29 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
-		var ctx []interface{}
-		ctx = append(ctx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
+		var logCtx []interface{}
+		logCtx = append(logCtx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
 		if resp.Error != nil {
-			ctx = append(ctx, "err", resp.Error.Message)
+			logCtx = append(logCtx, "err", resp.Error.Message)
 			if resp.Error.Data != nil {
-				ctx = append(ctx, "errdata", resp.Error.Data)
+				// If the log level is debug, log the full error data. Otherwise, try to truncate it.
+				if h.log.Enabled(context.Background(), log.LvlDebug) {
+					logCtx = append(logCtx, "errdata", resp.Error.Data)
+				} else {
+					errDataStr := fmt.Sprintf("%v", resp.Error.Data)
+					// Truncate the error data if it is too long. Otherwise, preserve the original data.
+					if len(errDataStr) > callErrorDataLogTruncateLimit {
+						remaining := len(errDataStr) - callErrorDataLogTruncateLimit
+						errDataStr = fmt.Sprintf("%s... (truncated remaining %d chars)", errDataStr[:callErrorDataLogTruncateLimit], remaining)
+						logCtx = append(logCtx, "errdata", errDataStr)
+					} else {
+						logCtx = append(logCtx, "errdata", resp.Error.Data)
+					}
+				}
 			}
-			h.log.Warn("Served "+msg.Method, ctx...)
+			h.log.Warn("Served "+msg.Method, logCtx...)
 		} else {
-			h.log.Debug("Served "+msg.Method, ctx...)
+			h.log.Debug("Served "+msg.Method, logCtx...)
 		}
 		return resp
 
