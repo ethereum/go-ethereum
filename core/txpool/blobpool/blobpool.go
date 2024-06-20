@@ -1598,8 +1598,8 @@ func (p *BlobPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
 func (p *BlobPool) Nonce(addr common.Address) uint64 {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
 	if txs, ok := p.index[addr]; ok {
 		return txs[len(txs)-1].nonce + 1
@@ -1610,8 +1610,8 @@ func (p *BlobPool) Nonce(addr common.Address) uint64 {
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
 func (p *BlobPool) Stats() (int, int) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
 	var pending int
 	for _, txs := range p.index {
