@@ -121,24 +121,24 @@ func ReadTransaction(db ethdb.Reader, hash common.Hash) (*types.Transaction, com
 
 // ReadReceipt retrieves a specific transaction receipt from the database, along with
 // its added positional metadata.
-func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig) (*types.Receipt, common.Hash, uint64, uint64) {
+func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig) *types.Receipt {
 	// Retrieve the context of the receipt based on the transaction hash
 	blockNumber := ReadTxLookupEntry(db, txHash)
 	if blockNumber == nil {
-		return nil, common.Hash{}, 0, 0
+		return nil
 	}
 	blockHash := ReadCanonicalHash(db, *blockNumber)
 	if blockHash == (common.Hash{}) {
-		return nil, common.Hash{}, 0, 0
+		return nil
 	}
 	blockHeader := ReadHeader(db, blockHash, *blockNumber)
 	if blockHeader == nil {
-		return nil, common.Hash{}, 0, 0
+		return nil
 	}
 	blockBody := ReadBody(db, blockHash, *blockNumber)
 	if blockBody == nil {
 		log.Error("Missing body but have receipt", "blockHash", blockHash, "number", blockNumber)
-		return nil, common.Hash{}, 0, 0
+		return nil
 	}
 
 	// Find a match tx and derive receipt fields
@@ -150,11 +150,11 @@ func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig
 		// Read raw receipts only if hash matches
 		receipts := ReadRawReceipts(db, blockHash, *blockNumber)
 		if receipts == nil {
-			return nil, common.Hash{}, 0, 0
+			return nil
 		}
 		if len(blockBody.Transactions) != len(receipts) {
 			log.Error("Transaction and receipt count mismatch", "txs", len(blockBody.Transactions), "receipts", len(receipts))
-			return nil, common.Hash{}, 0, 0
+			return nil
 		}
 
 		targetReceipt := receipts[txIndex]
@@ -181,13 +181,13 @@ func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig
 
 		if err := targetReceipt.DeriveFields(signer, blockHash, *blockNumber, blockHeader.BaseFee, blobGasPrice, uint(txIndex), gasUsed, logIndex, blockBody.Transactions[txIndex]); err != nil {
 			log.Error("Failed to derive the receipt fields", "txHash", txHash, "err", err)
-			return nil, common.Hash{}, 0, 0
+			return nil
 		}
-		return targetReceipt, blockHash, *blockNumber, uint64(txIndex)
+		return targetReceipt
 	}
 
 	log.Error("Receipt not found", "number", *blockNumber, "blockHash", blockHash, "txHash", txHash)
-	return nil, common.Hash{}, 0, 0
+	return nil
 }
 
 // ReadBloomBits retrieves the compressed bloom bit vector belonging to the given

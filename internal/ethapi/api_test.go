@@ -551,7 +551,7 @@ func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOr
 }
 func (b testBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) { panic("implement me") }
 func (b testBackend) GetReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
-	receipt, _, _, _ := rawdb.ReadReceipt(b.db, txHash, b.chain.Config())
+	receipt := rawdb.ReadReceipt(b.db, txHash, b.chain.Config())
 	return receipt, nil
 }
 func (b testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {

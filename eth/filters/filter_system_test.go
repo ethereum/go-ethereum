@@ -108,7 +108,7 @@ func (b *testBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.
 }
 
 func (b *testBackend) GetReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
-	receipt, _, _, _ := rawdb.ReadReceipt(b.db, txHash, params.TestChainConfig)
+	receipt := rawdb.ReadReceipt(b.db, txHash, params.TestChainConfig)
 	return receipt, nil
 }
 
