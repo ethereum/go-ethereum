@@ -1,13 +1,13 @@
-## Go Ethereum
+# ללכת ethereum
 
-Golang execution layer implementation of the Ethereum protocol.
+יישום שכבת ביצוע גולאנג של פרוטוקול Ethereum.
 
-[![API Reference](
-https://pkg.go.dev/badge/github.com/ethereum/go-ethereum
-)](https://pkg.go.dev/github.com/ethereum/go-ethereum?tab=doc)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ethereum/go-ethereum)](https://goreportcard.com/report/github.com/ethereum/go-ethereum)
-[![Travis](https://app.travis-ci.com/ethereum/go-ethereum.svg?branch=master)](https://app.travis-ci.com/github/ethereum/go-ethereum)
-[![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/nthXNEv)
+[![הפניה API I I](
+http://pkg. go. dev/badge/github. com/ethereum/go-ethereum
+)](http://pkg. go. dev/github. com/ethereum/go-ethereum? tab=doc)
+[![ללכת דו"ח כרטיס](http:/goreportcard. com/badge/github. com/ethereum/go-ethereum)](http:/goreportcard. com/ report/github. com/ethereum/go-ethereum)
+[![טראביס.](http://// app. travis-ci. com/ethereum/go-ethereum. svg? branch=master)](http http:////  travis-ci. com/github/ethereum/go-ethereum)
+[![Discord](http:/img. מגנים. io/badge/contrd-join%20צ'אט-כחול. svg)](http:/discord. gg/nthXNEv)
 
 Automated builds are available for stable releases and the unstable master branch. Binary
 archives are published at https://geth.ethereum.org/downloads/.
