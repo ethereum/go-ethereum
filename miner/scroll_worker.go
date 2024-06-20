@@ -404,6 +404,11 @@ func (w *worker) startNewPipeline(timestamp int64) {
 	if w.chainConfig.CurieBlock != nil && w.chainConfig.CurieBlock.Cmp(header.Number) == 0 {
 		misc.ApplyCurieHardFork(parentState)
 
+		var nextL1MsgIndex uint64
+		if dbVal := rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), header.ParentHash); dbVal != nil {
+			nextL1MsgIndex = *dbVal
+		}
+
 		// zkEVM requirement: Curie transition block contains 0 transactions, bypass pipeline.
 		err = w.commit(&pipeline.Result{
 			// Note: Signer nodes will not store CCC results for empty blocks in their database.
@@ -411,11 +416,12 @@ func (w *worker) startNewPipeline(timestamp int64) {
 			// nodes will still store CCC results.
 			Rows: &types.RowConsumption{},
 			FinalBlock: &pipeline.BlockCandidate{
-				Header:        header,
-				State:         parentState,
-				Txs:           types.Transactions{},
-				Receipts:      types.Receipts{},
-				CoalescedLogs: []*types.Log{},
+				Header:         header,
+				State:          parentState,
+				Txs:            types.Transactions{},
+				Receipts:       types.Receipts{},
+				CoalescedLogs:  []*types.Log{},
+				NextL1MsgIndex: nextL1MsgIndex,
 			},
 		})
 
