@@ -477,19 +477,14 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 		if resp.Error != nil {
 			logCtx = append(logCtx, "err", resp.Error.Message)
 			if resp.Error.Data != nil {
-				// If the log level is debug, log the full error data. Otherwise, try to truncate it.
-				if h.log.Enabled(context.Background(), log.LvlDebug) {
-					logCtx = append(logCtx, "errdata", resp.Error.Data)
+				errDataStr := fmt.Sprintf("%v", resp.Error.Data)
+				// Truncate the error data as string if it is too long. Otherwise, preserve the original data.
+				if len(errDataStr) > callErrorDataLogTruncateLimit {
+					remaining := len(errDataStr) - callErrorDataLogTruncateLimit
+					errDataStr = fmt.Sprintf("%s... (truncated remaining %d chars)", errDataStr[:callErrorDataLogTruncateLimit], remaining)
+					logCtx = append(logCtx, "errdata", errDataStr)
 				} else {
-					errDataStr := fmt.Sprintf("%v", resp.Error.Data)
-					// Truncate the error data if it is too long. Otherwise, preserve the original data.
-					if len(errDataStr) > callErrorDataLogTruncateLimit {
-						remaining := len(errDataStr) - callErrorDataLogTruncateLimit
-						errDataStr = fmt.Sprintf("%s... (truncated remaining %d chars)", errDataStr[:callErrorDataLogTruncateLimit], remaining)
-						logCtx = append(logCtx, "errdata", errDataStr)
-					} else {
-						logCtx = append(logCtx, "errdata", resp.Error.Data)
-					}
+					logCtx = append(logCtx, "errdata", resp.Error.Data)
 				}
 			}
 			h.log.Warn("Served "+msg.Method, logCtx...)
