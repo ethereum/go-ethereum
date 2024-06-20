@@ -290,7 +290,7 @@ func (p *PortalProtocol) AddEnr(n *enode.Node) {
 	// immediately add the node to the routing table
 	p.table.mutex.Lock()
 	defer p.table.mutex.Unlock()
-	p.table.handleAddNode(addNodeOp{node: n, isInbound: false, forceSetLive: true})
+	p.table.handleAddNode(addNodeOp{node: n, isInbound: true, forceSetLive: true})
 	id := n.ID().String()
 	p.radiusCache.Set([]byte(id), MaxDistance)
 }
