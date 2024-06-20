@@ -114,18 +114,6 @@ func (db *ProofSet) ByteList() [][]byte {
 	return values
 }
 
-// ProofList converts the node set to a ProofList
-func (db *ProofSet) ProofList() ProofList {
-	db.lock.RLock()
-	defer db.lock.RUnlock()
-
-	var values = make(ProofList, len(db.order))
-	for i, key := range db.order {
-		values[i] = db.nodes[key]
-	}
-	return values
-}
-
 // Store writes the contents of the set to the given database
 func (db *ProofSet) Store(target ethdb.KeyValueWriter) {
 	db.lock.RLock()
