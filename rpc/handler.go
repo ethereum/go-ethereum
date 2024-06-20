@@ -478,7 +478,7 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 			logCtx = append(logCtx, "err", resp.Error.Message)
 			if resp.Error.Data != nil {
 				errDataStr := fmt.Sprintf("%v", resp.Error.Data)
-				// Truncate the error data as string if it is too long. Otherwise, preserve the original data.
+				// Truncate the error data if it is too long. Otherwise, preserve the original data.
 				if len(errDataStr) > callErrorDataLogTruncateLimit {
 					remaining := len(errDataStr) - callErrorDataLogTruncateLimit
 					errDataStr = fmt.Sprintf("%s... (truncated remaining %d chars)", errDataStr[:callErrorDataLogTruncateLimit], remaining)
