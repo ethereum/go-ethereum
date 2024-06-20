@@ -320,9 +320,9 @@ func TestDeriveField(t *testing.T) {
 		} else {
 			gasUsed = derivedReceipts[i].CumulativeGasUsed - derivedReceipts[i-1].CumulativeGasUsed
 		}
-		err := derivedReceipts[i].DeriveField(signer, blockHash, blockNumber.Uint64(), basefee, blobGasPrice, uint(i), gasUsed, logIndex, txs[i])
+		err := derivedReceipts[i].DeriveFields(signer, blockHash, blockNumber.Uint64(), basefee, blobGasPrice, uint(i), gasUsed, logIndex, txs[i])
 		if err != nil {
-			t.Fatalf("DeriveField(...) = %v, want <nil>", err)
+			t.Fatalf("DeriveFields(...) = %v, want <nil>", err)
 		}
 		logIndex += uint(len(derivedReceipts[i].Logs))
 

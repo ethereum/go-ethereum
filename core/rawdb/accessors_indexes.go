@@ -179,7 +179,7 @@ func ReadReceipt(db ethdb.Reader, txHash common.Hash, config *params.ChainConfig
 			logIndex += uint(len(receipts[i].Logs))
 		}
 
-		if err := targetReceipt.DeriveField(signer, blockHash, *blockNumber, blockHeader.BaseFee, blobGasPrice, uint(txIndex), gasUsed, logIndex, blockBody.Transactions[txIndex]); err != nil {
+		if err := targetReceipt.DeriveFields(signer, blockHash, *blockNumber, blockHeader.BaseFee, blobGasPrice, uint(txIndex), gasUsed, logIndex, blockBody.Transactions[txIndex]); err != nil {
 			log.Error("Failed to derive the receipt fields", "txHash", txHash, "err", err)
 			return nil, common.Hash{}, 0, 0
 		}

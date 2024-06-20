@@ -117,9 +117,9 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 	return r
 }
 
-// DeriveField fills the receipt with their computed fields based on consensus
+// DeriveFields fills the receipt with their computed fields based on consensus
 // data and contextual infos like containing block and transactions.
-func (r *Receipt) DeriveField(signer Signer, hash common.Hash, number uint64, baseFee *big.Int, blobGasPrice *big.Int, txIndex uint, gasUsed uint64, firstLogIndex uint, tx *Transaction) error {
+func (r *Receipt) DeriveFields(signer Signer, hash common.Hash, number uint64, baseFee *big.Int, blobGasPrice *big.Int, txIndex uint, gasUsed uint64, firstLogIndex uint, tx *Transaction) error {
 	// The transaction type and hash can be retrieved from the transaction itself
 	r.Type = tx.Type()
 	r.TxHash = tx.Hash()
@@ -378,7 +378,7 @@ func (rs Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, nu
 		} else {
 			gasUsed = rs[i].CumulativeGasUsed - rs[i-1].CumulativeGasUsed
 		}
-		if err := rs[i].DeriveField(signer, hash, number, baseFee, blobGasPrice, uint(i), gasUsed, logIndex, txs[i]); err != nil {
+		if err := rs[i].DeriveFields(signer, hash, number, baseFee, blobGasPrice, uint(i), gasUsed, logIndex, txs[i]); err != nil {
 			return err
 		}
 		logIndex += uint(len(rs[i].Logs))
