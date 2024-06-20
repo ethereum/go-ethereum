@@ -104,7 +104,7 @@ func fuzzRlp(t *testing.T, input []byte) {
 	{
 		var v struct {
 			Byte [10]byte
-			Bool [10]bool
+			Rool [10]bool
 		}
 		if err := decodeEncode(input, &v); err != nil {
 			t.Fatal(err)
