@@ -24,6 +24,7 @@ import (
 
 	"github.com/tenderly/binance-geth/common"
 	cmath "github.com/tenderly/binance-geth/common/math"
+	"github.com/tenderly/binance-geth/consensus"
 	"github.com/tenderly/binance-geth/core/types"
 	"github.com/tenderly/binance-geth/core/vm"
 	"github.com/tenderly/binance-geth/params"
@@ -440,7 +441,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		fee := new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+
+		st.state.AddBalance(consensus.SystemAddress, fee)
+		// add extra blob fee reward
+		if rules.IsCancun {
+			blobFee := new(big.Int).SetUint64(st.blobGasUsed())
+			blobFee.Mul(blobFee, st.evm.Context.BlobBaseFee)
+			st.state.AddBalance(consensus.SystemAddress, blobFee)
+		}
 	}
 
 	return &ExecutionResult{
