@@ -8,6 +8,7 @@
       shell: |
         export RPC_IMAGE={{ rpc_image }}
         cd {{ deploy_path }}
+        git pull
         ./docker-down.sh
         ./docker-up-hash.sh
         docker ps
