@@ -1,0 +1,38 @@
+name: Docker
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build-and-push-arm64-image:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch:
+          - amd64
+          - aarch64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up QEMU
+        if: matrix.arch == 'aarch64'
+        run: |
+          docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+          docker buildx create --name multiarch --driver docker-container --use
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build docker image
+        uses: docker/build-push-action@v2
+        with:
+          platforms: linux/arm64
+          context: .
+          file: Dockerfile
+          push: true
+          tags: scrolltech/l2geth:${{github.ref_name}}-arm64-ubuntu
