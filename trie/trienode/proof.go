@@ -102,12 +102,12 @@ func (db *ProofSet) DataSize() int {
 	return db.dataSize
 }
 
-// ByteList converts the node set to a [][]byte
-func (db *ProofSet) ByteList() [][]byte {
+// List converts the node set to a slice of bytes.
+func (db *ProofSet) List() [][]byte {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	var values = make([][]byte, len(db.order))
+	values := make([][]byte, len(db.order))
 	for i, key := range db.order {
 		values[i] = db.nodes[key]
 	}

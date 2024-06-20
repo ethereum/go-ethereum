@@ -286,7 +286,7 @@ func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.H
 			t.logger.Error("Could not prove last item", "error", err)
 		}
 	}
-	return keys, vals, proof.ByteList()
+	return keys, vals, proof.List()
 }
 
 // defaultStorageRequestHandler is a well-behaving storage request handler
@@ -368,9 +368,7 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 					t.logger.Error("Could not prove last item", "error", err)
 				}
 			}
-			for _, blob := range proof.ByteList() {
-				proofs = append(proofs, blob)
-			}
+			proofs = append(proofs, proof.List()...)
 			break
 		}
 	}
@@ -427,9 +425,7 @@ func createStorageRequestResponseAlwaysProve(t *testPeer, root common.Hash, acco
 					t.logger.Error("Could not prove last item", "error", err)
 				}
 			}
-			for _, blob := range proof.ByteList() {
-				proofs = append(proofs, blob)
-			}
+			proofs = append(proofs, proof.List()...)
 			break
 		}
 	}
@@ -614,7 +610,7 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 			keys = append(keys[:1], keys[2:]...)
 			vals = append(vals[:1], vals[2:]...)
 		}
-		if err := t.remote.OnAccounts(t, requestId, keys, vals, proof.ByteList()); err != nil {
+		if err := t.remote.OnAccounts(t, requestId, keys, vals, proof.List()); err != nil {
 			t.logger.Info("remote error on delivery (as expected)", "error", err)
 			t.term()
 			// This is actually correct, signal to exit the test successfully
