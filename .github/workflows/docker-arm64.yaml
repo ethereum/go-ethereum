@@ -1,7 +1,12 @@
-name: Docker
+name: Docker-arm64
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "tag of this image (suffix -arm64 is added automatically)"
+        required: true
+        type: string
 
 jobs:
   build-and-push-arm64-image:
@@ -9,14 +14,12 @@ jobs:
     strategy:
       matrix:
         arch:
-          - amd64
           - aarch64
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Set up QEMU
-        if: matrix.arch == 'aarch64'
         run: |
           docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
           docker buildx create --name multiarch --driver docker-container --use
@@ -35,4 +38,4 @@ jobs:
           context: .
           file: Dockerfile
           push: true
-          tags: scrolltech/l2geth:${{github.ref_name}}-arm64-ubuntu
+          tags: scrolltech/l2geth:${{inputs.tag}}-arm64
