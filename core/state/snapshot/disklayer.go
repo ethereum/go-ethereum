@@ -26,23 +26,22 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/triedb"
 )
 
 // diskLayer is a low level persistent snapshot built on top of a key-value store.
 type diskLayer struct {
 	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
-	triedb *triedb.Database    // Trie node cache for reconstruction purposes
 	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
-	root  common.Hash // Root hash of the base snapshot
-	stale bool        // Signals that the layer became stale (state progressed)
+	root  common.Hash  // Root hash of the base snapshot
+	stale bool         // Signals that the layer became stale (state progressed)
+	lock  sync.RWMutex // Lock to protect stale
 
-	genMarker  []byte                    // Marker for the state that's indexed during initial layer generation
-	genPending chan struct{}             // Notification channel when generation is done (test synchronicity)
-	genAbort   chan chan *generatorStats // Notification channel to abort generating the snapshot in this layer
-
-	lock sync.RWMutex
+	// The generator is set if the state snapshot was not fully completed and
+	// will be unset if the state snapshot is completed later.
+	//
+	// The generator is thread-safe, no lock protection needed for access.
+	generator *generator
 }
 
 // Release releases underlying resources; specifically the fastcache requires
@@ -72,6 +71,17 @@ func (dl *diskLayer) Stale() bool {
 	defer dl.lock.RUnlock()
 
 	return dl.stale
+}
+
+// markStale sets the stale flag as true.
+func (dl *diskLayer) markStale() {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	if dl.stale {
+		panic("disk layer is stale")
+	}
+	dl.stale = true
 }
 
 // Account directly retrieves the account associated with a particular hash in
@@ -104,7 +114,8 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	}
 	// If the layer is being generated, ensure the requested hash has already been
 	// covered by the generator.
-	if dl.genMarker != nil && bytes.Compare(hash[:], dl.genMarker) > 0 {
+	marker := dl.genMarker()
+	if marker != nil && bytes.Compare(hash[:], marker) > 0 {
 		return nil, ErrNotCoveredYet
 	}
 	// If we're in the disk layer, all diff layers missed
@@ -144,7 +155,8 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 
 	// If the layer is being generated, ensure the requested hash has already been
 	// covered by the generator.
-	if dl.genMarker != nil && bytes.Compare(key, dl.genMarker) > 0 {
+	marker := dl.genMarker()
+	if marker != nil && bytes.Compare(key, marker) > 0 {
 		return nil, ErrNotCoveredYet
 	}
 	// If we're in the disk layer, all diff layers missed
@@ -174,4 +186,13 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 // copying everything.
 func (dl *diskLayer) Update(blockHash common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) *diffLayer {
 	return newDiffLayer(dl, blockHash, destructs, accounts, storage)
+}
+
+// genMarker returns the current state snapshot generation progress marker. If
+// the state snapshot has already been fully generated, nil is returned.
+func (dl *diskLayer) genMarker() []byte {
+	if dl.generator == nil {
+		return nil
+	}
+	return dl.generator.progressMarker()
 }

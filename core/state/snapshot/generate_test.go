@@ -71,7 +71,7 @@ func testGeneration(t *testing.T, scheme string) {
 		t.Fatalf("have %#x want %#x", have, want)
 	}
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
@@ -80,9 +80,7 @@ func testGeneration(t *testing.T, scheme string) {
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // Tests that snapshot generation with existent flat state.
@@ -112,7 +110,7 @@ func testGenerateExistentState(t *testing.T, scheme string) {
 
 	root, snap := helper.CommitAndGenerate()
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
@@ -121,9 +119,7 @@ func testGenerateExistentState(t *testing.T, scheme string) {
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 func checkSnapRoot(t *testing.T, snap *diskLayer, trieRoot common.Hash) {
@@ -330,17 +326,16 @@ func testGenerateExistentStateWithWrongStorage(t *testing.T, scheme string) {
 	t.Logf("Root: %#x\n", root) // Root = 0x8746cce9fd9c658b2cfd639878ed6584b7a2b3e73bb40f607fcfa156002429a0
 
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
+
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // Tests that snapshot generation with existent flat state, where the flat state
@@ -392,7 +387,7 @@ func testGenerateExistentStateWithWrongAccounts(t *testing.T, scheme string) {
 	t.Logf("Root: %#x\n", root) // Root = 0x825891472281463511e7ebcc7f109e4f9200c20fa384754e11fd605cd98464e8
 
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
@@ -401,9 +396,7 @@ func testGenerateExistentStateWithWrongAccounts(t *testing.T, scheme string) {
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // Tests that snapshot generation errors out correctly in case of a missing trie
@@ -433,7 +426,7 @@ func testGenerateCorruptAccountTrie(t *testing.T, scheme string) {
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt account trie")
 
@@ -441,9 +434,7 @@ func testGenerateCorruptAccountTrie(t *testing.T, scheme string) {
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // Tests that snapshot generation errors out correctly in case of a missing root
@@ -477,7 +468,7 @@ func testGenerateMissingStorageTrie(t *testing.T, scheme string) {
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt storage trie")
 
@@ -485,9 +476,7 @@ func testGenerateMissingStorageTrie(t *testing.T, scheme string) {
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // Tests that snapshot generation errors out correctly in case of a missing trie
@@ -519,7 +508,7 @@ func testGenerateCorruptStorageTrie(t *testing.T, scheme string) {
 
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 		t.Errorf("Snapshot generated against corrupt storage trie")
 
@@ -527,9 +516,7 @@ func testGenerateCorruptStorageTrie(t *testing.T, scheme string) {
 		// Not generated fast enough, hopefully blocked inside on missing trie node fail
 	}
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // Tests that snapshot generation when an extra account with storage exists in the snap state.
@@ -583,7 +570,7 @@ func testGenerateWithExtraAccounts(t *testing.T, scheme string) {
 	}
 	snap := generateSnapshot(helper.diskdb, helper.triedb, 16, root)
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
@@ -592,9 +579,8 @@ func testGenerateWithExtraAccounts(t *testing.T, scheme string) {
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
+
 	// If we now inspect the snap db, there should exist no extraneous storage items
 	if data := rawdb.ReadStorageSnapshot(helper.diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
 		t.Fatalf("expected slot to be removed, got %v", string(data))
@@ -645,17 +631,16 @@ func testGenerateWithManyExtraAccounts(t *testing.T, scheme string) {
 	}
 	root, snap := helper.CommitAndGenerate()
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
+
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // Tests this case
@@ -694,17 +679,16 @@ func testGenerateWithExtraBeforeAndAfter(t *testing.T, scheme string) {
 	}
 	root, snap := helper.CommitAndGenerate()
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
+
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // TestGenerateWithMalformedSnapdata tests what happes if we have some junk
@@ -734,17 +718,17 @@ func testGenerateWithMalformedSnapdata(t *testing.T, scheme string) {
 	}
 	root, snap := helper.CommitAndGenerate()
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
+
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
+
 	// If we now inspect the snap db, there should exist no extraneous storage items
 	if data := rawdb.ReadStorageSnapshot(helper.diskdb, hashData([]byte("acc-2")), hashData([]byte("b-key-1"))); data != nil {
 		t.Fatalf("expected slot to be removed, got %v", string(data))
@@ -771,17 +755,16 @@ func testGenerateFromEmptySnap(t *testing.T, scheme string) {
 	t.Logf("Root: %#x\n", root) // Root: 0x6f7af6d2e1a1bf2b84a3beb3f8b64388465fbc1e274ca5d5d3fc787ca78f59e4
 
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
+
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // Tests that snapshot generation with existent flat state, where the flat state
@@ -822,17 +805,16 @@ func testGenerateWithIncompleteStorage(t *testing.T, scheme string) {
 	t.Logf("Root: %#x\n", root) // Root: 0xca73f6f05ba4ca3024ef340ef3dfca8fdabc1b677ff13f5a9571fd49c16e67ff
 
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
 		t.Errorf("Snapshot generation failed")
 	}
 	checkSnapRoot(t, snap, root)
+
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 func incKey(key []byte) []byte {
@@ -917,7 +899,7 @@ func testGenerateCompleteSnapshotWithDanglingStorage(t *testing.T, scheme string
 
 	root, snap := helper.CommitAndGenerate()
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
@@ -926,9 +908,7 @@ func testGenerateCompleteSnapshotWithDanglingStorage(t *testing.T, scheme string
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
 
 // Tests that snapshot generation with dangling storages. Dangling storage means
@@ -954,7 +934,7 @@ func testGenerateBrokenSnapshotWithDanglingStorage(t *testing.T, scheme string) 
 
 	root, snap := helper.CommitAndGenerate()
 	select {
-	case <-snap.genPending:
+	case <-snap.generator.done:
 		// Snapshot generation succeeded
 
 	case <-time.After(3 * time.Second):
@@ -963,7 +943,5 @@ func testGenerateBrokenSnapshotWithDanglingStorage(t *testing.T, scheme string) 
 	checkSnapRoot(t, snap, root)
 
 	// Signal abortion to the generator and wait for it to tear down
-	stop := make(chan *generatorStats)
-	snap.genAbort <- stop
-	<-stop
+	snap.generator.stop()
 }
