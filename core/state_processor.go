@@ -106,6 +106,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		wxs := ProcessDequeueWithdrawalRequests(vmenv, statedb)
 		requests = append(requests, wxs...)
+		cxs := ProcessDequeueConsolidationRequests(vmenv, statedb)
+		requests = append(requests, cxs...)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -312,6 +314,47 @@ func ProcessDequeueWithdrawalRequests(vmenv *vm.EVM, statedb *state.StateDB) typ
 			Amount:    binary.BigEndian.Uint64(ret[start+68:]),
 		}
 		reqs = append(reqs, types.NewRequest(wx))
+	}
+	return reqs
+}
+
+// ProcessDequeueConsolidationRequests applies the EIP-7251 system call to the consolidation requests contract.
+func ProcessDequeueConsolidationRequests(vmenv *vm.EVM, statedb *state.StateDB) types.Requests {
+	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallStart != nil {
+		vmenv.Config.Tracer.OnSystemCallStart()
+	}
+	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallEnd != nil {
+		defer vmenv.Config.Tracer.OnSystemCallEnd()
+	}
+	msg := &Message{
+		From:      params.SystemAddress,
+		GasLimit:  30_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
+		To:        &params.ConsolidationRequestsAddress,
+	}
+	vmenv.Reset(NewEVMTxContext(msg), statedb)
+	statedb.AddAddressToAccessList(params.ConsolidationRequestsAddress)
+	ret, _, _ := vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
+	statedb.Finalise(true)
+
+	// Parse out the exits.
+	var reqs types.Requests
+	for i := 0; i < len(ret)/116; i++ {
+		start := i * 116
+		var (
+			sourcePubkey [48]byte
+			targetPubkey [48]byte
+		)
+		copy(sourcePubkey[:], ret[start+20:start+20+48])
+		copy(targetPubkey[:], ret[start+20+48:start+20+48+48])
+		cx := &types.ConsolidationRequest{
+			Source:          common.BytesToAddress(ret[start : start+20]),
+			SourcePublicKey: sourcePubkey,
+			TargetPublicKey: targetPubkey,
+		}
+		reqs = append(reqs, types.NewRequest(cx))
 	}
 	return reqs
 }
