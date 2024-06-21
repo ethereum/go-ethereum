@@ -306,7 +306,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 				if tracer.Hooks.OnTxEnd != nil {
 					tracer.Hooks.OnTxEnd(receipt, nil)
 				}
-				writeTraceResult(tracer, traceOutput)
+				if err = writeTraceResult(tracer, traceOutput); err != nil {
+					log.Warn("Error writing tracer output", "err", err)
+				}
 			}
 		}
 
@@ -423,7 +425,6 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 }
 
 func writeTraceResult(tracer *tracers.Tracer, f io.WriteCloser) error {
-	defer f.Close()
 	result, err := tracer.GetResult()
 	if err != nil || result == nil {
 		return err
@@ -432,5 +433,5 @@ func writeTraceResult(tracer *tracers.Tracer, f io.WriteCloser) error {
 	if err != nil {
 		return err
 	}
-	return nil
+	return f.Close()
 }
