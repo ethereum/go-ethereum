@@ -289,3 +289,5 @@ replace github.com/ethereum/go-ethereum => github.com/maticnetwork/bor v1.2.7
 replace github.com/Masterminds/goutils => github.com/Masterminds/goutils v1.1.1
 
 replace go.mongodb.org/mongo-driver => go.mongodb.org/mongo-driver v1.14.0
+
+replace github.com/maticnetwork/polyproto => github.com/anshalshukla/polyproto v0.0.0-20240621120311-ddd84287b14e

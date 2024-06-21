@@ -21,6 +21,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/grpc"
 
+	protobor "github.com/maticnetwork/polyproto/bor"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -47,6 +49,8 @@ import (
 
 type Server struct {
 	proto.UnimplementedBorServer
+	protobor.UnimplementedBorApiServer
+
 	node       *node.Node
 	backend    *eth.Ethereum
 	grpcServer *grpc.Server
@@ -438,6 +442,7 @@ func (s *Server) gRPCServerByAddress(addr string) error {
 func (s *Server) gRPCServerByListener(listener net.Listener) error {
 	s.grpcServer = grpc.NewServer(s.withLoggingUnaryInterceptor())
 	proto.RegisterBorServer(s.grpcServer, s)
+	protobor.RegisterBorApiServer(s.grpcServer, s)
 
 	go func() {
 		if err := s.grpcServer.Serve(listener); err != nil {
