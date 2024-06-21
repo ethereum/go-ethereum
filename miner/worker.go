@@ -125,6 +125,9 @@ func (miner *Miner) generateWork(params *generateParams) *newPayloadResult {
 		vmenv := vm.NewEVM(context, vm.TxContext{}, work.state, miner.chainConfig, vm.Config{})
 		wxs := core.ProcessDequeueWithdrawalRequests(vmenv, work.state)
 		requests = append(requests, wxs...)
+		// Process ConsolidationRequests
+		cxs := core.ProcessDequeueConsolidationRequests(vmenv, work.state)
+		requests = append(requests, cxs...)
 		body.Requests = requests
 	}
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)

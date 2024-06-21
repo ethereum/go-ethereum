@@ -80,6 +80,8 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 				Nonce:   0,
 				Balance: big.NewInt(0),
 			},
+			params.WithdrawalRequestsAddress:    {Code: common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe146090573615156028575f545f5260205ff35b366038141561012e5760115f54600182026001905f5b5f82111560595781019083028483029004916001019190603e565b90939004341061012e57600154600101600155600354806003026004013381556001015f3581556001016020359055600101600355005b6003546002548082038060101160a4575060105b5f5b81811460dd5780604c02838201600302600401805490600101805490600101549160601b83528260140152906034015260010160a6565b910180921460ed579060025560f8565b90505f6002555f6003555b5f548061049d141561010757505f5b60015460028282011161011c5750505f610122565b01600290035b5f555f600155604c025ff35b5f5ffd")},
+			params.ConsolidationRequestsAddress: {Code: common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe146098573615156028575f545f5260205ff35b36606014156101445760115f54600182026001905f5b5f82111560595781019083028483029004916001019190603e565b90939004341061014457600154600101600155600354806004026004013381556001015f35815560010160203581556001016040359055600101600355005b6003546002548082038060011160ac575060015b5f5b81811460f15780607402838201600402600401805490600101805490600101805490600101549260601b84529083601401528260340152906054015260010160ae565b9101809214610103579060025561010e565b90505f6002555f6003555b5f548061049d141561011d57505f5b6001546001828201116101325750505f610138565b01600190035b5f555f6001556074025ff35b5f5ffd")},
 		},
 		ExtraData:  []byte("test genesis"),
 		Timestamp:  9000,
@@ -1313,15 +1315,23 @@ func setupBodies(t *testing.T) (*node.Node, *eth.Ethereum, []*types.Block) {
 
 	// Each block, this callback will include two txs that generate body values like logs and requests.
 	callback := func(parent *types.Header) {
+		if parent.Number.Cmp(big.NewInt(10)) == 0 {
+			// Make a block with empty requests to ensure nil / non-nil distinction is
+			// being maintained.
+			return
+		}
 		var (
 			statedb, _ = ethservice.BlockChain().StateAt(parent.Root)
 			// Create tx to trigger log generator.
 			tx1, _ = types.SignTx(types.NewContractCreation(statedb.GetNonce(testAddr), new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 			// Create tx to trigger deposit generator.
 			tx2, _ = types.SignTx(types.NewTransaction(statedb.GetNonce(testAddr)+1, ethservice.APIBackend.ChainConfig().DepositContractAddress, new(big.Int), 500000, big.NewInt(2*params.InitialBaseFee), nil), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+			// Create tx to trigger withdrawal request.
+			tx3, _ = types.SignTx(types.NewTransaction(statedb.GetNonce(testAddr)+2, params.WithdrawalRequestsAddress, big.NewInt(42), 500000, big.NewInt(2*params.InitialBaseFee), make([]byte, 56)), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+			// Create tx to trigger consolidation request.
+			tx4, _ = types.SignTx(types.NewTransaction(statedb.GetNonce(testAddr)+3, params.ConsolidationRequestsAddress, big.NewInt(42), 500000, big.NewInt(2*params.InitialBaseFee), make([]byte, 96)), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
 		)
-		ethservice.TxPool().Add([]*types.Transaction{tx1}, false, false)
-		ethservice.TxPool().Add([]*types.Transaction{tx2}, false, false)
+		ethservice.TxPool().Add([]*types.Transaction{tx1, tx2, tx3, tx4}, false, false)
 	}
 
 	// Make some withdrawals to include.
@@ -1569,18 +1579,31 @@ func equalBody(a *types.Body, b *engine.ExecutionPayloadBody) bool {
 		return false
 	}
 
-	var deposits types.Deposits
+	var (
+		dxs types.Deposits
+		wxs types.WithdrawalRequests
+		cxs types.ConsolidationRequests
+	)
 	if a.Requests != nil {
 		// If requests is non-nil, it means deposits are available in block and we
 		// should return an empty slice instead of nil if there are no deposits.
-		deposits = make(types.Deposits, 0)
+		dxs = make(types.Deposits, 0)
+		wxs = make(types.WithdrawalRequests, 0)
+		cxs = make(types.ConsolidationRequests, 0)
 	}
-	for _, r := range a.Requests {
-		if d, ok := r.Inner().(*types.Deposit); ok {
-			deposits = append(deposits, d)
+	for _, req := range a.Requests {
+		switch v := req.Inner().(type) {
+		case *types.Deposit:
+			dxs = append(dxs, v)
+		case *types.WithdrawalRequest:
+			wxs = append(wxs, v)
+		case *types.ConsolidationRequest:
+			cxs = append(cxs, v)
 		}
 	}
-	return reflect.DeepEqual(deposits, b.Deposits)
+	return reflect.DeepEqual(dxs, b.Deposits) &&
+		reflect.DeepEqual(wxs, b.WithdrawalRequests) &&
+		reflect.DeepEqual(cxs, b.ConsolidationRequests)
 }
 
 func TestBlockToPayloadWithBlobs(t *testing.T) {

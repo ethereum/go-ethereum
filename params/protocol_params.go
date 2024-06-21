@@ -193,6 +193,8 @@ var (
 	BeaconRootsCode = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500")
 	// WithdrawalRequests is the address where the EIP-7002 withdrawal requests queue is maintained.
 	WithdrawalRequestsAddress = common.HexToAddress("0x00A3ca265EBcb825B45F985A16CEFB49958cE017")
+	// ConsolidationRequests is the address where the EIP-7251 consolidation requests queue is maintained.
+	ConsolidationRequestsAddress = common.HexToAddress("0x00b42dbF2194e931E80326D950320f7d9Dbeac02")
 	// SystemAddress is where the system-transaction is sent from as per EIP-4788
 	SystemAddress = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
 	// HistoryStorageAddress is where the historical block hashes are stored.

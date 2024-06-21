@@ -362,6 +362,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			)
 			wxs := ProcessDequeueWithdrawalRequests(vmenv, statedb)
 			requests = append(requests, wxs...)
+			cxs := ProcessDequeueConsolidationRequests(vmenv, statedb)
+			requests = append(requests, cxs...)
 		}
 
 		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals, Requests: requests}
