@@ -19,6 +19,7 @@ package snapshot
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -302,7 +303,7 @@ func TestDiskPartialMerge(t *testing.T) {
 				},
 			},
 		}
-		snaps.layers[baseRoot].(*diskLayer).genMarker = genMarker
+		snaps.layers[baseRoot].(*diskLayer).generator = newGenerator(db, nil, true, genMarker, &generatorStats{start: time.Now()})
 		base := snaps.Snapshot(baseRoot)
 
 		// assertAccount ensures that an account matches the given blob if it's

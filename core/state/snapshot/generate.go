@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -54,51 +54,70 @@ var (
 	errMissingTrie = errors.New("missing trie")
 )
 
-// generator is the struct for initial state snapshot generation.
+// Generator is the struct for initial state snapshot generation. It is not thread-safe;
+// the caller must manage concurrency issues themselves.
 type generator struct {
-	active atomic.Bool         // Flag if the background generation is running
+	readOnly bool // Flag indicating whether state snapshot generation is permitted
+	active   bool // Flag indicating whether the background generation is running
+
 	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
 	triedb *triedb.Database    // Trie node cache for reconstruction purposes
 	stats  *generatorStats     // Generation statistics used throughout the entire life cycle
 	abort  chan chan struct{}  // Notification channel to abort generating the snapshot in this layer
 	done   chan struct{}       // Notification channel when generation is done (test synchronicity)
+
+	progress []byte       // Progress marker of the state generation, nil means it's completed
+	lock     sync.RWMutex // Lock which protects the progress
 }
 
 // newGenerator constructs the state snapshot generator.
-func newGenerator(diskdb ethdb.KeyValueStore, triedb *triedb.Database, stats *generatorStats) *generator {
+func newGenerator(diskdb ethdb.KeyValueStore, triedb *triedb.Database, readOnly bool, progress []byte, stats *generatorStats) *generator {
 	if stats == nil {
 		stats = &generatorStats{start: time.Now()}
 	}
 	return &generator{
-		diskdb: diskdb,
-		triedb: triedb,
-		stats:  stats,
-		abort:  make(chan chan struct{}),
-		done:   make(chan struct{}),
+		readOnly: readOnly,
+		progress: progress,
+		diskdb:   diskdb,
+		triedb:   triedb,
+		stats:    stats,
+		abort:    make(chan chan struct{}),
+		done:     make(chan struct{}),
 	}
 }
 
-// run starts the state snapshot generation in the background. It will panic
-// if the previous cycle is not terminated yet.
-func (g *generator) run(root common.Hash, marker []byte, setMarker func([]byte)) {
-	if g.active.Load() {
-		panic("the previous generation cycle is not aborted")
+// run starts the state snapshot generation in the background.
+func (g *generator) run(root common.Hash) {
+	if g.readOnly {
+		log.Info("Snapshot generator is in read-only mode")
+		return
 	}
-	g.active.Store(true)
-
-	go g.generate(newGeneratorContext(root, marker, setMarker, g.diskdb))
+	if g.active {
+		g.stop()
+		log.Info("Terminated the state snapshot generation")
+	}
+	g.active = true
+	go g.generate(newGeneratorContext(root, g.progress, g.diskdb))
 }
 
 // stop terminates the background generation if it's actively running.
 func (g *generator) stop() {
-	if !g.active.Load() {
-		log.Error("State snapshot is not generating")
+	if !g.active {
+		log.Info("State snapshot is not generating")
 		return
 	}
 	ch := make(chan struct{})
 	g.abort <- ch
 	<-ch
-	g.active.Store(false)
+	g.active = false
+}
+
+// progressMarker returns the current generation progress marker.
+func (g *generator) progressMarker() []byte {
+	g.lock.RLock()
+	defer g.lock.RUnlock()
+
+	return g.progress
 }
 
 // splitMarker is an internal helper which splits the generation progress marker
@@ -130,10 +149,9 @@ func generateSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, cache
 		diskdb:    diskdb,
 		cache:     fastcache.New(cache * 1024 * 1024),
 		root:      root,
-		genMarker: genMarker,
-		generator: newGenerator(diskdb, triedb, stats),
+		generator: newGenerator(diskdb, triedb, false, genMarker, stats),
 	}
-	base.generator.run(root, genMarker, base.setGenMarker)
+	base.generator.run(root)
 	log.Debug("Start snapshot generation", "root", root)
 	return base
 }
@@ -536,8 +554,8 @@ func (g *generator) checkAndFlush(ctx *generatorContext, current []byte) error {
 	default:
 	}
 	if ctx.batch.ValueSize() > ethdb.IdealBatchSize || abort != nil {
-		if bytes.Compare(current, ctx.marker) < 0 {
-			log.Error("Snapshot generator went backwards", "current", fmt.Sprintf("%x", current), "genMarker", fmt.Sprintf("%x", ctx.marker))
+		if bytes.Compare(current, g.progress) < 0 {
+			log.Error("Snapshot generator went backwards", "current", fmt.Sprintf("%x", current), "genMarker", fmt.Sprintf("%x", g.progress))
 		}
 		// Persist the progress marker regardless of whether the batch is empty or not.
 		// It may happen that all the flat states in the database are correct, so the
@@ -550,13 +568,14 @@ func (g *generator) checkAndFlush(ctx *generatorContext, current []byte) error {
 		}
 		ctx.batch.Reset()
 
-		// Update the generation progress marker. This will also cascade the progress
-		// to the associated disk layer, allowing access to the newly generated parts.
-		ctx.setGenMarker(current)
+		// Update the generation progress marker
+		g.lock.Lock()
+		g.progress = current
+		g.lock.Unlock()
 
 		// Abort the generation if it's required
 		if abort != nil {
-			g.stats.log("Aborting state snapshot generation", ctx.root, ctx.marker)
+			g.stats.log("Aborting state snapshot generation", ctx.root, g.progress)
 			return newAbortErr(abort) // bubble up an error for interruption
 		}
 		// Don't hold the iterators too long, release them to let compactor works
@@ -564,7 +583,7 @@ func (g *generator) checkAndFlush(ctx *generatorContext, current []byte) error {
 		ctx.reopenIterator(snapStorage)
 	}
 	if time.Since(ctx.logged) > 8*time.Second {
-		g.stats.log("Generating state snapshot", ctx.root, ctx.marker)
+		g.stats.log("Generating state snapshot", ctx.root, g.progress)
 		ctx.logged = time.Now()
 	}
 	return nil
@@ -663,8 +682,8 @@ func (g *generator) generateAccounts(ctx *generatorContext, accMarker []byte) er
 		// If the snap generation goes here after interrupted, genMarker may go backward
 		// when last genMarker is consisted of accountHash and storageHash
 		marker := account[:]
-		if accMarker != nil && bytes.Equal(marker, accMarker) && len(ctx.marker) > common.HashLength {
-			marker = ctx.marker
+		if accMarker != nil && bytes.Equal(marker, accMarker) && len(g.progress) > common.HashLength {
+			marker = g.progress
 		}
 		// If we've exceeded our batch allowance or termination was requested, flush to disk
 		if err := g.checkAndFlush(ctx, marker); err != nil {
@@ -678,8 +697,8 @@ func (g *generator) generateAccounts(ctx *generatorContext, accMarker []byte) er
 			ctx.removeStorageAt(account)
 		} else {
 			var storeMarker []byte
-			if accMarker != nil && bytes.Equal(account[:], accMarker) && len(ctx.marker) > common.HashLength {
-				storeMarker = ctx.marker[common.HashLength:]
+			if accMarker != nil && bytes.Equal(account[:], accMarker) && len(g.progress) > common.HashLength {
+				storeMarker = g.progress[common.HashLength:]
 			}
 			if err := g.generateStorages(ctx, account, acc.Root, storeMarker); err != nil {
 				return err
@@ -713,7 +732,7 @@ func (g *generator) generateAccounts(ctx *generatorContext, accMarker []byte) er
 // gathering and logging, since the method surfs the blocks as they arrive, often
 // being restarted.
 func (g *generator) generate(ctx *generatorContext) {
-	g.stats.log("Resuming state snapshot generation", ctx.root, ctx.marker)
+	g.stats.log("Resuming state snapshot generation", ctx.root, g.progress)
 	defer ctx.close()
 
 	// Initialize the global generator context. The snapshot iterators are
@@ -725,7 +744,7 @@ func (g *generator) generate(ctx *generatorContext) {
 	// processed twice by the generator(they are already processed in the
 	// last run) but it's fine.
 	var (
-		accMarker, _ = splitMarker(ctx.marker)
+		accMarker, _ = splitMarker(g.progress)
 		abort        chan struct{}
 	)
 	if err := g.generateAccounts(ctx, accMarker); err != nil {
@@ -756,7 +775,9 @@ func (g *generator) generate(ctx *generatorContext) {
 		"storage", g.stats.storage, "dangling", g.stats.dangling, "elapsed", common.PrettyDuration(time.Since(g.stats.start)))
 
 	// Update the generation progress marker
-	ctx.setGenMarker(nil)
+	g.lock.Lock()
+	g.progress = nil
+	g.lock.Unlock()
 	close(g.done)
 
 	// Someone will be looking for us, wait it out

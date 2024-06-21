@@ -33,14 +33,14 @@ type diskLayer struct {
 	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
 	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
-	root      common.Hash  // Root hash of the base snapshot
-	stale     bool         // Signals that the layer became stale (state progressed)
-	genMarker []byte       // Marker for the state that's indexed during initial layer generation
-	lock      sync.RWMutex // Lock to protect stale and genMarker
+	root  common.Hash  // Root hash of the base snapshot
+	stale bool         // Signals that the layer became stale (state progressed)
+	lock  sync.RWMutex // Lock to protect stale
 
-	// State snapshot generator, set only if background generation is granted.
-	// Normally, a non-nil generator indicates that background snapshot generation
-	// is actively running, except for very short periods during restarts.
+	// The generator is set if the state snapshot was not fully completed and
+	// will be unset if the state snapshot is completed later.
+	//
+	// The generator is thread-safe, no lock protection needed for access.
 	generator *generator
 }
 
@@ -114,7 +114,8 @@ func (dl *diskLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 	}
 	// If the layer is being generated, ensure the requested hash has already been
 	// covered by the generator.
-	if dl.genMarker != nil && bytes.Compare(hash[:], dl.genMarker) > 0 {
+	marker := dl.genMarker()
+	if marker != nil && bytes.Compare(hash[:], marker) > 0 {
 		return nil, ErrNotCoveredYet
 	}
 	// If we're in the disk layer, all diff layers missed
@@ -154,7 +155,8 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 
 	// If the layer is being generated, ensure the requested hash has already been
 	// covered by the generator.
-	if dl.genMarker != nil && bytes.Compare(key, dl.genMarker) > 0 {
+	marker := dl.genMarker()
+	if marker != nil && bytes.Compare(key, marker) > 0 {
 		return nil, ErrNotCoveredYet
 	}
 	// If we're in the disk layer, all diff layers missed
@@ -186,10 +188,11 @@ func (dl *diskLayer) Update(blockHash common.Hash, destructs map[common.Hash]str
 	return newDiffLayer(dl, blockHash, destructs, accounts, storage)
 }
 
-// setGenMarker updates the generation progress marker with provided value.
-func (dl *diskLayer) setGenMarker(marker []byte) {
-	dl.lock.Lock()
-	defer dl.lock.Unlock()
-
-	dl.genMarker = marker
+// genMarker returns the current state snapshot generation progress marker. If
+// the state snapshot has already been fully generated, nil is returned.
+func (dl *diskLayer) genMarker() []byte {
+	if dl.generator == nil {
+		return nil
+	}
+	return dl.generator.progressMarker()
 }

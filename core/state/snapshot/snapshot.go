@@ -383,13 +383,12 @@ func (t *Tree) Cap(root common.Hash, layers int) error {
 	if !ok {
 		return fmt.Errorf("snapshot [%#x] is disk layer", root)
 	}
-	// If the generator is still running, use a more aggressive cap.
-	// Hold the read lock as the genMarker is not thread safe.
-	diff.origin.lock.RLock()
-	if diff.origin.genMarker != nil && layers > 8 {
+	// Hold the lock of diff layer for accessing origin
+	diff.lock.RLock()
+	if diff.origin.genMarker() != nil && layers > 8 {
 		layers = 8
 	}
-	diff.origin.lock.RUnlock()
+	diff.lock.RUnlock()
 
 	// Run the internal capping and discard all stale layers
 	t.lock.Lock()
@@ -523,12 +522,14 @@ func (t *Tree) cap(diff *diffLayer, layers int) *diskLayer {
 // be discarded if the whole transition if not finished.
 func diffToDisk(bottom *diffLayer) *diskLayer {
 	var (
-		base  = bottom.parent.(*diskLayer)
-		batch = base.diskdb.NewBatch()
+		base     = bottom.parent.(*diskLayer)
+		batch    = base.diskdb.NewBatch()
+		progress []byte
 	)
 	// If the disk layer is running a snapshot generator, abort it
 	if base.generator != nil {
 		base.generator.stop()
+		progress = base.generator.progressMarker()
 	}
 	// Put the deletion in the batch writer, flush all updates in the final step.
 	rawdb.DeleteSnapshotRoot(batch)
@@ -537,12 +538,9 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	base.markStale()
 
 	// Destroy all the destructed accounts from the database
-	//
-	// Note it's safe to access base.genMarker here as the only mutator
-	// base.generator has been terminated.
 	for hash := range bottom.destructSet {
 		// Skip any account not covered yet by the snapshot
-		if base.genMarker != nil && bytes.Compare(hash[:], base.genMarker) > 0 {
+		if progress != nil && bytes.Compare(hash[:], progress) > 0 {
 			continue
 		}
 		// Remove all storage slots
@@ -571,7 +569,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	// Push all updated accounts into the database
 	for hash, data := range bottom.accountData {
 		// Skip any account not covered yet by the snapshot
-		if base.genMarker != nil && bytes.Compare(hash[:], base.genMarker) > 0 {
+		if progress != nil && bytes.Compare(hash[:], progress) > 0 {
 			continue
 		}
 		// Push the account to disk
@@ -595,15 +593,15 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	// Push all the storage slots into the database
 	for accountHash, storage := range bottom.storageData {
 		// Skip any account not covered yet by the snapshot
-		if base.genMarker != nil && bytes.Compare(accountHash[:], base.genMarker) > 0 {
+		if progress != nil && bytes.Compare(accountHash[:], progress) > 0 {
 			continue
 		}
 		// Generation might be mid-account, track that case too
-		midAccount := base.genMarker != nil && bytes.Equal(accountHash[:], base.genMarker[:common.HashLength])
+		midAccount := progress != nil && bytes.Equal(accountHash[:], progress[:common.HashLength])
 
 		for storageHash, data := range storage {
 			// Skip any slot not covered yet by the snapshot
-			if midAccount && bytes.Compare(storageHash[:], base.genMarker[common.HashLength:]) > 0 {
+			if midAccount && bytes.Compare(storageHash[:], progress[common.HashLength:]) > 0 {
 				continue
 			}
 			if len(data) > 0 {
@@ -626,21 +624,19 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write leftover snapshot", "err", err)
 	}
-	log.Debug("Journalled disk layer", "root", bottom.root, "complete", base.genMarker == nil)
+	log.Debug("Journalled disk layer", "root", bottom.root, "complete", progress == nil)
+
 	res := &diskLayer{
-		root:      bottom.root,
-		cache:     base.cache,
-		diskdb:    base.diskdb,
-		genMarker: base.genMarker,
+		root:   bottom.root,
+		cache:  base.cache,
+		diskdb: base.diskdb,
 	}
 	// If snapshot generation hasn't finished yet, port over all the starts and
-	// continue where the previous round left off.
-	//
-	// Note, the base.generator comparison is not used normally, it's checked
-	// to allow the tests to play with the marker without triggering this path.
-	if res.genMarker != nil && base.generator != nil {
+	// continue where the previous round left off; otherwise unset the generator
+	// silently.
+	if progress != nil {
 		res.generator = base.generator
-		res.generator.run(res.root, res.genMarker, res.setGenMarker)
+		res.generator.run(res.root)
 	}
 	return res
 }
@@ -838,9 +834,7 @@ func (t *Tree) generating() (bool, error) {
 	if layer == nil {
 		return false, errors.New("disk layer is missing")
 	}
-	layer.lock.RLock()
-	defer layer.lock.RUnlock()
-	return layer.genMarker != nil, nil
+	return layer.genMarker() != nil, nil
 }
 
 // DiskRoot is an external helper function to return the disk layer root.

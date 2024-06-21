@@ -90,37 +90,26 @@ func (gs *generatorStats) log(msg string, root common.Hash, marker []byte) {
 // generatorContext holds several global fields that are used throughout the
 // current generation cycle.
 type generatorContext struct {
-	root      common.Hash         // State root of the generation target
-	marker    []byte              // Generation progress marker
-	setMarker func(marker []byte) // Function to notify the generation progress
-	account   *holdableIterator   // Iterator of account snapshot data
-	storage   *holdableIterator   // Iterator of storage snapshot data
-	db        ethdb.KeyValueStore // Key-value store containing the snapshot data
-	batch     ethdb.Batch         // Database batch for writing data atomically
-	logged    time.Time           // The timestamp when last generation progress was displayed
+	root    common.Hash         // State root of the generation target
+	account *holdableIterator   // Iterator of account snapshot data
+	storage *holdableIterator   // Iterator of storage snapshot data
+	db      ethdb.KeyValueStore // Key-value store containing the snapshot data
+	batch   ethdb.Batch         // Database batch for writing data atomically
+	logged  time.Time           // The timestamp when last generation progress was displayed
 }
 
 // newGeneratorContext initializes the context for generation.
-func newGeneratorContext(root common.Hash, marker []byte, setMarker func(marker []byte), db ethdb.KeyValueStore) *generatorContext {
+func newGeneratorContext(root common.Hash, marker []byte, db ethdb.KeyValueStore) *generatorContext {
 	ctx := &generatorContext{
-		root:      root,
-		marker:    marker,
-		setMarker: setMarker,
-		db:        db,
-		batch:     db.NewBatch(),
-		logged:    time.Now(),
+		root:   root,
+		db:     db,
+		batch:  db.NewBatch(),
+		logged: time.Now(),
 	}
 	accMarker, storageMarker := splitMarker(marker)
 	ctx.openIterator(snapAccount, accMarker)
 	ctx.openIterator(snapStorage, storageMarker)
 	return ctx
-}
-
-// setGenMarker updates the generation progress marker locally and cascades it
-// to associated disk layer.
-func (ctx *generatorContext) setGenMarker(marker []byte) {
-	ctx.marker = marker
-	ctx.setMarker(marker)
 }
 
 // openIterator constructs global account and storage snapshot iterators

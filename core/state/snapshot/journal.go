@@ -169,23 +169,22 @@ func loadSnapshot(diskdb ethdb.KeyValueStore, triedb *triedb.Database, root comm
 	}
 	// Load the disk layer status from the generator if it's not complete
 	if !generator.Done {
-		base.genMarker = generator.Marker
-	}
-	// Everything loaded correctly, resume any suspended operations
-	// if the background generation is allowed
-	if !generator.Done && !noBuild {
 		var origin uint64
 		if len(generator.Marker) >= 8 {
 			origin = binary.BigEndian.Uint64(generator.Marker)
 		}
-		base.generator = newGenerator(diskdb, triedb, &generatorStats{
+		base.generator = newGenerator(diskdb, triedb, noBuild, generator.Marker, &generatorStats{
 			origin:   origin,
 			start:    time.Now(),
 			accounts: generator.Accounts,
 			slots:    generator.Slots,
 			storage:  common.StorageSize(generator.Storage),
 		})
-		base.generator.run(baseRoot, generator.Marker, base.setGenMarker)
+		// Everything loaded correctly, resume any suspended operations
+		// if the background generation is allowed
+		if !noBuild {
+			base.generator.run(baseRoot)
+		}
 	}
 	return snapshot, false, nil
 }
@@ -199,7 +198,7 @@ func (dl *diskLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 
 		// safe to access dl.genMarker as the only mutator dl.generator
 		// has been terminated.
-		dl.generator.stats.log("Journalling in-progress snapshot", dl.root, dl.genMarker)
+		dl.generator.stats.log("Journalling in-progress snapshot", dl.root, dl.generator.progressMarker())
 	}
 	// Ensure the layer didn't get stale
 	dl.lock.RLock()

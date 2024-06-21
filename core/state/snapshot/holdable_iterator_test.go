@@ -118,7 +118,7 @@ func TestReopenIterator(t *testing.T) {
 		}
 	}
 	// Iterate over the database with the given configs and verify the results
-	ctx, idx := newGeneratorContext(common.Hash{}, nil, nil, db), -1
+	ctx, idx := newGeneratorContext(common.Hash{}, nil, db), -1
 
 	idx++
 	ctx.account.Next()
