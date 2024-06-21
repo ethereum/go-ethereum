@@ -368,7 +368,10 @@ func (p *Pipeline) encodeStage(traces <-chan *BlockCandidate) <-chan *BlockCandi
 				encodeTimer.UpdateSince(encodeStart)
 
 				stallStart := time.Now()
-				sendCancellable(downstreamCh, trace, p.ctx.Done())
+				if sendCancellable(downstreamCh, trace, p.ctx.Done()) {
+					// failed to send the trace downstream, free it here.
+					circuitcapacitychecker.FreeRustTrace(trace.RustTrace)
+				}
 				encodeStallTimer.UpdateSince(stallStart)
 			case <-p.ctx.Done():
 				return
@@ -395,6 +398,15 @@ func (p *Pipeline) cccStage(candidates <-chan *BlockCandidate, deadline time.Tim
 			close(resultCh)
 			deadlineTimer.Stop()
 			lifetimeTimer.UpdateSince(p.start)
+			// consume candidates and free all rust traces
+			for candidate := range candidates {
+				if candidate == nil {
+					break
+				}
+				if candidate.RustTrace != nil {
+					circuitcapacitychecker.FreeRustTrace(candidate.RustTrace)
+				}
+			}
 			p.wg.Done()
 		}()
 		for {

@@ -96,3 +96,6 @@ func MakeRustTrace(trace *types.BlockTrace, buffer *bytes.Buffer) unsafe.Pointer
 	goTraces[unsafe.Pointer(rustTrace)] = trace
 	return unsafe.Pointer(rustTrace)
 }
+
+func FreeRustTrace(ptr unsafe.Pointer) {
+}

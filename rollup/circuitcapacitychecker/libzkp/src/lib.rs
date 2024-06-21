@@ -271,6 +271,7 @@ pub mod utils {
     use std::ffi::{CStr, CString};
     use std::os::raw::c_char;
     use std::str::Utf8Error;
+    use prover::BlockTrace;
 
     /// # Safety
     #[no_mangle]
@@ -282,6 +283,13 @@ pub mod utils {
 
         let _ = CString::from_raw(ptr);
     }
+
+    /// # Safety
+    #[no_mangle]
+    pub unsafe extern "C" fn free_rust_trace(trace_ptr: *mut BlockTrace) {
+        let _ = Box::from_raw(trace_ptr);
+    }
+
 
     #[allow(dead_code)]
     pub(crate) fn c_char_to_str(c: *const c_char) -> Result<&'static str, Utf8Error> {
