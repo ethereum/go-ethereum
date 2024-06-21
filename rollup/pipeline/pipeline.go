@@ -368,7 +368,7 @@ func (p *Pipeline) encodeStage(traces <-chan *BlockCandidate) <-chan *BlockCandi
 				encodeTimer.UpdateSince(encodeStart)
 
 				stallStart := time.Now()
-				if sendCancellable(downstreamCh, trace, p.ctx.Done()) {
+				if sendCancellable(downstreamCh, trace, p.ctx.Done()) && trace.RustTrace != nil {
 					// failed to send the trace downstream, free it here.
 					circuitcapacitychecker.FreeRustTrace(trace.RustTrace)
 				}
