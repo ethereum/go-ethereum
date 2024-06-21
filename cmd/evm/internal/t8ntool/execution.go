@@ -425,6 +425,7 @@ func calcDifficulty(config *params.ChainConfig, number, currentTime, parentTime 
 }
 
 func writeTraceResult(tracer *tracers.Tracer, f io.WriteCloser) error {
+	defer f.Close()
 	result, err := tracer.GetResult()
 	if err != nil || result == nil {
 		return err
@@ -433,5 +434,5 @@ func writeTraceResult(tracer *tracers.Tracer, f io.WriteCloser) error {
 	if err != nil {
 		return err
 	}
-	return f.Close()
+	return nil
 }
