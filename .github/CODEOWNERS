@@ -10,6 +10,7 @@ core/                           @karalabe @holiman @rjl493456442
 eth/                            @karalabe @holiman @rjl493456442
 eth/catalyst/                   @gballet
 eth/tracers/                    @s1na
+core/tracing/                   @s1na
 graphql/                        @s1na
 les/                            @zsfelfoldi @rjl493456442
 light/                          @zsfelfoldi @rjl493456442

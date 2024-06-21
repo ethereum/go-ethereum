@@ -34,14 +34,18 @@ import (
 )
 
 var (
-	errInvalidTopic      = errors.New("invalid topic(s)")
-	errFilterNotFound    = errors.New("filter not found")
-	errInvalidBlockRange = errors.New("invalid block range params")
-	errExceedMaxTopics   = errors.New("exceed max topics")
+	errInvalidTopic           = errors.New("invalid topic(s)")
+	errFilterNotFound         = errors.New("filter not found")
+	errInvalidBlockRange      = errors.New("invalid block range params")
+	errPendingLogsUnsupported = errors.New("pending logs are not supported")
+	errExceedMaxTopics        = errors.New("exceed max topics")
 )
 
 // The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
 const maxTopics = 4
+
+// The maximum number of allowed topics within a topic criteria
+const maxSubTopics = 1000
 
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
@@ -67,10 +71,10 @@ type FilterAPI struct {
 }
 
 // NewFilterAPI returns a new FilterAPI instance.
-func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
+func NewFilterAPI(system *FilterSystem) *FilterAPI {
 	api := &FilterAPI{
 		sys:     system,
-		events:  NewEventSystem(system, lightMode),
+		events:  NewEventSystem(system),
 		filters: make(map[rpc.ID]*filter),
 		timeout: system.cfg.Timeout,
 	}
@@ -179,8 +183,6 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 				}
 			case <-rpcSub.Err():
 				return
-			case <-notifier.Closed():
-				return
 			}
 		}
 	}()
@@ -241,8 +243,6 @@ func (api *FilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 				notifier.Notify(rpcSub.ID, h)
 			case <-rpcSub.Err():
 				return
-			case <-notifier.Closed():
-				return
 			}
 		}
 	}()
@@ -277,8 +277,6 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 					notifier.Notify(rpcSub.ID, &log)
 				}
 			case <-rpcSub.Err(): // client send an unsubscribe request
-				return
-			case <-notifier.Closed(): // connection dropped
 				return
 			}
 		}
@@ -459,7 +457,7 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 				f.txs = nil
 				return hashes, nil
 			}
-		case LogsSubscription, MinedAndPendingLogsSubscription:
+		case LogsSubscription:
 			logs := f.logs
 			f.logs = nil
 			return returnLogs(logs), nil
@@ -545,6 +543,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 			return errors.New("invalid addresses in query")
 		}
 	}
+	if len(raw.Topics) > maxTopics {
+		return errExceedMaxTopics
+	}
 
 	// topics is an array consisting of strings and/or arrays of strings.
 	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
@@ -565,6 +566,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 
 			case []interface{}:
 				// or case e.g. [null, "topic0", "topic1"]
+				if len(topic) > maxSubTopics {
+					return errExceedMaxTopics
+				}
 				for _, rawTopic := range topic {
 					if rawTopic == nil {
 						// null component, match all

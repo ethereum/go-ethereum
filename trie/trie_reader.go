@@ -21,31 +21,19 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb/database"
 )
-
-// Reader wraps the Node method of a backing trie store.
-type Reader interface {
-	// Node retrieves the trie node blob with the provided trie identifier, node path and
-	// the corresponding node hash. No error will be returned if the node is not found.
-	//
-	// When looking up nodes in the account trie, 'owner' is the zero hash. For contract
-	// storage trie nodes, 'owner' is the hash of the account address that containing the
-	// storage.
-	//
-	// TODO(rjl493456442): remove the 'hash' parameter, it's redundant in PBSS.
-	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
-}
 
 // trieReader is a wrapper of the underlying node reader. It's not safe
 // for concurrent usage.
 type trieReader struct {
 	owner  common.Hash
-	reader Reader
+	reader database.Reader
 	banned map[string]struct{} // Marker to prevent node from being accessed, for tests
 }
 
 // newTrieReader initializes the trie reader with the given node reader.
-func newTrieReader(stateRoot, owner common.Hash, db *Database) (*trieReader, error) {
+func newTrieReader(stateRoot, owner common.Hash, db database.Database) (*trieReader, error) {
 	if stateRoot == (common.Hash{}) || stateRoot == types.EmptyRootHash {
 		if stateRoot == (common.Hash{}) {
 			log.Error("Zero state root hash!")
@@ -85,17 +73,22 @@ func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
 	return blob, nil
 }
 
-// trieLoader implements triestate.TrieLoader for constructing tries.
-type trieLoader struct {
-	db *Database
+// MerkleLoader implements triestate.TrieLoader for constructing tries.
+type MerkleLoader struct {
+	db database.Database
+}
+
+// NewMerkleLoader creates the merkle trie loader.
+func NewMerkleLoader(db database.Database) *MerkleLoader {
+	return &MerkleLoader{db: db}
 }
 
 // OpenTrie opens the main account trie.
-func (l *trieLoader) OpenTrie(root common.Hash) (triestate.Trie, error) {
+func (l *MerkleLoader) OpenTrie(root common.Hash) (triestate.Trie, error) {
 	return New(TrieID(root), l.db)
 }
 
 // OpenStorageTrie opens the storage trie of an account.
-func (l *trieLoader) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (triestate.Trie, error) {
+func (l *MerkleLoader) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (triestate.Trie, error) {
 	return New(StorageTrieID(stateRoot, addrHash, root), l.db)
 }

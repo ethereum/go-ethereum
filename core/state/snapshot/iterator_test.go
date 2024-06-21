@@ -815,7 +815,7 @@ func TestStorageIteratorDeletions(t *testing.T) {
 	verifyIterator(t, 2, snaps.Snapshot(common.HexToHash("0x06")).(*diffLayer).newBinaryStorageIterator(common.HexToHash("0xaa")), verifyStorage)
 }
 
-// BenchmarkAccountIteratorTraversal is a bit a bit notorious -- all layers contain the
+// BenchmarkAccountIteratorTraversal is a bit notorious -- all layers contain the
 // exact same 200 accounts. That means that we need to process 2000 items, but
 // only spit out 200 values eventually.
 //

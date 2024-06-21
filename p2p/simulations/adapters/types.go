@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"strconv"
@@ -34,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
-	"golang.org/x/exp/slog"
 )
 
 // Node represents a node in a simulation network which is created by a
@@ -42,7 +42,6 @@ import (
 //
 //   - SimNode, an in-memory node in the same process
 //   - ExecNode, a child process node
-//   - DockerNode, a node running in a Docker container
 type Node interface {
 	// Addr returns the node's address (e.g. an Enode URL)
 	Addr() []byte
@@ -299,7 +298,7 @@ func RegisterLifecycles(lifecycles LifecycleConstructors) {
 }
 
 // adds the host part to the configuration's ENR, signs it
-// creates and  the corresponding enode object to the configuration
+// creates and adds the corresponding enode object to the configuration
 func (n *NodeConfig) initEnode(ip net.IP, tcpport int, udpport int) error {
 	enrIp := enr.IP(ip)
 	n.Record.Set(&enrIp)

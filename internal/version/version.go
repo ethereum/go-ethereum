@@ -65,7 +65,7 @@ func ClientName(clientIdentifier string) string {
 	)
 }
 
-// runtimeInfo returns build and platform information about the current binary.
+// Info returns build and platform information about the current binary.
 //
 // If the package that is currently executing is a prefixed by our go-ethereum
 // module path, it will print out commit and date VCS information. Otherwise,

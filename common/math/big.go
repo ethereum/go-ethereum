@@ -54,7 +54,7 @@ func NewHexOrDecimal256(x int64) *HexOrDecimal256 {
 // It is similar to UnmarshalText, but allows parsing real decimals too, not just
 // quoted decimal strings.
 func (i *HexOrDecimal256) UnmarshalJSON(input []byte) error {
-	if len(input) > 0 && input[0] == '"' {
+	if len(input) > 1 && input[0] == '"' {
 		input = input[1 : len(input)-1]
 	}
 	return i.UnmarshalText(input)
@@ -224,7 +224,7 @@ func ReadBits(bigint *big.Int, buf []byte) {
 	}
 }
 
-// U256 encodes as a 256 bit two's complement number. This operation is destructive.
+// U256 encodes x as a 256 bit two's complement number. This operation is destructive.
 func U256(x *big.Int) *big.Int {
 	return x.And(x, tt256m1)
 }
@@ -255,14 +255,15 @@ func S256(x *big.Int) *big.Int {
 //
 // Courtesy @karalabe and @chfast
 func Exp(base, exponent *big.Int) *big.Int {
+	copyBase := new(big.Int).Set(base)
 	result := big.NewInt(1)
 
 	for _, word := range exponent.Bits() {
 		for i := 0; i < wordBits; i++ {
 			if word&1 == 1 {
-				U256(result.Mul(result, base))
+				U256(result.Mul(result, copyBase))
 			}
-			U256(base.Mul(base, base))
+			U256(copyBase.Mul(copyBase, copyBase))
 			word >>= 1
 		}
 	}

@@ -894,7 +894,7 @@ func getChunk(size int, b int) []byte {
 }
 
 // TODO (?)
-// - test that if we remove several head-files, aswell as data last data-file,
+// - test that if we remove several head-files, as well as data last data-file,
 //   the index is truncated accordingly
 // Right now, the freezer would fail on these conditions:
 // 1. have data files d0, d1, d2, d3

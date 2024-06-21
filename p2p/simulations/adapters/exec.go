@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -41,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
-	"golang.org/x/exp/slog"
 )
 
 func init() {
@@ -303,10 +303,13 @@ func (n *ExecNode) Stop() error {
 	go func() {
 		waitErr <- n.Cmd.Wait()
 	}()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
 	select {
 	case err := <-waitErr:
 		return err
-	case <-time.After(5 * time.Second):
+	case <-timer.C:
 		return n.Cmd.Process.Kill()
 	}
 }
@@ -460,7 +463,7 @@ func startExecNodeStack() (*node.Node, error) {
 	// decode the config
 	confEnv := os.Getenv(envNodeConfig)
 	if confEnv == "" {
-		return nil, fmt.Errorf("missing " + envNodeConfig)
+		return nil, errors.New("missing " + envNodeConfig)
 	}
 	var conf execNodeConfig
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {

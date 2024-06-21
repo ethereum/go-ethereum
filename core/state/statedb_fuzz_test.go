@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 	"math/rand"
 	"reflect"
 	"strings"
@@ -32,12 +31,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
-	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/triedb/pathdb"
+	"github.com/holiman/uint256"
 )
 
 // A stateTest checks that the state changes are correctly captured. Instances
@@ -60,7 +61,7 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 		{
 			name: "SetBalance",
 			fn: func(a testAction, s *StateDB) {
-				s.SetBalance(addr, big.NewInt(a.args[0]))
+				s.SetBalance(addr, uint256.NewInt(uint64(a.args[0])), tracing.BalanceChangeUnspecified)
 			},
 			args: make([]int64, 1),
 		},
@@ -94,7 +95,9 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 		{
 			name: "CreateAccount",
 			fn: func(a testAction, s *StateDB) {
-				s.CreateAccount(addr)
+				if !s.Exist(addr) {
+					s.CreateAccount(addr)
+				}
 			},
 		},
 		{
@@ -176,12 +179,24 @@ func (test *stateTest) run() bool {
 		roots       []common.Hash
 		accountList []map[common.Address][]byte
 		storageList []map[common.Address]map[common.Hash][]byte
-		onCommit    = func(states *triestate.Set) {
-			accountList = append(accountList, copySet(states.Accounts))
-			storageList = append(storageList, copy2DSet(states.Storages))
+		copyUpdate  = func(update *stateUpdate) {
+			accounts := make(map[common.Address][]byte, len(update.accountsOrigin))
+			for key, val := range update.accountsOrigin {
+				accounts[key] = common.CopyBytes(val)
+			}
+			accountList = append(accountList, accounts)
+
+			storages := make(map[common.Address]map[common.Hash][]byte, len(update.storagesOrigin))
+			for addr, subset := range update.storagesOrigin {
+				storages[addr] = make(map[common.Hash][]byte, len(subset))
+				for key, val := range subset {
+					storages[addr][key] = common.CopyBytes(val)
+				}
+			}
+			storageList = append(storageList, storages)
 		}
 		disk      = rawdb.NewMemoryDatabase()
-		tdb       = trie.NewDatabase(disk, &trie.Config{PathDB: pathdb.Defaults})
+		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})
 		sdb       = NewDatabaseWithNodeDB(disk, tdb)
 		byzantium = rand.Intn(2) == 0
 	)
@@ -206,8 +221,6 @@ func (test *stateTest) run() bool {
 		if err != nil {
 			panic(err)
 		}
-		state.onCommit = onCommit
-
 		for i, action := range actions {
 			if i%test.chunk == 0 && i != 0 {
 				if byzantium {
@@ -223,14 +236,15 @@ func (test *stateTest) run() bool {
 		} else {
 			state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
 		}
-		nroot, err := state.Commit(0, true) // call commit at the block boundary
+		ret, err := state.commitAndFlush(0, true) // call commit at the block boundary
 		if err != nil {
 			panic(err)
 		}
-		if nroot == root {
-			return true // filter out non-change state transition
+		if ret.empty() {
+			return true
 		}
-		roots = append(roots, nroot)
+		copyUpdate(ret)
+		roots = append(roots, ret.root)
 	}
 	for i := 0; i < len(test.actions); i++ {
 		root := types.EmptyRootHash
@@ -252,7 +266,7 @@ func (test *stateTest) run() bool {
 // - the account was indeed not present in trie
 // - the account is present in new trie, nil->nil is regarded as invalid
 // - the slots transition is correct
-func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addr common.Address, slots map[common.Hash][]byte) error {
+func (test *stateTest) verifyAccountCreation(next common.Hash, db *triedb.Database, otr, ntr *trie.Trie, addr common.Address, slots map[common.Hash][]byte) error {
 	// Verify account change
 	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	oBlob, err := otr.Get(addrHash.Bytes())
@@ -303,7 +317,7 @@ func (test *stateTest) verifyAccountCreation(next common.Hash, db *trie.Database
 // - the account was indeed present in trie
 // - the account in old trie matches the provided value
 // - the slots transition is correct
-func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, otr, ntr *trie.Trie, addr common.Address, origin []byte, slots map[common.Hash][]byte) error {
+func (test *stateTest) verifyAccountUpdate(next common.Hash, db *triedb.Database, otr, ntr *trie.Trie, addr common.Address, origin []byte, slots map[common.Hash][]byte) error {
 	// Verify account change
 	addrHash := crypto.Keccak256Hash(addr.Bytes())
 	oBlob, err := otr.Get(addrHash.Bytes())
@@ -357,7 +371,7 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *trie.Database, 
 	return nil
 }
 
-func (test *stateTest) verify(root common.Hash, next common.Hash, db *trie.Database, accountsOrigin map[common.Address][]byte, storagesOrigin map[common.Address]map[common.Hash][]byte) error {
+func (test *stateTest) verify(root common.Hash, next common.Hash, db *triedb.Database, accountsOrigin map[common.Address][]byte, storagesOrigin map[common.Address]map[common.Hash][]byte) error {
 	otr, err := trie.New(trie.StateTrieID(root), db)
 	if err != nil {
 		return err

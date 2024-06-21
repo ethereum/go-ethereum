@@ -17,24 +17,136 @@
 package trie
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
+	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
-// newTestDatabase initializes the trie database with specified scheme.
-func newTestDatabase(diskdb ethdb.Database, scheme string) *Database {
-	config := &Config{Preimages: false}
-	if scheme == rawdb.HashScheme {
-		config.HashDB = &hashdb.Config{
-			CleanCacheSize: 0,
-		} // disable clean cache
-	} else {
-		config.PathDB = &pathdb.Config{
-			CleanCacheSize: 0,
-			DirtyCacheSize: 0,
-		} // disable clean/dirty cache
+// testReader implements database.Reader interface, providing function to
+// access trie nodes.
+type testReader struct {
+	db     ethdb.Database
+	scheme string
+	nodes  []*trienode.MergedNodeSet // sorted from new to old
+}
+
+// Node implements database.Reader interface, retrieving trie node with
+// all available cached layers.
+func (r *testReader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+	// Check the node presence with the cached layer, from latest to oldest.
+	for _, nodes := range r.nodes {
+		if _, ok := nodes.Sets[owner]; !ok {
+			continue
+		}
+		n, ok := nodes.Sets[owner].Nodes[string(path)]
+		if !ok {
+			continue
+		}
+		if n.IsDeleted() || n.Hash != hash {
+			return nil, &MissingNodeError{Owner: owner, Path: path, NodeHash: hash}
+		}
+		return n.Blob, nil
 	}
-	return NewDatabase(diskdb, config)
+	// Check the node presence in database.
+	return rawdb.ReadTrieNode(r.db, owner, path, hash, r.scheme), nil
+}
+
+// testDb implements database.Database interface, using for testing purpose.
+type testDb struct {
+	disk    ethdb.Database
+	root    common.Hash
+	scheme  string
+	nodes   map[common.Hash]*trienode.MergedNodeSet
+	parents map[common.Hash]common.Hash
+}
+
+func newTestDatabase(diskdb ethdb.Database, scheme string) *testDb {
+	return &testDb{
+		disk:    diskdb,
+		root:    types.EmptyRootHash,
+		scheme:  scheme,
+		nodes:   make(map[common.Hash]*trienode.MergedNodeSet),
+		parents: make(map[common.Hash]common.Hash),
+	}
+}
+
+func (db *testDb) Reader(stateRoot common.Hash) (database.Reader, error) {
+	nodes, _ := db.dirties(stateRoot, true)
+	return &testReader{db: db.disk, scheme: db.scheme, nodes: nodes}, nil
+}
+
+func (db *testDb) Preimage(hash common.Hash) []byte {
+	return rawdb.ReadPreimage(db.disk, hash)
+}
+
+func (db *testDb) InsertPreimage(preimages map[common.Hash][]byte) {
+	rawdb.WritePreimages(db.disk, preimages)
+}
+
+func (db *testDb) Scheme() string { return db.scheme }
+
+func (db *testDb) Update(root common.Hash, parent common.Hash, nodes *trienode.MergedNodeSet) error {
+	if root == parent {
+		return nil
+	}
+	if _, ok := db.nodes[root]; ok {
+		return nil
+	}
+	db.parents[root] = parent
+	db.nodes[root] = nodes
+	return nil
+}
+
+func (db *testDb) dirties(root common.Hash, topToBottom bool) ([]*trienode.MergedNodeSet, []common.Hash) {
+	var (
+		pending []*trienode.MergedNodeSet
+		roots   []common.Hash
+	)
+	for {
+		if root == db.root {
+			break
+		}
+		nodes, ok := db.nodes[root]
+		if !ok {
+			break
+		}
+		if topToBottom {
+			pending = append(pending, nodes)
+			roots = append(roots, root)
+		} else {
+			pending = append([]*trienode.MergedNodeSet{nodes}, pending...)
+			roots = append([]common.Hash{root}, roots...)
+		}
+		root = db.parents[root]
+	}
+	return pending, roots
+}
+
+func (db *testDb) Commit(root common.Hash) error {
+	if root == db.root {
+		return nil
+	}
+	pending, roots := db.dirties(root, false)
+	for i, nodes := range pending {
+		for owner, set := range nodes.Sets {
+			if owner == (common.Hash{}) {
+				continue
+			}
+			set.ForEachWithOrder(func(path string, n *trienode.Node) {
+				rawdb.WriteTrieNode(db.disk, owner, []byte(path), n.Hash, n.Blob, db.scheme)
+			})
+		}
+		nodes.Sets[common.Hash{}].ForEachWithOrder(func(path string, n *trienode.Node) {
+			rawdb.WriteTrieNode(db.disk, common.Hash{}, []byte(path), n.Hash, n.Blob, db.scheme)
+		})
+		db.root = roots[i]
+	}
+	for _, root := range roots {
+		delete(db.nodes, root)
+		delete(db.parents, root)
+	}
+	return nil
 }

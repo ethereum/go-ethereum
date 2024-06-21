@@ -37,7 +37,9 @@ const (
 )
 
 var (
-	activePeerGauge metrics.Gauge = metrics.NilGauge{}
+	activePeerGauge         metrics.Gauge = metrics.NilGauge{}
+	activeInboundPeerGauge  metrics.Gauge = metrics.NilGauge{}
+	activeOutboundPeerGauge metrics.Gauge = metrics.NilGauge{}
 
 	ingressTrafficMeter = metrics.NewRegisteredMeter("p2p/ingress", nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/egress", nil)
@@ -65,6 +67,8 @@ func init() {
 	}
 
 	activePeerGauge = metrics.NewRegisteredGauge("p2p/peers", nil)
+	activeInboundPeerGauge = metrics.NewRegisteredGauge("p2p/peers/inbound", nil)
+	activeOutboundPeerGauge = metrics.NewRegisteredGauge("p2p/peers/outbound", nil)
 	serveMeter = metrics.NewRegisteredMeter("p2p/serves", nil)
 	serveSuccessMeter = metrics.NewRegisteredMeter("p2p/serves/success", nil)
 	dialMeter = metrics.NewRegisteredMeter("p2p/dials", nil)
