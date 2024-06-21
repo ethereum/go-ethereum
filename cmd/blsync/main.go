@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 
 	"github.com/ethereum/go-ethereum/beacon/blsync"
@@ -47,6 +48,11 @@ var (
 		Hidden:   true,
 		Category: flags.LoggingCategory,
 	}
+	logFmtFlag = &cli.StringFlag{
+		Name:     "log.format",
+		Usage:    "Log format to use (json|logfmt|terminal)",
+		Category: flags.LoggingCategory,
+	}
 )
 
 func main() {
@@ -68,6 +74,7 @@ func main() {
 		utils.BlsyncJWTSecretFlag,
 		verbosityFlag,
 		vmoduleFlag,
+		logFmtFlag,
 	}
 	app.Action = sync
 
@@ -78,13 +85,25 @@ func main() {
 }
 
 func sync(ctx *cli.Context) error {
-	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 	output := io.Writer(os.Stderr)
-	if usecolor {
-		output = colorable.NewColorable(os.Stderr)
-	}
 	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
-	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)))
+
+	var handler slog.Handler
+	switch ctx.String(logFmtFlag.Name) {
+	case "json":
+		handler = log.JSONHandlerWithLevel(output, verbosity)
+	case "logfmt":
+		handler = log.LogfmtHandlerWithLevel(output, verbosity)
+	case "", "terminal":
+		usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		if usecolor {
+			output = colorable.NewColorable(os.Stderr)
+		}
+		handler = log.NewTerminalHandlerWithLevel(output, verbosity, usecolor)
+	default:
+		return fmt.Errorf("unknown log format: %v", logFmtFlag.Name)
+	}
+	log.SetDefault(log.NewLogger(handler))
 
 	// set up blsync
 	client := blsync.NewClient(ctx)
