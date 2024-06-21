@@ -31,6 +31,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/eth/filters"
 	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
@@ -46,7 +47,7 @@ import (
 )
 
 type LightEthereum struct {
-	config *eth.Config
+	config *ethconfig.Config
 
 	odr         *LesOdr
 	relay       *LesTxRelay
@@ -79,7 +80,7 @@ type LightEthereum struct {
 	wg sync.WaitGroup
 }
 
-func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
+func New(ctx *node.ServiceContext, config *ethconfig.Config) (*LightEthereum, error) {
 	chainDb, err := eth.CreateDB(ctx, config, "lightchaindata")
 	if err != nil {
 		return nil, err

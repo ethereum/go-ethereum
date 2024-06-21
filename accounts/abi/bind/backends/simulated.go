@@ -135,6 +135,7 @@ func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfi
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
+// A simulated backend always uses chainID 1337.
 func NewSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
 	database := rawdb.NewMemoryDatabase()
 	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, Alloc: alloc, GasLimit: 42000000}

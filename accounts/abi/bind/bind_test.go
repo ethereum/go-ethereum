@@ -228,7 +228,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			// Deploy an interaction tester contract and call a transaction on it
@@ -269,7 +269,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			// Deploy a tuple tester contract and execute a structured call on it
@@ -301,7 +301,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			// Deploy a tuple tester contract and execute a structured call on it
@@ -343,7 +343,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			// Deploy a slice tester contract and execute a n array call on it
@@ -377,7 +377,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			// Deploy a default method invoker contract and execute its default method
@@ -446,7 +446,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			// Deploy a funky gas pattern contract
@@ -481,7 +481,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			// Deploy a sender tester contract and execute a structured call on it
@@ -541,7 +541,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			// Deploy a underscorer tester contract and execute a structured call on it
@@ -611,7 +611,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			// Deploy an eventer contract
@@ -760,7 +760,7 @@ var bindTests = []struct {
 		`
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
-			auth := bind.NewKeyedTransactor(key)
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 			sim := backends.NewXDCSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}, 10000000, params.TestXDPoSMockChainConfig)
 
 			//deploy the test contract

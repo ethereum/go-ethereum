@@ -41,10 +41,10 @@ var errEmptyTypedReceipt = errors.New("empty typed receipt bytes")
 
 const (
 	// ReceiptStatusFailed is the status code of a transaction if execution failed.
-	ReceiptStatusFailed = uint(0)
+	ReceiptStatusFailed = uint64(0)
 
 	// ReceiptStatusSuccessful is the status code of a transaction if execution succeeded.
-	ReceiptStatusSuccessful = uint(1)
+	ReceiptStatusSuccessful = uint64(1)
 )
 
 // Receipt represents the results of a transaction.
@@ -52,7 +52,7 @@ type Receipt struct {
 	// Consensus fields: These fields are defined by the Yellow Paper
 	Type              uint8  `json:"type,omitempty"`
 	PostState         []byte `json:"root"`
-	Status            uint   `json:"status"`
+	Status            uint64 `json:"status"`
 	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
 	Logs              []*Log `json:"logs"              gencodec:"required"`
@@ -73,7 +73,7 @@ type Receipt struct {
 type receiptMarshaling struct {
 	Type              hexutil.Uint64
 	PostState         hexutil.Bytes
-	Status            hexutil.Uint
+	Status            hexutil.Uint64
 	CumulativeGasUsed hexutil.Uint64
 	GasUsed           hexutil.Uint64
 	BlockNumber       *hexutil.Big

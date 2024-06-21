@@ -273,9 +273,14 @@ func (ec *Client) GetTransactionReceiptResult(ctx context.Context, txHash common
 	}
 	return r, result, err
 }
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
+	}
+	pending := big.NewInt(-1)
+	if number.Cmp(pending) == 0 {
+		return "pending"
 	}
 	return hexutil.EncodeBig(number)
 }

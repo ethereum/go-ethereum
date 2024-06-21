@@ -508,7 +508,7 @@ func (x *XDPoS) CacheNoneTIPSigningTxs(header *types.Header, txs []*types.Transa
 	signTxs := []*types.Transaction{}
 	for _, tx := range txs {
 		if tx.IsSigningTransaction() {
-			var b uint
+			var b uint64
 			for _, r := range receipts {
 				if r.TxHash == tx.Hash() {
 					if len(r.PostState) > 0 {

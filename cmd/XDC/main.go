@@ -127,6 +127,8 @@ var (
 		//utils.NoCompactionFlag,
 		//utils.GpoBlocksFlag,
 		//utils.GpoPercentileFlag,
+		utils.GpoMaxGasPriceFlag,
+		utils.GpoIgnoreGasPriceFlag,
 		//utils.ExtraDataFlag,
 		configFileFlag,
 		utils.AnnounceTxsFlag,
@@ -148,6 +150,7 @@ var (
 		utils.WSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
+		utils.RPCGlobalTxFeeCap,
 	}
 
 	whisperFlags = []cli.Flag{

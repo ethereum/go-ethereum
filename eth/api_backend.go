@@ -356,6 +356,10 @@ func (b *EthApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.AccountManager()
 }
 
+func (b *EthApiBackend) RPCTxFeeCap() float64 {
+	return b.eth.config.RPCTxFeeCap
+}
+
 func (b *EthApiBackend) BloomStatus() (uint64, uint64) {
 	sections, _, _ := b.eth.bloomIndexer.Sections()
 	return params.BloomBitsBlocks, sections
