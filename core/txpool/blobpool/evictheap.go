@@ -59,8 +59,8 @@ func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index *map[common.
 	sort.Slice(addrs, func(i, j int) bool { return bytes.Compare(addrs[i][:], addrs[j][:]) < 0 })
 
 	heap.addrs = addrs
-	for _, addr := range addrs {
-		heap.index[addr] = len(heap.addrs)
+	for i, addr := range addrs {
+		heap.index[addr] = i
 	}
 	heap.reinit(basefee, blobfee, true)
 	return heap
