@@ -94,8 +94,8 @@ func (h *evictHeap) Len() int {
 // Less implements sort.Interface as part of heap.Interface, returning which of
 // the two requested accounts has a cheaper bottleneck.
 func (h *evictHeap) Less(i, j int) bool {
-	txsI := (h.metas)[h.addrs[i]]
-	txsJ := (h.metas)[h.addrs[j]]
+	txsI := h.metas[h.addrs[i]]
+	txsJ := h.metas[h.addrs[j]]
 
 	lastI := txsI[len(txsI)-1]
 	lastJ := txsJ[len(txsJ)-1]
