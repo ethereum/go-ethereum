@@ -149,8 +149,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 		triggered chan struct{} // Used in tests
 		nfdb      = &nofreezedb{KeyValueStore: db}
 	)
-	timer := time.NewTimer(freezerRecheckInterval)
-	defer timer.Stop()
+	ticker := time.NewTicker(freezerRecheckInterval)
+	defer ticker.Stop()
 
 	for {
 		select {
@@ -166,9 +166,8 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 				triggered = nil
 			}
 			select {
-			case <-timer.C:
+			case <-ticker.C:
 				backoff = false
-				timer.Reset(freezerRecheckInterval)
 			case triggered = <-f.trigger:
 				backoff = false
 			case <-f.quit:
