@@ -20,6 +20,8 @@
       to: /docs/fundamentals/security
     - id: Sync-modes
       to: /docs/fundamentals/sync-modes
+    - id: Beacon light sync
+      to: /docs/fundamentals/blsync
     - id: Account management
       to: /docs/fundamentals/account-management
     - id: Databases

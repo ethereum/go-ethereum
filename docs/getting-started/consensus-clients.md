@@ -7,6 +7,8 @@ Geth is an [execution client](https://ethereum.org/en/glossary/#execution-client
 
 There are five consensus clients available, all of which connect to Geth in the same way. This page will outline how Geth can be set up with a consensus client to form a complete Ethereum node.
 
+<note>As an alternative it is possible to run with an integrated beacon light client for non-production settings. Please refer to [this](/docs/fundamentals/blsync) guide.</note>
+
 ## Configuring Geth {#configuring-geth}
 
 Geth can be downloaded and installed according to the instructions on the [Installing Geth](/docs/getting-started/installing-geth) page. In order to connect to a consensus client, Geth must expose a port for the inter-client RPC connection.
