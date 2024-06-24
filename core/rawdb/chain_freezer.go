@@ -165,10 +165,11 @@ func (f *chainFreezer) freeze(db ethdb.KeyValueStore) {
 				triggered <- struct{}{}
 				triggered = nil
 			}
+			timer.Reset(freezerRecheckInterval)
 			select {
 			case <-timer.C:
 				backoff = false
-				timer.Reset(freezerRecheckInterval)
+
 			case triggered = <-f.trigger:
 				backoff = false
 			case <-f.quit:
