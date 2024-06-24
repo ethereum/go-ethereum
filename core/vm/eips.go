@@ -628,7 +628,7 @@ func enableEOF(jt *JumpTable) {
 	}
 	jt[RETF] = &operation{
 		execute:     opRetf,
-		constantGas: GasFastishStep,
+		constantGas: GasFastestStep,
 		minStack:    minStack(0, 0),
 		maxStack:    maxStack(0, 0),
 		terminal:    true,
@@ -864,6 +864,7 @@ func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	}
 	scope.CodeSection = uint64(idx)
 	*pc = 0
+	*pc -= 1 // hacks xD
 	return nil, nil
 }
 
