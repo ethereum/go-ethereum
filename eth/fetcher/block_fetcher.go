@@ -93,6 +93,9 @@ type chainHeightFn func() uint64
 // chainInsertFn is a callback type to insert a batch of blocks into the local chain.
 type chainInsertFn func(types.Blocks) (int, error)
 
+// blockInsertFn is a callback type to insert a batch of blocks into the local chain.
+type blockInsertFn func(types.Block) (int, error)
+
 type blockPrepareFn func(block *types.Block) error
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
@@ -166,9 +169,10 @@ type BlockFetcher struct {
 	handleProposedBlock proposeBlockHandlerFn // Consensus v2 specific: Hanle new proposed block
 	broadcastBlock      blockBroadcasterFn    // Broadcasts a block to connected peers
 	chainHeight         chainHeightFn         // Retrieves the current chain's height
-	insertChain         chainInsertFn         // Injects a batch of blocks into the chain
-	prepareBlock        blockPrepareFn
-	dropPeer            peerDropFn // Drops a peer for misbehaving
+	// insertChain         chainInsertFn         // Injects a batch of blocks into the chain
+	insertBlock  blockInsertFn // Injects a batch of blocks into the chain
+	prepareBlock blockPrepareFn
+	dropPeer     peerDropFn // Drops a peer for misbehaving
 
 	// Testing hooks
 	announceChangeHook func(common.Hash, bool) // Method to call upon adding or deleting a hash from the blockAnnounce list
@@ -211,7 +215,7 @@ type BlockFetcher struct {
 // 		dropPeer:            dropPeer,
 // NewBlockFetcher creates a block fetcher to retrieve blocks based on hash announcements.
 
-func NewBlockFetcher(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, handleProposedBlock proposeBlockHandlerFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertChain chainInsertFn, prepareBlock blockPrepareFn, dropPeer peerDropFn) *BlockFetcher {
+func NewBlockFetcher(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, handleProposedBlock proposeBlockHandlerFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertBlock blockInsertFn, prepareBlock blockPrepareFn, dropPeer peerDropFn) *BlockFetcher {
 	knownBlocks, _ := lru.NewARC(blockLimit)
 	return &BlockFetcher{
 		notify:              make(chan *blockAnnounce),
@@ -234,9 +238,10 @@ func NewBlockFetcher(getBlock blockRetrievalFn, verifyHeader headerVerifierFn, h
 		handleProposedBlock: handleProposedBlock,
 		broadcastBlock:      broadcastBlock,
 		chainHeight:         chainHeight,
-		insertChain:         insertChain,
-		prepareBlock:        prepareBlock,
-		dropPeer:            dropPeer,
+		insertBlock:         insertBlock,
+		// insertChain:         insertChain,
+		prepareBlock: prepareBlock,
+		dropPeer:     dropPeer,
 	}
 }
 
@@ -772,7 +777,7 @@ func (f *BlockFetcher) insert(peer string, block *types.Block) {
 			return
 		}
 		// Run the actual import and log any issues
-		if _, err := f.insertChain(types.Blocks{block}); err != nil {
+		if _, err := f.insertBlock(*block); err != nil {
 			log.Warn("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
 		}

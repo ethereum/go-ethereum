@@ -246,7 +246,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		return blockchain.CurrentBlock().NumberU64()
 	}
 
-	inserter := func(blocks types.Blocks) (int, error) {
+	inserter := func(block types.Block) (int, error) {
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
 		//
 		// Ideally we would also compare the head block's timestamp and similarly reject
@@ -254,7 +254,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		// case when starting new networks, where the genesis might be ancient (0 unix)
 		// which would prevent full nodes from accepting it.
 		if manager.blockchain.CurrentBlock().NumberU64() < manager.checkpointNumber {
-			log.Warn("Unsynced yet, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
+			log.Warn("Unsynced yet, discarded propagated block", "number", block.Number(), "hash", block.Hash())
 			return 0, nil
 		}
 		// If fast sync is running, deny importing weird blocks. This is a problematic
@@ -263,10 +263,11 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		// out a way yet where nodes can decide unilaterally whether the network is new
 		// or not. This should be fixed if we figure out a solution.
 		if atomic.LoadUint32(&manager.fastSync) == 1 {
-			log.Warn("Fast syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
+			log.Warn("Fast syncing, discarded propagated block", "number", block.Number(), "hash", block.Hash())
 			return 0, nil
 		}
-		n, err := manager.blockchain.InsertChain(blocks)
+		n, err := manager.blockchain.InsertBlock(&block)
+		// n, err := manager.blockchain.InsertChain(blocks)
 		if err == nil {
 			atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		}

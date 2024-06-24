@@ -1774,10 +1774,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	return 0, events, coalescedLogs, nil
 }
 
-func (bc *BlockChain) InsertBlock(block *types.Block) error {
+func (bc *BlockChain) InsertBlock(block *types.Block) (int, error) {
 	events, logs, err := bc.insertBlock(block)
 	bc.PostChainEvents(events, logs)
-	return err
+	return 0, err
 }
 
 func (bc *BlockChain) PrepareBlock(block *types.Block) (err error) {
