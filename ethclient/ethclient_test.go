@@ -294,6 +294,9 @@ func TestEthClient(t *testing.T) {
 		"TransactionSender": {
 			func(t *testing.T) { testTransactionSender(t, client) },
 		},
+		"BatchFilterLogs": {
+			func(t *testing.T) { batchFilterLogs(t, client) },
+		},
 	}
 
 	t.Parallel()
@@ -759,4 +762,37 @@ func sendTransaction(ec *Client) error {
 		return err
 	}
 	return ec.SendTransaction(context.Background(), tx)
+}
+
+func batchFilterLogs(t *testing.T, client *rpc.Client) {
+	ec := NewClient(client)
+
+	blockNumber, err := ec.BlockNumber(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	q1 := ethereum.FilterQuery{
+		BlockHash: nil,
+		FromBlock: new(big.Int).SetUint64(0),
+		ToBlock:   new(big.Int).SetUint64(1),
+		Addresses: []common.Address{{}},
+		Topics:    nil,
+	}
+
+	q2 := ethereum.FilterQuery{
+		BlockHash: nil,
+		FromBlock: new(big.Int).SetUint64(1),
+		ToBlock:   new(big.Int).SetUint64(blockNumber),
+		Addresses: []common.Address{{}},
+		Topics:    nil,
+	}
+
+	resp, err := ec.BatchFilterLogs(context.Background(), []ethereum.FilterQuery{q1, q2})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_ = resp
+
 }

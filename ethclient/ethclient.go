@@ -427,6 +427,36 @@ func (ec *Client) NonceAtHash(ctx context.Context, account common.Address, block
 
 // Filters
 
+func (ec *Client) BatchFilterLogs(ctx context.Context, queries []ethereum.FilterQuery) ([]*ethereum.BatchLogsResult, error) {
+	var b []rpc.BatchElem
+	var batchResults []*ethereum.BatchLogsResult
+
+	for _, q := range queries {
+
+		var result []*types.Log
+		arg, err := toFilterArg(q)
+		if err != nil {
+			return nil, err
+		}
+
+		blr := ethereum.BatchLogsResult{
+			Logs: result,
+			Err:  nil,
+		}
+		batchResults = append(batchResults, &blr)
+
+		b = append(b, rpc.BatchElem{
+			Method: "eth_getLogs",
+			Args:   []interface{}{arg},
+			Result: result,
+			Error:  err,
+		})
+	}
+
+	err := ec.c.BatchCallContext(ctx, b)
+	return batchResults, err
+}
+
 // FilterLogs executes a filter query.
 func (ec *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
 	var result []types.Log
