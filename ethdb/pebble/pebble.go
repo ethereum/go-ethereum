@@ -452,8 +452,8 @@ func (d *Database) Path() string {
 // the metrics subsystem.
 func (d *Database) meter(refresh time.Duration, namespace string) {
 	var errc chan error
-	timer := time.NewTimer(refresh)
-	defer timer.Stop()
+	ticker := time.NewTicker(refresh)
+	defer ticker.Stop()
 
 	// Create storage and warning log tracer for write delay.
 	var (
@@ -550,8 +550,7 @@ func (d *Database) meter(refresh time.Duration, namespace string) {
 		select {
 		case errc = <-d.quitChan:
 			// Quit requesting, stop hammering the database
-		case <-timer.C:
-			timer.Reset(refresh)
+		case <-ticker.C:
 			// Timeout, gather a new set of stats
 		}
 	}

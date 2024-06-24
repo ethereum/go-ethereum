@@ -326,8 +326,8 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 		delaystats      [2]int64
 		lastWritePaused time.Time
 	)
-	timer := time.NewTimer(refresh)
-	defer timer.Stop()
+	ticker := time.NewTicker(refresh)
+	defer ticker.Stop()
 
 	// Iterate ad infinitum and collect the stats
 	for i := 1; errc == nil && merr == nil; i++ {
@@ -411,8 +411,7 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 		select {
 		case errc = <-db.quitChan:
 			// Quit requesting, stop hammering the database
-		case <-timer.C:
-			timer.Reset(refresh)
+		case <-ticker.C:
 			// Timeout, gather a new set of stats
 		}
 	}
