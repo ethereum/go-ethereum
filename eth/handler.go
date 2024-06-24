@@ -1128,7 +1128,7 @@ func (pm *ProtocolManager) BroadcastTransactions(txs types.Transactions, propaga
 		}
 	}
 	for peer, hashes := range annos {
-		if peer.version >= eth65 {
+		if peer.version >= eth65 { //implement
 			peer.AsyncSendPooledTransactionHashes(hashes)
 		} else {
 			peer.AsyncSendTransactions(hashes)

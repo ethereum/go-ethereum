@@ -31,20 +31,62 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	eth63  = 63
-	eth64  = 64
-	eth65  = 65
-	xdpos2 = 100
+	eth63   = 63
+	eth64   = 64
+	eth65   = 65
+	xdpos2  = 100 //xdpos2.1 = eth62+eth63
+	xdpos22 = 101 //xdpos2.2 = eth63+eth64+eth65
 )
+
+func supportsEth63(version int) bool {
+	switch {
+	case version < 63:
+		return false
+	case version > 63:
+		return true
+	default:
+		return false
+	}
+}
+
+func supportsEth64(version int) bool {
+	switch {
+	case version < 64:
+		return false
+	case version < 100:
+		return true
+	case version == 100:
+		return false
+	case version > 100:
+		return true
+	default:
+		return false
+	}
+}
+
+func supportsEth65(version int) bool {
+	switch {
+	case version < 65:
+		return false
+	case version < 100:
+		return true
+	case version == 100:
+		return false
+	case version > 100:
+		return true
+	default:
+		return false
+	}
+}
 
 // protocolName is the official short name of the protocol used during capability negotiation.
 const protocolName = "eth"
 
 // ProtocolVersions are the supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{xdpos2, eth65, eth64, eth63}
+var ProtocolVersions = []uint{xdpos22, xdpos2, eth65, eth64, eth63}
 
 // protocolLengths are the number of implemented message corresponding to different protocol versions.
-var protocolLengths = map[uint]uint64{xdpos2: 227, eth65: 17, eth64: 17, eth63: 17}
+var protocolLengths = map[uint]uint64{xdpos22: 227, xdpos2: 227, eth65: 17, eth64: 17, eth63: 17}
 
 const protocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
