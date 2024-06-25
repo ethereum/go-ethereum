@@ -56,7 +56,7 @@ Blsync takes the same flags as above to configure the HTTP endpoint as well as c
 Again to sync the Sepolia network in this mode, first run Geth:
 
 ```terminal
-❯ ./build/bin/geth --sepolia --datadir light-sepolia-dir
+./build/bin/geth --sepolia --datadir light-sepolia-dir
 ```
 
 The logs will indicate the Engine API path which is by default `http://localhost:8551` and the path to the JWT secret created which is in this instance `./light-sepolia-dir/geth/jwtsecret`. Now blsync can be run:
