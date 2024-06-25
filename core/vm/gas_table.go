@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -406,6 +407,51 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	if err != nil {
 		return 0, err
 	}
+	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	return gas, nil
+}
+
+func gasCallExt(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas            uint64
+		transfersValue = !stack.Back(2).IsZero()
+		address        = common.Address(stack.Back(1).Bytes20())
+	)
+	if evm.chainRules.IsEIP158 {
+		if transfersValue && evm.StateDB.Empty(address) {
+			gas += params.CallNewAccountGas
+		}
+	} else if !evm.StateDB.Exist(address) {
+		gas += params.CallNewAccountGas
+	}
+	if transfersValue && !evm.chainRules.IsEIP4762 {
+		gas += params.CallValueTransferGas
+	}
+	memoryGas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	if evm.chainRules.IsEIP4762 {
+		if transfersValue {
+			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
+
+	evm.callGasTemp, err = callGas(true, contract.Gas, gas, new(uint256.Int).SetUint64(contract.Gas))
+	if err != nil {
+		return 0, err
+	}
+
 	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
 		return 0, ErrGasUintOverflow
 	}

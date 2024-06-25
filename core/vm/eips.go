@@ -725,10 +725,10 @@ func enableEOF(jt *JumpTable) {
 	jt[EXTCALL] = &operation{
 		execute:     opExtCall,
 		constantGas: params.CallGasEIP150,
-		dynamicGas:  gasCall,
+		dynamicGas:  gasCallExt,
 		minStack:    minStack(4, 1),
 		maxStack:    maxStack(4, 1),
-		memorySize:  memoryCall,
+		memorySize:  memoryExtCall,
 	}
 	jt[EXTDELEGATECALL] = &operation{
 		execute:     opExtDelegateCall,
@@ -1073,17 +1073,18 @@ func opReturnDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	var (
 		offset = scope.Stack.pop()
 	)
-	if offset.Uint64()+32 > uint64(len(interpreter.returnData)) {
-		return nil, errors.New("return buffer overflow")
+	offset64, overflow := offset.Uint64WithOverflow()
+	if overflow {
+		offset64 = math.MaxUint64
 	}
-	scope.Stack.push(offset.SetBytes(interpreter.returnData[offset.Uint64() : offset.Uint64()+32]))
+	scope.Stack.push(offset.SetBytes(getData(interpreter.returnData, offset64, 32)))
 	return nil, nil
 }
 
 func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	stack := scope.Stack
 	// Use all available gas
-	gas := (scope.Contract.Gas / 64) * 63
+	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
 	addr, value, inOffset, inSize := stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
@@ -1106,7 +1107,7 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		temp.SetOne()
 	}
 	stack.push(&temp)
-
+	fmt.Println(returnGas)
 	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	interpreter.returnData = ret

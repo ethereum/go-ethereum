@@ -689,7 +689,7 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 
 // parseContainer tries to parse an EOF container if the Shanghai fork is active. It expects the code to already be validated.
 func (evm *EVM) parseContainer(b []byte) *Container {
-	if evm.chainRules.IsShanghai {
+	if evm.chainRules.IsPrague {
 		var c Container
 		if err := c.UnmarshalBinary(b); err != nil && strings.HasPrefix(err.Error(), "invalid magic") {
 			return nil
