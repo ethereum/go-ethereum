@@ -799,7 +799,7 @@ func opRjumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		code  = scope.Contract.CodeAt(scope.CodeSection)
-		count = uint64(code[*pc+1])
+		count = uint64(code[*pc+1]) + 1
 		idx   = scope.Stack.pop()
 	)
 	if idx, overflow := idx.Uint64WithOverflow(); overflow || idx >= count {
