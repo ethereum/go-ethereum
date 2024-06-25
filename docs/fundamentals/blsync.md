@@ -3,7 +3,7 @@ title: Beacon light client
 description: Running geth with integrated beacon light client
 ---
 
-`blsync` is a beacon light client shipped by Geth, designed to synchronize with the beacon chain without the need for a [consensus client](/docs/getting-started/consensus-clients). Integrated within Geth, blsync eliminates the necessity of running a separate consensus client, making it ideal for most use-cases that do not require full validation capabilities. It comes with very low resource requirements and can sync the beacon chain within seconds. `blsync` can be run in two modes: integrated or standalone. In standalone mode it is possible to use it for driving other execution clients.
+`blsync` is a beacon light client shipped by Geth, designed to synchronize with the beacon chain without the need for a [consensus client](/docs/getting-started/consensus-clients). Integrated within Geth, blsync eliminates the necessity of running a separate consensus client, making it ideal for use-cases that do not require full validation capabilities. It comes with very low resource requirements and can sync the beacon chain within seconds. `blsync` can be run in two modes: integrated or standalone. In standalone mode it is possible to use it for driving other execution clients.
 
 <note>Important: blsync is not suitable for running a validator. It is also not recommended for nodes handling any amount of money or used in production settings due to its lower security guarantees compared to running a full consensus client.</note>
 
