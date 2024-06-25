@@ -37,7 +37,7 @@ const privKey2 = "59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b7869
 func TestProcess1(t *testing.T) {
 
 	Sender := common.HexToAddress(DEFAULT_SENDER)
-	runProcess(newTestContextBuilder(t).
+	err := runProcess(newTestContextBuilder(t).
 		withAccount(addr1, 100000000000000).
 		withCode(DEFAULT_SENDER, createAccountCode(), 1000000000000000000).
 		build(), []*types.Rip7560AccountAbstractionTx{
@@ -48,6 +48,9 @@ func TestProcess1(t *testing.T) {
 			Data:          []byte{1, 2, 3},
 		},
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 // run a set of AA transactions, with a legacy TXs before and after.
