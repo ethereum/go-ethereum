@@ -1060,11 +1060,11 @@ func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		code  = scope.Contract.CodeAt(scope.CodeSection)
-		index = int(code[*pc+1]) + 1
-		n     = index>>4 + 1
-		m     = index%0x0F + 1
+		index = int(code[*pc+1])
+		n     = (index >> 4) + 1
+		m     = (index & 0x0F) + 1
 	)
-	scope.Stack.swapN(n, m)
+	scope.Stack.swapN(n+1, n+m+1)
 	*pc += 1
 	return nil, nil
 }
