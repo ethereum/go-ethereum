@@ -17,10 +17,9 @@
 package blobpool
 
 import (
-	"bytes"
 	"container/heap"
 	"math"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -56,7 +55,7 @@ func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index *map[common.
 	// but it makes the heap initialization deterministic and less annoying to
 	// test in unit tests.
 	addrs := maps.Keys(*index)
-	sort.Slice(addrs, func(i, j int) bool { return bytes.Compare(addrs[i][:], addrs[j][:]) < 0 })
+	slices.SortFunc(addrs, common.Address.Cmp)
 
 	heap.addrs = addrs
 	for i, addr := range addrs {
