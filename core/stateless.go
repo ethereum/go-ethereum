@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -40,6 +41,14 @@ import (
 //
 // TODO(karalabe): Would be nice to resolve both issues above somehow and move it.
 func ExecuteStateless(config *params.ChainConfig, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
+	// Sanity check if the supplied block accidentally contains a set root or
+	// receipt hash. If so, be very loud, but still continue.
+	if block.Root() != (common.Hash{}) {
+		log.Error("stateless runner received state root it's expected to calculate (faulty consensus client)", "block", block.Number())
+	}
+	if block.ReceiptHash() != (common.Hash{}) {
+		log.Error("stateless runner received receipt root it's expected to calculate (faulty consensus client)", "block", block.Number())
+	}
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
 

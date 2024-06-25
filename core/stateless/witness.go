@@ -48,16 +48,20 @@ type Witness struct {
 
 // NewWitness creates an empty witness ready for population.
 func NewWitness(context *types.Header, chain HeaderReader) (*Witness, error) {
-	// Retrieve the parent header, which will *always* be included to act as a
-	// trustless pre-root hash container
-	parent := chain.GetHeader(context.ParentHash, context.Number.Uint64()-1)
-	if parent == nil {
-		return nil, errors.New("failed to retrieve parent header")
+	// When building witnesses, retrieve the parent header, which will *always*
+	// be included to act as a trustless pre-root hash container
+	var headers []*types.Header
+	if chain != nil {
+		parent := chain.GetHeader(context.ParentHash, context.Number.Uint64()-1)
+		if parent == nil {
+			return nil, errors.New("failed to retrieve parent header")
+		}
+		headers = append(headers, parent)
 	}
 	// Create the wtness with a reconstructed gutted out block
 	return &Witness{
 		context: context,
-		Headers: []*types.Header{parent},
+		Headers: headers,
 		Codes:   make(map[string]struct{}),
 		State:   make(map[string]struct{}),
 		chain:   chain,
@@ -70,10 +74,7 @@ func NewWitness(context *types.Header, chain HeaderReader) (*Witness, error) {
 func (w *Witness) AddBlockHash(number uint64) {
 	// Keep pulling in headers until this hash is populated
 	for int(w.context.Number.Uint64()-number) > len(w.Headers) {
-		tail := w.context
-		if len(w.Headers) > 0 {
-			tail = w.Headers[len(w.Headers)-1]
-		}
+		tail := w.Headers[len(w.Headers)-1]
 		w.Headers = append(w.Headers, w.chain.GetHeader(tail.ParentHash, tail.Number.Uint64()-1))
 	}
 }

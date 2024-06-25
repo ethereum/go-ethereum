@@ -84,6 +84,9 @@ var caps = []string{
 	"engine_forkchoiceUpdatedV1",
 	"engine_forkchoiceUpdatedV2",
 	"engine_forkchoiceUpdatedV3",
+	"engine_forkchoiceUpdatedWithWitnessV1",
+	"engine_forkchoiceUpdatedWithWitnessV2",
+	"engine_forkchoiceUpdatedWithWitnessV3",
 	"engine_exchangeTransitionConfigurationV1",
 	"engine_getPayloadV1",
 	"engine_getPayloadV2",
@@ -91,6 +94,12 @@ var caps = []string{
 	"engine_newPayloadV1",
 	"engine_newPayloadV2",
 	"engine_newPayloadV3",
+	"engine_newPayloadWithWitnessV1",
+	"engine_newPayloadWithWitnessV2",
+	"engine_newPayloadWithWitnessV3",
+	"engine_executeStatelessPayloadV1",
+	"engine_executeStatelessPayloadV2",
+	"engine_executeStatelessPayloadV3",
 	"engine_getPayloadBodiesByHashV1",
 	"engine_getPayloadBodiesByRangeV1",
 	"engine_getClientVersionV1",
@@ -862,7 +871,7 @@ func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, v
 		errorMsg := err.Error()
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID, ValidationError: &errorMsg}, nil
 	}
-	bundle := new(stateless.Witness)
+	bundle, _ := stateless.NewWitness(block.Header(), nil)
 	if err := bundle.FromStatelessWitnessV1(&witness); err != nil {
 		log.Warn("Invalid ExecuteStatelessPayload witness", "err", err)
 		errorMsg := err.Error()

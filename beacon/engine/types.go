@@ -97,8 +97,8 @@ type executableDataMarshaling struct {
 // without any local data being present.
 type StatelessWitnessV1 struct {
 	Headers []hexutil.Bytes `json:"headers" gencodec:"required"`
-	Codes   []hexutil.Bytes `json:"codes"`
-	State   []hexutil.Bytes `json:"state"`
+	Codes   []hexutil.Bytes `json:"codes,omitempty"`
+	State   []hexutil.Bytes `json:"state,omitempty"`
 }
 
 // StatelessPayloadStatusV1 is the result of a stateless payload execution.

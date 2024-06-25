@@ -13,8 +13,8 @@ import (
 func (s StatelessWitnessV1) MarshalJSON() ([]byte, error) {
 	type StatelessWitnessV1 struct {
 		Headers []hexutil.Bytes `json:"headers" gencodec:"required"`
-		Codes   []hexutil.Bytes `json:"codes"`
-		State   []hexutil.Bytes `json:"state"`
+		Codes   []hexutil.Bytes `json:"codes,omitempty"`
+		State   []hexutil.Bytes `json:"state,omitempty"`
 	}
 	var enc StatelessWitnessV1
 	enc.Headers = s.Headers
@@ -27,8 +27,8 @@ func (s StatelessWitnessV1) MarshalJSON() ([]byte, error) {
 func (s *StatelessWitnessV1) UnmarshalJSON(input []byte) error {
 	type StatelessWitnessV1 struct {
 		Headers []hexutil.Bytes `json:"headers" gencodec:"required"`
-		Codes   []hexutil.Bytes `json:"codes"`
-		State   []hexutil.Bytes `json:"state"`
+		Codes   []hexutil.Bytes `json:"codes,omitempty"`
+		State   []hexutil.Bytes `json:"state,omitempty"`
 	}
 	var dec StatelessWitnessV1
 	if err := json.Unmarshal(input, &dec); err != nil {

@@ -20,10 +20,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -146,41 +144,6 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x) dberr: %w", header.Root, root, statedb.Error())
-	}
-	return nil
-}
-
-// ValidateWitness cross validates a block execution with stateless remote clients.
-//
-// Normally we'd distribute the block witness to remote cross validators, wait
-// for them to respond and then merge the results. For now, however, it's only
-// Geth, so do an internal stateless run.
-func (v *BlockValidator) ValidateWitness(block *types.Block, witness *stateless.Witness, receiptRoot common.Hash, stateRoot common.Hash) error {
-	// Run the cross client stateless execution
-	/*blob, err := rlp.EncodeToBytes(witness)
-	if err != nil {
-		return fmt.Errorf("failed to encode witness: %v", err)
-	}
-	defer func(start time.Time) {
-		log.Info("Stateless execution complete", "block", witness.Block.Number(), "witness", common.StorageSize(len(blob)), "elapsed", time.Since(start)) // lazy eval
-	}(time.Now())
-
-	// TODO(karalabe): Self-stateless for now, swap with other clients
-	// TODO(karalabe): RLP encoding/decoding is meaningless, it's for more precise metrics
-	witness = new(stateless.Witness)
-	if err = rlp.DecodeBytes(blob, witness); err != nil {
-		return fmt.Errorf("failed to decode witness: %v", err)
-	}*/
-	crossReceiptRoot, crossStateRoot, err := ExecuteStateless(v.config, block, witness)
-	if err != nil {
-		return fmt.Errorf("stateless execution failed: %v", err)
-	}
-	// Stateless cross execution suceeeded, validate the withheld computed fields
-	if crossReceiptRoot != receiptRoot {
-		return fmt.Errorf("cross validator receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, receiptRoot)
-	}
-	if crossStateRoot != stateRoot {
-		return fmt.Errorf("cross validator state root mismatch (cross: %x local: %x)", crossStateRoot, stateRoot)
 	}
 	return nil
 }

@@ -91,19 +91,6 @@ var (
 	blockPrefetchExecuteTimer   = metrics.NewRegisteredTimer("chain/prefetch/executes", nil)
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
 
-	statelessWitnessRLPSize          = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/plain/bytes", nil)
-	statelessWitnessRLPEncode        = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/plain/encode", nil)
-	statelessWitnessRLPDecode        = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/plain/decode", nil)
-	statelessWitnessJSONSize         = metrics.NewRegisteredResettingTimer("stateless/witness/json/plain/bytes", nil)
-	statelessWitnessJSONEncode       = metrics.NewRegisteredResettingTimer("stateless/witness/json/plain/encode", nil)
-	statelessWitnessJSONDecode       = metrics.NewRegisteredResettingTimer("stateless/witness/json/plain/decode", nil)
-	statelessWitnessRLPSnappySize    = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/snappy/bytes", nil)
-	statelessWitnessRLPSnappyEncode  = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/snappy/encode", nil)
-	statelessWitnessRLPSnappyDecode  = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/snappy/decode", nil)
-	statelessWitnessJSONSnappySize   = metrics.NewRegisteredResettingTimer("stateless/witness/json/snappy/bytes", nil)
-	statelessWitnessJSONSnappyEncode = metrics.NewRegisteredResettingTimer("stateless/witness/json/snappy/encode", nil)
-	statelessWitnessJSONSnappyDecode = metrics.NewRegisteredResettingTimer("stateless/witness/json/snappy/decode", nil)
-
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
 	errInvalidOldChain      = errors.New("invalid old chain")
@@ -1630,13 +1617,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	}
 	defer bc.chainmu.Unlock()
 
-	// Collect witnesses if requested (and discard, it's a testing feature)
-	// TODO(karalabe): Drop this tester when a live integration lands in CLs
-	var witnesses *[]*stateless.Witness
-	if bc.vmConfig.EnableWitnessCollection {
-		witnesses = new([]*stateless.Witness)
-	}
-	return bc.insertChain(chain, true, witnesses)
+	return bc.insertChain(chain, true, nil) // No witness collection for mass inserts (would get super large)
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -1842,7 +1823,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 		// useless due to the intermediate root hashing after each transaction.
 		var witness *stateless.Witness
 		if bc.chainConfig.IsByzantium(block.Number()) {
-			if witnesses != nil {
+			if witnesses != nil || bc.vmConfig.StatelessSelfValidation {
 				witness, err = stateless.NewWitness(block.Header(), bc)
 				if err != nil {
 					return it.index, err
@@ -1972,54 +1953,32 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	}
 	vtime := time.Since(vstart)
 
+	// If witnesses was generated and stateless self-validation requested, do
+	// that now. Self validation should *never* run in production, it's more of
+	// a tight integration to enable running *all* consensus tests through the
+	// witness builder/runner, which would otherwise be impossible due to the
+	// various invalid chain states/behaviors being contained in those tests.
 	xvstart := time.Now()
-	if witness := statedb.Witness(); witness != nil {
-		// Temporary benchmarks start
-		/*start := time.Now()
-		blob, err := rlp.EncodeToBytes(witness)
+	if witness := statedb.Witness(); witness != nil && bc.vmConfig.StatelessSelfValidation {
+		log.Warn("Running stateless self-validation", "block", block.Number(), "hash", block.Hash())
+
+		// Remove critical computed fields from the block to force true recalculation
+		context := block.Header()
+		context.Root = common.Hash{}
+		context.ReceiptHash = common.Hash{}
+
+		task := types.NewBlockWithHeader(context).WithBody(*block.Body())
+
+		// Run the stateless self-cross-validation
+		crossReceiptRoot, crossStateRoot, err := ExecuteStateless(bc.chainConfig, task, witness)
 		if err != nil {
-			panic(err)
+			return nil, fmt.Errorf("stateless self-validation failed: %v", err)
 		}
-		statelessWitnessRLPSize.Update(time.Duration(len(blob))) // Not time, we abuse the resetting meter, /shrug
-		statelessWitnessRLPEncode.Update(time.Since(start))
-
-		sblob := snappy.Encode(nil, blob)
-		statelessWitnessRLPSnappySize.Update(time.Duration(len(sblob))) // Not time, we abuse the resetting meter, /shrug
-		statelessWitnessRLPSnappyEncode.Update(time.Since(start))
-
-		start = time.Now()
-		rlp.DecodeBytes(blob, witness)
-		statelessWitnessRLPDecode.Update(time.Since(start))
-
-		snappy.Decode(nil, sblob)
-		statelessWitnessRLPSnappyDecode.Update(time.Since(start))
-
-		// ------------------------
-
-		// Temporary benchmarks start
-		start = time.Now()
-		blob, err = json.Marshal(witness)
-		if err != nil {
-			panic(err)
+		if crossReceiptRoot != block.ReceiptHash() {
+			return nil, fmt.Errorf("stateless self-validation receipt root mismatch (cross: %x local: %x)", crossReceiptRoot, block.ReceiptHash())
 		}
-		statelessWitnessJSONSize.Update(time.Duration(len(blob))) // Not time, we abuse the resetting meter, /shrug
-		statelessWitnessJSONEncode.Update(time.Since(start))
-
-		sblob = snappy.Encode(nil, blob)
-		statelessWitnessJSONSnappySize.Update(time.Duration(len(sblob))) // Not time, we abuse the resetting meter, /shrug
-		statelessWitnessJSONSnappyEncode.Update(time.Since(start))
-
-		start = time.Now()
-		json.Unmarshal(blob, witness)
-		statelessWitnessJSONDecode.Update(time.Since(start))
-
-		snappy.Decode(nil, sblob)
-		statelessWitnessJSONSnappyDecode.Update(time.Since(start))
-		// Temporary benchmarks end
-		*/
-		if err = bc.validator.ValidateWitness(block, witness, block.ReceiptHash(), block.Root()); err != nil {
-			bc.reportBlock(block, receipts, err)
-			return nil, fmt.Errorf("cross verification failed: %v", err)
+		if crossStateRoot != block.Root() {
+			return nil, fmt.Errorf("stateless self-validation root mismatch (cross: %x local: %x)", crossStateRoot, block.Root())
 		}
 	}
 	xvtime := time.Since(xvstart)

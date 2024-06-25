@@ -50,7 +50,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		BlobPool                blobpool.Config
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
-		EnableWitnessCollection bool `toml:"-"`
 		VMTrace                 string
 		VMTraceJsonConfig       string
 		DocRoot                 string `toml:"-"`
@@ -94,7 +93,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.BlobPool = c.BlobPool
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
-	enc.EnableWitnessCollection = c.EnableWitnessCollection
 	enc.VMTrace = c.VMTrace
 	enc.VMTraceJsonConfig = c.VMTraceJsonConfig
 	enc.DocRoot = c.DocRoot
@@ -142,7 +140,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		BlobPool                *blobpool.Config
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
-		EnableWitnessCollection *bool `toml:"-"`
 		VMTrace                 *string
 		VMTraceJsonConfig       *string
 		DocRoot                 *string `toml:"-"`
@@ -254,9 +251,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.EnablePreimageRecording != nil {
 		c.EnablePreimageRecording = *dec.EnablePreimageRecording
-	}
-	if dec.EnableWitnessCollection != nil {
-		c.EnableWitnessCollection = *dec.EnableWitnessCollection
 	}
 	if dec.VMTrace != nil {
 		c.VMTrace = *dec.VMTrace

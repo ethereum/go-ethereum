@@ -17,11 +17,7 @@
 package stateless
 
 import (
-	"bytes"
-	"errors"
-	"fmt"
 	"io"
-	"slices"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -38,13 +34,10 @@ func (w *Witness) toExtWitness() *extWitness {
 	for code := range w.Codes {
 		ext.Codes = append(ext.Codes, []byte(code))
 	}
-	slices.SortFunc(ext.Codes, bytes.Compare)
-
 	ext.State = make([][]byte, 0, len(w.State))
 	for node := range w.State {
 		ext.State = append(ext.State, []byte(node))
 	}
-	slices.SortFunc(ext.State, bytes.Compare)
 	return ext
 }
 
@@ -77,27 +70,6 @@ func (w *Witness) DecodeRLP(s *rlp.Stream) error {
 	return w.fromExtWitness(&ext)
 }
 
-// Sanitize checks for some mandatory fields in the witness after decoding so
-// the rest of the code can assume invariants and doesn't have to deal with
-// corrupted data.
-func (w *Witness) sanitize() error {
-	// Verify that the "parent" header (i.e. index 0) is available, and is the
-	// true parent of the block-to-be executed, since we use that to link the
-	// current block to the pre-state.
-	if len(w.Headers) == 0 {
-		return errors.New("parent header (for pre-root hash) missing")
-	}
-	for i, header := range w.Headers {
-		if header == nil {
-			return fmt.Errorf("witness header nil at position %d", i)
-		}
-	}
-	if w.Headers[0].Hash() != w.context.ParentHash {
-		return fmt.Errorf("parent hash different: witness %v, block parent %v", w.Headers[0].Hash(), w.context.ParentHash)
-	}
-	return nil
-}
-
 // extWitness is a witness RLP encoding for transferring across clients.
 type extWitness struct {
 	Headers []*types.Header
@@ -107,22 +79,18 @@ type extWitness struct {
 
 // ToStatelessWitnessV1 converts a witness to an engine API request type.
 func (w *Witness) ToStatelessWitnessV1() *engine.StatelessWitnessV1 {
-	// Convert the witness to a flat format with sorted fields. This isn't needed
-	// really, more of a nicety for now. Maybe remove it, maybe not.
-	ext := w.toExtWitness()
-
 	// Encode the headers and type cast the rest for the JSON encoding
 	headers := make([]hexutil.Bytes, len(w.Headers))
-	for i, header := range ext.Headers {
+	for i, header := range w.Headers {
 		headers[i], _ = rlp.EncodeToBytes(header)
 	}
-	codes := make([]hexutil.Bytes, len(ext.Codes))
-	for i, code := range ext.Codes {
-		codes[i] = code
+	codes := make([]hexutil.Bytes, 0, len(w.Codes))
+	for code := range w.Codes {
+		codes = append(codes, hexutil.Bytes(code))
 	}
-	state := make([]hexutil.Bytes, len(ext.State))
-	for i, node := range ext.State {
-		state[i] = node
+	state := make([]hexutil.Bytes, 0, len(w.State))
+	for node := range w.State {
+		state = append(state, hexutil.Bytes(node))
 	}
 	// Assemble and return the stateless executable data
 	return &engine.StatelessWitnessV1{
@@ -134,24 +102,21 @@ func (w *Witness) ToStatelessWitnessV1() *engine.StatelessWitnessV1 {
 
 // FromStatelessWitnessV1 converts an engine API request to a witness type.
 func (w *Witness) FromStatelessWitnessV1(witness *engine.StatelessWitnessV1) error {
-	// Convert the stateless executable data into a flat witness
-	ext := &extWitness{
-		Headers: make([]*types.Header, len(witness.Headers)),
-		Codes:   make([][]byte, len(witness.Codes)),
-		State:   make([][]byte, len(witness.State)),
-	}
+	w.Headers = make([]*types.Header, len(witness.Headers))
 	for i, blob := range witness.Headers {
 		header := new(types.Header)
 		if err := rlp.DecodeBytes(blob, header); err != nil {
 			return err
 		}
-		ext.Headers[i] = header
+		w.Headers[i] = header
 	}
-	for i, code := range ext.Codes {
-		ext.Codes[i] = code
+	w.Codes = make(map[string]struct{}, len(witness.Codes))
+	for _, code := range witness.Codes {
+		w.Codes[string(code)] = struct{}{}
 	}
-	for i, node := range ext.State {
-		ext.State[i] = node
+	w.State = make(map[string]struct{}, len(witness.State))
+	for _, node := range witness.State {
+		w.State[string(node)] = struct{}{}
 	}
-	return w.fromExtWitness(ext)
+	return nil
 }
