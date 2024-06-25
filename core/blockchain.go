@@ -78,10 +78,11 @@ var (
 
 	triedbCommitTimer = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
-	blockInsertTimer     = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
-	blockValidationTimer = metrics.NewRegisteredResettingTimer("chain/validation", nil)
-	blockExecutionTimer  = metrics.NewRegisteredResettingTimer("chain/execution", nil)
-	blockWriteTimer      = metrics.NewRegisteredResettingTimer("chain/write", nil)
+	blockInsertTimer          = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
+	blockValidationTimer      = metrics.NewRegisteredResettingTimer("chain/validation", nil)
+	blockCrossValidationTimer = metrics.NewRegisteredResettingTimer("chain/crossvalidation", nil)
+	blockExecutionTimer       = metrics.NewRegisteredResettingTimer("chain/execution", nil)
+	blockWriteTimer           = metrics.NewRegisteredResettingTimer("chain/write", nil)
 
 	blockReorgMeter     = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter  = metrics.NewRegisteredMeter("chain/reorg/add", nil)
@@ -89,6 +90,19 @@ var (
 
 	blockPrefetchExecuteTimer   = metrics.NewRegisteredTimer("chain/prefetch/executes", nil)
 	blockPrefetchInterruptMeter = metrics.NewRegisteredMeter("chain/prefetch/interrupts", nil)
+
+	statelessWitnessRLPSize          = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/plain/bytes", nil)
+	statelessWitnessRLPEncode        = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/plain/encode", nil)
+	statelessWitnessRLPDecode        = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/plain/decode", nil)
+	statelessWitnessJSONSize         = metrics.NewRegisteredResettingTimer("stateless/witness/json/plain/bytes", nil)
+	statelessWitnessJSONEncode       = metrics.NewRegisteredResettingTimer("stateless/witness/json/plain/encode", nil)
+	statelessWitnessJSONDecode       = metrics.NewRegisteredResettingTimer("stateless/witness/json/plain/decode", nil)
+	statelessWitnessRLPSnappySize    = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/snappy/bytes", nil)
+	statelessWitnessRLPSnappyEncode  = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/snappy/encode", nil)
+	statelessWitnessRLPSnappyDecode  = metrics.NewRegisteredResettingTimer("stateless/witness/rlp/snappy/decode", nil)
+	statelessWitnessJSONSnappySize   = metrics.NewRegisteredResettingTimer("stateless/witness/json/snappy/bytes", nil)
+	statelessWitnessJSONSnappyEncode = metrics.NewRegisteredResettingTimer("stateless/witness/json/snappy/encode", nil)
+	statelessWitnessJSONSnappyDecode = metrics.NewRegisteredResettingTimer("stateless/witness/json/snappy/decode", nil)
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
@@ -1615,7 +1629,14 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-	return bc.insertChain(chain, true)
+
+	// Collect witnesses if requested (and discard, it's a testing feature)
+	// TODO(karalabe): Drop this tester when a live integration lands in CLs
+	var witnesses *[]*stateless.Witness
+	if bc.vmConfig.EnableWitnessCollection {
+		witnesses = new([]*stateless.Witness)
+	}
+	return bc.insertChain(chain, true, witnesses)
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -1626,12 +1647,15 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error) {
+//
+// Note, the witnesses parameter has that funky type because it's an optional
+// accumulator (hence the slice pointer) and it can also have nil elements for
+// already known blocks (hence the pointer element). Do not change it!
+func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[]*stateless.Witness) (int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
 		return 0, nil
 	}
-
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
 	SenderCacher.RecoverFromBlocks(types.MakeSigner(bc.chainConfig, chain[0].Number(), chain[0].Time()), chain)
 
@@ -1683,6 +1707,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 					break
 				}
 			}
+			if witnesses != nil {
+				*witnesses = append(*witnesses, nil)
+			}
 			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
 			stats.ignored++
 
@@ -1700,6 +1727,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
 				return it.index, err
+			}
+			if witnesses != nil {
+				*witnesses = append(*witnesses, nil)
 			}
 			lastCanon = block
 
@@ -1787,13 +1817,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 					Safe:      bc.CurrentSafeBlock(),
 				})
 			}
-
+			if witnesses != nil {
+				*witnesses = append(*witnesses, nil)
+			}
 			// We can assume that logs are empty here, since the only way for consecutive
 			// Clique blocks to have the same state is if there are no transactions.
 			lastCanon = block
 			continue
 		}
-
 		// Retrieve the parent block and it's state to execute on top
 		start := time.Now()
 		parent := it.previous()
@@ -1809,10 +1840,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// If we are past Byzantium, enable prefetching to pull in trie node paths
 		// while processing transactions. Before Byzantium the prefetcher is mostly
 		// useless due to the intermediate root hashing after each transaction.
+		var witness *stateless.Witness
 		if bc.chainConfig.IsByzantium(block.Number()) {
-			var witness *stateless.Witness
-			if bc.vmConfig.EnableWitnessCollection {
-				witness, err = stateless.NewWitness(bc, block)
+			if witnesses != nil {
+				witness, err = stateless.NewWitness(block.Header(), bc)
 				if err != nil {
 					return it.index, err
 				}
@@ -1847,6 +1878,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		followupInterrupt.Store(true)
 		if err != nil {
 			return it.index, err
+		}
+		if witnesses != nil {
+			*witnesses = append(*witnesses, witness)
 		}
 		// Report the import stats before returning the various results
 		stats.processed++
@@ -1938,13 +1972,58 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	}
 	vtime := time.Since(vstart)
 
+	xvstart := time.Now()
 	if witness := statedb.Witness(); witness != nil {
-		if err = bc.validator.ValidateWitness(witness, block.ReceiptHash(), block.Root()); err != nil {
+		// Temporary benchmarks start
+		/*start := time.Now()
+		blob, err := rlp.EncodeToBytes(witness)
+		if err != nil {
+			panic(err)
+		}
+		statelessWitnessRLPSize.Update(time.Duration(len(blob))) // Not time, we abuse the resetting meter, /shrug
+		statelessWitnessRLPEncode.Update(time.Since(start))
+
+		sblob := snappy.Encode(nil, blob)
+		statelessWitnessRLPSnappySize.Update(time.Duration(len(sblob))) // Not time, we abuse the resetting meter, /shrug
+		statelessWitnessRLPSnappyEncode.Update(time.Since(start))
+
+		start = time.Now()
+		rlp.DecodeBytes(blob, witness)
+		statelessWitnessRLPDecode.Update(time.Since(start))
+
+		snappy.Decode(nil, sblob)
+		statelessWitnessRLPSnappyDecode.Update(time.Since(start))
+
+		// ------------------------
+
+		// Temporary benchmarks start
+		start = time.Now()
+		blob, err = json.Marshal(witness)
+		if err != nil {
+			panic(err)
+		}
+		statelessWitnessJSONSize.Update(time.Duration(len(blob))) // Not time, we abuse the resetting meter, /shrug
+		statelessWitnessJSONEncode.Update(time.Since(start))
+
+		sblob = snappy.Encode(nil, blob)
+		statelessWitnessJSONSnappySize.Update(time.Duration(len(sblob))) // Not time, we abuse the resetting meter, /shrug
+		statelessWitnessJSONSnappyEncode.Update(time.Since(start))
+
+		start = time.Now()
+		json.Unmarshal(blob, witness)
+		statelessWitnessJSONDecode.Update(time.Since(start))
+
+		snappy.Decode(nil, sblob)
+		statelessWitnessJSONSnappyDecode.Update(time.Since(start))
+		// Temporary benchmarks end
+		*/
+		if err = bc.validator.ValidateWitness(block, witness, block.ReceiptHash(), block.Root()); err != nil {
 			bc.reportBlock(block, receipts, err)
 			return nil, fmt.Errorf("cross verification failed: %v", err)
 		}
 	}
-	proctime := time.Since(start) // processing + validation
+	xvtime := time.Since(xvstart)
+	proctime := time.Since(start) // processing + validation + cross validation
 
 	// Update the metrics touched during block processing and validation
 	accountReadTimer.Update(statedb.AccountReads)                   // Account reads are complete(in processing)
@@ -1960,6 +2039,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
 	blockExecutionTimer.Update(ptime - trieRead)                    // The time spent on EVM processing
 	blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
+	blockCrossValidationTimer.Update(xvtime)                        // The time spent on stateless cross validation
 
 	// Write the block to the chain and get the status.
 	var (
@@ -2104,7 +2184,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, err := bc.insertChain(blocks, true); err != nil {
+			if _, err := bc.insertChain(blocks, true, nil); err != nil {
 				return 0, err
 			}
 			blocks, memory = blocks[:0], 0
@@ -2118,7 +2198,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, true)
+		return bc.insertChain(blocks, true, nil)
 	}
 	return 0, nil
 }
@@ -2167,7 +2247,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 		} else {
 			b = bc.GetBlock(hashes[i], numbers[i])
 		}
-		if _, err := bc.insertChain(types.Blocks{b}, false); err != nil {
+		if _, err := bc.insertChain(types.Blocks{b}, false, nil); err != nil {
 			return b.ParentHash(), err
 		}
 	}
@@ -2383,14 +2463,24 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 // The key difference between the InsertChain is it won't do the canonical chain
 // updating. It relies on the additional SetCanonical call to finalize the entire
 // procedure.
-func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block) error {
+func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block, witness bool) (*stateless.Witness, error) {
 	if !bc.chainmu.TryLock() {
-		return errChainStopped
+		return nil, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
-	_, err := bc.insertChain(types.Blocks{block}, false)
-	return err
+	var witnesses *[]*stateless.Witness
+	if witness {
+		witnesses = new([]*stateless.Witness)
+	}
+	_, err := bc.insertChain(types.Blocks{block}, false, witnesses)
+	if !witness {
+		return nil, err
+	}
+	if len(*witnesses) > 0 {
+		return (*witnesses)[0], err
+	}
+	return nil, err
 }
 
 // SetCanonical rewinds the chain to set the new head block as the specified

@@ -674,7 +674,7 @@ func assembleBlock(api *ConsensusAPI, parentHash common.Hash, params *engine.Pay
 		Withdrawals:  params.Withdrawals,
 		BeaconRoot:   params.BeaconRoot,
 	}
-	payload, err := api.eth.Miner().BuildPayload(args)
+	payload, err := api.eth.Miner().BuildPayload(args, false)
 	if err != nil {
 		return nil, err
 	}
@@ -911,7 +911,7 @@ func TestNewPayloadOnInvalidTerminalBlock(t *testing.T) {
 		Random:       crypto.Keccak256Hash([]byte{byte(1)}),
 		FeeRecipient: parent.Coinbase(),
 	}
-	payload, err := api.eth.Miner().BuildPayload(args)
+	payload, err := api.eth.Miner().BuildPayload(args, false)
 	if err != nil {
 		t.Fatalf("error preparing payload, err=%v", err)
 	}

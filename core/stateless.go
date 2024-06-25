@@ -39,7 +39,7 @@ import (
 //   - It cannot be placed outside of core, because it needs to construct a dud headerchain
 //
 // TODO(karalabe): Would be nice to resolve both issues above somehow and move it.
-func ExecuteStateless(config *params.ChainConfig, witness *stateless.Witness) (common.Hash, common.Hash, error) {
+func ExecuteStateless(config *params.ChainConfig, block *types.Block, witness *stateless.Witness) (common.Hash, common.Hash, error) {
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
 
@@ -58,16 +58,16 @@ func ExecuteStateless(config *params.ChainConfig, witness *stateless.Witness) (c
 	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
 
 	// Run the stateless blocks processing and self-validate certain fields
-	receipts, _, usedGas, err := processor.Process(witness.Block, db, vm.Config{})
+	receipts, _, usedGas, err := processor.Process(block, db, vm.Config{})
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
-	if err = validator.ValidateState(witness.Block, db, receipts, usedGas, true); err != nil {
+	if err = validator.ValidateState(block, db, receipts, usedGas, true); err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
 	// Almost everything validated, but receipt and state root needs to be returned
 	receiptRoot := types.DeriveSha(receipts, trie.NewStackTrie(nil))
-	stateRoot := db.IntermediateRoot(config.IsEIP158(witness.Block.Number()))
+	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
 
 	return receiptRoot, stateRoot, nil
 }

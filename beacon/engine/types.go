@@ -91,13 +91,32 @@ type executableDataMarshaling struct {
 	ExcessBlobGas *hexutil.Uint64
 }
 
+//go:generate go run github.com/fjl/gencodec -type StatelessWitnessV1 -out gen_sw.go
+
+// StatelessWitnessV1 is the witness data necessary to execute an ExecutableData
+// without any local data being present.
+type StatelessWitnessV1 struct {
+	Headers []hexutil.Bytes `json:"headers" gencodec:"required"`
+	Codes   []hexutil.Bytes `json:"codes"`
+	State   []hexutil.Bytes `json:"state"`
+}
+
+// StatelessPayloadStatusV1 is the result of a stateless payload execution.
+type StatelessPayloadStatusV1 struct {
+	Status          string      `json:"status"`
+	StateRoot       common.Hash `json:"stateRoot"`
+	ReceiptsRoot    common.Hash `json:"receiptsRoot"`
+	ValidationError *string     `json:"validationError"`
+}
+
 //go:generate go run github.com/fjl/gencodec -type ExecutionPayloadEnvelope -field-override executionPayloadEnvelopeMarshaling -out gen_epe.go
 
 type ExecutionPayloadEnvelope struct {
-	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
-	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
-	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
-	Override         bool            `json:"shouldOverrideBuilder"`
+	ExecutionPayload *ExecutableData     `json:"executionPayload"  gencodec:"required"`
+	BlockValue       *big.Int            `json:"blockValue"  gencodec:"required"`
+	BlobsBundle      *BlobsBundleV1      `json:"blobsBundle"`
+	Override         bool                `json:"shouldOverrideBuilder"`
+	Witness          *StatelessWitnessV1 `json:"witness"`
 }
 
 type BlobsBundleV1 struct {
@@ -112,9 +131,10 @@ type executionPayloadEnvelopeMarshaling struct {
 }
 
 type PayloadStatusV1 struct {
-	Status          string       `json:"status"`
-	LatestValidHash *common.Hash `json:"latestValidHash"`
-	ValidationError *string      `json:"validationError"`
+	Status          string              `json:"status"`
+	Witness         *StatelessWitnessV1 `json:"witness"`
+	LatestValidHash *common.Hash        `json:"latestValidHash"`
+	ValidationError *string             `json:"validationError"`
 }
 
 type TransitionConfigurationV1 struct {
@@ -195,6 +215,20 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in params.
 func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
+	block, err := ExecutableDataToBlockNoHash(params, versionedHashes, beaconRoot)
+	if err != nil {
+		return nil, err
+	}
+	if block.Hash() != params.BlockHash {
+		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
+	}
+	return block, nil
+}
+
+// ExecutableDataToBlockNoHash is analogous to ExecutableDataToBlock, but is used
+// for stateless execution, so it skips checking if the executable data hashes to
+// the requested hash (stateless has to *compute* the root hash, it's not given).
+func ExecutableDataToBlockNoHash(params ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -250,11 +284,7 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		BlobGasUsed:      params.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: params.Withdrawals})
-	if block.Hash() != params.BlockHash {
-		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
-	}
-	return block, nil
+	return types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: params.Withdrawals}), nil
 }
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the

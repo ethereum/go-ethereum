@@ -23,17 +23,15 @@ import (
 	"io"
 	"slices"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-//go:generate go run github.com/fjl/gencodec -type extWitness -field-override extWitnessMarshalling -out gen_encoding_json.go
-
 // toExtWitness converts our internal witness representation to the consensus one.
 func (w *Witness) toExtWitness() *extWitness {
 	ext := &extWitness{
-		Block:   w.Block,
 		Headers: w.Headers,
 	}
 	ext.Codes = make([][]byte, 0, len(w.Codes))
@@ -52,7 +50,7 @@ func (w *Witness) toExtWitness() *extWitness {
 
 // fromExtWitness converts the consensus witness format into our internal one.
 func (w *Witness) fromExtWitness(ext *extWitness) error {
-	w.Block, w.Headers = ext.Block, ext.Headers
+	w.Headers = ext.Headers
 
 	w.Codes = make(map[string]struct{}, len(ext.Codes))
 	for _, code := range ext.Codes {
@@ -62,26 +60,12 @@ func (w *Witness) fromExtWitness(ext *extWitness) error {
 	for _, node := range ext.State {
 		w.State[string(node)] = struct{}{}
 	}
-	return w.sanitize()
-}
-
-// MarshalJSON marshals a witness as JSON.
-func (w *Witness) MarshalJSON() ([]byte, error) {
-	return w.toExtWitness().MarshalJSON()
+	return nil
 }
 
 // EncodeRLP serializes a witness as RLP.
 func (w *Witness) EncodeRLP(wr io.Writer) error {
 	return rlp.Encode(wr, w.toExtWitness())
-}
-
-// UnmarshalJSON unmarshals from JSON.
-func (w *Witness) UnmarshalJSON(input []byte) error {
-	var ext extWitness
-	if err := ext.UnmarshalJSON(input); err != nil {
-		return err
-	}
-	return w.fromExtWitness(&ext)
 }
 
 // DecodeRLP decodes a witness from RLP.
@@ -93,7 +77,7 @@ func (w *Witness) DecodeRLP(s *rlp.Stream) error {
 	return w.fromExtWitness(&ext)
 }
 
-// sanitize checks for some mandatory fields in the witness after decoding so
+// Sanitize checks for some mandatory fields in the witness after decoding so
 // the rest of the code can assume invariants and doesn't have to deal with
 // corrupted data.
 func (w *Witness) sanitize() error {
@@ -108,22 +92,66 @@ func (w *Witness) sanitize() error {
 			return fmt.Errorf("witness header nil at position %d", i)
 		}
 	}
-	if w.Headers[0].Hash() != w.Block.ParentHash() {
-		return fmt.Errorf("parent hash different: witness %v, block parent %v", w.Headers[0].Hash(), w.Block.ParentHash())
+	if w.Headers[0].Hash() != w.context.ParentHash {
+		return fmt.Errorf("parent hash different: witness %v, block parent %v", w.Headers[0].Hash(), w.context.ParentHash)
 	}
 	return nil
 }
 
 // extWitness is a witness RLP encoding for transferring across clients.
 type extWitness struct {
-	Block   *types.Block    `json:"block"       gencodec:"required"`
-	Headers []*types.Header `json:"headers"       gencodec:"required"`
-	Codes   [][]byte        `json:"codes"`
-	State   [][]byte        `json:"state"`
+	Headers []*types.Header
+	Codes   [][]byte
+	State   [][]byte
 }
 
-// extWitnessMarshalling defines the hex marshalling types for a witness.
-type extWitnessMarshalling struct {
-	Codes []hexutil.Bytes
-	State []hexutil.Bytes
+// ToStatelessWitnessV1 converts a witness to an engine API request type.
+func (w *Witness) ToStatelessWitnessV1() *engine.StatelessWitnessV1 {
+	// Convert the witness to a flat format with sorted fields. This isn't needed
+	// really, more of a nicety for now. Maybe remove it, maybe not.
+	ext := w.toExtWitness()
+
+	// Encode the headers and type cast the rest for the JSON encoding
+	headers := make([]hexutil.Bytes, len(w.Headers))
+	for i, header := range ext.Headers {
+		headers[i], _ = rlp.EncodeToBytes(header)
+	}
+	codes := make([]hexutil.Bytes, len(ext.Codes))
+	for i, code := range ext.Codes {
+		codes[i] = code
+	}
+	state := make([]hexutil.Bytes, len(ext.State))
+	for i, node := range ext.State {
+		state[i] = node
+	}
+	// Assemble and return the stateless executable data
+	return &engine.StatelessWitnessV1{
+		Headers: headers,
+		Codes:   codes,
+		State:   state,
+	}
+}
+
+// FromStatelessWitnessV1 converts an engine API request to a witness type.
+func (w *Witness) FromStatelessWitnessV1(witness *engine.StatelessWitnessV1) error {
+	// Convert the stateless executable data into a flat witness
+	ext := &extWitness{
+		Headers: make([]*types.Header, len(witness.Headers)),
+		Codes:   make([][]byte, len(witness.Codes)),
+		State:   make([][]byte, len(witness.State)),
+	}
+	for i, blob := range witness.Headers {
+		header := new(types.Header)
+		if err := rlp.DecodeBytes(blob, header); err != nil {
+			return err
+		}
+		ext.Headers[i] = header
+	}
+	for i, code := range ext.Codes {
+		ext.Codes[i] = code
+	}
+	for i, node := range ext.State {
+		ext.State[i] = node
+	}
+	return w.fromExtWitness(ext)
 }
