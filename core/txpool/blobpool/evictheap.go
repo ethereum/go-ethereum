@@ -35,7 +35,7 @@ import (
 // The goal of the heap is to decide which account has the worst bottleneck to
 // evict transactions from.
 type evictHeap struct {
-	metas *map[common.Address][]*blobTxMeta // Pointer to the blob pool's index for price retrievals
+	metas map[common.Address][]*blobTxMeta // Pointer to the blob pool's index for price retrievals
 
 	basefeeJumps float64 // Pre-calculated absolute dynamic fee jumps for the base fee
 	blobfeeJumps float64 // Pre-calculated absolute dynamic fee jumps for the blob fee
@@ -46,7 +46,7 @@ type evictHeap struct {
 
 // newPriceHeap creates a new heap of cheapest accounts in the blob pool to evict
 // from in case of over saturation.
-func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index *map[common.Address][]*blobTxMeta) *evictHeap {
+func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index map[common.Address][]*blobTxMeta) *evictHeap {
 	heap := &evictHeap{
 		metas: index,
 		index: make(map[common.Address]int, len(*index)),
@@ -91,8 +91,8 @@ func (h *evictHeap) Len() int {
 // Less implements sort.Interface as part of heap.Interface, returning which of
 // the two requested accounts has a cheaper bottleneck.
 func (h *evictHeap) Less(i, j int) bool {
-	txsI := (*(h.metas))[h.addrs[i]]
-	txsJ := (*(h.metas))[h.addrs[j]]
+	txsI := h.metas[h.addrs[i]]
+	txsJ := h.metas[h.addrs[j]]
 
 	lastI := txsI[len(txsI)-1]
 	lastJ := txsJ[len(txsJ)-1]

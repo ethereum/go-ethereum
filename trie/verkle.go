@@ -369,3 +369,8 @@ func (t *VerkleTrie) ToDot() string {
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
 	return t.reader.node(path, common.Hash{})
 }
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *VerkleTrie) Witness() map[string]struct{} {
+	panic("not implemented")
+}

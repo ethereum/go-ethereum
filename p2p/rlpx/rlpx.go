@@ -604,6 +604,11 @@ func (h *handshakeState) readMsg(msg interface{}, prv *ecdsa.PrivateKey, r io.Re
 	}
 	size := binary.BigEndian.Uint16(prefix)
 
+	// baseProtocolMaxMsgSize = 2 * 1024
+	if size > 2048 {
+		return nil, errors.New("message too big")
+	}
+
 	// Read the handshake packet.
 	packet, err := h.rbuf.read(r, int(size))
 	if err != nil {
