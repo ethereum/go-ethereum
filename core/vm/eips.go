@@ -1052,7 +1052,7 @@ func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 		code  = scope.Contract.CodeAt(scope.CodeSection)
 		index = int(code[*pc+1]) + 1
 	)
-	scope.Stack.swap(index)
+	scope.Stack.swap(index + 1)
 	*pc += 1
 	return nil, nil
 }
