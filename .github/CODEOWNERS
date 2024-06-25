@@ -4,14 +4,18 @@
 accounts/usbwallet              @karalabe
 accounts/scwallet               @gballet
 accounts/abi                    @gballet @MariusVanDerWijden
+beacon/engine                   @lightclient
 cmd/clef                        @holiman
+cmd/evm                         @holiman @MariusVanDerWijden @lightclient
 consensus                       @karalabe
 core/                           @karalabe @holiman @rjl493456442
 eth/                            @karalabe @holiman @rjl493456442
-eth/catalyst/                   @gballet
+eth/catalyst/                   @gballet @lightclient
 eth/tracers/                    @s1na
 core/tracing/                   @s1na
 graphql/                        @s1na
+internal/ethapi                 @lightclient
+internal/era                    @lightclient
 les/                            @zsfelfoldi @rjl493456442
 light/                          @zsfelfoldi @rjl493456442
 node/                           @fjl
