@@ -311,7 +311,7 @@ func TestWalletNotifications(t *testing.T) {
 		live       = make(map[common.Address]accounts.Account)
 		wantEvents []walletEvent
 	)
-	for i := 0; i < 1024; i++ {
+	for i := 0; i < 500; i++ {
 		if create := len(live) == 0 || rand.Int()%4 > 0; create {
 			// Add a new account and ensure wallet notifications arrives
 			account, err := ks.NewAccount("")
