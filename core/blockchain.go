@@ -1617,7 +1617,8 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	}
 	defer bc.chainmu.Unlock()
 
-	return bc.insertChain(chain, true, nil) // No witness collection for mass inserts (would get super large)
+	_, n, err := bc.insertChain(chain, true, false) // No witness collection for mass inserts (would get super large)
+	return n, err
 }
 
 // insertChain is the internal implementation of InsertChain, which assumes that
@@ -1628,14 +1629,10 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // racey behaviour. If a sidechain import is in progress, and the historic state
 // is imported, but then new canon-head is added before the actual sidechain
 // completes, then the historic state could be pruned again
-//
-// Note, the witnesses parameter has that funky type because it's an optional
-// accumulator (hence the slice pointer) and it can also have nil elements for
-// already known blocks (hence the pointer element). Do not change it!
-func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[]*stateless.Witness) (int, error) {
+func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness bool) (*stateless.Witness, int, error) {
 	// If the chain is terminating, don't even bother starting up.
 	if bc.insertStopped() {
-		return 0, nil
+		return nil, 0, nil
 	}
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
 	SenderCacher.RecoverFromBlocks(types.MakeSigner(bc.chainConfig, chain[0].Number(), chain[0].Time()), chain)
@@ -1676,7 +1673,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 		for block != nil && bc.skipBlock(err, it) {
 			reorg, err = bc.forker.ReorgNeeded(current, block.Header())
 			if err != nil {
-				return it.index, err
+				return nil, it.index, err
 			}
 			if reorg {
 				// Switch to import mode if the forker says the reorg is necessary
@@ -1687,9 +1684,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 				if block.NumberU64() > current.Number.Uint64() || bc.GetCanonicalHash(block.NumberU64()) != block.Hash() {
 					break
 				}
-			}
-			if witnesses != nil {
-				*witnesses = append(*witnesses, nil)
 			}
 			log.Debug("Ignoring already known block", "number", block.Number(), "hash", block.Hash())
 			stats.ignored++
@@ -1707,10 +1701,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 		for block != nil && bc.skipBlock(err, it) {
 			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
-				return it.index, err
-			}
-			if witnesses != nil {
-				*witnesses = append(*witnesses, nil)
+				return nil, it.index, err
 			}
 			lastCanon = block
 
@@ -1724,12 +1715,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 		if setHead {
 			// First block is pruned, insert as sidechain and reorg only if TD grows enough
 			log.Debug("Pruned ancestor, inserting as sidechain", "number", block.Number(), "hash", block.Hash())
-			return bc.insertSideChain(block, it)
+			return bc.insertSideChain(block, it, makeWitness)
 		} else {
 			// We're post-merge and the parent is pruned, try to recover the parent state
 			log.Debug("Pruned ancestor", "number", block.Number(), "hash", block.Hash())
 			_, err := bc.recoverAncestors(block)
-			return it.index, err
+			return nil, it.index, err
 		}
 	// Some other error(except ErrKnownBlock) occurred, abort.
 	// ErrKnownBlock is allowed here since some known blocks
@@ -1737,7 +1728,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 	case err != nil && !errors.Is(err, ErrKnownBlock):
 		stats.ignored += len(it.chain)
 		bc.reportBlock(block, nil, err)
-		return it.index, err
+		return nil, it.index, err
 	}
 	// No validation errors for the first block (or chain prefix skipped)
 	var activeState *state.StateDB
@@ -1750,6 +1741,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 			activeState.StopPrefetcher()
 		}
 	}()
+
+	// Track the singleton witness from this chain insertion (if any)
+	var witness *stateless.Witness
 
 	for ; block != nil && err == nil || errors.Is(err, ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
@@ -1787,7 +1781,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 					"hash", block.Hash(), "number", block.NumberU64())
 			}
 			if err := bc.writeKnownBlock(block); err != nil {
-				return it.index, err
+				return nil, it.index, err
 			}
 			stats.processed++
 			if bc.logger != nil && bc.logger.OnSkippedBlock != nil {
@@ -1797,9 +1791,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 					Finalized: bc.CurrentFinalBlock(),
 					Safe:      bc.CurrentSafeBlock(),
 				})
-			}
-			if witnesses != nil {
-				*witnesses = append(*witnesses, nil)
 			}
 			// We can assume that logs are empty here, since the only way for consecutive
 			// Clique blocks to have the same state is if there are no transactions.
@@ -1814,19 +1805,21 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 		}
 		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
 		if err != nil {
-			return it.index, err
+			return nil, it.index, err
 		}
 		statedb.SetLogger(bc.logger)
 
 		// If we are past Byzantium, enable prefetching to pull in trie node paths
 		// while processing transactions. Before Byzantium the prefetcher is mostly
 		// useless due to the intermediate root hashing after each transaction.
-		var witness *stateless.Witness
 		if bc.chainConfig.IsByzantium(block.Number()) {
-			if witnesses != nil || bc.vmConfig.StatelessSelfValidation {
+			// Generate witnesses either if we're self-testing, or if it's the
+			// only block being inserted. A bit crude, but witnesses are huge,
+			// so we refuse to make an entire chain of them.
+			if bc.vmConfig.StatelessSelfValidation || (makeWitness && len(chain) == 1) {
 				witness, err = stateless.NewWitness(block.Header(), bc)
 				if err != nil {
-					return it.index, err
+					return nil, it.index, err
 				}
 			}
 			statedb.StartPrefetcher("chain", witness)
@@ -1858,10 +1851,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 		res, err := bc.processBlock(block, statedb, start, setHead)
 		followupInterrupt.Store(true)
 		if err != nil {
-			return it.index, err
-		}
-		if witnesses != nil {
-			*witnesses = append(*witnesses, witness)
+			return nil, it.index, err
 		}
 		// Report the import stats before returning the various results
 		stats.processed++
@@ -1878,7 +1868,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 			// After merge we expect few side chains. Simply count
 			// all blocks the CL gives us for GC processing time
 			bc.gcproc += res.procTime
-			return it.index, nil // Direct block insertion of a single block
+			return witness, it.index, nil // Direct block insertion of a single block
 		}
 		switch res.status {
 		case CanonStatTy:
@@ -1908,7 +1898,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, witnesses *[
 		}
 	}
 	stats.ignored += it.remaining()
-	return it.index, err
+	return witness, it.index, err
 }
 
 // blockProcessingResult is a summary of block processing
@@ -2033,7 +2023,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain if the TD exceeded the current chain.
 // insertSideChain is only used pre-merge.
-func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, error) {
+func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator, makeWitness bool) (*stateless.Witness, int, error) {
 	var (
 		externTd  *big.Int
 		lastBlock = block
@@ -2070,7 +2060,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 				// If someone legitimately side-mines blocks, they would still be imported as usual. However,
 				// we cannot risk writing unverified blocks to disk when they obviously target the pruning
 				// mechanism.
-				return it.index, errors.New("sidechain ghost-state attack")
+				return nil, it.index, errors.New("sidechain ghost-state attack")
 			}
 		}
 		if externTd == nil {
@@ -2081,7 +2071,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
 			start := time.Now()
 			if err := bc.writeBlockWithoutState(block, externTd); err != nil {
-				return it.index, err
+				return nil, it.index, err
 			}
 			log.Debug("Injected sidechain block", "number", block.Number(), "hash", block.Hash(),
 				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
@@ -2098,12 +2088,12 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	// blocks to regenerate the required state
 	reorg, err := bc.forker.ReorgNeeded(current, lastBlock.Header())
 	if err != nil {
-		return it.index, err
+		return nil, it.index, err
 	}
 	if !reorg {
 		localTd := bc.GetTd(current.Hash(), current.Number.Uint64())
 		log.Info("Sidechain written to disk", "start", it.first().NumberU64(), "end", it.previous().Number, "sidetd", externTd, "localtd", localTd)
-		return it.index, err
+		return nil, it.index, err
 	}
 	// Gather all the sidechain hashes (full blocks may be memory heavy)
 	var (
@@ -2114,7 +2104,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 	for parent != nil && !bc.HasState(parent.Root) {
 		if bc.stateRecoverable(parent.Root) {
 			if err := bc.triedb.Recover(parent.Root); err != nil {
-				return 0, err
+				return nil, 0, err
 			}
 			break
 		}
@@ -2124,7 +2114,7 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		parent = bc.GetHeader(parent.ParentHash, parent.Number.Uint64()-1)
 	}
 	if parent == nil {
-		return it.index, errors.New("missing parent")
+		return nil, it.index, errors.New("missing parent")
 	}
 	// Import all the pruned blocks to make the state available
 	var (
@@ -2143,23 +2133,23 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		// memory here.
 		if len(blocks) >= 2048 || memory > 64*1024*1024 {
 			log.Info("Importing heavy sidechain segment", "blocks", len(blocks), "start", blocks[0].NumberU64(), "end", block.NumberU64())
-			if _, err := bc.insertChain(blocks, true, nil); err != nil {
-				return 0, err
+			if _, _, err := bc.insertChain(blocks, true, false); err != nil {
+				return nil, 0, err
 			}
 			blocks, memory = blocks[:0], 0
 
 			// If the chain is terminating, stop processing blocks
 			if bc.insertStopped() {
 				log.Debug("Abort during blocks processing")
-				return 0, nil
+				return nil, 0, nil
 			}
 		}
 	}
 	if len(blocks) > 0 {
 		log.Info("Importing sidechain segment", "start", blocks[0].NumberU64(), "end", blocks[len(blocks)-1].NumberU64())
-		return bc.insertChain(blocks, true, nil)
+		return bc.insertChain(blocks, true, makeWitness)
 	}
-	return 0, nil
+	return nil, 0, nil
 }
 
 // recoverAncestors finds the closest ancestor with available state and re-execute
@@ -2206,7 +2196,7 @@ func (bc *BlockChain) recoverAncestors(block *types.Block) (common.Hash, error) 
 		} else {
 			b = bc.GetBlock(hashes[i], numbers[i])
 		}
-		if _, err := bc.insertChain(types.Blocks{b}, false, nil); err != nil {
+		if _, _, err := bc.insertChain(types.Blocks{b}, false, false); err != nil {
 			return b.ParentHash(), err
 		}
 	}
@@ -2422,24 +2412,14 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 // The key difference between the InsertChain is it won't do the canonical chain
 // updating. It relies on the additional SetCanonical call to finalize the entire
 // procedure.
-func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block, witness bool) (*stateless.Witness, error) {
+func (bc *BlockChain) InsertBlockWithoutSetHead(block *types.Block, makeWitness bool) (*stateless.Witness, error) {
 	if !bc.chainmu.TryLock() {
 		return nil, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
 
-	var witnesses *[]*stateless.Witness
-	if witness {
-		witnesses = new([]*stateless.Witness)
-	}
-	_, err := bc.insertChain(types.Blocks{block}, false, witnesses)
-	if !witness {
-		return nil, err
-	}
-	if len(*witnesses) > 0 {
-		return (*witnesses)[0], err
-	}
-	return nil, err
+	witness, _, err := bc.insertChain(types.Blocks{block}, false, makeWitness)
+	return witness, err
 }
 
 // SetCanonical rewinds the chain to set the new head block as the specified
