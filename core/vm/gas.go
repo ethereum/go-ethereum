@@ -22,8 +22,10 @@ import (
 
 // Gas costs
 const (
+	GasZeroStep    uint64 = 0
 	GasQuickStep   uint64 = 2
 	GasFastestStep uint64 = 3
+	GasFastishStep uint64 = 4
 	GasFastStep    uint64 = 5
 	GasMidStep     uint64 = 8
 	GasSlowStep    uint64 = 10

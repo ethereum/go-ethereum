@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -141,6 +142,7 @@ type Message struct {
 	AccessList    types.AccessList
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
+	InitCodes     [][]byte
 
 	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
@@ -163,6 +165,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		SkipAccountChecks: false,
 		BlobHashes:        tx.BlobHashes(),
 		BlobGasFeeCap:     tx.BlobGasFeeCap(),
+		InitCodes:         tx.InitCodes(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -393,8 +396,17 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		contractCreation = msg.To == nil
 	)
 
+	// Add the initcode data for calculation of the intrinsic gas
+	// TODO (MariusVanDerWijden): while this should work, it is very
+	// dirty, better to pass the initcodes directly to IntrinsicGas
+	// and duplicate the cost accounting logic there.
+	data := msg.Data
+	for _, initcode := range msg.InitCodes {
+		data = append(data, initcode...)
+	}
+
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(msg.Data, msg.AccessList, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+	gas, err := IntrinsicGas(data, msg.AccessList, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
 	if err != nil {
 		return nil, err
 	}
@@ -439,6 +451,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	)
 	if contractCreation {
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
+		// Special case for EOF, if the initcode or deployed code is
+		// invalid, the tx is considered valid (so update nonce), but
+		// is to be treated as an exceptional abort (so burn all gas).
+		if errors.Is(vmerr, vm.ErrInvalidEOFInitcode) {
+			st.gasRemaining = 0
+			st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
+		}
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)

@@ -1614,6 +1614,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
+
 	return bc.insertChain(chain, true)
 }
 
@@ -1916,16 +1917,16 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+	res, err := bc.processor.Process(block, statedb, bc.vmConfig)
 	if err != nil {
-		bc.reportBlock(block, receipts, err)
+		bc.reportBlock(block, res, err)
 		return nil, err
 	}
 	ptime := time.Since(pstart)
 
 	vstart := time.Now()
-	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-		bc.reportBlock(block, receipts, err)
+	if err := bc.validator.ValidateState(block, statedb, res); err != nil {
+		bc.reportBlock(block, res, err)
 		return nil, err
 	}
 	vtime := time.Since(vstart)
@@ -1953,9 +1954,9 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	)
 	if !setHead {
 		// Don't set the head, only insert the block
-		err = bc.writeBlockWithState(block, receipts, statedb)
+		err = bc.writeBlockWithState(block, res.Receipts, statedb)
 	} else {
-		status, err = bc.writeBlockAndSetHead(block, receipts, logs, statedb, false)
+		status, err = bc.writeBlockAndSetHead(block, res.Receipts, res.Logs, statedb, false)
 	}
 	if err != nil {
 		return nil, err
@@ -1969,7 +1970,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	blockWriteTimer.Update(time.Since(wstart) - max(statedb.AccountCommits, statedb.StorageCommits) /* concurrent */ - statedb.SnapshotCommits - statedb.TrieDBCommits)
 	blockInsertTimer.UpdateSince(start)
 
-	return &blockProcessingResult{usedGas: usedGas, procTime: proctime, status: status}, nil
+	return &blockProcessingResult{usedGas: res.GasUsed, procTime: proctime, status: status}, nil
 }
 
 // insertSideChain is called when an import batch hits upon a pruned ancestor
@@ -2466,7 +2467,11 @@ func (bc *BlockChain) skipBlock(err error, it *insertIterator) bool {
 }
 
 // reportBlock logs a bad block error.
-func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
+func (bc *BlockChain) reportBlock(block *types.Block, res *ProcessResult, err error) {
+	var receipts types.Receipts
+	if res != nil {
+		receipts = res.Receipts
+	}
 	rawdb.WriteBadBlock(bc.db, block)
 	log.Error(summarizeBadBlock(block, receipts, bc.Config(), err))
 }

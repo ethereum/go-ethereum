@@ -236,7 +236,10 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	vmconfig.ExtraEips = eips
 
 	block := t.genesis(config).ToBlock()
-	st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
+	genesisAlloc := t.json.Pre
+	genesisAlloc[params.BeaconRootsAddress] = types.Account{Nonce: 1, Code: params.BeaconRootsCode}
+	//genesisAlloc[params.HistoryStorageAddress] = types.Account{Nonce: 1, Code: params.HistoryStorageCode}
+	st = MakePreState(rawdb.NewMemoryDatabase(), genesisAlloc, snapshotter, scheme)
 
 	var baseFee *big.Int
 	if config.IsLondon(new(big.Int)) {
@@ -293,6 +296,11 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	if config.IsCancun(new(big.Int), block.Time()) && t.json.Env.ExcessBlobGas != nil {
 		context.BlobBaseFee = eip4844.CalcBlobFee(*t.json.Env.ExcessBlobGas)
 	}
+	{
+		evm := vm.NewEVM(context, vm.TxContext{}, st.StateDB, config, vmconfig)
+		core.ProcessBeaconBlockRoot(common.HexToHash("0x00"), evm, st.StateDB)
+	}
+
 	evm := vm.NewEVM(context, txContext, st.StateDB, config, vmconfig)
 
 	if tracer := vmconfig.Tracer; tracer != nil && tracer.OnTxStart != nil {
@@ -307,6 +315,10 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	snapshot := st.StateDB.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
+
+	for i := int(block.Number().Uint64() - 1); i >= 0; i-- {
+		core.ProcessParentBlockHash(st.StateDB, vmTestBlockHash(uint64(i)), uint64(i))
+	}
 	_, err = core.ApplyMessage(evm, msg, gaspool)
 	if err != nil {
 		st.StateDB.RevertToSnapshot(snapshot)
@@ -317,6 +329,12 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// - there are only 'bad' transactions, which aren't executed. In those cases,
 	//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
 	st.StateDB.AddBalance(block.Coinbase(), new(uint256.Int), tracing.BalanceChangeUnspecified)
+
+	if config.IsPrague(new(big.Int), block.Time()) {
+		// Process the withdrawal requests contract execution
+		vmenv := vm.NewEVM(context, vm.TxContext{}, st.StateDB, config, evm.Config)
+		core.ProcessDequeueWithdrawalRequests(vmenv, st.StateDB)
+	}
 
 	// Commit state mutations into database.
 	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()))

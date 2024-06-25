@@ -35,6 +35,7 @@ var (
 	PayloadV1 PayloadVersion = 0x1
 	PayloadV2 PayloadVersion = 0x2
 	PayloadV3 PayloadVersion = 0x3
+	PayloadV4 PayloadVersion = 0x4
 )
 
 //go:generate go run github.com/fjl/gencodec -type PayloadAttributes -field-override payloadAttributesMarshaling -out gen_blockparams.go
@@ -58,23 +59,25 @@ type payloadAttributesMarshaling struct {
 
 // ExecutableData is the data necessary to execute an EL payload.
 type ExecutableData struct {
-	ParentHash    common.Hash         `json:"parentHash"    gencodec:"required"`
-	FeeRecipient  common.Address      `json:"feeRecipient"  gencodec:"required"`
-	StateRoot     common.Hash         `json:"stateRoot"     gencodec:"required"`
-	ReceiptsRoot  common.Hash         `json:"receiptsRoot"  gencodec:"required"`
-	LogsBloom     []byte              `json:"logsBloom"     gencodec:"required"`
-	Random        common.Hash         `json:"prevRandao"    gencodec:"required"`
-	Number        uint64              `json:"blockNumber"   gencodec:"required"`
-	GasLimit      uint64              `json:"gasLimit"      gencodec:"required"`
-	GasUsed       uint64              `json:"gasUsed"       gencodec:"required"`
-	Timestamp     uint64              `json:"timestamp"     gencodec:"required"`
-	ExtraData     []byte              `json:"extraData"     gencodec:"required"`
-	BaseFeePerGas *big.Int            `json:"baseFeePerGas" gencodec:"required"`
-	BlockHash     common.Hash         `json:"blockHash"     gencodec:"required"`
-	Transactions  [][]byte            `json:"transactions"  gencodec:"required"`
-	Withdrawals   []*types.Withdrawal `json:"withdrawals"`
-	BlobGasUsed   *uint64             `json:"blobGasUsed"`
-	ExcessBlobGas *uint64             `json:"excessBlobGas"`
+	ParentHash         common.Hash              `json:"parentHash"    gencodec:"required"`
+	FeeRecipient       common.Address           `json:"feeRecipient"  gencodec:"required"`
+	StateRoot          common.Hash              `json:"stateRoot"     gencodec:"required"`
+	ReceiptsRoot       common.Hash              `json:"receiptsRoot"  gencodec:"required"`
+	LogsBloom          []byte                   `json:"logsBloom"     gencodec:"required"`
+	Random             common.Hash              `json:"prevRandao"    gencodec:"required"`
+	Number             uint64                   `json:"blockNumber"   gencodec:"required"`
+	GasLimit           uint64                   `json:"gasLimit"      gencodec:"required"`
+	GasUsed            uint64                   `json:"gasUsed"       gencodec:"required"`
+	Timestamp          uint64                   `json:"timestamp"     gencodec:"required"`
+	ExtraData          []byte                   `json:"extraData"     gencodec:"required"`
+	BaseFeePerGas      *big.Int                 `json:"baseFeePerGas" gencodec:"required"`
+	BlockHash          common.Hash              `json:"blockHash"     gencodec:"required"`
+	Transactions       [][]byte                 `json:"transactions"  gencodec:"required"`
+	Withdrawals        []*types.Withdrawal      `json:"withdrawals"`
+	BlobGasUsed        *uint64                  `json:"blobGasUsed"`
+	ExcessBlobGas      *uint64                  `json:"excessBlobGas"`
+	Deposits           types.Deposits           `json:"depositRequests"`
+	WithdrawalRequests types.WithdrawalRequests `json:"withdrawalRequests"`
 }
 
 // JSON type overrides for executableData.
@@ -229,6 +232,26 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		h := types.DeriveSha(types.Withdrawals(params.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
+
+	// Only set requestsHash if there exists requests in the ExecutableData. This
+	// allows CLs to continue using the data structure before requests are
+	// enabled.
+	var (
+		requestsHash *common.Hash
+		requests     types.Requests
+	)
+	if params.Deposits != nil {
+		requests = make(types.Requests, 0, len(params.Deposits.Requests()))
+		requests = append(requests, params.Deposits.Requests()...)
+	}
+	if params.WithdrawalRequests != nil {
+		requests = append(requests, params.WithdrawalRequests.Requests()...)
+	}
+	if requests != nil {
+		h := types.DeriveSha(requests, trie.NewStackTrie(nil))
+		requestsHash = &h
+	}
+
 	header := &types.Header{
 		ParentHash:       params.ParentHash,
 		UncleHash:        types.EmptyUncleHash,
@@ -249,8 +272,17 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		ExcessBlobGas:    params.ExcessBlobGas,
 		BlobGasUsed:      params.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
+		RequestsHash:     requestsHash,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: params.Withdrawals})
+	var (
+		body = types.Body{
+			Transactions: txs,
+			Uncles:       nil,
+			Withdrawals:  params.Withdrawals,
+			Requests:     requests,
+		}
+		block = types.NewBlockWithHeader(header).WithBody(body)
+	)
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
@@ -261,23 +293,25 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 // fields from the given block. It assumes the given block is post-merge block.
 func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar) *ExecutionPayloadEnvelope {
 	data := &ExecutableData{
-		BlockHash:     block.Hash(),
-		ParentHash:    block.ParentHash(),
-		FeeRecipient:  block.Coinbase(),
-		StateRoot:     block.Root(),
-		Number:        block.NumberU64(),
-		GasLimit:      block.GasLimit(),
-		GasUsed:       block.GasUsed(),
-		BaseFeePerGas: block.BaseFee(),
-		Timestamp:     block.Time(),
-		ReceiptsRoot:  block.ReceiptHash(),
-		LogsBloom:     block.Bloom().Bytes(),
-		Transactions:  encodeTransactions(block.Transactions()),
-		Random:        block.MixDigest(),
-		ExtraData:     block.Extra(),
-		Withdrawals:   block.Withdrawals(),
-		BlobGasUsed:   block.BlobGasUsed(),
-		ExcessBlobGas: block.ExcessBlobGas(),
+		BlockHash:          block.Hash(),
+		ParentHash:         block.ParentHash(),
+		FeeRecipient:       block.Coinbase(),
+		StateRoot:          block.Root(),
+		Number:             block.NumberU64(),
+		GasLimit:           block.GasLimit(),
+		GasUsed:            block.GasUsed(),
+		BaseFeePerGas:      block.BaseFee(),
+		Timestamp:          block.Time(),
+		ReceiptsRoot:       block.ReceiptHash(),
+		LogsBloom:          block.Bloom().Bytes(),
+		Transactions:       encodeTransactions(block.Transactions()),
+		Random:             block.MixDigest(),
+		ExtraData:          block.Extra(),
+		Withdrawals:        block.Withdrawals(),
+		BlobGasUsed:        block.BlobGasUsed(),
+		ExcessBlobGas:      block.ExcessBlobGas(),
+		Deposits:           block.Deposits(),
+		WithdrawalRequests: block.WithdrawalRequests(),
 	}
 	bundle := BlobsBundleV1{
 		Commitments: make([]hexutil.Bytes, 0),

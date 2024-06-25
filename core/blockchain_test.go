@@ -17,6 +17,8 @@
 package core
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -163,14 +165,14 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		if err != nil {
 			return err
 		}
-		receipts, _, usedGas, err := blockchain.processor.Process(block, statedb, vm.Config{})
+		res, err := blockchain.processor.Process(block, statedb, vm.Config{})
 		if err != nil {
-			blockchain.reportBlock(block, receipts, err)
+			blockchain.reportBlock(block, res, err)
 			return err
 		}
-		err = blockchain.validator.ValidateState(block, statedb, receipts, usedGas)
+		err = blockchain.validator.ValidateState(block, statedb, res)
 		if err != nil {
-			blockchain.reportBlock(block, receipts, err)
+			blockchain.reportBlock(block, res, err)
 			return err
 		}
 
@@ -4219,5 +4221,480 @@ func TestEIP3651(t *testing.T) {
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
+	}
+}
+
+func TestEIP6110(t *testing.T) {
+	var (
+		engine = beacon.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		funds  = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		config = *params.AllEthashProtocolChanges
+		gspec  = &Genesis{
+			Config: &config,
+			Alloc: types.GenesisAlloc{
+				addr: {Balance: funds},
+				config.DepositContractAddress: {
+					// Simple deposit generator, source: https://gist.github.com/lightclient/54abb2af2465d6969fa6d1920b9ad9d7
+					Code:    common.Hex2Bytes("6080604052366103aa575f603067ffffffffffffffff811115610025576100246103ae565b5b6040519080825280601f01601f1916602001820160405280156100575781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f8151811061007d5761007c6103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f602067ffffffffffffffff8111156100c7576100c66103ae565b5b6040519080825280601f01601f1916602001820160405280156100f95781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f8151811061011f5761011e6103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f600867ffffffffffffffff811115610169576101686103ae565b5b6040519080825280601f01601f19166020018201604052801561019b5781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f815181106101c1576101c06103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f606067ffffffffffffffff81111561020b5761020a6103ae565b5b6040519080825280601f01601f19166020018201604052801561023d5781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f81518110610263576102626103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f600867ffffffffffffffff8111156102ad576102ac6103ae565b5b6040519080825280601f01601f1916602001820160405280156102df5781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f81518110610305576103046103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f8081819054906101000a900460ff168092919061035090610441565b91906101000a81548160ff021916908360ff160217905550507f649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c585858585856040516103a09594939291906104d9565b60405180910390a1005b5f80fd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f60ff82169050919050565b5f61044b82610435565b915060ff820361045e5761045d610408565b5b600182019050919050565b5f81519050919050565b5f82825260208201905092915050565b8281835e5f83830152505050565b5f601f19601f8301169050919050565b5f6104ab82610469565b6104b58185610473565b93506104c5818560208601610483565b6104ce81610491565b840191505092915050565b5f60a0820190508181035f8301526104f181886104a1565b9050818103602083015261050581876104a1565b9050818103604083015261051981866104a1565b9050818103606083015261052d81856104a1565b9050818103608083015261054181846104a1565b9050969550505050505056fea26469706673582212208569967e58690162d7d6fe3513d07b393b4c15e70f41505cbbfd08f53eba739364736f6c63430008190033"),
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.TerminalTotalDifficulty = common.Big0
+	gspec.Config.TerminalTotalDifficultyPassed = true
+	gspec.Config.ShanghaiTime = u64(0)
+	gspec.Config.CancunTime = u64(0)
+	gspec.Config.PragueTime = u64(0)
+	signer := types.LatestSigner(gspec.Config)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		for i := 0; i < 5; i++ {
+			txdata := &types.DynamicFeeTx{
+				ChainID:    gspec.Config.ChainID,
+				Nonce:      uint64(i),
+				To:         &config.DepositContractAddress,
+				Gas:        500000,
+				GasFeeCap:  newGwei(5),
+				GasTipCap:  big.NewInt(2),
+				AccessList: nil,
+				Data:       []byte{},
+			}
+			tx := types.NewTx(txdata)
+			tx, _ = types.SignTx(tx, signer, key)
+			b.AddTx(tx)
+		}
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{DisableStack: true}, os.Stderr).Hooks()}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	block := chain.GetBlockByNumber(1)
+	if len(block.Deposits()) != 5 {
+		t.Fatalf("failed to retreive deposits: have %d, want %d", len(block.Deposits()), 5)
+	}
+
+	// Verify each index is correct.
+	for want, d := range block.Deposits() {
+		if got := int(d.PublicKey[0]); got != want {
+			t.Fatalf("invalid pubkey: have %d, want %d", got, want)
+		}
+		if got := int(d.WithdrawalCredentials[0]); got != want {
+			t.Fatalf("invalid withdrawal credentials: have %d, want %d", got, want)
+		}
+		if d.Amount != uint64(want) {
+			t.Fatalf("invalid amounbt: have %d, want %d", d.Amount, want)
+		}
+		if got := int(d.Signature[0]); got != want {
+			t.Fatalf("invalid signature: have %d, want %d", got, want)
+		}
+		if d.Index != uint64(want) {
+			t.Fatalf("invalid index: have %d, want %d", d.Index, want)
+		}
+	}
+}
+
+// TestEIP7002 verifies that withdrawal requests are processed correctly in the
+// pre-deploy and parsed out correctly via the system call.
+func TestEIP7002(t *testing.T) {
+	var (
+		engine = beacon.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		funds  = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		config = *params.AllEthashProtocolChanges
+		gspec  = &Genesis{
+			Config: &config,
+			Alloc: types.GenesisAlloc{
+				addr:                             {Balance: funds},
+				params.WithdrawalRequestsAddress: {Code: common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe146090573615156028575f545f5260205ff35b366038141561012e5760115f54600182026001905f5b5f82111560595781019083028483029004916001019190603e565b90939004341061012e57600154600101600155600354806003026004013381556001015f3581556001016020359055600101600355005b6003546002548082038060101160a4575060105b5f5b81811460dd5780604c02838201600302600401805490600101805490600101549160601b83528260140152906034015260010160a6565b910180921460ed579060025560f8565b90505f6002555f6003555b5f548061049d141561010757505f5b60015460028282011161011c5750505f610122565b01600290035b5f555f600155604c025ff35b5f5ffd")},
+			},
+		}
+	)
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.TerminalTotalDifficulty = common.Big0
+	gspec.Config.TerminalTotalDifficultyPassed = true
+	gspec.Config.ShanghaiTime = u64(0)
+	gspec.Config.CancunTime = u64(0)
+	gspec.Config.PragueTime = u64(0)
+	signer := types.LatestSigner(gspec.Config)
+
+	// Withdrawal requests to send.
+	wxs := types.WithdrawalRequests{
+		{
+			Source:    addr,
+			PublicKey: [48]byte{42},
+			Amount:    42,
+		},
+		{
+			Source:    addr,
+			PublicKey: [48]byte{13, 37},
+			Amount:    1337,
+		},
+	}
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		for i, wx := range wxs {
+			data := make([]byte, 56)
+			copy(data, wx.PublicKey[:])
+			binary.BigEndian.PutUint64(data[48:], wx.Amount)
+			txdata := &types.DynamicFeeTx{
+				ChainID:    gspec.Config.ChainID,
+				Nonce:      uint64(i),
+				To:         &params.WithdrawalRequestsAddress,
+				Value:      big.NewInt(1),
+				Gas:        500000,
+				GasFeeCap:  newGwei(5),
+				GasTipCap:  big.NewInt(2),
+				AccessList: nil,
+				Data:       data,
+			}
+			tx := types.NewTx(txdata)
+			tx, _ = types.SignTx(tx, signer, key)
+			b.AddTx(tx)
+		}
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr).Hooks()}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	block := chain.GetBlockByNumber(1)
+	if block == nil {
+		t.Fatalf("failed to retrieve block 1")
+	}
+
+	// Verify the withdrawal requests match.
+	got := block.WithdrawalRequests()
+	if len(got) != 2 {
+		t.Fatalf("wrong number of withdrawal requests: wanted 2, got %d", len(wxs))
+	}
+	for i, want := range wxs {
+		if want.Source != got[i].Source {
+			t.Fatalf("wrong source address: want %s, got %s", want.Source, got[i].Source)
+		}
+		if want.PublicKey != got[i].PublicKey {
+			t.Fatalf("wrong public key: want %s, got %s", common.Bytes2Hex(want.PublicKey[:]), common.Bytes2Hex(got[i].PublicKey[:]))
+		}
+		if want.Amount != got[i].Amount {
+			t.Fatalf("wrong amount: want %d, got %d", want.Amount, got[i].Amount)
+		}
+	}
+
+}
+
+func int8ToByte(n int8) uint8 {
+	return uint8(n)
+}
+
+func TestEOF(t *testing.T) {
+	var (
+		createDeployer = []byte{
+			byte(vm.CALLDATASIZE), // size
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // dst
+			byte(vm.CALLDATACOPY),
+			byte(vm.CALLDATASIZE), // len
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // value
+			byte(vm.CREATE),
+		}
+		create2Deployer = []byte{
+			byte(vm.CALLDATASIZE), // len
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // dst
+			byte(vm.CALLDATACOPY),
+			byte(vm.PUSH1), 0x00, // salt
+			byte(vm.CALLDATASIZE), // len
+			byte(vm.PUSH1), 0x00,  // offset
+			byte(vm.PUSH1), 0x00, // value
+			byte(vm.CREATE2),
+		}
+
+		aa     = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
+		bb     = common.HexToAddress("0x000000000000000000000000000000000000bbbb")
+		cc     = common.HexToAddress("0x000000000000000000000000000000000000cccc")
+		engine = beacon.NewFaker()
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		funds  = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		gspec  = &Genesis{
+			Config: params.AllDevChainProtocolChanges,
+			Alloc: GenesisAlloc{
+				addr: {Balance: funds},
+				bb:   {Code: createDeployer, Balance: big.NewInt(0)},
+				cc:   {Code: create2Deployer, Balance: big.NewInt(0)},
+				aa: {
+					Code: (&vm.Container{
+						Types: []*vm.FunctionMetadata{
+							{Input: 0, Output: 0x80, MaxStackHeight: 0},
+							{Input: 0, Output: 0, MaxStackHeight: 2},
+							{Input: 0, Output: 0, MaxStackHeight: 0},
+							{Input: 0, Output: 0, MaxStackHeight: 2},
+						},
+						Code: [][]byte{
+							{
+								byte(vm.CALLF),
+								byte(0),
+								byte(1),
+								byte(vm.CALLF),
+								byte(0),
+								byte(2),
+								byte(vm.STOP),
+							},
+							{
+								byte(vm.PUSH1),
+								byte(2),
+								byte(vm.RJUMP), // skip first flag
+								byte(0),
+								byte(5),
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(0),
+								byte(vm.SSTORE), // set first flag
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.SWAP1),
+								byte(vm.SUB),
+								byte(vm.DUP1),
+								byte(vm.RJUMPI), // jump to first flag, then don't branch
+								byte(0xff),
+								int8ToByte(-13),
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.SSTORE), // set second flag
+								byte(vm.RETF),
+							},
+							{
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(2),
+								byte(vm.SSTORE), // set third flag
+
+								byte(vm.CALLF),
+								byte(0),
+								byte(3),
+								byte(vm.RETF),
+							},
+							{
+								byte(vm.PUSH1),
+								byte(0),
+								byte(vm.RJUMPV), // jump over invalid op
+								byte(1),
+								byte(0),
+								byte(1),
+
+								byte(vm.INVALID),
+
+								byte(vm.PUSH1),
+								byte(1),
+								byte(vm.PUSH1),
+								byte(3),
+								byte(vm.SSTORE), // set forth flag
+								byte(vm.RETF),
+							},
+						},
+						Data: []byte{},
+					}).MarshalBinary(),
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.ShanghaiTime = u64(0)
+	signer := types.LatestSigner(gspec.Config)
+
+	container := vm.Container{
+		Types: []*vm.FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 0}},
+		Code:  [][]byte{{byte(vm.STOP)}},
+		Data:  nil,
+	}
+	deployed := container.MarshalBinary()
+	makeDeployCode := func(b []byte) []byte {
+		out := []byte{
+			byte(vm.PUSH1), byte(len(b)), // len
+			byte(vm.PUSH1), 0x0c, // offset
+			byte(vm.PUSH1), 0x00, // dst offset
+			byte(vm.CODECOPY),
+
+			// code in memory
+			byte(vm.PUSH1), byte(len(b)), // size
+			byte(vm.PUSH1), 0x00, // offset
+			byte(vm.RETURN),
+		}
+		return append(out, b...)
+	}
+	initCode := makeDeployCode(deployed)
+	initHash := crypto.Keccak256Hash(initCode)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		b.SetCoinbase(aa)
+
+		// 0: execute flag contract
+		txdata := &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      0,
+			To:         &aa,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       []byte{},
+		}
+		tx := types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 1: deploy eof contract from eoa
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      1,
+			To:         nil,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       initCode,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 2: invalid initcode in create tx, should be valid and use all gas
+		invalid := (&vm.Container{
+			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 1}},
+			Code:  [][]byte{common.Hex2Bytes("604200")},
+			Data:  []byte{0x01, 0x02, 0x03},
+		}).MarshalBinary()
+		invalid[2] = 0x02 // make version invalid
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      2,
+			To:         nil,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       invalid,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 3: invalid deployed eof in create tx, should be valid and use all gas
+		inner := (&vm.Container{
+			Types: []*vm.FunctionMetadata{{Input: 0, Output: 0x80, MaxStackHeight: 0}},
+			Code:  [][]byte{common.Hex2Bytes("0000")},
+		}).MarshalBinary()
+		invalid = makeDeployCode(inner)
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      3,
+			To:         nil,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       invalid,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 4: deploy eof contract from create contract
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      4,
+			To:         &bb,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       initCode,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+
+		// 5: deploy eof contract from create2 contract
+		txdata = &types.DynamicFeeTx{
+			ChainID:    gspec.Config.ChainID,
+			Nonce:      5,
+			To:         &cc,
+			Gas:        500000,
+			GasFeeCap:  newGwei(5),
+			GasTipCap:  big.NewInt(2),
+			AccessList: nil,
+			Data:       initCode,
+		}
+		tx = types.NewTx(txdata)
+		tx, _ = types.SignTx(tx, signer, key)
+		b.AddTx(tx)
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	// Check flags.
+	state, _ := chain.State()
+	for i := 0; i < 4; i++ {
+		if state.GetState(aa, common.BigToHash(big.NewInt(int64(i)))).Big().Uint64() != 1 {
+			t.Fatalf("flag %d not set", i)
+		}
+	}
+
+	r := chain.GetReceiptsByHash(blocks[0].Hash())[2]
+	if got, want := r.GasUsed, blocks[0].Transactions()[2].Gas(); r.Status == types.ReceiptStatusFailed && got != want {
+		t.Fatalf("gas accounting invalid for create tx with invalid initcode: gasUsed %d, gasLimit %d", got, want)
+	}
+	r = chain.GetReceiptsByHash(blocks[0].Hash())[3]
+	if got, want := r.GasUsed, blocks[0].Transactions()[3].Gas(); r.Status == types.ReceiptStatusFailed && got != want {
+		t.Fatalf("gas accounting invalid for create tx with invalid deployed code: gasUsed %d, gasLimit %d", got, want)
+	}
+
+	// Check various deployment mechanisms.
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress(addr, 1)), deployed) {
+		t.Fatalf("failed to deploy EOF with EOA")
+	}
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress(bb, 0)), deployed) {
+		t.Fatalf("failed to deploy EOF with CREATE")
+	}
+	if !bytes.Equal(state.GetCode(crypto.CreateAddress2(cc, [32]byte{}, initHash.Bytes())), deployed) {
+		t.Fatalf("failed to deploy EOF with CREATE2")
 	}
 }

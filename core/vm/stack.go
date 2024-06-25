@@ -65,7 +65,11 @@ func (st *Stack) len() int {
 }
 
 func (st *Stack) swap(n int) {
-	st.data[st.len()-n], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-n]
+	st.swapN(n, 1)
+}
+
+func (st *Stack) swapN(n, m int) {
+	st.data[st.len()-n], st.data[st.len()-m] = st.data[st.len()-m], st.data[st.len()-n]
 }
 
 func (st *Stack) dup(n int) {

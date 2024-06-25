@@ -568,8 +568,12 @@ func (s *stateObject) CodeSize() int {
 	if len(s.code) != 0 {
 		return len(s.code)
 	}
-	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
+	codeHash := s.CodeHash()
+	if bytes.Equal(codeHash, types.EmptyCodeHash.Bytes()) {
 		return 0
+	}
+	if bytes.Equal(codeHash, types.EmptyEOFCodeHash.Bytes()) {
+		return 2
 	}
 	size, err := s.db.db.ContractCodeSize(s.address, common.BytesToHash(s.CodeHash()))
 	if err != nil {

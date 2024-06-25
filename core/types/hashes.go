@@ -32,6 +32,9 @@ var (
 	// EmptyCodeHash is the known hash of the empty EVM bytecode.
 	EmptyCodeHash = crypto.Keccak256Hash(nil) // c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 
+	// EmptyEOFCodeHash is the known hash of the an empty EOF bytecode.
+	EmptyEOFCodeHash = crypto.Keccak256Hash([]byte{0xFE, 00}) // 9dbf3648db8210552e9c4f75c6a1c3057c0ca432043bd648be15fe7be05646f5
+
 	// EmptyTxsHash is the known hash of the empty transaction set.
 	EmptyTxsHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
@@ -40,6 +43,9 @@ var (
 
 	// EmptyWithdrawalsHash is the known hash of the empty withdrawal set.
 	EmptyWithdrawalsHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+
+	// EmptyRequestsHash is the known hash of the empty requests set.
+	EmptyRequestsHash = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
 	// EmptyVerkleHash is the known hash of an empty verkle trie.
 	EmptyVerkleHash = common.Hash{}

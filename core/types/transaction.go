@@ -49,6 +49,7 @@ const (
 	AccessListTxType = 0x01
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
+	InitCodeTxType   = 0x04
 )
 
 // Transaction is an Ethereum transaction.
@@ -206,6 +207,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		inner = new(DynamicFeeTx)
 	case BlobTxType:
 		inner = new(BlobTx)
+	case InitCodeTxType:
+		inner = new(InitCodeTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -464,6 +467,14 @@ func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
 		cpy.from.Store(f)
 	}
 	return cpy
+}
+
+// Initcodes returns the initcodes if an initcode transaction, nil otherwise.
+func (tx *Transaction) InitCodes() [][]byte {
+	if initcodeTx, ok := tx.inner.(*InitCodeTx); ok {
+		return initcodeTx.initcodes()
+	}
+	return nil
 }
 
 // SetTime sets the decoding time of a transaction. This is used by tests to set

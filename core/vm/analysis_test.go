@@ -20,6 +20,7 @@ import (
 	"math/bits"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -53,6 +54,28 @@ func TestJumpDestAnalysis(t *testing.T) {
 	}
 	for i, test := range tests {
 		ret := codeBitmap(test.code)
+		if ret[test.which] != test.exp {
+			t.Fatalf("test %d: expected %x, got %02x", i, test.exp, ret[test.which])
+		}
+		ret = eofCodeBitmap(test.code)
+		if ret[test.which] != test.exp {
+			t.Fatalf("eof test %d: expected %x, got %02x", i, test.exp, ret[test.which])
+		}
+	}
+}
+
+func TestEOFAnalysis(t *testing.T) {
+	tests := []struct {
+		code  []byte
+		exp   byte
+		which int
+	}{
+		{[]byte{byte(RJUMP), 0x01, 0x01, 0x01}, 0b0000_0110, 0},
+		{[]byte{byte(RJUMPI), byte(RJUMP), byte(RJUMP), byte(RJUMPI)}, 0b0011_0110, 0},
+		{[]byte{byte(RJUMPV), 0x02, byte(RJUMP), 0x00, byte(RJUMPI), 0x00}, 0b0011_1110, 0},
+	}
+	for i, test := range tests {
+		ret := eofCodeBitmap(test.code)
 		if ret[test.which] != test.exp {
 			t.Fatalf("test %d: expected %x, got %02x", i, test.exp, ret[test.which])
 		}
@@ -104,4 +127,21 @@ func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
 	bench.Run(op.String(), bencher)
 	op = STOP
 	bench.Run(op.String(), bencher)
+}
+
+func TestCodeAnalysis(t *testing.T) {
+	for _, tc := range []string{
+		"5e30303030",
+	} {
+		eofCodeBitmap(common.FromHex(tc))
+		codeBitmap(common.FromHex(tc))
+	}
+}
+
+func FuzzCodeAnalysis(f *testing.F) {
+	f.Add(common.FromHex("5e30303030"))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		eofCodeBitmap(data)
+		codeBitmap(data)
+	})
 }
