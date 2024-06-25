@@ -229,6 +229,7 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 		state:    state,
 		coinbase: coinbase,
 		header:   header,
+		witness:  state.Witness(),
 	}, nil
 }
 

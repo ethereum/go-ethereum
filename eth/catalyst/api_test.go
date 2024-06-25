@@ -1658,6 +1658,108 @@ func TestParentBeaconBlockRoot(t *testing.T) {
 	}
 }
 
+func TestWitnessCreationAndConsumption(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), log.LevelTrace, true)))
+
+	genesis, blocks := generateMergeChain(10, true)
+
+	// Set cancun time to semi-last block + 5 seconds
+	timestamp := blocks[len(blocks)-2].Time() + 5
+	genesis.Config.ShanghaiTime = &timestamp
+	genesis.Config.CancunTime = &timestamp
+
+	n, ethservice := startEthService(t, genesis, blocks[:9])
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+
+	// Put the 10th block's tx in the pool and produce a new block
+	txs := blocks[9].Transactions()
+
+	ethservice.TxPool().Add(txs, true, true)
+	blockParams := engine.PayloadAttributes{
+		Timestamp:   blocks[8].Time() + 5,
+		Withdrawals: make([]*types.Withdrawal, 0),
+		BeaconRoot:  &common.Hash{42},
+	}
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash:      blocks[8].Hash(),
+		SafeBlockHash:      common.Hash{},
+		FinalizedBlockHash: common.Hash{},
+	}
+	_, err := api.ForkchoiceUpdatedWithWitnessV3(fcState, &blockParams)
+	if err != nil {
+		t.Fatalf("error preparing payload, err=%v", err)
+	}
+	// Give the payload some time to be built
+	time.Sleep(100 * time.Millisecond)
+
+	payloadID := (&miner.BuildPayloadArgs{
+		Parent:       fcState.HeadBlockHash,
+		Timestamp:    blockParams.Timestamp,
+		FeeRecipient: blockParams.SuggestedFeeRecipient,
+		Random:       blockParams.Random,
+		Withdrawals:  blockParams.Withdrawals,
+		BeaconRoot:   blockParams.BeaconRoot,
+		Version:      engine.PayloadV3,
+	}).Id()
+	envelope, err := api.GetPayloadV3(payloadID)
+	if err != nil {
+		t.Fatalf("error getting payload, err=%v", err)
+	}
+	if len(envelope.ExecutionPayload.Transactions) != blocks[9].Transactions().Len() {
+		t.Fatalf("invalid number of transactions %d != %d", len(envelope.ExecutionPayload.Transactions), blocks[9].Transactions().Len())
+	}
+	if envelope.Witness == nil {
+		t.Fatalf("witness missing from payload")
+	}
+	// Test stateless execution of the created witness
+	wantStateRoot := envelope.ExecutionPayload.StateRoot
+	wantReceiptRoot := envelope.ExecutionPayload.ReceiptsRoot
+
+	envelope.ExecutionPayload.StateRoot = common.Hash{}
+	envelope.ExecutionPayload.ReceiptsRoot = common.Hash{}
+
+	res, err := api.ExecuteStatelessPayloadV3(*envelope.ExecutionPayload, []common.Hash{}, &common.Hash{42}, *envelope.Witness)
+	if err != nil {
+		t.Fatalf("error executing stateless payload witness: %v", err)
+	}
+	if res.StateRoot != wantStateRoot {
+		t.Fatalf("stateless state root mismatch: have %v, want %v", res.StateRoot, wantStateRoot)
+	}
+	if res.ReceiptsRoot != wantReceiptRoot {
+		t.Fatalf("stateless receipt root mismatch: have %v, want %v", res.ReceiptsRoot, wantReceiptRoot)
+	}
+	// Test block insertion with witness creation
+	envelope.ExecutionPayload.StateRoot = wantStateRoot
+	envelope.ExecutionPayload.ReceiptsRoot = wantReceiptRoot
+
+	res2, err := api.NewPayloadWithWitnessV3(*envelope.ExecutionPayload, []common.Hash{}, &common.Hash{42})
+	if err != nil {
+		t.Fatalf("error executing stateless payload witness: %v", err)
+	}
+	if res2.Witness == nil {
+		t.Fatalf("witness missing from payload")
+	}
+	// Test stateless execution of the created witness
+	wantStateRoot = envelope.ExecutionPayload.StateRoot
+	wantReceiptRoot = envelope.ExecutionPayload.ReceiptsRoot
+
+	envelope.ExecutionPayload.StateRoot = common.Hash{}
+	envelope.ExecutionPayload.ReceiptsRoot = common.Hash{}
+
+	res, err = api.ExecuteStatelessPayloadV3(*envelope.ExecutionPayload, []common.Hash{}, &common.Hash{42}, *res2.Witness)
+	if err != nil {
+		t.Fatalf("error executing stateless payload witness: %v", err)
+	}
+	if res.StateRoot != wantStateRoot {
+		t.Fatalf("stateless state root mismatch: have %v, want %v", res.StateRoot, wantStateRoot)
+	}
+	if res.ReceiptsRoot != wantReceiptRoot {
+		t.Fatalf("stateless receipt root mismatch: have %v, want %v", res.ReceiptsRoot, wantReceiptRoot)
+	}
+}
+
 // TestGetClientVersion verifies the expected version info is returned.
 func TestGetClientVersion(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)

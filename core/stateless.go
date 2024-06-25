@@ -32,8 +32,8 @@ import (
 )
 
 // ExecuteStateless runs a stateless execution based on a witness, verifies
-// everything it can locally and returns the two computed fields that need the
-// other side to explicitly check.
+// everything it can locally and returns the state root and receipt root, that
+// need the other side to explicitly check.
 //
 // This method is a bit of a sore thumb here, but:
 //   - It cannot be placed in core/stateless, because state.New prodces a circular dep
@@ -78,5 +78,5 @@ func ExecuteStateless(config *params.ChainConfig, block *types.Block, witness *s
 	receiptRoot := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 	stateRoot := db.IntermediateRoot(config.IsEIP158(block.Number()))
 
-	return receiptRoot, stateRoot, nil
+	return stateRoot, receiptRoot, nil
 }
