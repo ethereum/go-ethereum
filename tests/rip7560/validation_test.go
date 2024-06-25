@@ -69,7 +69,7 @@ func validatePhase(tb *testContextBuilder, aatx types.Rip7560AccountAbstractionT
 	var state = tests.MakePreState(rawdb.NewMemoryDatabase(), t.genesisAlloc, false, rawdb.HashScheme)
 	defer state.Close()
 
-	_, err := core.ApplyRip7560ValidationPhases(t.chainConfig, t.chainContext, &common.Address{}, t.gaspool, state.StateDB, t.genesisBlock.Header(), tx, vm.Config{})
+	_, err := core.ApplyRip7560ValidationPhases(t.genesis.Config, t.chainContext, &common.Address{}, t.gaspool, state.StateDB, t.genesisBlock.Header(), tx, vm.Config{})
 	// err string or empty if nil
 	errStr := ""
 	if err != nil {

@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/status-im/keycard-go/hexutils"
 	"math/big"
 	"testing"
@@ -21,7 +20,6 @@ type testContext struct {
 	genesisAlloc types.GenesisAlloc
 	t            *testing.T
 	chainContext *ethapi.ChainContext
-	chainConfig  *params.ChainConfig
 	gaspool      *core.GasPool
 	genesis      *core.Genesis
 	genesisBlock *types.Block
@@ -33,29 +31,20 @@ func newTestContext(t *testing.T) *testContext {
 
 type testContextBuilder struct {
 	t            *testing.T
-	chainConfig  *params.ChainConfig
 	genesisAlloc types.GenesisAlloc
 }
 
 func newTestContextBuilder(t *testing.T) *testContextBuilder {
 	genesisAlloc := types.GenesisAlloc{}
 
-	chainConfig := params.AllDevChainProtocolChanges
-	// probably bug in geth..
-	chainConfig.PragueTime = chainConfig.CancunTime
-
 	return &testContextBuilder{
 		t:            t,
-		chainConfig:  chainConfig,
 		genesisAlloc: genesisAlloc,
 	}
 }
 
 func (tb *testContextBuilder) build() *testContext {
-	genesis := &core.Genesis{
-		Config: params.AllDevChainProtocolChanges,
-		Alloc:  tb.genesisAlloc,
-	}
+	genesis := core.DeveloperGenesisBlock(10_000_000, &common.Address{})
 	genesisBlock := genesis.ToBlock()
 	gaspool := new(core.GasPool).AddGas(genesisBlock.GasLimit())
 
@@ -66,7 +55,6 @@ func (tb *testContextBuilder) build() *testContext {
 		t:            tb.t,
 		genesisAlloc: tb.genesisAlloc,
 		chainContext: ethapi.NewChainContext(context.TODO(), backend),
-		chainConfig:  tb.chainConfig,
 		genesis:      genesis,
 		genesisBlock: genesisBlock,
 		gaspool:      gaspool,
