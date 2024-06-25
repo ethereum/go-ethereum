@@ -35,7 +35,7 @@ import (
 // The goal of the heap is to decide which account has the worst bottleneck to
 // evict transactions from.
 type evictHeap struct {
-	metas *map[common.Address][]*blobTxMeta // Pointer to the blob pool's index for price retrievals
+	metas map[common.Address][]*blobTxMeta // Pointer to the blob pool's index for price retrievals
 
 	basefeeJumps float64 // Pre-calculated absolute dynamic fee jumps for the base fee
 	blobfeeJumps float64 // Pre-calculated absolute dynamic fee jumps for the blob fee
@@ -46,7 +46,7 @@ type evictHeap struct {
 
 // newPriceHeap creates a new heap of cheapest accounts in the blob pool to evict
 // from in case of over saturation.
-func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index *map[common.Address][]*blobTxMeta) *evictHeap {
+func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index map[common.Address][]*blobTxMeta) *evictHeap {
 	heap := &evictHeap{
 		metas: index,
 		index: make(map[common.Address]int),
@@ -54,8 +54,8 @@ func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index *map[common.
 	// Populate the heap in account sort order. Not really needed in practice,
 	// but it makes the heap initialization deterministic and less annoying to
 	// test in unit tests.
-	addrs := make([]common.Address, 0, len(*index))
-	for addr := range *index {
+	addrs := make([]common.Address, 0, len(index))
+	for addr := range index {
 		addrs = append(addrs, addr)
 	}
 	sort.Slice(addrs, func(i, j int) bool { return bytes.Compare(addrs[i][:], addrs[j][:]) < 0 })
@@ -94,8 +94,8 @@ func (h *evictHeap) Len() int {
 // Less implements sort.Interface as part of heap.Interface, returning which of
 // the two requested accounts has a cheaper bottleneck.
 func (h *evictHeap) Less(i, j int) bool {
-	txsI := (*(h.metas))[h.addrs[i]]
-	txsJ := (*(h.metas))[h.addrs[j]]
+	txsI := h.metas[h.addrs[i]]
+	txsJ := h.metas[h.addrs[j]]
 
 	lastI := txsI[len(txsI)-1]
 	lastJ := txsJ[len(txsJ)-1]
