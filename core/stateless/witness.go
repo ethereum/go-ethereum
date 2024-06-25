@@ -17,16 +17,13 @@
 package stateless
 
 import (
-	"bytes"
 	"errors"
-	"fmt"
 	"maps"
 	"slices"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // HeaderReader is an interface to pull in headers in place of block hashes for
@@ -36,10 +33,11 @@ type HeaderReader interface {
 	GetHeader(hash common.Hash, number uint64) *types.Header
 }
 
-// Witness encompasses a block, state and any other chain data required to apply
-// a set of transactions and derive a post state/receipt root.
+// Witness encompasses the state required to apply a set of transactions and
+// derive a post state/receipt root.
 type Witness struct {
-	Block   *types.Block        // Current block with rootHash and receiptHash zeroed out
+	context *types.Header // Header to which this witness belongs to, with rootHash and receiptHash zeroed out
+
 	Headers []*types.Header     // Past headers in reverse order (0=parent, 1=parent's-parent, etc). First *must* be set.
 	Codes   map[string]struct{} // Set of bytecodes ran or accessed
 	State   map[string]struct{} // Set of MPT state trie nodes (account and storage together)
@@ -49,24 +47,23 @@ type Witness struct {
 }
 
 // NewWitness creates an empty witness ready for population.
-func NewWitness(chain HeaderReader, block *types.Block) (*Witness, error) {
-	// Zero out the result fields to avoid accidentally sending them to the verifier
-	header := block.Header()
-	header.Root = common.Hash{}
-	header.ReceiptHash = common.Hash{}
-
-	// Retrieve the parent header, which will *always* be included to act as a
-	// trustless pre-root hash container
-	parent := chain.GetHeader(block.ParentHash(), block.NumberU64()-1)
-	if parent == nil {
-		return nil, errors.New("failed to retrieve parent header")
+func NewWitness(context *types.Header, chain HeaderReader) (*Witness, error) {
+	// When building witnesses, retrieve the parent header, which will *always*
+	// be included to act as a trustless pre-root hash container
+	var headers []*types.Header
+	if chain != nil {
+		parent := chain.GetHeader(context.ParentHash, context.Number.Uint64()-1)
+		if parent == nil {
+			return nil, errors.New("failed to retrieve parent header")
+		}
+		headers = append(headers, parent)
 	}
 	// Create the wtness with a reconstructed gutted out block
 	return &Witness{
-		Block:   types.NewBlockWithHeader(header).WithBody(*block.Body()),
+		context: context,
+		Headers: headers,
 		Codes:   make(map[string]struct{}),
 		State:   make(map[string]struct{}),
-		Headers: []*types.Header{parent},
 		chain:   chain,
 	}, nil
 }
@@ -76,11 +73,8 @@ func NewWitness(chain HeaderReader, block *types.Block) (*Witness, error) {
 // the chain to cover the block being added.
 func (w *Witness) AddBlockHash(number uint64) {
 	// Keep pulling in headers until this hash is populated
-	for int(w.Block.NumberU64()-number) > len(w.Headers) {
-		tail := w.Block.Header()
-		if len(w.Headers) > 0 {
-			tail = w.Headers[len(w.Headers)-1]
-		}
+	for int(w.context.Number.Uint64()-number) > len(w.Headers) {
+		tail := w.Headers[len(w.Headers)-1]
 		w.Headers = append(w.Headers, w.chain.GetHeader(tail.ParentHash, tail.Number.Uint64()-1))
 	}
 }
@@ -107,45 +101,16 @@ func (w *Witness) AddState(nodes map[string]struct{}) {
 // Copy deep-copies the witness object.  Witness.Block isn't deep-copied as it
 // is never mutated by Witness
 func (w *Witness) Copy() *Witness {
-	return &Witness{
-		Block:   w.Block,
+	cpy := &Witness{
 		Headers: slices.Clone(w.Headers),
 		Codes:   maps.Clone(w.Codes),
 		State:   maps.Clone(w.State),
+		chain:   w.chain,
 	}
-}
-
-// String prints a human-readable summary containing the total size of the
-// witness and the sizes of the underlying components
-func (w *Witness) String() string {
-	blob, _ := rlp.EncodeToBytes(w)
-	bytesTotal := len(blob)
-
-	blob, _ = rlp.EncodeToBytes(w.Block)
-	bytesBlock := len(blob)
-
-	bytesHeaders := 0
-	for _, header := range w.Headers {
-		blob, _ = rlp.EncodeToBytes(header)
-		bytesHeaders += len(blob)
+	if w.context != nil {
+		cpy.context = types.CopyHeader(w.context)
 	}
-	bytesCodes := 0
-	for code := range w.Codes {
-		bytesCodes += len(code)
-	}
-	bytesState := 0
-	for node := range w.State {
-		bytesState += len(node)
-	}
-	buf := new(bytes.Buffer)
-
-	fmt.Fprintf(buf, "Witness #%d: %v\n", w.Block.Number(), common.StorageSize(bytesTotal))
-	fmt.Fprintf(buf, "     block (%4d txs):  %10v\n", len(w.Block.Transactions()), common.StorageSize(bytesBlock))
-	fmt.Fprintf(buf, "%4d headers:      %10v\n", len(w.Headers), common.StorageSize(bytesHeaders))
-	fmt.Fprintf(buf, "%4d trie nodes:   %10v\n", len(w.State), common.StorageSize(bytesState))
-	fmt.Fprintf(buf, "%4d codes:        %10v\n", len(w.Codes), common.StorageSize(bytesCodes))
-
-	return buf.String()
+	return cpy
 }
 
 // Root returns the pre-state root from the first header.
