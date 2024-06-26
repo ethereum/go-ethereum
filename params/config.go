@@ -281,7 +281,7 @@ var (
 		ShanghaiBlock:       nil,
 		BernoulliBlock:      nil,
 		CurieBlock:          nil,
-		DescartesBlock:      nil,
+		DescartesTime:       nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -320,7 +320,7 @@ var (
 		ShanghaiBlock:       big.NewInt(0),
 		BernoulliBlock:      big.NewInt(3747132),
 		CurieBlock:          big.NewInt(4740239),
-		DescartesBlock:      nil,
+		DescartesTime:       nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -359,7 +359,7 @@ var (
 		ShanghaiBlock:       big.NewInt(0),
 		BernoulliBlock:      big.NewInt(5220340),
 		CurieBlock:          big.NewInt(7096836),
-		DescartesBlock:      nil,
+		DescartesTime:       nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -404,7 +404,7 @@ var (
 		ShanghaiBlock:           big.NewInt(0),
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
-		DescartesBlock:          big.NewInt(0),
+		DescartesTime:           new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -447,7 +447,7 @@ var (
 		ShanghaiBlock:           big.NewInt(0),
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
-		DescartesBlock:          big.NewInt(0),
+		DescartesTime:           new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  nil,
 		Clique:                  &CliqueConfig{Period: 0, Epoch: 30000},
@@ -485,7 +485,7 @@ var (
 		ShanghaiBlock:           big.NewInt(0),
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
-		DescartesBlock:          big.NewInt(0),
+		DescartesTime:           new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -501,7 +501,7 @@ var (
 				ScrollChainAddress:    common.HexToAddress("0x0000000000000000000000000000000000000000"),
 			},
 		}}
-	TestRules = TestChainConfig.Rules(new(big.Int))
+	TestRules = TestChainConfig.Rules(new(big.Int), 0)
 
 	TestNoL1DataFeeChainConfig = &ChainConfig{
 		ChainID:                 big.NewInt(1),
@@ -524,7 +524,7 @@ var (
 		ShanghaiBlock:           big.NewInt(0),
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
-		DescartesBlock:          big.NewInt(0),
+		DescartesTime:           new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -622,7 +622,7 @@ type ChainConfig struct {
 	ShanghaiBlock       *big.Int `json:"shanghaiBlock,omitempty"`       // Shanghai switch block (nil = no fork, 0 = already on shanghai)
 	BernoulliBlock      *big.Int `json:"bernoulliBlock,omitempty"`      // Bernoulli switch block (nil = no fork, 0 = already on bernoulli)
 	CurieBlock          *big.Int `json:"curieBlock,omitempty"`          // Curie switch block (nil = no fork, 0 = already on curie)
-	DescartesBlock      *big.Int `json:"descartesBlock,omitempty"`      // Descartes switch block (nil = no fork, 0 = already on descartes)
+	DescartesTime       *uint64  `json:"descartesTime,omitempty"`       // Descartes switch time (nil = no fork, 0 = already on descartes)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -759,7 +759,7 @@ func (c *ChainConfig) String() string {
 		c.ShanghaiBlock,
 		c.BernoulliBlock,
 		c.CurieBlock,
-		c.DescartesBlock,
+		c.DescartesTime,
 		engine,
 		c.Scroll,
 	)
@@ -853,8 +853,8 @@ func (c *ChainConfig) IsCurie(num *big.Int) bool {
 }
 
 // IsDescartes returns whether num is either equal to the Descartes fork block or greater.
-func (c *ChainConfig) IsDescartes(num *big.Int) bool {
-	return isForked(c.DescartesBlock, num)
+func (c *ChainConfig) IsDescartes(now uint64) bool {
+	return isForkedTime(now, c.DescartesTime)
 }
 
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
@@ -910,7 +910,6 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "shanghaiBlock", block: c.ShanghaiBlock, optional: true},
 		{name: "bernoulliBlock", block: c.BernoulliBlock, optional: true},
 		{name: "curieBlock", block: c.CurieBlock, optional: true},
-		{name: "descartesBlock", block: c.DescartesBlock, optional: true},
 	} {
 		if lastFork.name != "" {
 			// Next one must be higher number
@@ -995,9 +994,6 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.CurieBlock, newcfg.CurieBlock, head) {
 		return newCompatError("Curie fork block", c.CurieBlock, newcfg.CurieBlock)
 	}
-	if isForkIncompatible(c.DescartesBlock, newcfg.DescartesBlock, head) {
-		return newCompatError("Descartes fork block", c.DescartesBlock, newcfg.DescartesBlock)
-	}
 	return nil
 }
 
@@ -1013,6 +1009,13 @@ func isForked(s, head *big.Int) bool {
 		return false
 	}
 	return s.Cmp(head) <= 0
+}
+
+func isForkedTime(now uint64, forkTime *uint64) bool {
+	if forkTime == nil {
+		return false
+	}
+	return now >= *forkTime
 }
 
 func configNumEqual(x, y *big.Int) bool {
@@ -1070,7 +1073,7 @@ type Rules struct {
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules(num *big.Int) Rules {
+func (c *ChainConfig) Rules(num *big.Int, time uint64) Rules {
 	chainID := c.ChainID
 	if chainID == nil {
 		chainID = new(big.Int)
@@ -1091,6 +1094,6 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsShanghai:       c.IsShanghai(num),
 		IsBernoulli:      c.IsBernoulli(num),
 		IsCurie:          c.IsCurie(num),
-		IsDescartes:      c.IsDescartes(num),
+		IsDescartes:      c.IsDescartes(time),
 	}
 }

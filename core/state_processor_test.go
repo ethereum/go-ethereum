@@ -58,7 +58,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			ShanghaiBlock:       big.NewInt(0),
 			BernoulliBlock:      big.NewInt(0),
 			CurieBlock:          big.NewInt(0),
-			DescartesBlock:      big.NewInt(0),
+			DescartesTime:       new(uint64),
 			Ethash:              new(params.EthashConfig),
 		}
 		signer  = types.LatestSigner(config)

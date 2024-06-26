@@ -20,6 +20,8 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCheckCompatible(t *testing.T) {
@@ -94,5 +96,43 @@ func TestCheckCompatible(t *testing.T) {
 		if !reflect.DeepEqual(err, test.wantErr) {
 			t.Errorf("error mismatch:\nstored: %v\nnew: %v\nhead: %v\nerr: %v\nwant: %v", test.stored, test.new, test.head, err, test.wantErr)
 		}
+	}
+}
+
+func TestIsForkedTime(t *testing.T) {
+	timePtr := func(t uint64) *uint64 {
+		return &t
+	}
+
+	tests := map[string]struct {
+		forkTime *uint64
+		now      uint64
+		isForked bool
+	}{
+		"not configured": {
+			forkTime: nil,
+			isForked: false,
+		},
+		"before fork time": {
+			forkTime: timePtr(10),
+			now:      3,
+			isForked: false,
+		},
+		"on fork time": {
+			forkTime: timePtr(10),
+			now:      10,
+			isForked: true,
+		},
+		"after fork time": {
+			forkTime: timePtr(10),
+			now:      11,
+			isForked: true,
+		},
+	}
+
+	for desc, test := range tests {
+		t.Run(desc, func(t *testing.T) {
+			require.Equal(t, test.isForked, isForkedTime(test.now, test.forkTime))
+		})
 	}
 }
