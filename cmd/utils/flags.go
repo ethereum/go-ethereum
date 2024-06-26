@@ -870,6 +870,11 @@ var (
 		Value:    ethconfig.Defaults.GPO.IgnorePrice.Int64(),
 		Category: flags.GasPriceCategory,
 	}
+	GpoDefaultGasPriceFlag = &cli.Int64Flag{
+		Name:     "gpo.defaultprice",
+		Usage:    "Default gas price",
+		Category: flags.GasPriceCategory,
+	}
 
 	// Metrics flags
 	MetricsEnabledFlag = &cli.BoolFlag{
@@ -1504,6 +1509,9 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
 	}
 	if ctx.IsSet(GpoIgnoreGasPriceFlag.Name) {
 		cfg.IgnorePrice = big.NewInt(ctx.Int64(GpoIgnoreGasPriceFlag.Name))
+	}
+	if ctx.IsSet(GpoDefaultGasPriceFlag.Name) {
+		cfg.Default = big.NewInt(ctx.Int64(GpoDefaultGasPriceFlag.Name))
 	}
 }
 
