@@ -724,27 +724,27 @@ func enableEOF(jt *JumpTable) {
 	}
 	jt[EXTCALL] = &operation{
 		execute:     opExtCall,
-		constantGas: params.CallGasEIP150,
-		dynamicGas:  gasCallExt,
+		constantGas: params.WarmStorageReadCostEIP2929,
+		dynamicGas:  makeCallVariantGasCallEIP2929(gasExtCall),
 		minStack:    minStack(4, 1),
 		maxStack:    maxStack(4, 1),
 		memorySize:  memoryExtCall,
 	}
 	jt[EXTDELEGATECALL] = &operation{
 		execute:     opExtDelegateCall,
-		dynamicGas:  gasDelegateCall,
-		constantGas: params.CallGasEIP150,
+		dynamicGas:  makeCallVariantGasCallEIP2929(gasExtDelegateCall),
+		constantGas: params.WarmStorageReadCostEIP2929,
 		minStack:    minStack(3, 1),
 		maxStack:    maxStack(3, 1),
-		memorySize:  memoryDelegateCall,
+		memorySize:  memoryExtDelegateCall,
 	}
 	jt[EXTSTATICCALL] = &operation{
 		execute:     opExtStaticCall,
-		constantGas: params.CallGasEIP150,
-		dynamicGas:  gasStaticCall,
+		constantGas: params.WarmStorageReadCostEIP2929,
+		dynamicGas:  makeCallVariantGasCallEIP2929(gasExtStaticCall),
 		minStack:    minStack(3, 1),
 		maxStack:    maxStack(3, 1),
-		memorySize:  memoryStaticCall,
+		memorySize:  memoryExtStaticCall,
 	}
 }
 
@@ -1117,7 +1117,7 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	stack := scope.Stack
 	// Use all available gas
-	gas := (scope.Contract.Gas / 64) * 63
+	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
 	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
@@ -1143,7 +1143,7 @@ func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCont
 func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	stack := scope.Stack
 	// Use all available gas
-	gas := (scope.Contract.Gas / 64) * 63
+	gas := interpreter.evm.callGasTemp
 	// Pop other call parameters.
 	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
