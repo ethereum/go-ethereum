@@ -1088,6 +1088,9 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	// Pop other call parameters.
 	addr, value, inOffset, inSize := stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	if addr.ByteLen() > 20 {
+		return nil, errors.New("address space extension")
+	}
 	// safe a memory alloc
 	temp := addr
 	// Get the arguments from the memory.
@@ -1099,7 +1102,20 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
-	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
+	// Check that we're only calling non-legacy contracts
+	var (
+		err       error
+		ret       []byte
+		returnGas uint64
+	)
+	code := interpreter.evm.StateDB.GetCode(toAddr)
+	if len(code) > 0 && !hasEOFMagic(code) {
+		err = errors.New("calling legacy contract from eof")
+		ret = nil
+		returnGas = gas
+	} else {
+		ret, returnGas, err = interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
+	}
 
 	if err != nil {
 		temp.Clear()
