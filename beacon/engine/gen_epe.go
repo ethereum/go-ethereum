@@ -15,11 +15,11 @@ var _ = (*executionPayloadEnvelopeMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 	type ExecutionPayloadEnvelope struct {
-		ExecutionPayload *ExecutableData     `json:"executionPayload"  gencodec:"required"`
-		BlockValue       *hexutil.Big        `json:"blockValue"  gencodec:"required"`
-		BlobsBundle      *BlobsBundleV1      `json:"blobsBundle"`
-		Override         bool                `json:"shouldOverrideBuilder"`
-		Witness          *StatelessWitnessV1 `json:"witness"`
+		ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
+		BlockValue       *hexutil.Big    `json:"blockValue"  gencodec:"required"`
+		BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
+		Override         bool            `json:"shouldOverrideBuilder"`
+		Witness          *hexutil.Bytes  `json:"witness"`
 	}
 	var enc ExecutionPayloadEnvelope
 	enc.ExecutionPayload = e.ExecutionPayload
@@ -33,11 +33,11 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (e *ExecutionPayloadEnvelope) UnmarshalJSON(input []byte) error {
 	type ExecutionPayloadEnvelope struct {
-		ExecutionPayload *ExecutableData     `json:"executionPayload"  gencodec:"required"`
-		BlockValue       *hexutil.Big        `json:"blockValue"  gencodec:"required"`
-		BlobsBundle      *BlobsBundleV1      `json:"blobsBundle"`
-		Override         *bool               `json:"shouldOverrideBuilder"`
-		Witness          *StatelessWitnessV1 `json:"witness"`
+		ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
+		BlockValue       *hexutil.Big    `json:"blockValue"  gencodec:"required"`
+		BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
+		Override         *bool           `json:"shouldOverrideBuilder"`
+		Witness          *hexutil.Bytes  `json:"witness"`
 	}
 	var dec ExecutionPayloadEnvelope
 	if err := json.Unmarshal(input, &dec); err != nil {

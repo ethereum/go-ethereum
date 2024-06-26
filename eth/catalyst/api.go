@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/forks"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -651,16 +652,16 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV3(params engine.ExecutableData, v
 
 // ExecuteStatelessPayloadV1 is analogous to NewPayloadV1, only it operates in
 // a stateless mode on top of a provided witness instead of the local database.
-func (api *ConsensusAPI) ExecuteStatelessPayloadV1(params engine.ExecutableData, witness engine.StatelessWitnessV1) (engine.StatelessPayloadStatusV1, error) {
+func (api *ConsensusAPI) ExecuteStatelessPayloadV1(params engine.ExecutableData, opaqueWitness hexutil.Bytes) (engine.StatelessPayloadStatusV1, error) {
 	if params.Withdrawals != nil {
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
 	}
-	return api.executeStatelessPayload(params, nil, nil, witness)
+	return api.executeStatelessPayload(params, nil, nil, opaqueWitness)
 }
 
 // ExecuteStatelessPayloadV2 is analogous to NewPayloadV2, only it operates in
 // a stateless mode on top of a provided witness instead of the local database.
-func (api *ConsensusAPI) ExecuteStatelessPayloadV2(params engine.ExecutableData, witness engine.StatelessWitnessV1) (engine.StatelessPayloadStatusV1, error) {
+func (api *ConsensusAPI) ExecuteStatelessPayloadV2(params engine.ExecutableData, opaqueWitness hexutil.Bytes) (engine.StatelessPayloadStatusV1, error) {
 	if api.eth.BlockChain().Config().IsCancun(api.eth.BlockChain().Config().LondonBlock, params.Timestamp) {
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("can't use newPayloadV2 post-cancun"))
 	}
@@ -679,12 +680,12 @@ func (api *ConsensusAPI) ExecuteStatelessPayloadV2(params engine.ExecutableData,
 	if params.BlobGasUsed != nil {
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil blobGasUsed pre-cancun"))
 	}
-	return api.executeStatelessPayload(params, nil, nil, witness)
+	return api.executeStatelessPayload(params, nil, nil, opaqueWitness)
 }
 
 // ExecuteStatelessPayloadV3 is analogous to NewPayloadV3, only it operates in
 // a stateless mode on top of a provided witness instead of the local database.
-func (api *ConsensusAPI) ExecuteStatelessPayloadV3(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, witness engine.StatelessWitnessV1) (engine.StatelessPayloadStatusV1, error) {
+func (api *ConsensusAPI) ExecuteStatelessPayloadV3(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, opaqueWitness hexutil.Bytes) (engine.StatelessPayloadStatusV1, error) {
 	if params.Withdrawals == nil {
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
 	}
@@ -705,7 +706,7 @@ func (api *ConsensusAPI) ExecuteStatelessPayloadV3(params engine.ExecutableData,
 	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("executeStatelessPayloadV3 must only be called for cancun payloads"))
 	}
-	return api.executeStatelessPayload(params, versionedHashes, beaconRoot, witness)
+	return api.executeStatelessPayload(params, versionedHashes, beaconRoot, opaqueWitness)
 }
 
 func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, witness bool) (engine.PayloadStatusV1, error) {
@@ -829,14 +830,15 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	hash := block.Hash()
 
 	// If witness collection was requested, inject that into the result too
-	var sw *engine.StatelessWitnessV1
+	var ow *hexutil.Bytes
 	if proofs != nil {
-		sw = proofs.ToStatelessWitnessV1()
+		ow = new(hexutil.Bytes)
+		*ow, _ = rlp.EncodeToBytes(proofs)
 	}
-	return engine.PayloadStatusV1{Status: engine.VALID, Witness: sw, LatestValidHash: &hash}, nil
+	return engine.PayloadStatusV1{Status: engine.VALID, Witness: ow, LatestValidHash: &hash}, nil
 }
 
-func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, witness engine.StatelessWitnessV1) (engine.StatelessPayloadStatusV1, error) {
+func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, opaqueWitness hexutil.Bytes) (engine.StatelessPayloadStatusV1, error) {
 	log.Trace("Engine API request received", "method", "ExecuteStatelessPayload", "number", params.Number, "hash", params.BlockHash)
 
 	block, err := engine.ExecutableDataToBlockNoHash(params, versionedHashes, beaconRoot)
@@ -871,8 +873,8 @@ func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, v
 		errorMsg := err.Error()
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID, ValidationError: &errorMsg}, nil
 	}
-	bundle, _ := stateless.NewWitness(block.Header(), nil)
-	if err := bundle.FromStatelessWitnessV1(&witness); err != nil {
+	witness := new(stateless.Witness)
+	if err := rlp.DecodeBytes(opaqueWitness, witness); err != nil {
 		log.Warn("Invalid ExecuteStatelessPayload witness", "err", err)
 		errorMsg := err.Error()
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID, ValidationError: &errorMsg}, nil
@@ -883,7 +885,7 @@ func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, v
 	api.lastNewPayloadLock.Unlock()
 
 	log.Trace("Executing block statelessly", "number", block.Number(), "hash", params.BlockHash)
-	stateRoot, receiptRoot, err := core.ExecuteStateless(api.eth.BlockChain().Config(), block, bundle)
+	stateRoot, receiptRoot, err := core.ExecuteStateless(api.eth.BlockChain().Config(), block, witness)
 	if err != nil {
 		log.Warn("ExecuteStatelessPayload: execution failed", "err", err)
 		errorMsg := err.Error()

@@ -19,8 +19,6 @@ package stateless
 import (
 	"io"
 
-	"github.com/ethereum/go-ethereum/beacon/engine"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -75,48 +73,4 @@ type extWitness struct {
 	Headers []*types.Header
 	Codes   [][]byte
 	State   [][]byte
-}
-
-// ToStatelessWitnessV1 converts a witness to an engine API request type.
-func (w *Witness) ToStatelessWitnessV1() *engine.StatelessWitnessV1 {
-	// Encode the headers and type cast the rest for the JSON encoding
-	headers := make([]hexutil.Bytes, len(w.Headers))
-	for i, header := range w.Headers {
-		headers[i], _ = rlp.EncodeToBytes(header)
-	}
-	codes := make([]hexutil.Bytes, 0, len(w.Codes))
-	for code := range w.Codes {
-		codes = append(codes, hexutil.Bytes(code))
-	}
-	state := make([]hexutil.Bytes, 0, len(w.State))
-	for node := range w.State {
-		state = append(state, hexutil.Bytes(node))
-	}
-	// Assemble and return the stateless executable data
-	return &engine.StatelessWitnessV1{
-		Headers: headers,
-		Codes:   codes,
-		State:   state,
-	}
-}
-
-// FromStatelessWitnessV1 converts an engine API request to a witness type.
-func (w *Witness) FromStatelessWitnessV1(witness *engine.StatelessWitnessV1) error {
-	w.Headers = make([]*types.Header, len(witness.Headers))
-	for i, blob := range witness.Headers {
-		header := new(types.Header)
-		if err := rlp.DecodeBytes(blob, header); err != nil {
-			return err
-		}
-		w.Headers[i] = header
-	}
-	w.Codes = make(map[string]struct{}, len(witness.Codes))
-	for _, code := range witness.Codes {
-		w.Codes[string(code)] = struct{}{}
-	}
-	w.State = make(map[string]struct{}, len(witness.State))
-	for _, node := range witness.State {
-		w.State[string(node)] = struct{}{}
-	}
-	return nil
 }

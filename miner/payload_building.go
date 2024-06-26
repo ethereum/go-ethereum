@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -142,13 +143,15 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 	if payload.full != nil {
 		envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
 		if payload.fullWitness != nil {
-			envelope.Witness = payload.fullWitness.ToStatelessWitnessV1()
+			envelope.Witness = new(hexutil.Bytes)
+			*envelope.Witness, _ = rlp.EncodeToBytes(payload.fullWitness) // cannot fail
 		}
 		return envelope
 	}
 	envelope := engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
 	if payload.emptyWitness != nil {
-		envelope.Witness = payload.emptyWitness.ToStatelessWitnessV1()
+		envelope.Witness = new(hexutil.Bytes)
+		*envelope.Witness, _ = rlp.EncodeToBytes(payload.emptyWitness) // cannot fail
 	}
 	return envelope
 }
@@ -161,7 +164,8 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 
 	envelope := engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
 	if payload.emptyWitness != nil {
-		envelope.Witness = payload.emptyWitness.ToStatelessWitnessV1()
+		envelope.Witness = new(hexutil.Bytes)
+		*envelope.Witness, _ = rlp.EncodeToBytes(payload.emptyWitness) // cannot fail
 	}
 	return envelope
 }
@@ -191,7 +195,8 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	}
 	envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
 	if payload.fullWitness != nil {
-		envelope.Witness = payload.fullWitness.ToStatelessWitnessV1()
+		envelope.Witness = new(hexutil.Bytes)
+		*envelope.Witness, _ = rlp.EncodeToBytes(payload.fullWitness) // cannot fail
 	}
 	return envelope
 }

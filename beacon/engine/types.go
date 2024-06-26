@@ -91,16 +91,6 @@ type executableDataMarshaling struct {
 	ExcessBlobGas *hexutil.Uint64
 }
 
-//go:generate go run github.com/fjl/gencodec -type StatelessWitnessV1 -out gen_sw.go
-
-// StatelessWitnessV1 is the witness data necessary to execute an ExecutableData
-// without any local data being present.
-type StatelessWitnessV1 struct {
-	Headers []hexutil.Bytes `json:"headers" gencodec:"required"`
-	Codes   []hexutil.Bytes `json:"codes,omitempty"`
-	State   []hexutil.Bytes `json:"state,omitempty"`
-}
-
 // StatelessPayloadStatusV1 is the result of a stateless payload execution.
 type StatelessPayloadStatusV1 struct {
 	Status          string      `json:"status"`
@@ -112,11 +102,11 @@ type StatelessPayloadStatusV1 struct {
 //go:generate go run github.com/fjl/gencodec -type ExecutionPayloadEnvelope -field-override executionPayloadEnvelopeMarshaling -out gen_epe.go
 
 type ExecutionPayloadEnvelope struct {
-	ExecutionPayload *ExecutableData     `json:"executionPayload"  gencodec:"required"`
-	BlockValue       *big.Int            `json:"blockValue"  gencodec:"required"`
-	BlobsBundle      *BlobsBundleV1      `json:"blobsBundle"`
-	Override         bool                `json:"shouldOverrideBuilder"`
-	Witness          *StatelessWitnessV1 `json:"witness"`
+	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
+	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
+	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
+	Override         bool            `json:"shouldOverrideBuilder"`
+	Witness          *hexutil.Bytes  `json:"witness"`
 }
 
 type BlobsBundleV1 struct {
@@ -131,10 +121,10 @@ type executionPayloadEnvelopeMarshaling struct {
 }
 
 type PayloadStatusV1 struct {
-	Status          string              `json:"status"`
-	Witness         *StatelessWitnessV1 `json:"witness"`
-	LatestValidHash *common.Hash        `json:"latestValidHash"`
-	ValidationError *string             `json:"validationError"`
+	Status          string         `json:"status"`
+	Witness         *hexutil.Bytes `json:"witness"`
+	LatestValidHash *common.Hash   `json:"latestValidHash"`
+	ValidationError *string        `json:"validationError"`
 }
 
 type TransitionConfigurationV1 struct {
