@@ -110,7 +110,9 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// etc.), we just discard all diffs and try to recover them later.
 	var current snapshot = base
 	err := iterateJournal(db, func(parent common.Hash, root common.Hash, destructSet map[common.Hash]struct{}, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte) error {
-		current = newDiffLayer(current, root, destructSet, accountData, storageData)
+		diff := newDiffLayer(current, root, destructSet, accountData, storageData)
+		diff.AddToCache() // add to multi-version cache from the journal at startup.
+		current = diff
 		return nil
 	})
 	if err != nil {

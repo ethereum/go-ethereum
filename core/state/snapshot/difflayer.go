@@ -17,6 +17,7 @@
 package snapshot
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 )
@@ -103,6 +105,9 @@ type diffLayer struct {
 	parent snapshot   // Parent snapshot modified by this one, never nil
 	memory uint64     // Approximate guess as to how much memory we use
 
+	diffLayerID       uint64                     // diffLayerID is memory temp value, child_id = parent_id + 1, which is used as multi-version cache item version.
+	multiVersionCache *MultiVersionSnapshotCache // multiVersionCache is used to speed up the recursive query of 128 difflayers.
+
 	root  common.Hash // Root hash to which this snapshot diff belongs to
 	stale atomic.Bool // Signals that the layer became stale (state progressed)
 
@@ -154,8 +159,12 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 	}
 	switch parent := parent.(type) {
 	case *diskLayer:
+		dl.diffLayerID = 1
+		dl.multiVersionCache = NewMultiVersionSnapshotCache()
 		dl.rebloom(parent)
 	case *diffLayer:
+		dl.diffLayerID = parent.diffLayerID + 1
+		dl.multiVersionCache = parent.multiVersionCache
 		dl.rebloom(parent.origin)
 	default:
 		panic("unknown parent type")
@@ -181,6 +190,14 @@ func newDiffLayer(parent snapshot, root common.Hash, destructs map[common.Hash]s
 	}
 	dl.memory += uint64(len(destructs) * common.HashLength)
 	return dl
+}
+
+func (dl *diffLayer) AddToCache() {
+	dl.multiVersionCache.Add(dl)
+}
+
+func (dl *diffLayer) RemoveFromCache() {
+	dl.multiVersionCache.Remove(dl)
 }
 
 // rebloom discards the layer's current bloom and rebuilds it from scratch based
@@ -272,6 +289,46 @@ func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
 		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale
 	}
+
+	{
+		// try fastpath
+		data, needTryDisk, err := dl.multiVersionCache.QueryAccount(dl.diffLayerID, dl.root, hash)
+		if err == nil {
+			if needTryDisk {
+				data, err = dl.origin.AccountRLP(hash)
+				diffMultiVersionCacheMissMeter.Mark(1)
+			} else {
+				diffMultiVersionCacheHitMeter.Mark(1)
+				diffMultiVersionCacheReadMeter.Mark(int64(len(data)))
+			}
+			if err != nil {
+				log.Warn("Account has bug due to query disklayer", "error", err)
+				diffMultiVersionCacheBugMeter.Mark(1)
+			}
+			dl.lock.RUnlock()
+
+			{
+				// todo: double check
+				expectedData, expectedErr := dl.accountRLP(hash, 0)
+				if !bytes.Equal(data, expectedData) {
+					log.Error("Has bug",
+						"query_version", dl.diffLayerID,
+						"query_root", dl.root,
+						"account_hash", hash,
+						"actual_hit_disk", needTryDisk,
+						"actual_disk_root", dl.origin.Root(),
+						"actual_data_len", len(data),
+						"expected_data_len", len(expectedData),
+						"actual_error", err,
+						"expected_error", expectedErr)
+				}
+			}
+			return data, err
+		}
+		log.Warn("Account has bug due to query multi version cache", "error", err)
+		diffMultiVersionCacheBugMeter.Mark(1)
+	}
+
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
 	hit := dl.diffed.ContainsHash(accountBloomHash(hash))
@@ -345,6 +402,47 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 		dl.lock.RUnlock()
 		return nil, ErrSnapshotStale
 	}
+
+	{
+		// try fastpath
+		data, needTryDisk, err := dl.multiVersionCache.QueryStorage(dl.diffLayerID, dl.root, accountHash, storageHash)
+		if err == nil {
+			if needTryDisk {
+				data, err = dl.origin.Storage(accountHash, storageHash)
+				diffMultiVersionCacheMissMeter.Mark(1)
+			} else {
+				diffMultiVersionCacheHitMeter.Mark(1)
+				diffMultiVersionCacheReadMeter.Mark(int64(len(data)))
+			}
+			if err != nil {
+				log.Warn("Storage has bug due to query disklayer", "error", err)
+				diffMultiVersionCacheBugMeter.Mark(1)
+			}
+			dl.lock.RUnlock()
+
+			{
+				// todo: double check
+				expectedData, expectedErr := dl.storage(accountHash, storageHash, 0)
+				if !bytes.Equal(data, expectedData) {
+					log.Warn("Has bug",
+						"query_version", dl.diffLayerID,
+						"query_root", dl.root,
+						"account_hash", accountHash,
+						"storage_hash", storageHash,
+						"actual_hit_disk", needTryDisk,
+						"actual_disk_root", dl.origin.Root(),
+						"actual_data_len", len(data),
+						"expected_data_len", len(expectedData),
+						"actual_error", err,
+						"expected_error", expectedErr)
+				}
+			}
+			return data, err
+		}
+		log.Warn("Storage has bug due to query multi version cache", "error", err)
+		diffMultiVersionCacheBugMeter.Mark(1)
+	}
+
 	hit := dl.diffed.ContainsHash(storageBloomHash(accountHash, storageHash))
 	if !hit {
 		hit = dl.diffed.ContainsHash(destructBloomHash(accountHash))
@@ -460,15 +558,17 @@ func (dl *diffLayer) flatten() snapshot {
 	}
 	// Return the combo parent
 	return &diffLayer{
-		parent:      parent.parent,
-		origin:      parent.origin,
-		root:        dl.root,
-		destructSet: parent.destructSet,
-		accountData: parent.accountData,
-		storageData: parent.storageData,
-		storageList: make(map[common.Hash][]common.Hash),
-		diffed:      dl.diffed,
-		memory:      parent.memory + dl.memory,
+		parent:            parent.parent,
+		origin:            parent.origin,
+		diffLayerID:       dl.diffLayerID,
+		multiVersionCache: dl.multiVersionCache,
+		root:              dl.root,
+		destructSet:       parent.destructSet,
+		accountData:       parent.accountData,
+		storageData:       parent.storageData,
+		storageList:       make(map[common.Hash][]common.Hash),
+		diffed:            dl.diffed,
+		memory:            parent.memory + dl.memory,
 	}
 }
 
