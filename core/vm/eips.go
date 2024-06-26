@@ -823,7 +823,7 @@ func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	if scope.Stack.len()+int(typ.MaxStackHeight) >= 1024 {
 		return nil, fmt.Errorf("stack overflow")
 	}
-	if len(scope.ReturnStack) >= 1024 {
+	if len(scope.ReturnStack) > 1024 {
 		return nil, fmt.Errorf("return stack overflow")
 	}
 	retCtx := &ReturnContext{
