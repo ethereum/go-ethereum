@@ -83,7 +83,7 @@ var trustedCheckpoints = map[common.Hash]trustedCheckpoint{
 var (
 	ErrNoTrustedCht       = errors.New("no trusted canonical hash trie")
 	ErrNoTrustedBloomTrie = errors.New("no trusted bloom trie")
-	ErrNoHeader           = errors.New("header not found")
+	errNoHeader           = errors.New("header not found")
 	chtPrefix             = []byte("chtRoot-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
 	ChtTablePrefix        = "cht-"
 )
