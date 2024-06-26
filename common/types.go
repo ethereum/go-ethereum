@@ -45,6 +45,9 @@ var (
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
 
+	// ZeroAddress represents the zero address value.
+	ZeroAddress = Address{}
+
 	// MaxAddress represents the maximum possible address value.
 	MaxAddress = HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
 
