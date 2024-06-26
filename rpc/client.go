@@ -335,10 +335,22 @@ func (c *Client) Call(result interface{}, method string, args ...interface{}) er
 // The result must be a pointer so that package json can unmarshal into it. You
 // can also pass nil, in which case the result is ignored.
 func (c *Client) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
+	return c.CallContextSingle(ctx, result, method, args)
+}
+
+// CallContextSingle performs a JSON-RPC call with the given single argument
+// (which should serialize to an array or an object). If the context is canceled before
+// the call has successfully returned, CallContextSingle returns immediately.
+//
+// The result must be a pointer so that package json can unmarshal into it. You
+// can also pass nil, in which case the result is ignored.
+//
+// If the given args is a list, it behaves as CallContext
+func (c *Client) CallContextSingle(ctx context.Context, result interface{}, method string, arg interface{}) error {
 	if result != nil && reflect.TypeOf(result).Kind() != reflect.Ptr {
 		return fmt.Errorf("call result parameter must be pointer or nil interface: %v", result)
 	}
-	msg, err := c.newMessage(method, args...)
+	msg, err := c.newMessage(method, arg)
 	if err != nil {
 		return err
 	}
@@ -406,7 +418,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 		resp: make(chan []*jsonrpcMessage, 1),
 	}
 	for i, elem := range b {
-		msg, err := c.newMessage(elem.Method, elem.Args...)
+		msg, err := c.newMessage(elem.Method, elem.Args)
 		if err != nil {
 			return err
 		}
@@ -469,7 +481,7 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 // Notify sends a notification, i.e. a method call that doesn't expect a response.
 func (c *Client) Notify(ctx context.Context, method string, args ...interface{}) error {
 	op := new(requestOp)
-	msg, err := c.newMessage(method, args...)
+	msg, err := c.newMessage(method, args)
 	if err != nil {
 		return err
 	}
@@ -505,6 +517,16 @@ func (c *Client) ShhSubscribe(ctx context.Context, channel interface{}, args ...
 // ErrSubscriptionQueueOverflow. Use a sufficiently large buffer on the channel or ensure
 // that the channel usually has at least one reader to prevent this issue.
 func (c *Client) Subscribe(ctx context.Context, namespace string, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+	return c.SubscribeWith(ctx, ClientSubscriptionConfig{
+		SubscribeMethod:   namespace + subscribeMethodSuffix,
+		UnsubscribeMethod: namespace + unsubscribeMethodSuffix,
+	}, channel, args...)
+}
+
+// SubscribeWith calls the "<config.SubscribeMethod>" method with the given arguments,
+// registering a new Subscription. If `config.UnsubscribeMethod` is not set, it won't
+// be possible to unsubscribe.
+func (c *Client) SubscribeWith(ctx context.Context, config ClientSubscriptionConfig, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	// Check type of channel first.
 	chanVal := reflect.ValueOf(channel)
 	if chanVal.Kind() != reflect.Chan || chanVal.Type().ChanDir()&reflect.SendDir == 0 {
@@ -516,15 +538,18 @@ func (c *Client) Subscribe(ctx context.Context, namespace string, channel interf
 	if c.isHTTP {
 		return nil, ErrNotificationsUnsupported
 	}
+	if config.SubscribeMethod == "" {
+		return nil, fmt.Errorf("no subscription method")
+	}
 
-	msg, err := c.newMessage(namespace+subscribeMethodSuffix, args...)
+	msg, err := c.newMessage(config.SubscribeMethod, args)
 	if err != nil {
 		return nil, err
 	}
 	op := &requestOp{
 		ids:  []json.RawMessage{msg.ID},
 		resp: make(chan []*jsonrpcMessage, 1),
-		sub:  newClientSubscription(c, namespace, chanVal),
+		sub:  newClientSubscription(c, config, chanVal),
 	}
 
 	// Send the subscription request.
@@ -545,7 +570,7 @@ func (c *Client) SupportsSubscriptions() bool {
 	return !c.isHTTP
 }
 
-func (c *Client) newMessage(method string, paramsIn ...interface{}) (*jsonrpcMessage, error) {
+func (c *Client) newMessage(method string, paramsIn interface{}) (*jsonrpcMessage, error) {
 	msg := &jsonrpcMessage{Version: vsn, ID: c.nextID(), Method: method}
 	if paramsIn != nil { // prevent sending "params":null
 		var err error
