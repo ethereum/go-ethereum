@@ -51,11 +51,11 @@ func (w *wizard) makeGenesis() {
 		Difficulty: big.NewInt(524288),
 		Alloc:      make(core.GenesisAlloc),
 		Config: &params.ChainConfig{
-			HomesteadBlock: big.NewInt(1),
-			EIP150Block:    big.NewInt(2),
-			EIP155Block:    big.NewInt(3),
-			EIP158Block:    big.NewInt(3),
-			ByzantiumBlock: big.NewInt(4),
+			HomesteadBlock: big.NewInt(0),
+			EIP150Block:    big.NewInt(0),
+			EIP155Block:    big.NewInt(0),
+			EIP158Block:    big.NewInt(0),
+			ByzantiumBlock: big.NewInt(0),
 		},
 	}
 	// Figure out which consensus engine to choose
@@ -147,7 +147,7 @@ func (w *wizard) makeGenesis() {
 		fmt.Println()
 		fmt.Printf("Proportion of total masternodes v2 vote collection to generate a QC (float value), should be two thirds of masternodes? (default = %f)\n", 0.667)
 		genesis.Config.XDPoS.V2.CurrentConfig.CertThreshold = w.readDefaultFloat(0.667)
-
+		genesis.Config.XDPoS.V2.CurrentConfig.MaxMasternodes = 108
 		genesis.Config.XDPoS.V2.AllConfigs[0] = genesis.Config.XDPoS.V2.CurrentConfig
 
 		fmt.Println()

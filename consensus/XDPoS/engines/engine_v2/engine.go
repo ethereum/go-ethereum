@@ -191,7 +191,10 @@ func (x *XDPoS_v2) initial(chain consensus.ChainReader, header *types.Header) er
 			Signatures:        nil,
 			GapNumber:         header.Number.Uint64() - x.config.Gap,
 		}
-
+		// prevent overflow
+		if header.Number.Uint64() < x.config.Gap {
+			quorumCert.GapNumber = 0
+		}
 		// can not call processQC because round is equal to default
 		x.currentRound = 1
 		x.highestQuorumCert = quorumCert
@@ -210,6 +213,10 @@ func (x *XDPoS_v2) initial(chain consensus.ChainReader, header *types.Header) er
 
 	// Initial first v2 snapshot
 	lastGapNum := x.config.V2.SwitchBlock.Uint64() - x.config.Gap
+	// prevent overflow
+	if x.config.V2.SwitchBlock.Uint64() < x.config.Gap {
+		lastGapNum = 0
+	}
 	lastGapHeader := chain.GetHeaderByNumber(lastGapNum)
 
 	snap, _ := loadSnapshot(x.db, lastGapHeader.Hash())
@@ -846,6 +853,10 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	}
 	epochSwitchNumber := epochInfo.EpochSwitchBlockInfo.Number.Uint64()
 	gapNumber := epochSwitchNumber - epochSwitchNumber%x.config.Epoch - x.config.Gap
+	// prevent overflow
+	if epochSwitchNumber-epochSwitchNumber%x.config.Epoch < x.config.Gap {
+		gapNumber = 0
+	}
 	if gapNumber != quorumCert.GapNumber {
 		log.Error("[verifyQC] QC gap number mismatch", "epochSwitchNumber", epochSwitchNumber, "BlockNum", quorumCert.ProposedBlockInfo.Number, "BlockInfoHash", quorumCert.ProposedBlockInfo.Hash, "Gap", quorumCert.GapNumber, "GapShouldBe", gapNumber)
 		return fmt.Errorf("gap number mismatch QC Gap %d, shouldBe %d", quorumCert.GapNumber, gapNumber)
