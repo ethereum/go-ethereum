@@ -237,7 +237,7 @@ func (b *EthApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*t
 }
 
 func (b *EthApiBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
-	return core.GetBlockReceipts(b.eth.chainDb, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash)), nil
+	return b.eth.blockchain.GetReceiptsByHash(blockHash), nil
 }
 
 func (b *EthApiBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {

@@ -214,6 +214,9 @@ func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Rec
 	receipts := make(types.Receipts, len(storageReceipts))
 	for i, storageReceipt := range storageReceipts {
 		receipts[i] = (*types.Receipt)(storageReceipt)
+		receipts[i].BlockHash = hash
+		receipts[i].BlockNumber = new(big.Int).SetUint64(number)
+		receipts[i].TransactionIndex = uint(i)
 	}
 	return receipts
 }
