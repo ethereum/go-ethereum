@@ -3,7 +3,7 @@ title: Beacon light client
 description: Running geth with integrated beacon light client
 ---
 
-`blsync` is a beacon light client shipped by Geth, designed to synchronize with the beacon chain without the need for a [consensus client](/docs/getting-started/consensus-clients). Integrated within Geth, blsync eliminates the necessity of running a separate consensus client, making it ideal for most use-cases that do not require full validation capabilities. It comes with very low resource requirements and can sync the beacon chain within seconds. `blsync` can be run in two modes: integrated or standalone. In standalone mode it is possible to use it for driving other execution clients.
+`blsync` is a beacon chain light client. Integrated within Geth, blsync eliminates the necessity of running a separate [consensus client](/docs/getting-started/consensus-clients), making it ideal for use-cases that do not require full validation capabilities. It comes with very low resource requirements and can sync the beacon chain within seconds. `blsync` can be run in two modes: integrated or standalone. In standalone mode it is possible to use it for driving other execution clients.
 
 <note>Important: blsync is not suitable for running a validator. It is also not recommended for nodes handling any amount of money or used in production settings due to its lower security guarantees compared to running a full consensus client.</note>
 
@@ -56,7 +56,7 @@ Blsync takes the same flags as above to configure the HTTP endpoint as well as c
 Again to sync the Sepolia network in this mode, first run Geth:
 
 ```terminal
-❯ ./build/bin/geth --sepolia --datadir light-sepolia-dir
+./build/bin/geth --sepolia --datadir light-sepolia-dir
 ```
 
 The logs will indicate the Engine API path which is by default `http://localhost:8551` and the path to the JWT secret created which is in this instance `./light-sepolia-dir/geth/jwtsecret`. Now blsync can be run:
@@ -68,8 +68,3 @@ INFO [06-23|15:06:33.388] Loaded JWT secret file                   path=light-se
 INFO [06-23|15:06:34.130] Successful NewPayload                    number=6,169,314 hash=d4204e..772e65 status=SYNCING
 INFO [06-23|15:06:34.130] Successful ForkchoiceUpdated             head=d4204e..772e65 status=SYNCING
 ```
-
-## Summary
-
-This guide should provide the steps of using blsync in both integrated and standalone modes with Geth as an alternative to running a full consensus client. This is suitable for non-production use-cases and offers lower resource requirements and higher speed. The steps to run blsync include choosing an endpoint, obtaining a checkpoint, and starting the client with correct flags.
-
