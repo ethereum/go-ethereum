@@ -35,6 +35,8 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+
+	"github.com/ethereum/go-ethereum/common/hexutil/asmhex"
 )
 
 const uintBits = 32 << (uint64(^uint(0)) >> 63)
@@ -58,17 +60,22 @@ func (err decError) Error() string { return err.msg }
 
 // Decode decodes a hex string with 0x prefix.
 func Decode(input string) ([]byte, error) {
+	// Sanity check the input
 	if len(input) == 0 {
 		return nil, ErrEmptyString
 	}
 	if !has0xPrefix(input) {
 		return nil, ErrMissingPrefix
 	}
-	b, err := hex.DecodeString(input[2:])
+	// Preallocate the output and decode the string
+	src := ([]byte)(input)[2:]
+	dst := make([]byte, len(src)>>1)
+
+	_, err := asmhex.Decode(dst, src)
 	if err != nil {
 		err = mapError(err)
 	}
-	return b, err
+	return dst, err
 }
 
 // MustDecode decodes a hex string with 0x prefix. It panics for invalid input.
@@ -84,7 +91,7 @@ func MustDecode(input string) []byte {
 func Encode(b []byte) string {
 	enc := make([]byte, len(b)*2+2)
 	copy(enc, "0x")
-	hex.Encode(enc[2:], b)
+	asmhex.Encode(enc[2:], b)
 	return string(enc)
 }
 
