@@ -40,8 +40,6 @@
       to: /docs/fundamentals/private-network
     - id: Config files
       to: /docs/fundamentals/config-files
-    - id: Light client
-      to: /docs/fundamentals/les
     - id: Mining
       to: /docs/fundamentals/mining
 - id: Interacting with Geth
