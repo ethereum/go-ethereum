@@ -2621,12 +2621,13 @@ func summarizeBadBlock(block *types.Block, receipts []*types.Receipt, config *pa
 	return fmt.Sprintf(`
 ########## BAD BLOCK #########
 Block: %v (%#x)
+ParentHash: %#x
 Error: %v
 Platform: %v%v
 Chain config: %#v
 Receipts: %v
 ##############################
-`, block.Number(), block.Hash(), err, platform, vcs, config, receiptString)
+`, block.Number(), block.Hash(), block.ParentHash(), err, platform, vcs, config, receiptString)
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local
