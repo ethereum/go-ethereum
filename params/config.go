@@ -281,7 +281,7 @@ var (
 		ShanghaiBlock:       nil,
 		BernoulliBlock:      nil,
 		CurieBlock:          nil,
-		DescartesTime:       nil,
+		DarwinTime:          nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -320,7 +320,7 @@ var (
 		ShanghaiBlock:       big.NewInt(0),
 		BernoulliBlock:      big.NewInt(3747132),
 		CurieBlock:          big.NewInt(4740239),
-		DescartesTime:       nil,
+		DarwinTime:          nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -359,7 +359,7 @@ var (
 		ShanghaiBlock:       big.NewInt(0),
 		BernoulliBlock:      big.NewInt(5220340),
 		CurieBlock:          big.NewInt(7096836),
-		DescartesTime:       nil,
+		DarwinTime:          nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -404,7 +404,7 @@ var (
 		ShanghaiBlock:           big.NewInt(0),
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
-		DescartesTime:           new(uint64),
+		DarwinTime:              new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -447,7 +447,7 @@ var (
 		ShanghaiBlock:           big.NewInt(0),
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
-		DescartesTime:           new(uint64),
+		DarwinTime:              new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  nil,
 		Clique:                  &CliqueConfig{Period: 0, Epoch: 30000},
@@ -485,7 +485,7 @@ var (
 		ShanghaiBlock:           big.NewInt(0),
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
-		DescartesTime:           new(uint64),
+		DarwinTime:              new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -524,7 +524,7 @@ var (
 		ShanghaiBlock:           big.NewInt(0),
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
-		DescartesTime:           new(uint64),
+		DarwinTime:              new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -622,7 +622,7 @@ type ChainConfig struct {
 	ShanghaiBlock       *big.Int `json:"shanghaiBlock,omitempty"`       // Shanghai switch block (nil = no fork, 0 = already on shanghai)
 	BernoulliBlock      *big.Int `json:"bernoulliBlock,omitempty"`      // Bernoulli switch block (nil = no fork, 0 = already on bernoulli)
 	CurieBlock          *big.Int `json:"curieBlock,omitempty"`          // Curie switch block (nil = no fork, 0 = already on curie)
-	DescartesTime       *uint64  `json:"descartesTime,omitempty"`       // Descartes switch time (nil = no fork, 0 = already on descartes)
+	DarwinTime          *uint64  `json:"darwinTime,omitempty"`          // Darwin switch time (nil = no fork, 0 = already on darwin)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -739,7 +739,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Descartes: %v, Engine: %v, Scroll config: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, Engine: %v, Scroll config: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -759,7 +759,7 @@ func (c *ChainConfig) String() string {
 		c.ShanghaiBlock,
 		c.BernoulliBlock,
 		c.CurieBlock,
-		c.DescartesTime,
+		c.DarwinTime,
 		engine,
 		c.Scroll,
 	)
@@ -852,9 +852,9 @@ func (c *ChainConfig) IsCurie(num *big.Int) bool {
 	return isForked(c.CurieBlock, num)
 }
 
-// IsDescartes returns whether num is either equal to the Descartes fork block or greater.
-func (c *ChainConfig) IsDescartes(now uint64) bool {
-	return isForkedTime(now, c.DescartesTime)
+// IsDarwin returns whether num is either equal to the Darwin fork block or greater.
+func (c *ChainConfig) IsDarwin(now uint64) bool {
+	return isForkedTime(now, c.DarwinTime)
 }
 
 // IsTerminalPoWBlock returns whether the given block is the last block of PoW stage.
@@ -1069,7 +1069,7 @@ type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon, IsArchimedes, IsShanghai            bool
-	IsBernoulli, IsCurie, IsDescartes                       bool
+	IsBernoulli, IsCurie, IsDarwin                          bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1094,6 +1094,6 @@ func (c *ChainConfig) Rules(num *big.Int, time uint64) Rules {
 		IsShanghai:       c.IsShanghai(num),
 		IsBernoulli:      c.IsBernoulli(num),
 		IsCurie:          c.IsCurie(num),
-		IsDescartes:      c.IsDescartes(time),
+		IsDarwin:         c.IsDarwin(time),
 	}
 }
