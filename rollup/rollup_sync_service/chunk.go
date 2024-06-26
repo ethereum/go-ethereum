@@ -132,7 +132,7 @@ func DecodeChunkBlockRanges(chunks [][]byte) ([]*rawdb.ChunkBlockRange, error) {
 
 		numBlocks := int(chunk[0])
 		if len(chunk) < 1+numBlocks*blockContextByteSize {
-			return nil, fmt.Errorf("chunk size doesn't match with numBlocks")
+			return nil, fmt.Errorf("chunk size doesn't match with numBlocks, byte length of chunk: %v, expected length: %v", len(chunk), 1+numBlocks*blockContextByteSize)
 		}
 
 		blockContexts := make([]*BlockContext, numBlocks)
