@@ -26,6 +26,8 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
+	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
@@ -327,4 +329,48 @@ func (r Receipts) GetRlp(i int) []byte {
 		panic(err)
 	}
 	return bytes
+}
+
+// DeriveFields fills the receipts with their computed fields based on consensus
+// data and contextual infos like containing block and transactions.
+func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, number uint64, txs Transactions) error {
+	signer := MakeSigner(config, new(big.Int).SetUint64(number))
+
+	logIndex := uint(0)
+	if len(txs) != len(r) {
+		return errors.New("transaction and receipt count mismatch")
+	}
+	for i := 0; i < len(r); i++ {
+		// The transaction type and hash can be retrieved from the transaction itself
+		r[i].Type = txs[i].Type()
+		r[i].TxHash = txs[i].Hash()
+
+		// block location fields
+		r[i].BlockHash = hash
+		r[i].BlockNumber = new(big.Int).SetUint64(number)
+		r[i].TransactionIndex = uint(i)
+
+		// The contract address can be derived from the transaction itself
+		if txs[i].To() == nil {
+			// Deriving the signer is expensive, only do if it's actually needed
+			from, _ := Sender(signer, txs[i])
+			r[i].ContractAddress = crypto.CreateAddress(from, txs[i].Nonce())
+		}
+		// The used gas can be calculated based on previous r
+		if i == 0 {
+			r[i].GasUsed = r[i].CumulativeGasUsed
+		} else {
+			r[i].GasUsed = r[i].CumulativeGasUsed - r[i-1].CumulativeGasUsed
+		}
+		// The derived log fields can simply be set from the block and transaction
+		for j := 0; j < len(r[i].Logs); j++ {
+			r[i].Logs[j].BlockNumber = number
+			r[i].Logs[j].BlockHash = hash
+			r[i].Logs[j].TxHash = r[i].TxHash
+			r[i].Logs[j].TxIndex = uint(i)
+			r[i].Logs[j].Index = logIndex
+			logIndex++
+		}
+	}
+	return nil
 }
