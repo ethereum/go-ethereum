@@ -219,11 +219,12 @@ The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode re
 
 In `diff` mode the result object will contain a `pre` and a `post` object:
 
-1. Any read-only access is omitted completely from the result. This mode is only concerned with state modifications.
-2. In `pre` you will find the state of an account before the tx started, and in post its state after tx execution finished.
-3. `post` will contain only the modified fields. e.g. if `nonce` of an account hasn't changed it will be omitted from `post`.
-4. Deletion (i.e. account selfdestruct, or storage clearing) will be signified by inclusion in `pre` and omission in `post`.
-5. Insertion (i.e. account creation or new slots) will be signified by omission in `pre` and inclusion in `post`.
+1. The result only includes accounts that were modified. Accounts without changes will be omitted in this mode.
+2. In `pre` you will find the state of an account before the tx started, and in `post` its state after tx execution finished.
+3. `pre` can include fields that were not modified, if some other fields for the same account were modified. 
+4. `post` will contain only the modified fields. e.g. if `nonce` of an account hasn't changed it will be omitted from `post`.
+5. Deletion (i.e. account selfdestruct, or storage clearing) will be signified by inclusion in `pre` and omission in `post`.
+6. Insertion (i.e. account creation or new slots) will be signified by omission in `pre` and inclusion in `post`.
 
 To run this tracer in `diff` mode, pass `tracerConfig: {diffMode: true}` in the API call.
 
