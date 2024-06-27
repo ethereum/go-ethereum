@@ -31,7 +31,7 @@ import (
 )
 
 func newEmptySecure() *StateTrie {
-	trie, _ := NewStateTrie(TrieID(types.EmptyLegacyTrieRootHash), NewDatabase(rawdb.NewMemoryDatabase(), nil))
+	trie, _ := NewStateTrie(TrieID(types.EmptyZkTrieRootHash), NewDatabase(rawdb.NewMemoryDatabase(), nil))
 	return trie
 }
 
@@ -39,7 +39,7 @@ func newEmptySecure() *StateTrie {
 func makeTestStateTrie() (*Database, *StateTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(rawdb.NewMemoryDatabase(), nil)
-	trie, _ := NewStateTrie(TrieID(types.EmptyLegacyTrieRootHash), triedb)
+	trie, _ := NewStateTrie(TrieID(types.EmptyZkTrieRootHash), triedb)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
