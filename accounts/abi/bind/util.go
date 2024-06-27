@@ -29,13 +29,13 @@ import (
 
 // WaitMined waits for tx to be mined on the blockchain.
 // It stops waiting when the context is canceled.
-func WaitMined(ctx context.Context, b DeployBackend, tx *types.Transaction) (*types.Receipt, error) {
+func WaitMined(ctx context.Context, b DeployBackend, hash common.Hash) (*types.Receipt, error) {
 	queryTicker := time.NewTicker(time.Second)
 	defer queryTicker.Stop()
 
-	logger := log.New("hash", tx.Hash())
+	logger := log.New("hash", hash)
 	for {
-		receipt, err := b.TransactionReceipt(ctx, tx.Hash())
+		receipt, err := b.TransactionReceipt(ctx, hash)
 		if err == nil {
 			return receipt, nil
 		}
@@ -61,7 +61,7 @@ func WaitDeployed(ctx context.Context, b DeployBackend, tx *types.Transaction) (
 	if tx.To() != nil {
 		return common.Address{}, errors.New("tx is not contract creation")
 	}
-	receipt, err := WaitMined(ctx, b, tx)
+	receipt, err := WaitMined(ctx, b, tx.Hash())
 	if err != nil {
 		return common.Address{}, err
 	}
