@@ -21,6 +21,60 @@ As this is a real-time stream, the data indexing solution must be able to handle
 
 <Note>A live tracer can impact the performance of your node as it is run synchronously within the sync process. It is better to keep the tracer code minimal and only with the purpose of getting raw data out and doing heavy post-processing of data in a later stage.</Note>
 
+## Built-in live tracers
+
+Geth ships with a built-in live tracer which tracks the ether supply changes of blocks. This would be of interest to users wishing to e.g. compute the total supply of ether.
+
+### Running
+
+If the goal is to compute the total Ether supply, a full sync must be performed. The supply tracer must be enabled in the configuration of the node. This can be done as such:
+
+```terminal
+./build/bin/geth --syncmode full --vmtrace supply --vmtrace.jsonconfig '{"path": "output"}'
+```
+
+Geth will start full-syncing and right away the tracer will emit supply changes of each block to files a directory. The path to this directory must be configured via the `--vmtrace.jsonconfig` flag as demonstrated above.
+
+### Config
+
+The supply tracer accepts the following options:
+
+- `path: string` a required option which determines where to store the output files.
+- `maxSize: int` is the maximum size in megabytes of the tracer log file before it gets rotated (default 100Mib).
+
+### Output
+
+The output is a set of append-only files. Once the max size for each is reached the tracer will start writing to a new one. The files have the jsonl format. Each line represents the supply info for a block. Each line is a JSON object with the following schema.
+
+| field        | type        | description                        |
+| ------------ | ----------- | ---------------------------------- |
+| blockNumber  | string      | block number in hex                |
+| hash         | string      | block hash                         |
+| parentHash   | string      | parent hash                        |
+| issuance     | Object      | Contributors to newly issued Ether |
+| burn         | Object      | Contributors to burn Ether         |
+
+`issuance` itself is comprised of:
+
+| field         | type        | description                                     |
+| ------------- | ----------- | ----------------------------------------------- |
+| genesisAlloc  | string      | Ether allocations of the genesis block in hex   |
+| reward        | string      | block reward in hex (not relevant post-merge)   |
+| withdrawals   | string      | Ether withdrawn from a validators stake in hex  |
+
+And `burn` is comprised of:
+
+| field         | type        | description                                          |
+| ------------- | ----------- | ---------------------------------------------------- |
+| 1559          | string      | Ether burnt as per EIP-1559 rules in hex             |
+| blob          | string      | Ether burnt as per EIP-4788 rules in hex             |
+| misc          | string      | Ether burnt due to selfdestruct edge-cases in hex    |
+
+
+### Reorgs
+
+The tracer performs no reorg handling. It simply emits supply info for all blocks it received. On the processing side it will be possible to detect reorgs via the block information provided (`parentHash` and `blockNumber`). An example of a tool that parses the output files, handles reorgs, and computes the total supply can be found [here](https://github.com/ziogaschr/supply-tracer-parser).
+
 ## Implementing a live tracer
 
 The process is very similar to implementing a [custom native tracer](/docs/developers/evm-tracing/custom-tracer). These are the main differences:

@@ -680,7 +680,7 @@ please refer to the [subscription page](/docs/interacting-with-geth/rpc/pubsub) 
 
 ### debug_traceTransaction
 
-**OBS** In most scenarios, `debug.standardTraceBlockToFile` is better suited for tracing!
+**OBS** For heavy traces and when direct access to the node disk is possible, `debug.standardTraceBlockToFile` is more suitable!
 
 The `traceTransaction` debugging method will attempt to run the transaction in the exact same manner as it was executed on the network. It will replay any transaction that may have been executed prior to this one before it will finally attempt to execute the transaction that corresponds to the given
 hash.
