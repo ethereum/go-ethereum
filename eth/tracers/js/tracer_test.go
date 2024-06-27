@@ -260,9 +260,9 @@ func TestIsPrecompile(t *testing.T) {
 	}
 
 	// test sha disabled in archimedes
-	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000002'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
+	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000002'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
 	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(450)}
-	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg)
+	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -270,9 +270,9 @@ func TestIsPrecompile(t *testing.T) {
 		t.Errorf("Tracer should not consider blake2f as precompile in archimedes")
 	}
 
-	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000003'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
+	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000003'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
 	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(450)}
-	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg)
+	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -281,8 +281,8 @@ func TestIsPrecompile(t *testing.T) {
 	}
 
 	// test blake2f disabled in archimedes
-	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
-	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg)
+	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
+	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -291,8 +291,8 @@ func TestIsPrecompile(t *testing.T) {
 	}
 
 	// test ecrecover enabled in archimedes
-	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000001'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
-	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg)
+	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000001'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
+	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
 		t.Error(err)
 	}

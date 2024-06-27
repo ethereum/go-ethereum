@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -178,6 +179,10 @@ func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.Matc
 			}
 		}
 	}()
+}
+
+func (b *testBackend) StateAt(root common.Hash) (*state.StateDB, error) {
+	panic("not supported")
 }
 
 func newTestFilterSystem(t testing.TB, db ethdb.Database, cfg Config) (*testBackend, *FilterSystem) {
