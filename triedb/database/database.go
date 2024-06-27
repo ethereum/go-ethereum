@@ -16,9 +16,7 @@
 
 package database
 
-import (
-	"github.com/ethereum/go-ethereum/common"
-)
+import "github.com/ethereum/go-ethereum/common"
 
 // Reader wraps the Node method of a backing trie reader.
 type Reader interface {
@@ -31,20 +29,8 @@ type Reader interface {
 	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
 }
 
-// PreimageStore wraps the methods of a backing store for reading and writing
-// trie node preimages.
-type PreimageStore interface {
-	// Preimage retrieves the preimage of the specified hash.
-	Preimage(hash common.Hash) []byte
-
-	// InsertPreimage commits a set of preimages along with their hashes.
-	InsertPreimage(preimages map[common.Hash][]byte)
-}
-
 // Database wraps the methods of a backing trie store.
 type Database interface {
-	PreimageStore
-
 	// Reader returns a node reader associated with the specific state.
 	// An error will be returned if the specified state is not available.
 	Reader(stateRoot common.Hash) (Reader, error)
