@@ -33,7 +33,7 @@ If the goal is to compute the total Ether supply, a full sync must be performed.
 ./build/bin/geth --syncmode full --vmtrace supply --vmtrace.jsonconfig '{"path": "output"}'
 ```
 
-Geth will start full-syncing and right away the tracer will emit supply changes of each block to files a directory. The path to this directory must be configured via the `--vmtrace.jsonconfig` flag as demonstrated above.
+Geth will start full-syncing and right away the tracer will emit supply changes of each block to files inside the given directory. The path to this directory must be configured via the `--vmtrace.jsonconfig` flag as demonstrated above.
 
 ### Config
 
