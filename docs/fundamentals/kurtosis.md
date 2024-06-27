@@ -43,7 +43,7 @@ This describes the structure of the network desired. The network will consist of
 Once the config is written, it is straightforward to spin up the network. Run the following command:
 
 ```terminal
-kurtosis run github.com/ethpandaops/ethereum-package --args-file ./network_params.yaml` --image-download always
+kurtosis run github.com/ethpandaops/ethereum-package --args-file ./network_params.yaml --image-download always
 ```
 
 This indicates ethereum-package as a dependency which defines what the fields above mean. `--image-download always` makes sure the latest images are used always. Running it will produce an output such as the one below on a successful run:
