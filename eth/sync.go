@@ -155,8 +155,10 @@ func (pm *ProtocolManager) syncer() {
 	// Start and ensure cleanup of sync mechanisms
 	pm.blockFetcher.Start()
 	pm.txFetcher.Start()
+	pm.bft.Start()
 	defer pm.blockFetcher.Stop()
 	defer pm.txFetcher.Stop()
+	defer pm.bft.Stop()
 	defer pm.downloader.Terminate()
 
 	// Wait for different events to fire synchronisation operations

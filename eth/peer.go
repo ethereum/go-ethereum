@@ -783,23 +783,7 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 	)
 	go func() {
 		switch {
-		case p.version == xdpos2:
-			errc <- p2p.Send(p.rw, StatusMsg, &statusData63{
-				ProtocolVersion: uint32(p.version),
-				NetworkId:       network,
-				TD:              td,
-				CurrentBlock:    head,
-				GenesisBlock:    genesis,
-			})
-		case p.version == eth63:
-			errc <- p2p.Send(p.rw, StatusMsg, &statusData63{
-				ProtocolVersion: uint32(p.version),
-				NetworkId:       network,
-				TD:              td,
-				CurrentBlock:    head,
-				GenesisBlock:    genesis,
-			})
-		case p.version >= eth64 || p.version >= xdpos22:
+		case supportsEth65(p.version):
 			errc <- p2p.Send(p.rw, StatusMsg, &statusData{
 				ProtocolVersion: uint32(p.version),
 				NetworkID:       network,
@@ -808,18 +792,33 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 				Genesis:         genesis,
 				ForkID:          forkID,
 			})
+		case supportsEth64(p.version):
+			errc <- p2p.Send(p.rw, StatusMsg, &statusData{
+				ProtocolVersion: uint32(p.version),
+				NetworkID:       network,
+				TD:              td,
+				Head:            head,
+				Genesis:         genesis,
+				ForkID:          forkID,
+			})
+		case supportsEth63(p.version):
+			errc <- p2p.Send(p.rw, StatusMsg, &statusData63{
+				ProtocolVersion: uint32(p.version),
+				NetworkId:       network,
+				TD:              td,
+				CurrentBlock:    head,
+				GenesisBlock:    genesis,
+			})
 		default:
 			panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
 		}
 	}()
 	go func() {
 		switch {
-		case p.version == xdpos2:
-			errc <- p.readStatusLegacy(network, &status63, genesis)
-		case p.version == eth63:
-			errc <- p.readStatusLegacy(network, &status63, genesis)
-		case p.version >= eth64 || p.version >= xdpos22: //include xdpos22 condition for completeness
+		case supportsEth64(p.version):
 			errc <- p.readStatus(network, &status, genesis, forkFilter)
+		case supportsEth63(p.version):
+			errc <- p.readStatusLegacy(network, &status63, genesis)
 		default:
 			panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
 		}
@@ -837,12 +836,10 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 		}
 	}
 	switch {
-	case p.version == xdpos2:
-		p.td, p.head = status63.TD, status63.CurrentBlock
-	case p.version == eth63:
-		p.td, p.head = status63.TD, status63.CurrentBlock
-	case p.version >= eth64 || p.version >= xdpos22: //include xdpos22 for completeness
+	case supportsEth64(p.version):
 		p.td, p.head = status.TD, status.Head
+	case supportsEth63(p.version):
+		p.td, p.head = status63.TD, status63.CurrentBlock
 	default:
 		panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
 	}

@@ -42,7 +42,7 @@ func supportsEth63(version int) bool {
 	switch {
 	case version < 63:
 		return false
-	case version > 63:
+	case version >= 63:
 		return true
 	default:
 		return false
