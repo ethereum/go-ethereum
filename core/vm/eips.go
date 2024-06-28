@@ -1130,6 +1130,9 @@ func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCont
 	// Pop other call parameters.
 	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	if addr.ByteLen() > 20 {
+		return nil, errors.New("address space extension")
+	}
 	// safe a memory alloc
 	temp := addr
 	// Get arguments from the memory.
@@ -1173,6 +1176,9 @@ func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContex
 	// Pop other call parameters.
 	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
+	if addr.ByteLen() > 20 {
+		return nil, errors.New("address space extension")
+	}
 	// safe a memory alloc
 	temp := addr
 	// Get arguments from the memory.
