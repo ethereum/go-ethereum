@@ -56,7 +56,7 @@ func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index map[common.A
 	// test in unit tests.
 	heap.addrs = maps.Keys(index)
 	slices.SortFunc(heap.addrs, common.Address.Cmp)
-	for i, addr := range heap.index {
+	for i, addr := range heap.addrs {
 		heap.index[addr] = i
 	}
 	heap.reinit(basefee, blobfee, true)
