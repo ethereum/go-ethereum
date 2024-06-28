@@ -47,7 +47,17 @@ func (a *api) loop() {
 			go func() {
 				commitMu.Lock()
 				defer commitMu.Unlock()
-
+				// When the beacon chain is ran by a simulator, then transaction insertion,
+				// block insertion and block production will happen without any timing
+				// delay between them. This will cause flaky simulator executions due to
+				// the transaction pool running its internal reset operation on a back-
+				// ground thread. To avoid the racey behavior - in simulator mode - the
+				// pool will be explicitly blocked on its reset before continuing to the
+				// block production below.
+				if err := a.sim.eth.TxPool().Sync(); err != nil {
+					log.Error("Failed to sync transaction pool", "err", err)
+					return
+				}
 				withdrawals := append(a.sim.withdrawals.gatherPending(9), w)
 				if err := a.sim.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 					log.Warn("Error performing sealing work", "err", err)
@@ -58,6 +68,10 @@ func (a *api) loop() {
 				commitMu.Lock()
 				defer commitMu.Unlock()
 
+				if err := a.sim.eth.TxPool().Sync(); err != nil {
+					log.Error("Failed to sync transaction pool", "err", err)
+					return
+				}
 				a.sim.Commit()
 			}()
 		}
