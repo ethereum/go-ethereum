@@ -28,7 +28,7 @@ import (
 )
 
 // DownloaderAPI provides an API which gives information about the current
-// synchronisation status. It offers only methods that operates on data that
+// synchronization status. It offers only methods that operates on data that
 // can be available to anyone without security risks.
 type DownloaderAPI struct {
 	d                         *Downloader
