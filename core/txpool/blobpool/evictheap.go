@@ -49,16 +49,14 @@ type evictHeap struct {
 func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index map[common.Address][]*blobTxMeta) *evictHeap {
 	heap := &evictHeap{
 		metas: index,
-		index: make(map[common.Address]int, len(*index)),
+		index: make(map[common.Address]int, len(index)),
 	}
 	// Populate the heap in account sort order. Not really needed in practice,
 	// but it makes the heap initialization deterministic and less annoying to
 	// test in unit tests.
-	addrs := maps.Keys(*index)
-	slices.SortFunc(addrs, common.Address.Cmp)
-
-	heap.addrs = addrs
-	for i, addr := range addrs {
+	heap.addrs = maps.Keys(index)
+	slices.SortFunc(heap.addrs, common.Address.Cmp)
+	for i, addr := range heap.index {
 		heap.index[addr] = i
 	}
 	heap.reinit(basefee, blobfee, true)
