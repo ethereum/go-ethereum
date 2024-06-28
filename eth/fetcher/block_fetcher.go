@@ -94,7 +94,7 @@ type chainHeightFn func() uint64
 type chainInsertFn func(types.Blocks) (int, error)
 
 // blockInsertFn is a callback type to insert a batch of blocks into the local chain.
-type blockInsertFn func(types.Block) (int, error)
+type blockInsertFn func(types.Block) (error)
 
 type blockPrepareFn func(block *types.Block) error
 
@@ -777,7 +777,7 @@ func (f *BlockFetcher) insert(peer string, block *types.Block) {
 			return
 		}
 		// Run the actual import and log any issues
-		if _, err := f.insertBlock(*block); err != nil {
+		if err := f.insertBlock(*block); err != nil {
 			log.Warn("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
 		}

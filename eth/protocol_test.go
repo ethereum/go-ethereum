@@ -33,6 +33,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
 	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
@@ -66,15 +67,15 @@ func TestStatusMsgErrors63(t *testing.T) {
 			wantError: errResp(ErrNoStatusMsg, "first msg has code 2 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusData63{10, DefaultConfig.NetworkId, td, head.Hash(), genesis.Hash()},
+			code: StatusMsg, data: statusData63{10, ethconfig.Defaults.NetworkId, td, head.Hash(), genesis.Hash()},
 			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= %d)", 63),
 		},
 		{
 			code: StatusMsg, data: statusData63{63, 999, td, head.Hash(), genesis.Hash()},
-			wantError: errResp(ErrNetworkIDMismatch, "999 (!= %d)", DefaultConfig.NetworkId),
+			wantError: errResp(ErrNetworkIDMismatch, "999 (!= %d)", ethconfig.Defaults.NetworkId),
 		},
 		{
-			code: StatusMsg, data: statusData63{63, DefaultConfig.NetworkId, td, head.Hash(), common.Hash{3}},
+			code: StatusMsg, data: statusData63{63, ethconfig.Defaults.NetworkId, td, head.Hash(), common.Hash{3}},
 			wantError: errResp(ErrGenesisMismatch, "0300000000000000 (!= %x)", genesis.Hash().Bytes()[:8]),
 		},
 	}
@@ -118,19 +119,19 @@ func TestStatusMsgErrors64(t *testing.T) {
 			wantError: errResp(ErrNoStatusMsg, "first msg has code 2 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusData{10, DefaultConfig.NetworkId, td, head.Hash(), genesis.Hash(), forkID},
+			code: StatusMsg, data: statusData{10, ethconfig.Defaults.NetworkId, td, head.Hash(), genesis.Hash(), forkID},
 			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= %d)", 64),
 		},
 		{
 			code: StatusMsg, data: statusData{64, 999, td, head.Hash(), genesis.Hash(), forkID},
-			wantError: errResp(ErrNetworkIDMismatch, "999 (!= %d)", DefaultConfig.NetworkId),
+			wantError: errResp(ErrNetworkIDMismatch, "999 (!= %d)", ethconfig.Defaults.NetworkId),
 		},
 		{
-			code: StatusMsg, data: statusData{64, DefaultConfig.NetworkId, td, head.Hash(), common.Hash{3}, forkID},
+			code: StatusMsg, data: statusData{64, ethconfig.Defaults.NetworkId, td, head.Hash(), common.Hash{3}, forkID},
 			wantError: errResp(ErrGenesisMismatch, "0300000000000000000000000000000000000000000000000000000000000000 (!= %x)", genesis.Hash()),
 		},
 		{
-			code: StatusMsg, data: statusData{64, DefaultConfig.NetworkId, td, head.Hash(), genesis.Hash(), forkid.ID{Hash: [4]byte{0x00, 0x01, 0x02, 0x03}}},
+			code: StatusMsg, data: statusData{64, ethconfig.Defaults.NetworkId, td, head.Hash(), genesis.Hash(), forkid.ID{Hash: [4]byte{0x00, 0x01, 0x02, 0x03}}},
 			wantError: errResp(ErrForkIDRejected, forkid.ErrLocalIncompatibleOrStale.Error()),
 		},
 	}
@@ -255,6 +256,7 @@ func TestRecvTransactions63(t *testing.T)  { testRecvTransactions(t, 63) }
 func TestRecvTransactions64(t *testing.T)  { testRecvTransactions(t, 64) }
 func TestRecvTransactions65(t *testing.T)  { testRecvTransactions(t, 65) }
 func TestRecvTransactions100(t *testing.T) { testRecvTransactions(t, 100) }
+func TestRecvTransactions101(t *testing.T) { testRecvTransactions(t, 101) }
 
 func testRecvTransactions(t *testing.T, protocol int) {
 	txAdded := make(chan []*types.Transaction)
@@ -284,7 +286,8 @@ func testRecvTransactions(t *testing.T, protocol int) {
 func TestSendTransactions63(t *testing.T)  { testSendTransactions(t, 63) }
 func TestSendTransactions64(t *testing.T)  { testSendTransactions(t, 64) }
 func TestSendTransactions65(t *testing.T)  { testSendTransactions(t, 65) }
-func TestSendTransactions100(t *testing.T) { testSendTransactions(t, 100) } 
+func TestSendTransactions100(t *testing.T) { testSendTransactions(t, 100) }
+func TestSendTransactions101(t *testing.T) { testSendTransactions(t, 101) }
 
 func testSendTransactions(t *testing.T, protocol int) {
 	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, 0, nil, nil)

@@ -40,9 +40,10 @@ import (
 )
 
 // Tests that block headers can be retrieved from a remote chain based on user queries.
-func TestGetBlockHeaders63(t *testing.T) { testGetBlockHeaders(t, 63) }
-func TestGetBlockHeaders64(t *testing.T) { testGetBlockHeaders(t, 64) }
+func TestGetBlockHeaders63(t *testing.T)  { testGetBlockHeaders(t, 63) }
+func TestGetBlockHeaders64(t *testing.T)  { testGetBlockHeaders(t, 64) }
 func TestGetBlockHeaders100(t *testing.T) { testGetBlockHeaders(t, 100) }
+func TestGetBlockHeaders101(t *testing.T) { testGetBlockHeaders(t, 101) }
 
 func testGetBlockHeaders(t *testing.T, protocol int) {
 	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, downloader.MaxHashFetch+15, nil, nil)
@@ -200,9 +201,10 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 }
 
 // Tests that block contents can be retrieved from a remote chain based on their hashes.
-func TestGetBlockBodies63(t *testing.T) { testGetBlockBodies(t, 63) }
-func TestGetBlockBodies64(t *testing.T) { testGetBlockBodies(t, 64) }
-func TestGetBlockBodies100(t *testing.T) { testGetBlockBodies(t, 100)}
+func TestGetBlockBodies63(t *testing.T)  { testGetBlockBodies(t, 63) }
+func TestGetBlockBodies64(t *testing.T)  { testGetBlockBodies(t, 64) }
+func TestGetBlockBodies100(t *testing.T) { testGetBlockBodies(t, 100) }
+func TestGetBlockBodies101(t *testing.T) { testGetBlockBodies(t, 101) }
 
 func testGetBlockBodies(t *testing.T, protocol int) {
 	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, downloader.MaxBlockFetch+15, nil, nil)
@@ -273,9 +275,10 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 }
 
 // Tests that the node state database can be retrieved based on hashes.
-func TestGetNodeData63(t *testing.T) { testGetNodeData(t, 63) }
-func TestGetNodeData64(t *testing.T) { testGetNodeData(t, 64) }
+func TestGetNodeData63(t *testing.T)  { testGetNodeData(t, 63) }
+func TestGetNodeData64(t *testing.T)  { testGetNodeData(t, 64) }
 func TestGetNodeData100(t *testing.T) { testGetNodeData(t, 100) }
+func TestGetNodeData101(t *testing.T) { testGetNodeData(t, 101) }
 
 func testGetNodeData(t *testing.T, protocol int) {
 	// Define three accounts to simulate transactions with
@@ -369,9 +372,10 @@ func testGetNodeData(t *testing.T, protocol int) {
 }
 
 // Tests that the transaction receipts can be retrieved based on hashes.
-func TestGetReceipt63(t *testing.T) { testGetReceipt(t, 63) }
-func TestGetReceipt64(t *testing.T) { testGetReceipt(t, 64) }
+func TestGetReceipt63(t *testing.T)  { testGetReceipt(t, 63) }
+func TestGetReceipt64(t *testing.T)  { testGetReceipt(t, 64) }
 func TestGetReceipt100(t *testing.T) { testGetReceipt(t, 100) }
+func TestGetReceipt101(t *testing.T) { testGetReceipt(t, 101) }
 
 func testGetReceipt(t *testing.T, protocol int) {
 	// Define three accounts to simulate transactions with
@@ -557,7 +561,7 @@ func testBroadcastBlock(t *testing.T, totalPeers, broadcastExpected int) {
 	if err != nil {
 		t.Fatalf("failed to create new blockchain: %v", err)
 	}
-	pm, err := NewProtocolManager(config, downloader.FullSync, DefaultConfig.NetworkId, evmux, &testTxPool{pool: make(map[common.Hash]*types.Transaction)}, pow, blockchain, db)
+	pm, err := NewProtocolManager(config, downloader.FullSync, ethconfig.Defaults.NetworkId, evmux, &testTxPool{pool: make(map[common.Hash]*types.Transaction)}, pow, blockchain, db)
 	if err != nil {
 		t.Fatalf("failed to start test protocol manager: %v", err)
 	}
@@ -625,7 +629,7 @@ func TestBroadcastMalformedBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create new blockchain: %v", err)
 	}
-	pm, err := NewProtocolManager(config, downloader.FullSync, DefaultConfig.NetworkId, new(event.TypeMux), new(testTxPool), engine, blockchain, db)
+	pm, err := NewProtocolManager(config, downloader.FullSync, ethconfig.Defaults.NetworkId, new(event.TypeMux), new(testTxPool), engine, blockchain, db)
 	if err != nil {
 		t.Fatalf("failed to start test protocol manager: %v", err)
 	}

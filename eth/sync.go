@@ -61,7 +61,7 @@ func (pm *ProtocolManager) syncTransactions(p *peer) {
 	// The eth/65 protocol introduces proper transaction announcements, so instead
 	// of dripping transactions across multiple peers, just send the entire list as
 	// an announcement and let the remote side decide what they need (likely nothing).
-	if supportsEth65(p.version) {
+	if isEth65OrHigher(p.version) {
 		hashes := make([]common.Hash, len(txs))
 		for i, tx := range txs {
 			hashes[i] = tx.Hash()
@@ -89,7 +89,7 @@ func (pm *ProtocolManager) txsyncLoop64() {
 	)
 	// send starts a sending a pack of transactions from the sync.
 	send := func(s *txsync) {
-		if supportsEth65(s.p.version) {
+		if isEth65OrHigher(s.p.version) {
 			panic("initial transaction syncer running on eth/65+")
 		}
 		// Fill pack with transactions up to the target size.

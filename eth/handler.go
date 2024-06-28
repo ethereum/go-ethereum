@@ -246,7 +246,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		return blockchain.CurrentBlock().NumberU64()
 	}
 
-	inserter := func(block types.Block) (int, error) {
+	inserter := func(block types.Block) (error) {
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
 		//
 		// Ideally we would also compare the head block's timestamp and similarly reject
@@ -255,7 +255,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		// which would prevent full nodes from accepting it.
 		if manager.blockchain.CurrentBlock().NumberU64() < manager.checkpointNumber {
 			log.Warn("Unsynced yet, discarded propagated block", "number", block.Number(), "hash", block.Hash())
-			return 0, nil
+			return nil
 		}
 		// If fast sync is running, deny importing weird blocks. This is a problematic
 		// clause when starting up a new network, because fast-syncing miners might not
@@ -264,14 +264,14 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		// or not. This should be fixed if we figure out a solution.
 		if atomic.LoadUint32(&manager.fastSync) == 1 {
 			log.Warn("Fast syncing, discarded propagated block", "number", block.Number(), "hash", block.Hash())
-			return 0, nil
+			return nil
 		}
-		n, err := manager.blockchain.InsertBlock(&block)
-		// n, err := manager.blockchain.InsertChain(blocks)
+		err := manager.blockchain.InsertBlock(&block)
+		// n, err := manager.blockchain.InsertChain(blocks) //TODO: only use InsertChain like go-eth
 		if err == nil {
 			atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
 		}
-		return n, err
+		return err
 	}
 
 	prepare := func(block *types.Block) error {
@@ -699,7 +699,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 
-	case supportsEth63(p.version) && msg.Code == GetNodeDataMsg:
+	case isEth63OrHigher(p.version) && msg.Code == GetNodeDataMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -726,7 +726,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendNodeData(data)
 
-	case supportsEth63(p.version) && msg.Code == NodeDataMsg:
+	case isEth63OrHigher(p.version) && msg.Code == NodeDataMsg:
 		// A batch of node state data arrived to one of our previous requests
 		var data [][]byte
 		if err := msg.Decode(&data); err != nil {
@@ -737,7 +737,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			log.Debug("Failed to deliver node state data", "err", err)
 		}
 
-	case supportsEth63(p.version) && msg.Code == GetReceiptsMsg:
+	case isEth63OrHigher(p.version) && msg.Code == GetReceiptsMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -773,7 +773,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendReceiptsRLP(receipts)
 
-	case supportsEth63(p.version) && msg.Code == ReceiptsMsg:
+	case isEth63OrHigher(p.version) && msg.Code == ReceiptsMsg:
 		// A batch of receipts arrived to one of our previous requests
 		var receipts [][]*types.Receipt
 		if err := msg.Decode(&receipts); err != nil {
@@ -847,7 +847,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 
-	case msg.Code == NewPooledTransactionHashesMsg && supportsEth65(p.version):
+	case msg.Code == NewPooledTransactionHashesMsg && isEth65OrHigher(p.version):
 		// New transaction announcement arrived, make sure we have
 		// a valid and fresh chain to handle them
 		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
@@ -863,7 +863,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		pm.txFetcher.Notify(p.id, hashes)
 
-	case msg.Code == GetPooledTransactionsMsg && supportsEth65(p.version):
+	case msg.Code == GetPooledTransactionsMsg && isEth65OrHigher(p.version):
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -899,7 +899,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendPooledTransactionsRLP(hashes, txs)
 
-	case msg.Code == TransactionMsg || (msg.Code == PooledTransactionsMsg && supportsEth65(p.version)):
+	case msg.Code == TransactionMsg || (msg.Code == PooledTransactionsMsg && isEth65OrHigher(p.version)):
 		// Transactions arrived, make sure we have a valid and fresh chain to handle them
 		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
 			break

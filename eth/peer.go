@@ -783,25 +783,7 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 	)
 	go func() {
 		switch {
-		case supportsEth65(p.version):
-			errc <- p2p.Send(p.rw, StatusMsg, &statusData{
-				ProtocolVersion: uint32(p.version),
-				NetworkID:       network,
-				TD:              td,
-				Head:            head,
-				Genesis:         genesis,
-				ForkID:          forkID,
-			})
-		case supportsEth64(p.version):
-			errc <- p2p.Send(p.rw, StatusMsg, &statusData{
-				ProtocolVersion: uint32(p.version),
-				NetworkID:       network,
-				TD:              td,
-				Head:            head,
-				Genesis:         genesis,
-				ForkID:          forkID,
-			})
-		case supportsEth63(p.version):
+		case isEth63(p.version):
 			errc <- p2p.Send(p.rw, StatusMsg, &statusData63{
 				ProtocolVersion: uint32(p.version),
 				NetworkId:       network,
@@ -809,16 +791,25 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 				CurrentBlock:    head,
 				GenesisBlock:    genesis,
 			})
+		case isEth64OrHigher(p.version):
+			errc <- p2p.Send(p.rw, StatusMsg, &statusData{
+				ProtocolVersion: uint32(p.version),
+				NetworkID:       network,
+				TD:              td,
+				Head:            head,
+				Genesis:         genesis,
+				ForkID:          forkID,
+			})
 		default:
 			panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
 		}
 	}()
 	go func() {
 		switch {
-		case supportsEth64(p.version):
-			errc <- p.readStatus(network, &status, genesis, forkFilter)
-		case supportsEth63(p.version):
+		case isEth63(p.version):
 			errc <- p.readStatusLegacy(network, &status63, genesis)
+		case isEth64OrHigher(p.version):
+			errc <- p.readStatus(network, &status, genesis, forkFilter)
 		default:
 			panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
 		}
@@ -836,10 +827,10 @@ func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 		}
 	}
 	switch {
-	case supportsEth64(p.version):
-		p.td, p.head = status.TD, status.Head
-	case supportsEth63(p.version):
+	case isEth63(p.version):
 		p.td, p.head = status63.TD, status63.CurrentBlock
+	case isEth64OrHigher(p.version):
+		p.td, p.head = status.TD, status.Head
 	default:
 		panic(fmt.Sprintf("unsupported eth protocol version: %d", p.version))
 	}
