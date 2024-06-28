@@ -1121,9 +1121,9 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	}
 
 	if err != nil {
-		temp.Clear()
-	} else {
 		temp.SetOne()
+	} else {
+		temp.Clear()
 	}
 	stack.push(&temp)
 	fmt.Println(returnGas)
@@ -1147,9 +1147,9 @@ func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCont
 
 	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, true)
 	if err != nil {
-		temp.Clear()
-	} else {
 		temp.SetOne()
+	} else {
+		temp.Clear()
 	}
 	stack.push(&temp)
 
@@ -1173,9 +1173,9 @@ func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContex
 
 	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
 	if err != nil {
-		temp.Clear()
-	} else {
 		temp.SetOne()
+	} else {
+		temp.Clear()
 	}
 	stack.push(&temp)
 
