@@ -23,6 +23,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/forkid"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
@@ -30,28 +31,74 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	eth62  = 62
-	eth63  = 63
-	xdpos2 = 100
+	eth63   = 63
+	eth64   = 64
+	eth65   = 65
+	xdpos2  = 100 //xdpos2.1 = eth62+eth63
+	xdpos22 = 101 //xdpos2.2 = eth65
 )
 
-// Official short name of the protocol used during capability negotiation.
-var ProtocolName = "eth"
+// XDC needs the below functions because direct number equality doesn't work (eg. version >= 63)
+// we should try to match protocols 1 to 1 from now on, bump xdpos along with any new eth (eg. eth66 = xdpos23 only)
+// try to follow the exact comparison from go-ethereum as much as possible (eg. version >= 63 <> isEth63OrHigher(version))
 
-// Supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{xdpos2, eth63, eth62}
+func isEth63(version int) bool {
+	switch {
+	case version == 63:
+		return true
+	case version == 100:
+		return true
+	default:
+		return false
+	}
+}
+func isEth64(version int) bool {
+	switch {
+	case version == 64:
+		return true
+	default:
+		return false
+	}
+}
+func isEth65(version int) bool {
+	switch {
+	case version == 65:
+		return true
+	case version == 101:
+		return true
+	default:
+		return false
+	}
+}
 
-// Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{227, 17, 8}
+func isEth63OrHigher(version int) bool {
+	return isEth63(version) || isEth64(version) || isEth65(version)
+}
 
-const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
+func isEth64OrHigher(version int) bool {
+	return isEth64(version) || isEth65(version)
+}
+
+func isEth65OrHigher(version int) bool {
+	return isEth65(version)
+}
+
+// protocolName is the official short name of the protocol used during capability negotiation.
+const protocolName = "eth"
+
+// ProtocolVersions are the supported versions of the eth protocol (first is primary).
+var ProtocolVersions = []uint{xdpos22, xdpos2, eth65, eth64, eth63}
+
+// protocolLengths are the number of implemented message corresponding to different protocol versions.
+var protocolLengths = map[uint]uint64{xdpos22: 227, xdpos2: 227, eth65: 17, eth64: 17, eth63: 17}
+
+const protocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
 // eth protocol message codes
 const (
-	// Protocol messages belonging to eth/62
 	StatusMsg          = 0x00
 	NewBlockHashesMsg  = 0x01
-	TxMsg              = 0x02
+	TransactionMsg     = 0x02
 	GetBlockHeadersMsg = 0x03
 	BlockHeadersMsg    = 0x04
 	GetBlockBodiesMsg  = 0x05
@@ -64,6 +111,14 @@ const (
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
+
+	// New protocol message codes introduced in eth65
+	//
+	// Previously these message ids were used by some legacy and unsupported
+	// eth protocols, reown them here.
+	NewPooledTransactionHashesMsg = 0x28 //originally 0x08 but clash with OrderTxMsg
+	GetPooledTransactionsMsg      = 0x29 //originally 0x09 but clash with LendingTxMsg
+	PooledTransactionsMsg         = 0x0a
 
 	// Protocol messages belonging to xdpos2/100
 	VoteMsg     = 0xe0
@@ -78,11 +133,11 @@ const (
 	ErrDecode
 	ErrInvalidMsgCode
 	ErrProtocolVersionMismatch
-	ErrNetworkIdMismatch
-	ErrGenesisBlockMismatch
+	ErrNetworkIDMismatch
+	ErrGenesisMismatch
+	ErrForkIDRejected
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
-	ErrSuspendedPeer
 )
 
 func (e errCode) String() string {
@@ -95,14 +150,22 @@ var errorToString = map[int]string{
 	ErrDecode:                  "Invalid message",
 	ErrInvalidMsgCode:          "Invalid message code",
 	ErrProtocolVersionMismatch: "Protocol version mismatch",
-	ErrNetworkIdMismatch:       "NetworkId mismatch",
-	ErrGenesisBlockMismatch:    "Genesis block mismatch",
+	ErrNetworkIDMismatch:       "Network ID mismatch",
+	ErrGenesisMismatch:         "Genesis mismatch",
+	ErrForkIDRejected:          "Fork ID rejected",
 	ErrNoStatusMsg:             "No status message",
 	ErrExtraStatusMsg:          "Extra status message",
-	ErrSuspendedPeer:           "Suspended peer",
 }
 
 type txPool interface {
+	// Has returns an indicator whether txpool has a transaction
+	// cached with the given hash.
+	Has(hash common.Hash) bool
+
+	// Get retrieves the transaction from local txpool with given
+	// tx hash.
+	Get(hash common.Hash) *types.Transaction
+
 	// AddRemotes should add the given transactions to the pool.
 	AddRemotes([]*types.Transaction) []error
 
@@ -141,13 +204,23 @@ type lendingPool interface {
 	SubscribeTxPreEvent(chan<- core.LendingTxPreEvent) event.Subscription
 }
 
-// statusData is the network packet for the status message.
-type statusData struct {
+// statusData63 is the network packet for the status message for eth/63.
+type statusData63 struct {
 	ProtocolVersion uint32
 	NetworkId       uint64
 	TD              *big.Int
 	CurrentBlock    common.Hash
 	GenesisBlock    common.Hash
+}
+
+// statusData is the network packet for the status message for eth/64 and later.
+type statusData struct {
+	ProtocolVersion uint32
+	NetworkID       uint64
+	TD              *big.Int
+	Head            common.Hash
+	Genesis         common.Hash
+	ForkID          forkid.ID
 }
 
 // newBlockHashesData is the network packet for the block announcements.
@@ -204,6 +277,19 @@ func (hn *hashOrNumber) DecodeRLP(s *rlp.Stream) error {
 type newBlockData struct {
 	Block *types.Block
 	TD    *big.Int
+}
+
+// sanityCheck verifies that the values are reasonable, as a DoS protection
+func (request *newBlockData) sanityCheck() error {
+	if err := request.Block.SanityCheck(); err != nil {
+		return err
+	}
+	//TD at mainnet block #7753254 is 76 bits. If it becomes 100 million times
+	// larger, it will still fit within 100 bits
+	if tdlen := request.TD.BitLen(); tdlen > 100 {
+		return fmt.Errorf("too large block TD: bitlen %d", tdlen)
+	}
+	return nil
 }
 
 // blockBody represents the data content of a single block.

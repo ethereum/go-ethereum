@@ -51,6 +51,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/miner"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/enr"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
@@ -69,7 +70,9 @@ type Ethereum struct {
 	chainConfig *params.ChainConfig
 
 	// Channel for shutting down the service
-	shutdownChan chan bool // Channel for shutting down the ethereum
+	shutdownChan chan bool
+
+	server *p2p.Server
 
 	// Handlers
 	txPool          *core.TxPool
@@ -280,8 +283,8 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 			return block, false, nil
 		}
 
-		eth.protocolManager.fetcher.SetSignHook(signHook)
-		eth.protocolManager.fetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
+		eth.protocolManager.blockFetcher.SetSignHook(signHook)
+		eth.protocolManager.blockFetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
 
 		/*
 			XDPoS1.0 Specific hooks
@@ -538,22 +541,29 @@ func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
-func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
+func (s *Ethereum) EthVersion() int                    { return int(ProtocolVersions[0]) }
 func (s *Ethereum) NetVersion() uint64                 { return s.networkId }
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
-	if s.lesServer == nil {
-		return s.protocolManager.SubProtocols
+	protos := make([]p2p.Protocol, len(ProtocolVersions))
+	for i, vsn := range ProtocolVersions {
+		protos[i] = s.protocolManager.makeProtocol(vsn)
+		protos[i].Attributes = []enr.Entry{s.currentEthEntry()}
 	}
-	return append(s.protocolManager.SubProtocols, s.lesServer.Protocols()...)
+	if s.lesServer != nil {
+		protos = append(protos, s.lesServer.Protocols()...)
+	}
+	return protos
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start(srvr *p2p.Server) error {
+	s.startEthEntryUpdate(srvr.LocalNode())
+
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers()
 
