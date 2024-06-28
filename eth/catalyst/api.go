@@ -124,7 +124,7 @@ type ConsensusAPI struct {
 	invalidLock       sync.Mutex                    // Protects the invalid maps from concurrent access
 
 	// Geth can appear to be stuck or do strange things if the beacon client is
-	// offline or is sending us strange data. Stash some update stats away so
+	// offline or is sending us strange data. Stash some updated stats away so
 	// that we can warn the user and not have them open issues on our tracker.
 	lastTransitionUpdate time.Time
 	lastTransitionLock   sync.Mutex
