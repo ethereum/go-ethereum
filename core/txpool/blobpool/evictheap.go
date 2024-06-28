@@ -17,13 +17,13 @@
 package blobpool
 
 import (
-	"bytes"
 	"container/heap"
 	"math"
-	"sort"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"golang.org/x/exp/maps"
 )
 
 // evictHeap is a helper data structure to keep track of the cheapest bottleneck
@@ -49,20 +49,15 @@ type evictHeap struct {
 func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index map[common.Address][]*blobTxMeta) *evictHeap {
 	heap := &evictHeap{
 		metas: index,
-		index: make(map[common.Address]int),
+		index: make(map[common.Address]int, len(index)),
 	}
 	// Populate the heap in account sort order. Not really needed in practice,
 	// but it makes the heap initialization deterministic and less annoying to
 	// test in unit tests.
-	addrs := make([]common.Address, 0, len(index))
-	for addr := range index {
-		addrs = append(addrs, addr)
-	}
-	sort.Slice(addrs, func(i, j int) bool { return bytes.Compare(addrs[i][:], addrs[j][:]) < 0 })
-
-	for _, addr := range addrs {
-		heap.index[addr] = len(heap.addrs)
-		heap.addrs = append(heap.addrs, addr)
+	heap.addrs = maps.Keys(index)
+	slices.SortFunc(heap.addrs, common.Address.Cmp)
+	for i, addr := range heap.addrs {
+		heap.index[addr] = i
 	}
 	heap.reinit(basefee, blobfee, true)
 	return heap
