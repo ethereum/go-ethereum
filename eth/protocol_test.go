@@ -312,10 +312,10 @@ func testSendTransactions(t *testing.T, protocol int) {
 		}
 		for n := 0; n < len(alltxs) && !t.Failed(); {
 			var forAllHashes func(callback func(hash common.Hash))
-			switch protocol {
-			case 63:
+			switch  {
+			case isEth63(protocol):
 				fallthrough
-			case 64:
+			case isEth64(protocol):
 				msg, err := p.app.ReadMsg()
 				if err != nil {
 					t.Errorf("%v: read error: %v", p.Peer, err)
@@ -334,26 +334,7 @@ func testSendTransactions(t *testing.T, protocol int) {
 						callback(tx.Hash())
 					}
 				}
-			case 65:
-				msg, err := p.app.ReadMsg()
-				if err != nil {
-					t.Errorf("%v: read error: %v", p.Peer, err)
-					continue
-				} else if msg.Code != NewPooledTransactionHashesMsg {
-					t.Errorf("%v: got code %d, want NewPooledTransactionHashesMsg", p.Peer, msg.Code)
-					continue
-				}
-				var hashes []common.Hash
-				if err := msg.Decode(&hashes); err != nil {
-					t.Errorf("%v: %v", p.Peer, err)
-					continue
-				}
-				forAllHashes = func(callback func(hash common.Hash)) {
-					for _, h := range hashes {
-						callback(h)
-					}
-				}
-			case 100:
+			case isEth65(protocol):
 				msg, err := p.app.ReadMsg()
 				if err != nil {
 					t.Errorf("%v: read error: %v", p.Peer, err)

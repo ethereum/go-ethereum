@@ -35,10 +35,13 @@ const (
 	eth64   = 64
 	eth65   = 65
 	xdpos2  = 100 //xdpos2.1 = eth62+eth63
-	xdpos22 = 101 //xdpos2.2 = eth63+eth64+eth65
+	xdpos22 = 101 //xdpos2.2 = eth65
 )
 
-func supportsEth63(version int) bool {
+// XDC needs the below functions because direct number equality doesn't work (eg. version >= 63)
+// we should try to match protocols 1 to 1 from now on, bump xdpos along with any new eth (eg. eth66 = xdpos23 only)
+// try to follow the exact comparison from go-ethereum as much as possible (eg. version >= 63 <> isEth63OrHigher(version))
+func isEth63(version int) bool {
 	switch {
 	case version < 63:
 		return false
@@ -63,20 +66,37 @@ func supportsEth64(version int) bool {
 		return false
 	}
 }
-
-func supportsEth65(version int) bool {
+func isEth64(version int) bool {
 	switch {
 	case version < 65:
 		return false
 	case version < 100:
 		return true
-	case version == 100:
+	default:
 		return false
-	case version > 100:
+	}
+}
+func isEth65(version int) bool {
+	switch {
+	case version == 65:
+		return true
+	case version == 101:
 		return true
 	default:
 		return false
 	}
+}
+
+func isEth63OrHigher(version int) bool {
+	return isEth63(version) || isEth64(version) || isEth65(version)
+}
+
+func isEth64OrHigher(version int) bool {
+	return isEth64(version) || isEth65(version)
+}
+
+func isEth65OrHigher(version int) bool {
+	return isEth65(version)
 }
 
 // protocolName is the official short name of the protocol used during capability negotiation.
