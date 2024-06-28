@@ -442,7 +442,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	}
 	mapAcc := make(map[common.Address]OverrideAccount)
 	mapAcc[testAddr] = override
-	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc); err != nil {
+	if _, err := ec.CallContract(context.Background(), msg, big.NewInt(0), mapAcc); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -548,7 +548,7 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 	}
 	mapAcc := make(map[common.Address]OverrideAccount)
 	mapAcc[common.Address{}] = override
-	res, err := ec.CallContract(context.Background(), msg, big.NewInt(0), &mapAcc)
+	res, err := ec.CallContract(context.Background(), msg, big.NewInt(0), mapAcc)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -560,7 +560,7 @@ func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
 	bo := BlockOverrides{
 		Coinbase: common.HexToAddress("0x1111111111111111111111111111111111111111"),
 	}
-	res, err = ec.CallContractWithBlockOverrides(context.Background(), msg, big.NewInt(0), &mapAcc, bo)
+	res, err = ec.CallContractWithBlockOverrides(context.Background(), msg, big.NewInt(0), mapAcc, bo)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
