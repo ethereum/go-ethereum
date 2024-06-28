@@ -1105,23 +1105,13 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if !value.IsZero() {
 		gas += params.CallStipend
 	}
-	// Check that we're only calling non-legacy contracts
-	var (
-		err       error
-		ret       []byte
-		returnGas uint64
-	)
-	code := interpreter.evm.StateDB.GetCode(toAddr)
-	if len(code) > 0 && !hasEOFMagic(code) {
-		err = errors.New("calling legacy contract from eof")
-		ret = nil
-		returnGas = gas
-	} else {
-		ret, returnGas, err = interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
-	}
 
-	if err != nil {
+	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
+
+	if err == ErrExecutionReverted {
 		temp.SetOne()
+	} else if err != nil {
+		temp.SetUint64(2)
 	} else {
 		temp.Clear()
 	}
@@ -1145,9 +1135,26 @@ func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCont
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
-	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, true)
-	if err != nil {
+	// Check that we're only calling non-legacy contracts
+	var (
+		err       error
+		ret       []byte
+		returnGas uint64
+	)
+	code := interpreter.evm.StateDB.GetCode(toAddr)
+	if !hasEOFMagic(code) {
+		// Delegate-calling a non-eof contract should return 1
+		err = ErrExecutionReverted
+		ret = nil
+		returnGas = gas
+	} else {
+		ret, returnGas, err = interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, true)
+	}
+
+	if err == ErrExecutionReverted {
 		temp.SetOne()
+	} else if err != nil {
+		temp.SetUint64(2)
 	} else {
 		temp.Clear()
 	}
@@ -1172,8 +1179,10 @@ func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContex
 	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
 
 	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
-	if err != nil {
+	if err == ErrExecutionReverted {
 		temp.SetOne()
+	} else if err != nil {
+		temp.SetUint64(2)
 	} else {
 		temp.Clear()
 	}
