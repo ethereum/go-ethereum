@@ -115,7 +115,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			req.Close()
 		}
 	}()
-	// Subscribe to peer lifecycle events to schedule tasks to new joiners and
+	// Subscribe to peer lifecycle events to schedule tasks for new joiners and
 	// reschedule tasks upon disconnections. We don't care which event happened
 	// for simplicity, so just use a single channel.
 	peering := make(chan *peeringEvent, 64) // arbitrary buffer, just some burst protection
