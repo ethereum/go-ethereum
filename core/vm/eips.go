@@ -889,12 +889,19 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	}
 	subcontainer := scope.Contract.Container.ContainerSections[idx]
 
+	// Deduct hashing charge
+	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	hashingCharge := (params.Keccak256WordGas) * ((uint64(len(scope.Contract.Container.ContainerCode[idx])) + 31) / 32)
+	if ok := scope.Contract.UseGas(hashingCharge, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified); !ok {
+		return nil, ErrGasUintOverflow
+	}
 	// Reuse last popped value from stack
 	stackvalue := size
 	// Apply EIP150
 	gas -= gas / 64
 	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
-
+	// Skip the immediate
+	*pc += 1
 	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, subcontainer.MarshalBinary(), gas, &value, &salt)
 	if suberr != nil {
 		stackvalue.Clear()
@@ -990,6 +997,14 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	if len(deployedCode) == 0 {
 		return nil, errors.New("nonexistant subcontainer")
 	}
+	// Restore context
+	var (
+		last   = len(scope.ReturnStack) - 1
+		retCtx = scope.ReturnStack[last]
+	)
+	scope.ReturnStack = scope.ReturnStack[:last]
+	scope.CodeSection = retCtx.Section
+	*pc = retCtx.Pc - 1
 	return deployedCode, errStopToken
 }
 

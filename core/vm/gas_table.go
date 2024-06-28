@@ -586,17 +586,6 @@ func gasEOFCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	if err != nil {
 		return 0, err
 	}
-	size, overflow := stack.Back(3).Uint64WithOverflow()
-	if overflow {
-		return 0, ErrGasUintOverflow
-	}
-	if size > params.MaxInitCodeSize {
-		return 0, fmt.Errorf("%w: size %d", ErrMaxInitCodeSizeExceeded, size)
-	}
-	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
-	moreGas := (params.Keccak256WordGas) * ((size + 31) / 32)
-	if gas, overflow = math.SafeAdd(gas, moreGas); overflow {
-		return 0, ErrGasUintOverflow
-	}
+	// hashing charge needs to be deducted in the opcode itself, since it depends on the immediate
 	return gas, nil
 }
