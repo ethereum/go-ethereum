@@ -195,6 +195,7 @@ func TestOnDemandSpam(t *testing.T) {
 	var includedWithdrawals []uint64
 
 	timer := time.NewTimer(20 * time.Second)
+	defer timer.Stop()
 	for {
 		select {
 		case evt := <-chainHeadCh:
