@@ -693,7 +693,7 @@ func enableEOF(jt *JumpTable) {
 		dynamicGas:  memoryCopierGas(2),
 		minStack:    minStack(3, 0),
 		maxStack:    maxStack(3, 0),
-		memorySize:  memoryMcopy,
+		memorySize:  memoryDataCopy,
 	}
 	jt[DUPN] = &operation{
 		execute:     opDupN,

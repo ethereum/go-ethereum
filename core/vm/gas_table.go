@@ -586,7 +586,7 @@ func gasEOFCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memor
 	if err != nil {
 		return 0, err
 	}
-	size, overflow := stack.Back(2).Uint64WithOverflow()
+	size, overflow := stack.Back(3).Uint64WithOverflow()
 	if overflow {
 		return 0, ErrGasUintOverflow
 	}
