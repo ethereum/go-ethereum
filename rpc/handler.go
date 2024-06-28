@@ -17,8 +17,10 @@
 package rpc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -28,9 +30,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 )
-
-// callErrorDataLogTruncateLimit is the before truncation limit of the error data field in the log.
-const callErrorDataLogTruncateLimit = 1024
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that
 // handler is not safe for concurrent use. Message handling never blocks indefinitely
@@ -472,24 +471,16 @@ func (h *handler) handleCallMsg(ctx *callProc, msg *jsonrpcMessage) *jsonrpcMess
 
 	case msg.isCall():
 		resp := h.handleCall(ctx, msg)
-		var logCtx []interface{}
-		logCtx = append(logCtx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
+		var logctx []any
+		logctx = append(logctx, "reqid", idForLog{msg.ID}, "duration", time.Since(start))
 		if resp.Error != nil {
-			logCtx = append(logCtx, "err", resp.Error.Message)
+			logctx = append(logctx, "err", resp.Error.Message)
 			if resp.Error.Data != nil {
-				errDataStr := fmt.Sprintf("%v", resp.Error.Data)
-				// Truncate the error data if it is too long. Otherwise, preserve the original data.
-				if len(errDataStr) > callErrorDataLogTruncateLimit {
-					remaining := len(errDataStr) - callErrorDataLogTruncateLimit
-					errDataStr = fmt.Sprintf("%s... (truncated remaining %d chars)", errDataStr[:callErrorDataLogTruncateLimit], remaining)
-					logCtx = append(logCtx, "errdata", errDataStr)
-				} else {
-					logCtx = append(logCtx, "errdata", resp.Error.Data)
-				}
+				logctx = append(logctx, "errdata", formatErrorData(resp.Error.Data))
 			}
-			h.log.Warn("Served "+msg.Method, logCtx...)
+			h.log.Warn("Served "+msg.Method, logctx...)
 		} else {
-			h.log.Debug("Served "+msg.Method, logCtx...)
+			h.log.Debug("Served "+msg.Method, logctx...)
 		}
 		return resp
 
@@ -602,4 +593,34 @@ func (id idForLog) String() string {
 		return s
 	}
 	return string(id.RawMessage)
+}
+
+var errTruncatedOutput = errors.New("truncated output")
+
+type limitedBuffer struct {
+	output []byte
+	limit  int
+}
+
+func (buf *limitedBuffer) Write(data []byte) (int, error) {
+	avail := max(buf.limit, len(buf.output))
+	if len(data) < avail {
+		buf.output = append(buf.output, data...)
+		return len(data), nil
+	}
+	buf.output = append(buf.output, data[:avail]...)
+	return avail, errTruncatedOutput
+}
+
+func formatErrorData(v any) string {
+	buf := limitedBuffer{limit: 1024}
+	err := json.NewEncoder(&buf).Encode(v)
+	switch {
+	case err == nil:
+		return string(bytes.TrimRight(buf.output, "\n"))
+	case errors.Is(err, errTruncatedOutput):
+		return fmt.Sprintf("%s... (truncated)", buf.output)
+	default:
+		return fmt.Sprintf("bad error data (err=%v)", err)
+	}
 }
