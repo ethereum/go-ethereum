@@ -306,7 +306,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 				if tracer.Hooks.OnTxEnd != nil {
 					tracer.Hooks.OnTxEnd(receipt, nil)
 				}
-				writeTraceResult(tracer, traceOutput)
+				if err = writeTraceResult(tracer, traceOutput); err != nil {
+					log.Warn("Error writing tracer output", "err", err)
+				}
 			}
 		}
 
