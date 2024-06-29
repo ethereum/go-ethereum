@@ -134,11 +134,11 @@ func (q *headerQueue) put(hash common.Hash, data *types.Header) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	copy(q.headers[1:], q.headers)
-	q.headers[0] = &headerQueueItem{
+	q.headers = append(q.headers, &headerQueueItem{
 		hash:   hash,
 		header: data,
-	}
+	})
+	q.headers = q.headers[1:]
 }
 
 // get retrieves a previously stored header item or nil if it does not exist.
@@ -146,7 +146,8 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for _, item := range q.headers {
+	for i := len(q.headers) - 1; i >= 0; i-- {
+		item := q.headers[i]
 		if item == nil {
 			return nil // no more items
 		}
