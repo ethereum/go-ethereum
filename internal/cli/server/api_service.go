@@ -66,16 +66,20 @@ func (s *Server) GetTransactionReceipt(ctx context.Context, req *protobor.Receip
 		return nil, err
 	}
 
-	receipts, err := s.backend.APIBackend.GetReceipts(ctx, blockHash)
+	receipt, err := s.backend.APIBackend.GetReceipts(ctx, blockHash)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(receipts) <= int(txnIndex) {
+	if receipt == nil {
+		return nil, errors.New("no receipt found")
+	}
+
+	if len(receipt) <= int(txnIndex) {
 		return nil, errors.New("transaction index out of bounds")
 	}
 
-	return &protobor.ReceiptResponse{Receipt: ConvertReceiptToProtoReceipt(receipts[txnIndex])}, nil
+	return &protobor.ReceiptResponse{Receipt: ConvertReceiptToProtoReceipt(receipt[txnIndex])}, nil
 }
 
 func (s *Server) GetBorBlockReceipt(ctx context.Context, req *protobor.ReceiptRequest) (*protobor.ReceiptResponse, error) {
