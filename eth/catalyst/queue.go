@@ -56,7 +56,7 @@ type payloadQueue struct {
 // all containing empty items.
 func newPayloadQueue() *payloadQueue {
 	return &payloadQueue{
-		payloads: make([]*payloadQueueItem, maxTrackedPayloads),
+		payloads: make([]*payloadQueueItem, 0, maxTrackedPayloads),
 	}
 }
 
@@ -65,10 +65,12 @@ func (q *payloadQueue) put(id engine.PayloadID, payload *miner.Payload) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	copy(q.payloads[1:], q.payloads)
-	q.payloads[0] = &payloadQueueItem{
+	q.payloads = append(q.payloads, &payloadQueueItem{
 		id:      id,
 		payload: payload,
+	})
+	if len(q.payloads) > maxTrackedPayloads {
+		q.payloads = q.payloads[1:]
 	}
 }
 
@@ -78,9 +80,6 @@ func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayl
 	defer q.lock.RUnlock()
 
 	for _, item := range q.payloads {
-		if item == nil {
-			return nil // no more items
-		}
 		if item.id == id {
 			if !full {
 				return item.payload.Resolve()
@@ -97,9 +96,6 @@ func (q *payloadQueue) has(id engine.PayloadID) bool {
 	defer q.lock.RUnlock()
 
 	for _, item := range q.payloads {
-		if item == nil {
-			return false
-		}
 		if item.id == id {
 			return true
 		}
@@ -125,7 +121,7 @@ type headerQueue struct {
 // all containing empty items.
 func newHeaderQueue() *headerQueue {
 	return &headerQueue{
-		headers: make([]*headerQueueItem, maxTrackedHeaders),
+		headers: make([]*headerQueueItem, 0, maxTrackedHeaders),
 	}
 }
 
@@ -138,7 +134,9 @@ func (q *headerQueue) put(hash common.Hash, data *types.Header) {
 		hash:   hash,
 		header: data,
 	})
-	q.headers = q.headers[1:]
+	if len(q.headers) > maxTrackedHeaders {
+		q.headers = q.headers[1:]
+	}
 }
 
 // get retrieves a previously stored header item or nil if it does not exist.
@@ -146,11 +144,7 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for i := len(q.headers) - 1; i >= 0; i-- {
-		item := q.headers[i]
-		if item == nil {
-			return nil // no more items
-		}
+	for _, item := range q.headers {
 		if item.hash == hash {
 			return item.header
 		}
