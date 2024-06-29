@@ -22,7 +22,7 @@ import "sync"
 // This type is safe for concurrent use.
 type Cache[K comparable, V any] struct {
 	cache BasicLRU[K, V]
-	mu    sync.Mutex
+	mu    sync.RWMutex
 }
 
 // NewCache creates an LRU cache.
@@ -40,32 +40,32 @@ func (c *Cache[K, V]) Add(key K, value V) (evicted bool) {
 
 // Contains reports whether the given key exists in the cache.
 func (c *Cache[K, V]) Contains(key K) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	return c.cache.Contains(key)
 }
 
 // Get retrieves a value from the cache. This marks the key as recently used.
 func (c *Cache[K, V]) Get(key K) (value V, ok bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	return c.cache.Get(key)
 }
 
 // Len returns the current number of items in the cache.
 func (c *Cache[K, V]) Len() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	return c.cache.Len()
 }
 
 // Peek retrieves a value from the cache, but does not mark the key as recently used.
 func (c *Cache[K, V]) Peek(key K) (value V, ok bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	return c.cache.Peek(key)
 }
@@ -88,8 +88,8 @@ func (c *Cache[K, V]) Remove(key K) bool {
 
 // Keys returns all keys of items currently in the LRU.
 func (c *Cache[K, V]) Keys() []K {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	return c.cache.Keys()
 }

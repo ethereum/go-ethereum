@@ -36,7 +36,7 @@ type SizeConstrainedCache[K comparable, V blobType] struct {
 	size    uint64
 	maxSize uint64
 	lru     BasicLRU[K, V]
-	lock    sync.Mutex
+	lock    sync.RWMutex
 }
 
 // NewSizeConstrainedCache creates a new size-constrained LRU cache.
@@ -77,8 +77,8 @@ func (c *SizeConstrainedCache[K, V]) Add(key K, value V) (evicted bool) {
 
 // Get looks up a key's value from the cache.
 func (c *SizeConstrainedCache[K, V]) Get(key K) (V, bool) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 
 	return c.lru.Get(key)
 }
