@@ -71,7 +71,6 @@ func ConvertReceiptToProtoReceipt(receipt *types.Receipt) *protobor.Receipt {
 		GasUsed:           receipt.GasUsed,
 		EffectiveGasPrice: receipt.EffectiveGasPrice.Int64(),
 		BlobGasUsed:       receipt.BlobGasUsed,
-		BlobGasPrice:      receipt.BlobGasPrice.Int64(),
 		BlockHash:         protoutil.ConvertHashToH256(receipt.BlockHash),
 		BlockNumber:       receipt.BlockNumber.Int64(),
 		TransactionIndex:  uint64(receipt.TransactionIndex),
