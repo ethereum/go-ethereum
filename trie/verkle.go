@@ -144,10 +144,8 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount)
 
 	// Encode balance in little-endian
 	bytes := acc.Balance.Bytes()
-	if len(bytes) > 0 {
-		for i, b := range bytes {
-			balance[len(bytes)-i-1] = b
-		}
+	for i, b := range bytes {
+		balance[len(bytes)-i-1] = b
 	}
 	values[utils.BalanceLeafKey] = balance[:]
 
@@ -368,4 +366,9 @@ func (t *VerkleTrie) ToDot() string {
 
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
 	return t.reader.node(path, common.Hash{})
+}
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *VerkleTrie) Witness() map[string]struct{} {
+	panic("not implemented")
 }
