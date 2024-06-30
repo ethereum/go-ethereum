@@ -52,18 +52,19 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: hardhat/Dockerfile
+          push: true
+          tags: e1018mc/limechain:smart_contract
+
       - name: Run local devnet
         run: docker-compose up -d
 
       - name: Build a new image with Apollo contract
         run: docker build -t hardhat-ignition .
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: e1018mc/limechain:apollo_contract
 
       - name: Destroy local devnet
         run: docker-compose down
