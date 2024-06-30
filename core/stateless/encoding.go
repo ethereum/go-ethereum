@@ -58,6 +58,8 @@ func (w *Witness) fromExtWitness(ext *extWitness) error {
 	for _, code := range ext.Codes {
 		w.Codes[string(code)] = struct{}{}
 	}
+	w.lock.Lock()
+	defer w.lock.Unlock()
 	w.State = make(map[string]struct{}, len(ext.State))
 	for _, node := range ext.State {
 		w.State[string(node)] = struct{}{}
