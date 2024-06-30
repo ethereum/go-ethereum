@@ -48,8 +48,8 @@ func (c *Cache[K, V]) Contains(key K) bool {
 
 // Get retrieves a value from the cache. This marks the key as recently used.
 func (c *Cache[K, V]) Get(key K) (value V, ok bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	return c.cache.Get(key)
 }
