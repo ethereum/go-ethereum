@@ -5,9 +5,18 @@ services:
     image: e1018mc/limechain:go-ethereum-app
     platform: linux/x86_64
     ports:
-      - "8545:8545"
+      - "8546:8546"
     environment:
       - ENV_VAR=Test
+    networks:
+      - devnet
+  app2:
+    image: e1018mc/limechain:smart_contract
+    platform: linux/x86_64
+    ports:
+      - "8545:8545"
+    environment:
+      - ENV_VAR=Test-contracts
     networks:
       - devnet
 
