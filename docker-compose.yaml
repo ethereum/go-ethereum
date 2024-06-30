@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   app:
-    image: e1018mc/limechain:latest
+    image: e1018mc/limechain:go-ethereum-app
     platform: linux/x86_64
     ports:
       - "8545:8545"
