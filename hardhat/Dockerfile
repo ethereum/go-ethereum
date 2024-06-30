@@ -9,7 +9,7 @@ COPY . /usr/src/app
 RUN npm install
 RUN npm install wait-on
 
-COPY entrypoint.sh /usr/local/bin
+COPY ./hardhat/entrypoint.sh /usr/local/bin
 
 EXPOSE 8545
 
