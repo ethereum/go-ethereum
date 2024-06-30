@@ -6,7 +6,7 @@ WORKDIR /usr/src/app
 
 COPY . /usr/src/app
 
-RUN npm install
+RUN npm install --save-dev
 RUN npm install wait-on
 
 COPY ./hardhat/entrypoint.sh /usr/local/bin
