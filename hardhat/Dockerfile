@@ -1,19 +1,18 @@
-FROM node:lts-alpine
+FROM node:22-alpine3.19
 
 RUN apk add --no-cache bash
 
-WORKDIR /usr/app
+WORKDIR /usr/src/app
 
-COPY package*.json ./
+COPY . /usr/src/app
 
 RUN npm install
+RUN npm install wait-on
 
-COPY . .
+COPY $PWD/entrypoint.sh /usr/local/bin
 
 EXPOSE 8545
 
-COPY entrypoint.sh /usr/app/entrypoint.sh
+RUN chmod +x $PWD/entrypoint.sh
 
-RUN chmod +x /usr/app/entrypoint.sh
-
-ENTRYPOINT ["/usr/app/entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/entrypoint.sh"]
