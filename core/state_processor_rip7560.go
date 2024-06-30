@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -14,6 +13,36 @@ import (
 	"math/big"
 	"strings"
 )
+
+const MAGIC_VALUE_SENDER = uint64(0xbf45c166)
+const MAGIC_VALUE_PAYMASTER = uint64(0xe0e6183a)
+const MAGIC_VALUE_SIGFAIL = uint64(0x31665494)
+const PAYMASTER_MAX_CONTEXT_SIZE = 65536
+
+func PackValidationData(authorizerMagic uint64, validUntil, validAfter uint64) []byte {
+
+	t := new(big.Int).SetUint64(uint64(validAfter))
+	t = t.Lsh(t, 48).Add(t, new(big.Int).SetUint64(validUntil&0xffffff))
+	t = t.Lsh(t, 160).Add(t, new(big.Int).SetUint64(uint64(authorizerMagic)))
+	return common.LeftPadBytes(t.Bytes(), 32)
+}
+
+func UnpackValidationData(validationData []byte) (authorizerMagic uint64, validUntil, validAfter uint64) {
+
+	t := new(big.Int).SetBytes(validationData)
+	authorizerMagic = t.Uint64()
+	validUntil = t.Rsh(t, 160).Uint64() & 0xffffff
+	validAfter = t.Rsh(t, 48).Uint64()
+	return
+}
+
+func UnpackPaymasterValidationReturn(paymasterValidationReturn []byte) (validationData, context []byte) {
+	validationData = paymasterValidationReturn[0:32]
+	//2nd bytes32 is ignored (its an offset value)
+	contextLen := new(big.Int).SetBytes(paymasterValidationReturn[64:96])
+	context = paymasterValidationReturn[96 : 96+contextLen.Uint64()]
+	return
+}
 
 type ValidationPhaseResult struct {
 	TxIndex             int
@@ -399,45 +428,30 @@ func preparePostOpMessage(vpr *ValidationPhaseResult, chainConfig *params.ChainC
 }
 
 func validateAccountReturnData(data []byte) (uint64, uint64, error) {
-	MAGIC_VALUE_SENDER := uint32(0xbf45c166)
 	if len(data) != 32 {
 		return 0, 0, errors.New("invalid account return data length")
 	}
-	magicExpected := binary.BigEndian.Uint32(data[:4])
+	magicExpected, validUntil, validAfter := UnpackValidationData(data)
+	//todo: we check first 8 bytes of the 20-byte address (the rest is expected to be zeros)
 	if magicExpected != MAGIC_VALUE_SENDER {
+		if magicExpected == MAGIC_VALUE_SIGFAIL {
+			return 0, 0, errors.New("account signature error")
+		}
 		return 0, 0, errors.New("account did not return correct MAGIC_VALUE")
 	}
-	validAfter := binary.BigEndian.Uint64(data[4:12])
-	validUntil := binary.BigEndian.Uint64(data[12:20])
 	return validAfter, validUntil, nil
 }
 
-func validatePaymasterReturnData(data []byte) ([]byte, uint64, uint64, error) {
-	MAGIC_VALUE_PAYMASTER := uint32(0xe0e6183a)
-	if len(data) < 4 {
+func validatePaymasterReturnData(data []byte) (context []byte, validAfter, validUntil uint64, error error) {
+	if len(data) < 32 {
 		return nil, 0, 0, errors.New("invalid paymaster return data length")
 	}
-	magicExpected := binary.BigEndian.Uint32(data[:4])
+	validationData, context := UnpackPaymasterValidationReturn(data)
+	magicExpected, validAfter, validUntil := UnpackValidationData(validationData)
 	if magicExpected != MAGIC_VALUE_PAYMASTER {
 		return nil, 0, 0, errors.New("paymaster did not return correct MAGIC_VALUE")
 	}
-
-	jsondata := `[
-			{"type":"function","name":"validatePaymasterTransaction","outputs": [{"name": "context","type": "bytes"},{"name": "validUntil","type": "uint256"},{"name": "validAfter","type": "uint256"}]}
-		]`
-	validatePaymasterTransactionAbi, err := abi.JSON(strings.NewReader(jsondata))
-	if err != nil {
-		// todo: wrap error message
-		return nil, 0, 0, err
-	}
-	decodedPmReturnData, err := validatePaymasterTransactionAbi.Unpack("validatePaymasterTransaction", data[4:])
-	if err != nil {
-		return nil, 0, 0, err
-	}
-	context := decodedPmReturnData[0].([]byte)
-	validAfter := decodedPmReturnData[1].(*big.Int)
-	validUntil := decodedPmReturnData[2].(*big.Int)
-	return context, validAfter.Uint64(), validUntil.Uint64(), nil
+	return context, validAfter, validUntil, nil
 }
 
 func validateValidityTimeRange(time uint64, validAfter uint64, validUntil uint64) error {

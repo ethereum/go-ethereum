@@ -48,9 +48,7 @@ func TestProcess1(t *testing.T) {
 			Data:          []byte{1, 2, 3},
 		},
 	})
-	if err != nil {
-		panic(err)
-	}
+	assert.NoError(t, err)
 }
 
 // run a set of AA transactions, with a legacy TXs before and after.

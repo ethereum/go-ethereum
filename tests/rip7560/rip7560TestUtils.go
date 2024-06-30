@@ -15,6 +15,7 @@ import (
 )
 
 const DEFAULT_SENDER = "0x1111111111222222222233333333334444444444"
+const DEFAULT_BALANCE = 1 << 62
 
 type testContext struct {
 	genesisAlloc types.GenesisAlloc
@@ -83,26 +84,18 @@ func (tt *testContextBuilder) withCode(addr string, code []byte, balance int64) 
 
 // generate the code to return the given byte array (up to 32 bytes)
 func returnData(data []byte) []byte {
-	//couldn't get geth to support PUSH0 ...
 	datalen := len(data)
-	if datalen == 0 {
-		data = []byte{0}
-	}
 	if datalen > 32 {
 		panic(fmt.Errorf("data length is too big %v", data))
 	}
 
 	PUSHn := byte(int(vm.PUSH0) + datalen)
-	ret := createCode(PUSHn, data, vm.PUSH1, 0, vm.MSTORE, vm.PUSH1, 32, vm.PUSH1, 0, vm.RETURN)
+	ret := createCode(PUSHn, data, vm.PUSH0, vm.MSTORE, vm.PUSH1, datalen, vm.PUSH1, 0, vm.RETURN)
 	return ret
 }
 
-// create bytecode for account
 func createAccountCode() []byte {
-	magic := big.NewInt(0xbf45c166)
-	magic.Lsh(magic, 256-32)
-
-	return returnData(magic.Bytes())
+	return returnData(core.PackValidationData(core.MAGIC_VALUE_SENDER, 0, 0))
 }
 
 // create EVM code from OpCode, byte and []bytes
