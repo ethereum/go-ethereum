@@ -63,8 +63,5 @@ jobs:
       - name: Run local devnet
         run: docker-compose up -d
 
-      - name: Build a new image with Apollo contract
-        run: docker build -t hardhat-ignition .
-
       - name: Destroy local devnet
         run: docker-compose down
