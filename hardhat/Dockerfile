@@ -9,10 +9,10 @@ COPY . /usr/src/app
 RUN npm install
 RUN npm install wait-on
 
-COPY ./entrypoint.sh /usr/local/bin
+COPY entrypoint.sh /usr/local/bin
 
 EXPOSE 8545
 
-RUN chmod +x ./entrypoint.sh/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/entrypoint.sh"]
