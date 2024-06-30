@@ -77,8 +77,8 @@ func (c *SizeConstrainedCache[K, V]) Add(key K, value V) (evicted bool) {
 
 // Get looks up a key's value from the cache.
 func (c *SizeConstrainedCache[K, V]) Get(key K) (V, bool) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
 	return c.lru.Get(key)
 }
