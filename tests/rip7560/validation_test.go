@@ -28,27 +28,23 @@ func TestUnpackValidationData(t *testing.T) {
 }
 
 func TestValidationFailure_OOG(t *testing.T) {
-	magic := big.NewInt(0xbf45c166)
-	magic.Lsh(magic, 256-32)
 
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnData(magic.Bytes()), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1),
 		GasFeeCap:     big.NewInt(1000000000),
 	}, "out of gas")
 }
 
 func TestValidationFailure_no_balance(t *testing.T) {
-	magic := big.NewInt(0xbf45c166)
-	magic.Lsh(magic, 256-32)
 
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnData(magic.Bytes()), 1), types.Rip7560AccountAbstractionTx{
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 1), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1),
 		GasFeeCap:     big.NewInt(1000000000),
 	}, "insufficient funds for gas * price + value: address 0x1111111111222222222233333333334444444444 have 1 want 1000000000")
 }
 
 func TestValidationFailure_sigerror(t *testing.T) {
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnData(core.PackValidationData(core.MAGIC_VALUE_SIGFAIL, 0, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnData(core.PackValidationData(core.MAGIC_VALUE_SIGFAIL, 0, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
 	}, "account signature error")
@@ -56,7 +52,7 @@ func TestValidationFailure_sigerror(t *testing.T) {
 
 func TestValidation_ok(t *testing.T) {
 
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
 	}, "ok")
@@ -69,14 +65,14 @@ func TestValidation_ok_paid(t *testing.T) {
 		GasFeeCap:     big.NewInt(1000000000),
 	}
 	tb := newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), DEFAULT_BALANCE)
-	validatePhase(tb, aatx, "ok")
+	handleTransaction(tb, aatx, "ok")
 
 	maxCost := new(big.Int).SetUint64(aatx.ValidationGas + aatx.PaymasterGas + aatx.Gas)
 	maxCost.Mul(maxCost, aatx.GasFeeCap)
 }
 
 func TestValidationFailure_account_revert(t *testing.T) {
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		createCode(vm.PUSH0, vm.DUP1, vm.REVERT), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
@@ -84,7 +80,7 @@ func TestValidationFailure_account_revert(t *testing.T) {
 }
 
 func TestValidationFailure_account_out_of_range(t *testing.T) {
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		createCode(vm.PUSH0, vm.DUP1, vm.REVERT), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
@@ -92,7 +88,7 @@ func TestValidationFailure_account_out_of_range(t *testing.T) {
 }
 
 func TestValidationFailure_account_wrong_return_length(t *testing.T) {
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		returnData([]byte{1, 2, 3}), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
@@ -100,7 +96,7 @@ func TestValidationFailure_account_wrong_return_length(t *testing.T) {
 }
 
 func TestValidationFailure_account_no_return_value(t *testing.T) {
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		returnData([]byte{}), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
@@ -109,7 +105,7 @@ func TestValidationFailure_account_no_return_value(t *testing.T) {
 
 func TestValidationFailure_account_wrong_return_value(t *testing.T) {
 	// create buffer of 32 byte array
-	validatePhase(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		returnData(make([]byte, 32)),
 		DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
@@ -117,7 +113,7 @@ func TestValidationFailure_account_wrong_return_value(t *testing.T) {
 	}, "account did not return correct MAGIC_VALUE")
 }
 
-func validatePhase(tb *testContextBuilder, aatx types.Rip7560AccountAbstractionTx, expectedErr string) *core.ValidationPhaseResult {
+func handleTransaction(tb *testContextBuilder, aatx types.Rip7560AccountAbstractionTx, expectedErr string) {
 	t := tb.build()
 	if aatx.Sender == nil {
 		//pre-deployed sender account
@@ -130,19 +126,13 @@ func validatePhase(tb *testContextBuilder, aatx types.Rip7560AccountAbstractionT
 	defer state.Close()
 
 	state.StateDB.SetTxContext(tx.Hash(), 0)
-	err := core.BuyGasRip7560Transaction(&aatx, state.StateDB)
+	_, _, _, err := core.HandleRip7560Transactions([]*types.Transaction{tx}, 0, state.StateDB, &common.Address{}, t.genesisBlock.Header(), t.gaspool, t.genesis.Config, t.chainContext, vm.Config{})
 
-	var res *core.ValidationPhaseResult
-	if err == nil {
-		res, err = core.ApplyRip7560ValidationPhases(t.genesis.Config, t.chainContext, &common.Address{}, t.gaspool, state.StateDB, t.genesisBlock.Header(), tx, vm.Config{})
-		// err string or empty if nil
-	}
 	errStr := "ok"
 	if err != nil {
 		errStr = err.Error()
 	}
 	assert.Equal(t.t, expectedErr, errStr)
-	return res
 }
 
 //test failure on non-rip7560
