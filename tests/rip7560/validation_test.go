@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/tests"
+	"github.com/status-im/keycard-go/hexutils"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -43,7 +44,7 @@ func TestValidationFailure_no_balance(t *testing.T) {
 }
 
 func TestValidationFailure_sigerror(t *testing.T) {
-	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnData(core.PackValidationData(core.MAGIC_VALUE_SIGFAIL, 0, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnWithData(core.PackValidationData(core.MAGIC_VALUE_SIGFAIL, 0, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
 	}, "account signature error")
@@ -104,9 +105,11 @@ func TestValidationFailure_account_revert(t *testing.T) {
 	}, "execution reverted")
 }
 
-func TestValidationFailure_account_out_of_range(t *testing.T) {
+func TestValidationFailure_account_revert_with_reason(t *testing.T) {
+	// cast abi-encode 'Error(string)' hello
+	reason := hexutils.HexToBytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000568656c6c6f000000000000000000000000000000000000000000000000000000")
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
-		createCode(vm.PUSH0, vm.DUP1, vm.REVERT), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		revertWithData(reason), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
 	}, "execution reverted")
@@ -114,7 +117,7 @@ func TestValidationFailure_account_out_of_range(t *testing.T) {
 
 func TestValidationFailure_account_wrong_return_length(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
-		returnData([]byte{1, 2, 3}), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		returnWithData([]byte{1, 2, 3}), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
 	}, "invalid account return data length")
@@ -122,7 +125,7 @@ func TestValidationFailure_account_wrong_return_length(t *testing.T) {
 
 func TestValidationFailure_account_no_return_value(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
-		returnData([]byte{}), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		returnWithData([]byte{}), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
 	}, "invalid account return data length")
@@ -131,7 +134,7 @@ func TestValidationFailure_account_no_return_value(t *testing.T) {
 func TestValidationFailure_account_wrong_return_value(t *testing.T) {
 	// create buffer of 32 byte array
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
-		returnData(make([]byte, 32)),
+		returnWithData(make([]byte, 32)),
 		DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGas: uint64(1000000000),
 		GasFeeCap:     big.NewInt(1000000000),
