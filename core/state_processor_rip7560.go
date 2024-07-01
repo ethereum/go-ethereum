@@ -447,10 +447,10 @@ func preparePostOpMessage(vpr *ValidationPhaseResult, chainConfig *params.ChainC
 	if err != nil {
 		return nil, err
 	}
-	var paymasterAddress common.Address = [20]byte(tx.PaymasterData[0:20])
+	var paymasterAddress = tx.Paymaster
 	return &Message{
 		From:              chainConfig.EntryPointAddress,
-		To:                &paymasterAddress,
+		To:                paymasterAddress,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.PaymasterGas - executionResult.UsedGas,
 		GasPrice:          tx.GasFeeCap,
@@ -489,6 +489,9 @@ func validatePaymasterReturnData(data []byte) (context []byte, validAfter, valid
 	magicExpected, validAfter, validUntil := UnpackValidationData(validationData)
 	if magicExpected != MAGIC_VALUE_PAYMASTER {
 		return nil, 0, 0, errors.New("paymaster did not return correct MAGIC_VALUE")
+	}
+	if len(context) > PAYMASTER_MAX_CONTEXT_SIZE {
+		return nil, 0, 0, errors.New("paymaster context too large")
 	}
 	return context, validAfter, validUntil, nil
 }

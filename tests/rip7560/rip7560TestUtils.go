@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/status-im/keycard-go/hexutils"
 	"math/big"
+	"slices"
 	"testing"
 )
 
@@ -83,6 +84,23 @@ func (tt *testContextBuilder) withCode(addr string, code []byte, balance int64) 
 	return tt
 }
 
+// generate a push opcode and its following constant value
+func push(n int) []byte {
+	if n < 0 {
+		panic("attempt to push negative")
+	}
+	if n < 256 {
+		return createCode(vm.PUSH1, byte(n))
+	}
+	if n < 65536 {
+		return createCode(vm.PUSH2, byte(n>>8), byte(n))
+	}
+	if n < 1<<32 {
+		return createCode(vm.PUSH4, byte(n>>24), byte(n>>16), byte(n>>8), byte(n))
+	}
+	panic("larger number")
+}
+
 // create code to copy data into memory at the given offset
 // NOTE: if data is not in 32-byte multiples, it will override the next bytes
 // used by RETURN/REVERT
@@ -135,6 +153,8 @@ func createCode(items ...interface{}) []byte {
 			buffer.WriteByte(byte(v))
 		case uint16:
 			buffer.Write([]byte{byte(v >> 8), byte(v)})
+		case uint32:
+			buffer.Write([]byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)})
 		case int:
 			if v >= 256 {
 				panic(fmt.Errorf("int defaults to int8 (byte). use int16, etc: %v", v))
@@ -147,4 +167,18 @@ func createCode(items ...interface{}) []byte {
 	}
 
 	return buffer.Bytes()
+}
+
+func asBytes32(a int) []byte {
+	return common.LeftPadBytes(big.NewInt(int64(a)).Bytes(), 32)
+}
+
+func paymasterReturnValue(magic, validUntil, validAfter uint64, context []byte) []byte {
+	validationData := core.PackValidationData(magic, validUntil, validAfter)
+	//manual encode (bytes32 validationData, bytes context)
+	return slices.Concat(
+		common.LeftPadBytes(validationData, 32),
+		asBytes32(64),
+		asBytes32(len(context)),
+		context)
 }
