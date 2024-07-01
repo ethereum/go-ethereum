@@ -18,6 +18,7 @@ package utils
 
 import (
 	"encoding/binary"
+	"slices"
 	"sync"
 
 	"github.com/crate-crypto/go-ipa/bandersnatch/fr"
@@ -307,9 +308,7 @@ func pointToHash(evaluated *verkle.Point, suffix byte) []byte {
 	// tree would be empty. To avoid this problem, use a little
 	// endian commitment and chop the MSB.
 	bytes := evaluated.Bytes()
-	for i := 0; i < 16; i++ {
-		bytes[31-i], bytes[i] = bytes[i], bytes[31-i]
-	}
+	slices.Reverse(bytes[:])
 	bytes[31] = suffix
 	return bytes[:]
 }
@@ -317,7 +316,8 @@ func pointToHash(evaluated *verkle.Point, suffix byte) []byte {
 func evaluateAddressPoint(address []byte) *verkle.Point {
 	if len(address) < 32 {
 		var aligned [32]byte
-		address = append(aligned[:32-len(address)], address...)
+		copy(aligned[32-len(address):], address)
+		address = aligned[:]
 	}
 	var poly [3]fr.Element
 
