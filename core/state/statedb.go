@@ -73,6 +73,11 @@ func (m *mutation) isDelete() bool {
 	return m.typ == deletion
 }
 
+type delegation struct {
+	code     []byte
+	codeHash common.Hash
+}
+
 // StateDB structs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -140,6 +145,9 @@ type StateDB struct {
 
 	// Transient storage
 	transientStorage transientStorage
+
+	// Transient delegation of accounts to code
+	transientDelegation map[common.Address]delegation
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -364,6 +372,9 @@ func (s *StateDB) TxIndex() int {
 }
 
 func (s *StateDB) GetCode(addr common.Address) []byte {
+	if d, ok := s.transientDelegation[addr]; ok {
+		return d.code
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Code()
@@ -372,6 +383,9 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 }
 
 func (s *StateDB) GetCodeSize(addr common.Address) int {
+	if d, ok := s.transientDelegation[addr]; ok {
+		return len(d.code)
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.CodeSize()
@@ -380,6 +394,9 @@ func (s *StateDB) GetCodeSize(addr common.Address) int {
 }
 
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
+	if d, ok := s.transientDelegation[addr]; ok {
+		return d.codeHash
+	}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return common.BytesToHash(stateObject.CodeHash())
@@ -1384,7 +1401,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 // - Reset access list (Berlin)
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
-func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList, authList []types.SetCodeDelegation) {
 	if rules.IsEIP2929 && rules.IsEIP4762 {
 		panic("eip2929 and eip4762 are both activated")
 	}
@@ -1413,6 +1430,17 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 	}
 	// Reset transient storage at the beginning of transaction execution
 	s.transientStorage = newTransientStorage()
+
+	// Set temporary code delegations.
+	s.transientDelegation = nil
+	if authList != nil {
+		td := make(map[common.Address]delegation)
+		for _, auth := range authList {
+			td[auth.From] = delegation{s.GetCode(auth.Target), s.GetCodeHash(auth.Target)}
+			s.accessList.AddAddress(auth.From)
+		}
+		s.transientDelegation = td
+	}
 }
 
 // AddAddressToAccessList adds the given address to the access list
