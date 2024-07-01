@@ -83,20 +83,38 @@ func (tt *testContextBuilder) withCode(addr string, code []byte, balance int64) 
 	return tt
 }
 
-// generate the code to return the given byte array (up to 32 bytes)
-func returnData(data []byte) []byte {
-	datalen := len(data)
-	if datalen > 32 {
-		panic(fmt.Errorf("data length is too big %v", data))
+// create code to copy data into memory at the given offset
+// NOTE: if data is not in 32-byte multiples, it will override the next bytes
+// used by RETURN/REVERT
+func copyToMemory(data []byte, offset uint) []byte {
+	ret := []byte{}
+	for len(data) > 32 {
+		ret = append(ret, createCode(vm.PUSH32, data[0:32], vm.PUSH2, uint16(offset), vm.MSTORE)...)
+		data = data[32:]
+		offset = offset + 32
 	}
 
-	PUSHn := byte(int(vm.PUSH0) + datalen)
-	ret := createCode(PUSHn, data, vm.PUSH0, vm.MSTORE, vm.PUSH1, datalen, vm.PUSH1, 0, vm.RETURN)
+	if len(data) > 0 {
+		PUSHn := byte(int(vm.PUSH0) + len(data))
+		ret = append(ret, createCode(PUSHn, data, vm.PUSH2, uint16(offset), vm.MSTORE)...)
+	}
+	return ret
+}
+
+// revert with given data
+func revertWithData(data []byte) []byte {
+	ret := append(copyToMemory(data, 0), createCode(vm.PUSH2, uint16(len(data)), vm.PUSH0, vm.REVERT)...)
+	return ret
+}
+
+// generate the code to return the given byte array (up to 32 bytes)
+func returnWithData(data []byte) []byte {
+	ret := append(copyToMemory(data, 0), createCode(vm.PUSH2, uint16(len(data)), vm.PUSH0, vm.RETURN)...)
 	return ret
 }
 
 func createAccountCode() []byte {
-	return returnData(core.PackValidationData(core.MAGIC_VALUE_SENDER, 0, 0))
+	return returnWithData(core.PackValidationData(core.MAGIC_VALUE_SENDER, 0, 0))
 }
 
 // create EVM code from OpCode, byte and []bytes
@@ -115,9 +133,11 @@ func createCode(items ...interface{}) []byte {
 			buffer.Write(v)
 		case int8:
 			buffer.WriteByte(byte(v))
+		case uint16:
+			buffer.Write([]byte{byte(v >> 8), byte(v)})
 		case int:
 			if v >= 256 {
-				panic(fmt.Errorf("int defaults to int8 (byte). int16, etc: %v", v))
+				panic(fmt.Errorf("int defaults to int8 (byte). use int16, etc: %v", v))
 			}
 			buffer.WriteByte(byte(v))
 		default:
