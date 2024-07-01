@@ -79,7 +79,8 @@ func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayl
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for _, item := range q.payloads {
+	for i := len(q.payloads) - 1; i >= 0; i-- {
+		item := q.payloads[i]
 		if item.id == id {
 			if !full {
 				return item.payload.Resolve()
@@ -95,7 +96,8 @@ func (q *payloadQueue) has(id engine.PayloadID) bool {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for _, item := range q.payloads {
+	for i := len(q.payloads) - 1; i >= 0; i-- {
+		item := q.payloads[i]
 		if item.id == id {
 			return true
 		}
@@ -144,7 +146,8 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for _, item := range q.headers {
+	for i := len(q.headers) - 1; i >= 0; i-- {
+		item := q.headers[i]
 		if item.hash == hash {
 			return item.header
 		}
