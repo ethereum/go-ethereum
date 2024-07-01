@@ -420,10 +420,11 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 		zktrieTracer := state.NewProofTracer(trie)
 		env.sMu.Unlock()
 
-		for key, values := range keys {
+		for key := range keys {
 			addrStr := addr.String()
 			keyStr := key.String()
-			isDelete := bytes.Equal(values.Bytes(), common.Hash{}.Bytes())
+			value := state.GetState(addr, key)
+			isDelete := bytes.Equal(value.Bytes(), common.Hash{}.Bytes())
 
 			txm := txStorageTrace.StorageProofs[addrStr]
 			env.sMu.Lock()
