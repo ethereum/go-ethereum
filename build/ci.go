@@ -349,16 +349,16 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 	return filepath.Join(cachedir, base)
 }
 
-// hashDir iterates all files under the top-level project directory
+// hashSourceFiles iterates all files under the top-level project directory
 // computing the hash of each file (excluding files within the tests
 // subrepo)
-func hashDir() (map[string]common.Hash, error) {
+func hashSourceFiles() (map[string]common.Hash, error) {
 	res := make(map[string]common.Hash)
 	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if strings.HasPrefix(path, filepath.FromSlash("tests/testdata")) {
-			return nil
+			return filepath.SkipDir
 		}
-		if d.IsDir() {
+		if !d.Type().IsRegular() {
 			return nil
 		}
 		// open the file and hash it
@@ -383,28 +383,37 @@ func hashDir() (map[string]common.Hash, error) {
 // any mutations in the source file tree:  i.e. all generated files were
 // updated and committed.  Any stale generated files are updated.
 func doGenerate() {
-	tc := new(build.GoToolchain)
-	cachedir := flag.String("cachedir", "./build/cache", "directory for caching protoc/protoc-gen-go binaries.")
+	var (
+		tc       = new(build.GoToolchain)
+		cachedir = flag.String("cachedir", "./build/cache", "directory for caching binaries.")
+		verify   = flag.Bool("verify", false, "check whether any files are changed by go generate")
+	)
 
 	protocPath := downloadProtoc(*cachedir)
 	protocGenGoPath := downloadProtocGenGo(*cachedir)
 
-	preHashes, err := hashDir()
-	if err != nil {
-		log.Fatal("failed to compute map of source hashes", "err", err)
+	var preHashes map[string]common.Hash
+	if *verify {
+		var err error
+		preHashes, err = hashSourceFiles()
+		if err != nil {
+			log.Fatal("failed to compute map of source hashes", "err", err)
+		}
 	}
 
 	c := tc.Go("generate", "./...")
-	newPathEnv := os.Getenv("PATH") + string(os.PathListSeparator) + protocPath + string(os.PathSeparator) + "bin"
-	newPathEnv += string(os.PathListSeparator) + protocGenGoPath
-	c.Env = append(c.Env, "PATH="+newPathEnv)
+	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
+	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
 	build.MustRun(c)
 
-	postHashes, err := hashDir()
+	if !*verify {
+		return
+	}
+	// Check if files were changed.
+	postHashes, err := hashSourceFiles()
 	if err != nil {
 		log.Fatal("error computing source tree file hashes", "err", err)
 	}
-
 	updates := []string{}
 	for path, postHash := range postHashes {
 		preHash, ok := preHashes[path]
@@ -413,7 +422,7 @@ func doGenerate() {
 		}
 	}
 	for _, updatedFile := range updates {
-		fmt.Fprintf(os.Stderr, "updated generated file %s\n", updatedFile)
+		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
 	}
 	if len(updates) != 0 {
 		log.Fatal("One or more generated files were updated by running 'go generate ./...'")
