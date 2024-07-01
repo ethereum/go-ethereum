@@ -37,9 +37,16 @@ func UnpackValidationData(validationData []byte) (authorizerMagic uint64, validU
 }
 
 func UnpackPaymasterValidationReturn(paymasterValidationReturn []byte) (validationData, context []byte) {
+	if len(paymasterValidationReturn) < 96 {
+		return nil, nil
+	}
 	validationData = paymasterValidationReturn[0:32]
 	//2nd bytes32 is ignored (its an offset value)
 	contextLen := new(big.Int).SetBytes(paymasterValidationReturn[64:96])
+	if uint64(len(paymasterValidationReturn)) < 96+contextLen.Uint64() {
+		return nil, nil
+	}
+
 	context = paymasterValidationReturn[96 : 96+contextLen.Uint64()]
 	return
 }
@@ -133,17 +140,17 @@ func BuyGasRip7560Transaction(st *types.Rip7560AccountAbstractionTx, state vm.St
 	mgval = mgval.Mul(mgval, gasFeeCap)
 	balanceCheck := new(uint256.Int).Set(mgval)
 
-	chargeFrom := *st.Sender
+	chargeFrom := st.Sender
 
-	if len(st.PaymasterData) >= 20 {
-		chargeFrom = [20]byte(st.PaymasterData[:20])
+	if st.Paymaster != nil {
+		chargeFrom = st.Paymaster
 	}
 
-	if have, want := state.GetBalance(chargeFrom), balanceCheck; have.Cmp(want) < 0 {
+	if have, want := state.GetBalance(*chargeFrom), balanceCheck; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, chargeFrom.Hex(), have, want)
 	}
 
-	state.SubBalance(chargeFrom, mgval, 0)
+	state.SubBalance(*chargeFrom, mgval, 0)
 	return nil
 }
 
@@ -210,6 +217,9 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 	}
 
 	paymasterContext, pmValidationUsedGas, pmValidAfter, pmValidUntil, err := applyPaymasterValidationFrame(tx, chainConfig, signingHash, evm, gp, statedb, header)
+	if err != nil {
+		return nil, err
+	}
 	vpr := &ValidationPhaseResult{
 		Tx:                  tx,
 		TxHash:              tx.Hash(),
@@ -240,6 +250,9 @@ func applyPaymasterValidationFrame(tx *types.Transaction, chainConfig *params.Ch
 		resultPm, err := ApplyMessage(evm, paymasterMsg, gp)
 		if err != nil {
 			return nil, 0, 0, 0, err
+		}
+		if resultPm.Failed() {
+			return nil, 0, 0, 0, resultPm.Err
 		}
 		statedb.IntermediateRoot(true)
 		if resultPm.Failed() {
@@ -370,10 +383,10 @@ func prepareAccountValidationMessage(baseTx *types.Transaction, chainConfig *par
 
 func preparePaymasterValidationMessage(baseTx *types.Transaction, config *params.ChainConfig, signingHash common.Hash) (*Message, error) {
 	tx := baseTx.Rip7560TransactionData()
-	if len(tx.PaymasterData) < 20 {
+	paymasterAddress := tx.Paymaster
+	if paymasterAddress == nil {
 		return nil, nil
 	}
-	var paymasterAddress common.Address = [20]byte(tx.PaymasterData[0:20])
 	jsondata := `[
 	{"type":"function","name":"validatePaymasterTransaction","inputs": [{"name": "version","type": "uint256"},{"name": "txHash","type": "bytes32"},{"name": "transaction","type": "bytes"}]}
 	]`
@@ -387,7 +400,7 @@ func preparePaymasterValidationMessage(baseTx *types.Transaction, config *params
 	}
 	return &Message{
 		From:              config.EntryPointAddress,
-		To:                &paymasterAddress,
+		To:                paymasterAddress,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.PaymasterGas,
 		GasPrice:          tx.GasFeeCap,
@@ -470,6 +483,9 @@ func validatePaymasterReturnData(data []byte) (context []byte, validAfter, valid
 		return nil, 0, 0, errors.New("invalid paymaster return data length")
 	}
 	validationData, context := UnpackPaymasterValidationReturn(data)
+	if validationData == nil {
+		return nil, 0, 0, errors.New("invalid paymaster return data")
+	}
 	magicExpected, validAfter, validUntil := UnpackValidationData(validationData)
 	if magicExpected != MAGIC_VALUE_PAYMASTER {
 		return nil, 0, 0, errors.New("paymaster did not return correct MAGIC_VALUE")
