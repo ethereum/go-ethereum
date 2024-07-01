@@ -18,12 +18,9 @@ package catalyst
 
 import (
 	"context"
-	"time"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 type api struct {
@@ -41,13 +38,10 @@ func (a *api) loop() {
 		select {
 		case <-a.sim.shutdownCh:
 			return
-		case w := <-a.sim.withdrawals.pending:
-			withdrawals := append(a.sim.withdrawals.gatherPending(9), w)
-			if err := a.sim.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
-				log.Warn("Error performing sealing work", "err", err)
-			}
+		case <-a.sim.withdrawals.pending:
+			a.sim.commitUntilEmpty()
 		case <-newTxs:
-			a.sim.Commit()
+			a.sim.commitUntilEmpty()
 		}
 	}
 }

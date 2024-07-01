@@ -56,6 +56,10 @@ func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 		return errors.New("withdrawal queue full")
 	}
 	w.queue = append(w.queue, withdrawal)
+	select {
+	case w.pending <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
@@ -75,6 +79,12 @@ func (w *withdrawalQueue) popFront(count int) {
 	defer w.mu.Unlock()
 
 	w.queue = w.queue[count:]
+	if len(w.queue) > 0 {
+		select {
+		case w.pending <- struct{}{}:
+		default:
+		}
+	}
 }
 
 type SimulatedBeacon struct {
@@ -148,7 +158,7 @@ func (c *SimulatedBeacon) Stop() error {
 
 // sealBlock initiates payload building for a new block and creates a new block
 // with the completed payload.
-func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp uint64) error {
+func (c *SimulatedBeacon) sealBlock(sealEmpty bool, timestamp uint64) (bool, error) {
 	if timestamp <= c.lastBlockTime {
 		timestamp = c.lastBlockTime + 1
 	}
@@ -162,6 +172,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
+	withdrawals := c.withdrawals.gatherPending(maxWithdrawalCount)
 	var random [32]byte
 	rand.Read(random[:])
 	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
@@ -172,23 +183,26 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		BeaconRoot:            &common.Hash{},
 	}, engine.PayloadV3, true)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if fcResponse == engine.STATUS_SYNCING {
-		return errors.New("chain rewind prevented invocation of payload creation")
+		return false, errors.New("chain rewind prevented invocation of payload creation")
 	}
 	envelope, err := c.engineAPI.getPayload(*fcResponse.PayloadID, true)
 	if err != nil {
-		return err
+		return false, err
 	}
 	payload := envelope.ExecutionPayload
+	if !sealEmpty && len(payload.Transactions) == 0 && len(payload.Withdrawals) == 0 {
+		return false, nil
+	}
 
 	var finalizedHash common.Hash
 	if payload.Number%devEpochLength == 0 {
 		finalizedHash = payload.BlockHash
 	} else {
 		if fh := c.finalizedBlockHash(payload.Number); fh == nil {
-			return errors.New("chain rewind interrupted calculation of finalized block hash")
+			return false, errors.New("chain rewind interrupted calculation of finalized block hash")
 		} else {
 			finalizedHash = *fh
 		}
@@ -201,7 +215,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		for _, commit := range envelope.BlobsBundle.Commitments {
 			var c kzg4844.Commitment
 			if len(commit) != len(c) {
-				return errors.New("invalid commitment length")
+				return false, errors.New("invalid commitment length")
 			}
 			copy(c[:], commit)
 			blobHashes = append(blobHashes, kzg4844.CalcBlobHashV1(hasher, &c))
@@ -209,16 +223,17 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	}
 	// Mark the payload as canon
 	if _, err = c.engineAPI.NewPayloadV3(*payload, blobHashes, &common.Hash{}); err != nil {
-		return err
+		return false, err
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)
 
 	// Mark the block containing the payload as canonical
 	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
-		return err
+		return false, err
 	}
 	c.lastBlockTime = payload.Timestamp
-	return nil
+	c.withdrawals.popFront(len(withdrawals))
+	return true, nil
 }
 
 // loop runs the block production loop for non-zero period configuration
@@ -229,8 +244,7 @@ func (c *SimulatedBeacon) loop() {
 		case <-c.shutdownCh:
 			return
 		case <-timer.C:
-			withdrawals := c.withdrawals.gatherPending(10)
-			if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
+			if _, err := c.sealBlock(true, uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
 			} else {
 				timer.Reset(time.Second * time.Duration(c.period))
@@ -266,11 +280,24 @@ func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
 
 // Commit seals a block on demand.
 func (c *SimulatedBeacon) Commit() common.Hash {
-	withdrawals := c.withdrawals.gatherPending(10)
-	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
+	if _, err := c.sealBlock(true, uint64(time.Now().Unix())); err != nil {
 		log.Warn("Error performing sealing work", "err", err)
 	}
 	return c.eth.BlockChain().CurrentBlock().Hash()
+}
+
+// commitUntilEmpty seals blocks until there are now transactions or withdrawals
+// left to include
+func (c *SimulatedBeacon) commitUntilEmpty() {
+	for {
+		committed, err := c.sealBlock(false, uint64(time.Now().Unix()))
+		if err != nil {
+			log.Error("failed to seal block", "err", err)
+		}
+		if !committed {
+			return
+		}
+	}
 }
 
 // Rollback un-sends previously added transactions.
@@ -307,8 +334,8 @@ func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
 	if parent == nil {
 		return errors.New("parent not found")
 	}
-	withdrawals := c.withdrawals.gatherPending(10)
-	return c.sealBlock(withdrawals, parent.Time+uint64(adjustment))
+	_, err := c.sealBlock(true, parent.Time+uint64(adjustment))
+	return err
 }
 
 func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
