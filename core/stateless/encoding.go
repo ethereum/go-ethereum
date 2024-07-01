@@ -51,6 +51,9 @@ func (w *Witness) toExtWitness() *extWitness {
 }
 
 // fromExtWitness converts the consensus witness format into our internal one.
+// This function is only used in decoding an already-constructed witness object
+// which will be received from a remote source in the future. Although this does
+// modify `w.State`, the lock is unnecessary here.
 func (w *Witness) fromExtWitness(ext *extWitness) error {
 	w.Block, w.Headers = ext.Block, ext.Headers
 
@@ -58,8 +61,6 @@ func (w *Witness) fromExtWitness(ext *extWitness) error {
 	for _, code := range ext.Codes {
 		w.Codes[string(code)] = struct{}{}
 	}
-	w.lock.Lock()
-	defer w.lock.Unlock()
 	w.State = make(map[string]struct{}, len(ext.State))
 	for _, node := range ext.State {
 		w.State[string(node)] = struct{}{}
