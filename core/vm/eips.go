@@ -661,7 +661,7 @@ func enableEOF(jt *JumpTable) {
 	jt[RETURNCONTRACT] = &operation{
 		execute:     opReturnContract,
 		constantGas: GasZeroStep,
-		dynamicGas:  memoryCopierGas(1),
+		dynamicGas:  pureMemoryGascost,
 		minStack:    minStack(2, 0),
 		maxStack:    maxStack(2, 0),
 		immediate:   1,
@@ -909,7 +909,6 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		stackvalue.SetBytes(addr.Bytes())
 	}
 	scope.Stack.push(&stackvalue)
-
 	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
