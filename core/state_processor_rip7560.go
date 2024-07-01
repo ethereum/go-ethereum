@@ -486,7 +486,7 @@ func validatePaymasterReturnData(data []byte) (context []byte, validAfter, valid
 	if validationData == nil {
 		return nil, 0, 0, errors.New("invalid paymaster return data")
 	}
-	magicExpected, validAfter, validUntil := UnpackValidationData(validationData)
+	magicExpected, validUntil, validAfter := UnpackValidationData(validationData)
 	if magicExpected != MAGIC_VALUE_PAYMASTER {
 		return nil, 0, 0, errors.New("paymaster did not return correct MAGIC_VALUE")
 	}

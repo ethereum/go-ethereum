@@ -84,6 +84,26 @@ func TestPaymasterValidationFailure_contextTooLarge(t *testing.T) {
 	}, "paymaster context too large")
 }
 
+func TestPaymasterValidationFailure_validAfter(t *testing.T) {
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
+		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.MAGIC_VALUE_PAYMASTER, 300, 200, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		ValidationGas: 1000000000,
+		PaymasterGas:  1000000000,
+		GasFeeCap:     big.NewInt(1000000000),
+		Paymaster:     &DEFAULT_PAYMASTER,
+	}, "RIP-7560 transaction validity not reached yet")
+}
+
+func TestPaymasterValidationFailure_validUntil(t *testing.T) {
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
+		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.MAGIC_VALUE_PAYMASTER, 1, 0, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		ValidationGas: 1000000000,
+		PaymasterGas:  1000000000,
+		GasFeeCap:     big.NewInt(1000000000),
+		Paymaster:     &DEFAULT_PAYMASTER,
+	}, "RIP-7560 transaction validity expired")
+}
+
 func TestPaymasterValidation_ok(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.MAGIC_VALUE_PAYMASTER, 0, 0, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
