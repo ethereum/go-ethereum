@@ -17,11 +17,14 @@ Note also that there is a page explaining common log messages that are often que
 - [Command line options](/docs/fundamentals/command-line-options): see the various command line options that can be used to configure Geth
 - [Security](/docs/fundamentals/security): learn about basic security best-practises for Geth
 - [Sync-modes](/docs/fundamentals/sync-modes): learn about the different ways Geth can sync the blockchain
+- [Beacon light sync](/docs/fundamentals/blsync): learn about the usage of Beacon light client, in integrated mode or standalone mode
 - [Account management](/docs/fundamentals/account-management): read about how to manage accounts using Clef and Geth
+- [Databases](/docs/fundamentals/databases): learn about the two parts of database and the recommended database
 - [Backup and restore](/docs/fundamentals/backup-restore): learn how to backup and restore data for a Geth instance
 - [Logs](/docs/fundamentals/logs): learn how to interpret the main log messages Geth displays in the console
-- [Peer-to-peer](/docs/fundamentals/peer-to-peer): learn about Geth's peer-to-peer networking
+- [Connecting-to-peers](/docs/fundamentals/peer-to-peer): learn about Geth's peer-to-peer networking
 - [Pruning](/docs/fundamentals/pruning): read about Geth's data pruning options
+- [Private networks via kurtosis](/docs/fundamentals/kurtosis): learn how to set up a private network of multiple Geth nodes using Kurtosis
 - [Private networks](/docs/fundamentals/private-network): learn how to set up a private network of multiple Geth nodes
-- [Light clients](/docs/fundamentals/les): read about Geth's light mode.
+- [Config files](/docs/fundamentals/config-files): learn about using config files to tune Geth
 - [Mining](/docs/fundamentals/mining): read about the mining algorithms Geth used to use to secure Ethereum before the network switched to proof-of-stake.
