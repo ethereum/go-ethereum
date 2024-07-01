@@ -5,7 +5,7 @@ description: Documentation for Geth developers and dapp developers
 
 Welcome to the Geth Developer docs!
 
-This section includes information for builders. If you are building decentralized apps on top of Geth, head to the `dapp-developer` docs. If you are developing Geth itself, explore the `geth-developer` docs.
+This section includes information for builders. If you are building decentralized apps on top of Geth, head to the [Dapp developers](#dapp-developers) docs. If you are developing Geth itself, explore the [Geth developers](#geth-developers) docs.
 
 ## Dapp developers {#dapp-developers}
 
@@ -17,7 +17,7 @@ Geth has many features that support dapp developers. There are many built-in tra
 - [Go contract bindings](/docs/developers/dapp-developer/native-bindings)
 - [Geth for mobile](/docs/developers/dapp-developer/mobile)
 
-## EVM tracing {#evm-tracing}
+## EVM tracing
 
 Tracing allows developers to analyze precisely what the EVM has done or will do given a certain set of commands. This section outlines the various ways tracing can be implemented in Geth.
 
@@ -32,10 +32,9 @@ Tracing allows developers to analyze precisely what the EVM has done or will do 
 
 Geth developers add/remove features and fix bugs in Geth. The `geth-developer` section includes contribution guidelines and documentation relating to testing and disclosing vulnerabilities that will help you get started with working on Geth.
 
-- [Contributing to Geth]
 - [Developer guide](/docs/developers/geth-developer/dev-guide)
 - [Disclosures](/docs/developers/geth-developer/disclosures)
 - [DNS discovery setup guide](/docs/developers/geth-developer/dns-discovery-setup)
 - [Code review guidelines](/docs/developers/geth-developer/code-review-guidelines)
 
-## [Contributing](/docs/developers/geth-developer/contributing) {#contributing}
+## [Contributing](/docs/developers/geth-developer/contributing)
