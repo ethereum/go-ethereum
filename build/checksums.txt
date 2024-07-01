@@ -99,3 +99,28 @@ d7f0013f82e6d7f862cc6cb5c8cdb48eef5f2e239b35baa97e2f1a7466043767  go1.19.6.src.t
 # version:ppa-builder-2 1.21.9
 # https://go.dev/dl/
 58f0c5ced45a0012bce2ff7a9df03e128abcc8818ebabe5027bb92bafe20e421  go1.21.9.src.tar.gz
+
+# version:protoc 27.1
+# https://github.com/protocolbuffers/protobuf/releases/
+# https://github.com/protocolbuffers/protobuf/releases/download/v27.1/
+8809c2ec85368c6b6e9af161b6771a153aa92670a24adbe46dd34fa02a04df2f  protoc-27.1-linux-aarch_64.zip
+5d21979a6d27475e810b76b88863d1e784fa01ffb15e511a3ec5bd1924d89426  protoc-27.1-linux-ppcle_64.zip
+84d8852750ed186dc4a057a1a86bcac409be5362d6af04770f42367fee6b7bc1  protoc-27.1-linux-s390_64.zip
+2f028796ff5741691650e0eea290e61ff2f1c0d87f8d31fe45ef47fd967cef0c  protoc-27.1-linux-x86_32.zip
+8970e3d8bbd67d53768fe8c2e3971bdd71e51cfe2001ca06dacad17258a7dae3  protoc-27.1-linux-x86_64.zip
+03b7af1bf469e7285dc51976ee5fa99412704dbd1c017105114852a37b165c12  protoc-27.1-osx-aarch_64.zip
+f14d3973cf13283d07c520ed6f4c12405ad41b9efd18089a1c74897037d742b5  protoc-27.1-osx-universal_binary.zip
+8520d944f3a3890fa296a3b3b0d4bb18337337e2526bbbf1b507eeea3c2a1ec4  protoc-27.1-osx-x86_64.zip
+6263718ff96547b8392a079f6fdf02a4156f2e8d13cd51649a0d03fb7afa2de8  protoc-27.1-win32.zip
+da531c51ccd1290d8d34821f0ce4e219c7fbaa6f9825f5a3fb092a9d03fe6206  protoc-27.1-win64.zip
+
+# version:protoc-gen-go 1.34.2
+# https://github.com/protocolbuffers/protobuf-go/releases/
+# https://github.com/protocolbuffers/protobuf-go/releases/download/v1.34.2/
+9b48d8f90add02e8e94e14962fed74e7ce2b2d6bda4dd42f1f4fbccf0f766f1a  protoc-gen-go.v1.34.2.darwin.amd64.tar.gz
+17aca7f948dbb624049030cf841e35895cf34183ba006e721247fdeb95ff2780  protoc-gen-go.v1.34.2.darwin.arm64.tar.gz
+a191849433fd489f1d44f37788d762658f3f5fb225f3a85d4ce6ba32666703ed  protoc-gen-go.v1.34.2.linux.386.tar.gz
+b87bc134dee55576a842141bf0ed27761c635d746780fce5dee038c6dd16554f  protoc-gen-go.v1.34.2.linux.amd64.tar.gz
+63d400167e75ab9f6690688f6fdc6a9455aa20bc1faa71e32149dbd322f7f198  protoc-gen-go.v1.34.2.linux.arm64.tar.gz
+56e7675816db6e62be4f833a51544d5716b8420c462515579e05ca8444ab06ed  protoc-gen-go.v1.34.2.windows.386.zip
+abafd39612177dd4e9a65207cadd5374a9352d8611e8e040f8462fcfa3010daf  protoc-gen-go.v1.34.2.windows.amd64.zip
