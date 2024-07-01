@@ -37,38 +37,44 @@ import (
 )
 
 const devEpochLength = 32
+const maxWithdrawalCount = 10
 
 // withdrawalQueue implements a FIFO queue which holds withdrawals that are
 // pending inclusion.
 type withdrawalQueue struct {
-	pending chan *types.Withdrawal
+	queue   types.Withdrawals
+	pending chan struct{}
+	mu      sync.Mutex
 }
 
 // add queues a withdrawal for future inclusion.
 func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
-	select {
-	case w.pending <- withdrawal:
-		break
-	default:
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if len(w.queue)+1 > maxWithdrawalCount {
 		return errors.New("withdrawal queue full")
 	}
+	w.queue = append(w.queue, withdrawal)
 	return nil
 }
 
 // gatherPending returns a number of queued withdrawals up to a maximum count.
-func (w *withdrawalQueue) gatherPending(maxCount int) []*types.Withdrawal {
-	withdrawals := []*types.Withdrawal{}
-	for {
-		select {
-		case withdrawal := <-w.pending:
-			withdrawals = append(withdrawals, withdrawal)
-			if len(withdrawals) == maxCount {
-				return withdrawals
-			}
-		default:
-			return withdrawals
-		}
+func (w *withdrawalQueue) gatherPending(gatherCount int) []*types.Withdrawal {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if gatherCount > len(w.queue) {
+		gatherCount = len(w.queue)
 	}
+	return w.queue[:gatherCount]
+}
+
+func (w *withdrawalQueue) popFront(count int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.queue = w.queue[count:]
 }
 
 type SimulatedBeacon struct {
@@ -112,7 +118,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 		engineAPI:          engineAPI,
 		lastBlockTime:      block.Time,
 		curForkchoiceState: current,
-		withdrawals:        withdrawalQueue{make(chan *types.Withdrawal, 20)},
+		withdrawals:        withdrawalQueue{pending: make(chan struct{})},
 	}, nil
 }
 
