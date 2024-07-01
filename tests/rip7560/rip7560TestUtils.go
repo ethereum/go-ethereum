@@ -46,6 +46,7 @@ func newTestContextBuilder(t *testing.T) *testContextBuilder {
 
 func (tb *testContextBuilder) build() *testContext {
 	genesis := core.DeveloperGenesisBlock(10_000_000, &common.Address{})
+	genesis.Timestamp = 100
 	genesisBlock := genesis.ToBlock()
 	gaspool := new(core.GasPool).AddGas(genesisBlock.GasLimit())
 
