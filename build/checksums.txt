@@ -101,6 +101,8 @@ d7f0013f82e6d7f862cc6cb5c8cdb48eef5f2e239b35baa97e2f1a7466043767  go1.19.6.src.t
 58f0c5ced45a0012bce2ff7a9df03e128abcc8818ebabe5027bb92bafe20e421  go1.21.9.src.tar.gz
 
 # version:protoc 27.1
+# https://github.com/protocolbuffers/protobuf/releases/
+# https://github.com/protocolbuffers/protobuf/releases/download/v27.1/
 8809c2ec85368c6b6e9af161b6771a153aa92670a24adbe46dd34fa02a04df2f  protoc-27.1-linux-aarch_64.zip
 5d21979a6d27475e810b76b88863d1e784fa01ffb15e511a3ec5bd1924d89426  protoc-27.1-linux-ppcle_64.zip
 84d8852750ed186dc4a057a1a86bcac409be5362d6af04770f42367fee6b7bc1  protoc-27.1-linux-s390_64.zip
@@ -113,6 +115,8 @@ f14d3973cf13283d07c520ed6f4c12405ad41b9efd18089a1c74897037d742b5  protoc-27.1-os
 da531c51ccd1290d8d34821f0ce4e219c7fbaa6f9825f5a3fb092a9d03fe6206  protoc-27.1-win64.zip
 
 # version:protoc-gen-go 1.34.2
+# https://github.com/protocolbuffers/protobuf-go/releases/
+# https://github.com/protocolbuffers/protobuf-go/releases/download/v1.34.2/
 9b48d8f90add02e8e94e14962fed74e7ce2b2d6bda4dd42f1f4fbccf0f766f1a  protoc-gen-go.v1.34.2.darwin.amd64.tar.gz
 17aca7f948dbb624049030cf841e35895cf34183ba006e721247fdeb95ff2780  protoc-gen-go.v1.34.2.darwin.arm64.tar.gz
 a191849433fd489f1d44f37788d762658f3f5fb225f3a85d4ce6ba32666703ed  protoc-gen-go.v1.34.2.linux.386.tar.gz
