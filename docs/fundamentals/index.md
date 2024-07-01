@@ -26,5 +26,5 @@ Note also that there is a page explaining common log messages that are often que
 - [Pruning](/docs/fundamentals/pruning): read about Geth's data pruning options
 - [Private networks via kurtosis](/docs/fundamentals/kurtosis): learn how to set up a private network of multiple Geth nodes using Kurtosis
 - [Private networks](/docs/fundamentals/private-network): learn how to set up a private network of multiple Geth nodes
-- [Config files](/docs/fundamentals/config-files): learn about using of config files for Geth
+- [Config files](/docs/fundamentals/config-files): learn about using config files to tune Geth
 - [Mining](/docs/fundamentals/mining): read about the mining algorithms Geth used to use to secure Ethereum before the network switched to proof-of-stake.
