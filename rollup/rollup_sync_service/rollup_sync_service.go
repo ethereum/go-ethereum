@@ -225,22 +225,45 @@ func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endB
 			batchIndex := event.BatchIndex.Uint64()
 			log.Trace("found new FinalizeBatch event", "batch index", batchIndex)
 
-			parentBatchMeta, chunks, err := s.getLocalInfoForBatch(batchIndex)
-			if err != nil {
-				return fmt.Errorf("failed to get local node info, batch index: %v, err: %w", batchIndex, err)
+			lastFinalizedBatchIndex := rawdb.ReadLastFinalizedBatchIndex(s.db)
+
+			// After darwin, FinalizeBatch event emitted every bundle, which contains multiple batches.
+			// Therefore there are a range of finalized batches need to be saved into db.
+			//
+			// The range logic also applies to the batches before darwin when FinalizeBatch event emitted
+			// per single batch. In this situation, `batchIndex` just equals to `*lastFinalizedBatchIndex + 1`
+			// and only one batch is processed through the for loop.
+			startBatchIndex := batchIndex
+			if lastFinalizedBatchIndex != nil {
+				startBatchIndex = *lastFinalizedBatchIndex + 1
+			} else {
+				log.Warn("got nil when reading last finalized batch index. This should happen only once.")
 			}
 
-			endBlock, finalizedBatchMeta, err := validateBatch(event, parentBatchMeta, chunks, s.bc.Config(), s.stack)
-			if err != nil {
-				return fmt.Errorf("fatal: validateBatch failed: finalize event: %v, err: %w", event, err)
+			var highestFinalizedBlockNumber uint64
+			for index := startBatchIndex; index <= batchIndex; index++ {
+				parentBatchMeta, chunks, err := s.getLocalInfoForBatch(index)
+				if err != nil {
+					return fmt.Errorf("failed to get local node info, batch index: %v, err: %w", index, err)
+				}
+
+				endBlock, finalizedBatchMeta, err := validateBatch(event, parentBatchMeta, chunks, s.bc.Config(), s.stack)
+				if err != nil {
+					return fmt.Errorf("fatal: validateBatch failed: finalize event: %v, err: %w", event, err)
+				}
+
+				rawdb.WriteFinalizedBatchMeta(s.db, index, finalizedBatchMeta)
+
+				if index%100 == 0 {
+					log.Info("finalized batch progress", "batch index", index, "finalized l2 block height", endBlock)
+				}
+
+				highestFinalizedBlockNumber = endBlock
 			}
 
-			rawdb.WriteFinalizedL2BlockNumber(s.db, endBlock)
-			rawdb.WriteFinalizedBatchMeta(s.db, batchIndex, finalizedBatchMeta)
-
-			if batchIndex%100 == 0 {
-				log.Info("finalized batch progress", "batch index", batchIndex, "finalized l2 block height", endBlock)
-			}
+			rawdb.WriteFinalizedL2BlockNumber(s.db, highestFinalizedBlockNumber)
+			rawdb.WriteLastFinalizedBatchIndex(s.db, batchIndex)
+			log.Debug("write finalized l2 block number", "batch index", batchIndex, "finalized l2 block height", highestFinalizedBlockNumber)
 
 		default:
 			return fmt.Errorf("unknown event, topic: %v, tx hash: %v", vLog.Topics[0].Hex(), vLog.TxHash.Hex())
