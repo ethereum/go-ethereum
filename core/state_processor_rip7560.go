@@ -88,11 +88,16 @@ func handleRip7560Transactions(transactions []*types.Transaction, index int, sta
 
 		aatx := tx.Rip7560TransactionData()
 		statedb.SetTxContext(tx.Hash(), index+i)
-		err := BuyGasRip7560Transaction(aatx, statedb)
-		var vpr *ValidationPhaseResult
+		err := CheckNonceRip7560(aatx, statedb)
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		err = BuyGasRip7560Transaction(aatx, statedb)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		var vpr *ValidationPhaseResult
 		vpr, err = ApplyRip7560ValidationPhases(chainConfig, bc, coinbase, gp, statedb, header, tx, cfg)
 		if err != nil {
 			return nil, nil, nil, err
@@ -139,6 +144,24 @@ func BuyGasRip7560Transaction(st *types.Rip7560AccountAbstractionTx, state vm.St
 	}
 
 	state.SubBalance(chargeFrom, mgval, 0)
+	return nil
+}
+
+// precheck nonce of transaction.
+// (standard preCheck function check both nonce and no-code of account)
+func CheckNonceRip7560(tx *types.Rip7560AccountAbstractionTx, st *state.StateDB) error {
+	// Make sure this transaction's nonce is correct.
+	stNonce := st.GetNonce(*tx.Sender)
+	if msgNonce := tx.Nonce; stNonce < msgNonce {
+		return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
+			tx.Sender.Hex(), msgNonce, stNonce)
+	} else if stNonce > msgNonce {
+		return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
+			tx.Sender.Hex(), msgNonce, stNonce)
+	} else if stNonce+1 < stNonce {
+		return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
+			tx.Sender.Hex(), stNonce)
+	}
 	return nil
 }
 
@@ -333,6 +356,7 @@ func prepareAccountValidationMessage(baseTx *types.Transaction, chainConfig *par
 	return &Message{
 		From:              chainConfig.EntryPointAddress,
 		To:                tx.Sender,
+		Nonce:             tx.Nonce,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.ValidationGas - deploymentUsedGas,
 		GasPrice:          tx.GasFeeCap,
