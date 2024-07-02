@@ -1367,3 +1367,69 @@ func TestRandom(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestIndexValidation(t *testing.T) {
+	const (
+		items    = 30
+		dataSize = 10
+	)
+	garbage := indexEntry{
+		filenum: 100,
+		offset:  200,
+	}
+	var cases = []struct {
+		offset   int64
+		data     []byte
+		expItems int
+	}{
+		// extend index file with zero bytes at the end
+		{
+			offset:   (items + 1) * indexEntrySize,
+			data:     make([]byte, indexEntrySize),
+			expItems: 30,
+		},
+		// write garbage in the first non-head item
+		{
+			offset:   indexEntrySize,
+			data:     garbage.append(nil),
+			expItems: 0,
+		},
+		// write garbage in the first non-head item
+		{
+			offset:   (items/2 + 1) * indexEntrySize,
+			data:     garbage.append(nil),
+			expItems: items / 2,
+		},
+	}
+	for _, c := range cases {
+		fn := fmt.Sprintf("t-%d", rand.Uint64())
+		f, err := newTable(os.TempDir(), fn, metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 100, true, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeChunks(t, f, items, dataSize)
+
+		// write corrupted data
+		f.index.WriteAt(c.data, c.offset)
+		f.Close()
+
+		// reopen the table, corruption should be truncated
+		f, err = newTable(os.TempDir(), fn, metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge(), 100, true, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < c.expItems; i++ {
+			exp := getChunk(10, i)
+			got, err := f.Retrieve(uint64(i))
+			if err != nil {
+				t.Fatalf("Failed to read from table, %v", err)
+			}
+			if !bytes.Equal(exp, got) {
+				t.Fatalf("Unexpected item data, want: %v, got: %v", exp, got)
+			}
+		}
+		if f.items.Load() != uint64(c.expItems) {
+			t.Fatalf("Unexpected item number, want: %d, got: %d", c.expItems, f.items.Load())
+		}
+	}
+}
