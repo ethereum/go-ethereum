@@ -108,13 +108,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
 func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
-	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
+	tracing := evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil
+	if tracing {
 		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-		if evm.Config.Tracer.OnTxEnd != nil {
-			defer func() {
-				evm.Config.Tracer.OnTxEnd(receipt, err)
-			}()
-		}
 	}
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
@@ -123,6 +119,9 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
+		if tracer := evm.Config.Tracer; tracing && tracer.OnTxEnd != nil {
+			tracer.OnTxEnd(receipt, err)
+		}
 		return nil, err
 	}
 
@@ -162,6 +161,10 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
+
+	if tracer := evm.Config.Tracer; tracing && tracer.OnTxEnd != nil {
+		tracer.OnTxEnd(receipt, result.Err)
+	}
 	return receipt, err
 }
 
