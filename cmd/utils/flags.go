@@ -335,6 +335,11 @@ var (
 		Usage:    "Path to a JWT secret to use for target engine API endpoint",
 		Category: flags.BeaconCategory,
 	}
+	BltestApiFlag = &cli.StringFlag{ //TODO remove before merging to master
+		Name:     "bltest.rpc",
+		Usage:    "Target EL rpc API URL",
+		Category: flags.BeaconCategory,
+	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = &cli.StringFlag{
 		Name:     "txpool.locals",
