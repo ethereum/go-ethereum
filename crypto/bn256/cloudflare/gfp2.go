@@ -137,6 +137,24 @@ func (e *gfP2) Square(a *gfP2) *gfP2 {
 	return e
 }
 
+func (e *gfP2) InvertVariableTime(a *gfP2) *gfP2 {
+	// See "Implementing cryptographic pairings", M. Scott, section 3.2.
+	// ftp://136.206.11.249/pub/crypto/pairings.pdf
+	t1, t2 := &gfP{}, &gfP{}
+	gfpMul(t1, &a.x, &a.x)
+	gfpMul(t2, &a.y, &a.y)
+	gfpAdd(t1, t1, t2)
+
+	inv := &gfP{}
+	inv.InvertVariableTime(t1)
+
+	gfpNeg(t1, &a.x)
+
+	gfpMul(&e.x, t1, inv)
+	gfpMul(&e.y, &a.y, inv)
+	return e
+}
+
 func (e *gfP2) Invert(a *gfP2) *gfP2 {
 	// See "Implementing cryptographic pairings", M. Scott, section 3.2.
 	// ftp://136.206.11.249/pub/crypto/pairings.pdf
