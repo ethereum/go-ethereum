@@ -162,6 +162,9 @@ func (c *SimulatedBeacon) Stop() error {
 
 // sealBlock initiates payload building for a new block and creates a new block
 // with the completed payload.
+// If allowEmpty is false and payload building returns a block without
+// txs/withdrawals, the chain head will not be updated and the return
+// value of committed will be false.
 func (c *SimulatedBeacon) sealBlock(allowEmpty bool, timestamp uint64) (committed bool, err error) {
 	if timestamp <= c.lastBlockTime {
 		timestamp = c.lastBlockTime + 1
