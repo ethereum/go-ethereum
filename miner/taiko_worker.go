@@ -254,6 +254,7 @@ func (w *worker) commitL2Transactions(
 		env.txs = append(env.txs, firstTransaction)
 	}
 
+loop:
 	for {
 		// If we don't have enough gas for any further transactions then we're done.
 		if env.gasPool.Gas() < params.TxGas {
@@ -319,24 +320,23 @@ func (w *worker) commitL2Transactions(
 			env.tcount++
 			txs.Shift()
 
+			// Encode and compress the txList, if the byte length is > maxBytesPerTxList, remove the latest tx and break.
+			b, err := encodeAndComporeessTxList(env.txs)
+			if err != nil {
+				log.Trace("Failed to rlp encode and compress the pending transaction %s: %w", tx.Hash(), err)
+				txs.Pop()
+				continue
+			}
+			if len(b) > int(maxBytesPerTxList) {
+				lastTransaction = env.txs[env.tcount-1]
+				env.txs = env.txs[0 : env.tcount-1]
+				break loop
+			}
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
 			log.Trace("Transaction failed, account skipped", "hash", ltx.Hash, "err", err)
 			txs.Pop()
-		}
-
-		// Encode and compress the txList, if the byte length is > maxBytesPerTxList, remove the latest tx and break.
-		b, err := encodeAndComporeessTxList(append(env.txs, tx))
-		if err != nil {
-			log.Trace("Failed to rlp encode and compress the pending transaction %s: %w", tx.Hash(), err)
-			txs.Pop()
-			continue
-		}
-		if len(b) > int(maxBytesPerTxList) {
-			lastTransaction = env.txs[env.tcount-1]
-			env.txs = env.txs[0 : env.tcount-1]
-			break
 		}
 	}
 
