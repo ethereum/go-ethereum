@@ -440,10 +440,15 @@ func (s *stateObject) commitStorage(op *accountUpdate) {
 			op.storages = make(map[common.Hash][]byte)
 		}
 		op.storages[hash] = encode(val)
-		if op.storagesOrigin == nil {
-			op.storagesOrigin = make(map[common.Hash][]byte)
+		if op.storagesOriginByKey == nil {
+			op.storagesOriginByKey = make(map[common.Hash][]byte)
 		}
-		op.storagesOrigin[hash] = encode(s.originStorage[key])
+		origin := encode(s.originStorage[key])
+		op.storagesOriginByKey[key] = origin
+		if op.storagesOriginByHash == nil {
+			op.storagesOriginByHash = make(map[common.Hash][]byte)
+		}
+		op.storagesOriginByHash[hash] = origin
 
 		// Overwrite the clean value of storage slots
 		s.originStorage[key] = val

@@ -236,7 +236,7 @@ func (test *stateTest) run() bool {
 		} else {
 			state.IntermediateRoot(true) // call intermediateRoot at the transaction boundary
 		}
-		ret, err := state.commitAndFlush(0, true) // call commit at the block boundary
+		ret, err := state.commitAndFlush(0, true, false) // call commit at the block boundary
 		if err != nil {
 			panic(err)
 		}
@@ -366,7 +366,7 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *triedb.Database
 		st.Update(key.Bytes(), val)
 	}
 	if st.Hash() != oAcct.Root {
-		return errors.New("invalid slot changes")
+		return errors.New("invalid slot changes2")
 	}
 	return nil
 }

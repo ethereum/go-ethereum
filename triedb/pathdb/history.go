@@ -69,7 +69,8 @@ const (
 	slotIndexSize    = common.HashLength + 5     // The length of encoded slot index
 	historyMetaSize  = 9 + 2*common.HashLength   // The length of encoded history meta
 
-	stateHistoryVersion = uint8(0) // initial version of state history structure.
+	stateHistoryV0 = uint8(0) // initial version of state history structure.
+	stateHistoryV1 = uint8(1) // use the storage slot raw key as the identifier instead of the key hash.
 )
 
 // Each state history entry is consisted of five elements:
@@ -170,15 +171,18 @@ func (i *accountIndex) decode(blob []byte) {
 
 // slotIndex describes the metadata belonging to a storage slot.
 type slotIndex struct {
-	hash   common.Hash // The hash of slot key
-	length uint8       // The length of storage slot, up to 32 bytes defined in protocol
-	offset uint32      // The offset of item in storage slot data table
+	// the identifier of the storage slot. Specifically
+	// in v0, it's the hash of the raw storage slot key (32 bytes);
+	// in v1, it's the raw storage slot key (32 bytes);
+	id     common.Hash
+	length uint8  // The length of storage slot, up to 32 bytes defined in protocol
+	offset uint32 // The offset of item in storage slot data table
 }
 
 // encode packs slot index into byte stream.
 func (i *slotIndex) encode() []byte {
 	var buf [slotIndexSize]byte
-	copy(buf[:common.HashLength], i.hash.Bytes())
+	copy(buf[:common.HashLength], i.id.Bytes())
 	buf[common.HashLength] = i.length
 	binary.BigEndian.PutUint32(buf[common.HashLength+1:], i.offset)
 	return buf[:]
@@ -186,7 +190,7 @@ func (i *slotIndex) encode() []byte {
 
 // decode unpack slot index from the byte stream.
 func (i *slotIndex) decode(blob []byte) {
-	i.hash = common.BytesToHash(blob[:common.HashLength])
+	i.id = common.BytesToHash(blob[:common.HashLength])
 	i.length = blob[common.HashLength]
 	i.offset = binary.BigEndian.Uint32(blob[common.HashLength+1:])
 }
@@ -215,7 +219,7 @@ func (m *meta) decode(blob []byte) error {
 		return errors.New("no version tag")
 	}
 	switch blob[0] {
-	case stateHistoryVersion:
+	case stateHistoryV0, stateHistoryV1:
 		if len(blob) != historyMetaSize {
 			return fmt.Errorf("invalid state history meta, len: %d", len(blob))
 		}
@@ -255,9 +259,13 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, states *trie
 		slices.SortFunc(slist, common.Hash.Cmp)
 		storageList[addr] = slist
 	}
+	version := stateHistoryV0
+	if states.RawSlotKey {
+		version = stateHistoryV1
+	}
 	return &history{
 		meta: &meta{
-			version: stateHistoryVersion,
+			version: version,
 			parent:  parent,
 			root:    root,
 			block:   block,
@@ -290,7 +298,7 @@ func (h *history) encode() ([]byte, []byte, []byte, []byte) {
 			// Encode storage slots in order
 			for _, slotHash := range h.storageList[addr] {
 				sIndex := slotIndex{
-					hash:   slotHash,
+					id:     slotHash,
 					length: uint8(len(slots[slotHash])),
 					offset: uint32(len(storageData)),
 				}
@@ -403,7 +411,7 @@ func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.
 		}
 		index.decode(r.storageIndexes[start:end])
 
-		if bytes.Compare(last.Bytes(), index.hash.Bytes()) >= 0 {
+		if bytes.Compare(last.Bytes(), index.id.Bytes()) >= 0 {
 			return nil, nil, errors.New("storage slot is not in order")
 		}
 		if index.offset != r.lastSlotDataRead {
@@ -413,10 +421,10 @@ func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.
 		if uint32(len(r.storageData)) < sEnd {
 			return nil, nil, errors.New("storage data buffer is corrupted")
 		}
-		storage[index.hash] = r.storageData[r.lastSlotDataRead:sEnd]
-		list = append(list, index.hash)
+		storage[index.id] = r.storageData[r.lastSlotDataRead:sEnd]
+		list = append(list, index.id)
 
-		last = index.hash
+		last = index.id
 		r.lastSlotIndexRead = end
 		r.lastSlotDataRead = sEnd
 	}
