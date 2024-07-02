@@ -17,13 +17,13 @@
 package hexutil
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common/hexutil/asmhex"
 	"github.com/holiman/uint256"
 )
 
@@ -43,7 +43,7 @@ type Bytes []byte
 func (b Bytes) MarshalText() ([]byte, error) {
 	result := make([]byte, len(b)*2+2)
 	copy(result, `0x`)
-	hex.Encode(result[2:], b)
+	asmhex.Encode(result[2:], b)
 	return result, nil
 }
 
@@ -62,7 +62,7 @@ func (b *Bytes) UnmarshalText(input []byte) error {
 		return err
 	}
 	dec := make([]byte, len(raw)/2)
-	if _, err = hex.Decode(dec, raw); err != nil {
+	if _, err = asmhex.Decode(dec, raw); err != nil {
 		err = mapError(err)
 	} else {
 		*b = dec
@@ -121,7 +121,7 @@ func UnmarshalFixedText(typname string, input, out []byte) error {
 			return ErrSyntax
 		}
 	}
-	hex.Decode(out, raw)
+	asmhex.Decode(out, raw)
 	return nil
 }
 
@@ -142,7 +142,7 @@ func UnmarshalFixedUnprefixedText(typname string, input, out []byte) error {
 			return ErrSyntax
 		}
 	}
-	hex.Decode(out, raw)
+	asmhex.Decode(out, raw)
 	return nil
 }
 
