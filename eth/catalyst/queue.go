@@ -56,7 +56,7 @@ type payloadQueue struct {
 // all containing empty items.
 func newPayloadQueue() *payloadQueue {
 	return &payloadQueue{
-		payloads: make([]*payloadQueueItem, maxTrackedPayloads),
+		payloads: make([]*payloadQueueItem, 0, maxTrackedPayloads),
 	}
 }
 
@@ -65,10 +65,12 @@ func (q *payloadQueue) put(id engine.PayloadID, payload *miner.Payload) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	copy(q.payloads[1:], q.payloads)
-	q.payloads[0] = &payloadQueueItem{
+	q.payloads = append(q.payloads, &payloadQueueItem{
 		id:      id,
 		payload: payload,
+	})
+	if len(q.payloads) > maxTrackedPayloads {
+		q.payloads = q.payloads[1:]
 	}
 }
 
@@ -77,10 +79,8 @@ func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayl
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for _, item := range q.payloads {
-		if item == nil {
-			return nil // no more items
-		}
+	for i := len(q.payloads) - 1; i >= 0; i-- {
+		item := q.payloads[i]
 		if item.id == id {
 			if !full {
 				return item.payload.Resolve()
@@ -96,10 +96,8 @@ func (q *payloadQueue) has(id engine.PayloadID) bool {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for _, item := range q.payloads {
-		if item == nil {
-			return false
-		}
+	for i := len(q.payloads) - 1; i >= 0; i-- {
+		item := q.payloads[i]
 		if item.id == id {
 			return true
 		}
@@ -125,7 +123,7 @@ type headerQueue struct {
 // all containing empty items.
 func newHeaderQueue() *headerQueue {
 	return &headerQueue{
-		headers: make([]*headerQueueItem, maxTrackedHeaders),
+		headers: make([]*headerQueueItem, 0, maxTrackedHeaders),
 	}
 }
 
@@ -134,10 +132,12 @@ func (q *headerQueue) put(hash common.Hash, data *types.Header) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
-	copy(q.headers[1:], q.headers)
-	q.headers[0] = &headerQueueItem{
+	q.headers = append(q.headers, &headerQueueItem{
 		hash:   hash,
 		header: data,
+	})
+	if len(q.headers) > maxTrackedHeaders {
+		q.headers = q.headers[1:]
 	}
 }
 
@@ -146,10 +146,8 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
-	for _, item := range q.headers {
-		if item == nil {
-			return nil // no more items
-		}
+	for i := len(q.headers) - 1; i >= 0; i-- {
+		item := q.headers[i]
 		if item.hash == hash {
 			return item.header
 		}
