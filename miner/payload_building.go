@@ -25,6 +25,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -67,22 +69,25 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 // the revenue. Therefore, the empty-block here is always available and full-block
 // will be set/updated afterwards.
 type Payload struct {
-	id       engine.PayloadID
-	empty    *types.Block
-	full     *types.Block
-	sidecars []*types.BlobTxSidecar
-	fullFees *big.Int
-	stop     chan struct{}
-	lock     sync.Mutex
-	cond     *sync.Cond
+	id           engine.PayloadID
+	empty        *types.Block
+	emptyWitness *stateless.Witness
+	full         *types.Block
+	fullWitness  *stateless.Witness
+	sidecars     []*types.BlobTxSidecar
+	fullFees     *big.Int
+	stop         chan struct{}
+	lock         sync.Mutex
+	cond         *sync.Cond
 }
 
 // newPayload initializes the payload object.
-func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
+func newPayload(empty *types.Block, witness *stateless.Witness, id engine.PayloadID) *Payload {
 	payload := &Payload{
-		id:    id,
-		empty: empty,
-		stop:  make(chan struct{}),
+		id:           id,
+		empty:        empty,
+		emptyWitness: witness,
+		stop:         make(chan struct{}),
 	}
 	log.Info("Starting work on payload", "id", payload.id)
 	payload.cond = sync.NewCond(&payload.lock)
@@ -106,6 +111,7 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 		payload.full = r.block
 		payload.fullFees = r.fees
 		payload.sidecars = r.sidecars
+		payload.fullWitness = r.witness
 
 		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(r.fees), big.NewFloat(params.Ether))
 		log.Info("Updated payload",
@@ -135,9 +141,19 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 		close(payload.stop)
 	}
 	if payload.full != nil {
-		return engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
+		envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
+		if payload.fullWitness != nil {
+			envelope.Witness = new(hexutil.Bytes)
+			*envelope.Witness, _ = rlp.EncodeToBytes(payload.fullWitness) // cannot fail
+		}
+		return envelope
 	}
-	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
+	envelope := engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
+	if payload.emptyWitness != nil {
+		envelope.Witness = new(hexutil.Bytes)
+		*envelope.Witness, _ = rlp.EncodeToBytes(payload.emptyWitness) // cannot fail
+	}
+	return envelope
 }
 
 // ResolveEmpty is basically identical to Resolve, but it expects empty block only.
@@ -146,7 +162,12 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
-	return engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
+	envelope := engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
+	if payload.emptyWitness != nil {
+		envelope.Witness = new(hexutil.Bytes)
+		*envelope.Witness, _ = rlp.EncodeToBytes(payload.emptyWitness) // cannot fail
+	}
+	return envelope
 }
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
@@ -172,11 +193,16 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	default:
 		close(payload.stop)
 	}
-	return engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
+	envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
+	if payload.fullWitness != nil {
+		envelope.Witness = new(hexutil.Bytes)
+		*envelope.Witness, _ = rlp.EncodeToBytes(payload.fullWitness) // cannot fail
+	}
+	return envelope
 }
 
 // buildPayload builds the payload according to the provided parameters.
-func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
+func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
@@ -190,13 +216,12 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		beaconRoot:  args.BeaconRoot,
 		noTxs:       true,
 	}
-	empty := miner.generateWork(emptyParams)
+	empty := miner.generateWork(emptyParams, witness)
 	if empty.err != nil {
 		return nil, empty.err
 	}
-
 	// Construct a payload object for return.
-	payload := newPayload(empty.block, args.Id())
+	payload := newPayload(empty.block, empty.witness, args.Id())
 
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.
@@ -226,7 +251,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			select {
 			case <-timer.C:
 				start := time.Now()
-				r := miner.generateWork(fullParams)
+				r := miner.generateWork(fullParams, witness)
 				if r.err == nil {
 					payload.update(r, time.Since(start))
 				} else {
