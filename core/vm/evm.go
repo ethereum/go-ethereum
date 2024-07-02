@@ -485,6 +485,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	isInitcodeEOF := hasEOFMagic(codeAndHash.code)
 	if evm.chainRules.IsPrague {
 		if isInitcodeEOF {
+			if !fromEOF {
+				return nil, common.Address{}, gas, ErrLegacyCode
+			}
 			// If the initcode is EOF, verify it is well-formed.
 			var c Container
 			if err := c.UnmarshalBinary(codeAndHash.code, isInitcodeEOF); err != nil {
@@ -615,8 +618,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
-	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, nil, isEOF)
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, nil, false)
 }
 
 // Create2 creates a new contract using code as deployment code.
@@ -626,8 +628,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint2
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, nil, isEOF)
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, nil, false)
 }
 
 // EOFCreate
