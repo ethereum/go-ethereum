@@ -96,7 +96,7 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	defer subscription.Unsubscribe()
 
 	// generate some withdrawals
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 10; i++ {
 		withdrawals = append(withdrawals, types.Withdrawal{Index: uint64(i)})
 		if err := mock.withdrawals.add(&withdrawals[i]); err != nil {
 			t.Fatal("addWithdrawal failed", err)

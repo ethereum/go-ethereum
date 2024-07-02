@@ -43,8 +43,8 @@ const maxWithdrawalCount = 10
 // pending inclusion.
 type withdrawalQueue struct {
 	queue   types.Withdrawals
-	pending chan struct{}
-	mu      sync.Mutex
+	pending chan struct{} // channel to notify when there are pending withdrawals in the queue
+	mu      sync.Mutex    // mutex to gate access to the queue
 }
 
 // add queues a withdrawal for future inclusion.
@@ -52,10 +52,11 @@ func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if len(w.queue)+1 > maxWithdrawalCount {
+	if len(w.queue) == maxWithdrawalCount {
 		return errors.New("withdrawal queue full")
 	}
 	w.queue = append(w.queue, withdrawal)
+	// send a notification to the pending channel without blocking
 	select {
 	case w.pending <- struct{}{}:
 	default:
@@ -74,11 +75,14 @@ func (w *withdrawalQueue) gatherPending(gatherCount int) []*types.Withdrawal {
 	return w.queue[:gatherCount]
 }
 
+// popFront removes a number of withdrawals from the front of the queue
+// up to a maximum count.
 func (w *withdrawalQueue) popFront(count int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	w.queue = w.queue[count:]
+	// if the queue is still non-empty, notify so they will be picked up
 	if len(w.queue) > 0 {
 		select {
 		case w.pending <- struct{}{}:
@@ -158,7 +162,7 @@ func (c *SimulatedBeacon) Stop() error {
 
 // sealBlock initiates payload building for a new block and creates a new block
 // with the completed payload.
-func (c *SimulatedBeacon) sealBlock(sealEmpty bool, timestamp uint64) (bool, error) {
+func (c *SimulatedBeacon) sealBlock(allowEmpty bool, timestamp uint64) (committed bool, err error) {
 	if timestamp <= c.lastBlockTime {
 		timestamp = c.lastBlockTime + 1
 	}
@@ -193,7 +197,7 @@ func (c *SimulatedBeacon) sealBlock(sealEmpty bool, timestamp uint64) (bool, err
 		return false, err
 	}
 	payload := envelope.ExecutionPayload
-	if !sealEmpty && len(payload.Transactions) == 0 && len(payload.Withdrawals) == 0 {
+	if !allowEmpty && len(payload.Transactions) == 0 && len(payload.Withdrawals) == 0 {
 		return false, nil
 	}
 
