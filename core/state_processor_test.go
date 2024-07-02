@@ -18,6 +18,7 @@ package core
 
 import (
 	"crypto/ecdsa"
+	"encoding/binary"
 	"math/big"
 	"testing"
 
@@ -29,9 +30,11 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -527,4 +530,33 @@ func TestProcessVerkle(t *testing.T) {
 			t.Fatalf("expected block #%d txs to use %d, got %d\n", b.NumberU64(), blockGasUsagesExpected[i], b.GasUsed())
 		}
 	}
+}
+
+func TestProcessParentBlockHash(t *testing.T) {
+	var (
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		hashA      = common.Hash{0x01}
+		hashB      = common.Hash{0x02}
+		header     = &types.Header{ParentHash: hashA, Number: big.NewInt(2)}
+		parent     = &types.Header{ParentHash: hashB, Number: big.NewInt(1)}
+		genesis    = &types.Header{ParentHash: common.Hash{}, Number: big.NewInt(0)}
+	)
+
+	ProcessParentBlockHash(statedb, header.ParentHash, parent.Number.Uint64())
+	ProcessParentBlockHash(statedb, parent.ParentHash, genesis.Number.Uint64())
+
+	// make sure that the state is correct
+	if have := getParentBlockHash(statedb, 1); have != hashA {
+		t.Fail()
+	}
+	if have := getParentBlockHash(statedb, 0); have != hashB {
+		t.Fail()
+	}
+}
+
+func getParentBlockHash(statedb *state.StateDB, number uint64) common.Hash {
+	ringIndex := number % params.HistoryServeWindow
+	var key common.Hash
+	binary.BigEndian.PutUint64(key[24:], ringIndex)
+	return statedb.GetState(params.HistoryStorageAddress, key)
 }
