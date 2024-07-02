@@ -458,7 +458,7 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode, fromEOF bool) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode, input []byte, fromEOF bool) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller.Address(), address, codeAndHash.code, gas, value.ToBig())
 		defer func(startGas uint64) {
@@ -552,7 +552,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 
 	if err == nil {
-		ret, err = evm.interpreter.Run(contract, nil, false, contract.IsDeployment)
+		ret, err = evm.interpreter.Run(contract, input, false, contract.IsDeployment)
 	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
@@ -616,7 +616,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
 	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
-	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, isEOF)
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, nil, isEOF)
 }
 
 // Create2 creates a new contract using code as deployment code.
@@ -627,14 +627,14 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
 	isEOF := hasEOFMagic(evm.StateDB.GetCode(caller.Address()))
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, isEOF)
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, nil, isEOF)
 }
 
 // EOFCreate
-func (evm *EVM) EOFCreate(caller ContractRef, code []byte, subcontainer []byte, gas uint64, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) EOFCreate(caller ContractRef, input []byte, subcontainer []byte, gas uint64, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: subcontainer}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, true)
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, input, true)
 }
 
 // ChainConfig returns the environment's chain configuration
