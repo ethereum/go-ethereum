@@ -83,22 +83,47 @@ The `nodeInfo` administrative property can be queried for all the information kn
 ```js
 > admin.nodeInfo
 {
-  enode: "enode://44826a5d6a55f88a18298bca4773fca5749cdc3a5c9f308aa7d810e9b31123f3e7c5fba0b1d70aac5308426f47df2a128a6747040a3815cc7dd7167d03be320d@[::]:30303",
-  id: "44826a5d6a55f88a18298bca4773fca5749cdc3a5c9f308aa7d810e9b31123f3e7c5fba0b1d70aac5308426f47df2a128a6747040a3815cc7dd7167d03be320d",
-  ip: "::",
+  enode: "enode://3d876252880e32116fdb52ea56a78ee2b9789e55b4413de910db69702ce93a7ff9a0b7c647a010a5e1e079c0aca146331083009644e12dc03510b9de9f50b9ef@156.146.56.131:30303?discport=39261",
+  enr: "enr:-K64QL0-CI9BofDkirpulbV1OOOgqf5HLRMHr9iaziZInqI9HmeGOGZv2hs6J7olLu32LUMeYHTCjNBu3De_zlkI1fSGAY_h5ivyg2V0aMrJhPxk7ASDEYwwgmlkgnY0gmlwhJySOIOJc2VjcDI1NmsxoQM9h2JSiA4yEW_bUupWp47iuXieVbRBPekQ22lwLOk6f4RzbmFwwIN0Y3CCdl-DdWRwgpldhHVkcDaCdl8",
+  id: "b7b61ea54ad081258a13a6d82920ce6719301f4670c458f64f0035e3463ec2df",
+  ip: "156.146.56.131",
   listenAddr: "[::]:30303",
-  name: "Geth/v1.5.0-unstable/linux/go1.6",
+  name: "Geth/v1.14.4-unstable-51327686/linux-arm64/go1.22.3",
   ports: {
-    discovery: 30303,
+    discovery: 39261,
     listener: 30303
   },
   protocols: {
     eth: {
-      difficulty: 17334254859343145000,
+      config: {
+        arrowGlacierBlock: 13773000,
+        berlinBlock: 12244000,
+        byzantiumBlock: 4370000,
+        cancunTime: 1710338135,
+        chainId: 1,
+        constantinopleBlock: 7280000,
+        daoForkBlock: 1920000,
+        daoForkSupport: true,
+        eip150Block: 2463000,
+        eip155Block: 2675000,
+        eip158Block: 2675000,
+        ethash: {},
+        grayGlacierBlock: 15050000,
+        homesteadBlock: 1150000,
+        istanbulBlock: 9069000,
+        londonBlock: 12965000,
+        muirGlacierBlock: 9200000,
+        petersburgBlock: 7280000,
+        shanghaiTime: 1681338455,
+        terminalTotalDifficulty: 5.875e+22,
+        terminalTotalDifficultyPassed: true
+      },
+      difficulty: 17179869184,
       genesis: "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
-      head: "0xb83f73fbe6220c111136aefd27b160bf4a34085c65ba89f24246b3162257c36a",
+      head: "0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
       network: 1
-    }
+    },
+    snap: {}
   }
 }
 ```
@@ -127,33 +152,43 @@ The `peers` administrative property can be queried for all the information known
 ```js
 > admin.peers
 [{
-    caps: ["eth/61", "eth/62", "eth/63"],
-    id: "08a6b39263470c78d3e4f58e3c997cd2e7af623afce64656cfc56480babcea7a9138f3d09d7b9879344c2d2e457679e3655d4b56eaff5fd4fd7f147bdb045124",
-    name: "Geth/v1.5.0-unstable/linux/go1.5.1",
+    caps: ["eth/68", "snap/1"],
+    enode: "enode://4aeb4ab6c14b23e2c4cfdce879c04b0748a20d8e9b59e25ded2a08143e265c6c25936e74cbc8e641e3312ca288673d91f2f93f8e277de3cfa444ecdaaf982052@157.90.35.166:30303",
+    id: "6b36f791352f15eb3ec4f67787074ab8ad9d487e37c4401d383f0561a0a20507",
+    name: "Geth/v1.13.14-stable-2bd6bd01/linux-amd64/go1.21.7",
     network: {
-      localAddress: "192.168.0.104:51068",
-      remoteAddress: "71.62.31.72:30303"
+      inbound: false,
+      localAddress: "172.17.0.2:33666",
+      remoteAddress: "157.90.35.166:30303",
+      static: false,
+      trusted: false
     },
     protocols: {
       eth: {
-        difficulty: 17334052235346465000,
-        head: "5794b768dae6c6ee5366e6ca7662bdff2882576e09609bf778633e470e0e7852",
-        version: 63
+        version: 68
+      },
+      snap: {
+        version: 1
       }
     }
 }, /* ... */ {
-    caps: ["eth/61", "eth/62", "eth/63"],
-    id: "fcad9f6d3faf89a0908a11ddae9d4be3a1039108263b06c96171eb3b0f3ba85a7095a03bb65198c35a04829032d198759edfca9b63a8b69dc47a205d94fce7cc",
-    name: "Geth/v1.3.5-506c9277/linux/go1.4.2",
+    caps: ["eth/66", "eth/67", "eth/68", "snap/1"],
+    enode: "enode://404786d90feafd54abcbcb7a7c791b6197304e58f7f582715312372af7297f194baf4abb6ce1cc5c55050e8111194d500590d0e08fcd75ce575f8fdd2e090af0@34.241.148.206:30303",
+    id: "8a2a75da0f099ee3d1dcfad4a4825c81b5ab1cb3c18207e7626abae87ce589b1",
+    name: "Geth/v1.11.6-stable-ea9e62ca/linux-amd64/go1.20.3",
     network: {
-      localAddress: "192.168.0.104:55968",
-      remoteAddress: "121.196.232.205:30303"
+      inbound: false,
+      localAddress: "172.17.0.2:59938",
+      remoteAddress: "34.241.148.206:30303",
+      static: false,
+      trusted: false
     },
     protocols: {
       eth: {
-        difficulty: 17335165914080772000,
-        head: "5794b768dae6c6ee5366e6ca7662bdff2882576e09609bf778633e470e0e7852",
-        version: 63
+        version: 68
+      },
+      snap: {
+        version: 1
       }
     }
 }]
