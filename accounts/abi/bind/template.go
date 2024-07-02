@@ -275,6 +275,11 @@ var (
 	  return bind.NewBoundContract(address, *parsed, caller, transactor, filterer), nil
 	}
 
+	// GetABI is a convenience that returns the parsed ABI of the bound contract.
+	func (_{{$contract.Type}} *{{$contract.Type}}) GetABI() abi.ABI {
+		return _{{$contract.Type}}.{{$contract.Type}}Caller.contract.GetABI()
+	}
+	
 	// Call invokes the (constant) contract method with params as input values and
 	// sets the output to result. The result type might be a single field for simple
 	// returns, a slice of interfaces for anonymous returns and a struct for named
@@ -314,6 +319,13 @@ var (
 	}
 
 	{{range .Calls}}
+		// {{.Normalized.Name}}Method is a call to retrieve the method information 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Caller) {{.Normalized.Name}}Method() (*abi.Method, error) {
+			return _{{$contract.Type}}.contract.Method("{{.Original.Name}}")
+		}
+	
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
@@ -356,6 +368,20 @@ var (
 	{{end}}
 
 	{{range .Transacts}}
+		// {{.Normalized.Name}}Method is a call to retrieve the method information 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Transactor) {{.Normalized.Name}}Method() (*abi.Method, error) {
+			return _{{$contract.Type}}.contract.Method("{{.Original.Name}}")
+		}
+
+		// {{.Normalized.Name}}RawCalldata is the abi packed data binding the contract method 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+        func (_{{$contract.Type}} *{{$contract.Type}}Transactor) {{.Normalized.Name}}RawCalldata({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
+			return _{{$contract.Type}}.contract.Calldata("{{.Original.Name}}" {{range .Normalized.Inputs}}, {{.Name}}{{end}})
+		}
+		
 		// {{.Normalized.Name}} is a paid mutator transaction binding the contract method 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
@@ -493,6 +519,13 @@ var (
 		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
 			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $structs}}{{else}}{{bindtype .Type $structs}}{{end}}; {{end}}
 			Raw types.Log // Blockchain specific contextual infos
+		}
+
+		// {{.Normalized.Name}}Event is a call to retrieve the event information.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Filterer) {{.Normalized.Name}}Event() (*abi.Event, error) {
+			return _{{$contract.Type}}.contract.Event("{{.Original.Name}}")
 		}
 
 		// Filter{{.Normalized.Name}} is a free log retrieval operation binding the contract event 0x{{printf "%x" .Original.ID}}.
