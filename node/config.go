@@ -106,6 +106,10 @@ type Config struct {
 	// field is empty, no HTTP API endpoint will be started.
 	HTTPHost string
 
+	// HTTPProto is the protocol on which the HTTP RPC server will bind.
+	// Supported values are tcp, unix. HTTPPort is ignored if HTTPProto == unix
+	HTTPProto string
+
 	// HTTPPort is the TCP port number on which to start the HTTP RPC server. The
 	// default zero value is/ valid and will pick a port number randomly (useful
 	// for ephemeral nodes).
