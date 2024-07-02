@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0](https://github.com/taikoxyz/taiko-geth/compare/v1.3.0...v1.4.0) (2024-07-02)
+
+
+### Features
+
+* **miner:** count last oversized transaction ([#273](https://github.com/taikoxyz/taiko-geth/issues/273)) ([451a668](https://github.com/taikoxyz/taiko-geth/commit/451a668d79bb9e41bb34dfb5fdbd1e0301977a9b))
+* **taiko_worker:** skip blob transactions ([#280](https://github.com/taikoxyz/taiko-geth/issues/280)) ([30a615b](https://github.com/taikoxyz/taiko-geth/commit/30a615b4c3aafd0d395309035d58b86ff53c8eb0))
+
+
+### Bug Fixes
+
+* **taiko_worker:** fix a `maxBytesPerTxList` check issue ([#282](https://github.com/taikoxyz/taiko-geth/issues/282)) ([f930382](https://github.com/taikoxyz/taiko-geth/commit/f930382f4bf789bdc6c6fae5a410758a9f9bed7c))
+
 ## [1.3.0](https://github.com/taikoxyz/taiko-geth/compare/v1.2.0...v1.3.0) (2024-06-06)
 
 
