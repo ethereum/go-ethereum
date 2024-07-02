@@ -142,7 +142,7 @@ The most straightforward to interact with any of the geth nodes is through JSON-
 In the end the kurtosis services are docker images. It is also possible to get shell access to them and poke around, e.g. load up the console. Kurtosis facilitates the shell access through a command:
 
 ```
-> kurtosis shell dusty-soil el-1-geth-lighthouse
+> kurtosis service shell dusty-soil el-1-geth-lighthouse
 No bash found on container; dropping down to sh shell...
 / # geth --datadir /data/geth/execution-data/ attach
 Welcome to the Geth JavaScript console!
