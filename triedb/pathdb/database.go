@@ -190,7 +190,7 @@ func (db *Database) repairHistory() error {
 		// all of them. Fix the tests first.
 		return nil
 	}
-	freezer, err := rawdb.NewStateFreezer(ancient, db.readOnly)
+	freezer, err := rawdb.NewStateFreezer(ancient, db.isVerkle, db.readOnly)
 	if err != nil {
 		log.Crit("Failed to open state history freezer", "err", err)
 	}
