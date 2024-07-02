@@ -882,7 +882,6 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		salt         = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		gas          = scope.Contract.Gas
 	)
 	if int(idx) >= len(scope.Contract.Container.ContainerSections) {
 		return nil, fmt.Errorf("invalid subcontainer")
@@ -895,6 +894,12 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	if ok := scope.Contract.UseGas(hashingCharge, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified); !ok {
 		return nil, ErrGasUintOverflow
 	}
+	if interpreter.evm.Config.Tracer != nil {
+		if interpreter.evm.Config.Tracer != nil {
+			interpreter.evm.Config.Tracer.OnOpcode(*pc, byte(EOFCREATE), 0, hashingCharge, scope, interpreter.returnData, interpreter.evm.depth, nil)
+		}
+	}
+	gas := scope.Contract.Gas
 	// Reuse last popped value from stack
 	stackvalue := size
 	// Apply EIP150
@@ -996,6 +1001,18 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	if len(deployedCode) == 0 {
 		return nil, errors.New("nonexistant subcontainer")
 	}
+	// Validate the subcontainer
+	var c Container
+	if err := c.UnmarshalBinary(deployedCode, true); err != nil {
+		panic(fmt.Sprintf("%x", deployedCode))
+	}
+	if err := c.ValidateCode(interpreter.tableEOF); err != nil {
+		return nil, err
+	}
+	if len(c.Data) < c.DataSize {
+		return nil, errors.New("invalid subcontainer")
+	}
+	c.DataSize = len(c.Data)
 	// Restore context
 	var (
 		last   = len(scope.ReturnStack) - 1
@@ -1004,7 +1021,9 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	scope.ReturnStack = scope.ReturnStack[:last]
 	scope.CodeSection = retCtx.Section
 	*pc = retCtx.Pc - 1
-	return deployedCode, errStopToken
+	fmt.Printf("%v", c.MarshalBinary())
+	fmt.Printf("%v", deployedCode)
+	return c.MarshalBinary(), errStopToken
 }
 
 func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {

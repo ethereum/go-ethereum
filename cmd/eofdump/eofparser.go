@@ -72,8 +72,9 @@ type RefTests struct {
 }
 
 type EOFTest struct {
-	Code    string              `json:"code"`
-	Results map[string]etResult `json:"results"`
+	IsInitCode bool                `json:"isInitCode"`
+	Code       string              `json:"code"`
+	Results    map[string]etResult `json:"results"`
 }
 
 type etResult struct {
@@ -84,7 +85,7 @@ type etResult struct {
 func eofParser(ctx *cli.Context) error {
 	// If `--hex` is set, parse and validate the hex string argument.
 	if ctx.IsSet(HexFlag.Name) {
-		if _, err := parseAndValidate(ctx.String(HexFlag.Name)); err != nil {
+		if _, err := parseAndValidate(ctx.String(HexFlag.Name), false); err != nil {
 			if err2 := errors.Unwrap(err); err2 != nil {
 				err = err2
 			}
@@ -143,7 +144,7 @@ func eofParser(ctx *cli.Context) error {
 		if len(t) == 0 || t[0] == '#' {
 			continue
 		}
-		if _, err := parseAndValidate(t); err != nil {
+		if _, err := parseAndValidate(t, false); err != nil {
 			if err2 := errors.Unwrap(err); err2 != nil {
 				err = err2
 			}
@@ -166,7 +167,7 @@ func ExecuteTest(src []byte) (int, int, error) {
 				total++
 				// TODO(matt): all tests currently run against
 				// shanghai EOF, add support for custom forks.
-				_, err := parseAndValidate(tt.Code)
+				_, err := parseAndValidate(tt.Code, tt.IsInitCode)
 				if err2 := errors.Unwrap(err); err2 != nil {
 					err = err2
 				}
@@ -193,7 +194,7 @@ func ExecuteTest(src []byte) (int, int, error) {
 	return passed, total, nil
 }
 
-func parseAndValidate(s string) (*vm.Container, error) {
+func parseAndValidate(s string, isInitCode bool) (*vm.Container, error) {
 	if len(s) >= 2 && strings.HasPrefix(s, "0x") {
 		s = s[2:]
 	}
@@ -202,7 +203,7 @@ func parseAndValidate(s string) (*vm.Container, error) {
 		return nil, fmt.Errorf("unable to decode data: %w", err)
 	}
 	var c vm.Container
-	if err := c.UnmarshalBinary(b); err != nil {
+	if err := c.UnmarshalBinary(b, isInitCode); err != nil {
 		return nil, err
 	}
 	if err := c.ValidateCode(&jt); err != nil {
@@ -223,7 +224,7 @@ func eofDump(ctx *cli.Context) error {
 			return fmt.Errorf("unable to decode data: %w", err)
 		}
 		var c vm.Container
-		if err := c.UnmarshalBinary(b); err != nil {
+		if err := c.UnmarshalBinary(b, false); err != nil {
 			return err
 		}
 		fmt.Print(c.String())

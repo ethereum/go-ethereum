@@ -142,7 +142,7 @@ func (c *Container) MarshalBinary() []byte {
 }
 
 // UnmarshalBinary decodes an EOF container.
-func (c *Container) UnmarshalBinary(b []byte) error {
+func (c *Container) UnmarshalBinary(b []byte, isInitcode bool) error {
 	if !hasEOFMagic(b) {
 		return fmt.Errorf("%w: want %x", ErrInvalidMagic, eofMagic)
 	}
@@ -224,7 +224,11 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	if len(containerSizes) != 0 {
 		expectedSize += sum(containerSizes)
 	}
-	if len(b) < expectedSize-dataSize || len(b) > expectedSize {
+	if len(b) < expectedSize-dataSize {
+		return fmt.Errorf("%w: have %d, want %d", ErrInvalidContainerSize, len(b), expectedSize)
+	}
+	// Only check that the expected size is not exceed on non-initcode
+	if !isInitcode && len(b) > expectedSize {
 		return fmt.Errorf("%w: have %d, want %d", ErrInvalidContainerSize, len(b), expectedSize)
 	}
 
@@ -278,7 +282,7 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 			}
 			c := new(Container)
 			end := min(idx+size, len(b))
-			if err := c.UnmarshalBinary(b[idx:end]); err != nil {
+			if err := c.UnmarshalBinary(b[idx:end], isInitcode); err != nil {
 				return fmt.Errorf("%w for section %d", err, i)
 			}
 			container = append(container, c)
@@ -291,7 +295,10 @@ func (c *Container) UnmarshalBinary(b []byte) error {
 	}
 
 	// Parse data section.
-	end := min(idx+dataSize, len(b))
+	end := len(b)
+	if !isInitcode {
+		end = min(idx+dataSize, len(b))
+	}
 	c.Data = b[idx:end]
 
 	return nil

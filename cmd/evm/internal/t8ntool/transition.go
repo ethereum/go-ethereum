@@ -297,7 +297,7 @@ func applyEOFChecks(prestate *Prestate, chainConfig *params.ChainConfig) error {
 					c   vm.Container
 					err error
 				)
-				err = c.UnmarshalBinary(acc.Code)
+				err = c.UnmarshalBinary(acc.Code, false)
 				if err == nil {
 					jt := vm.NewPragueEOFInstructionSetForTesting()
 					err = c.ValidateCode(&jt)

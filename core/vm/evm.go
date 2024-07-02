@@ -487,7 +487,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		if isInitcodeEOF {
 			// If the initcode is EOF, verify it is well-formed.
 			var c Container
-			if err := c.UnmarshalBinary(codeAndHash.code); err != nil {
+			if err := c.UnmarshalBinary(codeAndHash.code, isInitcodeEOF); err != nil {
 				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, err)
 			}
 			if err := c.ValidateCode(evm.interpreter.tableEOF); err != nil {
@@ -568,13 +568,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if err == nil && len(ret) >= 1 && HasEOFByte(ret) {
 		if evm.chainRules.IsShanghai {
-			var c Container
-			if err = c.UnmarshalBinary(ret); err == nil {
-				err = c.ValidateCode(evm.interpreter.tableEOF)
-			}
-			if err != nil {
-				err = fmt.Errorf("%w: %v", ErrInvalidEOF, err)
-			}
+			// Don't reject EOF contracts after Shanghai
 		} else if evm.chainRules.IsLondon {
 			err = ErrInvalidCode
 		}
@@ -691,7 +685,7 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 func (evm *EVM) parseContainer(b []byte) *Container {
 	if evm.chainRules.IsPrague {
 		var c Container
-		if err := c.UnmarshalBinary(b); err != nil && strings.HasPrefix(err.Error(), "invalid magic") {
+		if err := c.UnmarshalBinary(b, false); err != nil && strings.HasPrefix(err.Error(), "invalid magic") {
 			return nil
 		} else if err != nil {
 			// Code was already validated, so no other errors should be possible.
