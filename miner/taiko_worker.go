@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
-	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -34,6 +32,7 @@ func (w *worker) BuildTransactionsLists(
 	maxBytesPerTxList uint64,
 	localAccounts []string,
 	maxTransactionsLists uint64,
+	minTip uint64,
 ) ([]*PreBuiltTxList, error) {
 	var (
 		txsLists    []*PreBuiltTxList
@@ -96,6 +95,7 @@ func (w *worker) BuildTransactionsLists(
 			newTransactionsByPriceAndNonce(signer, locals, baseFee),
 			newTransactionsByPriceAndNonce(signer, remotes, baseFee),
 			maxBytesPerTxList,
+			minTip,
 		)
 
 		b, err := encodeAndComporeessTxList(env.txs)
@@ -243,6 +243,7 @@ func (w *worker) commitL2Transactions(
 	txsLocal *transactionsByPriceAndNonce,
 	txsRemote *transactionsByPriceAndNonce,
 	maxBytesPerTxList uint64,
+	minTip uint64,
 ) *types.Transaction {
 	var (
 		txs             = txsLocal
@@ -280,17 +281,10 @@ loop:
 			continue
 		}
 
-		if os.Getenv("TAIKO_MIN_TIP") != "" {
-			minTip, err := strconv.Atoi(os.Getenv("TAIKO_MIN_TIP"))
-			if err != nil {
-				log.Error("Failed to parse TAIKO_MIN_TIP", "err", err)
-			} else {
-				if tx.GasTipCapIntCmp(new(big.Int).SetUint64(uint64(minTip))) < 0 {
-					log.Trace("Ignoring transaction with low tip", "hash", tx.Hash(), "tip", tx.GasTipCap(), "minTip", minTip)
-					txs.Pop()
-					continue
-				}
-			}
+		if tx.GasTipCapIntCmp(new(big.Int).SetUint64(minTip)) < 0 {
+			log.Trace("Ignoring transaction with low tip", "hash", tx.Hash(), "tip", tx.GasTipCap(), "minTip", minTip)
+			txs.Pop()
+			continue
 		}
 
 		// Error may be ignored here. The error has already been checked

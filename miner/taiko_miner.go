@@ -36,6 +36,28 @@ func (miner *Miner) BuildTransactionsLists(
 	locals []string,
 	maxTransactionsLists uint64,
 ) ([]*PreBuiltTxList, error) {
+	return miner.BuildTransactionsListsWithMinTip(
+		beneficiary,
+		baseFee,
+		blockMaxGasLimit,
+		maxBytesPerTxList,
+		locals,
+		maxTransactionsLists,
+		0,
+	)
+}
+
+// BuildTransactionsListsWithMinTip builds multiple transactions lists which satisfy all
+// the given limits and minimum tip.
+func (miner *Miner) BuildTransactionsListsWithMinTip(
+	beneficiary common.Address,
+	baseFee *big.Int,
+	blockMaxGasLimit uint64,
+	maxBytesPerTxList uint64,
+	locals []string,
+	maxTransactionsLists uint64,
+	minTip uint64,
+) ([]*PreBuiltTxList, error) {
 	return miner.worker.BuildTransactionsLists(
 		beneficiary,
 		baseFee,
@@ -43,5 +65,6 @@ func (miner *Miner) BuildTransactionsLists(
 		maxBytesPerTxList,
 		locals,
 		maxTransactionsLists,
+		minTip,
 	)
 }

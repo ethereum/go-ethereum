@@ -102,3 +102,34 @@ func (a *TaikoAuthAPIBackend) TxPoolContent(
 		maxTransactionsLists,
 	)
 }
+
+// TxPoolContentWithMinTip retrieves the transaction pool content with the given upper limits and minimum tip.
+func (a *TaikoAuthAPIBackend) TxPoolContentWithMinTip(
+	beneficiary common.Address,
+	baseFee *big.Int,
+	blockMaxGasLimit uint64,
+	maxBytesPerTxList uint64,
+	locals []string,
+	maxTransactionsLists uint64,
+	minTip uint64,
+) ([]*miner.PreBuiltTxList, error) {
+	log.Debug(
+		"Fetching L2 pending transactions finished",
+		"baseFee", baseFee,
+		"blockMaxGasLimit", blockMaxGasLimit,
+		"maxBytesPerTxList", maxBytesPerTxList,
+		"maxTransactions", maxTransactionsLists,
+		"locals", locals,
+		"minTip", minTip,
+	)
+
+	return a.eth.Miner().BuildTransactionsListsWithMinTip(
+		beneficiary,
+		baseFee,
+		blockMaxGasLimit,
+		maxBytesPerTxList,
+		locals,
+		maxTransactionsLists,
+		minTip,
+	)
+}
