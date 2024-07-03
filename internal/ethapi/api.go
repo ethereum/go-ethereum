@@ -970,7 +970,7 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 type OverrideAccount struct {
 	Nonce     *hexutil.Uint64             `json:"nonce"`
 	Code      *hexutil.Bytes              `json:"code"`
-	Balance   **hexutil.Big               `json:"balance"`
+	Balance   *hexutil.Big                `json:"balance"`
 	State     map[common.Hash]common.Hash `json:"state"`
 	StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
 }
@@ -994,7 +994,7 @@ func (diff *StateOverride) Apply(statedb *state.StateDB) error {
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			u256Balance, _ := uint256.FromBig((*big.Int)(*account.Balance))
+			u256Balance, _ := uint256.FromBig((*big.Int)(account.Balance))
 			statedb.SetBalance(addr, u256Balance, tracing.BalanceChangeUnspecified)
 		}
 		if account.State != nil && account.StateDiff != nil {
