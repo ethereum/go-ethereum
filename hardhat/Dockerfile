@@ -2,9 +2,9 @@ FROM node:22-alpine3.19
 
 RUN apk add --no-cache bash
 
-WORKDIR /usr/src/app
+WORKDIR /usr/src/app/hardhat
 
-COPY . /usr/src/app
+COPY . /usr/src/app/hardhat
 
 RUN npm install --save-dev hardhat
 

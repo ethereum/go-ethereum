@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Change to the correct directory
-cd /usr/src/app;
+cd /usr/src/app/hardhat;
 
 # Start hardhat node as a background process
 nohup npx hardhat node &
