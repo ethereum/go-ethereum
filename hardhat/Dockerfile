@@ -10,7 +10,7 @@ RUN npm uninstall && npm install --save-dev hardhat
 
 RUN npm install wait-on
 
-COPY ./entrypoint.sh /usr/local/bin
+COPY .hardhat/entrypoint.sh /usr/local/bin
 
 EXPOSE 8545
 
