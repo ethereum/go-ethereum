@@ -131,7 +131,6 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 				"C": {{0x01}, {0x04}},
 			}),
 			isScheduled{tracking: nil, fetching: nil},
-
 			// Wait for the arrival timeout which should move all expired items
 			// from the wait list to the scheduler
 			doWait{time: txArriveTimeout, step: true},
@@ -256,7 +255,9 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 				},
 			}),
 			// Announce clashing hashes with conflicting metadata. Somebody will
-			// be in the wrong, but we don't know yet who.
+			// be in the wrong, but we don't know yet who. Note that the blob
+			// announcement gets waitlisted since its tx hash was seen earlier
+			// as non-blob type.
 			doTxNotify{peer: "D", hashes: []common.Hash{{0x01}, {0x02}}, types: []byte{types.LegacyTxType, types.BlobTxType}, sizes: []uint32{999, 222}},
 			isWaitingWithMeta(map[string][]announce{
 				"A": {
@@ -279,6 +280,37 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 				},
 			}),
 			isScheduled{tracking: nil, fetching: nil},
+			// Announce a non-conflicting blob tx, which should immediately go
+			// to fetching without hitting the waitlist.
+			doTxNotify{peer: "D", hashes: []common.Hash{{0x0b}}, types: []byte{types.BlobTxType}, sizes: []uint32{1000}},
+			isWaitingWithMeta(map[string][]announce{
+				"A": {
+					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
+					{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(222)},
+					{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
+					{common.Hash{0x05}, typeptr(types.LegacyTxType), sizeptr(555)},
+				},
+				"B": {
+					{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
+					{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+				},
+				"C": {
+					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
+					{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+				},
+				"D": {
+					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(999)},
+					{common.Hash{0x02}, typeptr(types.BlobTxType), sizeptr(222)},
+				},
+			}),
+			isScheduledWithMeta{
+				tracking: map[string][]announce{
+					"D": {{common.Hash{0x0B}, typeptr(types.BlobTxType), sizeptr(1000)}},
+				},
+				fetching: map[string][]common.Hash{
+					"D": {{0x0B}},
+				},
+			},
 
 			// Wait for the arrival timeout which should move all expired items
 			// from the wait list to the scheduler
@@ -303,19 +335,20 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 					"D": {
 						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(999)},
 						{common.Hash{0x02}, typeptr(types.BlobTxType), sizeptr(222)},
+						{common.Hash{0x0B}, typeptr(types.BlobTxType), sizeptr(1000)},
 					},
 				},
 				fetching: map[string][]common.Hash{ // Depends on deterministic test randomizer
-					"A": {{0x03}, {0x05}},
-					"C": {{0x01}, {0x04}},
-					"D": {{0x02}},
+					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
+					"B": {{0x04}},
+					"D": {{0x0B}},
 				},
 			},
 			// Queue up a non-fetchable transaction and then trigger it with a new
 			// peer (weird case to test 1 line in the fetcher)
-			doTxNotify{peer: "C", hashes: []common.Hash{{0x06}, {0x07}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{666, 777}},
+			doTxNotify{peer: "B", hashes: []common.Hash{{0x06}, {0x07}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{666, 777}},
 			isWaitingWithMeta(map[string][]announce{
-				"C": {
+				"B": {
 					{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
 					{common.Hash{0x07}, typeptr(types.LegacyTxType), sizeptr(777)},
 				},
@@ -332,22 +365,23 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 					"B": {
 						{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
 						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+						{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
+						{common.Hash{0x07}, typeptr(types.LegacyTxType), sizeptr(777)},
 					},
 					"C": {
 						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
 						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
-						{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
-						{common.Hash{0x07}, typeptr(types.LegacyTxType), sizeptr(777)},
 					},
 					"D": {
 						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(999)},
 						{common.Hash{0x02}, typeptr(types.BlobTxType), sizeptr(222)},
+						{common.Hash{0x0B}, typeptr(types.BlobTxType), sizeptr(1000)},
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x03}, {0x05}},
-					"C": {{0x01}, {0x04}},
-					"D": {{0x02}},
+					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
+					"B": {{0x04}},
+					"D": {{0x0B}},
 				},
 			},
 			doTxNotify{peer: "E", hashes: []common.Hash{{0x06}, {0x07}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{666, 777}},
@@ -362,16 +396,17 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 					"B": {
 						{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
 						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+						{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
+						{common.Hash{0x07}, typeptr(types.LegacyTxType), sizeptr(777)},
 					},
 					"C": {
 						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
 						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
-						{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
-						{common.Hash{0x07}, typeptr(types.LegacyTxType), sizeptr(777)},
 					},
 					"D": {
 						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(999)},
 						{common.Hash{0x02}, typeptr(types.BlobTxType), sizeptr(222)},
+						{common.Hash{0x0B}, typeptr(types.BlobTxType), sizeptr(1000)},
 					},
 					"E": {
 						{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
@@ -379,9 +414,9 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x03}, {0x05}},
-					"C": {{0x01}, {0x04}},
-					"D": {{0x02}},
+					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
+					"B": {{0x04}},
+					"D": {{0x0B}},
 					"E": {{0x06}, {0x07}},
 				},
 			},
@@ -1082,10 +1117,10 @@ func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 						{common.Hash{0x08}, typeptr(types.BlobTxType), sizeptr(params.MaxBlobGasPerBlock)},
 					},
 				},
-				fetching: map[string][]common.Hash{
-					"A": {{0x02}, {0x03}, {0x04}},
+				fetching: map[string][]common.Hash{ // Depends on deterministic test randomizer
+					"A": {{0x03}, {0x04}, {0x01}},
 					"B": {{0x06}},
-					"C": {{0x08}},
+					"C": {{0x07}},
 				},
 			},
 		},
