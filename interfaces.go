@@ -143,6 +143,10 @@ type CallMsg struct {
 
 	AccessList types.AccessList // EIP-2930 access list.
 
+	// For BlobTxType
+	BlobGasFeeCap *big.Int
+	BlobHashes    []common.Hash
+
 	// scroll-related:
 	// not need to have a `IsL1MessageTx` field, should always be false
 }
