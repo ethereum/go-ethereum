@@ -43,7 +43,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 	case config.IsCurie(blockNumber):
 		signer = NewLondonSignerWithEIP4844(config.ChainID)
 	case config.IsCancun(blockNumber, blockTime):
-		signer = NewCancunSigner(config.ChainID)
+		signer = NewLondonSignerWithEIP4844(config.ChainID) // keep using LondonSignerWithEIP4844
 	case config.IsLondon(blockNumber):
 		signer = NewLondonSignerWithEIP4844(config.ChainID)
 	case config.IsBerlin(blockNumber):
