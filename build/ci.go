@@ -39,9 +39,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -169,6 +171,8 @@ func main() {
 		doPurge(os.Args[2:])
 	case "sanitycheck":
 		doSanityCheck()
+	case "generate":
+		doGenerate()
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -345,6 +349,86 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 	return filepath.Join(cachedir, base)
 }
 
+// hashSourceFiles iterates all files under the top-level project directory
+// computing the hash of each file (excluding files within the tests
+// subrepo)
+func hashSourceFiles() (map[string]common.Hash, error) {
+	res := make(map[string]common.Hash)
+	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+		if strings.HasPrefix(path, filepath.FromSlash("tests/testdata")) {
+			return filepath.SkipDir
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		// open the file and hash it
+		f, err := os.OpenFile(path, os.O_RDONLY, 0666)
+		if err != nil {
+			return err
+		}
+		hasher := sha256.New()
+		if _, err := io.Copy(hasher, f); err != nil {
+			return err
+		}
+		res[path] = common.Hash(hasher.Sum(nil))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// doGenerate ensures that re-generating generated files does not cause
+// any mutations in the source file tree:  i.e. all generated files were
+// updated and committed.  Any stale generated files are updated.
+func doGenerate() {
+	var (
+		tc       = new(build.GoToolchain)
+		cachedir = flag.String("cachedir", "./build/cache", "directory for caching binaries.")
+		verify   = flag.Bool("verify", false, "check whether any files are changed by go generate")
+	)
+
+	protocPath := downloadProtoc(*cachedir)
+	protocGenGoPath := downloadProtocGenGo(*cachedir)
+
+	var preHashes map[string]common.Hash
+	if *verify {
+		var err error
+		preHashes, err = hashSourceFiles()
+		if err != nil {
+			log.Fatal("failed to compute map of source hashes", "err", err)
+		}
+	}
+
+	c := tc.Go("generate", "./...")
+	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
+	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
+	build.MustRun(c)
+
+	if !*verify {
+		return
+	}
+	// Check if files were changed.
+	postHashes, err := hashSourceFiles()
+	if err != nil {
+		log.Fatal("error computing source tree file hashes", "err", err)
+	}
+	updates := []string{}
+	for path, postHash := range postHashes {
+		preHash, ok := preHashes[path]
+		if !ok || preHash != postHash {
+			updates = append(updates, path)
+		}
+	}
+	for _, updatedFile := range updates {
+		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
+	}
+	if len(updates) != 0 {
+		log.Fatal("One or more generated files were updated by running 'go generate ./...'")
+	}
+}
+
 // doLint runs golangci-lint on requested packages.
 func doLint(cmdline []string) {
 	var (
@@ -388,6 +472,96 @@ func downloadLinter(cachedir string) string {
 		log.Fatal(err)
 	}
 	return filepath.Join(cachedir, base, "golangci-lint")
+}
+
+// protocArchiveBaseName returns the name of the protoc archive file for
+// the current system, stripped of version and file suffix.
+func protocArchiveBaseName() (string, error) {
+	switch runtime.GOOS + "-" + runtime.GOARCH {
+	case "windows-amd64":
+		return "win64", nil
+	case "windows-386":
+		return "win32", nil
+	case "linux-arm64":
+		return "linux-aarch_64", nil
+	case "linux-386":
+		return "linux-x86_32", nil
+	case "linux-amd64":
+		return "linux-x86_64", nil
+	case "darwin-arm64":
+		return "osx-aarch_64", nil
+	case "darwin-amd64":
+		return "osx-x86_64", nil
+	default:
+		return "", fmt.Errorf("no prebuilt release of protoc available for this system (os: %s, arch: %s)", runtime.GOOS, runtime.GOARCH)
+	}
+}
+
+// downloadProtocGenGo downloads protoc-gen-go, which is used by protoc
+// in the generate command.  It returns the full path of the directory
+// containing the 'protoc-gen-go' executable.
+func downloadProtocGenGo(cachedir string) string {
+	csdb := build.MustLoadChecksums("build/checksums.txt")
+	version, err := build.Version(csdb, "protoc-gen-go")
+	if err != nil {
+		log.Fatal(err)
+	}
+	baseName := fmt.Sprintf("protoc-gen-go.v%s.%s.%s", version, runtime.GOOS, runtime.GOARCH)
+	archiveName := baseName
+	if runtime.GOOS == "windows" {
+		archiveName += ".zip"
+	} else {
+		archiveName += ".tar.gz"
+	}
+
+	url := fmt.Sprintf("https://github.com/protocolbuffers/protobuf-go/releases/download/v%s/%s", version, archiveName)
+
+	archivePath := path.Join(cachedir, archiveName)
+	if err := csdb.DownloadFile(url, archivePath); err != nil {
+		log.Fatal(err)
+	}
+	extractDest := filepath.Join(cachedir, baseName)
+	if err := build.ExtractArchive(archivePath, extractDest); err != nil {
+		log.Fatal(err)
+	}
+	extractDest, err = filepath.Abs(extractDest)
+	if err != nil {
+		log.Fatal("error resolving absolute path for protoc", "err", err)
+	}
+	return extractDest
+}
+
+// downloadProtoc downloads the prebuilt protoc binary used to lint generated
+// files as a CI step.  It returns the full path to the directory containing
+// the protoc executable.
+func downloadProtoc(cachedir string) string {
+	csdb := build.MustLoadChecksums("build/checksums.txt")
+	version, err := build.Version(csdb, "protoc")
+	if err != nil {
+		log.Fatal(err)
+	}
+	baseName, err := protocArchiveBaseName()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fileName := fmt.Sprintf("protoc-%s-%s", version, baseName)
+	archiveFileName := fileName + ".zip"
+	url := fmt.Sprintf("https://github.com/protocolbuffers/protobuf/releases/download/v%s/%s", version, archiveFileName)
+	archivePath := filepath.Join(cachedir, archiveFileName)
+
+	if err := csdb.DownloadFile(url, archivePath); err != nil {
+		log.Fatal(err)
+	}
+	extractDest := filepath.Join(cachedir, fileName)
+	if err := build.ExtractArchive(archivePath, extractDest); err != nil {
+		log.Fatal(err)
+	}
+	extractDest, err = filepath.Abs(extractDest)
+	if err != nil {
+		log.Fatal("error resolving absolute path for protoc", "err", err)
+	}
+	return extractDest
 }
 
 // Release Packaging
