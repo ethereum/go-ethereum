@@ -69,6 +69,10 @@ func NewVerkleTrie(root common.Hash, db database.Database, cache *utils.PointCac
 	}, nil
 }
 
+func (trie *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
+	return trie.reader.node(path, common.Hash{})
+}
+
 // GetKey returns the sha3 preimage of a hashed key that was previously used
 // to store a value.
 func (t *VerkleTrie) GetKey(key []byte) []byte {
@@ -301,6 +305,24 @@ func (t *VerkleTrie) Copy() *VerkleTrie {
 // IsVerkle indicates if the trie is a Verkle trie.
 func (t *VerkleTrie) IsVerkle() bool {
 	return true
+}
+
+func ProveAndSerialize(pretrie, posttrie *VerkleTrie, keys [][]byte, resolver verkle.NodeResolverFn) (*verkle.VerkleProof, verkle.StateDiff, error) {
+	var postroot verkle.VerkleNode
+	if posttrie != nil {
+		postroot = posttrie.root
+	}
+	proof, _, _, _, err := verkle.MakeVerkleMultiProof(pretrie.root, postroot, keys, resolver)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	p, kvps, err := verkle.SerializeProof(proof)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return p, kvps, nil
 }
 
 // ChunkedCode represents a sequence of 32-bytes chunks of code (31 bytes of which
