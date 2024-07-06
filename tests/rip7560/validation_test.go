@@ -14,8 +14,6 @@ import (
 )
 
 func TestPackValidationData(t *testing.T) {
-	//assert.Equal(t, make([]byte, 32), packValidationData(0, 0, 0))
-	//assert.Equal(t, new(big.Int).SetInt64(0x1234).Text(16), new(big.Int).SetBytes(packValidationData(0x1234, 0, 0)).Text(16))
 	// --------------- after 6bytes     before 6 bytes   magic 20 bytes
 	validationData := "000000000002" + "000000000001" + "0000000000000000000000000000000000001234"
 	packed, _ := new(big.Int).SetString(validationData, 16)

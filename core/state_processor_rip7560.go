@@ -356,7 +356,6 @@ func prepareAccountValidationMessage(baseTx *types.Transaction, chainConfig *par
 	return &Message{
 		From:              chainConfig.EntryPointAddress,
 		To:                tx.Sender,
-		Nonce:             tx.Nonce,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.ValidationGas - deploymentUsedGas,
 		GasPrice:          tx.GasFeeCap,
