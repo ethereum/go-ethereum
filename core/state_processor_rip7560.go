@@ -36,15 +36,18 @@ func UnpackValidationData(validationData []byte) (authorizerMagic uint64, validU
 	return
 }
 
-func UnpackPaymasterValidationReturn(paymasterValidationReturn []byte) (validationData, context []byte) {
+func UnpackPaymasterValidationReturn(paymasterValidationReturn []byte) (validationData, context []byte, err error) {
 	if len(paymasterValidationReturn) < 96 {
-		return nil, nil
+		return nil, nil, errors.New("paymaster return data: too short")
 	}
 	validationData = paymasterValidationReturn[0:32]
 	//2nd bytes32 is ignored (its an offset value)
 	contextLen := new(big.Int).SetBytes(paymasterValidationReturn[64:96])
 	if uint64(len(paymasterValidationReturn)) < 96+contextLen.Uint64() {
-		return nil, nil
+		return nil, nil, errors.New("paymaster return data: unable to decode context")
+	}
+	if contextLen.Cmp(big.NewInt(PAYMASTER_MAX_CONTEXT_SIZE)) > 0 {
+		return nil, nil, errors.New("paymaster return data: context too large")
 	}
 
 	context = paymasterValidationReturn[96 : 96+contextLen.Uint64()]
@@ -383,8 +386,7 @@ func prepareAccountValidationMessage(baseTx *types.Transaction, chainConfig *par
 
 func preparePaymasterValidationMessage(baseTx *types.Transaction, config *params.ChainConfig, signingHash common.Hash) (*Message, error) {
 	tx := baseTx.Rip7560TransactionData()
-	paymasterAddress := tx.Paymaster
-	if paymasterAddress == nil {
+	if tx.Paymaster == nil {
 		return nil, nil
 	}
 	jsondata := `[
@@ -400,7 +402,7 @@ func preparePaymasterValidationMessage(baseTx *types.Transaction, config *params
 	}
 	return &Message{
 		From:              config.EntryPointAddress,
-		To:                paymasterAddress,
+		To:                tx.Paymaster,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.PaymasterGas,
 		GasPrice:          tx.GasFeeCap,
@@ -447,10 +449,9 @@ func preparePostOpMessage(vpr *ValidationPhaseResult, chainConfig *params.ChainC
 	if err != nil {
 		return nil, err
 	}
-	var paymasterAddress = tx.Paymaster
 	return &Message{
 		From:              chainConfig.EntryPointAddress,
-		To:                paymasterAddress,
+		To:                tx.Paymaster,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.PaymasterGas - executionResult.UsedGas,
 		GasPrice:          tx.GasFeeCap,
@@ -482,16 +483,13 @@ func validatePaymasterReturnData(data []byte) (context []byte, validAfter, valid
 	if len(data) < 32 {
 		return nil, 0, 0, errors.New("invalid paymaster return data length")
 	}
-	validationData, context := UnpackPaymasterValidationReturn(data)
-	if validationData == nil {
-		return nil, 0, 0, errors.New("invalid paymaster return data")
+	validationData, context, err := UnpackPaymasterValidationReturn(data)
+	if err != nil {
+		return nil, 0, 0, err
 	}
 	magicExpected, validUntil, validAfter := UnpackValidationData(validationData)
 	if magicExpected != MAGIC_VALUE_PAYMASTER {
 		return nil, 0, 0, errors.New("paymaster did not return correct MAGIC_VALUE")
-	}
-	if len(context) > PAYMASTER_MAX_CONTEXT_SIZE {
-		return nil, 0, 0, errors.New("paymaster context too large")
 	}
 	return context, validAfter, validUntil, nil
 }

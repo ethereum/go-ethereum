@@ -49,7 +49,7 @@ func TestPaymasterValidationFailure_unparseable_return_value(t *testing.T) {
 		PaymasterGas:  1000000000,
 		GasFeeCap:     big.NewInt(1000000000),
 		Paymaster:     &DEFAULT_PAYMASTER,
-	}, "invalid paymaster return data")
+	}, "paymaster return data: too short")
 }
 
 func TestPaymasterValidationFailure_wrong_magic(t *testing.T) {
@@ -81,7 +81,7 @@ func TestPaymasterValidationFailure_contextTooLarge(t *testing.T) {
 		PaymasterGas:  1000000000,
 		GasFeeCap:     big.NewInt(1000000000),
 		Paymaster:     &DEFAULT_PAYMASTER,
-	}, "paymaster context too large")
+	}, "paymaster return data: context too large")
 }
 
 func TestPaymasterValidationFailure_validAfter(t *testing.T) {
