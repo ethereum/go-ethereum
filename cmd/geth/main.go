@@ -298,6 +298,9 @@ func prepare(ctx *cli.Context) {
 	case ctx.GlobalIsSet(utils.ScrollSepoliaFlag.Name):
 		log.Info("Starting l2geth on Scroll Sepolia testnet...")
 
+	case ctx.GlobalIsSet(utils.ScrollFlag.Name):
+		log.Info("Starting l2geth on Scroll mainnet...")
+
 	case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
 
