@@ -45,12 +45,9 @@ var (
 
 type announce struct {
 	hash common.Hash
-	kind *byte
-	size *uint32
+	kind byte
+	size uint32
 }
-
-func typeptr(t byte) *byte     { return &t }
-func sizeptr(n uint32) *uint32 { return &n }
 
 type doTxNotify struct {
 	peer   string
@@ -204,36 +201,36 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 			doTxNotify{peer: "A", hashes: []common.Hash{{0x01}, {0x02}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{111, 222}},
 			isWaitingWithMeta(map[string][]announce{
 				"A": {
-					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-					{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(222)},
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
 				},
 			}),
 			// Announce from a new peer to check that no overwrite happens
 			doTxNotify{peer: "B", hashes: []common.Hash{{0x03}, {0x04}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{333, 444}},
 			isWaitingWithMeta(map[string][]announce{
 				"A": {
-					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-					{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(222)},
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
 				},
 				"B": {
-					{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-					{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+					{common.Hash{0x03}, types.LegacyTxType, 333},
+					{common.Hash{0x04}, types.LegacyTxType, 444},
 				},
 			}),
 			// Announce clashing hashes but unique new peer
 			doTxNotify{peer: "C", hashes: []common.Hash{{0x01}, {0x04}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{111, 444}},
 			isWaitingWithMeta(map[string][]announce{
 				"A": {
-					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-					{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(222)},
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
 				},
 				"B": {
-					{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-					{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+					{common.Hash{0x03}, types.LegacyTxType, 333},
+					{common.Hash{0x04}, types.LegacyTxType, 444},
 				},
 				"C": {
-					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-					{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x04}, types.LegacyTxType, 444},
 				},
 			}),
 			// Announce existing and clashing hashes from existing peer. Clashes
@@ -241,18 +238,18 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 			doTxNotify{peer: "A", hashes: []common.Hash{{0x01}, {0x03}, {0x05}}, types: []byte{types.LegacyTxType, types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{999, 333, 555}},
 			isWaitingWithMeta(map[string][]announce{
 				"A": {
-					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-					{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(222)},
-					{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-					{common.Hash{0x05}, typeptr(types.LegacyTxType), sizeptr(555)},
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
+					{common.Hash{0x03}, types.LegacyTxType, 333},
+					{common.Hash{0x05}, types.LegacyTxType, 555},
 				},
 				"B": {
-					{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-					{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+					{common.Hash{0x03}, types.LegacyTxType, 333},
+					{common.Hash{0x04}, types.LegacyTxType, 444},
 				},
 				"C": {
-					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-					{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x04}, types.LegacyTxType, 444},
 				},
 			}),
 			// Announce clashing hashes with conflicting metadata. Somebody will
@@ -260,25 +257,57 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 			doTxNotify{peer: "D", hashes: []common.Hash{{0x01}, {0x02}}, types: []byte{types.LegacyTxType, types.BlobTxType}, sizes: []uint32{999, 222}},
 			isWaitingWithMeta(map[string][]announce{
 				"A": {
-					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-					{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(222)},
-					{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-					{common.Hash{0x05}, typeptr(types.LegacyTxType), sizeptr(555)},
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
+					{common.Hash{0x03}, types.LegacyTxType, 333},
+					{common.Hash{0x05}, types.LegacyTxType, 555},
 				},
 				"B": {
-					{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-					{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+					{common.Hash{0x03}, types.LegacyTxType, 333},
+					{common.Hash{0x04}, types.LegacyTxType, 444},
 				},
 				"C": {
-					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-					{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x04}, types.LegacyTxType, 444},
 				},
 				"D": {
-					{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(999)},
-					{common.Hash{0x02}, typeptr(types.BlobTxType), sizeptr(222)},
+					{common.Hash{0x01}, types.LegacyTxType, 999},
+					{common.Hash{0x02}, types.BlobTxType, 222},
 				},
 			}),
 			isScheduled{tracking: nil, fetching: nil},
+			// Announce a non-conflicting blob tx, which should immediately go
+			// to fetching after a trivial wait.
+			doTxNotify{peer: "D", hashes: []common.Hash{{0x0b}}, types: []byte{types.BlobTxType}, sizes: []uint32{1000}},
+			doWait{time: 0, step: true},
+			isWaitingWithMeta(map[string][]announce{
+				"A": {
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
+					{common.Hash{0x03}, types.LegacyTxType, 333},
+					{common.Hash{0x05}, types.LegacyTxType, 555},
+				},
+				"B": {
+					{common.Hash{0x03}, types.LegacyTxType, 333},
+					{common.Hash{0x04}, types.LegacyTxType, 444},
+				},
+				"C": {
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x04}, types.LegacyTxType, 444},
+				},
+				"D": {
+					{common.Hash{0x01}, types.LegacyTxType, 999},
+					{common.Hash{0x02}, types.BlobTxType, 222},
+				},
+			}),
+			isScheduledWithMeta{
+				tracking: map[string][]announce{
+					"D": {{common.Hash{0x0B}, types.BlobTxType, 1000}},
+				},
+				fetching: map[string][]common.Hash{
+					"D": {{0x0B}},
+				},
+			},
 
 			// Wait for the arrival timeout which should move all expired items
 			// from the wait list to the scheduler
@@ -287,101 +316,104 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 			isScheduledWithMeta{
 				tracking: map[string][]announce{
 					"A": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-						{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(222)},
-						{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-						{common.Hash{0x05}, typeptr(types.LegacyTxType), sizeptr(555)},
+						{common.Hash{0x01}, types.LegacyTxType, 111},
+						{common.Hash{0x02}, types.LegacyTxType, 222},
+						{common.Hash{0x03}, types.LegacyTxType, 333},
+						{common.Hash{0x05}, types.LegacyTxType, 555},
 					},
 					"B": {
-						{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+						{common.Hash{0x03}, types.LegacyTxType, 333},
+						{common.Hash{0x04}, types.LegacyTxType, 444},
 					},
 					"C": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+						{common.Hash{0x01}, types.LegacyTxType, 111},
+						{common.Hash{0x04}, types.LegacyTxType, 444},
 					},
 					"D": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(999)},
-						{common.Hash{0x02}, typeptr(types.BlobTxType), sizeptr(222)},
+						{common.Hash{0x01}, types.LegacyTxType, 999},
+						{common.Hash{0x02}, types.BlobTxType, 222},
+						{common.Hash{0x0B}, types.BlobTxType, 1000},
 					},
 				},
 				fetching: map[string][]common.Hash{ // Depends on deterministic test randomizer
-					"A": {{0x03}, {0x05}},
-					"C": {{0x01}, {0x04}},
-					"D": {{0x02}},
+					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
+					"B": {{0x04}},
+					"D": {{0x0B}},
 				},
 			},
 			// Queue up a non-fetchable transaction and then trigger it with a new
 			// peer (weird case to test 1 line in the fetcher)
-			doTxNotify{peer: "C", hashes: []common.Hash{{0x06}, {0x07}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{666, 777}},
+			doTxNotify{peer: "B", hashes: []common.Hash{{0x06}, {0x07}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{666, 777}},
 			isWaitingWithMeta(map[string][]announce{
-				"C": {
-					{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
-					{common.Hash{0x07}, typeptr(types.LegacyTxType), sizeptr(777)},
+				"B": {
+					{common.Hash{0x06}, types.LegacyTxType, 666},
+					{common.Hash{0x07}, types.LegacyTxType, 777},
 				},
 			}),
 			doWait{time: txArriveTimeout, step: true},
 			isScheduledWithMeta{
 				tracking: map[string][]announce{
 					"A": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-						{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(222)},
-						{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-						{common.Hash{0x05}, typeptr(types.LegacyTxType), sizeptr(555)},
+						{common.Hash{0x01}, types.LegacyTxType, 111},
+						{common.Hash{0x02}, types.LegacyTxType, 222},
+						{common.Hash{0x03}, types.LegacyTxType, 333},
+						{common.Hash{0x05}, types.LegacyTxType, 555},
 					},
 					"B": {
-						{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+						{common.Hash{0x03}, types.LegacyTxType, 333},
+						{common.Hash{0x04}, types.LegacyTxType, 444},
+						{common.Hash{0x06}, types.LegacyTxType, 666},
+						{common.Hash{0x07}, types.LegacyTxType, 777},
 					},
 					"C": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
-						{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
-						{common.Hash{0x07}, typeptr(types.LegacyTxType), sizeptr(777)},
+						{common.Hash{0x01}, types.LegacyTxType, 111},
+						{common.Hash{0x04}, types.LegacyTxType, 444},
 					},
 					"D": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(999)},
-						{common.Hash{0x02}, typeptr(types.BlobTxType), sizeptr(222)},
+						{common.Hash{0x01}, types.LegacyTxType, 999},
+						{common.Hash{0x02}, types.BlobTxType, 222},
+						{common.Hash{0x0B}, types.BlobTxType, 1000},
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x03}, {0x05}},
-					"C": {{0x01}, {0x04}},
-					"D": {{0x02}},
+					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
+					"B": {{0x04}},
+					"D": {{0x0B}},
 				},
 			},
 			doTxNotify{peer: "E", hashes: []common.Hash{{0x06}, {0x07}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{666, 777}},
 			isScheduledWithMeta{
 				tracking: map[string][]announce{
 					"A": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-						{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(222)},
-						{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-						{common.Hash{0x05}, typeptr(types.LegacyTxType), sizeptr(555)},
+						{common.Hash{0x01}, types.LegacyTxType, 111},
+						{common.Hash{0x02}, types.LegacyTxType, 222},
+						{common.Hash{0x03}, types.LegacyTxType, 333},
+						{common.Hash{0x05}, types.LegacyTxType, 555},
 					},
 					"B": {
-						{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(333)},
-						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
+						{common.Hash{0x03}, types.LegacyTxType, 333},
+						{common.Hash{0x04}, types.LegacyTxType, 444},
+						{common.Hash{0x06}, types.LegacyTxType, 666},
+						{common.Hash{0x07}, types.LegacyTxType, 777},
 					},
 					"C": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(111)},
-						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(444)},
-						{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
-						{common.Hash{0x07}, typeptr(types.LegacyTxType), sizeptr(777)},
+						{common.Hash{0x01}, types.LegacyTxType, 111},
+						{common.Hash{0x04}, types.LegacyTxType, 444},
 					},
 					"D": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(999)},
-						{common.Hash{0x02}, typeptr(types.BlobTxType), sizeptr(222)},
+						{common.Hash{0x01}, types.LegacyTxType, 999},
+						{common.Hash{0x02}, types.BlobTxType, 222},
+						{common.Hash{0x0B}, types.BlobTxType, 1000},
 					},
 					"E": {
-						{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(666)},
-						{common.Hash{0x07}, typeptr(types.LegacyTxType), sizeptr(777)},
+						{common.Hash{0x06}, types.LegacyTxType, 666},
+						{common.Hash{0x07}, types.LegacyTxType, 777},
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x03}, {0x05}},
-					"C": {{0x01}, {0x04}},
-					"D": {{0x02}},
+					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
+					"B": {{0x04}},
+					"D": {{0x0B}},
 					"E": {{0x06}, {0x07}},
 				},
 			},
@@ -714,7 +746,7 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 			},
 			// Deliver the middle transaction requested, the one before which
 			// should be dropped and the one after re-requested.
-			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true}, // This depends on the deterministic random
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[1]}, direct: true},
 			isScheduled{
 				tracking: map[string][]common.Hash{
 					"A": {testTxsHashes[2]},
@@ -1023,7 +1055,7 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 					"A": hashes,
 				},
 				fetching: map[string][]common.Hash{
-					"A": hashes[1643 : 1643+maxTxRetrievals],
+					"A": hashes[:maxTxRetrievals],
 				},
 			},
 		},
@@ -1068,24 +1100,24 @@ func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 			isScheduledWithMeta{
 				tracking: map[string][]announce{
 					"A": {
-						{common.Hash{0x01}, typeptr(types.LegacyTxType), sizeptr(48 * 1024)},
-						{common.Hash{0x02}, typeptr(types.LegacyTxType), sizeptr(48 * 1024)},
-						{common.Hash{0x03}, typeptr(types.LegacyTxType), sizeptr(48 * 1024)},
-						{common.Hash{0x04}, typeptr(types.LegacyTxType), sizeptr(48 * 1024)},
+						{common.Hash{0x01}, types.LegacyTxType, 48 * 1024},
+						{common.Hash{0x02}, types.LegacyTxType, 48 * 1024},
+						{common.Hash{0x03}, types.LegacyTxType, 48 * 1024},
+						{common.Hash{0x04}, types.LegacyTxType, 48 * 1024},
 					},
 					"B": {
-						{common.Hash{0x05}, typeptr(types.LegacyTxType), sizeptr(maxTxRetrievalSize)},
-						{common.Hash{0x06}, typeptr(types.LegacyTxType), sizeptr(maxTxRetrievalSize)},
+						{common.Hash{0x05}, types.LegacyTxType, maxTxRetrievalSize},
+						{common.Hash{0x06}, types.LegacyTxType, maxTxRetrievalSize},
 					},
 					"C": {
-						{common.Hash{0x07}, typeptr(types.BlobTxType), sizeptr(params.MaxBlobGasPerBlock)},
-						{common.Hash{0x08}, typeptr(types.BlobTxType), sizeptr(params.MaxBlobGasPerBlock)},
+						{common.Hash{0x07}, types.BlobTxType, params.MaxBlobGasPerBlock},
+						{common.Hash{0x08}, types.BlobTxType, params.MaxBlobGasPerBlock},
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x02}, {0x03}, {0x04}},
-					"B": {{0x06}},
-					"C": {{0x08}},
+					"A": {{0x01}, {0x02}, {0x03}},
+					"B": {{0x05}},
+					"C": {{0x07}},
 				},
 			},
 		},
@@ -1134,8 +1166,8 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 					"B": hashesB[:maxTxAnnounces/2-1],
 				},
 				fetching: map[string][]common.Hash{
-					"A": hashesA[1643 : 1643+maxTxRetrievals],
-					"B": append(append([]common.Hash{}, hashesB[maxTxAnnounces/2-3:maxTxAnnounces/2-1]...), hashesB[:maxTxRetrievals-2]...),
+					"A": hashesA[:maxTxRetrievals],
+					"B": hashesB[:maxTxRetrievals],
 				},
 			},
 			// Ensure that adding even one more hash results in dropping the hash
@@ -1152,8 +1184,8 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 					"B": hashesB[:maxTxAnnounces/2-1],
 				},
 				fetching: map[string][]common.Hash{
-					"A": hashesA[1643 : 1643+maxTxRetrievals],
-					"B": append(append([]common.Hash{}, hashesB[maxTxAnnounces/2-3:maxTxAnnounces/2-1]...), hashesB[:maxTxRetrievals-2]...),
+					"A": hashesA[:maxTxRetrievals],
+					"B": hashesB[:maxTxRetrievals],
 				},
 			},
 		},
@@ -1446,8 +1478,8 @@ func TestInvalidAnnounceMetadata(t *testing.T) {
 			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0], testTxsHashes[1]}, types: []byte{testTxs[0].Type(), testTxs[1].Type()}, sizes: []uint32{uint32(testTxs[0].Size()), uint32(testTxs[1].Size())}},
 			isWaitingWithMeta(map[string][]announce{
 				"A": {
-					{testTxsHashes[0], typeptr(testTxs[0].Type()), sizeptr(uint32(testTxs[0].Size()))},
-					{testTxsHashes[1], typeptr(testTxs[1].Type()), sizeptr(uint32(testTxs[1].Size()))},
+					{testTxsHashes[0], testTxs[0].Type(), uint32(testTxs[0].Size())},
+					{testTxsHashes[1], testTxs[1].Type(), uint32(testTxs[1].Size())},
 				},
 			}),
 			// Announce from new peers conflicting transactions
@@ -1455,14 +1487,14 @@ func TestInvalidAnnounceMetadata(t *testing.T) {
 			doTxNotify{peer: "C", hashes: []common.Hash{testTxsHashes[1]}, types: []byte{1 + testTxs[1].Type()}, sizes: []uint32{uint32(testTxs[1].Size())}},
 			isWaitingWithMeta(map[string][]announce{
 				"A": {
-					{testTxsHashes[0], typeptr(testTxs[0].Type()), sizeptr(uint32(testTxs[0].Size()))},
-					{testTxsHashes[1], typeptr(testTxs[1].Type()), sizeptr(uint32(testTxs[1].Size()))},
+					{testTxsHashes[0], testTxs[0].Type(), uint32(testTxs[0].Size())},
+					{testTxsHashes[1], testTxs[1].Type(), uint32(testTxs[1].Size())},
 				},
 				"B": {
-					{testTxsHashes[0], typeptr(testTxs[0].Type()), sizeptr(1024 + uint32(testTxs[0].Size()))},
+					{testTxsHashes[0], testTxs[0].Type(), 1024 + uint32(testTxs[0].Size())},
 				},
 				"C": {
-					{testTxsHashes[1], typeptr(1 + testTxs[1].Type()), sizeptr(uint32(testTxs[1].Size()))},
+					{testTxsHashes[1], 1 + testTxs[1].Type(), uint32(testTxs[1].Size())},
 				},
 			}),
 			// Schedule all the transactions for retrieval
@@ -1471,14 +1503,14 @@ func TestInvalidAnnounceMetadata(t *testing.T) {
 			isScheduledWithMeta{
 				tracking: map[string][]announce{
 					"A": {
-						{testTxsHashes[0], typeptr(testTxs[0].Type()), sizeptr(uint32(testTxs[0].Size()))},
-						{testTxsHashes[1], typeptr(testTxs[1].Type()), sizeptr(uint32(testTxs[1].Size()))},
+						{testTxsHashes[0], testTxs[0].Type(), uint32(testTxs[0].Size())},
+						{testTxsHashes[1], testTxs[1].Type(), uint32(testTxs[1].Size())},
 					},
 					"B": {
-						{testTxsHashes[0], typeptr(testTxs[0].Type()), sizeptr(1024 + uint32(testTxs[0].Size()))},
+						{testTxsHashes[0], testTxs[0].Type(), 1024 + uint32(testTxs[0].Size())},
 					},
 					"C": {
-						{testTxsHashes[1], typeptr(1 + testTxs[1].Type()), sizeptr(uint32(testTxs[1].Size()))},
+						{testTxsHashes[1], 1 + testTxs[1].Type(), uint32(testTxs[1].Size())},
 					},
 				},
 				fetching: map[string][]common.Hash{
@@ -1658,7 +1690,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			new := make(isWaitingWithMeta)
 			for peer, hashes := range old {
 				for _, hash := range hashes {
-					new[peer] = append(new[peer], announce{hash, nil, nil})
+					new[peer] = append(new[peer], announce{hash, 0, 0})
 				}
 			}
 			step = new
@@ -1671,7 +1703,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			}
 			for peer, hashes := range old.tracking {
 				for _, hash := range hashes {
-					new.tracking[peer] = append(new.tracking[peer], announce{hash, nil, nil})
+					new.tracking[peer] = append(new.tracking[peer], announce{hash, 0, 0})
 				}
 			}
 			step = new
@@ -1724,18 +1756,13 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					if meta, ok := waiting[ann.hash]; !ok {
 						t.Errorf("step %d, peer %s: hash %x missing from waitslots", i, peer, ann.hash)
 					} else {
-						if (meta == nil && (ann.kind != nil || ann.size != nil)) ||
-							(meta != nil && (ann.kind == nil || ann.size == nil)) ||
-							(meta != nil && (meta.kind != *ann.kind || meta.size != *ann.size)) {
-							t.Errorf("step %d, peer %s, hash %x: waitslot metadata mismatch: want %v, have %v/%v", i, peer, ann.hash, meta, *ann.kind, *ann.size)
+						if meta.kind != ann.kind || meta.size != ann.size {
+							t.Errorf("step %d, peer %s, hash %x: waitslot metadata mismatch: want %v, have %v/%v", i, peer, ann.hash, meta, ann.kind, ann.size)
 						}
 					}
 				}
 				for hash, meta := range waiting {
-					ann := announce{hash: hash}
-					if meta != nil {
-						ann.kind, ann.size = &meta.kind, &meta.size
-					}
+					ann := announce{hash: hash, kind: meta.kind, size: meta.size}
 					if !containsAnnounce(announces, ann) {
 						t.Errorf("step %d, peer %s: announce %v extra in waitslots", i, peer, ann)
 					}
@@ -1793,18 +1820,14 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					if meta, ok := scheduled[ann.hash]; !ok {
 						t.Errorf("step %d, peer %s: hash %x missing from announces", i, peer, ann.hash)
 					} else {
-						if (meta == nil && (ann.kind != nil || ann.size != nil)) ||
-							(meta != nil && (ann.kind == nil || ann.size == nil)) ||
-							(meta != nil && (meta.kind != *ann.kind || meta.size != *ann.size)) {
-							t.Errorf("step %d, peer %s, hash %x: announce metadata mismatch: want %v, have %v/%v", i, peer, ann.hash, meta, *ann.kind, *ann.size)
+						if meta.kind != ann.kind || meta.size != ann.size {
+							t.Errorf("step %d, peer %s, hash %x: announce metadata mismatch: want %v, have %v/%v", i, peer, ann.hash, meta, ann.kind, ann.size)
 						}
 					}
 				}
 				for hash, meta := range scheduled {
 					ann := announce{hash: hash}
-					if meta != nil {
-						ann.kind, ann.size = &meta.kind, &meta.size
-					}
+					ann.kind, ann.size = meta.kind, meta.size
 					if !containsAnnounce(announces, ann) {
 						t.Errorf("step %d, peer %s: announce %x extra in announces", i, peer, hash)
 					}
@@ -1954,21 +1977,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 func containsAnnounce(slice []announce, ann announce) bool {
 	for _, have := range slice {
 		if have.hash == ann.hash {
-			if have.kind == nil || ann.kind == nil {
-				if have.kind != ann.kind {
-					return false
-				}
-			} else if *have.kind != *ann.kind {
-				return false
-			}
-			if have.size == nil || ann.size == nil {
-				if have.size != ann.size {
-					return false
-				}
-			} else if *have.size != *ann.size {
-				return false
-			}
-			return true
+			return have.kind == ann.kind && have.size == ann.size
 		}
 	}
 	return false
