@@ -30,7 +30,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
-	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 )
 
@@ -56,8 +55,6 @@ type filter struct {
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
 	backend   Backend
-	mux       *event.TypeMux
-	quit      chan struct{}
 	chainDb   ethdb.Database
 	events    *EventSystem
 	filtersMu sync.Mutex
