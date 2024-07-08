@@ -219,7 +219,8 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	stackLen := len(stackData)
 	// Copy a snapshot of the current storage to a new container
 	var storage Storage
-	if !l.cfg.DisableStorage && (op == vm.SLOAD || op == vm.SSTORE) {
+	var recordStorageDetail bool
+	if op == vm.SLOAD || op == vm.SSTORE {
 		// initialise new changed values storage container for this contract
 		// if not present.
 		if l.storage[contract.Address()] == nil {
@@ -232,7 +233,10 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 				value   = l.env.StateDB.GetState(contract.Address(), address)
 			)
 			l.storage[contract.Address()][address] = value
-			storage = l.storage[contract.Address()].Copy()
+			recordStorageDetail = true
+			if !l.cfg.DisableStorage {
+				storage = l.storage[contract.Address()].Copy()
+			}
 		} else if op == vm.SSTORE && stackLen >= 2 {
 			// capture SSTORE opcodes and record the written entry in the local storage.
 			var (
@@ -240,7 +244,10 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 				address = common.Hash(stackData[stackLen-1].Bytes32())
 			)
 			l.storage[contract.Address()][address] = value
-			storage = l.storage[contract.Address()].Copy()
+			recordStorageDetail = true
+			if !l.cfg.DisableStorage {
+				storage = l.storage[contract.Address()].Copy()
+			}
 		}
 	}
 	var rdata []byte
@@ -251,7 +258,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	// create a new snapshot of the EVM.
 	structLog := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), err, nil}
 
-	if !l.cfg.DisableStorage && (op == vm.SLOAD || op == vm.SSTORE) {
+	if recordStorageDetail {
 		if err := traceStorage(l, scope, structLog.getOrInitExtraData()); err != nil {
 			log.Error("Failed to trace data", "opcode", op.String(), "err", err)
 		}
@@ -600,6 +607,7 @@ func FormatLogs(logs []StructLog) []types.StructLogRes {
 			Depth:         trace.Depth,
 			Error:         trace.ErrorString(),
 			RefundCounter: trace.RefundCounter,
+			ExtraData:     trace.ExtraData,
 		}
 		if trace.Stack != nil {
 			stack := make([]string, len(trace.Stack))
