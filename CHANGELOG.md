@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/taikoxyz/taiko-geth/compare/v1.4.0...v1.5.0) (2024-07-03)
+
+
+### Features
+
+* **taiko_miner:** add `BuildTransactionsListsWithMinTip` method ([#283](https://github.com/taikoxyz/taiko-geth/issues/283)) ([c777d24](https://github.com/taikoxyz/taiko-geth/commit/c777d24af16915030536564b8cb44346866ab0b1))
+
 ## [1.4.0](https://github.com/taikoxyz/taiko-geth/compare/v1.3.0...v1.4.0) (2024-07-02)
 
 
