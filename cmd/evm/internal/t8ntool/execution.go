@@ -200,8 +200,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		var (
 			prevNumber = pre.Env.Number - 1
 			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
+			evm        = vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
 		)
-		core.ProcessParentBlockHash(statedb, prevHash, prevNumber)
+		core.ProcessParentBlockHash(statedb, evm, prevHash, prevNumber)
 	}
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()

@@ -534,23 +534,33 @@ func TestProcessVerkle(t *testing.T) {
 
 func TestProcessParentBlockHash(t *testing.T) {
 	var (
-		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
-		hashA      = common.Hash{0x01}
-		hashB      = common.Hash{0x02}
-		header     = &types.Header{ParentHash: hashA, Number: big.NewInt(2)}
-		parent     = &types.Header{ParentHash: hashB, Number: big.NewInt(1)}
-		genesis    = &types.Header{ParentHash: common.Hash{}, Number: big.NewInt(0)}
+		chainConfig = params.MergedTestChainConfig
+		statedb, _  = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		hashA       = common.Hash{0x01}
+		hashB       = common.Hash{0x02}
+		header      = &types.Header{ParentHash: hashA, Number: big.NewInt(2), Difficulty: big.NewInt(0)}
+		parent      = &types.Header{ParentHash: hashB, Number: big.NewInt(1), Difficulty: big.NewInt(0)}
+		genesis     = &types.Header{ParentHash: common.Hash{}, Number: big.NewInt(0)}
+		coinbase    = common.Address{}
 	)
+	statedb.SetNonce(params.HistoryStorageAddress, 1)
+	statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
+	statedb.IntermediateRoot(true)
 
-	ProcessParentBlockHash(statedb, header.ParentHash, parent.Number.Uint64())
-	ProcessParentBlockHash(statedb, parent.ParentHash, genesis.Number.Uint64())
+	vmContext := NewEVMBlockContext(header, nil, &coinbase)
+	evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+	ProcessParentBlockHash(statedb, evm, header.ParentHash, parent.Number.Uint64())
+
+	vmContext = NewEVMBlockContext(parent, nil, &coinbase)
+	evm = vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+	ProcessParentBlockHash(statedb, evm, parent.ParentHash, genesis.Number.Uint64())
 
 	// make sure that the state is correct
 	if have := getParentBlockHash(statedb, 1); have != hashA {
-		t.Fail()
+		t.Errorf("expected parent hash %v, got %v", hashA, have)
 	}
 	if have := getParentBlockHash(statedb, 0); have != hashB {
-		t.Fail()
+		t.Errorf("expected parent hash %v, got %v", hashB, have)
 	}
 }
 
