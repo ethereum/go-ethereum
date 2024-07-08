@@ -490,19 +490,19 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
 	}
 
+	// The L2 Fee is the same as the fee that is charged in the normal geth codepath.
+	fee := big.NewInt(0)
 	if st.evm.Config.NoBaseFee && msg.GasFeeCap.Sign() == 0 && msg.GasTipCap.Sign() == 0 {
 		// Skip fee payment when NoBaseFee is set and the fee fields
 		// are 0. This avoids a negative effectiveTip being applied to
 		// the coinbase when simulating calls.
 	} else {
-		// The L2 Fee is the same as the fee that is charged in the normal geth
-		// codepath. Add the L1DataFee to the L2 fee for the total fee that is sent
-		// to the sequencer.
-		fee := new(big.Int).SetUint64(st.gasUsed())
+		fee = new(big.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTip)
-		fee.Add(fee, st.l1DataFee)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee) // TODO: change to `st.evm.FeeRecipient()`
 	}
+	//Add the L1DataFee to the L2 fee for the total fee that is sent to the sequencer.
+	totalFee := fee.Add(fee, st.l1DataFee)
+	st.state.AddBalance(st.evm.FeeRecipient(), totalFee)
 
 	return &ExecutionResult{
 		L1DataFee:  st.l1DataFee,
