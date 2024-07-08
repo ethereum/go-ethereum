@@ -549,11 +549,11 @@ func TestProcessParentBlockHash(t *testing.T) {
 
 	vmContext := NewEVMBlockContext(header, nil, &coinbase)
 	evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-	ProcessParentBlockHash(statedb, evm, header.ParentHash, parent.Number.Uint64())
+	ProcessParentBlockHash(statedb, evm, header.ParentHash)
 
 	vmContext = NewEVMBlockContext(parent, nil, &coinbase)
 	evm = vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-	ProcessParentBlockHash(statedb, evm, parent.ParentHash, genesis.Number.Uint64())
+	ProcessParentBlockHash(statedb, evm, parent.ParentHash)
 
 	// make sure that the state is correct
 	if have := getParentBlockHash(statedb, 1); have != hashA {

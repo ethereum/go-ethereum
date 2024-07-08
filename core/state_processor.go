@@ -82,7 +82,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	if p.config.IsPrague(block.Number(), block.Time()) {
 		// This should not underflow as genesis block is not processed.
-		ProcessParentBlockHash(statedb, vmenv, block.ParentHash(), block.NumberU64()-1)
+		ProcessParentBlockHash(statedb, vmenv, block.ParentHash())
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
