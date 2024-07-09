@@ -26,7 +26,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/fees"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
@@ -298,7 +302,7 @@ func (l *list) Contains(nonce uint64) bool {
 //
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
-func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
+func (l *list) Add(tx *types.Transaction, state *state.StateDB, priceBump uint64, chainconfig *params.ChainConfig, blockNumber *big.Int) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
@@ -322,13 +326,24 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 			return false, nil
 		}
 		// Old is being replaced, subtract old cost
+		// TODO: fix for L1DataFee
 		l.subTotalCost([]*types.Transaction{old})
 	}
+	l1DataFee := big.NewInt(0)
+	if state != nil && chainconfig != nil {
+		var err error
+		l1DataFee, err = fees.CalculateL1DataFee(tx, state, chainconfig, blockNumber)
+		if err != nil {
+			log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
+			return false, nil
+		}
+	}
 	// Add new tx cost to totalcost
+	// TODO: fix totalcost for L1DataFee for both sub and add
 	l.totalcost.Add(l.totalcost, tx.Cost())
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
-	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
+	if cost := new(big.Int).Add(tx.Cost(), l1DataFee); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
 	if gas := tx.Gas(); l.gascap < gas {
@@ -454,6 +469,7 @@ func (l *list) LastElement() *types.Transaction {
 
 // subTotalCost subtracts the cost of the given transactions from the
 // total cost of all transactions.
+// TODO: fix for L1DataFee
 func (l *list) subTotalCost(txs []*types.Transaction) {
 	for _, tx := range txs {
 		l.totalcost.Sub(l.totalcost, tx.Cost())

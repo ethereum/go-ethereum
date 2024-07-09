@@ -21,13 +21,19 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 // Tests that transactions can be added to strict lists and list contents and
 // nonce boundaries are correctly maintained.
 func TestStrictListAdd(t *testing.T) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := newTestBlockChain(eip1559Config, 1000000, statedb, new(event.Feed))
+
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()
 
@@ -38,7 +44,7 @@ func TestStrictListAdd(t *testing.T) {
 	// Insert the transactions in a random order
 	list := newList(true)
 	for _, v := range rand.Perm(len(txs)) {
-		list.Add(txs[v], DefaultConfig.PriceBump)
+		list.Add(txs[v], statedb, DefaultConfig.PriceBump, blockchain.Config(), blockchain.CurrentBlock().Number)
 	}
 	// Verify internal state
 	if len(list.txs.items) != len(txs) {
@@ -52,6 +58,9 @@ func TestStrictListAdd(t *testing.T) {
 }
 
 func BenchmarkListAdd(b *testing.B) {
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := newTestBlockChain(eip1559Config, 1000000, statedb, new(event.Feed))
+
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()
 
@@ -65,7 +74,7 @@ func BenchmarkListAdd(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		list := newList(true)
 		for _, v := range rand.Perm(len(txs)) {
-			list.Add(txs[v], DefaultConfig.PriceBump)
+			list.Add(txs[v], statedb, DefaultConfig.PriceBump, blockchain.Config(), blockchain.CurrentBlock().Number)
 			list.Filter(priceLimit, DefaultConfig.PriceBump)
 		}
 	}

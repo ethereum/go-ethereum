@@ -197,7 +197,7 @@ type ValidationOptionsWithState struct {
 //
 // This check is public to allow different transaction pools to check the stateful
 // rules without duplicating code and running the risk of missed updates.
-func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, opts *ValidationOptionsWithState) error {
+func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, opts *ValidationOptionsWithState, chainConfig *params.ChainConfig, headNumber *big.Int) error {
 	// Ensure the transaction adheres to nonce ordering
 	from, err := signer.Sender(tx) // already validated (and cached), but cleaner to check
 	if err != nil {
@@ -227,7 +227,7 @@ func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, op
 	// 2. Perform an additional check for L1 data fees.
 	// Always perform the check, because it's not easy to check FeeVault here
 	// Get L1 data fee in current state
-	l1DataFee, err := fees.CalculateL1DataFee(tx, opts.State)
+	l1DataFee, err := fees.CalculateL1DataFee(tx, opts.State, chainConfig, headNumber)
 	if err != nil {
 		return fmt.Errorf("failed to calculate L1 data fee, err: %w", err)
 	}

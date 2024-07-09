@@ -638,7 +638,7 @@ func (pool *LegacyPool) validateTx(tx *types.Transaction, local bool) error {
 			return nil
 		},
 	}
-	if err := txpool.ValidateTransactionWithState(tx, pool.signer, opts); err != nil {
+	if err := txpool.ValidateTransactionWithState(tx, pool.signer, opts, pool.chainconfig, pool.currentHead.Load().Number); err != nil {
 		return err
 	}
 	return nil
@@ -759,7 +759,7 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 	// Try to replace an existing transaction in the pending pool
 	if list := pool.pending[from]; list != nil && list.Contains(tx.Nonce()) {
 		// Nonce already pending, check if required price bump is met
-		inserted, old := list.Add(tx, pool.config.PriceBump)
+		inserted, old := list.Add(tx, pool.currentState, pool.config.PriceBump, pool.chainconfig, pool.currentHead.Load().Number)
 		if !inserted {
 			pendingDiscardMeter.Mark(1)
 			return false, txpool.ErrReplaceUnderpriced
@@ -833,7 +833,7 @@ func (pool *LegacyPool) enqueueTx(hash common.Hash, tx *types.Transaction, local
 	if pool.queue[from] == nil {
 		pool.queue[from] = newList(false)
 	}
-	inserted, old := pool.queue[from].Add(tx, pool.config.PriceBump)
+	inserted, old := pool.queue[from].Add(tx, pool.currentState, pool.config.PriceBump, pool.chainconfig, pool.currentHead.Load().Number)
 	if !inserted {
 		// An older transaction was better, discard this
 		queuedDiscardMeter.Mark(1)
@@ -887,7 +887,7 @@ func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *typ
 	}
 	list := pool.pending[addr]
 
-	inserted, old := list.Add(tx, pool.config.PriceBump)
+	inserted, old := list.Add(tx, pool.currentState, pool.config.PriceBump, pool.chainconfig, pool.currentHead.Load().Number)
 	if !inserted {
 		// An older transaction was better, discard this
 		pool.all.Remove(hash)

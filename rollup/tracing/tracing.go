@@ -220,7 +220,7 @@ func (env *TraceEnv) GetBlockTrace(block *types.Block) (*types.BlockTrace, error
 		msg, _ := core.TransactionToMessage(tx, env.signer, block.BaseFee())
 		env.state.SetTxContext(tx.Hash(), i)
 		vmenv := vm.NewEVM(env.blockCtx, core.NewEVMTxContext(msg), env.state, env.chainConfig, vm.Config{})
-		l1DataFee, err := fees.CalculateL1DataFee(tx, env.state)
+		l1DataFee, err := fees.CalculateL1DataFee(tx, env.state, env.chainConfig, block.Number())
 		if err != nil {
 			failed = err
 			break
@@ -330,7 +330,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 	state.SetTxContext(txctx.TxHash, txctx.TxIndex)
 
 	// Computes the new state by applying the given message.
-	l1DataFee, err := fees.CalculateL1DataFee(tx, state)
+	l1DataFee, err := fees.CalculateL1DataFee(tx, state, env.chainConfig, block.Number())
 	if err != nil {
 		return err
 	}
@@ -515,6 +515,10 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 			rcfg.L1BaseFeeSlot,
 			rcfg.OverheadSlot,
 			rcfg.ScalarSlot,
+			rcfg.L1BlobBaseFeeSlot,
+			rcfg.CommitScalarSlot,
+			rcfg.BlobScalarSlot,
+			rcfg.IsCurieSlot,
 		},
 	}
 

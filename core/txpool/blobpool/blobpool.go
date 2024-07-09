@@ -1080,7 +1080,7 @@ func (p *BlobPool) validateTx(tx *types.Transaction) error {
 			return nil
 		},
 	}
-	if err := txpool.ValidateTransactionWithState(tx, p.signer, stateOpts); err != nil {
+	if err := txpool.ValidateTransactionWithState(tx, p.signer, stateOpts, p.chain.Config(), p.head.Number); err != nil {
 		return err
 	}
 	// If the transaction replaces an existing one, ensure that price bumps are

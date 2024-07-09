@@ -715,7 +715,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 	signer := types.MakeSigner(b.blockchain.Config(), header.Number, header.Time)
-	l1DataFee, err := fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, b.blockchain.Config().ChainID, signer, stateDB)
+	l1DataFee, err := fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, b.blockchain.Config(), signer, stateDB, header.Number)
 	if err != nil {
 		return nil, err
 	}

@@ -1234,7 +1234,7 @@ func EstimateL1MsgFee(ctx context.Context, b Backend, args TransactionArgs, bloc
 	}()
 
 	signer := types.MakeSigner(config, header.Number, header.Time)
-	return fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, config.ChainID, signer, evm.StateDB)
+	return fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, config, signer, evm.StateDB, header.Number)
 }
 
 // executeEstimate is a helper that executes the transaction under a given gas limit and returns
@@ -1729,7 +1729,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		config := vm.Config{Tracer: tracer, NoBaseFee: true}
 		vmenv, _ := b.GetEVM(ctx, msg, statedb, header, &config, nil)
 		signer := types.MakeSigner(b.ChainConfig(), header.Number, header.Time)
-		l1DataFee, err := fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, b.ChainConfig().ChainID, signer, statedb)
+		l1DataFee, err := fees.EstimateL1DataFeeForMessage(msg, header.BaseFee, b.ChainConfig(), signer, statedb, header.Number)
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}

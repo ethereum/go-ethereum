@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rollup/rcfg"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -186,8 +187,22 @@ var (
 )
 
 var genesis = &core.Genesis{
-	Config:    params.AllEthashProtocolChanges,
-	Alloc:     core.GenesisAlloc{testAddr: {Balance: testBalance}},
+	Config: params.AllEthashProtocolChanges,
+	Alloc: core.GenesisAlloc{
+		testAddr: {Balance: testBalance},
+		rcfg.L1GasPriceOracleAddress: {
+			Balance: big.NewInt(0),
+			Storage: map[common.Hash]common.Hash{
+				rcfg.L1BaseFeeSlot:     common.BigToHash(big.NewInt(10000)),
+				rcfg.OverheadSlot:      common.BigToHash(big.NewInt(10000)),
+				rcfg.ScalarSlot:        common.BigToHash(big.NewInt(10000)),
+				rcfg.L1BlobBaseFeeSlot: common.BigToHash(big.NewInt(10000)),
+				rcfg.CommitScalarSlot:  common.BigToHash(big.NewInt(10000)),
+				rcfg.BlobScalarSlot:    common.BigToHash(big.NewInt(10000)),
+				rcfg.IsCurieSlot:       common.BytesToHash([]byte{1}),
+			},
+		},
+	},
 	ExtraData: []byte("test genesis"),
 	Timestamp: 9000,
 	BaseFee:   big.NewInt(params.InitialBaseFee),

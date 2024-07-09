@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
@@ -1384,6 +1385,9 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
+	if w.chainConfig.CurieBlock != nil && w.chainConfig.CurieBlock.Cmp(header.Number) == 0 {
+		misc.ApplyCurieHardFork(env.state)
+	}
 	if header.ParentBeaconRoot != nil {
 		context := core.NewEVMBlockContext(header, w.chain, w.chainConfig, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, w.chainConfig, vm.Config{})
@@ -1571,35 +1575,45 @@ func (w *worker) commitWork(interrupt *atomic.Int32, timestamp int64) {
 	if err != nil {
 		return
 	}
-	// Fill pending transactions from the txpool into the block.
-	err = w.fillTransactions(interrupt, work)
-	switch {
-	case err == nil:
-		// The entire block is filled, decrease resubmit interval in case
-		// of current interval is larger than the user-specified one.
-		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
 
-	case errors.Is(err, errBlockInterruptedByRecommit):
-		// Notify resubmit loop to increase resubmitting interval if the
-		// interruption is due to frequent commits.
-		gaslimit := work.header.GasLimit
-		ratio := float64(gaslimit-work.gasPool.Gas()) / float64(gaslimit)
-		if ratio < 0.1 {
-			ratio = 0.1
-		}
-		w.resubmitAdjustCh <- &intervalAdjust{
-			ratio: ratio,
-			inc:   true,
-		}
-
-	case errors.Is(err, errBlockInterruptedByNewHead):
-		// If the block building is interrupted by newhead event, discard it
-		// totally. Committing the interrupted block introduces unnecessary
-		// delay, and possibly causes miner to mine on the previous head,
-		// which could result in higher uncle rate.
-		work.discard()
-		return
+	noTxs := false
+	// zkEVM requirement: Curie transition block has 0 transactions
+	if w.chainConfig.CurieBlock != nil && w.chainConfig.CurieBlock.Cmp(work.header.Number) == 0 {
+		noTxs = true
 	}
+
+	if !noTxs {
+		// Fill pending transactions from the txpool into the block.
+		err = w.fillTransactions(interrupt, work)
+		switch {
+		case err == nil:
+			// The entire block is filled, decrease resubmit interval in case
+			// of current interval is larger than the user-specified one.
+			w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+
+		case errors.Is(err, errBlockInterruptedByRecommit):
+			// Notify resubmit loop to increase resubmitting interval if the
+			// interruption is due to frequent commits.
+			gaslimit := work.header.GasLimit
+			ratio := float64(gaslimit-work.gasPool.Gas()) / float64(gaslimit)
+			if ratio < 0.1 {
+				ratio = 0.1
+			}
+			w.resubmitAdjustCh <- &intervalAdjust{
+				ratio: ratio,
+				inc:   true,
+			}
+
+		case errors.Is(err, errBlockInterruptedByNewHead):
+			// If the block building is interrupted by newhead event, discard it
+			// totally. Committing the interrupted block introduces unnecessary
+			// delay, and possibly causes miner to mine on the previous head,
+			// which could result in higher uncle rate.
+			work.discard()
+			return
+		}
+	}
+
 	// Submit the generated block for consensus sealing.
 	w.commit(work.copy(), w.fullTaskHook, true, start)
 

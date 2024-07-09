@@ -115,7 +115,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	if err != nil {
 		return fmt.Errorf("failed to prepare transaction for tracing: %v", err)
 	}
-	l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+	l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, test.Genesis.Config, context.BlockNumber)
 	if err != nil {
 		return fmt.Errorf("failed to calculate L1DataFee: %v", err)
 	}

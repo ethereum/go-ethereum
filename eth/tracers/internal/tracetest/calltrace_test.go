@@ -151,7 +151,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+			l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, test.Genesis.Config, context.BlockNumber)
 			if err != nil {
 				t.Fatalf("failed to calculate l1DataFee: %v", err)
 			}
@@ -256,7 +256,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		}
 		evm := vm.NewEVM(context, txContext, statedb, test.Genesis.Config, vm.Config{Tracer: tracer})
 		snap := statedb.Snapshot()
-		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+		l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, test.Genesis.Config, context.BlockNumber)
 		if err != nil {
 			b.Fatalf("failed to calculate l1DataFee: %v", err)
 		}
@@ -398,7 +398,7 @@ func TestInternals(t *testing.T) {
 				SkipAccountChecks: false,
 			}
 			signer := types.MakeSigner(params.MainnetChainConfig, context.BlockNumber, context.Time)
-			l1DataFee, err := fees.EstimateL1DataFeeForMessage(msg, nil, params.MainnetChainConfig.ChainID, signer, statedb)
+			l1DataFee, err := fees.EstimateL1DataFeeForMessage(msg, nil, params.MainnetChainConfig, signer, statedb, context.BlockNumber)
 			if err != nil {
 				t.Fatalf("test %v: failed to estimate L1DataFee: %v", tc.name, err)
 			}

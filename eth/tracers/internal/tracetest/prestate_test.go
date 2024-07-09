@@ -122,7 +122,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+			l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, test.Genesis.Config, context.BlockNumber)
 			if err != nil {
 				t.Fatalf("failed to calculate L1DataFee: %v", err)
 			}

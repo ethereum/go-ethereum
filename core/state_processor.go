@@ -72,6 +72,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+	// Apply Curie hard fork
+	if p.config.CurieBlock != nil && p.config.CurieBlock.Cmp(block.Number()) == 0 {
+		misc.ApplyCurieHardFork(statedb)
+	}
 	var (
 		context = NewEVMBlockContext(header, p.bc, p.config, nil)
 		vmenv   = vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
@@ -110,7 +114,7 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
 
-	l1DataFee, err := fees.CalculateL1DataFee(tx, statedb)
+	l1DataFee, err := fees.CalculateL1DataFee(tx, statedb, config, blockNumber)
 	if err != nil {
 		return nil, err
 	}
