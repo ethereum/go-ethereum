@@ -199,6 +199,63 @@ func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
 	return nil
 }
 
+// RollBackAccount removes the account info + code from the tree, unlike DeleteAccount
+// that will overwrite it with 0s. The first 64 storage slots are also removed.
+func (t *VerkleTrie) RollBackAccount(addr common.Address) error {
+	evaluatedAddr := t.cache.Get(addr.Bytes())
+	codesizekey := utils.CodeSizeKeyWithEvaluatedAddress(evaluatedAddr)
+	codesizeBytes, err := t.root.Get(codesizekey, t.nodeResolver)
+	if err != nil {
+		return fmt.Errorf("rollback: error finding code size: %w", err)
+	}
+	codesize := binary.LittleEndian.Uint64(codesizeBytes)
+
+	// Delete the account header + first 64 slots + first 128 code chunks
+	for i := 0; i < verkle.NodeWidth; i++ {
+		codesizekey[31] = byte(i)
+
+		// this is a workaround to avoid deleting nil leaves, the lib needs to be
+		// fixed to be able to handle that
+		v, err := t.root.Get(codesizekey, t.nodeResolver)
+		if err != nil {
+			return fmt.Errorf("error rolling back account header: %w", err)
+		}
+		if len(v) == 0 {
+			continue
+		}
+
+		_, err = t.root.Delete(codesizekey, t.nodeResolver)
+		if err != nil {
+			return fmt.Errorf("error rolling back account header: %w", err)
+		}
+	}
+
+	var root *verkle.InternalNode
+	switch r := t.root.(type) {
+	case *verkle.InternalNode:
+		root = r
+	default:
+		return errInvalidRootType
+	}
+
+	// Delete all further code
+	var key []byte
+	for i, chunknr := uint64(32*128), uint64(128); i < codesize; i, chunknr = i+32, chunknr+1 {
+		// evaluate group key at the start of a new group
+		groupOffset := (chunknr + 128) % 256
+		if groupOffset == 0 {
+			key = utils.CodeChunkKeyWithEvaluatedAddress(evaluatedAddr, uint256.NewInt(chunknr))
+		}
+
+		_, err = root.Delete(key[:], t.nodeResolver)
+		if err != nil {
+			return fmt.Errorf("RollbackContractCode (addr=%x) error: %w", addr[:], err)
+		}
+	}
+
+	return nil
+}
+
 // DeleteStorage implements state.Trie, deleting the specified storage slot from
 // the trie. If the storage slot was not existent in the trie, no error will be
 // returned. If the trie is corrupted, an error will be returned.
