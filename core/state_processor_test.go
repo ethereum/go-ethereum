@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -535,32 +536,45 @@ func TestProcessVerkle(t *testing.T) {
 func TestProcessParentBlockHash(t *testing.T) {
 	var (
 		chainConfig = params.MergedTestChainConfig
-		statedb, _  = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
 		hashA       = common.Hash{0x01}
 		hashB       = common.Hash{0x02}
 		header      = &types.Header{ParentHash: hashA, Number: big.NewInt(2), Difficulty: big.NewInt(0)}
 		parent      = &types.Header{ParentHash: hashB, Number: big.NewInt(1), Difficulty: big.NewInt(0)}
 		coinbase    = common.Address{}
 	)
-	statedb.SetNonce(params.HistoryStorageAddress, 1)
-	statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
-	statedb.IntermediateRoot(true)
+	test := func(statedb *state.StateDB) {
+		statedb.SetNonce(params.HistoryStorageAddress, 1)
+		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
+		statedb.IntermediateRoot(true)
 
-	vmContext := NewEVMBlockContext(header, nil, &coinbase)
-	evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-	ProcessParentBlockHash(statedb, evm, header.ParentHash)
+		vmContext := NewEVMBlockContext(header, nil, &coinbase)
+		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+		ProcessParentBlockHash(statedb, evm, header.ParentHash)
 
-	vmContext = NewEVMBlockContext(parent, nil, &coinbase)
-	evm = vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-	ProcessParentBlockHash(statedb, evm, parent.ParentHash)
+		vmContext = NewEVMBlockContext(parent, nil, &coinbase)
+		evm = vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+		ProcessParentBlockHash(statedb, evm, parent.ParentHash)
 
-	// make sure that the state is correct
-	if have := getParentBlockHash(statedb, 1); have != hashA {
-		t.Errorf("expected parent hash %v, got %v", hashA, have)
+		// make sure that the state is correct
+		if have := getParentBlockHash(statedb, 1); have != hashA {
+			t.Errorf("expected parent hash %v, got %v", hashA, have)
+		}
+		if have := getParentBlockHash(statedb, 0); have != hashB {
+			t.Errorf("expected parent hash %v, got %v", hashB, have)
+		}
 	}
-	if have := getParentBlockHash(statedb, 0); have != hashB {
-		t.Errorf("expected parent hash %v, got %v", hashB, have)
-	}
+	t.Run("MPT", func(t *testing.T) {
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		test(statedb)
+	})
+	t.Run("Verkle", func(t *testing.T) {
+		db := rawdb.NewMemoryDatabase()
+		cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
+		cacheConfig.SnapshotLimit = 0
+		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
+		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+		test(statedb)
+	})
 }
 
 func getParentBlockHash(statedb *state.StateDB, number uint64) common.Hash {
