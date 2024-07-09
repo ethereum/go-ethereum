@@ -12,6 +12,7 @@ import (
 	"github.com/scroll-tech/da-codec/encoding/codecv0"
 	"github.com/scroll-tech/da-codec/encoding/codecv1"
 	"github.com/scroll-tech/da-codec/encoding/codecv2"
+	"github.com/scroll-tech/da-codec/encoding/codecv3"
 
 	"github.com/scroll-tech/go-ethereum/accounts/abi"
 	"github.com/scroll-tech/go-ethereum/common"
@@ -456,10 +457,16 @@ func validateBatch(event *L1FinalizeBatchEvent, parentBatchMeta *rawdb.Finalized
 			return 0, nil, fmt.Errorf("failed to create codecv1 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 		}
 		localBatchHash = daBatch.Hash()
-	} else { // codecv2: batches after Curie
+	} else if !chainCfg.IsDarwin(startBlock.Header.Time) { // codecv2: batches after Curie and before Darwin
 		daBatch, err := codecv2.NewDABatch(batch)
 		if err != nil {
-			return 0, nil, fmt.Errorf("failed to create codecv1 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
+			return 0, nil, fmt.Errorf("failed to create codecv2 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
+		}
+		localBatchHash = daBatch.Hash()
+	} else { // codecv3: batches after Darwin
+		daBatch, err := codecv3.NewDABatch(batch)
+		if err != nil {
+			return 0, nil, fmt.Errorf("failed to create codecv3 DA batch, batch index: %v, err: %w", event.BatchIndex.Uint64(), err)
 		}
 		localBatchHash = daBatch.Hash()
 	}
@@ -555,6 +562,25 @@ func decodeBlockRangesFromEncodedChunks(codecVersion encoding.CodecVersion, chun
 				StartBlockNumber: daBlocks[0].BlockNumber,
 				EndBlockNumber:   daBlocks[len(daBlocks)-1].BlockNumber,
 			})
+		case encoding.CodecV3:
+			if len(chunk) != 1+numBlocks*60 {
+				return nil, fmt.Errorf("invalid chunk byte length, expected: %v, got: %v", 1+numBlocks*60, len(chunk))
+			}
+			daBlocks := make([]*codecv3.DABlock, numBlocks)
+			for i := 0; i < numBlocks; i++ {
+				startIdx := 1 + i*60 // add 1 to skip numBlocks byte
+				endIdx := startIdx + 60
+				daBlocks[i] = &codecv3.DABlock{}
+				if err := daBlocks[i].Decode(chunk[startIdx:endIdx]); err != nil {
+					return nil, err
+				}
+			}
+
+			chunkBlockRanges = append(chunkBlockRanges, &rawdb.ChunkBlockRange{
+				StartBlockNumber: daBlocks[0].BlockNumber,
+				EndBlockNumber:   daBlocks[len(daBlocks)-1].BlockNumber,
+			})
+
 		default:
 			return nil, fmt.Errorf("unexpected batch version %v", codecVersion)
 		}
