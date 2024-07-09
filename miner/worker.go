@@ -205,7 +205,7 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
 	}
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
-		// Prague is enabled after Cancun so vmenv should be initalized.
+		// Prague is enabled after Cancun so vmenv should be initialized.
 		core.ProcessParentBlockHash(env.state, vmenv, header.ParentHash)
 	}
 	return env, nil
