@@ -540,7 +540,6 @@ func TestProcessParentBlockHash(t *testing.T) {
 		hashB       = common.Hash{0x02}
 		header      = &types.Header{ParentHash: hashA, Number: big.NewInt(2), Difficulty: big.NewInt(0)}
 		parent      = &types.Header{ParentHash: hashB, Number: big.NewInt(1), Difficulty: big.NewInt(0)}
-		genesis     = &types.Header{ParentHash: common.Hash{}, Number: big.NewInt(0)}
 		coinbase    = common.Address{}
 	)
 	statedb.SetNonce(params.HistoryStorageAddress, 1)
