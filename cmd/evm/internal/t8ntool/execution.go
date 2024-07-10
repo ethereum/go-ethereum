@@ -36,13 +36,14 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
 
 type Prestate struct {
-	Env stEnv             `json:"env"`
-	Pre core.GenesisAlloc `json:"pre"`
+	Env stEnv              `json:"env"`
+	Pre types.GenesisAlloc `json:"pre"`
 }
 
 // ExecutionResult contains the execution status after running a state test, any
@@ -145,6 +146,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		rejectedTxs []*rejectedTx
 		includedTxs types.Transactions
 		gasUsed     = uint64(0)
+		blobGasUsed = uint64(0)
 		receipts    = make(types.Receipts, 0)
 		txIndex     = 0
 	)
@@ -195,7 +197,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
 	}
-	var blobGasUsed uint64
 
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()
@@ -217,15 +218,15 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 			continue
 		}
+		txBlobGas := uint64(0)
 		if tx.Type() == types.BlobTxType {
-			txBlobGas := uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
+			txBlobGas = uint64(params.BlobTxBlobGasPerBlob * len(tx.BlobHashes()))
 			if used, max := blobGasUsed+txBlobGas, uint64(params.MaxBlobGasPerBlock); used > max {
 				err := fmt.Errorf("blob gas (%d) would exceed maximum allowance %d", used, max)
 				log.Warn("rejected tx", "index", i, "err", err)
 				rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 				continue
 			}
-			blobGasUsed += txBlobGas
 		}
 		tracer, err := getTracerFn(txIndex, tx.Hash())
 		if err != nil {
@@ -260,7 +261,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		if hashError != nil {
 			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)
 		}
-
+		blobGasUsed += txBlobGas
 		gasUsed += msgResult.UsedGas
 
 		// Receipt:
@@ -325,16 +326,16 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			reward.Sub(reward, new(big.Int).SetUint64(ommer.Delta))
 			reward.Mul(reward, blockReward)
 			reward.Div(reward, big.NewInt(8))
-			statedb.AddBalance(ommer.Address, reward)
+			statedb.AddBalance(ommer.Address, uint256.MustFromBig(reward))
 		}
 
-		statedb.AddBalance(pre.Env.Coinbase, minerReward)
+		statedb.AddBalance(pre.Env.Coinbase, uint256.MustFromBig(minerReward))
 	}
 	// Apply withdrawals
 	for _, w := range pre.Env.Withdrawals {
 		// Amount is in gwei, turn into wei
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
-		statedb.AddBalance(w.Address, amount)
+		statedb.AddBalance(w.Address, uint256.MustFromBig(amount))
 	}
 	// Commit block
 	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber))
@@ -373,14 +374,13 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	return statedb, execRs, body, nil
 }
 
-func MakePreState(db ethdb.Database, accounts core.GenesisAlloc) *state.StateDB {
-	sdb := state.NewDatabaseWithConfig(db, &trie.Config{Preimages: true})
+func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB {
+	sdb := state.NewDatabaseWithConfig(db, &triedb.Config{Preimages: true})
 	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
-		statedb.SetBalance(addr, a.Balance)
-
+		statedb.SetBalance(addr, uint256.MustFromBig(a.Balance))
 		for k, v := range a.Storage {
 			statedb.SetState(addr, k, v)
 		}

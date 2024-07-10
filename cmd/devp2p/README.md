@@ -108,31 +108,32 @@ Start the test by running `devp2p discv5 test -listen1 127.0.0.1 -listen2 127.0.
 
 The Eth Protocol test suite is a conformance test suite for the [eth protocol][eth].
 
-To run the eth protocol test suite against your implementation, the node needs to be initialized as such:
+To run the eth protocol test suite against your implementation, the node needs to be initialized
+with our test chain. The chain files are located in `./cmd/devp2p/internal/ethtest/testdata`.
 
-1. initialize the geth node with the `genesis.json` file contained in the `testdata` directory
-2. import the `halfchain.rlp` file in the `testdata` directory
-3. run geth with the following flags:
-```
-geth --datadir <datadir> --nodiscover --nat=none --networkid 19763 --verbosity 5
-```
+1. initialize the geth node with the `genesis.json` file
+2. import blocks from `chain.rlp`
+3. run the client using the resulting database. For geth, use a command like the one below:
 
-Then, run the following command, replacing `<enode>` with the enode of the geth node:
- ```
- devp2p rlpx eth-test <enode> cmd/devp2p/internal/ethtest/testdata/chain.rlp cmd/devp2p/internal/ethtest/testdata/genesis.json
-```
+    geth \
+        --datadir <datadir>            \
+        --nodiscover                   \
+        --nat=none                     \
+        --networkid 3503995874084926   \
+        --verbosity 5                  \
+        --authrpc.jwtsecret 0x7365637265747365637265747365637265747365637265747365637265747365
+
+Note that the tests also require access to the engine API.
+The test suite can now be executed using the devp2p tool.
+
+    devp2p rlpx eth-test \
+        --chain internal/ethtest/testdata   \
+        --node enode://....                 \
+        --engineapi http://127.0.0.1:8551   \
+        --jwtsecret 0x7365637265747365637265747365637265747365637265747365637265747365
 
 Repeat the above process (re-initialising the node) in order to run the Eth Protocol test suite again.
 
-#### Eth66 Test Suite
-
-The Eth66 test suite is also a conformance test suite for the eth 66 protocol version specifically.
-To run the eth66 protocol test suite, initialize a geth node as described above and run the following command,
-replacing `<enode>` with the enode of the geth node:
-
- ```
- devp2p rlpx eth66-test <enode> cmd/devp2p/internal/ethtest/testdata/chain.rlp cmd/devp2p/internal/ethtest/testdata/genesis.json
-```
 
 [eth]: https://github.com/ethereum/devp2p/blob/master/caps/eth.md
 [dns-tutorial]: https://geth.ethereum.org/docs/developers/geth-developer/dns-discovery-setup

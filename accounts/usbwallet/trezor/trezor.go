@@ -16,7 +16,7 @@
 
 // This file contains the implementation for interacting with the Trezor hardware
 // wallets. The wire protocol spec can be found on the SatoshiLabs website:
-// https://wiki.trezor.io/Developers_guide-Message_Workflows
+// https://docs.trezor.io/trezor-firmware/common/message-workflows.html
 
 // !!! STAHP !!!
 //

@@ -37,11 +37,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/tracing"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/bor"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -237,7 +237,7 @@ type worker struct {
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
 	coinbase common.Address
 	extra    []byte
-	tip      *big.Int // Minimum tip needed for non-local transaction to include them
+	tip      *uint256.Int // Minimum tip needed for non-local transaction to include them
 
 	pendingMu    sync.RWMutex
 	pendingTasks map[common.Hash]*task
@@ -296,7 +296,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		isLocalBlock:        isLocalBlock,
 		coinbase:            config.Etherbase,
 		extra:               config.ExtraData,
-		tip:                 config.GasPrice,
+		tip:                 uint256.MustFromBig(config.GasPrice),
 		pendingTasks:        make(map[common.Hash]*task),
 		txsCh:               make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:         make(chan core.ChainHeadEvent, chainHeadChanSize),
@@ -401,7 +401,7 @@ func (w *worker) setExtra(extra []byte) {
 func (w *worker) setGasTip(tip *big.Int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.tip = tip
+	w.tip = uint256.MustFromBig(tip)
 }
 
 // setRecommitInterval updates the interval for miner sealing work recommitting.
@@ -649,15 +649,18 @@ func (w *worker) mainLoop(ctx context.Context) {
 						Hash:      tx.Hash(),
 						Tx:        nil, // Do *not* set this! We need to resolve it later to pull blobs in
 						Time:      tx.Time(),
-						GasFeeCap: tx.GasFeeCap(),
-						GasTipCap: tx.GasTipCap(),
+						GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
+						GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
 						Gas:       tx.Gas(),
 						BlobGas:   tx.BlobGas(),
 					})
 				}
-				txset := newTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
+				plainTxs := newTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee) // Mixed bag of everrything, yolo
+				blobTxs := newTransactionsByPriceAndNonce(w.current.signer, nil, w.current.header.BaseFee)  // Empty bag, don't bother optimising
+
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, txset, nil, new(big.Int), context.Background())
+
+				w.commitTransactions(w.current, plainTxs, blobTxs, nil, context.Background())
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -917,7 +920,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, inte
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *big.Int, interruptCtx context.Context) error {
+func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32, interruptCtx context.Context) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -985,8 +988,34 @@ mainloop:
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
 			break
 		}
+		// If we don't have enough blob space for any further blob transactions,
+		// skip that list altogether
+		if !blobTxs.Empty() && env.blobs*params.BlobTxBlobGasPerBlob >= params.MaxBlobGasPerBlock {
+			log.Trace("Not enough blob space for further blob transactions")
+			blobTxs.Clear()
+			// Fall though to pick up any plain txs
+		}
 		// Retrieve the next transaction and abort if all done.
-		ltx, tip := txs.Peek()
+
+		var (
+			ltx *txpool.LazyTransaction
+			txs *transactionsByPriceAndNonce
+		)
+		pltx, ptip := plainTxs.Peek()
+		bltx, btip := blobTxs.Peek()
+
+		switch {
+		case pltx == nil:
+			txs, ltx = blobTxs, bltx
+		case bltx == nil:
+			txs, ltx = plainTxs, pltx
+		default:
+			if ptip.Lt(btip) {
+				txs, ltx = blobTxs, bltx
+			} else {
+				txs, ltx = plainTxs, pltx
+			}
+		}
 		if ltx == nil {
 			break
 		}
@@ -1001,11 +1030,7 @@ mainloop:
 			txs.Pop()
 			continue
 		}
-		// If we don't receive enough tip for the next transaction, skip the account
-		if tip.Cmp(minTip) < 0 {
-			log.Trace("Not enough tip for transaction", "hash", ltx.Hash, "tip", tip, "needed", minTip)
-			break // If the next-best is too low, surely no better will be available
-		}
+
 		// Transaction seems to fit, pull it up from the pool
 		tx := ltx.Resolve()
 		if tx == nil {
@@ -1343,20 +1368,31 @@ func startProfiler(profile string, filepath string, number uint64) (func() error
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
+
 //
 //nolint:gocognit
 func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, env *environment, interruptCtx context.Context) error {
 	ctx, span := tracing.StartSpan(ctx, "fillTransactions")
 	defer tracing.EndSpan(span)
 
-	// Split the pending transactions into locals and remotes
-	// Fill the block with all available pending transactions.
-	pending := w.eth.TxPool().Pending(true)
-	localTxs, remoteTxs := make(map[common.Address][]*txpool.LazyTransaction), pending
+	w.mu.RLock()
+	tip := w.tip
+	w.mu.RUnlock()
+
+	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
+	filter := txpool.PendingFilter{
+		MinTip: tip,
+	}
+	if env.header.BaseFee != nil {
+		filter.BaseFee = uint256.MustFromBig(env.header.BaseFee)
+	}
+	if env.header.ExcessBlobGas != nil {
+		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas))
+	}
 
 	var (
-		localTxsCount  int
-		remoteTxsCount int
+		localPlainTxsCount  int
+		remotePlainTxsCount int
 	)
 
 	// TODO: move to config or RPC
@@ -1420,19 +1456,33 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		}(env.header.Number.Uint64())
 	}
 
+	var (
+		localPlainTxs, remotePlainTxs, localBlobTxs, remoteBlobTxs map[common.Address][]*txpool.LazyTransaction
+	)
+
 	tracing.Exec(ctx, "", "worker.SplittingTransactions", func(ctx context.Context, span trace.Span) {
 		prePendingTime := time.Now()
 
-		pending := w.eth.TxPool().Pending(true)
-		remoteTxs = pending
+		filter.OnlyPlainTxs, filter.OnlyBlobTxs = true, false
+		pendingPlainTxs := w.eth.TxPool().Pending(filter)
+
+		filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
+		pendingBlobTxs := w.eth.TxPool().Pending(filter)
+
+		// Split the pending transactions into locals and remotes.
+		localPlainTxs, remotePlainTxs = make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
+		localBlobTxs, remoteBlobTxs = make(map[common.Address][]*txpool.LazyTransaction), pendingBlobTxs
 
 		postPendingTime := time.Now()
 
 		for _, account := range w.eth.TxPool().Locals() {
-			if txs := remoteTxs[account]; len(txs) > 0 {
-				delete(remoteTxs, account)
-
-				localTxs[account] = txs
+			if txs := remotePlainTxs[account]; len(txs) > 0 {
+				delete(remotePlainTxs, account)
+				localPlainTxs[account] = txs
+			}
+			if txs := remoteBlobTxs[account]; len(txs) > 0 {
+				delete(remoteBlobTxs, account)
+				localBlobTxs[account] = txs
 			}
 		}
 
@@ -1440,8 +1490,8 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 
 		tracing.SetAttributes(
 			span,
-			attribute.Int("len of local txs", localTxsCount),
-			attribute.Int("len of remote txs", remoteTxsCount),
+			attribute.Int("len of local txs", localPlainTxsCount),
+			attribute.Int("len of remote txs", remotePlainTxsCount),
 			attribute.String("time taken by Pending()", fmt.Sprintf("%v", postPendingTime.Sub(prePendingTime))),
 			attribute.String("time taken by Locals()", fmt.Sprintf("%v", postLocalsTime.Sub(postPendingTime))),
 		)
@@ -1453,29 +1503,22 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		err             error
 	)
 
-	w.mu.RLock()
-	tip := w.tip
-	w.mu.RUnlock()
-
-	if len(localTxs) > 0 {
-		var txs *transactionsByPriceAndNonce
+	// Fill the block with all available pending transactions.
+	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 {
+		var plainTxs, blobTxs *transactionsByPriceAndNonce
 
 		tracing.Exec(ctx, "", "worker.LocalTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
-			var baseFee *uint256.Int
-			if env.header.BaseFee != nil {
-				baseFee = cmath.FromBig(env.header.BaseFee)
-			}
-
-			txs = newTransactionsByPriceAndNonce(env.signer, localTxs, baseFee.ToBig())
+			plainTxs = newTransactionsByPriceAndNonce(env.signer, localPlainTxs, env.header.BaseFee)
+			blobTxs = newTransactionsByPriceAndNonce(env.signer, localBlobTxs, env.header.BaseFee)
 
 			tracing.SetAttributes(
 				span,
-				attribute.Int("len of tx local Heads", txs.GetTxs()),
+				attribute.Int("len of tx local Heads", plainTxs.GetTxs()),
 			)
 		})
 
 		tracing.Exec(ctx, "", "worker.LocalCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactions(env, txs, interrupt, new(big.Int), interruptCtx)
+			err = w.commitTransactions(env, plainTxs, blobTxs, interrupt, interruptCtx)
 		})
 
 		if err != nil {
@@ -1485,25 +1528,21 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		localEnvTCount = env.tcount
 	}
 
-	if len(remoteTxs) > 0 {
-		var txs *transactionsByPriceAndNonce
+	if len(remotePlainTxs) > 0 || len(remoteBlobTxs) > 0 {
+		var plainTxs, blobTxs *transactionsByPriceAndNonce
 
 		tracing.Exec(ctx, "", "worker.RemoteTransactionsByPriceAndNonce", func(ctx context.Context, span trace.Span) {
-			var baseFee *uint256.Int
-			if env.header.BaseFee != nil {
-				baseFee = cmath.FromBig(env.header.BaseFee)
-			}
-
-			txs = newTransactionsByPriceAndNonce(env.signer, remoteTxs, baseFee.ToBig())
+			plainTxs = newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, env.header.BaseFee)
+			blobTxs = newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, env.header.BaseFee)
 
 			tracing.SetAttributes(
 				span,
-				attribute.Int("len of tx remote Heads", txs.GetTxs()),
+				attribute.Int("len of tx remote Heads", plainTxs.GetTxs()),
 			)
 		})
 
 		tracing.Exec(ctx, "", "worker.RemoteCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactions(env, txs, interrupt, tip, interruptCtx)
+			err = w.commitTransactions(env, plainTxs, blobTxs, interrupt, interruptCtx)
 		})
 
 		if err != nil {

@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 
 	"github.com/stretchr/testify/require"
 )
@@ -94,7 +94,7 @@ func TestPastChainInsert(t *testing.T) {
 		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	_, _ = gspec.Commit(db, trie.NewDatabase(db, trie.HashDefaults))
+	_, _ = gspec.Commit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 
 	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
@@ -166,7 +166,7 @@ func TestFutureChainInsert(t *testing.T) {
 		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	_, _ = gspec.Commit(db, trie.NewDatabase(db, trie.HashDefaults))
+	_, _ = gspec.Commit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 
 	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {
@@ -226,7 +226,7 @@ func TestOverlappingChainInsert(t *testing.T) {
 		gspec = &Genesis{BaseFee: big.NewInt(params.InitialBaseFee), Config: params.AllEthashProtocolChanges}
 	)
 
-	_, _ = gspec.Commit(db, trie.NewDatabase(db, trie.HashDefaults))
+	_, _ = gspec.Commit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 
 	hc, err := NewHeaderChain(db, gspec.Config, ethash.NewFaker(), func() bool { return false })
 	if err != nil {

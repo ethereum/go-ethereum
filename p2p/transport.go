@@ -19,6 +19,7 @@ package p2p
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -167,7 +168,7 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 	}
 
 	if msg.Size > baseProtocolMaxMsgSize {
-		return nil, fmt.Errorf("message too big")
+		return nil, errors.New("message too big")
 	}
 
 	if msg.Code == discMsg {

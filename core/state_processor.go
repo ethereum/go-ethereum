@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -148,11 +149,11 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	statedb.SetMVHashmap(nil)
 
 	if evm.ChainConfig().IsLondon(blockNumber) {
-		statedb.AddBalance(result.BurntContractAddress, result.FeeBurnt)
+		statedb.AddBalance(result.BurntContractAddress, uint256.NewInt(result.FeeBurnt.Uint64()))
 	}
 
 	// TODO(raneet10) Double check
-	statedb.AddBalance(evm.Context.Coinbase, result.FeeTipped)
+	statedb.AddBalance(evm.Context.Coinbase, uint256.NewInt(result.FeeTipped.Uint64()))
 	output1 := new(big.Int).SetBytes(result.SenderInitBalance.Bytes())
 	output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
 
@@ -166,7 +167,7 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 
 		result.FeeTipped,
 		result.SenderInitBalance,
-		coinbaseBalance,
+		coinbaseBalance.ToBig(),
 		output1.Sub(output1, result.FeeTipped),
 		output2.Add(output2, result.FeeTipped),
 	)
@@ -250,6 +251,6 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 	}
 	vmenv.Reset(NewEVMTxContext(msg), statedb)
 	statedb.AddAddressToAccessList(params.BeaconRootsStorageAddress)
-	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.Big0, nil)
+	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560, nil)
 	statedb.Finalise(true)
 }

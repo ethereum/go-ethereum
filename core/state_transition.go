@@ -18,7 +18,6 @@ package core
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -27,7 +26,9 @@ import (
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // ExecutionResult includes all output after executing given evm
@@ -73,7 +74,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028 bool, isEIP3860 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -283,7 +284,11 @@ func (st *StateTransition) buyGas() error {
 			mgval.Add(mgval, blobFee)
 		}
 	}
-	if have, want := st.state.GetBalance(st.msg.From), balanceCheck; have.Cmp(want) < 0 {
+	balanceCheckU256, overflow := uint256.FromBig(balanceCheck)
+	if overflow {
+		return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
+	}
+	if have, want := st.state.GetBalance(st.msg.From), balanceCheckU256; have.Cmp(want) < 0 {
 		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
 	}
 
@@ -294,7 +299,8 @@ func (st *StateTransition) buyGas() error {
 	st.gasRemaining += st.msg.GasLimit
 
 	st.initialGas = st.msg.GasLimit
-	st.state.SubBalance(st.msg.From, mgval)
+	mgvalU256, _ := uint256.FromBig(mgval)
+	st.state.SubBalance(st.msg.From, mgvalU256)
 
 	return nil
 }
@@ -351,13 +357,18 @@ func (st *StateTransition) preCheck() error {
 	}
 	// Check the blob version validity
 	if msg.BlobHashes != nil {
+		// The to field of a blob tx type is mandatory, and a `BlobTx` transaction internally
+		// has it as a non-nillable value, so any msg derived from blob transaction has it non-nil.
+		// However, messages created through RPC (eth_call) don't have this restriction.
+		if msg.To == nil {
+			return ErrBlobTxCreate
+		}
 		if len(msg.BlobHashes) == 0 {
-			return errors.New("blob transaction missing blob hashes")
+			return ErrMissingBlobHashes
 		}
 		for i, hash := range msg.BlobHashes {
-			if hash[0] != params.BlobTxHashVersion {
-				return fmt.Errorf("blob %d hash version mismatch (have %d, supported %d)",
-					i, hash[0], params.BlobTxHashVersion)
+			if !kzg4844.IsValidVersionedHash(hash[:]) {
+				return fmt.Errorf("blob %d has invalid hash version", i)
 			}
 		}
 	}
@@ -392,7 +403,7 @@ func (st *StateTransition) preCheck() error {
 func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*ExecutionResult, error) {
 	input1 := st.state.GetBalance(st.msg.From)
 
-	var input2 *big.Int
+	var input2 *uint256.Int
 
 	if !st.noFeeBurnAndTip {
 		input2 = st.state.GetBalance(st.evm.Context.Coinbase)
@@ -440,7 +451,11 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	st.gasRemaining -= gas
 
 	// Check clause 6
-	if msg.Value.Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From, msg.Value) {
+	value, overflow := uint256.FromBig(msg.Value)
+	if overflow {
+		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
+	}
+	if !value.IsZero() && !st.evm.Context.CanTransfer(st.state, msg.From, value) {
 		return nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From.Hex())
 	}
 
@@ -460,12 +475,15 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	)
 
 	if contractCreation {
+
 		// nolint : contextcheck
-		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, msg.Value)
-	} else {
+		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
+
 		// Increment the nonce for the next transaction
+	} else {
 		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
-		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value, interruptCtx)
+
+		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value, interruptCtx)
 	}
 
 	var gasRefund uint64
@@ -477,10 +495,10 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		gasRefund = st.refundGas(params.RefundQuotientEIP3529)
 	}
 
-	effectiveTip := msg.GasPrice
+	effectiveTip := uint256.NewInt(msg.GasPrice.Uint64())
 
 	if rules.IsLondon {
-		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
+		effectiveTip = cmath.BigMinUint256(cmath.BigIntToUint256Int(msg.GasTipCap), new(uint256.Int).Sub(cmath.BigIntToUint256Int(msg.GasFeeCap), cmath.BigIntToUint256Int(st.evm.Context.BaseFee)))
 	}
 
 	// TODO(raneet10): Double check. We might want to inculcate this fix in a separate condition
@@ -494,15 +512,15 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	// 	st.state.AddBalance(st.evm.Context.Coinbase, fee)
 	// }
 
-	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
+	amount := new(uint256.Int).Mul(new(uint256.Int).SetUint64(st.gasUsed()), effectiveTip)
 
-	var burnAmount *big.Int
+	var burnAmount *uint256.Int
 
 	var burntContractAddress common.Address
 
 	if rules.IsLondon {
 		burntContractAddress = common.HexToAddress(st.evm.ChainConfig().Bor.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
-		burnAmount = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
+		burnAmount = new(uint256.Int).Mul(new(uint256.Int).SetUint64(st.gasUsed()), cmath.BigIntToUint256Int(st.evm.Context.BaseFee))
 
 		if !st.noFeeBurnAndTip {
 			st.state.AddBalance(burntContractAddress, burnAmount)
@@ -523,11 +541,11 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 			msg.From,
 			st.evm.Context.Coinbase,
 
-			amount,
-			input1,
-			input2,
-			output1.Sub(output1, amount),
-			output2.Add(output2, amount),
+			amount.ToBig(),
+			input1.ToBig(),
+			input2.ToBig(),
+			output1.Sub(output1, amount.ToBig()),
+			output2.Add(output2, amount.ToBig()),
 		)
 	}
 
@@ -536,10 +554,10 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		RefundedGas:          gasRefund,
 		Err:                  vmerr,
 		ReturnData:           ret,
-		SenderInitBalance:    input1,
-		FeeBurnt:             burnAmount,
+		SenderInitBalance:    input1.ToBig(),
+		FeeBurnt:             burnAmount.ToBig(),
 		BurntContractAddress: burntContractAddress,
-		FeeTipped:            amount,
+		FeeTipped:            amount.ToBig(),
 	}, nil
 }
 
@@ -553,7 +571,8 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 	st.gasRemaining += refund
 
 	// Return ETH for remaining gas, exchanged at the original rate.
-	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice)
+	remaining := uint256.NewInt(st.gasRemaining)
+	remaining = remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
 	st.state.AddBalance(st.msg.From, remaining)
 
 	// Also return remaining gas to the block gas counter so it is

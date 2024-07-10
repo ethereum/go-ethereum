@@ -43,8 +43,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/golang/mock/gomock"
+	"github.com/holiman/uint256"
 	"gotest.tools/assert"
 )
 
@@ -226,7 +227,7 @@ type testWorkerBackend struct {
 func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database) *testWorkerBackend {
 	var gspec = &core.Genesis{
 		Config: chainConfig,
-		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+		Alloc:  types.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 	}
 	switch e := engine.(type) {
 	case *bor.Bor:
@@ -251,7 +252,7 @@ func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engi
 		t.Fatalf("core.NewBlockChain failed: %v", err)
 	}
 	pool := legacypool.New(testTxPoolConfig, chain)
-	txpool, _ := txpool.New(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), chain, []txpool.SubPool{pool})
+	txpool, _ := txpool.New(testTxPoolConfig.PriceLimit, chain, []txpool.SubPool{pool})
 
 	return &testWorkerBackend{
 		db:      db,
@@ -426,7 +427,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	taskCh := make(chan struct{}, 2)
 	checkEqual := func(t *testing.T, task *task) {
 		// The work should contain 1 tx
-		receiptLen, balance := 1, big.NewInt(1000)
+		receiptLen, balance := 1, uint256.NewInt(1000)
 		if len(task.receipts) != receiptLen {
 			t.Fatalf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
 		}
@@ -970,7 +971,7 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 
 	// This test chain imports the mined blocks.
 	db2 := rawdb.NewMemoryDatabase()
-	back.genesis.MustCommit(db2, trie.NewDatabase(db2, trie.HashDefaults))
+	back.genesis.MustCommit(db2, triedb.NewDatabase(db2, triedb.HashDefaults))
 
 	chain, _ := core.NewParallelBlockChain(db2, nil, back.genesis, nil, engine, vm.Config{}, nil, nil, nil, 8)
 	defer chain.Stop()

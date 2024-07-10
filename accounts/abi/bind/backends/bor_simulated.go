@@ -5,18 +5,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 )
 
-func (fb *filterBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	number := rawdb.ReadHeaderNumber(fb.db, hash)
-	if number == nil {
-		return nil, nil
+func (b *SimulatedBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	receipt, err := b.GetBorBlockReceipt(ctx, hash)
+	if err != nil {
+		return nil, err
 	}
 
-	receipt := rawdb.ReadRawBorReceipt(fb.db, hash, *number)
 	if receipt == nil {
 		return nil, nil
 	}
@@ -24,12 +22,12 @@ func (fb *filterBackend) GetBorBlockReceipt(ctx context.Context, hash common.Has
 	return receipt, nil
 }
 
-func (fb *filterBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
+func (b *SimulatedBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
 	return false, nil
 }
 
-func (fb *filterBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
-	receipt, err := fb.GetBorBlockReceipt(ctx, hash)
+func (b *SimulatedBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
+	receipt, err := b.GetBorBlockReceipt(ctx, hash)
 	if err != nil || receipt == nil {
 		return nil, err
 	}
@@ -38,6 +36,6 @@ func (fb *filterBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) 
 }
 
 // SubscribeStateSyncEvent subscribes to state sync events
-func (fb *filterBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
-	return fb.bc.SubscribeStateSyncEvent(ch)
+func (b *SimulatedBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return b.SubscribeStateSyncEvent(ch)
 }

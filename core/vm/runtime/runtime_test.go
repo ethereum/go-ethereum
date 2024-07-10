@@ -38,6 +38,7 @@ import (
 
 	// force-load js tracers to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
+	"github.com/holiman/uint256"
 )
 
 func TestDefaults(t *testing.T) {
@@ -385,14 +386,14 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 	cfg.State.SetCode(destination, code)
 
 	// nolint: errcheck
-	vmenv.Call(sender, destination, nil, gas, cfg.Value, nil)
+	vmenv.Call(sender, destination, nil, gas, uint256.MustFromBig(cfg.Value), nil)
 
 	b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
 			// nolint: errcheck
-			vmenv.Call(sender, destination, nil, gas, cfg.Value, nil)
+			vmenv.Call(sender, destination, nil, gas, uint256.MustFromBig(cfg.Value), nil)
 		}
 	})
 }

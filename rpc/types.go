@@ -19,6 +19,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -112,7 +113,7 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	}
 
 	if blckNum > math.MaxInt64 {
-		return fmt.Errorf("block number larger than int64")
+		return errors.New("block number larger than int64")
 	}
 
 	*bn = BlockNumber(blckNum)
@@ -166,7 +167,7 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 
 	if err == nil {
 		if e.BlockNumber != nil && e.BlockHash != nil {
-			return fmt.Errorf("cannot specify both BlockHash and BlockNumber, choose one or the other")
+			return errors.New("cannot specify both BlockHash and BlockNumber, choose one or the other")
 		}
 
 		bnh.BlockNumber = e.BlockNumber
@@ -232,7 +233,7 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 			}
 
 			if blckNum > math.MaxInt64 {
-				return fmt.Errorf("blocknumber too high")
+				return errors.New("blocknumber too high")
 			}
 
 			bn := BlockNumber(blckNum)

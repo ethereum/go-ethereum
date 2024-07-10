@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/blockstm"
@@ -186,10 +187,10 @@ func (task *ExecutionTask) Settle() {
 
 	if *task.shouldDelayFeeCal {
 		if task.config.IsLondon(task.blockNumber) {
-			task.finalStateDB.AddBalance(task.result.BurntContractAddress, task.result.FeeBurnt)
+			task.finalStateDB.AddBalance(task.result.BurntContractAddress, cmath.BigIntToUint256Int(task.result.FeeBurnt))
 		}
 
-		task.finalStateDB.AddBalance(task.coinbase, task.result.FeeTipped)
+		task.finalStateDB.AddBalance(task.coinbase, cmath.BigIntToUint256Int(task.result.FeeTipped))
 		output1 := new(big.Int).SetBytes(task.result.SenderInitBalance.Bytes())
 		output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
 
@@ -203,7 +204,7 @@ func (task *ExecutionTask) Settle() {
 
 			task.result.FeeTipped,
 			task.result.SenderInitBalance,
-			coinbaseBalance,
+			coinbaseBalance.ToBig(),
 			output1.Sub(output1, task.result.FeeTipped),
 			output2.Add(output2, task.result.FeeTipped),
 		)

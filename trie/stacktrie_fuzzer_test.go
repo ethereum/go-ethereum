@@ -42,15 +42,13 @@ func fuzz(data []byte, debugging bool) {
 	var (
 		input   = bytes.NewReader(data)
 		spongeA = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		dbA     = NewDatabase(rawdb.NewDatabase(spongeA), nil)
+		dbA     = newTestDatabase(rawdb.NewDatabase(spongeA), rawdb.HashScheme)
 		trieA   = NewEmpty(dbA)
 		spongeB = &spongeDb{sponge: sha3.NewLegacyKeccak256()}
-		dbB     = NewDatabase(rawdb.NewDatabase(spongeB), nil)
-
-		options = NewStackTrieOptions().WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+		dbB     = newTestDatabase(rawdb.NewDatabase(spongeB), rawdb.HashScheme)
+		trieB   = NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 			rawdb.WriteTrieNode(spongeB, common.Hash{}, path, hash, blob, dbB.Scheme())
 		})
-		trieB       = NewStackTrie(options)
 		vals        []*kv
 		maxElements = 10000
 		// operate on unique keys only
@@ -87,10 +85,10 @@ func fuzz(data []byte, debugging bool) {
 		panic(err)
 	}
 	if nodes != nil {
-		dbA.Update(rootA, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
+		dbA.Update(rootA, types.EmptyRootHash, trienode.NewWithNodeSet(nodes))
 	}
 	// Flush memdb -> disk (sponge)
-	dbA.Commit(rootA, false)
+	dbA.Commit(rootA)
 
 	// Stacktrie requires sorted insertion
 	slices.SortFunc(vals, (*kv).cmp)
@@ -99,10 +97,9 @@ func fuzz(data []byte, debugging bool) {
 		if debugging {
 			fmt.Printf("{\"%#x\" , \"%#x\"} // stacktrie.Update\n", kv.k, kv.v)
 		}
-		trieB.MustUpdate(kv.k, kv.v)
+		trieB.Update(kv.k, kv.v)
 	}
 	rootB := trieB.Hash()
-	trieB.Commit()
 	if rootA != rootB {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootB))
 	}
@@ -114,20 +111,19 @@ func fuzz(data []byte, debugging bool) {
 
 	// Ensure all the nodes are persisted correctly
 	var (
-		nodeset  = make(map[string][]byte) // path -> blob
-		optionsC = NewStackTrieOptions().WithWriter(func(path []byte, hash common.Hash, blob []byte) {
+		nodeset = make(map[string][]byte) // path -> blob
+		trieC   = NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 			if crypto.Keccak256Hash(blob) != hash {
 				panic("invalid node blob")
 			}
 			nodeset[string(path)] = common.CopyBytes(blob)
 		})
-		trieC   = NewStackTrie(optionsC)
 		checked int
 	)
 	for _, kv := range vals {
-		trieC.MustUpdate(kv.k, kv.v)
+		trieC.Update(kv.k, kv.v)
 	}
-	rootC := trieC.Commit()
+	rootC := trieC.Hash()
 	if rootA != rootC {
 		panic(fmt.Sprintf("roots differ: (trie) %x != %x (stacktrie)", rootA, rootC))
 	}

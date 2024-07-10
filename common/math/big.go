@@ -197,6 +197,10 @@ func BigMinUint256(x, y *uint256.Int) *uint256.Int {
 	return x
 }
 
+func BigIntToUint256Int(x *big.Int) *uint256.Int {
+	return new(uint256.Int).SetUint64(x.Uint64())
+}
+
 // FirstBitSet returns the index of the first 1 bit in v, counting from LSB.
 func FirstBitSet(v *big.Int) int {
 	for i := 0; i < v.BitLen(); i++ {

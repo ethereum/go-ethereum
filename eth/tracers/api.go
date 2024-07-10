@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
 )
 
 const (
@@ -93,7 +94,7 @@ type Backend interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
-	GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+	GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error)
 	RPCGasCap() uint64
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
@@ -918,7 +919,7 @@ txloop:
 				statedb.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
 			}
 		} else {
-			coinbaseBalance := statedb.GetBalance(blockCtx.Coinbase)
+			coinbaseBalance := big.NewInt(statedb.GetBalance(blockCtx.Coinbase).ToBig().Int64())
 			// nolint : contextcheck
 			result, err := core.ApplyMessageNoFeeBurnOrTip(vmenv, *msg, new(core.GasPool).AddGas(msg.GasLimit), context.Background())
 
@@ -928,10 +929,10 @@ txloop:
 			}
 
 			if london {
-				statedb.AddBalance(result.BurntContractAddress, result.FeeBurnt)
+				statedb.AddBalance(result.BurntContractAddress, uint256.NewInt(result.FeeBurnt.Uint64()))
 			}
 
-			statedb.AddBalance(blockCtx.Coinbase, result.FeeTipped)
+			statedb.AddBalance(blockCtx.Coinbase, uint256.NewInt(result.FeeTipped.Uint64()))
 			output1 := new(big.Int).SetBytes(result.SenderInitBalance.Bytes())
 			output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
 
@@ -1172,10 +1173,10 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 		config.BorTraceEnabled = defaultBorTraceEnabled
 	}
 
-	tx, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
-	if tx == nil {
+	found, _, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
+	if !found {
 		// For BorTransaction, there will be no trace available
-		tx, _, _, _ = rawdb.ReadBorTransaction(api.backend.ChainDb(), hash)
+		tx, _, _, _ := rawdb.ReadBorTransaction(api.backend.ChainDb(), hash)
 		if tx != nil {
 			return &ethapi.ExecutionResult{
 				StructLogs: make([]ethapi.StructLogRes, 0),
@@ -1186,8 +1187,9 @@ func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, ethapi.NewTxIndexingError()
 	}
+
 	// It shouldn't happen in practice.
 	if blockNumber == 0 {
 		return nil, errors.New("genesis is not traceable")
@@ -1284,7 +1286,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		config.BlockOverrides.Apply(&vmctx)
 	}
 	// Execute the trace
-	msg, err := args.ToMessage(api.backend.RPCGasCap(), block.BaseFee())
+	msg, err := args.ToMessage(api.backend.RPCGasCap(), vmctx.BaseFee)
 	if err != nil {
 		return nil, err
 	}

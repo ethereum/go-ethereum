@@ -16,6 +16,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/holiman/uint256"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/sha3"
@@ -884,8 +885,8 @@ func (c *Bor) changeContractCodeIfNeeded(headerNumber uint64, state *state.State
 				log.Info("change contract code", "address", addr)
 				state.SetCode(addr, account.Code)
 
-				if state.GetBalance(addr).Cmp(big.NewInt(0)) == 0 {
-					state.SetBalance(addr, account.Balance)
+				if state.GetBalance(addr).Cmp(uint256.NewInt(0)) == 0 {
+					state.SetBalance(addr, uint256.NewInt(account.Balance.Uint64()))
 				}
 			}
 		}
