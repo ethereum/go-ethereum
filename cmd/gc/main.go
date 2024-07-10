@@ -52,7 +52,7 @@ type ResultProcessNode struct {
 
 func main() {
 	flag.Parse()
-	db, _ := leveldb.New(*dir, ethconfig.Defaults.DatabaseCache, utils.MakeDatabaseHandles(), "")
+	db, _ := leveldb.New(*dir, ethconfig.Defaults.DatabaseCache, utils.MakeDatabaseHandles(0), "")
 	lddb := rawdb.NewDatabase(db)
 	head := core.GetHeadBlockHash(lddb)
 	currentHeader := core.GetHeader(lddb, head, core.GetBlockNumber(lddb, head))

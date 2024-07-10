@@ -313,6 +313,10 @@ var (
 		Usage: "Percentage of cache memory allowance to use for trie pruning",
 		Value: 25,
 	}
+	FDLimitFlag = cli.IntFlag{
+		Name:  "fdlimit",
+		Usage: "Raise the open file descriptor resource limit (default = system fd limit)",
+	}
 	// Miner settings
 	StakingEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
@@ -817,10 +821,23 @@ func setPrefix(ctx *cli.Context, cfg *node.Config) {
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
 // for XDC and returns half of the allowance to assign to the database.
-func MakeDatabaseHandles() int {
+func MakeDatabaseHandles(max int) int {
 	limit, err := fdlimit.Maximum()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
+	}
+	switch {
+	case max == 0:
+		// User didn't specify a meaningful value, use system limits
+	case max < 128:
+		// User specified something unhealthy, just use system defaults
+		log.Error("File descriptor limit invalid (<128)", "had", max, "updated", limit)
+	case max > limit:
+		// User requested more than the OS allows, notify that we can't allocate it
+		log.Warn("Requested file descriptors denied by OS", "req", max, "limit", limit)
+	default:
+		// User limit is meaningful and within allowed range, use that
+		limit = max
 	}
 	raised, err := fdlimit.Raise(uint64(limit))
 	if err != nil {
@@ -1179,7 +1196,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 	}
-	cfg.DatabaseHandles = MakeDatabaseHandles()
+	cfg.DatabaseHandles = MakeDatabaseHandles(ctx.GlobalInt(FDLimitFlag.Name))
 
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
@@ -1268,7 +1285,7 @@ func SetupNetwork(ctx *cli.Context) {
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
-		handles = MakeDatabaseHandles()
+		handles = MakeDatabaseHandles(ctx.GlobalInt(FDLimitFlag.Name))
 	)
 	name := "chaindata"
 	if ctx.GlobalBool(LightModeFlag.Name) {
