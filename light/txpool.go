@@ -353,6 +353,20 @@ func (pool *TxPool) Stats() (pending int) {
 	return
 }
 
+// StatsWithMinBaseFee returns the number of currently pending (locally created) transactions and ignores the base fee.
+func (pool *TxPool) StatsWithMinBaseFee(minBaseFee *big.Int) (pending int) {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
+	for _, tx := range pool.pending {
+		if _, err := tx.EffectiveGasTip(minBaseFee); err == nil {
+			pending++
+		}
+	}
+
+	return pending
+}
+
 // validateTx checks whether a transaction is valid according to the consensus rules.
 func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error {
 	// Validate sender

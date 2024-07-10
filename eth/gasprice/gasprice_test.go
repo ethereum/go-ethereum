@@ -101,6 +101,10 @@ func (b *testBackend) Stats() (int, int) {
 	return b.pendingTxCount, 0
 }
 
+func (b *testBackend) StatsWithMinBaseFee(minBaseFee *big.Int) (int, int) {
+	return b.pendingTxCount, 0
+}
+
 func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool, pendingTxCount int) *testBackend {
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

@@ -64,6 +64,7 @@ type OracleBackend interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	StateAt(root common.Hash) (*state.StateDB, error)
 	Stats() (pending int, queued int)
+	StatsWithMinBaseFee(minBaseFee *big.Int) (pending int, queued int)
 }
 
 // Oracle recommends gas prices based on the content of recent
@@ -192,7 +193,7 @@ func (oracle *Oracle) SuggestTipCap(ctx context.Context) (*big.Int, error) {
 	// If pending txs are less than oracle.congestedThreshold, we consider the network to be non-congested and suggest
 	// a minimal tip cap. This is to prevent users from overpaying for gas when the network is not congested and a few
 	// high-priced txs are causing the suggested tip cap to be high.
-	pendingTxCount, _ := oracle.backend.Stats()
+	pendingTxCount, _ := oracle.backend.StatsWithMinBaseFee(head.BaseFee)
 	if pendingTxCount < oracle.congestedThreshold {
 		// Before Curie (EIP-1559), we need to return the total suggested gas price. After Curie we return 2 wei as the tip cap,
 		// as the base fee is set separately or added manually for legacy transactions.
