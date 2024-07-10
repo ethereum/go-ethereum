@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build freebsd
 // +build freebsd
 
 package fdlimit
@@ -26,11 +27,11 @@ import "syscall"
 
 // Raise tries to maximize the file descriptor allowance of this process
 // to the maximum hard-limit allowed by the OS.
-func Raise(max uint64) error {
+func Raise(max uint64) (uint64, error) {
 	// Get the current limit
 	var limit syscall.Rlimit
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
-		return err
+		return 0, err
 	}
 	// Try to update the limit to the max allowance
 	limit.Cur = limit.Max
@@ -38,9 +39,12 @@ func Raise(max uint64) error {
 		limit.Cur = int64(max)
 	}
 	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
-		return err
+		return 0, err
 	}
-	return nil
+	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
+		return 0, err
+	}
+	return limit.Cur, nil
 }
 
 // Current retrieves the number of file descriptors allowed to be opened by this
