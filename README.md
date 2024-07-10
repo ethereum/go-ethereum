@@ -6,7 +6,7 @@ https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/6874
 )](https://pkg.go.dev/github.com/maticnetwork/bor)
 [![Go Report Card](https://goreportcard.com/badge/github.com/maticnetwork/bor)](https://goreportcard.com/report/github.com/maticnetwork/bor)
 ![MIT License](https://img.shields.io/github/license/maticnetwork/bor)
-[![Discord](https://img.shields.io/discord/714888181740339261?color=1C1CE1&label=Polygon%20%7C%20Discord%20%F0%9F%91%8B%20&style=flat-square)](https://discord.com/invite/0xPolygonDevs)
+[![Discord](https://img.shields.io/discord/714888181740339261?color=1C1CE1&label=Polygon%20%7C%20Discord%20%F0%9F%91%8B%20&style=flat-square)](https://discord.gg/0xpolygon)
 [![Twitter Follow](https://img.shields.io/twitter/follow/0xPolygon.svg?style=social)](https://twitter.com/0xPolygon)
 
 ### Installing bor using packaging
