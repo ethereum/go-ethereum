@@ -182,3 +182,9 @@ func (self *Miner) SetEtherbase(addr common.Address) {
 	self.coinbase = addr
 	self.worker.setEtherbase(addr)
 }
+
+// SubscribePendingLogs starts delivering logs from pending transactions
+// to the given channel.
+func (self *Miner) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
+	return self.worker.pendingLogsFeed.Subscribe(ch)
+}

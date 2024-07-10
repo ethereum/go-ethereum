@@ -104,6 +104,9 @@ type worker struct {
 
 	mu sync.Mutex
 
+	// Feeds
+	pendingLogsFeed event.Feed
+
 	// update loop
 	mux          *event.TypeMux
 	txsCh        chan core.NewTxsEvent
@@ -322,7 +325,7 @@ func (self *worker) update() {
 				}
 				feeCapacity := state.GetTRC21FeeCapacityFromState(self.current.state)
 				txset, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, txs, nil, feeCapacity)
-				self.current.commitTransactions(self.mux, feeCapacity, txset, specialTxs, self.chain, self.coinbase)
+				self.current.commitTransactions(self.mux, feeCapacity, txset, specialTxs, self.chain, self.coinbase, &self.pendingLogsFeed)
 				self.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
@@ -781,7 +784,7 @@ func (self *worker) commitNewWork() {
 			specialTxs = append(specialTxs, txStateRoot)
 		}
 	}
-	work.commitTransactions(self.mux, feeCapacity, txs, specialTxs, self.chain, self.coinbase)
+	work.commitTransactions(self.mux, feeCapacity, txs, specialTxs, self.chain, self.coinbase, &self.pendingLogsFeed)
 	// compute uncles for the new block.
 	var (
 		uncles []*types.Header
@@ -801,7 +804,7 @@ func (self *worker) commitNewWork() {
 	self.push(work)
 }
 
-func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Address]*big.Int, txs *types.TransactionsByPriceAndNonce, specialTxs types.Transactions, bc *core.BlockChain, coinbase common.Address) {
+func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Address]*big.Int, txs *types.TransactionsByPriceAndNonce, specialTxs types.Transactions, bc *core.BlockChain, coinbase common.Address, pendingLogsFeed *event.Feed) {
 	gp := new(core.GasPool).AddGas(env.header.GasLimit)
 	balanceUpdated := map[common.Address]*big.Int{}
 	totalFeeUsed := big.NewInt(0)
@@ -1028,29 +1031,25 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 		}
 	}
 	state.UpdateTRC21Fee(env.state, balanceUpdated, totalFeeUsed)
-	if len(coalescedLogs) > 0 || env.tcount > 0 {
-		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
-		// logs by filling in the block hash when the block was mined by the local miner. This can
-		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+	// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+	// logs by filling in the block hash when the block was mined by the local miner. This can
+	// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+	if len(coalescedLogs) > 0 {
 		cpy := make([]*types.Log, len(coalescedLogs))
 		for i, l := range coalescedLogs {
 			cpy[i] = new(types.Log)
 			*cpy[i] = *l
 		}
-		go func(logs []*types.Log, tcount int) {
-			if len(logs) > 0 {
-				err := mux.Post(core.PendingLogsEvent{Logs: logs})
-				if err != nil {
-					log.Warn("[commitTransactions] Error when sending PendingLogsEvent", "LogLength", len(logs))
-				}
+		pendingLogsFeed.Send(cpy)
+	}
+	if env.tcount > 0 {
+		go func(tcount int) {
+			err := mux.Post(core.PendingStateEvent{})
+			if err != nil {
+				log.Warn("[commitTransactions] Error when sending PendingStateEvent", "tcount", tcount)
 			}
-			if tcount > 0 {
-				err := mux.Post(core.PendingStateEvent{})
-				if err != nil {
-					log.Warn("[commitTransactions] Error when sending PendingStateEvent", "tcount", tcount)
-				}
-			}
-		}(cpy, env.tcount)
+		}(env.tcount)
+
 	}
 }
 

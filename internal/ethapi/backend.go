@@ -49,9 +49,8 @@ type Backend interface {
 	ProtocolVersion() int
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	ChainDb() ethdb.Database
-	EventMux() *event.TypeMux
 	AccountManager() *accounts.Manager
-	RPCGasCap() uint64 // global gas cap for eth_call over rpc: DoS protection
+	RPCGasCap() uint64    // global gas cap for eth_call over rpc: DoS protection
 	RPCTxFeeCap() float64 // global tx fee cap for all transaction related APIs
 	XDCxService() *XDCx.XDCX
 	LendingService() *XDCxlending.Lending
@@ -88,6 +87,7 @@ type Backend interface {
 	OrderTxPoolContent() (map[common.Address]types.OrderTransactions, map[common.Address]types.OrderTransactions)
 	OrderStats() (pending int, queued int)
 	SendLendingTx(ctx context.Context, signedTx *types.LendingTransaction) error
+	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
