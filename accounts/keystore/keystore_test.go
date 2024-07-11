@@ -17,6 +17,7 @@
 package keystore
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"math/rand"
 	"os"
 	"runtime"
@@ -283,6 +284,8 @@ type walletEvent struct {
 // Tests that wallet notifications and correctly fired when accounts are added
 // or deleted from the keystore.
 func TestWalletNotifications(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))))
+
 	t.Parallel()
 	_, ks := tmpKeyStore(t)
 
@@ -292,16 +295,14 @@ func TestWalletNotifications(t *testing.T) {
 		updates = make(chan accounts.WalletEvent)
 		sub     = ks.Subscribe(updates)
 	)
+
 	defer sub.Unsubscribe()
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		for {
-			select {
-			case ev := <-updates:
-				events = append(events, walletEvent{ev, ev.Wallet.Accounts()[0]})
-			case <-sub.Err():
-				close(updates)
-				return
-			}
+		defer wg.Done()
+		for ev := range updates {
+			events = append(events, walletEvent{ev, ev.Wallet.Accounts()[0]})
 		}
 	}()
 
@@ -336,9 +337,13 @@ func TestWalletNotifications(t *testing.T) {
 
 	// Shut down the event collector and check events.
 	sub.Unsubscribe()
-	for ev := range updates {
-		events = append(events, walletEvent{ev, ev.Wallet.Accounts()[0]})
+	if !waitForKsUpdating(t, ks, false, 4*time.Second) {
+		t.Errorf("wallet notifier didn't terminate after unsubscribe")
 	}
+	// Wait for the event collection goroutine to finish
+	close(updates)
+	wg.Wait()
+
 	checkAccounts(t, live, ks.Wallets())
 	checkEvents(t, wantEvents, events)
 }

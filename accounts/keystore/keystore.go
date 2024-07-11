@@ -72,6 +72,8 @@ type KeyStore struct {
 
 	mu       sync.RWMutex
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
+
+	addedWallets map[string]struct{} // Track addedWallets wallet URLs to prevent duplicates
 }
 
 type unlocked struct {
@@ -95,6 +97,7 @@ func (ks *KeyStore) init(keydir string) {
 	// Initialize the set of unlocked keys and the account cache
 	ks.unlocked = make(map[common.Address]*unlocked)
 	ks.cache, ks.changes = newAccountCache(keydir)
+	ks.addedWallets = make(map[string]struct{})
 
 	// TODO: In order for this finalizer to work, there must be no references
 	// to ks. addressCache doesn't keep a reference but unlocked keys do,
@@ -146,6 +149,13 @@ func (ks *KeyStore) refreshWallets() {
 		// If there are no more wallets or the account is before the next, wrap new wallet
 		if len(ks.wallets) == 0 || ks.wallets[0].URL().Cmp(account.URL) > 0 {
 			wallet := &keystoreWallet{account: account, keystore: ks}
+
+			// Only add a wallet once
+			if _, ok := ks.addedWallets[wallet.URL().String()]; !ok {
+				ks.addedWallets[wallet.URL().String()] = struct{}{}
+			} else {
+				continue
+			}
 
 			events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletArrived})
 			wallets = append(wallets, wallet)
