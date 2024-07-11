@@ -3,7 +3,7 @@ title: Connecting To The Network
 description: Guide to connecting Geth to a peer-to-peer network
 ---
 
-The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/fundamentals/private-network) and [local testnets](/docs/developers/geth-developer/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simply by passing:
+The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/fundamentals/private-network) and [local testnets](/docs/developers/dapp-developer/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simply by passing:
 
 - `--goerli`, Goerli proof-of-authority test network
 - `--sepolia` Sepolia proof-of-work test network
