@@ -655,7 +655,7 @@ func DefaultConfig() *Config {
 			NoLocals:     false,
 			Journal:      "transactions.rlp",
 			Rejournal:    1 * time.Hour,
-			PriceLimit:   params.BorDefaultTxPoolPriceLimit, // bor's default
+			PriceLimit:   1, // Default for every network except Amoy
 			PriceBump:    10,
 			AccountSlots: 16,
 			GlobalSlots:  32768,
@@ -666,8 +666,8 @@ func DefaultConfig() *Config {
 		Sealer: &SealerConfig{
 			Enabled:             false,
 			Etherbase:           "",
-			GasCeil:             30_000_000,                                 // geth's default
-			GasPrice:            big.NewInt(params.BorDefaultMinerGasPrice), // bor's default
+			GasCeil:             30_000_000,                  // geth's default
+			GasPrice:            big.NewInt(1 * params.GWei), // Default for every network except Amoy
 			ExtraData:           "",
 			Recommit:            125 * time.Second,
 			CommitInterruptFlag: true,

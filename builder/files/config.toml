@@ -56,7 +56,7 @@ syncmode = "full"
 
 [txpool]
   nolocals = true
-  pricelimit = 30000000000
+  pricelimit = 30000000000 # 25000000000 for amoy
   accountslots = 16
   globalslots = 32768
   accountqueue = 16
@@ -69,7 +69,7 @@ syncmode = "full"
 
 [miner]
   gaslimit = 30000000
-  gasprice = "30000000000"
+  gasprice = "30000000000" # 25000000000 for amoy
   # mine = true
   # etherbase = "VALIDATOR ADDRESS"
   # extradata = ""
@@ -127,7 +127,7 @@ syncmode = "full"
   # maxheaderhistory = 1024
   # maxblockhistory = 1024
   # maxprice = "5000000000000"
-  ignoreprice = "30000000000"
+  ignoreprice = "30000000000" # 25000000000 for amoy
 
 [telemetry]
   metrics = true

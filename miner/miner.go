@@ -59,8 +59,11 @@ type Config struct {
 
 // DefaultConfig contains default settings for miner.
 var DefaultConfig = Config{
-	GasCeil:  30000000,
-	GasPrice: big.NewInt(params.BorDefaultMinerGasPrice), // enforces minimum gas price of 30 gwei in bor
+	GasCeil: 30000000,
+
+	// (PIP-35): Update the gas price to `params.BorDefaultMinerGasPrice` once
+	// the change is applied over all networks.
+	GasPrice: big.NewInt(params.GWei),
 
 	// The default recommit time is chosen as two seconds since
 	// consensus-layer usually will wait a half slot of time(6s)

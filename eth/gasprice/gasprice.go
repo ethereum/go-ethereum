@@ -35,8 +35,9 @@ import (
 const sampleNumber = 3 // Number of transactions sampled in a block
 
 var (
-	DefaultMaxPrice    = big.NewInt(500 * params.GWei)
-	DefaultIgnorePrice = big.NewInt(params.BorDefaultGpoIgnorePrice)
+	DefaultMaxPrice        = big.NewInt(500 * params.GWei)
+	DefaultIgnorePrice     = big.NewInt(2 * params.Wei)
+	DefaultIgnorePriceAmoy *big.Int // (PIP-35): Default ignore price for amoy (to be removed later)
 )
 
 type Config struct {
@@ -100,13 +101,21 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		log.Warn("Sanitizing invalid gasprice oracle price cap", "provided", params.MaxPrice, "updated", maxPrice)
 	}
 
+	// (PIP-35): Enforce the ignore price for amoy. The default value for amoy (which is
+	// an indicator of being on amoy) should be set by the caller.
 	ignorePrice := params.IgnorePrice
-	if ignorePrice == nil || ignorePrice.Int64() != DefaultIgnorePrice.Int64() {
-		ignorePrice = DefaultIgnorePrice
-		log.Warn("Sanitizing invalid gasprice oracle ignore price", "provided", params.IgnorePrice, "updated", ignorePrice)
-	} else if ignorePrice.Int64() > 0 {
-		log.Info("Gasprice oracle is ignoring threshold set", "threshold", ignorePrice)
+	if DefaultIgnorePriceAmoy != nil {
+		if ignorePrice == nil || ignorePrice.Int64() != DefaultIgnorePriceAmoy.Int64() {
+			ignorePrice = DefaultIgnorePriceAmoy
+			log.Warn("Sanitizing invalid gasprice oracle ignore price", "provided", params.IgnorePrice, "updated", ignorePrice)
+		}
+	} else {
+		if ignorePrice == nil || ignorePrice.Int64() <= 0 {
+			ignorePrice = DefaultIgnorePrice
+			log.Warn("Sanitizing invalid gasprice oracle ignore price", "provided", params.IgnorePrice, "updated", ignorePrice)
+		}
 	}
+	log.Info("Gasprice oracle is ignoring threshold set", "threshold", ignorePrice)
 
 	maxHeaderHistory := params.MaxHeaderHistory
 	if maxHeaderHistory < 1 {

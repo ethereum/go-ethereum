@@ -26,6 +26,9 @@ func TestConfigDefault(t *testing.T) {
 
 // assertBorDefaultGasPrice asserts the bor default gas price is set correctly.
 func assertBorDefaultGasPrice(t *testing.T, ethConfig *ethconfig.Config) {
+	// (PIP-35): Only applicable to amoy
+	t.Skip("Skipped because the price enforcement is only applied to amoy")
+
 	assert.NotNil(t, ethConfig)
 	assert.Equal(t, ethConfig.Miner.GasPrice, big.NewInt(params.BorDefaultMinerGasPrice))
 }

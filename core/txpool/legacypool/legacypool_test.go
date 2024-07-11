@@ -62,7 +62,7 @@ func init() {
 	testTxPoolConfig = DefaultConfig
 	testTxPoolConfig.Journal = ""
 	/*
-		Given the introduction of `BorDefaultTxPoolPriceLimit=30gwei`,
+		Given the introduction of `BorDefaultTxPoolPriceLimit=25gwei`,
 		we set `testTxPoolConfig.PriceLimit = 1` to avoid rewriting all `legacypool_test.go` tests,
 		causing code divergence from geth, as this has been widely tested on different networks.
 		Also, `worker_test.go` has been adapted to reflect such changes.
@@ -296,6 +296,9 @@ func (c *testChain) State() (*state.StateDB, error) {
 
 // TestTxPoolDefaultPriceLimit ensures the bor default tx pool price limit is set correctly.
 func TestTxPoolDefaultPriceLimit(t *testing.T) {
+	// (PIP-35): Only applicable to amoy
+	t.Skip("Skipped because the price enforcement is only applied to amoy")
+
 	t.Parallel()
 
 	pool, _ := setupPool()
