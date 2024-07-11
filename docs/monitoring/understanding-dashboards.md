@@ -3,7 +3,7 @@ title: Understanding Geth's dashboard
 description: How to use a dashboard to understand a Geth node's performance
 ---
 
-Our [dashboards page](/docs/monitoring/dashboards.md) explains how to set up a Grafana dashboard for monitoring your Geth node. This page explores the dashboard itself, explaining what the various metrics are and what they mean for the health of a node. Note that the raw data informing the dashboard can be viewed in JSON format in the browser by navigating to the ip address and port passed to `--metrics.addr` and `--metrics.port` (`127.0.0.1:6060` by default).
+Our [dashboards page](/docs/monitoring/dashboards) explains how to set up a Grafana dashboard for monitoring your Geth node. This page explores the dashboard itself, explaining what the various metrics are and what they mean for the health of a node. Note that the raw data informing the dashboard can be viewed in JSON format in the browser by navigating to the ip address and port passed to `--metrics.addr` and `--metrics.port` (`127.0.0.1:6060` by default).
 
 ## What does the dashboard look like?
 
