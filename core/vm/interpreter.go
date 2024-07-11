@@ -18,13 +18,13 @@ package vm
 
 import (
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
+	evmmax_arith "github.com/jwasinger/evmmax-arith"
 )
 
 // Config are the configuration options for the Interpreter
@@ -40,9 +40,49 @@ type Config struct {
 // ScopeContext contains the things that are per-call, such as stack and memory,
 // but not transients like pc and gas
 type ScopeContext struct {
-	Memory   *Memory
-	Stack    *Stack
-	Contract *Contract
+	Memory      *Memory
+	Stack       *Stack
+	Contract    *Contract
+	modExtState fieldAllocs
+}
+
+// fieldAllocs represents the current set of field contexts that have been
+// allocated in the current EVM call frame.  It keeps track of an active
+// context and the total allocated size in bytes of all field elements
+// in all contexts in the current EVM call frame.
+type fieldAllocs struct {
+	alloced     map[uint]*evmmax_arith.FieldContext
+	active      *evmmax_arith.FieldContext
+	allocedSize uint64
+}
+
+// AllocAndSetActive takes an id (number between 0 and 255 inclusive), a
+// big-endian modulus, and the number of field elements to allocate.  Each
+// field element occupies memory equivalent to the size of the modulus padded
+// to the nearest multiple of 8 bytes.
+func (f *fieldAllocs) AllocAndSetActive(id uint, modulus []byte, allocCount int) error {
+	fieldContext, err := evmmax_arith.NewFieldContext(modulus, allocCount)
+	if err != nil {
+		return err
+	}
+	f.alloced[id] = fieldContext
+	f.active = fieldContext
+	f.allocedSize += uint64(fieldContext.AllocedSize())
+	return nil
+}
+
+// AllocSize returns the amount of EVMMAX-allocated memory (in bytes) in the current EVM call context
+func (f *fieldAllocs) AllocSize() uint64 {
+	return f.allocedSize
+}
+
+// SetActive sets a modulus as active in the current EVM call context.  The
+// modulus associated with id is assumed to have already been instantiated by
+// a previous call to AllocAndSetActive
+func (f *fieldAllocs) SetActive(id uint) error {
+	fieldContext := f.alloced[id]
+	f.active = fieldContext
+	return nil
 }
 
 // MemoryData returns the underlying memory slice. Callers must not modify the contents
@@ -109,6 +149,8 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 	case evm.chainRules.IsVerkle:
 		// TODO replace with proper instruction set when fork is specified
 		table = &verkleInstructionSet
+	case evm.chainRules.IsEVMMAX:
+		table = &evmmaxInstructionSet
 	case evm.chainRules.IsCancun:
 		table = &cancunInstructionSet
 	case evm.chainRules.IsShanghai:
@@ -183,9 +225,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		mem         = NewMemory() // bound memory
 		stack       = newstack()  // local stack
 		callContext = &ScopeContext{
-			Memory:   mem,
-			Stack:    stack,
-			Contract: contract,
+			Memory:      mem,
+			Stack:       stack,
+			Contract:    contract,
+			modExtState: fieldAllocs{alloced: make(map[uint]*evmmax_arith.FieldContext)},
 		}
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
@@ -277,7 +320,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			// Consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method can get the proper cost
 			var dynamicCost uint64
-			dynamicCost, err = operation.dynamicGas(in.evm, contract, stack, mem, memorySize)
+			dynamicCost, err = operation.dynamicGas(pc, in.evm, callContext, stack, mem, memorySize)
 			cost += dynamicCost // for tracing
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)

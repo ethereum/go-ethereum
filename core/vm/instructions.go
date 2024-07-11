@@ -954,6 +954,62 @@ func makeLog(size int) executionFunc {
 	}
 }
 
+func opSetupx(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	id, modOffset, modSize, allocSize := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.pop(), scope.Stack.pop()
+	modulus := scope.Memory.GetCopy(modOffset.Uint64(), modSize.Uint64())
+
+	if err := scope.modExtState.AllocAndSetActive(uint(id.Uint64()), modulus, int(allocSize.Uint64())); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func opLoadx(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	dest, source, count := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.pop()
+	destBuf := scope.Memory.GetPtr(dest.Uint64(), count.Uint64()*uint64(scope.modExtState.active.ElemSize()))
+	scope.modExtState.active.Load(destBuf, int(source.Uint64()), int(count.Uint64()))
+	return nil, nil
+}
+
+func opStorex(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	dest, source, count := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.pop()
+	srcBuf := scope.Memory.GetPtr(source.Uint64(), count.Uint64()*uint64(scope.modExtState.active.ElemSize()))
+	return nil, scope.modExtState.active.Store(uint(dest.Uint64()), uint(count.Uint64()), srcBuf)
+}
+
+func extractEVMMAXImmediateInputs(pc uint64, code []byte) (out, outStride, x, xStride, y, yStride, count uint) {
+	_ = code[pc+7]
+	out = uint(code[pc+1])
+	outStride = uint(code[pc+2])
+	x = uint(code[pc+3])
+	xStride = uint(code[pc+4])
+	y = uint(code[pc+5])
+	yStride = uint(code[pc+6])
+	count = uint(code[pc+7])
+	return out, outStride, x, xStride, y, yStride, count
+}
+
+func opAddmodx(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	out, outStride, x, xStride, y, yStride, count := extractEVMMAXImmediateInputs(*pc, scope.Contract.Code)
+	*pc += 7
+	scope.modExtState.active.AddMod(out, outStride, x, xStride, y, yStride, count)
+	return nil, nil
+}
+
+func opSubmodx(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	out, outStride, x, xStride, y, yStride, count := extractEVMMAXImmediateInputs(*pc, scope.Contract.Code)
+	*pc += 7
+	scope.modExtState.active.SubMod(out, outStride, x, xStride, y, yStride, count)
+	return nil, nil
+}
+
+func opMulmodx(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	out, outStride, x, xStride, y, yStride, count := extractEVMMAXImmediateInputs(*pc, scope.Contract.Code)
+	*pc += 7
+	scope.modExtState.active.MulMod(out, outStride, x, xStride, y, yStride, count)
+	return nil, nil
+}
+
 // opPush1 is a specialized version of pushN
 func opPush1(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (

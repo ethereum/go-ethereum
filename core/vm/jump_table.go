@@ -24,9 +24,9 @@ import (
 
 type (
 	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
-	gasFunc       func(*EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
+	gasFunc       func(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, memory *Memory, evmMemorySize uint64) (uint64, error) // last parameters are the requested memory sizes as uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
-	memorySizeFunc func(*Stack) (size uint64, overflow bool)
+	memorySizeFunc func(*Stack) (memSize uint64, overflow bool)
 )
 
 type operation struct {
@@ -59,6 +59,7 @@ var (
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
+	evmmaxInstructionSet           = newEVMMAXInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
 	verkleInstructionSet           = newVerkleInstructionSet()
 	pragueEOFInstructionSet        = newPragueEOFInstructionSet()
@@ -99,6 +100,49 @@ func newPragueEOFInstructionSet() JumpTable {
 	instructionSet := newCancunInstructionSet()
 	enableEOF(&instructionSet)
 	return validate(instructionSet)
+}
+
+func newEVMMAXInstructionSet() JumpTable {
+	instructionSet := newCancunInstructionSet()
+	instructionSet[SETUPX] = &operation{
+		execute:    opSetupx,
+		dynamicGas: gasSetupx,
+		minStack:   minStack(4, 0),
+		maxStack:   maxStack(4, 0),
+	}
+	instructionSet[LOADX] = &operation{
+		execute:     opLoadx,
+		constantGas: GasQuickStep,
+		dynamicGas:  gasLoadx,
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+	}
+	instructionSet[STOREX] = &operation{
+		execute:     opStorex,
+		constantGas: GasQuickStep,
+		dynamicGas:  gasStorex,
+		minStack:    minStack(3, 0),
+		maxStack:    maxStack(3, 0),
+	}
+	instructionSet[ADDMODX] = &operation{
+		execute:    opAddmodx,
+		dynamicGas: gasEVMMAXArithOp,
+		minStack:   minStack(0, 0),
+		maxStack:   maxStack(0, 0),
+	}
+	instructionSet[SUBMODX] = &operation{
+		execute:    opSubmodx,
+		dynamicGas: gasEVMMAXArithOp,
+		minStack:   minStack(0, 0),
+		maxStack:   maxStack(0, 0),
+	}
+	instructionSet[MULMODX] = &operation{
+		execute:    opMulmodx,
+		dynamicGas: gasEVMMAXArithOp,
+		minStack:   minStack(0, 0),
+		maxStack:   maxStack(0, 0),
+	}
+	return instructionSet
 }
 
 func newCancunInstructionSet() JumpTable {
