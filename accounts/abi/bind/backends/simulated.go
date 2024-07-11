@@ -66,7 +66,8 @@ type SimulatedBackend struct {
 	pendingState    *state.StateDB // Currently pending state that will be the active on request
 	pendingReceipts types.Receipts // Currently receipts for the pending block
 
-	events *filters.EventSystem // Event system for filtering log events live
+	events       *filters.EventSystem  // for filtering log events live
+	filterSystem *filters.FilterSystem // for filtering database logs
 
 	config *params.ChainConfig
 }
@@ -95,9 +96,7 @@ func SimulateWalletAddressAndSignFn() (common.Address, func(account accounts.Acc
 
 // XDC simulated backend for testing purpose.
 func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfig *params.ChainConfig) *SimulatedBackend {
-	// database := ethdb.NewMemDatabase()
 	database := rawdb.NewMemoryDatabase()
-
 	genesis := core.Genesis{
 		GasLimit:  gasLimit, // need this big, support initial smart contract
 		Config:    chainConfig,
@@ -128,7 +127,11 @@ func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfi
 		blockchain: blockchain,
 		config:     genesis.Config,
 	}
-	backend.events = filters.NewEventSystem(&filterBackend{database, blockchain, backend}, false)
+
+	filterBackend := &filterBackend{database, blockchain, backend}
+	backend.filterSystem = filters.NewFilterSystem(filterBackend, filters.Config{})
+	backend.events = filters.NewEventSystem(backend.filterSystem, false)
+
 	blockchain.Client = backend
 	backend.rollback()
 	return backend
@@ -148,7 +151,11 @@ func NewSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
 		blockchain: blockchain,
 		config:     genesis.Config,
 	}
-	backend.events = filters.NewEventSystem(&filterBackend{database, blockchain, backend}, false)
+
+	filterBackend := &filterBackend{database, blockchain, backend}
+	backend.filterSystem = filters.NewFilterSystem(filterBackend, filters.Config{})
+	backend.events = filters.NewEventSystem(backend.filterSystem, false)
+
 	backend.rollback()
 	return backend
 }
@@ -423,7 +430,7 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query XDPoSChain.Filt
 	var filter *filters.Filter
 	if query.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
-		filter = filters.NewBlockFilter(&filterBackend{b.database, b.blockchain, b}, *query.BlockHash, query.Addresses, query.Topics)
+		filter = b.filterSystem.NewBlockFilter(*query.BlockHash, query.Addresses, query.Topics)
 	} else {
 		// Initialize unset filter boundaried to run from genesis to chain head
 		from := int64(0)
@@ -435,7 +442,7 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query XDPoSChain.Filt
 			to = query.ToBlock.Int64()
 		}
 		// Construct the range filter
-		filter = filters.NewRangeFilter(&filterBackend{b.database, b.blockchain, b}, from, to, query.Addresses, query.Topics)
+		filter = b.filterSystem.NewRangeFilter(from, to, query.Addresses, query.Topics)
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
@@ -552,15 +559,8 @@ func (fb *filterBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts
 	return fb.backend.pendingBlock, fb.backend.pendingReceipts
 }
 
-func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	receipts := core.GetBlockReceipts(fb.db, hash, core.GetBlockNumber(fb.db, hash))
-	if receipts == nil {
-		return nil, nil
-	}
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
+func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
+	logs := rawdb.ReadLogs(fb.db, hash, number)
 	return logs, nil
 }
 

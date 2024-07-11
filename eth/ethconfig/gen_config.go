@@ -31,6 +31,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		MinerThreads            int            `toml:",omitempty"`
 		ExtraData               []byte         `toml:",omitempty"`
 		GasPrice                *big.Int
+		FilterLogCacheSize      int
 		Ethash                  ethash.Config
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
@@ -55,6 +56,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.MinerThreads = c.MinerThreads
 	enc.ExtraData = c.ExtraData
 	enc.GasPrice = c.GasPrice
+	enc.FilterLogCacheSize = c.FilterLogCacheSize
 	enc.Ethash = c.Ethash
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
@@ -83,6 +85,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		MinerThreads            *int            `toml:",omitempty"`
 		ExtraData               []byte          `toml:",omitempty"`
 		GasPrice                *big.Int
+		FilterLogCacheSize      *int
 		Ethash                  *ethash.Config
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
@@ -139,6 +142,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.GasPrice != nil {
 		c.GasPrice = dec.GasPrice
+	}
+	if dec.FilterLogCacheSize != nil {
+		c.FilterLogCacheSize = *dec.FilterLogCacheSize
 	}
 	if dec.Ethash != nil {
 		c.Ethash = *dec.Ethash

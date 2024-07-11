@@ -190,7 +190,7 @@ func (s *LightEthereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewFilterAPI(s.ApiBackend, true, 5*time.Minute),
+			Service:   filters.NewFilterAPI(filters.NewFilterSystem(s.ApiBackend, filters.Config{LogCacheSize: s.config.FilterLogCacheSize}), true),
 			Public:    true,
 		}, {
 			Namespace: "net",

@@ -233,17 +233,8 @@ func (b *EthApiBackend) GetReceipts(ctx context.Context, blockHash common.Hash) 
 	return core.GetBlockReceipts(b.eth.chainDb, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash)), nil
 }
 
-func (b *EthApiBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	db := b.eth.ChainDb()
-	number := rawdb.ReadHeaderNumber(db, blockHash)
-	if number == nil {
-		return nil, errors.New("failed to get block number from hash")
-	}
-	logs := rawdb.ReadLogs(db, blockHash, *number)
-	if logs == nil {
-		return nil, errors.New("failed to get logs for block")
-	}
-	return logs, nil
+func (b *EthApiBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
+	return rawdb.ReadLogs(b.eth.chainDb, hash, number), nil
 }
 
 func (b *EthApiBackend) GetTd(blockHash common.Hash) *big.Int {

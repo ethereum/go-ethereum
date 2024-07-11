@@ -35,6 +35,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/filters"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -103,6 +104,10 @@ type Backend interface {
 	GetBlocksHashCache(blockNr uint64) []common.Hash
 	AreTwoBlockSamePath(newBlock common.Hash, oldBlock common.Hash) bool
 	GetOrderNonce(address common.Hash) (uint64, error)
+
+	// eth/filters needs to be initialized from this backend type, so methods needed by
+	// it must also be included here.
+	filters.Backend
 }
 
 func GetAPIs(apiBackend Backend, chainReader consensus.ChainReader) []rpc.API {
