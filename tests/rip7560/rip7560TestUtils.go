@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/status-im/keycard-go/hexutils"
 	"math/big"
@@ -45,6 +46,31 @@ func newTestContextBuilder(t *testing.T) *testContextBuilder {
 	}
 }
 
+// return a contract code that will deploy the given code
+func create2_contract(deployedCode []byte) []byte {
+
+	return returnWithData(deployedCode)
+}
+
+// return the generated address when deploying the given code
+func create2_addr(deployer common.Address, deployedCode []byte) common.Address {
+
+	contractCode := create2_contract(deployedCode)
+	data := createCode(0xff, deployer.Bytes(), common.Hash{}, crypto.Keccak256(contractCode))
+	return common.BytesToAddress(crypto.Keccak256(data))
+}
+
+// generate code to call create2
+// note: parameter is the deployed code, not the full contract code
+// always use zero value and zero salt.
+func create2(deployedCode []byte) []byte {
+	contractCode := create2_contract(deployedCode)
+	return createCode(
+		copyToMemory(contractCode, 0),
+		push(0), push(len(contractCode)), push(0), push(0), vm.CREATE2,
+	)
+}
+
 func (tb *testContextBuilder) build() *testContext {
 	genesis := core.DeveloperGenesisBlock(10_000_000, &common.Address{})
 	genesis.Timestamp = 100
@@ -69,7 +95,6 @@ func (tt *testContextBuilder) withAccount(addr string, balance int64) *testConte
 	tt.genesisAlloc[common.HexToAddress(addr)] = types.Account{Balance: big.NewInt(balance)}
 	return tt
 }
-
 func (tt *testContextBuilder) withCode(addr string, code []byte, balance int64) *testContextBuilder {
 	if len(code) == 0 {
 		tt.genesisAlloc[common.HexToAddress(addr)] = types.Account{
@@ -113,8 +138,9 @@ func copyToMemory(data []byte, offset uint) []byte {
 	}
 
 	if len(data) > 0 {
-		PUSHn := byte(int(vm.PUSH0) + len(data))
-		ret = append(ret, createCode(PUSHn, data, vm.PUSH2, uint16(offset), vm.MSTORE)...)
+		//push data up, as EVM is big-endian
+		v := common.RightPadBytes(data, 32)
+		ret = append(ret, createCode(vm.PUSH32, v, vm.PUSH2, uint16(offset), vm.MSTORE)...)
 	}
 	return ret
 }
@@ -160,6 +186,10 @@ func createCode(items ...interface{}) []byte {
 				panic(fmt.Errorf("int defaults to int8 (byte). use int16, etc: %v", v))
 			}
 			buffer.WriteByte(byte(v))
+		case common.Hash:
+			buffer.Write(v.Bytes())
+		case common.Address:
+			buffer.Write(v.Bytes())
 		default:
 			// should be a compile-time error...
 			panic(fmt.Errorf("unsupported type: %T", v))

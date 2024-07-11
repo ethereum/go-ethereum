@@ -177,8 +177,9 @@ func CheckNonceRip7560(tx *types.Rip7560AccountAbstractionTx, st *state.StateDB)
 
 func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, cfg vm.Config) (*ValidationPhaseResult, error) {
 	blockContext := NewEVMBlockContext(header, bc, author)
+	sender := tx.Rip7560TransactionData().Sender
 	txContext := vm.TxContext{
-		Origin:   *tx.Rip7560TransactionData().Sender,
+		Origin:   *sender,
 		GasPrice: tx.GasFeeCap(),
 	}
 	evm := vm.NewEVM(blockContext, txContext, statedb, chainConfig, cfg)
@@ -186,16 +187,25 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 	deployerMsg := prepareDeployerMessage(tx, chainConfig)
 	var deploymentUsedGas uint64
 	if deployerMsg != nil {
-		resultDeployer, err := ApplyMessage(evm, deployerMsg, gp)
+		var err error
+		var resultDeployer *ExecutionResult
+		if statedb.GetCodeSize(*sender) != 0 {
+			err = errors.New("sender already deployed")
+		} else {
+			resultDeployer, err = ApplyMessage(evm, deployerMsg, gp)
+		}
+		if err == nil && resultDeployer != nil {
+			err = resultDeployer.Err
+			deploymentUsedGas = resultDeployer.UsedGas
+		}
+		if err == nil && statedb.GetCodeSize(*sender) == 0 {
+			err = errors.New("sender not deployed")
+		}
 		if err != nil {
-			return nil, err
+			// TODO: bubble up the inner error message to the user, if possible
+			return nil, fmt.Errorf("account deployment failed: %v", err)
 		}
 		statedb.IntermediateRoot(true)
-		if resultDeployer.Failed() {
-			// TODO: bubble up the inner error message to the user, if possible
-			return nil, errors.New("account deployment  failed - invalid transaction")
-		}
-		deploymentUsedGas = resultDeployer.UsedGas
 	}
 
 	/*** Account Validation Frame ***/
@@ -338,19 +348,18 @@ func ApplyRip7560ExecutionPhase(config *params.ChainConfig, vpr *ValidationPhase
 
 func prepareDeployerMessage(baseTx *types.Transaction, config *params.ChainConfig) *Message {
 	tx := baseTx.Rip7560TransactionData()
-	if len(tx.DeployerData) < 20 {
+	if tx.Deployer == nil {
 		return nil
 	}
-	var deployerAddress common.Address = [20]byte(tx.DeployerData[0:20])
 	return &Message{
 		From:              config.DeployerCallerAddress,
-		To:                &deployerAddress,
+		To:                tx.Deployer,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.ValidationGas,
 		GasPrice:          tx.GasFeeCap,
 		GasFeeCap:         tx.GasFeeCap,
 		GasTipCap:         tx.GasTipCap,
-		Data:              tx.DeployerData[20:],
+		Data:              tx.DeployerData,
 		AccessList:        make(types.AccessList, 0),
 		SkipAccountChecks: true,
 		IsRip7560Frame:    true,
