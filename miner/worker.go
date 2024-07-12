@@ -128,6 +128,10 @@ type worker struct {
 	coinbase common.Address
 	extra    []byte
 
+	snapshotMu       sync.RWMutex // The lock used to protect the block snapshot and state snapshot
+	snapshotBlock    *types.Block
+	snapshotReceipts types.Receipts
+
 	currentMu sync.Mutex
 	current   *Work
 
@@ -217,6 +221,14 @@ func (self *worker) pendingBlock() *types.Block {
 		)
 	}
 	return self.current.Block
+}
+
+// pendingBlockAndReceipts returns pending block and corresponding receipts.
+func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	// return a snapshot to avoid contention on currentMu mutex
+	w.snapshotMu.RLock()
+	defer w.snapshotMu.RUnlock()
+	return w.snapshotBlock, w.snapshotReceipts
 }
 
 func (self *worker) start() {
