@@ -58,7 +58,7 @@ var (
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
 	curieInstructionSet            = newCurieInstructionSet()
-	descartesInstructionSet        = newDescartesInstructionSet()
+	darwinInstructionSet           = newDarwinInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -82,9 +82,9 @@ func validate(jt JumpTable) JumpTable {
 	return jt
 }
 
-// newDescartesInstructionSet returns the frontier, homestead, byzantium,
-// contantinople, istanbul, petersburg, berlin, london, shanghai, curie, and descartes instructions.
-func newDescartesInstructionSet() JumpTable {
+// newDarwinInstructionSet returns the frontier, homestead, byzantium,
+// contantinople, istanbul, petersburg, berlin, london, shanghai, curie, and darwin instructions.
+func newDarwinInstructionSet() JumpTable {
 	instructionSet := newCurieInstructionSet()
 	return instructionSet
 }

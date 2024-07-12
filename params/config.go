@@ -168,7 +168,7 @@ var (
 		ArchimedesBlock:               big.NewInt(0),
 		BernoulliBlock:                big.NewInt(0),
 		CurieBlock:                    big.NewInt(0),
-		DescartesBlock:                big.NewInt(0),
+		DarwinTime:                    newUint64(0),
 		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           nil,
@@ -204,7 +204,7 @@ var (
 		ArchimedesBlock:     big.NewInt(2646311),
 		BernoulliBlock:      nil,
 		CurieBlock:          nil,
-		DescartesBlock:      nil,
+		DarwinTime:          nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -242,7 +242,7 @@ var (
 		ArchimedesBlock:     big.NewInt(0),
 		BernoulliBlock:      big.NewInt(3747132),
 		CurieBlock:          big.NewInt(4740239),
-		DescartesBlock:      nil,
+		DarwinTime:          nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -280,7 +280,7 @@ var (
 		ArchimedesBlock:     big.NewInt(0),
 		BernoulliBlock:      big.NewInt(5220340),
 		CurieBlock:          big.NewInt(7096836),
-		DescartesBlock:      nil,
+		DarwinTime:          nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -351,7 +351,7 @@ var (
 		ArchimedesBlock:               big.NewInt(0),
 		BernoulliBlock:                big.NewInt(0),
 		CurieBlock:                    big.NewInt(0),
-		DescartesBlock:                big.NewInt(0),
+		DarwinTime:                    newUint64(0),
 		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           nil,
@@ -397,7 +397,7 @@ var (
 		ArchimedesBlock:               big.NewInt(0),
 		BernoulliBlock:                big.NewInt(0),
 		CurieBlock:                    big.NewInt(0),
-		DescartesBlock:                big.NewInt(0),
+		DarwinTime:                    newUint64(0),
 		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           &common.Address{123},
@@ -441,7 +441,7 @@ var (
 		ArchimedesBlock:               big.NewInt(0),
 		BernoulliBlock:                big.NewInt(0),
 		CurieBlock:                    big.NewInt(0),
-		DescartesBlock:                big.NewInt(0),
+		DarwinTime:                    newUint64(0),
 		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           nil,
@@ -532,7 +532,6 @@ type ChainConfig struct {
 	ArchimedesBlock *big.Int `json:"archimedesBlock,omitempty"` // Archimedes switch block (nil = no fork, 0 = already on archimedes)
 	BernoulliBlock  *big.Int `json:"bernoulliBlock,omitempty"`  // Bernoulli switch block (nil = no fork, 0 = already on bernoulli)
 	CurieBlock      *big.Int `json:"curieBlock,omitempty"`      // Curie switch block (nil = no fork, 0 = already on curie)
-	DescartesBlock  *big.Int `json:"descartesBlock,omitempty"`  // Descartes switch block (nil = no fork, 0 = already on descartes)
 
 	// Fork scheduling was switched from blocks to timestamps here
 
@@ -540,6 +539,7 @@ type ChainConfig struct {
 	CancunTime   *uint64 `json:"cancunTime,omitempty"`   // Cancun switch time (nil = no fork, 0 = already on cancun)
 	PragueTime   *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
 	VerkleTime   *uint64 `json:"verkleTime,omitempty"`   // Verkle switch time (nil = no fork, 0 = already on verkle)
+	DarwinTime   *uint64 `json:"darwinTime,omitempty"`   // Darwin switch time (nil = no fork, 0 = already on darwin)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -717,9 +717,6 @@ func (c *ChainConfig) Description() string {
 	if c.CurieBlock != nil {
 		banner += fmt.Sprintf(" - Curie:                       #%-8v\n", c.CurieBlock) // TODO: add Curie execution-specs
 	}
-	if c.DescartesBlock != nil {
-		banner += fmt.Sprintf(" - Descartes:                   #%-8v\n", c.DescartesBlock) // TODO: add Descartes execution-specs
-	}
 	banner += "\n"
 
 	// Add a special section for the merge as it's non-obvious
@@ -750,6 +747,9 @@ func (c *ChainConfig) Description() string {
 	}
 	if c.VerkleTime != nil {
 		banner += fmt.Sprintf(" - Verkle:                      @%-10v\n", *c.VerkleTime)
+	}
+	if c.DarwinTime != nil {
+		banner += fmt.Sprintf(" - Darwin:                      @%-10v\n", *c.DarwinTime)
 	}
 	banner += "\n"
 
@@ -875,9 +875,9 @@ func (c *ChainConfig) IsCurie(num *big.Int) bool {
 	return isBlockForked(c.CurieBlock, num)
 }
 
-// IsDescartes returns whether num is either equal to the Descartes fork block or greater.
-func (c *ChainConfig) IsDescartes(num *big.Int) bool {
-	return isBlockForked(c.DescartesBlock, num)
+// IsDarwin returns whether num is either equal to the Darwin fork block or greater.
+func (c *ChainConfig) IsDarwin(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.DarwinTime, time)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -939,7 +939,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "bernoulliBlock", block: c.BernoulliBlock, optional: true},
 		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
 		{name: "curieBlock", block: c.CurieBlock, optional: true},
-		{name: "descartesBlock", block: c.DescartesBlock, optional: true},
+		{name: "darwinTime", timestamp: c.DarwinTime, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {
@@ -1058,8 +1058,8 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkBlockIncompatible(c.CurieBlock, newcfg.CurieBlock, headNumber) {
 		return newBlockCompatError("Curie fork block", c.CurieBlock, newcfg.CurieBlock)
 	}
-	if isForkBlockIncompatible(c.DescartesBlock, newcfg.DescartesBlock, headNumber) {
-		return newBlockCompatError("Descartes fork block", c.DescartesBlock, newcfg.DescartesBlock)
+	if isForkTimestampIncompatible(c.DarwinTime, newcfg.DarwinTime, headTimestamp) {
+		return newTimestampCompatError("Darwin fork timestamp", c.DarwinTime, newcfg.DarwinTime)
 	}
 	return nil
 }
@@ -1207,7 +1207,7 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
 	IsVerkle                                                bool
-	IsArchimedes, IsBernoulli, IsCurie, IsDescartes         bool
+	IsArchimedes, IsBernoulli, IsCurie, IsDarwin            bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1236,6 +1236,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsArchimedes:     c.IsArchimedes(num),
 		IsBernoulli:      c.IsBernoulli(num),
 		IsCurie:          c.IsCurie(num),
-		IsDescartes:      c.IsDescartes(num),
+		IsDarwin:         c.IsDarwin(num, timestamp),
 	}
 }

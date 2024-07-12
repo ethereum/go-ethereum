@@ -4727,7 +4727,7 @@ func TestCurieTransition(t *testing.T) {
 	b, _ := json.Marshal(params.AllEthashProtocolChanges)
 	json.Unmarshal(b, &config)
 	config.CurieBlock = big.NewInt(2)
-	config.DescartesBlock = nil
+	config.DarwinTime = nil
 
 	var (
 		db      = rawdb.NewMemoryDatabase()
