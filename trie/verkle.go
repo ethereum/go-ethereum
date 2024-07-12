@@ -247,6 +247,7 @@ func (t *VerkleTrie) RollBackAccount(addr common.Address) error {
 			key = utils.CodeChunkKeyWithEvaluatedAddress(evaluatedAddr, uint256.NewInt(chunknr))
 		}
 
+		key[31] = byte(groupOffset)
 		_, err = root.Delete(key[:], t.nodeResolver)
 		if err != nil {
 			return fmt.Errorf("RollbackContractCode (addr=%x) error: %w", addr[:], err)
