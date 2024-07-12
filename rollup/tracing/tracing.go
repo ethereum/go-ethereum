@@ -539,7 +539,7 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 			if _, existed := env.StorageProofs[addr.String()][slot.String()]; !existed {
 				if trie, err := statedb.GetStorageTrieForProof(addr); err != nil {
 					log.Error("Storage proof for intrinstic address not available", "error", err, "address", addr)
-				} else if proof, _ := statedb.GetSecureTrieProof(trie, slot); err != nil {
+				} else if proof, err := statedb.GetSecureTrieProof(trie, slot); err != nil {
 					log.Error("Get storage proof for intrinstic address failed", "error", err, "address", addr, "slot", slot)
 				} else {
 					env.StorageProofs[addr.String()][slot.String()] = types.WrapProof(proof)
