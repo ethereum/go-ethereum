@@ -107,6 +107,7 @@ type Backend interface {
 
 	// eth/filters needs to be initialized from this backend type, so methods needed by
 	// it must also be included here.
+	GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error)
 	filters.Backend
 }
 

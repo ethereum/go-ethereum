@@ -29,6 +29,22 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
+// WriteCanonicalHash stores the hash assigned to a canonical block number.
+func WriteCanonicalHash(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	if err := db.Put(headerHashKey(number), hash.Bytes()); err != nil {
+		log.Crit("Failed to store number to hash mapping", "err", err)
+	}
+}
+
+// WriteHeaderNumber stores the hash->number mapping.
+func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
+	key := headerNumberKey(hash)
+	enc := encodeBlockNumber(number)
+	if err := db.Put(key, enc); err != nil {
+		log.Crit("Failed to store hash to number mapping", "err", err)
+	}
+}
+
 // ReadHeaderNumber returns the header number assigned to a hash.
 func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(headerNumberKey(hash))
@@ -37,6 +53,13 @@ func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	}
 	number := binary.BigEndian.Uint64(data)
 	return &number
+}
+
+// WriteHeadBlockHash stores the head block's hash.
+func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
+		log.Crit("Failed to store last block's hash", "err", err)
+	}
 }
 
 // ReadBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
@@ -98,6 +121,27 @@ func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *t
 		log.Crit("Failed to RLP encode body", "err", err)
 	}
 	WriteBodyRLP(db, hash, number, data)
+}
+
+// WriteHeader stores a block header into the database and also stores the hash-
+// to-number mapping.
+func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
+	var (
+		hash   = header.Hash()
+		number = header.Number.Uint64()
+	)
+	// Write the hash -> number mapping
+	WriteHeaderNumber(db, hash, number)
+
+	// Write the encoded header
+	data, err := rlp.EncodeToBytes(header)
+	if err != nil {
+		log.Crit("Failed to RLP encode header", "err", err)
+	}
+	key := headerKey(number, hash)
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
 }
 
 // ReadReceiptsRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
@@ -195,6 +239,12 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rec
 	}
 }
 
+// WriteBlock serializes a block into the database, header and body separately.
+func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
+	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
+	WriteHeader(db, block.Header())
+}
+
 // storedReceiptRLP is the storage encoding of a receipt.
 // Re-definition in core/types/receipt.go.
 type storedReceiptRLP struct {
@@ -248,9 +298,9 @@ func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, t
 	return nil
 }
 
-// ReadLogs retrieves the logs for all transactions in a block. The log fields
-// are populated with metadata. In case the receipts or the block body
-// are not found, a nil is returned.
+// ReadLogs retrieves the logs for all transactions in a block. In case
+// receipts is not found, a nil is returned.
+// Note: ReadLogs does not derive unstored log fields.
 func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
@@ -263,15 +313,6 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 		return nil
 	}
 
-	body := ReadBody(db, hash, number)
-	if body == nil {
-		log.Error("Missing body but have receipt", "hash", hash, "number", number)
-		return nil
-	}
-	if err := deriveLogFields(receipts, hash, number, body.Transactions); err != nil {
-		log.Error("Failed to derive block receipts fields", "hash", hash, "number", number, "err", err)
-		return nil
-	}
 	logs := make([][]*types.Log, len(receipts))
 	for i, receipt := range receipts {
 		logs[i] = receipt.Logs
