@@ -104,7 +104,6 @@ func TestVerkleRollBack(t *testing.T) {
 				t.Fatalf("Failed to update account, %v", err)
 			}
 		}
-
 		// create more than 128 chunks of code
 		code := make([]byte, 129*32)
 		for i := 0; i < len(code); i += 2 {
@@ -113,6 +112,7 @@ func TestVerkleRollBack(t *testing.T) {
 		}
 		hash := crypto.Keccak256Hash(code)
 		if err := tr.UpdateContractCode(addr, hash, code); err != nil {
+			t.Fatalf("Failed to update contract, %v", err)
 		}
 	}
 

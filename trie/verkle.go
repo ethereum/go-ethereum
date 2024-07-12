@@ -202,58 +202,48 @@ func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
 // RollBackAccount removes the account info + code from the tree, unlike DeleteAccount
 // that will overwrite it with 0s. The first 64 storage slots are also removed.
 func (t *VerkleTrie) RollBackAccount(addr common.Address) error {
-	evaluatedAddr := t.cache.Get(addr.Bytes())
-	codesizekey := utils.CodeSizeKeyWithEvaluatedAddress(evaluatedAddr)
-	codesizeBytes, err := t.root.Get(codesizekey, t.nodeResolver)
+	var (
+		evaluatedAddr = t.cache.Get(addr.Bytes())
+		codeSizeKey   = utils.CodeSizeKeyWithEvaluatedAddress(evaluatedAddr)
+	)
+	codeSizeBytes, err := t.root.Get(codeSizeKey, t.nodeResolver)
 	if err != nil {
 		return fmt.Errorf("rollback: error finding code size: %w", err)
 	}
-	codesize := binary.LittleEndian.Uint64(codesizeBytes)
+	codeSize := binary.LittleEndian.Uint64(codeSizeBytes)
 
 	// Delete the account header + first 64 slots + first 128 code chunks
+	key := common.CopyBytes(codeSizeKey)
 	for i := 0; i < verkle.NodeWidth; i++ {
-		codesizekey[31] = byte(i)
+		key[31] = byte(i)
 
 		// this is a workaround to avoid deleting nil leaves, the lib needs to be
 		// fixed to be able to handle that
-		v, err := t.root.Get(codesizekey, t.nodeResolver)
+		v, err := t.root.Get(key, t.nodeResolver)
 		if err != nil {
 			return fmt.Errorf("error rolling back account header: %w", err)
 		}
 		if len(v) == 0 {
 			continue
 		}
-
-		_, err = t.root.Delete(codesizekey, t.nodeResolver)
+		_, err = t.root.Delete(key, t.nodeResolver)
 		if err != nil {
 			return fmt.Errorf("error rolling back account header: %w", err)
 		}
 	}
-
-	var root *verkle.InternalNode
-	switch r := t.root.(type) {
-	case *verkle.InternalNode:
-		root = r
-	default:
-		return errInvalidRootType
-	}
-
 	// Delete all further code
-	var key []byte
-	for i, chunknr := uint64(32*128), uint64(128); i < codesize; i, chunknr = i+32, chunknr+1 {
+	for i, chunknr := uint64(32*128), uint64(128); i < codeSize; i, chunknr = i+32, chunknr+1 {
 		// evaluate group key at the start of a new group
 		groupOffset := (chunknr + 128) % 256
 		if groupOffset == 0 {
 			key = utils.CodeChunkKeyWithEvaluatedAddress(evaluatedAddr, uint256.NewInt(chunknr))
 		}
-
 		key[31] = byte(groupOffset)
-		_, err = root.Delete(key[:], t.nodeResolver)
+		_, err = t.root.Delete(key[:], t.nodeResolver)
 		if err != nil {
-			return fmt.Errorf("RollbackContractCode (addr=%x) error: %w", addr[:], err)
+			return fmt.Errorf("error deleting code chunk (addr=%x) error: %w", addr[:], err)
 		}
 	}
-
 	return nil
 }
 
