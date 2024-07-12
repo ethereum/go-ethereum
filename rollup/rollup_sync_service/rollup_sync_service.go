@@ -388,18 +388,38 @@ func (s *RollupSyncService) decodeChunkBlockRanges(txData []byte) ([]*rawdb.Chun
 		return nil, fmt.Errorf("failed to unpack transaction data using ABI, tx data: %v, err: %w", txData, err)
 	}
 
-	type commitBatchArgs struct {
-		Version                uint8
-		ParentBatchHeader      []byte
-		Chunks                 [][]byte
-		SkippedL1MessageBitmap []byte
-	}
-	var args commitBatchArgs
-	if err = method.Inputs.Copy(&args, values); err != nil {
-		return nil, fmt.Errorf("failed to decode calldata into commitBatch args, values: %+v, err: %w", values, err)
+	if method.Name == "commitBatch" {
+		type commitBatchArgs struct {
+			Version                uint8
+			ParentBatchHeader      []byte
+			Chunks                 [][]byte
+			SkippedL1MessageBitmap []byte
+		}
+
+		var args commitBatchArgs
+		if err = method.Inputs.Copy(&args, values); err != nil {
+			return nil, fmt.Errorf("failed to decode calldata into commitBatch args, values: %+v, err: %w", values, err)
+		}
+
+		return decodeBlockRangesFromEncodedChunks(encoding.CodecVersion(args.Version), args.Chunks)
+	} else if method.Name == "commitBatchWithBlobProof" {
+		type commitBatchWithBlobProofArgs struct {
+			Version                uint8
+			ParentBatchHeader      []byte
+			Chunks                 [][]byte
+			SkippedL1MessageBitmap []byte
+			BlobDataProof          []byte
+		}
+
+		var args commitBatchWithBlobProofArgs
+		if err = method.Inputs.Copy(&args, values); err != nil {
+			return nil, fmt.Errorf("failed to decode calldata into commitBatchWithBlobProofArgs args, values: %+v, err: %w", values, err)
+		}
+
+		return decodeBlockRangesFromEncodedChunks(encoding.CodecVersion(args.Version), args.Chunks)
 	}
 
-	return decodeBlockRangesFromEncodedChunks(encoding.CodecVersion(args.Version), args.Chunks)
+	return nil, fmt.Errorf("unexpected method name: %v", method.Name)
 }
 
 // validateBatch verifies the consistency between the L1 contract and L2 node data.

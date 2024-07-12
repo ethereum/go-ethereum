@@ -209,6 +209,70 @@ func TestDecodeChunkRangesCodecv2(t *testing.T) {
 	}
 }
 
+func TestDecodeChunkRangesCodecv3(t *testing.T) {
+	scrollChainABI, err := scrollChainMetaData.GetAbi()
+	require.NoError(t, err)
+
+	service := &RollupSyncService{
+		scrollChainABI: scrollChainABI,
+	}
+
+	data, err := os.ReadFile("./testdata/commitBatchWithBlobProof_input_codecv3.json")
+	require.NoError(t, err, "Failed to read json file")
+
+	type tx struct {
+		Input string `json:"input"`
+	}
+	var commitBatch tx
+	err = json.Unmarshal(data, &commitBatch)
+	require.NoError(t, err, "Failed to unmarshal transaction json")
+
+	testTxData, err := hex.DecodeString(commitBatch.Input[2:])
+	if err != nil {
+		t.Fatalf("Failed to decode string: %v", err)
+	}
+
+	ranges, err := service.decodeChunkBlockRanges(testTxData)
+	if err != nil {
+		t.Fatalf("Failed to decode chunk ranges: %v", err)
+	}
+
+	expectedRanges := []*rawdb.ChunkBlockRange{
+		{StartBlockNumber: 1, EndBlockNumber: 9},
+		{StartBlockNumber: 10, EndBlockNumber: 20},
+		{StartBlockNumber: 21, EndBlockNumber: 21},
+		{StartBlockNumber: 22, EndBlockNumber: 22},
+		{StartBlockNumber: 23, EndBlockNumber: 23},
+		{StartBlockNumber: 24, EndBlockNumber: 24},
+		{StartBlockNumber: 25, EndBlockNumber: 25},
+		{StartBlockNumber: 26, EndBlockNumber: 26},
+		{StartBlockNumber: 27, EndBlockNumber: 27},
+		{StartBlockNumber: 28, EndBlockNumber: 28},
+		{StartBlockNumber: 29, EndBlockNumber: 29},
+		{StartBlockNumber: 30, EndBlockNumber: 30},
+		{StartBlockNumber: 31, EndBlockNumber: 31},
+		{StartBlockNumber: 32, EndBlockNumber: 32},
+		{StartBlockNumber: 33, EndBlockNumber: 33},
+		{StartBlockNumber: 34, EndBlockNumber: 34},
+		{StartBlockNumber: 35, EndBlockNumber: 35},
+		{StartBlockNumber: 36, EndBlockNumber: 36},
+		{StartBlockNumber: 37, EndBlockNumber: 37},
+		{StartBlockNumber: 38, EndBlockNumber: 38},
+		{StartBlockNumber: 39, EndBlockNumber: 39},
+		{StartBlockNumber: 40, EndBlockNumber: 40},
+	}
+
+	if len(expectedRanges) != len(ranges) {
+		t.Fatalf("Expected range length %v, got %v", len(expectedRanges), len(ranges))
+	}
+
+	for i := range ranges {
+		if *expectedRanges[i] != *ranges[i] {
+			t.Errorf("Mismatch at index %d: expected %v, got %v", i, *expectedRanges[i], *ranges[i])
+		}
+	}
+}
+
 func TestGetChunkRangesCodecv0(t *testing.T) {
 	genesisConfig := &params.ChainConfig{
 		Scroll: params.ScrollConfig{
@@ -225,7 +289,7 @@ func TestGetChunkRangesCodecv0(t *testing.T) {
 		t.Fatalf("Failed to read RLP data: %v", err)
 	}
 	l1Client := &mockEthClient{
-		commitBatchRLP: rlpData,
+		txRLP: rlpData,
 	}
 	bc := &core.BlockChain{}
 	stack, err := node.New(&node.DefaultConfig)
@@ -277,7 +341,7 @@ func TestGetChunkRangesCodecv1(t *testing.T) {
 		t.Fatalf("Failed to read RLP data: %v", err)
 	}
 	l1Client := &mockEthClient{
-		commitBatchRLP: rlpData,
+		txRLP: rlpData,
 	}
 	bc := &core.BlockChain{}
 	stack, err := node.New(&node.DefaultConfig)
@@ -327,7 +391,7 @@ func TestGetChunkRangesCodecv2(t *testing.T) {
 		t.Fatalf("Failed to read RLP data: %v", err)
 	}
 	l1Client := &mockEthClient{
-		commitBatchRLP: rlpData,
+		txRLP: rlpData,
 	}
 	bc := &core.BlockChain{}
 	stack, err := node.New(&node.DefaultConfig)
@@ -376,6 +440,85 @@ func TestGetChunkRangesCodecv2(t *testing.T) {
 		{StartBlockNumber: 172, EndBlockNumber: 172},
 		{StartBlockNumber: 173, EndBlockNumber: 173},
 		{StartBlockNumber: 174, EndBlockNumber: 174},
+	}
+
+	if len(expectedRanges) != len(ranges) {
+		t.Fatalf("Expected range length %v, got %v", len(expectedRanges), len(ranges))
+	}
+
+	for i := range ranges {
+		if *expectedRanges[i] != *ranges[i] {
+			t.Fatalf("Mismatch at index %d: expected %v, got %v", i, *expectedRanges[i], *ranges[i])
+		}
+	}
+}
+
+func TestGetChunkRangesCodecv3(t *testing.T) {
+	genesisConfig := &params.ChainConfig{
+		Scroll: params.ScrollConfig{
+			L1Config: &params.L1Config{
+				L1ChainId:          11155111,
+				ScrollChainAddress: common.HexToAddress("0x2D567EcE699Eabe5afCd141eDB7A4f2D0D6ce8a0"),
+			},
+		},
+	}
+	db := rawdb.NewDatabase(memorydb.New())
+
+	rlpData, err := os.ReadFile("./testdata/commitBatchWithBlobProof_codecv3.rlp")
+	if err != nil {
+		t.Fatalf("Failed to read RLP data: %v", err)
+	}
+	l1Client := &mockEthClient{
+		txRLP: rlpData,
+	}
+	bc := &core.BlockChain{}
+	stack, err := node.New(&node.DefaultConfig)
+	if err != nil {
+		t.Fatalf("Failed to new P2P node: %v", err)
+	}
+	defer stack.Close()
+	service, err := NewRollupSyncService(context.Background(), genesisConfig, db, l1Client, bc, stack)
+	if err != nil {
+		t.Fatalf("Failed to new rollup sync service: %v", err)
+	}
+
+	vLog := &types.Log{
+		TxHash: common.HexToHash("0x3"),
+	}
+	ranges, err := service.getChunkRanges(1, vLog)
+	require.NoError(t, err)
+
+	expectedRanges := []*rawdb.ChunkBlockRange{
+		{StartBlockNumber: 41, EndBlockNumber: 41},
+		{StartBlockNumber: 42, EndBlockNumber: 42},
+		{StartBlockNumber: 43, EndBlockNumber: 43},
+		{StartBlockNumber: 44, EndBlockNumber: 44},
+		{StartBlockNumber: 45, EndBlockNumber: 45},
+		{StartBlockNumber: 46, EndBlockNumber: 46},
+		{StartBlockNumber: 47, EndBlockNumber: 47},
+		{StartBlockNumber: 48, EndBlockNumber: 48},
+		{StartBlockNumber: 49, EndBlockNumber: 49},
+		{StartBlockNumber: 50, EndBlockNumber: 50},
+		{StartBlockNumber: 51, EndBlockNumber: 51},
+		{StartBlockNumber: 52, EndBlockNumber: 52},
+		{StartBlockNumber: 53, EndBlockNumber: 53},
+		{StartBlockNumber: 54, EndBlockNumber: 54},
+		{StartBlockNumber: 55, EndBlockNumber: 55},
+		{StartBlockNumber: 56, EndBlockNumber: 56},
+		{StartBlockNumber: 57, EndBlockNumber: 57},
+		{StartBlockNumber: 58, EndBlockNumber: 58},
+		{StartBlockNumber: 59, EndBlockNumber: 59},
+		{StartBlockNumber: 60, EndBlockNumber: 60},
+		{StartBlockNumber: 61, EndBlockNumber: 61},
+		{StartBlockNumber: 62, EndBlockNumber: 62},
+		{StartBlockNumber: 63, EndBlockNumber: 63},
+		{StartBlockNumber: 64, EndBlockNumber: 64},
+		{StartBlockNumber: 65, EndBlockNumber: 65},
+		{StartBlockNumber: 66, EndBlockNumber: 66},
+		{StartBlockNumber: 67, EndBlockNumber: 67},
+		{StartBlockNumber: 68, EndBlockNumber: 68},
+		{StartBlockNumber: 69, EndBlockNumber: 69},
+		{StartBlockNumber: 70, EndBlockNumber: 70},
 	}
 
 	if len(expectedRanges) != len(ranges) {
@@ -548,8 +691,8 @@ func TestValidateBatchCodecv2(t *testing.T) {
 	assert.Equal(t, parentBatchMeta3, finalizedBatchMeta2)
 }
 
-func TestValidateBatchUpgrades(t *testing.T) {
-	chainConfig := &params.ChainConfig{BernoulliBlock: big.NewInt(14), CurieBlock: big.NewInt(16)}
+func TestValidateBatchCodecv3(t *testing.T) {
+	chainConfig := &params.ChainConfig{BernoulliBlock: big.NewInt(0), CurieBlock: big.NewInt(0), DarwinTime: new(uint64)}
 
 	block1 := readBlockFromJSON(t, "./testdata/blockTrace_02.json")
 	chunk1 := &encoding.Chunk{Blocks: []*encoding.Block{block1}}
@@ -557,20 +700,70 @@ func TestValidateBatchUpgrades(t *testing.T) {
 	block2 := readBlockFromJSON(t, "./testdata/blockTrace_03.json")
 	chunk2 := &encoding.Chunk{Blocks: []*encoding.Block{block2}}
 
+	block3 := readBlockFromJSON(t, "./testdata/blockTrace_04.json")
+	chunk3 := &encoding.Chunk{Blocks: []*encoding.Block{block3}}
+
 	parentBatchMeta1 := &rawdb.FinalizedBatchMeta{}
 	event1 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(0),
-		BatchHash:    common.HexToHash("0xb501030a30bf3936aaf7d50ae175035ecfa04c8ce0031de3936300cf2718c427"),
-		StateRoot:    chunk2.Blocks[len(chunk2.Blocks)-1].Header.Root,
-		WithdrawRoot: chunk2.Blocks[len(chunk2.Blocks)-1].WithdrawRoot,
+		BatchHash:    common.HexToHash("0x015eb56fb95bf9a06157cfb8389ba7c2b6b08373e22581ac2ba387003708265d"),
+		StateRoot:    chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
+		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
 	}
 
-	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*encoding.Chunk{chunk1, chunk2}, chainConfig, nil)
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*encoding.Chunk{chunk1, chunk2, chunk3}, chainConfig, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(3), endBlock1)
+	assert.Equal(t, uint64(13), endBlock1)
 
-	block3 := readBlockFromJSON(t, "./testdata/blockTrace_04.json")
-	chunk3 := &encoding.Chunk{Blocks: []*encoding.Block{block3}}
+	block4 := readBlockFromJSON(t, "./testdata/blockTrace_05.json")
+	chunk4 := &encoding.Chunk{Blocks: []*encoding.Block{block4}}
+
+	parentBatchMeta2 := &rawdb.FinalizedBatchMeta{
+		BatchHash:            event1.BatchHash,
+		TotalL1MessagePopped: 11,
+		StateRoot:            event1.StateRoot,
+		WithdrawRoot:         event1.WithdrawRoot,
+	}
+	assert.Equal(t, parentBatchMeta2, finalizedBatchMeta1)
+	event2 := &L1FinalizeBatchEvent{
+		BatchIndex:   big.NewInt(1),
+		BatchHash:    common.HexToHash("0x382cb0d507e3d7507f556c52e05f76b05e364ad26205e7f62c95967a19c2f35d"),
+		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
+		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
+	}
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*encoding.Chunk{chunk4}, chainConfig, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(17), endBlock2)
+
+	parentBatchMeta3 := &rawdb.FinalizedBatchMeta{
+		BatchHash:            event2.BatchHash,
+		TotalL1MessagePopped: 42,
+		StateRoot:            event2.StateRoot,
+		WithdrawRoot:         event2.WithdrawRoot,
+	}
+	assert.Equal(t, parentBatchMeta3, finalizedBatchMeta2)
+}
+
+func TestValidateBatchUpgrades(t *testing.T) {
+	chainConfig := &params.ChainConfig{BernoulliBlock: big.NewInt(3), CurieBlock: big.NewInt(14), DarwinTime: func() *uint64 { t := uint64(1684762320); return &t }()}
+
+	block1 := readBlockFromJSON(t, "./testdata/blockTrace_02.json")
+	chunk1 := &encoding.Chunk{Blocks: []*encoding.Block{block1}}
+
+	parentBatchMeta1 := &rawdb.FinalizedBatchMeta{}
+	event1 := &L1FinalizeBatchEvent{
+		BatchIndex:   big.NewInt(0),
+		BatchHash:    common.HexToHash("0x4605465b7470c8565b123330d7186805caf9a7f2656d8e9e744b62e14ca22c3d"),
+		StateRoot:    chunk1.Blocks[len(chunk1.Blocks)-1].Header.Root,
+		WithdrawRoot: chunk1.Blocks[len(chunk1.Blocks)-1].WithdrawRoot,
+	}
+
+	endBlock1, finalizedBatchMeta1, err := validateBatch(event1, parentBatchMeta1, []*encoding.Chunk{chunk1}, chainConfig, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), endBlock1)
+
+	block2 := readBlockFromJSON(t, "./testdata/blockTrace_03.json")
+	chunk2 := &encoding.Chunk{Blocks: []*encoding.Block{block2}}
 
 	parentBatchMeta2 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event1.BatchHash,
@@ -581,41 +774,61 @@ func TestValidateBatchUpgrades(t *testing.T) {
 	assert.Equal(t, parentBatchMeta2, finalizedBatchMeta1)
 	event2 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(1),
-		BatchHash:    common.HexToHash("0x1879659b3cdc1039a9db62f4ac5a6d0d8f2aaa13ff484917d603fe04eaf2d7c1"),
-		StateRoot:    chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
-		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
+		BatchHash:    common.HexToHash("0xc4af33bce87aa702edc3ad4b7d34730d25719427704e250787f99e0f55049252"),
+		StateRoot:    chunk2.Blocks[len(chunk2.Blocks)-1].Header.Root,
+		WithdrawRoot: chunk2.Blocks[len(chunk2.Blocks)-1].WithdrawRoot,
 	}
-	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*encoding.Chunk{chunk3}, chainConfig, nil)
+	endBlock2, finalizedBatchMeta2, err := validateBatch(event2, parentBatchMeta2, []*encoding.Chunk{chunk2}, chainConfig, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(13), endBlock2)
+	assert.Equal(t, uint64(3), endBlock2)
 
-	block4 := readBlockFromJSON(t, "./testdata/blockTrace_05.json")
-	chunk4 := &encoding.Chunk{Blocks: []*encoding.Block{block4}}
+	block3 := readBlockFromJSON(t, "./testdata/blockTrace_04.json")
+	chunk3 := &encoding.Chunk{Blocks: []*encoding.Block{block3}}
 
 	parentBatchMeta3 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event2.BatchHash,
-		TotalL1MessagePopped: 11,
+		TotalL1MessagePopped: 0,
 		StateRoot:            event2.StateRoot,
 		WithdrawRoot:         event2.WithdrawRoot,
 	}
 	assert.Equal(t, parentBatchMeta3, finalizedBatchMeta2)
 	event3 := &L1FinalizeBatchEvent{
 		BatchIndex:   big.NewInt(2),
-		BatchHash:    common.HexToHash("0x871ba3c4ed8821ffc438c5468f1e996a6c4325fd8b53066c2783e54b3b7e9e24"),
-		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
-		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
+		BatchHash:    common.HexToHash("0x9f87f2de2019ed635f867b1e61be6a607c3174ced096f370fd18556c38833c62"),
+		StateRoot:    chunk3.Blocks[len(chunk3.Blocks)-1].Header.Root,
+		WithdrawRoot: chunk3.Blocks[len(chunk3.Blocks)-1].WithdrawRoot,
 	}
-	endBlock3, finalizedBatchMeta3, err := validateBatch(event3, parentBatchMeta3, []*encoding.Chunk{chunk4}, chainConfig, nil)
+	endBlock3, finalizedBatchMeta3, err := validateBatch(event3, parentBatchMeta3, []*encoding.Chunk{chunk3}, chainConfig, nil)
 	assert.NoError(t, err)
-	assert.Equal(t, uint64(17), endBlock3)
+	assert.Equal(t, uint64(13), endBlock3)
+
+	block4 := readBlockFromJSON(t, "./testdata/blockTrace_05.json")
+	chunk4 := &encoding.Chunk{Blocks: []*encoding.Block{block4}}
 
 	parentBatchMeta4 := &rawdb.FinalizedBatchMeta{
 		BatchHash:            event3.BatchHash,
-		TotalL1MessagePopped: 42,
+		TotalL1MessagePopped: 11,
 		StateRoot:            event3.StateRoot,
 		WithdrawRoot:         event3.WithdrawRoot,
 	}
 	assert.Equal(t, parentBatchMeta4, finalizedBatchMeta3)
+	event4 := &L1FinalizeBatchEvent{
+		BatchIndex:   big.NewInt(3),
+		BatchHash:    common.HexToHash("0xd33332aef8efbc9a0be4c4694088ac0dd052d2d3ad3ffda5e4c2010825e476bc"),
+		StateRoot:    chunk4.Blocks[len(chunk4.Blocks)-1].Header.Root,
+		WithdrawRoot: chunk4.Blocks[len(chunk4.Blocks)-1].WithdrawRoot,
+	}
+	endBlock4, finalizedBatchMeta4, err := validateBatch(event4, parentBatchMeta4, []*encoding.Chunk{chunk4}, chainConfig, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(17), endBlock4)
+
+	parentBatchMeta5 := &rawdb.FinalizedBatchMeta{
+		BatchHash:            event4.BatchHash,
+		TotalL1MessagePopped: 42,
+		StateRoot:            event4.StateRoot,
+		WithdrawRoot:         event4.WithdrawRoot,
+	}
+	assert.Equal(t, parentBatchMeta5, finalizedBatchMeta4)
 }
 
 func readBlockFromJSON(t *testing.T, filename string) *encoding.Block {

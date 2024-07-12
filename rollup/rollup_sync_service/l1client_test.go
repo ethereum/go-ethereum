@@ -36,7 +36,7 @@ func TestL1Client(t *testing.T) {
 }
 
 type mockEthClient struct {
-	commitBatchRLP []byte
+	txRLP []byte
 }
 
 func (m *mockEthClient) BlockNumber(ctx context.Context) (uint64, error) {
@@ -63,7 +63,7 @@ func (m *mockEthClient) SubscribeFilterLogs(ctx context.Context, query ethereum.
 
 func (m *mockEthClient) TransactionByHash(ctx context.Context, txHash common.Hash) (*types.Transaction, bool, error) {
 	var tx types.Transaction
-	if err := rlp.DecodeBytes(m.commitBatchRLP, &tx); err != nil {
+	if err := rlp.DecodeBytes(m.txRLP, &tx); err != nil {
 		return nil, false, err
 	}
 	return &tx, false, nil
