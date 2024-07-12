@@ -92,6 +92,10 @@ func (b *testBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*
 	return logs, nil
 }
 
+func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return nil, nil
+}
+
 func (b *testBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return b.txFeed.Subscribe(ch)
 }
@@ -602,7 +606,7 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	var (
 		db      = rawdb.NewMemoryDatabase()
 		backend = &testBackend{db: db}
-		api     = NewFilterAPI(backend, false, timeout)
+		api     = NewPublicFilterAPI(backend, false, timeout)
 		done    = make(chan struct{})
 	)
 
