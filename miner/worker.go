@@ -1025,7 +1025,7 @@ func (w *worker) commitTransactions(env *environment, txs orderedTransactionSet,
 		l2CommitTxsTimer.Update(time.Since(t0))
 	}(time.Now())
 
-	var circuitCapacityReached bool
+	var circuitCapacityOrBlockTimeReached bool
 
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
@@ -1045,13 +1045,13 @@ loop:
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
 			if signal := interrupt.Load(); signal != commitInterruptNone {
-				return circuitCapacityReached, signalToErr(signal)
+				return circuitCapacityOrBlockTimeReached, signalToErr(signal)
 			}
 		}
 		// seal block early if we're over time
 		// note: current.header.Time = max(parent.Time + cliquePeriod, now())
 		if env.tcount > 0 && w.chainConfig.Clique != nil && uint64(time.Now().Unix()) > env.header.Time {
-			circuitCapacityReached = true // skip subsequent invocations of commitTransactions
+			circuitCapacityOrBlockTimeReached = true // skip subsequent invocations of commitTransactions
 			break
 		}
 		// If we don't have enough gas for any further transactions then we're done.
@@ -1176,7 +1176,7 @@ loop:
 				}
 				w.newTxs.Add(int32(1))
 
-				circuitCapacityReached = true
+				circuitCapacityOrBlockTimeReached = true
 				break loop
 			} else {
 				// 2. Circuit capacity limit reached in a block, and it's the first tx: skip the tx
@@ -1202,7 +1202,7 @@ loop:
 				// Reset ccc so that we can process other transactions for this block
 				w.circuitCapacityChecker.Reset()
 				log.Trace("Worker reset ccc", "id", w.circuitCapacityChecker.ID)
-				circuitCapacityReached = false
+				circuitCapacityOrBlockTimeReached = false
 
 				// Store skipped transaction in local db
 				if w.config.StoreSkippedTxTraces {
@@ -1230,7 +1230,7 @@ loop:
 			// Normally we would do `txs.Shift()` here.
 			// However, after `ErrUnknown`, ccc might remain in an
 			// inconsistent state, so we cannot pack more transactions.
-			circuitCapacityReached = true
+			circuitCapacityOrBlockTimeReached = true
 			w.checkCurrentTxNumWithCCC(env.tcount)
 			break loop
 
@@ -1250,7 +1250,7 @@ loop:
 			// However, after `ErrUnknown`, ccc might remain in an
 			// inconsistent state, so we cannot pack more transactions.
 			w.eth.TxPool().RemoveTx(tx.Hash(), true, true)
-			circuitCapacityReached = true
+			circuitCapacityOrBlockTimeReached = true
 			w.checkCurrentTxNumWithCCC(env.tcount)
 			break loop
 
@@ -1292,7 +1292,7 @@ loop:
 		}
 		w.pendingLogsFeed.Send(cpy)
 	}
-	return circuitCapacityReached, nil
+	return circuitCapacityOrBlockTimeReached, nil
 }
 
 // generateParams wraps various of settings for generating sealing task.
@@ -1448,7 +1448,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	l2CommitNewWorkTidyPendingTxTimer.UpdateSince(tidyPendingStart)
 
 	// Fill the block with all available pending transactions.
-	var circuitCapacityReached bool
+	var circuitCapacityOrBlockTimeReached bool
 	var err error
 	commitL1MsgStart := time.Now()
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Messages) > 0 {
@@ -1458,7 +1458,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 			log.Error("Failed to create L1 message set", "l1Messages", l1Messages, "err", err)
 			return err
 		}
-		circuitCapacityReached, err = w.commitTransactions(env, txs, interrupt)
+		circuitCapacityOrBlockTimeReached, err = w.commitTransactions(env, txs, interrupt)
 		if err != nil {
 			l2CommitNewWorkCommitL1MsgTimer.UpdateSince(commitL1MsgStart)
 			return err
@@ -1469,7 +1469,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	if w.prioritizedTx != nil && w.current.header.Number.Uint64() > w.prioritizedTx.blockNumber {
 		w.prioritizedTx = nil
 	}
-	if !circuitCapacityReached && w.prioritizedTx != nil && w.current.header.Number.Uint64() == w.prioritizedTx.blockNumber {
+	if !circuitCapacityOrBlockTimeReached && w.prioritizedTx != nil && w.current.header.Number.Uint64() == w.prioritizedTx.blockNumber {
 		tx := w.prioritizedTx.tx
 		from, _ := types.Sender(w.current.signer, tx) // error already checked before
 		// we don't know where this came from, yolo resolve from everywhere (w.eth.TxPool())
@@ -1479,7 +1479,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 		// but here there's only 1 tx, and hence no need for sorting, we could just simply use `newTransactionsByPriceAndNonce`
 		// (but we fill the LazyTransaction's tx first, in case it's a l1tx and cannot be resolved from the mempool).
 		txs := newTransactionsByPriceAndNonce(w.current.signer, txList, env.header.BaseFee)
-		circuitCapacityReached, err = w.commitTransactions(env, txs, interrupt)
+		circuitCapacityOrBlockTimeReached, err = w.commitTransactions(env, txs, interrupt)
 		if err != nil {
 			l2CommitNewWorkPrioritizedTxCommitTimer.UpdateSince(prioritizedTxStart)
 			return err
@@ -1487,16 +1487,16 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	}
 	l2CommitNewWorkPrioritizedTxCommitTimer.UpdateSince(prioritizedTxStart)
 	remoteLocalStart := time.Now()
-	if !circuitCapacityReached && len(localTxs) > 0 {
+	if !circuitCapacityOrBlockTimeReached && len(localTxs) > 0 {
 		localTxPriceAndNonceStart := time.Now()
 		txs := newTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
 		l2CommitNewWorkLocalPriceAndNonceTimer.UpdateSince(localTxPriceAndNonceStart)
-		if circuitCapacityReached, err = w.commitTransactions(env, txs, interrupt); err != nil {
+		if circuitCapacityOrBlockTimeReached, err = w.commitTransactions(env, txs, interrupt); err != nil {
 			l2CommitNewWorkRemoteLocalCommitTimer.UpdateSince(remoteLocalStart)
 			return err
 		}
 	}
-	if !circuitCapacityReached && len(remoteTxs) > 0 {
+	if !circuitCapacityOrBlockTimeReached && len(remoteTxs) > 0 {
 		remoteTxPriceAndNonceStart := time.Now()
 		txs := newTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
 		l2CommitNewWorkRemotePriceAndNonceTimer.UpdateSince(remoteTxPriceAndNonceStart)
