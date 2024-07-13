@@ -244,6 +244,19 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	return blocks, receipts
 }
 
+// GenerateChainWithGenesis is a wrapper of GenerateChain which will initialize
+// genesis block to database first according to the provided genesis specification
+// then generate chain on top.
+func GenerateChainWithGenesis(genesis *Genesis, engine consensus.Engine, n int, gen func(int, *BlockGen)) (ethdb.Database, []*types.Block, []types.Receipts) {
+	db := rawdb.NewMemoryDatabase()
+	_, err := genesis.Commit(db)
+	if err != nil {
+		panic(err)
+	}
+	blocks, receipts := GenerateChain(genesis.Config, genesis.ToBlock(nil), engine, db, n, gen)
+	return db, blocks, receipts
+}
+
 func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
 	var time *big.Int
 	if parent.Time() == nil {
