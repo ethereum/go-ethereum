@@ -27,6 +27,7 @@ import (
 
 	ethereum "github.com/XinFinOrg/XDPoSChain"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -34,7 +35,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 // Config represents the configuration of the filter system.
@@ -74,21 +74,16 @@ type Backend interface {
 // FilterSystem holds resources shared by all filters.
 type FilterSystem struct {
 	backend   Backend
-	logsCache *lru.Cache
+	logsCache *lru.Cache[common.Hash, [][]*types.Log]
 	cfg       *Config
 }
 
 // NewFilterSystem creates a filter system.
 func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 	config = config.withDefaults()
-
-	cache, err := lru.New(config.LogCacheSize)
-	if err != nil {
-		panic(err)
-	}
 	return &FilterSystem{
 		backend:   backend,
-		logsCache: cache,
+		logsCache: lru.NewCache[common.Hash, [][]*types.Log](config.LogCacheSize),
 		cfg:       &config,
 	}
 }
@@ -97,7 +92,7 @@ func NewFilterSystem(backend Backend, config Config) *FilterSystem {
 func (sys *FilterSystem) cachedGetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error) {
 	cached, ok := sys.logsCache.Get(blockHash)
 	if ok {
-		return cached.([][]*types.Log), nil
+		return cached, nil
 	}
 
 	logs, err := sys.backend.GetLogs(ctx, blockHash, number)
