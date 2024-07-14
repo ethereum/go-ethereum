@@ -26,6 +26,7 @@ func TestReadWriteFreezerTableMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create file %v", err)
 	}
+	defer f.Close()
 	err = writeMetadata(f, newMetadata(100))
 	if err != nil {
 		t.Fatalf("Failed to write metadata %v", err)
@@ -47,6 +48,7 @@ func TestInitializeFreezerTableMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create file %v", err)
 	}
+	defer f.Close()
 	meta, err := loadMetadata(f, uint64(100))
 	if err != nil {
 		t.Fatalf("Failed to read metadata %v", err)
