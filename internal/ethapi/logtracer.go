@@ -48,24 +48,23 @@ var (
 //   - Recipient address
 type tracer struct {
 	// logs keeps logs for all open call frames.
-	// This lets us clear logs for failed logs.
+	// This lets us clear logs for failed calls.
 	logs           [][]*types.Log
 	count          int
 	traceTransfers bool
-	// TODO: replace with tracers.Context once extended tracer PR is merged.
-	blockNumber uint64
-	blockHash   common.Hash
-	txHash      common.Hash
-	txIdx       uint
+	blockNumber    uint64
+	blockHash      common.Hash
+	txHash         common.Hash
+	txIdx          uint
 }
 
-func newTracer(traceTransfers bool, blockNumber uint64, blockHash, txHash common.Hash, txIdx uint) *tracer {
+func newTracer(traceTransfers bool, blockNumber uint64, blockHash, txHash common.Hash, txIndex uint) *tracer {
 	return &tracer{
 		traceTransfers: traceTransfers,
 		blockNumber:    blockNumber,
 		blockHash:      blockHash,
 		txHash:         txHash,
-		txIdx:          txIdx,
+		txIdx:          txIndex,
 	}
 }
 

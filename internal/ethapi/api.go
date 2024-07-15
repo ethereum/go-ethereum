@@ -1265,7 +1265,17 @@ func (s *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrOrH
 	if state == nil || err != nil {
 		return nil, err
 	}
-	sim := &simulator{b: s.b, state: state, base: base, traceTransfers: opts.TraceTransfers, validate: opts.Validation, fullTx: opts.ReturnFullTransactions}
+	sim := &simulator{
+		b:           s.b,
+		state:       state,
+		base:        base,
+		chainConfig: s.b.ChainConfig(),
+		// Each tx and all the series of txes shouldn't consume more gas than cap
+		gp:             new(core.GasPool).AddGas(s.b.RPCGasCap()),
+		traceTransfers: opts.TraceTransfers,
+		validate:       opts.Validation,
+		fullTx:         opts.ReturnFullTransactions,
+	}
 	return sim.execute(ctx, opts.BlockStateCalls)
 }
 
