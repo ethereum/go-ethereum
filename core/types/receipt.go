@@ -68,10 +68,10 @@ type Receipt struct {
 
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
-	BlockHash        common.Hash    `json:"blockHash,omitempty"`
-	BlockNumber      *big.Int       `json:"blockNumber,omitempty"`
-	TransactionIndex uint           `json:"transactionIndex"`
-	To               common.Address `json:"to,omitempty"`
+	BlockHash        common.Hash     `json:"blockHash,omitempty"`
+	BlockNumber      *big.Int        `json:"blockNumber,omitempty"`
+	TransactionIndex uint            `json:"transactionIndex"`
+	To               *common.Address `json:"to"`
 }
 
 type receiptMarshaling struct {
@@ -85,6 +85,7 @@ type receiptMarshaling struct {
 	BlobGasPrice      *hexutil.Big
 	BlockNumber       *hexutil.Big
 	TransactionIndex  hexutil.Uint
+	To                *common.Address
 }
 
 // receiptRLP is the consensus encoding of a receipt.
