@@ -16,6 +16,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
+	"github.com/scroll-tech/go-ethereum/crypto/codehash"
 	"github.com/scroll-tech/go-ethereum/eth/tracers"
 	_ "github.com/scroll-tech/go-ethereum/eth/tracers/native"
 	"github.com/scroll-tech/go-ethereum/ethdb"
@@ -61,18 +62,19 @@ type TraceEnv struct {
 
 	coinbase common.Address
 
-	// rMu lock is used to protect txs executed in parallel.
 	signer   types.Signer
 	state    *state.StateDB
 	blockCtx vm.BlockContext
 
-	// pMu lock is used to protect Proofs' read and write mutual exclusion,
-	// since txs are executed in parallel, so this lock is required.
-	pMu sync.Mutex
-	// sMu is required because of txs are executed in parallel,
-	// this lock is used to protect StorageTrace's read and write mutual exclusion.
-	sMu sync.Mutex
+	// The following Mutexes are used to protect against parallel read/write,
+	// since txs are executed in parallel.
+	pMu sync.Mutex // for `TraceEnv.StorageTrace.Proofs`
+	sMu sync.Mutex // for `TraceEnv.state``
+	cMu sync.Mutex // for `TraceEnv.Codes`
+
 	*types.StorageTrace
+
+	Codes           map[common.Hash]vm.CodeInfo
 	TxStorageTraces []*types.StorageTrace
 	// zktrie tracer is used for zktrie storage to build additional deletion proof
 	ZkTrieTracer     map[string]state.ZktrieProofTracer
@@ -112,6 +114,7 @@ func CreateTraceEnvHelper(chainConfig *params.ChainConfig, logConfig *vm.LogConf
 			Proofs:        make(map[string][]hexutil.Bytes),
 			StorageProofs: make(map[string]map[string][]hexutil.Bytes),
 		},
+		Codes:             make(map[common.Hash]vm.CodeInfo),
 		ZkTrieTracer:      make(map[string]state.ZktrieProofTracer),
 		ExecutionResults:  make([]*types.ExecutionResult, block.Transactions().Len()),
 		TxStorageTraces:   make([]*types.StorageTrace, block.Transactions().Len()),
@@ -319,14 +322,10 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 	if err != nil {
 		return fmt.Errorf("failed to create callTracer: %w", err)
 	}
-	prestateTracer, err := tracers.New("prestateTracer", &tracerContext)
-	if err != nil {
-		return fmt.Errorf("failed to create prestateTracer: %w", err)
-	}
 
 	applyMessageStart := time.Now()
 	structLogger := vm.NewStructLogger(env.logConfig)
-	tracer := NewMuxTracer(structLogger, callTracer, prestateTracer)
+	tracer := NewMuxTracer(structLogger, callTracer)
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(env.blockCtx, txContext, state, env.chainConfig, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 
@@ -382,6 +381,15 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 	if index == len(block.Transactions())-1 {
 		txStorageTrace.RootAfter = block.Root()
 	}
+
+	// merge bytecodes
+	env.cMu.Lock()
+	for codeHash, codeInfo := range structLogger.TracedBytecodes() {
+		if codeHash != (common.Hash{}) {
+			env.Codes[codeHash] = codeInfo
+		}
+	}
+	env.cMu.Unlock()
 
 	// merge required proof data
 	proofAccounts := structLogger.UpdatedAccounts()
@@ -487,10 +495,6 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 	if err != nil {
 		return fmt.Errorf("failed to get callTracer result: %w", err)
 	}
-	prestate, err := prestateTracer.GetResult()
-	if err != nil {
-		return fmt.Errorf("failed to get prestateTracer result: %w", err)
-	}
 	getTxResultTracerResultTimer.UpdateSince(tracerResultTimer)
 
 	env.ExecutionResults[index] = &types.ExecutionResult{
@@ -504,7 +508,6 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 		ReturnValue:    fmt.Sprintf("%x", returnVal),
 		StructLogs:     vm.FormatLogs(structLogger.StructLogs()),
 		CallTrace:      callTrace,
-		Prestate:       prestate,
 	}
 	env.TxStorageTraces[index] = txStorageTrace
 
@@ -579,6 +582,7 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 			CodeSize:         statedb.GetCodeSize(env.coinbase),
 		},
 		Header:            block.Header(),
+		Bytecodes:         make([]*types.BytecodeTrace, 0, len(env.Codes)),
 		StorageTrace:      env.StorageTrace,
 		ExecutionResults:  env.ExecutionResults,
 		TxStorageTraces:   env.TxStorageTraces,
@@ -586,17 +590,19 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 		StartL1QueueIndex: env.StartL1QueueIndex,
 	}
 
-	for i, tx := range block.Transactions() {
-		evmTrace := env.ExecutionResults[i]
-		// Contract is created.
-		if tx.To() == nil {
-			evmTrace.ByteCode = hexutil.Encode(tx.Data())
-		} else { // contract call be included at this case, specially fallback call's data is empty.
-			evmTrace.ByteCode = hexutil.Encode(statedb.GetCode(*tx.To()))
-			// Get tx.to address's code hash.
-			codeHash := statedb.GetPoseidonCodeHash(*tx.To())
-			evmTrace.PoseidonCodeHash = &codeHash
-		}
+	blockTrace.Bytecodes = append(blockTrace.Bytecodes, &types.BytecodeTrace{
+		CodeSize:         0,
+		KeccakCodeHash:   codehash.EmptyKeccakCodeHash,
+		PoseidonCodeHash: codehash.EmptyPoseidonCodeHash,
+		Code:             hexutil.Bytes{},
+	})
+	for _, codeInfo := range env.Codes {
+		blockTrace.Bytecodes = append(blockTrace.Bytecodes, &types.BytecodeTrace{
+			CodeSize:         codeInfo.CodeSize,
+			KeccakCodeHash:   codeInfo.KeccakCodeHash,
+			PoseidonCodeHash: codeInfo.PoseidonCodeHash,
+			Code:             codeInfo.Code,
+		})
 	}
 
 	blockTrace.WithdrawTrieRoot = withdrawtrie.ReadWTRSlot(rcfg.L2MessageQueueAddress, env.state)

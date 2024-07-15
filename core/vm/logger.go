@@ -76,7 +76,6 @@ type StructLog struct {
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
 	RefundCounter uint64                      `json:"refund"`
-	ExtraData     *types.ExtraData            `json:"extraData"`
 	Err           error                       `json:"-"`
 }
 
@@ -96,15 +95,7 @@ func (s *StructLog) clean() {
 	s.Stack = s.Stack[:0]
 	s.ReturnData.Reset()
 	s.Storage = nil
-	s.ExtraData = nil
 	s.Err = nil
-}
-
-func (s *StructLog) getOrInitExtraData() *types.ExtraData {
-	if s.ExtraData == nil {
-		s.ExtraData = &types.ExtraData{}
-	}
-	return s.ExtraData
 }
 
 // overrides for gencodec
@@ -145,6 +136,13 @@ type EVMLogger interface {
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
 }
 
+type CodeInfo struct {
+	CodeSize         uint64
+	KeccakCodeHash   common.Hash
+	PoseidonCodeHash common.Hash
+	Code             []byte
+}
+
 // StructLogger is an EVM state logger and implements EVMLogger.
 //
 // StructLogger can capture state based on the given Log configuration and also keeps
@@ -153,6 +151,8 @@ type EVMLogger interface {
 type StructLogger struct {
 	cfg LogConfig
 	env *EVM
+
+	bytecodes map[common.Hash]CodeInfo
 
 	statesAffected map[common.Address]struct{}
 	storage        map[common.Address]Storage
@@ -167,6 +167,7 @@ type StructLogger struct {
 // NewStructLogger returns a new logger
 func NewStructLogger(cfg *LogConfig) *StructLogger {
 	logger := &StructLogger{
+		bytecodes:      make(map[common.Hash]CodeInfo),
 		storage:        make(map[common.Address]Storage),
 		statesAffected: make(map[common.Address]struct{}),
 	}
@@ -179,6 +180,7 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 
 // Reset clears the data held by the logger.
 func (l *StructLogger) Reset() {
+	l.bytecodes = make(map[common.Hash]CodeInfo)
 	l.storage = make(map[common.Address]Storage)
 	l.statesAffected = make(map[common.Address]struct{})
 	l.output = make([]byte, 0)
@@ -200,6 +202,8 @@ func (l *StructLogger) CaptureStart(env *EVM, from common.Address, to common.Add
 			Nonce:   env.StateDB.GetNonce(to),
 			Balance: (*hexutil.Big)(value),
 		}
+	} else {
+		traceCodeWithAddress(l, to)
 	}
 
 	l.statesAffected[from] = struct{}{}
@@ -260,16 +264,10 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 	if ok {
 		// execute trace func list.
 		for _, exec := range execFuncList {
-			if err := exec(l, scope, structLog.getOrInitExtraData()); err != nil {
+			if err := exec(l, scope); err != nil {
 				log.Error("Failed to trace data", "opcode", op.String(), "err", err)
 			}
 		}
-	}
-	// for each "calling" op, pick the caller's state
-	switch op {
-	case CALL, CALLCODE, STATICCALL, DELEGATECALL, CREATE, CREATE2:
-		extraData := structLog.getOrInitExtraData()
-		extraData.Caller = append(extraData.Caller, getWrappedAccountForAddr(l, scope.Contract.Address()))
 	}
 
 	// in reality it is impossible for CREATE to trigger ErrContractAddressCollision
@@ -288,9 +286,6 @@ func (l *StructLogger) CaptureState(pc uint64, op OpCode, gas, cost uint64, scop
 
 		contractHash := l.env.StateDB.GetKeccakCodeHash(address)
 		if l.env.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyKeccakCodeHash) {
-			extraData := structLog.getOrInitExtraData()
-			wrappedStatus := getWrappedAccountForAddr(l, address)
-			extraData.StateList = append(extraData.StateList, wrappedStatus)
 			l.statesAffected[address] = struct{}{}
 		}
 	}
@@ -331,16 +326,7 @@ func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.A
 		panic("unexpected evm depth in capture enter")
 	}
 	l.statesAffected[to] = struct{}{}
-	theLog := l.logs[lastLogPos]
-	theLog.getOrInitExtraData()
-	// handling additional updating for CALL/STATICCALL/CALLCODE/CREATE/CREATE2 only
-	// append extraData part for the log, capture the account status (the nonce / balance has been updated in capture enter)
-	wrappedStatus := getWrappedAccountForAddr(l, to)
-	theLog.ExtraData.StateList = append(theLog.ExtraData.StateList, wrappedStatus)
-	// finally we update the caller's status (it is possible that nonce and balance being updated)
-	if len(theLog.ExtraData.Caller) == 1 {
-		theLog.ExtraData.Caller = append(theLog.ExtraData.Caller, getWrappedAccountForAddr(l, from))
-	}
+
 }
 
 // CaptureExit phase, a CREATE has its target address's code being set and queryable
@@ -350,32 +336,7 @@ func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {
 		panic("unexpected capture exit occur")
 	}
 
-	theLogPos := l.callStackLogInd[stackH-1]
 	l.callStackLogInd = l.callStackLogInd[:stackH-1]
-	theLog := l.logs[theLogPos]
-	// update "forecast" data
-	if err != nil {
-		theLog.ExtraData.CallFailed = true
-	}
-
-	// handling updating for CREATE only
-	switch theLog.Op {
-	case CREATE, CREATE2:
-		// append extraData part for the log whose op is CREATE(2), capture the account status (the codehash would be updated in capture exit)
-		dataLen := len(theLog.ExtraData.StateList)
-		if dataLen == 0 {
-			panic("unexpected data capture for target op")
-		}
-
-		lastAccData := theLog.ExtraData.StateList[dataLen-1]
-		wrappedStatus := getWrappedAccountForAddr(l, lastAccData.Address)
-		theLog.ExtraData.StateList = append(theLog.ExtraData.StateList, wrappedStatus)
-		code := getCodeForAddr(l, lastAccData.Address)
-		theLog.ExtraData.CodeList = append(theLog.ExtraData.CodeList, hexutil.Encode(code))
-	default:
-		//do nothing for other op code
-		return
-	}
 
 }
 
@@ -387,6 +348,11 @@ func (l *StructLogger) UpdatedAccounts() map[common.Address]struct{} {
 // UpdatedStorages is used to collect all "touched" storage slots
 func (l *StructLogger) UpdatedStorages() map[common.Address]Storage {
 	return l.storage
+}
+
+// TracedBytecodes is used to collect all "touched" bytecodes
+func (l *StructLogger) TracedBytecodes() map[common.Hash]CodeInfo {
+	return l.bytecodes
 }
 
 // CreatedAccount return the account data in case it is a create tx
@@ -540,7 +506,6 @@ func FormatLogs(logs []*StructLog) []*types.StructLogRes {
 			}
 			logRes.Storage = storage
 		}
-		logRes.ExtraData = trace.ExtraData
 
 		formatted = append(formatted, logRes)
 	}
