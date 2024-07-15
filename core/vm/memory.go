@@ -24,9 +24,7 @@ import (
 
 var memoryPool = sync.Pool{
 	New: func() any {
-		return &Memory{
-			store: make([]byte, 0),
-		}
+		return &Memory{}
 	},
 }
 
