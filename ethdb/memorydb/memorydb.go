@@ -182,9 +182,9 @@ func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
 	return newSnapshot(db), nil
 }
 
-// Stat returns a particular internal stat of the database.
-func (db *Database) Stat(property string) (string, error) {
-	return "", errors.New("unknown property")
+// Stat returns the statistic data of the database.
+func (db *Database) Stat() (string, error) {
+	return "", nil
 }
 
 // Compact is not supported on a memory database, but there's no need either as

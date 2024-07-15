@@ -35,7 +35,7 @@ const (
 	LvlDebug = LevelDebug
 )
 
-// convert from old Geth verbosity level constants
+// FromLegacyLevel converts from old Geth verbosity level constants
 // to levels defined by slog
 func FromLegacyLevel(lvl int) slog.Level {
 	switch lvl {
@@ -107,7 +107,7 @@ type Logger interface {
 	// With returns a new Logger that has this logger's attributes plus the given attributes
 	With(ctx ...interface{}) Logger
 
-	// With returns a new Logger that has this logger's attributes plus the given attributes. Identical to 'With'.
+	// New returns a new Logger that has this logger's attributes plus the given attributes. Identical to 'With'.
 	New(ctx ...interface{}) Logger
 
 	// Log logs a message at the specified level with context key/value pairs
@@ -156,7 +156,7 @@ func (l *logger) Handler() slog.Handler {
 	return l.inner.Handler()
 }
 
-// Write logs a message at the specified level:
+// Write logs a message at the specified level.
 func (l *logger) Write(level slog.Level, msg string, attrs ...any) {
 	if !l.inner.Enabled(context.Background(), level) {
 		return

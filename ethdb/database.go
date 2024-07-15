@@ -39,8 +39,8 @@ type KeyValueWriter interface {
 
 // KeyValueStater wraps the Stat method of a backing data store.
 type KeyValueStater interface {
-	// Stat returns a particular internal stat of the database.
-	Stat(property string) (string, error)
+	// Stat returns the statistic data of the database.
+	Stat() (string, error)
 }
 
 // Compacter wraps the Compact method of a backing data store.

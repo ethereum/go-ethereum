@@ -186,10 +186,14 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 			// call will just do nothing
 			timer.Stop()
 			delete(s.timeouts, id)
-			s.childEventCb(event)
+			if s.childEventCb != nil {
+				s.childEventCb(event)
+			}
 		}
 	default:
-		s.childEventCb(event)
+		if s.childEventCb != nil {
+			s.childEventCb(event)
+		}
 	}
 }
 
@@ -211,25 +215,27 @@ func (s *serverWithTimeout) startTimeout(reqData RequestResponse) {
 			delete(s.timeouts, id)
 			childEventCb := s.childEventCb
 			s.lock.Unlock()
-			childEventCb(Event{Type: EvFail, Data: reqData})
+			if childEventCb != nil {
+				childEventCb(Event{Type: EvFail, Data: reqData})
+			}
 		})
 		childEventCb := s.childEventCb
 		s.lock.Unlock()
-		childEventCb(Event{Type: EvTimeout, Data: reqData})
+		if childEventCb != nil {
+			childEventCb(Event{Type: EvTimeout, Data: reqData})
+		}
 	})
 }
 
 // unsubscribe stops all goroutines associated with the server.
 func (s *serverWithTimeout) unsubscribe() {
 	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	for _, timer := range s.timeouts {
 		if timer != nil {
 			timer.Stop()
 		}
 	}
-	s.childEventCb = nil
+	s.lock.Unlock()
 	s.parent.Unsubscribe()
 }
 
@@ -328,10 +334,10 @@ func (s *serverWithLimits) eventCallback(event Event) {
 	}
 	childEventCb := s.childEventCb
 	s.lock.Unlock()
-	if passEvent {
+	if passEvent && childEventCb != nil {
 		childEventCb(event)
 	}
-	if sendCanRequestAgain {
+	if sendCanRequestAgain && childEventCb != nil {
 		childEventCb(Event{Type: EvCanRequestAgain})
 	}
 }
@@ -347,13 +353,12 @@ func (s *serverWithLimits) sendRequest(request Request) (reqId ID) {
 // unsubscribe stops all goroutines associated with the server.
 func (s *serverWithLimits) unsubscribe() {
 	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	if s.delayTimer != nil {
 		s.delayTimer.Stop()
 		s.delayTimer = nil
 	}
 	s.childEventCb = nil
+	s.lock.Unlock()
 	s.serverWithTimeout.unsubscribe()
 }
 
@@ -383,7 +388,7 @@ func (s *serverWithLimits) canRequestNow() bool {
 	}
 	childEventCb := s.childEventCb
 	s.lock.Unlock()
-	if sendCanRequestAgain {
+	if sendCanRequestAgain && childEventCb != nil {
 		childEventCb(Event{Type: EvCanRequestAgain})
 	}
 	return canRequest
@@ -415,7 +420,7 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 		}
 		childEventCb := s.childEventCb
 		s.lock.Unlock()
-		if sendCanRequestAgain {
+		if sendCanRequestAgain && childEventCb != nil {
 			childEventCb(Event{Type: EvCanRequestAgain})
 		}
 	})

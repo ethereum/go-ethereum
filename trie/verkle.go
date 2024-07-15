@@ -144,10 +144,8 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount)
 
 	// Encode balance in little-endian
 	bytes := acc.Balance.Bytes()
-	if len(bytes) > 0 {
-		for i, b := range bytes {
-			balance[len(bytes)-i-1] = b
-		}
+	for i, b := range bytes {
+		balance[len(bytes)-i-1] = b
 	}
 	values[utils.BalanceLeafKey] = balance[:]
 
@@ -201,6 +199,57 @@ func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
 	return nil
 }
 
+// RollBackAccount removes the account info + code from the tree, unlike DeleteAccount
+// that will overwrite it with 0s. The first 64 storage slots are also removed.
+func (t *VerkleTrie) RollBackAccount(addr common.Address) error {
+	var (
+		evaluatedAddr = t.cache.Get(addr.Bytes())
+		codeSizeKey   = utils.CodeSizeKeyWithEvaluatedAddress(evaluatedAddr)
+	)
+	codeSizeBytes, err := t.root.Get(codeSizeKey, t.nodeResolver)
+	if err != nil {
+		return fmt.Errorf("rollback: error finding code size: %w", err)
+	}
+	if len(codeSizeBytes) == 0 {
+		return errors.New("rollback: code size is not existent")
+	}
+	codeSize := binary.LittleEndian.Uint64(codeSizeBytes)
+
+	// Delete the account header + first 64 slots + first 128 code chunks
+	key := common.CopyBytes(codeSizeKey)
+	for i := 0; i < verkle.NodeWidth; i++ {
+		key[31] = byte(i)
+
+		// this is a workaround to avoid deleting nil leaves, the lib needs to be
+		// fixed to be able to handle that
+		v, err := t.root.Get(key, t.nodeResolver)
+		if err != nil {
+			return fmt.Errorf("error rolling back account header: %w", err)
+		}
+		if len(v) == 0 {
+			continue
+		}
+		_, err = t.root.Delete(key, t.nodeResolver)
+		if err != nil {
+			return fmt.Errorf("error rolling back account header: %w", err)
+		}
+	}
+	// Delete all further code
+	for i, chunknr := uint64(32*128), uint64(128); i < codeSize; i, chunknr = i+32, chunknr+1 {
+		// evaluate group key at the start of a new group
+		groupOffset := (chunknr + 128) % 256
+		if groupOffset == 0 {
+			key = utils.CodeChunkKeyWithEvaluatedAddress(evaluatedAddr, uint256.NewInt(chunknr))
+		}
+		key[31] = byte(groupOffset)
+		_, err = t.root.Delete(key[:], t.nodeResolver)
+		if err != nil {
+			return fmt.Errorf("error deleting code chunk (addr=%x) error: %w", addr[:], err)
+		}
+	}
+	return nil
+}
+
 // DeleteStorage implements state.Trie, deleting the specified storage slot from
 // the trie. If the storage slot was not existent in the trie, no error will be
 // returned. If the trie is corrupted, an error will be returned.
@@ -217,22 +266,21 @@ func (t *VerkleTrie) Hash() common.Hash {
 }
 
 // Commit writes all nodes to the tree's memory database.
-func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet, error) {
-	root, ok := t.root.(*verkle.InternalNode)
-	if !ok {
-		return common.Hash{}, nil, errors.New("unexpected root node type")
-	}
+func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
+	root := t.root.(*verkle.InternalNode)
 	nodes, err := root.BatchSerialize()
 	if err != nil {
-		return common.Hash{}, nil, fmt.Errorf("serializing tree nodes: %s", err)
+		// Error return from this function indicates error in the code logic
+		// of BatchSerialize, and we fail catastrophically if this is the case.
+		panic(fmt.Errorf("BatchSerialize failed: %v", err))
 	}
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
-		// hash parameter is not used in pathdb
+		// Hash parameter is not used in pathdb
 		nodeset.AddNode(node.Path, trienode.New(common.Hash{}, node.SerializedBytes))
 	}
 	// Serialize root commitment form
-	return t.Hash(), nodeset, nil
+	return t.Hash(), nodeset
 }
 
 // NodeIterator implements state.Trie, returning an iterator that returns
@@ -369,4 +417,9 @@ func (t *VerkleTrie) ToDot() string {
 
 func (t *VerkleTrie) nodeResolver(path []byte) ([]byte, error) {
 	return t.reader.node(path, common.Hash{})
+}
+
+// Witness returns a set containing all trie nodes that have been accessed.
+func (t *VerkleTrie) Witness() map[string]struct{} {
+	panic("not implemented")
 }

@@ -139,16 +139,14 @@ func (set *NodeSet) Size() (int, int) {
 func (set *NodeSet) Summary() string {
 	var out = new(strings.Builder)
 	fmt.Fprintf(out, "nodeset owner: %v\n", set.Owner)
-	if set.Nodes != nil {
-		for path, n := range set.Nodes {
-			// Deletion
-			if n.IsDeleted() {
-				fmt.Fprintf(out, "  [-]: %x\n", path)
-				continue
-			}
-			// Insertion or update
-			fmt.Fprintf(out, "  [+/*]: %x -> %v \n", path, n.Hash)
+	for path, n := range set.Nodes {
+		// Deletion
+		if n.IsDeleted() {
+			fmt.Fprintf(out, "  [-]: %x\n", path)
+			continue
 		}
+		// Insertion or update
+		fmt.Fprintf(out, "  [+/*]: %x -> %v \n", path, n.Hash)
 	}
 	for _, n := range set.Leaves {
 		fmt.Fprintf(out, "[leaf]: %v\n", n)
@@ -186,7 +184,7 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 
 // Flatten returns a two-dimensional map for internal nodes.
 func (set *MergedNodeSet) Flatten() map[common.Hash]map[string]*Node {
-	nodes := make(map[common.Hash]map[string]*Node)
+	nodes := make(map[common.Hash]map[string]*Node, len(set.Sets))
 	for owner, set := range set.Sets {
 		nodes[owner] = set.Nodes
 	}

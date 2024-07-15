@@ -204,12 +204,10 @@ func (s *supply) internalTxsHandler(call *supplyTxCallstack) {
 		s.delta.Burn.Misc.Add(s.delta.Burn.Misc, call.burn)
 	}
 
-	if len(call.calls) > 0 {
-		// Recursively handle internal calls
-		for _, call := range call.calls {
-			callCopy := call
-			s.internalTxsHandler(&callCopy)
-		}
+	// Recursively handle internal calls
+	for _, call := range call.calls {
+		callCopy := call
+		s.internalTxsHandler(&callCopy)
 	}
 }
 
