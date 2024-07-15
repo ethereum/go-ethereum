@@ -210,6 +210,9 @@ func (t *VerkleTrie) RollBackAccount(addr common.Address) error {
 	if err != nil {
 		return fmt.Errorf("rollback: error finding code size: %w", err)
 	}
+	if len(codeSizeBytes) == 0 {
+		return errors.New("rollback: code size is not existent")
+	}
 	codeSize := binary.LittleEndian.Uint64(codeSizeBytes)
 
 	// Delete the account header + first 64 slots + first 128 code chunks
