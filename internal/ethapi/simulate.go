@@ -190,8 +190,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		evm.SetPrecompiles(precompiles)
 	}
 	for i, call := range block.Calls {
-		// TODO: Pre-estimate nonce and gas
-		// TODO: Move gas fees sanitizing to beginning of func
 		if err := sim.sanitizeCall(&call, sim.state, header, blockContext, &gasUsed); err != nil {
 			return nil, nil, err
 		}
