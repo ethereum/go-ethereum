@@ -19,7 +19,6 @@ type BlockTrace struct {
 	StorageTrace      *StorageTrace      `json:"storageTrace"`
 	TxStorageTraces   []*StorageTrace    `json:"txStorageTraces,omitempty"`
 	ExecutionResults  []*ExecutionResult `json:"executionResults"`
-	MPTWitness        *json.RawMessage   `json:"mptwitness,omitempty"`
 	WithdrawTrieRoot  common.Hash        `json:"withdraw_trie_root,omitempty"`
 	StartL1QueueIndex uint64             `json:"startL1QueueIndex"`
 }
@@ -135,13 +134,12 @@ type ExtraData struct {
 }
 
 type AccountWrapper struct {
-	Address          common.Address  `json:"address"`
-	Nonce            uint64          `json:"nonce"`
-	Balance          *hexutil.Big    `json:"balance"`
-	KeccakCodeHash   common.Hash     `json:"keccakCodeHash,omitempty"`
-	PoseidonCodeHash common.Hash     `json:"poseidonCodeHash,omitempty"`
-	CodeSize         uint64          `json:"codeSize"`
-	Storage          *StorageWrapper `json:"storage,omitempty"` // StorageWrapper can be empty if irrelated to storage operation
+	Address          common.Address `json:"address"`
+	Nonce            uint64         `json:"nonce"`
+	Balance          *hexutil.Big   `json:"balance"`
+	KeccakCodeHash   common.Hash    `json:"keccakCodeHash,omitempty"`
+	PoseidonCodeHash common.Hash    `json:"poseidonCodeHash,omitempty"`
+	CodeSize         uint64         `json:"codeSize"`
 }
 
 // StorageWrapper while key & value can also be retrieved from StructLogRes.Storage,

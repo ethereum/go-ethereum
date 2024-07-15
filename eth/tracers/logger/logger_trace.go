@@ -65,18 +65,6 @@ func traceContractCode(l *StructLogger, scope *vm.ScopeContext, extraData *types
 	return nil
 }
 
-// traceStorage get contract's storage at storage_address
-func traceStorage(l *StructLogger, scope *vm.ScopeContext, extraData *types.ExtraData) error {
-	if len(scope.Stack.Data()) == 0 {
-		return nil
-	}
-	key := common.Hash(scope.Stack.Peek().Bytes32())
-	storage := getWrappedAccountForStorage(l, scope.Contract.Address(), key)
-	extraData.StateList = append(extraData.StateList, storage)
-
-	return nil
-}
-
 // traceContractAccount gets the contract's account
 func traceContractAccount(l *StructLogger, scope *vm.ScopeContext, extraData *types.ExtraData) error {
 	// Get account state.
@@ -114,21 +102,6 @@ func getWrappedAccountForAddr(l *StructLogger, address common.Address) *types.Ac
 		KeccakCodeHash:   l.env.StateDB.GetKeccakCodeHash(address),
 		PoseidonCodeHash: l.env.StateDB.GetPoseidonCodeHash(address),
 		CodeSize:         l.env.StateDB.GetCodeSize(address),
-	}
-}
-
-func getWrappedAccountForStorage(l *StructLogger, address common.Address, key common.Hash) *types.AccountWrapper {
-	return &types.AccountWrapper{
-		Address:          address,
-		Nonce:            l.env.StateDB.GetNonce(address),
-		Balance:          (*hexutil.Big)(l.env.StateDB.GetBalance(address)),
-		KeccakCodeHash:   l.env.StateDB.GetKeccakCodeHash(address),
-		PoseidonCodeHash: l.env.StateDB.GetPoseidonCodeHash(address),
-		CodeSize:         l.env.StateDB.GetCodeSize(address),
-		Storage: &types.StorageWrapper{
-			Key:   key.String(),
-			Value: l.env.StateDB.GetState(address, key).String(),
-		},
 	}
 }
 

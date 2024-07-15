@@ -584,15 +584,6 @@ func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, erro
 		}
 	}
 
-	// only zktrie model has the ability to get `mptwitness`.
-	if env.chainConfig.Scroll.ZktrieEnabled() {
-		// // we use MPTWitnessNothing by default and do not allow switch among MPTWitnessType atm.
-		// // MPTWitness will be removed from traces in the future.
-		// if err := zkproof.FillBlockTraceForMPTWitness(zkproof.MPTWitnessNothing, blockTrace); err != nil {
-		// 	log.Error("fill mpt witness fail", "error", err)
-		// }
-	}
-
 	blockTrace.WithdrawTrieRoot = withdrawtrie.ReadWTRSlot(rcfg.L2MessageQueueAddress, env.state)
 
 	return blockTrace, nil

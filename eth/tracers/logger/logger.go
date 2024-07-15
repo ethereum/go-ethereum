@@ -219,7 +219,6 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	stackLen := len(stackData)
 	// Copy a snapshot of the current storage to a new container
 	var storage Storage
-	var recordStorageDetail bool
 	if op == vm.SLOAD || op == vm.SSTORE {
 		// initialise new changed values storage container for this contract
 		// if not present.
@@ -233,7 +232,6 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 				value   = l.env.StateDB.GetState(contract.Address(), address)
 			)
 			l.storage[contract.Address()][address] = value
-			recordStorageDetail = true
 			if !l.cfg.DisableStorage {
 				storage = l.storage[contract.Address()].Copy()
 			}
@@ -244,7 +242,6 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 				address = common.Hash(stackData[stackLen-1].Bytes32())
 			)
 			l.storage[contract.Address()][address] = value
-			recordStorageDetail = true
 			if !l.cfg.DisableStorage {
 				storage = l.storage[contract.Address()].Copy()
 			}
@@ -257,12 +254,6 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, s
 	}
 	// create a new snapshot of the EVM.
 	structLog := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), err, nil}
-
-	if recordStorageDetail {
-		if err := traceStorage(l, scope, structLog.getOrInitExtraData()); err != nil {
-			log.Error("Failed to trace data", "opcode", op.String(), "err", err)
-		}
-	}
 
 	execFuncList, ok := OpcodeExecs[op]
 	if ok {

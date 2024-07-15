@@ -4,14 +4,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-type MPTWitnessType int
-
-const (
-	MPTWitnessNothing MPTWitnessType = iota
-	MPTWitnessNatural
-	MPTWitnessRWTbl
-)
-
 // SMTPathNode represent a node in the SMT Path, all hash is saved by the present of
 // zktype.Hash
 type SMTPathNode struct {
@@ -56,4 +48,15 @@ type StorageTrace struct {
 	CommonStateRoot hexutil.Bytes    `json:"commonStateRoot,omitempty"` //CommonStateRoot is used if there is no update on state storage
 	StatePath       [2]*SMTPath      `json:"statePath,omitempty"`
 	StateUpdate     [2]*StateStorage `json:"stateUpdate,omitempty"`
+}
+
+type ProofList [][]byte
+
+func (n *ProofList) Put(key []byte, value []byte) error {
+	*n = append(*n, value)
+	return nil
+}
+
+func (n *ProofList) Delete(key []byte) error {
+	panic("not supported")
 }
