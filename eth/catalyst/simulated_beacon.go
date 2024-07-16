@@ -341,7 +341,7 @@ func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
 	if parent == nil {
 		return errors.New("parent not found")
 	}
-	_, err := c.sealBlock(true, parent.Time+uint64(adjustment))
+	_, err := c.sealBlock(true, parent.Time+uint64(adjustment/time.Second))
 	return err
 }
 

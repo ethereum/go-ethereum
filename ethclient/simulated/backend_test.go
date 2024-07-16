@@ -106,7 +106,7 @@ func TestAdjustTime(t *testing.T) {
 	block2, _ := client.BlockByNumber(context.Background(), nil)
 	prevTime := block1.Time()
 	newTime := block2.Time()
-	if newTime-prevTime != uint64(time.Minute) {
+	if newTime-prevTime != 60 {
 		t.Errorf("adjusted time not equal to 60 seconds. prev: %v, new: %v", prevTime, newTime)
 	}
 }

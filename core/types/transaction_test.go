@@ -345,6 +345,41 @@ func TestTransactionCoding(t *testing.T) {
 	}
 }
 
+func TestLegacyTransaction_ConsistentV_LargeChainIds(t *testing.T) {
+	chainId := new(big.Int).SetUint64(13317435930671861669)
+
+	txdata := &LegacyTx{
+		Nonce:    1,
+		Gas:      1,
+		GasPrice: big.NewInt(2),
+		Data:     []byte("abcdef"),
+	}
+
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("could not generate key: %v", err)
+	}
+
+	tx, err := SignNewTx(key, NewEIP2930Signer(chainId), txdata)
+	if err != nil {
+		t.Fatalf("could not sign transaction: %v", err)
+	}
+
+	// Make a copy of the initial V value
+	preV, _, _ := tx.RawSignatureValues()
+	preV = new(big.Int).Set(preV)
+
+	if tx.ChainId().Cmp(chainId) != 0 {
+		t.Fatalf("wrong chain id: %v", tx.ChainId())
+	}
+
+	v, _, _ := tx.RawSignatureValues()
+
+	if v.Cmp(preV) != 0 {
+		t.Fatalf("wrong v value: %v", v)
+	}
+}
+
 func encodeDecodeJSON(tx *Transaction) (*Transaction, error) {
 	data, err := json.Marshal(tx)
 	if err != nil {
