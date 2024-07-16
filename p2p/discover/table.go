@@ -525,11 +525,13 @@ func (tab *Table) removeIP(b *bucket, ip netip.Addr) {
 // The caller must hold tab.mutex.
 func (tab *Table) handleAddNode(req addNodeOp) bool {
 	if req.node.ID() == tab.self().ID() {
+		tab.log.Debug("this node is already in table", "id", req.node.ID())
 		return false
 	}
 	// For nodes from inbound contact, there is an additional safety measure: if the table
 	// is still initializing the node is not added.
 	if req.isInbound && !tab.isInitDone() {
+		tab.log.Debug("table is not ready")
 		return false
 	}
 
@@ -537,15 +539,18 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	n, _ := tab.bumpInBucket(b, req.node, req.isInbound)
 	if n != nil {
 		// Already in bucket.
+		tab.log.Debug("the node is already in table", "id", req.node.ID())
 		return false
 	}
 	if len(b.entries) >= bucketSize {
 		// Bucket full, maybe add as replacement.
+		tab.log.Debug("the bucket is full and will add in replacement", "id", req.node.ID())
 		tab.addReplacement(b, req.node)
 		return false
 	}
 	if !tab.addIP(b, req.node.IPAddr()) {
 		// Can't add: IP limit reached.
+		tab.log.Debug("IP limit reached", "id", req.node.ID())
 		return false
 	}
 

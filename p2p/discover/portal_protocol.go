@@ -290,7 +290,11 @@ func (p *PortalProtocol) AddEnr(n *enode.Node) {
 	// immediately add the node to the routing table
 	p.table.mutex.Lock()
 	defer p.table.mutex.Unlock()
-	p.table.handleAddNode(addNodeOp{node: n, isInbound: true, forceSetLive: true})
+	added := p.table.handleAddNode(addNodeOp{node: n, isInbound: true, forceSetLive: true})
+	if !added {
+		p.Log.Warn("add node failed", "id", n.ID())
+		return
+	}
 	id := n.ID().String()
 	p.radiusCache.Set([]byte(id), MaxDistance)
 }
@@ -1433,11 +1437,13 @@ func (p *PortalProtocol) Resolve(n *enode.Node) *enode.Node {
 // It returns nil if the nodeId could not be resolved.
 func (p *PortalProtocol) ResolveNodeId(id enode.ID) *enode.Node {
 	if id == p.Self().ID() {
+		p.Log.Debug("Resolve Self Id", "id", id.String())
 		return p.Self()
 	}
 
 	n := p.table.getNode(id)
 	if n != nil {
+		p.Log.Debug("found Id in table and will request enr from the node", "id", id.String())
 		// Try asking directly. This works if the Node is still responding on the endpoint we have.
 		if resp, err := p.RequestENR(n); err == nil {
 			return resp
