@@ -42,7 +42,16 @@ type Config struct {
 // default settings.
 var HashDefaults = &Config{
 	Preimages: false,
+	IsVerkle:  false,
 	HashDB:    hashdb.Defaults,
+}
+
+// VerkleDefaults represents a config for holding verkle trie data
+// using path-based scheme with default settings.
+var VerkleDefaults = &Config{
+	Preimages: false,
+	IsVerkle:  true,
+	PathDB:    pathdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -84,7 +93,6 @@ type backend interface {
 // relevant with trie nodes and node preimages.
 type Database struct {
 	config    *Config        // Configuration for trie database
-	diskdb    ethdb.Database // Persistent database to store the snapshot
 	preimages *preimageStore // The store for caching preimages
 	backend   backend        // The backend for managing trie nodes
 }
@@ -102,7 +110,6 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	}
 	db := &Database{
 		config:    config,
-		diskdb:    diskdb,
 		preimages: preimages,
 	}
 	if config.HashDB != nil && config.PathDB != nil {
