@@ -173,7 +173,6 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 					}
 					change := int(params.StackLimit) - jt[nextOP].maxStack + jt[nextOP].minStack
 					if have, want := nextBounds.max+change, currentBounds.max; have != want {
-						fmt.Println(nextPC, have, want, change)
 						return 0, fmt.Errorf("%w want %d as max got %d at pos %d,", ErrInvalidBackwardJump, want, have, pos)
 					}
 					if have, want := nextBounds.min+change, currentBounds.min; have != want {

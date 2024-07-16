@@ -122,22 +122,6 @@ func memoryStaticCall(stack *Stack) (uint64, bool) {
 }
 
 func memoryExtCall(stack *Stack) (uint64, bool) {
-	x, overflow := calcMemSize64(stack.Back(2), stack.Back(3))
-	if overflow {
-		return 0, true
-	}
-	return x, false
-}
-
-func memoryExtDelegateCall(stack *Stack) (uint64, bool) {
-	x, overflow := calcMemSize64(stack.Back(1), stack.Back(2))
-	if overflow {
-		return 0, true
-	}
-	return x, false
-}
-
-func memoryExtStaticCall(stack *Stack) (uint64, bool) {
 	x, overflow := calcMemSize64(stack.Back(1), stack.Back(2))
 	if overflow {
 		return 0, true
