@@ -432,6 +432,8 @@ github.com/optimism-java/utp-go v0.0.0-20240603010819-75be99daf402 h1:jssfGQq6xd
 github.com/optimism-java/utp-go v0.0.0-20240603010819-75be99daf402/go.mod h1:DZ0jYzLzt4ZsCmhI/iqYgGFoNx45OfpEoKzXB8HVALQ=
 github.com/optimism-java/utp-go v0.0.0-20240708082218-8e16d096da4a h1:yKF0O3VAaL0hB2mo+5ZU3+XtpMhclvXKs2WWrjFptxg=
 github.com/optimism-java/utp-go v0.0.0-20240708082218-8e16d096da4a/go.mod h1:DZ0jYzLzt4ZsCmhI/iqYgGFoNx45OfpEoKzXB8HVALQ=
+github.com/optimism-java/utp-go v0.0.0-20240716050942-7583a3d702fd h1:D8gytM7P1H2dGRBG+7sOSWBbAFOIbMSPWWbHPb8/rf4=
+github.com/optimism-java/utp-go v0.0.0-20240716050942-7583a3d702fd/go.mod h1:DZ0jYzLzt4ZsCmhI/iqYgGFoNx45OfpEoKzXB8HVALQ=
 github.com/optimism-java/zrnt v0.32.4-0.20240415084906-d9dbf06b32f7 h1:ZTQWXQ8xblCRUXhZs3h5qrBMSAHe8iNH7BG7a7IVFlI=
 github.com/optimism-java/zrnt v0.32.4-0.20240415084906-d9dbf06b32f7/go.mod h1:A0fezkp9Tt3GBLATSPIbuY4ywYESyAuc/FFmPKg8Lqs=
 github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7 h1:oYW+YCJ1pachXTQmzR3rNLYGGz4g/UgFcjb28p/viDM=
