@@ -240,3 +240,49 @@ func TestConvertAddressDataToSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTypedDataArrayValidate(t *testing.T) {
+	t.Parallel()
+
+	typedData := TypedData{
+		Types: Types{
+			"BulkOrder": []Type{
+				// Should be able to accept fixed size arrays
+				{Name: "tree", Type: "OrderComponents[2][2]"},
+			},
+			"OrderComponents": []Type{
+				{Name: "offerer", Type: "address"},
+				{Name: "amount", Type: "uint8"},
+			},
+			"EIP712Domain": []Type{
+				{Name: "name", Type: "string"},
+				{Name: "version", Type: "string"},
+				{Name: "chainId", Type: "uint8"},
+				{Name: "verifyingContract", Type: "address"},
+			},
+		},
+		PrimaryType: "BulkOrder",
+		Domain: TypedDataDomain{
+			VerifyingContract: "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
+		},
+		Message: TypedDataMessage{},
+	}
+
+	if err := typedData.validate(); err != nil {
+		t.Errorf("expected typed data to pass validation, got: %v", err)
+	}
+
+	// Should be able to accept dynamic arrays
+	typedData.Types["BulkOrder"][0].Type = "OrderComponents[]"
+
+	if err := typedData.validate(); err != nil {
+		t.Errorf("expected typed data to pass validation, got: %v", err)
+	}
+
+	// Should be able to accept standard types
+	typedData.Types["BulkOrder"][0].Type = "OrderComponents"
+
+	if err := typedData.validate(); err != nil {
+		t.Errorf("expected typed data to pass validation, got: %v", err)
+	}
+}

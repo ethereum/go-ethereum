@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Za-z](\w*)(\[\])?$`)
+var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Za-z](\w*)(\[\d*\])*$`)
 
 type ValidationInfo struct {
 	Typ     string `json:"type"`
@@ -216,8 +216,9 @@ func (t *Type) isArray() bool {
 // typeName returns the canonical name of the type. If the type is 'Person[]', then
 // this method returns 'Person'
 func (t *Type) typeName() string {
-	if strings.HasSuffix(t.Type, "[]") {
-		return strings.TrimSuffix(t.Type, "[]")
+	if strings.Contains(t.Type, "[") {
+		re := regexp.MustCompile(`\[\d*\]`)
+		return re.ReplaceAllString(t.Type, "")
 	}
 	return t.Type
 }
