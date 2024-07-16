@@ -292,7 +292,7 @@ var (
 	}
 	BeaconApiHeaderFlag = &cli.StringSliceFlag{
 		Name:     "beacon.api.header",
-		Usage:    "Pass custom HTTP header fields to the emote beacon node API in \"key:value\" format. This flag can be given multiple times.",
+		Usage:    "Pass custom HTTP header fields to the remote beacon node API in \"key:value\" format. This flag can be given multiple times.",
 		Category: flags.BeaconCategory,
 	}
 	BeaconThresholdFlag = &cli.IntFlag{

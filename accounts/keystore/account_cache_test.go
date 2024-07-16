@@ -114,7 +114,7 @@ func TestWatchNewFile(t *testing.T) {
 func TestWatchNoDir(t *testing.T) {
 	t.Parallel()
 	// Create ks but not the directory that it watches.
-	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watchnodir-test-%d-%d", os.Getpid(), rand.Int()))
+	dir := filepath.Join(t.TempDir(), fmt.Sprintf("eth-keystore-watchnodir-test-%d-%d", os.Getpid(), rand.Int()))
 	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
 	list := ks.Accounts()
 	if len(list) > 0 {
@@ -126,7 +126,6 @@ func TestWatchNoDir(t *testing.T) {
 	}
 	// Create the directory and copy a key file into it.
 	os.MkdirAll(dir, 0700)
-	defer os.RemoveAll(dir)
 	file := filepath.Join(dir, "aaa")
 	if err := cp.CopyFile(file, cachetestAccounts[0].URL.Path); err != nil {
 		t.Fatal(err)
