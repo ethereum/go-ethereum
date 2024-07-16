@@ -34,23 +34,21 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
-func makeJWTSecret(t *testing.T) (string, [32]byte, error) {
+func makeJWTSecret(t *testing.T) (string, [32]byte) {
+	t.Helper()
 	var secret [32]byte
 	if _, err := crand.Read(secret[:]); err != nil {
-		return "", secret, fmt.Errorf("failed to create jwt secret: %v", err)
+		t.Fatalf("failed to create jwt secret: %v", err)
 	}
 	jwtPath := filepath.Join(t.TempDir(), "jwt_secret")
 	if err := os.WriteFile(jwtPath, []byte(hexutil.Encode(secret[:])), 0600); err != nil {
-		return "", secret, fmt.Errorf("failed to prepare jwt secret file: %v", err)
+		t.Fatalf("failed to prepare jwt secret file: %v", err)
 	}
-	return jwtPath, secret, nil
+	return jwtPath, secret
 }
 
 func TestEthSuite(t *testing.T) {
-	jwtPath, secret, err := makeJWTSecret(t)
-	if err != nil {
-		t.Fatalf("could not make jwt secret: %v", err)
-	}
+	jwtPath, secret := makeJWTSecret(t)
 	geth, err := runGeth("./testdata", jwtPath)
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
@@ -75,10 +73,7 @@ func TestEthSuite(t *testing.T) {
 }
 
 func TestSnapSuite(t *testing.T) {
-	jwtPath, secret, err := makeJWTSecret(t)
-	if err != nil {
-		t.Fatalf("could not make jwt secret: %v", err)
-	}
+	jwtPath, secret := makeJWTSecret(t)
 	geth, err := runGeth("./testdata", jwtPath)
 	if err != nil {
 		t.Fatalf("could not run geth: %v", err)
