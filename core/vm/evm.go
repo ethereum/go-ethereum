@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 	"sync/atomic"
@@ -190,9 +191,9 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Capture the tracer start/end events in debug mode
 	if evm.Config.Tracer != nil {
-		evm.captureBegin(evm.depth, CALL, caller.Address(), addr, input, gas, value.ToBig())
+		evm.captureBegin(evm.depth, CALL, caller.Address(), addr, bytes.Clone(input), gas, value.ToBig())
 		defer func(startGas uint64) {
-			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, bytes.Clone(ret), err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -275,9 +276,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
-		evm.captureBegin(evm.depth, CALLCODE, caller.Address(), addr, input, gas, value.ToBig())
+		evm.captureBegin(evm.depth, CALLCODE, caller.Address(), addr, bytes.Clone(input), gas, value.ToBig())
 		defer func(startGas uint64) {
-			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, bytes.Clone(ret), err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -333,9 +334,9 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		// that caller is something other than a Contract.
 		parent := caller.(*Contract)
 		// DELEGATECALL inherits value from parent call
-		evm.captureBegin(evm.depth, DELEGATECALL, caller.Address(), addr, input, gas, parent.value.ToBig())
+		evm.captureBegin(evm.depth, DELEGATECALL, caller.Address(), addr, bytes.Clone(input), gas, parent.value.ToBig())
 		defer func(startGas uint64) {
-			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, bytes.Clone(ret), err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
@@ -377,9 +378,9 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
-		evm.captureBegin(evm.depth, STATICCALL, caller.Address(), addr, input, gas, nil)
+		evm.captureBegin(evm.depth, STATICCALL, caller.Address(), addr, bytes.Clone(input), gas, nil)
 		defer func(startGas uint64) {
-			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, bytes.Clone(ret), err)
 		}(gas)
 	}
 	// Fail if we're trying to execute above the call depth limit
