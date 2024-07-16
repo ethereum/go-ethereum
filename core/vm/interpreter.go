@@ -18,7 +18,6 @@ package vm
 
 import (
 	"fmt"
-	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -51,7 +50,7 @@ func (ctx *ScopeContext) MemoryData() []byte {
 	if ctx.Memory == nil {
 		return nil
 	}
-	return slices.Clone(ctx.Memory.Data())
+	return ctx.Memory.Data()
 }
 
 // StackData returns the stack data. Callers must not modify the contents
