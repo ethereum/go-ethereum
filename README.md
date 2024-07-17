@@ -57,6 +57,11 @@
          <img width="1060" alt="image" src="https://github.com/user-attachments/assets/26e304cd-b756-4690-b95c-6496edc50b43">
          <img width="1067" alt="image" src="https://github.com/user-attachments/assets/a3d9131c-8e1e-4418-b9b2-1b9dfa59b2dc">
 
+         * Additional details: <br><br>
+
+         <img width="1043" alt="image" src="https://github.com/user-attachments/assets/acf36fe2-796b-4800-9518-29e2d5602a78">
+
+
 5. Terraform script which creates k8s cluster in AWS could be found `/go-ethereum/terraform/main.tf`
 6. Added Blockscount
 
