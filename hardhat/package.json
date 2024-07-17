@@ -1,0 +1,23 @@
+{
+  "name": "hardhat-pacage",
+  "version": "1.0.0",
+  "description": "denis hardhat project",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/denislav-mladenov/go-ethereum.git"
+  },
+  "author": "denis",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/denislav-mladenov/go-ethereum/issues"
+  },
+  "homepage": "https://github.com/denislav-mladenov/go-ethereum#readme",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.6"
+  }
+}
