@@ -29,6 +29,34 @@
    3. The docker-compose file could be found under `/go-ethereum/docker-compose/docer-compose.yml`
 4. The docker deploy file which creates new hardhat could found uder `/go-ethereum/.github/workflows/docker-deploy.yml`
       1. The hardhat project is under `/go-ethereum/hardhat`
+  
+      2. The hardhat project was tested to verify that everything works as expected
+         
+         * hardhat was initilized and new sample project was created: <br><br>
+           
+         <img width="838" alt="image" src="https://github.com/user-attachments/assets/5f7fa570-b5ec-465c-a9c6-830addee9258">
+         
+         * 1 Solidity file was compiled successfully: <br><br>
+           
+         <img width="921" alt="image" src="https://github.com/user-attachments/assets/cd7eb968-d6b8-4bd9-9d7a-2b67609aaf3a">
+         
+         * New test was initiated and passed successfully: <br><br>
+           
+         <img width="949" alt="image" src="https://github.com/user-attachments/assets/75335f61-b46c-4406-9e63-3e71ad4c829e">
+         
+         * Another full test suite for the token with a lot of additional information about Mocha passed successfully: <br><br>
+           
+         <img width="834" alt="image" src="https://github.com/user-attachments/assets/c07a950b-c259-4858-9a25-ad277272b0c7">
+         
+         * The Deployment finished successfully: <br><br>
+           
+         <img width="1209" alt="image" src="https://github.com/user-attachments/assets/1e4b7f7d-cb69-4dd2-ba4f-f1a8f91d904e">
+         
+         * Tested Deploying to remote networks `Infura` <br><br>
+           
+         <img width="1060" alt="image" src="https://github.com/user-attachments/assets/26e304cd-b756-4690-b95c-6496edc50b43">
+         <img width="1067" alt="image" src="https://github.com/user-attachments/assets/a3d9131c-8e1e-4418-b9b2-1b9dfa59b2dc">
+
 5. Terraform script which creates k8s cluster in AWS could be found `/go-ethereum/terraform/main.tf`
 6. Added Blockscount
 
