@@ -1,3 +1,34 @@
+## DevOps Take Home Task
+
+1. Fork the following repo:
+    1. go-ethereum (geth) https://github.com/ethereum/go-ethereum
+2. Update your forked repo with the following functionality:
+    1. When a PR with label `CI:Build` is merged in it, a trigger kicks in and:
+        1. builds a new docker image of the given project
+        2. uploads it to a registry
+    2. Create a Docker Compose definition that runs a local devnet with the newly built image.
+3. Create e new directory named `hardhat` in the repository. Inside it start a new **Sample Hardhat Project** (*following official Hardhat docs*)
+    1. When a PR with label `CI:Deploy` is merged in the repo, a pipeline is triggered that
+        1. runs a local devnet using the forked `go-ethereum` image.
+        2. deploys the Sample Hardhat Project to it.
+        3. builds a new docker image, which allows to run an instance of the devnet with the contracts already deployed and uploads it to the same registry with a suitable different tag
+4. Add a step to the pipeline which runs the hardhat tests from the sample project against the image with predeployed contracts 
+5. Create a Terraform script that quickly creates a k8s cluster in the cloud and deploys an instance of the built image to it.
+6. (Bonus) Add Blockscout explorer to the Docker Compose definition created
+
+## DevOps Task Solution. (Under construction)
+
+1. The forked repo could be found under `https://github.com/denislav-mladenov/go-ethereum`
+2. Updated the forked repo with new functionality.
+   1. The required docker image file could be found under `/go-ethereum/.github/workflows/docker-build.yml`
+   2. The docker-compose file could be found under `/go-ethereum/docker-compose/docer-compose.yml`
+4. The docker deploy file which creates new hardhat could found uder `/go-ethereum/.github/workflows/docker-deploy.yml`
+      1. The hardhat project is under `/go-ethereum/hardhat`
+5. Terraform script which creates k8s cluster in AWS could be found `/go-ethereum/terraform/main.tf`
+6. Added Blockscount
+
+
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
