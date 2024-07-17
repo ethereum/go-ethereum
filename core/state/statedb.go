@@ -860,12 +860,16 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 		obj := s.stateObjects[addr] // closure for the task runner below
 		workers.Go(func() error {
-			obj.updateRoot()
+			if s.db.TrieDB().IsVerkle() {
+				obj.updateTrie()
+			} else {
+				obj.updateRoot()
 
-			// If witness building is enabled and the state object has a trie,
-			// gather the witnesses for its specific storage trie
-			if s.witness != nil && obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness())
+				// If witness building is enabled and the state object has a trie,
+				// gather the witnesses for its specific storage trie
+				if s.witness != nil && obj.trie != nil {
+					s.witness.AddState(obj.trie.Witness())
+				}
 			}
 			return nil
 		})
