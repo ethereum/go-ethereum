@@ -1,13 +1,13 @@
 version: '3.8'
-
+ 
 services:
   geth:
-    image: denislav-mladenov/go-ethereum:latest
+    image: ghcr.io/denislav-mladenov/go-ethereum:latest
     ports:
       - "8545:8545"
       - "8546:8546"
-      - "30303:30303"
-    command: >
+      - "30303:30303
+    command: 
       --dev
       --http
       --http.addr 0.0.0.0

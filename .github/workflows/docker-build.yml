@@ -1,5 +1,5 @@
 name: docker-build
-
+ 
 on:
   pull_request:
     branches: [ "master" ]
@@ -35,6 +35,6 @@ jobs:
 
     - name: Build docker image
       uses: docker/build-push-action@v5
-      with:
+      with: 
         push: true
         tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
