@@ -77,7 +77,7 @@ jobs:
       run: docker exec go-ethereum sh -c "cd /workspace/hardhat && ls -larth && cat hardhat.config.js"
 
     - name: Deploy hardhat sample project
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat run scripts/deploy.js --network devnet"
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
 
     - name: Testing contracts
       run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat test"
