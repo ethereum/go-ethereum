@@ -166,6 +166,7 @@ func TestFreezerRepairDanglingHead(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer f.Close()
 		// The last item should be missing
 		if _, err = f.Retrieve(0xff); err == nil {
 			t.Errorf("Expected error for missing index entry")
@@ -235,7 +236,11 @@ func TestFreezerRepairDanglingHeadLarge(t *testing.T) {
 
 	// And if we open it, we should now be able to read all of them (new values)
 	{
-		f, _ := newTable(tmpDirPath, fname, rm, wm, sg, 50, true, false)
+		f, err := newTable(tmpDirPath, fname, rm, wm, sg, 50, true, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
 		for y := 1; y < 255; y++ {
 			exp := getChunk(15, ^y)
 			got, err := f.Retrieve(uint64(y))
@@ -285,9 +290,9 @@ func TestSnappyDetection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer f.Close()
 		// There should be 255 items
 		if _, err = f.Retrieve(0xfe); err != nil {
-			f.Close()
 			t.Fatalf("expected no error, got %v", err)
 		}
 	}
@@ -1153,6 +1158,7 @@ func TestFreezerReadonly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer f.Close()
 	v, err := f.Retrieve(10)
 	if err != nil {
 		t.Fatal(err)
