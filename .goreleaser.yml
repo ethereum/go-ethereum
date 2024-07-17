@@ -6,6 +6,7 @@ dist: /tmp/dist/mev-commit-geth
 builds:
   - env:
       - CGO_ENABLED=0
+      - GOWORK=off
     goos:
       - linux
       - windows
