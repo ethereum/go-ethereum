@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  geth:
+    image: denislav-mladenov/go-ethereum:latest
+    ports:
+      - "8545:8545"
+      - "30303:30303"
+    volumes:
+      - ./data:/root/.ethereum
+    command: --dev --http --http.addr 0.0.0.0 --http.port 8545 --http.api eth,net,web3,personal,miner
+
