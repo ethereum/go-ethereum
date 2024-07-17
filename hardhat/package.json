@@ -15,6 +15,7 @@
   "bugs": {
     "url": "https://github.com/denislav-mladenov/go-ethereum/issues"
   },
+  "homepage": "https://github.com/denislav-mladenov/go-ethereum#readme",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "hardhat": "^2.22.5"
