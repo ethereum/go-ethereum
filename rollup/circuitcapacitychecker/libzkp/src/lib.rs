@@ -1,7 +1,5 @@
-#![feature(once_cell)]
-
 pub mod checker {
-    use crate::utils::{c_char_to_str, c_char_to_vec, vec_to_c_char};
+    use crate::utils::vec_to_c_char;
     use anyhow::{anyhow, bail, Error};
     use libc::c_char;
     use prover::{
@@ -9,10 +7,11 @@ pub mod checker {
         BlockTrace,
     };
     use serde_derive::{Deserialize, Serialize};
-    use std::cell::OnceCell;
+    use std::{cell::OnceCell, ptr::null_mut};
     use std::collections::HashMap;
     use std::panic;
     use std::ptr::null;
+    use std::ffi::CStr;
 
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct CommonResult {
@@ -47,6 +46,17 @@ pub mod checker {
 
     /// # Safety
     #[no_mangle]
+    pub unsafe extern "C" fn parse_json_to_rust_trace(trace_json_ptr: *const c_char) -> *mut BlockTrace {
+        let trace_json_cstr = unsafe { CStr::from_ptr(trace_json_ptr) };
+        let trace = serde_json::from_slice::<BlockTrace>(trace_json_cstr.to_bytes());
+        match trace {
+            Err(_) => return null_mut(),
+            Ok(t) => return Box::into_raw(Box::new(t))
+        }
+    }
+
+    /// # Safety
+    #[no_mangle]
     pub unsafe extern "C" fn new_circuit_capacity_checker() -> u64 {
         let checkers = CHECKERS
             .get_mut()
@@ -70,8 +80,9 @@ pub mod checker {
 
     /// # Safety
     #[no_mangle]
-    pub unsafe extern "C" fn apply_tx(id: u64, tx_traces: *const c_char) -> *const c_char {
-        let result = apply_tx_inner(id, tx_traces);
+    pub unsafe extern "C" fn apply_tx(id: u64, trace_ptr: *mut BlockTrace) -> *const c_char {
+        let trace = Box::from_raw(trace_ptr);
+        let result = apply_tx_inner(id, *trace);
         let r = match result {
             Ok(acc_row_usage) => {
                 log::debug!(
@@ -92,14 +103,12 @@ pub mod checker {
         serde_json::to_vec(&r).map_or(null(), vec_to_c_char)
     }
 
-    unsafe fn apply_tx_inner(id: u64, tx_traces: *const c_char) -> Result<RowUsage, Error> {
+    unsafe fn apply_tx_inner(id: u64, traces: BlockTrace) -> Result<RowUsage, Error> {
         log::debug!(
             "ccc apply_tx raw input, id: {:?}, tx_traces: {:?}",
             id,
-            c_char_to_str(tx_traces)?
+            traces
         );
-        let tx_traces_vec = c_char_to_vec(tx_traces);
-        let traces = serde_json::from_slice::<BlockTrace>(&tx_traces_vec)?;
 
         if traces.transactions.len() != 1 {
             bail!("traces.transactions.len() != 1");
@@ -121,7 +130,7 @@ pub mod checker {
                 .ok_or(anyhow!(
                     "fail to get circuit capacity checker (id: {id:?}) in apply_tx"
                 ))?
-                .estimate_circuit_capacity(&[traces])
+                .estimate_circuit_capacity(traces)
         });
         match r {
             Ok(result) => result,
@@ -133,8 +142,9 @@ pub mod checker {
 
     /// # Safety
     #[no_mangle]
-    pub unsafe extern "C" fn apply_block(id: u64, block_trace: *const c_char) -> *const c_char {
-        let result = apply_block_inner(id, block_trace);
+    pub unsafe extern "C" fn apply_block(id: u64, trace_ptr: *mut BlockTrace) -> *const c_char {
+        let trace = Box::from_raw(trace_ptr);
+        let result = apply_block_inner(id, *trace);
         let r = match result {
             Ok(acc_row_usage) => {
                 log::debug!(
@@ -155,14 +165,12 @@ pub mod checker {
         serde_json::to_vec(&r).map_or(null(), vec_to_c_char)
     }
 
-    unsafe fn apply_block_inner(id: u64, block_trace: *const c_char) -> Result<RowUsage, Error> {
+    unsafe fn apply_block_inner(id: u64, traces: BlockTrace) -> Result<RowUsage, Error> {
         log::debug!(
             "ccc apply_block raw input, id: {:?}, block_trace: {:?}",
             id,
-            c_char_to_str(block_trace)?
+            traces
         );
-        let block_trace = c_char_to_vec(block_trace);
-        let traces = serde_json::from_slice::<BlockTrace>(&block_trace)?;
 
         let r = panic::catch_unwind(|| {
             CHECKERS
@@ -174,7 +182,7 @@ pub mod checker {
                 .ok_or(anyhow!(
                     "fail to get circuit capacity checker (id: {id:?}) in apply_block"
                 ))?
-                .estimate_circuit_capacity(&[traces])
+                .estimate_circuit_capacity(traces)
         });
         match r {
             Ok(result) => result,
@@ -263,6 +271,7 @@ pub mod utils {
     use std::ffi::{CStr, CString};
     use std::os::raw::c_char;
     use std::str::Utf8Error;
+    use prover::BlockTrace;
 
     /// # Safety
     #[no_mangle]
@@ -274,6 +283,13 @@ pub mod utils {
 
         let _ = CString::from_raw(ptr);
     }
+
+    /// # Safety
+    #[no_mangle]
+    pub unsafe extern "C" fn free_rust_trace(trace_ptr: *mut BlockTrace) {
+        let _ = Box::from_raw(trace_ptr);
+    }
+
 
     #[allow(dead_code)]
     pub(crate) fn c_char_to_str(c: *const c_char) -> Result<&'static str, Utf8Error> {
