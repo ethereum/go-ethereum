@@ -1,11 +1,11 @@
-require("@nomiclabs/hardhat-waffle");
+require("@nomicfoundation/hardhat-toolbox");
 
+/** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: "0.8.4",
+  solidity: "0.8.24",
   networks: {
     devnet: {
       url: "http://localhost:8545",
-      chainId: 1337,
     },
   },
 };
