@@ -145,8 +145,8 @@ func BuyGasRip7560Transaction(st *types.Rip7560AccountAbstractionTx, state vm.St
 
 	chargeFrom := st.Sender
 
-	if st.Paymaster != nil {
-		chargeFrom = st.Paymaster
+	if st.Paymaster != nil && st.Paymaster.Cmp(common.Address{}) != 0 {
+		chargeFrom = *st.Paymaster
 	}
 
 	if have, want := state.GetBalance(*chargeFrom), balanceCheck; have.Cmp(want) < 0 {
@@ -183,6 +183,11 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 		GasPrice: tx.GasFeeCap(),
 	}
 	evm := vm.NewEVM(blockContext, txContext, statedb, chainConfig, cfg)
+
+	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
+		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, common.Address{})
+	}
+
 	/*** Deployer Frame ***/
 	deployerMsg := prepareDeployerMessage(tx, chainConfig)
 	var deploymentUsedGas uint64
@@ -202,7 +207,6 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 			err = errors.New("sender not deployed")
 		}
 		if err != nil {
-			// TODO: bubble up the inner error message to the user, if possible
 			return nil, fmt.Errorf("account deployment failed: %v", err)
 		}
 		statedb.IntermediateRoot(true)
@@ -348,7 +352,7 @@ func ApplyRip7560ExecutionPhase(config *params.ChainConfig, vpr *ValidationPhase
 
 func prepareDeployerMessage(baseTx *types.Transaction, config *params.ChainConfig) *Message {
 	tx := baseTx.Rip7560TransactionData()
-	if tx.Deployer == nil {
+	if tx.Deployer == nil || tx.Deployer.Cmp(common.Address{}) == 0 {
 		return nil
 	}
 	return &Message{
@@ -395,7 +399,7 @@ func prepareAccountValidationMessage(baseTx *types.Transaction, chainConfig *par
 
 func preparePaymasterValidationMessage(baseTx *types.Transaction, config *params.ChainConfig, signingHash common.Hash) (*Message, error) {
 	tx := baseTx.Rip7560TransactionData()
-	if tx.Paymaster == nil {
+	if tx.Paymaster == nil || tx.Paymaster.Cmp(common.Address{}) == 0 {
 		return nil, nil
 	}
 	jsondata := `[
