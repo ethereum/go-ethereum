@@ -51,6 +51,9 @@ jobs:
           --ws.origins "*" \
           --ws.api personal,db,eth,net,web3
 
+    - name: Wait for the Ethereum node to be ready
+      run: sleep 15
+
     - name: Copying the hardhat files to the container
       run: |
         docker exec go-ethereum mkdir -p /workspace/hardhat
@@ -64,14 +67,14 @@ jobs:
     - name: Installation of hardhat
       run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev hardhat"
 
-    - name: Checking the hardhat version to verify that its working properly
+    - name: Checking the hardhat version to verify that it's working properly
       run: docker exec go-ethereum npx hardhat --version
 
     - name: Verify Hardhat project
       run: docker exec go-ethereum sh -c "cd /workspace/hardhat && ls -larth && cat hardhat.config.js"
 
     - name: Deploy hardhat sample project
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat run scripts/deploy.js --network devnet"
 
     - name: Testing contracts
       run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat test"
