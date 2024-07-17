@@ -1,5 +1,5 @@
 version: '3.8'
-
+ 
 services:
   geth:
     image: ghcr.io/denislav-mladenov/go-ethereum:latest
