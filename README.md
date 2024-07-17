@@ -1,3 +1,72 @@
+## DevOps Take Home Task
+
+1. Fork the following repo:
+    1. go-ethereum (geth) https://github.com/ethereum/go-ethereum
+2. Update your forked repo with the following functionality:
+    1. When a PR with label `CI:Build` is merged in it, a trigger kicks in and:
+        1. builds a new docker image of the given project
+        2. uploads it to a registry
+    2. Create a Docker Compose definition that runs a local devnet with the newly built image.
+3. Create e new directory named `hardhat` in the repository. Inside it start a new **Sample Hardhat Project** (*following official Hardhat docs*)
+    1. When a PR with label `CI:Deploy` is merged in the repo, a pipeline is triggered that
+        1. runs a local devnet using the forked `go-ethereum` image.
+        2. deploys the Sample Hardhat Project to it.
+        3. builds a new docker image, which allows to run an instance of the devnet with the contracts already deployed and uploads it to the same registry with a suitable different tag
+4. Add a step to the pipeline which runs the hardhat tests from the sample project against the image with predeployed contracts 
+5. Create a Terraform script that quickly creates a k8s cluster in the cloud and deploys an instance of the built image to it.
+6. (Bonus) Add Blockscout explorer to the Docker Compose definition created
+
+## DevOps Task Solution. (Under construction)
+
+1. The forked repo could be found under `https://github.com/denislav-mladenov/go-ethereum`
+2. Updated the forked repo with new functionality.
+   1. The required docker image file could be found under `/go-ethereum/.github/workflows/docker-build.yml`
+      1. The PR was successfully executed and completed:
+         <img width="703" alt="image" src="https://github.com/user-attachments/assets/d53b9525-f5f3-4e82-b17e-2239488f8cee">
+
+         ![image](https://github.com/user-attachments/assets/a7d2819c-b28c-420b-97d9-0ae977b2d53c)
+
+   3. The docker-compose file could be found under `/go-ethereum/docker-compose/docer-compose.yml`
+4. The docker deploy file which creates new hardhat could found uder `/go-ethereum/.github/workflows/docker-deploy.yml`
+      1. The hardhat project is under `/go-ethereum/hardhat`
+  
+      2. The hardhat project was tested to verify that everything works as expected
+         
+         * hardhat was initilized and new sample project was created: <br><br>
+           
+         <img width="838" alt="image" src="https://github.com/user-attachments/assets/5f7fa570-b5ec-465c-a9c6-830addee9258">
+         
+         * 1 Solidity file was compiled successfully: <br><br>
+           
+         <img width="921" alt="image" src="https://github.com/user-attachments/assets/cd7eb968-d6b8-4bd9-9d7a-2b67609aaf3a">
+         
+         * New test was initiated and passed successfully: <br><br>
+           
+         <img width="949" alt="image" src="https://github.com/user-attachments/assets/75335f61-b46c-4406-9e63-3e71ad4c829e">
+         
+         * Another full test suite for the token with a lot of additional information about Mocha passed successfully: <br><br>
+           
+         <img width="834" alt="image" src="https://github.com/user-attachments/assets/c07a950b-c259-4858-9a25-ad277272b0c7">
+         
+         * The Deployment finished successfully: <br><br>
+           
+         <img width="1209" alt="image" src="https://github.com/user-attachments/assets/1e4b7f7d-cb69-4dd2-ba4f-f1a8f91d904e">
+         
+         * Tested Deploying to remote networks `Infura` <br><br>
+           
+         <img width="1060" alt="image" src="https://github.com/user-attachments/assets/26e304cd-b756-4690-b95c-6496edc50b43">
+         <img width="1067" alt="image" src="https://github.com/user-attachments/assets/a3d9131c-8e1e-4418-b9b2-1b9dfa59b2dc">
+
+         * Additional details: <br><br>
+
+         <img width="1043" alt="image" src="https://github.com/user-attachments/assets/acf36fe2-796b-4800-9518-29e2d5602a78">
+
+
+5. Terraform script which creates k8s cluster in AWS could be found `/go-ethereum/terraform/main.tf`
+6. Added Blockscount
+
+
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
