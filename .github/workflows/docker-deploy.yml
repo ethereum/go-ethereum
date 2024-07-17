@@ -59,13 +59,16 @@ jobs:
         docker exec go-ethereum mkdir -p /workspace/hardhat
         docker cp ${{ github.workspace }}/hardhat/. go-ethereum:/workspace/hardhat
         docker exec go-ethereum ls -larth /workspace/hardhat
-          
+
     - name: Installing the required Node.js and npm
       run: |
         docker exec go-ethereum apk add --no-cache nodejs npm
 
-    - name: Installation of hardhat
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev hardhat"
+    - name: Installing hardhat dependencies
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install"
+
+    - name: Installation of hardhat plugins
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev @nomiclabs/hardhat-waffle ethereum-waffle chai"
 
     - name: Checking the hardhat version to verify that it's working properly
       run: docker exec go-ethereum npx hardhat --version
@@ -86,4 +89,3 @@ jobs:
   
     - name: Push new image to ghcr.io
       run: docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/go-eth-hardhat:latest
-
