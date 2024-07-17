@@ -21,7 +21,12 @@
 1. The forked repo could be found under `https://github.com/denislav-mladenov/go-ethereum`
 2. Updated the forked repo with new functionality.
    1. The required docker image file could be found under `/go-ethereum/.github/workflows/docker-build.yml`
-   2. The docker-compose file could be found under `/go-ethereum/docker-compose/docer-compose.yml`
+      1. The PR was successfully executed and completed:
+         <img width="703" alt="image" src="https://github.com/user-attachments/assets/d53b9525-f5f3-4e82-b17e-2239488f8cee">
+
+         ![image](https://github.com/user-attachments/assets/a7d2819c-b28c-420b-97d9-0ae977b2d53c)
+
+   3. The docker-compose file could be found under `/go-ethereum/docker-compose/docer-compose.yml`
 4. The docker deploy file which creates new hardhat could found uder `/go-ethereum/.github/workflows/docker-deploy.yml`
       1. The hardhat project is under `/go-ethereum/hardhat`
 5. Terraform script which creates k8s cluster in AWS could be found `/go-ethereum/terraform/main.tf`
