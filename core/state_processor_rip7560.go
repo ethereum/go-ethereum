@@ -29,10 +29,9 @@ func PackValidationData(authorizerMagic uint64, validUntil, validAfter uint64) [
 
 func UnpackValidationData(validationData []byte) (authorizerMagic uint64, validUntil, validAfter uint64) {
 
-	t := new(big.Int).SetBytes(validationData)
-	authorizerMagic = t.Uint64()
-	validUntil = t.Rsh(t, 160).Uint64() // & 0xffffff
-	validAfter = t.Rsh(t, 48).Uint64()
+	authorizerMagic = new(big.Int).SetBytes(validationData[:20]).Uint64()
+	validUntil = new(big.Int).SetBytes(validationData[20:26]).Uint64()
+	validAfter = new(big.Int).SetBytes(validationData[26:32]).Uint64()
 	return
 }
 
