@@ -431,6 +431,7 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 	pendingBundle, err := miner.txpool.PendingRip7560Bundle()
 	if pendingBundle != nil {
 		if err = miner.commitRip7560TransactionsBundle(env, pendingBundle, interrupt); err != nil {
+			log.Error(err.Error())
 			return err
 		}
 	}

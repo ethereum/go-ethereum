@@ -493,6 +493,7 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			To:         &common.Address{},
 			ChainID:    (*big.Int)(args.ChainID),
 			Gas:        uint64(*args.Gas),
+			Nonce:      uint64(*args.Nonce),
 			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
 			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
 			Value:      (*big.Int)(args.Value),
