@@ -493,7 +493,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			if err := c.UnmarshalBinary(codeAndHash.code, isInitcodeEOF); err != nil {
 				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, err)
 			}
-			if err := c.ValidateCode(evm.interpreter.tableEOF); err != nil {
+			if err := c.ValidateCode(evm.interpreter.tableEOF, isInitcodeEOF); err != nil {
 				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, err)
 			}
 			contract.Container = &c

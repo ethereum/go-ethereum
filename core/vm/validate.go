@@ -36,20 +36,41 @@ var (
 	ErrInvalidMaxStackHeight         = errors.New("invalid max stack height")
 	ErrInvalidCodeTermination        = errors.New("invalid code termination")
 	ErrEOFCreateWithTruncatedSection = errors.New("eofcreate with truncated section")
+	ErrOrphanedSubcontainer          = errors.New("subcontainer not referenced at all")
+	ErrIncompatibleContainerKind     = errors.New("incompatible container kind")
+	ErrStopAndReturnContract         = errors.New("Stop/Return and Returncontract in the same code section")
+	ErrStopInInitCode                = errors.New("initcode contains a RETURN or STOP opcode")
+	ErrTruncatedTopLevelContainer    = errors.New("truncated top level container")
 	ErrUnreachableCode               = errors.New("unreachable code")
 )
 
+const (
+	NotRefByEither = iota
+	RefByReturnContract
+	RefByEOFCreate
+)
+
+type ValidationResult struct {
+	VisitedCode          map[int]struct{}
+	VisitedSubContainers map[int]int
+	IsInitCode           bool
+	IsRuntime            bool
+}
+
 // validateCode validates the code parameter against the EOF v1 validity requirements.
-func validateCode(code []byte, section int, container *Container, jt *JumpTable) (map[int]struct{}, error) {
+func validateCode(code []byte, section int, container *Container, jt *JumpTable, isInitCode bool) (*ValidationResult, error) {
 	var (
 		i = 0
 		// Tracks the number of actual instructions in the code (e.g.
 		// non-immediate values). This is used at the end to determine
 		// if each instruction is reachable.
-		count    = 0
-		op       OpCode
-		analysis bitvec
-		visited  = make(map[int]struct{})
+		count                = 0
+		op                   OpCode
+		analysis             bitvec
+		visitedCode          = make(map[int]struct{})
+		visitedSubcontainers = make(map[int]int)
+		hasReturnContract    bool
+		hasStop              bool
 	)
 	// This loop visits every single instruction and verifies:
 	// * if the instruction is valid for the given jump table.
@@ -61,63 +82,88 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 		count++
 		op = OpCode(code[i])
 		if jt[op].undefined {
-			return visited, fmt.Errorf("%w: op %s, pos %d", ErrUndefinedInstruction, op, i)
+			return nil, fmt.Errorf("%w: op %s, pos %d", ErrUndefinedInstruction, op, i)
 		}
 		if size := jt[op].immediate; size != 0 {
 			if len(code) <= i+size {
-				return visited, fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
+				return nil, fmt.Errorf("%w: op %s, pos %d", ErrTruncatedImmediate, op, i)
 			}
 			switch {
 			case op == RJUMP || op == RJUMPI:
 				if err := checkDest(code, &analysis, i+1, i+3, len(code)); err != nil {
-					return visited, err
+					return nil, err
 				}
 			case op == RJUMPV:
 				max_size := int(code[i+1])
 				length := max_size + 1
 				if len(code) <= i+length {
-					return visited, fmt.Errorf("%w: jump table truncated, op %s, pos %d", ErrTruncatedImmediate, op, i)
+					return nil, fmt.Errorf("%w: jump table truncated, op %s, pos %d", ErrTruncatedImmediate, op, i)
 				}
 				offset := i + 2
 				for j := 0; j < length; j++ {
 					if err := checkDest(code, &analysis, offset+j*2, offset+(length*2), len(code)); err != nil {
-						return visited, err
+						return nil, err
 					}
 				}
 				i += 2 * max_size
 			case op == CALLF:
 				arg, _ := parseUint16(code[i+1:])
 				if arg >= len(container.Types) {
-					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
+					return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
 				}
 				if container.Types[arg].Output == 0x80 {
-					return visited, fmt.Errorf("%w: section %v", ErrInvalidCallArgument, arg)
+					return nil, fmt.Errorf("%w: section %v", ErrInvalidCallArgument, arg)
 				}
-				visited[arg] = struct{}{}
+				visitedCode[arg] = struct{}{}
 			case op == JUMPF:
 				arg, _ := parseUint16(code[i+1:])
 				if arg >= len(container.Types) {
-					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
+					return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
 				}
-				visited[arg] = struct{}{}
+				visitedCode[arg] = struct{}{}
 			case op == DATALOADN:
 				arg, _ := parseUint16(code[i+1:])
 				if arg+32 > len(container.Data) {
-					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(container.Data), i)
+					return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(container.Data), i)
 				}
 			case op == RETURNCONTRACT:
 				arg := int(code[i+1])
 				if arg >= len(container.ContainerSections) {
-					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
+					return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
 				}
+				// We need to store per subcontainer how it was referenced
+				if v, ok := visitedSubcontainers[arg]; ok && v != RefByReturnContract {
+					return nil, fmt.Errorf("section already referenced, arg :%d", arg)
+				}
+				if hasStop {
+					return nil, ErrStopAndReturnContract
+				}
+				hasReturnContract = true
+				visitedSubcontainers[arg] = RefByReturnContract
 			case op == EOFCREATE:
 				arg := int(code[i+1])
 				if arg >= len(container.ContainerSections) {
-					return visited, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
+					return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
 				}
 				if ct := container.ContainerSections[arg]; len(ct.Data) != ct.DataSize {
-					return visited, fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", ErrEOFCreateWithTruncatedSection, arg, len(ct.Data), ct.DataSize, i)
+					return nil, fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", ErrEOFCreateWithTruncatedSection, arg, len(ct.Data), ct.DataSize, i)
 				}
+				if _, ok := visitedSubcontainers[arg]; ok {
+					return nil, fmt.Errorf("section already referenced, arg :%d", arg)
+				}
+				// We need to store per subcontainer how it was referenced
+				if v, ok := visitedSubcontainers[arg]; ok && v != RefByEOFCreate {
+					return nil, fmt.Errorf("section already referenced, arg :%d", arg)
+				}
+				visitedSubcontainers[arg] = RefByEOFCreate
+			case op == STOP || op == RETURN:
+				if isInitCode {
+					return nil, ErrStopInInitCode
+				}
+				if hasReturnContract {
+					return nil, ErrStopAndReturnContract
+				}
+				hasStop = true
 			}
 			i += size
 		}
@@ -126,16 +172,21 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable)
 	// Code sections may not "fall through" and require proper termination.
 	// Therefore, the last instruction must be considered terminal or RJUMP.
 	if !jt[op].terminal && op != RJUMP {
-		return visited, fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, i)
+		return nil, fmt.Errorf("%w: end with %s, pos %d", ErrInvalidCodeTermination, op, i)
 	}
 	if paths, err := validateControlFlow2(code, section, container.Types, jt); err != nil {
-		return visited, err
+		return nil, err
 	} else if paths != count {
 		fmt.Printf("Paths: %v Count: %v\n", paths, count)
 		// TODO(matt): return actual position of unreachable code
-		return visited, ErrUnreachableCode
+		return nil, ErrUnreachableCode
 	}
-	return visited, nil
+	return &ValidationResult{
+		VisitedCode:          visitedCode,
+		VisitedSubContainers: visitedSubcontainers,
+		IsInitCode:           hasReturnContract,
+		IsRuntime:            hasStop,
+	}, nil
 }
 
 // checkDest parses a relative offset at code[0:2] and checks if it is a valid jump destination.

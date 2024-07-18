@@ -206,7 +206,7 @@ func parseAndValidate(s string, isInitCode bool) (*vm.Container, error) {
 	if err := c.UnmarshalBinary(b, isInitCode); err != nil {
 		return nil, err
 	}
-	if err := c.ValidateCode(&jt); err != nil {
+	if err := c.ValidateCode(&jt, isInitCode); err != nil {
 		return nil, err
 	}
 	return &c, nil

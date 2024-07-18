@@ -300,7 +300,7 @@ func applyEOFChecks(prestate *Prestate, chainConfig *params.ChainConfig) error {
 				err = c.UnmarshalBinary(acc.Code, false)
 				if err == nil {
 					jt := vm.NewPragueEOFInstructionSetForTesting()
-					err = c.ValidateCode(&jt)
+					err = c.ValidateCode(&jt, false)
 				}
 				if err != nil {
 					return NewError(ErrorConfig, fmt.Errorf("code at %s considered invalid: %v", addr, err))

@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -143,11 +145,18 @@ func (c *Container) MarshalBinary() []byte {
 
 // UnmarshalBinary decodes an EOF container.
 func (c *Container) UnmarshalBinary(b []byte, isInitcode bool) error {
+	return c.unmarshaSubContainer(b, isInitcode, true)
+}
+
+func (c *Container) unmarshaSubContainer(b []byte, isInitcode bool, topLevel bool) error {
 	if !hasEOFMagic(b) {
 		return fmt.Errorf("%w: want %x", ErrInvalidMagic, eofMagic)
 	}
 	if len(b) < 14 {
 		return io.ErrUnexpectedEOF
+	}
+	if len(b) > params.MaxInitCodeSize {
+		return ErrMaxInitCodeSizeExceeded
 	}
 	if !isEOFVersion1(b) {
 		return fmt.Errorf("%w: have %d, want %d", ErrInvalidVersion, b[2], eof1Version)
@@ -282,7 +291,7 @@ func (c *Container) UnmarshalBinary(b []byte, isInitcode bool) error {
 			}
 			c := new(Container)
 			end := min(idx+size, len(b))
-			if err := c.UnmarshalBinary(b[idx:end], isInitcode); err != nil {
+			if err := c.unmarshaSubContainer(b[idx:end], isInitcode, false); err != nil {
 				return fmt.Errorf("%w for section %d", err, i)
 			}
 			container = append(container, c)
@@ -299,6 +308,9 @@ func (c *Container) UnmarshalBinary(b []byte, isInitcode bool) error {
 	if !isInitcode {
 		end = min(idx+dataSize, len(b))
 	}
+	if topLevel && len(b) != idx+dataSize {
+		return ErrTruncatedTopLevelContainer
+	}
 	c.Data = b[idx:end]
 
 	return nil
@@ -306,8 +318,13 @@ func (c *Container) UnmarshalBinary(b []byte, isInitcode bool) error {
 
 // ValidateCode validates each code section of the container against the EOF v1
 // rule set.
-func (c *Container) ValidateCode(jt *JumpTable) error {
+func (c *Container) ValidateCode(jt *JumpTable, isInitCode bool) error {
+	return c.validateSubContainer(jt, isInitCode, NotRefByEither)
+}
+
+func (c *Container) validateSubContainer(jt *JumpTable, isInitCode bool, refBy int) error {
 	visited := make(map[int]struct{})
+	subContainerVisited := make(map[int]int)
 	toVisit := []int{0}
 	for len(toVisit) > 0 {
 		// TODO check if this can be used as a DOS
@@ -321,16 +338,30 @@ func (c *Container) ValidateCode(jt *JumpTable) error {
 			code  = c.Code[index]
 		)
 		if _, ok := visited[index]; !ok {
-			v, err := validateCode(code, index, c, jt)
+			res, err := validateCode(code, index, c, jt, isInitCode)
 			if err != nil {
 				return err
 			}
 			visited[index] = struct{}{}
 			// Mark all sections that can be visited from here.
-			for idx := range v {
+			for idx := range res.VisitedCode {
 				if _, ok := visited[idx]; !ok {
 					toVisit = append(toVisit, idx)
 				}
+			}
+			// Mark all subcontainer that can be visited from here.
+			for idx, reference := range res.VisitedSubContainers {
+				// Make sure subcontainers are only ever referenced by either EOFCreate or ReturnContract
+				if ref, ok := subContainerVisited[idx]; ok && ref != reference {
+					return errors.New("section referenced by both EOFCreate and ReturnContract")
+				}
+				subContainerVisited[idx] = reference
+			}
+			if refBy == RefByReturnContract && res.IsInitCode {
+				return ErrIncompatibleContainerKind
+			}
+			if refBy == RefByEOFCreate && res.IsRuntime {
+				return ErrIncompatibleContainerKind
 			}
 		}
 		toVisit = toVisit[1:]
@@ -339,8 +370,12 @@ func (c *Container) ValidateCode(jt *JumpTable) error {
 	if len(visited) != len(c.Code) {
 		return ErrUnreachableCode
 	}
-	for _, container := range c.ContainerSections {
-		if err := container.ValidateCode(jt); err != nil {
+	for idx, container := range c.ContainerSections {
+		reference, ok := subContainerVisited[idx]
+		if !ok {
+			return ErrOrphanedSubcontainer
+		}
+		if err := container.validateSubContainer(jt, isInitCode, reference); err != nil {
 			return err
 		}
 	}
