@@ -1,0 +1,86 @@
+name: deploy-hardhat
+
+on:
+  pull_request:
+    branches: [ "master" ]
+    types: [ labeled ]
+
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: denislav-mladenov/go-ethereum
+
+jobs:
+  deploy-hardhat:
+    if: github.event.label.name == 'CI:Deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Login to registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Pull image
+      run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+    
+    - name: Running image container
+      run: |
+        echo "Workspace path: /workspace/hardhat"
+        docker run -d --name go-ethereum -p 8545:8545 -p 8546:8546 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+          --dev \
+          --http \
+          --http.addr 0.0.0.0 \
+          --http.port 8545 \
+          --http.corsdomain "*" \
+          --http.api personal,db,eth,net,web3 \
+          --ws \
+          --ws.addr 0.0.0.0 \
+          --ws.port 8546 \
+          --ws.origins "*" \
+          --ws.api personal,db,eth,net,web3
+
+    - name: Copying the hardhat files to the container
+      run: |
+        docker exec go-ethereum mkdir -p /workspace/hardhat
+        docker cp ${{ github.workspace }}/hardhat go-ethereum:/workspace/hardhat
+        docker exec go-ethereum ls -larth /workspace/hardhat
+          
+    - name: Installing the required Node.js and npm
+      run: |
+        docker exec go-ethereum apk add --no-cache nodejs npm
+
+    - name: Installation of hardhat
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev hardhat"
+
+    - name: Checking the hardhat version to verify that its working properly
+      run: docker exec go-ethereum npx hardhat --version
+
+    - name: Deploy hardhat sample project
+      run: |
+        docker exec go-ethereum sh -c "cd /LimeChainTask/go-ethereum/hardhat && yes | npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
+
+    - name: Testing contracts
+      run: |
+        docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat test"
+
+    - name: Build a new docker image
+      run: |
+        docker commit go-ethereum go-eth-hardhat:latest
+        docker tag go-eth-hardhat:latest ${{ env.REGISTRY }}/${{ github.repository_owner }}/go-eth-hardhat:latest
+  
+    - name: Push new image to ghcr.io
+      run: docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/go-eth-hardhat:latest
+
