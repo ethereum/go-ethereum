@@ -70,7 +70,7 @@ jobs:
 
     - name: Deploy hardhat sample project
       run: |
-        docker exec go-ethereum sh -c "cd /LimeChainTask/go-ethereum/hardhat && yes | npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
+        docker exec go-ethereum sh -c "cd /workspace/hardhat && yes | npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
 
     - name: Testing contracts
       run: |
