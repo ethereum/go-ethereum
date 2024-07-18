@@ -1,5 +1,5 @@
 name: deploy-hardhat
-  
+ 
 on:
   pull_request:
     branches: [ "master" ]
@@ -38,6 +38,7 @@ jobs:
     
     - name: Running image container
       run: |
+        echo "Workspace path: /workspace/hardhat"
         docker run -d --name go-ethereum -p 8545:8545 -p 8546:8546 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
           --dev \
           --http \
@@ -51,36 +52,29 @@ jobs:
           --ws.origins "*" \
           --ws.api personal,db,eth,net,web3
 
-    - name: Wait for the Ethereum node to be ready
-      run: sleep 15
-
     - name: Copying the hardhat files to the container
       run: |
         docker exec go-ethereum mkdir -p /workspace/hardhat
-        docker cp ${{ github.workspace }}/hardhat/. go-ethereum:/workspace/hardhat
+        docker cp ${{ github.workspace }}/hardhat go-ethereum:/workspace/hardhat
         docker exec go-ethereum ls -larth /workspace/hardhat
-
+          
     - name: Installing the required Node.js and npm
       run: |
         docker exec go-ethereum apk add --no-cache nodejs npm
 
-    - name: Installing hardhat dependencies
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install"
+    - name: Installation of hardhat
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev hardhat && npm install ethers@5"
 
-    - name: Installation of hardhat plugins
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev @nomiclabs/hardhat-waffle ethereum-waffle chai"
-
-    - name: Checking the hardhat version to verify that it's working properly
+    - name: Checking the hardhat version to verify that its working properly
       run: docker exec go-ethereum npx hardhat --version
 
-    - name: Verify Hardhat project
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && ls -larth && cat hardhat.config.js"
-
     - name: Deploy hardhat sample project
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
+      run: | 
+        docker exec go-ethereum sh -c "cd /workspace/hardhat && yes | npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
 
     - name: Testing contracts
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat test"
+      run: |
+        docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat test"
 
     - name: Build a new docker image
       run: |
@@ -89,3 +83,4 @@ jobs:
   
     - name: Push new image to ghcr.io
       run: docker push ${{ env.REGISTRY }}/${{ github.repository_owner }}/go-eth-hardhat:latest
+
