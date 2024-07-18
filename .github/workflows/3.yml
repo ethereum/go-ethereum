@@ -63,14 +63,14 @@ jobs:
         docker exec go-ethereum apk add --no-cache nodejs npm
 
     - name: Installation of hardhat
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev hardhat && npm install ethers@5"
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && ls -larth && npm install --save-dev hardhat && npm install ethers@5"
 
     - name: Checking the hardhat version to verify that its working properly
       run: docker exec go-ethereum npx hardhat --version
 
     - name: Deploy hardhat sample project
       run: | 
-        docker exec go-ethereum sh -c "cd /workspace/hardhat/ignition/modules && yes | npx hardhat ignition deploy Token.js --network devnet"
+        docker exec go-ethereum sh -c "cd /workspace/hardhat && yes | npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
 
     - name: Testing contracts
       run: |
