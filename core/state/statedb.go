@@ -471,20 +471,28 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 // storage. This function should only be used for debugging and the mutations
 // must be discarded afterwards.
 func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
-	// SetStorage needs to wipe existing storage. We achieve this by pretending
-	// that the account self-destructed earlier in this block, by flagging
-	// it in stateObjectsDestruct. The effect of doing so is that storage lookups
-	// will not hit disk, since it is assumed that the disk-data is belonging
+	// SetStorage needs to wipe the existing storage. We achieve this by marking
+	// the account as self-destructed in this block. The effect is that storage
+	// lookups will not hit the disk, as it is assumed that the disk data belongs
 	// to a previous incarnation of the object.
 	//
-	// TODO(rjl493456442) this function should only be supported by 'unwritable'
-	// state and all mutations made should all be discarded afterwards.
-	if _, ok := s.stateObjectsDestruct[addr]; !ok {
-		s.stateObjectsDestruct[addr] = nil
+	// TODO (rjl493456442): This function should only be supported by 'unwritable'
+	// state, and all mutations made should be discarded afterward.
+	obj := s.getStateObject(addr)
+	if obj != nil {
+		if _, ok := s.stateObjectsDestruct[addr]; !ok {
+			s.stateObjectsDestruct[addr] = obj
+		}
 	}
-	stateObject := s.getOrNewStateObject(addr)
+	newObj := s.createObject(addr)
 	for k, v := range storage {
-		stateObject.SetState(k, v)
+		newObj.SetState(k, v)
+	}
+	// Inherit the metadata of original object if it was existent
+	if obj != nil {
+		newObj.SetCode(common.BytesToHash(obj.CodeHash()), obj.code)
+		newObj.SetNonce(obj.Nonce())
+		newObj.SetBalance(obj.Balance(), tracing.BalanceChangeUnspecified)
 	}
 }
 
