@@ -1,10 +1,10 @@
 {
-  "name": "hardhat-pacage",
+  "name": "hardhat-package",
   "version": "1.0.0",
   "description": "denis hardhat project",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "hardhat test"
   },
   "repository": {
     "type": "git",
@@ -18,6 +18,9 @@
   "homepage": "https://github.com/denislav-mladenov/go-ethereum#readme",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "hardhat": "^2.22.6"
+    "hardhat": "^2.22.5",
+    "@nomiclabs/hardhat-waffle": "^2.0.0",
+    "ethereum-waffle": "^3.4.0",
+    "chai": "^4.3.4"
   }
 }
