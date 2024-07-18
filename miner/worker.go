@@ -967,12 +967,12 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*typ
 		// 2.1 when starting handling the first tx, `state.refund` is 0 by default,
 		// 2.2 after tracing, the state is either committed in `core.ApplyTransaction`, or reverted, so the `state.refund` can be cleared,
 		// 2.3 when starting handling the following txs, `state.refund` comes as 0
-		withTimer(l2CommitTxTraceTimer, func() {
+		common.WithTimer(l2CommitTxTraceTimer, func() {
 			traces, err = env.traceEnv.GetBlockTrace(
 				types.NewBlockWithHeader(env.header).WithBody([]*types.Transaction{tx}, nil),
 			)
 		})
-		withTimer(l2CommitTxTraceStateRevertTimer, func() {
+		common.WithTimer(l2CommitTxTraceStateRevertTimer, func() {
 			// `env.traceEnv.State` & `env.state` share a same pointer to the state, so only need to revert `env.state`
 			// revert to snapshot for calling `core.ApplyMessage` again, (both `traceEnv.GetBlockTrace` & `core.ApplyTransaction` will call `core.ApplyMessage`)
 			env.state.RevertToSnapshot(snap)
@@ -980,7 +980,7 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*typ
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		withTimer(l2CommitTxCCCTimer, func() {
+		common.WithTimer(l2CommitTxCCCTimer, func() {
 			accRows, err = w.circuitCapacityChecker.ApplyTransaction(traces)
 		})
 		if err != nil {
@@ -998,7 +998,7 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*typ
 		snap = env.state.Snapshot() // create new snapshot for `core.ApplyTransaction`
 		gp   = env.gasPool.Gas()
 	)
-	withTimer(l2CommitTxApplyTimer, func() {
+	common.WithTimer(l2CommitTxApplyTimer, func() {
 		receipt, err = core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	})
 	if err != nil {
@@ -1429,7 +1429,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	// fetch l1Txs
 	var l1Messages []types.L1MessageTx
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() {
-		withTimer(l2CommitNewWorkL1CollectTimer, func() {
+		common.WithTimer(l2CommitNewWorkL1CollectTimer, func() {
 			l1Messages = w.collectPendingL1Messages(env.nextL1MsgIndex)
 		})
 	}
@@ -1634,7 +1634,7 @@ func (w *worker) calcAndSetAccRowsForEnv(env *environment) error {
 	)
 	var traces *types.BlockTrace
 	var err error
-	withTimer(l2CommitTraceTimer, func() {
+	common.WithTimer(l2CommitTraceTimer, func() {
 		traces, err = env.traceEnv.GetBlockTrace(types.NewBlockWithHeader(env.header))
 	})
 	if err != nil {
@@ -1650,7 +1650,7 @@ func (w *worker) calcAndSetAccRowsForEnv(env *environment) error {
 	traces.ExecutionResults = traces.ExecutionResults[:0]
 	traces.TxStorageTraces = traces.TxStorageTraces[:0]
 	var accRows *types.RowConsumption
-	withTimer(l2CommitCCCTimer, func() {
+	common.WithTimer(l2CommitCCCTimer, func() {
 		accRows, err = w.circuitCapacityChecker.ApplyBlock(traces)
 	})
 	if err != nil {
@@ -1786,13 +1786,5 @@ func signalToErr(signal int32) error {
 		return errBlockInterruptedByTimeout
 	default:
 		panic(fmt.Errorf("undefined signal %d", signal))
-	}
-}
-
-func withTimer(timer metrics.Timer, f func()) {
-	if metrics.Enabled {
-		timer.Time(f)
-	} else {
-		f()
 	}
 }
