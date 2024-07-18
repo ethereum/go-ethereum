@@ -414,14 +414,6 @@ func (w *worker) setExtra(extra []byte) {
 	w.extra = extra
 }
 
-// setRecommitInterval updates the interval for miner sealing work recommitting.
-func (w *worker) setRecommitInterval(interval time.Duration) {
-	select {
-	case w.resubmitIntervalCh <- interval:
-	case <-w.exitCh:
-	}
-}
-
 // pending returns the pending state and corresponding block. The returned
 // values can be nil in case the pending block is not initialized.
 func (w *worker) pending() (*types.Block, *state.StateDB) {
