@@ -314,7 +314,7 @@ func TestUDPv4_findnodeMultiReply(t *testing.T) {
 	// queue a pending findnode request
 	resultc, errc := make(chan []*enode.Node, 1), make(chan error, 1)
 	go func() {
-		rid := encodePubkey(&test.remotekey.PublicKey).id()
+		rid := v4wire.EncodePubkey(&test.remotekey.PublicKey).ID()
 		ns, err := test.udp.findnode(rid, test.remoteaddr, testTarget)
 		if err != nil && len(ns) == 0 {
 			errc <- err
@@ -433,7 +433,7 @@ func TestUDPv4_successfulPing(t *testing.T) {
 	// pong packet.
 	select {
 	case n := <-added:
-		rid := encodePubkey(&test.remotekey.PublicKey).id()
+		rid := v4wire.EncodePubkey(&test.remotekey.PublicKey).ID()
 		if n.ID() != rid {
 			t.Errorf("node has wrong ID: got %v, want %v", n.ID(), rid)
 		}
