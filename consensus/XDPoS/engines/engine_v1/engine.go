@@ -154,7 +154,6 @@ func (x *XDPoS_v1) verifyHeaderWithCache(chain consensus.ChainReader, header *ty
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
 func (x *XDPoS_v1) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header, fullVerify bool) error {
-	fullVerify = false
 	// If we're running a engine faking, accept any block as valid
 	if x.config.SkipV1Validation {
 		return nil
