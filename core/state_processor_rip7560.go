@@ -146,7 +146,7 @@ func BuyGasRip7560Transaction(st *types.Rip7560AccountAbstractionTx, state vm.St
 	chargeFrom := st.Sender
 
 	if st.Paymaster != nil && st.Paymaster.Cmp(common.Address{}) != 0 {
-		chargeFrom = *st.Paymaster
+		chargeFrom = st.Paymaster
 	}
 
 	if have, want := state.GetBalance(*chargeFrom), balanceCheck; have.Cmp(want) < 0 {
