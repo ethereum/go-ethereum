@@ -21,7 +21,7 @@
     "hardhat": "^2.22.5",
     "@nomiclabs/hardhat-waffle": "^2.0.0",
     "ethereum-waffle": "^3.4.0",
-    "chai": "^4.3.4"
+    "chai": "^4.3.4",
     "ethers": "^5.0.0"
   }
 }
