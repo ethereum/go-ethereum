@@ -60,7 +60,7 @@ jobs:
           
     - name: Installing the required Node.js and npm
       run: |
-        docker exec go-ethereum apt-get install -y nodejs
+        docker exec go-ethereum apk add -y nodejs
 
     - name: Installation of hardhat
       run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev hardhat && npm install ethers@5"
