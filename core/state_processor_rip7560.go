@@ -31,7 +31,7 @@ func UnpackValidationData(validationData []byte) (authorizerMagic uint64, validU
 
 	t := new(big.Int).SetBytes(validationData)
 	authorizerMagic = t.Uint64()
-	validUntil = t.Rsh(t, 160).Uint64() & 0xffffff
+	validUntil = t.Rsh(t, 160).Uint64() // & 0xffffff
 	validAfter = t.Rsh(t, 48).Uint64()
 	return
 }
