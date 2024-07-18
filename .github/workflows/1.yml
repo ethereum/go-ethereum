@@ -63,7 +63,7 @@ jobs:
         docker exec go-ethereum apk add --no-cache nodejs npm
 
     - name: Installation of hardhat
-      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev hardhat"
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npm install --save-dev hardhat && npm install ethers@5"
 
     - name: Checking the hardhat version to verify that its working properly
       run: docker exec go-ethereum npx hardhat --version
