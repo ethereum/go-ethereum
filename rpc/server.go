@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -152,7 +153,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	reqs, batch, err := codec.readBatch()
 	if err != nil {
 		if err != io.EOF {
-			resp := errorMessage(&invalidMessageError{"parse error"})
+			resp := errorMessage(&invalidMessageError{fmt.Sprintf("parse error: %s", err.Error())})
 			codec.writeJSON(ctx, resp, true)
 		}
 		return
