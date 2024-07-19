@@ -241,10 +241,15 @@ func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endB
 				log.Warn("got nil when reading last finalized batch index. This should happen only once.")
 			}
 
+			parentBatchMeta := &rawdb.FinalizedBatchMeta{}
+			if startBatchIndex > 0 {
+				parentBatchMeta = rawdb.ReadFinalizedBatchMeta(s.db, startBatchIndex-1)
+			}
+
 			var highestFinalizedBlockNumber uint64
 			batchWriter := s.db.NewBatch()
 			for index := startBatchIndex; index <= batchIndex; index++ {
-				parentBatchMeta, chunks, err := s.getLocalInfoForBatch(index)
+				chunks, err := s.getLocalChunksForBatch(index)
 				if err != nil {
 					return fmt.Errorf("failed to get local node info, batch index: %v, err: %w", index, err)
 				}
@@ -256,6 +261,7 @@ func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endB
 
 				rawdb.WriteFinalizedBatchMeta(batchWriter, index, finalizedBatchMeta)
 				highestFinalizedBlockNumber = endBlock
+				parentBatchMeta = finalizedBatchMeta
 
 				if index%100 == 0 {
 					log.Info("finalized batch progress", "batch index", index, "finalized l2 block height", endBlock)
@@ -283,17 +289,17 @@ func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endB
 	return nil
 }
 
-func (s *RollupSyncService) getLocalInfoForBatch(batchIndex uint64) (*rawdb.FinalizedBatchMeta, []*encoding.Chunk, error) {
+func (s *RollupSyncService) getLocalChunksForBatch(batchIndex uint64) ([]*encoding.Chunk, error) {
 	chunkBlockRanges := rawdb.ReadBatchChunkRanges(s.db, batchIndex)
 	if len(chunkBlockRanges) == 0 {
-		return nil, nil, fmt.Errorf("failed to get batch chunk ranges, empty chunk block ranges")
+		return nil, fmt.Errorf("failed to get batch chunk ranges, empty chunk block ranges")
 	}
 
 	endBlockNumber := chunkBlockRanges[len(chunkBlockRanges)-1].EndBlockNumber
 	for i := 0; i < defaultMaxRetries; i++ {
 		if s.ctx.Err() != nil {
 			log.Info("Context canceled", "reason", s.ctx.Err())
-			return nil, nil, s.ctx.Err()
+			return nil, s.ctx.Err()
 		}
 
 		localSyncedBlockHeight := s.bc.CurrentBlock().Number().Uint64()
@@ -308,7 +314,7 @@ func (s *RollupSyncService) getLocalInfoForBatch(batchIndex uint64) (*rawdb.Fina
 
 	localSyncedBlockHeight := s.bc.CurrentBlock().Number().Uint64()
 	if localSyncedBlockHeight < endBlockNumber {
-		return nil, nil, fmt.Errorf("local node is not synced up to the required block height: %v, local synced block height: %v", endBlockNumber, localSyncedBlockHeight)
+		return nil, fmt.Errorf("local node is not synced up to the required block height: %v, local synced block height: %v", endBlockNumber, localSyncedBlockHeight)
 	}
 
 	chunks := make([]*encoding.Chunk, len(chunkBlockRanges))
@@ -317,12 +323,12 @@ func (s *RollupSyncService) getLocalInfoForBatch(batchIndex uint64) (*rawdb.Fina
 		for j := cr.StartBlockNumber; j <= cr.EndBlockNumber; j++ {
 			block := s.bc.GetBlockByNumber(j)
 			if block == nil {
-				return nil, nil, fmt.Errorf("failed to get block by number: %v", i)
+				return nil, fmt.Errorf("failed to get block by number: %v", i)
 			}
 			txData := encoding.TxsToTxsData(block.Transactions())
 			state, err := s.bc.StateAt(block.Root())
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to get block state, block: %v, err: %w", block.Hash().Hex(), err)
+				return nil, fmt.Errorf("failed to get block state, block: %v, err: %w", block.Hash().Hex(), err)
 			}
 			withdrawRoot := withdrawtrie.ReadWTRSlot(rcfg.L2MessageQueueAddress, state)
 			chunks[i].Blocks[j-cr.StartBlockNumber] = &encoding.Block{
@@ -333,13 +339,7 @@ func (s *RollupSyncService) getLocalInfoForBatch(batchIndex uint64) (*rawdb.Fina
 		}
 	}
 
-	// get metadata of parent batch: default to genesis batch metadata.
-	parentBatchMeta := &rawdb.FinalizedBatchMeta{}
-	if batchIndex > 0 {
-		parentBatchMeta = rawdb.ReadFinalizedBatchMeta(s.db, batchIndex-1)
-	}
-
-	return parentBatchMeta, chunks, nil
+	return chunks, nil
 }
 
 func (s *RollupSyncService) getChunkRanges(batchIndex uint64, vLog *types.Log) ([]*rawdb.ChunkBlockRange, error) {
