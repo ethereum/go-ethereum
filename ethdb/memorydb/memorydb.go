@@ -35,10 +35,6 @@ var (
 	// errMemorydbNotFound is returned if a key is requested that is not found in
 	// the provided memory database.
 	errMemorydbNotFound = errors.New("not found")
-
-	// errSnapshotReleased is returned if callers want to retrieve data from a
-	// released snapshot.
-	errSnapshotReleased = errors.New("snapshot released")
 )
 
 // Database is an ephemeral key-value store. Apart from basic data storage
