@@ -251,6 +251,7 @@ func (p *PortalProtocolAPI) RoutingTableInfo() *RoutingTableInfo {
 }
 
 func (p *PortalProtocolAPI) AddEnr(enr string) (bool, error) {
+	p.portalProtocol.Log.Debug("serving AddEnr", "enr", enr)
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return false, err

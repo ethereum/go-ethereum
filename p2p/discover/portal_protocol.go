@@ -292,7 +292,7 @@ func (p *PortalProtocol) AddEnr(n *enode.Node) {
 	defer p.table.mutex.Unlock()
 	added := p.table.handleAddNode(addNodeOp{node: n, isInbound: true, forceSetLive: true})
 	if !added {
-		p.Log.Warn("add node failed", "id", n.ID())
+		p.Log.Warn("add node failed", "id", n.ID(), n.IPAddr())
 		return
 	}
 	id := n.ID().String()
