@@ -102,12 +102,22 @@ func (s *StructLog) ErrorString() string {
 	return ""
 }
 
+type wrappedLog struct {
+	parent   *wrappedLog
+	error    error
+	log      StructLog
+	children []*wrappedLog
+}
+
 // StructLogger is an EVM state logger and implements EVMLogger.
 //
 // StructLogger can capture state based on the given Log configuration and also keeps
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
 type StructLogger struct {
+	current *wrappedLog
+	depth   int
+
 	cfg Config
 	env *tracing.VMContext
 
@@ -165,6 +175,36 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 	op := vm.OpCode(opcode)
 	memory := scope.MemoryData()
 	stack := scope.StackData()
+
+	for ; l.depth > depth-1; l.depth = l.depth - 1 {
+		i := l.depth - (depth - 1)
+		if l.current.error == nil {
+			switch stack[len(stack)-i].Bytes32()[31] {
+			case 0x00:
+				l.current.error = fmt.Errorf("call failed")
+			}
+		}
+		l.current = l.current.parent
+	}
+	if err != nil {
+		l.current.error = err
+	}
+	switch op {
+	case vm.CALL, vm.DELEGATECALL, vm.STATICCALL, vm.CALLCODE:
+		l.depth = l.depth + 1
+		wl := &wrappedLog{
+			parent: l.current,
+			error:  l.current.error,
+		}
+		l.current.children = append(l.current.children, wl)
+		l.current = wl
+	case vm.REVERT:
+		l.current.error = vm.ErrExecutionReverted
+		return
+	default:
+		return
+	}
+
 	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
 	if l.cfg.EnableMemory {
@@ -212,7 +252,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 	}
 	// create a new snapshot of the EVM.
 	log := StructLog{pc, op, gas, cost, mem, len(memory), stck, rdata, storage, depth, l.env.StateDB.GetRefund(), err}
-	l.logs = append(l.logs, log)
+	l.current.log = log
 }
 
 // OnExit is called a call frame finishes processing.
@@ -220,6 +260,18 @@ func (l *StructLogger) OnExit(depth int, output []byte, gasUsed uint64, err erro
 	if depth != 0 {
 		return
 	}
+
+	for ; l.depth > 1; l.depth-- {
+		l.current = l.current.parent
+	}
+	l.current.log = StructLog{
+		Op:         vm.CALL,
+		GasCost:    gasUsed,
+		ReturnData: output,
+		Depth:      0,
+		Err:        err,
+	}
+
 	l.output = output
 	l.err = err
 	if l.cfg.Debug {
@@ -258,6 +310,8 @@ func (l *StructLogger) Stop(err error) {
 
 func (l *StructLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	l.env = env
+	l.depth = 0
+	l.current = &wrappedLog{}
 }
 
 func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
@@ -271,8 +325,19 @@ func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
 	l.usedGas = receipt.GasUsed
 }
 
+// Depth first append for all children (stack max depth is 1024)
+func (l *wrappedLog) getLogs() []StructLog {
+	var logs []StructLog
+	l.log.Err = l.error
+	logs = append(logs, l.log)
+	for _, child := range l.children {
+		logs = append(logs, child.getLogs()...)
+	}
+	return logs
+}
+
 // StructLogs returns the captured log entries.
-func (l *StructLogger) StructLogs() []StructLog { return l.logs }
+func (l *StructLogger) StructLogs() []StructLog { return l.current.getLogs() }
 
 // Error returns the VM error captured by the trace.
 func (l *StructLogger) Error() error { return l.err }
