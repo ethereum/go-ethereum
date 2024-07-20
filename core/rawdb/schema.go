@@ -145,6 +145,13 @@ var (
 	FixedCommitteeRootKey = []byte("fixedRoot-") // bigEndian64(syncPeriod) -> committee root hash
 	SyncCommitteeKey      = []byte("committee-") // bigEndian64(syncPeriod) -> serialized committee
 
+	FilterMapsPrefix        = []byte("fT5-") //TODO fm-
+	filterMapsRangeKey      = append(FilterMapsPrefix, byte('R'))
+	filterMapRowPrefix      = append(FilterMapsPrefix, byte('r')) // filterMapRowPrefix + mapRowIndex (uint64 big endian) -> filter row
+	filterMapBlockPtrPrefix = append(FilterMapsPrefix, byte('b')) // filterMapBlockPtrPrefix + mapIndex (uint32 big endian) -> block number (uint64 big endian)
+	blockLVPrefix           = append(FilterMapsPrefix, byte('p')) // blockLVPrefix + num (uint64 big endian) -> log value pointer (uint64 big endian)
+	revertPointPrefix       = append(FilterMapsPrefix, byte('v')) // revertPointPrefix + num (uint64 big endian) -> revert data
+
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 )
@@ -345,4 +352,28 @@ func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 func IsStorageTrieNode(key []byte) bool {
 	ok, _, _ := ResolveStorageTrieNode(key)
 	return ok
+}
+
+// filterMapRowKey = filterMapRowPrefix + mapRowIndex (uint64 big endian)
+func filterMapRowKey(mapRowIndex uint64) []byte {
+	key := append(filterMapRowPrefix, make([]byte, 8)...)
+	binary.BigEndian.PutUint64(key[1:], mapRowIndex)
+	return key
+}
+
+// filterMapBlockPtrKey = filterMapBlockPtrPrefix + mapIndex (uint32 big endian)
+func filterMapBlockPtrKey(mapIndex uint32) []byte {
+	key := append(filterMapBlockPtrPrefix, make([]byte, 4)...)
+	binary.BigEndian.PutUint32(key[1:], mapIndex)
+	return key
+}
+
+// blockLVKey = blockLVPrefix + num (uint64 big endian)
+func blockLVKey(number uint64) []byte {
+	return append(blockLVPrefix, encodeBlockNumber(number)...)
+}
+
+// revertPointKey = revertPointPrefix + num (uint64 big endian)
+func revertPointKey(number uint64) []byte {
+	return append(revertPointPrefix, encodeBlockNumber(number)...)
 }
