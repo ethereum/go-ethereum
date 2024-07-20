@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -213,6 +214,28 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 	}
 	if (*al)[0].StorageKeys[0] != common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000081") {
 		t.Fatalf("unexpected storage key: %v", (*al)[0].StorageKeys[0])
+	}
+
+	// error when gasPrice is less than baseFee
+	msg = ethereum.CallMsg{
+		From:     testAddr,
+		To:       &common.Address{},
+		Gas:      21000,
+		GasPrice: big.NewInt(1), // less than baseFee
+		Value:    big.NewInt(1),
+	}
+	al, gas, vmErr, err = ec.CreateAccessList(context.Background(), msg)
+	if errors.Is(err, core.ErrBlobFeeCapTooLow) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vmErr != "" {
+		t.Fatalf("unexpected vm error: %v", vmErr)
+	}
+	if gas != 0 {
+		t.Fatalf("unexpected gas used: %v", gas)
+	}
+	if al != nil {
+		t.Fatalf("unexpected accesslist: %v", len(*al))
 	}
 }
 
