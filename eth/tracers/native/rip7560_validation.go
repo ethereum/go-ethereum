@@ -33,8 +33,10 @@ type contractSizeVal struct {
 }
 
 type access struct {
-	Reads  map[string]string `json:"reads"`
-	Writes map[string]uint64 `json:"writes"`
+	Reads           map[string]string `json:"reads"`
+	Writes          map[string]uint64 `json:"writes"`
+	TransientReads  map[string]uint64 `json:"transientReads"`
+	TransientWrites map[string]uint64 `json:"transientWrites"`
 }
 
 // note - this means an individual 'frame' in 7560 (validate, execute, postOp)
@@ -251,14 +253,16 @@ func (b *rip7560ValidationTracer) OnOpcode(pc uint64, op byte, gas, cost uint64,
 	}
 	b.lastOp = opcode
 
-	if opcode == "SLOAD" || opcode == "SSTORE" {
+	if opcode == "SLOAD" || opcode == "SSTORE" || opcode == "TLOAD" || opcode == "TSTORE" {
 		slot := common.BytesToHash(StackBack(scope.StackData(), 0).Bytes())
 		slotHex := slot.Hex()
 		addr := scope.Address()
 		if _, ok := b.CurrentLevel.Access[addr]; !ok {
 			b.CurrentLevel.Access[addr] = &access{
-				Reads:  map[string]string{},
-				Writes: map[string]uint64{},
+				Reads:           map[string]string{},
+				Writes:          map[string]uint64{},
+				TransientReads:  map[string]uint64{},
+				TransientWrites: map[string]uint64{},
 			}
 		}
 		access := *b.CurrentLevel.Access[addr]
@@ -271,8 +275,12 @@ func (b *rip7560ValidationTracer) OnOpcode(pc uint64, op byte, gas, cost uint64,
 			if !rOk && !wOk {
 				access.Reads[slotHex] = b.env.StateDB.GetState(addr, slot).Hex()
 			}
-		} else {
+		} else if opcode == "STORE" {
 			b.incrementCount(access.Writes, slotHex)
+		} else if opcode == "TLOAD" {
+			b.incrementCount(access.TransientReads, slotHex)
+		} else if opcode == "TSTORE" {
+			b.incrementCount(access.TransientWrites, slotHex)
 		}
 	}
 

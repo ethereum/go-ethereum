@@ -136,7 +136,7 @@ func handleRip7560Transactions(transactions []*types.Transaction, index int, sta
 // todo: move to a suitable interface, whatever that is
 // todo 2: maybe handle the "shared gas pool" situation instead of just overriding it completely?
 func BuyGasRip7560Transaction(st *types.Rip7560AccountAbstractionTx, state vm.StateDB) error {
-	gasLimit := st.Gas + st.ValidationGas + st.PaymasterGas + st.PostOpGas
+	gasLimit := st.Gas + st.ValidationGasLimit + st.PaymasterValidationGasLimit + st.PostOpGas
 	mgval := new(uint256.Int).SetUint64(gasLimit)
 	gasFeeCap, _ := uint256.FromBig(st.GasFeeCap)
 	mgval = mgval.Mul(mgval, gasFeeCap)
@@ -358,7 +358,7 @@ func prepareDeployerMessage(baseTx *types.Transaction, config *params.ChainConfi
 		From:              config.DeployerCallerAddress,
 		To:                tx.Deployer,
 		Value:             big.NewInt(0),
-		GasLimit:          tx.ValidationGas,
+		GasLimit:          tx.ValidationGasLimit,
 		GasPrice:          tx.GasFeeCap,
 		GasFeeCap:         tx.GasFeeCap,
 		GasTipCap:         tx.GasTipCap,
@@ -385,7 +385,7 @@ func prepareAccountValidationMessage(baseTx *types.Transaction, chainConfig *par
 		From:              chainConfig.EntryPointAddress,
 		To:                tx.Sender,
 		Value:             big.NewInt(0),
-		GasLimit:          tx.ValidationGas - deploymentUsedGas,
+		GasLimit:          tx.ValidationGasLimit - deploymentUsedGas,
 		GasPrice:          tx.GasFeeCap,
 		GasFeeCap:         tx.GasFeeCap,
 		GasTipCap:         tx.GasTipCap,
@@ -416,7 +416,7 @@ func preparePaymasterValidationMessage(baseTx *types.Transaction, config *params
 		From:              config.EntryPointAddress,
 		To:                tx.Paymaster,
 		Value:             big.NewInt(0),
-		GasLimit:          tx.PaymasterGas,
+		GasLimit:          tx.PaymasterValidationGasLimit,
 		GasPrice:          tx.GasFeeCap,
 		GasFeeCap:         tx.GasFeeCap,
 		GasTipCap:         tx.GasTipCap,
@@ -465,7 +465,7 @@ func preparePostOpMessage(vpr *ValidationPhaseResult, chainConfig *params.ChainC
 		From:              chainConfig.EntryPointAddress,
 		To:                tx.Paymaster,
 		Value:             big.NewInt(0),
-		GasLimit:          tx.PaymasterGas - executionResult.UsedGas,
+		GasLimit:          tx.PaymasterValidationGasLimit - executionResult.UsedGas,
 		GasPrice:          tx.GasFeeCap,
 		GasFeeCap:         tx.GasFeeCap,
 		GasTipCap:         tx.GasTipCap,

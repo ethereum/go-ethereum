@@ -14,9 +14,9 @@ func TestValidationFailure_deployerRevert(t *testing.T) {
 		withCode(DEFAULT_SENDER, []byte{}, DEFAULT_BALANCE).
 		withCode(DEPLOYER.Hex(), revertWithData([]byte{}), 0),
 		types.Rip7560AccountAbstractionTx{
-			Deployer:      &DEPLOYER,
-			ValidationGas: 1000000000,
-			GasFeeCap:     big.NewInt(1000000000),
+			Deployer:           &DEPLOYER,
+			ValidationGasLimit: 1000000000,
+			GasFeeCap:          big.NewInt(1000000000),
 		}, "account deployment failed: execution reverted")
 }
 
@@ -25,9 +25,9 @@ func TestValidationFailure_deployerOOG(t *testing.T) {
 		withCode(DEFAULT_SENDER, []byte{}, DEFAULT_BALANCE).
 		withCode(DEPLOYER.Hex(), revertWithData([]byte{}), 0),
 		types.Rip7560AccountAbstractionTx{
-			Deployer:      &DEPLOYER,
-			ValidationGas: 1,
-			GasFeeCap:     big.NewInt(1000000000),
+			Deployer:           &DEPLOYER,
+			ValidationGasLimit: 1,
+			GasFeeCap:          big.NewInt(1000000000),
 		}, "account deployment failed: out of gas")
 }
 
@@ -36,9 +36,9 @@ func TestValidationFailure_senderNotDeployed(t *testing.T) {
 		withCode(DEFAULT_SENDER, []byte{}, DEFAULT_BALANCE).
 		withCode(DEPLOYER.Hex(), returnWithData([]byte{}), 0),
 		types.Rip7560AccountAbstractionTx{
-			Deployer:      &DEPLOYER,
-			ValidationGas: 1000000000,
-			GasFeeCap:     big.NewInt(1000000000),
+			Deployer:           &DEPLOYER,
+			ValidationGasLimit: 1000000000,
+			GasFeeCap:          big.NewInt(1000000000),
 		}, "account deployment failed: sender not deployed")
 }
 
@@ -50,10 +50,10 @@ func TestValidationFailure_senderAlreadyDeployed(t *testing.T) {
 		withCode(sender.Hex(), accountCode, DEFAULT_BALANCE).
 		withCode(DEPLOYER.Hex(), deployerCode, 0),
 		types.Rip7560AccountAbstractionTx{
-			Sender:        &sender,
-			Deployer:      &DEPLOYER,
-			ValidationGas: 1000000000,
-			GasFeeCap:     big.NewInt(1000000000),
+			Sender:             &sender,
+			Deployer:           &DEPLOYER,
+			ValidationGasLimit: 1000000000,
+			GasFeeCap:          big.NewInt(1000000000),
 		}, "account deployment failed: sender already deployed")
 }
 
@@ -65,10 +65,10 @@ func TestValidationFailure_senderReverts(t *testing.T) {
 		withCode(sender.Hex(), []byte{}, DEFAULT_BALANCE).
 		withCode(DEPLOYER.Hex(), deployerCode, 0),
 		types.Rip7560AccountAbstractionTx{
-			Sender:        &sender,
-			Deployer:      &DEPLOYER,
-			ValidationGas: 1000000000,
-			GasFeeCap:     big.NewInt(1000000000),
+			Sender:             &sender,
+			Deployer:           &DEPLOYER,
+			ValidationGasLimit: 1000000000,
+			GasFeeCap:          big.NewInt(1000000000),
 		}, "execution reverted")
 }
 
@@ -80,9 +80,9 @@ func TestValidation_deployer_ok(t *testing.T) {
 		withCode(sender.Hex(), []byte{}, DEFAULT_BALANCE).
 		withCode(DEPLOYER.Hex(), deployerCode, 0),
 		types.Rip7560AccountAbstractionTx{
-			Sender:        &sender,
-			Deployer:      &DEPLOYER,
-			ValidationGas: 1000000000,
-			GasFeeCap:     big.NewInt(1000000000),
+			Sender:             &sender,
+			Deployer:           &DEPLOYER,
+			ValidationGasLimit: 1000000000,
+			GasFeeCap:          big.NewInt(1000000000),
 		}, "ok")
 }
