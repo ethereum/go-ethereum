@@ -17,12 +17,12 @@
 package abi
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"reflect"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // typeWithoutStringer is an alias for the Type type which simply doesn't implement
@@ -78,11 +78,11 @@ func TestTypeRegexp(t *testing.T) {
 		{"uint64[2]", nil, Type{T: ArrayTy, Size: 2, Elem: &Type{Size: 64, T: UintTy, stringKind: "uint64"}, stringKind: "uint64[2]"}},
 		{"uint256[]", nil, Type{T: SliceTy, Elem: &Type{Size: 256, T: UintTy, stringKind: "uint256"}, stringKind: "uint256[]"}},
 		{"uint256[2]", nil, Type{T: ArrayTy, Size: 2, Elem: &Type{Size: 256, T: UintTy, stringKind: "uint256"}, stringKind: "uint256[2]"}},
-		{"bytes32", nil, Type{T: FixedBytesTy, Size: 32, stringKind: "bytes32"}},
+		{"bytes32", nil, Type{T: HashTy, Size: 32, stringKind: "bytes32"}},
 		{"bytes[]", nil, Type{T: SliceTy, Elem: &Type{T: BytesTy, stringKind: "bytes"}, stringKind: "bytes[]"}},
 		{"bytes[2]", nil, Type{T: ArrayTy, Size: 2, Elem: &Type{T: BytesTy, stringKind: "bytes"}, stringKind: "bytes[2]"}},
-		{"bytes32[]", nil, Type{T: SliceTy, Elem: &Type{T: FixedBytesTy, Size: 32, stringKind: "bytes32"}, stringKind: "bytes32[]"}},
-		{"bytes32[2]", nil, Type{T: ArrayTy, Size: 2, Elem: &Type{T: FixedBytesTy, Size: 32, stringKind: "bytes32"}, stringKind: "bytes32[2]"}},
+		{"bytes32[]", nil, Type{T: SliceTy, Elem: &Type{T: HashTy, Size: 32, stringKind: "bytes32"}, stringKind: "bytes32[]"}},
+		{"bytes32[2]", nil, Type{T: ArrayTy, Size: 2, Elem: &Type{T: HashTy, Size: 32, stringKind: "bytes32"}, stringKind: "bytes32[2]"}},
 		{"string", nil, Type{T: StringTy, stringKind: "string"}},
 		{"string[]", nil, Type{T: SliceTy, Elem: &Type{T: StringTy, stringKind: "string"}, stringKind: "string[]"}},
 		{"string[2]", nil, Type{T: ArrayTy, Size: 2, Elem: &Type{T: StringTy, stringKind: "string"}, stringKind: "string[2]"}},
@@ -249,7 +249,7 @@ func TestTypeCheck(t *testing.T) {
 		{"bytes3", nil, [3]byte{}, ""},
 		{"bytes2", nil, [2]byte{}, ""},
 		{"bytes1", nil, [1]byte{}, ""},
-		{"bytes32", nil, [33]byte{}, "abi: cannot use [33]uint8 as type [32]uint8 as argument"},
+		{"bytes32", nil, [33]byte{}, "abi: cannot use [33]uint8 as type common.Hash as argument"},
 		{"bytes32", nil, common.Hash{1}, ""},
 		{"bytes31", nil, common.Hash{1}, "abi: cannot use common.Hash as type [31]uint8 as argument"},
 		{"bytes31", nil, [32]byte{}, "abi: cannot use [32]uint8 as type [31]uint8 as argument"},

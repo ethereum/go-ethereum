@@ -126,7 +126,7 @@ var unpackTests = []unpackTest{
 		def:  `[{"type": "bytes32"}]`,
 		enc:  "000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200100000000000000000000000000000000000000000000000000000000000000",
 		want: []byte(nil),
-		err:  "abi: cannot unmarshal [32]uint8 in to []uint8",
+		err:  "abi: cannot unmarshal common.Hash in to []uint8",
 	},
 	{
 		def: `[{"name":"___","type":"int256"}]`,

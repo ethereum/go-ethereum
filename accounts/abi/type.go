@@ -153,13 +153,16 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	case "string":
 		typ.T = StringTy
 	case "bytes":
-		if varSize == 0 {
-			typ.T = BytesTy
+		if varSize > 32 {
+			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 		} else {
-			if varSize > 32 {
-				return Type{}, fmt.Errorf("unsupported arg type: %s", t)
+			if varSize == 0 {
+				typ.T = BytesTy
+			} else if varSize == 32 {
+				typ.T = HashTy
+			} else {
+				typ.T = FixedBytesTy
 			}
-			typ.T = FixedBytesTy
 			typ.Size = varSize
 		}
 	case "tuple":
@@ -249,8 +252,7 @@ func (t Type) GetType() reflect.Type {
 	case BytesTy:
 		return reflect.SliceOf(reflect.TypeOf(byte(0)))
 	case HashTy:
-		// hashtype currently not used
-		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
+		return reflect.TypeOf(common.Hash{})
 	case FixedPointTy:
 		// fixedpoint type currently not used
 		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))

@@ -78,6 +78,8 @@ func typeCheck(t Type, value reflect.Value) error {
 		return typeErr(t.GetType().Kind(), value.Kind())
 	} else if t.T == FixedBytesTy && t.Size != value.Len() {
 		return typeErr(t.GetType(), value.Type())
+	} else if t.T == HashTy && t.Size != value.Len() {
+		return typeErr(t.GetType(), value.Type())
 	} else {
 		return nil
 	}
