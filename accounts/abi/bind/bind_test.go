@@ -943,7 +943,7 @@ var bindTests = []struct {
 				sim.Commit()
 			}
 			// Test filtering for certain events and ensure they can be found
-			sit, err := eventer.FilterSimpleEvent(nil, []common.Address{common.Address{1}, common.Address{3}}, [][32]byte{{byte(1)}, {byte(2)}, {byte(3)}}, []bool{true})
+			sit, err := eventer.FilterSimpleEvent(nil, []common.Address{common.Address{1}, common.Address{3}}, []common.Hash{{1}, {2}, {3}}, []bool{true})
 			if err != nil {
 				t.Fatalf("failed to filter for simple events: %v", err)
 			}
