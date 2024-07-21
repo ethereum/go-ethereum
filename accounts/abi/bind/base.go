@@ -154,13 +154,10 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method string, params ...interface{}) error {
+func (c *BoundContract) Call(opts *CallOpts, results []interface{}, method string, params ...interface{}) error {
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(CallOpts)
-	}
-	if results == nil {
-		results = new([]interface{})
 	}
 	// Pack the input, call and unpack the results
 	input, err := c.abi.Pack(method, params...)
@@ -222,12 +219,12 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 		}
 	}
 
-	if len(*results) == 0 {
+	if len(results) == 0 {
 		res, err := c.abi.Unpack(method, output)
-		*results = res
+		results = res
 		return err
 	}
-	res := *results
+	res := results
 	return c.abi.UnpackIntoInterface(res[0], method, output)
 }
 
