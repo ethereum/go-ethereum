@@ -95,19 +95,9 @@ func handleRip7560Transactions(transactions []*types.Transaction, index int, sta
 			break
 		}
 
-		aatx := tx.Rip7560TransactionData()
 		statedb.SetTxContext(tx.Hash(), index+i)
-		err := CheckNonceRip7560(aatx, statedb)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		err = BuyGasRip7560Transaction(aatx, statedb)
-		if err != nil {
-			return nil, nil, nil, err
-		}
 
-		var vpr *ValidationPhaseResult
-		vpr, err = ApplyRip7560ValidationPhases(chainConfig, bc, coinbase, gp, statedb, header, tx, cfg)
+		vpr, err := ApplyRip7560ValidationPhases(chainConfig, bc, coinbase, gp, statedb, header, tx, cfg)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -175,6 +165,16 @@ func CheckNonceRip7560(tx *types.Rip7560AccountAbstractionTx, st *state.StateDB)
 }
 
 func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, cfg vm.Config) (*ValidationPhaseResult, error) {
+	aatx := tx.Rip7560TransactionData()
+	err := CheckNonceRip7560(aatx, statedb)
+	if err != nil {
+		return nil, err
+	}
+	err = BuyGasRip7560Transaction(aatx, statedb)
+	if err != nil {
+		return nil, err
+	}
+
 	blockContext := NewEVMBlockContext(header, bc, author)
 	sender := tx.Rip7560TransactionData().Sender
 	txContext := vm.TxContext{
