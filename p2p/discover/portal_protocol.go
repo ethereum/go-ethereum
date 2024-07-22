@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"io"
 	"math/big"
 	"math/rand"
@@ -682,7 +683,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			return 0xff, nil, err
 		}
 
-		p.Log.Trace("Received returned content response", "id", target.ID(), "connIdMsg", connIdMsg)
+		p.Log.Trace("Received returned content response", "id", target.ID(), "resp", common.Bytes2Hex(resp), "connIdMsg", connIdMsg)
 		p.table.addFoundNode(target, true)
 		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
 		laddr := p.utp.Addr().(*utp.Addr)
