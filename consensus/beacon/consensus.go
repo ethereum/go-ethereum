@@ -408,7 +408,7 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 		vtrpost, okpost := state.GetTrie().(*trie.VerkleTrie)
 		if okpre && okpost {
 			if len(keys) > 0 {
-				p, k, err := trie.ProveAndSerialize(vtrpre, vtrpost, keys, vtrpre.FlatdbNodeResolver)
+				p, k, err := vtrpre.Proof(vtrpost, keys, vtrpre.FlatdbNodeResolver)
 				if err != nil {
 					return nil, fmt.Errorf("error generating verkle proof for block %d: %w", header.Number, err)
 				}
