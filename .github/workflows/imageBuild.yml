@@ -13,7 +13,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: ghcr.io/username/repo:pr-${{ github.event.pull_request.number }}
+          tags: yohands/devops_task:pr-${{ github.event.pull_request.number }}
           labels: type=pr,event=merge
     env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_HUB_USER }}
