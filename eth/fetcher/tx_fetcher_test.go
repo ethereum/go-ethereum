@@ -180,9 +180,8 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 			}),
 			isScheduled{tracking: nil, fetching: nil},
 			// Announce a non-conflicting blob tx, which should immediately go
-			// to fetching after a trivial wait.
+			// to fetching without hitting the waitlist
 			doTxNotify{peer: "D", hashes: []common.Hash{{0x0b}}, types: []byte{types.BlobTxType}, sizes: []uint32{1000}},
-			doWait{time: 0, step: true},
 			isWaiting(map[string][]announce{
 				"A": {
 					{common.Hash{0x01}, types.LegacyTxType, 111},
@@ -239,8 +238,9 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 					},
 				},
 				fetching: map[string][]common.Hash{ // Depends on deterministic test randomizer
-					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
-					"B": {{0x04}},
+					"A": {{0x02}, {0x05}},
+					"B": {{0x03}, {0x04}},
+					"C": {{0x01}},
 					"D": {{0x0B}},
 				},
 			},
@@ -279,8 +279,9 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
-					"B": {{0x04}},
+					"A": {{0x02}, {0x05}},
+					"B": {{0x03}, {0x04}},
+					"C": {{0x01}},
 					"D": {{0x0B}},
 				},
 			},
@@ -314,8 +315,9 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x01}, {0x02}, {0x03}, {0x05}},
-					"B": {{0x04}},
+					"A": {{0x02}, {0x05}},
+					"B": {{0x03}, {0x04}},
+					"C": {{0x01}},
 					"D": {{0x0B}},
 					"E": {{0x06}, {0x07}},
 				},

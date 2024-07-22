@@ -464,6 +464,22 @@ func (f *TxFetcher) loop() {
 					}
 					continue
 				}
+				// If this is a blob tx, schedule it to fetch without being
+				// waitlisted since blob txs should not be broadcast. If its
+				// hash is already on the waitlist, it was previously announced
+				// as a non-blob (or unknown) tx type. In this case we'll just
+				// eat the delay and continue handling it as a waitlisted tx to
+				// keep things simple.
+				if ann.metas[i].kind == types.BlobTxType && f.waitlist[hash] == nil {
+					f.announced[hash] = map[string]struct{}{ann.origin: {}}
+					if announces := f.announces[ann.origin]; announces != nil {
+						announces[hash] = ann.metas[i]
+					} else {
+						f.announces[ann.origin] = map[common.Hash]txMetadata{hash: ann.metas[i]}
+					}
+					f.scheduleFetches(timeoutTimer, timeoutTrigger, map[string]struct{}{ann.origin: {}})
+					continue
+				}
 				// If the transaction is already known to the fetcher, but not
 				// yet downloading, add the peer as an alternate origin in the
 				// waiting list.
@@ -485,15 +501,7 @@ func (f *TxFetcher) loop() {
 				}
 				// Transaction unknown to the fetcher, insert it into the waiting list
 				f.waitlist[hash] = map[string]struct{}{ann.origin: {}}
-				if ann.metas[i].kind == types.BlobTxType {
-					// blob transactions are never broadcast, so to force them
-					// to be fetched immediately we pretend they arrived
-					// earlier.
-					f.waittime[hash] = f.clock.Now() - mclock.AbsTime(txArriveTimeout)
-					idleWait = true // may need to reschedule fetcher due to "time travel"
-				} else {
-					f.waittime[hash] = f.clock.Now()
-				}
+				f.waittime[hash] = f.clock.Now()
 
 				if waitslots := f.waitslots[ann.origin]; waitslots != nil {
 					waitslots[hash] = ann.metas[i]
