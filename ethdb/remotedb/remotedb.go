@@ -138,10 +138,6 @@ func (db *Database) Compact(start []byte, limit []byte) error {
 	return nil
 }
 
-func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
-	panic("not supported")
-}
-
 func (db *Database) Close() error {
 	db.remote.Close()
 	return nil
