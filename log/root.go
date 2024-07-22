@@ -1,10 +1,9 @@
 package log
 
 import (
+	"log/slog"
 	"os"
 	"sync/atomic"
-
-	"golang.org/x/exp/slog"
 )
 
 var root atomic.Value

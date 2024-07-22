@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/crate-crypto/go-ipa/banderwagon"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -40,11 +39,8 @@ const (
 	// Cache size granted for caching clean code.
 	codeCacheSize = 64 * 1024 * 1024
 
-	// commitmentSize is the size of commitment stored in cache.
-	commitmentSize = banderwagon.UncompressedSize
-
-	// Cache item granted for caching commitment results.
-	commitmentCacheItems = 64 * 1024 * 1024 / (commitmentSize + common.AddressLength)
+	// Number of address->curve point associations to keep.
+	pointCacheSize = 4096
 )
 
 // Database wraps access to tries and contract code.
@@ -66,6 +62,9 @@ type Database interface {
 
 	// DiskDB returns the underlying key-value disk database.
 	DiskDB() ethdb.KeyValueStore
+
+	// PointCache returns the cache holding points used in verkle tree key computation
+	PointCache() *utils.PointCache
 
 	// TrieDB returns the underlying trie database for managing trie nodes.
 	TrieDB() *triedb.Database
@@ -124,7 +123,11 @@ type Trie interface {
 	// The returned nodeset can be nil if the trie is clean(nothing to commit).
 	// Once the trie is committed, it's not usable anymore. A new trie must
 	// be created with new root and updated trie database for following usage
-	Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet, error)
+	Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet)
+
+	// Witness returns a set containing all trie nodes that have been accessed.
+	// The returned map could be nil if the witness is empty.
+	Witness() map[string]struct{}
 
 	// NodeIterator returns an iterator that returns nodes of the trie. Iteration
 	// starts at the key after the given start key. And error will be returned
@@ -139,6 +142,9 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
+
+	// IsVerkle returns true if the trie is verkle-tree based
+	IsVerkle() bool
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -157,6 +163,7 @@ func NewDatabaseWithConfig(db ethdb.Database, config *triedb.Config) Database {
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb.NewDatabase(db, config),
+		pointCache:    utils.NewPointCache(pointCacheSize),
 	}
 }
 
@@ -167,6 +174,7 @@ func NewDatabaseWithNodeDB(db ethdb.Database, triedb *triedb.Database) Database 
 		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
 		triedb:        triedb,
+		pointCache:    utils.NewPointCache(pointCacheSize),
 	}
 }
 
@@ -175,12 +183,13 @@ type cachingDB struct {
 	codeSizeCache *lru.Cache[common.Hash, int]
 	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
 	triedb        *triedb.Database
+	pointCache    *utils.PointCache
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
 func (db *cachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
-		return trie.NewVerkleTrie(root, db.triedb, utils.NewPointCache(commitmentCacheItems))
+		return trie.NewVerkleTrie(root, db.triedb, db.pointCache)
 	}
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
 	if err != nil {
@@ -208,6 +217,8 @@ func (db *cachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 func (db *cachingDB) CopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
+		return t.Copy()
+	case *trie.VerkleTrie:
 		return t.Copy()
 	default:
 		panic(fmt.Errorf("unknown trie type %T", t))
@@ -263,4 +274,9 @@ func (db *cachingDB) DiskDB() ethdb.KeyValueStore {
 // TrieDB retrieves any intermediate trie-node caching layer.
 func (db *cachingDB) TrieDB() *triedb.Database {
 	return db.triedb
+}
+
+// PointCache returns the cache of evaluated curve points.
+func (db *cachingDB) PointCache() *utils.PointCache {
+	return db.pointCache
 }

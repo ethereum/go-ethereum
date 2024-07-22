@@ -17,7 +17,7 @@
 package era
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"math/big"
 
@@ -30,7 +30,7 @@ type Iterator struct {
 	inner *RawIterator
 }
 
-// NewRawIterator returns a new Iterator instance. Next must be immediately
+// NewIterator returns a new Iterator instance. Next must be immediately
 // called on new iterators to load the first item.
 func NewIterator(e *Era) (*Iterator, error) {
 	inner, err := NewRawIterator(e)
@@ -61,7 +61,7 @@ func (it *Iterator) Error() error {
 // Block returns the block for the iterator's current position.
 func (it *Iterator) Block() (*types.Block, error) {
 	if it.inner.Header == nil || it.inner.Body == nil {
-		return nil, fmt.Errorf("header and body must be non-nil")
+		return nil, errors.New("header and body must be non-nil")
 	}
 	var (
 		header types.Header
@@ -73,13 +73,13 @@ func (it *Iterator) Block() (*types.Block, error) {
 	if err := rlp.Decode(it.inner.Body, &body); err != nil {
 		return nil, err
 	}
-	return types.NewBlockWithHeader(&header).WithBody(body.Transactions, body.Uncles), nil
+	return types.NewBlockWithHeader(&header).WithBody(body), nil
 }
 
 // Receipts returns the receipts for the iterator's current position.
 func (it *Iterator) Receipts() (types.Receipts, error) {
 	if it.inner.Receipts == nil {
-		return nil, fmt.Errorf("receipts must be non-nil")
+		return nil, errors.New("receipts must be non-nil")
 	}
 	var receipts types.Receipts
 	err := rlp.Decode(it.inner.Receipts, &receipts)

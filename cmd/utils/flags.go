@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -36,6 +37,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	bparams "github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/core"
@@ -281,6 +283,58 @@ var (
 		Value:    ethconfig.Defaults.TransactionHistory,
 		Category: flags.StateCategory,
 	}
+	// Beacon client light sync settings
+	BeaconApiFlag = &cli.StringSliceFlag{
+		Name:     "beacon.api",
+		Usage:    "Beacon node (CL) light client API URL. This flag can be given multiple times.",
+		Category: flags.BeaconCategory,
+	}
+	BeaconApiHeaderFlag = &cli.StringSliceFlag{
+		Name:     "beacon.api.header",
+		Usage:    "Pass custom HTTP header fields to the emote beacon node API in \"key:value\" format. This flag can be given multiple times.",
+		Category: flags.BeaconCategory,
+	}
+	BeaconThresholdFlag = &cli.IntFlag{
+		Name:     "beacon.threshold",
+		Usage:    "Beacon sync committee participation threshold",
+		Value:    bparams.SyncCommitteeSupermajority,
+		Category: flags.BeaconCategory,
+	}
+	BeaconNoFilterFlag = &cli.BoolFlag{
+		Name:     "beacon.nofilter",
+		Usage:    "Disable future slot signature filter",
+		Category: flags.BeaconCategory,
+	}
+	BeaconConfigFlag = &cli.StringFlag{
+		Name:     "beacon.config",
+		Usage:    "Beacon chain config YAML file",
+		Category: flags.BeaconCategory,
+	}
+	BeaconGenesisRootFlag = &cli.StringFlag{
+		Name:     "beacon.genesis.gvroot",
+		Usage:    "Beacon chain genesis validators root",
+		Category: flags.BeaconCategory,
+	}
+	BeaconGenesisTimeFlag = &cli.Uint64Flag{
+		Name:     "beacon.genesis.time",
+		Usage:    "Beacon chain genesis time",
+		Category: flags.BeaconCategory,
+	}
+	BeaconCheckpointFlag = &cli.StringFlag{
+		Name:     "beacon.checkpoint",
+		Usage:    "Beacon chain weak subjectivity checkpoint block hash",
+		Category: flags.BeaconCategory,
+	}
+	BlsyncApiFlag = &cli.StringFlag{
+		Name:     "blsync.engine.api",
+		Usage:    "Target EL engine API URL",
+		Category: flags.BeaconCategory,
+	}
+	BlsyncJWTSecretFlag = &cli.StringFlag{
+		Name:     "blsync.jwtsecret",
+		Usage:    "Path to a JWT secret to use for target engine API endpoint",
+		Category: flags.BeaconCategory,
+	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = &cli.StringFlag{
 		Name:     "txpool.locals",
@@ -425,11 +479,6 @@ var (
 	}
 
 	// Miner settings
-	MiningEnabledFlag = &cli.BoolFlag{
-		Name:     "mine",
-		Usage:    "Enable mining",
-		Category: flags.MinerCategory,
-	}
 	MinerGasLimitFlag = &cli.Uint64Flag{
 		Name:     "miner.gaslimit",
 		Usage:    "Target gas ceiling for mined blocks",
@@ -440,11 +489,6 @@ var (
 		Name:     "miner.gasprice",
 		Usage:    "Minimum gas price for mining a transaction",
 		Value:    ethconfig.Defaults.Miner.GasPrice,
-		Category: flags.MinerCategory,
-	}
-	MinerEtherbaseFlag = &cli.StringFlag{
-		Name:     "miner.etherbase",
-		Usage:    "0x prefixed public address for block mining rewards",
 		Category: flags.MinerCategory,
 	}
 	MinerExtraDataFlag = &cli.StringFlag{
@@ -458,10 +502,9 @@ var (
 		Value:    ethconfig.Defaults.Miner.Recommit,
 		Category: flags.MinerCategory,
 	}
-	MinerNewPayloadTimeout = &cli.DurationFlag{
-		Name:     "miner.newpayload-timeout",
-		Usage:    "Specify the maximum time allowance for creating a new payload",
-		Value:    ethconfig.Defaults.Miner.NewPayloadTimeout,
+	MinerPendingFeeRecipientFlag = &cli.StringFlag{
+		Name:     "miner.pending.feeRecipient",
+		Usage:    "0x prefixed public address for the pending block producer (not used for actual block production)",
 		Category: flags.MinerCategory,
 	}
 
@@ -496,7 +539,16 @@ var (
 		Usage:    "Record information useful for VM and contract debugging",
 		Category: flags.VMCategory,
 	}
-
+	VMTraceFlag = &cli.StringFlag{
+		Name:     "vmtrace",
+		Usage:    "Name of tracer which should record internal VM operations (costly)",
+		Category: flags.VMCategory,
+	}
+	VMTraceJsonConfigFlag = &cli.StringFlag{
+		Name:     "vmtrace.jsonconfig",
+		Usage:    "Tracer configuration (JSON)",
+		Category: flags.VMCategory,
+	}
 	// API options.
 	RPCGlobalGasCapFlag = &cli.Uint64Flag{
 		Name:     "rpc.gascap",
@@ -551,6 +603,11 @@ var (
 		Name:     "nocompaction",
 		Usage:    "Disables db compaction after import",
 		Category: flags.LoggingCategory,
+	}
+	CollectWitnessFlag = &cli.BoolFlag{
+		Name:     "collectwitness",
+		Usage:    "Enable state witness generation during block execution. Work in progress flag, don't use.",
+		Category: flags.MiscCategory,
 	}
 
 	// MISC settings
@@ -609,7 +666,7 @@ var (
 	}
 	HTTPPathPrefixFlag = &cli.StringFlag{
 		Name:     "http.rpcprefix",
-		Usage:    "HTTP path path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
+		Usage:    "HTTP path prefix on which JSON-RPC is served. Use '/' to serve on all paths.",
 		Value:    "",
 		Category: flags.APICategory,
 	}
@@ -820,12 +877,6 @@ var (
 		Usage:    "Enable metrics collection and reporting",
 		Category: flags.MetricsCategory,
 	}
-	MetricsEnabledExpensiveFlag = &cli.BoolFlag{
-		Name:     "metrics.expensive",
-		Usage:    "Enable expensive metrics collection and reporting",
-		Category: flags.MetricsCategory,
-	}
-
 	// MetricsHTTPFlag defines the endpoint for a stand-alone metrics HTTP endpoint.
 	// Since the pprof service enables sensitive/vulnerable behavior, this allows a user
 	// to enable a public-OK metrics endpoint without having to worry about ALSO exposing
@@ -1268,19 +1319,23 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 
 // setEtherbase retrieves the etherbase from the directly specified command line flags.
 func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
-	if !ctx.IsSet(MinerEtherbaseFlag.Name) {
+	if ctx.IsSet(MinerEtherbaseFlag.Name) {
+		log.Warn("Option --miner.etherbase is deprecated as the etherbase is set by the consensus client post-merge")
 		return
 	}
-	addr := ctx.String(MinerEtherbaseFlag.Name)
+	if !ctx.IsSet(MinerPendingFeeRecipientFlag.Name) {
+		return
+	}
+	addr := ctx.String(MinerPendingFeeRecipientFlag.Name)
 	if strings.HasPrefix(addr, "0x") || strings.HasPrefix(addr, "0X") {
 		addr = addr[2:]
 	}
 	b, err := hex.DecodeString(addr)
 	if err != nil || len(b) != common.AddressLength {
-		Fatalf("-%s: invalid etherbase address %q", MinerEtherbaseFlag.Name, addr)
+		Fatalf("-%s: invalid pending block producer address %q", MinerPendingFeeRecipientFlag.Name, addr)
 		return
 	}
-	cfg.Miner.Etherbase = common.BytesToAddress(b)
+	cfg.Miner.PendingFeeRecipient = common.BytesToAddress(b)
 }
 
 // MakePasswordList reads password lines from the file specified by the global --password flag.
@@ -1496,6 +1551,9 @@ func setTxPool(ctx *cli.Context, cfg *legacypool.Config) {
 }
 
 func setMiner(ctx *cli.Context, cfg *miner.Config) {
+	if ctx.Bool(MiningEnabledFlag.Name) {
+		log.Warn("The flag --mine is deprecated and will be removed")
+	}
 	if ctx.IsSet(MinerExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.String(MinerExtraDataFlag.Name))
 	}
@@ -1508,8 +1566,9 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerRecommitIntervalFlag.Name) {
 		cfg.Recommit = ctx.Duration(MinerRecommitIntervalFlag.Name)
 	}
-	if ctx.IsSet(MinerNewPayloadTimeout.Name) {
-		cfg.NewPayloadTimeout = ctx.Duration(MinerNewPayloadTimeout.Name)
+	if ctx.IsSet(MinerNewPayloadTimeoutFlag.Name) {
+		log.Warn("The flag --miner.newpayload-timeout is deprecated and will be removed, please use --miner.recommit")
+		cfg.Recommit = ctx.Duration(MinerNewPayloadTimeoutFlag.Name)
 	}
 }
 
@@ -1668,6 +1727,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.String(GCModeFlag.Name) == "archive" && cfg.TransactionHistory != 0 {
 		cfg.TransactionHistory = 0
 		log.Warn("Disabled transaction unindexing for archive node")
+
+		cfg.StateScheme = rawdb.HashScheme
+		log.Warn("Forcing hash state-scheme for archive mode")
 	}
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheTrieFlag.Name) {
 		cfg.TrieCleanCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheTrieFlag.Name) / 100
@@ -1702,6 +1764,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.Bool(VMEnableDebugFlag.Name)
+	}
+	if ctx.IsSet(CollectWitnessFlag.Name) {
+		cfg.EnableWitnessCollection = ctx.Bool(CollectWitnessFlag.Name)
 	}
 
 	if ctx.IsSet(RPCGlobalGasCapFlag.Name) {
@@ -1783,8 +1848,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 		// Figure out the dev account address.
 		// setEtherbase has been called above, configuring the miner address from command line flags.
-		if cfg.Miner.Etherbase != (common.Address{}) {
-			developer = accounts.Account{Address: cfg.Miner.Etherbase}
+		if cfg.Miner.PendingFeeRecipient != (common.Address{}) {
+			developer = accounts.Account{Address: cfg.Miner.PendingFeeRecipient}
 		} else if accs := ks.Accounts(); len(accs) > 0 {
 			developer = ks.Accounts()[0]
 		} else {
@@ -1795,7 +1860,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		// Make sure the address is configured as fee recipient, otherwise
 		// the miner will fail to start.
-		cfg.Miner.Etherbase = developer.Address
+		cfg.Miner.PendingFeeRecipient = developer.Address
 
 		if err := ks.Unlock(developer, passphrase); err != nil {
 			Fatalf("Failed to unlock developer account: %v", err)
@@ -1815,13 +1880,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 					Fatalf("Could not read genesis from database: %v", err)
 				}
 				if !genesis.Config.TerminalTotalDifficultyPassed {
-					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficultyPassed must be true in developer mode")
+					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficultyPassed must be true")
 				}
 				if genesis.Config.TerminalTotalDifficulty == nil {
-					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficulty must be specified.")
+					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficulty must be specified")
+				} else if genesis.Config.TerminalTotalDifficulty.Cmp(big.NewInt(0)) != 0 {
+					Fatalf("Bad developer-mode genesis configuration: terminalTotalDifficulty must be 0")
 				}
-				if genesis.Difficulty.Cmp(genesis.Config.TerminalTotalDifficulty) != 1 {
-					Fatalf("Bad developer-mode genesis configuration: genesis block difficulty must be > terminalTotalDifficulty")
+				if genesis.Difficulty.Cmp(big.NewInt(0)) != 0 {
+					Fatalf("Bad developer-mode genesis configuration: difficulty must be 0")
 				}
 			}
 			chaindb.Close()
@@ -1841,6 +1908,18 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	log.Info("Initializing the KZG library", "backend", ctx.String(CryptoKZGFlag.Name))
 	if err := kzg4844.UseCKZG(ctx.String(CryptoKZGFlag.Name) == "ckzg"); err != nil {
 		Fatalf("Failed to set KZG library implementation to %s: %v", ctx.String(CryptoKZGFlag.Name), err)
+	}
+	// VM tracing config.
+	if ctx.IsSet(VMTraceFlag.Name) {
+		if name := ctx.String(VMTraceFlag.Name); name != "" {
+			var config string
+			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
+				config = ctx.String(VMTraceJsonConfigFlag.Name)
+			}
+
+			cfg.VMTrace = name
+			cfg.VMTraceJsonConfig = config
+		}
 	}
 }
 
@@ -1890,7 +1969,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	})
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, false),
+		Service:   filters.NewFilterAPI(filterSystem),
 	}})
 	return filterSystem
 }
@@ -2119,13 +2198,29 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
 		cache.TrieDirtyLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
-	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
-
+	vmcfg := vm.Config{
+		EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name),
+		EnableWitnessCollection: ctx.Bool(CollectWitnessFlag.Name),
+	}
+	if ctx.IsSet(VMTraceFlag.Name) {
+		if name := ctx.String(VMTraceFlag.Name); name != "" {
+			var config json.RawMessage
+			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
+				config = json.RawMessage(ctx.String(VMTraceJsonConfigFlag.Name))
+			}
+			t, err := tracers.LiveDirectory.New(name, config)
+			if err != nil {
+				Fatalf("Failed to create tracer %q: %v", name, err)
+			}
+			vmcfg.Tracer = t
+		}
+	}
 	// Disable transaction indexing/unindexing by default.
 	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}
+
 	return chain, chainDb
 }
 

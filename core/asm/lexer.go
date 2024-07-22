@@ -127,7 +127,7 @@ func (l *lexer) ignore() {
 	l.start = l.pos
 }
 
-// Accepts checks whether the given input matches the next rune
+// accept checks whether the given input matches the next rune
 func (l *lexer) accept(valid string) bool {
 	if strings.ContainsRune(valid, l.next()) {
 		return true

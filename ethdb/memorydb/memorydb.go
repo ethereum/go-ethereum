@@ -182,9 +182,9 @@ func (db *Database) NewSnapshot() (ethdb.Snapshot, error) {
 	return newSnapshot(db), nil
 }
 
-// Stat returns a particular internal stat of the database.
-func (db *Database) Stat(property string) (string, error) {
-	return "", errors.New("unknown property")
+// Stat returns the statistic data of the database.
+func (db *Database) Stat() (string, error) {
+	return "", nil
 }
 
 // Compact is not supported on a memory database, but there's no need either as
@@ -227,7 +227,7 @@ func (b *batch) Put(key, value []byte) error {
 	return nil
 }
 
-// Delete inserts the a key removal into the batch for later committing.
+// Delete inserts the key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
 	b.writes = append(b.writes, keyvalue{string(key), nil, true})
 	b.size += len(key)

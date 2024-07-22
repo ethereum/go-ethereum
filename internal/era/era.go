@@ -18,6 +18,7 @@ package era
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -127,7 +128,7 @@ func (e *Era) Close() error {
 
 func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if e.m.start > num || e.m.start+e.m.count <= num {
-		return nil, fmt.Errorf("out-of-bounds")
+		return nil, errors.New("out-of-bounds")
 	}
 	off, err := e.readOffset(num)
 	if err != nil {
@@ -150,7 +151,7 @@ func (e *Era) GetBlockByNumber(num uint64) (*types.Block, error) {
 	if err := rlp.Decode(r, &body); err != nil {
 		return nil, err
 	}
-	return types.NewBlockWithHeader(&header).WithBody(body.Transactions, body.Uncles), nil
+	return types.NewBlockWithHeader(&header).WithBody(body), nil
 }
 
 // Accumulator reads the accumulator entry in the Era1 file.
@@ -228,7 +229,7 @@ func (e *Era) readOffset(n uint64) (int64, error) {
 	)
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	clearBuffer(e.buf[:])
+	clear(e.buf[:])
 	if _, err := e.f.ReadAt(e.buf[:], offOffset); err != nil {
 		return 0, err
 	}
@@ -238,20 +239,13 @@ func (e *Era) readOffset(n uint64) (int64, error) {
 	return blockIndexRecordOffset + int64(binary.LittleEndian.Uint64(e.buf[:])), nil
 }
 
-// newReader returns a snappy.Reader for the e2store entry value at off.
+// newSnappyReader returns a snappy.Reader for the e2store entry value at off.
 func newSnappyReader(e *e2store.Reader, expectedType uint16, off int64) (io.Reader, int64, error) {
 	r, n, err := e.ReaderAt(expectedType, off)
 	if err != nil {
 		return nil, 0, err
 	}
 	return snappy.NewReader(r), int64(n), err
-}
-
-// clearBuffer zeroes out the buffer.
-func clearBuffer(buf []byte) {
-	for i := 0; i < len(buf); i++ {
-		buf[i] = 0
-	}
 }
 
 // metadata wraps the metadata in the block index.

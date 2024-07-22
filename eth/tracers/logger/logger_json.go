@@ -22,55 +22,104 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-type JSONLogger struct {
+//go:generate go run github.com/fjl/gencodec -type callFrame -field-override callFrameMarshaling -out gen_callframe.go
+
+// overrides for gencodec
+type callFrameMarshaling struct {
+	Input hexutil.Bytes
+	Gas   math.HexOrDecimal64
+	Value *hexutil.Big
+	Type  string `json:"type"` // adds call to Type() in MarshalJSON
+}
+
+// callFrame is emitted every call frame entered.
+type callFrame struct {
+	op    vm.OpCode
+	From  common.Address `json:"from"`
+	To    common.Address `json:"to"`
+	Input []byte         `json:"input,omitempty"`
+	Gas   uint64         `json:"gas"`
+	Value *big.Int       `json:"value"`
+}
+
+// Type formats the call type in a human-readable format.
+func (c *callFrame) Type() string {
+	return c.op.String()
+}
+
+type jsonLogger struct {
 	encoder *json.Encoder
 	cfg     *Config
-	env     *vm.EVM
+	env     *tracing.VMContext
+	hooks   *tracing.Hooks
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
 // into the provided stream.
-func NewJSONLogger(cfg *Config, writer io.Writer) *JSONLogger {
-	l := &JSONLogger{encoder: json.NewEncoder(writer), cfg: cfg}
+func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
+	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
 	if l.cfg == nil {
 		l.cfg = &Config{}
 	}
-	return l
+	l.hooks = &tracing.Hooks{
+		OnTxStart:         l.OnTxStart,
+		OnSystemCallStart: l.onSystemCallStart,
+		OnExit:            l.OnEnd,
+		OnOpcode:          l.OnOpcode,
+		OnFault:           l.OnFault,
+	}
+	return l.hooks
 }
 
-func (l *JSONLogger) CaptureStart(env *vm.EVM, from, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
-	l.env = env
+// NewJSONLoggerWithCallFrames creates a new EVM tracer that prints execution steps as JSON objects
+// into the provided stream. It also includes call frames in the output.
+func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
+	l := &jsonLogger{encoder: json.NewEncoder(writer), cfg: cfg}
+	if l.cfg == nil {
+		l.cfg = &Config{}
+	}
+	l.hooks = &tracing.Hooks{
+		OnTxStart:         l.OnTxStart,
+		OnSystemCallStart: l.onSystemCallStart,
+		OnEnter:           l.OnEnter,
+		OnExit:            l.OnExit,
+		OnOpcode:          l.OnOpcode,
+		OnFault:           l.OnFault,
+	}
+	return l.hooks
 }
 
-func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (l *jsonLogger) OnFault(pc uint64, op byte, gas uint64, cost uint64, scope tracing.OpContext, depth int, err error) {
 	// TODO: Add rData to this interface as well
-	l.CaptureState(pc, op, gas, cost, scope, nil, depth, err)
+	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
 }
 
-// CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	memory := scope.Memory
-	stack := scope.Stack
+func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	memory := scope.MemoryData()
+	stack := scope.StackData()
 
 	log := StructLog{
 		Pc:            pc,
-		Op:            op,
+		Op:            vm.OpCode(op),
 		Gas:           gas,
 		GasCost:       cost,
-		MemorySize:    memory.Len(),
+		MemorySize:    len(memory),
 		Depth:         depth,
 		RefundCounter: l.env.StateDB.GetRefund(),
 		Err:           err,
 	}
 	if l.cfg.EnableMemory {
-		log.Memory = memory.Data()
+		log.Memory = memory
 	}
 	if !l.cfg.DisableStack {
-		log.Stack = stack.Data()
+		log.Stack = stack
 	}
 	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
@@ -78,8 +127,39 @@ func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, sco
 	l.encoder.Encode(log)
 }
 
-// CaptureEnd is triggered at end of execution.
-func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
+func (l *jsonLogger) onSystemCallStart() {
+	// Process no events while in system call.
+	hooks := *l.hooks
+	*l.hooks = tracing.Hooks{
+		OnSystemCallEnd: func() {
+			*l.hooks = hooks
+		},
+	}
+}
+
+// OnEnter is not enabled by default.
+func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	frame := callFrame{
+		op:    vm.OpCode(typ),
+		From:  from,
+		To:    to,
+		Gas:   gas,
+		Value: value,
+	}
+	if l.cfg.EnableMemory {
+		frame.Input = input
+	}
+	l.encoder.Encode(frame)
+}
+
+func (l *jsonLogger) OnEnd(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if depth > 0 {
+		return
+	}
+	l.OnExit(depth, output, gasUsed, err, false)
+}
+
+func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	type endLog struct {
 		Output  string              `json:"output"`
 		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
@@ -92,11 +172,6 @@ func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, err error) {
 	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
 }
 
-func (l *JSONLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (l *jsonLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	l.env = env
 }
-
-func (l *JSONLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
-
-func (l *JSONLogger) CaptureTxStart(gasLimit uint64) {}
-
-func (l *JSONLogger) CaptureTxEnd(restGas uint64) {}

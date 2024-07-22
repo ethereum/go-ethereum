@@ -57,7 +57,7 @@
         "gas": "0x19ee4",
         "init": "0x5a600055600060006000f0505a60015500"
       },
-      "error": "out of gas",
+      "error": "out of gas: not enough gas for reentrancy sentry",
       "traceAddress": [],
       "subtraces": 1,
       "transactionPosition": 63,

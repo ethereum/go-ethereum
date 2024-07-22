@@ -17,9 +17,10 @@
 package logger
 
 import (
-	"math/big"
+	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -72,22 +73,14 @@ func (al accessList) equal(other accessList) bool {
 	// Accounts match, cross reference the storage slots too
 	for addr, slots := range al {
 		otherslots := other[addr]
-
-		if len(slots) != len(otherslots) {
+		if !maps.Equal(slots, otherslots) {
 			return false
-		}
-		// Given that len(slots) == len(otherslots), we only need to check that
-		// all the items from slots are in otherslots.
-		for hash := range slots {
-			if _, ok := otherslots[hash]; !ok {
-				return false
-			}
 		}
 	}
 	return true
 }
 
-// accesslist converts the accesslist to a types.AccessList.
+// accessList converts the accesslist to a types.AccessList.
 func (al accessList) accessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
 	for addr, slots := range al {
@@ -132,17 +125,20 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	}
 }
 
-func (a *AccessListTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (a *AccessListTracer) Hooks() *tracing.Hooks {
+	return &tracing.Hooks{
+		OnOpcode: a.OnOpcode,
+	}
 }
 
-// CaptureState captures all opcodes that touch storage or addresses and adds them to the accesslist.
-func (a *AccessListTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	stack := scope.Stack
-	stackData := stack.Data()
+// OnOpcode captures all opcodes that touch storage or addresses and adds them to the accesslist.
+func (a *AccessListTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	stackData := scope.StackData()
 	stackLen := len(stackData)
+	op := vm.OpCode(opcode)
 	if (op == vm.SLOAD || op == vm.SSTORE) && stackLen >= 1 {
 		slot := common.Hash(stackData[stackLen-1].Bytes32())
-		a.list.addSlot(scope.Contract.Address(), slot)
+		a.list.addSlot(scope.Address(), slot)
 	}
 	if (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT) && stackLen >= 1 {
 		addr := common.Address(stackData[stackLen-1].Bytes20())
@@ -157,20 +153,6 @@ func (a *AccessListTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint6
 		}
 	}
 }
-
-func (*AccessListTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
-}
-
-func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {}
-
-func (*AccessListTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-}
-
-func (*AccessListTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
-
-func (*AccessListTracer) CaptureTxStart(gasLimit uint64) {}
-
-func (*AccessListTracer) CaptureTxEnd(restGas uint64) {}
 
 // AccessList returns the current accesslist maintained by the tracer.
 func (a *AccessListTracer) AccessList() types.AccessList {

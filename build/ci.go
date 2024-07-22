@@ -39,9 +39,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -117,23 +119,15 @@ var (
 		debEthereum,
 	}
 
-	// Distros for which packages are created.
-	// Note: vivid is unsupported because there is no golang-1.6 package for it.
-	// Note: the following Ubuntu releases have been officially deprecated on Launchpad:
-	//   wily, yakkety, zesty, artful, cosmic, disco, eoan, groovy, hirsuite, impish,
-	//   kinetic, lunar
-	debDistroGoBoots = map[string]string{
-		"trusty": "golang-1.11", // 14.04, EOL: 04/2024
-		"xenial": "golang-go",   // 16.04, EOL: 04/2026
-		"bionic": "golang-go",   // 18.04, EOL: 04/2028
-		"focal":  "golang-go",   // 20.04, EOL: 04/2030
-		"jammy":  "golang-go",   // 22.04, EOL: 04/2032
-		"mantic": "golang-go",   // 23.10, EOL: 07/2024
-	}
+	// Distros for which packages are created
+	debDistros = []string{
+		"xenial", // 16.04, EOL: 04/2026
+		"bionic", // 18.04, EOL: 04/2028
+		"focal",  // 20.04, EOL: 04/2030
+		"jammy",  // 22.04, EOL: 04/2032
+		"noble",  // 24.04, EOL: 04/2034
 
-	debGoBootPaths = map[string]string{
-		"golang-1.11": "/usr/lib/go-1.11",
-		"golang-go":   "/usr/lib/go",
+		"mantic", // 23.10, EOL: 07/2024
 	}
 
 	// This is where the tests should be unpacked.
@@ -177,6 +171,8 @@ func main() {
 		doPurge(os.Args[2:])
 	case "sanitycheck":
 		doSanityCheck()
+	case "generate":
+		doGenerate()
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -353,6 +349,86 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 	return filepath.Join(cachedir, base)
 }
 
+// hashSourceFiles iterates all files under the top-level project directory
+// computing the hash of each file (excluding files within the tests
+// subrepo)
+func hashSourceFiles() (map[string]common.Hash, error) {
+	res := make(map[string]common.Hash)
+	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+		if strings.HasPrefix(path, filepath.FromSlash("tests/testdata")) {
+			return filepath.SkipDir
+		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
+		// open the file and hash it
+		f, err := os.OpenFile(path, os.O_RDONLY, 0666)
+		if err != nil {
+			return err
+		}
+		hasher := sha256.New()
+		if _, err := io.Copy(hasher, f); err != nil {
+			return err
+		}
+		res[path] = common.Hash(hasher.Sum(nil))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// doGenerate ensures that re-generating generated files does not cause
+// any mutations in the source file tree:  i.e. all generated files were
+// updated and committed.  Any stale generated files are updated.
+func doGenerate() {
+	var (
+		tc       = new(build.GoToolchain)
+		cachedir = flag.String("cachedir", "./build/cache", "directory for caching binaries.")
+		verify   = flag.Bool("verify", false, "check whether any files are changed by go generate")
+	)
+
+	protocPath := downloadProtoc(*cachedir)
+	protocGenGoPath := downloadProtocGenGo(*cachedir)
+
+	var preHashes map[string]common.Hash
+	if *verify {
+		var err error
+		preHashes, err = hashSourceFiles()
+		if err != nil {
+			log.Fatal("failed to compute map of source hashes", "err", err)
+		}
+	}
+
+	c := tc.Go("generate", "./...")
+	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
+	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
+	build.MustRun(c)
+
+	if !*verify {
+		return
+	}
+	// Check if files were changed.
+	postHashes, err := hashSourceFiles()
+	if err != nil {
+		log.Fatal("error computing source tree file hashes", "err", err)
+	}
+	updates := []string{}
+	for path, postHash := range postHashes {
+		preHash, ok := preHashes[path]
+		if !ok || preHash != postHash {
+			updates = append(updates, path)
+		}
+	}
+	for _, updatedFile := range updates {
+		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
+	}
+	if len(updates) != 0 {
+		log.Fatal("One or more generated files were updated by running 'go generate ./...'")
+	}
+}
+
 // doLint runs golangci-lint on requested packages.
 func doLint(cmdline []string) {
 	var (
@@ -396,6 +472,96 @@ func downloadLinter(cachedir string) string {
 		log.Fatal(err)
 	}
 	return filepath.Join(cachedir, base, "golangci-lint")
+}
+
+// protocArchiveBaseName returns the name of the protoc archive file for
+// the current system, stripped of version and file suffix.
+func protocArchiveBaseName() (string, error) {
+	switch runtime.GOOS + "-" + runtime.GOARCH {
+	case "windows-amd64":
+		return "win64", nil
+	case "windows-386":
+		return "win32", nil
+	case "linux-arm64":
+		return "linux-aarch_64", nil
+	case "linux-386":
+		return "linux-x86_32", nil
+	case "linux-amd64":
+		return "linux-x86_64", nil
+	case "darwin-arm64":
+		return "osx-aarch_64", nil
+	case "darwin-amd64":
+		return "osx-x86_64", nil
+	default:
+		return "", fmt.Errorf("no prebuilt release of protoc available for this system (os: %s, arch: %s)", runtime.GOOS, runtime.GOARCH)
+	}
+}
+
+// downloadProtocGenGo downloads protoc-gen-go, which is used by protoc
+// in the generate command.  It returns the full path of the directory
+// containing the 'protoc-gen-go' executable.
+func downloadProtocGenGo(cachedir string) string {
+	csdb := build.MustLoadChecksums("build/checksums.txt")
+	version, err := build.Version(csdb, "protoc-gen-go")
+	if err != nil {
+		log.Fatal(err)
+	}
+	baseName := fmt.Sprintf("protoc-gen-go.v%s.%s.%s", version, runtime.GOOS, runtime.GOARCH)
+	archiveName := baseName
+	if runtime.GOOS == "windows" {
+		archiveName += ".zip"
+	} else {
+		archiveName += ".tar.gz"
+	}
+
+	url := fmt.Sprintf("https://github.com/protocolbuffers/protobuf-go/releases/download/v%s/%s", version, archiveName)
+
+	archivePath := path.Join(cachedir, archiveName)
+	if err := csdb.DownloadFile(url, archivePath); err != nil {
+		log.Fatal(err)
+	}
+	extractDest := filepath.Join(cachedir, baseName)
+	if err := build.ExtractArchive(archivePath, extractDest); err != nil {
+		log.Fatal(err)
+	}
+	extractDest, err = filepath.Abs(extractDest)
+	if err != nil {
+		log.Fatal("error resolving absolute path for protoc", "err", err)
+	}
+	return extractDest
+}
+
+// downloadProtoc downloads the prebuilt protoc binary used to lint generated
+// files as a CI step.  It returns the full path to the directory containing
+// the protoc executable.
+func downloadProtoc(cachedir string) string {
+	csdb := build.MustLoadChecksums("build/checksums.txt")
+	version, err := build.Version(csdb, "protoc")
+	if err != nil {
+		log.Fatal(err)
+	}
+	baseName, err := protocArchiveBaseName()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fileName := fmt.Sprintf("protoc-%s-%s", version, baseName)
+	archiveFileName := fileName + ".zip"
+	url := fmt.Sprintf("https://github.com/protocolbuffers/protobuf/releases/download/v%s/%s", version, archiveFileName)
+	archivePath := filepath.Join(cachedir, archiveFileName)
+
+	if err := csdb.DownloadFile(url, archivePath); err != nil {
+		log.Fatal(err)
+	}
+	extractDest := filepath.Join(cachedir, fileName)
+	if err := build.ExtractArchive(archivePath, extractDest); err != nil {
+		log.Fatal(err)
+	}
+	extractDest, err = filepath.Abs(extractDest)
+	if err != nil {
+		log.Fatal("error resolving absolute path for protoc", "err", err)
+	}
+	return extractDest
 }
 
 // Release Packaging
@@ -694,8 +860,8 @@ func doDebianSource(cmdline []string) {
 	}
 	// Download and verify the Go source packages.
 	var (
-		gobootbundle = downloadGoBootstrapSources(*cachedir)
-		gobundle     = downloadGoSources(*cachedir)
+		gobootbundles = downloadGoBootstrapSources(*cachedir)
+		gobundle      = downloadGoSources(*cachedir)
 	)
 	// Download all the dependencies needed to build the sources and run the ci script
 	srcdepfetch := tc.Go("mod", "download")
@@ -708,17 +874,19 @@ func doDebianSource(cmdline []string) {
 
 	// Create Debian packages and upload them.
 	for _, pkg := range debPackages {
-		for distro, goboot := range debDistroGoBoots {
+		for _, distro := range debDistros {
 			// Prepare the debian package with the go-ethereum sources.
-			meta := newDebMetadata(distro, goboot, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
+			meta := newDebMetadata(distro, *signer, env, now, pkg.Name, pkg.Version, pkg.Executables)
 			pkgdir := stageDebianSource(*workdir, meta)
 
 			// Add bootstrapper Go source code
-			if err := build.ExtractArchive(gobootbundle, pkgdir); err != nil {
-				log.Fatalf("Failed to extract bootstrapper Go sources: %v", err)
-			}
-			if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, ".goboot")); err != nil {
-				log.Fatalf("Failed to rename bootstrapper Go source folder: %v", err)
+			for i, gobootbundle := range gobootbundles {
+				if err := build.ExtractArchive(gobootbundle, pkgdir); err != nil {
+					log.Fatalf("Failed to extract bootstrapper Go sources: %v", err)
+				}
+				if err := os.Rename(filepath.Join(pkgdir, "go"), filepath.Join(pkgdir, fmt.Sprintf(".goboot-%d", i+1))); err != nil {
+					log.Fatalf("Failed to rename bootstrapper Go source folder: %v", err)
+				}
 			}
 			// Add builder Go source code
 			if err := build.ExtractArchive(gobundle, pkgdir); err != nil {
@@ -754,21 +922,26 @@ func doDebianSource(cmdline []string) {
 	}
 }
 
-// downloadGoBootstrapSources downloads the Go source tarball that will be used
+// downloadGoBootstrapSources downloads the Go source tarball(s) that will be used
 // to bootstrap the builder Go.
-func downloadGoBootstrapSources(cachedir string) string {
+func downloadGoBootstrapSources(cachedir string) []string {
 	csdb := build.MustLoadChecksums("build/checksums.txt")
-	gobootVersion, err := build.Version(csdb, "ppa-builder")
-	if err != nil {
-		log.Fatal(err)
+
+	var bundles []string
+	for _, booter := range []string{"ppa-builder-1", "ppa-builder-2"} {
+		gobootVersion, err := build.Version(csdb, booter)
+		if err != nil {
+			log.Fatal(err)
+		}
+		file := fmt.Sprintf("go%s.src.tar.gz", gobootVersion)
+		url := "https://dl.google.com/go/" + file
+		dst := filepath.Join(cachedir, file)
+		if err := csdb.DownloadFile(url, dst); err != nil {
+			log.Fatal(err)
+		}
+		bundles = append(bundles, dst)
 	}
-	file := fmt.Sprintf("go%s.src.tar.gz", gobootVersion)
-	url := "https://dl.google.com/go/" + file
-	dst := filepath.Join(cachedir, file)
-	if err := csdb.DownloadFile(url, dst); err != nil {
-		log.Fatal(err)
-	}
-	return dst
+	return bundles
 }
 
 // downloadGoSources downloads the Go source tarball.
@@ -846,10 +1019,7 @@ type debPackage struct {
 }
 
 type debMetadata struct {
-	Env           build.Environment
-	GoBootPackage string
-	GoBootPath    string
-
+	Env         build.Environment
 	PackageName string
 
 	// go-ethereum version being built. Note that this
@@ -877,21 +1047,19 @@ func (d debExecutable) Package() string {
 	return d.BinaryName
 }
 
-func newDebMetadata(distro, goboot, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
+func newDebMetadata(distro, author string, env build.Environment, t time.Time, name string, version string, exes []debExecutable) debMetadata {
 	if author == "" {
 		// No signing key, use default author.
 		author = "Ethereum Builds <fjl@ethereum.org>"
 	}
 	return debMetadata{
-		GoBootPackage: goboot,
-		GoBootPath:    debGoBootPaths[goboot],
-		PackageName:   name,
-		Env:           env,
-		Author:        author,
-		Distro:        distro,
-		Version:       version,
-		Time:          t.Format(time.RFC1123Z),
-		Executables:   exes,
+		PackageName: name,
+		Env:         env,
+		Author:      author,
+		Distro:      distro,
+		Version:     version,
+		Time:        t.Format(time.RFC1123Z),
+		Executables: exes,
 	}
 }
 

@@ -142,10 +142,10 @@ func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accou
 // NewKeyedTransactorWithChainID is a utility method to easily create a transaction signer
 // from a single private key.
 func NewKeyedTransactorWithChainID(key *ecdsa.PrivateKey, chainID *big.Int) (*TransactOpts, error) {
-	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	if chainID == nil {
 		return nil, ErrNoChainID
 	}
+	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	signer := types.LatestSignerForChainID(chainID)
 	return &TransactOpts{
 		From: keyAddr,

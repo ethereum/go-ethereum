@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	cli "github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -91,7 +91,7 @@ data, and verifies that all snapshot storage data has a corresponding account.
 			},
 			{
 				Name:      "inspect-account",
-				Usage:     "Check all snapshot layers for the a specific account",
+				Usage:     "Check all snapshot layers for the specific account",
 				ArgsUsage: "<address | hash>",
 				Action:    checkAccount,
 				Flags:     flags.Merge(utils.NetworkFlags, utils.DatabaseFlags),
@@ -541,7 +541,10 @@ func dumpState(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	conf, db, root, err := parseDumpConfig(ctx, stack)
+	db := utils.MakeChainDatabase(ctx, stack, true)
+	defer db.Close()
+
+	conf, root, err := parseDumpConfig(ctx, db)
 	if err != nil {
 		return err
 	}

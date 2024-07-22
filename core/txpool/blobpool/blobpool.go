@@ -407,7 +407,7 @@ func (p *BlobPool) Init(gasTip uint64, head *types.Header, reserve txpool.Addres
 	if p.head.ExcessBlobGas != nil {
 		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(*p.head.ExcessBlobGas))
 	}
-	p.evict = newPriceHeap(basefee, blobfee, &p.index)
+	p.evict = newPriceHeap(basefee, blobfee, p.index)
 
 	// Pool initialized, attach the blob limbo to it to track blobs included
 	// recently but not yet finalized
@@ -1131,8 +1131,12 @@ func (p *BlobPool) validateTx(tx *types.Transaction) error {
 		next    = p.state.GetNonce(from)
 	)
 	if uint64(len(p.index[from])) > tx.Nonce()-next {
-		// Account can support the replacement, but the price bump must also be met
 		prev := p.index[from][int(tx.Nonce()-next)]
+		// Ensure the transaction is different than the one tracked locally
+		if prev.hash == tx.Hash() {
+			return txpool.ErrAlreadyKnown
+		}
+		// Account can support the replacement, but the price bump must also be met
 		switch {
 		case tx.GasFeeCapIntCmp(prev.execFeeCap.ToBig()) <= 0:
 			return fmt.Errorf("%w: new tx gas fee cap %v <= %v queued", txpool.ErrReplaceUnderpriced, tx.GasFeeCap(), prev.execFeeCap)
@@ -1222,7 +1226,7 @@ func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error 
 	return errs
 }
 
-// Add inserts a new blob transaction into the pool if it passes validation (both
+// add inserts a new blob transaction into the pool if it passes validation (both
 // consensus validity and pool restrictions).
 func (p *BlobPool) add(tx *types.Transaction) (err error) {
 	// The blob pool blocks on adding a transaction. This is because blob txs are
@@ -1594,6 +1598,7 @@ func (p *BlobPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool
 // Nonce returns the next nonce of an account, with all transactions executable
 // by the pool already applied on top.
 func (p *BlobPool) Nonce(addr common.Address) uint64 {
+	// We need a write lock here, since state.GetNonce might write the cache.
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -1606,8 +1611,8 @@ func (p *BlobPool) Nonce(addr common.Address) uint64 {
 // Stats retrieves the current pool stats, namely the number of pending and the
 // number of queued (non-executable) transactions.
 func (p *BlobPool) Stats() (int, int) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
 	var pending int
 	for _, txs := range p.index {

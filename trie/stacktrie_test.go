@@ -19,15 +19,12 @@ package trie
 import (
 	"bytes"
 	"math/big"
-	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/trie/testutil"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/exp/slices"
 )
 
 func TestStackTrieInsertAndHash(t *testing.T) {
@@ -377,90 +374,6 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 		have := vals[i]
 		if !bytes.Equal(have, want) {
 			t.Fatalf("item %d, have %#x want %#x", i, have, want)
-		}
-	}
-}
-
-func buildPartialTree(entries []*kv, t *testing.T) map[string]common.Hash {
-	var (
-		options = NewStackTrieOptions()
-		nodes   = make(map[string]common.Hash)
-	)
-	var (
-		first int
-		last  = len(entries) - 1
-
-		noLeft  bool
-		noRight bool
-	)
-	// Enter split mode if there are at least two elements
-	if rand.Intn(5) != 0 {
-		for {
-			first = rand.Intn(len(entries))
-			last = rand.Intn(len(entries))
-			if first <= last {
-				break
-			}
-		}
-		if first != 0 {
-			noLeft = true
-		}
-		if last != len(entries)-1 {
-			noRight = true
-		}
-	}
-	options = options.WithSkipBoundary(noLeft, noRight, nil)
-	options = options.WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-		nodes[string(path)] = hash
-	})
-	tr := NewStackTrie(options)
-
-	for i := first; i <= last; i++ {
-		tr.MustUpdate(entries[i].k, entries[i].v)
-	}
-	tr.Commit()
-	return nodes
-}
-
-func TestPartialStackTrie(t *testing.T) {
-	for round := 0; round < 100; round++ {
-		var (
-			n       = rand.Intn(100) + 1
-			entries []*kv
-		)
-		for i := 0; i < n; i++ {
-			var val []byte
-			if rand.Intn(3) == 0 {
-				val = testutil.RandBytes(3)
-			} else {
-				val = testutil.RandBytes(32)
-			}
-			entries = append(entries, &kv{
-				k: testutil.RandBytes(32),
-				v: val,
-			})
-		}
-		slices.SortFunc(entries, (*kv).cmp)
-
-		var (
-			nodes   = make(map[string]common.Hash)
-			options = NewStackTrieOptions().WithWriter(func(path []byte, hash common.Hash, blob []byte) {
-				nodes[string(path)] = hash
-			})
-		)
-		tr := NewStackTrie(options)
-
-		for i := 0; i < len(entries); i++ {
-			tr.MustUpdate(entries[i].k, entries[i].v)
-		}
-		tr.Commit()
-
-		for j := 0; j < 100; j++ {
-			for path, hash := range buildPartialTree(entries, t) {
-				if nodes[path] != hash {
-					t.Errorf("%v, want %x, got %x", []byte(path), nodes[path], hash)
-				}
-			}
 		}
 	}
 }

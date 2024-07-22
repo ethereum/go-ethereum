@@ -26,7 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
@@ -51,7 +51,7 @@ func blockTestCmd(ctx *cli.Context) error {
 		return errors.New("path-to-test argument required")
 	}
 
-	var tracer vm.EVMLogger
+	var tracer *tracing.Hooks
 	// Configure the EVM logger
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(&logger.Config{
@@ -86,7 +86,7 @@ func blockTestCmd(ctx *cli.Context) error {
 			continue
 		}
 		test := tests[name]
-		if err := test.Run(false, rawdb.HashScheme, tracer, func(res error, chain *core.BlockChain) {
+		if err := test.Run(false, rawdb.HashScheme, false, tracer, func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if state, _ := chain.State(); state != nil {
 					fmt.Println(string(state.Dump(nil)))

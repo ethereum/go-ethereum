@@ -196,7 +196,7 @@ func TestEIP2718BlockEncoding(t *testing.T) {
 func TestUncleHash(t *testing.T) {
 	uncles := make([]*Header, 0)
 	h := CalcUncleHash(uncles)
-	exp := common.HexToHash("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+	exp := EmptyUncleHash
 	if h != exp {
 		t.Fatalf("empty uncle hash is wrong, got %x != %x", h, exp)
 	}
@@ -254,7 +254,7 @@ func makeBenchBlock() *Block {
 			Extra:      []byte("benchmark uncle"),
 		}
 	}
-	return NewBlock(header, txs, uncles, receipts, blocktest.NewHasher())
+	return NewBlock(header, &Body{Transactions: txs, Uncles: uncles}, receipts, blocktest.NewHasher())
 }
 
 func TestRlpDecodeParentHash(t *testing.T) {

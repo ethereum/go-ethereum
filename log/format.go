@@ -3,6 +3,7 @@ package log
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -10,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/holiman/uint256"
-	"golang.org/x/exp/slog"
 )
 
 const (
@@ -79,24 +79,18 @@ func (h *TerminalHandler) format(buf []byte, r slog.Record, usecolor bool) []byt
 }
 
 func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, color string) {
-	// tmp is a temporary buffer we use, until bytes.Buffer.AvailableBuffer() (1.21)
-	// can be used.
-	var tmp = make([]byte, 40)
 	writeAttr := func(attr slog.Attr, first, last bool) {
 		buf.WriteByte(' ')
 
 		if color != "" {
 			buf.WriteString(color)
-			//buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
-			buf.Write(appendEscapeString(tmp[:0], attr.Key))
+			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
 			buf.WriteString("\x1b[0m=")
 		} else {
-			//buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
-			buf.Write(appendEscapeString(tmp[:0], attr.Key))
+			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
 			buf.WriteByte('=')
 		}
-		//val := FormatSlogValue(attr.Value, true, buf.AvailableBuffer())
-		val := FormatSlogValue(attr.Value, tmp[:0])
+		val := FormatSlogValue(attr.Value, buf.AvailableBuffer())
 
 		padding := h.fieldPadding[attr.Key]
 
@@ -346,7 +340,7 @@ func writeTimeTermFormat(buf *bytes.Buffer, t time.Time) {
 
 // writePosIntWidth writes non-negative integer i to the buffer, padded on the left
 // by zeroes to the given width. Use a width of 0 to omit padding.
-// Adapted from golang.org/x/exp/slog/internal/buffer/buffer.go
+// Adapted from pkg.go.dev/log/slog/internal/buffer
 func writePosIntWidth(b *bytes.Buffer, i, width int) {
 	// Cheap integer to fixed-width decimal ASCII.
 	// Copied from log/log.go.

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	mrand "math/rand"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -32,16 +33,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/testutil"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
-	"golang.org/x/exp/slices"
 )
 
 func TestHashing(t *testing.T) {
@@ -64,7 +64,7 @@ func TestHashing(t *testing.T) {
 		}
 	}
 	var new = func() {
-		hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+		hasher := crypto.NewKeccakState()
 		var hash = make([]byte, 32)
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
@@ -96,7 +96,7 @@ func BenchmarkHashing(b *testing.B) {
 		}
 	}
 	var new = func() {
-		hasher := sha3.NewLegacyKeccak256().(crypto.KeccakState)
+		hasher := crypto.NewKeccakState()
 		var hash = make([]byte, 32)
 		for i := 0; i < len(bytecodes); i++ {
 			hasher.Reset()
@@ -286,10 +286,7 @@ func createAccountRequestResponse(t *testPeer, root common.Hash, origin common.H
 			t.logger.Error("Could not prove last item", "error", err)
 		}
 	}
-	for _, blob := range proof.List() {
-		proofs = append(proofs, blob)
-	}
-	return keys, vals, proofs
+	return keys, vals, proof.List()
 }
 
 // defaultStorageRequestHandler is a well-behaving storage request handler
@@ -371,9 +368,7 @@ func createStorageRequestResponse(t *testPeer, root common.Hash, accounts []comm
 					t.logger.Error("Could not prove last item", "error", err)
 				}
 			}
-			for _, blob := range proof.List() {
-				proofs = append(proofs, blob)
-			}
+			proofs = append(proofs, proof.List()...)
 			break
 		}
 	}
@@ -430,9 +425,7 @@ func createStorageRequestResponseAlwaysProve(t *testPeer, root common.Hash, acco
 					t.logger.Error("Could not prove last item", "error", err)
 				}
 			}
-			for _, blob := range proof.List() {
-				proofs = append(proofs, blob)
-			}
+			proofs = append(proofs, proof.List()...)
 			break
 		}
 	}
@@ -586,9 +579,8 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 
 	source.accountRequestHandler = func(t *testPeer, requestId uint64, root common.Hash, origin common.Hash, limit common.Hash, cap uint64) error {
 		var (
-			proofs [][]byte
-			keys   []common.Hash
-			vals   [][]byte
+			keys []common.Hash
+			vals [][]byte
 		)
 		// The values
 		for _, entry := range t.accountValues {
@@ -618,10 +610,7 @@ func testSyncBloatedProof(t *testing.T, scheme string) {
 			keys = append(keys[:1], keys[2:]...)
 			vals = append(vals[:1], vals[2:]...)
 		}
-		for _, blob := range proof.List() {
-			proofs = append(proofs, blob)
-		}
-		if err := t.remote.OnAccounts(t, requestId, keys, vals, proofs); err != nil {
+		if err := t.remote.OnAccounts(t, requestId, keys, vals, proof.List()); err != nil {
 			t.logger.Info("remote error on delivery (as expected)", "error", err)
 			t.term()
 			// This is actually correct, signal to exit the test successfully
@@ -839,7 +828,7 @@ func testMultiSyncManyUseless(t *testing.T, scheme string) {
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
 }
 
-// TestMultiSyncManyUseless contains one good peer, and many which doesn't return anything valuable at all
+// TestMultiSyncManyUselessWithLowTimeout contains one good peer, and many which doesn't return anything valuable at all
 func TestMultiSyncManyUselessWithLowTimeout(t *testing.T) {
 	t.Parallel()
 
@@ -1378,7 +1367,7 @@ func testSyncWithStorageAndNonProvingPeer(t *testing.T, scheme string) {
 	verifyTrie(scheme, syncer.db, sourceAccountTrie.Hash(), t)
 }
 
-// TestSyncWithStorage tests  basic sync using accounts + storage + code, against
+// TestSyncWithStorageMisbehavingProve tests  basic sync using accounts + storage + code, against
 // a peer who insists on delivering full storage sets _and_ proofs. This triggered
 // an error, where the recipient erroneously clipped the boundary nodes, but
 // did not mark the account for healing.
@@ -1502,7 +1491,7 @@ func getCodeByHash(hash common.Hash) []byte {
 	return nil
 }
 
-// makeAccountTrieNoStorage spits out a trie, along with the leafs
+// makeAccountTrieNoStorage spits out a trie, along with the leaves
 func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) {
 	var (
 		db      = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
@@ -1525,7 +1514,7 @@ func makeAccountTrieNoStorage(n int, scheme string) (string, *trie.Trie, []*kv) 
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
-	root, nodes, _ := accTrie.Commit(false)
+	root, nodes := accTrie.Commit(false)
 	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
@@ -1587,7 +1576,7 @@ func makeBoundaryAccountTrie(scheme string, n int) (string, *trie.Trie, []*kv) {
 
 	// Commit the state changes into db and re-create the trie
 	// for accessing later.
-	root, nodes, _ := accTrie.Commit(false)
+	root, nodes := accTrie.Commit(false)
 	db.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 
 	accTrie, _ = trie.New(trie.StateTrieID(root), db)
@@ -1633,7 +1622,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 	slices.SortFunc(entries, (*kv).cmp)
 
 	// Commit account trie
-	root, set, _ := accTrie.Commit(true)
+	root, set := accTrie.Commit(true)
 	nodes.Merge(set)
 
 	// Commit gathered dirty nodes into database
@@ -1650,7 +1639,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 	return db.Scheme(), accTrie, entries, storageTries, storageEntries
 }
 
-// makeAccountTrieWithStorage spits out a trie, along with the leafs
+// makeAccountTrieWithStorage spits out a trie, along with the leaves
 func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, boundary bool, uneven bool) (*trie.Trie, []*kv, map[common.Hash]*trie.Trie, map[common.Hash][]*kv) {
 	var (
 		db             = triedb.NewDatabase(rawdb.NewMemoryDatabase(), newDbConfig(scheme))
@@ -1700,7 +1689,7 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 	slices.SortFunc(entries, (*kv).cmp)
 
 	// Commit account trie
-	root, set, _ := accTrie.Commit(true)
+	root, set := accTrie.Commit(true)
 	nodes.Merge(set)
 
 	// Commit gathered dirty nodes into database
@@ -1742,7 +1731,7 @@ func makeStorageTrieWithSeed(owner common.Hash, n, seed uint64, db *triedb.Datab
 		entries = append(entries, elem)
 	}
 	slices.SortFunc(entries, (*kv).cmp)
-	root, nodes, _ := trie.Commit(false)
+	root, nodes := trie.Commit(false)
 	return root, nodes, entries
 }
 
@@ -1793,7 +1782,7 @@ func makeBoundaryStorageTrie(owner common.Hash, n int, db *triedb.Database) (com
 		entries = append(entries, elem)
 	}
 	slices.SortFunc(entries, (*kv).cmp)
-	root, nodes, _ := trie.Commit(false)
+	root, nodes := trie.Commit(false)
 	return root, nodes, entries
 }
 
@@ -1816,8 +1805,8 @@ func makeUnevenStorageTrie(owner common.Hash, slots int, db *triedb.Database) (c
 			break
 		}
 		for j := 0; j < slots/3; j++ {
-			key := append([]byte{byte(n)}, testutil.RandBytes(31)...)
-			val, _ := rlp.EncodeToBytes(testutil.RandBytes(32))
+			key := append([]byte{byte(n)}, testrand.Bytes(31)...)
+			val, _ := rlp.EncodeToBytes(testrand.Bytes(32))
 
 			elem := &kv{key, val}
 			tr.MustUpdate(elem.k, elem.v)
@@ -1825,7 +1814,7 @@ func makeUnevenStorageTrie(owner common.Hash, slots int, db *triedb.Database) (c
 		}
 	}
 	slices.SortFunc(entries, (*kv).cmp)
-	root, nodes, _ := tr.Commit(false)
+	root, nodes := tr.Commit(false)
 	return root, nodes, entries
 }
 
@@ -1873,8 +1862,9 @@ func verifyTrie(scheme string, db ethdb.KeyValueStore, root common.Hash, t *test
 // TestSyncAccountPerformance tests how efficient the snap algo is at minimizing
 // state healing
 func TestSyncAccountPerformance(t *testing.T) {
-	t.Parallel()
-
+	// These tests must not run in parallel: they modify the
+	// global var accountConcurrency
+	// t.Parallel()
 	testSyncAccountPerformance(t, rawdb.HashScheme)
 	testSyncAccountPerformance(t, rawdb.PathScheme)
 }

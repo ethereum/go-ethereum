@@ -20,17 +20,21 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/stateless"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie/utils"
 	"github.com/holiman/uint256"
 )
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	CreateAccount(common.Address)
+	CreateContract(common.Address)
 
-	SubBalance(common.Address, *uint256.Int)
-	AddBalance(common.Address, *uint256.Int)
+	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
+	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
 	GetBalance(common.Address) *uint256.Int
 
 	GetNonce(common.Address) uint64
@@ -48,6 +52,7 @@ type StateDB interface {
 	GetCommittedState(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
+	GetStorageRoot(addr common.Address) common.Hash
 
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)
@@ -72,6 +77,10 @@ type StateDB interface {
 	// AddSlotToAccessList adds the given (address,slot) to the access list. This operation is safe to perform
 	// even if the feature/fork is not active yet
 	AddSlotToAccessList(addr common.Address, slot common.Hash)
+
+	// PointCache returns the point cache used in computations
+	PointCache() *utils.PointCache
+
 	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
 
 	RevertToSnapshot(int)
@@ -79,6 +88,8 @@ type StateDB interface {
 
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)
+
+	Witness() *stateless.Witness
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

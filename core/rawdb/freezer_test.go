@@ -23,10 +23,11 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"path"
+	"path/filepath"
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/rawdb/ancienttest"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
@@ -275,7 +276,7 @@ func TestFreezerReadonlyValidate(t *testing.T) {
 	}
 	require.NoError(t, f.Close())
 
-	// Re-openening as readonly should fail when validating
+	// Re-opening as readonly should fail when validating
 	// table lengths.
 	_, err = NewFreezer(dir, "", true, 2049, tables)
 	if err == nil {
@@ -393,15 +394,15 @@ func TestRenameWindows(t *testing.T) {
 	dir2 := t.TempDir()
 
 	// Create file in dir1 and fill with data
-	f, err := os.Create(path.Join(dir1, fname))
+	f, err := os.Create(filepath.Join(dir1, fname))
 	if err != nil {
 		t.Fatal(err)
 	}
-	f2, err := os.Create(path.Join(dir1, fname2))
+	f2, err := os.Create(filepath.Join(dir1, fname2))
 	if err != nil {
 		t.Fatal(err)
 	}
-	f3, err := os.Create(path.Join(dir2, fname2))
+	f3, err := os.Create(filepath.Join(dir2, fname2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,15 +424,15 @@ func TestRenameWindows(t *testing.T) {
 	if err := f3.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(f.Name(), path.Join(dir2, fname)); err != nil {
+	if err := os.Rename(f.Name(), filepath.Join(dir2, fname)); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(f2.Name(), path.Join(dir2, fname2)); err != nil {
+	if err := os.Rename(f2.Name(), filepath.Join(dir2, fname2)); err != nil {
 		t.Fatal(err)
 	}
 
 	// Check file contents
-	f, err = os.Open(path.Join(dir2, fname))
+	f, err = os.Open(filepath.Join(dir2, fname))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +446,7 @@ func TestRenameWindows(t *testing.T) {
 		t.Errorf("unexpected file contents. Got %v\n", buf)
 	}
 
-	f, err = os.Open(path.Join(dir2, fname2))
+	f, err = os.Open(filepath.Join(dir2, fname2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,4 +480,23 @@ func TestFreezerCloseSync(t *testing.T) {
 	} else if have, want := err.Error(), "[closed closed]"; have != want {
 		t.Fatalf("want %v, have %v", have, want)
 	}
+}
+
+func TestFreezerSuite(t *testing.T) {
+	ancienttest.TestAncientSuite(t, func(kinds []string) ethdb.AncientStore {
+		tables := make(map[string]bool)
+		for _, kind := range kinds {
+			tables[kind] = true
+		}
+		f, _ := newFreezerForTesting(t, tables)
+		return f
+	})
+	ancienttest.TestResettableAncientSuite(t, func(kinds []string) ethdb.ResettableAncientStore {
+		tables := make(map[string]bool)
+		for _, kind := range kinds {
+			tables[kind] = true
+		}
+		f, _ := newResettableFreezer(t.TempDir(), "", false, 2048, tables)
+		return f
+	})
 }

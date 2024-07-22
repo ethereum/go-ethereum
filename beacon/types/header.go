@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/beacon/params"
 	"github.com/ethereum/go-ethereum/common"
+	zrntcommon "github.com/protolambda/zrnt/eth2/beacon/common"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
@@ -55,6 +56,16 @@ type Header struct {
 
 	// SSZ hash of the beacon block body (https://github.com/ethereum/consensus-specs/blob/dev/specs/bellatrix/beacon-chain.md#beaconblockbody)
 	BodyRoot common.Hash `gencodec:"required" json:"body_root"`
+}
+
+func headerFromZRNT(zh *zrntcommon.BeaconBlockHeader) Header {
+	return Header{
+		Slot:          uint64(zh.Slot),
+		ProposerIndex: uint64(zh.ProposerIndex),
+		ParentRoot:    common.Hash(zh.ParentRoot),
+		StateRoot:     common.Hash(zh.StateRoot),
+		BodyRoot:      common.Hash(zh.BodyRoot),
+	}
 }
 
 // headerMarshaling is a field type overrides for gencodec.

@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
@@ -58,7 +59,7 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 	if header.ExcessBlobGas != nil {
 		blobBaseFee = eip4844.CalcBlobFee(*header.ExcessBlobGas)
 	}
-	if header.Difficulty.Cmp(common.Big0) == 0 {
+	if header.Difficulty.Sign() == 0 {
 		random = &header.MixDigest
 	}
 	return vm.BlockContext{
@@ -136,6 +137,6 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *uint256.Int) bool {
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *uint256.Int) {
-	db.SubBalance(sender, amount)
-	db.AddBalance(recipient, amount)
+	db.SubBalance(sender, amount, tracing.BalanceChangeTransfer)
+	db.AddBalance(recipient, amount, tracing.BalanceChangeTransfer)
 }

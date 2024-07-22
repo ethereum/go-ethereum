@@ -107,13 +107,7 @@ func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, err
 
 // SignNewTx creates a transaction and signs it.
 func SignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) (*Transaction, error) {
-	tx := NewTx(txdata)
-	h := s.Hash(tx)
-	sig, err := crypto.Sign(h[:], prv)
-	if err != nil {
-		return nil, err
-	}
-	return tx.WithSignature(s, sig)
+	return SignTx(NewTx(txdata), s, prv)
 }
 
 // MustSignNewTx creates a transaction and signs it.
@@ -134,8 +128,7 @@ func MustSignNewTx(prv *ecdsa.PrivateKey, s Signer, txdata TxData) *Transaction 
 // signing method. The cache is invalidated if the cached signer does
 // not match the signer used in the current call.
 func Sender(signer Signer, tx *Transaction) (common.Address, error) {
-	if sc := tx.from.Load(); sc != nil {
-		sigCache := sc.(sigCache)
+	if sigCache := tx.from.Load(); sigCache != nil {
 		// If the signer used to derive from in a previous
 		// call is not the same as used current, invalidate
 		// the cache.
@@ -148,7 +141,7 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 	if err != nil {
 		return common.Address{}, err
 	}
-	tx.from.Store(sigCache{signer: signer, from: addr})
+	tx.from.Store(&sigCache{signer: signer, from: addr})
 	return addr, nil
 }
 
@@ -466,11 +459,11 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 // homestead rules.
 type HomesteadSigner struct{ FrontierSigner }
 
-func (s HomesteadSigner) ChainID() *big.Int {
+func (hs HomesteadSigner) ChainID() *big.Int {
 	return nil
 }
 
-func (s HomesteadSigner) Equal(s2 Signer) bool {
+func (hs HomesteadSigner) Equal(s2 Signer) bool {
 	_, ok := s2.(HomesteadSigner)
 	return ok
 }
@@ -493,11 +486,11 @@ func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
 // frontier rules.
 type FrontierSigner struct{}
 
-func (s FrontierSigner) ChainID() *big.Int {
+func (fs FrontierSigner) ChainID() *big.Int {
 	return nil
 }
 
-func (s FrontierSigner) Equal(s2 Signer) bool {
+func (fs FrontierSigner) Equal(s2 Signer) bool {
 	_, ok := s2.(FrontierSigner)
 	return ok
 }
@@ -579,6 +572,6 @@ func deriveChainId(v *big.Int) *big.Int {
 		}
 		return new(big.Int).SetUint64((v - 35) / 2)
 	}
-	v = new(big.Int).Sub(v, big.NewInt(35))
-	return v.Div(v, big.NewInt(2))
+	v.Sub(v, big.NewInt(35))
+	return v.Rsh(v, 1)
 }

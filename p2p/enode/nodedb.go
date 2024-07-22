@@ -21,11 +21,12 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"net"
+	"net/netip"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -65,7 +66,7 @@ var (
 	errInvalidIP = errors.New("invalid IP")
 )
 
-var zeroIP = make(net.IP, 16)
+var zeroIP = netip.IPv6Unspecified()
 
 // DB is the node database, storing previously seen nodes and any collected metadata about
 // them for QoS purposes.
@@ -84,7 +85,7 @@ func OpenDB(path string) (*DB, error) {
 	return newPersistentDB(path)
 }
 
-// newMemoryNodeDB creates a new in-memory node database without a persistent backend.
+// newMemoryDB creates a new in-memory node database without a persistent backend.
 func newMemoryDB() (*DB, error) {
 	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	if err != nil {
@@ -93,7 +94,7 @@ func newMemoryDB() (*DB, error) {
 	return &DB{lvl: db, quit: make(chan struct{})}, nil
 }
 
-// newPersistentNodeDB creates/opens a leveldb backed persistent node database,
+// newPersistentDB creates/opens a leveldb backed persistent node database,
 // also flushing its contents in case of a version mismatch.
 func newPersistentDB(path string) (*DB, error) {
 	opts := &opt.Options{OpenFilesCacheCapacity: 5}
@@ -150,39 +151,37 @@ func splitNodeKey(key []byte) (id ID, rest []byte) {
 }
 
 // nodeItemKey returns the database key for a node metadata field.
-func nodeItemKey(id ID, ip net.IP, field string) []byte {
-	ip16 := ip.To16()
-	if ip16 == nil {
-		panic(fmt.Errorf("invalid IP (length %d)", len(ip)))
+func nodeItemKey(id ID, ip netip.Addr, field string) []byte {
+	if !ip.IsValid() {
+		panic("invalid IP")
 	}
-	return bytes.Join([][]byte{nodeKey(id), ip16, []byte(field)}, []byte{':'})
+	ip16 := ip.As16()
+	return bytes.Join([][]byte{nodeKey(id), ip16[:], []byte(field)}, []byte{':'})
 }
 
 // splitNodeItemKey returns the components of a key created by nodeItemKey.
-func splitNodeItemKey(key []byte) (id ID, ip net.IP, field string) {
+func splitNodeItemKey(key []byte) (id ID, ip netip.Addr, field string) {
 	id, key = splitNodeKey(key)
 	// Skip discover root.
 	if string(key) == dbDiscoverRoot {
-		return id, nil, ""
+		return id, netip.Addr{}, ""
 	}
 	key = key[len(dbDiscoverRoot)+1:]
 	// Split out the IP.
-	ip = key[:16]
-	if ip4 := ip.To4(); ip4 != nil {
-		ip = ip4
-	}
+	ip, _ = netip.AddrFromSlice(key[:16])
 	key = key[16+1:]
 	// Field is the remainder of key.
 	field = string(key)
 	return id, ip, field
 }
 
-func v5Key(id ID, ip net.IP, field string) []byte {
+func v5Key(id ID, ip netip.Addr, field string) []byte {
+	ip16 := ip.As16()
 	return bytes.Join([][]byte{
 		[]byte(dbNodePrefix),
 		id[:],
 		[]byte(dbDiscv5Root),
-		ip.To16(),
+		ip16[:],
 		[]byte(field),
 	}, []byte{':'})
 }
@@ -242,13 +241,14 @@ func (db *DB) Node(id ID) *Node {
 }
 
 func mustDecodeNode(id, data []byte) *Node {
-	node := new(Node)
-	if err := rlp.DecodeBytes(data, &node.r); err != nil {
+	var r enr.Record
+	if err := rlp.DecodeBytes(data, &r); err != nil {
 		panic(fmt.Errorf("p2p/enode: can't decode node %x in DB: %v", id, err))
 	}
-	// Restore node id cache.
-	copy(node.id[:], id)
-	return node
+	if len(id) != len(ID{}) {
+		panic(fmt.Errorf("invalid id length %d", len(id)))
+	}
+	return newNodeWithID(&r, ID(id))
 }
 
 // UpdateNode inserts - potentially overwriting - a node into the peer database.
@@ -362,24 +362,24 @@ func (db *DB) expireNodes() {
 
 // LastPingReceived retrieves the time of the last ping packet received from
 // a remote node.
-func (db *DB) LastPingReceived(id ID, ip net.IP) time.Time {
-	if ip = ip.To16(); ip == nil {
+func (db *DB) LastPingReceived(id ID, ip netip.Addr) time.Time {
+	if !ip.IsValid() {
 		return time.Time{}
 	}
 	return time.Unix(db.fetchInt64(nodeItemKey(id, ip, dbNodePing)), 0)
 }
 
 // UpdateLastPingReceived updates the last time we tried contacting a remote node.
-func (db *DB) UpdateLastPingReceived(id ID, ip net.IP, instance time.Time) error {
-	if ip = ip.To16(); ip == nil {
+func (db *DB) UpdateLastPingReceived(id ID, ip netip.Addr, instance time.Time) error {
+	if !ip.IsValid() {
 		return errInvalidIP
 	}
 	return db.storeInt64(nodeItemKey(id, ip, dbNodePing), instance.Unix())
 }
 
 // LastPongReceived retrieves the time of the last successful pong from remote node.
-func (db *DB) LastPongReceived(id ID, ip net.IP) time.Time {
-	if ip = ip.To16(); ip == nil {
+func (db *DB) LastPongReceived(id ID, ip netip.Addr) time.Time {
+	if !ip.IsValid() {
 		return time.Time{}
 	}
 	// Launch expirer
@@ -388,40 +388,40 @@ func (db *DB) LastPongReceived(id ID, ip net.IP) time.Time {
 }
 
 // UpdateLastPongReceived updates the last pong time of a node.
-func (db *DB) UpdateLastPongReceived(id ID, ip net.IP, instance time.Time) error {
-	if ip = ip.To16(); ip == nil {
+func (db *DB) UpdateLastPongReceived(id ID, ip netip.Addr, instance time.Time) error {
+	if !ip.IsValid() {
 		return errInvalidIP
 	}
 	return db.storeInt64(nodeItemKey(id, ip, dbNodePong), instance.Unix())
 }
 
 // FindFails retrieves the number of findnode failures since bonding.
-func (db *DB) FindFails(id ID, ip net.IP) int {
-	if ip = ip.To16(); ip == nil {
+func (db *DB) FindFails(id ID, ip netip.Addr) int {
+	if !ip.IsValid() {
 		return 0
 	}
 	return int(db.fetchInt64(nodeItemKey(id, ip, dbNodeFindFails)))
 }
 
 // UpdateFindFails updates the number of findnode failures since bonding.
-func (db *DB) UpdateFindFails(id ID, ip net.IP, fails int) error {
-	if ip = ip.To16(); ip == nil {
+func (db *DB) UpdateFindFails(id ID, ip netip.Addr, fails int) error {
+	if !ip.IsValid() {
 		return errInvalidIP
 	}
 	return db.storeInt64(nodeItemKey(id, ip, dbNodeFindFails), int64(fails))
 }
 
 // FindFailsV5 retrieves the discv5 findnode failure counter.
-func (db *DB) FindFailsV5(id ID, ip net.IP) int {
-	if ip = ip.To16(); ip == nil {
+func (db *DB) FindFailsV5(id ID, ip netip.Addr) int {
+	if !ip.IsValid() {
 		return 0
 	}
 	return int(db.fetchInt64(v5Key(id, ip, dbNodeFindFails)))
 }
 
 // UpdateFindFailsV5 stores the discv5 findnode failure counter.
-func (db *DB) UpdateFindFailsV5(id ID, ip net.IP, fails int) error {
-	if ip = ip.To16(); ip == nil {
+func (db *DB) UpdateFindFailsV5(id ID, ip netip.Addr, fails int) error {
+	if !ip.IsValid() {
 		return errInvalidIP
 	}
 	return db.storeInt64(v5Key(id, ip, dbNodeFindFails), int64(fails))
@@ -468,7 +468,7 @@ seek:
 			id[0] = 0
 			continue seek // iterator exhausted
 		}
-		if now.Sub(db.LastPongReceived(n.ID(), n.IP())) > maxAge {
+		if now.Sub(db.LastPongReceived(n.ID(), n.IPAddr())) > maxAge {
 			continue seek
 		}
 		for i := range nodes {

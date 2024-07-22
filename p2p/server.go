@@ -19,11 +19,14 @@ package p2p
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -190,8 +192,8 @@ type Server struct {
 
 	nodedb    *enode.DB
 	localnode *enode.LocalNode
-	ntab      *discover.UDPv4
-	DiscV5    *discover.UDPv5
+	discv4    *discover.UDPv4
+	discv5    *discover.UDPv5
 	discmix   *enode.FairMix
 	dialsched *dialScheduler
 
@@ -400,6 +402,16 @@ func (srv *Server) Self() *enode.Node {
 	return ln.Node()
 }
 
+// DiscoveryV4 returns the discovery v4 instance, if configured.
+func (srv *Server) DiscoveryV4() *discover.UDPv4 {
+	return srv.discv4
+}
+
+// DiscoveryV5 returns the discovery v5 instance, if configured.
+func (srv *Server) DiscoveryV5() *discover.UDPv5 {
+	return srv.discv5
+}
+
 // Stop terminates the server and all active peer connections.
 // It blocks until all active connections have been closed.
 func (srv *Server) Stop() {
@@ -425,11 +437,11 @@ type sharedUDPConn struct {
 	unhandled chan discover.ReadPacket
 }
 
-// ReadFromUDP implements discover.UDPConn
-func (s *sharedUDPConn) ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error) {
+// ReadFromUDPAddrPort implements discover.UDPConn
+func (s *sharedUDPConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
 	packet, ok := <-s.unhandled
 	if !ok {
-		return 0, nil, errors.New("connection was closed")
+		return 0, netip.AddrPort{}, errors.New("connection was closed")
 	}
 	l := len(packet.Data)
 	if l > len(b) {
@@ -547,13 +559,13 @@ func (srv *Server) setupDiscovery() error {
 	)
 	// If both versions of discovery are running, setup a shared
 	// connection, so v5 can read unhandled messages from v4.
-	if srv.DiscoveryV4 && srv.DiscoveryV5 {
+	if srv.Config.DiscoveryV4 && srv.Config.DiscoveryV5 {
 		unhandled = make(chan discover.ReadPacket, 100)
 		sconn = &sharedUDPConn{conn, unhandled}
 	}
 
 	// Start discovery services.
-	if srv.DiscoveryV4 {
+	if srv.Config.DiscoveryV4 {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
@@ -565,17 +577,17 @@ func (srv *Server) setupDiscovery() error {
 		if err != nil {
 			return err
 		}
-		srv.ntab = ntab
+		srv.discv4 = ntab
 		srv.discmix.AddSource(ntab.RandomNodes())
 	}
-	if srv.DiscoveryV5 {
+	if srv.Config.DiscoveryV5 {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
 			Bootnodes:   srv.BootstrapNodesV5,
 			Log:         srv.log,
 		}
-		srv.DiscV5, err = discover.ListenV5(sconn, srv.localnode, cfg)
+		srv.discv5, err = discover.ListenV5(sconn, srv.localnode, cfg)
 		if err != nil {
 			return err
 		}
@@ -602,8 +614,8 @@ func (srv *Server) setupDialScheduler() {
 		dialer:         srv.Dialer,
 		clock:          srv.clock,
 	}
-	if srv.ntab != nil {
-		config.resolver = srv.ntab
+	if srv.discv4 != nil {
+		config.resolver = srv.discv4
 	}
 	if config.dialer == nil {
 		config.dialer = tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
@@ -771,8 +783,10 @@ running:
 				if p.Inbound() {
 					inboundCount++
 					serveSuccessMeter.Mark(1)
+					activeInboundPeerGauge.Inc(1)
 				} else {
 					dialSuccessMeter.Mark(1)
+					activeOutboundPeerGauge.Inc(1)
 				}
 				activePeerGauge.Inc(1)
 			}
@@ -786,6 +800,9 @@ running:
 			srv.dialsched.peerRemoved(pd.rw)
 			if pd.Inbound() {
 				inboundCount--
+				activeInboundPeerGauge.Dec(1)
+			} else {
+				activeOutboundPeerGauge.Dec(1)
 			}
 			activePeerGauge.Dec(1)
 		}
@@ -794,11 +811,11 @@ running:
 	srv.log.Trace("P2P networking is spinning down")
 
 	// Terminate discovery. If there is a running lookup it will terminate soon.
-	if srv.ntab != nil {
-		srv.ntab.Close()
+	if srv.discv4 != nil {
+		srv.discv4.Close()
 	}
-	if srv.DiscV5 != nil {
-		srv.DiscV5.Close()
+	if srv.discv5 != nil {
+		srv.discv5.Close()
 	}
 	// Disconnect all peers.
 	for _, p := range peers {
@@ -889,14 +906,14 @@ func (srv *Server) listenLoop() {
 			break
 		}
 
-		remoteIP := netutil.AddrIP(fd.RemoteAddr())
+		remoteIP := netutil.AddrAddr(fd.RemoteAddr())
 		if err := srv.checkInboundConn(remoteIP); err != nil {
 			srv.log.Debug("Rejected inbound connection", "addr", fd.RemoteAddr(), "err", err)
 			fd.Close()
 			slots <- struct{}{}
 			continue
 		}
-		if remoteIP != nil {
+		if remoteIP.IsValid() {
 			fd = newMeteredConn(fd)
 			serveMeter.Mark(1)
 			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
@@ -908,18 +925,19 @@ func (srv *Server) listenLoop() {
 	}
 }
 
-func (srv *Server) checkInboundConn(remoteIP net.IP) error {
-	if remoteIP == nil {
+func (srv *Server) checkInboundConn(remoteIP netip.Addr) error {
+	if !remoteIP.IsValid() {
+		// This case happens for internal test connections without remote address.
 		return nil
 	}
 	// Reject connections that do not match NetRestrict.
-	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
+	if srv.NetRestrict != nil && !srv.NetRestrict.ContainsAddr(remoteIP) {
 		return errors.New("not in netrestrict list")
 	}
 	// Reject Internet peers that try too often.
 	now := srv.clock.Now()
 	srv.inboundHistory.expire(now, nil)
-	if !netutil.IsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
+	if !netutil.AddrIsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
 		return errors.New("too many attempts")
 	}
 	srv.inboundHistory.add(remoteIP.String(), now.Add(inboundThrottleTime))
@@ -937,7 +955,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		c.transport = srv.newTransport(fd, dialDest.Pubkey())
 	}
 
-	err := srv.setupConn(c, flags, dialDest)
+	err := srv.setupConn(c, dialDest)
 	if err != nil {
 		if !c.is(inboundConn) {
 			markDialError(err)
@@ -947,7 +965,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 	return err
 }
 
-func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) error {
+func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
 	running := srv.running
@@ -1092,7 +1110,7 @@ func (srv *Server) NodeInfo() *NodeInfo {
 		Name:       srv.Name,
 		Enode:      node.URLv4(),
 		ID:         node.ID().String(),
-		IP:         node.IP().String(),
+		IP:         node.IPAddr().String(),
 		ListenAddr: srv.ListenAddr,
 		Protocols:  make(map[string]interface{}),
 	}
@@ -1123,12 +1141,9 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	// Sort the result array alphabetically by node identifier
-	for i := 0; i < len(infos); i++ {
-		for j := i + 1; j < len(infos); j++ {
-			if infos[i].ID > infos[j].ID {
-				infos[i], infos[j] = infos[j], infos[i]
-			}
-		}
-	}
+	slices.SortFunc(infos, func(a, b *PeerInfo) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
+
 	return infos
 }

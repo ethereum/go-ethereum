@@ -19,6 +19,7 @@ package engine
 import (
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -132,12 +133,7 @@ func (b PayloadID) Version() PayloadVersion {
 
 // Is returns whether the identifier matches any of provided payload versions.
 func (b PayloadID) Is(versions ...PayloadVersion) bool {
-	for _, v := range versions {
-		if v == b.Version() {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(versions, b.Version())
 }
 
 func (b PayloadID) String() string {
@@ -213,7 +209,7 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 	if params.BaseFeePerGas != nil && (params.BaseFeePerGas.Sign() == -1 || params.BaseFeePerGas.BitLen() > 256) {
 		return nil, fmt.Errorf("invalid baseFeePerGas: %v", params.BaseFeePerGas)
 	}
-	var blobHashes []common.Hash
+	var blobHashes = make([]common.Hash, 0, len(txs))
 	for _, tx := range txs {
 		blobHashes = append(blobHashes, tx.BlobHashes()...)
 	}
@@ -254,7 +250,7 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		BlobGasUsed:      params.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */).WithWithdrawals(params.Withdrawals)
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: params.Withdrawals})
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}
@@ -313,7 +309,7 @@ const (
 // ClientVersionV1 contains information which identifies a client implementation.
 type ClientVersionV1 struct {
 	Code    string `json:"code"`
-	Name    string `json:"clientName"`
+	Name    string `json:"name"`
 	Version string `json:"version"`
 	Commit  string `json:"commit"`
 }

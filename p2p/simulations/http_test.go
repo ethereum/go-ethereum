@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"net/http/httptest"
 	"os"
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
-	"golang.org/x/exp/slog"
 )
 
 func TestMain(m *testing.M) {
@@ -281,8 +281,6 @@ func (t *TestAPI) Events(ctx context.Context) (*rpc.Subscription, error) {
 			case <-sub.Err():
 				return
 			case <-rpcSub.Err():
-				return
-			case <-notifier.Closed():
 				return
 			}
 		}
@@ -840,7 +838,7 @@ func TestMsgFilterPassSingle(t *testing.T) {
 	})
 }
 
-// TestMsgFilterPassSingle tests streaming message events using an invalid
+// TestMsgFilterFailBadParams tests streaming message events using an invalid
 // filter
 func TestMsgFilterFailBadParams(t *testing.T) {
 	// start the server

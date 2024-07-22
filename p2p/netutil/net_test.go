@@ -18,7 +18,9 @@ package netutil
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
+	"net/netip"
 	"reflect"
 	"testing"
 	"testing/quick"
@@ -29,7 +31,7 @@ import (
 func TestParseNetlist(t *testing.T) {
 	var tests = []struct {
 		input    string
-		wantErr  error
+		wantErr  string
 		wantList *Netlist
 	}{
 		{
@@ -38,25 +40,27 @@ func TestParseNetlist(t *testing.T) {
 		},
 		{
 			input:    "127.0.0.0/8",
-			wantErr:  nil,
-			wantList: &Netlist{{IP: net.IP{127, 0, 0, 0}, Mask: net.CIDRMask(8, 32)}},
+			wantList: &Netlist{netip.MustParsePrefix("127.0.0.0/8")},
 		},
 		{
 			input:   "127.0.0.0/44",
-			wantErr: &net.ParseError{Type: "CIDR address", Text: "127.0.0.0/44"},
+			wantErr: `netip.ParsePrefix("127.0.0.0/44"): prefix length out of range`,
 		},
 		{
 			input: "127.0.0.0/16, 23.23.23.23/24,",
 			wantList: &Netlist{
-				{IP: net.IP{127, 0, 0, 0}, Mask: net.CIDRMask(16, 32)},
-				{IP: net.IP{23, 23, 23, 0}, Mask: net.CIDRMask(24, 32)},
+				netip.MustParsePrefix("127.0.0.0/16"),
+				netip.MustParsePrefix("23.23.23.23/24"),
 			},
 		},
 	}
 
 	for _, test := range tests {
 		l, err := ParseNetlist(test.input)
-		if !reflect.DeepEqual(err, test.wantErr) {
+		if err == nil && test.wantErr != "" {
+			t.Errorf("%q: got no error, expected %q", test.input, test.wantErr)
+			continue
+		} else if err != nil && err.Error() != test.wantErr {
 			t.Errorf("%q: got error %q, want %q", test.input, err, test.wantErr)
 			continue
 		}
@@ -70,14 +74,12 @@ func TestParseNetlist(t *testing.T) {
 
 func TestNilNetListContains(t *testing.T) {
 	var list *Netlist
-	checkContains(t, list.Contains, nil, []string{"1.2.3.4"})
+	checkContains(t, list.Contains, list.ContainsAddr, nil, []string{"1.2.3.4"})
 }
 
 func TestIsLAN(t *testing.T) {
-	checkContains(t, IsLAN,
+	checkContains(t, IsLAN, AddrIsLAN,
 		[]string{ // included
-			"0.0.0.0",
-			"0.2.0.8",
 			"127.0.0.1",
 			"10.0.1.1",
 			"10.22.0.3",
@@ -86,25 +88,35 @@ func TestIsLAN(t *testing.T) {
 			"fe80::f4a1:8eff:fec5:9d9d",
 			"febf::ab32:2233",
 			"fc00::4",
+			// 4-in-6
+			"::ffff:127.0.0.1",
+			"::ffff:10.10.0.2",
 		},
 		[]string{ // excluded
 			"192.0.2.1",
 			"1.0.0.0",
 			"172.32.0.1",
 			"fec0::2233",
+			// 4-in-6
+			"::ffff:88.99.100.2",
 		},
 	)
 }
 
 func TestIsSpecialNetwork(t *testing.T) {
-	checkContains(t, IsSpecialNetwork,
+	checkContains(t, IsSpecialNetwork, AddrIsSpecialNetwork,
 		[]string{ // included
+			"0.0.0.0",
+			"0.2.0.8",
 			"192.0.2.1",
 			"192.0.2.44",
 			"2001:db8:85a3:8d3:1319:8a2e:370:7348",
 			"255.255.255.255",
 			"224.0.0.22", // IPv4 multicast
 			"ff05::1:3",  // IPv6 multicast
+			// 4-in-6
+			"::ffff:255.255.255.255",
+			"::ffff:192.0.2.1",
 		},
 		[]string{ // excluded
 			"192.0.3.1",
@@ -115,15 +127,21 @@ func TestIsSpecialNetwork(t *testing.T) {
 	)
 }
 
-func checkContains(t *testing.T, fn func(net.IP) bool, inc, exc []string) {
+func checkContains(t *testing.T, fn func(net.IP) bool, fn2 func(netip.Addr) bool, inc, exc []string) {
 	for _, s := range inc {
 		if !fn(parseIP(s)) {
-			t.Error("returned false for included address", s)
+			t.Error("returned false for included net.IP", s)
+		}
+		if !fn2(netip.MustParseAddr(s)) {
+			t.Error("returned false for included netip.Addr", s)
 		}
 	}
 	for _, s := range exc {
 		if fn(parseIP(s)) {
-			t.Error("returned true for excluded address", s)
+			t.Error("returned true for excluded net.IP", s)
+		}
+		if fn2(netip.MustParseAddr(s)) {
+			t.Error("returned true for excluded netip.Addr", s)
 		}
 	}
 }
@@ -244,14 +262,22 @@ func TestDistinctNetSet(t *testing.T) {
 }
 
 func TestDistinctNetSetAddRemove(t *testing.T) {
-	cfg := &quick.Config{}
-	fn := func(ips []net.IP) bool {
+	cfg := &quick.Config{
+		Values: func(s []reflect.Value, rng *rand.Rand) {
+			slice := make([]netip.Addr, rng.Intn(20)+1)
+			for i := range slice {
+				slice[i] = RandomAddr(rng, false)
+			}
+			s[0] = reflect.ValueOf(slice)
+		},
+	}
+	fn := func(ips []netip.Addr) bool {
 		s := DistinctNetSet{Limit: 3, Subnet: 2}
 		for _, ip := range ips {
-			s.Add(ip)
+			s.AddAddr(ip)
 		}
 		for _, ip := range ips {
-			s.Remove(ip)
+			s.RemoveAddr(ip)
 		}
 		return s.Len() == 0
 	}
