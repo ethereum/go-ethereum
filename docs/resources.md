@@ -13,6 +13,8 @@ Here are more resources for a deeper understanding of Geth and related topics.
 
 ## Watch {#watch}
 
+[lightclients overview of Geth at EPF study group, Feb 2024](https://www.youtube.com/live/pniTkWo70OY)
+
 [Geth team AMA at Devcon 6, Bogota](https://youtu.be/Wr_SHOmz4lc?t=10714)
 
 [Sina's EVM tracing workshop at Devcon 6, Bogota](https://youtu.be/b8RdmGsilfU)
