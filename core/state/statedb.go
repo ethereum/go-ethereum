@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -1483,4 +1485,14 @@ func (s *StateDB) PointCache() *utils.PointCache {
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
 	return s.witness
+}
+
+func (s *StateDB) IsSlotFilled(addr common.Address, slot common.Hash) bool {
+	// The snapshot can not be used, because it uses the old encoding where
+	// no difference is made between 0 and no data.
+	_, err := s.db.DiskDB().Get(utils.StorageSlotKeyWithEvaluatedAddress(s.accessList.pointCache.GetTreeKeyHeader(addr[:]), slot[:]))
+	// The error needs to be checked because we want to be future-proof
+	// and not rely on the length of the encoding, in case 0-values are
+	// somehow compressed later.
+	return errors.Is(pebble.ErrNotFound, err) || errors.Is(memorydb.ErrMemorydbNotFound, err)
 }
