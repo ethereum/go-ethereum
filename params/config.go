@@ -26,10 +26,11 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
-	HoleskyGenesisHash = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
-	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
-	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
+	MainnetGenesisHash  = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
+	EphemeryGenesisHash = common.HexToHash("0xb62368598318c23ba82921969086f7ab078cad039d84f5cf557812a921535c46")
+	HoleskyGenesisHash  = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
+	SepoliaGenesisHash  = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
+	GoerliGenesisHash   = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 )
 
 func newUint64(val uint64) *uint64 { return &val }
@@ -60,6 +61,57 @@ var (
 		ShanghaiTime:                  newUint64(1681338455),
 		CancunTime:                    newUint64(1710338135),
 		Ethash:                        new(EthashConfig),
+	}
+	// EphemeryChainConfig contains the chain parameters to run a node on the Ephemery test network.
+	EphemeryChainConfig = &ChainConfig{
+		// TODO: review params
+		// "config": {
+		// 	"chainId": 1337498,
+		// 	"homesteadBlock": 0,
+		// 	"eip150Block": 0,
+		// 	"eip155Block": 0,
+		// 	"eip158Block": 0,
+		// 	"byzantiumBlock": 0,
+		// 	"constantinopleBlock": 0,
+		// 	"petersburgBlock": 0,
+		// 	"istanbulBlock": 0,
+		// 	"berlinBlock": 0,
+		// 	"londonBlock": 0,
+		// 	"mergeForkBlock": 0,
+		// 	"terminalTotalDifficulty": 0,
+		// 	"coinbase": "0x0000000000000000000000000000000000000000",
+		// 	"difficulty": "0x01",
+		// 	"extraData": "",
+		// 	"gasLimit": "0x400000",
+		// 	"nonce": "0x1234",
+		// 	"mixhash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+		// 	"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+		// 	"timestamp": "1665428400",
+		// 	"ephemeral": 172800
+		//   },
+		ChainID:                       big.NewInt(39438000),
+		HomesteadBlock:                big.NewInt(0),
+		DAOForkBlock:                  nil,
+		DAOForkSupport:                true,
+		EIP150Block:                   big.NewInt(0),
+		EIP155Block:                   big.NewInt(0),
+		EIP158Block:                   big.NewInt(0),
+		ByzantiumBlock:                big.NewInt(0),
+		ConstantinopleBlock:           big.NewInt(0),
+		PetersburgBlock:               big.NewInt(0),
+		IstanbulBlock:                 big.NewInt(0),
+		MuirGlacierBlock:              nil,
+		BerlinBlock:                   big.NewInt(0),
+		LondonBlock:                   big.NewInt(0),
+		ArrowGlacierBlock:             nil,
+		GrayGlacierBlock:              nil,
+		TerminalTotalDifficulty:       big.NewInt(0),
+		TerminalTotalDifficultyPassed: true,
+		MergeNetsplitBlock:            nil,
+		ShanghaiTime:                  newUint64(1696000704),
+		CancunTime:                    newUint64(1707305664),
+		Ethash:                        new(EthashConfig),
+		EphemeralTime:                 uint64(604800), // 7 days in seconds TODO: rename as reset
 	}
 	// HoleskyChainConfig contains the chain parameters to run a node on the Holesky test network.
 	HoleskyChainConfig = &ChainConfig{
@@ -312,10 +364,11 @@ var (
 
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
-	MainnetChainConfig.ChainID.String(): "mainnet",
-	GoerliChainConfig.ChainID.String():  "goerli",
-	SepoliaChainConfig.ChainID.String(): "sepolia",
-	HoleskyChainConfig.ChainID.String(): "holesky",
+	MainnetChainConfig.ChainID.String():  "mainnet",
+	GoerliChainConfig.ChainID.String():   "goerli",
+	SepoliaChainConfig.ChainID.String():  "sepolia",
+	HoleskyChainConfig.ChainID.String():  "holesky",
+	EphemeryChainConfig.ChainID.String(): "ephemery",
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -368,6 +421,10 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+
+	// EphemeralTime is a flag that is added to support the Ephemery network
+	// EIP-6916 implements the Ephemery testnet (https://github.com/ethereum/EIPs/blob/master/EIPS/eip-6916.md)
+	EphemeralTime uint64 `json:"ephemeral"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.

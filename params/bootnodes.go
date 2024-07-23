@@ -28,6 +28,14 @@ var MainnetBootnodes = []string{
 	"enode://4aeb4ab6c14b23e2c4cfdce879c04b0748a20d8e9b59e25ded2a08143e265c6c25936e74cbc8e641e3312ca288673d91f2f93f8e277de3cfa444ecdaaf982052@157.90.35.166:30303", // bootnode-hetzner-fsn
 }
 
+// EphemeryBootnodes are the enode URLs of the P2P bootstrap nodes running on the
+// Ephemery test network.
+var EphemeryBootnodes = []string{
+	// ephemery.dev bootnodes
+	"enode://50a54ecbd2175497640bcf46a25bbe9bb4fae51d7cc2a29ef4947a7ee17496cf39a699b7fe6b703ed0feb9dbaae7e44fc3827fcb7435ca9ac6de4daa4d983b3d@137.74.203.240:30303",
+	"enode://0f2c301a9a3f9fa2ccfa362b79552c052905d8c2982f707f46cd29ece5a9e1c14ecd06f4ac951b228f059a43c6284a1a14fce709e8976cac93b50345218bf2e9@135.181.140.168:30343",
+}
+
 // HoleskyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Holesky test network.
 var HoleskyBootnodes = []string{

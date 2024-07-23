@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -209,6 +210,8 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.Gene
 		genesis = DefaultSepoliaGenesisBlock()
 	case params.HoleskyGenesisHash:
 		genesis = DefaultHoleskyGenesisBlock()
+	case params.EphemeryGenesisHash:
+		genesis = DefaultEphemeryGenesisBlock()
 	}
 	if genesis != nil {
 		return genesis.Alloc, nil
@@ -403,6 +406,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return g.Config
 	case ghash == params.MainnetGenesisHash:
 		return params.MainnetChainConfig
+	case ghash == params.EphemeryGenesisHash:
+		return params.EphemeryChainConfig
 	case ghash == params.HoleskyGenesisHash:
 		return params.HoleskyChainConfig
 	case ghash == params.SepoliaGenesisHash:
@@ -569,6 +574,35 @@ func DefaultHoleskyGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(0x01),
 		Timestamp:  1695902100,
 		Alloc:      decodePrealloc(holeskyAllocData),
+	}
+}
+
+// DefaultEphemeryGenesisBlock returns the Ephemery network genesis block.
+func DefaultEphemeryGenesisBlock() *Genesis {
+	// Calculate the number of ephemery iterations that have elapsed since minGenesisTime to get the latest ChainID
+	now := time.Now()
+	minGenesisTimestamp := int64(1638471600)
+	genesisDelay := uint64(300)
+	timestamp := time.Unix(minGenesisTimestamp, 0)
+	difference := now.Sub(timestamp)
+	differenceInSeconds := difference.Seconds() * float64(time.Nanosecond)
+	iteration := int64(differenceInSeconds) / int64(params.EphemeryChainConfig.EphemeralTime)
+	i := big.NewInt(iteration)
+	params.EphemeryChainConfig.ChainID = new(big.Int).Add(i, params.EphemeryChainConfig.ChainID)
+
+	log.Debug("1", "EphemeralTime", params.EphemeryChainConfig.EphemeralTime)
+	log.Debug("2", "iteration", uint64(iteration))
+	log.Debug("3", "minGenesisTimestamp", uint64(minGenesisTimestamp))
+	log.Debug("4", "timestamp", params.EphemeryChainConfig.EphemeralTime*uint64(iteration)+uint64(minGenesisTimestamp)+genesisDelay)
+
+	return &Genesis{
+		Config:     params.EphemeryChainConfig,
+		Nonce:      0x1234,
+		GasLimit:   0x400000,
+		Difficulty: big.NewInt(0x01),
+		Timestamp:  (params.EphemeryChainConfig.EphemeralTime * uint64(iteration)) + uint64(minGenesisTimestamp) + genesisDelay,
+		ExtraData:  []byte(""),
+		Alloc:      decodePrealloc(ephemeryAllocData),
 	}
 }
 
