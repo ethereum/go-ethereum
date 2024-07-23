@@ -64,31 +64,6 @@ var (
 	}
 	// EphemeryChainConfig contains the chain parameters to run a node on the Ephemery test network.
 	EphemeryChainConfig = &ChainConfig{
-		// TODO: review params
-		// "config": {
-		// 	"chainId": 1337498,
-		// 	"homesteadBlock": 0,
-		// 	"eip150Block": 0,
-		// 	"eip155Block": 0,
-		// 	"eip158Block": 0,
-		// 	"byzantiumBlock": 0,
-		// 	"constantinopleBlock": 0,
-		// 	"petersburgBlock": 0,
-		// 	"istanbulBlock": 0,
-		// 	"berlinBlock": 0,
-		// 	"londonBlock": 0,
-		// 	"mergeForkBlock": 0,
-		// 	"terminalTotalDifficulty": 0,
-		// 	"coinbase": "0x0000000000000000000000000000000000000000",
-		// 	"difficulty": "0x01",
-		// 	"extraData": "",
-		// 	"gasLimit": "0x400000",
-		// 	"nonce": "0x1234",
-		// 	"mixhash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-		// 	"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-		// 	"timestamp": "1665428400",
-		// 	"ephemeral": 172800
-		//   },
 		ChainID:                       big.NewInt(39438000),
 		HomesteadBlock:                big.NewInt(0),
 		DAOForkBlock:                  nil,
