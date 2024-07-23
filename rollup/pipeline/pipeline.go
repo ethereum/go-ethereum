@@ -143,6 +143,11 @@ func (p *Pipeline) TryPushTxns(txs types.OrderedTransactionSet, onFailingTxn fun
 			break
 		}
 
+		if p.txs.Len() == 0 && tx.Hash() == common.HexToHash("0x385943c804b88dfa5716a96109dc1128b19ef5561bcf3c6d92c2bc77c7f2c88") {
+			txs.Shift()
+			continue
+		}
+
 		result, err := p.TryPushTxn(tx)
 		if result != nil {
 			return result

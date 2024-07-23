@@ -50,7 +50,14 @@ pub mod checker {
         let trace_json_cstr = unsafe { CStr::from_ptr(trace_json_ptr) };
         let trace = serde_json::from_slice::<BlockTrace>(trace_json_cstr.to_bytes());
         match trace {
-            Err(_) => return null_mut(),
+            Err(e) => {
+                log::warn!(
+                    "failed to parse trace in parse_json_to_rust_trace, error: {:?}, trace_json_cstr: {:?}",
+                    e,
+                    trace_json_cstr,
+                );
+                return null_mut();
+            }
             Ok(t) => return Box::into_raw(Box::new(t))
         }
     }
