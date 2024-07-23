@@ -122,18 +122,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	// (PIP-35): Only enforce the minimum gas price of 25 gwei for amoy
-	if config.Genesis != nil && config.Genesis.Config.ChainID.Cmp(params.AmoyChainConfig.ChainID) == 0 {
-		if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(big.NewInt(params.BorDefaultMinerGasPrice)) != 0 {
-			log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", params.BorDefaultMinerGasPrice)
-			config.Miner.GasPrice = new(big.Int).SetUint64(params.BorDefaultMinerGasPrice)
-		}
-	} else {
-		if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
-			log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
-			config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
-		}
+
+	// PIP-35: Enforce min gas price to 25 gwei
+	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(big.NewInt(params.BorDefaultMinerGasPrice)) != 0 {
+		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
+		config.Miner.GasPrice = ethconfig.Defaults.Miner.GasPrice
 	}
+
 	if config.NoPruning && config.TrieDirtyCache > 0 {
 		if config.SnapshotCache > 0 {
 			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
@@ -258,10 +253,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, config.Genesis, &overrides, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit, checker)
 	}
 
-	// (PIP-35): Update the default ignore price for amoy
-	if chainConfig.ChainID.Cmp(params.AmoyChainConfig.ChainID) == 0 {
-		gasprice.DefaultIgnorePriceAmoy = new(big.Int).SetUint64(params.BorDefaultGpoIgnorePrice)
-	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 	if err != nil {
 		return nil, err
@@ -291,10 +282,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// The `config.TxPool.PriceLimit` used above doesn't reflect the sanitized/enforced changes
 	// made in the txpool. Update the `gasTip` explicitly to reflect the enforced value.
-	// (PIP-35): This change is only applied for Amoy network. Remove the checks once it's applied for all networks.
-	if chainConfig.ChainID.Cmp(params.AmoyChainConfig.ChainID) == 0 {
-		eth.txPool.SetGasTip(new(big.Int).SetUint64(params.BorDefaultTxPoolPriceLimit))
-	}
+	eth.txPool.SetGasTip(new(big.Int).SetUint64(params.BorDefaultTxPoolPriceLimit))
 
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit

@@ -46,7 +46,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```gpo.blocks```: Number of recent blocks to check for gas prices (default: 20)
 
-- ```gpo.ignoreprice```: Gas price below which gpo will ignore transactions (default: 2)
+- ```gpo.ignoreprice```: Gas price below which gpo will ignore transactions (default: 25000000000)
 
 - ```gpo.maxblockhistory```: Maximum block history of gasprice oracle (default: 1024)
 
@@ -250,7 +250,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```miner.gaslimit```: Target gas ceiling (gas limit) for mined blocks (default: 30000000)
 
-- ```miner.gasprice```: Minimum gas price for mining a transaction (default: 1000000000)
+- ```miner.gasprice```: Minimum gas price for mining a transaction (default: 25000000000)
 
 - ```miner.interruptcommit```: Interrupt block commit when block creation time is passed (default: true)
 
@@ -306,6 +306,6 @@ The ```bor server``` command runs the Bor client.
 
 - ```txpool.pricebump```: Price bump percentage to replace an already existing transaction (default: 10)
 
-- ```txpool.pricelimit```: Minimum gas price limit to enforce for acceptance into the pool (default: 1)
+- ```txpool.pricelimit```: Minimum gas price limit to enforce for acceptance into the pool (default: 25000000000)
 
 - ```txpool.rejournal```: Time interval to regenerate the local transaction journal (default: 1h0m0s)

@@ -147,9 +147,7 @@ var DefaultConfig = Config{
 	Journal:   "transactions.rlp",
 	Rejournal: time.Hour,
 
-	// (PIP-35): Update price limit to `params.BorDefaultTxPoolPriceLimit` once
-	// the change is applied over all networks.
-	PriceLimit: 1,
+	PriceLimit: params.BorDefaultTxPoolPriceLimit,
 	PriceBump:  10,
 
 	AccountSlots: 16,
@@ -163,23 +161,16 @@ var DefaultConfig = Config{
 
 // sanitize checks the provided user configurations and changes anything that's
 // unreasonable or unworkable.
-func (config *Config) sanitize(chainId *big.Int) Config {
+func (config *Config) sanitize() Config {
 	conf := *config
 	if conf.Rejournal < time.Second {
 		log.Warn("Sanitizing invalid txpool journal time", "provided", conf.Rejournal, "updated", time.Second)
 		conf.Rejournal = time.Second
 	}
-	// (PIP-35): Only enforce the 25gwei txpool price limit for amoy
-	if chainId.Cmp(params.AmoyChainConfig.ChainID) == 0 {
-		if conf.PriceLimit != params.BorDefaultTxPoolPriceLimit {
-			log.Warn("Sanitizing invalid txpool price limit", "provided", conf.PriceLimit, "updated", params.BorDefaultTxPoolPriceLimit)
-			conf.PriceLimit = params.BorDefaultTxPoolPriceLimit
-		}
-	} else {
-		if conf.PriceLimit < 1 {
-			log.Warn("Sanitizing invalid txpool price limit", "provided", conf.PriceLimit, "updated", DefaultConfig.PriceLimit)
-			conf.PriceLimit = DefaultConfig.PriceLimit
-		}
+	// PIP-35: Enforce min price limit to 25 gwei
+	if conf.PriceLimit != params.BorDefaultTxPoolPriceLimit {
+		log.Warn("Sanitizing invalid txpool price limit", "provided", conf.PriceLimit, "updated", DefaultConfig.PriceLimit)
+		conf.PriceLimit = DefaultConfig.PriceLimit
 	}
 	if conf.PriceBump < 1 {
 		log.Warn("Sanitizing invalid txpool price bump", "provided", conf.PriceBump, "updated", DefaultConfig.PriceBump)
@@ -259,7 +250,7 @@ type txpoolResetRequest struct {
 // transactions from the network.
 func New(config Config, chain BlockChain, options ...func(pool *LegacyPool)) *LegacyPool {
 	// Sanitize the input to ensure no vulnerable gas prices are set
-	config = (&config).sanitize(chain.Config().ChainID)
+	config = (&config).sanitize()
 
 	// Create the transaction pool with its initial settings
 	pool := &LegacyPool{

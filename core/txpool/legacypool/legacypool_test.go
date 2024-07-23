@@ -296,9 +296,6 @@ func (c *testChain) State() (*state.StateDB, error) {
 
 // TestTxPoolDefaultPriceLimit ensures the bor default tx pool price limit is set correctly.
 func TestTxPoolDefaultPriceLimit(t *testing.T) {
-	// (PIP-35): Only applicable to amoy
-	t.Skip("Skipped because the price enforcement is only applied to amoy")
-
 	t.Parallel()
 
 	pool, _ := setupPool()

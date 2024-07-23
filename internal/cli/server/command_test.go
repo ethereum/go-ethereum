@@ -86,7 +86,7 @@ func TestFlagsWithConfig(t *testing.T) {
 			"32000000": "0x875500011e5eecc0c554f95d07b31cf59df4ca2505f4dbbfffa7d4e4da917c68",
 		},
 	)
-	require.Equal(t, c.config.Sealer.GasPrice, big.NewInt(30000000000))
+	require.Equal(t, c.config.Sealer.GasPrice, big.NewInt(25000000000))
 	require.Equal(t, c.config.Sealer.Recommit, recommit)
 	require.Equal(t, c.config.JsonRPC.RPCEVMTimeout, evmTimeout)
 	require.Equal(t, c.config.JsonRPC.Http.API, []string{"eth", "bor"})
