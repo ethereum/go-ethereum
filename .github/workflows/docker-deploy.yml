@@ -68,13 +68,14 @@ jobs:
     - name: Checking the hardhat version to verify that its working properly
       run: docker exec go-ethereum npx hardhat --version
 
+    - name: Check the path to the hardhat folder
+      run: docker run --rm go-ethereum sh -c "find / -type d -name 'hardhat'"
+
     - name: Deploy hardhat sample project
-      run: | 
-        docker exec go-ethereum sh -c "cd /workspace/hardhat && yes | npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && yes | npx hardhat ignition deploy ./ignition/modules/Token.js --network devnet"
 
     - name: Testing contracts
-      run: |
-        docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat test"
+      run: docker exec go-ethereum sh -c "cd /workspace/hardhat && npx hardhat test"
 
     - name: Build a new docker image
       run: |
