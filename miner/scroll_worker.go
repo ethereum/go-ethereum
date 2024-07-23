@@ -541,12 +541,13 @@ func (w *worker) handlePipelineResult(res *pipeline.Result) error {
 	w.currentPipeline.Release()
 	w.currentPipeline = nil
 
+	if res.FinalBlock != nil {
+		w.updateSnapshot(res.FinalBlock)
+	}
+
 	// Rows being nil without an OverflowingTx means that block didn't go thru CCC,
 	// which means that we are not the sequencer. Do not attempt to commit.
 	if res.Rows == nil && res.OverflowingTx == nil {
-		if res.FinalBlock != nil {
-			w.updateSnapshot(res.FinalBlock)
-		}
 		return nil
 	}
 
