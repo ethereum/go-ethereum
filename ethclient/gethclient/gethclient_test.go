@@ -237,6 +237,27 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 	if al != nil {
 		t.Fatalf("unexpected accesslist: %v", len(*al))
 	}
+
+	// when gasPrice is not specified
+	msg = ethereum.CallMsg{
+		From:  testAddr,
+		To:    &common.Address{},
+		Gas:   21000,
+		Value: big.NewInt(1),
+	}
+	al, gas, vmErr, err = ec.CreateAccessList(context.Background(), msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vmErr != "" {
+		t.Fatalf("unexpected vm error: %v", vmErr)
+	}
+	if gas != 21000 {
+		t.Fatalf("unexpected gas used: %v", gas)
+	}
+	if len(*al) != 0 {
+		t.Fatalf("unexpected length of accesslist: %v", len(*al))
+	}
 }
 
 func testGetProof(t *testing.T, client *rpc.Client, addr common.Address) {
