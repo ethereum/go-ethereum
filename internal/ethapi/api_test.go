@@ -781,15 +781,24 @@ func TestEstimateGas(t *testing.T) {
 
 func TestCall(t *testing.T) {
 	t.Parallel()
+
 	// Initialize test accounts
 	var (
 		accounts = newAccounts(3)
+		dad      = common.HexToAddress("0x0000000000000000000000000000000000000dad")
 		genesis  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
 			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+				dad: {
+					Balance: big.NewInt(params.Ether),
+					Nonce:   1,
+					Storage: map[common.Hash]common.Hash{
+						common.Hash{}: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
+					},
+				},
 			},
 		}
 		genBlocks = 10
@@ -948,6 +957,32 @@ func TestCall(t *testing.T) {
 				},
 			},
 			want: "0x0122000000000000000000000000000000000000000000000000000000000000",
+		},
+		// Clear the entire storage set
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From: &accounts[1].addr,
+				// Yul:
+				// object "Test" {
+				//    code {
+				//        let dad := 0x0000000000000000000000000000000000000dad
+				//        if eq(balance(dad), 0) {
+				//            revert(0, 0)
+				//        }
+				//        let slot := sload(0)
+				//        mstore(0, slot)
+				//        return(0, 32)
+				//    }
+				// }
+				Input: hex2Bytes("610dad6000813103600f57600080fd5b6000548060005260206000f3"),
+			},
+			overrides: StateOverride{
+				dad: OverrideAccount{
+					State: &map[common.Hash]common.Hash{},
+				},
+			},
+			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
 	for i, tc := range testSuite {
