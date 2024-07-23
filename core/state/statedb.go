@@ -1158,6 +1158,10 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
+	// Short circuit if any error occurs within the IntermediateRoot.
+	if s.dbErr != nil {
+		return nil, fmt.Errorf("commit aborted due to database error: %v", s.dbErr)
+	}
 	// Commit objects to the trie, measuring the elapsed time
 	var (
 		accountTrieNodesUpdated int
