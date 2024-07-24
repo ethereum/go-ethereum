@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum"
@@ -225,7 +225,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 		Value:    big.NewInt(1),
 	}
 	al, gas, vmErr, err = ec.CreateAccessList(context.Background(), msg)
-	if errors.Is(err, core.ErrBlobFeeCapTooLow) {
+	if err != nil && !strings.Contains(err.Error(), core.ErrFeeCapTooLow.Error()) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if vmErr != "" {
