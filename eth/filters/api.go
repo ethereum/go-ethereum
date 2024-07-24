@@ -29,7 +29,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
-	"github.com/XinFinOrg/XDPoSChain/ethdb"
 
 	// "github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
@@ -57,7 +56,6 @@ type filter struct {
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type FilterAPI struct {
 	sys       *FilterSystem
-	chainDb   ethdb.Database
 	events    *EventSystem
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
@@ -68,7 +66,6 @@ type FilterAPI struct {
 func NewFilterAPI(system *FilterSystem, lightMode bool) *FilterAPI {
 	api := &FilterAPI{
 		sys:     system,
-		chainDb: system.backend.ChainDb(),
 		events:  NewEventSystem(system, lightMode),
 		filters: make(map[rpc.ID]*filter),
 		timeout: system.cfg.Timeout,
