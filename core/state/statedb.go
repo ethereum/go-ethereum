@@ -186,7 +186,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		hasher:               crypto.NewKeccakState(),
 	}
 	if db.TrieDB().IsVerkle() {
-		sdb.accessEvents = sdb.NewAccessEvents()
+		sdb.accessEvents = NewAccessEvents(db.(*cachingDB).pointCache)
 	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
@@ -1458,14 +1458,6 @@ func (s *StateDB) PointCache() *utils.PointCache {
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
 	return s.witness
-}
-
-func (s *StateDB) NewAccessEvents() *AccessEvents {
-	return &AccessEvents{
-		branches:   make(map[branchAccessKey]mode),
-		chunks:     make(map[chunkAccessKey]mode),
-		pointCache: utils.NewPointCache(100),
-	}
 }
 
 func (s *StateDB) AccessEvents() *AccessEvents {
