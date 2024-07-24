@@ -19,6 +19,9 @@ const MAGIC_VALUE_PAYMASTER = uint64(0xe0e6183a)
 const MAGIC_VALUE_SIGFAIL = uint64(0x31665494)
 const PAYMASTER_MAX_CONTEXT_SIZE = 65536
 
+var AA_ENTRY_POINT = common.HexToAddress("0x0000000000000000000000000000000000007560")
+var AA_SENDER_CREATOR = common.HexToAddress("0x00000000000000000000000000000000ffff7560")
+
 func PackValidationData(authorizerMagic uint64, validUntil, validAfter uint64) []byte {
 
 	t := new(big.Int).SetUint64(uint64(validAfter))
@@ -209,6 +212,8 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 			return nil, fmt.Errorf("account deployment failed: %v", err)
 		}
 		statedb.IntermediateRoot(true)
+	} else {
+		statedb.SetNonce(*sender, statedb.GetNonce(*sender)+1)
 	}
 
 	/*** Account Validation Frame ***/
@@ -355,7 +360,7 @@ func prepareDeployerMessage(baseTx *types.Transaction, config *params.ChainConfi
 		return nil
 	}
 	return &Message{
-		From:              config.DeployerCallerAddress,
+		From:              AA_SENDER_CREATOR,
 		To:                tx.Deployer,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.ValidationGas,
@@ -382,7 +387,7 @@ func prepareAccountValidationMessage(baseTx *types.Transaction, chainConfig *par
 	txAbiEncoding, err := tx.AbiEncode()
 	validateTransactionData, err := validateTransactionAbi.Pack("validateTransaction", big.NewInt(0), signingHash, txAbiEncoding)
 	return &Message{
-		From:              chainConfig.EntryPointAddress,
+		From:              AA_ENTRY_POINT,
 		To:                tx.Sender,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.ValidationGas - deploymentUsedGas,
@@ -430,7 +435,7 @@ func preparePaymasterValidationMessage(baseTx *types.Transaction, config *params
 func prepareAccountExecutionMessage(baseTx *types.Transaction, config *params.ChainConfig) *Message {
 	tx := baseTx.Rip7560TransactionData()
 	return &Message{
-		From:              config.EntryPointAddress,
+		From:              AA_ENTRY_POINT,
 		To:                tx.Sender,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.Gas,
@@ -462,7 +467,7 @@ func preparePostOpMessage(vpr *ValidationPhaseResult, chainConfig *params.ChainC
 		return nil, err
 	}
 	return &Message{
-		From:              chainConfig.EntryPointAddress,
+		From:              AA_ENTRY_POINT,
 		To:                tx.Paymaster,
 		Value:             big.NewInt(0),
 		GasLimit:          tx.PaymasterGas - executionResult.UsedGas,
