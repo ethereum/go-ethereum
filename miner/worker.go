@@ -17,33 +17,15 @@
 package miner
 
 import (
-	"errors"
-	"fmt"
 	"math/big"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rollup/circuitcapacitychecker"
-	"github.com/ethereum/go-ethereum/rollup/fees"
-	"github.com/ethereum/go-ethereum/rollup/tracing"
-	"github.com/ethereum/go-ethereum/trie"
 )
+
+/*
 
 const (
 	// resultQueueSize is the size of channel listening to sealing result.
@@ -199,6 +181,7 @@ type newWorkReq struct {
 	interrupt *atomic.Int32
 	timestamp int64
 }
+*/
 
 // newPayloadResult is the result of payload generation.
 type newPayloadResult struct {
@@ -207,6 +190,8 @@ type newPayloadResult struct {
 	fees     *big.Int               // total block fees
 	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
 }
+
+/*
 
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
 type getWorkReq struct {
@@ -387,6 +372,8 @@ func (w *worker) getCCC() *circuitcapacitychecker.CircuitCapacityChecker {
 	return w.circuitCapacityChecker
 }
 
+*/
+
 // setEtherbase sets the etherbase used to initialize the block coinbase field.
 func (w *worker) setEtherbase(addr common.Address) {
 	w.mu.Lock()
@@ -464,6 +451,8 @@ func (w *worker) close() {
 	close(w.exitCh)
 	w.wg.Wait()
 }
+
+/*
 
 // recalcRecommit recalculates the resubmitting interval upon feedback.
 func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) time.Duration {
@@ -1388,6 +1377,8 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	return env, nil
 }
 
+*/
+
 func txToLazyTx(txPool *txpool.TxPool, tx *types.Transaction) *txpool.LazyTransaction {
 	if tx.IsL1MessageTx() {
 		return &txpool.LazyTransaction{
@@ -1413,6 +1404,8 @@ func txToLazyTx(txPool *txpool.TxPool, tx *types.Transaction) *txpool.LazyTransa
 		BlobGas:   tx.BlobGas(),
 	}
 }
+
+/*
 
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
@@ -1780,3 +1773,5 @@ func signalToErr(signal int32) error {
 		panic(fmt.Errorf("undefined signal %d", signal))
 	}
 }
+
+*/

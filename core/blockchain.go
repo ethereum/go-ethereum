@@ -2669,3 +2669,8 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
 }
+
+// Database gives access to the underlying database for convenience
+func (bc *BlockChain) Database() ethdb.Database {
+	return bc.db
+}

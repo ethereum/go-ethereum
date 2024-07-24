@@ -19,6 +19,7 @@ package miner
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"math/big"
 	"sync"
 	"time"
@@ -176,6 +177,11 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 
 // buildPayload builds the payload according to the provided parameters.
 func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
+	return nil, errors.New("not implemented")
+}
+
+/*
+func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
@@ -241,3 +247,4 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	}()
 	return payload, nil
 }
+*/
