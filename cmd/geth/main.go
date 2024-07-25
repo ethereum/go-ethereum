@@ -295,6 +295,9 @@ func prepare(ctx *cli.Context) {
 	case ctx.IsSet(utils.ScrollSepoliaFlag.Name):
 		log.Info("Starting l2geth on Scroll Sepolia testnet...")
 
+	case ctx.IsSet(utils.ScrollFlag.Name):
+		log.Info("Starting l2geth on Scroll mainnet...")
+
 	case ctx.IsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
 		log.Warn(`You are running Geth in --dev mode. Please note the following:
