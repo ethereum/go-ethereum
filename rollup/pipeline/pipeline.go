@@ -362,7 +362,7 @@ func (p *Pipeline) encodeStage(traces <-chan *BlockCandidate) <-chan *BlockCandi
 					trace.RustTrace = circuitcapacitychecker.MakeRustTrace(trace.LastTrace, buffer)
 					if trace.RustTrace == nil {
 						log.Error("making rust trace", "txHash", trace.LastTrace.Transactions[0].TxHash)
-						return
+						// ignore the error here, CCC stage will catch it and treat it as a CCC error
 					}
 				}
 				encodeTimer.UpdateSince(encodeStart)
@@ -431,7 +431,11 @@ func (p *Pipeline) cccStage(candidates <-chan *BlockCandidate, deadline time.Tim
 				var accRows *types.RowConsumption
 				var err error
 				if candidate != nil && p.ccc != nil {
-					accRows, err = p.ccc.ApplyTransactionRustTrace(candidate.RustTrace)
+					if candidate.RustTrace != nil {
+						accRows, err = p.ccc.ApplyTransactionRustTrace(candidate.RustTrace)
+					} else {
+						err = errors.New("no rust trace")
+					}
 					lastTxn := candidate.Txs[candidate.Txs.Len()-1]
 					cccTimer.UpdateSince(cccStart)
 					if err != nil {
