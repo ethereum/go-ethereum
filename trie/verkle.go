@@ -69,8 +69,8 @@ func NewVerkleTrie(root common.Hash, db database.Database, cache *utils.PointCac
 	}, nil
 }
 
-func (trie *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
-	return trie.reader.node(path, common.Hash{})
+func (t *VerkleTrie) FlatdbNodeResolver(path []byte) ([]byte, error) {
+	return t.reader.node(path, common.Hash{})
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was previously used
