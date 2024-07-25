@@ -177,7 +177,7 @@ func (v IPv4Addr) ENRKey() string { return "ip" }
 func (v IPv4Addr) EncodeRLP(w io.Writer) error {
 	addr := netip.Addr(v)
 	if !addr.Is4() {
-		return fmt.Errorf("address is not IPv4")
+		return errors.New("address is not IPv4")
 	}
 	enc := rlp.NewEncoderBuffer(w)
 	bytes := addr.As4()
@@ -204,7 +204,7 @@ func (v IPv6Addr) ENRKey() string { return "ip6" }
 func (v IPv6Addr) EncodeRLP(w io.Writer) error {
 	addr := netip.Addr(v)
 	if !addr.Is6() {
-		return fmt.Errorf("address is not IPv6")
+		return errors.New("address is not IPv6")
 	}
 	enc := rlp.NewEncoderBuffer(w)
 	bytes := addr.As16()

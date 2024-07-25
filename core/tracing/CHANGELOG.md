@@ -2,7 +2,7 @@
 
 All notable changes to the tracing interface will be documented in this file.
 
-## [Unreleased]
+## [v1.14.3]
 
 There have been minor backwards-compatible changes to the tracing interface to explicitly mark the execution of **system** contracts. As of now the only system call updates the parent beacon block root as per [EIP-4788](https://eips.ethereum.org/EIPS/eip-4788). Other system calls are being considered for the future hardfork.
 
@@ -77,3 +77,4 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 
 [unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.0...master
 [v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0
+[v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
