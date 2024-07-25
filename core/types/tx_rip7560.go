@@ -129,7 +129,18 @@ func (tx *Rip7560AccountAbstractionTx) setSignatureValues(chainID, v, r, s *big.
 }
 
 // encode the subtype byte and the payload-bearing bytes of the RIP-7560 transaction
-func (tx *Rip7560AccountAbstractionTx) encode(b *bytes.Buffer) error {
+func (t *Rip7560AccountAbstractionTx) encode(b *bytes.Buffer) error {
+	zeroAddress := common.Address{}
+	tx := t.copy().(*Rip7560AccountAbstractionTx)
+	if tx.Paymaster != nil && zeroAddress.Cmp(*tx.Paymaster) == 0 {
+		tx.Paymaster = nil
+	}
+	if tx.Deployer != nil && zeroAddress.Cmp(*tx.Deployer) == 0 {
+		tx.Deployer = nil
+	}
+	if tx.To != nil && zeroAddress.Cmp(*tx.To) == 0 {
+		tx.To = nil
+	}
 	return rlp.Encode(b, tx)
 }
 
