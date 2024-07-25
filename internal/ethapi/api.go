@@ -968,11 +968,11 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 // if stateDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
-	Nonce     *hexutil.Uint64              `json:"nonce"`
-	Code      *hexutil.Bytes               `json:"code"`
-	Balance   **hexutil.Big                `json:"balance"`
-	State     *map[common.Hash]common.Hash `json:"state"`
-	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
+	Nonce     *hexutil.Uint64             `json:"nonce"`
+	Code      *hexutil.Bytes              `json:"code"`
+	Balance   *hexutil.Big                `json:"balance"`
+	State     map[common.Hash]common.Hash `json:"state"`
+	StateDiff map[common.Hash]common.Hash `json:"stateDiff"`
 }
 
 // StateOverride is the collection of overridden accounts.
@@ -994,7 +994,7 @@ func (diff *StateOverride) Apply(statedb *state.StateDB) error {
 		}
 		// Override account balance.
 		if account.Balance != nil {
-			u256Balance, _ := uint256.FromBig((*big.Int)(*account.Balance))
+			u256Balance, _ := uint256.FromBig((*big.Int)(account.Balance))
 			statedb.SetBalance(addr, u256Balance, tracing.BalanceChangeUnspecified)
 		}
 		if account.State != nil && account.StateDiff != nil {
@@ -1002,11 +1002,11 @@ func (diff *StateOverride) Apply(statedb *state.StateDB) error {
 		}
 		// Replace entire state if caller requires.
 		if account.State != nil {
-			statedb.SetStorage(addr, *account.State)
+			statedb.SetStorage(addr, account.State)
 		}
 		// Apply state diff into specified accounts.
 		if account.StateDiff != nil {
-			for key, value := range *account.StateDiff {
+			for key, value := range account.StateDiff {
 				statedb.SetState(addr, key, value)
 			}
 		}
