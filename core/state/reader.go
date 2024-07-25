@@ -48,6 +48,10 @@ type Reader interface {
 	// - The returned storage slot is safe to modify after the call
 	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
 
+	// StorageExists implements Reader, returning a flag indicating whether the
+	// requested storage slot exists.
+	StorageExists(addr common.Address, slot common.Hash) (bool, error)
+
 	// Copy returns a deep-copied state reader.
 	Copy() Reader
 }
@@ -124,6 +128,14 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	var value common.Hash
 	value.SetBytes(content)
 	return value, nil
+}
+
+// StorageExists implements Reader, returning a flag indicating whether the
+// requested storage slot exists.
+func (r *stateReader) StorageExists(addr common.Address, key common.Hash) (bool, error) {
+	addrHash := crypto.HashData(r.buff, addr.Bytes())
+	slotHash := crypto.HashData(r.buff, key.Bytes())
+	return r.snap.StorageExists(addrHash, slotHash)
 }
 
 // Copy implements Reader, returning a deep-copied snap reader.
@@ -230,6 +242,41 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
+// StorageExists implements Reader, returning a flag indicating whether the
+// requested storage slot exists. An error will be returned if the trie data
+// is internally corrupted.
+func (r *trieReader) StorageExists(addr common.Address, key common.Hash) (bool, error) {
+	var (
+		tr    Trie
+		found bool
+	)
+	if r.db.IsVerkle() {
+		tr = r.mainTrie
+	} else {
+		tr, found = r.subTries[addr]
+		if !found {
+			root, ok := r.subRoots[addr]
+
+			// The storage slot is accessed without account caching. It's unexpected
+			// behavior but try to resolve the account first anyway.
+			if !ok {
+				_, err := r.Account(addr)
+				if err != nil {
+					return false, err
+				}
+				root = r.subRoots[addr]
+			}
+			var err error
+			tr, err = trie.NewStateTrie(trie.StorageTrieID(r.root, crypto.HashData(r.buff, addr.Bytes()), root), r.db)
+			if err != nil {
+				return false, err
+			}
+			r.subTries[addr] = tr
+		}
+	}
+	return tr.StorageExists(addr, key.Bytes())
+}
+
 // Copy implements Reader, returning a deep-copied trie reader.
 func (r *trieReader) Copy() Reader {
 	tries := make(map[common.Address]Trie)
@@ -299,6 +346,20 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 		errs = append(errs, err)
 	}
 	return common.Hash{}, errors.Join(errs...)
+}
+
+// StorageExists implements Reader, returning a flag indicating whether the
+// requested storage slot exists.
+func (r *multiReader) StorageExists(addr common.Address, slot common.Hash) (bool, error) {
+	var errs []error
+	for _, reader := range r.readers {
+		exists, err := reader.StorageExists(addr, slot)
+		if err == nil {
+			return exists, nil
+		}
+		errs = append(errs, err)
+	}
+	return false, errors.Join(errs...)
 }
 
 // Copy implementing Reader interface, returning a deep-copied state reader.

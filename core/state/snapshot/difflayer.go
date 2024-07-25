@@ -365,6 +365,37 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	return dl.storage(accountHash, storageHash, 0)
 }
 
+// StorageExists returns a flag indicating whether the requested storage slot is
+// existent or not.
+func (dl *diffLayer) StorageExists(accountHash, storageHash common.Hash) (bool, error) {
+	// Check the bloom filter first whether there's even a point in reaching into
+	// all the maps in all the layers below
+	dl.lock.RLock()
+	// Check staleness before reaching further.
+	if dl.Stale() {
+		dl.lock.RUnlock()
+		return false, ErrSnapshotStale
+	}
+	hit := dl.diffed.ContainsHash(storageBloomHash(accountHash, storageHash))
+	if !hit {
+		hit = dl.diffed.ContainsHash(destructBloomHash(accountHash))
+	}
+	var origin *diskLayer
+	if !hit {
+		origin = dl.origin // extract origin while holding the lock
+	}
+	dl.lock.RUnlock()
+
+	// If the bloom filter misses, don't even bother with traversing the memory
+	// diff layers, reach straight into the bottom persistent disk layer
+	if origin != nil {
+		snapshotBloomStorageMissMeter.Mark(1)
+		return origin.StorageExists(accountHash, storageHash)
+	}
+	// The bloom filter hit, start poking in the internal maps
+	return dl.StorageExists(accountHash, storageHash)
+}
+
 // storage is an internal version of Storage that skips the bloom filter checks
 // and uses the internal maps to try and retrieve the data. It's meant  to be
 // used if a higher layer's bloom filter hit already.

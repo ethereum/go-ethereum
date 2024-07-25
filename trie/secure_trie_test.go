@@ -147,3 +147,36 @@ func TestStateTrieConcurrency(t *testing.T) {
 	// Wait for all threads to finish
 	pend.Wait()
 }
+
+func TestSecureStorageExists(t *testing.T) {
+	trie := newEmptySecure()
+
+	// Zero size value
+	trie.MustUpdate([]byte("foo"), []byte(""))
+	exists, err := trie.StorageExists(common.Address{}, []byte("foo"))
+	if err != nil {
+		t.Fatalf("trie is corrupted: %v", err)
+	}
+	if exists {
+		t.Fatal("Unexpected trie element")
+	}
+
+	// Non-existent value
+	exists, err = trie.StorageExists(common.Address{}, []byte("dead"))
+	if err != nil {
+		t.Fatalf("trie is corrupted: %v", err)
+	}
+	if exists {
+		t.Fatal("Unexpected trie element")
+	}
+
+	// Non-zero size value
+	trie.MustUpdate([]byte("foo"), []byte("bar"))
+	exists, err = trie.StorageExists(common.Address{}, []byte("foo"))
+	if err != nil {
+		t.Fatalf("trie is corrupted: %v", err)
+	}
+	if !exists {
+		t.Fatal("Trie element is missing")
+	}
+}

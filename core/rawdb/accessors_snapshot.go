@@ -98,6 +98,13 @@ func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash commo
 	return data
 }
 
+// HasStorageSnapshot returns a flag indicating whether the requested storage
+// slot exists.
+func HasStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) bool {
+	exists, _ := db.Has(storageSnapshotKey(accountHash, storageHash))
+	return exists
+}
+
 // WriteStorageSnapshot stores the snapshot entry of a storage trie leaf.
 func WriteStorageSnapshot(db ethdb.KeyValueWriter, accountHash, storageHash common.Hash, entry []byte) {
 	if err := db.Put(storageSnapshotKey(accountHash, storageHash), entry); err != nil {

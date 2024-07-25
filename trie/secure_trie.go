@@ -113,6 +113,16 @@ func (t *StateTrie) GetStorage(_ common.Address, key []byte) ([]byte, error) {
 	return content, err
 }
 
+// StorageExists implements state.Trie, returning a flag indicating whether the
+// requested storage slot is existent or not.
+func (t *StateTrie) StorageExists(addr common.Address, key []byte) (bool, error) {
+	data, err := t.GetStorage(addr, key)
+	if err != nil {
+		return false, nil
+	}
+	return len(data) != 0, nil
+}
+
 // GetAccount attempts to retrieve an account with provided account address.
 // If the specified account is not in the trie, nil will be returned.
 // If a trie node is not found in the database, a MissingNodeError is returned.

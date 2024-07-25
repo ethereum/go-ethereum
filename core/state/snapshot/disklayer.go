@@ -169,6 +169,37 @@ func (dl *diskLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	return blob, nil
 }
 
+// StorageExists returns a flag indicating whether the requested storage slot is
+// existent or not.
+func (dl *diskLayer) StorageExists(accountHash, storageHash common.Hash) (bool, error) {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	// If the layer was flattened into, consider it invalid (any live reference to
+	// the original should be marked as unusable).
+	if dl.stale {
+		return false, ErrSnapshotStale
+	}
+	key := append(accountHash[:], storageHash[:]...)
+
+	// If the layer is being generated, ensure the requested hash has already been
+	// covered by the generator.
+	if dl.genMarker != nil && bytes.Compare(key, dl.genMarker) > 0 {
+		return false, ErrNotCoveredYet
+	}
+	// If we're in the disk layer, all diff layers missed
+	snapshotDirtyStorageMissMeter.Mark(1)
+
+	// Try to retrieve the storage slot from the memory cache
+	if blob, found := dl.cache.HasGet(nil, key); found {
+		snapshotCleanStorageHitMeter.Mark(1)
+		snapshotCleanStorageReadMeter.Mark(int64(len(blob)))
+		return true, nil
+	}
+	snapshotCleanStorageMissMeter.Mark(1)
+	return rawdb.HasStorageSnapshot(dl.diskdb, accountHash, storageHash), nil
+}
+
 // Update creates a new layer on top of the existing snapshot diff tree with
 // the specified data items. Note, the maps are retained by the method to avoid
 // copying everything.

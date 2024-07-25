@@ -95,6 +95,11 @@ type Trie interface {
 	// a trie.MissingNodeError is returned.
 	GetStorage(addr common.Address, key []byte) ([]byte, error)
 
+	// StorageExists returns a flag indicating whether the requested storage slot
+	// is existent in the trie or not. An error should be returned if the trie
+	// state is internally corrupted.
+	StorageExists(addr common.Address, key []byte) (bool, error)
+
 	// UpdateAccount abstracts an account write to the trie. It encodes the
 	// provided account object with associated algorithm and then updates it
 	// in the trie with provided address.
