@@ -34,6 +34,7 @@ import (
 	"strings"
 	"time"
 
+	pcsclite "github.com/gballet/go-libpcsclite"
 	"github.com/scroll-tech/go-ethereum/accounts"
 	"github.com/scroll-tech/go-ethereum/accounts/keystore"
 	"github.com/scroll-tech/go-ethereum/common"
@@ -76,7 +77,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/trie"
 	"github.com/scroll-tech/go-ethereum/trie/triedb/hashdb"
 	"github.com/scroll-tech/go-ethereum/trie/triedb/pathdb"
-	pcsclite "github.com/gballet/go-libpcsclite"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"github.com/urfave/cli/v2"
 )
@@ -1983,9 +1983,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		log.Info("Pruning disabled")
 		cfg.NoPruning = true
-		// disable prefetch
-		log.Info("Prefetch disabled")
-		cfg.NoPrefetch = true
 	case ctx.Bool(ScrollFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 534352
@@ -2002,9 +1999,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		log.Info("Pruning disabled")
 		cfg.NoPruning = true
-		// disable prefetch
-		log.Info("Prefetch disabled")
-		cfg.NoPrefetch = true
 	case ctx.Bool(DeveloperFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
