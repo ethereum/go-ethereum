@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/scroll-tech/go-ethereum/metrics"
 )
 
 const (

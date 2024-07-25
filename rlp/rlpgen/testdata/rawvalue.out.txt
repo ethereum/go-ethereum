@@ -1,6 +1,6 @@
 package test
 
-import "github.com/ethereum/go-ethereum/rlp"
+import "github.com/scroll-tech/go-ethereum/rlp"
 import "io"
 
 func (obj *Test) EncodeRLP(_w io.Writer) error {

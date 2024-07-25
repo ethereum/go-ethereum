@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
 // This example configures a HTTP-based RPC client with two options - one setting the

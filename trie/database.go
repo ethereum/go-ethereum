@@ -20,13 +20,13 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/pathdb"
-	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/ethdb"
+	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/trie/triedb/hashdb"
+	"github.com/scroll-tech/go-ethereum/trie/triedb/pathdb"
+	"github.com/scroll-tech/go-ethereum/trie/trienode"
+	"github.com/scroll-tech/go-ethereum/trie/triestate"
 )
 
 // Config defines all necessary options for database.

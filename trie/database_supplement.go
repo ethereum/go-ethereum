@@ -5,9 +5,9 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/trie/triedb/hashdb"
 )
 
 func (db *Database) GetLock() *sync.RWMutex {

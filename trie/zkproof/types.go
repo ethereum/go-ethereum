@@ -1,7 +1,7 @@
 package zkproof
 
 import (
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/scroll-tech/go-ethereum/common/hexutil"
 )
 
 // SMTPathNode represent a node in the SMT Path, all hash is saved by the present of

@@ -3,7 +3,7 @@ package rcfg
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/common"
 )
 
 // TODO:

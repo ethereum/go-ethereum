@@ -1,6 +1,6 @@
 package common
 
-import "github.com/ethereum/go-ethereum/metrics"
+import "github.com/scroll-tech/go-ethereum/metrics"
 
 // WithTimer calculates the interval of f
 func WithTimer(timer metrics.Timer, f func()) {

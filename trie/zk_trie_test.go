@@ -29,9 +29,9 @@ import (
 
 	zkt "github.com/scroll-tech/zktrie/types"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/trie/triedb/hashdb"
+	"github.com/scroll-tech/go-ethereum/common"
+	"github.com/scroll-tech/go-ethereum/core/rawdb"
+	"github.com/scroll-tech/go-ethereum/trie/triedb/hashdb"
 )
 
 func newEmptyZkTrie() *ZkTrie {
