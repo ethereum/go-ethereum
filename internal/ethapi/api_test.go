@@ -979,7 +979,7 @@ func TestCall(t *testing.T) {
 			},
 			overrides: StateOverride{
 				dad: OverrideAccount{
-					State: &map[common.Hash]common.Hash{},
+					State: map[common.Hash]common.Hash{},
 				},
 			},
 			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
