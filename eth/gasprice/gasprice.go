@@ -36,7 +36,7 @@ const sampleNumber = 3 // Number of transactions sampled in a block
 
 var (
 	DefaultMaxPrice    = big.NewInt(500 * params.GWei)
-	DefaultIgnorePrice = big.NewInt(2 * params.Wei)
+	DefaultIgnorePrice = big.NewInt(params.BorDefaultGpoIgnorePrice) // bor's default
 )
 
 type Config struct {
@@ -100,11 +100,12 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		log.Warn("Sanitizing invalid gasprice oracle price cap", "provided", params.MaxPrice, "updated", maxPrice)
 	}
 
+	// PIP-35: Enforce the ignore price to 25 gwei
 	ignorePrice := params.IgnorePrice
-	if ignorePrice == nil || ignorePrice.Int64() <= 0 {
+	if ignorePrice == nil || ignorePrice.Int64() != DefaultIgnorePrice.Int64() {
 		ignorePrice = DefaultIgnorePrice
 		log.Warn("Sanitizing invalid gasprice oracle ignore price", "provided", params.IgnorePrice, "updated", ignorePrice)
-	} else if ignorePrice.Int64() > 0 {
+	} else {
 		log.Info("Gasprice oracle is ignoring threshold set", "threshold", ignorePrice)
 	}
 

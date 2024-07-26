@@ -24,6 +24,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -38,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -194,8 +195,8 @@ type Server struct {
 
 	nodedb    *enode.DB
 	localnode *enode.LocalNode
-	ntab      *discover.UDPv4
-	DiscV5    *discover.UDPv5
+	discv4    *discover.UDPv4
+	discv5    *discover.UDPv5
 	discmix   *enode.FairMix
 	dialsched *dialScheduler
 
@@ -456,6 +457,16 @@ func (srv *Server) Self() *enode.Node {
 	return ln.Node()
 }
 
+// DiscoveryV4 returns the discovery v4 instance, if configured.
+func (srv *Server) DiscoveryV4() *discover.UDPv4 {
+	return srv.discv4
+}
+
+// DiscoveryV4 returns the discovery v5 instance, if configured.
+func (srv *Server) DiscoveryV5() *discover.UDPv5 {
+	return srv.discv5
+}
+
 // Stop terminates the server and all active peer connections.
 // It blocks until all active connections have been closed.
 func (srv *Server) Stop() {
@@ -483,11 +494,11 @@ type sharedUDPConn struct {
 	unhandled chan discover.ReadPacket
 }
 
-// ReadFromUDP implements discover.UDPConn
-func (s *sharedUDPConn) ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error) {
+// ReadFromUDPAddrPort implements discover.UDPConn
+func (s *sharedUDPConn) ReadFromUDPAddrPort(b []byte) (n int, addr netip.AddrPort, err error) {
 	packet, ok := <-s.unhandled
 	if !ok {
-		return 0, nil, errors.New("connection was closed")
+		return 0, netip.AddrPort{}, errors.New("connection was closed")
 	}
 
 	l := len(packet.Data)
@@ -621,13 +632,13 @@ func (srv *Server) setupDiscovery() error {
 	)
 	// If both versions of discovery are running, setup a shared
 	// connection, so v5 can read unhandled messages from v4.
-	if srv.DiscoveryV4 && srv.DiscoveryV5 {
+	if srv.Config.DiscoveryV4 && srv.Config.DiscoveryV5 {
 		unhandled = make(chan discover.ReadPacket, 100)
 		sconn = &sharedUDPConn{conn, unhandled}
 	}
 
 	// Start discovery services.
-	if srv.DiscoveryV4 {
+	if srv.Config.DiscoveryV4 {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
@@ -640,18 +651,17 @@ func (srv *Server) setupDiscovery() error {
 		if err != nil {
 			return err
 		}
-
-		srv.ntab = ntab
+		srv.discv4 = ntab
 		srv.discmix.AddSource(ntab.RandomNodes())
 	}
-	if srv.DiscoveryV5 {
+	if srv.Config.DiscoveryV5 {
 		cfg := discover.Config{
 			PrivateKey:  srv.PrivateKey,
 			NetRestrict: srv.NetRestrict,
 			Bootnodes:   srv.BootstrapNodesV5,
 			Log:         srv.log,
 		}
-		srv.DiscV5, err = discover.ListenV5(sconn, srv.localnode, cfg)
+		srv.discv5, err = discover.ListenV5(sconn, srv.localnode, cfg)
 		if err != nil {
 			return err
 		}
@@ -678,8 +688,8 @@ func (srv *Server) setupDialScheduler() {
 		dialer:         srv.Dialer,
 		clock:          srv.clock,
 	}
-	if srv.ntab != nil {
-		config.resolver = srv.ntab
+	if srv.discv4 != nil {
+		config.resolver = srv.discv4
 	}
 
 	if config.dialer == nil {
@@ -877,12 +887,11 @@ running:
 	srv.log.Trace("P2P networking is spinning down")
 
 	// Terminate discovery. If there is a running lookup it will terminate soon.
-	if srv.ntab != nil {
-		srv.ntab.Close()
+	if srv.discv4 != nil {
+		srv.discv4.Close()
 	}
-
-	if srv.DiscV5 != nil {
-		srv.DiscV5.Close()
+	if srv.discv5 != nil {
+		srv.discv5.Close()
 	}
 	// Disconnect all peers.
 	for _, p := range peers {

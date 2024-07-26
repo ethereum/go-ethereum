@@ -18,6 +18,7 @@ type finality[T rawdb.BlockFinality[T]] struct {
 	Number   uint64      // Number , populated by reaching out to heimdall
 	interval uint64      // Interval, until which we can allow importing
 	doExist  bool
+	name     string // Name of the service (checkpoint or milestone)
 }
 
 type finalityService interface {
@@ -43,21 +44,33 @@ func (f *finality[T]) IsValidPeer(fetchHeadersByNumber func(number uint64, amoun
 	return isValidPeer(fetchHeadersByNumber, doExist, number, hash)
 }
 
-// IsValidChain checks the validity of chain by comparing it
-// against the local checkpoint entry
-// todo: need changes
+// IsValidChain checks the validity of chain by comparing it against the local
+// whitelisted entry of checkpoint/milestone.
 func (f *finality[T]) IsValidChain(currentHeader *types.Header, chain []*types.Header) (bool, error) {
 	// Return if we've received empty chain
 	if len(chain) == 0 {
 		return false, nil
 	}
 
-	res, err := isValidChain(currentHeader, chain, f.doExist, f.Number, f.Hash)
+	return isValidChain(currentHeader, chain, f.doExist, f.Number, f.Hash)
+}
 
-	return res, err
+// reportWhitelist logs the block number and hash if a new and unique entry is being inserted
+// and it doesn't log for duplicate/redundant entries.
+func (f *finality[T]) reportWhitelist(block uint64, hash common.Hash) {
+	msg := fmt.Sprintf("Whitelisting new %s from heimdall", f.name)
+	if !f.doExist {
+		log.Info(msg, "block", block, "hash", hash)
+	} else {
+		if f.Number != block && f.Hash != hash {
+			log.Info(msg, "block", block, "hash", hash)
+		}
+	}
 }
 
 func (f *finality[T]) Process(block uint64, hash common.Hash) {
+	f.reportWhitelist(block, hash)
+
 	f.doExist = true
 	f.Hash = hash
 	f.Number = block

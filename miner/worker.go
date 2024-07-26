@@ -956,29 +956,13 @@ func (w *worker) commitTransactions(env *environment, txs *transactionsByPriceAn
 		}(chDeps)
 	}
 
-	initialGasLimit := env.gasPool.Gas()
-
-	initialTxs := txs.GetTxs()
-
-	var breakCause string
-
-	defer func() {
-		log.OnDebug(func(lg log.Logging) {
-			lg("commitTransactions-stats",
-				"initialTxsCount", initialTxs,
-				"initialGasLimit", initialGasLimit,
-				"resultTxsCount", txs.GetTxs(),
-				"resultGapPool", env.gasPool.Gas(),
-				"exitCause", breakCause)
-		})
-	}()
+	var lastTxHash common.Hash
 
 mainloop:
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
 			if signal := interrupt.Load(); signal != commitInterruptNone {
-				breakCause = "interrupt"
 				return signalToErr(signal)
 			}
 		}
@@ -992,7 +976,7 @@ mainloop:
 			select {
 			case <-interruptCtx.Done():
 				txCommitInterruptCounter.Inc(1)
-				log.Warn("Tx Level Interrupt")
+				log.Warn("Tx Level Interrupt", "hash", lastTxHash)
 				break mainloop
 			default:
 			}
@@ -1000,16 +984,15 @@ mainloop:
 
 		// If we don't have enough gas for any further transactions then we're done.
 		if env.gasPool.Gas() < params.TxGas {
-			breakCause = "Not enough gas for further transactions"
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
 			break
 		}
 		// Retrieve the next transaction and abort if all done.
 		ltx, tip := txs.Peek()
 		if ltx == nil {
-			breakCause = "all transactions has been included"
 			break
 		}
+		lastTxHash = ltx.Hash
 		// If we don't have enough space for the next transaction, skip the account.
 		if env.gasPool.Gas() < ltx.Gas {
 			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
@@ -1072,12 +1055,6 @@ mainloop:
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
-		var start time.Time
-
-		log.OnDebug(func(log.Logging) {
-			start = time.Now()
-		})
-
 		logs, err := w.commitTransaction(env, tx, interruptCtx)
 
 		switch {
@@ -1109,10 +1086,6 @@ mainloop:
 			}
 
 			txs.Shift()
-
-			log.OnDebug(func(lg log.Logging) {
-				lg("Committed new tx", "tx hash", tx.Hash(), "from", from, "to", tx.To(), "nonce", tx.Nonce(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "value", tx.Value(), "time spent", time.Since(start))
-			})
 
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
@@ -1657,7 +1630,7 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 	case err == nil:
 		// The entire block is filled, decrease resubmit interval in case
 		// of current interval is larger than the user-specified one.
-		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
+		w.adjustResubmitInterval(&intervalAdjust{inc: false})
 
 	case errors.Is(err, errBlockInterruptedByRecommit):
 		// Notify resubmit loop to increase resubmitting interval if the
@@ -1668,10 +1641,10 @@ func (w *worker) commitWork(ctx context.Context, interrupt *atomic.Int32, noempt
 		if ratio < 0.1 {
 			ratio = 0.1
 		}
-		w.resubmitAdjustCh <- &intervalAdjust{
+		w.adjustResubmitInterval(&intervalAdjust{
 			ratio: ratio,
 			inc:   true,
-		}
+		})
 
 	case errors.Is(err, errBlockInterruptedByNewHead):
 		// If the block building is interrupted by newhead event, discard it
@@ -1791,6 +1764,15 @@ func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
 func (w *worker) isTTDReached(header *types.Header) bool {
 	td, ttd := w.chain.GetTd(header.ParentHash, header.Number.Uint64()-1), w.chain.Config().TerminalTotalDifficulty
 	return td != nil && ttd != nil && td.Cmp(ttd) >= 0
+}
+
+// adjustResubmitInterval adjusts the resubmit interval.
+func (w *worker) adjustResubmitInterval(message *intervalAdjust) {
+	select {
+	case w.resubmitAdjustCh <- message:
+	default:
+		log.Warn("the resubmitAdjustCh is full, discard the message")
+	}
 }
 
 // copyReceipts makes a deep copy of the given receipts.

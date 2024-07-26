@@ -61,13 +61,13 @@ syncmode = "full"
     # locals = []
     # journal = ""
     # rejournal = "1h0m0s"
-    # pricelimit = 1
+    # pricelimit = 25000000000
     # pricebump = 10
 
 [miner]
     mine = true
     gaslimit = 30000000
-    # gasprice = "1000000000"
+    # gasprice = "25000000000"
     # etherbase = ""
     # extradata = ""
     # recommit = "2m5s"
@@ -123,7 +123,7 @@ syncmode = "full"
     # maxheaderhistory = 1024
     # maxblockhistory = 1024
     # maxprice = "5000000000000"
-    # ignoreprice = "2"
+    # ignoreprice = "25000000000"
 
 [telemetry]
     metrics = true

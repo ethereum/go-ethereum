@@ -269,7 +269,7 @@ func (b *testWorkerBackend) PeerCount() int {
 
 func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 	var tx *types.Transaction
-	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+	gasPrice := big.NewInt(26 * params.InitialBaseFee)
 	if creation {
 		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
 	} else {
@@ -297,7 +297,7 @@ func (b *testWorkerBackend) newRandomTxWithNonce(creation bool, nonce uint64) *t
 func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, common.Address) {
 	var tx *types.Transaction
 
-	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+	gasPrice := big.NewInt(26 * params.InitialBaseFee)
 
 	tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(TestBankAddress), big.NewInt(0), testGas, gasPrice, common.FromHex(storageContractByteCode)), types.HomesteadSigner{}, testBankKey)
 	contractAddr := crypto.CreateAddress(TestBankAddress, b.txPool.Nonce(TestBankAddress))
@@ -309,7 +309,7 @@ func (b *testWorkerBackend) newStorageCreateContractTx() (*types.Transaction, co
 func (b *testWorkerBackend) newStorageContractCallTx(to common.Address, nonce uint64) *types.Transaction {
 	var tx *types.Transaction
 
-	gasPrice := big.NewInt(10 * params.InitialBaseFee)
+	gasPrice := big.NewInt(26 * params.InitialBaseFee)
 
 	tx, _ = types.SignTx(types.NewTransaction(nonce, to, nil, storageCallTxGas, gasPrice, common.FromHex(storageContractTxCallData)), types.HomesteadSigner{}, testBankKey)
 
@@ -334,6 +334,7 @@ func newTestWorker(t TensingObject, chainConfig *params.ChainConfig, engine cons
 }
 
 func TestGenerateAndImportBlock(t *testing.T) {
+	t.Parallel()
 	var (
 		db     = rawdb.NewMemoryDatabase()
 		config = *params.AllCliqueProtocolChanges
@@ -550,14 +551,17 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 }
 
 func TestGetSealingWorkEthash(t *testing.T) {
+	t.Parallel()
 	testGetSealingWork(t, ethashChainConfig, ethash.NewFaker())
 }
 
 func TestGetSealingWorkClique(t *testing.T) {
+	t.Parallel()
 	testGetSealingWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
 }
 
 func TestGetSealingWorkPostMerge(t *testing.T) {
+	t.Parallel()
 	local := new(params.ChainConfig)
 	*local = *ethashChainConfig
 	local.TerminalTotalDifficulty = big.NewInt(0)
@@ -742,7 +746,7 @@ func testCommitInterruptExperimentBorContract(t *testing.T, delay uint, txCount 
 
 	chainConfig = params.BorUnittestChainConfig
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	engine, _ = getFakeBorFromConfig(t, chainConfig)
 
@@ -796,7 +800,7 @@ func testCommitInterruptExperimentBor(t *testing.T, delay uint, txCount int, opc
 
 	chainConfig = params.BorUnittestChainConfig
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	engine, ctrl = getFakeBorFromConfig(t, chainConfig)
 

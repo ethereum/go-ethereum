@@ -540,22 +540,7 @@ func (w *worker) commitTransactionsWithDelay(env *environment, txs *transactions
 		}(chDeps)
 	}
 
-	initialGasLimit := env.gasPool.Gas()
-
-	initialTxs := txs.GetTxs()
-
-	var breakCause string
-
-	defer func() {
-		log.OnDebug(func(lg log.Logging) {
-			lg("commitTransactions-stats",
-				"initialTxsCount", initialTxs,
-				"initialGasLimit", initialGasLimit,
-				"resultTxsCount", txs.GetTxs(),
-				"resultGapPool", env.gasPool.Gas(),
-				"exitCause", breakCause)
-		})
-	}()
+	var lastTxHash common.Hash
 
 mainloop:
 	for {
@@ -568,7 +553,7 @@ mainloop:
 			select {
 			case <-interruptCtx.Done():
 				txCommitInterruptCounter.Inc(1)
-				log.Warn("Tx Level Interrupt")
+				log.Warn("Tx Level Interrupt", "hash", lastTxHash)
 				break mainloop
 			default:
 			}
@@ -577,22 +562,20 @@ mainloop:
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
 			if signal := interrupt.Load(); signal != commitInterruptNone {
-				breakCause = "interrupt"
 				return signalToErr(signal)
 			}
 		}
 		// If we don't have enough gas for any further transactions then we're done.
 		if env.gasPool.Gas() < params.TxGas {
-			breakCause = "Not enough gas for further transactions"
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
 			break
 		}
 		// Retrieve the next transaction and abort if all done.
 		ltx, _ := txs.Peek()
 		if ltx == nil {
-			breakCause = "all transactions has been included"
 			break
 		}
+		lastTxHash = ltx.Hash
 		// If we don't have enough space for the next transaction, skip the account.
 		if env.gasPool.Gas() < ltx.Gas {
 			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
@@ -650,12 +633,6 @@ mainloop:
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
-		var start time.Time
-
-		log.OnDebug(func(log.Logging) {
-			start = time.Now()
-		})
-
 		logs, err := w.commitTransaction(env, tx, interruptCtx)
 
 		if interruptCtx != nil {
@@ -692,11 +669,6 @@ mainloop:
 			}
 
 			txs.Shift()
-
-			log.OnDebug(func(lg log.Logging) {
-				lg("Committed new tx", "tx hash", tx.Hash(), "from", from, "to", tx.To(), "nonce", tx.Nonce(), "gas", tx.Gas(), "gasPrice", tx.GasPrice(), "value", tx.Value(), "time spent", time.Since(start))
-			})
-
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.

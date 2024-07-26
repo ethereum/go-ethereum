@@ -37,7 +37,7 @@ gcmode = "archive"
     # [p2p.discovery]
         # v4disc = true
         # v5disc = false
-        # bootnodes = ["enode://76316d1cb93c8ed407d3332d595233401250d48f8fbb1d9c65bd18c0495eca1b43ec38ee0ea1c257c0abb7d1f25d649d359cdfe5a805842159cfe36c5f66b7e8@52.78.36.216:30303", "enode://b8f1cc9c5d4403703fbf377116469667d2b1823c0daf16b7250aa576bacf399e42c3930ccfcb02c5df6879565a2b8931335565f0e8d3f8e72385ecf4a4bf160a@3.36.224.80:30303", "enode://8729e0c825f3d9cad382555f3e46dcff21af323e89025a0e6312df541f4a9e73abfa562d64906f5e59c51fe6f0501b3e61b07979606c56329c020ed739910759@54.194.245.5:30303", "enode://681ebac58d8dd2d8a6eef15329dfbad0ab960561524cf2dfde40ad646736fe5c244020f20b87e7c1520820bc625cfb487dd71d63a3a3bf0baea2dbb8ec7c79f1@34.240.245.39:30303"]
+        # bootnodes = ["enode://b8f1cc9c5d4403703fbf377116469667d2b1823c0daf16b7250aa576bacf399e42c3930ccfcb02c5df6879565a2b8931335565f0e8d3f8e72385ecf4a4bf160a@3.36.224.80:30303", "enode://8729e0c825f3d9cad382555f3e46dcff21af323e89025a0e6312df541f4a9e73abfa562d64906f5e59c51fe6f0501b3e61b07979606c56329c020ed739910759@54.194.245.5:30303"]
         # bootnodesv4 = []
         # bootnodesv5 = []
         # static-nodes = []
@@ -51,7 +51,7 @@ gcmode = "archive"
 
 [txpool]
     nolocals = true
-    pricelimit = 30000000000
+    pricelimit = 25000000000
     accountslots = 16
     globalslots = 32768
     accountqueue = 16
@@ -64,7 +64,7 @@ gcmode = "archive"
 
 [miner]
     gaslimit = 30000000
-    gasprice = "30000000000"
+    gasprice = "25000000000"
     # mine = false
     # etherbase = ""
     # extradata = ""
@@ -121,7 +121,7 @@ gcmode = "archive"
     # maxheaderhistory = 1024
     # maxblockhistory = 1024
     # maxprice = "5000000000000"
-    ignoreprice = "30000000000"
+    ignoreprice = "25000000000"
 
 [telemetry]
     metrics = true

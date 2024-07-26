@@ -195,7 +195,7 @@ func TestSprintLengthMilestoneReorg2Nodes(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -242,7 +242,7 @@ func TestSprintLengthMilestoneReorg(t *testing.T) {
 	t.Skip()
 	// t.Parallel()
 
-	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -319,7 +319,7 @@ func SprintLengthMilestoneReorgIndividual2NodesHelper(t *testing.T, index int, t
 func SetupValidatorsAndTest2NodesSprintLengthMilestone(t *testing.T, tt map[string]interface{}) (uint64, uint64) {
 	t.Helper()
 
-	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 
@@ -461,7 +461,7 @@ func SetupValidatorsAndTest2NodesSprintLengthMilestone(t *testing.T, tt map[stri
 func SetupValidatorsAndTestSprintLengthMilestone(t *testing.T, tt map[string]uint64) (uint64, uint64) {
 	t.Helper()
 
-	log.Root().SetHandler(log.LvlFilterHandler(3, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 
 	_, err := fdlimit.Raise(2048)
 

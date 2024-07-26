@@ -172,6 +172,5 @@ func SignNull(r *enr.Record, id ID) *Node {
 	if err := r.SetSig(NullID{}, []byte{}); err != nil {
 		panic(err)
 	}
-
-	return &Node{r: *r, id: id}
+	return newNodeWithID(r, id)
 }

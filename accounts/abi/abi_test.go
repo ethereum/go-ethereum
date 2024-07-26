@@ -120,6 +120,7 @@ var methods = map[string]Method{
 }
 
 func TestReader(t *testing.T) {
+	t.Parallel()
 	abi := ABI{
 		Methods: methods,
 	}
@@ -153,6 +154,7 @@ func TestReader(t *testing.T) {
 }
 
 func TestInvalidABI(t *testing.T) {
+	t.Parallel()
 	json := `[{ "type" : "function", "name" : "", "constant" : fals }]`
 
 	_, err := JSON(strings.NewReader(json))
@@ -175,6 +177,7 @@ func TestInvalidABI(t *testing.T) {
 //		constructor(uint256 a, uint256 b) public{}
 //	}
 func TestConstructor(t *testing.T) {
+	t.Parallel()
 	json := `[{	"inputs": [{"internalType": "uint256","name": "a","type": "uint256"	},{	"internalType": "uint256","name": "b","type": "uint256"}],"stateMutability": "nonpayable","type": "constructor"}]`
 	method := NewMethod("", "", Constructor, "nonpayable", false, false, []Argument{{"a", Uint256, false}, {"b", Uint256, false}}, nil)
 	// Test from JSON
@@ -207,6 +210,7 @@ func TestConstructor(t *testing.T) {
 }
 
 func TestTestNumbers(t *testing.T) {
+	t.Parallel()
 	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
@@ -245,6 +249,7 @@ func TestTestNumbers(t *testing.T) {
 }
 
 func TestMethodSignature(t *testing.T) {
+	t.Parallel()
 	m := NewMethod("foo", "foo", Function, "", false, false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil)
 	exp := "foo(string,string)"
 
@@ -286,6 +291,7 @@ func TestMethodSignature(t *testing.T) {
 }
 
 func TestOverloadedMethodSignature(t *testing.T) {
+	t.Parallel()
 	json := `[{"constant":true,"inputs":[{"name":"i","type":"uint256"},{"name":"j","type":"uint256"}],"name":"foo","outputs":[],"payable":false,"stateMutability":"pure","type":"function"},{"constant":true,"inputs":[{"name":"i","type":"uint256"}],"name":"foo","outputs":[],"payable":false,"stateMutability":"pure","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"i","type":"uint256"}],"name":"bar","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"i","type":"uint256"},{"indexed":false,"name":"j","type":"uint256"}],"name":"bar","type":"event"}]`
 
 	abi, err := JSON(strings.NewReader(json))
@@ -311,6 +317,7 @@ func TestOverloadedMethodSignature(t *testing.T) {
 }
 
 func TestCustomErrors(t *testing.T) {
+	t.Parallel()
 	json := `[{ "inputs": [	{ "internalType": "uint256", "name": "", "type": "uint256" } ],"name": "MyError", "type": "error"} ]`
 
 	abi, err := JSON(strings.NewReader(json))
@@ -327,6 +334,7 @@ func TestCustomErrors(t *testing.T) {
 }
 
 func TestMultiPack(t *testing.T) {
+	t.Parallel()
 	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
@@ -366,6 +374,7 @@ func ExampleJSON() {
 }
 
 func TestInputVariableInputLength(t *testing.T) {
+	t.Parallel()
 	const definition = `[
 	{ "type" : "function", "name" : "strOne", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" } ] },
 	{ "type" : "function", "name" : "bytesOne", "constant" : true, "inputs" : [ { "name" : "str", "type" : "bytes" } ] },
@@ -498,6 +507,7 @@ func TestInputVariableInputLength(t *testing.T) {
 }
 
 func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
+	t.Parallel()
 	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Error(err)
@@ -682,6 +692,7 @@ func TestInputFixedArrayAndVariableInputLength(t *testing.T) {
 }
 
 func TestDefaultFunctionParsing(t *testing.T) {
+	t.Parallel()
 	const definition = `[{ "name" : "balance", "type" : "function" }]`
 
 	abi, err := JSON(strings.NewReader(definition))
@@ -695,6 +706,7 @@ func TestDefaultFunctionParsing(t *testing.T) {
 }
 
 func TestBareEvents(t *testing.T) {
+	t.Parallel()
 	const definition = `[
 	{ "type" : "event", "name" : "balance" },
 	{ "type" : "event", "name" : "anon", "anonymous" : true},
@@ -776,6 +788,7 @@ func TestBareEvents(t *testing.T) {
 //
 //	receipt{status=1 cgas=23949 bloom=00000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000040200000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 logs=[log: b6818c8064f645cd82d99b59a1a267d6d61117ef [75fd880d39c1daf53b6547ab6cb59451fc6452d27caa90e5b6649dd8293b9eed] 000000000000000000000000376c47978271565f56deb45495afa69e59c16ab200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000158 9ae378b6d4409eada347a5dc0c180f186cb62dc68fcc0f043425eb917335aa28 0 95d429d309bb9d753954195fe2d69bd140b4ae731b9b5b605c34323de162cf00 0]}
 func TestUnpackEvent(t *testing.T) {
+	t.Parallel()
 	const abiJSON = `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"receive","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"}],"name":"receivedAddr","type":"event"}]`
 
 	abi, err := JSON(strings.NewReader(abiJSON))
@@ -820,6 +833,7 @@ func TestUnpackEvent(t *testing.T) {
 }
 
 func TestUnpackEventIntoMap(t *testing.T) {
+	t.Parallel()
 	const abiJSON = `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"receive","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"sender","type":"address"}],"name":"receivedAddr","type":"event"}]`
 
 	abi, err := JSON(strings.NewReader(abiJSON))
@@ -880,6 +894,7 @@ func TestUnpackEventIntoMap(t *testing.T) {
 }
 
 func TestUnpackMethodIntoMap(t *testing.T) {
+	t.Parallel()
 	const abiJSON = `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"receive","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"constant":false,"inputs":[],"name":"send","outputs":[{"name":"amount","type":"uint256"}],"payable":true,"stateMutability":"payable","type":"function"},{"constant":false,"inputs":[{"name":"addr","type":"address"}],"name":"get","outputs":[{"name":"hash","type":"bytes"}],"payable":true,"stateMutability":"payable","type":"function"}]`
 
 	abi, err := JSON(strings.NewReader(abiJSON))
@@ -939,6 +954,7 @@ func TestUnpackMethodIntoMap(t *testing.T) {
 }
 
 func TestUnpackIntoMapNamingConflict(t *testing.T) {
+	t.Parallel()
 	// Two methods have the same name
 	var abiJSON = `[{"constant":false,"inputs":[{"name":"memo","type":"bytes"}],"name":"get","outputs":[],"payable":true,"stateMutability":"payable","type":"function"},{"constant":false,"inputs":[],"name":"send","outputs":[{"name":"amount","type":"uint256"}],"payable":true,"stateMutability":"payable","type":"function"},{"constant":false,"inputs":[{"name":"addr","type":"address"}],"name":"get","outputs":[{"name":"hash","type":"bytes"}],"payable":true,"stateMutability":"payable","type":"function"}]`
 
@@ -1043,6 +1059,7 @@ func TestUnpackIntoMapNamingConflict(t *testing.T) {
 }
 
 func TestABI_MethodById(t *testing.T) {
+	t.Parallel()
 	abi, err := JSON(strings.NewReader(jsondata))
 	if err != nil {
 		t.Fatal(err)
@@ -1080,6 +1097,7 @@ func TestABI_MethodById(t *testing.T) {
 }
 
 func TestABI_EventById(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		json  string
@@ -1149,6 +1167,7 @@ func TestABI_EventById(t *testing.T) {
 }
 
 func TestABI_ErrorByID(t *testing.T) {
+	t.Parallel()
 	abi, err := JSON(strings.NewReader(`[
 		{"inputs":[{"internalType":"uint256","name":"x","type":"uint256"}],"name":"MyError1","type":"error"},
 		{"inputs":[{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"string","name":"b","type":"string"},{"internalType":"address","name":"c","type":"address"}],"internalType":"struct MyError.MyStruct","name":"x","type":"tuple"},{"internalType":"address","name":"y","type":"address"},{"components":[{"internalType":"uint256","name":"a","type":"uint256"},{"internalType":"string","name":"b","type":"string"},{"internalType":"address","name":"c","type":"address"}],"internalType":"struct MyError.MyStruct","name":"z","type":"tuple"}],"name":"MyError2","type":"error"},
@@ -1179,6 +1198,7 @@ func TestABI_ErrorByID(t *testing.T) {
 // TestDoubleDuplicateMethodNames checks that if transfer0 already exists, there won't be a name
 // conflict and that the second transfer method will be renamed transfer1.
 func TestDoubleDuplicateMethodNames(t *testing.T) {
+	t.Parallel()
 	abiJSON := `[{"constant":false,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"}],"name":"transfer","outputs":[{"name":"ok","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"},{"name":"data","type":"bytes"}],"name":"transfer0","outputs":[{"name":"ok","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"},{"name":"data","type":"bytes"},{"name":"customFallback","type":"string"}],"name":"transfer","outputs":[{"name":"ok","type":"bool"}],"payable":false,"stateMutability":"nonpayable","type":"function"}]`
 
 	contractAbi, err := JSON(strings.NewReader(abiJSON))
@@ -1213,6 +1233,7 @@ func TestDoubleDuplicateMethodNames(t *testing.T) {
 //		event send();
 //	}
 func TestDoubleDuplicateEventNames(t *testing.T) {
+	t.Parallel()
 	abiJSON := `[{"anonymous": false,"inputs": [{"indexed": false,"internalType": "uint256","name": "a","type": "uint256"}],"name": "send","type": "event"},{"anonymous": false,"inputs": [],"name": "send0","type": "event"},{	"anonymous": false,	"inputs": [],"name": "send","type": "event"}]`
 
 	contractAbi, err := JSON(strings.NewReader(abiJSON))
@@ -1245,6 +1266,7 @@ func TestDoubleDuplicateEventNames(t *testing.T) {
 //		event send(uint256, uint256);
 //	}
 func TestUnnamedEventParam(t *testing.T) {
+	t.Parallel()
 	abiJSON := `[{ "anonymous": false, "inputs": [{	"indexed": false,"internalType": "uint256",	"name": "","type": "uint256"},{"indexed": false,"internalType": "uint256","name": "","type": "uint256"}],"name": "send","type": "event"}]`
 
 	contractAbi, err := JSON(strings.NewReader(abiJSON))
@@ -1282,7 +1304,9 @@ func TestUnpackRevert(t *testing.T) {
 	}
 
 	for index, c := range cases {
+		index, c := index, c
 		t.Run(fmt.Sprintf("case %d", index), func(t *testing.T) {
+			t.Parallel()
 			got, err := UnpackRevert(common.Hex2Bytes(c.input))
 			if c.expectErr != nil {
 				if err == nil {

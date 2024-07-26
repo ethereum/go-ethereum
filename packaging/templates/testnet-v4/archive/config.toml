@@ -59,12 +59,12 @@ gcmode = "archive"
     # locals = []
     # journal = ""
     # rejournal = "1h0m0s"
-    # pricelimit = 1
+    # pricelimit = 25000000000
     # pricebump = 10
 
 [miner]
     gaslimit = 30000000
-    # gasprice = "1000000000"
+    # gasprice = "25000000000"
     # mine = false
     # etherbase = ""
     # extradata = ""
@@ -121,7 +121,7 @@ gcmode = "archive"
     # maxheaderhistory = 1024
     # maxblockhistory = 1024
     # maxprice = "5000000000000"
-    # ignoreprice = "2"
+    # ignoreprice = "25000000000"
 
 [telemetry]
     metrics = true

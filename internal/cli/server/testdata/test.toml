@@ -11,7 +11,7 @@ snapshot = true
 "32000000" = "0x875500011e5eecc0c554f95d07b31cf59df4ca2505f4dbbfffa7d4e4da917c68"
 
 [miner]
-  gasprice = "30000000000"
+  gasprice = "25000000000"
   recommit = "20s"
 
 [jsonrpc]

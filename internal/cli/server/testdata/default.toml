@@ -58,7 +58,7 @@ devfakeauthor = false
   nolocals = false
   journal = "transactions.rlp"
   rejournal = "1h0m0s"
-  pricelimit = 1
+  pricelimit = 25000000000
   pricebump = 10
   accountslots = 16
   globalslots = 32768
@@ -71,7 +71,7 @@ devfakeauthor = false
   etherbase = ""
   extradata = ""
   gaslimit = 30000000
-  gasprice = "1000000000"
+  gasprice = "25000000000"
   recommit = "2m5s"
   commitinterrupt = true
 
@@ -127,7 +127,7 @@ devfakeauthor = false
   maxheaderhistory = 1024
   maxblockhistory = 1024
   maxprice = "500000000000"
-  ignoreprice = "2"
+  ignoreprice = "25000000000"
 
 [telemetry]
   metrics = false

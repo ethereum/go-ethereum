@@ -273,6 +273,7 @@ func resolveOffset(db ethdb.KeyValueStore, isLastOffset bool) uint64 {
 //nolint:gocognit
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly, disableFreeze, isLastOffset bool) (ethdb.Database, error) {
 	offset := resolveOffset(db, isLastOffset)
+	log.Info("Resolving ancient pruner offset", "isLastOffset", isLastOffset, "offset", offset)
 
 	// Create the idle freezer instance
 	frdb, err := newChainFreezer(resolveChainFreezerDir(ancient), namespace, readonly, offset)

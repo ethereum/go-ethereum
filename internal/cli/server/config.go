@@ -655,7 +655,7 @@ func DefaultConfig() *Config {
 			NoLocals:     false,
 			Journal:      "transactions.rlp",
 			Rejournal:    1 * time.Hour,
-			PriceLimit:   1, // geth's default
+			PriceLimit:   params.BorDefaultTxPoolPriceLimit, // bor's default
 			PriceBump:    10,
 			AccountSlots: 16,
 			GlobalSlots:  32768,
@@ -666,8 +666,8 @@ func DefaultConfig() *Config {
 		Sealer: &SealerConfig{
 			Enabled:             false,
 			Etherbase:           "",
-			GasCeil:             30_000_000,                  // geth's default
-			GasPrice:            big.NewInt(1 * params.GWei), // geth's default
+			GasCeil:             30_000_000,                                 // geth's default
+			GasPrice:            big.NewInt(params.BorDefaultMinerGasPrice), // bor's default
 			ExtraData:           "",
 			Recommit:            125 * time.Second,
 			CommitInterruptFlag: true,
@@ -678,7 +678,7 @@ func DefaultConfig() *Config {
 			MaxHeaderHistory: 1024,
 			MaxBlockHistory:  1024,
 			MaxPrice:         gasprice.DefaultMaxPrice,
-			IgnorePrice:      gasprice.DefaultIgnorePrice,
+			IgnorePrice:      gasprice.DefaultIgnorePrice, // bor's default
 		},
 		JsonRPC: &JsonRPCConfig{
 			IPCDisable:          false,

@@ -84,7 +84,7 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	generate := func(i int, g *core.BlockGen) {
 		g.OffsetTime(5)
 		g.SetExtra([]byte("test"))
-		tx, _ := types.SignTx(types.NewTransaction(testNonce, common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"), big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*2), nil), types.LatestSigner(&config), testKey)
+		tx, _ := types.SignTx(types.NewTransaction(testNonce, common.HexToAddress("0x9a9070028361F7AAbeB3f2F2Dc07F82C4a98A02a"), big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee*26), nil), types.LatestSigner(&config), testKey)
 		g.AddTx(tx)
 		testNonce++
 	}
@@ -604,7 +604,7 @@ func TestNewPayloadOnInvalidChain(t *testing.T) {
 			Nonce:    statedb.GetNonce(testAddr),
 			Value:    new(big.Int),
 			Gas:      1000000,
-			GasPrice: big.NewInt(2 * params.InitialBaseFee),
+			GasPrice: big.NewInt(26 * params.InitialBaseFee),
 			Data:     logCode,
 		})
 		ethservice.TxPool().Add([]*types.Transaction{tx}, false, true)
@@ -1568,7 +1568,7 @@ func TestBlockToPayloadWithBlobs(t *testing.T) {
 func TestParentBeaconBlockRoot(t *testing.T) {
 	t.Skip("This test is not compatible with bor")
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(colorable.NewColorableStderr(), log.LevelTrace, true)))
 
 	genesis, blocks := generateMergeChain(10, true)
 

@@ -61,6 +61,14 @@ const (
 func init() {
 	testTxPoolConfig = DefaultConfig
 	testTxPoolConfig.Journal = ""
+	/*
+		Given the introduction of `BorDefaultTxPoolPriceLimit=25gwei`,
+		we set `testTxPoolConfig.PriceLimit = 1` to avoid rewriting all `legacypool_test.go` tests,
+		causing code divergence from geth, as this has been widely tested on different networks.
+		Also, `worker_test.go` has been adapted to reflect such changes.
+		Furthermore, config test can be found in `TestTxPoolDefaultPriceLimit`
+	*/
+	testTxPoolConfig.PriceLimit = 1
 
 	cpy := *params.TestChainConfig
 	eip1559Config = &cpy
@@ -284,6 +292,18 @@ func (c *testChain) State() (*state.StateDB, error) {
 	}
 
 	return stdb, nil
+}
+
+// TestTxPoolDefaultPriceLimit ensures the bor default tx pool price limit is set correctly.
+func TestTxPoolDefaultPriceLimit(t *testing.T) {
+	t.Parallel()
+
+	pool, _ := setupPool()
+	defer pool.Close()
+
+	if have, want := pool.config.PriceLimit, uint64(params.BorDefaultTxPoolPriceLimit); have != want {
+		t.Fatalf("txpool price limit incorrect: have %d, want %d", have, want)
+	}
 }
 
 // This test simulates a scenario where a new block is imported during a
@@ -1719,6 +1739,50 @@ func TestRepricing(t *testing.T) {
 
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
+func TestMinGasPriceEnforced(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the pricing enforcement with
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	blockchain := newTestBlockChain(eip1559Config, 10000000, statedb, new(event.Feed))
+
+	txPoolConfig := DefaultConfig
+	txPoolConfig.NoLocals = true
+	pool := New(txPoolConfig, blockchain)
+	pool.Init(new(big.Int).SetUint64(txPoolConfig.PriceLimit), blockchain.CurrentBlock(), makeAddressReserver())
+	defer pool.Close()
+
+	key, _ := crypto.GenerateKey()
+	testAddBalance(pool, crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000))
+
+	tx := pricedTransaction(0, 100000, big.NewInt(2), key)
+	pool.SetGasTip(big.NewInt(tx.GasPrice().Int64() + 1))
+
+	if err := pool.addLocal(tx); !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+
+	tx = dynamicFeeTx(0, 100000, big.NewInt(3), big.NewInt(2), key)
+	pool.SetGasTip(big.NewInt(tx.GasTipCap().Int64() + 1))
+
+	if err := pool.addLocal(tx); !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; !errors.Is(err, txpool.ErrUnderpriced) {
+		t.Fatalf("Min tip not enforced")
+	}
+	// Make sure the tx is accepted if locals are enabled
+	pool.config.NoLocals = false
+	if err := pool.Add([]*types.Transaction{tx}, true, false)[0]; err != nil {
+		t.Fatalf("Min tip enforced with locals enabled, error: %v", err)
 	}
 }
 

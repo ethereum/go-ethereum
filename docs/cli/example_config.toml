@@ -61,7 +61,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   nolocals = false              # Disables price exemptions for locally submitted transactions
   journal = "transactions.rlp"  # Disk journal for local transaction to survive node restarts
   rejournal = "1h0m0s"          # Time interval to regenerate the local transaction journal
-  pricelimit = 1                # Minimum gas price limit to enforce for acceptance into the pool (mainnet = 30000000000)
+  pricelimit = 25000000000      # Minimum gas price limit to enforce for acceptance into the pool. Regardless the value set, it will be enforced to 25000000000 for all networks
   pricebump = 10                # Price bump percentage to replace an already existing transaction
   accountslots = 16             # Minimum number of executable transaction slots guaranteed per account
   globalslots = 32768           # Maximum number of executable transaction slots for all accounts
@@ -74,7 +74,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   etherbase = ""           # Public address for block mining rewards
   extradata = ""           # Block extra data set by the miner (default = client version)
   gaslimit = 30000000      # Target gas ceiling for mined blocks
-  gasprice = "1000000000"  # Minimum gas price for mining a transaction (recommended for mainnet = 30000000000, default suitable for amoy/mumbai/devnet)
+  gasprice = "25000000000"  # Minimum gas price for mining a transaction. Regardless the value set, it will be enforced to 25000000000 for all networks
   recommit = "2m5s"        # The time interval for miner to re-create mining work
   commitinterrupt = true   # Interrupt the current mining work when time is exceeded and create partial blocks
 
@@ -128,7 +128,7 @@ devfakeauthor = false           # Run miner without validator set authorization 
   maxheaderhistory = 1024     # Maximum header history of gasprice oracle
   maxblockhistory = 1024      # Maximum block history of gasprice oracle
   maxprice = "5000000000000"  # Maximum gas price will be recommended by gpo
-  ignoreprice = "2"           # Gas price below which gpo will ignore transactions (recommended for mainnet = 30000000000, default suitable for amoy/mumbai/devnet)
+  ignoreprice = "25000000000"           # Gas price below which gpo will ignore transactions. Regardless the value set, it will be enforced to 25000000000 for all networks
 
 [telemetry]
   metrics = false                            # Enable metrics collection and reporting

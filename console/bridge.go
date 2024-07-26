@@ -82,7 +82,7 @@ func (b *bridge) NewAccount(call jsre.Call) (goja.Value, error) {
 		}
 
 		if password != confirm {
-			return nil, errors.New("passwords don't match!")
+			return nil, errors.New("passwords don't match")
 		}
 	// A single string password was specified, use that
 	case len(call.Arguments) == 1 && call.Argument(0).ToString() != nil:
