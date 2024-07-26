@@ -138,6 +138,10 @@ type StateDB struct {
 
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
+
+	// CHANGE(taiko): basefeeSharingPctg of the basefee will be sent to the block.coinbase,
+	// the remaining will be sent to the treasury address.
+	BasefeeSharingPctg uint8
 }
 
 // New creates a new state from a given trie.

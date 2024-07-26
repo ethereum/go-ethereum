@@ -170,6 +170,7 @@ func (w *worker) sealBlockWith(
 	defer env.discard()
 
 	env.header.GasLimit = blkMeta.GasLimit
+	env.state.BasefeeSharingPctg = blkMeta.BasefeeSharingPctg
 
 	// Commit transactions.
 	gasLimit := env.header.GasLimit

@@ -382,6 +382,11 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	if payloadAttributes != nil {
 		// CHANGE(taiko): create a L2 block by Taiko protocol.
 		if isTaiko {
+			if payloadAttributes.BlockMetadata.BasefeeSharingPctg > 100 {
+				return valid(nil), engine.InvalidPayloadAttributes.With(
+					fmt.Errorf("invalid basefeeSharingPctg %d", payloadAttributes.BlockMetadata.BasefeeSharingPctg),
+				)
+			}
 			// No need to check payloadAttribute here, because all its fields are
 			// marked as required.
 			block, err := api.eth.Miner().SealBlockWith(

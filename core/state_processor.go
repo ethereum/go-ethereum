@@ -169,6 +169,8 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	if err != nil {
 		return nil, err
 	}
+	// CHANGE(taiko): set `BasefeeSharingPctg` for the current message.
+	msg.BasefeeSharingPctg = statedb.BasefeeSharingPctg
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	txContext := NewEVMTxContext(msg)

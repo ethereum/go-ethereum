@@ -5,7 +5,6 @@ package engine
 import (
 	"encoding/json"
 	"errors"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -16,13 +15,13 @@ var _ = (*blockMetadataMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (b BlockMetadata) MarshalJSON() ([]byte, error) {
 	type BlockMetadata struct {
-		Beneficiary    common.Address `json:"beneficiary"  gencodec:"required"`
-		GasLimit       uint64         `json:"gasLimit"     gencodec:"required"`
-		Timestamp      hexutil.Uint64 `json:"timestamp"    gencodec:"required"`
-		MixHash        common.Hash    `json:"mixHash"      gencodec:"required"`
-		TxList         hexutil.Bytes  `json:"txList"          gencodec:"required"`
-		HighestBlockID *big.Int       `json:"highestBlockID"  gencodec:"required"`
-		ExtraData      []byte         `json:"extraData"       gencodec:"required"`
+		Beneficiary        common.Address `json:"beneficiary"  gencodec:"required"`
+		GasLimit           uint64         `json:"gasLimit"     gencodec:"required"`
+		Timestamp          hexutil.Uint64 `json:"timestamp"    gencodec:"required"`
+		MixHash            common.Hash    `json:"mixHash"      gencodec:"required"`
+		TxList             hexutil.Bytes  `json:"txList"          gencodec:"required"`
+		ExtraData          []byte         `json:"extraData"       gencodec:"required"`
+		BasefeeSharingPctg uint8          `json:"basefeeSharingPctg"`
 	}
 	var enc BlockMetadata
 	enc.Beneficiary = b.Beneficiary
@@ -30,21 +29,21 @@ func (b BlockMetadata) MarshalJSON() ([]byte, error) {
 	enc.Timestamp = hexutil.Uint64(b.Timestamp)
 	enc.MixHash = b.MixHash
 	enc.TxList = b.TxList
-	enc.HighestBlockID = b.HighestBlockID
 	enc.ExtraData = b.ExtraData
+	enc.BasefeeSharingPctg = b.BasefeeSharingPctg
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (b *BlockMetadata) UnmarshalJSON(input []byte) error {
 	type BlockMetadata struct {
-		Beneficiary    *common.Address `json:"beneficiary"  gencodec:"required"`
-		GasLimit       *uint64         `json:"gasLimit"     gencodec:"required"`
-		Timestamp      *hexutil.Uint64 `json:"timestamp"    gencodec:"required"`
-		MixHash        *common.Hash    `json:"mixHash"      gencodec:"required"`
-		TxList         *hexutil.Bytes  `json:"txList"          gencodec:"required"`
-		HighestBlockID *big.Int        `json:"highestBlockID"  gencodec:"required"`
-		ExtraData      []byte          `json:"extraData"       gencodec:"required"`
+		Beneficiary        *common.Address `json:"beneficiary"  gencodec:"required"`
+		GasLimit           *uint64         `json:"gasLimit"     gencodec:"required"`
+		Timestamp          *hexutil.Uint64 `json:"timestamp"    gencodec:"required"`
+		MixHash            *common.Hash    `json:"mixHash"      gencodec:"required"`
+		TxList             *hexutil.Bytes  `json:"txList"          gencodec:"required"`
+		ExtraData          []byte          `json:"extraData"       gencodec:"required"`
+		BasefeeSharingPctg *uint8          `json:"basefeeSharingPctg"`
 	}
 	var dec BlockMetadata
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -70,13 +69,12 @@ func (b *BlockMetadata) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'txList' for BlockMetadata")
 	}
 	b.TxList = *dec.TxList
-	if dec.HighestBlockID == nil {
-		return errors.New("missing required field 'highestBlockID' for BlockMetadata")
-	}
-	b.HighestBlockID = dec.HighestBlockID
 	if dec.ExtraData == nil {
 		return errors.New("missing required field 'extraData' for BlockMetadata")
 	}
 	b.ExtraData = dec.ExtraData
+	if dec.BasefeeSharingPctg != nil {
+		b.BasefeeSharingPctg = *dec.BasefeeSharingPctg
+	}
 	return nil
 }

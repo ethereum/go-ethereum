@@ -64,16 +64,15 @@ type payloadAttributesMarshaling struct {
 // CHANGE(taiko): BlockMetadata represents a `BlockMetadata` struct defined in
 // protocol.
 type BlockMetadata struct {
-	// Fields defined in `LibData.blockMetadata`.
 	Beneficiary common.Address `json:"beneficiary"  gencodec:"required"`
 	GasLimit    uint64         `json:"gasLimit"     gencodec:"required"`
 	Timestamp   uint64         `json:"timestamp"    gencodec:"required"`
 	MixHash     common.Hash    `json:"mixHash"      gencodec:"required"`
 
 	// Extra fields required in taiko-geth.
-	TxList         []byte   `json:"txList"          gencodec:"required"`
-	HighestBlockID *big.Int `json:"highestBlockID"  gencodec:"required"`
-	ExtraData      []byte   `json:"extraData"       gencodec:"required"`
+	TxList             []byte `json:"txList"          gencodec:"required"`
+	ExtraData          []byte `json:"extraData"       gencodec:"required"`
+	BasefeeSharingPctg uint8  `json:"basefeeSharingPctg"`
 }
 
 // CHANGE(taiko): JSON type overrides for BlockMetadata.

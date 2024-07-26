@@ -149,6 +149,9 @@ type Message struct {
 
 	// CHANGE(taiko): whether the current transaction is the first TaikoL2.anchor transaction in a block.
 	IsAnchor bool
+	// CHANGE(taiko): basefeeSharingPctg of the basefee will be sent to the block.coinbase,
+	// the remaining will be sent to the treasury address.
+	BasefeeSharingPctg uint8
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -467,12 +470,16 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		fee := new(uint256.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTipU256)
 		st.state.AddBalance(st.evm.Context.Coinbase, fee)
-		// CHANGE(taiko): basefee is not burnt, but sent to a treasury instead.
+		// CHANGE(taiko): basefee is not burnt, but sent to a treasury and block.coinbase instead.
 		if st.evm.ChainConfig().Taiko && st.evm.Context.BaseFee != nil && !st.msg.IsAnchor {
-			st.state.AddBalance(
-				st.getTreasuryAddress(),
-				uint256.MustFromBig(new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(st.gasUsed()))),
+			totalFee := new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(st.gasUsed()))
+			feeCoinbase := new(big.Int).Div(
+				new(big.Int).Mul(totalFee, new(big.Int).SetUint64(uint64(st.msg.BasefeeSharingPctg))),
+				new(big.Int).SetUint64(100),
 			)
+			feeTreasury := new(big.Int).Sub(totalFee, feeCoinbase)
+			st.state.AddBalance(st.getTreasuryAddress(), uint256.MustFromBig(feeTreasury))
+			st.state.AddBalance(st.evm.Context.Coinbase, uint256.MustFromBig(feeCoinbase))
 		}
 	}
 
