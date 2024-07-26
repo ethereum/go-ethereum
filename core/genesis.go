@@ -280,18 +280,12 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if err := WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty); err != nil {
 		return nil, err
 	}
-	if err := WriteBlock(db, block); err != nil {
-		return nil, err
-	}
+	rawdb.WriteBlock(db, block)
 	if err := WriteBlockReceipts(db, block.Hash(), block.NumberU64(), nil); err != nil {
 		return nil, err
 	}
-	if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
-		return nil, err
-	}
-	if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
-		return nil, err
-	}
+	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+	rawdb.WriteHeadBlockHash(db, block.Hash())
 	if err := WriteHeadHeaderHash(db, block.Hash()); err != nil {
 		return nil, err
 	}
