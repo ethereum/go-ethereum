@@ -414,6 +414,10 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	}
 	// Sign the transaction and schedule it for execution
 	if opts.Signer == nil {
+		if opts.NoSend {
+			// If no signer is provided, return the raw transaction
+			return rawTx, nil
+		}
 		return nil, errors.New("no signer to authorize the transaction with")
 	}
 	signedTx, err := opts.Signer(opts.From, rawTx)
