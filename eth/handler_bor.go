@@ -3,6 +3,8 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/bor"
@@ -18,8 +20,6 @@ var (
 	// errMilestone is returned when we are unable to fetch the
 	// latest milestone from the local heimdall.
 	errMilestone = errors.New("failed to fetch latest milestone")
-
-	ErrNotInRejectedList = errors.New("MilestoneID not in rejected list")
 )
 
 // fetchWhitelistCheckpoint fetches the latest checkpoint from it's local heimdall
@@ -32,19 +32,23 @@ func (h *ethHandler) fetchWhitelistCheckpoint(ctx context.Context, bor *bor.Bor,
 
 	// fetch the latest checkpoint from Heimdall
 	checkpoint, err := bor.HeimdallClient.FetchCheckpoint(ctx, -1)
+	err = reportCommonErrors("latest checkpoint", err, errCheckpoint)
 	if err != nil {
-		log.Debug("Failed to fetch latest checkpoint for whitelisting", "err", err)
-		return blockNum, blockHash, errCheckpoint
+		return blockNum, blockHash, err
 	}
 
-	log.Info("Got new checkpoint from heimdall", "start", checkpoint.StartBlock.Uint64(), "end", checkpoint.EndBlock.Uint64(), "rootHash", checkpoint.RootHash.String())
+	log.Debug("Got new checkpoint from heimdall", "start", checkpoint.StartBlock.Uint64(), "end", checkpoint.EndBlock.Uint64(), "rootHash", checkpoint.RootHash.String())
 
 	// Verify if the checkpoint fetched can be added to the local whitelist entry or not
 	// If verified, it returns the hash of the end block of the checkpoint. If not,
 	// it will return appropriate error.
 	hash, err := verifier.verify(ctx, eth, h, checkpoint.StartBlock.Uint64(), checkpoint.EndBlock.Uint64(), checkpoint.RootHash.String()[2:], true)
 	if err != nil {
-		log.Warn("Failed to whitelist checkpoint", "err", err)
+		if errors.Is(err, errChainOutOfSync) {
+			log.Info("Whitelisting checkpoint deferred", "err", err)
+		} else {
+			log.Warn("Failed to whitelist checkpoint", "err", err)
+		}
 		return blockNum, blockHash, err
 	}
 
@@ -64,72 +68,68 @@ func (h *ethHandler) fetchWhitelistMilestone(ctx context.Context, bor *bor.Bor, 
 
 	// fetch latest milestone
 	milestone, err := bor.HeimdallClient.FetchMilestone(ctx)
-	if errors.Is(err, heimdall.ErrServiceUnavailable) {
-		log.Debug("Failed to fetch latest milestone for whitelisting", "err", err)
-		return num, hash, err
-	}
-
+	err = reportCommonErrors("latest milestone", err, errMilestone)
 	if err != nil {
-		log.Error("Failed to fetch latest milestone for whitelisting", "err", err)
-		return num, hash, errMilestone
+		return num, hash, err
 	}
 
 	num = milestone.EndBlock.Uint64()
 	hash = milestone.Hash
 
-	log.Info("Got new milestone from heimdall", "start", milestone.StartBlock.Uint64(), "end", milestone.EndBlock.Uint64(), "hash", milestone.Hash.String())
+	log.Debug("Got new milestone from heimdall", "start", milestone.StartBlock.Uint64(), "end", milestone.EndBlock.Uint64(), "hash", milestone.Hash.String())
 
-	// Verify if the milestone fetched can be added to the local whitelist entry or not
-	// If verified, it returns the hash of the end block of the milestone. If not,
-	// it will return appropriate error.
+	// Verify if the milestone fetched can be added to the local whitelist entry or not. If verified,
+	// the hash of the end block of the milestone is returned else appropriate error is returned.
 	_, err = verifier.verify(ctx, eth, h, milestone.StartBlock.Uint64(), milestone.EndBlock.Uint64(), milestone.Hash.String()[2:], false)
 	if err != nil {
+		if errors.Is(err, errChainOutOfSync) {
+			log.Info("Whitelisting milestone deferred", "err", err)
+		} else {
+			log.Warn("Failed to whitelist milestone", "err", err)
+		}
 		h.downloader.UnlockSprint(milestone.EndBlock.Uint64())
-		return num, hash, err
 	}
 
-	return num, hash, nil
+	return num, hash, err
 }
 
 func (h *ethHandler) fetchNoAckMilestone(ctx context.Context, bor *bor.Bor) (string, error) {
-	var (
-		milestoneID string
-	)
-
-	// fetch latest milestone
 	milestoneID, err := bor.HeimdallClient.FetchLastNoAckMilestone(ctx)
-	if errors.Is(err, heimdall.ErrServiceUnavailable) {
-		log.Debug("Failed to fetch latest no-ack milestone", "err", err)
-		return milestoneID, err
-	}
+	err = reportCommonErrors("latest no-ack milestone", err, nil)
 
-	if err != nil {
-		log.Error("Failed to fetch latest no-ack milestone", "err", err)
-		return milestoneID, errMilestone
-	}
-
-	return milestoneID, nil
+	return milestoneID, err
 }
 
 func (h *ethHandler) fetchNoAckMilestoneByID(ctx context.Context, bor *bor.Bor, milestoneID string) error {
-	// fetch latest milestone
 	err := bor.HeimdallClient.FetchNoAckMilestone(ctx, milestoneID)
-	if errors.Is(err, heimdall.ErrServiceUnavailable) {
-		log.Debug("Failed to fetch no-ack milestone by ID", "milestoneID", milestoneID, "err", err)
+	if errors.Is(err, heimdall.ErrNotInRejectedList) {
+		log.Debug("MilestoneID not in rejected list", "milestoneID", milestoneID)
+	}
+	err = reportCommonErrors("no-ack milestone by ID", err, nil, "milestoneID", milestoneID)
+	return err
+}
+
+// reportCommonErrors reports common errors which can occur while fetching data from heimdall. It also
+// returns back the wrapped erorr if required to the caller.
+func reportCommonErrors(msg string, err error, wrapError error, ctx ...interface{}) error {
+	if err == nil {
 		return err
 	}
 
-	// fixme: handle different types of errors
-	if errors.Is(err, ErrNotInRejectedList) {
-		log.Warn("MilestoneID not in rejected list", "milestoneID", milestoneID, "err", err)
-		return err
+	// We're skipping extra check to the `heimdall.ErrServiceUnavailable` error as it should not
+	// occur post HF (in heimdall). If it does, we'll anyways warn below as a normal error.
+
+	ctx = append(ctx, "err", err)
+
+	if strings.Contains(err.Error(), "context deadline exceeded") {
+		log.Warn(fmt.Sprintf("Failed to fetch %s, please check the heimdall endpoint and status of your heimdall node", msg), ctx...)
+	} else {
+		log.Warn(fmt.Sprintf("Failed to fetch %s", msg), ctx...)
 	}
 
-	if err != nil {
-		log.Error("Failed to fetch no-ack milestone by ID ", "milestoneID", milestoneID, "err", err)
-
-		return errMilestone
+	if wrapError != nil {
+		return fmt.Errorf("%w: %v", wrapError, err)
 	}
 
-	return nil
+	return err
 }

@@ -122,11 +122,13 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	// enforce minimum gas price of 30 gwei in bor
+
+	// PIP-35: Enforce min gas price to 25 gwei
 	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(big.NewInt(params.BorDefaultMinerGasPrice)) != 0 {
 		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
-		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
+		config.Miner.GasPrice = ethconfig.Defaults.Miner.GasPrice
 	}
+
 	if config.NoPruning && config.TrieDirtyCache > 0 {
 		if config.SnapshotCache > 0 {
 			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
@@ -277,6 +279,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// The `config.TxPool.PriceLimit` used above doesn't reflect the sanitized/enforced changes
+	// made in the txpool. Update the `gasTip` explicitly to reflect the enforced value.
+	eth.txPool.SetGasTip(new(big.Int).SetUint64(params.BorDefaultTxPoolPriceLimit))
+
 	// Permit the downloader to use the trie cache allowance during fast sync
 	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
 	if eth.handler, err = newHandler(&handlerConfig{
@@ -695,15 +702,11 @@ func retryHeimdallHandler(fn heimdallHandler, tickerDuration time.Duration, time
 		return
 	}
 
-	// first run for fetching milestones
+	// first run
 	firstCtx, cancel := context.WithTimeout(context.Background(), timeout)
-	err = fn(firstCtx, ethHandler, bor)
+	_ = fn(firstCtx, ethHandler, bor)
 
 	cancel()
-
-	if err != nil {
-		log.Warn(fmt.Sprintf("unable to start the %s service - first run", fnName), "err", err)
-	}
 
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
@@ -712,13 +715,11 @@ func retryHeimdallHandler(fn heimdallHandler, tickerDuration time.Duration, time
 		select {
 		case <-ticker.C:
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			err := fn(ctx, ethHandler, bor)
+
+			// Skip any error reporting here as it's handled in respective functions
+			_ = fn(ctx, ethHandler, bor)
 
 			cancel()
-
-			if err != nil {
-				log.Warn(fmt.Sprintf("unable to handle %s", fnName), "err", err)
-			}
 		case <-closeCh:
 			return
 		}
@@ -754,7 +755,7 @@ func (s *Ethereum) handleMilestone(ctx context.Context, ethHandler *ethHandler, 
 	// If the current chain head is behind the received milestone, add it to the future milestone
 	// list. Also, the hash mismatch (end block hash) error will lead to rewind so also
 	// add that milestone to the future milestone list.
-	if errors.Is(err, errMissingBlocks) || errors.Is(err, errHashMismatch) {
+	if errors.Is(err, errChainOutOfSync) || errors.Is(err, errHashMismatch) {
 		ethHandler.downloader.ProcessFutureMilestone(num, hash)
 	}
 

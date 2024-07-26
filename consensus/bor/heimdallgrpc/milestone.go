@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/consensus/bor/heimdall"
 	"github.com/ethereum/go-ethereum/consensus/bor/heimdall/milestone"
 	"github.com/ethereum/go-ethereum/log"
 
@@ -48,14 +49,14 @@ func (h *HeimdallGRPCClient) FetchMilestone(ctx context.Context) (*milestone.Mil
 }
 
 func (h *HeimdallGRPCClient) FetchLastNoAckMilestone(ctx context.Context) (string, error) {
-	log.Info("Fetching latest no ack milestone Id")
+	log.Debug("Fetching latest no ack milestone Id")
 
 	res, err := h.client.FetchLastNoAckMilestone(ctx, nil)
 	if err != nil {
 		return "", err
 	}
 
-	log.Info("Fetched last no-ack milestone")
+	log.Debug("Fetched last no-ack milestone", "res", res.Result.Result)
 
 	return res.Result.Result, nil
 }
@@ -65,7 +66,7 @@ func (h *HeimdallGRPCClient) FetchNoAckMilestone(ctx context.Context, milestoneI
 		MilestoneID: milestoneID,
 	}
 
-	log.Info("Fetching no ack milestone", "milestoneaID", milestoneID)
+	log.Debug("Fetching no ack milestone", "milestoneID", milestoneID)
 
 	res, err := h.client.FetchNoAckMilestone(ctx, req)
 	if err != nil {
@@ -73,10 +74,10 @@ func (h *HeimdallGRPCClient) FetchNoAckMilestone(ctx context.Context, milestoneI
 	}
 
 	if !res.Result.Result {
-		return fmt.Errorf("Not in rejected list: milestoneID %q", milestoneID)
+		return fmt.Errorf("%w: milestoneID %q", heimdall.ErrNotInRejectedList, milestoneID)
 	}
 
-	log.Info("Fetched no ack milestone", "milestoneaID", milestoneID)
+	log.Debug("Fetched no ack milestone", "milestoneID", milestoneID)
 
 	return nil
 }
@@ -86,7 +87,7 @@ func (h *HeimdallGRPCClient) FetchMilestoneID(ctx context.Context, milestoneID s
 		MilestoneID: milestoneID,
 	}
 
-	log.Info("Fetching milestone id", "milestoneID", milestoneID)
+	log.Debug("Fetching milestone id", "milestoneID", milestoneID)
 
 	res, err := h.client.FetchMilestoneID(ctx, req)
 	if err != nil {
@@ -94,10 +95,10 @@ func (h *HeimdallGRPCClient) FetchMilestoneID(ctx context.Context, milestoneID s
 	}
 
 	if !res.Result.Result {
-		return fmt.Errorf("This milestoneID %q does not exist", milestoneID)
+		return fmt.Errorf("%w: milestoneID %q", heimdall.ErrNotInMilestoneList, milestoneID)
 	}
 
-	log.Info("Fetched milestone id", "milestoneID", milestoneID)
+	log.Debug("Fetched milestone id", "milestoneID", milestoneID)
 
 	return nil
 }

@@ -53,16 +53,16 @@ func (b *EthAPIBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, e
 		return false, errBorEngineNotAvailable
 	}
 
-	//Confirmation of 16 blocks on the endblock
+	// Confirmation of 16 blocks on the endblock
 	tipConfirmationBlockNr := endBlockNr + uint64(16)
 
-	//Check if tipConfirmation block exit
+	// Check if tipConfirmation block exit
 	_, err := b.BlockByNumber(ctx, rpc.BlockNumber(tipConfirmationBlockNr))
 	if err != nil {
 		return false, errTipConfirmationBlock
 	}
 
-	//Check if end block exist
+	// Check if end block exist
 	localEndBlock, err := b.BlockByNumber(ctx, rpc.BlockNumber(endBlockNr))
 	if err != nil {
 		return false, errEndBlock
@@ -75,12 +75,12 @@ func (b *EthAPIBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, e
 
 	if !isLocked {
 		downloader.UnlockMutex(false, "", endBlockNr, common.Hash{})
-		return false, errors.New("Whitelisted number or locked sprint number is more than the received end block number")
+		return false, errors.New("whitelisted number or locked sprint number is more than the received end block number")
 	}
 
 	if localEndBlockHash != hash {
 		downloader.UnlockMutex(false, "", endBlockNr, common.Hash{})
-		return false, fmt.Errorf("Hash mismatch: localChainHash %s, milestoneHash %s", localEndBlockHash, hash)
+		return false, fmt.Errorf("hash mismatch: localChainHash %s, milestoneHash %s", localEndBlockHash, hash)
 	}
 
 	downloader.UnlockMutex(true, milestoneId, endBlockNr, localEndBlock.Hash())

@@ -678,7 +678,7 @@ func DefaultConfig() *Config {
 			MaxHeaderHistory: 1024,
 			MaxBlockHistory:  1024,
 			MaxPrice:         gasprice.DefaultMaxPrice,
-			IgnorePrice:      gasprice.DefaultIgnorePrice,
+			IgnorePrice:      gasprice.DefaultIgnorePrice, // bor's default
 		},
 		JsonRPC: &JsonRPCConfig{
 			IPCDisable:          false,

@@ -51,7 +51,7 @@ gcmode = "archive"
 
 [txpool]
     nolocals = true
-    pricelimit = 30000000000
+    pricelimit = 25000000000
     accountslots = 16
     globalslots = 32768
     accountqueue = 16
@@ -64,7 +64,7 @@ gcmode = "archive"
 
 [miner]
     gaslimit = 30000000
-    gasprice = "30000000000"
+    gasprice = "25000000000"
     # mine = false
     # etherbase = ""
     # extradata = ""
@@ -121,7 +121,7 @@ gcmode = "archive"
     # maxheaderhistory = 1024
     # maxblockhistory = 1024
     # maxprice = "5000000000000"
-    ignoreprice = "30000000000"
+    ignoreprice = "25000000000"
 
 [telemetry]
     metrics = true
