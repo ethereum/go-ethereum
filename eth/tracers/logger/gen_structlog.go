@@ -8,7 +8,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
 	"github.com/scroll-tech/go-ethereum/common/math"
-	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
 )
@@ -30,7 +29,6 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 		Depth         int                         `json:"depth"`
 		RefundCounter uint64                      `json:"refund"`
 		Err           error                       `json:"-"`
-		ExtraData     *types.ExtraData            `json:"extraData"`
 		OpName        string                      `json:"opName"`
 		ErrorString   string                      `json:"error,omitempty"`
 	}
@@ -47,7 +45,6 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 	enc.Depth = s.Depth
 	enc.RefundCounter = s.RefundCounter
 	enc.Err = s.Err
-	enc.ExtraData = s.ExtraData
 	enc.OpName = s.OpName()
 	enc.ErrorString = s.ErrorString()
 	return json.Marshal(&enc)
@@ -68,7 +65,6 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		Depth         *int                        `json:"depth"`
 		RefundCounter *uint64                     `json:"refund"`
 		Err           error                       `json:"-"`
-		ExtraData     *types.ExtraData            `json:"extraData"`
 	}
 	var dec StructLog
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -109,9 +105,6 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Err != nil {
 		s.Err = dec.Err
-	}
-	if dec.ExtraData != nil {
-		s.ExtraData = dec.ExtraData
 	}
 	return nil
 }
