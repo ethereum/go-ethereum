@@ -217,6 +217,7 @@ func (t *callTracer) captureEnd(output []byte, gasUsed uint64, err error, revert
 }
 
 func (t *callTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	t.callstack = nil
 	t.gasLimit = tx.Gas()
 }
 

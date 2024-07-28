@@ -30,33 +30,18 @@ func init() {
 	tracers.DefaultDirectory.Register("muxTracer", newMuxTracer, false)
 }
 
-// muxTracer is a go implementation of the Tracer interface which
+// MuxTracer is a go implementation of the Tracer interface which
 // runs multiple tracers in one go.
-type muxTracer struct {
-	names   []string
-	tracers []*tracers.Tracer
+type MuxTracer struct {
+	tracers map[string]*tracers.Tracer
 }
 
 // newMuxTracer returns a new mux tracer.
 func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
-	var config map[string]json.RawMessage
-	if cfg != nil {
-		if err := json.Unmarshal(cfg, &config); err != nil {
-			return nil, err
-		}
+	t, err := NewMuxTracer(cfg)
+	if err != nil {
+		return nil, err
 	}
-	objects := make([]*tracers.Tracer, 0, len(config))
-	names := make([]string, 0, len(config))
-	for k, v := range config {
-		t, err := tracers.DefaultDirectory.New(k, ctx, v)
-		if err != nil {
-			return nil, err
-		}
-		objects = append(objects, t)
-		names = append(names, k)
-	}
-
-	t := &muxTracer{names: names, tracers: objects}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart:       t.OnTxStart,
@@ -77,7 +62,27 @@ func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, e
 	}, nil
 }
 
-func (t *muxTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+// NewMuxTracer returns a new mux tracer.
+func NewMuxTracer(cfg json.RawMessage) (*MuxTracer, error) {
+	var config map[string]json.RawMessage
+	if cfg != nil {
+		if err := json.Unmarshal(cfg, &config); err != nil {
+			return nil, err
+		}
+	}
+	objects := make(map[string]*tracers.Tracer, len(config))
+	for k, v := range config {
+		t, err := tracers.DefaultDirectory.New(k, nil, v)
+		if err != nil {
+			return nil, err
+		}
+		objects[k] = t
+	}
+
+	return &MuxTracer{tracers: objects}, nil
+}
+
+func (t *MuxTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.OnOpcode != nil {
 			t.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
@@ -85,7 +90,7 @@ func (t *muxTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing
 	}
 }
 
-func (t *muxTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+func (t *MuxTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
 	for _, t := range t.tracers {
 		if t.OnFault != nil {
 			t.OnFault(pc, op, gas, cost, scope, depth, err)
@@ -93,7 +98,7 @@ func (t *muxTracer) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.
 	}
 }
 
-func (t *muxTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
+func (t *MuxTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
 	for _, t := range t.tracers {
 		if t.OnGasChange != nil {
 			t.OnGasChange(old, new, reason)
@@ -101,7 +106,7 @@ func (t *muxTracer) OnGasChange(old, new uint64, reason tracing.GasChangeReason)
 	}
 }
 
-func (t *muxTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *MuxTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	for _, t := range t.tracers {
 		if t.OnEnter != nil {
 			t.OnEnter(depth, typ, from, to, input, gas, value)
@@ -109,7 +114,7 @@ func (t *muxTracer) OnEnter(depth int, typ byte, from common.Address, to common.
 	}
 }
 
-func (t *muxTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *MuxTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	for _, t := range t.tracers {
 		if t.OnExit != nil {
 			t.OnExit(depth, output, gasUsed, err, reverted)
@@ -117,7 +122,7 @@ func (t *muxTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, 
 	}
 }
 
-func (t *muxTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (t *MuxTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	for _, t := range t.tracers {
 		if t.OnTxStart != nil {
 			t.OnTxStart(env, tx, from)
@@ -125,7 +130,7 @@ func (t *muxTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, fro
 	}
 }
 
-func (t *muxTracer) OnTxEnd(receipt *types.Receipt, err error) {
+func (t *MuxTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	for _, t := range t.tracers {
 		if t.OnTxEnd != nil {
 			t.OnTxEnd(receipt, err)
@@ -133,7 +138,7 @@ func (t *muxTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 }
 
-func (t *muxTracer) OnBalanceChange(a common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
+func (t *MuxTracer) OnBalanceChange(a common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 	for _, t := range t.tracers {
 		if t.OnBalanceChange != nil {
 			t.OnBalanceChange(a, prev, new, reason)
@@ -141,7 +146,7 @@ func (t *muxTracer) OnBalanceChange(a common.Address, prev, new *big.Int, reason
 	}
 }
 
-func (t *muxTracer) OnNonceChange(a common.Address, prev, new uint64) {
+func (t *MuxTracer) OnNonceChange(a common.Address, prev, new uint64) {
 	for _, t := range t.tracers {
 		if t.OnNonceChange != nil {
 			t.OnNonceChange(a, prev, new)
@@ -149,7 +154,7 @@ func (t *muxTracer) OnNonceChange(a common.Address, prev, new uint64) {
 	}
 }
 
-func (t *muxTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+func (t *MuxTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
 	for _, t := range t.tracers {
 		if t.OnCodeChange != nil {
 			t.OnCodeChange(a, prevCodeHash, prev, codeHash, code)
@@ -157,7 +162,7 @@ func (t *muxTracer) OnCodeChange(a common.Address, prevCodeHash common.Hash, pre
 	}
 }
 
-func (t *muxTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) {
+func (t *MuxTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 	for _, t := range t.tracers {
 		if t.OnStorageChange != nil {
 			t.OnStorageChange(a, k, prev, new)
@@ -165,7 +170,7 @@ func (t *muxTracer) OnStorageChange(a common.Address, k, prev, new common.Hash) 
 	}
 }
 
-func (t *muxTracer) OnLog(log *types.Log) {
+func (t *MuxTracer) OnLog(log *types.Log) {
 	for _, t := range t.tracers {
 		if t.OnLog != nil {
 			t.OnLog(log)
@@ -174,14 +179,14 @@ func (t *muxTracer) OnLog(log *types.Log) {
 }
 
 // GetResult returns an empty json object.
-func (t *muxTracer) GetResult() (json.RawMessage, error) {
+func (t *MuxTracer) GetResult() (json.RawMessage, error) {
 	resObject := make(map[string]json.RawMessage)
-	for i, tt := range t.tracers {
+	for n, tt := range t.tracers {
 		r, err := tt.GetResult()
 		if err != nil {
 			return nil, err
 		}
-		resObject[t.names[i]] = r
+		resObject[n] = r
 	}
 	res, err := json.Marshal(resObject)
 	if err != nil {
@@ -191,8 +196,12 @@ func (t *muxTracer) GetResult() (json.RawMessage, error) {
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
-func (t *muxTracer) Stop(err error) {
+func (t *MuxTracer) Stop(err error) {
 	for _, t := range t.tracers {
 		t.Stop(err)
 	}
+}
+
+func (t *MuxTracer) Tracers() map[string]*tracers.Tracer {
+	return t.tracers
 }
