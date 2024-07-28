@@ -30,6 +30,7 @@ var (
 	GoldenTouchAccount   = common.HexToAddress("0x0000777735367b36bC9B61C50022d9D0700dB4Ec")
 	TaikoL2AddressSuffix = "10001"
 	AnchorSelector       = crypto.Keccak256([]byte("anchor(bytes32,bytes32,uint64,uint32)"))[:4]
+	AnchorV2Selector     = crypto.Keccak256([]byte("anchorV2(uint64,bytes32,uint32,uint32,uint8)"))[:4]
 	AnchorGasLimit       = uint64(250_000)
 )
 
@@ -274,7 +275,7 @@ func (t *Taiko) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, p
 	return common.Big0
 }
 
-// ValidateAnchorTx checks if the given transaction is a valid TaikoL2.anchor transaction.
+// ValidateAnchorTx checks if the given transaction is a valid TaikoL2.anchor or TaikoL2.anchorV2 transaction.
 func (t *Taiko) ValidateAnchorTx(tx *types.Transaction, header *types.Header) (bool, error) {
 	if tx.Type() != types.DynamicFeeTxType {
 		return false, nil
@@ -284,7 +285,7 @@ func (t *Taiko) ValidateAnchorTx(tx *types.Transaction, header *types.Header) (b
 		return false, nil
 	}
 
-	if !bytes.HasPrefix(tx.Data(), AnchorSelector) {
+	if !bytes.HasPrefix(tx.Data(), AnchorSelector) && !bytes.HasPrefix(tx.Data(), AnchorV2Selector) {
 		return false, nil
 	}
 
