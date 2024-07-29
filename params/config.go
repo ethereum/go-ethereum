@@ -378,7 +378,8 @@ type ChainConfig struct {
 	Clique *CliqueConfig `json:"clique,omitempty"`
 
 	// CHANGE(taiko): Taiko network flag.
-	Taiko bool `json:"taiko"`
+	Taiko       bool     `json:"taiko"`
+	OntakeBlock *big.Int `json:"ontakeBlock,omitempty"` // Ontake switch block (nil = no fork, 0 = already activated)
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -593,6 +594,11 @@ func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 // IsVerkle returns whether num is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
+}
+
+// CHANGE(taiko): IsOntake returns whether num is either equal to the Ontake fork block or greater.
+func (c *ChainConfig) IsOntake(num *big.Int) bool {
+	return isBlockForked(c.OntakeBlock, num)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported

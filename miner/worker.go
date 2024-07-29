@@ -987,8 +987,13 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
-		if w.chainConfig.Taiko && genParams.baseFeePerGas != nil {
-			header.BaseFee = genParams.baseFeePerGas
+		if w.chainConfig.Taiko {
+			if !w.chainConfig.IsOntake(header.Number) {
+				header.BaseFee = genParams.baseFeePerGas
+			} else {
+				_, blockGasTargetMillion := core.DecodeOntakeExtraData(header.Extra)
+				header.BaseFee = eip1559.CalcBaseFeeOntake(w.chainConfig, parent, uint64(blockGasTargetMillion)*1_000_000)
+			}
 		} else {
 			header.BaseFee = eip1559.CalcBaseFee(w.chainConfig, parent)
 			if !w.chainConfig.IsLondon(parent.Number) {

@@ -169,8 +169,12 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	if err != nil {
 		return nil, err
 	}
-	// CHANGE(taiko): set `BasefeeSharingPctg` for the current message.
-	msg.BasefeeSharingPctg = statedb.BasefeeSharingPctg
+	// CHANGE(taiko): decode the basefeeSharingPctg config from the extradata, and
+	// add it to the Message, if its an ontake block.
+	if config.IsOntake(header.Number) {
+		basefeeSharingPctg, _ := DecodeOntakeExtraData(header.Extra)
+		msg.BasefeeSharingPctg = basefeeSharingPctg
+	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)
 	txContext := NewEVMTxContext(msg)

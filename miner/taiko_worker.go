@@ -144,8 +144,7 @@ func (w *worker) sealBlockWith(
 	}
 
 	if len(txs) == 0 {
-		// A L2 block needs to have have at least one `V1TaikoL2.anchor` or
-		// `V1TaikoL2.invalidateBlock` transaction.
+		// A L2 block needs to have have at least one `TaikoL2.anchor` / `TaikoL2.anchorV2`.
 		return nil, fmt.Errorf("too less transactions in the block")
 	}
 
@@ -170,7 +169,6 @@ func (w *worker) sealBlockWith(
 	defer env.discard()
 
 	env.header.GasLimit = blkMeta.GasLimit
-	env.state.BasefeeSharingPctg = blkMeta.BasefeeSharingPctg
 
 	// Commit transactions.
 	gasLimit := env.header.GasLimit

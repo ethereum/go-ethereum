@@ -9,6 +9,12 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var (
+	InternalDevnetOntakeBlock = new(big.Int).SetUint64(374_400)
+	HeklaOntakeBlock          = new(big.Int).SetUint64(720_000)
+	MainnetOntakeBlock        = new(big.Int).SetUint64(374_400)
+)
+
 // TaikoGenesisBlock returns the Taiko network genesis block configs.
 func TaikoGenesisBlock(networkID uint64) *Genesis {
 	chainConfig := params.TaikoChainConfig
@@ -17,9 +23,11 @@ func TaikoGenesisBlock(networkID uint64) *Genesis {
 	switch networkID {
 	case params.TaikoMainnetNetworkID.Uint64():
 		chainConfig.ChainID = params.TaikoMainnetNetworkID
+		chainConfig.OntakeBlock = MainnetOntakeBlock
 		allocJSON = taikoGenesis.MainnetGenesisAllocJSON
 	case params.TaikoInternalL2ANetworkID.Uint64():
 		chainConfig.ChainID = params.TaikoInternalL2ANetworkID
+		chainConfig.OntakeBlock = InternalDevnetOntakeBlock
 		allocJSON = taikoGenesis.InternalL2AGenesisAllocJSON
 	case params.TaikoInternalL2BNetworkID.Uint64():
 		chainConfig.ChainID = params.TaikoInternalL2BNetworkID
@@ -44,9 +52,11 @@ func TaikoGenesisBlock(networkID uint64) *Genesis {
 		allocJSON = taikoGenesis.KatlaGenesisAllocJSON
 	case params.HeklaNetworkID.Uint64():
 		chainConfig.ChainID = params.HeklaNetworkID
+		chainConfig.OntakeBlock = HeklaOntakeBlock
 		allocJSON = taikoGenesis.HeklaGenesisAllocJSON
 	default:
 		chainConfig.ChainID = params.TaikoInternalL2ANetworkID
+		chainConfig.OntakeBlock = InternalDevnetOntakeBlock
 		allocJSON = taikoGenesis.InternalL2AGenesisAllocJSON
 	}
 
