@@ -195,17 +195,14 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
 	}
-	var (
-		context vm.BlockContext
-		vmenv   *vm.EVM
-	)
 	if header.ParentBeaconRoot != nil {
-		context = core.NewEVMBlockContext(header, miner.chain, nil)
-		vmenv = vm.NewEVM(context, vm.TxContext{}, env.state, miner.chainConfig, vm.Config{})
+		context := core.NewEVMBlockContext(header, miner.chain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, miner.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
 	}
 	if miner.chainConfig.IsPrague(header.Number, header.Time) {
-		// Prague is enabled after Cancun so vmenv should be initialized.
+		context := core.NewEVMBlockContext(header, miner.chain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, miner.chainConfig, vm.Config{})
 		core.ProcessParentBlockHash(env.state, vmenv, header.ParentHash)
 	}
 	return env, nil
