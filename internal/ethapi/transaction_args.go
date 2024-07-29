@@ -115,6 +115,9 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	if err := args.setFeeDefaults(ctx, b); err != nil {
 		return err
 	}
+	if err := args.set7560Defaults(ctx, b); err != nil {
+		return err
+	}
 
 	if args.Value == nil {
 		args.Value = new(hexutil.Big)
@@ -192,6 +195,25 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 		args.ChainID = (*hexutil.Big)(want)
 	}
 	return nil
+}
+
+func (args *TransactionArgs) set7560Defaults(ctx context.Context, b Backend) error {
+	// Not 7560 tx
+	if args.Sender == nil {
+		return nil
+	}
+	if args.Paymaster == nil {
+		log.Error("set7560Defaults setting default paymaster fields")
+		args.Paymaster = &common.Address{}
+		args.PaymasterData = &hexutil.Bytes{}
+	}
+	if args.Deployer == nil {
+		log.Error("set7560Defaults setting default deployer fields")
+		args.Deployer = &common.Address{}
+		args.DeployerData = &hexutil.Bytes{}
+	}
+	return nil
+
 }
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
@@ -500,16 +522,16 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			Data:       args.data(),
 			AccessList: al,
 			// RIP-7560 parameters
-			Sender:        args.Sender,
-			Signature:     *args.Signature,
-			Paymaster:     args.Paymaster,
-			PaymasterData: *args.PaymasterData,
-			Deployer:      args.Deployer,
-			DeployerData:  *args.DeployerData,
-			BuilderFee:    (*big.Int)(args.BuilderFee),
-			ValidationGas: uint64(*args.ValidationGas),
-			PaymasterGas:  uint64(*args.PaymasterGas),
-			PostOpGas:     uint64(*args.PostOpGas),
+			Sender:                      args.Sender,
+			Signature:                   *args.Signature,
+			Paymaster:                   args.Paymaster,
+			PaymasterData:               *args.PaymasterData,
+			Deployer:                    args.Deployer,
+			DeployerData:                *args.DeployerData,
+			BuilderFee:                  (*big.Int)(args.BuilderFee),
+			ValidationGasLimit:          uint64(*args.ValidationGas),
+			PaymasterValidationGasLimit: uint64(*args.PaymasterGas),
+			PostOpGas:                   uint64(*args.PostOpGas),
 		}
 		data = &aatx
 		hash := types.NewTx(data).Hash()

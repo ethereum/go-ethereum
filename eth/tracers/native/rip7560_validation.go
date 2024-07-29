@@ -11,6 +11,7 @@ import (
 	"github.com/holiman/uint256"
 	"math/big"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -33,8 +34,10 @@ type contractSizeVal struct {
 }
 
 type access struct {
-	Reads  map[string]string `json:"reads"`
-	Writes map[string]uint64 `json:"writes"`
+	Reads           map[string]string `json:"reads"`
+	Writes          map[string]uint64 `json:"writes"`
+	TransientReads  map[string]uint64 `json:"transientReads"`
+	TransientWrites map[string]uint64 `json:"transientWrites"`
 }
 
 // note - this means an individual 'frame' in 7560 (validate, execute, postOp)
@@ -87,6 +90,7 @@ func newRip7560Tracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trace
 			OnTxStart: t.OnTxStart,
 			OnTxEnd:   t.OnTxEnd,
 			OnOpcode:  t.OnOpcode,
+			OnExit:    t.OnExit,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -142,6 +146,27 @@ func (b *rip7560ValidationTracer) OnEnter(depth int, typ byte, from common.Addre
 	if depth == 0 {
 		b.createNewTopLevelFrame(to)
 	}
+	b.Calls = append(b.Calls, &callsItem{
+		Type: vm.OpCode(typ).String(),
+		From: from,
+		To:   to,
+		//Method: input[0:10],
+		Value: (*hexutil.Big)(value),
+		Gas:   gas,
+		Data:  input,
+	})
+}
+
+func (b *rip7560ValidationTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	typ := "RETURN"
+	if err != nil {
+		typ = "REVERT"
+	}
+	b.Calls = append(b.Calls, &callsItem{
+		Type:    typ,
+		GasUsed: gasUsed,
+		Data:    output,
+	})
 }
 
 func (b *rip7560ValidationTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
@@ -251,14 +276,16 @@ func (b *rip7560ValidationTracer) OnOpcode(pc uint64, op byte, gas, cost uint64,
 	}
 	b.lastOp = opcode
 
-	if opcode == "SLOAD" || opcode == "SSTORE" {
+	if opcode == "SLOAD" || opcode == "SSTORE" || opcode == "TLOAD" || opcode == "TSTORE" {
 		slot := common.BytesToHash(StackBack(scope.StackData(), 0).Bytes())
 		slotHex := slot.Hex()
 		addr := scope.Address()
 		if _, ok := b.CurrentLevel.Access[addr]; !ok {
 			b.CurrentLevel.Access[addr] = &access{
-				Reads:  map[string]string{},
-				Writes: map[string]uint64{},
+				Reads:           map[string]string{},
+				Writes:          map[string]uint64{},
+				TransientReads:  map[string]uint64{},
+				TransientWrites: map[string]uint64{},
 			}
 		}
 		access := *b.CurrentLevel.Access[addr]
@@ -271,34 +298,44 @@ func (b *rip7560ValidationTracer) OnOpcode(pc uint64, op byte, gas, cost uint64,
 			if !rOk && !wOk {
 				access.Reads[slotHex] = b.env.StateDB.GetState(addr, slot).Hex()
 			}
-		} else {
+		} else if opcode == "SSTORE" {
 			b.incrementCount(access.Writes, slotHex)
+		} else if opcode == "TLOAD" {
+			b.incrementCount(access.TransientReads, slotHex)
+		} else if opcode == "TSTORE" {
+			b.incrementCount(access.TransientWrites, slotHex)
 		}
 	}
 
 	if opcode == "KECCAK256" {
 		// TODO: uncomment and fix with StackBack
 		// collect keccak on 64-byte blocks
-		//	ofs := scope.Stack.Back(0).ToBig().Int64()
-		//	len := scope.Stack.Back(1).ToBig().Int64()
+		ofs := StackBack(scope.StackData(), 0)
+		len := StackBack(scope.StackData(), 1)
+		memory := scope.MemoryData()
 		//	// currently, solidity uses only 2-word (6-byte) for a key. this might change..still, no need to
 		//	// return too much
-		//	if len > 20 && len < 512 {
-		//		b.Keccak = append(b.Keccak, scope.Memory.GetCopy(ofs, len))
-		//	}
-		//} else if strings.HasPrefix(opcode, "LOG") {
-		//	count, _ := strconv.Atoi(opcode[3:])
-		//	ofs := scope.Stack.Back(0).ToBig().Int64()
-		//	len := scope.Stack.Back(1).ToBig().Int64()
-		//	topics := []hexutil.Bytes{}
-		//	for i := 0; i < count; i++ {
-		//		topics = append(topics, scope.Stack.Back(2+i).Bytes())
-		//	}
-		//
-		//	b.Logs = append(b.Logs, &logsItem{
-		//		Data:  scope.Memory.GetCopy(ofs, len),
-		//		Topic: topics,
-		//	})
+		if len.Uint64() > 20 && len.Uint64() < 512 {
+			keccak := make([]byte, len.Uint64())
+			copy(keccak, memory[ofs.Uint64():ofs.Uint64()+len.Uint64()])
+			b.Keccak = append(b.Keccak, keccak)
+		}
+	} else if strings.HasPrefix(opcode, "LOG") {
+		count, _ := strconv.Atoi(opcode[3:])
+		ofs := StackBack(scope.StackData(), 0)
+		len := StackBack(scope.StackData(), 1)
+		memory := scope.MemoryData()
+		topics := []hexutil.Bytes{}
+		for i := 0; i < count; i++ {
+			topics = append(topics, StackBack(scope.StackData(), 2+i).Bytes())
+			//topics = append(topics, scope.Stack.Back(2+i).Bytes())
+		}
+		log := make([]byte, len.Uint64())
+		copy(log, memory[ofs.Uint64():ofs.Uint64()+len.Uint64()])
+		b.Logs = append(b.Logs, &logsItem{
+			Data:  log,
+			Topic: topics,
+		})
 	}
 }
 

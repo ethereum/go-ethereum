@@ -30,23 +30,23 @@ func TestUnpackValidationData(t *testing.T) {
 func TestValidationFailure_OOG(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "out of gas")
 }
 
 func TestValidationFailure_no_balance(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 1), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "insufficient funds for gas * price + value: address 0x1111111111222222222233333333334444444444 have 1 want 1000000000")
 }
 
 func TestValidationFailure_sigerror(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnWithData(core.PackValidationData(core.MAGIC_VALUE_SIGFAIL, 0, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "account signature error")
 }
 
@@ -54,8 +54,8 @@ func TestValidationFailure_validAfter(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		returnWithData(core.PackValidationData(core.MAGIC_VALUE_SENDER, 300, 200)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "RIP-7560 transaction validity not reached yet")
 }
 
@@ -63,45 +63,45 @@ func TestValidationFailure_validUntil(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		returnWithData(core.PackValidationData(core.MAGIC_VALUE_SENDER, 1, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "RIP-7560 transaction validity expired")
 }
 
 func TestValidation_ok(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "ok")
 }
 
 func TestValidation_ok_paid(t *testing.T) {
 
 	aatx := types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}
 	tb := newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), DEFAULT_BALANCE)
 	handleTransaction(tb, aatx, "ok")
 
-	maxCost := new(big.Int).SetUint64(aatx.ValidationGas + aatx.PaymasterGas + aatx.Gas)
+	maxCost := new(big.Int).SetUint64(aatx.ValidationGasLimit + aatx.PaymasterValidationGasLimit + aatx.Gas)
 	maxCost.Mul(maxCost, aatx.GasFeeCap)
 }
 
 func TestValidationFailure_account_nonce(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		Nonce:         1234,
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		Nonce:              1234,
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "nonce too high: address 0x1111111111222222222233333333334444444444, tx: 1234 state: 0")
 }
 
 func TestValidationFailure_account_revert(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		createCode(vm.PUSH0, vm.DUP1, vm.REVERT), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "execution reverted")
 }
 
@@ -110,24 +110,24 @@ func TestValidationFailure_account_revert_with_reason(t *testing.T) {
 	reason := hexutils.HexToBytes("0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000568656c6c6f000000000000000000000000000000000000000000000000000000")
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		revertWithData(reason), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "execution reverted")
 }
 
 func TestValidationFailure_account_wrong_return_length(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		returnWithData([]byte{1, 2, 3}), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "invalid account return data length")
 }
 
 func TestValidationFailure_account_no_return_value(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		returnWithData([]byte{}), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "invalid account return data length")
 }
 
@@ -136,8 +136,8 @@ func TestValidationFailure_account_wrong_return_value(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
 		returnWithData(make([]byte, 32)),
 		DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
+		ValidationGasLimit: uint64(1000000000),
+		GasFeeCap:          big.NewInt(1000000000),
 	}, "account did not return correct MAGIC_VALUE")
 }
 

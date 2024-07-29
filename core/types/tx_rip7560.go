@@ -35,16 +35,16 @@ type Rip7560AccountAbstractionTx struct {
 	AccessList AccessList
 
 	// extra fields
-	Sender        *common.Address
-	Signature     []byte
-	Paymaster     *common.Address `rlp:"nil"`
-	PaymasterData []byte
-	Deployer      *common.Address `rlp:"nil"`
-	DeployerData  []byte
-	BuilderFee    *big.Int
-	ValidationGas uint64
-	PaymasterGas  uint64
-	PostOpGas     uint64
+	Sender                      *common.Address
+	Signature                   []byte
+	Paymaster                   *common.Address `rlp:"nil"`
+	PaymasterData               []byte
+	Deployer                    *common.Address `rlp:"nil"`
+	DeployerData                []byte
+	BuilderFee                  *big.Int
+	ValidationGasLimit          uint64
+	PaymasterValidationGasLimit uint64
+	PostOpGas                   uint64
 
 	// removed fields
 	To    *common.Address `rlp:"nil"`
@@ -66,16 +66,16 @@ func (tx *Rip7560AccountAbstractionTx) copy() TxData {
 		GasTipCap:  new(big.Int),
 		GasFeeCap:  new(big.Int),
 
-		Sender:        copyAddressPtr(tx.Sender),
-		Signature:     common.CopyBytes(tx.Signature),
-		Paymaster:     copyAddressPtr(tx.Paymaster),
-		PaymasterData: common.CopyBytes(tx.PaymasterData),
-		Deployer:      copyAddressPtr(tx.Deployer),
-		DeployerData:  common.CopyBytes(tx.DeployerData),
-		BuilderFee:    new(big.Int),
-		ValidationGas: tx.ValidationGas,
-		PaymasterGas:  tx.PaymasterGas,
-		PostOpGas:     tx.PostOpGas,
+		Sender:                      copyAddressPtr(tx.Sender),
+		Signature:                   common.CopyBytes(tx.Signature),
+		Paymaster:                   copyAddressPtr(tx.Paymaster),
+		PaymasterData:               common.CopyBytes(tx.PaymasterData),
+		Deployer:                    copyAddressPtr(tx.Deployer),
+		DeployerData:                common.CopyBytes(tx.DeployerData),
+		BuilderFee:                  new(big.Int),
+		ValidationGasLimit:          tx.ValidationGasLimit,
+		PaymasterValidationGasLimit: tx.PaymasterValidationGasLimit,
+		PostOpGas:                   tx.PostOpGas,
 	}
 	copy(cpy.AccessList, tx.AccessList)
 	if tx.Value != nil {
@@ -151,21 +151,21 @@ func (tx *Rip7560AccountAbstractionTx) decode(input []byte) error {
 
 // Rip7560Transaction an equivalent of a solidity struct only used to encode the 'transaction' parameter
 type Rip7560Transaction struct {
-	Sender               common.Address
-	Nonce                *big.Int
-	ValidationGasLimit   *big.Int
-	PaymasterGasLimit    *big.Int
-	PostOpGasLimit       *big.Int
-	CallGasLimit         *big.Int
-	MaxFeePerGas         *big.Int
-	MaxPriorityFeePerGas *big.Int
-	BuilderFee           *big.Int
-	Paymaster            *common.Address
-	PaymasterData        []byte
-	Deployer             *common.Address
-	DeployerData         []byte
-	CallData             []byte
-	Signature            []byte
+	Sender                      common.Address
+	Nonce                       *big.Int
+	ValidationGasLimit          *big.Int
+	PaymasterValidationGasLimit *big.Int
+	PostOpGasLimit              *big.Int
+	CallGasLimit                *big.Int
+	MaxFeePerGas                *big.Int
+	MaxPriorityFeePerGas        *big.Int
+	BuilderFee                  *big.Int
+	Paymaster                   common.Address
+	PaymasterData               []byte
+	Deployer                    common.Address
+	DeployerData                []byte
+	CallData                    []byte
+	Signature                   []byte
 }
 
 func (tx *Rip7560AccountAbstractionTx) AbiEncode() ([]byte, error) {
@@ -173,12 +173,15 @@ func (tx *Rip7560AccountAbstractionTx) AbiEncode() ([]byte, error) {
 		{Name: "sender", Type: "address"},
 		{Name: "nonce", Type: "uint256"},
 		{Name: "validationGasLimit", Type: "uint256"},
-		{Name: "paymasterGasLimit", Type: "uint256"},
+		{Name: "paymasterValidationGasLimit", Type: "uint256"},
+		{Name: "postOpGasLimit", Type: "uint256"},
 		{Name: "callGasLimit", Type: "uint256"},
 		{Name: "maxFeePerGas", Type: "uint256"},
 		{Name: "maxPriorityFeePerGas", Type: "uint256"},
 		{Name: "builderFee", Type: "uint256"},
+		{Name: "paymaster", Type: "address"},
 		{Name: "paymasterData", Type: "bytes"},
+		{Name: "deployer", Type: "address"},
 		{Name: "deployerData", Type: "bytes"},
 		{Name: "callData", Type: "bytes"},
 		{Name: "signature", Type: "bytes"},
@@ -187,19 +190,32 @@ func (tx *Rip7560AccountAbstractionTx) AbiEncode() ([]byte, error) {
 	args := abi.Arguments{
 		{Type: structThing, Name: "param_one"},
 	}
+
+	paymaster := tx.Paymaster
+	if paymaster == nil {
+		paymaster = &common.Address{}
+	}
+	deployer := tx.Deployer
+	if deployer == nil {
+		deployer = &common.Address{}
+	}
+
 	record := &Rip7560Transaction{
-		Sender:               *tx.Sender,
-		Nonce:                big.NewInt(int64(tx.Nonce)),
-		ValidationGasLimit:   big.NewInt(int64(tx.ValidationGas)),
-		PaymasterGasLimit:    big.NewInt(int64(tx.PaymasterGas)),
-		CallGasLimit:         big.NewInt(int64(tx.Gas)),
-		MaxFeePerGas:         tx.GasFeeCap,
-		MaxPriorityFeePerGas: tx.GasTipCap,
-		BuilderFee:           tx.BuilderFee,
-		PaymasterData:        tx.PaymasterData,
-		DeployerData:         tx.DeployerData,
-		CallData:             tx.Data,
-		Signature:            tx.Signature,
+		Sender:                      *tx.Sender,
+		Nonce:                       big.NewInt(int64(tx.Nonce)),
+		ValidationGasLimit:          big.NewInt(int64(tx.ValidationGasLimit)),
+		PaymasterValidationGasLimit: big.NewInt(int64(tx.PaymasterValidationGasLimit)),
+		PostOpGasLimit:              big.NewInt(int64(tx.PostOpGas)),
+		CallGasLimit:                big.NewInt(int64(tx.Gas)),
+		MaxFeePerGas:                tx.GasFeeCap,
+		MaxPriorityFeePerGas:        tx.GasTipCap,
+		BuilderFee:                  tx.BuilderFee,
+		Paymaster:                   *paymaster,
+		PaymasterData:               tx.PaymasterData,
+		Deployer:                    *deployer,
+		DeployerData:                tx.DeployerData,
+		CallData:                    tx.Data,
+		Signature:                   tx.Signature,
 	}
 	packed, err := args.Pack(&record)
 	return packed, err

@@ -40,7 +40,7 @@ func (s rip7560Signer) Hash(tx *Transaction) common.Hash {
 			aatx.PaymasterData,
 			aatx.DeployerData,
 			aatx.BuilderFee,
-			aatx.ValidationGas,
-			aatx.PaymasterGas,
+			aatx.ValidationGasLimit,
+			aatx.PaymasterValidationGasLimit,
 		})
 }

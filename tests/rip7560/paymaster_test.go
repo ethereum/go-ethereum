@@ -15,9 +15,9 @@ func TestPaymasterValidationFailure_nobalance(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), createCode(vm.PUSH0, vm.DUP1, vm.REVERT), 1), types.Rip7560AccountAbstractionTx{
-		ValidationGas: 1000000000,
-		GasFeeCap:     big.NewInt(1000000000),
-		Paymaster:     &DEFAULT_PAYMASTER,
+		ValidationGasLimit: 1000000000,
+		GasFeeCap:          big.NewInt(1000000000),
+		Paymaster:          &DEFAULT_PAYMASTER,
 	}, "insufficient funds for gas * price + value: address 0xaaAaaAAAAAbBbbbbBbBBCCCCcCCCcCdddDDDdddd have 1 want 1000000000000000000")
 }
 
@@ -25,19 +25,19 @@ func TestPaymasterValidationFailure_oog(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), createCode(vm.PUSH0, vm.DUP1, vm.REVERT), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: 1000000000,
-		GasFeeCap:     big.NewInt(1000000000),
-		Paymaster:     &DEFAULT_PAYMASTER,
+		ValidationGasLimit: 1000000000,
+		GasFeeCap:          big.NewInt(1000000000),
+		Paymaster:          &DEFAULT_PAYMASTER,
 	}, "out of gas")
 }
 func TestPaymasterValidationFailure_revert(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), createCode(vm.PUSH0, vm.DUP1, vm.REVERT), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: uint64(1000000000),
-		GasFeeCap:     big.NewInt(1000000000),
-		Paymaster:     &DEFAULT_PAYMASTER,
-		PaymasterGas:  1000000000,
+		ValidationGasLimit:          uint64(1000000000),
+		GasFeeCap:                   big.NewInt(1000000000),
+		Paymaster:                   &DEFAULT_PAYMASTER,
+		PaymasterValidationGasLimit: 1000000000,
 	}, "execution reverted")
 }
 
@@ -45,20 +45,20 @@ func TestPaymasterValidationFailure_unparseable_return_value(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), createAccountCode(), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: 1000000000,
-		PaymasterGas:  1000000000,
-		GasFeeCap:     big.NewInt(1000000000),
-		Paymaster:     &DEFAULT_PAYMASTER,
+		ValidationGasLimit:          1000000000,
+		PaymasterValidationGasLimit: 1000000000,
+		GasFeeCap:                   big.NewInt(1000000000),
+		Paymaster:                   &DEFAULT_PAYMASTER,
 	}, "paymaster return data: too short")
 }
 
 func TestPaymasterValidationFailure_wrong_magic(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(1, 2, 3, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: 1000000000,
-		PaymasterGas:  1000000000,
-		GasFeeCap:     big.NewInt(1000000000),
-		Paymaster:     &DEFAULT_PAYMASTER,
+		ValidationGasLimit:          1000000000,
+		PaymasterValidationGasLimit: 1000000000,
+		GasFeeCap:                   big.NewInt(1000000000),
+		Paymaster:                   &DEFAULT_PAYMASTER,
 	}, "paymaster did not return correct MAGIC_VALUE")
 }
 
@@ -77,39 +77,39 @@ func TestPaymasterValidationFailure_contextTooLarge(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), pmCode, DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: 1000000000,
-		PaymasterGas:  1000000000,
-		GasFeeCap:     big.NewInt(1000000000),
-		Paymaster:     &DEFAULT_PAYMASTER,
+		ValidationGasLimit:          1000000000,
+		PaymasterValidationGasLimit: 1000000000,
+		GasFeeCap:                   big.NewInt(1000000000),
+		Paymaster:                   &DEFAULT_PAYMASTER,
 	}, "paymaster return data: context too large")
 }
 
 func TestPaymasterValidationFailure_validAfter(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.MAGIC_VALUE_PAYMASTER, 300, 200, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: 1000000000,
-		PaymasterGas:  1000000000,
-		GasFeeCap:     big.NewInt(1000000000),
-		Paymaster:     &DEFAULT_PAYMASTER,
+		ValidationGasLimit:          1000000000,
+		PaymasterValidationGasLimit: 1000000000,
+		GasFeeCap:                   big.NewInt(1000000000),
+		Paymaster:                   &DEFAULT_PAYMASTER,
 	}, "RIP-7560 transaction validity not reached yet")
 }
 
 func TestPaymasterValidationFailure_validUntil(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.MAGIC_VALUE_PAYMASTER, 1, 0, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: 1000000000,
-		PaymasterGas:  1000000000,
-		GasFeeCap:     big.NewInt(1000000000),
-		Paymaster:     &DEFAULT_PAYMASTER,
+		ValidationGasLimit:          1000000000,
+		PaymasterValidationGasLimit: 1000000000,
+		GasFeeCap:                   big.NewInt(1000000000),
+		Paymaster:                   &DEFAULT_PAYMASTER,
 	}, "RIP-7560 transaction validity expired")
 }
 
 func TestPaymasterValidation_ok(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.MAGIC_VALUE_PAYMASTER, 0, 0, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
-		ValidationGas: 1000000000,
-		PaymasterGas:  1000000000,
-		GasFeeCap:     big.NewInt(1000000000),
-		Paymaster:     &DEFAULT_PAYMASTER,
+		ValidationGasLimit:          1000000000,
+		PaymasterValidationGasLimit: 1000000000,
+		GasFeeCap:                   big.NewInt(1000000000),
+		Paymaster:                   &DEFAULT_PAYMASTER,
 	}, "ok")
 }

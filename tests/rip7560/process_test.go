@@ -42,10 +42,10 @@ func TestProcess1(t *testing.T) {
 		withCode(DEFAULT_SENDER, createAccountCode(), 1000000000000000000).
 		build(), []*types.Rip7560AccountAbstractionTx{
 		{
-			Sender:        &Sender,
-			ValidationGas: uint64(1000000000),
-			GasFeeCap:     big.NewInt(1000000000),
-			Data:          []byte{1, 2, 3},
+			Sender:             &Sender,
+			ValidationGasLimit: uint64(1000000000),
+			GasFeeCap:          big.NewInt(1000000000),
+			Data:               []byte{1, 2, 3},
 		},
 	})
 	assert.NoError(t, err)
