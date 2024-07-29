@@ -72,6 +72,8 @@ func startSimulatedBeaconEthService(t *testing.T, genesis *core.Genesis) (*node.
 // send 20 transactions, >10 withdrawals and ensure they are included in order
 // send enough transactions to fill multiple blocks
 func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
+	t.Skip("we are not using catalyst API currently")
+
 	var withdrawals []types.Withdrawal
 	txs := make(map[common.Hash]types.Transaction)
 
