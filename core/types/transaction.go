@@ -56,6 +56,7 @@ type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
+	// BOR specific - DO NOT REMOVE
 	// knownAccounts (EIP-4337)
 	optionsAA4337 *OptionsAA4337
 
