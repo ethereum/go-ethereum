@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/holiman/billy"
+	"github.com/holiman/uint256"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus/misc/eip1559"
 	"github.com/scroll-tech/go-ethereum/consensus/misc/eip4844"
@@ -42,8 +44,6 @@ import (
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
 	"github.com/scroll-tech/go-ethereum/rollup/fees"
-	"github.com/holiman/billy"
-	"github.com/holiman/uint256"
 )
 
 const (
@@ -1381,6 +1381,16 @@ func (p *BlobPool) drop() {
 // Pending retrieves all currently processable transactions, grouped by origin
 // account and sorted by nonce.
 func (p *BlobPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction {
+	return p.pendingWithMax(enforceTips, math.MaxInt)
+}
+
+// PendingWithMax works similar to Pending but allows setting an upper limit on how many
+// accounts to return
+func (p *BlobPool) PendingWithMax(enforceTips bool, maxAccountsNum int) map[common.Address][]*txpool.LazyTransaction {
+	return p.pendingWithMax(enforceTips, maxAccountsNum)
+}
+
+func (p *BlobPool) pendingWithMax(enforceTips bool, maxAccountsNum int) map[common.Address][]*txpool.LazyTransaction {
 	// Track the amount of time waiting to retrieve the list of pending blob txs
 	// from the pool and the amount of time actually spent on assembling the data.
 	// The latter will be pretty much moot, but we've kept it to have symmetric
@@ -1410,6 +1420,9 @@ func (p *BlobPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTr
 		}
 		if len(lazies) > 0 {
 			pending[addr] = lazies
+		}
+		if len(pending) >= maxAccountsNum {
+			break
 		}
 	}
 	return pending

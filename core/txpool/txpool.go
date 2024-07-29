@@ -318,6 +318,16 @@ func (p *TxPool) Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 	return txs
 }
 
+func (p *TxPool) PendingWithMax(enforceTips bool, maxAccountsNum int) map[common.Address][]*LazyTransaction {
+	txs := make(map[common.Address][]*LazyTransaction)
+	for _, subpool := range p.subpools {
+		for addr, set := range subpool.PendingWithMax(enforceTips, maxAccountsNum) {
+			txs[addr] = set
+		}
+	}
+	return txs
+}
+
 // SubscribeTransactions registers a subscription for new transaction events,
 // supporting feeding only newly seen or also resurrected transactions.
 func (p *TxPool) SubscribeTransactions(ch chan<- core.NewTxsEvent, reorgs bool) event.Subscription {

@@ -59,6 +59,7 @@ type Config struct {
 	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
 
 	StoreSkippedTxTraces bool // Whether store the wrapped traces when storing a skipped tx
+	MaxAccountsNum       int  // Maximum number of accounts that miner will fetch the pending transactions of when building a new block
 }
 
 // DefaultConfig contains default settings for miner.

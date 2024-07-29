@@ -19,6 +19,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"math"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -161,6 +162,12 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
+
+	// Sanitize account fetch limit.
+	if worker.config.MaxAccountsNum == 0 {
+		log.Warn("Sanitizing miner account fetch limit", "provided", worker.config.MaxAccountsNum, "updated", math.MaxInt)
+		worker.config.MaxAccountsNum = math.MaxInt
+	}
 
 	worker.wg.Add(1)
 	go worker.mainLoop()
@@ -382,7 +389,7 @@ func (w *worker) startNewPipeline(timestamp int64) {
 
 	tidyPendingStart := time.Now()
 	// Fill the block with all available pending transactions.
-	pending := w.eth.TxPool().Pending(false)
+	pending := w.eth.TxPool().PendingWithMax(false, w.config.MaxAccountsNum)
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address][]*txpool.LazyTransaction), pending
 	for _, account := range w.eth.TxPool().Locals() {

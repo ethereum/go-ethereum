@@ -110,6 +110,8 @@ type SubPool interface {
 	// account and sorted by nonce.
 	Pending(enforceTips bool) map[common.Address][]*LazyTransaction
 
+	PendingWithMax(enforceTips bool, maxAccountsNum int) map[common.Address][]*LazyTransaction
+
 	// SubscribeTransactions subscribes to new transaction events. The subscriber
 	// can decide whether to receive notifications only for newly seen transactions
 	// or also for reorged out ones.

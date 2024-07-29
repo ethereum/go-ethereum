@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -67,8 +68,9 @@ var (
 	newTxs     []*types.Transaction
 
 	testConfig = &Config{
-		Recommit: time.Second,
-		GasCeil:  params.GenesisGasLimit,
+		Recommit:       time.Second,
+		GasCeil:        params.GenesisGasLimit,
+		MaxAccountsNum: math.MaxInt,
 	}
 )
 

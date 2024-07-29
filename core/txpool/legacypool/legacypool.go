@@ -523,6 +523,16 @@ func (pool *LegacyPool) ContentFrom(addr common.Address) ([]*types.Transaction, 
 // transactions and only return those whose **effective** tip is large enough in
 // the next pending execution environment.
 func (pool *LegacyPool) Pending(enforceTips bool) map[common.Address][]*txpool.LazyTransaction {
+	return pool.pendingWithMax(enforceTips, math.MaxInt)
+}
+
+// PendingWithMax works similar to Pending but allows setting an upper limit on how many
+// accounts to return
+func (pool *LegacyPool) PendingWithMax(enforceTips bool, maxAccountsNum int) map[common.Address][]*txpool.LazyTransaction {
+	return pool.pendingWithMax(enforceTips, maxAccountsNum)
+}
+
+func (pool *LegacyPool) pendingWithMax(enforceTips bool, maxAccountsNum int) map[common.Address][]*txpool.LazyTransaction {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -554,6 +564,9 @@ func (pool *LegacyPool) Pending(enforceTips bool) map[common.Address][]*txpool.L
 				}
 			}
 			pending[addr] = lazies
+			if len(pending) >= maxAccountsNum {
+				break
+			}
 		}
 	}
 	return pending

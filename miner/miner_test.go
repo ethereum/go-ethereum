@@ -19,6 +19,7 @@ package miner
 
 import (
 	"errors"
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -301,7 +302,8 @@ func minerTestGenesisBlock(period uint64, gasLimit uint64, faucet common.Address
 func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	// Create Ethash config
 	config := Config{
-		Etherbase: common.HexToAddress("123456789"),
+		Etherbase:      common.HexToAddress("123456789"),
+		MaxAccountsNum: math.MaxInt,
 	}
 	// Create chainConfig
 	chainDB := rawdb.NewMemoryDatabase()

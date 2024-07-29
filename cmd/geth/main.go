@@ -124,6 +124,7 @@ var (
 		utils.MinerRecommitIntervalFlag,
 		utils.MinerNewPayloadTimeout,
 		utils.MinerStoreSkippedTxTracesFlag,
+		utils.MinerMaxAccountsNumFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV4Flag,

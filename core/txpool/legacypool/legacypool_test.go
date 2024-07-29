@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core"
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
@@ -2627,4 +2629,28 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	for _, tx := range batches {
 		pool.addRemotesSync([]*types.Transaction{tx})
 	}
+}
+
+func TestPoolPending(t *testing.T) {
+	// Generate a batch of transactions to enqueue into the pool
+	pool, _ := setupPool()
+	defer pool.Close()
+	numTxns := 100
+	batches := make(types.Transactions, numTxns)
+	for i := 0; i < numTxns; i++ {
+		key, _ := crypto.GenerateKey()
+		account := crypto.PubkeyToAddress(key.PublicKey)
+		pool.currentState.AddBalance(account, big.NewInt(1000000))
+		tx := transaction(uint64(0), 100000, key)
+		batches[i] = tx
+	}
+	// Benchmark importing the transactions into the queue
+	for _, tx := range batches {
+		pool.addRemotesSync([]*types.Transaction{tx})
+	}
+
+	assert.Len(t, pool.Pending(false), numTxns)
+
+	maxAccounts := 10
+	assert.Len(t, pool.PendingWithMax(false, maxAccounts), maxAccounts)
 }
