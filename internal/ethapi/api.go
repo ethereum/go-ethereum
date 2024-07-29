@@ -1323,7 +1323,7 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	// this makes sure resources are cleaned up.
 	defer cancel()
 
-	block, err := b.BlockByHash(ctx, header.Hash())
+	block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
 		return nil, 0, false, err, nil
 	}
