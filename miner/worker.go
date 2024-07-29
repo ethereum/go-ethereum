@@ -933,7 +933,7 @@ type generateParams struct {
 	withdrawals types.Withdrawals // List of withdrawals to include in block.
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
-	// CHANGE(taiko): The base fee per gas for the next block
+	// CHANGE(taiko): The base fee per gas for the next block, used by the legacy Taiko blocks.
 	baseFeePerGas *big.Int
 }
 
