@@ -21,13 +21,20 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	cmath "github.com/scroll-tech/go-ethereum/common/math"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
+)
+
+var (
+	stateTransitionEvmCallExecutionTimer = metrics.NewRegisteredTimer("state/transition/call_execution", nil)
+	stateTransitionApplyMessageTimer     = metrics.NewRegisteredTimer("state/transition/apply_message", nil)
 )
 
 // ExecutionResult includes all output after executing given evm
@@ -196,6 +203,10 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool, l1DataFee *big.Int) (*ExecutionResult, error) {
+	defer func(t time.Time) {
+		stateTransitionApplyMessageTimer.Update(time.Since(t))
+	}(time.Now())
+
 	return NewStateTransition(evm, msg, gp, l1DataFee).TransitionDb()
 }
 
@@ -463,7 +474,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
+		evmCallStart := time.Now()
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, msg.Value)
+		stateTransitionEvmCallExecutionTimer.Update(time.Since(evmCallStart))
 	}
 
 	// no refunds for l1 messages

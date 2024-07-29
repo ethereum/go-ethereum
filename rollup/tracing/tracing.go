@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/hexutil"
@@ -21,10 +22,20 @@ import (
 	"github.com/scroll-tech/go-ethereum/eth/tracers/native"
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/fees"
 	"github.com/scroll-tech/go-ethereum/rollup/rcfg"
 	"github.com/scroll-tech/go-ethereum/rollup/withdrawtrie"
+)
+
+var (
+	getTxResultTimer             = metrics.NewRegisteredTimer("rollup/tracing/get_tx_result", nil)
+	getTxResultApplyMessageTimer = metrics.NewRegisteredTimer("rollup/tracing/get_tx_result/apply_message", nil)
+	getTxResultZkTrieBuildTimer  = metrics.NewRegisteredTimer("rollup/tracing/get_tx_result/zk_trie_build", nil)
+	getTxResultTracerResultTimer = metrics.NewRegisteredTimer("rollup/tracing/get_tx_result/tracer_result", nil)
+	feedTxToTracerTimer          = metrics.NewRegisteredTimer("rollup/tracing/feed_tx_to_tracer", nil)
+	fillBlockTraceTimer          = metrics.NewRegisteredTimer("rollup/tracing/fill_block_trace", nil)
 )
 
 // TracerWrapper implements ScrollTracerWrapper interface
@@ -191,7 +202,11 @@ func (env *TraceEnv) GetBlockTrace(block *types.Block) (*types.BlockTrace, error
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
 		go func() {
-			defer pend.Done()
+			defer func(t time.Time) {
+				pend.Done()
+				getTxResultTimer.Update(time.Since(t))
+			}(time.Now())
+
 			// Fetch and execute the next transaction trace tasks
 			for task := range jobs {
 				if err := env.getTxResult(task.statedb, task.index, block); err != nil {
@@ -213,27 +228,29 @@ func (env *TraceEnv) GetBlockTrace(block *types.Block) (*types.BlockTrace, error
 
 	// Feed the transactions into the tracers and return
 	var failed error
-	for i, tx := range txs {
-		// Send the trace task over for execution
-		jobs <- &txTraceTask{statedb: env.state.Copy(), index: i}
+	common.WithTimer(feedTxToTracerTimer, func() {
+		for i, tx := range txs {
+			// Send the trace task over for execution
+			jobs <- &txTraceTask{statedb: env.state.Copy(), index: i}
 
-		// Generate the next state snapshot fast without tracing
-		msg, _ := core.TransactionToMessage(tx, env.signer, block.BaseFee())
-		env.state.SetTxContext(tx.Hash(), i)
-		vmenv := vm.NewEVM(env.blockCtx, core.NewEVMTxContext(msg), env.state, env.chainConfig, vm.Config{})
-		l1DataFee, err := fees.CalculateL1DataFee(tx, env.state, env.chainConfig, block.Number())
-		if err != nil {
-			failed = err
-			break
+			// Generate the next state snapshot fast without tracing
+			msg, _ := core.TransactionToMessage(tx, env.signer, block.BaseFee())
+			env.state.SetTxContext(tx.Hash(), i)
+			vmenv := vm.NewEVM(env.blockCtx, core.NewEVMTxContext(msg), env.state, env.chainConfig, vm.Config{})
+			l1DataFee, err := fees.CalculateL1DataFee(tx, env.state, env.chainConfig, block.Number())
+			if err != nil {
+				failed = err
+				break
+			}
+			if _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit), l1DataFee); err != nil {
+				failed = err
+				break
+			}
+			if env.finaliseStateAfterApply {
+				env.state.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
+			}
 		}
-		if _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit), l1DataFee); err != nil {
-			failed = err
-			break
-		}
-		if env.finaliseStateAfterApply {
-			env.state.Finalise(vmenv.ChainConfig().IsEIP158(block.Number()))
-		}
-	}
+	})
 	close(jobs)
 	pend.Wait()
 
@@ -301,6 +318,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 		}
 	}
 
+	applyMessageStart := time.Now()
 	structLogger := logger.NewStructLogger(env.logConfig)
 	tracerContext := tracers.Context{
 		BlockHash: block.Hash(),
@@ -331,8 +349,10 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 	}
 	result, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit), l1DataFee)
 	if err != nil {
+		getTxResultApplyMessageTimer.UpdateSince(applyMessageStart)
 		return err
 	}
+	getTxResultApplyMessageTimer.UpdateSince(applyMessageStart)
 	// If the result contains a revert reason, return it.
 	returnVal := result.Return()
 	if len(result.Revert()) > 0 {
@@ -407,6 +427,7 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 		env.pMu.Unlock()
 	}
 
+	zkTrieBuildStart := time.Now()
 	proofStorages := structLogger.UpdatedStorages()
 	for addr, keys := range proofStorages {
 		if _, existed := txStorageTrace.StorageProofs[addr.String()]; !existed {
@@ -476,11 +497,14 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 			env.sMu.Unlock()
 		}
 	}
+	getTxResultZkTrieBuildTimer.UpdateSince(zkTrieBuildStart)
 
+	tracerResultTimer := time.Now()
 	callTrace, err := callTracer.GetResult()
 	if err != nil {
 		return fmt.Errorf("failed to get callTracer result: %w", err)
 	}
+	getTxResultTracerResultTimer.UpdateSince(tracerResultTimer)
 
 	env.ExecutionResults[index] = &types.ExecutionResult{
 		From:           sender,
@@ -501,6 +525,10 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 
 // fillBlockTrace content after all the txs are finished running.
 func (env *TraceEnv) fillBlockTrace(block *types.Block) (*types.BlockTrace, error) {
+	defer func(t time.Time) {
+		fillBlockTraceTimer.Update(time.Since(t))
+	}(time.Now())
+
 	statedb := env.state
 
 	txs := make([]*types.TransactionData, block.Transactions().Len())
