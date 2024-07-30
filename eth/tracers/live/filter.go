@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 func init() {
@@ -43,34 +44,34 @@ type filterTracerConfig struct {
 	Config json.RawMessage `json:"config"`
 }
 
-func newFilter(cfg json.RawMessage) (*tracing.Hooks, error) {
+func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 	var config filterTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
-			return nil, fmt.Errorf("failed to parse config: %v", err)
+			return nil, nil, fmt.Errorf("failed to parse config: %v", err)
 		}
 	}
 	if config.Path == "" {
-		return nil, errors.New("filter tracer output path is required")
+		return nil, nil, errors.New("filter tracer output path is required")
 	}
 
 	db, err := rawdb.NewFreezer(config.Path, "trace", false, tableSize, map[string]bool{tracersTable: false})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create trace freezer db: %v", err)
+		return nil, nil, fmt.Errorf("failed to create trace freezer db: %v", err)
 	}
 
 	t, err := native.NewMuxTracer(nil, config.Config)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	tail, err := db.Tail()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read the tail block number from the freezer db: %v", err)
+		return nil, nil, fmt.Errorf("failed to read the tail block number from the freezer db: %v", err)
 	}
 	frozen, err := db.Ancients()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read the frozen block numbers from the freezer db: %v", err)
+		return nil, nil, fmt.Errorf("failed to read the frozen block numbers from the freezer db: %v", err)
 	}
 
 	f := &filter{db: db, tracer: t, latest: tail + frozen, offsetFile: path.Join(config.Path, "OFFSET")}
@@ -78,11 +79,11 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, error) {
 	if _, err := os.Stat(f.offsetFile); err == nil || os.IsExist(err) {
 		data, err := os.ReadFile(f.offsetFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read the offset from the freezer db: %v", err)
+			return nil, nil, fmt.Errorf("failed to read the offset from the freezer db: %v", err)
 		}
 		offset, err = strconv.Atoi(string(data))
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert offset: %v", err)
+			return nil, nil, fmt.Errorf("failed to convert offset: %v", err)
 		}
 	}
 
@@ -105,7 +106,7 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, error) {
 		OnCodeChange:    t.OnCodeChange,
 		OnStorageChange: t.OnStorageChange,
 		OnLog:           t.OnLog,
-	}, nil
+	}, nil, nil
 }
 
 func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
