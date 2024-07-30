@@ -77,12 +77,18 @@ func (tr *tableRevalidation) nodeEndpointChanged(tab *Table, n *tableNode) {
 // It returns the next time it should be invoked, which is used in the Table main loop
 // to schedule a timer. However, run can be called at any time.
 func (tr *tableRevalidation) run(tab *Table, now mclock.AbsTime) (nextTime mclock.AbsTime) {
-	if n := tr.fast.getAndSchedule(now, &tab.rand, tr.activeReq); n != nil {
-		tr.startRequest(tab, n)
+	reval := func(list *revalidationList) {
+		if list.nextTime <= now {
+			if n := list.get(now, &tab.rand, tr.activeReq); n != nil {
+				tr.startRequest(tab, n)
+			}
+			// Update nextTime regardless if any requests were started because
+			// current value has passed.
+			list.schedule(now, &tab.rand)
+		}
 	}
-	if n := tr.slow.getAndSchedule(now, &tab.rand, tr.activeReq); n != nil {
-		tr.startRequest(tab, n)
-	}
+	reval(&tr.fast)
+	reval(&tr.slow)
 
 	return min(tr.fast.nextTime, tr.slow.nextTime)
 }
@@ -196,13 +202,8 @@ type revalidationList struct {
 	name     string
 }
 
-// getAndSchedule returns a random node from the queue. Nodes in the 'exclude' map are not returned.
-// It also schedules the next invocation if nextTime has already passed.
-func (list *revalidationList) getAndSchedule(now mclock.AbsTime, rand randomSource, exclude map[enode.ID]struct{}) *tableNode {
-	if now < list.nextTime {
-		return nil
-	}
-	list.schedule(now, rand)
+// get returns a random node from the queue. Nodes in the 'exclude' map are not returned.
+func (list *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude map[enode.ID]struct{}) *tableNode {
 	if len(list.nodes) == 0 {
 		return nil
 	}
