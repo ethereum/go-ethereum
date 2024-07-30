@@ -189,8 +189,8 @@ func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash == EmptyReceiptsHash
 }
 
-// ValidateBlockNumberOptions4337 validates the block range passed as in the options parameter in the conditional transaction (EIP-4337)
-func (h *Header) ValidateBlockNumberOptions4337(minBlockNumber *big.Int, maxBlockNumber *big.Int) error {
+// ValidateBlockNumberOptionsPIP15 validates the block range passed as in the options parameter in the conditional transaction (PIP-15)
+func (h *Header) ValidateBlockNumberOptionsPIP15(minBlockNumber *big.Int, maxBlockNumber *big.Int) error {
 	currentBlockNumber := h.Number
 
 	if minBlockNumber != nil {
@@ -208,8 +208,8 @@ func (h *Header) ValidateBlockNumberOptions4337(minBlockNumber *big.Int, maxBloc
 	return nil
 }
 
-// ValidateBlockNumberOptions4337 validates the timestamp range passed as in the options parameter in the conditional transaction (EIP-4337)
-func (h *Header) ValidateTimestampOptions4337(minTimestamp *uint64, maxTimestamp *uint64) error {
+// ValidateBlockNumberOptionsPIP15 validates the timestamp range passed as in the options parameter in the conditional transaction (PIP-15)
+func (h *Header) ValidateTimestampOptionsPIP15(minTimestamp *uint64, maxTimestamp *uint64) error {
 	currentBlockTime := h.Time
 
 	if minTimestamp != nil {
