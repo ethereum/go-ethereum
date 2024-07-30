@@ -88,7 +88,7 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 	}
 
 	f.offset = uint64(offset)
-	return &tracing.Hooks{
+	hooks := &tracing.Hooks{
 		OnBlockStart:   f.OnBlockStart,
 		OnBlockEnd:     f.OnBlockEnd,
 		OnGenesisBlock: f.OnGenesisBlock,
@@ -106,7 +106,14 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 		OnCodeChange:    t.OnCodeChange,
 		OnStorageChange: t.OnStorageChange,
 		OnLog:           t.OnLog,
-	}, nil, nil
+	}
+	apis := []rpc.API{
+		{
+			Namespace: "trace",
+			Service:   &filterAPI{filter: f},
+		},
+	}
+	return hooks, apis, nil
 }
 
 func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
