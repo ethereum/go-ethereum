@@ -144,3 +144,30 @@ func ReadFinalizedL2BlockNumber(db ethdb.Reader) *uint64 {
 	finalizedL2BlockNumber := number.Uint64()
 	return &finalizedL2BlockNumber
 }
+
+// WriteLastFinalizedBatchIndex stores the last finalized batch index in the database.
+func WriteLastFinalizedBatchIndex(db ethdb.KeyValueWriter, lastFinalizedBatchIndex uint64) {
+	value := big.NewInt(0).SetUint64(lastFinalizedBatchIndex).Bytes()
+	if err := db.Put(lastFinalizedBatchIndexKey, value); err != nil {
+		log.Crit("failed to store last finalized batch index for rollup event", "batch index", lastFinalizedBatchIndex, "value", value, "err", err)
+	}
+}
+
+// ReadLastFinalizedBatchIndex fetches the last finalized batch index from the database.
+func ReadLastFinalizedBatchIndex(db ethdb.Reader) *uint64 {
+	data, err := db.Get(lastFinalizedBatchIndexKey)
+	if err != nil && isNotFoundErr(err) {
+		return nil
+	}
+	if err != nil {
+		log.Crit("failed to read last finalized batch index from database", "key", lastFinalizedBatchIndexKey, "err", err)
+	}
+
+	number := new(big.Int).SetBytes(data)
+	if !number.IsUint64() {
+		log.Crit("unexpected finalized batch index in database", "data", data, "number", number)
+	}
+
+	lastFinalizedBatchIndex := number.Uint64()
+	return &lastFinalizedBatchIndex
+}

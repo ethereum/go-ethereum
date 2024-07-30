@@ -152,6 +152,7 @@ var (
 	batchChunkRangesPrefix            = []byte("R-bcr")
 	batchMetaPrefix                   = []byte("R-bm")
 	finalizedL2BlockNumberKey         = []byte("R-finalized")
+	lastFinalizedBatchIndexKey        = []byte("R-finalizedBatchIndex")
 
 	// Row consumption
 	rowConsumptionPrefix = []byte("rc") // rowConsumptionPrefix + hash -> row consumption by block
