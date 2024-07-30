@@ -252,7 +252,7 @@ func (p *PortalProtocolAPI) RoutingTableInfo() *RoutingTableInfo {
 
 func (p *PortalProtocolAPI) AddEnr(enr string) (bool, error) {
 	p.portalProtocol.Log.Debug("serving AddEnr", "enr", enr)
-	n, err := enode.Parse(enode.ValidSchemes, enr)
+	n, err := enode.ParseForAddEnr(enode.ValidSchemes, enr)
 	if err != nil {
 		return false, err
 	}
@@ -263,7 +263,7 @@ func (p *PortalProtocolAPI) AddEnr(enr string) (bool, error) {
 func (p *PortalProtocolAPI) AddEnrs(enrs []string) bool {
 	// Note: unspecified RPC, but useful for our local testnet test
 	for _, enr := range enrs {
-		n, err := enode.Parse(enode.ValidSchemes, enr)
+		n, err := enode.ParseForAddEnr(enode.ValidSchemes, enr)
 		if err != nil {
 			continue
 		}

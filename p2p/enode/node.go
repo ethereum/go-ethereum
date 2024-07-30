@@ -149,6 +149,34 @@ func Parse(validSchemes enr.IdentityScheme, input string) (*Node, error) {
 	return New(validSchemes, &r)
 }
 
+func ParseForAddEnr(validSchemes enr.IdentityScheme, input string) (*Node, error) {
+	if strings.HasPrefix(input, "enode://") {
+		return ParseV4(input)
+	}
+	if !strings.HasPrefix(input, "enr:") {
+		return nil, errMissingPrefix
+	}
+	bin, err := base64.RawURLEncoding.DecodeString(input[4:])
+	if err != nil {
+		return nil, err
+	}
+	var r enr.Record
+	if err := rlp.DecodeBytes(bin, &r); err != nil {
+		return nil, err
+	}
+	var n *Node
+	if n, err = New(validSchemes, &r); err != nil {
+		return nil, err
+	}
+	var ip4 netip.Addr
+	var ip6 netip.Addr
+	n.Load((*enr.IPv4Addr)(&ip4))
+	n.Load((*enr.IPv6Addr)(&ip6))
+	n.setIP4(ip4)
+	n.setIP6(ip6)
+	return n, nil
+}
+
 // ID returns the node identifier.
 func (n *Node) ID() ID {
 	return n.id
