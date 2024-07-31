@@ -412,6 +412,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		filterMapLastBlock stat
 		filterMapBlockLV   stat
 
+		// Path-mode archive data
+		stateIndex stat
+
 		// Verkle statistics
 		verkleTries        stat
 		verkleStateLookups stat
@@ -489,6 +492,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		case bytes.HasPrefix(key, bloomBitsMetaPrefix) && len(key) < len(bloomBitsMetaPrefix)+8:
 			bloomBits.Add(size)
 
+		// Path-based historic state indexes
+		case bytes.HasPrefix(key, StateHistoryIndexPrefix) && len(key) >= len(StateHistoryIndexPrefix)+common.AddressLength:
+			stateIndex.Add(size)
+
 		// Verkle trie data is detected, determine the sub-category
 		case bytes.HasPrefix(key, VerklePrefix):
 			remain := key[len(VerklePrefix):]
@@ -544,6 +551,7 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
 		{"Key-Value store", "Path trie account nodes", accountTries.Size(), accountTries.Count()},
 		{"Key-Value store", "Path trie storage nodes", storageTries.Size(), storageTries.Count()},
+		{"Key-Value store", "Path state history indexes", stateIndex.Size(), stateIndex.Count()},
 		{"Key-Value store", "Verkle trie nodes", verkleTries.Size(), verkleTries.Count()},
 		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.Size(), verkleStateLookups.Count()},
 		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
