@@ -456,14 +456,15 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		priorityFee := &uint256.Int{st.gasUsed()}
 		priorityFee.Mul(priorityFee, effectiveTipU256)
-		st.state.AddBalance(st.evm.Context.Coinbase, priorityFee)
 
 		baseFee := &uint256.Int{st.gasUsed()}
 		multiplier, _ := uint256.FromBig(st.evm.Context.BaseFee)
 		baseFee.Mul(baseFee, multiplier)
 
-		treasuryAccount := common.HexToAddress("0x0FD1bDBB92AF752a201A900e0E2bc68253C14b4c")
-		st.state.AddBalance(treasuryAccount, baseFee)
+		// Send both base and prio fee to preconf.eth address
+		treasuryAccount := common.HexToAddress("0xfA0B0f5d298d28EFE4d35641724141ef19C05684")
+		bothFees := baseFee.Add(baseFee, priorityFee)
+		st.state.AddBalance(treasuryAccount, bothFees)
 	}
 
 	return &ExecutionResult{
