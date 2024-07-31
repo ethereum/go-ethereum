@@ -31,7 +31,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 )
@@ -383,12 +382,8 @@ func BenchmarkHandshakeRead(b *testing.B) {
 }
 
 func BenchmarkThroughput(b *testing.B) {
-	pipe1, pipe2, err := pipes.TCPPipe()
-	if err != nil {
-		b.Fatal(err)
-	}
-
 	var (
+		pipe1, pipe2  = net.Pipe()
 		conn1, conn2  = NewConn(pipe1, nil), NewConn(pipe2, &keyA.PublicKey)
 		handshakeDone = make(chan error, 1)
 		msgdata       = make([]byte, 1024)
