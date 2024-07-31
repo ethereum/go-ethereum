@@ -1003,13 +1003,3 @@ func makeDup(size int64) executionFunc {
 		return nil, nil
 	}
 }
-
-// make swap instruction function
-func makeSwap(size int64) executionFunc {
-	// switch n + 1 otherwise n would be swapped with n
-	size++
-	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-		scope.Stack.swap(int(size))
-		return nil, nil
-	}
-}
