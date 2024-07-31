@@ -1426,7 +1426,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment) err
 	}
 
 	tidyPendingStart := time.Now()
-	pending := w.eth.TxPool().PendingWithMax(true, w.config.MaxAccountsNum)
+	pending := w.eth.TxPool().PendingWithMax(false, w.config.MaxAccountsNum)
 
 	// Split the pending transactions into locals and remotes.
 	localTxs, remoteTxs := make(map[common.Address][]*txpool.LazyTransaction), pending
