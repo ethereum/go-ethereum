@@ -10,11 +10,24 @@ type filterAPI struct {
 	filter *filter
 }
 
-func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber) ([]*traceResult, error) {
+type traceConfig struct {
+	Tracer string `json:"tracer"`
+}
+
+var defaultTraceConfig = &traceConfig{
+	Tracer: "callTracer",
+}
+
+func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *traceConfig) ([]*traceResult, error) {
 	blknum := uint64(blockNr.Int64())
 	if blockNr == rpc.LatestBlockNumber {
 		blknum = api.filter.latest
 	}
 
-	return api.filter.readBlockTraces(blknum)
+	tracer := defaultTraceConfig.Tracer
+	if cfg != nil {
+		tracer = cfg.Tracer
+	}
+
+	return api.filter.readBlockTraces(tracer, blknum)
 }

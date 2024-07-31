@@ -25,8 +25,7 @@ func init() {
 }
 
 const (
-	tracersTable = "tracers"
-	tableSize    = 2 * 1024 * 1024 * 1024
+	tableSize = 2 * 1024 * 1024 * 1024
 )
 
 type traceResult struct {
@@ -37,8 +36,9 @@ type traceResult struct {
 
 type filter struct {
 	db         *rawdb.Freezer
-	traces     []*traceResult
-	tracer     *tracers.Tracer
+	tables     map[string]bool
+	traces     map[string][]*traceResult
+	tracer     *native.MuxTracer
 	latest     uint64
 	offset     uint64
 	once       sync.Once
@@ -48,6 +48,10 @@ type filter struct {
 type filterTracerConfig struct {
 	Path   string          `json:"path"` // Path to the directory where the tracer logs will be stored
 	Config json.RawMessage `json:"config"`
+}
+
+func toTraceTable(name string) string {
+	return name + "_tracers"
 }
 
 func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
@@ -61,14 +65,22 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 		return nil, nil, errors.New("filter tracer output path is required")
 	}
 
-	db, err := rawdb.NewFreezer(config.Path, "trace", false, tableSize, map[string]bool{tracersTable: false})
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create trace freezer db: %v", err)
-	}
-
-	t, err := native.NewMuxTracer(nil, config.Config)
+	t, err := native.NewMuxTracer(config.Config)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	muxTracers := t.Tracers()
+	tables := make(map[string]bool, len(muxTracers))
+	traces := make(map[string][]*traceResult, len(muxTracers))
+	for name := range muxTracers {
+		tables[toTraceTable(name)] = false
+		traces[name] = nil
+	}
+
+	db, err := rawdb.NewFreezer(config.Path, "trace", false, tableSize, tables)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create trace freezer db: %v", err)
 	}
 
 	tail, err := db.Tail()
@@ -80,7 +92,14 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 		return nil, nil, fmt.Errorf("failed to read the frozen block numbers from the freezer db: %v", err)
 	}
 
-	f := &filter{db: db, tracer: t, latest: tail + frozen, offsetFile: path.Join(config.Path, "OFFSET")}
+	f := &filter{
+		db:         db,
+		tables:     tables,
+		traces:     traces,
+		tracer:     t,
+		latest:     tail + frozen,
+		offsetFile: path.Join(config.Path, "OFFSET"),
+	}
 	offset := 0
 	if _, err := os.Stat(f.offsetFile); err == nil || os.IsExist(err) {
 		data, err := os.ReadFile(f.offsetFile)
@@ -92,14 +111,14 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 			return nil, nil, fmt.Errorf("failed to convert offset: %v", err)
 		}
 	}
+	log.Info("Open filter tracer", "path", config.Path, "offset", offset, "tables", tables)
 
 	f.offset = uint64(offset)
 	hooks := &tracing.Hooks{
-		OnBlockStart:   f.OnBlockStart,
-		OnBlockEnd:     f.OnBlockEnd,
-		OnGenesisBlock: f.OnGenesisBlock,
-		OnTxStart:      f.OnTxStart,
-		OnTxEnd:        f.OnTxEnd,
+		OnBlockStart: f.OnBlockStart,
+		OnBlockEnd:   f.OnBlockEnd,
+		OnTxStart:    f.OnTxStart,
+		OnTxEnd:      f.OnTxEnd,
 
 		// reuse the mux's hooks
 		OnEnter:         t.OnEnter,
@@ -124,7 +143,11 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 
 func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	// reset local cache
-	f.traces = make([]*traceResult, 0, ev.Block.Transactions().Len())
+	txs := ev.Block.Transactions().Len()
+	for name := range f.traces {
+		f.traces[name] = make([]*traceResult, 0, txs)
+	}
+
 	blknum := ev.Block.NumberU64()
 
 	// save the earliest arrived blknum as the offset
@@ -138,7 +161,7 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	// truncate the freezer db if the block number is less than the latest
 	if blknum >= f.latest {
 		if _, err := f.db.TruncateHead(blknum - f.offset); err != nil {
-			log.Error("failed to truncate filter tracer db", "error", err)
+			log.Error("Failed to truncate filter tracer db", "error", err)
 			// TODO: how to handle this error?
 			return
 		}
@@ -154,36 +177,48 @@ func (f *filter) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from c
 func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 	f.tracer.OnTxEnd(receipt, err)
 
-	trace := &traceResult{TxHash: receipt.TxHash}
-	result, err := f.tracer.GetResult()
-	if err != nil {
-		log.Error("failed to get tracer results", "number", f.latest, "error", err)
-		trace.Error = err.Error()
-	} else {
-		trace.Result = result
+	for name, tt := range f.tracer.Tracers() {
+		trace := &traceResult{TxHash: receipt.TxHash}
+		result, err := tt.GetResult()
+		if err != nil {
+			log.Error("Failed to get tracer results", "number", f.latest, "error", err)
+			trace.Error = err.Error()
+		} else {
+			trace.Result = result
+		}
+		f.traces[name] = append(f.traces[name], trace)
 	}
-	f.traces = append(f.traces, trace)
 }
 
 func (f *filter) OnBlockEnd(err error) {
-	data, _ := json.Marshal(f.traces)
-	f.appendData(data)
-}
-
-func (f *filter) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
-	f.appendData([]byte{})
-}
-
-func (f *filter) appendData(data []byte) {
-	_, err := f.db.ModifyAncients(func(w ethdb.AncientWriteOp) error {
-		return w.AppendRaw(tracersTable, f.latest-f.offset, data)
+	f.db.ModifyAncients(func(w ethdb.AncientWriteOp) error {
+		number := f.latest - f.offset
+		for name, traces := range f.traces {
+			data, err := json.Marshal(traces)
+			if err != nil {
+				log.Error("Failed to marshal traces", "error", err)
+			}
+			if f.db == nil {
+				log.Crit("Failed to write block traces", "error", "f.db is null")
+			}
+			if w == nil {
+				log.Crit("Failed to write block traces", "error", "2 is null")
+			}
+			table := toTraceTable(name)
+			if err := w.AppendRaw(table, number, data); err != nil {
+				log.Error("Failed to write block traces", "number", f.latest, "table", table, "error", err)
+			}
+		}
+		return nil
 	})
-	if err != nil {
-		log.Error("write to freezer db failed", "error", err)
-	}
 }
 
-func (f *filter) readBlockTraces(blknum uint64) ([]*traceResult, error) {
+func (f *filter) readBlockTraces(name string, blknum uint64) ([]*traceResult, error) {
+	table := toTraceTable(name)
+	if _, ok := f.tables[table]; !ok {
+		return nil, errors.New("tracer not found")
+	}
+
 	if blknum < f.offset || blknum > f.latest {
 		return nil, nil
 	}
@@ -191,7 +226,7 @@ func (f *filter) readBlockTraces(blknum uint64) ([]*traceResult, error) {
 	var data []byte
 	err := f.db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		var err error
-		data, err = reader.Ancient(tracersTable, blknum-f.offset)
+		data, err = reader.Ancient(table, blknum-f.offset)
 		return err
 	})
 	if err != nil {
