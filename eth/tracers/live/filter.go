@@ -29,9 +29,15 @@ const (
 	tableSize    = 2 * 1024 * 1024 * 1024
 )
 
+type traceResult struct {
+	TxHash common.Hash `json:"txHash,omitempty"` // transaction hash
+	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
+	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+}
+
 type filter struct {
 	db         *rawdb.Freezer
-	traces     []json.RawMessage
+	traces     []*traceResult
 	tracer     *tracers.Tracer
 	latest     uint64
 	offset     uint64
@@ -117,6 +123,8 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 }
 
 func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
+	// reset local cache
+	f.traces = make([]*traceResult, 0, ev.Block.Transactions().Len())
 	blknum := ev.Block.NumberU64()
 
 	// save the earliest arrived blknum as the offset
@@ -137,7 +145,6 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	}
 
 	f.latest = blknum
-	f.traces = make([]json.RawMessage, ev.Block.Transactions().Len())
 }
 
 func (f *filter) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
@@ -147,12 +154,15 @@ func (f *filter) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from c
 func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 	f.tracer.OnTxEnd(receipt, err)
 
+	trace := &traceResult{TxHash: receipt.TxHash}
 	result, err := f.tracer.GetResult()
 	if err != nil {
 		log.Error("failed to get tracer results", "number", f.latest, "error", err)
-		return
+		trace.Error = err.Error()
+	} else {
+		trace.Result = result
 	}
-	f.traces = append(f.traces, result)
+	f.traces = append(f.traces, trace)
 }
 
 func (f *filter) OnBlockEnd(err error) {
@@ -171,4 +181,23 @@ func (f *filter) appendData(data []byte) {
 	if err != nil {
 		log.Error("write to freezer db failed", "error", err)
 	}
+}
+
+func (f *filter) readBlockTraces(blknum uint64) ([]*traceResult, error) {
+	if blknum < f.offset || blknum > f.latest {
+		return nil, nil
+	}
+
+	var data []byte
+	err := f.db.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		var err error
+		data, err = reader.Ancient(tracersTable, blknum-f.offset)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	var traces []*traceResult
+	err = json.Unmarshal(data, &traces)
+	return traces, err
 }
