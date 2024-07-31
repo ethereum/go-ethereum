@@ -490,6 +490,32 @@ func readHistory(reader ethdb.AncientReader, id uint64) (*history, error) {
 	return &dec, nil
 }
 
+// readHistories reads and decodes a list of state histories with specific
+// history range.
+func readHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]*history, error) {
+	metaList, aIndexList, sIndexList, aDataList, sDataList, err := rawdb.ReadStateHistoryList(freezer, start, count)
+	if err != nil {
+		return nil, err
+	}
+	number := len(metaList)
+	if number != len(aIndexList) || number != len(sIndexList) || number != len(aDataList) || number != len(sDataList) {
+		return nil, errors.New("corrupted state history")
+	}
+	var result []*history
+	for i := 0; i < number; i++ {
+		var m meta
+		if err := m.decode(metaList[i]); err != nil {
+			return nil, err
+		}
+		dec := history{meta: &m}
+		if err := dec.decode(aDataList[i], sDataList[i], aIndexList[i], sIndexList[i]); err != nil {
+			return nil, err
+		}
+		result = append(result, &dec)
+	}
+	return result, nil
+}
+
 // writeHistory persists the state history with the provided state set.
 func writeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	// Short circuit if state set is not available.

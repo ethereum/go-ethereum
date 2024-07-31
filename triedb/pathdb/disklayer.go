@@ -240,6 +240,9 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 			overflow = true
 			oldest = bottom.stateID() - limit + 1 // track the id of history **after truncation**
 		}
+		if dl.db.indexer != nil {
+			dl.db.indexer.notify(bottom.stateID())
+		}
 	}
 	// Mark the diskLayer as stale before applying any mutations on top.
 	dl.markStale()

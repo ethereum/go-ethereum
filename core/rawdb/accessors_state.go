@@ -251,6 +251,33 @@ func ReadStateHistory(db ethdb.AncientReaderOp, id uint64) ([]byte, []byte, []by
 	return meta, accountIndex, storageIndex, accountData, storageData, nil
 }
 
+// ReadStateHistoryList retrieves a list of state histories from database with
+// specific range. Compute the position of state history in freezer by minus one
+// since the id of first state history starts from one(zero for initial state).
+func ReadStateHistoryList(db ethdb.AncientReaderOp, start uint64, count uint64) ([][]byte, [][]byte, [][]byte, [][]byte, [][]byte, error) {
+	metaList, err := db.AncientRange(stateHistoryMeta, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	aIndexList, err := db.AncientRange(stateHistoryAccountIndex, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	sIndexList, err := db.AncientRange(stateHistoryStorageIndex, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	aDataList, err := db.AncientRange(stateHistoryAccountData, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	sDataList, err := db.AncientRange(stateHistoryStorageData, start-1, count, 0)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	return metaList, aIndexList, sIndexList, aDataList, sDataList, nil
+}
+
 // WriteStateHistory writes the provided state history to database. Compute the
 // position of state history in freezer by minus one since the id of first state
 // history starts from one(zero for initial state).

@@ -161,6 +161,7 @@ type Database struct {
 	diskdb     ethdb.Database               // Persistent storage for matured trie nodes
 	tree       *layerTree                   // The group for all known layers
 	freezer    ethdb.ResettableAncientStore // Freezer for storing trie histories, nil possible in tests
+	indexer    *historyIndexer              // History indexer
 	lock       sync.RWMutex                 // Lock to prevent mutations from happening at the same time
 }
 
@@ -257,6 +258,8 @@ func (db *Database) repairHistory() error {
 	if pruned != 0 {
 		log.Warn("Truncated extra state histories", "number", pruned)
 	}
+	// TODO read-only mode?
+	db.indexer = newHistoryIndexer(db.diskdb, db.freezer, db.tree.bottom().stateID())
 	return nil
 }
 
