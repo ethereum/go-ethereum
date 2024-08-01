@@ -91,11 +91,33 @@ func TestTransactionSigHash(t *testing.T) {
 }
 
 func TestTransactionEncode(t *testing.T) {
+	should := common.FromHex("f86103018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8255441ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3")
+
+	// rlp.EncodeToBytes
 	txb, err := rlp.EncodeToBytes(rightvrsTx)
 	if err != nil {
 		t.Fatalf("encode error: %v", err)
 	}
-	should := common.FromHex("f86103018207d094b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a8255441ca098ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4aa08887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a3")
+	if !bytes.Equal(txb, should) {
+		t.Errorf("encoded RLP mismatch, got %x", txb)
+	}
+
+	// tx.EncodeRLP
+	raw := new(bytes.Buffer)
+	err = rightvrsTx.EncodeRLP(raw)
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
+	txb = raw.Bytes()
+	if !bytes.Equal(txb, should) {
+		t.Errorf("encoded RLP mismatch, got %x", txb)
+	}
+
+	// tx.MarshalBinary
+	txb, err = rightvrsTx.MarshalBinary()
+	if err != nil {
+		t.Fatalf("encode error: %v", err)
+	}
 	if !bytes.Equal(txb, should) {
 		t.Errorf("encoded RLP mismatch, got %x", txb)
 	}
@@ -190,11 +212,23 @@ func TestEIP2930Signer(t *testing.T) {
 func TestEIP2718TransactionEncode(t *testing.T) {
 	// RLP representation
 	{
+		// rlp.EncodeToBytes
 		have, err := rlp.EncodeToBytes(signedEip2718Tx)
 		if err != nil {
 			t.Fatalf("encode error: %v", err)
 		}
 		want := common.FromHex("b86601f8630103018261a894b94f5374fce5edbc8e2a8697c15331677e6ebf0b0a825544c001a0c9519f4f2b30335884581971573fadf60c6204f59a911df35ee8a540456b2660a032f1e8e2c5dd761f9e4f88f41c8310aeaba26a8bfcdacfedfa12ec3862d37521")
+		if !bytes.Equal(have, want) {
+			t.Errorf("encoded RLP mismatch, got %x", have)
+		}
+
+		// tx.EncodeRLP
+		raw := new(bytes.Buffer)
+		err = signedEip2718Tx.EncodeRLP(raw)
+		if err != nil {
+			t.Fatalf("encode error: %v", err)
+		}
+		have = raw.Bytes()
 		if !bytes.Equal(have, want) {
 			t.Errorf("encoded RLP mismatch, got %x", have)
 		}
