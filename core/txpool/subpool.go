@@ -142,4 +142,7 @@ type SubPool interface {
 
 	// RemoveTx removes a transaction from the pool, returning the number of transactions removed.
 	RemoveTx(hash common.Hash, outofbound bool, unreserve bool) int
+
+	PauseReorgs()
+	ResumeReorgs()
 }

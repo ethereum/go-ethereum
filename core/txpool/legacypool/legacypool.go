@@ -227,6 +227,7 @@ type LegacyPool struct {
 	queueTxEventCh  chan *types.Transaction
 	reorgDoneCh     chan chan struct{}
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
+	reorgPauseCh    chan bool      // requests to pause scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
@@ -258,6 +259,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		queueTxEventCh:  make(chan *types.Transaction),
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
+		reorgPauseCh:    make(chan bool),
 		initDoneCh:      make(chan struct{}),
 	}
 	pool.locals = newAccountSet(pool.signer)
@@ -1198,13 +1200,14 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 		curDone       chan struct{} // non-nil while runReorg is active
 		nextDone      = make(chan struct{})
 		launchNextRun bool
+		reorgsPaused  bool
 		reset         *txpoolResetRequest
 		dirtyAccounts *accountSet
 		queuedEvents  = make(map[common.Address]*sortedMap)
 	)
 	for {
 		// Launch next background reorg if needed
-		if curDone == nil && launchNextRun {
+		if curDone == nil && launchNextRun && !reorgsPaused {
 			// Run the background reorg and announcements
 			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
 
@@ -1256,6 +1259,7 @@ func (pool *LegacyPool) scheduleReorgLoop() {
 			}
 			close(nextDone)
 			return
+		case reorgsPaused = <-pool.reorgPauseCh:
 		}
 	}
 }
@@ -1702,6 +1706,24 @@ func (pool *LegacyPool) demoteUnexecutables() {
 				pool.reserve(addr, false)
 			}
 		}
+	}
+}
+
+// PauseReorgs stops any new reorg jobs to be started but doesn't interrupt any existing ones that are in flight
+// Keep in mind this function might block, although it is not expected to block for any significant amount of time
+func (pool *LegacyPool) PauseReorgs() {
+	select {
+	case pool.reorgPauseCh <- true:
+	case <-pool.reorgShutdownCh:
+	}
+}
+
+// ResumeReorgs allows new reorg jobs to be started.
+// Keep in mind this function might block, although it is not expected to block for any significant amount of time
+func (pool *LegacyPool) ResumeReorgs() {
+	select {
+	case pool.reorgPauseCh <- false:
+	case <-pool.reorgShutdownCh:
 	}
 }
 

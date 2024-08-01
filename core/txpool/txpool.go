@@ -434,3 +434,15 @@ func (p *TxPool) RemoveTx(hash common.Hash, outofbound bool, unreserve bool) int
 	}
 	return ret
 }
+
+func (pool *TxPool) PauseReorgs() {
+	for _, subpool := range pool.subpools {
+		subpool.PauseReorgs()
+	}
+}
+
+func (pool *TxPool) ResumeReorgs() {
+	for _, subpool := range pool.subpools {
+		subpool.ResumeReorgs()
+	}
+}

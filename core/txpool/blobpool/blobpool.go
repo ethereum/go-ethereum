@@ -1576,3 +1576,10 @@ func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
 func (p *BlobPool) RemoveTx(hash common.Hash, outofbound bool, unreserve bool) int {
 	return 0
 }
+
+func (p *BlobPool) PauseReorgs() {
+	log.Debug("skip BlobPool `PauseReorgs`")
+}
+func (p *BlobPool) ResumeReorgs() {
+	log.Debug("skip BlobPool `ResumeReorgs`")
+}
