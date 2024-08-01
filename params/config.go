@@ -399,7 +399,7 @@ var (
 		CurieBlock:                    big.NewInt(0),
 		DarwinTime:                    newUint64(0),
 		Scroll: ScrollConfig{
-			UseZktrie:                 false,
+			UseZktrie:                 true,
 			FeeVaultAddress:           &common.Address{123},
 			MaxTxPerBlock:             nil,
 			MaxTxPayloadBytesPerBlock: nil,

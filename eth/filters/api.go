@@ -448,12 +448,15 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 			return returnHashes(hashes), nil
 		case PendingTransactionsSubscription:
 			if f.fullTx {
-				state, err := api.sys.backend.StateAt(latest.Root)
-				if err != nil || state == nil {
-					log.Error("State not found", "number", latest.Number, "hash", latest.Hash().Hex(), "state", state, "err", err)
-					return nil, errors.New("state not found")
+				var l1BaseFee *big.Int
+				if latest != nil {
+					state, err := api.sys.backend.StateAt(latest.Root)
+					if err != nil || state == nil {
+						log.Error("State not found", "number", latest.Number, "hash", latest.Hash().Hex(), "state", state, "err", err)
+						return nil, errors.New("state not found")
+					}
+					l1BaseFee = fees.GetL1BaseFee(state)
 				}
-				l1BaseFee := fees.GetL1BaseFee(state)
 
 				txs := make([]*ethapi.RPCTransaction, 0, len(f.txs))
 				for _, tx := range f.txs {
