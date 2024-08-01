@@ -239,15 +239,16 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 		checkpoint = params.TrustedCheckpoints[genesisHash]
 	}
 	if eth.handler, err = newHandler(&handlerConfig{
-		Database:   chainDb,
-		Chain:      eth.blockchain,
-		TxPool:     eth.txPool,
-		Network:    config.NetworkId,
-		Sync:       config.SyncMode,
-		BloomCache: uint64(cacheLimit),
-		EventMux:   eth.eventMux,
-		Checkpoint: checkpoint,
-		Whitelist:  config.Whitelist,
+		Database:          chainDb,
+		Chain:             eth.blockchain,
+		TxPool:            eth.txPool,
+		Network:           config.NetworkId,
+		Sync:              config.SyncMode,
+		BloomCache:        uint64(cacheLimit),
+		EventMux:          eth.eventMux,
+		Checkpoint:        checkpoint,
+		Whitelist:         config.Whitelist,
+		ShadowForkPeerIDs: config.ShadowForkPeerIDs,
 	}); err != nil {
 		return nil, err
 	}

@@ -20,6 +20,9 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/consensus/ethash"
@@ -167,4 +170,83 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 func (b *testHandler) close() {
 	b.handler.Stop()
 	b.chain.Stop()
+}
+
+type testPeer struct {
+	id string
+}
+
+func (p testPeer) ID() string {
+	return p.id
+}
+
+func TestOnlyShadowForkPeers(t *testing.T) {
+
+	tests := map[string]struct {
+		shadowForkPeerIDs []string
+		peers             []testPeer
+		expectedPeerIDs   []string
+	}{
+		"nil peers": {
+			shadowForkPeerIDs: nil,
+			peers:             nil,
+			expectedPeerIDs:   []string{},
+		},
+		"empty peers": {
+			shadowForkPeerIDs: nil,
+			peers:             []testPeer{},
+			expectedPeerIDs:   []string{},
+		},
+		"no fork": {
+			shadowForkPeerIDs: nil,
+			peers: []testPeer{
+				{
+					id: "peer1",
+				},
+				{
+					id: "peer2",
+				},
+			},
+			expectedPeerIDs: []string{
+				"peer1",
+				"peer2",
+			},
+		},
+		"some shadow fork peers": {
+			shadowForkPeerIDs: []string{"peer2"},
+			peers: []testPeer{
+				{
+					id: "peer1",
+				},
+				{
+					id: "peer2",
+				},
+			},
+			expectedPeerIDs: []string{
+				"peer2",
+			},
+		},
+		"no shadow fork peers": {
+			shadowForkPeerIDs: []string{"peer2"},
+			peers: []testPeer{
+				{
+					id: "peer1",
+				},
+				{
+					id: "peer3",
+				},
+			},
+			expectedPeerIDs: []string{},
+		},
+	}
+
+	for desc, test := range tests {
+		t.Run(desc, func(t *testing.T) {
+			gotIds := []string{}
+			for _, peer := range onlyShadowForkPeers(test.shadowForkPeerIDs, test.peers) {
+				gotIds = append(gotIds, peer.ID())
+			}
+			require.Equal(t, gotIds, test.expectedPeerIDs)
+		})
+	}
 }

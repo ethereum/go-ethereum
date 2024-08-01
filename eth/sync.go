@@ -156,8 +156,18 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.handler.peers.len() < minPeers {
 		return nil
 	}
+
+	var syncWhiteList []string
+	chainConfig := cs.handler.chain.Config()
+	currentHeight := cs.handler.chain.CurrentHeader().Number.Uint64()
+	if chainConfig.Clique != nil {
+		shadowForkHeight := chainConfig.Clique.ShadowForkHeight
+		if shadowForkHeight != 0 && currentHeight >= shadowForkHeight {
+			syncWhiteList = cs.handler.shadowForkPeerIDs
+		}
+	}
 	// We have enough peers, check TD
-	peer := cs.handler.peers.peerWithHighestTD()
+	peer := cs.handler.peers.peerWithHighestTD(syncWhiteList)
 	if peer == nil {
 		return nil
 	}

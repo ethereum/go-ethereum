@@ -17,7 +17,9 @@
 package clique
 
 import (
+	"bytes"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/scroll-tech/go-ethereum/common"
@@ -123,5 +125,92 @@ func TestSealHash(t *testing.T) {
 	want := common.HexToHash("0xbd3d1fa43fbc4c5bfcc91b179ec92e2861df3654de60468beb908ff805359e8f")
 	if have != want {
 		t.Errorf("have %x, want %x", have, want)
+	}
+}
+
+func TestShadowFork(t *testing.T) {
+	engineConf := *params.AllCliqueProtocolChanges.Clique
+	engineConf.Epoch = 2
+	forkedEngineConf := engineConf
+	forkedEngineConf.ShadowForkHeight = 3
+	shadowForkKey, _ := crypto.HexToECDSA(strings.Repeat("11", 32))
+	shadowForkAddr := crypto.PubkeyToAddress(shadowForkKey.PublicKey)
+	forkedEngineConf.ShadowForkSigner = shadowForkAddr
+
+	// Initialize a Clique chain with a single signer
+	var (
+		db           = rawdb.NewMemoryDatabase()
+		key, _       = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr         = crypto.PubkeyToAddress(key.PublicKey)
+		engine       = New(&engineConf, db)
+		signer       = new(types.HomesteadSigner)
+		forkedEngine = New(&forkedEngineConf, db)
+	)
+	genspec := &core.Genesis{
+		ExtraData: make([]byte, extraVanity+common.AddressLength+extraSeal),
+		Alloc: map[common.Address]core.GenesisAccount{
+			addr: {Balance: big.NewInt(10000000000000000)},
+		},
+		BaseFee: big.NewInt(params.InitialBaseFee),
+	}
+	copy(genspec.ExtraData[extraVanity:], addr[:])
+	genesis := genspec.MustCommit(db)
+
+	// Generate a batch of blocks, each properly signed
+	chain, _ := core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, engine, vm.Config{}, nil, nil)
+	defer chain.Stop()
+
+	forkedChain, _ := core.NewBlockChain(db, nil, params.AllCliqueProtocolChanges, forkedEngine, vm.Config{}, nil, nil)
+	defer forkedChain.Stop()
+
+	blocks, _ := core.GenerateChain(params.AllCliqueProtocolChanges, genesis, forkedEngine, db, 16, func(i int, block *core.BlockGen) {
+		// The chain maker doesn't have access to a chain, so the difficulty will be
+		// lets unset (nil). Set it here to the correct value.
+		if block.Number().Uint64() > forkedEngineConf.ShadowForkHeight {
+			block.SetDifficulty(diffShadowFork)
+		} else {
+			block.SetDifficulty(diffInTurn)
+		}
+
+		tx, err := types.SignTx(types.NewTransaction(block.TxNonce(addr), common.Address{0x00}, new(big.Int), params.TxGas, block.BaseFee(), nil), signer, key)
+		if err != nil {
+			panic(err)
+		}
+		block.AddTxWithChain(chain, tx)
+	})
+	for i, block := range blocks {
+		header := block.Header()
+		if i > 0 {
+			header.ParentHash = blocks[i-1].Hash()
+		}
+
+		signingAddr, signingKey := addr, key
+		if header.Number.Uint64() > forkedEngineConf.ShadowForkHeight {
+			// start signing with shadow fork authority key
+			signingAddr, signingKey = shadowForkAddr, shadowForkKey
+		}
+
+		header.Extra = make([]byte, extraVanity)
+		if header.Number.Uint64()%engineConf.Epoch == 0 {
+			header.Extra = append(header.Extra, signingAddr.Bytes()...)
+		}
+		header.Extra = append(header.Extra, bytes.Repeat([]byte{0}, extraSeal)...)
+
+		sig, _ := crypto.Sign(SealHash(header).Bytes(), signingKey)
+		copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+		blocks[i] = block.WithSeal(header)
+	}
+
+	if _, err := chain.InsertChain(blocks); err == nil {
+		t.Fatalf("should've failed to insert some blocks to canonical chain")
+	}
+	if chain.CurrentHeader().Number.Uint64() != forkedEngineConf.ShadowForkHeight {
+		t.Fatalf("unexpected canonical chain height")
+	}
+	if _, err := forkedChain.InsertChain(blocks); err != nil {
+		t.Fatalf("failed to insert blocks to forked chain: %v %d", err, forkedChain.CurrentHeader().Number)
+	}
+	if forkedChain.CurrentHeader().Number.Uint64() != uint64(len(blocks)) {
+		t.Fatalf("unexpected forked chain height")
 	}
 }

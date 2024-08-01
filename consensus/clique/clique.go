@@ -66,8 +66,9 @@ var (
 
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
 
-	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
-	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
+	diffInTurn     = big.NewInt(2) // Block difficulty for in-turn signatures
+	diffNoTurn     = big.NewInt(1) // Block difficulty for out-of-turn signatures
+	diffShadowFork = diffNoTurn
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -195,6 +196,7 @@ func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
 	if conf.Epoch == 0 {
 		conf.Epoch = epochLength
 	}
+
 	// Allocate the snapshot caches and create the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
@@ -291,7 +293,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	}
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
 	if number > 0 {
-		if header.Difficulty == nil || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0) {
+		if header.Difficulty == nil || (header.Difficulty.Cmp(diffInTurn) != 0 && header.Difficulty.Cmp(diffNoTurn) != 0 && header.Difficulty.Cmp(diffShadowFork) != 0) {
 			return errInvalidDifficulty
 		}
 	}
@@ -375,6 +377,14 @@ func (c *Clique) snapshot(chain consensus.ChainHeaderReader, number uint64, hash
 		snap    *Snapshot
 	)
 	for snap == nil {
+		if c.config.ShadowForkHeight > 0 && number == c.config.ShadowForkHeight {
+			c.signatures.Purge()
+			c.recents.Purge()
+			c.proposals = make(map[common.Address]bool)
+			snap = newSnapshot(c.config, c.signatures, number, hash, []common.Address{c.config.ShadowForkSigner})
+			break
+		}
+
 		// If an in-memory snapshot was found, use that
 		if s, ok := c.recents.Get(hash); ok {
 			snap = s.(*Snapshot)
@@ -485,11 +495,8 @@ func (c *Clique) verifySeal(snap *Snapshot, header *types.Header, parents []*typ
 	}
 	// Ensure that the difficulty corresponds to the turn-ness of the signer
 	if !c.fakeDiff {
-		inturn := snap.inturn(header.Number.Uint64(), signer)
-		if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
-			return errWrongDifficulty
-		}
-		if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
+		expected := c.calcDifficulty(snap, signer)
+		if header.Difficulty.Cmp(expected) != 0 {
 			return errWrongDifficulty
 		}
 	}
@@ -534,7 +541,7 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	c.lock.RUnlock()
 
 	// Set the correct difficulty
-	header.Difficulty = calcDifficulty(snap, signer)
+	header.Difficulty = c.calcDifficulty(snap, signer)
 
 	// Ensure the extra data has all its components
 	if len(header.Extra) < extraVanity {
@@ -678,10 +685,14 @@ func (c *Clique) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, 
 	c.lock.RLock()
 	signer := c.signer
 	c.lock.RUnlock()
-	return calcDifficulty(snap, signer)
+	return c.calcDifficulty(snap, signer)
 }
 
-func calcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
+func (c *Clique) calcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
+	if c.config.ShadowForkHeight > 0 && snap.Number >= c.config.ShadowForkHeight {
+		// if we are past shadow fork point, set a low difficulty so that mainnet nodes don't try to switch to forked chain
+		return new(big.Int).Set(diffShadowFork)
+	}
 	if snap.inturn(snap.Number+1, signer) {
 		return new(big.Int).Set(diffInTurn)
 	}

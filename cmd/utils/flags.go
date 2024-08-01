@@ -858,6 +858,12 @@ var (
 		Name:  "rpc.getlogs.maxrange",
 		Usage: "Limit max fetched block range for `eth_getLogs` method",
 	}
+
+	// Shadowfork peers
+	ShadowforkPeersFlag = cli.StringSliceFlag{
+		Name:  "net.shadowforkpeers",
+		Usage: "peer ids of shadow fork peers",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1651,6 +1657,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setCircuitCapacityCheck(ctx, cfg)
 	setEnableRollupVerify(ctx, cfg)
 	setMaxBlockRange(ctx, cfg)
+	if ctx.GlobalIsSet(ShadowforkPeersFlag.Name) {
+		cfg.ShadowForkPeerIDs = ctx.GlobalStringSlice(ShadowforkPeersFlag.Name)
+		log.Info("Shadow fork peers", "ids", cfg.ShadowForkPeerIDs)
+	}
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
