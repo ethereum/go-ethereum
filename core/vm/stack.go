@@ -64,10 +64,6 @@ func (st *Stack) len() int {
 	return len(st.data)
 }
 
-func (st *Stack) swap(n int) {
-	st.data[st.len()-n], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-n]
-}
-
 func (st *Stack) swap1() {
 	st.data[st.len()-2], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-2]
 }
