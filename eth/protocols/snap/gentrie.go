@@ -31,6 +31,9 @@ type genTrie interface {
 	// update inserts the state item into generator trie.
 	update(key, value []byte) error
 
+	// delete removes the state item from the generator trie.
+	delete(key []byte) error
+
 	// commit flushes the right boundary nodes if complete flag is true. This
 	// function must be called before flushing the associated database batch.
 	commit(complete bool) common.Hash
@@ -113,7 +116,7 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 			// removed because it's a sibling of the nodes we want to commit, not
 			// the parent or ancestor.
 			for i := 0; i < len(path); i++ {
-				t.delete(path[:i], false)
+				t.deleteNode(path[:i], false)
 			}
 		}
 		return
@@ -136,7 +139,7 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 	// byte key. In either case, no gaps will be left in the path.
 	if t.last != nil && bytes.HasPrefix(t.last, path) && len(t.last)-len(path) > 1 {
 		for i := len(path) + 1; i < len(t.last); i++ {
-			t.delete(t.last[:i], true)
+			t.deleteNode(t.last[:i], true)
 		}
 	}
 	t.write(path, blob)
@@ -192,8 +195,8 @@ func (t *pathTrie) deleteStorageNode(path []byte, inner bool) {
 	rawdb.DeleteStorageTrieNode(t.batch, t.owner, path)
 }
 
-// delete commits the node deletion to provided database batch in path mode.
-func (t *pathTrie) delete(path []byte, inner bool) {
+// deleteNode commits the node deletion to provided database batch in path mode.
+func (t *pathTrie) deleteNode(path []byte, inner bool) {
 	if t.owner == (common.Hash{}) {
 		t.deleteAccountNode(path, inner)
 	} else {
@@ -205,6 +208,29 @@ func (t *pathTrie) delete(path []byte, inner bool) {
 // stack trie.
 func (t *pathTrie) update(key, value []byte) error {
 	return t.tr.Update(key, value)
+}
+
+// delete implements genTrie interface, deleting the item from the stack trie.
+func (t *pathTrie) delete(key []byte) error {
+	// reset the trie along with the trackers. Be aware that the last
+	// inserted item (potentially along with some internal trie nodes)
+	// will be silently discarded by trie resetting.
+	t.first = nil
+	t.last = nil
+	t.tr.Reset()
+
+	// explicitly mark the left boundary as incomplete, as the left-side
+	// item of the next one has been removed. Be aware that the next item
+	// to be inserted to will be ignored from committing as well.
+	t.skipLeftBoundary = true
+
+	// explicitly delete the potential leftover nodes on the specific
+	// path from the database.
+	tkey := t.tr.TrieKey(key)
+	for i := 0; i <= len(tkey); i++ {
+		t.deleteNode(tkey[:i], false)
+	}
+	return nil
 }
 
 // commit implements genTrie interface, flushing the right boundary if it's
@@ -255,7 +281,7 @@ func (t *pathTrie) commit(complete bool) common.Hash {
 	// with no issues as they are actually complete. Also, from a database
 	// perspective, first deleting and then rewriting is a valid data update.
 	for i := 0; i < len(t.last); i++ {
-		t.delete(t.last[:i], false)
+		t.deleteNode(t.last[:i], false)
 	}
 	return common.Hash{} // the hash is meaningless for incomplete commit
 }
@@ -277,6 +303,9 @@ func newHashTrie(batch ethdb.Batch) *hashTrie {
 func (t *hashTrie) update(key, value []byte) error {
 	return t.tr.Update(key, value)
 }
+
+// delete implements genTrie interface, ignoring the state item for deleting.
+func (t *hashTrie) delete(key []byte) error { return nil }
 
 // commit implements genTrie interface, committing the nodes on right boundary.
 func (t *hashTrie) commit(complete bool) common.Hash {
