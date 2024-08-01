@@ -91,6 +91,14 @@ type executableDataMarshaling struct {
 	ExcessBlobGas *hexutil.Uint64
 }
 
+// StatelessPayloadStatusV1 is the result of a stateless payload execution.
+type StatelessPayloadStatusV1 struct {
+	Status          string      `json:"status"`
+	StateRoot       common.Hash `json:"stateRoot"`
+	ReceiptsRoot    common.Hash `json:"receiptsRoot"`
+	ValidationError *string     `json:"validationError"`
+}
+
 //go:generate go run github.com/fjl/gencodec -type ExecutionPayloadEnvelope -field-override executionPayloadEnvelopeMarshaling -out gen_epe.go
 
 type ExecutionPayloadEnvelope struct {
@@ -98,6 +106,7 @@ type ExecutionPayloadEnvelope struct {
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
 	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
 	Override         bool            `json:"shouldOverrideBuilder"`
+	Witness          *hexutil.Bytes  `json:"witness"`
 }
 
 type BlobsBundleV1 struct {
@@ -112,9 +121,10 @@ type executionPayloadEnvelopeMarshaling struct {
 }
 
 type PayloadStatusV1 struct {
-	Status          string       `json:"status"`
-	LatestValidHash *common.Hash `json:"latestValidHash"`
-	ValidationError *string      `json:"validationError"`
+	Status          string         `json:"status"`
+	Witness         *hexutil.Bytes `json:"witness"`
+	LatestValidHash *common.Hash   `json:"latestValidHash"`
+	ValidationError *string        `json:"validationError"`
 }
 
 type TransitionConfigurationV1 struct {
@@ -195,6 +205,20 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in params.
 func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
+	block, err := ExecutableDataToBlockNoHash(params, versionedHashes, beaconRoot)
+	if err != nil {
+		return nil, err
+	}
+	if block.Hash() != params.BlockHash {
+		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
+	}
+	return block, nil
+}
+
+// ExecutableDataToBlockNoHash is analogous to ExecutableDataToBlock, but is used
+// for stateless execution, so it skips checking if the executable data hashes to
+// the requested hash (stateless has to *compute* the root hash, it's not given).
+func ExecutableDataToBlockNoHash(params ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
 	txs, err := decodeTransactions(params.Transactions)
 	if err != nil {
 		return nil, err
@@ -250,11 +274,7 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 		BlobGasUsed:      params.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: params.Withdrawals})
-	if block.Hash() != params.BlockHash {
-		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
-	}
-	return block, nil
+	return types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: params.Withdrawals}), nil
 }
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
