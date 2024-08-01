@@ -149,7 +149,10 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 		f.traces[name] = make([]*traceResult, 0, txs)
 	}
 
+	// track the latest block number
 	blknum := ev.Block.NumberU64()
+	latest := f.latest
+	f.latest = blknum
 
 	// save the earliest arrived blknum as the offset
 	f.once.Do(func() {
@@ -160,17 +163,15 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	})
 
 	// truncate the freezer db if the block number is less than the latest
-	if blknum < f.latest {
+	if blknum < latest {
 		frozen, _ := f.db.Ancients()
-		log.Info("Reorg detected", "number", blknum, "latest", f.latest, "offset", f.offset, "frozen", frozen)
+		log.Info("Reorg detected", "number", blknum, "latest", latest, "offset", f.offset, "frozen", frozen)
 		if _, err := f.db.TruncateHead(blknum - f.offset); err != nil {
 			log.Error("Failed to truncate filter tracer db", "error", err)
 			// TODO: how to handle this error?
 			return
 		}
 	}
-
-	f.latest = blknum
 }
 
 func (f *filter) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
