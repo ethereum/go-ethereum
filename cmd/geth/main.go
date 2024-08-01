@@ -145,6 +145,7 @@ var (
 		utils.GpoPercentileFlag,
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
+		utils.GpoCongestionThresholdFlag,
 		configFileFlag,
 		utils.L1EndpointFlag,
 		utils.L1ConfirmationsFlag,

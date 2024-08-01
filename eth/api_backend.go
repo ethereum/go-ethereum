@@ -344,6 +344,10 @@ func (b *EthAPIBackend) Stats() (runnable int, blocked int) {
 	return b.eth.txPool.Stats()
 }
 
+func (b *EthAPIBackend) StatsWithMinBaseFee(minBaseFee *big.Int) (pending int, queued int) {
+	return b.eth.txPool.StatsWithMinBaseFee(minBaseFee)
+}
+
 func (b *EthAPIBackend) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
 	return b.eth.txPool.Content()
 }

@@ -125,6 +125,8 @@ type SubPool interface {
 	// number of queued (non-executable) transactions.
 	Stats() (int, int)
 
+	StatsWithMinBaseFee(minBaseFee *big.Int) (pending int, queued int)
+
 	// Content retrieves the data content of the transaction pool, returning all the
 	// pending as well as queued transactions, grouped by account and sorted by nonce.
 	Content() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction)

@@ -446,3 +446,12 @@ func (pool *TxPool) ResumeReorgs() {
 		subpool.ResumeReorgs()
 	}
 }
+
+func (pool *TxPool) StatsWithMinBaseFee(minBaseFee *big.Int) (pending int, queued int) {
+	for _, subpool := range pool.subpools {
+		p, q := subpool.StatsWithMinBaseFee(minBaseFee)
+		pending += p
+		queued += q
+	}
+	return pending, queued
+}
