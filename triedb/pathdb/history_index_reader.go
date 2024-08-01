@@ -300,13 +300,14 @@ func (r *historyReader) resolve(owner common.Address, state common.Hash, id uint
 	return r.resolveStorage(owner, state, id)
 }
 
-func (r *historyReader) read(owner common.Address, state common.Hash, id uint64, latest uint64) ([]byte, error) {
+func (r *historyReader) read(owner common.Address, state common.Hash, targetID uint64, latestID uint64, latestValue []byte) ([]byte, error) {
 	tail, err := r.freezer.Tail()
 	if err != nil {
 		return nil, err
 	}
-	// id == tail is allowed, as the first history object preserved is tail+1
-	if id < tail {
+	// targetID == tail is allowed, as the first history object
+	// available is tail+1
+	if targetID < tail {
 		return nil, errors.New("historic state is pruned")
 	}
 	head := rawdb.ReadStateHistoryIndexHead(r.disk)
@@ -314,7 +315,7 @@ func (r *historyReader) read(owner common.Address, state common.Hash, id uint64,
 	/*
 		the available range of histories is [tail+1, head]
 	*/
-	if head == nil || *head <= id {
+	if head == nil || *head <= targetID {
 		return nil, errors.New("state history is not fully indexed")
 	}
 	ir, ok := r.readers[owner.Hex()+state.Hex()]
@@ -325,15 +326,15 @@ func (r *historyReader) read(owner common.Address, state common.Hash, id uint64,
 		}
 		r.readers[owner.Hex()+state.Hex()] = ir
 	}
-	id, err = ir.readGreaterThan(id)
+	targetID, err = ir.readGreaterThan(targetID)
 	if err != nil {
 		return nil, err
 	}
-	if id == math.MaxUint64 {
-		if *head < latest {
+	if targetID == math.MaxUint64 {
+		if *head < latestID {
 			return nil, errors.New("state history is not fully indexed")
 		}
-		return nil, errors.New("not found")
+		return latestValue, nil
 	}
-	return r.resolve(owner, state, id)
+	return r.resolve(owner, state, targetID)
 }

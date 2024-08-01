@@ -112,11 +112,15 @@ func (i *historyIndexer) run(done chan struct{}, head uint64, interrupt *atomic.
 		log.Error("Failed to find next state history for indexing", "err", err)
 		return
 	}
-	// TODO what if head is lower than the index head. It can
-	// happen if the entire state history freezer is reset.
-	//if begin > head {
-	//
-	//}
+	// Short circuit if no indexing tasks left
+	if begin == head+1 {
+		return
+	}
+	// Deep reorg occurs, TODO put the reorg logic here
+	if begin > head+1 {
+		log.Error("Deep reorg detected", "head", head, "next", begin)
+		return
+	}
 	log.Info("Start history indexing", "begin", begin, "head", head)
 
 	var (

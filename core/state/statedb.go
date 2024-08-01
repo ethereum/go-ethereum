@@ -86,9 +86,9 @@ func (m *mutation) isDelete() bool {
 type StateDB struct {
 	db         Database
 	prefetcher *triePrefetcher
-	trie       Trie
 	logger     *tracing.Hooks
 	reader     Reader
+	trie       Trie // trie is only resolved when it's accessed
 
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
@@ -167,17 +167,12 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(root common.Hash, db Database) (*StateDB, error) {
-	tr, err := db.OpenTrie(root)
-	if err != nil {
-		return nil, err
-	}
 	reader, err := db.Reader(root)
 	if err != nil {
 		return nil, err
 	}
 	return &StateDB{
 		db:                   db,
-		trie:                 tr,
 		originalRoot:         root,
 		reader:               reader,
 		stateObjects:         make(map[common.Address]*stateObject),
@@ -650,7 +645,6 @@ func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		db:                   s.db,
-		trie:                 mustCopyTrie(s.trie),
 		reader:               s.reader.Copy(),
 		originalRoot:         s.originalRoot,
 		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
@@ -675,6 +669,9 @@ func (s *StateDB) Copy() *StateDB {
 		journal:          s.journal.copy(),
 		validRevisions:   slices.Clone(s.validRevisions),
 		nextRevisionId:   s.nextRevisionId,
+	}
+	if s.trie != nil {
+		state.trie = mustCopyTrie(s.trie)
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
@@ -879,6 +876,14 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		} else {
 			s.trie = trie
 		}
+	}
+	if s.trie == nil {
+		tr, err := s.db.OpenTrie(s.originalRoot)
+		if err != nil {
+			s.setError(err)
+			return common.Hash{}
+		}
+		s.trie = tr
 	}
 	// Perform updates before deletions.  This prevents resolution of unnecessary trie nodes
 	// in circumstances similar to the following:

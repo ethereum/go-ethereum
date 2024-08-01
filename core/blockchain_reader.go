@@ -356,6 +356,11 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.stateDb)
 }
 
+// ArchiveState returns a new mutable archive state.
+func (bc *BlockChain) ArchiveState(root common.Hash) (*state.StateDB, error) {
+	return state.New(root, state.NewArchiveDatabase(bc.stateDb))
+}
+
 // Config retrieves the chain's fork configuration.
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 

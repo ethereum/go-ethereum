@@ -21,7 +21,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb/database"
@@ -146,4 +148,77 @@ func (db *Database) StateReader(root common.Hash) (database.StateReader, error) 
 		return nil, fmt.Errorf("state %#x is not available", root)
 	}
 	return &reader{layer: layer}, nil
+}
+
+// ArchiveReader is a wrapper over the history reader, providing access to a
+// specific historical state.
+type ArchiveReader struct {
+	db     *Database
+	reader *historyReader
+	id     uint64
+}
+
+// HistoricReader constructs a reader for accessing the requested historic state.
+func (db *Database) HistoricReader(root common.Hash) (*ArchiveReader, error) {
+	id := rawdb.ReadStateID(db.diskdb, root)
+	if id == nil {
+		return nil, fmt.Errorf("state %#x is not available", root)
+	}
+	return &ArchiveReader{
+		id:     *id,
+		db:     db,
+		reader: newHistoryReader(db.diskdb, db.freezer),
+	}, nil
+}
+
+// AccountRLP directly retrieves the account RLP associated with a particular
+// address in the slim data format. An error will be returned if the read
+// operation exits abnormally. Specifically, if the layer is already stale.
+//
+// Note:
+// - the returned account is not a copy, please don't modify it.
+// - no error will be returned if the requested account is not found in database.
+func (r *ArchiveReader) AccountRLP(address common.Address) ([]byte, error) {
+	bottom := r.db.tree.bottom()
+	latest, err := bottom.account(crypto.Keccak256Hash(address.Bytes()), 0)
+	if err != nil {
+		return nil, err
+	}
+	return r.reader.read(address, common.Hash{}, r.id, bottom.stateID(), latest)
+}
+
+// Account directly retrieves the account associated with a particular address in
+// the slim data format. An error will be returned if the read operation exits
+// abnormally. Specifically, if the layer is already stale.
+//
+// No error will be returned if the requested account is not found in database
+func (r *ArchiveReader) Account(address common.Address) (*types.SlimAccount, error) {
+	blob, err := r.AccountRLP(address)
+	if err != nil {
+		return nil, err
+	}
+	if len(blob) == 0 {
+		return nil, nil
+	}
+	account := new(types.SlimAccount)
+	if err := rlp.DecodeBytes(blob, account); err != nil {
+		panic(err)
+	}
+	return account, nil
+}
+
+// Storage directly retrieves the storage data associated with a particular key,
+// within a particular account. An error will be returned if the read operation
+// exits abnormally. Specifically, if the layer is already stale.
+//
+// Note:
+// - the returned storage data is not a copy, please don't modify it.
+// - no error will be returned if the requested slot is not found in database.
+func (r *ArchiveReader) Storage(address common.Address, key common.Hash) ([]byte, error) {
+	bottom := r.db.tree.bottom()
+	latest, err := bottom.storage(crypto.Keccak256Hash(address.Bytes()), crypto.Keccak256Hash(key.Bytes()), 0)
+	if err != nil {
+		return nil, err
+	}
+	return r.reader.read(address, crypto.Keccak256Hash(key.Bytes()), r.id, bottom.stateID(), latest)
 }

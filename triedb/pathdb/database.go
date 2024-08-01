@@ -519,6 +519,10 @@ func (db *Database) Close() error {
 	// Release the memory held by clean cache.
 	db.tree.bottom().resetCache()
 
+	// Shutdown background history indexer
+	if db.indexer != nil {
+		db.indexer.close()
+	}
 	// Close the attached state history freezer.
 	if db.freezer == nil {
 		return nil

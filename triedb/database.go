@@ -350,6 +350,15 @@ func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek 
 	return pdb.StorageIterator(root, account, seek)
 }
 
+// HistoricReader constructs a reader for accessing the requested historic state.
+func (db *Database) HistoricReader(root common.Hash) (*pathdb.ArchiveReader, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.HistoricReader(root)
+}
+
 // IsVerkle returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsVerkle() bool {
 	return db.config.IsVerkle
