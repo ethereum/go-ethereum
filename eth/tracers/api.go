@@ -386,7 +386,7 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			if api.backend.ChainConfig().IsPrague(next.Number(), next.Time()) {
 				context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
 				vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
-				core.ProcessParentBlockHash(statedb, vmenv, next.ParentHash())
+				core.ProcessParentBlockHash(next.ParentHash(), vmenv, statedb)
 			}
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
@@ -541,7 +541,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
 	if chainConfig.IsPrague(block.Number(), block.Time()) {
-		core.ProcessParentBlockHash(statedb, vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{}), block.ParentHash())
+		core.ProcessParentBlockHash(block.ParentHash(), vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{}), statedb)
 	}
 	for i, tx := range block.Transactions() {
 		if err := ctx.Err(); err != nil {
@@ -624,7 +624,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	}
 	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
 		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
-		core.ProcessParentBlockHash(statedb, vmenv, block.ParentHash())
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
 	for i, tx := range txs {
 		// Generate the next state snapshot fast without tracing
@@ -786,7 +786,7 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	}
 	if chainConfig.IsPrague(block.Number(), block.Time()) {
 		vmenv := vm.NewEVM(vmctx, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-		core.ProcessParentBlockHash(statedb, vmenv, block.ParentHash())
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution

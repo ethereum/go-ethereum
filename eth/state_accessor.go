@@ -243,7 +243,7 @@ func (eth *Ethereum) stateAtTransaction(ctx context.Context, block *types.Block,
 	if eth.blockchain.Config().IsPrague(block.Number(), block.Time()) {
 		context := core.NewEVMBlockContext(block.Header(), eth.blockchain, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, eth.blockchain.Config(), vm.Config{})
-		core.ProcessParentBlockHash(statedb, vmenv, block.ParentHash())
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
 	if txIndex == 0 && len(block.Transactions()) == 0 {
 		return nil, vm.BlockContext{}, statedb, release, nil
