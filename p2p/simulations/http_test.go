@@ -237,8 +237,8 @@ type TestAPI struct {
 	state               *atomic.Value
 	peerCount           *int64
 	counter             int64
-	feed                event.Feed
 	activeSubscriptions int64
+	feed                event.Feed
 }
 
 func (t *TestAPI) PeerCount() int64 {
