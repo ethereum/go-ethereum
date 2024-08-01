@@ -68,37 +68,53 @@ func (st *Stack) swap(n int) {
 	st.data[st.len()-n], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-n]
 }
 
-func (s *Stack) swap1() { s.data[s.len()-2], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-2] }
-func (s *Stack) swap2() { s.data[s.len()-3], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-3] }
-func (s *Stack) swap3() { s.data[s.len()-4], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-4] }
-func (s *Stack) swap4() { s.data[s.len()-5], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-5] }
-func (s *Stack) swap5() { s.data[s.len()-6], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-6] }
-func (s *Stack) swap6() { s.data[s.len()-7], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-7] }
-func (s *Stack) swap7() { s.data[s.len()-8], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-8] }
-func (s *Stack) swap8() { s.data[s.len()-9], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-9] }
-func (s *Stack) swap9() {
-	s.data[s.len()-10], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-10]
+func (st *Stack) swap1() {
+	st.data[st.len()-2], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-2]
 }
-func (s *Stack) swap10() {
-	s.data[s.len()-11], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-11]
+func (st *Stack) swap2() {
+	st.data[st.len()-3], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-3]
 }
-func (s *Stack) swap11() {
-	s.data[s.len()-12], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-12]
+func (st *Stack) swap3() {
+	st.data[st.len()-4], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-4]
 }
-func (s *Stack) swap12() {
-	s.data[s.len()-13], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-13]
+func (st *Stack) swap4() {
+	st.data[st.len()-5], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-5]
 }
-func (s *Stack) swap13() {
-	s.data[s.len()-14], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-14]
+func (st *Stack) swap5() {
+	st.data[st.len()-6], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-6]
 }
-func (s *Stack) swap14() {
-	s.data[s.len()-15], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-15]
+func (st *Stack) swap6() {
+	st.data[st.len()-7], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-7]
 }
-func (s *Stack) swap15() {
-	s.data[s.len()-16], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-16]
+func (st *Stack) swap7() {
+	st.data[st.len()-8], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-8]
 }
-func (s *Stack) swap16() {
-	s.data[s.len()-17], s.data[s.len()-1] = s.data[s.len()-1], s.data[s.len()-17]
+func (st *Stack) swap8() {
+	st.data[st.len()-9], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-9]
+}
+func (st *Stack) swap9() {
+	st.data[st.len()-10], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-10]
+}
+func (st *Stack) swap10() {
+	st.data[st.len()-11], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-11]
+}
+func (st *Stack) swap11() {
+	st.data[st.len()-12], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-12]
+}
+func (st *Stack) swap12() {
+	st.data[st.len()-13], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-13]
+}
+func (st *Stack) swap13() {
+	st.data[st.len()-14], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-14]
+}
+func (st *Stack) swap14() {
+	st.data[st.len()-15], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-15]
+}
+func (st *Stack) swap15() {
+	st.data[st.len()-16], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-16]
+}
+func (st *Stack) swap16() {
+	st.data[st.len()-17], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-17]
 }
 
 func (st *Stack) dup(n int) {
