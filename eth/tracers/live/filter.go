@@ -159,8 +159,9 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	})
 
 	// truncate the freezer db if the block number is less than the latest
-	if blknum <= f.latest {
-		log.Info("Reorg detected", "number", blknum, "latest", f.latest, "offset", f.offset)
+	if blknum < f.latest {
+		frozen, _ := f.db.Ancients()
+		log.Info("Reorg detected", "number", blknum, "latest", f.latest, "offset", f.offset, "frozen", frozen)
 		if _, err := f.db.TruncateHead(blknum - f.offset); err != nil {
 			log.Error("Failed to truncate filter tracer db", "error", err)
 			// TODO: how to handle this error?
