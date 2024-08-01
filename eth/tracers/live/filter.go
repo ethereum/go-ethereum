@@ -163,7 +163,7 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	})
 
 	// truncate the freezer db if the block number is less than the latest
-	if blknum < latest {
+	if blknum <= latest {
 		frozen, _ := f.db.Ancients()
 		log.Info("Reorg detected", "number", blknum, "latest", latest, "offset", f.offset, "frozen", frozen)
 		if _, err := f.db.TruncateHead(blknum - f.offset); err != nil {
