@@ -30,7 +30,7 @@ var stackPool = sync.Pool{
 
 // Stack is an object for basic stack operations. Items popped to the stack are
 // expected to be changed and modified. stack does not take care of adding newly
-// initialised objects.
+// initialized objects.
 type Stack struct {
 	data []uint256.Int
 }
