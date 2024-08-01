@@ -16,6 +16,8 @@
 
 package metrics
 
+import "time"
+
 // compile-time checks that interfaces are implemented.
 var (
 	_ SampleSnapshot    = (*emptySnapshot)(nil)
@@ -46,3 +48,4 @@ func (*emptySnapshot) Rate1() float64                     { return 0.0 }
 func (*emptySnapshot) Rate5() float64                     { return 0.0 }
 func (*emptySnapshot) Rate15() float64                    { return 0.0 }
 func (*emptySnapshot) RateMean() float64                  { return 0.0 }
+func (*emptySnapshot) Total() time.Duration               { return 0 }

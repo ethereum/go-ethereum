@@ -95,6 +95,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"m5":       ms.Rate5(),
 			"m15":      ms.Rate15(),
 			"meanrate": ms.RateMean(),
+			"total":    int64(ms.Total()),
 		}
 		return measurement, fields
 	case metrics.ResettingTimer:

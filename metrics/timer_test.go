@@ -112,3 +112,18 @@ func ExampleGetOrRegisterTimer() {
 	t.Update(47)
 	fmt.Println(t.Snapshot().Max()) // Output: 47
 }
+
+func TestTimerSum(t *testing.T) {
+	tm := GetOrRegisterTimer("test.timer.sum", nil)
+	times := 5000000
+	for i := 0; i < times; i++ {
+		tm.Update(time.Second)
+	}
+	ss := tm.Snapshot()
+	if total := tm.Total().Seconds(); total != float64(times) {
+		t.Errorf("tm.Total().Seconds(): 5000000.0 != %v\n", total)
+	}
+	if total := ss.Total().Seconds(); total != float64(times) {
+		t.Errorf("ss.Total().Seconds(): 5000000.0 != %v\n", total)
+	}
+}
