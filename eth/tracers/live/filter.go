@@ -113,6 +113,7 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 	}
 	log.Info("Open filter tracer", "path", config.Path, "offset", offset, "tables", tables)
 
+	f.latest += uint64(offset)
 	f.offset = uint64(offset)
 	hooks := &tracing.Hooks{
 		OnBlockStart: f.OnBlockStart,
