@@ -70,7 +70,7 @@ type ExecutionResult struct {
 	// currently they are just `from` and `to` account
 	AccountsAfter []*AccountWrapper `json:"accountAfter"`
 
-	StructLogs []*StructLogRes `json:"structLogs"`
+	StructLogs []StructLogRes  `json:"structLogs"`
 	CallTrace  json.RawMessage `json:"callTrace"`
 }
 
@@ -91,8 +91,8 @@ type StructLogRes struct {
 
 // NewStructLogResBasic Basic StructLogRes skeleton, Stack&Memory&Storage&ExtraData are separated from it for GC optimization;
 // still need to fill in with Stack&Memory&Storage&ExtraData
-func NewStructLogResBasic(pc uint64, op string, gas, gasCost uint64, depth int, refundCounter uint64, err error) *StructLogRes {
-	logRes := &StructLogRes{
+func NewStructLogResBasic(pc uint64, op string, gas, gasCost uint64, depth int, refundCounter uint64, err error) StructLogRes {
+	logRes := StructLogRes{
 		Pc:            pc,
 		Op:            op,
 		Gas:           gas,

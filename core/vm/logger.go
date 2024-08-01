@@ -79,8 +79,8 @@ type StructLog struct {
 	Err           error                       `json:"-"`
 }
 
-func NewStructlog(pc uint64, op OpCode, gas, cost uint64, depth int, err error) *StructLog {
-	return &StructLog{
+func NewStructlog(pc uint64, op OpCode, gas, cost uint64, depth int, err error) StructLog {
+	return StructLog{
 		Pc:      pc,
 		Op:      op,
 		Gas:     gas,
@@ -88,14 +88,6 @@ func NewStructlog(pc uint64, op OpCode, gas, cost uint64, depth int, err error) 
 		Depth:   depth,
 		Err:     err,
 	}
-}
-
-func (s *StructLog) clean() {
-	s.Memory.Reset()
-	s.Stack = s.Stack[:0]
-	s.ReturnData.Reset()
-	s.Storage = nil
-	s.Err = nil
 }
 
 // overrides for gencodec
@@ -159,7 +151,7 @@ type StructLogger struct {
 	createdAccount *types.AccountWrapper
 
 	callStackLogInd []int
-	logs            []*StructLog
+	logs            []StructLog
 	output          []byte
 	err             error
 }
@@ -359,7 +351,7 @@ func (l *StructLogger) TracedBytecodes() map[common.Hash]CodeInfo {
 func (l *StructLogger) CreatedAccount() *types.AccountWrapper { return l.createdAccount }
 
 // StructLogs returns the captured log entries.
-func (l *StructLogger) StructLogs() []*StructLog { return l.logs }
+func (l *StructLogger) StructLogs() []StructLog { return l.logs }
 
 // Error returns the VM error captured by the trace.
 func (l *StructLogger) Error() error { return l.err }
@@ -368,7 +360,7 @@ func (l *StructLogger) Error() error { return l.err }
 func (l *StructLogger) Output() []byte { return l.output }
 
 // WriteTrace writes a formatted trace to the given writer
-func WriteTrace(writer io.Writer, logs []*StructLog) {
+func WriteTrace(writer io.Writer, logs []StructLog) {
 	for _, log := range logs {
 		fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", log.Op, log.Pc, log.Gas, log.GasCost)
 		if log.Err != nil {
@@ -488,8 +480,8 @@ func (t *mdLogger) CaptureEnter(typ OpCode, from common.Address, to common.Addre
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
 // FormatLogs formats EVM returned structured logs for json output
-func FormatLogs(logs []*StructLog) []*types.StructLogRes {
-	formatted := make([]*types.StructLogRes, 0, len(logs))
+func FormatLogs(logs []StructLog) []types.StructLogRes {
+	formatted := make([]types.StructLogRes, 0, len(logs))
 
 	for _, trace := range logs {
 		logRes := types.NewStructLogResBasic(trace.Pc, trace.Op.String(), trace.Gas, trace.GasCost, trace.Depth, trace.RefundCounter, trace.Err)
