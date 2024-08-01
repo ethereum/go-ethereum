@@ -18,13 +18,13 @@ package p2p
 
 import (
 	"errors"
-	"net"
 	"reflect"
 	"sync"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/pipes"
 )
 
 func TestProtocolHandshake(t *testing.T) {
@@ -37,10 +37,13 @@ func TestProtocolHandshake(t *testing.T) {
 		pub1    = crypto.FromECDSAPub(&prv1.PublicKey)[1:]
 		hs1     = &protoHandshake{Version: 3, ID: pub1, Caps: []Cap{{"c", 1}, {"d", 3}}}
 
-		fd0, fd1 = net.Pipe()
-
 		wg sync.WaitGroup
 	)
+
+	fd0, fd1, err := pipes.TCPPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	wg.Add(2)
 	go func() {
