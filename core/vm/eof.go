@@ -338,7 +338,7 @@ func (c *Container) validateSubContainer(jt *JumpTable, isInitCode bool, refBy i
 			code  = c.Code[index]
 		)
 		if _, ok := visited[index]; !ok {
-			res, err := validateCode(code, index, c, jt, isInitCode)
+			res, err := validateCode(code, index, c, jt, isInitCode || refBy == RefByEOFCreate)
 			if err != nil {
 				return err
 			}

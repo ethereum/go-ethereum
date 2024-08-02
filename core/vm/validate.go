@@ -127,6 +127,9 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable,
 					return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(container.Data), i)
 				}
 			case op == RETURNCONTRACT:
+				if !isInitCode {
+					return nil, ErrIncompatibleContainerKind
+				}
 				arg := int(code[i+1])
 				if arg >= len(container.ContainerSections) {
 					return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrUnreachableCode, arg, len(container.ContainerSections), i)
