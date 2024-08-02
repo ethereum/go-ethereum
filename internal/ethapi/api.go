@@ -1399,7 +1399,12 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNrOr
 		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &latest
 	}
-	result, _, failed, err, vmErr := DoCall(ctx, s.b, args, *blockNrOrHash, overrides, vm.Config{}, 5*time.Second, s.b.RPCGasCap())
+	timeout := 5 * time.Second
+	MasternodeVotingSMCBinary := common.Address{19: 0x88} // xdc0000000000000000000000000000000000000088
+	if args.To != nil && *args.To == MasternodeVotingSMCBinary {
+		timeout = 0
+	}
+	result, _, failed, err, vmErr := DoCall(ctx, s.b, args, *blockNrOrHash, overrides, vm.Config{}, timeout, s.b.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
