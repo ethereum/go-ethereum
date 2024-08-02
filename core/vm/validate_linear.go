@@ -30,7 +30,9 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 		op := OpCode(code[pos])
 		currentBounds := stackBounds[pos]
 		if currentBounds == nil {
-			fmt.Printf("Stack bounds not set: %v at %v \n", op, pos)
+			if debugging {
+				fmt.Printf("Stack bounds not set: %v at %v \n", op, pos)
+			}
 			return 0, ErrUnreachableCode
 		}
 
@@ -196,7 +198,9 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 		return 0, ErrStackOverflow{maxStackHeight, int(params.StackLimit)}
 	}
 	if maxStackHeight != int(metadata[section].MaxStackHeight) {
-		fmt.Print(maxStackHeight, metadata[section].MaxStackHeight)
+		if debugging {
+			fmt.Print(maxStackHeight, metadata[section].MaxStackHeight)
+		}
 		return 0, fmt.Errorf("%w in code section %d: have %d, want %d", ErrInvalidMaxStackHeight, section, maxStackHeight, metadata[section].MaxStackHeight)
 	}
 	return len(stackBounds), nil

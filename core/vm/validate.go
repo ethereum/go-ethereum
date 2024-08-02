@@ -180,7 +180,7 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable,
 	if paths, err := validateControlFlow2(code, section, container.Types, jt); err != nil {
 		return nil, err
 	} else if paths != count {
-		fmt.Printf("Paths: %v Count: %v\n", paths, count)
+		//fmt.Printf("Paths: %v Count: %v\n", paths, count)
 		// TODO(matt): return actual position of unreachable code
 		return nil, ErrUnreachableCode
 	}

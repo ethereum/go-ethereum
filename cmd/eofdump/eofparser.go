@@ -91,7 +91,7 @@ func eofParser(ctx *cli.Context) error {
 			}
 			return fmt.Errorf("err(%d): %w", errorMap[err.Error()], err)
 		}
-		fmt.Println("ok.")
+		fmt.Println("OK")
 		return nil
 	}
 
@@ -138,19 +138,28 @@ func eofParser(ctx *cli.Context) error {
 	}
 
 	// If neither are passed in, read input from stdin.
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		t := strings.TrimSpace(scanner.Text())
-		if len(t) == 0 || t[0] == '#' {
+	reader := bufio.NewReaderSize(os.Stdin, 1024*1024)
+	t, err := reader.ReadString('\n')
+	for err == nil {
+		l := len(t)
+		if l == 0 || t[0] == '#' {
 			continue
 		}
-		if _, err := parseAndValidate(t, false); err != nil {
+		if t[l-1] == '\n' {
+			t = t[:l-1] // remove newline
+		}
+		_, err := parseAndValidate(t, false)
+		if err != nil {
 			if err2 := errors.Unwrap(err); err2 != nil {
 				err = err2
 			}
-			fmt.Fprintf(os.Stderr, "err(%d): %v\n", errorMap[err.Error()], err)
+			fmt.Printf("err(%d): %v\n", errorMap[err.Error()], err)
+		} else {
+			fmt.Println("OK")
 		}
+		t, err = reader.ReadString('\n')
 	}
+	println(err.Error())
 
 	return nil
 }
