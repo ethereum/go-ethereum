@@ -437,6 +437,7 @@ func createNode(t *testing.T) *node.Node {
 }
 
 func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Genesis, genBlocks int, genfunc func(i int, gen *core.BlockGen)) (*handler, []*types.Block) {
+	gspec.Config.Scroll.UseZktrie = true
 	ethConf := &ethconfig.Config{
 		Genesis:        gspec,
 		NetworkId:      1337,
