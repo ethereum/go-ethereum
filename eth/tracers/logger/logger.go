@@ -80,14 +80,6 @@ type StructLog struct {
 	Err           error                       `json:"-"`
 }
 
-func (s *StructLog) clean() {
-	s.Memory = s.Memory[:0]
-	s.Stack = s.Stack[:0]
-	s.ReturnData = s.ReturnData[:0]
-	s.Storage = nil
-	s.Err = nil
-}
-
 // overrides for gencodec
 type structLogMarshaling struct {
 	Gas         math.HexOrDecimal64

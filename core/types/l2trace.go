@@ -92,24 +92,6 @@ type StructLogRes struct {
 	RefundCounter uint64             `json:"refund,omitempty"`
 }
 
-// NewStructLogResBasic Basic StructLogRes skeleton, Stack&Memory&Storage&ExtraData are separated from it for GC optimization;
-// still need to fill in with Stack&Memory&Storage&ExtraData
-func NewStructLogResBasic(pc uint64, op string, gas, gasCost uint64, depth int, refundCounter uint64, err error) *StructLogRes {
-	logRes := &StructLogRes{
-		Pc:            pc,
-		Op:            op,
-		Gas:           gas,
-		GasCost:       gasCost,
-		Depth:         depth,
-		RefundCounter: refundCounter,
-	}
-
-	if err != nil {
-		logRes.Error = err.Error()
-	}
-	return logRes
-}
-
 type AccountWrapper struct {
 	Address          common.Address `json:"address"`
 	Nonce            uint64         `json:"nonce"`
