@@ -87,9 +87,6 @@ func NewEVMTxContext(msg *Message) vm.TxContext {
 	if msg.BlobGasFeeCap != nil {
 		ctx.BlobFeeCap = new(big.Int).Set(msg.BlobGasFeeCap)
 	}
-	if msg.InitCodes != nil {
-		ctx.InitCodes = msg.InitCodes
-	}
 	return ctx
 }
 

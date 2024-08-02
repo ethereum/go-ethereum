@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -650,14 +649,6 @@ func enableEOF(jt *JumpTable) {
 		memorySize:  memoryEOFCreate,
 		immediate:   1,
 	}
-	jt[TXCREATE] = &operation{
-		execute:     opTXCreate,
-		constantGas: params.Create2Gas,
-		dynamicGas:  gasEOFCreate,
-		minStack:    minStack(5, 1),
-		maxStack:    maxStack(5, 1),
-		memorySize:  memoryEOFCreate,
-	}
 	jt[RETURNCONTRACT] = &operation{
 		execute:     opReturnContract,
 		constantGas: GasZeroStep,
@@ -913,64 +904,6 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		stackvalue.SetBytes(addr.Bytes())
 	}
 	scope.Stack.push(&stackvalue)
-	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
-
-	if suberr == ErrExecutionReverted {
-		interpreter.returnData = res // set REVERT data to return data buffer
-		return res, nil
-	}
-	interpreter.returnData = nil // clear dirty return data buffer
-	return nil, nil
-}
-
-func opTXCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	if interpreter.readOnly {
-		return nil, ErrWriteProtection
-	}
-	var (
-		value          = scope.Stack.pop()
-		salt           = scope.Stack.pop()
-		offset, size   = scope.Stack.pop(), scope.Stack.pop()
-		txInitCodeHash = scope.Stack.pop()
-		input          = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		gas            = scope.Contract.Gas
-	)
-	// Reuse last popped value from stack
-	stackvalue := txInitCodeHash
-
-	var initCode []byte
-	for _, code := range interpreter.evm.InitCodes {
-		if interpreter.hasher == nil {
-			interpreter.hasher = crypto.NewKeccakState()
-		} else {
-			interpreter.hasher.Reset()
-		}
-		interpreter.hasher.Write(code)
-		interpreter.hasher.Read(interpreter.hasherBuf[:])
-		if interpreter.hasherBuf.Cmp(txInitCodeHash.Bytes32()) == 0 {
-			initCode = code
-		}
-	}
-	if len(initCode) == 0 {
-		stackvalue.Clear()
-		scope.Stack.push(&stackvalue)
-	}
-
-	// Additional hashing charge
-	hashingCharge := params.InitCodeWordGas * ((uint64(len(initCode)) + 31) / 32)
-	scope.Contract.UseGas(hashingCharge, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
-	// Apply EIP150
-	gas -= gas / 64
-	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
-	scope.InitCodeMode = true
-	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, initCode, gas, &value, &salt)
-	if suberr != nil {
-		stackvalue.Clear()
-	} else {
-		stackvalue.SetBytes(addr.Bytes())
-	}
-	scope.Stack.push(&stackvalue)
-
 	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
 
 	if suberr == ErrExecutionReverted {
