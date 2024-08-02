@@ -8,6 +8,7 @@ import (
 	"path"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -39,7 +40,7 @@ type filter struct {
 	tables     map[string]bool
 	traces     map[string][]*traceResult
 	tracer     *native.MuxTracer
-	latest     uint64
+	latest     atomic.Uint64
 	offset     uint64
 	once       sync.Once
 	offsetFile string
@@ -97,7 +98,6 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 		tables:     tables,
 		traces:     traces,
 		tracer:     t,
-		latest:     tail + frozen,
 		offsetFile: path.Join(config.Path, "OFFSET"),
 	}
 	offset := 0
@@ -113,7 +113,7 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 	}
 	log.Info("Open filter tracer", "path", config.Path, "offset", offset, "tables", tables)
 
-	f.latest += uint64(offset)
+	f.latest.Store(tail + frozen + uint64(offset))
 	f.offset = uint64(offset)
 	hooks := &tracing.Hooks{
 		OnBlockStart: f.OnBlockStart,
@@ -151,8 +151,8 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 
 	// track the latest block number
 	blknum := ev.Block.NumberU64()
-	latest := f.latest
-	f.latest = blknum
+	latest := f.latest.Load()
+	f.latest.Store(blknum)
 
 	// save the earliest arrived blknum as the offset
 	f.once.Do(func() {
@@ -185,7 +185,7 @@ func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 		trace := &traceResult{TxHash: receipt.TxHash}
 		result, err := tt.GetResult()
 		if err != nil {
-			log.Error("Failed to get tracer results", "number", f.latest, "error", err)
+			log.Error("Failed to get tracer results", "number", f.latest.Load(), "error", err)
 			trace.Error = err.Error()
 		} else {
 			trace.Result = result
@@ -196,7 +196,7 @@ func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 
 func (f *filter) OnBlockEnd(err error) {
 	f.db.ModifyAncients(func(w ethdb.AncientWriteOp) error {
-		number := f.latest - f.offset
+		number := f.latest.Load() - f.offset
 		for name, traces := range f.traces {
 			data, err := json.Marshal(traces)
 			if err != nil {
@@ -210,7 +210,7 @@ func (f *filter) OnBlockEnd(err error) {
 			}
 			table := toTraceTable(name)
 			if err := w.AppendRaw(table, number, data); err != nil {
-				log.Error("Failed to write block traces", "number", f.latest, "table", table, "error", err)
+				log.Error("Failed to write block traces", "number", f.latest.Load(), "table", table, "error", err)
 			}
 		}
 		return nil
@@ -223,7 +223,7 @@ func (f *filter) readBlockTraces(name string, blknum uint64) ([]*traceResult, er
 		return nil, errors.New("tracer not found")
 	}
 
-	if blknum < f.offset || blknum > f.latest {
+	if blknum < f.offset || blknum > f.latest.Load() {
 		return nil, nil
 	}
 
