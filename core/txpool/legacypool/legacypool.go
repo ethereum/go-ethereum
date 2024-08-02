@@ -1500,8 +1500,10 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 			pool.all.Remove(hash)
 		}
 		log.Trace("Removed old queued transactions", "count", len(forwards))
+
 		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), gasLimit)
+		costLimit := pool.currentState.GetBalance(addr)
+		drops, _ := list.FilterF(costLimit, gasLimit, pool.executableTxFilter(costLimit, gasLimit))
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
@@ -1547,6 +1549,26 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 		}
 	}
 	return promoted
+}
+
+func (pool *LegacyPool) executableTxFilter(costLimit *big.Int, gasLimit uint64) func(tx *types.Transaction) bool {
+	return func(tx *types.Transaction) bool {
+		if tx.Gas() > gasLimit || tx.Cost().Cmp(costLimit) > 0 {
+			return true
+		}
+
+		if pool.chainconfig.Scroll.FeeVaultEnabled() {
+			// recheck L1 data fee, as the oracle price may have changed
+			l1DataFee, err := fees.CalculateL1DataFee(tx, pool.currentState, pool.chainconfig, pool.currentHead.Load().Number)
+			if err != nil {
+				log.Error("Failed to calculate L1 data fee", "err", err, "tx", tx)
+				return false
+			}
+			return costLimit.Cmp(new(big.Int).Add(tx.Cost(), l1DataFee)) < 0
+		}
+
+		return false
+	}
 }
 
 // truncatePending removes transactions from the pending queue if the pool is above the
@@ -1702,7 +1724,8 @@ func (pool *LegacyPool) demoteUnexecutables() {
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), gasLimit)
+		costLimit := pool.currentState.GetBalance(addr)
+		drops, invalids := list.FilterF(costLimit, gasLimit, pool.executableTxFilter(costLimit, gasLimit))
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)

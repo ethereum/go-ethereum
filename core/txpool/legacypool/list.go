@@ -404,6 +404,37 @@ func (l *list) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, 
 	return removed, invalids
 }
 
+// FilterF removes all transactions from the list that satisfy a predicate.
+// Every removed transaction is returned for any post-removal maintenance.
+// Strict-mode invalidated transactions are also returned.
+func (l *list) FilterF(costLimit *big.Int, gasLimit uint64, f func(tx *types.Transaction) bool) (types.Transactions, types.Transactions) {
+	// If all transactions are below the threshold, short circuit
+	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
+		return nil, nil
+	}
+	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
+	l.gascap = gasLimit
+
+	removed := l.txs.Filter(f)
+
+	if len(removed) == 0 {
+		return nil, nil
+	}
+	var invalids types.Transactions
+	// If the list was strict, filter anything above the lowest nonce
+	if l.strict {
+		lowest := uint64(math.MaxUint64)
+		for _, tx := range removed {
+			if nonce := tx.Nonce(); lowest > nonce {
+				lowest = nonce
+			}
+		}
+		invalids = l.txs.filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
+	}
+	l.txs.reheap()
+	return removed, invalids
+}
+
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
 func (l *list) Cap(threshold int) types.Transactions {
