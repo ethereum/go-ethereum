@@ -25,7 +25,7 @@ import (
 )
 
 // Protocol-enforced maximum L2 base fee.
-// We would only go above this if L1 base fee hits 2164 Gwei.
+// We would only go above this if L1 base fee hits 2931 Gwei.
 const MaximumL2BaseFee = 10000000000
 
 // VerifyEip1559Header verifies some header attributes which were changed in EIP-1559,
@@ -55,11 +55,11 @@ func CalcBaseFee(config *params.ChainConfig, parent *types.Header, parentL1BaseF
 		return big.NewInt(10000000) // 0.01 Gwei
 	}
 	l2SequencerFee := big.NewInt(1000000) // 0.001 Gwei
-	provingFee := big.NewInt(47700000)    // 0.0477 Gwei
+	provingFee := big.NewInt(33700000)    // 0.0337 Gwei
 
-	// L1_base_fee * 0.0046
+	// L1_base_fee * 0.0034
 	verificationFee := parentL1BaseFee
-	verificationFee = new(big.Int).Mul(verificationFee, big.NewInt(46))
+	verificationFee = new(big.Int).Mul(verificationFee, big.NewInt(34))
 	verificationFee = new(big.Int).Div(verificationFee, big.NewInt(10000))
 
 	baseFee := big.NewInt(0)
