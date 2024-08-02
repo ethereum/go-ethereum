@@ -590,7 +590,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 		log.Crit("Failed to write genesis block", "err", err)
 	}
 	bc.genesisBlock = genesis
-	bc.insert(bc.genesisBlock)
+	bc.insert(bc.genesisBlock, false)
 	bc.currentBlock.Store(bc.genesisBlock)
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
@@ -680,7 +680,7 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 // or if they are on a different side chain.
 //
 // Note, this function assumes that the `mu` mutex is held!
-func (bc *BlockChain) insert(block *types.Block) {
+func (bc *BlockChain) insert(block *types.Block, writeBlock bool) {
 	// If the block is on a side chain or an unknown one, force other heads onto it too
 	updateHeads := GetCanonicalHash(bc.db, block.NumberU64()) != block.Hash()
 
@@ -690,6 +690,11 @@ func (bc *BlockChain) insert(block *types.Block) {
 	}
 	if err := WriteHeadBlockHash(bc.db, block.Hash()); err != nil {
 		log.Crit("Failed to insert head block hash", "err", err)
+	}
+	if writeBlock {
+		if err := WriteBlock(bc.db, block); err != nil {
+			log.Crit("Failed to insert block", "err", err)
+		}
 	}
 	bc.currentBlock.Store(block)
 
@@ -1422,7 +1427,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 
 	// Set new head.
 	if status == CanonStatTy {
-		bc.insert(block)
+		// WriteBlock has already been called, no need to write again
+		bc.insert(block, false)
 		// prepare set of masternodes for the next epoch
 		if bc.chainConfig.XDPoS != nil && ((block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap)) {
 			err := bc.UpdateM1()
@@ -2265,7 +2271,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	var addedTxs types.Transactions
 	for i := len(newChain) - 1; i >= 0; i-- {
 		// insert the block in the canonical way, re-writing history
-		bc.insert(newChain[i])
+		bc.insert(newChain[i], true)
 		// write lookup entries for hash based transaction/receipt searches
 		if err := WriteTxLookupEntries(bc.db, newChain[i]); err != nil {
 			return err
