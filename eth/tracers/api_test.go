@@ -227,7 +227,7 @@ func TestTraceCall(t *testing.T) {
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []types.StructLogRes{},
+				StructLogs:  []*types.StructLogRes{},
 			},
 		},
 		// Standard JSON trace upon the head, plain transfer.
@@ -245,7 +245,7 @@ func TestTraceCall(t *testing.T) {
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []types.StructLogRes{},
+				StructLogs:  []*types.StructLogRes{},
 			},
 		},
 		// Standard JSON trace upon the non-existent block, error expects
@@ -275,7 +275,7 @@ func TestTraceCall(t *testing.T) {
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []types.StructLogRes{},
+				StructLogs:  []*types.StructLogRes{},
 			},
 		},
 		// Standard JSON trace upon the pending block
@@ -293,7 +293,7 @@ func TestTraceCall(t *testing.T) {
 				Gas:         params.TxGas,
 				Failed:      false,
 				ReturnValue: "",
-				StructLogs:  []types.StructLogRes{},
+				StructLogs:  []*types.StructLogRes{},
 			},
 		},
 	}
@@ -347,7 +347,7 @@ func TestTraceTransaction(t *testing.T) {
 		Gas:         params.TxGas,
 		Failed:      false,
 		ReturnValue: "",
-		StructLogs:  []types.StructLogRes{},
+		StructLogs:  []*types.StructLogRes{},
 	}) {
 		t.Error("Transaction tracing result is different")
 	}
