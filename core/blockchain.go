@@ -2584,6 +2584,8 @@ func (bc *BlockChain) UpdateM1() error {
 		if err != nil {
 			return err
 		}
+	} else if stateDB == nil {
+		return errors.New("nil stateDB in UpdateM1")
 	} else {
 		candidates = state.GetCandidates(stateDB)
 	}

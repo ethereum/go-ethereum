@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -443,7 +442,11 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 
 	state, err := chain.StateAt(lastCheckpointBlock.Root())
 	if err != nil {
-		fmt.Println("ERROR Trying to getting state at", lastCheckpointNumber, " Error ", err)
+		log.Error("fail to get state in GetVotersRewards", "lastCheckpointNumber", lastCheckpointNumber, "err", err)
+		return nil
+	}
+	if state == nil {
+		log.Error("fail to get state in GetVotersRewards", "lastCheckpointNumber", lastCheckpointNumber)
 		return nil
 	}
 
@@ -503,7 +506,11 @@ func (b *EthApiBackend) GetVotersCap(checkpoint *big.Int, masterAddr common.Addr
 	state, err := chain.StateAt(checkpointBlock.Root())
 
 	if err != nil {
-		fmt.Println("ERROR Trying to getting state at", checkpoint, " Error ", err)
+		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint, "err", err)
+		return nil
+	}
+	if state != nil {
+		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint)
 		return nil
 	}
 
@@ -533,9 +540,12 @@ func (b *EthApiBackend) GetEpochDuration() *big.Int {
 func (b *EthApiBackend) GetMasternodesCap(checkpoint uint64) map[common.Address]*big.Int {
 	checkpointBlock := b.eth.blockchain.GetBlockByNumber(checkpoint)
 	state, err := b.eth.blockchain.StateAt(checkpointBlock.Root())
-
 	if err != nil {
-		fmt.Println("ERROR Trying to getting state at", checkpoint, " Error ", err)
+		log.Error("fail to get state in GetMasternodesCap", "checkpoint", checkpoint, "err", err)
+		return nil
+	}
+	if state == nil {
+		log.Error("fail to get state in GetMasternodesCap", "checkpoint", checkpoint)
 		return nil
 	}
 

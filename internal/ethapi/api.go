@@ -897,6 +897,10 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 			result[fieldSuccess] = false
 			return result, err
 		}
+		if statedb == nil {
+			result[fieldSuccess] = false
+			return result, errors.New("nil statedb in GetCandidateStatus")
+		}
 		candidatesAddresses := state.GetCandidates(statedb)
 		candidates = make([]utils.Masternode, 0, len(candidatesAddresses))
 		for _, address := range candidatesAddresses {
@@ -1051,6 +1055,10 @@ func (s *PublicBlockChainAPI) GetCandidates(ctx context.Context, epoch rpc.Epoch
 		if err != nil {
 			result[fieldSuccess] = false
 			return result, err
+		}
+		if statedb == nil {
+			result[fieldSuccess] = false
+			return result, errors.New("nil statedb in GetCandidates")
 		}
 		candidatesAddresses := state.GetCandidates(statedb)
 		candidates = make([]utils.Masternode, 0, len(candidatesAddresses))
@@ -1305,6 +1313,9 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	if statedb == nil || err != nil {
 		return nil, 0, false, err, nil
 	}
+	if header == nil {
+		return nil, 0, false, errors.New("nil header in DoCall"), nil
+	}
 	if err := overrides.Apply(statedb); err != nil {
 		return nil, 0, false, err, nil
 	}
@@ -1326,6 +1337,9 @@ func DoCall(ctx context.Context, b Backend, args CallArgs, blockNrOrHash rpc.Blo
 	block, err := b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
 		return nil, 0, false, err, nil
+	}
+	if block == nil {
+		return nil, 0, false, fmt.Errorf("nil block in DoCall: number=%d, hash=%s", header.Number.Uint64(), header.Hash().Hex()), nil
 	}
 	author, err := b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -1947,6 +1961,9 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	block, err := b.BlockByHash(ctx, header.Hash())
 	if err != nil {
 		return nil, 0, nil, err
+	}
+	if block == nil {
+		return nil, 0, nil, fmt.Errorf("nil block in AccessList: number=%d, hash=%s", header.Number.Uint64(), header.Hash().Hex())
 	}
 	author, err := b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -3617,9 +3634,15 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 			if err != nil {
 				return addrs, err
 			}
+			if header == nil {
+				return addrs, errors.New("nil header in GetSignersFromBlocks")
+			}
 			blockData, err := b.BlockByNumber(nil, rpc.BlockNumber(i))
 			if err != nil {
 				return addrs, err
+			}
+			if blockData == nil {
+				return addrs, errors.New("nil blockData in GetSignersFromBlocks")
 			}
 			signTxs := engine.CacheSigningTxs(header.Hash(), blockData.Transactions())
 			for _, signtx := range signTxs {

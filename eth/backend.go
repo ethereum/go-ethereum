@@ -192,11 +192,14 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 	eth.orderPool = core.NewOrderPool(eth.chainConfig, eth.blockchain)
 	eth.lendingPool = core.NewLendingPool(eth.chainConfig, eth.blockchain)
-	if common.RollbackHash != common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000") {
+	if common.RollbackHash != (common.Hash{}) {
 		curBlock := eth.blockchain.CurrentBlock()
+		if curBlock == nil {
+			log.Warn("not find current block when rollback")
+		}
 		prevBlock := eth.blockchain.GetBlockByHash(common.RollbackHash)
 
-		if curBlock.NumberU64() > prevBlock.NumberU64() {
+		if curBlock != nil && prevBlock != nil && curBlock.NumberU64() > prevBlock.NumberU64() {
 			for ; curBlock != nil && curBlock.NumberU64() != prevBlock.NumberU64(); curBlock = eth.blockchain.GetBlock(curBlock.ParentHash(), curBlock.NumberU64()-1) {
 				eth.blockchain.Rollback([]common.Hash{curBlock.Hash()})
 			}
@@ -208,6 +211,8 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 				log.Crit("Err Rollback", "err", err)
 				return nil, err
 			}
+		} else {
+			log.Error("skip SetHead because target block is nil when rollback")
 		}
 	}
 
