@@ -21,7 +21,7 @@ var defaultTraceConfig = &traceConfig{
 func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *traceConfig) ([]*traceResult, error) {
 	blknum := uint64(blockNr.Int64())
 	if blockNr == rpc.LatestBlockNumber {
-		blknum = api.filter.latest
+		blknum = api.filter.latest.Load()
 	}
 
 	tracer := defaultTraceConfig.Tracer
