@@ -18,44 +18,77 @@ package catalyst
 
 import (
 	"context"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 )
 
-type api struct {
-	sim *SimulatedBeacon
+// simulatedBeaconAPI provides a RPC API for SimulatedBeacon.
+type simulatedBeaconAPI struct {
+	sim      *SimulatedBeacon
+	doCommit chan struct{}
 }
 
-func (a *api) loop() {
+// loop is the main loop for the API when it's running in period = 0 mode. It
+// ensures that block production is triggered as soon as a new withdrawal or
+// transaction is received.
+func (a *simulatedBeaconAPI) loop() {
 	var (
-		newTxs = make(chan core.NewTxsEvent)
-		sub    = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
+		newTxs    = make(chan core.NewTxsEvent)
+		newWxs    = make(chan newWithdrawalsEvent)
+		newTxsSub = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
+		newWxsSub = a.sim.withdrawals.Subscribe(newWxs)
 	)
-	defer sub.Unsubscribe()
+	defer newTxsSub.Unsubscribe()
+	defer newWxsSub.Unsubscribe()
+
+	go a.worker()
 
 	for {
 		select {
 		case <-a.sim.shutdownCh:
 			return
-		case w := <-a.sim.withdrawals.pending:
-			withdrawals := append(a.sim.withdrawals.gatherPending(9), w)
-			if err := a.sim.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
-				log.Warn("Error performing sealing work", "err", err)
-			}
+		case <-newWxs:
+			a.commit()
 		case <-newTxs:
-			a.sim.Commit()
+			a.commit()
 		}
 	}
 }
 
-func (a *api) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
-	return a.sim.withdrawals.add(withdrawal)
+// commit is a non-blocking method to initate Commit() on the simulator.
+func (a *simulatedBeaconAPI) commit() {
+	select {
+	case a.doCommit <- struct{}{}:
+	default:
+	}
 }
 
-func (a *api) SetFeeRecipient(ctx context.Context, feeRecipient common.Address) {
+// worker runs in the background and signals to the simulator when to commit
+// based on messages over doCommit.
+func (a *simulatedBeaconAPI) worker() {
+	for {
+		select {
+		case <-a.sim.shutdownCh:
+			return
+		case <-a.doCommit:
+			a.sim.Commit()
+			a.sim.eth.TxPool().Sync()
+			executable, _ := a.sim.eth.TxPool().Stats()
+			if executable != 0 {
+				a.commit()
+			}
+		}
+	}
+}
+
+// AddWithdrawal adds a withdrawal to the pending queue.
+func (a *simulatedBeaconAPI) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
+	return a.sim.withdrawals.Add(withdrawal)
+}
+
+// SetFeeRecipient sets the fee recipient for block building purposes.
+func (a *simulatedBeaconAPI) SetFeeRecipient(ctx context.Context, feeRecipient common.Address) {
 	a.sim.setFeeRecipient(feeRecipient)
 }
