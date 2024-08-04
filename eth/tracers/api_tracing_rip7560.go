@@ -2,7 +2,6 @@ package tracers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -12,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
-	"log"
 	"math/big"
 	"time"
 )
@@ -61,8 +59,6 @@ func (api *Rip7560API) TraceRip7560Validation(
 	if err != nil {
 		return nil, err
 	}
-	log.Println("TraceRip7560Validation result")
-	log.Println(string(traceResult.(json.RawMessage)))
 	return traceResult, err
 }
 
