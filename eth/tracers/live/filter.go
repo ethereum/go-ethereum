@@ -143,16 +143,22 @@ func newFilter(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 }
 
 func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
+	// track the latest block number
+	blknum := ev.Block.NumberU64()
+	latest := f.latest.Load()
+	if blknum < latest {
+		// TODO: handle the case of setHead
+		log.Error("OnBlockStart received an old block", "latest", latest, "number", blknum)
+		return
+	}
+	f.latest.Store(blknum)
+	log.Info("OnBlockStart", "new", blknum, "old", latest)
+
 	// reset local cache
 	txs := ev.Block.Transactions().Len()
 	for name := range f.traces {
 		f.traces[name] = make([]*traceResult, 0, txs)
 	}
-
-	// track the latest block number
-	blknum := ev.Block.NumberU64()
-	latest := f.latest.Load()
-	f.latest.Store(blknum)
 
 	// save the earliest arrived blknum as the offset
 	f.once.Do(func() {
@@ -196,6 +202,9 @@ func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 }
 
 func (f *filter) OnBlockEnd(err error) {
+	if err != nil {
+		log.Warn("OnBlockEnd", "latest", f.latest.Load(), "err", err)
+	}
 	f.db.ModifyAncients(func(w ethdb.AncientWriteOp) error {
 		latest := f.latest.Load()
 		offset := f.offset.Load()
