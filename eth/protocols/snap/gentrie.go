@@ -212,19 +212,24 @@ func (t *pathTrie) update(key, value []byte) error {
 
 // delete implements genTrie interface, deleting the item from the stack trie.
 func (t *pathTrie) delete(key []byte) error {
-	// reset the trie along with the trackers. Be aware that the last
-	// inserted item (potentially along with some internal trie nodes)
-	// will be silently discarded by trie resetting.
+	// Commit the trie since the right boundary is incomplete because
+	// of the deleted item. This will implicitly discard the last inserted
+	// item and clean some ancestor trie nodes of the last committed
+	// item in the database.
+	t.commit(false)
+
+	// Reset the trie and all the internal trackers
 	t.first = nil
 	t.last = nil
 	t.tr.Reset()
 
-	// explicitly mark the left boundary as incomplete, as the left-side
-	// item of the next one has been removed. Be aware that the next item
-	// to be inserted to will be ignored from committing as well.
+	// Explicitly mark the left boundary as incomplete, as the left-side
+	// item of the next one has been deleted. Be aware that the next item
+	// to be inserted will be ignored from committing as well as it's on
+	// the left boundary.
 	t.skipLeftBoundary = true
 
-	// explicitly delete the potential leftover nodes on the specific
+	// Explicitly delete the potential leftover nodes on the specific
 	// path from the database.
 	tkey := t.tr.TrieKey(key)
 	for i := 0; i <= len(tkey); i++ {
