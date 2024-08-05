@@ -5,7 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// SubmitBundle inserts the entire bundle of Type 4 transactions into the relevant pool.
+// SubmitRip7560Bundle inserts the entire bundle of Type 4 transactions into the relevant pool.
 func (p *TxPool) SubmitRip7560Bundle(bundle *types.ExternallyReceivedBundle) error {
 	// todo: we cannot 'filter-out' the AA pool so just passing to all pools - only AA pool has code in SubmitBundle
 	for _, subpool := range p.subpools {

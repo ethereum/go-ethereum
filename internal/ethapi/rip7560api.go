@@ -23,7 +23,7 @@ func (s *TransactionAPI) SendRip7560TransactionsBundle(ctx context.Context, args
 		ValidForBlock: creationBlock,
 		Transactions:  txs,
 	}
-	bundleHash := calculateBundleHash(txs)
+	bundleHash := CalculateBundleHash(txs)
 	bundle.BundleHash = bundleHash
 	err := SubmitRip7560Bundle(ctx, s.b, bundle)
 	if err != nil {
@@ -37,15 +37,19 @@ func (s *TransactionAPI) GetRip7560BundleStatus(ctx context.Context, hash common
 	return bundleStats, err
 }
 
+// CalculateBundleHash
 // TODO: If this code is indeed necessary, keep it in utils; better - remove altogether.
-func calculateBundleHash(txs []*types.Transaction) common.Hash {
+func CalculateBundleHash(txs []*types.Transaction) common.Hash {
 	appendedTxIds := make([]byte, 0)
 	for _, tx := range txs {
 		txHash := tx.Hash()
 		appendedTxIds = append(appendedTxIds, txHash[:]...)
 	}
 
-	return rlpHash(appendedTxIds)
+	bundleHash := rlpHash(appendedTxIds)
+	println("calculateBundleHash")
+	println(bundleHash.String())
+	return bundleHash
 }
 
 func rlpHash(x interface{}) (h common.Hash) {

@@ -163,6 +163,18 @@ type Config struct {
 
 	// OverrideVerkle (TODO: remove after the fork)
 	OverrideVerkle *uint64 `toml:",omitempty"`
+
+	// Rip7560MaxBundleGas is the maximum amount of gas that can be used by an RIP-7560 bundle
+	Rip7560MaxBundleGas *uint64 `toml:",omitempty"`
+
+	// Rip7560MaxBundleSize is the maximum number of transactions an RIP-7560 bundle can contain
+	Rip7560MaxBundleSize *uint64 `toml:",omitempty"`
+
+	// Rip7560PullUrls provides a list of bundlers the node will ask for new bundles for each block
+	Rip7560PullUrls []string
+
+	// Rip7560AcceptPush when set to "true" the node will accept incoming 'eth_sendRip7560TransactionsBundle'
+	Rip7560AcceptPush bool `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.

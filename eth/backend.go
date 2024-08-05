@@ -238,8 +238,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
 
 	rip7560PoolConfig := rip7560pool.Config{
-		MaxBundleGas:  10000000,
-		MaxBundleSize: 100,
+		MaxBundleGas:  config.Rip7560MaxBundleGas,
+		MaxBundleSize: config.Rip7560MaxBundleSize,
+		PullUrls:      config.Rip7560PullUrls,
 	}
 	rip7560 := rip7560pool.New(rip7560PoolConfig, eth.blockchain, config.Miner.Etherbase)
 
@@ -266,7 +267,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.miner = miner.New(eth, config.Miner, eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
-	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
+	eth.APIBackend = &EthAPIBackend{config.Rip7560AcceptPush, stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
 	}

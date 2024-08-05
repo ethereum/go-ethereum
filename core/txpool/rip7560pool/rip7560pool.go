@@ -1,21 +1,30 @@
 package rip7560pool
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
+	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type Config struct {
-	MaxBundleSize uint
-	MaxBundleGas  uint
+	MaxBundleSize *uint64
+	MaxBundleGas  *uint64
+	PullUrls      []string
 }
 
 // Rip7560BundlerPool is the transaction pool dedicated to RIP-7560 AA transactions.
@@ -189,7 +198,10 @@ func (pool *Rip7560BundlerPool) PendingRip7560Bundle() (*types.ExternallyReceive
 	defer pool.mu.Unlock()
 
 	bundle := pool.selectExternalBundle()
-	return bundle, nil
+	if bundle != nil {
+		return bundle, nil
+	}
+	return pool.fetchBundleFromBundler()
 }
 
 // SubscribeTransactions is not needed for the External Bundler AA sub pool and 'ch' will never be sent anything.
@@ -259,6 +271,64 @@ func (pool *Rip7560BundlerPool) GetRip7560BundleStatus(hash common.Hash) (*types
 	defer pool.mu.Unlock()
 
 	return pool.includedBundles[hash], nil
+}
+
+type GetRip7560BundleArgs struct {
+	MinBaseFee    uint64
+	MaxBundleGas  uint64
+	MaxBundleSize uint64
+}
+
+type GetRip7560BundleResult struct {
+	Bundle        []ethapi.TransactionArgs
+	ValidForBlock *hexutil.Big
+}
+
+func (pool *Rip7560BundlerPool) fetchBundleFromBundler() (*types.ExternallyReceivedBundle, error) {
+	if len(pool.config.PullUrls) == 0 {
+		return nil, nil
+	}
+	currentHead := pool.currentHead.Load()
+	chosenBundle := make([]ethapi.TransactionArgs, 0)
+	pullErrors := make([]error, 0)
+	for _, url := range pool.config.PullUrls {
+		client := rpc.WithHTTPClient(&http.Client{Timeout: 500 * time.Millisecond})
+		cl, err := rpc.DialOptions(context.Background(), url, client)
+		if err != nil {
+			log.Warn(fmt.Sprintf("Failed to dial RIP-7560 bundler URL (%s): %v", url, err))
+		}
+		maxBundleGas := min(*pool.config.MaxBundleGas, currentHead.GasLimit)
+		args := &GetRip7560BundleArgs{
+			MinBaseFee:    currentHead.BaseFee.Uint64(), // todo: adjust to account for possible change!
+			MaxBundleGas:  maxBundleGas,
+			MaxBundleSize: *pool.config.MaxBundleSize,
+		}
+		result := &GetRip7560BundleResult{
+			Bundle: make([]ethapi.TransactionArgs, 0),
+		}
+		err = cl.Call(result, "aa_getRip7560Bundle", args)
+		if err != nil {
+			log.Warn(fmt.Sprintf("Failed to fetch RIP-7560 bundle from URL (%s): %v", url, err))
+			pullErrors = append(pullErrors, err)
+			continue
+		}
+		chosenBundle = result.Bundle
+		break
+	}
+	if len(pullErrors) == len(pool.config.PullUrls) {
+		return nil, errors.New("failed to fetch a new RIP-7560 bundle from any bundler")
+	}
+	txs := make([]*types.Transaction, len(chosenBundle))
+	for i, tx := range chosenBundle {
+		txs[i] = tx.ToTransaction()
+	}
+	bundleHash := ethapi.CalculateBundleHash(txs)
+	return &types.ExternallyReceivedBundle{
+		BundlerId:     "result.String",
+		BundleHash:    bundleHash,
+		ValidForBlock: big.NewInt(0),
+		Transactions:  txs,
+	}, nil
 }
 
 // return first bundle

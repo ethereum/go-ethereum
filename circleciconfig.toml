@@ -1,0 +1,5 @@
+[Eth]
+Rip7560MaxBundleSize = 0
+Rip7560MaxBundleGas = 0
+Rip7560PullUrls = ["http://localhost:3001/rpc"]
+Rip7560AcceptPush = false
