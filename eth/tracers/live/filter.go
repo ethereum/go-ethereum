@@ -43,7 +43,7 @@ type filter struct {
 	latest     atomic.Uint64
 	offset     atomic.Uint64
 	once       sync.Once
-	ignored    bool
+	skipped    bool
 	offsetFile string
 }
 
@@ -150,7 +150,7 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	if blknum < latest {
 		// TODO: handle the case of setHead
 		log.Error("OnBlockStart received an old block", "latest", latest, "number", blknum)
-		f.ignored = true
+		f.skipped = true
 		return
 	}
 	f.latest.Store(blknum)
@@ -184,14 +184,14 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 }
 
 func (f *filter) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
-	if f.ignored {
+	if f.skipped {
 		return
 	}
 	f.tracer.OnTxStart(env, tx, from)
 }
 
 func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
-	if f.ignored {
+	if f.skipped {
 		return
 	}
 	f.tracer.OnTxEnd(receipt, err)
@@ -210,9 +210,9 @@ func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 }
 
 func (f *filter) OnBlockEnd(err error) {
-	if f.ignored {
+	if f.skipped {
 		// reset it
-		f.ignored = false
+		f.skipped = false
 		return
 	}
 	if err != nil {
