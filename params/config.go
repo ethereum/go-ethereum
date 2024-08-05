@@ -39,6 +39,8 @@ var (
 	ScrollMainnetGenesisHash = common.HexToHash("0xbbc05efd412b7cd47a2ed0e5ddfcf87af251e414ea4c801d78b6784513180a80")
 )
 
+func newUint64(val uint64) *uint64 { return &val }
+
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
 // the chain it belongs to.
 var TrustedCheckpoints = map[common.Hash]*TrustedCheckpoint{
@@ -320,7 +322,7 @@ var (
 		ShanghaiBlock:       big.NewInt(0),
 		BernoulliBlock:      big.NewInt(3747132),
 		CurieBlock:          big.NewInt(4740239),
-		DarwinTime:          nil,
+		DarwinTime:          newUint64(1723622400),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -359,7 +361,7 @@ var (
 		ShanghaiBlock:       big.NewInt(0),
 		BernoulliBlock:      big.NewInt(5220340),
 		CurieBlock:          big.NewInt(7096836),
-		DarwinTime:          nil,
+		DarwinTime:          newUint64(1724227200),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
