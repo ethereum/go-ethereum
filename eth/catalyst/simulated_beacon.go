@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -163,6 +164,16 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
+	// Because transaction insertion, block insertion and block production will
+	// happen without any timing delay between them in simulator mode and the
+	// transaction pool will be running its internal reset operation on a
+	// background thread, flaky executions can happen. To avoid the racey
+	// behavior, the pool will be explicitly blocked on its reset before
+	// continuing to the block production below.
+	if err := c.eth.APIBackend.TxPool().Sync(); err != nil {
+		return fmt.Errorf("failed to sync txpool: %w", err)
+	}
+
 	var random [32]byte
 	rand.Read(random[:])
 	fcResponse, err := c.engineAPI.forkchoiceUpdated(c.curForkchoiceState, &engine.PayloadAttributes{
@@ -171,7 +182,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
-	}, engine.PayloadV3, true)
+	}, engine.PayloadV3)
 	if err != nil {
 		return err
 	}
