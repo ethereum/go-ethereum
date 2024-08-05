@@ -22,13 +22,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/trie/testutil"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
 func emptyLayer() *diskLayer {
 	return &diskLayer{
-		db:     New(rawdb.NewMemoryDatabase(), nil),
+		db:     New(rawdb.NewMemoryDatabase(), nil, false),
 		buffer: newNodeBuffer(DefaultBufferSize, nil, 0),
 	}
 }
@@ -58,7 +59,6 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 	b.Helper()
 	var (
 		npath []byte
-		nhash common.Hash
 		nblob []byte
 	)
 	// First, we set up 128 diff layers, with 3K items each
@@ -67,14 +67,14 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 		nodes[common.Hash{}] = make(map[string]*trienode.Node)
 		for i := 0; i < 3000; i++ {
 			var (
-				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				path = testrand.Bytes(32)
+				blob = testrand.Bytes(100)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob)
 			)
-			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
+			nodes[common.Hash{}][string(path)] = node
 			if npath == nil && depth == index {
 				npath = common.CopyBytes(path)
-				nblob = common.CopyBytes(node.Blob)
-				nhash = node.Hash
+				nblob = common.CopyBytes(blob)
 			}
 		}
 		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)
@@ -91,7 +91,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 		err  error
 	)
 	for i := 0; i < b.N; i++ {
-		have, err = layer.Node(common.Hash{}, npath, nhash)
+		have, _, _, err = layer.node(common.Hash{}, npath, 0)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -113,10 +113,11 @@ func BenchmarkPersist(b *testing.B) {
 		nodes[common.Hash{}] = make(map[string]*trienode.Node)
 		for i := 0; i < 3000; i++ {
 			var (
-				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				path = testrand.Bytes(32)
+				blob = testrand.Bytes(100)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob)
 			)
-			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
+			nodes[common.Hash{}][string(path)] = node
 		}
 		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)
 	}
@@ -150,10 +151,11 @@ func BenchmarkJournal(b *testing.B) {
 		nodes[common.Hash{}] = make(map[string]*trienode.Node)
 		for i := 0; i < 3000; i++ {
 			var (
-				path = testutil.RandBytes(32)
-				node = testutil.RandomNode()
+				path = testrand.Bytes(32)
+				blob = testrand.Bytes(100)
+				node = trienode.New(crypto.Keccak256Hash(blob), blob)
 			)
-			nodes[common.Hash{}][string(path)] = trienode.New(node.Hash, node.Blob)
+			nodes[common.Hash{}][string(path)] = node
 		}
 		// TODO(rjl493456442) a non-nil state set is expected.
 		return newDiffLayer(parent, common.Hash{}, 0, 0, nodes, nil)

@@ -9,6 +9,7 @@ import (
 	core "github.com/ethereum/go-ethereum/core"
 	bloombits "github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	types "github.com/ethereum/go-ethereum/core/types"
 	ethdb "github.com/ethereum/go-ethereum/ethdb"
 	event "github.com/ethereum/go-ethereum/event"
@@ -185,6 +186,6 @@ func (b *TestBackend) GetBody(context.Context, common.Hash, rpc.BlockNumber) (*t
 	panic("not implemented")
 }
 
-func (b *TestBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+func (b *TestBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	panic("not implemented")
 }

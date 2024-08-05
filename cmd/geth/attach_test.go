@@ -50,7 +50,7 @@ func TestAttachWithHeaders(t *testing.T) {
 	testReceiveHeaders(t, ln, "attach", "-H", "first: one", "-H", "second: two", fmt.Sprintf("http://localhost:%d", port))
 }
 
-// TestAttachWithHeaders tests that 'geth db --remotedb' with custom headers works, i.e
+// TestRemoteDbWithHeaders tests that 'geth db --remotedb' with custom headers works, i.e
 // that custom headers are forwarded to the target.
 func TestRemoteDbWithHeaders(t *testing.T) {
 	t.Parallel()

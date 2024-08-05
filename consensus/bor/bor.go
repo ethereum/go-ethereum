@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/tracing"
+	balance_tracing "github.com/ethereum/go-ethereum/core/tracing"
+
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/bor/api"
 	"github.com/ethereum/go-ethereum/consensus/bor/clerk"
@@ -813,7 +815,7 @@ func (c *Bor) Prepare(chain consensus.ChainHeaderReader, header *types.Header) e
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, _ []*types.Transaction, _ []*types.Header, withdrawals []*types.Withdrawal) {
+func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body) {
 	var (
 		stateSyncData []*types.StateSyncData
 		err           error
@@ -821,7 +823,7 @@ func (c *Bor) Finalize(chain consensus.ChainHeaderReader, header *types.Header, 
 
 	headerNumber := header.Number.Uint64()
 
-	if withdrawals != nil || header.WithdrawalsHash != nil {
+	if body.Withdrawals != nil || header.WithdrawalsHash != nil {
 		return
 	}
 
@@ -886,7 +888,8 @@ func (c *Bor) changeContractCodeIfNeeded(headerNumber uint64, state *state.State
 				state.SetCode(addr, account.Code)
 
 				if state.GetBalance(addr).Cmp(uint256.NewInt(0)) == 0 {
-					state.SetBalance(addr, uint256.NewInt(account.Balance.Uint64()))
+					// todo: @anshalshukla - check tracing reason
+					state.SetBalance(addr, uint256.NewInt(account.Balance.Uint64()), balance_tracing.BalanceChangeUnspecified)
 				}
 			}
 		}
@@ -897,13 +900,13 @@ func (c *Bor) changeContractCodeIfNeeded(headerNumber uint64, state *state.State
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
-func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt, withdrawals []*types.Withdrawal) (*types.Block, error) {
-	finalizeCtx, finalizeSpan := tracing.StartSpan(ctx, "bor.FinalizeAndAssemble")
+func (c *Bor) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt) (*types.Block, error) {
+	finalizeCtx, finalizeSpan := tracing.StartSpan(context.Background(), "bor.FinalizeAndAssemble")
 	defer tracing.EndSpan(finalizeSpan)
 
 	headerNumber := header.Number.Uint64()
 
-	if withdrawals != nil || header.WithdrawalsHash != nil {
+	if body.Withdrawals != nil || header.WithdrawalsHash != nil {
 		return nil, consensus.ErrUnexpectedWithdrawals
 	}
 
@@ -955,7 +958,7 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 	header.UncleHash = types.CalcUncleHash(nil)
 
 	// Assemble block
-	block := types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 
 	// set state sync
 	bc := chain.(core.BorStateSyncer)
@@ -965,7 +968,7 @@ func (c *Bor) FinalizeAndAssemble(ctx context.Context, chain consensus.ChainHead
 		finalizeSpan,
 		attribute.Int("number", int(header.Number.Int64())),
 		attribute.String("hash", header.Hash().String()),
-		attribute.Int("number of txs", len(txs)),
+		attribute.Int("number of txs", len(body.Transactions)),
 		attribute.Int("gas used", int(block.GasUsed())),
 	)
 

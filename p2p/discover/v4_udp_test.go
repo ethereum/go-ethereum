@@ -296,7 +296,7 @@ func TestUDPv4_findnode(t *testing.T) {
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
 	remoteID := v4wire.EncodePubkey(&test.remotekey.PublicKey).ID()
-	test.table.db.UpdateLastPongReceived(remoteID, test.remoteaddr.Addr().AsSlice(), time.Now())
+	test.table.db.UpdateLastPongReceived(remoteID, test.remoteaddr.Addr(), time.Now())
 
 	// check that closest neighbors are returned.
 	expected := test.table.findnodeByID(testTarget.ID(), bucketSize, true)
@@ -304,13 +304,13 @@ func TestUDPv4_findnode(t *testing.T) {
 	waitNeighbors := func(want []*enode.Node) {
 		test.waitPacketOut(func(p *v4wire.Neighbors, to netip.AddrPort, hash []byte) {
 			if len(p.Nodes) != len(want) {
-				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), bucketSize)
+				t.Errorf("wrong number of results: got %d, want %d", len(p.Nodes), len(want))
 				return
 			}
 
 			for i, n := range p.Nodes {
 				if n.ID.ID() != want[i].ID() {
-					t.Errorf("result mismatch at %d:\n  got:  %v\n  want: %v", i, n, expected.entries[i])
+					t.Errorf("result mismatch at %d:\n  got: %v\n  want: %v", i, n, expected.entries[i])
 				}
 
 				if !live[n.ID.ID()] {
@@ -334,7 +334,7 @@ func TestUDPv4_findnodeMultiReply(t *testing.T) {
 	defer test.close()
 
 	rid := enode.PubkeyToIDV4(&test.remotekey.PublicKey)
-	test.table.db.UpdateLastPingReceived(rid, test.remoteaddr.Addr().AsSlice(), time.Now())
+	test.table.db.UpdateLastPingReceived(rid, test.remoteaddr.Addr(), time.Now())
 
 	// queue a pending findnode request
 	resultc, errc := make(chan []*enode.Node, 1), make(chan error, 1)
@@ -466,8 +466,8 @@ func TestUDPv4_successfulPing(t *testing.T) {
 		if n.ID() != rid {
 			t.Errorf("node has wrong ID: got %v, want %v", n.ID(), rid)
 		}
-		if !n.IP().Equal(test.remoteaddr.Addr().AsSlice()) {
-			t.Errorf("node has wrong IP: got %v, want: %v", n.IP(), test.remoteaddr.Addr())
+		if n.IPAddr() != test.remoteaddr.Addr() {
+			t.Errorf("node has wrong IP: got %v, want: %v", n.IPAddr(), test.remoteaddr.Addr())
 		}
 		if n.UDP() != int(test.remoteaddr.Port()) {
 			t.Errorf("node has wrong UDP port: got %v, want: %v", n.UDP(), test.remoteaddr.Port())

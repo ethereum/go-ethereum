@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -187,10 +188,10 @@ func (task *ExecutionTask) Settle() {
 
 	if *task.shouldDelayFeeCal {
 		if task.config.IsLondon(task.blockNumber) {
-			task.finalStateDB.AddBalance(task.result.BurntContractAddress, cmath.BigIntToUint256Int(task.result.FeeBurnt))
+			task.finalStateDB.AddBalance(task.result.BurntContractAddress, cmath.BigIntToUint256Int(task.result.FeeBurnt), tracing.BalanceChangeTransfer)
 		}
 
-		task.finalStateDB.AddBalance(task.coinbase, cmath.BigIntToUint256Int(task.result.FeeTipped))
+		task.finalStateDB.AddBalance(task.coinbase, cmath.BigIntToUint256Int(task.result.FeeTipped), tracing.BalanceChangeTransfer)
 		output1 := new(big.Int).SetBytes(task.result.SenderInitBalance.Bytes())
 		output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
 
@@ -388,7 +389,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), nil)
+	p.engine.Finalize(p.bc, header, statedb, block.Body())
 
 	return receipts, allLogs, *usedGas, nil
 }

@@ -175,7 +175,7 @@ func ExecutableDataToBlock(params ExecutableDataV1) (*types.Block, error) {
 		MixDigest:   params.Random,
 	}
 
-	block := types.NewBlockWithHeader(header).WithBody(txs, nil /* uncles */)
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs})
 	if block.Hash() != params.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
 	}

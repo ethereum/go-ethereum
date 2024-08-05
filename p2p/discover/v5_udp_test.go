@@ -25,6 +25,7 @@ import (
 	"net"
 	"net/netip"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -35,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 )
 
 // Real sockets, real crypto: this test checks end-to-end connectivity for UDPv5.

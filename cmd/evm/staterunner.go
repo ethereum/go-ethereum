@@ -64,11 +64,11 @@ func stateTestCmd(ctx *cli.Context) error {
 		cfg.Tracer = logger.NewJSONLogger(config, os.Stderr)
 
 	case ctx.Bool(DebugFlag.Name):
-		cfg.Tracer = logger.NewStructLogger(config)
+		cfg.Tracer = logger.NewStructLogger(config).Hooks()
 	}
 	// Load the test content from the input file
 	if len(ctx.Args().First()) != 0 {
-		return runStateTest(ctx.Args().First(), cfg, ctx.Bool(MachineFlag.Name), ctx.Bool(DumpFlag.Name))
+		return runStateTest(ctx.Args().First(), cfg, ctx.Bool(DumpFlag.Name))
 	}
 	// Read filenames from stdin and execute back-to-back
 	scanner := bufio.NewScanner(os.Stdin)
@@ -77,7 +77,7 @@ func stateTestCmd(ctx *cli.Context) error {
 		if len(fname) == 0 {
 			return nil
 		}
-		if err := runStateTest(fname, cfg, ctx.Bool(MachineFlag.Name), ctx.Bool(DumpFlag.Name)); err != nil {
+		if err := runStateTest(fname, cfg, ctx.Bool(DumpFlag.Name)); err != nil {
 			return err
 		}
 	}
@@ -85,7 +85,7 @@ func stateTestCmd(ctx *cli.Context) error {
 }
 
 // runStateTest loads the state-test given by fname, and executes the test.
-func runStateTest(fname string, cfg vm.Config, jsonOut, dump bool) error {
+func runStateTest(fname string, cfg vm.Config, dump bool) error {
 	src, err := os.ReadFile(fname)
 	if err != nil {
 		return err
@@ -108,9 +108,7 @@ func runStateTest(fname string, cfg vm.Config, jsonOut, dump bool) error {
 				if tstate.StateDB != nil {
 					root = tstate.StateDB.IntermediateRoot(false)
 					result.Root = &root
-					if jsonOut {
-						fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
-					}
+					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
 					if dump { // Dump any state to aid debugging
 						cpy, _ := state.New(root, tstate.StateDB.Database(), nil)
 						dump := cpy.RawDump(nil)

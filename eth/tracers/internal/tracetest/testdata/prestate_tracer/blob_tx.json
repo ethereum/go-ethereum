@@ -1,0 +1,64 @@
+{
+  "genesis": {
+    "baseFeePerGas": "7",
+    "blobGasUsed": "0",
+    "difficulty": "0",
+    "excessBlobGas": "36306944",
+    "extraData": "0xd983010e00846765746888676f312e32312e308664617277696e",
+    "gasLimit": "15639172",
+    "hash": "0xc682259fda061bb9ce8ccb491d5b2d436cb73daf04e1025dd116d045ce4ad28c",
+    "miner": "0x0000000000000000000000000000000000000000",
+    "mixHash": "0xae1a5ba939a4c9ac38aabeff361169fb55a6fc2c9511457e0be6eff9514faec0",
+    "nonce": "0x0000000000000000",
+    "number": "315",
+    "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "stateRoot": "0x577f42ab21ccfd946511c57869ace0bdf7c217c36f02b7cd3459df0ed1cffc1a",
+    "timestamp": "1709626771",
+    "totalDifficulty": "1",
+    "withdrawals": [],
+    "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "alloc": {
+      "0x0000000000000000000000000000000000000000": {
+        "balance": "0x272e0528"
+      },
+      "0x0c2c51a0990aee1d73c1228de158688341557508": {
+        "balance": "0xde0b6b3a7640000"
+      }
+    },
+    "config": {
+      "chainId": 1337,
+      "homesteadBlock": 0,
+      "eip150Block": 0,
+      "eip155Block": 0,
+      "eip158Block": 0,
+      "byzantiumBlock": 0,
+      "constantinopleBlock": 0,
+      "petersburgBlock": 0,
+      "istanbulBlock": 0,
+      "muirGlacierBlock": 0,
+      "berlinBlock": 0,
+      "londonBlock": 0,
+      "arrowGlacierBlock": 0,
+      "grayGlacierBlock": 0,
+      "shanghaiTime": 0,
+      "cancunTime": 0,
+      "terminalTotalDifficulty": 0,
+      "terminalTotalDifficultyPassed": true
+    }
+  },
+  "context": {
+    "number": "316",
+    "difficulty": "0",
+    "timestamp": "1709626785",
+    "gasLimit": "15654443",
+    "miner": "0x0000000000000000000000000000000000000000",
+    "baseFeePerGas": "7"
+  },
+  "input": "0x03f8b1820539806485174876e800825208940c2c51a0990aee1d73c1228de1586883415575088080c083020000f842a00100c9fbdf97f747e85847b4f3fff408f89c26842f77c882858bf2c89923849aa00138e3896f3c27f2389147507f8bcec52028b0efca6ee842ed83c9158873943880a0dbac3f97a532c9b00e6239b29036245a5bfbb96940b9d848634661abee98b945a03eec8525f261c2e79798f7b45a5d6ccaefa24576d53ba5023e919b86841c0675",
+  "result": {
+    "0x0000000000000000000000000000000000000000": { "balance": "0x272e0528" },
+    "0x0c2c51a0990aee1d73c1228de158688341557508": {
+      "balance": "0xde0b6b3a7640000"
+    }
+  }
+}

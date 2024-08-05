@@ -132,7 +132,7 @@ func (t *pathTrie) onTrieNode(path []byte, hash common.Hash, blob []byte) {
 	//
 	// The extension node is detected if its path is the prefix of last committed
 	// one and path gap is larger than one. If the path gap is only one byte,
-	// the current node could either be a full node, or a extension with single
+	// the current node could either be a full node, or an extension with single
 	// byte key. In either case, no gaps will be left in the path.
 	if t.last != nil && bytes.HasPrefix(t.last, path) && len(t.last)-len(path) > 1 {
 		for i := len(path) + 1; i < len(t.last); i++ {
@@ -164,7 +164,7 @@ func (t *pathTrie) deleteAccountNode(path []byte, inner bool) {
 	} else {
 		accountOuterLookupGauge.Inc(1)
 	}
-	if !rawdb.ExistsAccountTrieNode(t.db, path) {
+	if !rawdb.HasAccountTrieNode(t.db, path) {
 		return
 	}
 	if inner {
@@ -181,7 +181,7 @@ func (t *pathTrie) deleteStorageNode(path []byte, inner bool) {
 	} else {
 		storageOuterLookupGauge.Inc(1)
 	}
-	if !rawdb.ExistsStorageTrieNode(t.db, t.owner, path) {
+	if !rawdb.HasStorageTrieNode(t.db, t.owner, path) {
 		return
 	}
 	if inner {

@@ -1342,7 +1342,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 			roots    = make([]common.Hash, 0, storageSets)
 			subtask  *storageTask
 		)
-		for account, subtasks := range storageTasks {
+		for account, subtasks := range task.SubTasks {
 			for _, st := range subtasks {
 				// Skip any subtasks already filling
 				if st.req != nil {
@@ -2377,7 +2377,7 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 			// If the chunk's root is an overflown but full delivery,
 			// clear the heal request.
 			accountHash := res.accounts[len(res.accounts)-1]
-			if root == res.subTask.root && rawdb.HasStorageTrieNode(s.db, accountHash, nil, root) {
+			if root == res.subTask.root && rawdb.HasStorageTrieNode(s.db, accountHash, nil) {
 				for i, account := range res.mainTask.res.hashes {
 					if account == accountHash {
 						res.mainTask.needHeal[i] = false
@@ -2582,7 +2582,6 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			if err != nil {
 				panic(err) // Really shouldn't ever happen
 			}
-
 			task.genTrie.update(hash[:], full)
 		}
 	}
@@ -2618,13 +2617,9 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 	// flush after finalizing task.done. It's fine even if we crash and lose this
 	// write as it will only cause more data to be downloaded during heal.
 	if task.done {
-		task.genTrie.commit(task.Last == common.MaxHash)
-		if err := task.genBatch.Write(); err != nil {
-			log.Error("Failed to persist stack account", "err", err)
-		}
-		task.genBatch.Reset()
-	} else if task.genBatch.ValueSize() > batchSizeThreshold {
 		task.genTrie.commit(false)
+	}
+	if task.genBatch.ValueSize() > ethdb.IdealBatchSize || task.done {
 		if err := task.genBatch.Write(); err != nil {
 			log.Error("Failed to persist stack account", "err", err)
 		}

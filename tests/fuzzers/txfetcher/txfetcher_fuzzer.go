@@ -87,7 +87,6 @@ func fuzz(input []byte) int {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
-		testTxArrivalWait,
 		nil,
 		clock, rand,
 	)

@@ -19,7 +19,9 @@ package types
 import (
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/merkle"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/yaml.v3"
 )
 
@@ -34,10 +37,12 @@ import (
 // across signing different data structures.
 const syncCommitteeDomain = 7
 
+var knownForks = []string{"GENESIS", "ALTAIR", "BELLATRIX", "CAPELLA", "DENEB"}
+
 // Fork describes a single beacon chain fork and also stores the calculated
 // signature domain used after this fork.
 type Fork struct {
-	// Name of the fork in the chain config (config.yaml) file{
+	// Name of the fork in the chain config (config.yaml) file
 	Name string
 
 	// Epoch when given fork version is activated
@@ -45,6 +50,9 @@ type Fork struct {
 
 	// Fork version, see https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#custom-types
 	Version []byte
+
+	// index in list of known forks or MaxInt if unknown
+	knownIndex int
 
 	// calculated by computeDomain, based on fork version and genesis validators root
 	domain merkle.Value
@@ -99,9 +107,14 @@ func (f Forks) SigningRoot(header Header) (common.Hash, error) {
 	return signingRoot, nil
 }
 
-func (f Forks) Len() int           { return len(f) }
-func (f Forks) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
-func (f Forks) Less(i, j int) bool { return f[i].Epoch < f[j].Epoch }
+func (f Forks) Len() int      { return len(f) }
+func (f Forks) Swap(i, j int) { f[i], f[j] = f[j], f[i] }
+func (f Forks) Less(i, j int) bool {
+	if f[i].Epoch != f[j].Epoch {
+		return f[i].Epoch < f[j].Epoch
+	}
+	return f[i].knownIndex < f[j].knownIndex
+}
 
 // ChainConfig contains the beacon chain configuration.
 type ChainConfig struct {
@@ -110,18 +123,34 @@ type ChainConfig struct {
 	Forks                 Forks
 }
 
+// ForkAtEpoch returns the latest active fork at the given epoch.
+func (c *ChainConfig) ForkAtEpoch(epoch uint64) Fork {
+	for i := len(c.Forks) - 1; i >= 0; i-- {
+		if c.Forks[i].Epoch <= epoch {
+			return *c.Forks[i]
+		}
+	}
+	return Fork{}
+}
+
 // AddFork adds a new item to the list of forks.
 func (c *ChainConfig) AddFork(name string, epoch uint64, version []byte) *ChainConfig {
+	knownIndex := slices.Index(knownForks, name)
+	if knownIndex == -1 {
+		knownIndex = math.MaxInt // assume that the unknown fork happens after the known ones
+		if epoch != math.MaxUint64 {
+			log.Warn("Unknown fork in config.yaml", "fork name", name, "known forks", knownForks)
+		}
+	}
 	fork := &Fork{
-		Name:    name,
-		Epoch:   epoch,
-		Version: version,
+		Name:       name,
+		Epoch:      epoch,
+		Version:    version,
+		knownIndex: knownIndex,
 	}
 	fork.computeDomain(c.GenesisValidatorsRoot)
-
 	c.Forks = append(c.Forks, fork)
 	sort.Sort(c.Forks)
-
 	return c
 }
 
@@ -171,6 +200,5 @@ func (c *ChainConfig) LoadForks(path string) error {
 	for name := range versions {
 		return fmt.Errorf("epoch number missing for fork %q in beacon chain config file", name)
 	}
-	sort.Sort(c.Forks)
 	return nil
 }

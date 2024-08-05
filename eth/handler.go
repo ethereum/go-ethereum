@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
@@ -86,22 +88,21 @@ type txPool interface {
 // handlerConfig is the collection of initialization parameters to create a full
 // node network handler.
 type handlerConfig struct {
+	NodeID              enode.ID            // P2P node ID used for tx propagation topology
 	Database            ethdb.Database      // Database for direct sync insertions
 	Chain               *core.BlockChain    // Blockchain to serve data from
 	TxPool              txPool              // Transaction pool to propagate from
-	Merger              *consensus.Merger   // The manager for eth1/2 transition
-	Network             uint64              // Network identifier to adfvertise
+	Network             uint64              // Network identifier to advertise
 	Sync                downloader.SyncMode // Whether to snap or full sync
 	BloomCache          uint64              // Megabytes to alloc for snap sync bloom
 	EventMux            *event.TypeMux      // Legacy event mux, deprecate for `feed`
-	txArrivalWait       time.Duration       // Maximum duration to wait for an announced tx before requesting it
 	checker             ethereum.ChainValidator
 	RequiredBlocks      map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
-	EthAPI              *ethapi.BlockChainAPI  // EthAPI to interact
 	enableBlockTracking bool                   // Whether to log information collected while tracking block lifecycle
 }
 
 type handler struct {
+	nodeID     enode.ID
 	networkID  uint64
 	forkFilter forkid.Filter // Fork ID filter, constant across the lifetime of the node
 
@@ -113,11 +114,10 @@ type handler struct {
 	chain    *core.BlockChain
 	maxPeers int
 
-	downloader   *downloader.Downloader
-	blockFetcher *fetcher.BlockFetcher
-	txFetcher    *fetcher.TxFetcher
-	peers        *peerSet
-	merger       *consensus.Merger
+	downloader *downloader.Downloader
+	txFetcher  *fetcher.TxFetcher
+	peers      *peerSet
+	merger     *consensus.Merger
 
 	ethAPI *ethapi.BlockChainAPI // EthAPI to interact
 
@@ -133,8 +133,7 @@ type handler struct {
 	// channels for fetcher, syncer, txsyncLoop
 	quitSync chan struct{}
 
-	chainSync *chainSyncer
-	wg        sync.WaitGroup
+	wg sync.WaitGroup
 
 	handlerStartCh chan struct{}
 	handlerDoneCh  chan struct{}
@@ -148,6 +147,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	}
 
 	h := &handler{
+		nodeID:              config.NodeID,
 		networkID:           config.Network,
 		forkFilter:          forkid.NewFilter(config.Chain),
 		eventMux:            config.EventMux,
@@ -155,8 +155,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		txpool:              config.TxPool,
 		chain:               config.Chain,
 		peers:               newPeerSet(),
-		merger:              config.Merger,
-		ethAPI:              config.EthAPI,
 		requiredBlocks:      config.RequiredBlocks,
 		enableBlockTracking: config.enableBlockTracking,
 		quitSync:            make(chan struct{}),
@@ -294,6 +292,12 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return h.chain.InsertChain(blocks)
 	}
+
+	// If snap sync is requested but snapshots are disabled, fail loudly
+	if h.snapSync.Load() && config.Chain.Snapshots() == nil {
+		return nil, errors.New("snap sync not supported with snapshots disabled")
+	}
+
 	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer, h.enableBlockTracking)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
@@ -307,9 +311,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false, false)
 	}
-	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx, config.txArrivalWait, h.removePeer)
-	h.chainSync = newChainSyncer(h)
-
+	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
 
@@ -419,8 +421,6 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 			return err
 		}
 	}
-	h.chainSync.handlePeerEvent()
-
 	// Propagate existing transactions. new transactions appearing
 	// after this will be sent via broadcasts.
 	h.syncTransactions(peer)
@@ -549,15 +549,8 @@ func (h *handler) Start(maxPeers int) {
 	h.txsSub = h.txpool.SubscribeTransactions(h.txsCh, false)
 	go h.txBroadcastLoop()
 
-	// broadcast mined blocks
-	h.wg.Add(1)
-
-	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
-	go h.minedBroadcastLoop()
-
 	// start sync handlers
-	h.wg.Add(1)
-	go h.chainSync.loop()
+	h.txFetcher.Start()
 
 	// start peer handler tracker
 	h.wg.Add(1)
@@ -565,8 +558,9 @@ func (h *handler) Start(maxPeers int) {
 }
 
 func (h *handler) Stop() {
-	h.txsSub.Unsubscribe()        // quits txBroadcastLoop
-	h.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
+	h.txsSub.Unsubscribe() // quits txBroadcastLoop
+	h.txFetcher.Stop()
+	h.downloader.Terminate()
 
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
@@ -657,49 +651,74 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		largeTxs int // Number of large transactions to announce only
 
 		directCount int // Number of transactions sent directly to peers (duplicates included)
-		directPeers int // Number of peers that were sent transactions directly
 		annCount    int // Number of transactions announced across all peers (duplicates included)
-		annPeers    int // Number of peers announced about transactions
 
 		txset = make(map[*ethPeer][]common.Hash) // Set peer->hash to transfer directly
 		annos = make(map[*ethPeer][]common.Hash) // Set peer->hash to announce
 	)
 	// Broadcast transactions to a batch of peers not knowing about it
-	for _, tx := range txs {
-		peers := h.peers.peersWithoutTransaction(tx.Hash())
+	direct := big.NewInt(int64(math.Sqrt(float64(h.peers.len())))) // Approximate number of peers to broadcast to
+	if direct.BitLen() == 0 {
+		direct = big.NewInt(1)
+	}
+	total := new(big.Int).Exp(direct, big.NewInt(2), nil) // Stabilise total peer count a bit based on sqrt peers
 
-		var numDirect int
+	var (
+		signer = types.LatestSignerForChainID(h.chain.Config().ChainID) // Don't care about chain status, we just need *a* sender
+		hasher = crypto.NewKeccakState()
+		hash   = make([]byte, 32)
+	)
+	for _, tx := range txs {
+		var maybeDirect bool
 		switch {
 		case tx.Type() == types.BlobTxType:
 			blobTxs++
 		case tx.Size() > txMaxBroadcastSize:
 			largeTxs++
 		default:
-			numDirect = int(math.Sqrt(float64(len(peers))))
+			maybeDirect = true
 		}
-		// Send the tx unconditionally to a subset of our peers
-		for _, peer := range peers[:numDirect] {
-			txset[peer] = append(txset[peer], tx.Hash())
-		}
-		// For the remaining peers, send announcement only
-		for _, peer := range peers[numDirect:] {
-			annos[peer] = append(annos[peer], tx.Hash())
+		// Send the transaction (if it's small enough) directly to a subset of
+		// the peers that have not received it yet, ensuring that the flow of
+		// transactions is grouped by account to (try and) avoid nonce gaps.
+		//
+		// To do this, we hash the local enode IW with together with a peer's
+		// enode ID together with the transaction sender and broadcast if
+		// `sha(self, peer, sender) mod peers < sqrt(peers)`.
+		for _, peer := range h.peers.peersWithoutTransaction(tx.Hash()) {
+			var broadcast bool
+			if maybeDirect {
+				hasher.Reset()
+				hasher.Write(h.nodeID.Bytes())
+				hasher.Write(peer.Node().ID().Bytes())
+
+				from, _ := types.Sender(signer, tx) // Ignore error, we only use the addr as a propagation target splitter
+				hasher.Write(from.Bytes())
+
+				hasher.Read(hash)
+				if new(big.Int).Mod(new(big.Int).SetBytes(hash), total).Cmp(direct) < 0 {
+					broadcast = true
+				}
+			}
+			if broadcast {
+				txset[peer] = append(txset[peer], tx.Hash())
+			} else {
+				annos[peer] = append(annos[peer], tx.Hash())
+			}
 		}
 	}
 
 	for peer, hashes := range txset {
-		directPeers++
 		directCount += len(hashes)
 		peer.AsyncSendTransactions(hashes)
 	}
 
 	for peer, hashes := range annos {
-		annPeers++
 		annCount += len(hashes)
 		peer.AsyncSendPooledTransactionHashes(hashes)
 	}
 	log.Debug("Distributed transactions", "plaintxs", len(txs)-blobTxs-largeTxs, "blobtxs", blobTxs, "largetxs", largeTxs,
-		"bcastpeers", directPeers, "bcastcount", directCount, "annpeers", annPeers, "anncount", annCount)
+		"bcastcount", directCount, "anncount", annCount)
 }
 
 // minedBroadcastLoop sends mined blocks to connected peers.

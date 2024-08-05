@@ -185,6 +185,8 @@ type newPayloadResult struct {
 	block    *types.Block
 	fees     *big.Int               // total block fees
 	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
+	stateDB  *state.StateDB         // StateDB after executing the transactions
+	receipts []*types.Receipt       // Receipts collected during construction
 }
 
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
@@ -414,15 +416,15 @@ func (w *worker) setRecommitInterval(interval time.Duration) {
 
 // pending returns the pending state and corresponding block. The returned
 // values can be nil in case the pending block is not initialized.
-func (w *worker) pending() (*types.Block, *state.StateDB) {
+func (w *worker) pending() (*types.Block, types.Receipts, *state.StateDB) {
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
 
 	if w.snapshotState == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	return w.snapshotBlock, w.snapshotState.Copy()
+	return w.snapshotBlock, w.snapshotReceipts, w.snapshotState.Copy()
 }
 
 // pendingBlock returns pending block. The returned block can be nil in case the
@@ -432,15 +434,6 @@ func (w *worker) pendingBlock() *types.Block {
 	defer w.snapshotMu.RUnlock()
 
 	return w.snapshotBlock
-}
-
-// pendingBlockAndReceipts returns pending block and corresponding receipts.
-// The returned values can be nil in case the pending block is not initialized.
-func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	w.snapshotMu.RLock()
-	defer w.snapshotMu.RUnlock()
-
-	return w.snapshotBlock, w.snapshotReceipts
 }
 
 // start sets the running status as 1 and triggers new work submitting.
@@ -864,7 +857,8 @@ func (w *worker) makeEnv(parent *types.Header, header *types.Header, coinbase co
 		return nil, err
 	}
 
-	state.StartPrefetcher("miner")
+	// todo: @anshalshukla - check if witness is required
+	state.StartPrefetcher("miner", nil)
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
@@ -889,8 +883,9 @@ func (w *worker) updateSnapshot(env *environment) {
 
 	w.snapshotBlock = types.NewBlock(
 		env.header,
-		env.txs,
-		nil,
+		&types.Body{
+			Transactions: env.txs,
+		},
 		env.receipts,
 		trie.NewStackTrie(nil),
 	)
@@ -1039,7 +1034,7 @@ mainloop:
 			continue
 		}
 		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
+		// during transaction acceptance in the transaction pool.
 		from, _ := types.Sender(env.signer, tx)
 
 		// not prioritising conditional transaction, yet.
@@ -1381,11 +1376,13 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 
 	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
 	filter := txpool.PendingFilter{
-		MinTip: tip,
+		MinTip: uint256.MustFromBig(tip.ToBig()),
 	}
+
 	if env.header.BaseFee != nil {
 		filter.BaseFee = uint256.MustFromBig(env.header.BaseFee)
 	}
+
 	if env.header.ExcessBlobGas != nil {
 		filter.BlobFee = uint256.MustFromBig(eip4844.CalcBlobFee(*env.header.ExcessBlobGas))
 	}
@@ -1585,7 +1582,12 @@ func (w *worker) generateWork(ctx context.Context, params *generateParams) *newP
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(w.newpayloadTimeout))
 		}
 	}
-	block, err := w.engine.FinalizeAndAssemble(ctx, w.chain, work.header, work.state, work.txs, nil, work.receipts, params.withdrawals)
+	block, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, &types.Body{
+		Transactions: work.txs,
+		Uncles:       nil,
+		Withdrawals:  params.withdrawals,
+	}, work.receipts)
+
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -1739,7 +1741,9 @@ func (w *worker) commit(ctx context.Context, env *environment, interval func(), 
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
 		// Withdrawals are set to nil here, because this is only called in PoW.
-		block, err := w.engine.FinalizeAndAssemble(ctx, w.chain, env.header, env.state, env.txs, nil, env.receipts, nil)
+		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, &types.Body{
+			Transactions: env.txs,
+		}, env.receipts)
 		tracing.SetAttributes(
 			span,
 			attribute.Int("number", int(env.header.Number.Uint64())),

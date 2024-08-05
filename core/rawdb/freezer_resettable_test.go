@@ -36,7 +36,7 @@ func TestResetFreezer(t *testing.T) {
 		{2, bytes.Repeat([]byte{2}, 2048)},
 	}
 
-	f, _ := NewResettableFreezer(t.TempDir(), "", false, 2048, freezerTestTableDef)
+	f, _ := newResettableFreezer(t.TempDir(), "", false, 2048, freezerTestTableDef)
 	defer f.Close()
 
 	_, _ = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
@@ -98,7 +98,7 @@ func TestFreezerCleanup(t *testing.T) {
 		{2, bytes.Repeat([]byte{2}, 2048)},
 	}
 	datadir := t.TempDir()
-	f, _ := NewResettableFreezer(datadir, "", false, 2048, freezerTestTableDef)
+	f, _ := newResettableFreezer(datadir, "", false, 2048, freezerTestTableDef)
 	_, _ = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for _, item := range items {
 			_ = op.AppendRaw("test", item.id, item.blob)
@@ -110,7 +110,7 @@ func TestFreezerCleanup(t *testing.T) {
 	_ = os.Rename(datadir, tmpName(datadir))
 
 	// Open the freezer again, trigger cleanup operation
-	f, _ = NewResettableFreezer(datadir, "", false, 2048, freezerTestTableDef)
+	f, _ = newResettableFreezer(datadir, "", false, 2048, freezerTestTableDef)
 	_ = f.Close()
 
 	if _, err := os.Lstat(tmpName(datadir)); !os.IsNotExist(err) {

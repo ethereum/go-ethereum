@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
+	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
 var (
@@ -619,19 +620,13 @@ func (db *Database) Size() (common.StorageSize, common.StorageSize) {
 func (db *Database) Close() error {
 	if db.cleans != nil {
 		db.cleans.Reset()
-		db.cleans = nil
 	}
 	return nil
 }
 
-// Scheme returns the node scheme used in the database.
-func (db *Database) Scheme() string {
-	return rawdb.HashScheme
-}
-
 // Reader retrieves a node reader belonging to the given state root.
 // An error will be returned if the requested state is not available.
-func (db *Database) Reader(root common.Hash) (*reader, error) {
+func (db *Database) Reader(root common.Hash) (database.Reader, error) {
 	if _, err := db.node(root); err != nil {
 		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
 	}

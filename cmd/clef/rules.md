@@ -9,14 +9,14 @@ It enables usecases like the following:
 
 The two main features that are required for this to work well are;
 
-1. Rule Implementation: how to create, manage and interpret rules in a flexible but secure manner
-2. Credential managements and credentials; how to provide auto-unlock without exposing keys unnecessarily.
+1. Rule Implementation: how to create, manage, and interpret rules in a flexible but secure manner
+2. Credential management and credentials; how to provide auto-unlock without exposing keys unnecessarily.
 
 The section below deals with both of them
 
 ## Rule Implementation
 
-A ruleset file is implemented as a `js` file. Under the hood, the ruleset-engine is a `SignerUI`, implementing the same methods as the `json-rpc` methods
+A ruleset file is implemented as a `js` file. Under the hood, the ruleset engine is a `SignerUI`, implementing the same methods as the `json-rpc` methods
 defined in the UI protocol. Example:
 
 ```js
@@ -27,7 +27,7 @@ function asBig(str) {
 	return new BigNumber(str)
 }
 
-// Approve transactions to a certain contract if value is below a certain limit
+// Approve transactions to a certain contract if the value is below a certain limit
 function ApproveTx(req) {
 	var limit = big.Newint("0xb1a2bc2ec50000")
 	var value = asBig(req.transaction.value);
@@ -70,7 +70,7 @@ The Otto vm has a few [caveats](https://github.com/robertkrimen/otto):
 Additionally, a few more have been added
 
 * The rule execution cannot load external javascript files.
-* The only preloaded library is [`bignumber.js`](https://github.com/MikeMcl/bignumber.js) version `2.0.3`. This one is fairly old, and is not aligned with the documentation at the github repository.
+* The only preloaded library is [`bignumber.js`](https://github.com/MikeMcl/bignumber.js) version `2.0.3`. This one is fairly old, and is not aligned with the documentation at the GitHub repository.
 * Each invocation is made in a fresh virtual machine. This means that you cannot store data in global variables between invocations. This is a deliberate choice -- if you want to store data, use the disk-backed `storage`, since rules should not rely on ephemeral data.
 * Javascript API parameters are _always_ an object. This is also a design choice, to ensure that parameters are accessed by _key_ and not by order. This is to prevent mistakes due to missing parameters or parameter changes.
 * The JS engine has access to `storage` and `console`.
@@ -88,8 +88,8 @@ Some security precautions can be made, such as:
 
 ##### Security of implementation
 
-The drawbacks of this very flexible solution is that the `signer` needs to contain a javascript engine. This is pretty simple to implement, since it's already
-implemented for `geth`. There are no known security vulnerabilities in, nor have we had any security-problems with it so far.
+The drawback of this very flexible solution is that the `signer` needs to contain a javascript engine. This is pretty simple to implement since it's already
+implemented for `geth`. There are no known security vulnerabilities in it, nor have we had any security problems with it so far.
 
 The javascript engine would be an added attack surface; but if the validation of `rulesets` is made good (with hash-based attestation), the actual javascript cannot be considered
 an attack surface -- if an attacker can control the ruleset, a much simpler attack would be to implement an "always-approve" rule instead of exploiting the js vm. The only benefit
@@ -105,7 +105,7 @@ It's unclear whether any other DSL could be more secure; since there's always th
 
 ## Credential management
 
-The ability to auto-approve transaction means that the signer needs to have necessary credentials to decrypt keyfiles. These passwords are hereafter called `ksp` (keystore pass).
+The ability to auto-approve transactions means that the signer needs to have the necessary credentials to decrypt keyfiles. These passwords are hereafter called `ksp` (keystore pass).
 
 ### Example implementation
 
@@ -127,8 +127,8 @@ The `vault.dat` would be an encrypted container storing the following informatio
 
 ### Security considerations
 
-This would leave it up to the user to ensure that the `path/to/masterseed` is handled in a secure way. It's difficult to get around this, although one could
-imagine leveraging OS-level keychains where supported. The setup is however in general similar to how ssh-keys are  stored in `.ssh/`.
+This would leave it up to the user to ensure that the `path/to/masterseed` is handled securely. It's difficult to get around this, although one could
+imagine leveraging OS-level keychains where supported. The setup is however, in general, similar to how ssh-keys are stored in `.ssh/`.
 
 
 # Implementation status
@@ -149,7 +149,7 @@ function big(str) {
 // Time window: 1 week
 var window = 1000* 3600*24*7;
 
-// Limit : 1 ether
+// Limit: 1 ether
 var limit = new BigNumber("1e18");
 
 function isLimitOk(transaction) {
@@ -163,7 +163,7 @@ function isLimitOk(transaction) {
 	if (stored != "") {
 		txs = JSON.parse(stored)
 	}
-	// First, remove all that have passed out of the time-window
+	// First, remove all that has passed out of the time window
 	var newtxs = txs.filter(function(tx){return tx.tstamp > windowstart});
 	console.log(txs, newtxs.length);
 
@@ -174,7 +174,7 @@ function isLimitOk(transaction) {
 	console.log("ApproveTx > Sum so far", sum);
 	console.log("ApproveTx > Requested", value.toNumber());
 
-	// Would we exceed weekly limit ?
+	// Would we exceed the weekly limit ?
 	return sum.plus(value).lt(limit)
 
 }

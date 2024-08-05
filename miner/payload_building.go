@@ -46,7 +46,6 @@ type BuildPayloadArgs struct {
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
 func (args *BuildPayloadArgs) Id() engine.PayloadID {
-	// Hash
 	hasher := sha256.New()
 	hasher.Write(args.Parent[:])
 	_ = binary.Write(hasher, binary.BigEndian, args.Timestamp)
@@ -195,6 +194,7 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		beaconRoot:  args.BeaconRoot,
 		noTxs:       true,
 	}
+
 	empty := w.getSealingBlock(emptyParams)
 	if empty.err != nil {
 		return nil, empty.err
@@ -234,9 +234,10 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 				r := w.getSealingBlock(fullParams)
 				if r.err == nil {
 					payload.update(r, time.Since(start))
+				} else {
+					log.Info("Error while generating work", "id", payload.id, "err", r.err)
 				}
-
-				timer.Reset(w.recommit)
+				timer.Reset(w.config.Recommit)
 			case <-payload.stop:
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return

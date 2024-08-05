@@ -272,6 +272,7 @@ func TestClientBatchRequestLimit(t *testing.T) {
 	defer server.Stop()
 	server.SetBatchLimits(2, 100000)
 	client := DialInProc(server)
+	defer client.Close()
 
 	batch := []BatchElem{
 		{Method: "foo"},
@@ -365,6 +366,7 @@ func testClientCancel(transport string, t *testing.T) {
 	default:
 		panic("unknown transport: " + transport)
 	}
+	defer client.Close()
 
 	// The actual test starts here.
 	var (
@@ -645,6 +647,7 @@ func TestClientSubscriptionChannelClose(t *testing.T) {
 	srv.RegisterName("nftest", new(notificationTestService))
 
 	client, _ := Dial(wsURL)
+	defer client.Close()
 
 	for i := 0; i < 100; i++ {
 		ch := make(chan int, 100)
@@ -776,9 +779,6 @@ func TestClientHTTP(t *testing.T) {
 		errc       = make(chan error, len(results))
 		wantResult = echoResult{"a", 1, new(echoArgs)}
 	)
-
-	defer client.Close()
-
 	for i := range results {
 		i := i
 

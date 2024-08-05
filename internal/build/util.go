@@ -27,7 +27,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -124,7 +123,7 @@ func RunGit(args ...string) string {
 
 // readGitFile returns content of file in .git directory.
 func readGitFile(file string) string {
-	content, err := os.ReadFile(path.Join(".git", file))
+	content, err := os.ReadFile(filepath.Join(".git", file))
 	if err != nil {
 		return ""
 	}
@@ -197,7 +196,7 @@ func UploadSFTP(identityFile, host, dir string, files []string) error {
 
 	in := io.MultiWriter(stdin, os.Stdout)
 	for _, f := range files {
-		fmt.Fprintln(in, "put", f, path.Join(dir, filepath.Base(f)))
+		fmt.Fprintln(in, "put", f, filepath.Join(dir, filepath.Base(f)))
 	}
 
 	fmt.Fprintln(in, "exit")
