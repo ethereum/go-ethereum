@@ -96,7 +96,7 @@ func (al accessList) equal(other accessList) bool {
 func (al accessList) accessList() types.AccessList {
 	acl := make(types.AccessList, 0, len(al))
 	for addr, slots := range al {
-		tuple := types.AccessTuple{Address: addr}
+		tuple := types.AccessTuple{Address: addr, StorageKeys: []common.Hash{}}
 		for slot := range slots {
 			tuple.StorageKeys = append(tuple.StorageKeys, slot)
 		}
@@ -165,6 +165,11 @@ func (*AccessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost 
 }
 
 func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
+
+func (*AccessListTracer) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+}
+
+func (*AccessListTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
 
 // AccessList returns the current accesslist maintained by the tracer.
 func (a *AccessListTracer) AccessList() types.AccessList {

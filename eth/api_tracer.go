@@ -62,13 +62,6 @@ type TraceConfig struct {
 	Reexec  *uint64
 }
 
-// txTraceContext is the contextual infos about a transaction before it gets run.
-type txTraceContext struct {
-	index int         // Index of the transaction within the block
-	hash  common.Hash // Hash of the transaction
-	block common.Hash // Hash of the block containing the transaction
-}
-
 // TraceCallConfig is the config for traceCall API. It holds one more
 // field to override the state for tracing.
 type TraceCallConfig struct {
@@ -249,10 +242,10 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 						}
 					}
 					msg, _ := tx.AsMessage(signer, balacne, task.block.Number())
-					txctx := &txTraceContext{
-						index: i,
-						hash:  tx.Hash(),
-						block: task.block.Hash(),
+					txctx := &tracers.Context{
+						BlockHash: task.block.Hash(),
+						TxIndex:   i,
+						TxHash:    tx.Hash(),
 					}
 					vmctx := core.NewEVMContext(msg, task.block.Header(), api.eth.blockchain, nil)
 
@@ -495,10 +488,10 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 					}
 				}
 				msg, _ := txs[task.index].AsMessage(signer, balacne, block.Number())
-				txctx := &txTraceContext{
-					index: task.index,
-					hash:  txs[task.index].Hash(),
-					block: blockHash,
+				txctx := &tracers.Context{
+					BlockHash: blockHash,
+					TxIndex:   task.index,
+					TxHash:    txs[task.index].Hash(),
 				}
 				vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 
@@ -647,10 +640,10 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 		return nil, err
 	}
 
-	txctx := &txTraceContext{
-		index: int(index),
-		hash:  hash,
-		block: blockHash,
+	txctx := &tracers.Context{
+		BlockHash: blockHash,
+		TxIndex:   int(index),
+		TxHash:    hash,
 	}
 	return api.traceTx(ctx, msg, txctx, vmctx, statedb, config)
 }
@@ -705,20 +698,22 @@ func (api *PrivateDebugAPI) TraceCall(ctx context.Context, args ethapi.CallArgs,
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}
-	return api.traceTx(ctx, msg, new(txTraceContext), vmctx, statedb, traceConfig)
+	return api.traceTx(ctx, msg, new(tracers.Context), vmctx, statedb, traceConfig)
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
-func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, txctx *txTraceContext, vmctx vm.Context, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
+func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, txctx *tracers.Context, vmctx vm.Context, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
 	// Assemble the structured logger or the JavaScript tracer
 	var (
-		tracer vm.Tracer
+		tracer vm.EVMLogger
 		err    error
 	)
 	switch {
-	case config != nil && config.Tracer != nil:
+	case config == nil:
+		tracer = vm.NewStructLogger(nil)
+	case config.Tracer != nil:
 		// Define a meaningful timeout of a single transaction trace
 		timeout := defaultTraceTimeout
 		if config.Timeout != nil {
@@ -726,20 +721,19 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, t
 				return nil, err
 			}
 		}
-		// Constuct the JavaScript tracer to execute with
-		if tracer, err = tracers.New(*config.Tracer); err != nil {
+		if t, err := tracers.New(*config.Tracer, txctx); err != nil {
 			return nil, err
+		} else {
+			deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+			go func() {
+				<-deadlineCtx.Done()
+				if errors.Is(deadlineCtx.Err(), context.DeadlineExceeded) {
+					t.Stop(errors.New("execution timeout"))
+				}
+			}()
+			defer cancel()
+			tracer = t
 		}
-		// Handle timeouts and RPC cancellations
-		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-		go func() {
-			<-deadlineCtx.Done()
-			tracer.(*tracers.Tracer).Stop(errors.New("execution timeout"))
-		}()
-		defer cancel()
-
-	case config == nil:
-		tracer = vm.NewStructLogger(nil)
 
 	default:
 		tracer = vm.NewStructLogger(config.LogConfig)
@@ -748,7 +742,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, t
 	vmenv := vm.NewEVM(vmctx, statedb, nil, api.config, vm.Config{Debug: true, Tracer: tracer})
 
 	// Call Prepare to clear out the statedb access list
-	statedb.Prepare(txctx.hash, txctx.block, txctx.index)
+	statedb.Prepare(txctx.TxHash, txctx.BlockHash, txctx.TxIndex)
 
 	owner := common.Address{}
 	ret, gas, failed, err, _ := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), owner)
@@ -765,7 +759,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, t
 			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
 		}, nil
 
-	case *tracers.Tracer:
+	case tracers.Tracer:
 		return tracer.GetResult()
 
 	default:

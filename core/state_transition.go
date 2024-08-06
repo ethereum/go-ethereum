@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 
@@ -100,13 +101,13 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, 
 		}
 		// Make sure we don't exceed uint64 for all data combinations
 		if (math.MaxUint64-gas)/params.TxDataNonZeroGas < nz {
-			return 0, vm.ErrOutOfGas
+			return 0, ErrGasUintOverflow
 		}
 		gas += nz * params.TxDataNonZeroGas
 
 		z := uint64(len(data)) - nz
 		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
-			return 0, vm.ErrOutOfGas
+			return 0, ErrGasUintOverflow
 		}
 		gas += z * params.TxDataZeroGas
 	}
@@ -169,15 +170,6 @@ func (st *StateTransition) to() vm.AccountRef {
 	return reference
 }
 
-func (st *StateTransition) useGas(amount uint64) error {
-	if st.gas < amount {
-		return vm.ErrOutOfGas
-	}
-	st.gas -= amount
-
-	return nil
-}
-
 func (st *StateTransition) buyGas() error {
 	var (
 		state           = st.state
@@ -238,9 +230,10 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 	if err != nil {
 		return nil, 0, false, err, nil
 	}
-	if err = st.useGas(gas); err != nil {
-		return nil, 0, false, err, nil
+	if st.gas < gas {
+		return nil, 0, false, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas), nil
 	}
+	st.gas -= gas
 
 	if rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber); rules.IsEIP1559 {
 		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
@@ -286,7 +279,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 		st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 	}
 
-	return ret, st.gasUsed(), vmerr != nil, err, vmerr
+	return ret, st.gasUsed(), vmerr != nil, nil, vmerr
 }
 
 func (st *StateTransition) refundGas() {

@@ -4,51 +4,40 @@ package vm
 
 import (
 	"encoding/json"
-	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
-	"github.com/XinFinOrg/XDPoSChain/common/math"
+	"github.com/holiman/uint256"
 )
-
-var _ = (*structLogMarshaling)(nil)
 
 // MarshalJSON marshals as JSON.
 func (s StructLog) MarshalJSON() ([]byte, error) {
 	type StructLog struct {
 		Pc            uint64                      `json:"pc"`
 		Op            OpCode                      `json:"op"`
-		Gas           math.HexOrDecimal64         `json:"gas"`
-		GasCost       math.HexOrDecimal64         `json:"gasCost"`
-		Memory        hexutil.Bytes               `json:"memory"`
+		Gas           uint64                      `json:"gas"`
+		GasCost       uint64                      `json:"gasCost"`
+		Memory        []byte                      `json:"memory"`
 		MemorySize    int                         `json:"memSize"`
-		Stack         []*math.HexOrDecimal256     `json:"stack"`
+		Stack         []uint256.Int               `json:"stack"`
+		ReturnData    []byte                      `json:"returnData"`
 		Storage       map[common.Hash]common.Hash `json:"-"`
 		Depth         int                         `json:"depth"`
 		RefundCounter uint64                      `json:"refund"`
 		Err           error                       `json:"-"`
-		OpName        string                      `json:"opName"`
-		ErrorString   string                      `json:"error"`
 	}
 	var enc StructLog
 	enc.Pc = s.Pc
 	enc.Op = s.Op
-	enc.Gas = math.HexOrDecimal64(s.Gas)
-	enc.GasCost = math.HexOrDecimal64(s.GasCost)
+	enc.Gas = s.Gas
+	enc.GasCost = s.GasCost
 	enc.Memory = s.Memory
 	enc.MemorySize = s.MemorySize
-	if s.Stack != nil {
-		enc.Stack = make([]*math.HexOrDecimal256, len(s.Stack))
-		for k, v := range s.Stack {
-			enc.Stack[k] = (*math.HexOrDecimal256)(v)
-		}
-	}
+	enc.Stack = s.Stack
+	enc.ReturnData = s.ReturnData
 	enc.Storage = s.Storage
 	enc.Depth = s.Depth
 	enc.RefundCounter = s.RefundCounter
 	enc.Err = s.Err
-	enc.OpName = s.OpName()
-	enc.ErrorString = s.ErrorString()
 	return json.Marshal(&enc)
 }
 
@@ -57,11 +46,12 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 	type StructLog struct {
 		Pc            *uint64                     `json:"pc"`
 		Op            *OpCode                     `json:"op"`
-		Gas           *math.HexOrDecimal64        `json:"gas"`
-		GasCost       *math.HexOrDecimal64        `json:"gasCost"`
-		Memory        *hexutil.Bytes              `json:"memory"`
+		Gas           *uint64                     `json:"gas"`
+		GasCost       *uint64                     `json:"gasCost"`
+		Memory        []byte                      `json:"memory"`
 		MemorySize    *int                        `json:"memSize"`
-		Stack         []*math.HexOrDecimal256     `json:"stack"`
+		Stack         []uint256.Int               `json:"stack"`
+		ReturnData    []byte                      `json:"returnData"`
 		Storage       map[common.Hash]common.Hash `json:"-"`
 		Depth         *int                        `json:"depth"`
 		RefundCounter *uint64                     `json:"refund"`
@@ -78,22 +68,22 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		s.Op = *dec.Op
 	}
 	if dec.Gas != nil {
-		s.Gas = uint64(*dec.Gas)
+		s.Gas = *dec.Gas
 	}
 	if dec.GasCost != nil {
-		s.GasCost = uint64(*dec.GasCost)
+		s.GasCost = *dec.GasCost
 	}
 	if dec.Memory != nil {
-		s.Memory = *dec.Memory
+		s.Memory = dec.Memory
 	}
 	if dec.MemorySize != nil {
 		s.MemorySize = *dec.MemorySize
 	}
 	if dec.Stack != nil {
-		s.Stack = make([]*big.Int, len(dec.Stack))
-		for k, v := range dec.Stack {
-			s.Stack[k] = (*big.Int)(v)
-		}
+		s.Stack = dec.Stack
+	}
+	if dec.ReturnData != nil {
+		s.ReturnData = dec.ReturnData
 	}
 	if dec.Storage != nil {
 		s.Storage = dec.Storage

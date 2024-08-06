@@ -37,6 +37,10 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/node"
+
+	// Force-load the native, to trigger registration
+	_ "github.com/XinFinOrg/XDPoSChain/eth/tracers/native"
+
 	"gopkg.in/urfave/cli.v1"
 )
 
