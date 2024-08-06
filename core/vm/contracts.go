@@ -46,9 +46,12 @@ type PrecompiledContract interface {
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
+// PrecompiledContracts contains the precompiled contracts supported at the given fork.
+type PrecompiledContracts map[common.Address]PrecompiledContract
+
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
 // contracts used in the Frontier and Homestead releases.
-var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
+var PrecompiledContractsHomestead = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
@@ -57,7 +60,7 @@ var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
 
 // PrecompiledContractsByzantium contains the default set of pre-compiled Ethereum
 // contracts used in the Byzantium release.
-var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
+var PrecompiledContractsByzantium = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
@@ -70,7 +73,7 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 
 // PrecompiledContractsIstanbul contains the default set of pre-compiled Ethereum
 // contracts used in the Istanbul release.
-var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
+var PrecompiledContractsIstanbul = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
@@ -84,7 +87,7 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 
 // PrecompiledContractsBerlin contains the default set of pre-compiled Ethereum
 // contracts used in the Berlin release.
-var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
+var PrecompiledContractsBerlin = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
@@ -98,7 +101,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 
 // PrecompiledContractsCancun contains the default set of pre-compiled Ethereum
 // contracts used in the Cancun release.
-var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
+var PrecompiledContractsCancun = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x1}): &ecrecover{},
 	common.BytesToAddress([]byte{0x2}): &sha256hash{},
 	common.BytesToAddress([]byte{0x3}): &ripemd160hash{},
@@ -113,7 +116,7 @@ var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
 
 // PrecompiledContractsPrague contains the set of pre-compiled Ethereum
 // contracts used in the Prague release.
-var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
+var PrecompiledContractsPrague = PrecompiledContracts{
 	common.BytesToAddress([]byte{0x01}): &ecrecover{},
 	common.BytesToAddress([]byte{0x02}): &sha256hash{},
 	common.BytesToAddress([]byte{0x03}): &ripemd160hash{},
@@ -169,7 +172,40 @@ func init() {
 	}
 }
 
-// ActivePrecompiles returns the precompiles enabled with the current configuration.
+// Copy returns a copy of the precompiled contracts.
+func (p PrecompiledContracts) Copy() PrecompiledContracts {
+	c := make(PrecompiledContracts)
+	for k, v := range p {
+		c[k] = v
+	}
+	return c
+}
+
+func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
+	switch {
+	case rules.IsVerkle:
+		return PrecompiledContractsVerkle
+	case rules.IsPrague:
+		return PrecompiledContractsPrague
+	case rules.IsCancun:
+		return PrecompiledContractsCancun
+	case rules.IsBerlin:
+		return PrecompiledContractsBerlin
+	case rules.IsIstanbul:
+		return PrecompiledContractsIstanbul
+	case rules.IsByzantium:
+		return PrecompiledContractsByzantium
+	default:
+		return PrecompiledContractsHomestead
+	}
+}
+
+// ActivePrecompiledContracts returns a copy of precompiled contracts enabled with the current configuration.
+func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
+	return activePrecompiledContracts(rules).Copy()
+}
+
+// ActivePrecompiles returns the precompile addresses enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
 	case rules.IsPrague:
