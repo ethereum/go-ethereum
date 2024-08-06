@@ -113,7 +113,7 @@ var errTerminated = errors.New("terminated")
 type txAnnounce struct {
 	origin string        // Identifier of the peer originating the notification
 	hashes []common.Hash // Batch of transaction hashes being announced
-	metas  []txMetadata  // Batch of metadatas associated with the hashes
+	metas  []txMetadata  // Batch of metadata associated with the hashes
 }
 
 // txMetadata provides the extra data transmitted along with the announcement
@@ -175,14 +175,14 @@ type TxFetcher struct {
 
 	// Stage 1: Waiting lists for newly discovered transactions that might be
 	// broadcast without needing explicit request/reply round trips.
-	waitlist  map[common.Hash]map[string]struct{}   // Transactions waiting for an potential broadcast
-	waittime  map[common.Hash]mclock.AbsTime        // Timestamps when transactions were added to the waitlist
-	waitslots map[string]map[common.Hash]txMetadata // Waiting announcements grouped by peer (DoS protection)
+	waitlist  map[common.Hash]map[string]struct{}    // Transactions waiting for an potential broadcast
+	waittime  map[common.Hash]mclock.AbsTime         // Timestamps when transactions were added to the waitlist
+	waitslots map[string]map[common.Hash]*txMetadata // Waiting announcements grouped by peer (DoS protection)
 
 	// Stage 2: Queue of transactions that waiting to be allocated to some peer
 	// to be retrieved directly.
-	announces map[string]map[common.Hash]txMetadata // Set of announced transactions, grouped by origin peer
-	announced map[common.Hash]map[string]struct{}   // Set of download locations, grouped by transaction hash
+	announces map[string]map[common.Hash]*txMetadata // Set of announced transactions, grouped by origin peer
+	announced map[common.Hash]map[string]struct{}    // Set of download locations, grouped by transaction hash
 
 	// Stage 3: Set of transactions currently being retrieved, some which may be
 	// fulfilled and some rescheduled. Note, this step shares 'announces' from the
@@ -220,8 +220,8 @@ func NewTxFetcherForTests(
 		quit:        make(chan struct{}),
 		waitlist:    make(map[common.Hash]map[string]struct{}),
 		waittime:    make(map[common.Hash]mclock.AbsTime),
-		waitslots:   make(map[string]map[common.Hash]txMetadata),
-		announces:   make(map[string]map[common.Hash]txMetadata),
+		waitslots:   make(map[string]map[common.Hash]*txMetadata),
+		announces:   make(map[string]map[common.Hash]*txMetadata),
 		announced:   make(map[common.Hash]map[string]struct{}),
 		fetching:    make(map[common.Hash]string),
 		requests:    make(map[string]*txRequest),
@@ -445,9 +445,9 @@ func (f *TxFetcher) loop() {
 
 					// Stage 2 and 3 share the set of origins per tx
 					if announces := f.announces[ann.origin]; announces != nil {
-						announces[hash] = ann.metas[i]
+						announces[hash] = &ann.metas[i]
 					} else {
-						f.announces[ann.origin] = map[common.Hash]txMetadata{hash: ann.metas[i]}
+						f.announces[ann.origin] = map[common.Hash]*txMetadata{hash: &ann.metas[i]}
 					}
 					continue
 				}
@@ -458,9 +458,9 @@ func (f *TxFetcher) loop() {
 
 					// Stage 2 and 3 share the set of origins per tx
 					if announces := f.announces[ann.origin]; announces != nil {
-						announces[hash] = ann.metas[i]
+						announces[hash] = &ann.metas[i]
 					} else {
-						f.announces[ann.origin] = map[common.Hash]txMetadata{hash: ann.metas[i]}
+						f.announces[ann.origin] = map[common.Hash]*txMetadata{hash: &ann.metas[i]}
 					}
 					continue
 				}
@@ -473,9 +473,9 @@ func (f *TxFetcher) loop() {
 				if ann.metas[i].kind == types.BlobTxType && f.waitlist[hash] == nil {
 					f.announced[hash] = map[string]struct{}{ann.origin: {}}
 					if announces := f.announces[ann.origin]; announces != nil {
-						announces[hash] = ann.metas[i]
+						announces[hash] = &ann.metas[i]
 					} else {
-						f.announces[ann.origin] = map[common.Hash]txMetadata{hash: ann.metas[i]}
+						f.announces[ann.origin] = map[common.Hash]*txMetadata{hash: &ann.metas[i]}
 					}
 					f.scheduleFetches(timeoutTimer, timeoutTrigger, map[string]struct{}{ann.origin: {}})
 					continue
@@ -493,9 +493,9 @@ func (f *TxFetcher) loop() {
 					f.waitlist[hash][ann.origin] = struct{}{}
 
 					if waitslots := f.waitslots[ann.origin]; waitslots != nil {
-						waitslots[hash] = ann.metas[i]
+						waitslots[hash] = &ann.metas[i]
 					} else {
-						f.waitslots[ann.origin] = map[common.Hash]txMetadata{hash: ann.metas[i]}
+						f.waitslots[ann.origin] = map[common.Hash]*txMetadata{hash: &ann.metas[i]}
 					}
 					continue
 				}
@@ -504,9 +504,9 @@ func (f *TxFetcher) loop() {
 				f.waittime[hash] = f.clock.Now()
 
 				if waitslots := f.waitslots[ann.origin]; waitslots != nil {
-					waitslots[hash] = ann.metas[i]
+					waitslots[hash] = &ann.metas[i]
 				} else {
-					f.waitslots[ann.origin] = map[common.Hash]txMetadata{hash: ann.metas[i]}
+					f.waitslots[ann.origin] = map[common.Hash]*txMetadata{hash: &ann.metas[i]}
 				}
 			}
 			// If a new item was added to the waitlist, schedule it into the fetcher
@@ -534,7 +534,7 @@ func (f *TxFetcher) loop() {
 						if announces := f.announces[peer]; announces != nil {
 							announces[hash] = f.waitslots[peer][hash]
 						} else {
-							f.announces[peer] = map[common.Hash]txMetadata{hash: f.waitslots[peer][hash]}
+							f.announces[peer] = map[common.Hash]*txMetadata{hash: f.waitslots[peer][hash]}
 						}
 						delete(f.waitslots[peer], hash)
 						if len(f.waitslots[peer]) == 0 {
@@ -960,7 +960,7 @@ func (f *TxFetcher) forEachPeer(peers map[string]struct{}, do func(peer string))
 // the do function for each until it returns false. We enforce an arrival
 // ordering to minimize the chances of mempool nonce-gaps, which result in blob
 // transactions being rejected by the mempool.
-func (f *TxFetcher) forEachAnnounce(announces map[common.Hash]txMetadata, do func(hash common.Hash, meta txMetadata) bool) {
+func (f *TxFetcher) forEachAnnounce(announces map[common.Hash]*txMetadata, do func(hash common.Hash, meta txMetadata) bool) {
 	type announcement struct {
 		hash common.Hash
 		meta txMetadata
@@ -968,7 +968,7 @@ func (f *TxFetcher) forEachAnnounce(announces map[common.Hash]txMetadata, do fun
 	// process announcements by their arrival order
 	list := make([]announcement, 0, len(announces))
 	for hash, metadata := range announces {
-		list = append(list, announcement{hash: hash, meta: metadata})
+		list = append(list, announcement{hash: hash, meta: *metadata})
 	}
 	sort.Slice(list, func(i, j int) bool {
 		return list[i].meta.arrival < list[j].meta.arrival

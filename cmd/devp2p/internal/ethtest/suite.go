@@ -849,7 +849,7 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 		if code, _, err := conn.Read(); err != nil {
 			t.Fatalf("expected disconnect on blob violation, got err: %v", err)
 		} else if code != discMsg {
-			if code == 24 {
+			if code == protoOffset(ethProto)+eth.NewPooledTransactionHashesMsg {
 				// sometimes we'll get a blob transaction hashes announcement before the disconnect
 				// because blob transactions are scheduled to be fetched right away.
 				if code, _, err = conn.Read(); err != nil {
