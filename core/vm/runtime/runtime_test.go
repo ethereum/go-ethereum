@@ -38,7 +38,6 @@ import (
 
 	// force-load js tracers to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
-	"github.com/holiman/uint256"
 )
 
 func TestDefaults(t *testing.T) {
@@ -339,11 +338,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 			Tracer: tracer.Hooks,
 		}
 	}
-	var (
-		destination = common.BytesToAddress([]byte("contract"))
-		vmenv       = NewEnv(cfg)
-		sender      = vm.AccountRef(cfg.Origin)
-	)
+	destination := common.BytesToAddress([]byte("contract"))
 	cfg.State.CreateAccount(destination)
 	eoa := common.HexToAddress("E0")
 	{
@@ -363,12 +358,12 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 	//cfg.State.CreateAccount(cfg.Origin)
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(destination, code)
-	vmenv.Call(sender, destination, nil, gas, uint256.MustFromBig(cfg.Value))
+	Call(destination, nil, cfg)
 
 	b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			vmenv.Call(sender, destination, nil, gas, uint256.MustFromBig(cfg.Value))
+			Call(destination, nil, cfg)
 		}
 	})
 }
