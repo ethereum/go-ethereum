@@ -71,11 +71,9 @@ func (m *Memory) GetCopy(offset, size uint64) (cpy []byte) {
 		return nil
 	}
 
-	if uint64(len(m.store)) > offset {
-		cpy = make([]byte, size)
-		copy(cpy, m.store[offset:offset+size])
-	}
-
+	// memory is always resized before being accessed, no need to check bounds
+	cpy = make([]byte, size)
+	copy(cpy, m.store[offset:offset+size])
 	return
 }
 
@@ -85,11 +83,8 @@ func (m *Memory) GetPtr(offset, size uint64) []byte {
 		return nil
 	}
 
-	if uint64(len(m.store)) > offset {
-		return m.store[offset : offset+size]
-	}
-
-	return nil
+	// memory is always resized before being accessed, no need to check bounds
+	return m.store[offset : offset+size]
 }
 
 // Len returns the length of the backing slice
