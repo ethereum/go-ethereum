@@ -76,6 +76,7 @@ var (
 	accountCommitTimer = metrics.NewRegisteredResettingTimer("chain/account/commits", nil)
 
 	storageReadTimer   = metrics.NewRegisteredResettingTimer("chain/storage/reads", nil)
+	storageHashTimer   = metrics.NewRegisteredTimer("chain/storage/hashes", nil)
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 
@@ -2392,9 +2393,19 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if err != nil {
 			return it.index, err
 		}
+
+		// Update the metrics touched during block commit
+		accountCommitTimer.Update(statedb.AccountCommits)   // Account commits are complete, we can mark them
+		storageCommitTimer.Update(statedb.StorageCommits)   // Storage commits are complete, we can mark them
+		snapshotCommitTimer.Update(statedb.SnapshotCommits) // Snapshot commits are complete, we can mark them
+		triedbCommitTimer.Update(statedb.TrieDBCommits)     // Trie database commits are complete, we can mark them
+
+		blockWriteTimer.Update(time.Since(wstart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits - statedb.TrieDBCommits)
+		blockInsertTimer.UpdateSince(start)
+
 		// Report the import stats before returning the various results
 		stats.processed++
-		stats.usedGas += res.usedGas
+		stats.usedGas += usedGas
 
 		var snapDiffItems, snapBufItems common.StorageSize
 		if bc.snaps != nil {
@@ -2406,7 +2417,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if !setHead {
 			// After merge we expect few side chains. Simply count
 			// all blocks the CL gives us for GC processing time
-			bc.gcproc += res.procTime
+			bc.gcproc += proctime
 			return it.index, nil // Direct block insertion of a single block
 		}
 
@@ -2418,7 +2429,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		}
 		// BOR
 
-		switch res.status {
+		switch status {
 		case CanonStatTy:
 			log.Debug("Inserted new block", "number", block.Number(), "hash", block.Hash(),
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
@@ -2428,7 +2439,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 			lastCanon = block
 
 			// Only count canonical blocks for GC processing time
-			bc.gcproc += procTime
+			bc.gcproc += proctime
 
 		case SideStatTy:
 			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
@@ -2499,7 +2510,7 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
+	receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig, context.Background())
 	if err != nil {
 		bc.reportBlock(block, receipts, err)
 		return nil, err

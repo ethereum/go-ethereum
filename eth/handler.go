@@ -114,10 +114,11 @@ type handler struct {
 	chain    *core.BlockChain
 	maxPeers int
 
-	downloader *downloader.Downloader
-	txFetcher  *fetcher.TxFetcher
-	peers      *peerSet
-	merger     *consensus.Merger
+	downloader   *downloader.Downloader
+	blockFetcher *fetcher.BlockFetcher
+	txFetcher    *fetcher.TxFetcher
+	peers        *peerSet
+	merger       *consensus.Merger
 
 	ethAPI *ethapi.BlockChainAPI // EthAPI to interact
 

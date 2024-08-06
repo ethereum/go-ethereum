@@ -204,6 +204,23 @@ func (ps *peerSet) peer(id string) *ethPeer {
 	return ps.peers[id]
 }
 
+// peersWithoutBlock retrieves a list of peers that do not have a given block in
+// their set of known hashes so it might be propagated to them.
+func (ps *peerSet) peersWithoutBlock(hash common.Hash) []*ethPeer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*ethPeer, 0, len(ps.peers))
+
+	for _, p := range ps.peers {
+		if !p.KnownBlock(hash) {
+			list = append(list, p)
+		}
+	}
+
+	return list
+}
+
 // peersWithoutTransaction retrieves a list of peers that do not have a given
 // transaction in their set of known hashes.
 func (ps *peerSet) peersWithoutTransaction(hash common.Hash) []*ethPeer {

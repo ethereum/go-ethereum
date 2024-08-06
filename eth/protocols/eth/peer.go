@@ -53,6 +53,10 @@ type Peer struct {
 	head common.Hash // Latest advertised head block hash
 	td   *big.Int    // Latest advertised head block total difficulty
 
+	knownBlocks     *knownCache            // Set of block hashes known to be known by this peer
+	queuedBlocks    chan *blockPropagation // Queue of blocks to broadcast to the peer
+	queuedBlockAnns chan *types.Block      // Queue of blocks to announce to the peer
+
 	txpool      TxPool             // Transaction pool used by the broadcasters for liveness checks
 	knownTxs    *knownCache        // Set of transaction hashes known to be known by this peer
 	txBroadcast chan []common.Hash // Channel used to queue transaction propagation requests
@@ -124,6 +128,11 @@ func (p *Peer) SetHead(hash common.Hash, td *big.Int) {
 
 	copy(p.head[:], hash[:])
 	p.td.Set(td)
+}
+
+// KnownBlock returns whether peer is known to already have a block.
+func (p *Peer) KnownBlock(hash common.Hash) bool {
+	return p.knownBlocks.Contains(hash)
 }
 
 // KnownTransaction returns whether peer is known to already have a transaction.
@@ -204,6 +213,55 @@ func (p *Peer) ReplyPooledTransactionsRLP(id uint64, hashes []common.Hash, txs [
 		RequestId:                     id,
 		PooledTransactionsRLPResponse: txs,
 	})
+}
+
+// SendNewBlockHashes announces the availability of a number of blocks through
+// a hash notification.
+func (p *Peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
+	// Mark all the block hashes as known, but ensure we don't overflow our limits
+	p.knownBlocks.Add(hashes...)
+
+	request := make(NewBlockHashesPacket, len(hashes))
+	for i := 0; i < len(hashes); i++ {
+		request[i].Hash = hashes[i]
+		request[i].Number = numbers[i]
+	}
+	return p2p.Send(p.rw, NewBlockHashesMsg, request)
+}
+
+// AsyncSendNewBlockHash queues the availability of a block for propagation to a
+// remote peer. If the peer's broadcast queue is full, the event is silently
+// dropped.
+func (p *Peer) AsyncSendNewBlockHash(block *types.Block) {
+	select {
+	case p.queuedBlockAnns <- block:
+		// Mark all the block hash as known, but ensure we don't overflow our limits
+		p.knownBlocks.Add(block.Hash())
+	default:
+		p.Log().Debug("Dropping block announcement", "number", block.NumberU64(), "hash", block.Hash())
+	}
+}
+
+// SendNewBlock propagates an entire block to a remote peer.
+func (p *Peer) SendNewBlock(block *types.Block, td *big.Int) error {
+	// Mark all the block hash as known, but ensure we don't overflow our limits
+	p.knownBlocks.Add(block.Hash())
+	return p2p.Send(p.rw, NewBlockMsg, &NewBlockPacket{
+		Block: block,
+		TD:    td,
+	})
+}
+
+// AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
+// the peer's broadcast queue is full, the event is silently dropped.
+func (p *Peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
+	select {
+	case p.queuedBlocks <- &blockPropagation{block: block, td: td}:
+		// Mark all the block hash as known, but ensure we don't overflow our limits
+		p.knownBlocks.Add(block.Hash())
+	default:
+		p.Log().Debug("Dropping block propagation", "number", block.NumberU64(), "hash", block.Hash())
+	}
 }
 
 // ReplyBlockHeadersRLP is the response to GetBlockHeaders.
