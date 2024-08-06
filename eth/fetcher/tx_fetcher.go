@@ -267,10 +267,6 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 			if types == nil {
 				unknownMetas = append(unknownMetas, txMetadata{arrival: f.counter})
 			} else {
-				if sizes[i] == 0 {
-					// invalid size parameter, return error
-					return fmt.Errorf("announcement from tx %x had an invalid 0 size metadata", hash)
-				}
 				unknownMetas = append(unknownMetas, txMetadata{kind: types[i], size: sizes[i], arrival: f.counter})
 			}
 			f.counter++
