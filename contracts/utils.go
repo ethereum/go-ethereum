@@ -407,7 +407,7 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 
 	log.Info("Signers data", "totalSigner", totalSigner, "totalReward", chainReward)
 	for addr, signer := range signers {
-		log.Info("Signer reward", "signer", addr, "sign", signer.Sign, "reward", signer.Reward)
+		log.Debug("Signer reward", "signer", addr, "sign", signer.Sign, "reward", signer.Reward)
 	}
 
 	return resultSigners, nil
