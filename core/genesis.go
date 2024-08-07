@@ -421,8 +421,6 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.SepoliaChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
-	case ghash == params.ScrollAlphaGenesisHash:
-		return params.ScrollAlphaChainConfig
 	case ghash == params.ScrollSepoliaGenesisHash:
 		return params.ScrollSepoliaChainConfig
 	case ghash == params.ScrollMainnetGenesisHash:
@@ -586,18 +584,6 @@ func DefaultHoleskyGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(0x01),
 		Timestamp:  1695902100,
 		Alloc:      decodePrealloc(holeskyAllocData),
-	}
-}
-
-// DefaultScrollAlphaGenesisBlock returns the Scroll Alpha network genesis block.
-func DefaultScrollAlphaGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.ScrollAlphaChainConfig,
-		Timestamp:  0x63f67207,
-		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000b7C0c58702D0781C0e2eB3aaE301E4c340073448Ec9c139eFCBBe6323DA406fffBF4Db02a60A9720589c71deC4302fE718bE62350c174922782Cc6600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   8000000,
-		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(scrollAlphaAllocData),
 	}
 }
 

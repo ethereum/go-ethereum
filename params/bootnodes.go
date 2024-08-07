@@ -64,13 +64,6 @@ var GoerliBootnodes = []string{
 	"enode://d2b720352e8216c9efc470091aa91ddafc53e222b32780f505c817ceef69e01d5b0b0797b69db254c586f493872352f5a022b4d8479a00fc92ec55f9ad46a27e@88.99.70.182:30303",
 }
 
-// ScrollAlphaBootnodes are the enode URLs of the P2P bootstrap nodes running on the Scroll Alpha test network.
-var ScrollAlphaBootnodes = []string{
-	"enode://996a655365e731321ca35636f5a62fdf37c0b75dc56a8832c472d077da5af47effe45874196268f6083b8f65e1a9589ed25015f68f47598c7bcc93ac8ea29e8a@35.85.116.190:30303",
-	"enode://a4e90d8108bbcd8b13066567c786f800812a9b6b3eeb92947e64edd19ac9231bf371da1a86796af2ccd7b7e781218ebbe2d04130d63f7b3f25d6372a706fc022@44.224.134.190:30303",
-	"enode://cf85bfa5828239b1f6b21758579ee8aaaba2a1fb4c658d6967c5f7ed4f040d95dee5b5cef0c77d656a191f6b0875dd03f05b30a3b2b3e15bfcf18b500d8f634c@35.155.117.77:30303",
-}
-
 // ScrollSepoliaBootnodes are the enode URLs of the P2P bootstrap nodes running on the Scroll Sepolia test network.
 var ScrollSepoliaBootnodes = []string{
 	"enode://ceb1636bac5cbb262e5ad5b2cd22014bdb35ffe7f58b3506970d337a63099481814a338dbcd15f2d28757151e3ecd40ba38b41350b793cd0d910ff0436654f8c@35.85.84.250:30303",

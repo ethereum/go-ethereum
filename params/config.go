@@ -31,7 +31,6 @@ var (
 	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
 	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 
-	ScrollAlphaGenesisHash   = common.HexToHash("0xa4fc62b9b0643e345bdcebe457b3ae898bef59c7203c3db269200055e037afda")
 	ScrollSepoliaGenesisHash = common.HexToHash("0xaa62d1a8b2bffa9e5d2368b63aae0d98d54928bd713125e3fd9e5c896c68592c")
 	ScrollMainnetGenesisHash = common.HexToHash("0xbbc05efd412b7cd47a2ed0e5ddfcf87af251e414ea4c801d78b6784513180a80")
 )
@@ -183,45 +182,7 @@ var (
 		},
 	}
 
-	// ScrollAlphaChainConfig contains the chain parameters to run a node on the Scroll Alpha test network.
-	ScrollAlphaChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(534353),
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP155Block:         big.NewInt(0),
-		EIP158Block:         big.NewInt(0),
-		ByzantiumBlock:      big.NewInt(0),
-		ConstantinopleBlock: big.NewInt(0),
-		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
-		MuirGlacierBlock:    nil,
-		BerlinBlock:         big.NewInt(0),
-		LondonBlock:         big.NewInt(0),
-		ArrowGlacierBlock:   nil,
-		ShanghaiTime:        nil,
-		ArchimedesBlock:     big.NewInt(2646311),
-		BernoulliBlock:      nil,
-		CurieBlock:          nil,
-		DarwinTime:          nil,
-		Clique: &CliqueConfig{
-			Period: 3,
-			Epoch:  30000,
-		},
-		Scroll: ScrollConfig{
-			UseZktrie:                 true,
-			MaxTxPerBlock:             &rcfg.ScrollMaxTxPerBlock,
-			MaxTxPayloadBytesPerBlock: &rcfg.ScrollMaxTxPayloadBytesPerBlock,
-			FeeVaultAddress:           &rcfg.ScrollFeeVaultAddress,
-			L1Config: &L1Config{
-				L1ChainId:             5,
-				L1MessageQueueAddress: common.HexToAddress("0x79DB48002Aa861C8cb189cabc21c6B1468BC83BB"),
-				NumL1MessagesPerBlock: 0,
-				ScrollChainAddress:    common.HexToAddress("0x3C584eC7f0f2764CC715ac3180Ae9828465E9833"),
-			},
-		},
-	}
+	// ScrollSepoliaChainConfig contains the chain parameters to run a node on the Scroll Sepolia test network.
 	ScrollSepoliaChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(534351),
 		HomesteadBlock:      big.NewInt(0),
@@ -260,6 +221,8 @@ var (
 			},
 		},
 	}
+
+	// ScrollMainnetChainConfig contains the chain parameters to run a node on the Scroll mainnet.
 	ScrollMainnetChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(534352),
 		HomesteadBlock:      big.NewInt(0),
@@ -495,7 +458,6 @@ var NetworkNames = map[string]string{
 	SepoliaChainConfig.ChainID.String(): "sepolia",
 	HoleskyChainConfig.ChainID.String(): "holesky",
 
-	ScrollAlphaChainConfig.ChainID.String():   "scroll-alpha",
 	ScrollSepoliaChainConfig.ChainID.String(): "scroll-sepolia",
 	ScrollMainnetChainConfig.ChainID.String(): "scroll",
 }

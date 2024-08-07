@@ -169,11 +169,6 @@ var (
 		Usage:    "Scroll mainnet",
 		Category: flags.EthCategory,
 	}
-	ScrollAlphaFlag = &cli.BoolFlag{
-		Name:     "scroll-alpha",
-		Usage:    "Scroll Alpha test network",
-		Category: flags.EthCategory,
-	}
 	ScrollSepoliaFlag = &cli.BoolFlag{
 		Name:     "scroll-sepolia",
 		Usage:    "Scroll Sepolia test network",
@@ -1024,7 +1019,6 @@ var (
 		GoerliFlag,
 		SepoliaFlag,
 		HoleskyFlag,
-		ScrollAlphaFlag,
 		ScrollSepoliaFlag,
 	}
 	// NetworkFlags is the flag group of all built-in supported networks.
@@ -1054,9 +1048,6 @@ func MakeDataDir(ctx *cli.Context) string {
 		}
 		if ctx.Bool(HoleskyFlag.Name) {
 			return filepath.Join(path, "holesky")
-		}
-		if ctx.Bool(ScrollAlphaFlag.Name) {
-			return filepath.Join(path, "scroll-alpha")
 		}
 		if ctx.Bool(ScrollSepoliaFlag.Name) {
 			return filepath.Join(path, "scroll-sepolia")
@@ -1126,8 +1117,6 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 			urls = params.SepoliaBootnodes
 		case ctx.Bool(GoerliFlag.Name):
 			urls = params.GoerliBootnodes
-		case ctx.Bool(ScrollAlphaFlag.Name):
-			urls = params.ScrollAlphaBootnodes
 		case ctx.Bool(ScrollSepoliaFlag.Name):
 			urls = params.ScrollSepoliaBootnodes
 		case ctx.Bool(ScrollFlag.Name):
@@ -1619,8 +1608,6 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
 	case ctx.Bool(HoleskyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "holesky")
-	case ctx.Bool(ScrollAlphaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "scroll-alpha")
 	case ctx.Bool(ScrollSepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "scroll-sepolia")
 	case ctx.Bool(ScrollFlag.Name) && cfg.DataDir == node.DefaultDataDir():
@@ -1810,7 +1797,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, GoerliFlag, SepoliaFlag, HoleskyFlag, ScrollAlphaFlag, ScrollSepoliaFlag, ScrollFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, GoerliFlag, SepoliaFlag, HoleskyFlag, ScrollSepoliaFlag, ScrollFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
@@ -1980,12 +1967,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.Bool(ScrollAlphaFlag.Name):
-		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 534353
-		}
-		cfg.Genesis = core.DefaultScrollAlphaGenesisBlock()
-		// SetDNSDiscoveryDefaults(cfg, params.ScrollAlphaGenesisHash)
 	case ctx.Bool(ScrollSepoliaFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 534351
@@ -2356,8 +2337,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultSepoliaGenesisBlock()
 	case ctx.Bool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.Bool(ScrollAlphaFlag.Name):
-		genesis = core.DefaultScrollAlphaGenesisBlock()
 	case ctx.Bool(ScrollSepoliaFlag.Name):
 		genesis = core.DefaultScrollSepoliaGenesisBlock()
 	case ctx.Bool(ScrollFlag.Name):
