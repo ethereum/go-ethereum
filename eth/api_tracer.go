@@ -236,13 +236,13 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				feeCapacity := state.GetTRC21FeeCapacityFromState(task.statedb)
 				// Trace all the transactions contained within
 				for i, tx := range task.block.Transactions() {
-					var balacne *big.Int
+					var balance *big.Int
 					if tx.To() != nil {
 						if value, ok := feeCapacity[*tx.To()]; ok {
-							balacne = value
+							balance = value
 						}
 					}
-					msg, _ := tx.AsMessage(signer, balacne, task.block.Number())
+					msg, _ := tx.AsMessage(signer, balance, task.block.Number())
 					txctx := &tracers.Context{
 						BlockHash: task.block.Hash(),
 						TxIndex:   i,
@@ -480,13 +480,13 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 			// Fetch and execute the next transaction trace tasks
 			for task := range jobs {
 				feeCapacity := state.GetTRC21FeeCapacityFromState(task.statedb)
-				var balacne *big.Int
+				var balance *big.Int
 				if txs[task.index].To() != nil {
 					if value, ok := feeCapacity[*txs[task.index].To()]; ok {
-						balacne = value
+						balance = value
 					}
 				}
-				msg, _ := txs[task.index].AsMessage(signer, balacne, block.Number())
+				msg, _ := txs[task.index].AsMessage(signer, balance, block.Number())
 				txctx := &tracers.Context{
 					BlockHash: blockHash,
 					TxIndex:   task.index,
@@ -507,18 +507,18 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 	for i, tx := range txs {
 		// Send the trace task over for execution
 		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i}
-		var balacne *big.Int
+		var balance *big.Int
 		if tx.To() != nil {
 			// Bypass the validation for trading and lending transactions as their nonce are not incremented
 			if tx.IsSkipNonceTransaction() {
 				continue
 			}
 			if value, ok := feeCapacity[*tx.To()]; ok {
-				balacne = value
+				balance = value
 			}
 		}
 		// Generate the next state snapshot fast without tracing
-		msg, _ := tx.AsMessage(signer, balacne, block.Number())
+		msg, _ := tx.AsMessage(signer, balance, block.Number())
 		txContext := core.NewEVMTxContext(msg)
 		statedb.Prepare(tx.Hash(), i)
 
