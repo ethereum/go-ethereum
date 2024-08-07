@@ -18,7 +18,7 @@ package types
 
 import (
 	"bytes"
-	"unsafe"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -43,8 +43,10 @@ type withdrawalMarshaling struct {
 	Amount    hexutil.Uint64
 }
 
+var withdrawalSize = common.StorageSize(reflect.TypeOf(Withdrawal{}).Size())
+
 func (w Withdrawal) Size() common.StorageSize {
-	return common.StorageSize(unsafe.Sizeof(w))
+	return common.StorageSize(withdrawalSize)
 }
 
 // Withdrawals implements DerivableList for withdrawals.
