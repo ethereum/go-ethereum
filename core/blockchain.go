@@ -678,12 +678,14 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) insert(block *types.Block, writeBlock bool) {
+	blockHash := block.Hash()
+	blockNumberU64 := block.NumberU64()
 	// If the block is on a side chain or an unknown one, force other heads onto it too
-	updateHeads := GetCanonicalHash(bc.db, block.NumberU64()) != block.Hash()
+	updateHeads := GetCanonicalHash(bc.db, blockNumberU64) != blockHash
 
 	// Add the block to the canonical chain number scheme and mark as the head
-	rawdb.WriteCanonicalHash(bc.db, block.Hash(), block.NumberU64())
-	rawdb.WriteHeadBlockHash(bc.db, block.Hash())
+	rawdb.WriteCanonicalHash(bc.db, blockHash, blockNumberU64)
+	rawdb.WriteHeadBlockHash(bc.db, blockHash)
 	if writeBlock {
 		rawdb.WriteBlock(bc.db, block)
 	}
@@ -693,7 +695,7 @@ func (bc *BlockChain) insert(block *types.Block, writeBlock bool) {
 	if bc.chainConfig.XDPoS != nil && !bc.chainConfig.IsTIPSigning(block.Number()) {
 		engine, ok := bc.Engine().(*XDPoS.XDPoS)
 		if ok {
-			engine.CacheNoneTIPSigningTxs(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
+			engine.CacheNoneTIPSigningTxs(block.Header(), block.Transactions(), bc.GetReceiptsByHash(blockHash))
 		}
 	}
 
@@ -701,7 +703,7 @@ func (bc *BlockChain) insert(block *types.Block, writeBlock bool) {
 	if updateHeads {
 		bc.hc.SetCurrentHeader(block.Header())
 
-		if err := WriteHeadFastBlockHash(bc.db, block.Hash()); err != nil {
+		if err := WriteHeadFastBlockHash(bc.db, blockHash); err != nil {
 			log.Crit("Failed to insert head fast block hash", "err", err)
 		}
 		bc.currentFastBlock.Store(block)
