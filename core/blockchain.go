@@ -684,7 +684,9 @@ func (bc *BlockChain) insert(block *types.Block, writeBlock bool) {
 	// Add the block to the canonical chain number scheme and mark as the head
 	rawdb.WriteCanonicalHash(bc.db, block.Hash(), block.NumberU64())
 	rawdb.WriteHeadBlockHash(bc.db, block.Hash())
-	rawdb.WriteBlock(bc.db, block)
+	if writeBlock {
+		rawdb.WriteBlock(bc.db, block)
+	}
 	bc.currentBlock.Store(block)
 
 	// save cache BlockSigners
