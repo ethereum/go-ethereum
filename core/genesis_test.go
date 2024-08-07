@@ -311,7 +311,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-	triedb := triedb.NewDatabase(db, &triedb.Config{IsVerkle: true, PathDB: pathdb.Defaults})
+	triedb := triedb.NewDatabase(db, triedb.VerkleDefaults)
 	block := genesis.MustCommit(db, triedb)
 	if !bytes.Equal(block.Root().Bytes(), expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, block.Root())
@@ -321,8 +321,8 @@ func TestVerkleGenesisCommit(t *testing.T) {
 	if !triedb.IsVerkle() {
 		t.Fatalf("expected trie to be verkle")
 	}
-
-	if !rawdb.HasAccountTrieNode(db, nil) {
+	vdb := rawdb.NewTable(db, string(rawdb.VerklePrefix))
+	if !rawdb.HasAccountTrieNode(vdb, nil) {
 		t.Fatal("could not find node")
 	}
 }

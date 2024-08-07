@@ -359,7 +359,7 @@ func (ec *Client) NetworkID(ctx context.Context) (*big.Int, error) {
 	if err := ec.c.CallContext(ctx, &ver, "net_version"); err != nil {
 		return nil, err
 	}
-	if _, ok := version.SetString(ver, 10); !ok {
+	if _, ok := version.SetString(ver, 0); !ok {
 		return nil, fmt.Errorf("invalid net_version result %q", ver)
 	}
 	return version, nil

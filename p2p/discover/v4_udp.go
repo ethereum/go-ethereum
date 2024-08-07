@@ -271,7 +271,7 @@ func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
 		// case and run the bootstrapping logic.
 		<-t.tab.refresh()
 	}
-	return t.newLookup(t.closeCtx, encodePubkey(key)).run()
+	return t.newLookup(t.closeCtx, v4wire.EncodePubkey(key)).run()
 }
 
 // RandomNodes is an iterator yielding nodes from a random walk of the DHT.
@@ -286,24 +286,24 @@ func (t *UDPv4) lookupRandom() []*enode.Node {
 
 // lookupSelf implements transport.
 func (t *UDPv4) lookupSelf() []*enode.Node {
-	return t.newLookup(t.closeCtx, encodePubkey(&t.priv.PublicKey)).run()
+	pubkey := v4wire.EncodePubkey(&t.priv.PublicKey)
+	return t.newLookup(t.closeCtx, pubkey).run()
 }
 
 func (t *UDPv4) newRandomLookup(ctx context.Context) *lookup {
-	var target encPubkey
+	var target v4wire.Pubkey
 	crand.Read(target[:])
 	return t.newLookup(ctx, target)
 }
 
-func (t *UDPv4) newLookup(ctx context.Context, targetKey encPubkey) *lookup {
+func (t *UDPv4) newLookup(ctx context.Context, targetKey v4wire.Pubkey) *lookup {
 	target := enode.ID(crypto.Keccak256Hash(targetKey[:]))
-	ekey := v4wire.Pubkey(targetKey)
 	it := newLookup(ctx, t.tab, target, func(n *enode.Node) ([]*enode.Node, error) {
 		addr, ok := n.UDPEndpoint()
 		if !ok {
 			return nil, errNoUDPEndpoint
 		}
-		return t.findnode(n.ID(), addr, ekey)
+		return t.findnode(n.ID(), addr, targetKey)
 	})
 	return it
 }

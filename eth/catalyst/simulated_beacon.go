@@ -302,7 +302,7 @@ func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
 		return errors.New("parent not found")
 	}
 	withdrawals := c.withdrawals.gatherPending(10)
-	return c.sealBlock(withdrawals, parent.Time+uint64(adjustment))
+	return c.sealBlock(withdrawals, parent.Time+uint64(adjustment/time.Second))
 }
 
 func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {

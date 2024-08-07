@@ -471,20 +471,28 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 // storage. This function should only be used for debugging and the mutations
 // must be discarded afterwards.
 func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
-	// SetStorage needs to wipe existing storage. We achieve this by pretending
-	// that the account self-destructed earlier in this block, by flagging
-	// it in stateObjectsDestruct. The effect of doing so is that storage lookups
-	// will not hit disk, since it is assumed that the disk-data is belonging
+	// SetStorage needs to wipe the existing storage. We achieve this by marking
+	// the account as self-destructed in this block. The effect is that storage
+	// lookups will not hit the disk, as it is assumed that the disk data belongs
 	// to a previous incarnation of the object.
 	//
-	// TODO(rjl493456442) this function should only be supported by 'unwritable'
-	// state and all mutations made should all be discarded afterwards.
-	if _, ok := s.stateObjectsDestruct[addr]; !ok {
-		s.stateObjectsDestruct[addr] = nil
+	// TODO (rjl493456442): This function should only be supported by 'unwritable'
+	// state, and all mutations made should be discarded afterward.
+	obj := s.getStateObject(addr)
+	if obj != nil {
+		if _, ok := s.stateObjectsDestruct[addr]; !ok {
+			s.stateObjectsDestruct[addr] = obj
+		}
 	}
-	stateObject := s.getOrNewStateObject(addr)
+	newObj := s.createObject(addr)
 	for k, v := range storage {
-		stateObject.SetState(k, v)
+		newObj.SetState(k, v)
+	}
+	// Inherit the metadata of original object if it was existent
+	if obj != nil {
+		newObj.SetCode(common.BytesToHash(obj.CodeHash()), obj.code)
+		newObj.SetNonce(obj.Nonce())
+		newObj.SetBalance(obj.Balance(), tracing.BalanceChangeUnspecified)
 	}
 }
 
@@ -860,12 +868,16 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 		obj := s.stateObjects[addr] // closure for the task runner below
 		workers.Go(func() error {
-			obj.updateRoot()
+			if s.db.TrieDB().IsVerkle() {
+				obj.updateTrie()
+			} else {
+				obj.updateRoot()
 
-			// If witness building is enabled and the state object has a trie,
-			// gather the witnesses for its specific storage trie
-			if s.witness != nil && obj.trie != nil {
-				s.witness.AddState(obj.trie.Witness())
+				// If witness building is enabled and the state object has a trie,
+				// gather the witnesses for its specific storage trie
+				if s.witness != nil && obj.trie != nil {
+					s.witness.AddState(obj.trie.Witness())
+				}
 			}
 			return nil
 		})
@@ -907,9 +919,12 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// Now we're about to start to write changes to the trie. The trie is so far
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
+	//
+	// Don't check prefetcher if verkle trie has been used. In the context of verkle,
+	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
+	// here could result in losing uncommitted changes from storage.
 	start = time.Now()
-
-	if s.prefetcher != nil {
+	if s.prefetcher != nil && (s.trie == nil || !s.trie.IsVerkle()) {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
 			log.Error("Failed to retrieve account pre-fetcher trie")
 		} else {
@@ -985,76 +1000,70 @@ func (s *StateDB) clearJournalAndRefund() {
 // of a specific account. It leverages the associated state snapshot for fast
 // storage iteration and constructs trie node deletion markers by creating
 // stack trie with iterated slots.
-func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (common.StorageSize, map[common.Hash][]byte, *trienode.NodeSet, error) {
+func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, *trienode.NodeSet, error) {
 	iter, err := s.snaps.StorageIterator(s.originalRoot, addrHash, common.Hash{})
 	if err != nil {
-		return 0, nil, nil, err
+		return nil, nil, err
 	}
 	defer iter.Release()
 
 	var (
-		size  common.StorageSize
 		nodes = trienode.NewNodeSet(addrHash)
 		slots = make(map[common.Hash][]byte)
 	)
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		nodes.AddNode(path, trienode.NewDeleted())
-		size += common.StorageSize(len(path))
 	})
 	for iter.Next() {
 		slot := common.CopyBytes(iter.Slot())
 		if err := iter.Error(); err != nil { // error might occur after Slot function
-			return 0, nil, nil, err
+			return nil, nil, err
 		}
-		size += common.StorageSize(common.HashLength + len(slot))
 		slots[iter.Hash()] = slot
 
 		if err := stack.Update(iter.Hash().Bytes(), slot); err != nil {
-			return 0, nil, nil, err
+			return nil, nil, err
 		}
 	}
 	if err := iter.Error(); err != nil { // error might occur during iteration
-		return 0, nil, nil, err
+		return nil, nil, err
 	}
 	if stack.Hash() != root {
-		return 0, nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
+		return nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
 	}
-	return size, slots, nodes, nil
+	return slots, nodes, nil
 }
 
 // slowDeleteStorage serves as a less-efficient alternative to "fastDeleteStorage,"
 // employed when the associated state snapshot is not available. It iterates the
 // storage slots along with all internal trie nodes via trie directly.
-func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (common.StorageSize, map[common.Hash][]byte, *trienode.NodeSet, error) {
+func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, *trienode.NodeSet, error) {
 	tr, err := s.db.OpenStorageTrie(s.originalRoot, addr, root, s.trie)
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("failed to open storage trie, err: %w", err)
+		return nil, nil, fmt.Errorf("failed to open storage trie, err: %w", err)
 	}
 	it, err := tr.NodeIterator(nil)
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("failed to open storage iterator, err: %w", err)
+		return nil, nil, fmt.Errorf("failed to open storage iterator, err: %w", err)
 	}
 	var (
-		size  common.StorageSize
 		nodes = trienode.NewNodeSet(addrHash)
 		slots = make(map[common.Hash][]byte)
 	)
 	for it.Next(true) {
 		if it.Leaf() {
 			slots[common.BytesToHash(it.LeafKey())] = common.CopyBytes(it.LeafBlob())
-			size += common.StorageSize(common.HashLength + len(it.LeafBlob()))
 			continue
 		}
 		if it.Hash() == (common.Hash{}) {
 			continue
 		}
-		size += common.StorageSize(len(it.Path()))
 		nodes.AddNode(it.Path(), trienode.NewDeleted())
 	}
 	if err := it.Error(); err != nil {
-		return 0, nil, nil, err
+		return nil, nil, err
 	}
-	return size, slots, nodes, nil
+	return slots, nodes, nil
 }
 
 // deleteStorage is designed to delete the storage trie of a designated account.
@@ -1063,9 +1072,7 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 // efficient approach.
 func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, *trienode.NodeSet, error) {
 	var (
-		start = time.Now()
 		err   error
-		size  common.StorageSize
 		slots map[common.Hash][]byte
 		nodes *trienode.NodeSet
 	)
@@ -1073,24 +1080,14 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 	// generated, or it's internally corrupted. Fallback to the slow
 	// one just in case.
 	if s.snap != nil {
-		size, slots, nodes, err = s.fastDeleteStorage(addrHash, root)
+		slots, nodes, err = s.fastDeleteStorage(addrHash, root)
 	}
 	if s.snap == nil || err != nil {
-		size, slots, nodes, err = s.slowDeleteStorage(addr, addrHash, root)
+		slots, nodes, err = s.slowDeleteStorage(addr, addrHash, root)
 	}
 	if err != nil {
 		return nil, nil, err
 	}
-	// Report the metrics
-	n := int64(len(slots))
-
-	slotDeletionMaxCount.UpdateIfGt(int64(len(slots)))
-	slotDeletionMaxSize.UpdateIfGt(int64(size))
-
-	slotDeletionTimer.UpdateSince(start)
-	slotDeletionCount.Mark(n)
-	slotDeletionSize.Mark(int64(size))
-
 	return slots, nodes, nil
 }
 
@@ -1169,6 +1166,10 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	// Finalize any pending changes and merge everything into the tries
 	s.IntermediateRoot(deleteEmptyObjects)
 
+	// Short circuit if any error occurs within the IntermediateRoot.
+	if s.dbErr != nil {
+		return nil, fmt.Errorf("commit aborted due to database error: %v", s.dbErr)
+	}
 	// Commit objects to the trie, measuring the elapsed time
 	var (
 		accountTrieNodesUpdated int

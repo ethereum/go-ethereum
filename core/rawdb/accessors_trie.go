@@ -245,7 +245,7 @@ func DeleteTrieNode(db ethdb.KeyValueWriter, owner common.Hash, path []byte, has
 
 // ReadStateScheme reads the state scheme of persistent state, or none
 // if the state is not present in database.
-func ReadStateScheme(db ethdb.Reader) string {
+func ReadStateScheme(db ethdb.Database) string {
 	// Check if state in path-based scheme is present.
 	if HasAccountTrieNode(db, nil) {
 		return PathScheme
@@ -253,6 +253,16 @@ func ReadStateScheme(db ethdb.Reader) string {
 	// The root node might be deleted during the initial snap sync, check
 	// the persistent state id then.
 	if id := ReadPersistentStateID(db); id != 0 {
+		return PathScheme
+	}
+	// Check if verkle state in path-based scheme is present.
+	vdb := NewTable(db, string(VerklePrefix))
+	if HasAccountTrieNode(vdb, nil) {
+		return PathScheme
+	}
+	// The root node of verkle might be deleted during the initial snap sync,
+	// check the persistent state id then.
+	if id := ReadPersistentStateID(vdb); id != 0 {
 		return PathScheme
 	}
 	// In a hash-based scheme, the genesis state is consistently stored
