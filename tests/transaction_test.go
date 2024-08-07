@@ -41,6 +41,9 @@ func TestTransaction(t *testing.T) {
 	// accept transactions at a certain point in the distant future
 	txt.skipLoad("^ttNonce/TransactionWithHighNonce256.json")
 
+	// The maximum value of nonce is 2^64 - 1
+	txt.skipLoad("^ttNonce/TransactionWithHighNonce64Minus1.json")
+
 	// The value is larger than uint64, which according to the test is invalid.
 	// Geth accepts it, which is not a consensus issue since we use big.Int's
 	// internally to calculate the cost
