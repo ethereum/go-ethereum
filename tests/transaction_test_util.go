@@ -29,8 +29,8 @@ import (
 
 // TransactionTest checks RLP decoding and sender derivation of transactions.
 type TransactionTest struct {
-	Txbytes    hexutil.Bytes `json:"txbytes"`
-	Result ttResult
+	Txbytes hexutil.Bytes `json:"txbytes"`
+	Result  ttResult
 }
 
 type ttResult struct {
