@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -487,7 +488,7 @@ func TestProcessVerkle(t *testing.T) {
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
 	}
-	_, chain, _, _, _ := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
+	_, chain, _, proofs, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 
 		// TODO need to check that the tx cost provided is the exact amount used (no remaining left-over)
@@ -508,7 +509,12 @@ func TestProcessVerkle(t *testing.T) {
 		}
 	})
 
-	t.Log("inserting blocks into the chain")
+	err := verkle.Verify(proofs[1], chain[0].Root().Bytes(), chain[1].Root().Bytes(), statediffs[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("verified verkle proof, inserting blocks into the chain")
 
 	endnum, err := blockchain.InsertChain(chain)
 	if err != nil {
