@@ -37,6 +37,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 		ParentExcessBlobGas   *math.HexOrDecimal64                `json:"parentExcessBlobGas,omitempty"`
 		ParentBlobGasUsed     *math.HexOrDecimal64                `json:"parentBlobGasUsed,omitempty"`
 		ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
+		IsStateTest           bool                                `json:"isStateTest"`
 	}
 	var enc stEnv
 	enc.Coinbase = common.UnprefixedAddress(s.Coinbase)
@@ -59,6 +60,7 @@ func (s stEnv) MarshalJSON() ([]byte, error) {
 	enc.ParentExcessBlobGas = (*math.HexOrDecimal64)(s.ParentExcessBlobGas)
 	enc.ParentBlobGasUsed = (*math.HexOrDecimal64)(s.ParentBlobGasUsed)
 	enc.ParentBeaconBlockRoot = s.ParentBeaconBlockRoot
+	enc.IsStateTest = s.IsStateTest
 	return json.Marshal(&enc)
 }
 
@@ -85,6 +87,7 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 		ParentExcessBlobGas   *math.HexOrDecimal64                `json:"parentExcessBlobGas,omitempty"`
 		ParentBlobGasUsed     *math.HexOrDecimal64                `json:"parentBlobGasUsed,omitempty"`
 		ParentBeaconBlockRoot *common.Hash                        `json:"parentBeaconBlockRoot"`
+		IsStateTest           *bool                               `json:"isStateTest"`
 	}
 	var dec stEnv
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -153,6 +156,9 @@ func (s *stEnv) UnmarshalJSON(input []byte) error {
 	}
 	if dec.ParentBeaconBlockRoot != nil {
 		s.ParentBeaconBlockRoot = dec.ParentBeaconBlockRoot
+	}
+	if dec.IsStateTest != nil {
+		s.IsStateTest = *dec.IsStateTest
 	}
 	return nil
 }
