@@ -172,8 +172,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	// CHANGE(taiko): decode the basefeeSharingPctg config from the extradata, and
 	// add it to the Message, if its an ontake block.
 	if config.IsOntake(header.Number) {
-		basefeeSharingPctg, _ := DecodeOntakeExtraData(header.Extra)
-		msg.BasefeeSharingPctg = basefeeSharingPctg
+		msg.BasefeeSharingPctg = DecodeOntakeExtraData(header.Extra)
 	}
 	// Create a new context to be used in the EVM environment
 	blockContext := NewEVMBlockContext(header, bc, author)

@@ -538,21 +538,8 @@ func (st *StateTransition) getTreasuryAddress() common.Address {
 	)
 }
 
-// DecodeOntakeExtraData decodes an ontake block's extradata,
-// returns basefeeSharingPctg and blockGasTargetMillion configurations.
-func DecodeOntakeExtraData(extradata []byte) (uint8, uint8) {
-	// Convert []byte to *big.Int
-	extra := new(big.Int).SetBytes(extradata)
-
-	// Define the masks.
-	blockGasTargetMillionMask := big.NewInt(0xFF) // 8 bits mask for _blockGasTargetMillion
-	basefeeSharingPctgMask := big.NewInt(0xFF)    // 8 bits mask for _basefeeSharingPctg
-
-	// Extract _blockGasTargetMillion.
-	blockGasTargetMillion := new(big.Int).And(extra, blockGasTargetMillionMask).Uint64()
-
-	// Shift right by 8 bits to get the _basefeeSharingPctg part.
-	basefeeSharingPctg := new(big.Int).Rsh(extra, 8).And(basefeeSharingPctgMask, basefeeSharingPctgMask).Uint64()
-
-	return uint8(basefeeSharingPctg), uint8(blockGasTargetMillion)
+// DecodeOntakeExtraData decodes an ontake block's extradata, returns basefeeSharingPctg configurations,
+// the corresponding enocding function in protocol is `LibProposing._encodeGasConfigs`.
+func DecodeOntakeExtraData(extradata []byte) uint8 {
+	return uint8(new(big.Int).SetBytes(extradata).Uint64())
 }
