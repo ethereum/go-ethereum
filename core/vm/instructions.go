@@ -232,7 +232,7 @@ func opSAR(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 
 func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.peek()
-	data := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	data := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 
 	if interpreter.hasher == nil {
 		interpreter.hasher = crypto.NewKeccakState()
@@ -502,7 +502,7 @@ func opPop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 
 func opMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v := scope.Stack.peek()
-	offset := int64(v.Uint64())
+	offset := v.Uint64()
 	v.SetBytes(scope.Memory.GetPtr(offset, 32))
 	return nil, nil
 }
@@ -670,7 +670,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	var (
 		value        = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
-		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 		gas          = scope.Contract.Gas
 	)
 	if interpreter.evm.chainRules.IsEIP150 {
@@ -714,7 +714,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		endowment    = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		salt         = scope.Stack.pop()
-		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 		gas          = scope.Contract.Gas
 	)
 
@@ -752,7 +752,7 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get the arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	if interpreter.readOnly && !value.IsZero() {
 		return nil, ErrWriteProtection
@@ -788,7 +788,7 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	addr, value, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	if !value.IsZero() {
 		gas += params.CallStipend
@@ -821,7 +821,7 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	ret, returnGas, err := interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas)
 	if err != nil {
@@ -850,7 +850,7 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	addr, inOffset, inSize, retOffset, retSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 	toAddr := common.Address(addr.Bytes20())
 	// Get arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
 	if err != nil {
@@ -871,14 +871,14 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 
 func opReturn(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.pop()
-	ret := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 
 	return ret, errStopToken
 }
 
 func opRevert(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	offset, size := scope.Stack.pop(), scope.Stack.pop()
-	ret := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 
 	interpreter.returnData = ret
 	return ret, ErrExecutionReverted
@@ -947,7 +947,7 @@ func makeLog(size int) executionFunc {
 			topics[i] = addr.Bytes32()
 		}
 
-		d := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
+		d := scope.Memory.GetCopy(mStart.Uint64(), mSize.Uint64())
 		interpreter.evm.StateDB.AddLog(&types.Log{
 			Address: scope.Contract.Address(),
 			Topics:  topics,
