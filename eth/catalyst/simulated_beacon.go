@@ -52,7 +52,7 @@ type withdrawalQueue struct {
 type newWithdrawalsEvent struct{ Withdrawals types.Withdrawals }
 
 // add queues a withdrawal for future inclusion.
-func (w *withdrawalQueue) Add(withdrawal *types.Withdrawal) error {
+func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -63,7 +63,7 @@ func (w *withdrawalQueue) Add(withdrawal *types.Withdrawal) error {
 }
 
 // pop dequeues the specified number of withdrawals from the queue.
-func (w *withdrawalQueue) Pop(count int) types.Withdrawals {
+func (w *withdrawalQueue) pop(count int) types.Withdrawals {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -76,7 +76,7 @@ func (w *withdrawalQueue) Pop(count int) types.Withdrawals {
 
 // subscribe allows a listener to be updated when new withdrawals are added to
 // the queue.
-func (w *withdrawalQueue) Subscribe(ch chan<- newWithdrawalsEvent) event.Subscription {
+func (w *withdrawalQueue) subscribe(ch chan<- newWithdrawalsEvent) event.Subscription {
 	sub := w.feed.Subscribe(ch)
 	return w.subs.Track(sub)
 }
@@ -164,7 +164,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		c.setCurrentState(header.Hash(), *finalizedHash)
 	}
 
-	// Because transaction insertion, block insertion and block production will
+	// Because transaction insertion, block insertion, and block production will
 	// happen without any timing delay between them in simulator mode and the
 	// transaction pool will be running its internal reset operation on a
 	// background thread, flaky executions can happen. To avoid the racey
@@ -242,7 +242,7 @@ func (c *SimulatedBeacon) loop() {
 		case <-c.shutdownCh:
 			return
 		case <-timer.C:
-			if err := c.sealBlock(c.withdrawals.Pop(10), uint64(time.Now().Unix())); err != nil {
+			if err := c.sealBlock(c.withdrawals.pop(10), uint64(time.Now().Unix())); err != nil {
 				log.Warn("Error performing sealing work", "err", err)
 			} else {
 				timer.Reset(time.Second * time.Duration(c.period))
@@ -278,7 +278,7 @@ func (c *SimulatedBeacon) setCurrentState(headHash, finalizedHash common.Hash) {
 
 // Commit seals a block on demand.
 func (c *SimulatedBeacon) Commit() common.Hash {
-	withdrawals := c.withdrawals.Pop(10)
+	withdrawals := c.withdrawals.pop(10)
 	if err := c.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
 		log.Warn("Error performing sealing work", "err", err)
 	}
@@ -319,18 +319,14 @@ func (c *SimulatedBeacon) AdjustTime(adjustment time.Duration) error {
 	if parent == nil {
 		return errors.New("parent not found")
 	}
-	withdrawals := c.withdrawals.Pop(10)
+	withdrawals := c.withdrawals.pop(10)
 	return c.sealBlock(withdrawals, parent.Time+uint64(adjustment/time.Second))
 }
 
 // RegisterSimulatedBeaconAPIs registers the simulated beacon's API with the
 // stack.
 func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
-	api := &simulatedBeaconAPI{sim: sim, doCommit: make(chan struct{}, 1)}
-	if sim.period == 0 {
-		// mine on demand if period is set to 0
-		go api.loop()
-	}
+	api := newSimulatedBeaconAPI(sim)
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "dev",

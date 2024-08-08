@@ -98,7 +98,7 @@ func TestSimulatedBeaconSendWithdrawals(t *testing.T) {
 	// generate some withdrawals
 	for i := 0; i < 20; i++ {
 		withdrawals = append(withdrawals, types.Withdrawal{Index: uint64(i)})
-		if err := mock.withdrawals.Add(&withdrawals[i]); err != nil {
+		if err := mock.withdrawals.add(&withdrawals[i]); err != nil {
 			t.Fatal("addWithdrawal failed", err)
 		}
 	}
@@ -152,6 +152,7 @@ func TestOnDemandSpam(t *testing.T) {
 		gasLimit        uint64 = 10_000_000
 		genesis                = core.DeveloperGenesisBlock(gasLimit, &testAddr)
 		node, eth, mock        = startSimulatedBeaconEthService(t, genesis, 0)
+		_                      = newSimulatedBeaconAPI(mock)
 		signer                 = types.LatestSigner(eth.BlockChain().Config())
 		chainHeadCh            = make(chan core.ChainHeadEvent, 100)
 		sub                    = eth.BlockChain().SubscribeChainHeadEvent(chainHeadCh)
@@ -159,14 +160,10 @@ func TestOnDemandSpam(t *testing.T) {
 	defer node.Close()
 	defer sub.Unsubscribe()
 
-	// start simulated beacon
-	api := &simulatedBeaconAPI{sim: mock, doCommit: make(chan struct{}, 1)}
-	go api.loop()
-
 	// generate some withdrawals
 	for i := 0; i < 20; i++ {
 		withdrawals = append(withdrawals, types.Withdrawal{Index: uint64(i)})
-		if err := mock.withdrawals.Add(&withdrawals[i]); err != nil {
+		if err := mock.withdrawals.add(&withdrawals[i]); err != nil {
 			t.Fatal("addWithdrawal failed", err)
 		}
 	}

@@ -30,6 +30,18 @@ type simulatedBeaconAPI struct {
 	doCommit chan struct{}
 }
 
+// newSimulatedBeaconAPI returns an instance of simulatedBeaconAPI with a
+// buffered commit channel. If period is zero, it starts a goroutine to handle
+// new tx events.
+func newSimulatedBeaconAPI(sim *SimulatedBeacon) *simulatedBeaconAPI {
+	api := &simulatedBeaconAPI{sim: sim, doCommit: make(chan struct{}, 1)}
+	if sim.period == 0 {
+		// mine on demand if period is set to 0
+		go api.loop()
+	}
+	return api
+}
+
 // loop is the main loop for the API when it's running in period = 0 mode. It
 // ensures that block production is triggered as soon as a new withdrawal or
 // transaction is received.
@@ -38,7 +50,7 @@ func (a *simulatedBeaconAPI) loop() {
 		newTxs    = make(chan core.NewTxsEvent)
 		newWxs    = make(chan newWithdrawalsEvent)
 		newTxsSub = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
-		newWxsSub = a.sim.withdrawals.Subscribe(newWxs)
+		newWxsSub = a.sim.withdrawals.subscribe(newWxs)
 	)
 	defer newTxsSub.Unsubscribe()
 	defer newWxsSub.Unsubscribe()
@@ -85,7 +97,7 @@ func (a *simulatedBeaconAPI) worker() {
 
 // AddWithdrawal adds a withdrawal to the pending queue.
 func (a *simulatedBeaconAPI) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
-	return a.sim.withdrawals.Add(withdrawal)
+	return a.sim.withdrawals.add(withdrawal)
 }
 
 // SetFeeRecipient sets the fee recipient for block building purposes.
