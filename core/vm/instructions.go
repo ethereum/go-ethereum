@@ -338,8 +338,16 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	return nil, nil
 }
 
+// TODO: very ugly workaround for Solidity preventing calls to no-code contracts
+
+var AA_ENTRY_POINT = common.HexToAddress("0x0000000000000000000000000000000000007560")
+
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
+	if common.Address(slot.Bytes20()).Cmp(AA_ENTRY_POINT) == 0 {
+		slot.SetUint64(uint64(1))
+		return nil, nil
+	}
 	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
 	return nil, nil
 }

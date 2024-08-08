@@ -371,10 +371,6 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-
-	// RIP-7560 specific config parameters
-	EntryPointAddress     common.Address `json:"entryPointAddress,omitempty"`
-	DeployerCallerAddress common.Address `json:"deployerCallerAddress,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
