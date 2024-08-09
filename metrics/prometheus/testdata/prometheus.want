@@ -49,6 +49,9 @@ test_histogram {quantile="0.9999"} 3
 # TYPE test_meter gauge
 test_meter 0
 
+# TYPE test_resetting_gauge gauge
+test_resetting_gauge 23456
+
 # TYPE test_resetting_timer_count counter
 test_resetting_timer_count 6
 

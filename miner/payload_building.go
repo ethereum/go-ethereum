@@ -31,6 +31,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+// bigGwei is usde by the metrics to report on block fees on a scale that fits
+// into an int64.
+var bigGwei = big.NewInt(1_000_000_000)
+
 // BuildPayloadArgs contains the provided parameters for building payload.
 // Check engine-api specification for more details.
 // https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#payloadattributesv3
@@ -67,7 +71,9 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 // the revenue. Therefore, the empty-block here is always available and full-block
 // will be set/updated afterwards.
 type Payload struct {
-	id       engine.PayloadID
+	id     engine.PayloadID
+	number uint64
+
 	empty    *types.Block
 	full     *types.Block
 	sidecars []*types.BlobTxSidecar
@@ -75,14 +81,17 @@ type Payload struct {
 	stop     chan struct{}
 	lock     sync.Mutex
 	cond     *sync.Cond
+
+	recommits []*big.Int
 }
 
 // newPayload initializes the payload object.
 func newPayload(empty *types.Block, id engine.PayloadID) *Payload {
 	payload := &Payload{
-		id:    id,
-		empty: empty,
-		stop:  make(chan struct{}),
+		id:     id,
+		number: empty.NumberU64(),
+		empty:  empty,
+		stop:   make(chan struct{}),
 	}
 	log.Info("Starting work on payload", "id", payload.id)
 	payload.cond = sync.NewCond(&payload.lock)
@@ -99,6 +108,9 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 		return // reject stale update
 	default:
 	}
+	// Stash away all the commit fees to report in metrics
+	payload.recommits = append(payload.recommits, r.fees)
+
 	// Ensure the newly provided full block has a higher transaction fee.
 	// In post-merge stage, there is no uncle reward anymore and transaction
 	// fee(apart from the mev revenue) is the only indicator for comparison.
@@ -121,6 +133,12 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 		)
 	}
 	payload.cond.Broadcast() // fire signal for notifying full block
+}
+
+// Number retrieves the block number this payload belongs to. This method is used
+// in stats reporting to allow matching a block arriving later to a past payload.
+func (payload *Payload) Number() uint64 {
+	return payload.number
 }
 
 // Resolve returns the latest built payload and also terminates the background
@@ -221,7 +239,6 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			beaconRoot:  args.BeaconRoot,
 			noTxs:       false,
 		}
-
 		for {
 			select {
 			case <-timer.C:

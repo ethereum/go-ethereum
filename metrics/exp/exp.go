@@ -123,6 +123,12 @@ func (exp *exp) publishGauge(name string, metric metrics.GaugeSnapshot) {
 	v := exp.getInt(name)
 	v.Set(metric.Value())
 }
+func (exp *exp) publishResettingGauge(name string, metric metrics.ResettingGaugeSnapshot) {
+	v := exp.getInt(name)
+	if val := metric.Value(); val != 0 {
+		v.Set(val)
+	}
+}
 func (exp *exp) publishGaugeFloat64(name string, metric metrics.GaugeFloat64Snapshot) {
 	exp.getFloat(name).Set(metric.Value())
 }
@@ -194,6 +200,8 @@ func (exp *exp) syncToExpvar() {
 			exp.publishCounterFloat64(name, i.Snapshot())
 		case metrics.Gauge:
 			exp.publishGauge(name, i.Snapshot())
+		case metrics.ResettingGauge:
+			exp.publishResettingGauge(name, i.Snapshot())
 		case metrics.GaugeFloat64:
 			exp.publishGaugeFloat64(name, i.Snapshot())
 		case metrics.GaugeInfo:
