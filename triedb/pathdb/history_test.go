@@ -47,7 +47,7 @@ func randomStateSet(n int) *triestate.Set {
 		account := generateAccount(types.EmptyRootHash)
 		accounts[addr] = types.SlimAccountRLP(account)
 	}
-	return triestate.New(accounts, storages)
+	return triestate.New(accounts, storages, false)
 }
 
 func makeHistory() *history {

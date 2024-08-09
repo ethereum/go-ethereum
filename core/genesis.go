@@ -142,7 +142,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 			statedb.SetState(addr, key, value)
 		}
 	}
-	return statedb.Commit(0, false)
+	return statedb.Commit(0, false, false)
 }
 
 // flushAlloc is very similar with hash, but the main difference is all the generated
@@ -165,7 +165,7 @@ func flushAlloc(ga *types.GenesisAlloc, db ethdb.Database, triedb *triedb.Databa
 			statedb.SetState(addr, key, value)
 		}
 	}
-	root, err := statedb.Commit(0, false)
+	root, err := statedb.Commit(0, false, false)
 	if err != nil {
 		return err
 	}
