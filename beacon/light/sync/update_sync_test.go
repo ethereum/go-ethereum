@@ -201,6 +201,40 @@ func TestUpdateSyncDifferentHeads(t *testing.T) {
 	chain.ExpNextSyncPeriod(t, 17)
 }
 
+func Test_lock(t *testing.T) {
+	r := rangeLock{}
+	// locking from 0 to 99
+	r.lock(0, 100, 1)
+	// check that elements have values > 0
+	for i := 0; i < 100; i++ {
+		if v, ok := r[uint64(i)]; v <= 0 || !ok {
+			t.Fatalf("integer space: %d not locked", i)
+		}
+	}
+
+	// unlocking from 0 to 99
+	r.lock(0, 100, -1)
+	// check that elements have values <= 0
+	for i := 0; i < 100; i++ {
+		if v, ok := r[uint64(i)]; v > 0 || ok {
+			t.Fatalf("integer space: %d is locked", i)
+		}
+	}
+}
+
+func Test_firstUnlocked(t *testing.T) {
+	r := rangeLock{}
+	// locking from 0 to 99
+	r.lock(0, 100, 1)
+	// unlocking from 10 to 59
+	r.lock(10, 50, -1)
+	// check first element unlocked
+	first, count := r.firstUnlocked(0, 100)
+	if first != 10 || count != 50 {
+		t.Fatalf("unexpected first: %d or count: %d", first, count)
+	}
+}
+
 func testRespUpdate(request requestWithID) request.Response {
 	var resp RespUpdates
 	if request.request == nil {
