@@ -21,11 +21,11 @@ func TestPackValidationData(t *testing.T) {
 	assert.Equal(t, packed.Text(16), new(big.Int).SetBytes(core.PackValidationData(0x1234, 1, 2)).Text(16))
 }
 
-func TestUnpackValidationData(t *testing.T) {
-	packed := core.PackValidationData(0xdead, 0xcafe, 0xface)
-	magic, until, after := core.UnpackValidationData(packed)
-	assert.Equal(t, []uint64{0xdead, 0xcafe, 0xface}, []uint64{magic, until, after})
-}
+// func TestUnpackValidationData(t *testing.T) {
+// 	packed := core.PackValidationData(0xdead, 0xcafe, 0xface)
+// 	magic, until, after := core.UnpackValidationData(packed)
+// 	assert.Equal(t, []uint64{0xdead, 0xcafe, 0xface}, []uint64{magic, until, after})
+// }
 
 func TestValidationFailure_OOG(t *testing.T) {
 
@@ -44,7 +44,7 @@ func TestValidationFailure_no_balance(t *testing.T) {
 }
 
 func TestValidationFailure_sigerror(t *testing.T) {
-	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnWithData(core.PackValidationData(core.MAGIC_VALUE_SIGFAIL, 0, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, returnWithData(core.PackValidationData(core.SigFailAccountMethodSig, 0, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGasLimit: uint64(1000000000),
 		GasFeeCap:          big.NewInt(1000000000),
 	}, "account signature error")
@@ -53,7 +53,7 @@ func TestValidationFailure_sigerror(t *testing.T) {
 func TestValidationFailure_validAfter(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
-		returnWithData(core.PackValidationData(core.MAGIC_VALUE_SENDER, 300, 200)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		returnWithData(core.PackValidationData(core.AcceptAccountMethodSig, 300, 200)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGasLimit: uint64(1000000000),
 		GasFeeCap:          big.NewInt(1000000000),
 	}, "RIP-7560 transaction validity not reached yet")
@@ -62,7 +62,7 @@ func TestValidationFailure_validAfter(t *testing.T) {
 func TestValidationFailure_validUntil(t *testing.T) {
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER,
-		returnWithData(core.PackValidationData(core.MAGIC_VALUE_SENDER, 1, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		returnWithData(core.PackValidationData(core.AcceptAccountMethodSig, 1, 0)), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGasLimit: uint64(1000000000),
 		GasFeeCap:          big.NewInt(1000000000),
 	}, "RIP-7560 transaction validity expired")

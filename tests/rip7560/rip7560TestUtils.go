@@ -158,7 +158,7 @@ func returnWithData(data []byte) []byte {
 }
 
 func createAccountCode() []byte {
-	return returnWithData(core.PackValidationData(core.MAGIC_VALUE_SENDER, 0, 0))
+	return returnWithData(core.PackValidationData(core.AcceptAccountMethodSig, 0, 0))
 }
 
 // create EVM code from OpCode, byte and []bytes

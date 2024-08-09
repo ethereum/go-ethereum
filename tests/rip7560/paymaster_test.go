@@ -70,10 +70,10 @@ func TestPaymasterValidationFailure_contextTooLarge(t *testing.T) {
 	// then we return the total length of above (context itself is uninitialized string of max+1 zeroes)
 	pmCode := createCode(
 		//vm.PUSH1, 1, vm.PUSH0, vm.RETURN,
-		copyToMemory(core.PackValidationData(core.MAGIC_VALUE_PAYMASTER, 0, 0), 0),
+		copyToMemory(core.PackValidationData(core.AcceptPaymasterMethodSig, 0, 0), 0),
 		copyToMemory(asBytes32(64), 32),
-		copyToMemory(asBytes32(core.PAYMASTER_MAX_CONTEXT_SIZE+1), 64),
-		push(core.PAYMASTER_MAX_CONTEXT_SIZE+96+1), vm.PUSH0, vm.RETURN)
+		copyToMemory(asBytes32(core.PaymasterMaxContextSize+1), 64),
+		push(core.PaymasterMaxContextSize+96+1), vm.PUSH0, vm.RETURN)
 
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
 		withCode(DEFAULT_PAYMASTER.String(), pmCode, DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
@@ -86,7 +86,7 @@ func TestPaymasterValidationFailure_contextTooLarge(t *testing.T) {
 
 func TestPaymasterValidationFailure_validAfter(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
-		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.MAGIC_VALUE_PAYMASTER, 300, 200, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.AcceptPaymasterMethodSig, 300, 200, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGasLimit:          1000000000,
 		PaymasterValidationGasLimit: 1000000000,
 		GasFeeCap:                   big.NewInt(1000000000),
@@ -96,7 +96,7 @@ func TestPaymasterValidationFailure_validAfter(t *testing.T) {
 
 func TestPaymasterValidationFailure_validUntil(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
-		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.MAGIC_VALUE_PAYMASTER, 1, 0, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.AcceptPaymasterMethodSig, 1, 0, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGasLimit:          1000000000,
 		PaymasterValidationGasLimit: 1000000000,
 		GasFeeCap:                   big.NewInt(1000000000),
@@ -106,7 +106,7 @@ func TestPaymasterValidationFailure_validUntil(t *testing.T) {
 
 func TestPaymasterValidation_ok(t *testing.T) {
 	handleTransaction(newTestContextBuilder(t).withCode(DEFAULT_SENDER, createAccountCode(), 0).
-		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.MAGIC_VALUE_PAYMASTER, 0, 0, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
+		withCode(DEFAULT_PAYMASTER.String(), returnWithData(paymasterReturnValue(core.AcceptPaymasterMethodSig, 0, 0, []byte{})), DEFAULT_BALANCE), types.Rip7560AccountAbstractionTx{
 		ValidationGasLimit:          1000000000,
 		PaymasterValidationGasLimit: 1000000000,
 		GasFeeCap:                   big.NewInt(1000000000),

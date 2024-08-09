@@ -3,7 +3,6 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -12,13 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"math/big"
-	"strings"
 )
-
-const MAGIC_VALUE_SENDER = uint64(0x1256ebd1)    // acceptAccount(uint256,uint256)
-const MAGIC_VALUE_PAYMASTER = uint64(0x03be8439) // acceptPaymaster(uint256,uint256,bytes)
-const MAGIC_VALUE_SIGFAIL = uint64(0x7715fac2)   // sigFailAccount(uint256,uint256)
-const PAYMASTER_MAX_CONTEXT_SIZE = 65536
 
 var AA_ENTRY_POINT = common.HexToAddress("0x0000000000000000000000000000000000007560")
 var AA_SENDER_CREATOR = common.HexToAddress("0x00000000000000000000000000000000ffff7560")
@@ -29,33 +22,6 @@ func PackValidationData(authorizerMagic uint64, validUntil, validAfter uint64) [
 	t = t.Lsh(t, 48).Add(t, new(big.Int).SetUint64(validUntil&0xffffff))
 	t = t.Lsh(t, 160).Add(t, new(big.Int).SetUint64(uint64(authorizerMagic)))
 	return common.LeftPadBytes(t.Bytes(), 32)
-}
-
-func UnpackValidationData(validationData []byte) (authorizerMagic uint64, validUntil uint64, validAfter uint64) {
-	authorizerMagic = new(big.Int).SetBytes(validationData[:4]).Uint64()
-	validAfter = new(big.Int).SetBytes(validationData[4:36]).Uint64()
-	validUntil = new(big.Int).SetBytes(validationData[36:68]).Uint64()
-	return
-}
-
-func UnpackPaymasterValidationReturn(paymasterValidationReturn []byte) (authorizerMagic uint64, validUntil uint64, validAfter uint64, context []byte, err error) {
-	if len(paymasterValidationReturn) < 100 {
-		return 0, 0, 0, nil, errors.New("paymaster return data: too short")
-	}
-	authorizerMagic = new(big.Int).SetBytes(paymasterValidationReturn[:4]).Uint64()
-	validAfter = new(big.Int).SetBytes(paymasterValidationReturn[4:36]).Uint64()
-	validUntil = new(big.Int).SetBytes(paymasterValidationReturn[36:68]).Uint64()
-	contextDataLength := paymasterValidationReturn[100:132]
-	contextLen := new(big.Int).SetBytes(contextDataLength)
-	if uint64(len(paymasterValidationReturn)) < 96+contextLen.Uint64() {
-		return 0, 0, 0, nil, errors.New("paymaster return data: unable to decode context")
-	}
-	if contextLen.Cmp(big.NewInt(PAYMASTER_MAX_CONTEXT_SIZE)) > 0 {
-		return 0, 0, 0, nil, errors.New("paymaster return data: context too large")
-	}
-
-	context = paymasterValidationReturn[132 : 132+contextLen.Uint64()]
-	return
 }
 
 type EntryPointCall struct {
@@ -276,11 +242,13 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 	if resultAccountValidation.Err != nil {
 		return nil, resultAccountValidation.Err
 	}
-	validAfter, validUntil, err := vpr.validateAccountEntryPointCall()
+	aad, err := vpr.validateAccountEntryPointCall()
+	// clear the EntryPoint calls array after parsing
+	vpr.EpCalls = make([]*EntryPointCall, 0)
 	if err != nil {
 		return nil, err
 	}
-	err = validateValidityTimeRange(header.Time, validAfter, validUntil)
+	err = validateValidityTimeRange(header.Time, aad.ValidAfter.Uint64(), aad.ValidUntil.Uint64())
 	if err != nil {
 		return nil, err
 	}
@@ -298,8 +266,8 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 	vpr.DeploymentUsedGas = deploymentUsedGas
 	vpr.ValidationUsedGas = resultAccountValidation.UsedGas
 	vpr.PmValidationUsedGas = pmValidationUsedGas
-	vpr.SenderValidAfter = validAfter
-	vpr.SenderValidUntil = validUntil
+	vpr.SenderValidAfter = aad.ValidAfter.Uint64()
+	vpr.SenderValidUntil = aad.ValidUntil.Uint64()
 	vpr.PmValidAfter = pmValidAfter
 	vpr.PmValidUntil = pmValidUntil
 	statedb.Finalise(true)
@@ -310,36 +278,31 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 func applyPaymasterValidationFrame(vpr *ValidationPhaseResult, tx *types.Transaction, chainConfig *params.ChainConfig, signingHash common.Hash, evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header) ([]byte, uint64, uint64, uint64, error) {
 	/*** Paymaster Validation Frame ***/
 	var pmValidationUsedGas uint64
-	var paymasterContext []byte
-	var pmValidAfter uint64
-	var pmValidUntil uint64
 	paymasterMsg, err := preparePaymasterValidationMessage(tx, chainConfig, signingHash)
+	if paymasterMsg == nil || err != nil {
+		return nil, 0, 0, 0, err
+	}
+	vpr.PmUsed = true
+	resultPm, err := ApplyMessage(evm, paymasterMsg, gp)
 	if err != nil {
 		return nil, 0, 0, 0, err
 	}
-	if paymasterMsg != nil {
-		vpr.PmUsed = true
-		resultPm, err := ApplyMessage(evm, paymasterMsg, gp)
-		if err != nil {
-			return nil, 0, 0, 0, err
-		}
-		if resultPm.Failed() {
-			return nil, 0, 0, 0, resultPm.Err
-		}
-		if resultPm.Failed() {
-			return nil, 0, 0, 0, errors.New("paymaster validation failed - invalid transaction")
-		}
-		pmValidationUsedGas = resultPm.UsedGas
-		paymasterContext, pmValidAfter, pmValidUntil, err = vpr.validatePaymasterEntryPointCall()
-		if err != nil {
-			return nil, 0, 0, 0, err
-		}
-		err = validateValidityTimeRange(header.Time, pmValidAfter, pmValidUntil)
-		if err != nil {
-			return nil, 0, 0, 0, err
-		}
+	if resultPm.Failed() {
+		return nil, 0, 0, 0, resultPm.Err
 	}
-	return paymasterContext, pmValidationUsedGas, pmValidAfter, pmValidUntil, nil
+	if resultPm.Failed() {
+		return nil, 0, 0, 0, errors.New("paymaster validation failed - invalid transaction")
+	}
+	pmValidationUsedGas = resultPm.UsedGas
+	apd, err := vpr.validatePaymasterEntryPointCall()
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
+	err = validateValidityTimeRange(header.Time, apd.ValidAfter.Uint64(), apd.ValidUntil.Uint64())
+	if err != nil {
+		return nil, 0, 0, 0, err
+	}
+	return apd.Context, pmValidationUsedGas, apd.ValidAfter.Uint64(), apd.ValidUntil.Uint64(), nil
 }
 
 func applyPaymasterPostOpFrame(vpr *ValidationPhaseResult, executionResult *ExecutionResult, evm *vm.EVM, gp *GasPool, statedb *state.StateDB, header *types.Header) (*ExecutionResult, error) {
@@ -430,16 +393,10 @@ func prepareDeployerMessage(baseTx *types.Transaction, config *params.ChainConfi
 
 func prepareAccountValidationMessage(baseTx *types.Transaction, chainConfig *params.ChainConfig, signingHash common.Hash, deploymentUsedGas uint64) (*Message, error) {
 	tx := baseTx.Rip7560TransactionData()
-	jsondata := `[
-	{"type":"function","name":"validateTransaction","inputs": [{"name": "version","type": "uint256"},{"name": "txHash","type": "bytes32"},{"name": "transaction","type": "bytes"}]}
-	]`
-
-	validateTransactionAbi, err := abi.JSON(strings.NewReader(jsondata))
+	data, err := abiEncodeValidateTransaction(tx, signingHash)
 	if err != nil {
 		return nil, err
 	}
-	txAbiEncoding, err := tx.AbiEncode()
-	validateTransactionData, err := validateTransactionAbi.Pack("validateTransaction", big.NewInt(0), signingHash, txAbiEncoding)
 	return &Message{
 		From:              AA_ENTRY_POINT,
 		To:                tx.Sender,
@@ -448,7 +405,7 @@ func prepareAccountValidationMessage(baseTx *types.Transaction, chainConfig *par
 		GasPrice:          tx.GasFeeCap,
 		GasFeeCap:         tx.GasFeeCap,
 		GasTipCap:         tx.GasTipCap,
-		Data:              validateTransactionData,
+		Data:              data,
 		AccessList:        make(types.AccessList, 0),
 		SkipAccountChecks: true,
 		IsRip7560Frame:    true,
@@ -460,14 +417,7 @@ func preparePaymasterValidationMessage(baseTx *types.Transaction, config *params
 	if tx.Paymaster == nil || tx.Paymaster.Cmp(common.Address{}) == 0 {
 		return nil, nil
 	}
-	jsondata := `[
-	{"type":"function","name":"validatePaymasterTransaction","inputs": [{"name": "version","type": "uint256"},{"name": "txHash","type": "bytes32"},{"name": "transaction","type": "bytes"}]}
-	]`
-
-	validateTransactionAbi, err := abi.JSON(strings.NewReader(jsondata))
-	txAbiEncoding, err := tx.AbiEncode()
-	data, err := validateTransactionAbi.Pack("validatePaymasterTransaction", big.NewInt(0), signingHash, txAbiEncoding)
-
+	data, err := abiEncodeValidatePaymasterTransaction(tx, signingHash)
 	if err != nil {
 		return nil, err
 	}
@@ -507,16 +457,8 @@ func preparePostOpMessage(vpr *ValidationPhaseResult, chainConfig *params.ChainC
 	if len(vpr.PaymasterContext) == 0 {
 		return nil, nil
 	}
-
 	tx := vpr.Tx.Rip7560TransactionData()
-	jsondata := `[
-			{"type":"function","name":"postPaymasterTransaction","inputs": [{"name": "success","type": "bool"},{"name": "actualGasCost","type": "uint256"},{"name": "context","type": "bytes"}]}
-		]`
-	postPaymasterTransactionAbi, err := abi.JSON(strings.NewReader(jsondata))
-	if err != nil {
-		return nil, err
-	}
-	postOpData, err := postPaymasterTransactionAbi.Pack("postPaymasterTransaction", true, big.NewInt(0), vpr.PaymasterContext)
+	postOpData, err := abiEncodePostPaymasterTransaction(vpr.PaymasterContext)
 	if err != nil {
 		return nil, err
 	}
@@ -535,50 +477,38 @@ func preparePostOpMessage(vpr *ValidationPhaseResult, chainConfig *params.ChainC
 	}, nil
 }
 
-func (vpr *ValidationPhaseResult) validateAccountEntryPointCall() (uint64, uint64, error) {
+func (vpr *ValidationPhaseResult) validateAccountEntryPointCall() (*AcceptAccountData, error) {
 	if len(vpr.EpCalls) == 0 {
-		return 0, 0, errors.New("validation did not call the EntryPoint callback")
+		return nil, errors.New("account validation did not call the EntryPoint callback")
 	}
-	if (!vpr.PmUsed && len(vpr.EpCalls) > 1) || (vpr.PmUsed && len(vpr.EpCalls) > 2) {
-		return 0, 0, errors.New("validation illegally called the EntryPoint callback multiple times")
+	if len(vpr.EpCalls) > 1 {
+		return nil, errors.New("account validation illegally called the EntryPoint callback multiple times")
 	}
 	epCall := vpr.EpCalls[0]
 
 	if len(epCall.input) != 68 {
-		return 0, 0, errors.New("invalid account return data length")
+		return nil, errors.New("invalid account return data length")
 	}
-	magicExpected, validUntil, validAfter := UnpackValidationData(epCall.input)
-	//todo: we check first 8 bytes of the 20-byte address (the rest is expected to be zeros)
-	if magicExpected != MAGIC_VALUE_SENDER {
-		if magicExpected == MAGIC_VALUE_SIGFAIL {
-			return 0, 0, errors.New("account signature error")
-		}
-		return 0, 0, errors.New("account did not return correct MAGIC_VALUE")
-	}
-	return validAfter, validUntil, nil
+	return abiDecodeAcceptAccount(epCall.input)
 }
 
-func (vpr *ValidationPhaseResult) validatePaymasterEntryPointCall() (context []byte, validAfter, validUntil uint64, error error) {
-	if len(vpr.EpCalls) < 2 {
-		return nil, 0, 0, errors.New("validation did not call the EntryPoint callback")
+func (vpr *ValidationPhaseResult) validatePaymasterEntryPointCall() (*AcceptPaymasterData, error) {
+	if len(vpr.EpCalls) == 0 {
+		return nil, errors.New("paymaster validation did not call the EntryPoint callback")
 	}
-	if vpr.PmUsed && len(vpr.EpCalls) > 2 {
-		return nil, 0, 0, errors.New("validation illegally called the EntryPoint callback multiple times")
+	if vpr.PmUsed && len(vpr.EpCalls) > 1 {
+		return nil, errors.New("paymaster validation illegally called the EntryPoint callback multiple times")
 	}
-	epCall := vpr.EpCalls[1]
+	epCall := vpr.EpCalls[0]
 
 	if len(epCall.input) < 100 {
-		return nil, 0, 0, errors.New("invalid paymaster callback data length")
+		return nil, errors.New("invalid paymaster callback data length")
 	}
-	magicExpected, validUntil, validAfter, context, err := UnpackPaymasterValidationReturn(epCall.input)
+	apd, err := abiDecodeAcceptPaymaster(epCall.input)
 	if err != nil {
-		return nil, 0, 0, err
+		return nil, err
 	}
-	//,  := UnpackValidationData(validationData)
-	if magicExpected != MAGIC_VALUE_PAYMASTER {
-		return nil, 0, 0, errors.New("paymaster did not return correct MAGIC_VALUE")
-	}
-	return context, validAfter, validUntil, nil
+	return apd, nil
 }
 
 func validateValidityTimeRange(time uint64, validAfter uint64, validUntil uint64) error {
