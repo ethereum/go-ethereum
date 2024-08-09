@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -193,21 +194,21 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 //
 // and that the blockhash of the constructed block matches the parameters. Nil
 // Withdrawals value will propagate through the returned block. Empty
-// Withdrawals value must be passed via non-nil, length 0 value in params.
-func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
-	txs, err := decodeTransactions(params.Transactions)
+// Withdrawals value must be passed via non-nil, length 0 value in data.
+func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
+	txs, err := decodeTransactions(data.Transactions)
 	if err != nil {
 		return nil, err
 	}
-	if len(params.ExtraData) > 32 {
-		return nil, fmt.Errorf("invalid extradata length: %v", len(params.ExtraData))
+	if len(data.ExtraData) > int(params.MaximumExtraDataSize) {
+		return nil, fmt.Errorf("invalid extradata length: %v", len(data.ExtraData))
 	}
-	if len(params.LogsBloom) != 256 {
-		return nil, fmt.Errorf("invalid logsBloom length: %v", len(params.LogsBloom))
+	if len(data.LogsBloom) != 256 {
+		return nil, fmt.Errorf("invalid logsBloom length: %v", len(data.LogsBloom))
 	}
 	// Check that baseFeePerGas is not negative or too big
-	if params.BaseFeePerGas != nil && (params.BaseFeePerGas.Sign() == -1 || params.BaseFeePerGas.BitLen() > 256) {
-		return nil, fmt.Errorf("invalid baseFeePerGas: %v", params.BaseFeePerGas)
+	if data.BaseFeePerGas != nil && (data.BaseFeePerGas.Sign() == -1 || data.BaseFeePerGas.BitLen() > 256) {
+		return nil, fmt.Errorf("invalid baseFeePerGas: %v", data.BaseFeePerGas)
 	}
 	var blobHashes = make([]common.Hash, 0, len(txs))
 	for _, tx := range txs {
@@ -225,34 +226,34 @@ func ExecutableDataToBlock(params ExecutableData, versionedHashes []common.Hash,
 	// ExecutableData before withdrawals are enabled by marshaling
 	// Withdrawals as the json null value.
 	var withdrawalsRoot *common.Hash
-	if params.Withdrawals != nil {
-		h := types.DeriveSha(types.Withdrawals(params.Withdrawals), trie.NewStackTrie(nil))
+	if data.Withdrawals != nil {
+		h := types.DeriveSha(types.Withdrawals(data.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
 	header := &types.Header{
-		ParentHash:       params.ParentHash,
+		ParentHash:       data.ParentHash,
 		UncleHash:        types.EmptyUncleHash,
-		Coinbase:         params.FeeRecipient,
-		Root:             params.StateRoot,
+		Coinbase:         data.FeeRecipient,
+		Root:             data.StateRoot,
 		TxHash:           types.DeriveSha(types.Transactions(txs), trie.NewStackTrie(nil)),
-		ReceiptHash:      params.ReceiptsRoot,
-		Bloom:            types.BytesToBloom(params.LogsBloom),
+		ReceiptHash:      data.ReceiptsRoot,
+		Bloom:            types.BytesToBloom(data.LogsBloom),
 		Difficulty:       common.Big0,
-		Number:           new(big.Int).SetUint64(params.Number),
-		GasLimit:         params.GasLimit,
-		GasUsed:          params.GasUsed,
-		Time:             params.Timestamp,
-		BaseFee:          params.BaseFeePerGas,
-		Extra:            params.ExtraData,
-		MixDigest:        params.Random,
+		Number:           new(big.Int).SetUint64(data.Number),
+		GasLimit:         data.GasLimit,
+		GasUsed:          data.GasUsed,
+		Time:             data.Timestamp,
+		BaseFee:          data.BaseFeePerGas,
+		Extra:            data.ExtraData,
+		MixDigest:        data.Random,
 		WithdrawalsHash:  withdrawalsRoot,
-		ExcessBlobGas:    params.ExcessBlobGas,
-		BlobGasUsed:      params.BlobGasUsed,
+		ExcessBlobGas:    data.ExcessBlobGas,
+		BlobGasUsed:      data.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: params.Withdrawals})
-	if block.Hash() != params.BlockHash {
-		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", params.BlockHash, block.Hash())
+	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals})
+	if block.Hash() != data.BlockHash {
+		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", data.BlockHash, block.Hash())
 	}
 	return block, nil
 }
