@@ -354,7 +354,7 @@ var (
 		PragueTime:                    nil,
 		VerkleTime:                    nil,
 		TerminalTotalDifficulty:       nil,
-		TerminalTotalDifficultyPassed: false,
+		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
 		ArchimedesBlock:               big.NewInt(0),
