@@ -80,7 +80,7 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
 
-	chain, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 	if err != nil {
 		panic(err)
 	}

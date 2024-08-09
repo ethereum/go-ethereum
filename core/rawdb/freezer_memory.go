@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -215,6 +216,8 @@ type MemoryFreezer struct {
 	lock       sync.RWMutex            // Lock to protect fields
 	tables     map[string]*memoryTable // Tables for storing everything
 	writeBatch *memoryBatch            // Pre-allocated write batch
+	// Used during ancient db pruning
+	offset atomic.Uint64 // Starting block number in current freezer
 }
 
 // NewMemoryFreezer initializes an in-memory freezer instance.
@@ -232,12 +235,18 @@ func NewMemoryFreezer(readonly bool, tableName map[string]bool) *MemoryFreezer {
 
 // todo: @anshalshukla || @manav2401 - Check if implementation is required
 func (f *MemoryFreezer) AncientOffSet() uint64 {
-	panic("not supported")
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	return f.offset.Load()
 }
 
 // todo: @anshalshukla || @manav2401 - Check if implementation is required
 func (f *MemoryFreezer) ItemAmountInAncient() (uint64, error) {
-	panic("not supported")
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	return f.items - f.offset.Load(), nil
 }
 
 // HasAncient returns an indicator whether the specified data exists.

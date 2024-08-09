@@ -197,6 +197,7 @@ func BigMinUint256(x, y *uint256.Int) *uint256.Int {
 	return x
 }
 
+// todo: @anshalshukla - check implementation correctness
 func BigIntToUint256Int(x *big.Int) *uint256.Int {
 	return new(uint256.Int).SetUint64(x.Uint64())
 }

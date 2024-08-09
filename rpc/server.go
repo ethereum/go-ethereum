@@ -61,11 +61,16 @@ type Server struct {
 }
 
 // NewServer creates a new server instance with no registered handlers.
-func NewServer() *Server {
+func NewServer(service string, executionPoolSize uint64, executionPoolRequesttimeout time.Duration) *Server {
+	reportEpStats := true
+	if service == "" || service == "test" {
+		reportEpStats = false
+	}
+
 	server := &Server{
 		idgen:         randomIDGenerator(),
 		codecs:        make(map[ServerCodec]struct{}),
-		httpBodyLimit: defaultBodyLimit,
+		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout, service, reportEpStats),
 	}
 	server.run.Store(true)
 

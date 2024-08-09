@@ -294,7 +294,7 @@ type BlockChain struct {
 // and Processor.
 //
 //nolint:gocognit
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64, checker ethereum.ChainValidator) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -341,12 +341,20 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		borReceiptsCache: lru.NewCache[common.Hash, *types.Receipt](receiptsCacheLimit),
 		logger:           vmConfig.Tracer,
 	}
+
 	var err error
 
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
 	if err != nil {
 		return nil, err
 	}
+
+	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
+	bc.forker = NewForkChoice(bc, shouldPreserve, checker)
+	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
+	bc.validator = NewBlockValidator(chainConfig, bc)
+	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
+	bc.processor = NewStateProcessor(chainConfig, bc.hc)
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
@@ -534,8 +542,8 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 }
 
 // NewParallelBlockChain , similar to NewBlockChain, creates a new blockchain object, but with a parallel state processor
-func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64, checker ethereum.ChainValidator, numprocs int) (*BlockChain, error) {
-	bc, err := NewBlockChain(db, cacheConfig, genesis, overrides, engine, vmConfig, txLookupLimit, checker)
+func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker ethereum.ChainValidator, numprocs int) (*BlockChain, error) {
+	bc, err := NewBlockChain(db, cacheConfig, genesis, overrides, engine, vmConfig, shouldPreserve, txLookupLimit, checker)
 
 	if err != nil {
 		return nil, err
@@ -1840,7 +1848,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// Flush limits are not considered for the first TriesInMemory blocks.
 	current := block.NumberU64()
 	if current <= state.TriesInMemory {
-		return nil, fmt.Errorf("block number %d is less than state.TriesInMemory %d", current, state.TriesInMemory)
+		return []*types.Log{}, nil
 	}
 	// If we exceeded our memory allowance, flush matured singleton nodes to disk
 	var (

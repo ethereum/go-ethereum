@@ -29,7 +29,7 @@ import (
 )
 
 func TestServerRegisterName(t *testing.T) {
-	server := NewServer()
+	server := NewServer("", 0, 0)
 	service := new(testService)
 
 	svcName := "test"

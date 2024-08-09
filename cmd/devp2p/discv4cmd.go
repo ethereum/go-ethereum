@@ -188,7 +188,7 @@ func discv4Listen(ctx *cli.Context) error {
 
 	api := &discv4API{disc}
 	log.Info("Starting RPC API server", "addr", httpAddr)
-	srv := rpc.NewServer()
+	srv := rpc.NewServer("", 0, 0)
 	srv.RegisterName("discv4", api)
 	http.DefaultServeMux.Handle("/", srv)
 	httpsrv := http.Server{Addr: httpAddr, Handler: http.DefaultServeMux}

@@ -1121,6 +1121,11 @@ func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
 }
 
+// Exporting so that it can be used by simulated backend for test cases
+func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
+	return s.getOrNewStateObject(addr)
+}
+
 // getOrNewStateObject retrieves a state object or create a new state object if nil.
 func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 	obj := s.getStateObject(addr)

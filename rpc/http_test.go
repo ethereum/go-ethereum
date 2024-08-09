@@ -44,7 +44,7 @@ func confirmStatusCode(t *testing.T, got, want int) {
 func confirmRequestValidationCode(t *testing.T, method, contentType, body string, expectedStatusCode int) {
 	t.Helper()
 
-	s := NewServer()
+	s := NewServer("", 0, 0)
 	request := httptest.NewRequest(method, "http://url.com", strings.NewReader(body))
 	if len(contentType) > 0 {
 		request.Header.Set("Content-Type", contentType)
@@ -117,7 +117,7 @@ func TestHTTPResponseWithEmptyGet(t *testing.T) {
 func TestHTTPRespBodyUnlimited(t *testing.T) {
 	const respLength = defaultBodyLimit * 3
 
-	s := NewServer()
+	s := NewServer("", 0, 0)
 	defer s.Stop()
 	s.RegisterName("test", largeRespService{respLength})
 

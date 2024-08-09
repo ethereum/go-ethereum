@@ -254,7 +254,7 @@ func TestFilters(t *testing.T) {
 		}
 	})
 
-	bc, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	bc, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

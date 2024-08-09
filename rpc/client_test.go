@@ -593,7 +593,7 @@ func TestClientSubscriptionUnsubscribeServer(t *testing.T) {
 	t.Parallel()
 
 	// Create the server.
-	srv := NewServer()
+	srv := NewServer("", 0, 0)
 	srv.RegisterName("nftest", new(notificationTestService))
 
 	p1, p2 := net.Pipe()
@@ -636,7 +636,7 @@ func TestClientSubscriptionChannelClose(t *testing.T) {
 	t.Parallel()
 
 	var (
-		srv     = NewServer()
+		srv     = NewServer("", 0, 0)
 		httpsrv = httptest.NewServer(srv.WebsocketHandler(nil))
 		wsURL   = "ws:" + strings.TrimPrefix(httpsrv.URL, "http:")
 	)

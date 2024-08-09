@@ -246,7 +246,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		stack.RegisterLifecycle(simBeacon)
 	} else if ctx.IsSet(utils.BeaconApiFlag.Name) {
 		// Start blsync mode.
-		srv := rpc.NewServer()
+		srv := rpc.NewServer("", 0, 0)
 		srv.RegisterName("engine", catalyst.NewConsensusAPI(eth))
 		blsyncer := blsync.NewClient(ctx)
 		blsyncer.SetEngineRPC(rpc.DialInProc(srv))

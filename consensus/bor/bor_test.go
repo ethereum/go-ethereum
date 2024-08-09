@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -68,7 +69,7 @@ func TestGenesisContractChange(t *testing.T) {
 	statedb, err := state.New(genesis.Root(), state.NewDatabase(db), nil)
 	require.NoError(t, err)
 
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genspec, nil, b, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genspec, nil, b, vm.Config{}, nil, nil, nil)
 	require.NoError(t, err)
 
 	addBlock := func(root common.Hash, num int64) (common.Hash, *state.StateDB) {
@@ -76,7 +77,7 @@ func TestGenesisContractChange(t *testing.T) {
 			ParentHash: root,
 			Number:     big.NewInt(num),
 		}
-		b.Finalize(chain, h, statedb, nil)
+		b.Finalize(chain, h, statedb, &types.Body{Withdrawals: nil, Transactions: nil, Uncles: nil})
 
 		// write state to database
 		root, err := statedb.Commit(0, false)
@@ -96,32 +97,32 @@ func TestGenesisContractChange(t *testing.T) {
 	// code does not change, balance remains 0
 	root, statedb = addBlock(root, 1)
 	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x1})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(0))
+	require.Equal(t, statedb.GetBalance(addr0), uint256.NewInt(0))
 
 	// code changes 1st time, balance remains 0
 	root, statedb = addBlock(root, 2)
 	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x2})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(0))
+	require.Equal(t, statedb.GetBalance(addr0), uint256.NewInt(0))
 
 	// code same as 1st change, balance remains 0
 	root, statedb = addBlock(root, 3)
 	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x2})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(0))
+	require.Equal(t, statedb.GetBalance(addr0), uint256.NewInt(0))
 
 	// code changes 2nd time, balance updates to 4096
 	root, statedb = addBlock(root, 4)
 	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x3})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(4096))
+	require.Equal(t, statedb.GetBalance(addr0), uint256.NewInt(4096))
 
 	// code same as 2nd change, balance remains 4096
 	root, statedb = addBlock(root, 5)
 	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x3})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(4096))
+	require.Equal(t, statedb.GetBalance(addr0), uint256.NewInt(4096))
 
 	// code changes 3rd time, balance remains 4096
 	_, statedb = addBlock(root, 6)
 	require.Equal(t, statedb.GetCode(addr0), []byte{0x1, 0x4})
-	require.Equal(t, statedb.GetBalance(addr0), big.NewInt(4096))
+	require.Equal(t, statedb.GetBalance(addr0), uint256.NewInt(4096))
 }
 
 func TestEncodeSigHeaderJaipur(t *testing.T) {

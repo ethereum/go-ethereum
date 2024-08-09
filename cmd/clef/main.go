@@ -818,7 +818,7 @@ func signer(c *cli.Context) error {
 		vhosts := utils.SplitAndTrim(c.String(utils.HTTPVirtualHostsFlag.Name))
 		cors := utils.SplitAndTrim(c.String(utils.HTTPCORSDomainFlag.Name))
 
-		srv := rpc.NewServer()
+		srv := rpc.NewServer("", 0, 0)
 		srv.SetBatchLimits(node.DefaultConfig.BatchRequestLimit, node.DefaultConfig.BatchResponseMaxSize)
 		err := node.RegisterApis(rpcAPI, []string{"account"}, srv)
 		if err != nil {

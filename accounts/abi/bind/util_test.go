@@ -24,10 +24,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -55,15 +55,16 @@ var waitDeployedTests = map[string]struct {
 func TestWaitDeployed(t *testing.T) {
 	t.Parallel()
 	for name, test := range waitDeployedTests {
-		backend := simulated.NewBackend(
+		backend := backends.NewSimulatedBackend(
 			types.GenesisAlloc{
 				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 			},
+			10000000,
 		)
 		defer backend.Close()
 
 		// Create the transaction
-		head, _ := backend.Client().HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+		head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 		gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei))
 
 		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, gasPrice, common.FromHex(test.code))
@@ -78,13 +79,13 @@ func TestWaitDeployed(t *testing.T) {
 		)
 
 		go func() {
-			address, err = bind.WaitDeployed(ctx, backend.Client(), tx)
+			address, err = bind.WaitDeployed(ctx, backend, tx)
 
 			close(mined)
 		}()
 
 		// Send and mine the transaction.
-		backend.Client().SendTransaction(ctx, tx)
+		backend.SendTransaction(ctx, tx)
 		backend.Commit()
 
 		select {
@@ -103,14 +104,15 @@ func TestWaitDeployed(t *testing.T) {
 }
 
 func TestWaitDeployedCornerCases(t *testing.T) {
-	backend := simulated.NewBackend(
+	backend := backends.NewSimulatedBackend(
 		types.GenesisAlloc{
 			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000000000)},
 		},
+		10000000,
 	)
 	defer backend.Close()
 
-	head, _ := backend.Client().HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+	head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 
 	// Create a transaction to an account.
@@ -120,10 +122,10 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	backend.Client().SendTransaction(ctx, tx)
+	backend.SendTransaction(ctx, tx)
 	backend.Commit()
 	notContractCreation := errors.New("tx is not contract creation")
-	if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != notContractCreation.Error() {
+	if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != notContractCreation.Error() {
 		t.Errorf("error mismatch: want %q, got %q, ", notContractCreation, err)
 	}
 
@@ -133,11 +135,11 @@ func TestWaitDeployedCornerCases(t *testing.T) {
 
 	go func() {
 		contextCanceled := errors.New("context canceled")
-		if _, err := bind.WaitDeployed(ctx, backend.Client(), tx); err.Error() != contextCanceled.Error() {
+		if _, err := bind.WaitDeployed(ctx, backend, tx); err.Error() != contextCanceled.Error() {
 			t.Errorf("error mismatch: want %q, got %q, ", contextCanceled, err)
 		}
 	}()
 
-	backend.Client().SendTransaction(ctx, tx)
+	backend.SendTransaction(ctx, tx)
 	cancel()
 }

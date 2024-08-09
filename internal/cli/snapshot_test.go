@@ -160,7 +160,7 @@ func BlockchainCreator(t *testing.T, chaindbPath, AncientPath string, blockRemai
 
 	genesis := gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 	// Initialize a fresh chain with only a genesis block
-	blockchain, err := core.NewBlockChain(db, config, gspec, nil, engine, vm.Config{}, nil, nil)
+	blockchain, err := core.NewBlockChain(db, config, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	require.NoError(t, err, "failed to create chain")
 
 	// Make chain starting from genesis

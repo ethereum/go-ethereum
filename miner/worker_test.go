@@ -90,7 +90,7 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool, isBor bool) {
 	defer w.close()
 
 	// This test chain imports the mined blocks.
-	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, b.genesis, nil, engine, vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, b.genesis, nil, engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -247,7 +247,7 @@ func newTestWorkerBackend(t TensingObject, chainConfig *params.ChainConfig, engi
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
 	// genesis := gspec.MustCommit(db)
-	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec, nil, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("core.NewBlockChain failed: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestGenerateAndImportBlock(t *testing.T) {
 	defer w.close()
 
 	// This test chain imports the mined blocks.
-	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, b.genesis, nil, engine, vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, b.genesis, nil, engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
@@ -872,7 +872,7 @@ func BenchmarkBorMining(b *testing.B) {
 	w, back, _ := newTestWorker(b, chainConfig, engine, rawdb.NewMemoryDatabase(), false, 0, 0)
 	defer w.close()
 
-	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, back.genesis, nil, engine, vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, back.genesis, nil, engine, vm.Config{}, nil, nil, nil)
 	defer chain.Stop()
 
 	// fulfill tx pool
@@ -973,7 +973,7 @@ func BenchmarkBorMiningBlockSTMMetadata(b *testing.B) {
 	db2 := rawdb.NewMemoryDatabase()
 	back.genesis.MustCommit(db2, triedb.NewDatabase(db2, triedb.HashDefaults))
 
-	chain, _ := core.NewParallelBlockChain(db2, nil, back.genesis, nil, engine, vm.Config{}, nil, nil, 8)
+	chain, _ := core.NewParallelBlockChain(db2, nil, back.genesis, nil, engine, vm.Config{}, nil, nil, nil, 8)
 	defer chain.Stop()
 
 	// Ignore empty commit here for less noise.
