@@ -453,7 +453,10 @@ func (g *Genesis) ToBlock() *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
-	var withdrawals []*types.Withdrawal
+	var (
+		withdrawals []*types.Withdrawal
+		requests    types.Requests
+	)
 	if conf := g.Config; conf != nil {
 		num := big.NewInt(int64(g.Number))
 		if conf.IsShanghai(num, g.Timestamp) {
@@ -475,8 +478,12 @@ func (g *Genesis) ToBlock() *types.Block {
 				head.BlobGasUsed = new(uint64)
 			}
 		}
+		if conf.IsPrague(num, g.Timestamp) {
+			head.RequestsHash = &types.EmptyRequestsHash
+			requests = make(types.Requests, 0)
+		}
 	}
-	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))
+	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals, Requests: requests}, nil, trie.NewStackTrie(nil))
 }
 
 // Commit writes the block and state of a genesis specification to the database.
