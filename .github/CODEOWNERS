@@ -21,7 +21,4 @@ light/                          @zsfelfoldi @rjl493456442
 node/                           @fjl
 p2p/                            @fjl @zsfelfoldi
 rpc/                            @fjl @holiman
-p2p/simulations                 @fjl
-p2p/protocols                   @fjl
-p2p/testing                     @fjl
 signer/                         @holiman
