@@ -86,7 +86,13 @@ func (n *upnp) AddMapping(protocol string, extport, intport int, desc string, li
 	}
 	protocol = strings.ToUpper(protocol)
 	lifetimeS := uint32(lifetime / time.Second)
-	n.DeleteMapping(protocol, extport, intport)
+
+	if extport == 0 {
+		extport = intport
+	} else {
+		// Only delete port mapping if the external port was already used by geth.
+		n.DeleteMapping(protocol, extport, intport)
+	}
 
 	err = n.withRateLimit(func() error {
 		return n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
@@ -110,12 +116,15 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 	}
 	// It will retry with a random port number if the client does
 	// not support AddAnyPortMapping.
-	extport = n.randomPort()
-	err := n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
-	if err != nil {
-		return 0, err
+	var err error
+	for i := 0; i < 3; i++ {
+		extport = n.randomPort()
+		err := n.client.AddPortMapping("", uint16(extport), protocol, uint16(intport), ip.String(), true, desc, lifetimeS)
+		if err == nil {
+			return uint16(extport), nil
+		}
 	}
-	return uint16(extport), nil
+	return 0, err
 }
 
 func (n *upnp) randomPort() int {
