@@ -64,8 +64,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
 	}
-	k := keybytesToHex(key)
-	k = k[:len(k)-1] // chop the termination flag
+	k := t.TrieKey(key)
 	if bytes.Compare(t.last, k) >= 0 {
 		return errors.New("non-ascending key order")
 	}
@@ -82,6 +81,13 @@ func (t *StackTrie) Update(key, value []byte) error {
 func (t *StackTrie) Reset() {
 	t.root = stPool.Get().(*stNode)
 	t.last = nil
+}
+
+// TrieKey returns the internal key representation for the given user key.
+func (t *StackTrie) TrieKey(key []byte) []byte {
+	k := keybytesToHex(key)
+	k = k[:len(k)-1] // chop the termination flag
+	return k
 }
 
 // stNode represents a node within a StackTrie
