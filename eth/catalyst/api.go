@@ -86,11 +86,15 @@ var caps = []string{
 	"engine_getPayloadV1",
 	"engine_getPayloadV2",
 	"engine_getPayloadV3",
+	"engine_getPayloadV4",
 	"engine_newPayloadV1",
 	"engine_newPayloadV2",
 	"engine_newPayloadV3",
+	"engine_newPayloadV4",
 	"engine_getPayloadBodiesByHashV1",
+	"engine_getPayloadBodiesByHashV2",
 	"engine_getPayloadBodiesByRangeV1",
+	"engine_getPayloadBodiesByRangeV2",
 	"engine_getClientVersionV1",
 }
 
@@ -220,7 +224,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 		if params.BeaconRoot == nil {
 			return engine.STATUS_INVALID, engine.InvalidPayloadAttributes.With(errors.New("missing beacon root"))
 		}
-		if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
+		if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun && api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague {
 			return engine.STATUS_INVALID, engine.UnsupportedFork.With(errors.New("forkchoiceUpdatedV3 must only be called for cancun payloads"))
 		}
 	}
@@ -228,7 +232,11 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 	// hash, even if params are wrong. To do this we need to split up
 	// forkchoiceUpdate into a function that only updates the head and then a
 	// function that kicks off block construction.
-	return api.forkchoiceUpdated(update, params, engine.PayloadV3, false)
+	payloadVersion := engine.PayloadV3
+	if params != nil && api.eth.BlockChain().Config().LatestFork(params.Timestamp) == forks.Prague {
+		payloadVersion = engine.PayloadV4
+	}
+	return api.forkchoiceUpdated(update, params, payloadVersion, false)
 }
 
 func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, simulatorMode bool) (engine.ForkChoiceResponse, error) {
@@ -456,6 +464,14 @@ func (api *ConsensusAPI) GetPayloadV3(payloadID engine.PayloadID) (*engine.Execu
 	return api.getPayload(payloadID, false)
 }
 
+// GetPayloadV4 returns a cached payload by id.
+func (api *ConsensusAPI) GetPayloadV4(payloadID engine.PayloadID) (*engine.ExecutionPayloadEnvelope, error) {
+	if !payloadID.Is(engine.PayloadV4) {
+		return nil, engine.UnsupportedFork
+	}
+	return api.getPayload(payloadID, false)
+}
+
 func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*engine.ExecutionPayloadEnvelope, error) {
 	log.Trace("Engine API request received", "method", "GetPayload", "id", payloadID)
 	data := api.localBlocks.get(payloadID, full)
@@ -521,6 +537,34 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 	return api.newPayload(params, versionedHashes, beaconRoot)
 }
 
+// NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
+	if params.Withdrawals == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
+	}
+	if params.ExcessBlobGas == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil excessBlobGas post-cancun"))
+	}
+	if params.BlobGasUsed == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil blobGasUsed post-cancun"))
+	}
+	if params.Deposits == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil deposits post-prague"))
+	}
+
+	if versionedHashes == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil versionedHashes post-cancun"))
+	}
+	if beaconRoot == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil beaconRoot post-cancun"))
+	}
+
+	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadV4 must only be called for prague payloads"))
+	}
+	return api.newPayload(params, versionedHashes, beaconRoot)
+}
+
 func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (engine.PayloadStatusV1, error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
@@ -566,6 +610,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			"params.ExcessBlobGas", ebg,
 			"len(params.Transactions)", len(params.Transactions),
 			"len(params.Withdrawals)", len(params.Withdrawals),
+			"len(params.Deposits)", len(params.Deposits),
 			"beaconRoot", beaconRoot,
 			"error", err)
 		return api.invalid(err, nil), nil
@@ -839,8 +884,25 @@ func (api *ConsensusAPI) GetClientVersionV1(info engine.ClientVersionV1) []engin
 
 // GetPayloadBodiesByHashV1 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engine.ExecutionPayloadBodyV1 {
-	bodies := make([]*engine.ExecutionPayloadBodyV1, len(hashes))
+func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engine.ExecutionPayloadBody {
+	bodies := make([]*engine.ExecutionPayloadBody, len(hashes))
+	for i, hash := range hashes {
+		block := api.eth.BlockChain().GetBlockByHash(hash)
+		body := getBody(block)
+		if body != nil {
+			// Nil out the V2 values, clients should know to not request V1 objects
+			// after Prague.
+			body.Deposits = nil
+		}
+		bodies[i] = body
+	}
+	return bodies
+}
+
+// GetPayloadBodiesByHashV2 implements engine_getPayloadBodiesByHashV1 which allows for retrieval of a list
+// of block bodies by the engine api.
+func (api *ConsensusAPI) GetPayloadBodiesByHashV2(hashes []common.Hash) []*engine.ExecutionPayloadBody {
+	bodies := make([]*engine.ExecutionPayloadBody, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
 		bodies[i] = getBody(block)
@@ -850,7 +912,28 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engin
 
 // GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
 // of block bodies by the engine api.
-func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBodyV1, error) {
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
+	bodies, err := api.getBodiesByRange(start, count)
+	if err != nil {
+		return nil, err
+	}
+	// Nil out the V2 values, clients should know to not request V1 objects
+	// after Prague.
+	for i := range bodies {
+		if bodies[i] != nil {
+			bodies[i].Deposits = nil
+		}
+	}
+	return bodies, nil
+}
+
+// GetPayloadBodiesByRangeV2 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
+// of block bodies by the engine api.
+func (api *ConsensusAPI) GetPayloadBodiesByRangeV2(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
+	return api.getBodiesByRange(start, count)
+}
+
+func (api *ConsensusAPI) getBodiesByRange(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
 	if start == 0 || count == 0 {
 		return nil, engine.InvalidParams.With(fmt.Errorf("invalid start or count, start: %v count: %v", start, count))
 	}
@@ -863,7 +946,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) 
 	if last > current {
 		last = current
 	}
-	bodies := make([]*engine.ExecutionPayloadBodyV1, 0, uint64(count))
+	bodies := make([]*engine.ExecutionPayloadBody, 0, uint64(count))
 	for i := uint64(start); i <= last; i++ {
 		block := api.eth.BlockChain().GetBlockByNumber(i)
 		bodies = append(bodies, getBody(block))
@@ -871,15 +954,16 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) 
 	return bodies, nil
 }
 
-func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
+func getBody(block *types.Block) *engine.ExecutionPayloadBody {
 	if block == nil {
 		return nil
 	}
 
 	var (
-		body        = block.Body()
-		txs         = make([]hexutil.Bytes, len(body.Transactions))
-		withdrawals = body.Withdrawals
+		body            = block.Body()
+		txs             = make([]hexutil.Bytes, len(body.Transactions))
+		withdrawals     = body.Withdrawals
+		depositRequests types.Deposits
 	)
 
 	for j, tx := range body.Transactions {
@@ -891,8 +975,20 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBodyV1 {
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
 
-	return &engine.ExecutionPayloadBodyV1{
+	if block.Header().RequestsHash != nil {
+		// TODO: this isn't future proof because we can't determine if a request
+		// type has activated yet or if there are just no requests of that type from
+		// only the block.
+		for _, req := range block.Requests() {
+			if d, ok := req.Inner().(*types.Deposit); ok {
+				depositRequests = append(depositRequests, d)
+			}
+		}
+	}
+
+	return &engine.ExecutionPayloadBody{
 		TransactionData: txs,
 		Withdrawals:     withdrawals,
+		Deposits:        depositRequests,
 	}
 }

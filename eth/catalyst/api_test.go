@@ -1519,7 +1519,7 @@ func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
 	}
 }
 
-func equalBody(a *types.Body, b *engine.ExecutionPayloadBodyV1) bool {
+func equalBody(a *types.Body, b *engine.ExecutionPayloadBody) bool {
 	if a == nil && b == nil {
 		return true
 	} else if a == nil || b == nil {

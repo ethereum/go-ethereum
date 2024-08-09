@@ -121,14 +121,17 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 
 // ValidateState validates the various changes that happen after a state transition,
 // such as amount of used gas, the receipt roots and the state root itself.
-func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64, stateless bool) error {
+func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool) error {
+	if res == nil {
+		return fmt.Errorf("nil ProcessResult value")
+	}
 	header := block.Header()
-	if block.GasUsed() != usedGas {
-		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
+	if block.GasUsed() != res.GasUsed {
+		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), res.GasUsed)
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
-	rbloom := types.CreateBloom(receipts)
+	rbloom := types.CreateBloom(res.Receipts)
 	if rbloom != header.Bloom {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
@@ -138,9 +141,16 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		return nil
 	}
 	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
-	receiptSha := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+	receiptSha := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
 	if receiptSha != header.ReceiptHash {
 		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
+	}
+	// Validate the parsed requests match the expected header value.
+	if header.RequestsHash != nil {
+		depositSha := types.DeriveSha(res.Requests, trie.NewStackTrie(nil))
+		if depositSha != *header.RequestsHash {
+			return fmt.Errorf("invalid deposit root hash (remote: %x local: %x)", *header.RequestsHash, depositSha)
+		}
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
