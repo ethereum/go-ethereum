@@ -81,7 +81,7 @@ type StateDB interface {
 	// PointCache returns the point cache used in computations
 	PointCache() *utils.PointCache
 
-	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList)
+	Prepare(rules params.Rules, sender, coinbase common.Address, dest *common.Address, precompiles []common.Address, txAccesses types.AccessList, authList []types.SetCodeDelegation)
 
 	RevertToSnapshot(int)
 	Snapshot() int

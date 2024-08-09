@@ -123,6 +123,7 @@ type stTransaction struct {
 	Sender               *common.Address     `json:"sender"`
 	BlobVersionedHashes  []common.Hash       `json:"blobVersionedHashes,omitempty"`
 	BlobGasFeeCap        *big.Int            `json:"maxFeePerBlobGas,omitempty"`
+	AuthorizationList    []*stAuthorization  `json:"authorizationList,omitempty"`
 }
 
 type stTransactionMarshaling struct {
@@ -133,6 +134,28 @@ type stTransactionMarshaling struct {
 	GasLimit             []math.HexOrDecimal64
 	PrivateKey           hexutil.Bytes
 	BlobGasFeeCap        *math.HexOrDecimal256
+}
+
+//go:generate go run github.com/fjl/gencodec -type stAuthorization -field-override stAuthorizationMarshaling -out gen_stauthorization.go
+
+// Authorization is an authorization from an account to deploy code at it's
+// address.
+type stAuthorization struct {
+	ChainID *big.Int
+	Address common.Address `json:"address" gencodec:"required"`
+	Nonce   []uint64       `json:"nonce" gencodec:"required"`
+	V       *big.Int       `json:"v" gencodec:"required"`
+	R       *big.Int       `json:"r" gencodec:"required"`
+	S       *big.Int       `json:"s" gencodec:"required"`
+}
+
+// field type overrides for gencodec
+type stAuthorizationMarshaling struct {
+	ChainID *math.HexOrDecimal256
+	Nonce   []math.HexOrDecimal64
+	V       *math.HexOrDecimal256
+	R       *math.HexOrDecimal256
+	S       *math.HexOrDecimal256
 }
 
 // GetChainConfig takes a fork definition and returns a chain config.
@@ -415,6 +438,23 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 	if gasPrice == nil {
 		return nil, errors.New("no gas price provided")
 	}
+	var authList types.AuthorizationList
+	if tx.AuthorizationList != nil {
+		for _, auth := range tx.AuthorizationList {
+			chainID := auth.ChainID
+			if chainID == nil {
+				chainID = big.NewInt(0)
+			}
+			authList = append(authList, &types.Authorization{
+				ChainID: chainID,
+				Address: auth.Address,
+				Nonce:   auth.Nonce,
+				V:       auth.V,
+				R:       auth.R,
+				S:       auth.S,
+			})
+		}
+	}
 
 	msg := &core.Message{
 		From:          from,
@@ -429,6 +469,7 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		AccessList:    accessList,
 		BlobHashes:    tx.BlobVersionedHashes,
 		BlobGasFeeCap: tx.BlobGasFeeCap,
+		AuthList:      authList,
 	}
 	return msg, nil
 }
