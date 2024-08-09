@@ -15,11 +15,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func init() {
-	tracers.LiveDirectory.Register("supply", newSupply)
+	tracers.LiveDirectory.Register("supply", func(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
+		t, err := newSupply(cfg)
+		return t, nil, err
+	})
 }
 
 type supplyInfoIssuance struct {

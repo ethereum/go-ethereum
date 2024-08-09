@@ -203,11 +203,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		if config.VMTraceJsonConfig != "" {
 			traceConfig = json.RawMessage(config.VMTraceJsonConfig)
 		}
-		t, err := tracers.LiveDirectory.New(config.VMTrace, traceConfig)
+		t, apis, err := tracers.LiveDirectory.New(config.VMTrace, traceConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tracer %s: %v", config.VMTrace, err)
 		}
 		vmConfig.Tracer = t
+
+		// Register live trace JSON-APIs
+		stack.RegisterAPIs(apis)
 	}
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
