@@ -43,7 +43,7 @@ func ExecuteStateless(config *params.ChainConfig, witness *stateless.Witness) (c
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
 
-	db, err := state.New(witness.Root(), state.NewDatabaseWithConfig(memdb, triedb.HashDefaults), nil)
+	db, err := state.New(witness.Root(), state.NewDatabase(memdb, triedb.NewDatabase(memdb, triedb.HashDefaults), nil))
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}

@@ -76,6 +76,9 @@ var (
 	// trieJournalKey tracks the in-memory trie node layers across restarts.
 	trieJournalKey = []byte("TrieJournal")
 
+	// stateHistoryIndexHeadKey tracks the ID of the latest state that has been indexed.
+	stateHistoryIndexHeadKey = []byte("StateHistoryIndexHead")
+
 	// txIndexTailKey tracks the oldest block whose transactions have been indexed.
 	txIndexTailKey = []byte("TransactionIndexTail")
 
@@ -116,6 +119,9 @@ var (
 	TrieNodeAccountPrefix = []byte("A") // TrieNodeAccountPrefix + hexPath -> trie node
 	TrieNodeStoragePrefix = []byte("O") // TrieNodeStoragePrefix + accountHash + hexPath -> trie node
 	stateIDPrefix         = []byte("L") // stateIDPrefix + state root -> state id
+
+	// state history indexing within path-based storage scheme
+	stateIndexPrefix = []byte("M") // stateIndexPrefix + account address or (account address + slotHash) -> index
 
 	// VerklePrefix is the database prefix for Verkle trie data, which includes:
 	// (a) Trie nodes
@@ -345,4 +351,22 @@ func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 func IsStorageTrieNode(key []byte) bool {
 	ok, _, _ := ResolveStorageTrieNode(key)
 	return ok
+}
+
+// stateIndexKey = stateIndexPrefix + address + state
+func stateIndexKey(address common.Address, state common.Hash) []byte {
+	if state == (common.Hash{}) {
+		return append(stateIndexPrefix, address.Bytes()...)
+	}
+	return append(append(stateIndexPrefix, address.Bytes()...), state.Bytes()...)
+}
+
+// stateIndexBlockKey = stateIndexPrefix + address + state + id
+func stateIndexBlockKey(address common.Address, state common.Hash, id uint32) []byte {
+	var buf [4]byte
+	binary.BigEndian.PutUint32(buf[:], id)
+	if state == (common.Hash{}) {
+		return append(append(stateIndexPrefix, address.Bytes()...), buf[:]...)
+	}
+	return append(append(append(stateIndexPrefix, address.Bytes()...), state.Bytes()...), buf[:]...)
 }
