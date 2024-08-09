@@ -1691,14 +1691,13 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	if err != nil {
 		return nil, err
 	}
-	receipts, err := api.b.GetReceipts(ctx, blockHash)
+	receipt, err := api.b.GetReceipt(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
-	if uint64(len(receipts)) <= index {
+	if receipt == nil {
 		return nil, nil
 	}
-	receipt := receipts[index]
 
 	// Derive the sender.
 	signer := types.MakeSigner(api.b.ChainConfig(), header.Number, header.Time)
