@@ -68,11 +68,12 @@ func TestPythonInterop(t *testing.T) {
 func TestNodeEndpoints(t *testing.T) {
 	id := HexID("00000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
 	type endpointTest struct {
-		name    string
-		node    *Node
-		wantIP  netip.Addr
-		wantUDP int
-		wantTCP int
+		name     string
+		node     *Node
+		wantIP   netip.Addr
+		wantUDP  int
+		wantTCP  int
+		wantQUIC int
 	}
 	tests := []endpointTest{
 		{
@@ -95,6 +96,14 @@ func TestNodeEndpoints(t *testing.T) {
 			node: func() *Node {
 				var r enr.Record
 				r.Set(enr.TCP(9000))
+				return SignNull(&r, id)
+			}(),
+		},
+		{
+			name: "quic-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.QUIC(9000))
 				return SignNull(&r, id)
 			}(),
 		},
@@ -221,6 +230,9 @@ func TestNodeEndpoints(t *testing.T) {
 			}
 			if test.wantTCP != test.node.TCP() {
 				t.Errorf("node has wrong TCP port %d, want %d", test.node.TCP(), test.wantTCP)
+			}
+			if test.wantQUIC != test.node.QUIC() {
+				t.Errorf("node has wrong QUIC port %d, want %d", test.node.QUIC(), test.wantQUIC)
 			}
 		})
 	}
