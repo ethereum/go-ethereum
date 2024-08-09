@@ -217,7 +217,7 @@ type BlockChain struct {
 	lastWrite     uint64                           // Last block when the state was flushed
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
-	stateCache    state.Database                   // State database to reuse between imports (contains state cache)
+	stateDb       *state.CachingDB                 // State database to reuse between imports (contains state cache)
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc            *HeaderChain
@@ -310,7 +310,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
 	bc.forker = NewForkChoice(bc, shouldPreserve)
-	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
+	bc.stateDb = state.NewDatabase(bc.db, bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
@@ -354,7 +354,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			// disk layer point of snapshot(if it's enabled). Make sure the
 			// rewound point is lower than disk layer.
 			var diskRoot common.Hash
-			if bc.cacheConfig.SnapshotLimit > 0 {
+			if bc.cacheConfig.SnapshotLimit > 0 || bc.cacheConfig.StateScheme == rawdb.HashScheme {
 				diskRoot = rawdb.ReadSnapshotRoot(bc.db)
 			}
 			if diskRoot != (common.Hash{}) {
@@ -427,7 +427,32 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			bc.logger.OnGenesisBlock(bc.genesisBlock, alloc)
 		}
 	}
+	bc.setupSnapshot()
 
+	// Rewind the chain in case of an incompatible config upgrade.
+	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
+		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
+		if compat.RewindToTime > 0 {
+			bc.SetHeadWithTimestamp(compat.RewindToTime)
+		} else {
+			bc.SetHead(compat.RewindToBlock)
+		}
+		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
+	}
+
+	// Start tx indexer if it's enabled.
+	if txLookupLimit != nil {
+		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
+	}
+	return bc, nil
+}
+
+func (bc *BlockChain) setupSnapshot() {
+	// Short circuit if the chain is established with path scheme, as the
+	// state snapshot is integrated into pathdb natively.
+	if bc.cacheConfig.StateScheme == rawdb.PathScheme {
+		return
+	}
 	// Load any existing snapshot, regenerating it if loading failed
 	if bc.cacheConfig.SnapshotLimit > 0 {
 		// If the chain was rewound past the snapshot persistent layer (causing
@@ -448,23 +473,12 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			AsyncBuild: !bc.cacheConfig.SnapshotWait,
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
-	}
-	// Rewind the chain in case of an incompatible config upgrade.
-	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
-		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
-		if compat.RewindToTime > 0 {
-			bc.SetHeadWithTimestamp(compat.RewindToTime)
-		} else {
-			bc.SetHead(compat.RewindToBlock)
-		}
-		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
-	}
 
-	// Start tx indexer if it's enabled.
-	if txLookupLimit != nil {
-		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
+		// Register the snapshot into statedb. It's an ugly hack as state snapshot
+		// is constructed after stateDb. TODO(rjl493456442) improve the construction
+		// logic.
+		bc.stateDb.SetSnapshot(bc.snaps)
 	}
-	return bc, nil
 }
 
 // empty returns an indicator whether the blockchain is empty.
@@ -1800,7 +1814,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		statedb, err := state.New(parent.Root, bc.stateDb)
 		if err != nil {
 			return it.index, err
 		}
@@ -1826,7 +1840,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		var followupInterrupt atomic.Bool
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
-				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
+				throwaway, _ := state.New(parent.Root, bc.stateDb)
 
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB) {
 					// Disable tracing for prefetcher executions.
