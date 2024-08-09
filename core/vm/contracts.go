@@ -109,6 +109,8 @@ var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x8}): &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{0x9}): &blake2F{},
 	common.BytesToAddress([]byte{0xa}): &kzgPointEvaluation{},
+
+	common.BytesToAddress([]byte{0x75, 0x60}): &rip7560EntryPoint{},
 }
 
 // PrecompiledContractsPrague contains the set of pre-compiled Ethereum
@@ -133,6 +135,19 @@ var PrecompiledContractsPrague = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{0x11}): &bls12381Pairing{},
 	common.BytesToAddress([]byte{0x12}): &bls12381MapG1{},
 	common.BytesToAddress([]byte{0x13}): &bls12381MapG2{},
+}
+
+// rip7560EntryPoint does not really have any code and simply returns '1' whenever it is called
+type rip7560EntryPoint struct{}
+
+func (r *rip7560EntryPoint) RequiredGas(input []byte) uint64 {
+	return 0
+}
+
+func (r *rip7560EntryPoint) Run(input []byte) ([]byte, error) {
+	byteRet := make([]byte, 32)
+	byteRet[31] = 1
+	return byteRet, nil
 }
 
 var PrecompiledContractsBLS = PrecompiledContractsPrague
