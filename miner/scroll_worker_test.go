@@ -38,7 +38,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/params"
-	"github.com/scroll-tech/go-ethereum/rollup/circuitcapacitychecker"
+	"github.com/scroll-tech/go-ethereum/rollup/ccc"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
 )
 
@@ -788,7 +788,7 @@ func TestOversizedTxThenNormal(t *testing.T) {
 		switch blockNum {
 		case 0:
 			// schedule to skip 2nd call to ccc
-			w.getCCC().ScheduleError(2, circuitcapacitychecker.ErrBlockRowConsumptionOverflow)
+			w.getCCC().ScheduleError(2, ccc.ErrBlockRowConsumptionOverflow)
 			return false
 		case 1:
 			// include #0, fail on #1, then seal the block
@@ -803,7 +803,7 @@ func TestOversizedTxThenNormal(t *testing.T) {
 			assert.Equal(uint64(1), *queueIndex)
 
 			// schedule to skip next call to ccc
-			w.getCCC().ScheduleError(1, circuitcapacitychecker.ErrBlockRowConsumptionOverflow)
+			w.getCCC().ScheduleError(1, ccc.ErrBlockRowConsumptionOverflow)
 
 			return false
 		case 2:
@@ -869,7 +869,7 @@ func TestPrioritizeOverflowTx(t *testing.T) {
 
 	// Process 2 transactions with gas order: tx0 > tx1, tx1 will overflow.
 	b.txPool.AddRemotesSync([]*types.Transaction{tx0, tx1})
-	w.getCCC().ScheduleError(2, circuitcapacitychecker.ErrBlockRowConsumptionOverflow)
+	w.getCCC().ScheduleError(2, ccc.ErrBlockRowConsumptionOverflow)
 	w.start()
 
 	select {
@@ -903,7 +903,7 @@ func TestPrioritizeOverflowTx(t *testing.T) {
 		t.Fatalf("timeout")
 	}
 
-	w.getCCC().Skip(tx4.Hash(), circuitcapacitychecker.ErrBlockRowConsumptionOverflow)
+	w.getCCC().Skip(tx4.Hash(), ccc.ErrBlockRowConsumptionOverflow)
 	assert.Equal([]error{nil, nil, nil}, b.txPool.AddRemotesSync([]*types.Transaction{tx3, tx4, tx5}))
 
 	w.start()

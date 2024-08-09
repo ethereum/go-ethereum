@@ -1,4 +1,4 @@
-package circuitcapacitychecker
+package ccc
 
 import (
 	"errors"

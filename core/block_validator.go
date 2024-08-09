@@ -30,7 +30,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
-	"github.com/scroll-tech/go-ethereum/rollup/circuitcapacitychecker"
+	"github.com/scroll-tech/go-ethereum/rollup/ccc"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
 
@@ -52,10 +52,10 @@ type BlockValidator struct {
 	engine consensus.Engine    // Consensus engine used for validating
 
 	// circuit capacity checker related fields
-	checkCircuitCapacity   bool                                           // whether enable circuit capacity check
-	cMu                    sync.Mutex                                     // mutex for circuit capacity checker
-	tracer                 tracerWrapper                                  // scroll tracer wrapper
-	circuitCapacityChecker *circuitcapacitychecker.CircuitCapacityChecker // circuit capacity checker instance
+	checkCircuitCapacity   bool          // whether enable circuit capacity check
+	cMu                    sync.Mutex    // mutex for circuit capacity checker
+	tracer                 tracerWrapper // scroll tracer wrapper
+	circuitCapacityChecker *ccc.Checker  // circuit capacity checker instance
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
@@ -75,7 +75,7 @@ type tracerWrapper interface {
 func (v *BlockValidator) SetupTracerAndCircuitCapacityChecker(tracer tracerWrapper) {
 	v.checkCircuitCapacity = true
 	v.tracer = tracer
-	v.circuitCapacityChecker = circuitcapacitychecker.NewCircuitCapacityChecker(true)
+	v.circuitCapacityChecker = ccc.NewChecker(true)
 	log.Info("new CircuitCapacityChecker in BlockValidator", "ID", v.circuitCapacityChecker.ID)
 }
 

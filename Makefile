@@ -9,7 +9,7 @@ GO ?= latest
 GORUN = env GO111MODULE=on go run
 
 libzkp:
-	cd $(PWD)/rollup/circuitcapacitychecker/libzkp && make libzkp
+	cd $(PWD)/rollup/ccc/libzkp && make libzkp
 
 nccc_geth: ## geth without circuit capacity checker
 	$(GORUN) build/ci.go install ./cmd/geth
