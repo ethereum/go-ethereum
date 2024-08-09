@@ -184,7 +184,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update engine.ForkchoiceStateV1, pa
 			return engine.STATUS_INVALID, engine.InvalidParams.With(errors.New("forkChoiceUpdateV1 called post-shanghai"))
 		}
 	}
-	return api.forkchoiceUpdated(update, payloadAttributes, engine.PayloadV1, false)
+	return api.forkchoiceUpdated(update, payloadAttributes, engine.PayloadV1)
 }
 
 // ForkchoiceUpdatedV2 is equivalent to V1 with the addition of withdrawals in the payload
@@ -207,7 +207,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV2(update engine.ForkchoiceStateV1, pa
 			return engine.STATUS_INVALID, engine.UnsupportedFork.With(errors.New("forkchoiceUpdatedV2 must only be called with paris and shanghai payloads"))
 		}
 	}
-	return api.forkchoiceUpdated(update, params, engine.PayloadV2, false)
+	return api.forkchoiceUpdated(update, params, engine.PayloadV2)
 }
 
 // ForkchoiceUpdatedV3 is equivalent to V2 with the addition of parent beacon block root
@@ -228,10 +228,10 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 	// hash, even if params are wrong. To do this we need to split up
 	// forkchoiceUpdate into a function that only updates the head and then a
 	// function that kicks off block construction.
-	return api.forkchoiceUpdated(update, params, engine.PayloadV3, false)
+	return api.forkchoiceUpdated(update, params, engine.PayloadV3)
 }
 
-func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, simulatorMode bool) (engine.ForkChoiceResponse, error) {
+func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion) (engine.ForkChoiceResponse, error) {
 	api.forkchoiceLock.Lock()
 	defer api.forkchoiceLock.Unlock()
 
@@ -373,19 +373,6 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 		// to start a second process.
 		if api.localBlocks.has(id) {
 			return valid(&id), nil
-		}
-		// If the beacon chain is ran by a simulator, then transaction insertion,
-		// block insertion and block production will happen without any timing
-		// delay between them. This will cause flaky simulator executions due to
-		// the transaction pool running its internal reset operation on a back-
-		// ground thread. To avoid the racey behavior - in simulator mode - the
-		// pool will be explicitly blocked on its reset before continuing to the
-		// block production below.
-		if simulatorMode {
-			if err := api.eth.TxPool().Sync(); err != nil {
-				log.Error("Failed to sync transaction pool", "err", err)
-				return valid(nil), engine.InvalidPayloadAttributes.With(err)
-			}
 		}
 		payload, err := api.eth.Miner().BuildPayload(args)
 		if err != nil {
