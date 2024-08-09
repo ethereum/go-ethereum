@@ -99,6 +99,14 @@ func TestNodeEndpoints(t *testing.T) {
 			}(),
 		},
 		{
+			name: "quic-only",
+			node: func() *Node {
+				var r enr.Record
+				r.Set(enr.QUIC(9000))
+				return SignNull(&r, id)
+			}(),
+		},
+		{
 			name: "ipv4-only-loopback",
 			node: func() *Node {
 				var r enr.Record

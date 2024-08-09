@@ -77,6 +77,16 @@ type UDP6 uint16
 
 func (v UDP6) ENRKey() string { return "udp6" }
 
+// QUIC is the "quic" key, which holds the QUIC port of the node.
+type QUIC uint16
+
+func (v QUIC) ENRKey() string { return "quic" }
+
+// QUIC6 is the "quic6" key, which holds the IPv6-specific quic6 port of the node.
+type QUIC6 uint16
+
+func (v QUIC6) ENRKey() string { return "quic6" }
+
 // ID is the "id" key, which holds the name of the identity scheme.
 type ID string
 
