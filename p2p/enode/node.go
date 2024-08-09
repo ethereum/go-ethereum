@@ -38,10 +38,9 @@ type Node struct {
 	r  enr.Record
 	id ID
 	// endpoint information
-	ip   netip.Addr
-	udp  uint16
-	tcp  uint16
-	quic uint16
+	ip  netip.Addr
+	udp uint16
+	tcp uint16
 }
 
 // New wraps a node record. The record must be valid according to the given
@@ -106,7 +105,6 @@ func (n *Node) setIP4(ip netip.Addr) {
 	n.ip = ip
 	n.Load((*enr.UDP)(&n.udp))
 	n.Load((*enr.TCP)(&n.tcp))
-	n.Load((*enr.QUIC)(&n.quic))
 }
 
 func (n *Node) setIP6(ip netip.Addr) {
@@ -120,9 +118,6 @@ func (n *Node) setIP6(ip netip.Addr) {
 	}
 	if err := n.Load((*enr.TCP6)(&n.tcp)); err != nil {
 		n.Load((*enr.TCP)(&n.tcp))
-	}
-	if err := n.Load((*enr.QUIC6)(&n.quic)); err != nil {
-		n.Load((*enr.QUIC)(&n.quic))
 	}
 }
 
@@ -189,11 +184,6 @@ func (n *Node) TCP() int {
 	return int(n.tcp)
 }
 
-// QUIC returns the QUIC port of the node.
-func (n *Node) QUIC() int {
-	return int(n.quic)
-}
-
 // UDPEndpoint returns the announced UDP endpoint.
 func (n *Node) UDPEndpoint() (netip.AddrPort, bool) {
 	if !n.ip.IsValid() || n.ip.IsUnspecified() || n.udp == 0 {
@@ -212,10 +202,12 @@ func (n *Node) TCPEndpoint() (netip.AddrPort, bool) {
 
 // QUICEndpoint returns the announced QUIC endpoint.
 func (n *Node) QUICEndpoint() (netip.AddrPort, bool) {
-	if !n.ip.IsValid() || n.ip.IsUnspecified() || n.quic == 0 {
+	var quic enr.QUIC
+	n.Load(&quic)
+	if !n.ip.IsValid() || n.ip.IsUnspecified() || quic == 0 {
 		return netip.AddrPort{}, false
 	}
-	return netip.AddrPortFrom(n.ip, n.quic), true
+	return netip.AddrPortFrom(n.ip, uint16(quic)), true
 }
 
 // Pubkey returns the secp256k1 public key of the node, if present.
