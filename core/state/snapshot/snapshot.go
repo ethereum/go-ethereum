@@ -112,6 +112,10 @@ type Snapshot interface {
 	// Storage directly retrieves the storage data associated with a particular hash,
 	// within a particular account.
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)
+
+	// StorageExists returns a flag indicating whether the requested storage slot is
+	// existent or not.
+	StorageExists(accountHash, storageHash common.Hash) (bool, error)
 }
 
 // snapshot is the internal version of the snapshot data layer that supports some

@@ -127,6 +127,17 @@ func (t *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error)
 	return common.TrimLeftZeroes(val), nil
 }
 
+// StorageExists implements state.Trie, returning a flag indicating whether the
+// requested storage slot is existent or not.
+func (t *VerkleTrie) StorageExists(addr common.Address, key []byte) (bool, error) {
+	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.Get(addr.Bytes()), key)
+	val, err := t.root.Get(k, t.nodeResolver)
+	if err != nil {
+		return false, err
+	}
+	return len(val) != 0, nil
+}
+
 // UpdateAccount implements state.Trie, writing the provided account into the tree.
 // If the tree is corrupted, an error will be returned.
 func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount) error {

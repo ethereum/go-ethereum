@@ -572,3 +572,51 @@ func TestDiskSeek(t *testing.T) {
 		}
 	}
 }
+
+func TestDiskStorageExists(t *testing.T) {
+	// Create some accounts in the disk layer
+	db := rawdb.NewMemoryDatabase()
+	defer db.Close()
+
+	// fill storage slot with zero size
+	rawdb.WriteStorageSnapshot(db, common.Hash{0x1}, common.Hash{0x1}, []byte{})
+	rawdb.WriteStorageSnapshot(db, common.Hash{0x1}, common.Hash{0x2}, nil)
+	rawdb.WriteStorageSnapshot(db, common.Hash{0x1}, common.Hash{0x3}, []byte{0x1})
+
+	dl := &diskLayer{
+		diskdb: db,
+		cache:  fastcache.New(500 * 1024),
+		root:   randomHash(),
+	}
+	// Test some different seek positions
+	type testcase struct {
+		key    common.Hash
+		expect bool
+	}
+	var cases = []testcase{
+		{
+			common.Hash{0x0}, false,
+		},
+		{
+			common.Hash{0x1}, true,
+		},
+		{
+			common.Hash{0x2}, true,
+		},
+		{
+			common.Hash{0x3}, true,
+		},
+		{
+			common.Hash{0x4}, false,
+		},
+	}
+	for i, tc := range cases {
+		result, err := dl.StorageExists(common.Hash{0x1}, tc.key)
+		if err != nil {
+			t.Fatalf("Failed to query disk layer: %v", err)
+		}
+		if result != tc.expect {
+			t.Fatalf("%d, unexpected result, want %t, got: %t", i, tc.expect, result)
+		}
+	}
+}
