@@ -229,6 +229,7 @@ var (
 			PostState:         common.Hash{3}.Bytes(),
 			CumulativeGasUsed: 6,
 			Logs:              []*Log{},
+			Bloom:             Bloom{},
 			// derived fields:
 			TxHash:            txs[2].Hash(),
 			GasUsed:           3,
@@ -242,6 +243,7 @@ var (
 			PostState:         common.Hash{4}.Bytes(),
 			CumulativeGasUsed: 10,
 			Logs:              []*Log{},
+			Bloom:             Bloom{},
 			// derived fields:
 			TxHash:            txs[3].Hash(),
 			GasUsed:           4,
@@ -255,6 +257,7 @@ var (
 			PostState:         common.Hash{5}.Bytes(),
 			CumulativeGasUsed: 15,
 			Logs:              []*Log{},
+			Bloom:             Bloom{},
 			// derived fields:
 			TxHash:            txs[4].Hash(),
 			GasUsed:           5,
@@ -268,6 +271,7 @@ var (
 			PostState:         common.Hash{6}.Bytes(),
 			CumulativeGasUsed: 21,
 			Logs:              []*Log{},
+			Bloom:             Bloom{},
 			// derived fields:
 			TxHash:            txs[5].Hash(),
 			GasUsed:           6,
@@ -283,6 +287,7 @@ var (
 			PostState:         common.Hash{7}.Bytes(),
 			CumulativeGasUsed: 28,
 			Logs:              []*Log{},
+			Bloom:             Bloom{},
 			// derived fields:
 			TxHash:            txs[6].Hash(),
 			GasUsed:           7,
@@ -295,6 +300,13 @@ var (
 		},
 	}
 )
+
+func init() {
+	// Correctly compute the bloom filters
+	for _, receipt := range receipts {
+		receipt.Bloom = CreateBloom(Receipts{receipt})
+	}
+}
 
 func TestDecodeEmptyTypedReceipt(t *testing.T) {
 	input := []byte{0x80}
@@ -511,6 +523,7 @@ func clearComputedFieldsOnReceipt(receipt *Receipt) *Receipt {
 	cpy.EffectiveGasPrice = big.NewInt(0)
 	cpy.BlobGasUsed = 0
 	cpy.BlobGasPrice = nil
+	cpy.Bloom = CreateBloom(Receipts{&cpy})
 	return &cpy
 }
 
