@@ -87,7 +87,7 @@ type Account struct {
 
 // getState fetches the StateDB object for an account.
 func (a *Account) getState(ctx context.Context) (*state.StateDB, error) {
-	state, _, err := a.r.backend.StateAndHeaderByNumberOrHash(ctx, a.blockNrOrHash)
+	state, _, err := a.r.backend.StateAndHeaderByNumberOrHash(ctx, a.blockNrOrHash, nil)
 	return state, err
 }
 
