@@ -74,7 +74,7 @@ type supplyTracerConfig struct {
 	MaxSize int    `json:"maxSize"` // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
 }
 
-func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
+func newSupply(cfg json.RawMessage, _ tracers.Backend) (*tracing.Hooks, error) {
 	var config supplyTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {

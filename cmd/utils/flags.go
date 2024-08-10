@@ -1937,7 +1937,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 		if cfg.VMTraceJsonConfig != "" {
 			traceConfig = json.RawMessage(cfg.VMTraceJsonConfig)
 		}
-		t, err := tracers.LiveDirectory.New(cfg.VMTrace, traceConfig)
+		t, err := tracers.LiveDirectory.New(cfg.VMTrace, traceConfig, backend.APIBackend)
 		if err != nil {
 			Fatalf("failed to create tracer %s: %v", cfg.VMTrace, err)
 		}
@@ -2205,7 +2205,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
 				config = json.RawMessage(ctx.String(VMTraceJsonConfigFlag.Name))
 			}
-			t, err := tracers.LiveDirectory.New(name, config)
+			t, err := tracers.LiveDirectory.New(name, config, nil)
 			if err != nil {
 				Fatalf("Failed to create tracer %q: %v", name, err)
 			}
