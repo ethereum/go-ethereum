@@ -89,7 +89,7 @@ This command will:
    This tool is optional and if you leave it out you can always attach it to an already running
    `geth` instance with `geth attach`.
 
-### A Full node on the Görli test network
+### A Full node on the Göerli test network
 
 Transitioning towards developers, if you'd like to play around with creating Ethereum
 contracts, you almost certainly would like to do that without any real money involved until
