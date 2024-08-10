@@ -203,7 +203,7 @@ var (
 		ArchimedesBlock:     big.NewInt(0),
 		BernoulliBlock:      big.NewInt(3747132),
 		CurieBlock:          big.NewInt(4740239),
-		DarwinTime:          nil,
+		DarwinTime:          newUint64(1723622400),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -243,7 +243,7 @@ var (
 		ArchimedesBlock:     big.NewInt(0),
 		BernoulliBlock:      big.NewInt(5220340),
 		CurieBlock:          big.NewInt(7096836),
-		DarwinTime:          nil,
+		DarwinTime:          newUint64(1724227200),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
