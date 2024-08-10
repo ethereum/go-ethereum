@@ -3,3 +3,5 @@
 build/_workspace
 build/_bin
 tests/testdata
+
+rollup/ccc/libzkp/target

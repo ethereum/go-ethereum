@@ -17,7 +17,6 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY ./rollup/ccc/libzkp .
-RUN cargo clean
 RUN cargo build --release
 
 # Build Geth in a stock Go builder container
