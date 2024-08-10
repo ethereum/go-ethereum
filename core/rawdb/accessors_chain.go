@@ -62,6 +62,27 @@ func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+// WriteHeader stores a block header into the database and also stores the hash-
+// to-number mapping.
+func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
+	var (
+		hash   = header.Hash()
+		number = header.Number.Uint64()
+	)
+	// Write the hash -> number mapping
+	WriteHeaderNumber(db, hash, number)
+
+	// Write the encoded header
+	data, err := rlp.EncodeToBytes(header)
+	if err != nil {
+		log.Crit("Failed to RLP encode header", "err", err)
+	}
+	key := headerKey(number, hash)
+	if err := db.Put(key, data); err != nil {
+		log.Crit("Failed to store header", "err", err)
+	}
+}
+
 // ReadBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
 func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
@@ -121,27 +142,6 @@ func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *t
 		log.Crit("Failed to RLP encode body", "err", err)
 	}
 	WriteBodyRLP(db, hash, number, data)
-}
-
-// WriteHeader stores a block header into the database and also stores the hash-
-// to-number mapping.
-func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
-	var (
-		hash   = header.Hash()
-		number = header.Number.Uint64()
-	)
-	// Write the hash -> number mapping
-	WriteHeaderNumber(db, hash, number)
-
-	// Write the encoded header
-	data, err := rlp.EncodeToBytes(header)
-	if err != nil {
-		log.Crit("Failed to RLP encode header", "err", err)
-	}
-	key := headerKey(number, hash)
-	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store header", "err", err)
-	}
 }
 
 // ReadReceiptsRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
@@ -239,12 +239,6 @@ func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rec
 	}
 }
 
-// WriteBlock serializes a block into the database, header and body separately.
-func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
-	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
-	WriteHeader(db, block.Header())
-}
-
 // storedReceiptRLP is the storage encoding of a receipt.
 // Re-definition in core/types/receipt.go.
 type storedReceiptRLP struct {
@@ -318,4 +312,10 @@ func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 		logs[i] = receipt.Logs
 	}
 	return logs
+}
+
+// WriteBlock serializes a block into the database, header and body separately.
+func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
+	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
+	WriteHeader(db, block.Header())
 }
