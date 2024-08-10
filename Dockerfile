@@ -8,15 +8,15 @@ FROM scrolltech/go-rust-builder:go-1.21-rust-nightly-2023-12-03 as chef
 WORKDIR app
 
 FROM chef as planner
-COPY ./rollup/circuitcapacitychecker/libzkp/ .
+COPY ./rollup/ccc/libzkp/ .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef as zkp-builder
-COPY ./rollup/circuitcapacitychecker/libzkp/rust-toolchain ./
+COPY ./rollup/ccc/libzkp/rust-toolchain ./
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
-COPY ./rollup/circuitcapacitychecker/libzkp .
+COPY ./rollup/ccc/libzkp .
 RUN cargo clean
 RUN cargo build --release
 
@@ -31,7 +31,7 @@ RUN cd /go-ethereum && go mod download
 ADD . /go-ethereum
 COPY --from=zkp-builder /app/target/release/libzkp.so /usr/local/lib/
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/
-RUN cd /go-ethereum && go run build/ci.go install -tags circuit_capacity_checker ./cmd/geth
+RUN cd /go-ethereum && go run build/ci.go install -tags ccc ./cmd/geth
 
 # Pull Geth into a second stage deploy container
 FROM ubuntu:20.04

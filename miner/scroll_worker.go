@@ -38,7 +38,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
-	"github.com/scroll-tech/go-ethereum/rollup/circuitcapacitychecker"
+	"github.com/scroll-tech/go-ethereum/rollup/ccc"
 	"github.com/scroll-tech/go-ethereum/rollup/fees"
 	"github.com/scroll-tech/go-ethereum/rollup/pipeline"
 	"github.com/scroll-tech/go-ethereum/trie"
@@ -131,7 +131,7 @@ type worker struct {
 	// External functions
 	isLocalBlock func(block *types.Header) bool // Function used to determine whether the specified block is mined by local miner.
 
-	circuitCapacityChecker *circuitcapacitychecker.CircuitCapacityChecker
+	circuitCapacityChecker *ccc.Checker
 	prioritizedTx          *prioritizedTransaction
 
 	// Test hooks
@@ -153,9 +153,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		chainHeadCh:            make(chan core.ChainHeadEvent, chainHeadChanSize),
 		exitCh:                 make(chan struct{}),
 		startCh:                make(chan struct{}, 1),
-		circuitCapacityChecker: circuitcapacitychecker.NewCircuitCapacityChecker(true),
+		circuitCapacityChecker: ccc.NewChecker(true),
 	}
-	log.Info("created new worker", "CircuitCapacityChecker ID", worker.circuitCapacityChecker.ID)
+	log.Info("created new worker", "Checker ID", worker.circuitCapacityChecker.ID)
 
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeTransactions(worker.txsCh, true)
@@ -181,7 +181,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 
 // getCCC returns a pointer to this worker's CCC instance.
 // Only used in tests.
-func (w *worker) getCCC() *circuitcapacitychecker.CircuitCapacityChecker {
+func (w *worker) getCCC() *ccc.Checker {
 	return w.circuitCapacityChecker
 }
 
@@ -533,16 +533,16 @@ func (w *worker) handlePipelineResult(res *pipeline.Result) error {
 
 		switch {
 		case res.OverflowingTx.IsL1MessageTx() &&
-			errors.Is(res.CCCErr, circuitcapacitychecker.ErrBlockRowConsumptionOverflow):
+			errors.Is(res.CCCErr, ccc.ErrBlockRowConsumptionOverflow):
 			l1TxRowConsumptionOverflowCounter.Inc(1)
 		case !res.OverflowingTx.IsL1MessageTx() &&
-			errors.Is(res.CCCErr, circuitcapacitychecker.ErrBlockRowConsumptionOverflow):
+			errors.Is(res.CCCErr, ccc.ErrBlockRowConsumptionOverflow):
 			l2TxRowConsumptionOverflowCounter.Inc(1)
 		case res.OverflowingTx.IsL1MessageTx() &&
-			errors.Is(res.CCCErr, circuitcapacitychecker.ErrUnknown):
+			errors.Is(res.CCCErr, ccc.ErrUnknown):
 			l1TxCccUnknownErrCounter.Inc(1)
 		case !res.OverflowingTx.IsL1MessageTx() &&
-			errors.Is(res.CCCErr, circuitcapacitychecker.ErrUnknown):
+			errors.Is(res.CCCErr, ccc.ErrUnknown):
 			l2TxCccUnknownErrCounter.Inc(1)
 		}
 	}

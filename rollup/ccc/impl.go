@@ -1,6 +1,6 @@
-//go:build circuit_capacity_checker
+//go:build ccc
 
-package circuitcapacitychecker
+package ccc
 
 /*
 #cgo LDFLAGS: -lm -ldl -lzkp
@@ -22,7 +22,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/metrics"
 )
 
-// mutex for concurrent CircuitCapacityChecker creations
+// mutex for concurrent Checker creations
 var (
 	creationMu  sync.Mutex
 	encodeTimer = metrics.NewRegisteredTimer("ccc/encode", nil)
@@ -32,26 +32,26 @@ func init() {
 	C.init()
 }
 
-type CircuitCapacityChecker struct {
-	// mutex for each CircuitCapacityChecker itself
+type Checker struct {
+	// mutex for each Checker itself
 	sync.Mutex
 	ID         uint64
 	jsonBuffer bytes.Buffer
 }
 
-// NewCircuitCapacityChecker creates a new CircuitCapacityChecker
-func NewCircuitCapacityChecker(lightMode bool) *CircuitCapacityChecker {
+// NewChecker creates a new Checker
+func NewChecker(lightMode bool) *Checker {
 	creationMu.Lock()
 	defer creationMu.Unlock()
 
 	id := C.new_circuit_capacity_checker()
-	ccc := &CircuitCapacityChecker{ID: uint64(id)}
+	ccc := &Checker{ID: uint64(id)}
 	ccc.SetLightMode(lightMode)
 	return ccc
 }
 
-// Reset resets a CircuitCapacityChecker
-func (ccc *CircuitCapacityChecker) Reset() {
+// Reset resets a Checker
+func (ccc *Checker) Reset() {
 	ccc.Lock()
 	defer ccc.Unlock()
 
@@ -59,7 +59,7 @@ func (ccc *CircuitCapacityChecker) Reset() {
 }
 
 // ApplyTransaction appends a tx's wrapped BlockTrace into the ccc, and return the accumulated RowConsumption
-func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*types.RowConsumption, error) {
+func (ccc *Checker) ApplyTransaction(traces *types.BlockTrace) (*types.RowConsumption, error) {
 	ccc.Lock()
 	defer ccc.Unlock()
 
@@ -84,13 +84,13 @@ func (ccc *CircuitCapacityChecker) ApplyTransaction(traces *types.BlockTrace) (*
 	return ccc.applyTransactionRustTrace(rustTrace)
 }
 
-func (ccc *CircuitCapacityChecker) ApplyTransactionRustTrace(rustTrace unsafe.Pointer) (*types.RowConsumption, error) {
+func (ccc *Checker) ApplyTransactionRustTrace(rustTrace unsafe.Pointer) (*types.RowConsumption, error) {
 	ccc.Lock()
 	defer ccc.Unlock()
 	return ccc.applyTransactionRustTrace(rustTrace)
 }
 
-func (ccc *CircuitCapacityChecker) applyTransactionRustTrace(rustTrace unsafe.Pointer) (*types.RowConsumption, error) {
+func (ccc *Checker) applyTransactionRustTrace(rustTrace unsafe.Pointer) (*types.RowConsumption, error) {
 	rawResult := C.apply_tx(C.uint64_t(ccc.ID), rustTrace)
 	defer func() {
 		C.free_c_chars(rawResult)
@@ -103,11 +103,11 @@ func (ccc *CircuitCapacityChecker) applyTransactionRustTrace(rustTrace unsafe.Po
 	}
 
 	if result.Error != "" {
-		log.Error("fail to apply_tx in CircuitCapacityChecker", "id", ccc.ID, "err", result.Error)
+		log.Error("fail to apply_tx in Checker", "id", ccc.ID, "err", result.Error)
 		return nil, ErrUnknown
 	}
 	if result.AccRowUsage == nil {
-		log.Error("fail to apply_tx in CircuitCapacityChecker",
+		log.Error("fail to apply_tx in Checker",
 			"id", ccc.ID, "result.AccRowUsage == nil", result.AccRowUsage == nil,
 			"err", "AccRowUsage is empty unexpectedly")
 		return nil, ErrUnknown
@@ -119,7 +119,7 @@ func (ccc *CircuitCapacityChecker) applyTransactionRustTrace(rustTrace unsafe.Po
 }
 
 // ApplyBlock gets a block's RowConsumption
-func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.RowConsumption, error) {
+func (ccc *Checker) ApplyBlock(traces *types.BlockTrace) (*types.RowConsumption, error) {
 	ccc.Lock()
 	defer ccc.Unlock()
 
@@ -145,11 +145,11 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 	}
 
 	if result.Error != "" {
-		log.Error("fail to apply_block in CircuitCapacityChecker", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash(), "err", result.Error)
+		log.Error("fail to apply_block in Checker", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash(), "err", result.Error)
 		return nil, ErrUnknown
 	}
 	if result.AccRowUsage == nil {
-		log.Error("fail to apply_block in CircuitCapacityChecker", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash(), "err", "AccRowUsage is empty unexpectedly")
+		log.Error("fail to apply_block in Checker", "id", ccc.ID, "blockNumber", traces.Header.Number, "blockHash", traces.Header.Hash(), "err", "AccRowUsage is empty unexpectedly")
 		return nil, ErrUnknown
 	}
 	if !result.AccRowUsage.IsOk {
@@ -159,7 +159,7 @@ func (ccc *CircuitCapacityChecker) ApplyBlock(traces *types.BlockTrace) (*types.
 }
 
 // CheckTxNum compares whether the tx_count in ccc match the expected
-func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, uint64, error) {
+func (ccc *Checker) CheckTxNum(expected int) (bool, uint64, error) {
 	ccc.Lock()
 	defer ccc.Unlock()
 
@@ -175,14 +175,14 @@ func (ccc *CircuitCapacityChecker) CheckTxNum(expected int) (bool, uint64, error
 		return false, 0, fmt.Errorf("fail to json unmarshal get_tx_num result, id: %d, err: %w", ccc.ID, err)
 	}
 	if result.Error != "" {
-		return false, 0, fmt.Errorf("fail to get_tx_num in CircuitCapacityChecker, id: %d, err: %w", ccc.ID, result.Error)
+		return false, 0, fmt.Errorf("fail to get_tx_num in Checker, id: %d, err: %w", ccc.ID, result.Error)
 	}
 
 	return result.TxNum == uint64(expected), result.TxNum, nil
 }
 
 // SetLightMode sets to ccc light mode
-func (ccc *CircuitCapacityChecker) SetLightMode(lightMode bool) error {
+func (ccc *Checker) SetLightMode(lightMode bool) error {
 	ccc.Lock()
 	defer ccc.Unlock()
 
@@ -198,7 +198,7 @@ func (ccc *CircuitCapacityChecker) SetLightMode(lightMode bool) error {
 		return fmt.Errorf("fail to json unmarshal set_light_mode result, id: %d, err: %w", ccc.ID, err)
 	}
 	if result.Error != "" {
-		return fmt.Errorf("fail to set_light_mode in CircuitCapacityChecker, id: %d, err: %w", ccc.ID, result.Error)
+		return fmt.Errorf("fail to set_light_mode in Checker, id: %d, err: %w", ccc.ID, result.Error)
 	}
 
 	return nil

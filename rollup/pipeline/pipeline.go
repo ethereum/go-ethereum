@@ -16,7 +16,7 @@ import (
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
-	"github.com/scroll-tech/go-ethereum/rollup/circuitcapacitychecker"
+	"github.com/scroll-tech/go-ethereum/rollup/ccc"
 	"github.com/scroll-tech/go-ethereum/rollup/tracing"
 )
 
@@ -62,7 +62,7 @@ type Pipeline struct {
 	cancelCtx context.CancelFunc
 
 	// accumulators
-	ccc            *circuitcapacitychecker.CircuitCapacityChecker
+	ccc            *ccc.Checker
 	Header         types.Header
 	state          *state.StateDB
 	nextL1MsgIndex uint64
@@ -88,7 +88,7 @@ func NewPipeline(
 
 	header *types.Header,
 	nextL1MsgIndex uint64,
-	ccc *circuitcapacitychecker.CircuitCapacityChecker,
+	ccc *ccc.Checker,
 ) *Pipeline {
 	// make sure we are not sharing a tracer with the caller and not in debug mode
 	vmConfig.Tracer = nil
@@ -393,7 +393,7 @@ func (p *Pipeline) encodeStage(traces <-chan *BlockCandidate) <-chan *BlockCandi
 
 				encodeStart := time.Now()
 				if p.ccc != nil {
-					trace.RustTrace = circuitcapacitychecker.MakeRustTrace(trace.LastTrace, buffer)
+					trace.RustTrace = ccc.MakeRustTrace(trace.LastTrace, buffer)
 					if trace.RustTrace == nil {
 						log.Error("making rust trace", "txHash", trace.LastTrace.Transactions[0].TxHash)
 						// ignore the error here, CCC stage will catch it and treat it as a CCC error
@@ -404,7 +404,7 @@ func (p *Pipeline) encodeStage(traces <-chan *BlockCandidate) <-chan *BlockCandi
 				stallStart := time.Now()
 				if sendCancellable(downstreamCh, trace, p.ctx.Done()) && trace.RustTrace != nil {
 					// failed to send the trace downstream, free it here.
-					circuitcapacitychecker.FreeRustTrace(trace.RustTrace)
+					ccc.FreeRustTrace(trace.RustTrace)
 				}
 				encodeStallTimer.UpdateSince(stallStart)
 			case <-p.ctx.Done():
@@ -438,7 +438,7 @@ func (p *Pipeline) cccStage(candidates <-chan *BlockCandidate, deadline time.Tim
 					break
 				}
 				if candidate.RustTrace != nil {
-					circuitcapacitychecker.FreeRustTrace(candidate.RustTrace)
+					ccc.FreeRustTrace(candidate.RustTrace)
 				}
 			}
 			p.wg.Done()

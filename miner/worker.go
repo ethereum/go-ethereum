@@ -279,7 +279,7 @@ type worker struct {
 	// External functions
 	isLocalBlock func(header *types.Header) bool // Function used to determine whether the specified block is mined by local miner.
 
-	circuitCapacityChecker *circuitcapacitychecker.CircuitCapacityChecker
+	circuitCapacityChecker *ccc.Checker
 	prioritizedTx          *prioritizedTransaction
 
 	// Test hooks
@@ -314,9 +314,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 
 		l1MsgsCh:               make(chan core.NewL1MsgsEvent, txChanSize),
-		circuitCapacityChecker: circuitcapacitychecker.NewCircuitCapacityChecker(true),
+		circuitCapacityChecker: ccc.NewChecker(true),
 	}
-	log.Info("created new worker", "CircuitCapacityChecker ID", worker.circuitCapacityChecker.ID)
+	log.Info("created new worker", "Checker ID", worker.circuitCapacityChecker.ID)
 
 	// Subscribe for transaction insertion events (whether from network or resurrects)
 	worker.txsSub = eth.TxPool().SubscribeTransactions(worker.txsCh, true)
@@ -374,7 +374,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 
 // getCCC returns a pointer to this worker's CCC instance.
 // Only used in tests.
-func (w *worker) getCCC() *circuitcapacitychecker.CircuitCapacityChecker {
+func (w *worker) getCCC() *ccc.Checker {
 	return w.circuitCapacityChecker
 }
 
@@ -994,7 +994,7 @@ func (w *worker) applyTransaction(env *environment, tx *types.Transaction) (*typ
 		if accRows != nil {
 			// At this point, we have called CCC but the transaction failed in `ApplyTransaction`.
 			// If we skip this tx and continue to pack more, the next tx will likely fail with
-			// `circuitcapacitychecker.ErrUnknown`. However, at this point we cannot decide whether
+			// `ccc.ErrUnknown`. However, at this point we cannot decide whether
 			// we should seal the block or skip the tx and continue, so we simply return the error.
 			log.Error(
 				"GetBlockTrace passed but ApplyTransaction failed, ccc is left in inconsistent state",
@@ -1144,7 +1144,7 @@ loop:
 			l1TxGasLimitExceededCounter.Inc(1)
 
 		// Circuit capacity check
-		case errors.Is(err, circuitcapacitychecker.ErrBlockRowConsumptionOverflow):
+		case errors.Is(err, ccc.ErrBlockRowConsumptionOverflow):
 			if env.tcount >= 1 {
 				// 1. Circuit capacity limit reached in a block, and it's not the first tx:
 				// don't pop or shift, just quit the loop immediately;
@@ -1199,7 +1199,7 @@ loop:
 				}
 			}
 
-		case (errors.Is(err, circuitcapacitychecker.ErrUnknown) && tx.IsL1MessageTx()):
+		case (errors.Is(err, ccc.ErrUnknown) && tx.IsL1MessageTx()):
 			// Circuit capacity check: unknown circuit capacity checker error for L1MessageTx,
 			// shift to the next from the account because we shouldn't skip the entire txs from the same account
 			queueIndex := tx.AsL1MessageTx().QueueIndex
@@ -1221,7 +1221,7 @@ loop:
 			w.checkCurrentTxNumWithCCC(env.tcount)
 			break loop
 
-		case (errors.Is(err, circuitcapacitychecker.ErrUnknown) && !tx.IsL1MessageTx()):
+		case (errors.Is(err, ccc.ErrUnknown) && !tx.IsL1MessageTx()):
 			// Circuit capacity check: unknown circuit capacity checker error for L2MessageTx, skip the account
 			log.Trace("Unknown circuit capacity checker error for L2MessageTx", "tx", tx.Hash().String())
 			log.Info("Skipping L2 message", "tx", tx.Hash().String(), "block", env.header.Number, "reason", "unknown row consumption error")
