@@ -2544,3 +2544,12 @@ func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 func (bc *BlockChain) logger() *tracing.Hooks {
 	return bc.vmConfig.Tracer
 }
+
+// SetLogger sets the blockchain tracer for logging and debugging purposes.
+// This method should be called during the initialization phase of the blockchain.
+// Note: Setting a logger after the blockchain has started processing blocks may
+// result in inconsistent or partial logging. It's recommended to set the logger
+// before any block processing occurs.
+func (bc *BlockChain) SetLogger(logger *tracing.Hooks) {
+	bc.vmConfig.Tracer = logger
+}
