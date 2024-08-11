@@ -501,6 +501,13 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int) *core.Message {
 	}
 }
 
+func toUint64(b *hexutil.Uint64) uint64 {
+	if b == nil {
+		return 0
+	}
+	return uint64(*b)
+}
+
 // ToTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
 func (args *TransactionArgs) ToTransaction() *types.Transaction {
@@ -529,9 +536,9 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			Deployer:                    args.Deployer,
 			DeployerData:                *args.DeployerData,
 			BuilderFee:                  (*big.Int)(args.BuilderFee),
-			ValidationGasLimit:          uint64(*args.ValidationGas),
-			PaymasterValidationGasLimit: uint64(*args.PaymasterGas),
-			PostOpGas:                   uint64(*args.PostOpGas),
+			ValidationGasLimit:          toUint64(args.ValidationGas),
+			PaymasterValidationGasLimit: toUint64(args.PaymasterGas),
+			PostOpGas:                   toUint64(args.PostOpGas),
 		}
 		data = &aatx
 		hash := types.NewTx(data).Hash()
