@@ -1329,7 +1329,7 @@ func (s *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inc
 type RPCTransaction struct {
 	BlockHash           *common.Hash      `json:"blockHash"`
 	BlockNumber         *hexutil.Big      `json:"blockNumber"`
-	From                common.Address    `json:"from"`
+	From                common.Address    `json:"from,omitempty"`
 	Gas                 hexutil.Uint64    `json:"gas"`
 	GasPrice            *hexutil.Big      `json:"gasPrice"`
 	GasFeeCap           *hexutil.Big      `json:"maxFeePerGas,omitempty"`
@@ -1338,17 +1338,43 @@ type RPCTransaction struct {
 	Hash                common.Hash       `json:"hash"`
 	Input               hexutil.Bytes     `json:"input"`
 	Nonce               hexutil.Uint64    `json:"nonce"`
-	To                  *common.Address   `json:"to"`
+	To                  *common.Address   `json:"to,omitempty"`
 	TransactionIndex    *hexutil.Uint64   `json:"transactionIndex"`
 	Value               *hexutil.Big      `json:"value"`
 	Type                hexutil.Uint64    `json:"type"`
 	Accesses            *types.AccessList `json:"accessList,omitempty"`
 	ChainID             *hexutil.Big      `json:"chainId,omitempty"`
 	BlobVersionedHashes []common.Hash     `json:"blobVersionedHashes,omitempty"`
-	V                   *hexutil.Big      `json:"v"`
-	R                   *hexutil.Big      `json:"r"`
-	S                   *hexutil.Big      `json:"s"`
+	V                   *hexutil.Big      `json:"v,omitempty"`
+	R                   *hexutil.Big      `json:"r,omitempty"`
+	S                   *hexutil.Big      `json:"s,omitempty"`
 	YParity             *hexutil.Uint64   `json:"yParity,omitempty"`
+
+	// Introduced by RIP-7560 Transaction
+	Sender                      *common.Address `json:"sender,omitempty"`
+	Signature                   *hexutil.Bytes  `json:"signature,omitempty"`
+	Paymaster                   *common.Address `json:"paymaster,omitempty"`
+	PaymasterData               *hexutil.Bytes  `json:"paymasterData,omitempty"`
+	Deployer                    *common.Address `json:"deployer,omitempty"`
+	DeployerData                *hexutil.Bytes  `json:"deployerData,omitempty"`
+	BuilderFee                  *hexutil.Big    `json:"builderFee,omitempty"`
+	ValidationGas               *hexutil.Uint64 `json:"verificationGasLimit,omitempty"`
+	PaymasterValidationGasLimit *hexutil.Uint64 `json:"paymasterVerificationGasLimit,omitempty"`
+	PostOpGas                   *hexutil.Uint64 `json:"paymasterPostOpGasLimit,omitempty"`
+}
+
+func toBytes(data []byte) *hexutil.Bytes {
+	if len(data) == 0 {
+		return nil
+	}
+	return (*hexutil.Bytes)(&data)
+}
+
+func conditional_uint64(v uint64, addr *common.Address) *hexutil.Uint64 {
+	if addr == nil {
+		return nil
+	}
+	return (*hexutil.Uint64)(&v)
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1397,6 +1423,37 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.YParity = &yparity
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// if the transaction has been mined, compute the effective gas price
+		if baseFee != nil && blockHash != (common.Hash{}) {
+			// price = min(gasTipCap + baseFee, gasFeeCap)
+			result.GasPrice = (*hexutil.Big)(effectiveGasPrice(tx, baseFee))
+		} else {
+			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		}
+
+	case types.Rip7560Type:
+		rip7560Tx := tx.Rip7560TransactionData()
+
+		result.S = nil
+		result.R = nil
+		result.V = nil
+		result.Input = rip7560Tx.Data
+		result.Sender = rip7560Tx.Sender
+		result.Signature = toBytes(rip7560Tx.Signature)
+		result.Gas = hexutil.Uint64(tx.Gas())
+		result.Paymaster = rip7560Tx.Paymaster
+		result.PaymasterData = toBytes(rip7560Tx.PaymasterData)
+		result.Deployer = rip7560Tx.Deployer
+		result.DeployerData = toBytes(rip7560Tx.DeployerData)
+		result.BuilderFee = (*hexutil.Big)(rip7560Tx.BuilderFee)
+		result.ValidationGas = (*hexutil.Uint64)(&rip7560Tx.ValidationGasLimit)
+		result.PaymasterValidationGasLimit = conditional_uint64(rip7560Tx.PaymasterValidationGasLimit, rip7560Tx.Paymaster)
+		result.PostOpGas = conditional_uint64(rip7560Tx.PostOpGas, rip7560Tx.Paymaster)
+
+		//shared fields with DynamicFeeTxType
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
 		// if the transaction has been mined, compute the effective gas price
