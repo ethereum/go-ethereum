@@ -522,16 +522,20 @@ func (args *TransactionArgs) ToTransaction() *types.Transaction {
 			Data:       args.data(),
 			AccessList: al,
 			// RIP-7560 parameters
-			Sender:                      args.Sender,
-			Signature:                   *args.Signature,
-			Paymaster:                   args.Paymaster,
-			PaymasterData:               *args.PaymasterData,
-			Deployer:                    args.Deployer,
-			DeployerData:                *args.DeployerData,
-			BuilderFee:                  (*big.Int)(args.BuilderFee),
-			ValidationGasLimit:          uint64(*args.ValidationGas),
-			PaymasterValidationGasLimit: uint64(*args.PaymasterGas),
-			PostOpGas:                   uint64(*args.PostOpGas),
+			Sender:             args.Sender,
+			Signature:          *args.Signature,
+			Paymaster:          args.Paymaster,
+			PaymasterData:      *args.PaymasterData,
+			Deployer:           args.Deployer,
+			DeployerData:       *args.DeployerData,
+			BuilderFee:         (*big.Int)(args.BuilderFee),
+			ValidationGasLimit: uint64(*args.ValidationGas),
+		}
+		if args.PaymasterGas != nil {
+			aatx.PaymasterValidationGasLimit = uint64(*args.PaymasterGas)
+		}
+		if args.PostOpGas != nil {
+			aatx.PostOpGas = uint64(*args.PostOpGas)
 		}
 		data = &aatx
 		hash := types.NewTx(data).Hash()
