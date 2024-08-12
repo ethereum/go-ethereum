@@ -537,8 +537,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	return ret, address, contract.Gas, err
 }
 
-// initNewContract perform initialization checks and actions on code for a newly
-// create()d contract.
+// initNewContract runs a new contract's creation code, performs checks on the
+// resulting code that is to be deployed, and consumes necessary gas.
 func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]byte, error) {
 	ret, err := evm.interpreter.Run(contract, nil, false)
 	if err != nil {
