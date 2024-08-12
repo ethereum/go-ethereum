@@ -1023,14 +1023,14 @@ mainloop:
 		// not prioritising conditional transaction, yet.
 		//nolint:nestif
 		if options := tx.GetOptions(); options != nil {
-			if err := env.header.ValidateBlockNumberOptions4337(options.BlockNumberMin, options.BlockNumberMax); err != nil {
+			if err := env.header.ValidateBlockNumberOptionsPIP15(options.BlockNumberMin, options.BlockNumberMax); err != nil {
 				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
 				txs.Pop()
 
 				continue
 			}
 
-			if err := env.header.ValidateTimestampOptions4337(options.TimestampMin, options.TimestampMax); err != nil {
+			if err := env.header.ValidateTimestampOptionsPIP15(options.TimestampMin, options.TimestampMax); err != nil {
 				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
 				txs.Pop()
 

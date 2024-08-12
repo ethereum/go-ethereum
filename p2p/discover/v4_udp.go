@@ -600,6 +600,11 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 }
 
 func (t *UDPv4) handlePacket(from netip.AddrPort, buf []byte) error {
+	// Unwrap IPv4-in-6 source address.
+	if from.Addr().Is4In6() {
+		from = netip.AddrPortFrom(netip.AddrFrom4(from.Addr().As4()), from.Port())
+	}
+
 	rawpacket, fromKey, hash, err := v4wire.Decode(buf)
 	if err != nil {
 		t.log.Debug("Bad discv4 packet", "addr", from, "err", err)

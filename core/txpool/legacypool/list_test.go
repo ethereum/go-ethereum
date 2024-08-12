@@ -109,7 +109,7 @@ func TestFilterTxConditional(t *testing.T) {
 	// and add to the list.
 	tx2 := transaction(1, 1000, key)
 
-	var options types.OptionsAA4337
+	var options types.OptionsPIP15
 
 	options.KnownAccounts = types.KnownAccounts{
 		common.Address{19: 1}: &types.Value{

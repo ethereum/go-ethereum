@@ -725,6 +725,10 @@ func (t *UDPv5) readLoop() {
 
 // dispatchReadPacket sends a packet into the dispatch loop.
 func (t *UDPv5) dispatchReadPacket(from netip.AddrPort, content []byte) bool {
+	// Unwrap IPv4-in-6 source address.
+	if from.Addr().Is4In6() {
+		from = netip.AddrPortFrom(netip.AddrFrom4(from.Addr().As4()), from.Port())
+	}
 	select {
 	case t.packetInCh <- ReadPacket{content, from}:
 		return true

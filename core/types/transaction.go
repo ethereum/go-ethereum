@@ -56,8 +56,9 @@ type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
-	// knownAccounts (EIP-4337)
-	optionsAA4337 *OptionsAA4337
+	// BOR specific - DO NOT REMOVE
+	// knownAccounts (PIP-15)
+	optionsPIP15 *OptionsPIP15
 
 	// caches
 	hash atomic.Value
@@ -105,14 +106,14 @@ type TxData interface {
 	decode([]byte) error
 }
 
-// PutOptions stores the optionsAA4337 field of the conditional transaction (EIP-4337)
-func (tx *Transaction) PutOptions(options *OptionsAA4337) {
-	tx.optionsAA4337 = options
+// PutOptions stores the optionsPIP15 field of the conditional transaction (PIP-15)
+func (tx *Transaction) PutOptions(options *OptionsPIP15) {
+	tx.optionsPIP15 = options
 }
 
-// GetOptions returns the optionsAA4337 field of the conditional transaction (EIP-4337)
-func (tx *Transaction) GetOptions() *OptionsAA4337 {
-	return tx.optionsAA4337
+// GetOptions returns the optionsPIP15 field of the conditional transaction (PIP-15)
+func (tx *Transaction) GetOptions() *OptionsPIP15 {
+	return tx.optionsPIP15
 }
 
 // EncodeRLP implements rlp.Encoder
