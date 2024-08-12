@@ -99,12 +99,13 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.Gas == nil {
 		// These fields are immutable during the estimation, safe to
 		// pass the pointer directly.
+		data := args.data()
 		callArgs := TransactionArgs{
 			From:       args.From,
 			To:         args.To,
 			GasPrice:   args.GasPrice,
 			Value:      args.Value,
-			Data:       args.Data,
+			Data:       (*hexutil.Bytes)(&data),
 			AccessList: args.AccessList,
 		}
 		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
