@@ -380,9 +380,6 @@ func hashAllSourceFiles() (map[string]common.Hash, error) {
 }
 
 func hashSourceFiles(files []string) (map[string]common.Hash, error) {
-	if len(files) == 0 {
-		return hashAllSourceFiles()
-	}
 	res := make(map[string]common.Hash)
 	for _, filePath := range files {
 		f, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
