@@ -438,16 +438,6 @@ func (x *XDPoS_v1) YourTurn(chain consensus.ChainReader, parent *types.Header, s
 
 func (x *XDPoS_v1) yourTurn(chain consensus.ChainReader, parent *types.Header, signer common.Address) (int, int, int, bool, error) {
 	masternodes := x.GetMasternodes(chain, parent)
-
-	// if common.IsTestnet {
-	// 	// Only three mns hard code for XDC testnet.
-	// 	masternodes = []common.Address{
-	// 		common.HexToAddress("0x3Ea0A3555f9B1dE983572BfF6444aeb1899eC58C"),
-	// 		common.HexToAddress("0x4F7900282F3d371d585ab1361205B0940aB1789C"),
-	// 		common.HexToAddress("0x942a5885A8844Ee5587C8AC5e371Fc39FFE61896"),
-	// 	}
-	// }
-
 	snap, err := x.GetSnapshot(chain, parent)
 	if err != nil {
 		log.Warn("Failed when trying to commit new work", "err", err)

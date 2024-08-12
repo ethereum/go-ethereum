@@ -486,28 +486,6 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 	return true, nil
 }
 
-// ValidateMasternodeTestNet checks if node's address is in set of masternodes in Testnet
-func (s *Ethereum) ValidateMasternodeTestnet() (bool, error) {
-	eb, err := s.Etherbase()
-	if err != nil {
-		return false, err
-	}
-	if s.chainConfig.XDPoS == nil {
-		return false, errors.New("Only verify masternode permission in XDPoS protocol")
-	}
-	masternodes := []common.Address{
-		common.HexToAddress("0x3Ea0A3555f9B1dE983572BfF6444aeb1899eC58C"),
-		common.HexToAddress("0x4F7900282F3d371d585ab1361205B0940aB1789C"),
-		common.HexToAddress("0x942a5885A8844Ee5587C8AC5e371Fc39FFE61896"),
-	}
-	for _, m := range masternodes {
-		if m == eb {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func (s *Ethereum) StartStaking(local bool) error {
 	eb, err := s.Etherbase()
 	if err != nil {
