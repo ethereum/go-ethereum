@@ -471,7 +471,7 @@ func validateAccountEntryPointCall(epc *EntryPointCall) (*AcceptAccountData, err
 		return nil, epc.err
 	}
 	if epc.Input == nil {
-		return nil, errors.New("account validation did not call the EntryPoint callback")
+		return nil, errors.New("account validation did not call the EntryPoint 'acceptAccount' callback")
 	}
 	if len(epc.Input) != 68 {
 		return nil, errors.New("invalid account return data length")
@@ -484,7 +484,7 @@ func validatePaymasterEntryPointCall(epc *EntryPointCall) (*AcceptPaymasterData,
 		return nil, epc.err
 	}
 	if epc.Input == nil {
-		return nil, errors.New("paymaster validation did not call the EntryPoint callback")
+		return nil, errors.New("paymaster validation did not call the EntryPoint 'acceptPaymaster' callback")
 	}
 
 	if len(epc.Input) < 100 {
