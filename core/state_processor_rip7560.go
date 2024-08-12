@@ -229,13 +229,14 @@ func ApplyRip7560ValidationPhases(chainConfig *params.ChainConfig, bc ChainConte
 		return nil, resultAccountValidation.Err
 	}
 	aad, err := validateAccountEntryPointCall(epc)
+	if err != nil {
+		return nil, err
+	}
+
 	// clear the EntryPoint calls array after parsing
 	epc.err = nil
 	epc.Input = nil
 
-	if err != nil {
-		return nil, err
-	}
 	err = validateValidityTimeRange(header.Time, aad.ValidAfter.Uint64(), aad.ValidUntil.Uint64())
 	if err != nil {
 		return nil, err
