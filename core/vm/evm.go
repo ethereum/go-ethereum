@@ -526,15 +526,11 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
 		if !contract.UseGas(evm.AccessEvents.ContractCreateInitGas(address, value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
-			return nil, common.Address{}, 0, ErrOutOfGas
+			return nil, address, 0, ErrOutOfGas
 		}
 	}
 
 	ret, err := evm.initNewContract(contract, address)
-	if err != nil {
-		return nil, common.Address{}, contract.Gas, err
-	}
-	evm.StateDB.SetCode(address, ret)
 	return ret, address, contract.Gas, err
 }
 
@@ -543,34 +539,36 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]byte, error) {
 	ret, err := evm.interpreter.Run(contract, nil, false)
 	if err != nil {
-		return nil, err
+		return ret, err
 	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
 	if evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
-		return nil, ErrMaxCodeSizeExceeded
+		return ret, ErrMaxCodeSizeExceeded
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
-		return nil, ErrInvalidCode
+		return ret, ErrInvalidCode
 	}
 
 	if !evm.chainRules.IsEIP4762 {
 		createDataGas := uint64(len(ret)) * params.CreateDataGas
 		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-			return nil, ErrCodeStoreOutOfGas
+			return ret, ErrCodeStoreOutOfGas
 		}
 	} else {
 		// Contract creation completed, touch the missing fields in the contract
 		if !contract.UseGas(evm.AccessEvents.AddAccount(address, true), evm.Config.Tracer, tracing.GasChangeWitnessContractCreation) {
-			return nil, ErrCodeStoreOutOfGas
+			return ret, ErrCodeStoreOutOfGas
 		}
 
 		if len(ret) > 0 && !contract.UseGas(evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk) {
-			return nil, ErrCodeStoreOutOfGas
+			return ret, ErrCodeStoreOutOfGas
 		}
 	}
+
+	evm.StateDB.SetCode(address, ret)
 	return ret, nil
 }
 
