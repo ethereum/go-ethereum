@@ -781,15 +781,24 @@ func TestEstimateGas(t *testing.T) {
 
 func TestCall(t *testing.T) {
 	t.Parallel()
+
 	// Initialize test accounts
 	var (
 		accounts = newAccounts(3)
+		dad      = common.HexToAddress("0x0000000000000000000000000000000000000dad")
 		genesis  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
 			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[2].addr: {Balance: big.NewInt(params.Ether)},
+				dad: {
+					Balance: big.NewInt(params.Ether),
+					Nonce:   1,
+					Storage: map[common.Hash]common.Hash{
+						common.Hash{}: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001"),
+					},
+				},
 			},
 		}
 		genBlocks = 10
@@ -904,7 +913,7 @@ func TestCall(t *testing.T) {
 			overrides: StateOverride{
 				randomAccounts[2].addr: OverrideAccount{
 					Code:      hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033"),
-					StateDiff: &map[common.Hash]common.Hash{{}: common.BigToHash(big.NewInt(123))},
+					StateDiff: map[common.Hash]common.Hash{{}: common.BigToHash(big.NewInt(123))},
 				},
 			},
 			want: "0x000000000000000000000000000000000000000000000000000000000000007b",
@@ -948,6 +957,32 @@ func TestCall(t *testing.T) {
 				},
 			},
 			want: "0x0122000000000000000000000000000000000000000000000000000000000000",
+		},
+		// Clear the entire storage set
+		{
+			blockNumber: rpc.LatestBlockNumber,
+			call: TransactionArgs{
+				From: &accounts[1].addr,
+				// Yul:
+				// object "Test" {
+				//    code {
+				//        let dad := 0x0000000000000000000000000000000000000dad
+				//        if eq(balance(dad), 0) {
+				//            revert(0, 0)
+				//        }
+				//        let slot := sload(0)
+				//        mstore(0, slot)
+				//        return(0, 32)
+				//    }
+				// }
+				Input: hex2Bytes("610dad6000813103600f57600080fd5b6000548060005260206000f3"),
+			},
+			overrides: StateOverride{
+				dad: OverrideAccount{
+					State: map[common.Hash]common.Hash{},
+				},
+			},
+			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
 	for i, tc := range testSuite {
@@ -1308,9 +1343,9 @@ func newAccounts(n int) (accounts []account) {
 	return accounts
 }
 
-func newRPCBalance(balance *big.Int) **hexutil.Big {
+func newRPCBalance(balance *big.Int) *hexutil.Big {
 	rpcBalance := (*hexutil.Big)(balance)
-	return &rpcBalance
+	return rpcBalance
 }
 
 func hex2Bytes(str string) *hexutil.Bytes {

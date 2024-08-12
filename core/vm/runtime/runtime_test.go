@@ -38,7 +38,6 @@ import (
 
 	// force-load js tracers to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
-	"github.com/holiman/uint256"
 )
 
 func TestDefaults(t *testing.T) {
@@ -213,6 +212,35 @@ func BenchmarkEVM_CREATE2_1200(bench *testing.B) {
 	benchmarkEVM_Create(bench, "5b5862124f80600080f5600152600056")
 }
 
+func BenchmarkEVM_SWAP1(b *testing.B) {
+	// returns a contract that does n swaps (SWAP1)
+	swapContract := func(n uint64) []byte {
+		contract := []byte{
+			byte(vm.PUSH0), // PUSH0
+			byte(vm.PUSH0), // PUSH0
+		}
+		for i := uint64(0); i < n; i++ {
+			contract = append(contract, byte(vm.SWAP1))
+		}
+		return contract
+	}
+
+	state, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	contractAddr := common.BytesToAddress([]byte("contract"))
+
+	b.Run("10k", func(b *testing.B) {
+		contractCode := swapContract(10_000)
+		state.SetCode(contractAddr, contractCode)
+
+		for i := 0; i < b.N; i++ {
+			_, _, err := Call(contractAddr, []byte{}, &Config{State: state})
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
 func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
 	header := types.Header{
 		Coinbase:   common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
@@ -339,11 +367,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 			Tracer: tracer.Hooks,
 		}
 	}
-	var (
-		destination = common.BytesToAddress([]byte("contract"))
-		vmenv       = NewEnv(cfg)
-		sender      = vm.AccountRef(cfg.Origin)
-	)
+	destination := common.BytesToAddress([]byte("contract"))
 	cfg.State.CreateAccount(destination)
 	eoa := common.HexToAddress("E0")
 	{
@@ -363,12 +387,12 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 	//cfg.State.CreateAccount(cfg.Origin)
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(destination, code)
-	vmenv.Call(sender, destination, nil, gas, uint256.MustFromBig(cfg.Value))
+	Call(destination, nil, cfg)
 
 	b.Run(name, func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			vmenv.Call(sender, destination, nil, gas, uint256.MustFromBig(cfg.Value))
+			Call(destination, nil, cfg)
 		}
 	})
 }

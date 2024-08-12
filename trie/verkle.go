@@ -199,6 +199,57 @@ func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
 	return nil
 }
 
+// RollBackAccount removes the account info + code from the tree, unlike DeleteAccount
+// that will overwrite it with 0s. The first 64 storage slots are also removed.
+func (t *VerkleTrie) RollBackAccount(addr common.Address) error {
+	var (
+		evaluatedAddr = t.cache.Get(addr.Bytes())
+		codeSizeKey   = utils.CodeSizeKeyWithEvaluatedAddress(evaluatedAddr)
+	)
+	codeSizeBytes, err := t.root.Get(codeSizeKey, t.nodeResolver)
+	if err != nil {
+		return fmt.Errorf("rollback: error finding code size: %w", err)
+	}
+	if len(codeSizeBytes) == 0 {
+		return errors.New("rollback: code size is not existent")
+	}
+	codeSize := binary.LittleEndian.Uint64(codeSizeBytes)
+
+	// Delete the account header + first 64 slots + first 128 code chunks
+	key := common.CopyBytes(codeSizeKey)
+	for i := 0; i < verkle.NodeWidth; i++ {
+		key[31] = byte(i)
+
+		// this is a workaround to avoid deleting nil leaves, the lib needs to be
+		// fixed to be able to handle that
+		v, err := t.root.Get(key, t.nodeResolver)
+		if err != nil {
+			return fmt.Errorf("error rolling back account header: %w", err)
+		}
+		if len(v) == 0 {
+			continue
+		}
+		_, err = t.root.Delete(key, t.nodeResolver)
+		if err != nil {
+			return fmt.Errorf("error rolling back account header: %w", err)
+		}
+	}
+	// Delete all further code
+	for i, chunknr := uint64(32*128), uint64(128); i < codeSize; i, chunknr = i+32, chunknr+1 {
+		// evaluate group key at the start of a new group
+		groupOffset := (chunknr + 128) % 256
+		if groupOffset == 0 {
+			key = utils.CodeChunkKeyWithEvaluatedAddress(evaluatedAddr, uint256.NewInt(chunknr))
+		}
+		key[31] = byte(groupOffset)
+		_, err = t.root.Delete(key[:], t.nodeResolver)
+		if err != nil {
+			return fmt.Errorf("error deleting code chunk (addr=%x) error: %w", addr[:], err)
+		}
+	}
+	return nil
+}
+
 // DeleteStorage implements state.Trie, deleting the specified storage slot from
 // the trie. If the storage slot was not existent in the trie, no error will be
 // returned. If the trie is corrupted, an error will be returned.

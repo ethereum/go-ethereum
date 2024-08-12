@@ -843,7 +843,7 @@ func TestTracingWithOverrides(t *testing.T) {
 							byte(vm.PUSH1), 00,
 							byte(vm.RETURN),
 						}),
-						StateDiff: &map[common.Hash]common.Hash{
+						StateDiff: map[common.Hash]common.Hash{
 							common.HexToHash("0x03"): common.HexToHash("0x11"),
 						},
 					},
@@ -898,9 +898,9 @@ func newAccounts(n int) (accounts []Account) {
 	return accounts
 }
 
-func newRPCBalance(balance *big.Int) **hexutil.Big {
+func newRPCBalance(balance *big.Int) *hexutil.Big {
 	rpcBalance := (*hexutil.Big)(balance)
-	return &rpcBalance
+	return rpcBalance
 }
 
 func newRPCBytes(bytes []byte) *hexutil.Bytes {
@@ -908,7 +908,7 @@ func newRPCBytes(bytes []byte) *hexutil.Bytes {
 	return &rpcBytes
 }
 
-func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.Hash {
+func newStates(keys []common.Hash, vals []common.Hash) map[common.Hash]common.Hash {
 	if len(keys) != len(vals) {
 		panic("invalid input")
 	}
@@ -916,7 +916,7 @@ func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.H
 	for i := 0; i < len(keys); i++ {
 		m[keys[i]] = vals[i]
 	}
-	return &m
+	return m
 }
 
 func TestTraceChain(t *testing.T) {

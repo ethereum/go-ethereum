@@ -123,7 +123,8 @@ func (b *beaconBackfiller) resume() {
 func (b *beaconBackfiller) setMode(mode SyncMode) {
 	// Update the old sync mode and track if it was changed
 	b.lock.Lock()
-	updated := b.syncMode != mode
+	oldMode := b.syncMode
+	updated := oldMode != mode
 	filling := b.filling
 	b.syncMode = mode
 	b.lock.Unlock()
@@ -133,7 +134,7 @@ func (b *beaconBackfiller) setMode(mode SyncMode) {
 	if !updated || !filling {
 		return
 	}
-	log.Error("Downloader sync mode changed mid-run", "old", mode.String(), "new", mode.String())
+	log.Error("Downloader sync mode changed mid-run", "old", oldMode.String(), "new", mode.String())
 	b.suspend()
 	b.resume()
 }

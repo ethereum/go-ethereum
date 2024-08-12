@@ -1116,7 +1116,7 @@ func (p *BlobPool) validateTx(tx *types.Transaction) error {
 		ExistingCost: func(addr common.Address, nonce uint64) *big.Int {
 			next := p.state.GetNonce(addr)
 			if uint64(len(p.index[addr])) > nonce-next {
-				return p.index[addr][int(tx.Nonce()-next)].costCap.ToBig()
+				return p.index[addr][int(nonce-next)].costCap.ToBig()
 			}
 			return nil
 		},

@@ -546,7 +546,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			bgu = strconv.Itoa(int(*params.BlobGasUsed))
 		}
 		ebg := "nil"
-		if params.BlobGasUsed != nil {
+		if params.ExcessBlobGas != nil {
 			ebg = strconv.Itoa(int(*params.ExcessBlobGas))
 		}
 		log.Warn("Invalid NewPayload params",
