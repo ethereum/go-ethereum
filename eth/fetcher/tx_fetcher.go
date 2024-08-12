@@ -114,7 +114,7 @@ var errTerminated = errors.New("terminated")
 type txAnnounce struct {
 	origin string        // Identifier of the peer originating the notification
 	hashes []common.Hash // Batch of transaction hashes being announced
-	metas  []*txMetadata // Batch of metadatas associated with the hashes (nil before eth/68)
+	metas  []*txMetadata // Batch of metadata associated with the hashes
 }
 
 // txMetadata is a set of extra data transmitted along the announcement for better
@@ -137,7 +137,7 @@ type txRequest struct {
 type txDelivery struct {
 	origin string        // Identifier of the peer originating the notification
 	hashes []common.Hash // Batch of transaction hashes having been delivered
-	metas  []txMetadata  // Batch of metadatas associated with the delivered hashes
+	metas  []txMetadata  // Batch of metadata associated with the delivered hashes
 	direct bool          // Whether this is a direct reply or a broadcast
 }
 
@@ -237,6 +237,12 @@ func NewTxFetcherForTests(
 // Notify announces the fetcher of the potential availability of a new batch of
 // transactions in the network.
 func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []common.Hash) error {
+	// Sanitize the announcements. Transaction metadata has been available since eth68,
+	// and all legacy eth protocols have been deprecated. Therefore, metadata is always
+	// expected in the announcement.
+	if len(types) != len(sizes) || len(types) != len(hashes) {
+		return errors.New("invalid transaction announcements")
+	}
 	// Keep track of all the announced transactions
 	txAnnounceInMeter.Mark(int64(len(hashes)))
 
@@ -260,11 +266,7 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 			underpriced++
 		default:
 			unknownHashes = append(unknownHashes, hash)
-			if types == nil {
-				unknownMetas = append(unknownMetas, nil)
-			} else {
-				unknownMetas = append(unknownMetas, &txMetadata{kind: types[i], size: sizes[i]})
-			}
+			unknownMetas = append(unknownMetas, &txMetadata{kind: types[i], size: sizes[i]})
 		}
 	}
 	txAnnounceKnownMeter.Mark(duplicate)
@@ -892,13 +894,8 @@ func (f *TxFetcher) scheduleFetches(timer *mclock.Timer, timeout chan struct{}, 
 			if len(hashes) >= maxTxRetrievals {
 				return false // break in the for-each
 			}
-			if meta != nil { // Only set eth/68 and upwards
-				bytes += uint64(meta.size)
-				if bytes >= maxTxRetrievalSize {
-					return false
-				}
-			}
-			return true // scheduled, try to add more
+			bytes += uint64(meta.size)
+			return bytes < maxTxRetrievalSize
 		})
 		// If any hashes were allocated, request them from the peer
 		if len(hashes) > 0 {
