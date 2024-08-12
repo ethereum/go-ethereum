@@ -16,14 +16,6 @@ import (
 var AA_ENTRY_POINT = common.HexToAddress("0x0000000000000000000000000000000000007560")
 var AA_SENDER_CREATOR = common.HexToAddress("0x00000000000000000000000000000000ffff7560")
 
-func PackValidationData(authorizerMagic uint64, validUntil, validAfter uint64) []byte {
-
-	t := new(big.Int).SetUint64(uint64(validAfter))
-	t = t.Lsh(t, 48).Add(t, new(big.Int).SetUint64(validUntil&0xffffff))
-	t = t.Lsh(t, 160).Add(t, new(big.Int).SetUint64(uint64(authorizerMagic)))
-	return common.LeftPadBytes(t.Bytes(), 32)
-}
-
 type EntryPointCall struct {
 	OnEnterSuper tracing.EnterHook
 	Input        []byte
