@@ -1,6 +1,7 @@
 package live
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -37,6 +38,7 @@ type traceResult struct {
 }
 
 type filter struct {
+	backend    tracers.Backend
 	kvdb       ethdb.Database
 	frdb       *rawdb.Freezer
 	tables     map[string]bool
@@ -127,6 +129,7 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 	}
 
 	f := &filter{
+		backend:    backend,
 		kvdb:       kvdb,
 		frdb:       frdb,
 		tables:     tables,
@@ -170,7 +173,7 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 	apis := []rpc.API{
 		{
 			Namespace: "trace",
-			Service:   &filterAPI{filter: f},
+			Service:   &filterAPI{backend: backend, filter: f},
 		},
 	}
 	return hooks, apis, nil
@@ -272,28 +275,42 @@ func (f *filter) OnBlockEnd(err error) {
 	// })
 }
 
-func (f *filter) readBlockTraces(name string, blknum uint64) ([]*traceResult, error) {
-	table := toTraceTable(name)
-	if _, ok := f.tables[table]; !ok {
-		return nil, errors.New("tracer not found")
+func (f *filter) readBlockTraces(ctx context.Context, name string, blknum uint64) ([]*traceResult, error) {
+	header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(blknum))
+	if err != nil {
+		return nil, err
 	}
 
-	if blknum < f.offset.Load() || blknum > f.latest.Load() {
-		return nil, nil
-	}
-
-	var data []byte
-	err := f.frdb.ReadAncients(func(reader ethdb.AncientReaderOp) error {
-		var err error
-		data, err = reader.Ancient(table, blknum-f.offset.Load())
-		return err
-	})
+	kvKey := toKVKey(name, blknum, header.Hash())
+	data, err := f.kvdb.Get(kvKey)
 	if err != nil {
 		return nil, err
 	}
 	var traces []*traceResult
 	err = json.Unmarshal(data, &traces)
 	return traces, err
+
+	// table := toTraceTable(name)
+	// if _, ok := f.tables[table]; !ok {
+	// 	return nil, errors.New("tracer not found")
+	// }
+	//
+	// if blknum < f.offset.Load() || blknum > f.latest.Load() {
+	// 	return nil, nil
+	// }
+	//
+	// var data []byte
+	// err := f.frdb.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	// 	var err error
+	// 	data, err = reader.Ancient(table, blknum-f.offset.Load())
+	// 	return err
+	// })
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// var traces []*traceResult
+	// err = json.Unmarshal(data, &traces)
+	// return traces, err
 }
 
 func (f *filter) Close() {

@@ -3,11 +3,13 @@ package live
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type filterAPI struct {
-	filter *filter
+	backend tracers.Backend
+	filter  *filter
 }
 
 type traceConfig struct {
@@ -29,5 +31,5 @@ func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *t
 		tracer = cfg.Tracer
 	}
 
-	return api.filter.readBlockTraces(tracer, blknum)
+	return api.filter.readBlockTraces(ctx, tracer, blknum)
 }
