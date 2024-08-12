@@ -4,6 +4,7 @@ const AcceptAccountMethodSig = uint64(0x1256ebd1)   // acceptAccount(uint256,uin
 const AcceptPaymasterMethodSig = uint64(0x03be8439) // acceptPaymaster(uint256,uint256,bytes)
 const SigFailAccountMethodSig = uint64(0x7715fac2)  // sigFailAccount(uint256,uint256)
 const PaymasterMaxContextSize = 65536
+const Rip7560AbiVersion = 0
 
 const ValidateTransactionAbi = `
 [

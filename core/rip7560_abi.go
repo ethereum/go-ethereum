@@ -27,14 +27,14 @@ func abiEncodeValidateTransaction(tx *types.Rip7560AccountAbstractionTx, signing
 	}
 
 	txAbiEncoding, err := tx.AbiEncode()
-	validateTransactionData, err := jsonAbi.Pack("validateTransaction", big.NewInt(0), signingHash, txAbiEncoding)
+	validateTransactionData, err := jsonAbi.Pack("validateTransaction", big.NewInt(Rip7560AbiVersion), signingHash, txAbiEncoding)
 	return validateTransactionData, err
 }
 
 func abiEncodeValidatePaymasterTransaction(tx *types.Rip7560AccountAbstractionTx, signingHash common.Hash) ([]byte, error) {
 	jsonAbi, err := abi.JSON(strings.NewReader(ValidatePaymasterTransactionAbi))
 	txAbiEncoding, err := tx.AbiEncode()
-	data, err := jsonAbi.Pack("validatePaymasterTransaction", big.NewInt(0), signingHash, txAbiEncoding)
+	data, err := jsonAbi.Pack("validatePaymasterTransaction", big.NewInt(Rip7560AbiVersion), signingHash, txAbiEncoding)
 	return data, err
 }
 
@@ -43,6 +43,7 @@ func abiEncodePostPaymasterTransaction(context []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// TODO: pass actual gas cost parameter here!
 	postOpData, err := jsonAbi.Pack("postPaymasterTransaction", true, big.NewInt(0), context)
 	return postOpData, err
 }
