@@ -445,11 +445,11 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, leftOverGas uint64, retErr error) {
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller.Address(), address, codeAndHash.code, gas, value.ToBig())
 		defer func(startGas uint64) {
-			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, err)
+			evm.captureEnd(evm.depth, startGas, leftOverGas, ret, retErr)
 		}(gas)
 	}
 	// Depth check execution. Fail if we're trying to execute above the
@@ -510,64 +510,67 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	contract.SetCodeOptionalHash(&address, codeAndHash)
 	contract.IsDeployment = true
 
+	defer func() {
+		// When an error was returned by the EVM or when setting the creation code
+		// above we revert to the snapshot and consume any gas remaining. Additionally,
+		// when we're in homestead this also counts for code storage gas errors.
+		if err := retErr; err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
+			evm.StateDB.RevertToSnapshot(snapshot)
+			if err != ErrExecutionReverted {
+				contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
+			}
+		}
+	}()
+
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
 		if !contract.UseGas(evm.AccessEvents.ContractCreateInitGas(address, value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
-			err = ErrOutOfGas
+			return nil, common.Address{}, 0, ErrOutOfGas
 		}
 	}
 
-	if err == nil {
-		ret, err = evm.interpreter.Run(contract, nil, false)
+	ret, err := evm.initNewContract(contract, address)
+	if err != nil {
+		return nil, common.Address{}, contract.Gas, err
+	}
+	evm.StateDB.SetCode(address, ret)
+	return ret, address, contract.Gas, err
+}
+
+// initNewContract perform initialization checks and actions on code for a newly
+// create()d contract.
+func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]byte, error) {
+	ret, err := evm.interpreter.Run(contract, nil, false)
+	if err != nil {
+		return nil, err
 	}
 
 	// Check whether the max code size has been exceeded, assign err if the case.
-	if err == nil && evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
-		err = ErrMaxCodeSizeExceeded
+	if evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
+		return nil, ErrMaxCodeSizeExceeded
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
-	if err == nil && len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
-		err = ErrInvalidCode
+	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
+		return nil, ErrInvalidCode
 	}
 
-	// if the contract creation ran successfully and no errors were returned
-	// calculate the gas required to store the code. If the code could not
-	// be stored due to not enough gas set an error and let it be handled
-	// by the error checking condition below.
-	if err == nil {
-		if !evm.chainRules.IsEIP4762 {
-			createDataGas := uint64(len(ret)) * params.CreateDataGas
-			if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
-				err = ErrCodeStoreOutOfGas
-			}
-		} else {
-			// Contract creation completed, touch the missing fields in the contract
-			if !contract.UseGas(evm.AccessEvents.AddAccount(address, true), evm.Config.Tracer, tracing.GasChangeWitnessContractCreation) {
-				err = ErrCodeStoreOutOfGas
-			}
-
-			if err == nil && len(ret) > 0 && !contract.UseGas(evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk) {
-				err = ErrCodeStoreOutOfGas
-			}
+	if !evm.chainRules.IsEIP4762 {
+		createDataGas := uint64(len(ret)) * params.CreateDataGas
+		if !contract.UseGas(createDataGas, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+			return nil, ErrCodeStoreOutOfGas
+		}
+	} else {
+		// Contract creation completed, touch the missing fields in the contract
+		if !contract.UseGas(evm.AccessEvents.AddAccount(address, true), evm.Config.Tracer, tracing.GasChangeWitnessContractCreation) {
+			return nil, ErrCodeStoreOutOfGas
 		}
 
-		if err == nil {
-			evm.StateDB.SetCode(address, ret)
+		if len(ret) > 0 && !contract.UseGas(evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true), evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk) {
+			return nil, ErrCodeStoreOutOfGas
 		}
 	}
-
-	// When an error was returned by the EVM or when setting the creation code
-	// above we revert to the snapshot and consume any gas remaining. Additionally,
-	// when we're in homestead this also counts for code storage gas errors.
-	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
-		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted {
-			contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
-		}
-	}
-
-	return ret, address, contract.Gas, err
+	return ret, nil
 }
 
 // Create creates a new contract using code as deployment code.
