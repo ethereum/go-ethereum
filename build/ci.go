@@ -172,8 +172,6 @@ func main() {
 		doSanityCheck()
 	case "generate":
 		doGenerate()
-	case "tidy":
-		doGoModTidy()
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
