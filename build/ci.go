@@ -379,6 +379,8 @@ func hashAllSourceFiles() (map[string]common.Hash, error) {
 	return res, nil
 }
 
+// hashSourceFiles iterates the provided set of filepaths (relative to the top-level geth project directory)
+// computing the hash of each file.
 func hashSourceFiles(files []string) (map[string]common.Hash, error) {
 	res := make(map[string]common.Hash)
 	for _, filePath := range files {
