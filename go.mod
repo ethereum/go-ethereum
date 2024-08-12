@@ -44,7 +44,6 @@ require (
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/jackpal/go-nat-pmp v1.0.2
 	github.com/jedisct1/go-minisign v0.0.0-20230811132847-661be99b8267
-	github.com/julienschmidt/httprouter v1.3.0
 	github.com/karalabe/hid v1.0.1-0.20240306101548-573246063e52
 	github.com/kilic/bls12-381 v0.1.0
 	github.com/kylelemons/godebug v1.1.0
