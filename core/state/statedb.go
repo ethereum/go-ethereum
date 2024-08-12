@@ -1084,7 +1084,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 		prevAccount, ok := s.accountsOrigin[prev.address]
 		s.journal.append(resetObjectChange{
 			account:                &addr,
-			prev:                   prev,
+			prev:                   prev.deepCopy(s),
 			prevdestruct:           prevdestruct,
 			prevAccount:            s.accounts[prev.addrHash],
 			prevStorage:            s.storages[prev.addrHash],
