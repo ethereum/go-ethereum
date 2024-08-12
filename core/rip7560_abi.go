@@ -57,7 +57,7 @@ func abiDecodeAcceptAccount(input []byte) (*AcceptAccountData, error) {
 		if methodSelector == SigFailAccountMethodSig {
 			return nil, errors.New("account signature error")
 		}
-		return nil, errors.New("account did not return correct MAGIC_VALUE")
+		return nil, errors.New("account did not call the EntryPoint 'acceptAccount' callback")
 	}
 	acceptAccountData := &AcceptAccountData{}
 	err = jsonAbi.UnpackIntoInterface(acceptAccountData, "acceptAccount", input[4:])
@@ -71,7 +71,7 @@ func abiDecodeAcceptPaymaster(input []byte) (*AcceptPaymasterData, error) {
 	}
 	methodSelector := new(big.Int).SetBytes(input[:4]).Uint64()
 	if methodSelector != AcceptPaymasterMethodSig {
-		return nil, errors.New("paymaster did not return correct MAGIC_VALUE")
+		return nil, errors.New("paymaster did not call the EntryPoint 'acceptPaymaster' callback")
 	}
 	acceptPaymasterData := &AcceptPaymasterData{}
 	err = jsonAbi.UnpackIntoInterface(acceptPaymasterData, "acceptPaymaster", input[4:])

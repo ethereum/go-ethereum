@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/status-im/keycard-go/hexutils"
 	"math/big"
-	"slices"
 	"testing"
 )
 
@@ -158,7 +157,7 @@ func returnWithData(data []byte) []byte {
 }
 
 func createAccountCode() []byte {
-	return returnWithData(core.PackValidationData(core.AcceptAccountMethodSig, 0, 0))
+	return nil
 }
 
 // create EVM code from OpCode, byte and []bytes
@@ -201,14 +200,4 @@ func createCode(items ...interface{}) []byte {
 
 func asBytes32(a int) []byte {
 	return common.LeftPadBytes(big.NewInt(int64(a)).Bytes(), 32)
-}
-
-func paymasterReturnValue(magic, validUntil, validAfter uint64, context []byte) []byte {
-	validationData := core.PackValidationData(magic, validUntil, validAfter)
-	//manual encode (bytes32 validationData, bytes context)
-	return slices.Concat(
-		common.LeftPadBytes(validationData, 32),
-		asBytes32(64),
-		asBytes32(len(context)),
-		context)
 }
