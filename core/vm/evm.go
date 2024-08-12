@@ -518,6 +518,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 			evm.StateDB.RevertToSnapshot(snapshot)
 			if err != ErrExecutionReverted {
 				contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
+				leftOverGas = 0
 			}
 		}
 	}()
