@@ -411,14 +411,15 @@ func compareHashedFilesets(preHashes map[string]common.Hash, postHashes map[stri
 }
 
 func doGoModTidy() {
-	preHashes, err := hashSourceFiles([]string{"go.mod", "go.sum"})
+	targetFiles := []string{"go.mod", "go.sum"}
+	preHashes, err := hashSourceFiles(targetFiles)
 	if err != nil {
 		log.Fatal("failed to hash go.mod/go.sum", "err", err)
 	}
 	tc := new(build.GoToolchain)
 	c := tc.Go("mod", "tidy")
 	build.MustRun(c)
-	postHashes, err := hashSourceFiles([]string{"go.mod", "go.sum"})
+	postHashes, err := hashSourceFiles(targetFiles)
 	updates := compareHashedFilesets(preHashes, postHashes)
 	for _, updatedFile := range updates {
 		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
