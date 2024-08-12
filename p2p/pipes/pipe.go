@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -16,17 +16,9 @@
 
 package pipes
 
-import (
-	"net"
-)
+import "net"
 
-// NetPipe wraps net.Pipe in a signature returning an error
-func NetPipe() (net.Conn, net.Conn, error) {
-	p1, p2 := net.Pipe()
-	return p1, p2, nil
-}
-
-// TCPPipe creates an in process full duplex pipe based on a localhost TCP socket
+// TCPPipe creates an in process full duplex pipe based on a localhost TCP socket.
 func TCPPipe() (net.Conn, net.Conn, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
