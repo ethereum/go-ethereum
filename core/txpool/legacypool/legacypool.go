@@ -168,7 +168,7 @@ func (config *Config) sanitize() Config {
 		log.Warn("Sanitizing invalid txpool journal time", "provided", conf.Rejournal, "updated", time.Second)
 		conf.Rejournal = time.Second
 	}
-	// enforce txpool price limit to 30gwei in bor
+	// PIP-35: Enforce min price limit to 25 gwei
 	if conf.PriceLimit != params.BorDefaultTxPoolPriceLimit {
 		log.Warn("Sanitizing invalid txpool price limit", "provided", conf.PriceLimit, "updated", DefaultConfig.PriceLimit)
 		conf.PriceLimit = DefaultConfig.PriceLimit

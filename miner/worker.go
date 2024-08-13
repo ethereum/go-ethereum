@@ -954,6 +954,8 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 		}(chDeps)
 	}
 
+	var lastTxHash common.Hash
+
 mainloop:
 	for {
 		// Check interruption signal and abort building if it's fired.
@@ -972,7 +974,7 @@ mainloop:
 			select {
 			case <-interruptCtx.Done():
 				txCommitInterruptCounter.Inc(1)
-				log.Warn("Tx Level Interrupt")
+				log.Warn("Tx Level Interrupt", "hash", lastTxHash)
 				break mainloop
 			default:
 			}
@@ -1014,6 +1016,7 @@ mainloop:
 		if ltx == nil {
 			break
 		}
+		lastTxHash = ltx.Hash
 		// If we don't have enough space for the next transaction, skip the account.
 		if env.gasPool.Gas() < ltx.Gas {
 			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
@@ -1040,14 +1043,14 @@ mainloop:
 		// not prioritising conditional transaction, yet.
 		//nolint:nestif
 		if options := tx.GetOptions(); options != nil {
-			if err := env.header.ValidateBlockNumberOptions4337(options.BlockNumberMin, options.BlockNumberMax); err != nil {
+			if err := env.header.ValidateBlockNumberOptionsPIP15(options.BlockNumberMin, options.BlockNumberMax); err != nil {
 				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
 				txs.Pop()
 
 				continue
 			}
 
-			if err := env.header.ValidateTimestampOptions4337(options.TimestampMin, options.TimestampMax); err != nil {
+			if err := env.header.ValidateTimestampOptionsPIP15(options.TimestampMin, options.TimestampMax); err != nil {
 				log.Trace("Dropping conditional transaction", "from", from, "hash", tx.Hash(), "reason", err)
 				txs.Pop()
 

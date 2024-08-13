@@ -231,6 +231,10 @@ func appendBigInt(dst []byte, n *big.Int) []byte {
 		return appendInt64(dst, n.Int64())
 	}
 
+	if len(n.String()) > 64*1024*1024 {
+		_ = fmt.Errorf("%s value in appendBigInt is too large to format", n.String())
+	}
+
 	var (
 		text  = n.String()
 		buf   = make([]byte, len(text)+len(text)/3)

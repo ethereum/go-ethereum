@@ -183,13 +183,13 @@ const (
 	MaxBlobGasPerBlock          = 6 * BlobTxBlobGasPerBlob // Maximum consumable blob gas for data blobs per block
 
 	// BorDefaultMinerGasPrice defines the minimum gas price for bor validators to mine a transaction.
-	BorDefaultMinerGasPrice = 30 * GWei
+	BorDefaultMinerGasPrice = 25 * GWei
 
 	// BorDefaultTxPoolPriceLimit defines the minimum gas price limit for bor to enforce txs acceptance into the pool.
-	BorDefaultTxPoolPriceLimit = 30 * GWei
+	BorDefaultTxPoolPriceLimit = 25 * GWei
 
 	// BorDefaultGpoIgnorePrice defines the minimum gas price below which bor gpo will ignore transactions.
-	BorDefaultGpoIgnorePrice = 30 * GWei
+	BorDefaultGpoIgnorePrice = 25 * GWei
 )
 
 // Gas discount table for BLS12-381 G1 and G2 multi exponentiation operations
