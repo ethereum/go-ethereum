@@ -41,11 +41,14 @@ type filter struct {
 	backend    tracers.Backend
 	kvdb       ethdb.Database
 	frdb       *rawdb.Freezer
+	blockCh    chan uint64
+	stopCh     chan struct{}
 	tables     map[string]bool
 	traces     map[string][]*traceResult
 	tracer     *native.MuxTracer
 	latest     atomic.Uint64
 	offset     atomic.Uint64
+	finalized  atomic.Uint64
 	hash       common.Hash
 	once       sync.Once
 	offsetFile string
@@ -132,6 +135,8 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 		backend:    backend,
 		kvdb:       kvdb,
 		frdb:       frdb,
+		blockCh:    make(chan uint64, 100),
+		stopCh:     make(chan struct{}),
 		tables:     tables,
 		traces:     traces,
 		tracer:     t,
@@ -176,20 +181,25 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 			Service:   &filterAPI{backend: backend, filter: f},
 		},
 	}
+
+	// Initialize head if it doesn't exist
+	head, _ := f.getFreezerHeadTail()
+	if head == 0 {
+		f.updateFreezerHead(f.latest.Load())
+	}
+	go f.freeze()
+
 	return hooks, apis, nil
 }
 
 func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	// track the latest block number
 	blknum := ev.Block.NumberU64()
-	// latest := f.latest.Load()
-	// if blknum < latest {
-	// 	// TODO: handle the case of setHead
-	// 	log.Error("OnBlockStart received an old block", "latest", latest, "number", blknum)
-	// 	return
-	// }
 	f.latest.Store(blknum)
 	f.hash = ev.Block.Hash()
+	if ev.Finalized != nil {
+		f.finalized.Store(ev.Finalized.Number.Uint64())
+	}
 
 	// reset local cache
 	txs := ev.Block.Transactions().Len()
@@ -204,18 +214,6 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 			os.WriteFile(f.offsetFile, []byte(fmt.Sprintf("%d", blknum)), 0666)
 		}
 	})
-
-	// // truncate the freezer db if the block number is less than the latest
-	// if blknum <= latest {
-	// 	frozen, _ := f.frdb.Ancients()
-	// 	offset := f.offset.Load()
-	// 	log.Info("Reorg detected", "number", blknum, "latest", latest, "offset", offset, "frozen", frozen)
-	// 	if _, err := f.frdb.TruncateHead(blknum - offset); err != nil {
-	// 		log.Error("Failed to truncate filter tracer db", "error", err)
-	// 		// TODO: how to handle this error?
-	// 		return
-	// 	}
-	// }
 }
 
 func (f *filter) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
@@ -240,7 +238,7 @@ func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 
 func (f *filter) OnBlockEnd(err error) {
 	if err != nil {
-		log.Warn("OnBlockEnd", "latest", f.latest.Load(), "err", err)
+		log.Warn("OnBlockEnd", "latest", f.latest.Load(), "error", err)
 	}
 	batch := f.kvdb.NewBatch()
 
@@ -250,32 +248,60 @@ func (f *filter) OnBlockEnd(err error) {
 		data, err := json.Marshal(traces)
 		if err != nil {
 			log.Error("Failed to marshal traces", "error", err)
+			break
 		}
 		batch.Put(toKVKey(name, number, hash), data)
 	}
 	if err := batch.Write(); err != nil {
-		log.Error("Failed to write", "err", err)
+		log.Error("Failed to write", "error", err)
+		return
 	}
 
-	// f.frdb.ModifyAncients(func(w ethdb.AncientWriteOp) error {
-	// 	latest := f.latest.Load()
-	// 	offset := f.offset.Load()
-	// 	number := latest - offset
-	// 	for name, traces := range f.traces {
-	// 		data, err := json.Marshal(traces)
-	// 		if err != nil {
-	// 			log.Error("Failed to marshal traces", "error", err)
-	// 		}
-	// 		table := toTraceTable(name)
-	// 		if err := w.AppendRaw(table, number, data); err != nil {
-	// 			log.Error("Failed to write block traces", "number", latest, "table", table, "error", err)
-	// 		}
-	// 	}
-	// 	return nil
-	// })
+	select {
+	case f.blockCh <- f.finalized.Load():
+	default:
+		// Channel is full, log a warning
+		log.Warn("Block channel is full, skipping finalized block notification")
+	}
 }
 
 func (f *filter) readBlockTraces(ctx context.Context, name string, blknum uint64) ([]*traceResult, error) {
+	if blknum > f.latest.Load() {
+		return nil, errors.New("notfound")
+	}
+	if blknum < f.offset.Load() {
+		return nil, errors.New("historical data not available")
+	}
+
+	_, tail := f.getFreezerHeadTail()
+
+	// If tail is 0 (not found in kvdb), use the offset
+	if tail == 0 {
+		tail = f.offset.Load()
+	}
+
+	// Determine whether to read from kvdb or frdb
+	var (
+		data []byte
+		err  error
+	)
+	if blknum >= tail {
+		// Data is in kvdb
+		data, err = f.readFromKVDB(ctx, name, blknum)
+	} else {
+		// Data is in frdb
+		data, err = f.readFromFRDB(name, blknum)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var traces []*traceResult
+	err = json.Unmarshal(data, &traces)
+	return traces, err
+}
+
+func (f *filter) readFromKVDB(ctx context.Context, name string, blknum uint64) ([]byte, error) {
 	header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(blknum))
 	if err != nil {
 		return nil, err
@@ -284,36 +310,28 @@ func (f *filter) readBlockTraces(ctx context.Context, name string, blknum uint64
 	kvKey := toKVKey(name, blknum, header.Hash())
 	data, err := f.kvdb.Get(kvKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("traces not found in kvdb for block %d: %w", blknum, err)
 	}
-	var traces []*traceResult
-	err = json.Unmarshal(data, &traces)
-	return traces, err
+	return data, err
+}
 
-	// table := toTraceTable(name)
-	// if _, ok := f.tables[table]; !ok {
-	// 	return nil, errors.New("tracer not found")
-	// }
-	//
-	// if blknum < f.offset.Load() || blknum > f.latest.Load() {
-	// 	return nil, nil
-	// }
-	//
-	// var data []byte
-	// err := f.frdb.ReadAncients(func(reader ethdb.AncientReaderOp) error {
-	// 	var err error
-	// 	data, err = reader.Ancient(table, blknum-f.offset.Load())
-	// 	return err
-	// })
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// var traces []*traceResult
-	// err = json.Unmarshal(data, &traces)
-	// return traces, err
+func (f *filter) readFromFRDB(name string, blknum uint64) ([]byte, error) {
+	table := toTraceTable(name)
+	var data []byte
+	err := f.frdb.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+		var err error
+		data, err = reader.Ancient(table, blknum-f.offset.Load())
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("traces not found in frdb for block %d: %w", blknum, err)
+	}
+	return data, nil
 }
 
 func (f *filter) Close() {
+	close(f.stopCh)
+
 	if err := f.kvdb.Close(); err != nil {
 		log.Error("Close kvdb failed", "err", err)
 	}
