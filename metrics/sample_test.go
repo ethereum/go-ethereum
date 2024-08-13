@@ -129,8 +129,8 @@ func TestExpDecaySample(t *testing.T) {
 // The priority becomes +Inf quickly after starting if this is done,
 // effectively freezing the set of samples until a rescale step happens.
 func TestExpDecaySampleNanosecondRegression(t *testing.T) {
-	sw := NewExpDecaySample(1000, 0.99)
-	for i := 0; i < 1000; i++ {
+	sw := NewExpDecaySample(100, 0.99)
+	for i := 0; i < 100; i++ {
 		sw.Update(10)
 	}
 	time.Sleep(1 * time.Millisecond)

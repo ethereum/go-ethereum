@@ -69,7 +69,7 @@ func emptyBlockGenerationFunc(b *core.BlockGen) {}
 
 func TestSupplyOmittedFields(t *testing.T) {
 	var (
-		config = *params.MergedTestChainConfig
+		config = *params.TestChainConfig
 		gspec  = &core.Genesis{
 			Config: &config,
 		}
@@ -86,7 +86,7 @@ func TestSupplyOmittedFields(t *testing.T) {
 
 	expected := supplyInfo{
 		Number:     0,
-		Hash:       common.HexToHash("0x52f276d96f0afaaf2c3cb358868bdc2779c4b0cb8de3e7e5302e247c0b66a703"),
+		Hash:       common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}
 	actual := out[expected.Number]

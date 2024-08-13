@@ -97,6 +97,12 @@ func TestValidatorsBlockProduction(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	for _, node := range nodes {
+		if node.PeerCount() == 0 {
+			panic("Node is not connected to any peers")
+		}
+	}
+
+	for _, node := range nodes {
 		if err := node.StartMining(); err != nil {
 			panic(err)
 		}
@@ -117,6 +123,7 @@ func TestValidatorsBlockProduction(t *testing.T) {
 	// check block 7 miner ; expected author is node0 signer
 	blockHeaderVal0 := nodes[0].BlockChain().GetHeaderByNumber(7)
 	blockHeaderVal1 := nodes[1].BlockChain().GetHeaderByNumber(7)
+
 	authorVal0, err := nodes[0].Engine().Author(blockHeaderVal0)
 
 	if err != nil {
