@@ -184,6 +184,11 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
+// Time retrieves the time first seen locally
+func (tx *Transaction) Time() time.Time {
+	return tx.time
+}
+
 // decodeTyped decodes a typed transaction from the canonical format.
 func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	if len(b) <= 1 {

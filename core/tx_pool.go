@@ -129,6 +129,8 @@ var (
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
 
 	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
+
+	txLifecycleTimer = metrics.NewRegisteredTimer("txpool/txfifecycle", nil)
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -795,6 +797,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		// New transaction is better, replace old one
 		if old != nil {
 			pool.all.Remove(old.Hash())
+			pool.calculateTxsLifecycle(types.Transactions{old}, time.Now())
 			pool.priced.Removed(1)
 			pendingReplaceMeter.Mark(1)
 		}
@@ -848,6 +851,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction, local boo
 	if old != nil {
 		pool.all.Remove(old.Hash())
 		pool.priced.Removed(1)
+		pool.calculateTxsLifecycle(types.Transactions{old}, time.Now())
 		queuedReplaceMeter.Mark(1)
 	} else {
 		// Nothing was replaced, bump the queued counter
@@ -896,6 +900,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	if !inserted {
 		// An older transaction was better, discard this
 		pool.all.Remove(hash)
+		pool.calculateTxsLifecycle(types.Transactions{tx}, time.Now())
 		pool.priced.Removed(1)
 		pendingDiscardMeter.Mark(1)
 		return false
@@ -903,6 +908,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	// Otherwise discard any previous transaction and mark this
 	if old != nil {
 		pool.all.Remove(old.Hash())
+		pool.calculateTxsLifecycle(types.Transactions{old}, time.Now())
 		pool.priced.Removed(1)
 		pendingReplaceMeter.Mark(1)
 	} else {
@@ -1084,6 +1090,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 
 	// Remove it from the list of known transactions
 	pool.all.Remove(hash)
+	pool.calculateTxsLifecycle(types.Transactions{tx}, time.Now())
 	if outofbound {
 		pool.priced.Removed(1)
 	}
@@ -1418,6 +1425,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		for _, tx := range forwards {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
+			pool.calculateTxsLifecycle(types.Transactions{tx}, time.Now())
 		}
 		log.Trace("Removed old queued transactions", "count", len(forwards))
 
@@ -1427,6 +1435,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 		for _, tx := range drops {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
+			pool.calculateTxsLifecycle(types.Transactions{tx}, time.Now())
 		}
 		log.Trace("Removed unpayable queued transactions", "count", len(drops))
 		queuedNofundsMeter.Mark(int64(len(drops)))
@@ -1449,6 +1458,7 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			for _, tx := range caps {
 				hash := tx.Hash()
 				pool.all.Remove(hash)
+				pool.calculateTxsLifecycle(types.Transactions{tx}, time.Now())
 				log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
 			}
 			queuedRateLimitMeter.Mark(int64(len(caps)))
@@ -1531,6 +1541,7 @@ func (pool *TxPool) truncatePending() {
 						// Drop the transaction from the global pools too
 						hash := tx.Hash()
 						pool.all.Remove(hash)
+						pool.calculateTxsLifecycle(types.Transactions{tx}, time.Now())
 
 						// Update the account nonce to the dropped transaction
 						pool.pendingNonces.setIfLower(offenders[i], tx.Nonce())
@@ -1558,6 +1569,7 @@ func (pool *TxPool) truncatePending() {
 					// Drop the transaction from the global pools too
 					hash := tx.Hash()
 					pool.all.Remove(hash)
+					pool.calculateTxsLifecycle(types.Transactions{tx}, time.Now())
 
 					// Update the account nonce to the dropped transaction
 					pool.pendingNonces.setIfLower(addr, tx.Nonce())
@@ -1637,6 +1649,7 @@ func (pool *TxPool) demoteUnexecutables() {
 		for _, tx := range olds {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
+			pool.calculateTxsLifecycle(types.Transactions{tx}, time.Now())
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
@@ -1646,6 +1659,7 @@ func (pool *TxPool) demoteUnexecutables() {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)
 			pool.all.Remove(hash)
+			pool.calculateTxsLifecycle(types.Transactions{tx}, time.Now())
 		}
 		pendingNofundsMeter.Mark(int64(len(drops)))
 
@@ -1677,6 +1691,16 @@ func (pool *TxPool) demoteUnexecutables() {
 		// Delete the entire pending entry if it became empty.
 		if list.Empty() {
 			delete(pool.pending, addr)
+		}
+	}
+}
+
+// calculateTxsLifecycle calculates the lifecycle of given txs
+func (pool *TxPool) calculateTxsLifecycle(txs types.Transactions, t time.Time) {
+	for _, tx := range txs {
+		if tx.Time().Before(t) {
+			txLifecycle := t.Sub(tx.Time())
+			txLifecycleTimer.Update(txLifecycle)
 		}
 	}
 }
