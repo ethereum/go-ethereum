@@ -106,8 +106,8 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 	}
 	// Ensure the gasprice is high enough to cover the requirement of the calling
 	// pool and/or block producer
-	if tx.GasTipCapIntCmp(opts.MinTip) < 0 {
-		return fmt.Errorf("%w: tip needed %v, tip permitted %v", ErrUnderpriced, opts.MinTip, tx.GasTipCap())
+	if tx.GasFeeCapIntCmp(opts.MinTip) < 0 {
+		return fmt.Errorf("%w: fee needed %v, fee permitted %v", ErrUnderpriced, opts.MinTip, tx.GasFeeCap())
 	}
 	// Ensure blob transactions have valid commitments
 	if tx.Type() == types.BlobTxType {
