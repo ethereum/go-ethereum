@@ -96,6 +96,17 @@ func testSetupGenesis(t *testing.T, scheme string) {
 			wantConfig: customg.Config,
 		},
 		{
+			name: "custom block in DB, genesis == sepolia",
+			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
+				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
+				customg.Commit(db, tdb)
+				return SetupGenesisBlock(db, tdb, DefaultSepoliaGenesisBlock())
+			},
+			wantErr:    &GenesisMismatchError{Stored: customghash, New: params.SepoliaGenesisHash},
+			wantHash:   params.SepoliaGenesisHash,
+			wantConfig: params.SepoliaChainConfig,
+		},
+		{
 			name: "compatible config in DB",
 			fn: func(db ethdb.Database) (*params.ChainConfig, common.Hash, error) {
 				tdb := triedb.NewDatabase(db, newDbConfig(scheme))
