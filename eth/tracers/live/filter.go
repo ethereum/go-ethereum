@@ -71,14 +71,18 @@ func encodeBlockNumber(number uint64) []byte {
 }
 
 func toKVKey(name string, number uint64, hash common.Hash) []byte {
-	var key []byte
+	var typo byte
 	switch name {
 	case "callTracer":
-		key = []byte("C")
+		typo = byte('C')
 	case "flatCallTracer":
-		key = []byte("P")
+		typo = byte('P')
+	default:
+		panic("not supported yet")
 	}
-	key = append(append(key, encodeBlockNumber(number)...), hash.Bytes()...)
+	// TODO: have some prefix?
+	key := append(encodeBlockNumber(number), hash.Bytes()...)
+	key = append(key, typo)
 
 	return key
 }

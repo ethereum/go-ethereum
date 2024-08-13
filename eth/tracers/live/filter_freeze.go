@@ -94,33 +94,38 @@ func (f *filter) moveBlockToFreezer(blknum uint64) error {
 	}
 
 	offset := f.offset.Load()
-	for name := range f.tracer.Tracers() {
-		kvKey := toKVKey(name, blknum, header.Hash())
-		data, err := f.kvdb.Get(kvKey)
-		if err != nil {
-			return err
-		}
 
-		table := toTraceTable(name)
-		n, err := f.frdb.ModifyAncients(func(op ethdb.AncientWriteOp) error {
-			return op.AppendRaw(table, blknum-offset, data)
-		})
-		if err != nil {
-			return err
-		}
-		log.Info("Move from kvdb to frdb", "blknum", blknum, "size", n)
+	size, err := f.frdb.ModifyAncients(func(op ethdb.AncientWriteOp) error {
+		for name := range f.tracer.Tracers() {
+			kvKey := toKVKey(name, blknum, header.Hash())
+			data, err := f.kvdb.Get(kvKey)
+			if err != nil {
+				return err
+			}
 
-		// Delete all entries for this prefix from kvdb, ignore error
-		prefix := append([]byte(name), encodeBlockNumber(blknum)...)
-		if err := f.deleteKVDBEntriesWithPrefix(prefix); err != nil {
-			log.Error("Failed to delete entries from kvdb", "error", err)
+			table := toTraceTable(name)
+			err = op.AppendRaw(table, blknum-offset, data)
+			if err != nil {
+				return err
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	log.Info("Move from kvdb to frdb", "blknum", blknum, "size", size)
+
+	// Delete all entries for this prefix from kvdb, ignore error
+	if err := f.deleteKVDBEntriesWithPrefix(blknum); err != nil {
+		log.Error("Failed to delete entries from kvdb", "error", err)
 	}
 
 	return nil
 }
 
-func (f *filter) deleteKVDBEntriesWithPrefix(prefix []byte) error {
+func (f *filter) deleteKVDBEntriesWithPrefix(blknum uint64) error {
+	prefix := encodeBlockNumber(blknum)
 	batch := f.kvdb.NewBatch()
 	it := f.kvdb.NewIterator(prefix, nil)
 	defer it.Release()
