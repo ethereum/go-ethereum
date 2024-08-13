@@ -422,7 +422,7 @@ func (s *StateDB) ApplyMVWriteSet(writes []blockstm.WriteDescriptor) {
 			case CodePath:
 				s.SetCode(addr, sr.GetCode(addr))
 			case SuicidePath:
-				stateObject := sr.getDeletedStateObject(addr)
+				stateObject := sr.getStateObject(addr)
 				if stateObject != nil {
 					s.SelfDestruct(addr)
 				}
@@ -973,99 +973,25 @@ func (s *StateDB) deleteStateObject(addr common.Address) {
 // getStateObject retrieves a state object given by the address, returning nil if
 // the object is not found or was deleted in this execution context.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
-	// Prefer live objects if any is available
-	if obj := s.stateObjects[addr]; obj != nil {
-		return obj
-	}
-	// Short circuit if the account is already destructed in this block.
-	if _, ok := s.stateObjectsDestruct[addr]; ok {
-		return nil
-	}
-	// If no live objects are available, attempt to use snapshots
-	var data *types.StateAccount
-	if s.snap != nil {
-		start := time.Now()
-		acc, err := s.snap.Account(crypto.HashData(s.hasher, addr.Bytes()))
-		s.SnapshotAccountReads += time.Since(start)
-		if err == nil {
-			if acc == nil {
-				return nil
-			}
-			data = &types.StateAccount{
-				Nonce:    acc.Nonce,
-				Balance:  acc.Balance,
-				CodeHash: acc.CodeHash,
-				Root:     common.BytesToHash(acc.Root),
-			}
-			if len(data.CodeHash) == 0 {
-				data.CodeHash = types.EmptyCodeHash.Bytes()
-			}
-			if data.Root == (common.Hash{}) {
-				data.Root = types.EmptyRootHash
-			}
-		}
-	}
-	// If snapshot unavailable or reading from it failed, load from the database
-	if data == nil {
-		start := time.Now()
-		var err error
-		data, err = s.trie.GetAccount(addr)
-		s.AccountReads += time.Since(start)
-
-		if err != nil {
-			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
-			return nil
-		}
-		if data == nil {
-			return nil
-		}
-	}
-	// Independent of where we loaded the data from, add it to the prefetcher.
-	// Whilst this would be a bit weird if snapshots are disabled, but we still
-	// want the trie nodes to end up in the prefetcher too, so just push through.
-	if s.prefetcher != nil {
-		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, [][]byte{addr[:]}, true); err != nil {
-			log.Error("Failed to prefetch account", "addr", addr, "err", err)
-		}
-	}
-	// Insert into the live set
-	obj := newObject(s, addr, data)
-	s.setStateObject(obj)
-	return obj
-}
-
-// getDeletedStateObject is similar to getStateObject, but instead of returning
-// nil for a deleted state object, it returns the actual object with the deleted
-// flag set. This is needed by the state journal to revert to the correct s-
-// destructed object instead of wiping all knowledge about the state object.
-func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 	return MVRead(s, blockstm.NewAddressKey(addr), nil, func(s *StateDB) *stateObject {
 		// Prefer live objects if any is available
 		if obj := s.stateObjects[addr]; obj != nil {
 			return obj
 		}
-
 		// Short circuit if the account is already destructed in this block.
 		if _, ok := s.stateObjectsDestruct[addr]; ok {
 			return nil
 		}
-
 		// If no live objects are available, attempt to use snapshots
 		var data *types.StateAccount
-
-		if s.snap != nil { // nolint
+		if s.snap != nil {
 			start := time.Now()
-			acc, err := s.snap.Account(crypto.HashData(crypto.NewKeccakState(), addr.Bytes()))
-
-			if metrics.Enabled {
-				s.SnapshotAccountReads += time.Since(start)
-			}
-
+			acc, err := s.snap.Account(crypto.HashData(s.hasher, addr.Bytes()))
+			s.SnapshotAccountReads += time.Since(start)
 			if err == nil {
 				if acc == nil {
 					return nil
 				}
-
 				data = &types.StateAccount{
 					Nonce:    acc.Nonce,
 					Balance:  acc.Balance,
@@ -1075,7 +1001,6 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				if len(data.CodeHash) == 0 {
 					data.CodeHash = types.EmptyCodeHash.Bytes()
 				}
-
 				if data.Root == (common.Hash{}) {
 					data.Root = types.EmptyRootHash
 				}
@@ -1084,24 +1009,18 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 		// If snapshot unavailable or reading from it failed, load from the database
 		if data == nil {
 			start := time.Now()
-
 			var err error
 			data, err = s.trie.GetAccount(addr)
-
-			if metrics.Enabled {
-				s.AccountReads += time.Since(start)
-			}
+			s.AccountReads += time.Since(start)
 
 			if err != nil {
 				s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
 				return nil
 			}
-
 			if data == nil {
 				return nil
 			}
 		}
-
 		// Independent of where we loaded the data from, add it to the prefetcher.
 		// Whilst this would be a bit weird if snapshots are disabled, but we still
 		// want the trie nodes to end up in the prefetcher too, so just push through.

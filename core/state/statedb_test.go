@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"math/big"
 	"math/rand"
 	"reflect"
 	"slices"
@@ -810,7 +809,7 @@ func TestMVHashMapReadWriteDelete(t *testing.T) {
 	b = states[4].GetBalance(addr)
 
 	assert.Equal(t, common.Hash{}, v)
-	assert.Equal(t, common.Big0, b)
+	assert.Equal(t, uint256.NewInt(0), b)
 }
 
 func TestMVHashMapRevert(t *testing.T) {
@@ -846,7 +845,7 @@ func TestMVHashMapRevert(t *testing.T) {
 	states[1].SetState(addr, key, common.HexToHash("0x02"))
 	v := states[1].GetState(addr, key)
 	b := states[1].GetBalance(addr)
-	assert.Equal(t, new(big.Int).SetUint64(uint64(200)), b)
+	assert.Equal(t, uint256.NewInt(200), b)
 	assert.Equal(t, common.HexToHash("0x02"), v)
 
 	states[1].SelfDestruct(addr)
@@ -1014,7 +1013,7 @@ func TestMVHashMapOverwrite(t *testing.T) {
 	b = states[2].GetBalance(addr)
 
 	assert.Equal(t, common.Hash{}, v)
-	assert.Equal(t, common.Big0, b)
+	assert.Equal(t, uint256.NewInt(0), b)
 }
 
 func TestMVHashMapWriteNoConflict(t *testing.T) {
@@ -1088,7 +1087,7 @@ func TestMVHashMapWriteNoConflict(t *testing.T) {
 
 	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key1))
 	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key2))
-	assert.Equal(t, common.Big0, states[3].GetBalance(addr))
+	assert.Equal(t, uint256.NewInt(0), states[3].GetBalance(addr))
 
 	// Tx1 delete
 	for _, v := range states[1].writeMap {
@@ -1099,7 +1098,7 @@ func TestMVHashMapWriteNoConflict(t *testing.T) {
 
 	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key1))
 	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key2))
-	assert.Equal(t, common.Big0, states[3].GetBalance(addr))
+	assert.Equal(t, uint256.NewInt(0), states[3].GetBalance(addr))
 }
 
 func TestApplyMVWriteSet(t *testing.T) {
