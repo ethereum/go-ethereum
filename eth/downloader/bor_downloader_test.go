@@ -777,7 +777,7 @@ func testMultiProtoSync(t *testing.T, protocol uint, mode SyncMode) {
 	assertOwnChain(t, tester, len(chain.blocks))
 
 	// Check that no peers have been dropped off
-	for _, version := range []int{68, 67} {
+	for _, version := range []int{68} {
 		peer := fmt.Sprintf("peer %d", version)
 		if _, ok := tester.peers[peer]; !ok {
 			t.Errorf("%s dropped", peer)

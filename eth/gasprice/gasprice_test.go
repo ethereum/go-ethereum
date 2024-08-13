@@ -166,8 +166,8 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 
 	if cancunBlock != nil {
 		// ts := gspec.Timestamp + cancunBlock.Uint64()*10 // fixed 10 sec block time in blockgen
-		config.ShanghaiBlock = big.NewInt(10)
-		config.CancunBlock = big.NewInt(10)
+		config.ShanghaiBlock = londonBlock
+		config.CancunBlock = cancunBlock
 		signer = types.LatestSigner(gspec.Config)
 	}
 

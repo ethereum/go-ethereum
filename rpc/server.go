@@ -71,6 +71,7 @@ func NewServer(service string, executionPoolSize uint64, executionPoolRequesttim
 		idgen:         randomIDGenerator(),
 		codecs:        make(map[ServerCodec]struct{}),
 		executionPool: NewExecutionPool(int(executionPoolSize), executionPoolRequesttimeout, service, reportEpStats),
+		httpBodyLimit: defaultBodyLimit,
 	}
 	server.run.Store(true)
 

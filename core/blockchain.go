@@ -324,20 +324,22 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	log.Info("")
 
 	bc := &BlockChain{
-		chainConfig:      chainConfig,
-		cacheConfig:      cacheConfig,
-		db:               db,
-		triedb:           triedb,
-		triegc:           prque.New[int64, common.Hash](nil),
-		quit:             make(chan struct{}),
-		chainmu:          syncx.NewClosableMutex(),
-		bodyCache:        lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
-		bodyRLPCache:     lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
-		receiptsCache:    lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
-		blockCache:       lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
-		txLookupCache:    lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
-		engine:           engine,
-		vmConfig:         vmConfig,
+		chainConfig:   chainConfig,
+		cacheConfig:   cacheConfig,
+		db:            db,
+		triedb:        triedb,
+		triegc:        prque.New[int64, common.Hash](nil),
+		quit:          make(chan struct{}),
+		chainmu:       syncx.NewClosableMutex(),
+		bodyCache:     lru.NewCache[common.Hash, *types.Body](bodyCacheLimit),
+		bodyRLPCache:  lru.NewCache[common.Hash, rlp.RawValue](bodyCacheLimit),
+		receiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
+		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
+		txLookupCache: lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
+		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
+		engine:        engine,
+		vmConfig:      vmConfig,
+
 		borReceiptsCache: lru.NewCache[common.Hash, *types.Receipt](receiptsCacheLimit),
 		logger:           vmConfig.Tracer,
 	}
@@ -533,10 +535,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
 
-	// Start tx indexer if it's enabled.
-	if txLookupLimit != nil {
-		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
+	if txLookupLimit == nil {
+		txLookupLimit = new(uint64)
 	}
+
+	bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
 
 	return bc, nil
 }

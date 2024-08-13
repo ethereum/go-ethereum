@@ -158,7 +158,7 @@ func TestNewSimulatedBackend(t *testing.T) {
 func TestAdjustTime(t *testing.T) {
 	t.Parallel()
 	sim := NewSimulatedBackend(
-		core.GenesisAlloc{}, 10000000,
+		types.GenesisAlloc{}, 10000000,
 	)
 	defer sim.Close()
 
