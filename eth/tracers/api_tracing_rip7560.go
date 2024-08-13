@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
@@ -132,7 +133,9 @@ func (api *Rip7560API) traceTx(ctx context.Context, tx *types.Transaction, txctx
 	gp := new(core.GasPool).AddGas(10000000)
 
 	// TODO: this is added to allow our bundler checking the 'TraceValidation' API is supported on Geth
-	if tx.Rip7560TransactionData().Sender.Cmp(common.HexToAddress("0x0000000000000000000000000000000000000000")) == 0 {
+	sender := tx.Rip7560TransactionData().Sender
+	paymaster := tx.Rip7560TransactionData().Paymaster
+	if sender.Cmp(common.HexToAddress("0x0000000000000000000000000000000000000000")) == 0 {
 		return tracer.GetResult()
 	}
 
@@ -141,5 +144,7 @@ func (api *Rip7560API) traceTx(ctx context.Context, tx *types.Transaction, txctx
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
+	x:= tracer.(*native.Rip7560ValidationTracer).EntryPointCall.entries
+	core.ValidateAccountAndPaymaster(0,  sender, paymaster, tracer.)
 	return tracer.GetResult()
 }

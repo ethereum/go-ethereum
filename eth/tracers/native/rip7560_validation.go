@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -69,7 +70,7 @@ func newRip7560Tracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trace
 		return nil, err
 	}
 	// TODO FIX mock fields
-	t := &rip7560ValidationTracer{
+	t := &Rip7560ValidationTracer{
 		TraceResults: make([]stateMap, ValidationFramesMaxCount),
 		UsedOpcodes:  make([]map[string]bool, ValidationFramesMaxCount),
 		Created:      make([]map[common.Address]bool, ValidationFramesMaxCount),
@@ -119,13 +120,13 @@ type logsItem struct {
 }
 
 // Array fields contain of all access details of all validation frames
-type rip7560ValidationTracer struct {
+type Rip7560ValidationTracer struct {
 	//rip7560TxData *types.Rip7560AccountAbstractionTx
-
-	env          *tracing.VMContext
-	TraceResults []stateMap                `json:"traceResults"`
-	UsedOpcodes  []map[string]bool         `json:"usedOpcodes"`
-	Created      []map[common.Address]bool `json:"created"`
+	EntryPointCall core.EntryPointCall
+	env            *tracing.VMContext
+	TraceResults   []stateMap                `json:"traceResults"`
+	UsedOpcodes    []map[string]bool         `json:"usedOpcodes"`
+	Created        []map[common.Address]bool `json:"created"`
 	//Deleted      []map[common.Address]bool `json:"deleted"`
 
 	lastThreeOpCodes    []*lastThreeOpCodesItem
@@ -142,7 +143,9 @@ type rip7560ValidationTracer struct {
 	//reason    error       // Textual reason for the interruption
 }
 
-func (b *rip7560ValidationTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (b *Rip7560ValidationTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+
+	b.entryPointCall.OnEnter(depth, typ, from, to, input, gas, value)
 	if depth == 0 {
 		b.createNewTopLevelFrame(to)
 	}
@@ -157,7 +160,7 @@ func (b *rip7560ValidationTracer) OnEnter(depth int, typ byte, from common.Addre
 	})
 }
 
-func (b *rip7560ValidationTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (b *Rip7560ValidationTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	typ := "RETURN"
 	if err != nil {
 		typ = "REVERT"
@@ -169,12 +172,12 @@ func (b *rip7560ValidationTracer) OnExit(depth int, output []byte, gasUsed uint6
 	})
 }
 
-func (b *rip7560ValidationTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (b *Rip7560ValidationTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	b.env = env
 	//b.rip7560TxData = tx.Rip7560TransactionData()
 }
 
-func (b *rip7560ValidationTracer) createNewTopLevelFrame(addr common.Address) {
+func (b *Rip7560ValidationTracer) createNewTopLevelFrame(addr common.Address) {
 	b.CurrentLevel = &entryPointCall{
 		TopLevelTargetAddress: addr,
 		Access:                map[common.Address]*access{},
@@ -188,10 +191,10 @@ func (b *rip7560ValidationTracer) createNewTopLevelFrame(addr common.Address) {
 	return
 }
 
-func (b *rip7560ValidationTracer) OnTxEnd(receipt *types.Receipt, err error) {
+func (b *Rip7560ValidationTracer) OnTxEnd(receipt *types.Receipt, err error) {
 }
 
-func (b *rip7560ValidationTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (b *Rip7560ValidationTracer) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	opcode := vm.OpCode(op).String()
 
 	stackSize := len(scope.StackData())
@@ -344,7 +347,7 @@ func StackBack(stackData []uint256.Int, n int) *uint256.Int {
 	return &stackData[len(stackData)-n-1]
 }
 
-func (b *rip7560ValidationTracer) isEXTorCALL(opcode string) bool {
+func (b *Rip7560ValidationTracer) isEXTorCALL(opcode string) bool {
 	return strings.HasPrefix(opcode, "EXT") ||
 		opcode == "CALL" ||
 		opcode == "CALLCODE" ||
@@ -354,22 +357,22 @@ func (b *rip7560ValidationTracer) isEXTorCALL(opcode string) bool {
 
 // not using 'isPrecompiled' to only allow the ones defined by the ERC-7562 as stateless precompiles
 // [OP-062]
-func (b *rip7560ValidationTracer) isAllowedPrecompile(addr common.Address) bool {
+func (b *Rip7560ValidationTracer) isAllowedPrecompile(addr common.Address) bool {
 	addrInt := addr.Big()
 	return addrInt.Cmp(big.NewInt(0)) == 1 && addrInt.Cmp(big.NewInt(10)) == -1
 }
 
-func (b *rip7560ValidationTracer) incrementCount(m map[string]uint64, k string) {
+func (b *Rip7560ValidationTracer) incrementCount(m map[string]uint64, k string) {
 	if _, ok := m[k]; !ok {
 		m[k] = 0
 	}
 	m[k]++
 }
 
-func (b *rip7560ValidationTracer) GetResult() (json.RawMessage, error) {
+func (b *Rip7560ValidationTracer) GetResult() (json.RawMessage, error) {
 	jsonResult, err := json.MarshalIndent(*b, "", "    ")
 	return jsonResult, err
 }
 
-func (b *rip7560ValidationTracer) Stop(err error) {
+func (b *Rip7560ValidationTracer) Stop(err error) {
 }
