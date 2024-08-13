@@ -237,12 +237,6 @@ func NewTxFetcherForTests(
 // Notify announces the fetcher of the potential availability of a new batch of
 // transactions in the network.
 func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []common.Hash) error {
-	// Sanitize the announcements. Transaction metadata has been available since eth68,
-	// and all legacy eth protocols have been deprecated. Therefore, metadata is always
-	// expected in the announcement.
-	if len(types) != len(sizes) || len(types) != len(hashes) {
-		return errors.New("invalid transaction announcements")
-	}
 	// Keep track of all the announced transactions
 	txAnnounceInMeter.Mark(int64(len(hashes)))
 
@@ -266,6 +260,10 @@ func (f *TxFetcher) Notify(peer string, types []byte, sizes []uint32, hashes []c
 			underpriced++
 		default:
 			unknownHashes = append(unknownHashes, hash)
+
+			// Transaction metadata has been available since eth68, and all
+			// legacy eth protocols (prior to eth68) have been deprecated.
+			// Therefore, metadata is always expected in the announcement.
 			unknownMetas = append(unknownMetas, &txMetadata{kind: types[i], size: sizes[i]})
 		}
 	}
