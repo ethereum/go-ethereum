@@ -179,37 +179,6 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 				},
 			}),
 			isScheduled{tracking: nil, fetching: nil},
-			// Announce a non-conflicting blob tx, which should immediately go
-			// to fetching without hitting the waitlist
-			doTxNotify{peer: "D", hashes: []common.Hash{{0x0b}}, types: []byte{types.BlobTxType}, sizes: []uint32{1000}},
-			isWaiting(map[string][]announce{
-				"A": {
-					{common.Hash{0x01}, types.LegacyTxType, 111},
-					{common.Hash{0x02}, types.LegacyTxType, 222},
-					{common.Hash{0x03}, types.LegacyTxType, 333},
-					{common.Hash{0x05}, types.LegacyTxType, 555},
-				},
-				"B": {
-					{common.Hash{0x03}, types.LegacyTxType, 333},
-					{common.Hash{0x04}, types.LegacyTxType, 444},
-				},
-				"C": {
-					{common.Hash{0x01}, types.LegacyTxType, 111},
-					{common.Hash{0x04}, types.LegacyTxType, 444},
-				},
-				"D": {
-					{common.Hash{0x01}, types.LegacyTxType, 999},
-					{common.Hash{0x02}, types.BlobTxType, 222},
-				},
-			}),
-			isScheduled{
-				tracking: map[string][]announce{
-					"D": {{common.Hash{0x0B}, types.BlobTxType, 1000}},
-				},
-				fetching: map[string][]common.Hash{
-					"D": {{0x0B}},
-				},
-			},
 
 			// Wait for the arrival timeout which should move all expired items
 			// from the wait list to the scheduler
@@ -234,21 +203,19 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 					"D": {
 						{common.Hash{0x01}, types.LegacyTxType, 999},
 						{common.Hash{0x02}, types.BlobTxType, 222},
-						{common.Hash{0x0B}, types.BlobTxType, 1000},
 					},
 				},
 				fetching: map[string][]common.Hash{ // Depends on deterministic test randomizer
-					"A": {{0x02}, {0x05}},
-					"B": {{0x03}, {0x04}},
-					"C": {{0x01}},
-					"D": {{0x0B}},
+					"A": {{0x03}, {0x05}},
+					"C": {{0x01}, {0x04}},
+					"D": {{0x02}},
 				},
 			},
 			// Queue up a non-fetchable transaction and then trigger it with a new
 			// peer (weird case to test 1 line in the fetcher)
-			doTxNotify{peer: "B", hashes: []common.Hash{{0x06}, {0x07}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{666, 777}},
+			doTxNotify{peer: "C", hashes: []common.Hash{{0x06}, {0x07}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{666, 777}},
 			isWaiting(map[string][]announce{
-				"B": {
+				"C": {
 					{common.Hash{0x06}, types.LegacyTxType, 666},
 					{common.Hash{0x07}, types.LegacyTxType, 777},
 				},
@@ -265,24 +232,22 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 					"B": {
 						{common.Hash{0x03}, types.LegacyTxType, 333},
 						{common.Hash{0x04}, types.LegacyTxType, 444},
-						{common.Hash{0x06}, types.LegacyTxType, 666},
-						{common.Hash{0x07}, types.LegacyTxType, 777},
 					},
 					"C": {
 						{common.Hash{0x01}, types.LegacyTxType, 111},
 						{common.Hash{0x04}, types.LegacyTxType, 444},
+						{common.Hash{0x06}, types.LegacyTxType, 666},
+						{common.Hash{0x07}, types.LegacyTxType, 777},
 					},
 					"D": {
 						{common.Hash{0x01}, types.LegacyTxType, 999},
 						{common.Hash{0x02}, types.BlobTxType, 222},
-						{common.Hash{0x0B}, types.BlobTxType, 1000},
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x02}, {0x05}},
-					"B": {{0x03}, {0x04}},
-					"C": {{0x01}},
-					"D": {{0x0B}},
+					"A": {{0x03}, {0x05}},
+					"C": {{0x01}, {0x04}},
+					"D": {{0x02}},
 				},
 			},
 			doTxNotify{peer: "E", hashes: []common.Hash{{0x06}, {0x07}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{666, 777}},
@@ -297,17 +262,16 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 					"B": {
 						{common.Hash{0x03}, types.LegacyTxType, 333},
 						{common.Hash{0x04}, types.LegacyTxType, 444},
-						{common.Hash{0x06}, types.LegacyTxType, 666},
-						{common.Hash{0x07}, types.LegacyTxType, 777},
 					},
 					"C": {
 						{common.Hash{0x01}, types.LegacyTxType, 111},
 						{common.Hash{0x04}, types.LegacyTxType, 444},
+						{common.Hash{0x06}, types.LegacyTxType, 666},
+						{common.Hash{0x07}, types.LegacyTxType, 777},
 					},
 					"D": {
 						{common.Hash{0x01}, types.LegacyTxType, 999},
 						{common.Hash{0x02}, types.BlobTxType, 222},
-						{common.Hash{0x0B}, types.BlobTxType, 1000},
 					},
 					"E": {
 						{common.Hash{0x06}, types.LegacyTxType, 666},
@@ -315,10 +279,9 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x02}, {0x05}},
-					"B": {{0x03}, {0x04}},
-					"C": {{0x01}},
-					"D": {{0x0B}},
+					"A": {{0x03}, {0x05}},
+					"C": {{0x01}, {0x04}},
+					"D": {{0x02}},
 					"E": {{0x06}, {0x07}},
 				},
 			},
@@ -1792,6 +1755,76 @@ func TestTransactionFetcherFuzzCrash04(t *testing.T) {
 			}),
 			doWait{time: 0, step: true},
 			doWait{time: txFetchTimeout, step: true},
+		},
+	})
+}
+
+// This test ensures the blob transactions will be scheduled for fetching
+// once they are announced in the network.
+func TestBlobTransactionAnnounce(t *testing.T) {
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			return NewTxFetcher(
+				func(common.Hash) bool { return false },
+				nil,
+				func(string, []common.Hash) error { return nil },
+				nil,
+			)
+		},
+		steps: []interface{}{
+			// Initial announcement to get something into the waitlist
+			doTxNotify{peer: "A", hashes: []common.Hash{{0x01}, {0x02}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{111, 222}},
+			isWaiting(map[string][]announce{
+				"A": {
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
+				},
+			}),
+			// Announce a blob transaction
+			doTxNotify{peer: "B", hashes: []common.Hash{{0x03}}, types: []byte{types.BlobTxType}, sizes: []uint32{333}},
+			isWaiting(map[string][]announce{
+				"A": {
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
+				},
+				"B": {
+					{common.Hash{0x03}, types.BlobTxType, 333},
+				},
+			}),
+			doWait{time: 0, step: true}, // zero time, but the blob fetching should be scheduled
+			isWaiting(map[string][]announce{
+				"A": {
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
+				},
+			}),
+			isScheduled{
+				tracking: map[string][]announce{
+					"B": {
+						{common.Hash{0x03}, types.BlobTxType, 333},
+					},
+				},
+				fetching: map[string][]common.Hash{ // Depends on deterministic test randomizer
+					"B": {{0x03}},
+				},
+			},
+			doWait{time: txArriveTimeout, step: true}, // zero time, but the blob fetching should be scheduled
+			isWaiting(nil),
+			isScheduled{
+				tracking: map[string][]announce{
+					"A": {
+						{common.Hash{0x01}, types.LegacyTxType, 111},
+						{common.Hash{0x02}, types.LegacyTxType, 222},
+					},
+					"B": {
+						{common.Hash{0x03}, types.BlobTxType, 333},
+					},
+				},
+				fetching: map[string][]common.Hash{ // Depends on deterministic test randomizer
+					"A": {{0x01}, {0x02}},
+					"B": {{0x03}},
+				},
+			},
 		},
 	})
 }
