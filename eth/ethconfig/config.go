@@ -86,11 +86,12 @@ type Config struct {
 	EthDiscoveryURLs  []string
 	SnapDiscoveryURLs []string
 
-	NoPruning  bool // Whether to disable pruning and flush everything to disk
-	NoPrefetch bool // Whether to disable prefetching and only load state on demand
+	NoPruning         bool // Whether to disable pruning and flush everything to disk
+	NoPrefetch        bool // Whether to disable prefetching and only load state on demand
 
-	// Deprecated, use 'TransactionHistory' instead.
-	TxLookupLimit      uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+	// Deprecated: use 'TransactionHistory' instead.
+	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+
 	TransactionHistory uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 	StateHistory       uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
 
@@ -103,6 +104,10 @@ type Config struct {
 	// canonical chain of all remote peers. Setting the option makes geth verify the
 	// presence of these blocks for every new peer connection.
 	RequiredBlocks map[uint64]common.Hash `toml:"-"`
+
+	// Deprecated: LES server has been removed
+	// We retain this field for compatibility with config files created by `geth dumpconfig`.
+	LightPeers int `toml:"-"`
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
