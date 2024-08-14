@@ -17,7 +17,6 @@ import (
 	params "github.com/ethereum/go-ethereum/params"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 	gomock "github.com/golang/mock/gomock"
-	"github.com/ethereum/go-ethereum/core/state"
 )
 
 // MockBackend is a mock of Backend interface.
@@ -203,25 +202,6 @@ func (m *MockBackend) HeaderByNumber(arg0 context.Context, arg1 rpc.BlockNumber)
 func (mr *MockBackendMockRecorder) HeaderByNumber(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumber", reflect.TypeOf((*MockBackend)(nil).HeaderByNumber), arg0, arg1)
-}
-
-
-// todo: @anshalshukla - check method implemenetation
-// Pending mocks base method.
-func (m *MockBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Pending")
-	ret0, _ := ret[0].(*types.Block)
-	ret1, _ := ret[1].(types.Receipts)
-	ret2, _ := ret[2].(*state.StateDB)
-	return ret0, ret1, ret2
-}
-
-// todo: @anshalshukla - check method implemenetation
-// Pending indicates an expected call of Pending.
-func (mr *MockBackendMockRecorder) Pending() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pending", reflect.TypeOf((*MockBackend)(nil).Pending))
 }
 
 // ServiceFilter mocks base method.
