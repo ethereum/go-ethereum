@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -247,6 +248,9 @@ func (a Address) Bytes() []byte { return a[:] }
 
 // Big converts an address to a big integer.
 func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
+
+// Big converts an address to a uint256.
+func (a Address) Uint256() *uint256.Int { return new(uint256.Int).SetBytes20(a[:]) }
 
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {

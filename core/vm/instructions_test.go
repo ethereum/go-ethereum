@@ -580,6 +580,25 @@ func BenchmarkOpMstore(bench *testing.B) {
 	}
 }
 
+func BenchmarkOpAddress(bench *testing.B) {
+	var (
+		env            = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
+		stack          = newstack()
+		evmInterpreter = NewEVMInterpreter(env)
+	)
+
+	env.interpreter = evmInterpreter
+	pc := uint64(0)
+	contract := Contract{
+		self: contractRef{addr: common.Address{}},
+	}
+
+	bench.ResetTimer()
+	for i := 0; i < bench.N; i++ {
+		opAddress(&pc, evmInterpreter, &ScopeContext{nil, stack, &contract})
+	}
+}
+
 func TestOpTstore(t *testing.T) {
 	var (
 		statedb, _     = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
