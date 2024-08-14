@@ -64,3 +64,15 @@ func currentENREntry(chain *core.BlockChain) *enrEntry {
 		ForkID: forkid.NewID(chain.Config(), chain.Genesis(), head.Number.Uint64(), head.Time),
 	}
 }
+
+func NewNodeFilter(chain *core.BlockChain) func(*enode.Node) bool {
+	filter := forkid.NewFilter(chain)
+	return func(n *enode.Node) bool {
+		var entry enrEntry
+		if err := n.Load(entry); err != nil {
+			return false
+		}
+		err := filter(entry.ForkID)
+		return err == nil
+	}
+}
