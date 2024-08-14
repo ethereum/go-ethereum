@@ -344,7 +344,7 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 		}
 		overrides := block.BlockOverrides
 		if overrides.Time == nil {
-			t := prevTimestamp + 12
+			t := prevTimestamp + 1
 			overrides.Time = (*hexutil.Uint64)(&t)
 		} else if time := (*uint64)(overrides.Time); *time <= prevTimestamp {
 			return nil, &invalidBlockTimestampError{fmt.Sprintf("block timestamps must be in order: %d <= %d", *time, prevTimestamp)}
