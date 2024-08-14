@@ -107,7 +107,7 @@ type Config struct {
 
 	// Deprecated: LES server has been removed
 	// We retain this field for compatibility with config files created by `geth dumpconfig`.
-	LightPeers int `toml:"-"`
+	LightPeers int `toml:",omitempty"`
 
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
