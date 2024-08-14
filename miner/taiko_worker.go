@@ -98,7 +98,7 @@ func (w *worker) BuildTransactionsLists(
 			minTip,
 		)
 
-		b, err := encodeAndComporeessTxList(env.txs)
+		b, err := encodeAndCompressTxList(env.txs)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -314,7 +314,7 @@ loop:
 			txs.Shift()
 
 			// Encode and compress the txList, if the byte length is > maxBytesPerTxList, remove the latest tx and break.
-			b, err := encodeAndComporeessTxList(env.txs)
+			b, err := encodeAndCompressTxList(env.txs)
 			if err != nil {
 				log.Trace("Failed to rlp encode and compress the pending transaction %s: %w", tx.Hash(), err)
 				txs.Pop()
@@ -336,8 +336,8 @@ loop:
 	return lastTransaction
 }
 
-// encodeAndComporeessTxList encodes and compresses the given transactions list.
-func encodeAndComporeessTxList(txs types.Transactions) ([]byte, error) {
+// encodeAndCompressTxList encodes and compresses the given transactions list.
+func encodeAndCompressTxList(txs types.Transactions) ([]byte, error) {
 	b, err := rlp.EncodeToBytes(txs)
 	if err != nil {
 		return nil, err
