@@ -144,6 +144,9 @@ func serviceContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHe
 	if count > maxHeadersServe {
 		count = maxHeadersServe
 	}
+	if count == 0 {
+		return nil
+	}
 	if query.Origin.Hash == (common.Hash{}) {
 		// Number mode, just return the canon chain segment. The backend
 		// delivers in [N, N-1, N-2..] descending order, so we need to
