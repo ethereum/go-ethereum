@@ -131,6 +131,7 @@ type worker struct {
 	snapshotMu       sync.RWMutex // The lock used to protect the block snapshot and state snapshot
 	snapshotBlock    *types.Block
 	snapshotReceipts types.Receipts
+	snapshotState    *state.StateDB
 
 	currentMu sync.Mutex
 	current   *Work
@@ -337,7 +338,15 @@ func (self *worker) update() {
 				}
 				feeCapacity := state.GetTRC21FeeCapacityFromState(self.current.state)
 				txset, specialTxs := types.NewTransactionsByPriceAndNonce(self.current.signer, txs, nil, feeCapacity)
+
+				tcount := self.current.tcount
 				self.current.commitTransactions(self.mux, feeCapacity, txset, specialTxs, self.chain, self.coinbase, &self.pendingLogsFeed)
+
+				// Only update the snapshot if any new transactions were added
+				// to the pending block
+				if tcount != self.current.tcount {
+					self.updateSnapshot()
+				}
 				self.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
@@ -475,6 +484,32 @@ func (self *worker) push(work *Work) {
 			ch <- work
 		}
 	}
+}
+
+// copyReceipts makes a deep copy of the given receipts.
+func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
+	result := make([]*types.Receipt, len(receipts))
+	for i, l := range receipts {
+		cpy := *l
+		result[i] = &cpy
+	}
+	return result
+}
+
+// updateSnapshot updates pending snapshot block and state.
+// Note this function assumes the current variable is thread safe.
+func (w *worker) updateSnapshot() {
+	w.snapshotMu.Lock()
+	defer w.snapshotMu.Unlock()
+
+	w.snapshotBlock = types.NewBlock(
+		w.current.header,
+		w.current.txs,
+		nil,
+		w.current.receipts,
+	)
+	w.snapshotReceipts = copyReceipts(w.current.receipts)
+	w.snapshotState = w.current.state.Copy()
 }
 
 // makeCurrent creates a new environment for the current cycle.
@@ -814,6 +849,7 @@ func (self *worker) commitNewWork() {
 		self.lastParentBlockCommit = parent.Hash().Hex()
 	}
 	self.push(work)
+	self.updateSnapshot()
 }
 
 func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Address]*big.Int, txs *types.TransactionsByPriceAndNonce, specialTxs types.Transactions, bc *core.BlockChain, coinbase common.Address, pendingLogsFeed *event.Feed) {
