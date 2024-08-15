@@ -66,12 +66,12 @@ type Config = ethconfig.Config
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	// core protocol objects
-	config *ethconfig.Config
-	txPool *txpool.TxPool
+	config     *ethconfig.Config
+	txPool     *txpool.TxPool
 	blockchain *core.BlockChain
 
-	handler    *handler
-	discmix    *enode.FairMix
+	handler *handler
+	discmix *enode.FairMix
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -161,7 +161,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
-		discmix:     enode.NewFairMix(2 * time.Second),
+		discmix:           enode.NewFairMix(2 * time.Second),
 		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
 	}
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
