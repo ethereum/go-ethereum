@@ -263,7 +263,7 @@ func fuzzCrossG2Mul(data []byte) int {
 
 	blScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(scalar.Bytes(), 32))
 
-	blp := new(blst.P1)
+	blp := new(blst.P2)
 	blp.FromAffine(blpAffine)
 
 	resBl := blp.Mult(blScalar)
@@ -285,8 +285,6 @@ func getG1Points(input io.Reader) (*bls12381.G1Affine, *blst.P1Affine, error) {
 	// compute a random point
 	cp := new(bls12381.G1Affine)
 	_, _, g1Gen, _ := bls12381.Generators()
-	fmt.Println(s)
-	fmt.Println(g1Gen)
 	cp.ScalarMultiplication(&g1Gen, s)
 	cpBytes := cp.Marshal()
 
