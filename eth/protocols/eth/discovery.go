@@ -65,6 +65,8 @@ func currentENREntry(chain *core.BlockChain) *enrEntry {
 	}
 }
 
+// NewNodeFilter returns a filtering function that returns whether the provided
+// enode advertises a forkid compatible with the current chain.
 func NewNodeFilter(chain *core.BlockChain) func(*enode.Node) bool {
 	filter := forkid.NewFilter(chain)
 	return func(n *enode.Node) bool {
