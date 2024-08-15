@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -121,7 +122,11 @@ func NewBeaconLightApi(url string, customHeaders map[string]string) *BeaconLight
 }
 
 func (api *BeaconLightApi) httpGet(path string) ([]byte, error) {
-	req, err := http.NewRequest("GET", api.url+path, nil)
+	uri, err := url.JoinPath(api.url, path)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -547,7 +552,12 @@ func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadE
 	for retry := true; retry; retry = ctxSleep(ctx, 5*time.Second) {
 		path := "/eth/v1/events?topics=head&topics=light_client_finality_update&topics=light_client_optimistic_update"
 		log.Trace("Sending event subscription request")
-		req, err := http.NewRequestWithContext(ctx, "GET", api.url+path, nil)
+		uri, err := url.JoinPath(api.url, path)
+		if err != nil {
+			listener.OnError(fmt.Errorf("error creating event subscription URL: %v", err))
+			continue
+		}
+		req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
 		if err != nil {
 			listener.OnError(fmt.Errorf("error creating event subscription request: %v", err))
 			continue
