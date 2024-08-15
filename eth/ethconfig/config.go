@@ -106,10 +106,6 @@ type Config struct {
 	// presence of these blocks for every new peer connection.
 	RequiredBlocks map[uint64]common.Hash `toml:"-"`
 
-	// Deprecated: LES server has been removed
-	// We retain this field for compatibility with config files created by `geth dumpconfig`.
-	LightPeers int `toml:",omitempty"`
-
 	// Database options
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`
