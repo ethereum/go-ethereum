@@ -53,7 +53,7 @@ func FuzzG1Add(f *testing.F) {
 
 func FuzzG1Mul(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzz(blsG1Mul, data)
+		fuzzCrossG1Mul(data)
 	})
 }
 

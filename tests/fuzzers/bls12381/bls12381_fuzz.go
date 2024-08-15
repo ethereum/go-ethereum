@@ -225,6 +225,31 @@ func fuzzCrossG1MultiExp(data []byte) int {
 	return 1
 }
 
+func fuzzCrossG1Mul(data []byte) int {
+	input := bytes.NewReader(data)
+	gp, blpAffine, err := getG1Points(input)
+	if err != nil {
+		return 0
+	}
+	scalar, err := randomScalar(input, fp.Modulus())
+	if err != nil {
+		return 0
+	}
+
+	blScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(scalar.Bytes(), 32))
+
+	blp := new(blst.P1)
+	blp.FromAffine(blpAffine)
+
+	resBl := blp.Mult(blScalar)
+	resGeth := (new(bls12381.G1Affine)).ScalarMultiplication(gp, scalar)
+
+	if !bytes.Equal(resGeth.Marshal(), resBl.Serialize()) {
+		panic("bytes(blst.G1) != bytes(geth.G1)")
+	}
+	return 1
+}
+
 func getG1Points(input io.Reader) (*bls12381.G1Affine, *blst.P1Affine, error) {
 	// sample a random scalar
 	s, err := randomScalar(input, fp.Modulus())
@@ -235,6 +260,8 @@ func getG1Points(input io.Reader) (*bls12381.G1Affine, *blst.P1Affine, error) {
 	// compute a random point
 	cp := new(bls12381.G1Affine)
 	_, _, g1Gen, _ := bls12381.Generators()
+	fmt.Println(s)
+	fmt.Println(g1Gen)
 	cp.ScalarMultiplication(&g1Gen, s)
 	cpBytes := cp.Marshal()
 
