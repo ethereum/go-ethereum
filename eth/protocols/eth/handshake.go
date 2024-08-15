@@ -43,14 +43,24 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 	var status StatusPacket // safe to read after two values have been received from errc
 
 	go func() {
-		errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
-			ProtocolVersion: uint32(p.version),
-			NetworkID:       network,
-			TD:              td,
-			Head:            head,
-			Genesis:         genesis,
-			ForkID:          forkID,
-		})
+		if p.version == ETH68 {
+			errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
+				ProtocolVersion: uint32(p.version),
+				NetworkID:       network,
+				TD:              td,
+				Head:            head,
+				Genesis:         genesis,
+				ForkID:          forkID,
+			})
+		} else {
+			errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
+				ProtocolVersion: uint32(p.version),
+				NetworkID:       network,
+				Head:            head,
+				Genesis:         genesis,
+				ForkID:          forkID,
+			})
+		}
 	}()
 	go func() {
 		errc <- p.readStatus(network, &status, genesis, forkFilter)
