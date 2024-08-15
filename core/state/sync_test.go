@@ -53,8 +53,8 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 	}
 	db := rawdb.NewMemoryDatabase()
 	nodeDb := triedb.NewDatabase(db, config)
-	sdb := NewDatabaseWithNodeDB(db, nodeDb)
-	state, _ := New(types.EmptyRootHash, sdb, nil)
+	sdb := NewDatabase(db, nodeDb, nil)
+	state, _ := New(types.EmptyRootHash, sdb)
 
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
@@ -94,7 +94,7 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, scheme string, root com
 		config.PathDB = pathdb.Defaults
 	}
 	// Check root availability and state contents
-	state, err := New(root, NewDatabaseWithConfig(db, &config), nil)
+	state, err := New(root, NewDatabase(db, triedb.NewDatabase(db, &config), nil))
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
@@ -120,7 +120,7 @@ func checkStateConsistency(db ethdb.Database, scheme string, root common.Hash) e
 	if scheme == rawdb.PathScheme {
 		config.PathDB = pathdb.Defaults
 	}
-	state, err := New(root, NewDatabaseWithConfig(db, config), nil)
+	state, err := New(root, NewDatabase(db, triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool, s
 	for i := 0; i < len(codes); i++ {
 		codeElements = append(codeElements, stateElement{code: codes[i]})
 	}
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
@@ -326,7 +326,7 @@ func testIterativeDelayedStateSync(t *testing.T, scheme string) {
 	for i := 0; i < len(codes); i++ {
 		codeElements = append(codeElements, stateElement{code: codes[i]})
 	}
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
@@ -430,7 +430,7 @@ func testIterativeRandomStateSync(t *testing.T, count int, scheme string) {
 	for _, hash := range codes {
 		codeQueue[hash] = struct{}{}
 	}
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
@@ -523,7 +523,7 @@ func testIterativeRandomDelayedStateSync(t *testing.T, scheme string) {
 	for _, hash := range codes {
 		codeQueue[hash] = struct{}{}
 	}
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not existent, %#x", srcRoot)
 	}
@@ -628,7 +628,7 @@ func testIncompleteStateSync(t *testing.T, scheme string) {
 		addedPaths  []string
 		addedHashes []common.Hash
 	)
-	reader, err := ndb.Reader(srcRoot)
+	reader, err := ndb.NodeReader(srcRoot)
 	if err != nil {
 		t.Fatalf("state is not available %x", srcRoot)
 	}

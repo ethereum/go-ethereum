@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 	"golang.org/x/exp/maps"
 )
 
@@ -243,14 +242,14 @@ type history struct {
 }
 
 // newHistory constructs the state history object with provided state change set.
-func newHistory(root common.Hash, parent common.Hash, block uint64, states *triestate.Set) *history {
+func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) *history {
 	var (
-		accountList = maps.Keys(states.Accounts)
+		accountList = maps.Keys(accounts)
 		storageList = make(map[common.Address][]common.Hash)
 	)
 	slices.SortFunc(accountList, common.Address.Cmp)
 
-	for addr, slots := range states.Storages {
+	for addr, slots := range storages {
 		slist := maps.Keys(slots)
 		slices.SortFunc(slist, common.Hash.Cmp)
 		storageList[addr] = slist
@@ -262,9 +261,9 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, states *trie
 			root:    root,
 			block:   block,
 		},
-		accounts:    states.Accounts,
+		accounts:    accounts,
 		accountList: accountList,
-		storages:    states.Storages,
+		storages:    storages,
 		storageList: storageList,
 	}
 }
@@ -491,6 +490,32 @@ func readHistory(reader ethdb.AncientReader, id uint64) (*history, error) {
 	return &dec, nil
 }
 
+// readHistories reads and decodes a list of state histories with specific
+// history range.
+func readHistories(freezer ethdb.AncientReader, start uint64, count uint64) ([]*history, error) {
+	metaList, aIndexList, sIndexList, aDataList, sDataList, err := rawdb.ReadStateHistoryList(freezer, start, count)
+	if err != nil {
+		return nil, err
+	}
+	number := len(metaList)
+	if number != len(aIndexList) || number != len(sIndexList) || number != len(aDataList) || number != len(sDataList) {
+		return nil, errors.New("corrupted state history")
+	}
+	var result []*history
+	for i := 0; i < number; i++ {
+		var m meta
+		if err := m.decode(metaList[i]); err != nil {
+			return nil, err
+		}
+		dec := history{meta: &m}
+		if err := dec.decode(aDataList[i], sDataList[i], aIndexList[i], sIndexList[i]); err != nil {
+			return nil, err
+		}
+		result = append(result, &dec)
+	}
+	return result, nil
+}
+
 // writeHistory persists the state history with the provided state set.
 func writeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	// Short circuit if state set is not available.
@@ -499,7 +524,7 @@ func writeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	}
 	var (
 		start   = time.Now()
-		history = newHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states)
+		history = newHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states.accountOrigin, dl.states.storageOrigin)
 	)
 	accountData, storageData, accountIndex, storageIndex := history.encode()
 	dataSize := common.StorageSize(len(accountData) + len(storageData))

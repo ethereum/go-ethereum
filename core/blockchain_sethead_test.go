@@ -2022,7 +2022,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 	}
 	if tt.commitBlock > 0 {
 		chain.triedb.Commit(canonblocks[tt.commitBlock-1].Root(), false)
-		if snapshots {
+		if snapshots && scheme == rawdb.HashScheme {
 			if err := chain.snaps.Cap(canonblocks[tt.commitBlock-1].Root(), 0); err != nil {
 				t.Fatalf("Failed to flatten snapshots: %v", err)
 			}
@@ -2040,7 +2040,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		dbconfig.HashDB = hashdb.Defaults
 	}
 	chain.triedb = triedb.NewDatabase(chain.db, dbconfig)
-	chain.stateCache = state.NewDatabaseWithNodeDB(chain.db, chain.triedb)
+	chain.stateDb = state.NewDatabase(chain.db, chain.triedb, chain.snaps)
 
 	// Force run a freeze cycle
 	type freezer interface {
