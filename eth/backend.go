@@ -23,7 +23,6 @@ import (
 	"math/big"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
