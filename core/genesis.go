@@ -145,9 +145,8 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 	return statedb.Commit(0, false)
 }
 
-// flushAlloc is very similar with hash, but the main difference is all the generated
-// states will be persisted into the given database. Also, the genesis state
-// specification will be flushed as well.
+// flushAlloc is very similar with hash, but the main difference is all the
+// generated states will be persisted into the given database.
 func flushAlloc(ga *types.GenesisAlloc, db ethdb.Database, triedb *triedb.Database) (common.Hash, error) {
 	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
 	if err != nil {
@@ -423,6 +422,7 @@ func (g *Genesis) ToBlock() *types.Block {
 	return g.toBlockWithRoot(root)
 }
 
+// toBlockWithRoot constructs the genesis block with the given genesis state root.
 func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
@@ -499,13 +499,13 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 		return nil, err
 	}
 	block := g.toBlockWithRoot(root)
+
 	// Marshal the genesis state specification and persist.
 	blob, err := json.Marshal(g.Alloc)
 	if err != nil {
 		return nil, err
 	}
 	rawdb.WriteGenesisStateSpec(db, block.Hash(), blob)
-
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
