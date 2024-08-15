@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	ssz "github.com/ferranbt/fastssz"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // ComputeAccumulator calculates the SSZ hash tree root of the Era1

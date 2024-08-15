@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mattn/go-colorable"
+
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -48,7 +50,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/mattn/go-colorable"
 )
 
 var (
