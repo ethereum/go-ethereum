@@ -179,6 +179,8 @@ func fuzzCrossG1MultiExp(data []byte) int {
 		input        = bytes.NewReader(data)
 		gnarkScalars []fr.Element
 		gnarkPoints  []bls12381.G1Affine
+		blstScalars  []*blst.Scalar
+		blstPoints   []*blst.P1Affine
 	)
 	// n random scalars (max 17)
 	for i := 0; i < 17; i++ {
@@ -188,24 +190,33 @@ func fuzzCrossG1MultiExp(data []byte) int {
 			break
 		}
 		// get a random G1 point as basis
-		cp1, _, err := getG1Points(input)
+		cp1, bl1, err := getG1Points(input)
 		if err != nil {
 			break
 		}
-		var gnarkScalar = &fr.Element{}
-		gnarkScalar = gnarkScalar.SetBigInt(s)
-		gnarkScalars = append(gnarkScalars, *gnarkScalar)
 
+		gnarkScalar := new(fr.Element).SetBigInt(s)
+		gnarkScalars = append(gnarkScalars, *gnarkScalar)
 		gnarkPoints = append(gnarkPoints, *cp1)
+
+		blstScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
+		blstScalars = append(blstScalars, blstScalar)
+		blstPoints = append(blstPoints, bl1)
 	}
 
 	// gnark multi exp
 	cp := new(bls12381.G1Affine)
 	cp.MultiExp(gnarkPoints, gnarkScalars, ecc.MultiExpConfig{})
 
-	expected := multiExpG1(gnarkPoints, gnarkScalars)
-	if !bytes.Equal(cp.Marshal(), expected.Marshal()) {
+	expectedGnark := multiExpG1Gnark(gnarkPoints, gnarkScalars)
+	if !bytes.Equal(cp.Marshal(), expectedGnark.Marshal()) {
 		panic("g1 multi exponentiation mismatch")
+	}
+
+	// blst multi exp
+	expectedBlst := blst.P1AffinesMult(blstPoints, blstScalars, 256).ToAffine()
+	if !bytes.Equal(cp.Marshal(), expectedBlst.Serialize()) {
+		panic("g1 multi exponentiation mismatch, gnark/blst")
 	}
 	return 1
 }
@@ -266,8 +277,8 @@ func randomScalar(r io.Reader, max *big.Int) (k *big.Int, err error) {
 	}
 }
 
-// multiExpG1 is a naive implementation of G1 multi-exponentiation
-func multiExpG1(gs []bls12381.G1Affine, scalars []fr.Element) bls12381.G1Affine {
+// multiExpG1Gnark is a naive implementation of G1 multi-exponentiation
+func multiExpG1Gnark(gs []bls12381.G1Affine, scalars []fr.Element) bls12381.G1Affine {
 	_, _, res, _ := bls12381.Generators()
 	for i := 0; i < len(gs); i++ {
 		tmp := new(bls12381.G1Affine)
