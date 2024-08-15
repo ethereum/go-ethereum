@@ -373,6 +373,7 @@ func (s *Ethereum) Start() error {
 func (s *Ethereum) setupDiscovery() error {
 	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
 
+	// Add eth nodes from DNS.
 	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
 	if len(s.config.EthDiscoveryURLs) > 0 {
 		iter, err := dnsclient.NewIterator(s.config.EthDiscoveryURLs...)
@@ -382,6 +383,7 @@ func (s *Ethereum) setupDiscovery() error {
 		s.discmix.AddSource(iter)
 	}
 
+	// Add snap nodes from DNS.
 	if len(s.config.SnapDiscoveryURLs) > 0 {
 		iter, err := dnsclient.NewIterator(s.config.SnapDiscoveryURLs...)
 		if err != nil {
@@ -390,6 +392,7 @@ func (s *Ethereum) setupDiscovery() error {
 		s.discmix.AddSource(iter)
 	}
 
+	// Add DHT nodes from discv5.
 	if s.p2pServer.DiscoveryV5() != nil {
 		filter := eth.NewNodeFilter(s.blockchain)
 		iter := enode.Filter(s.p2pServer.DiscoveryV5().RandomNodes(), filter)
