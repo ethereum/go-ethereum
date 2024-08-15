@@ -204,6 +204,10 @@ func fuzzCrossG1MultiExp(data []byte) int {
 		blstPoints = append(blstPoints, bl1)
 	}
 
+	if len(gnarkScalars) == 0 || len(gnarkScalars) != len(gnarkPoints) {
+		return 0
+	}
+
 	// gnark multi exp
 	cp := new(bls12381.G1Affine)
 	cp.MultiExp(gnarkPoints, gnarkScalars, ecc.MultiExpConfig{})
@@ -279,7 +283,7 @@ func randomScalar(r io.Reader, max *big.Int) (k *big.Int, err error) {
 
 // multiExpG1Gnark is a naive implementation of G1 multi-exponentiation
 func multiExpG1Gnark(gs []bls12381.G1Affine, scalars []fr.Element) bls12381.G1Affine {
-	_, _, res, _ := bls12381.Generators()
+	res := bls12381.G1Affine{}
 	for i := 0; i < len(gs); i++ {
 		tmp := new(bls12381.G1Affine)
 		sb := scalars[i].Bytes()
