@@ -194,34 +194,23 @@ func (self *worker) setExtra(extra []byte) {
 	self.extra = extra
 }
 
-func (self *worker) pending() (*types.Block, *state.StateDB) {
-	self.currentMu.Lock()
-	defer self.currentMu.Unlock()
-
-	if atomic.LoadInt32(&self.mining) == 0 {
-		return types.NewBlock(
-			self.current.header,
-			self.current.txs,
-			nil,
-			self.current.receipts,
-		), self.current.state.Copy()
+// pending returns the pending state and corresponding block. The returned
+// values can be nil in case the pending block is not initialized.
+func (w *worker) pending() (*types.Block, *state.StateDB) {
+	w.snapshotMu.RLock()
+	defer w.snapshotMu.RUnlock()
+	if w.snapshotState == nil {
+		return nil, nil
 	}
-	return self.current.Block, self.current.state.Copy()
+	return w.snapshotBlock, w.snapshotState.Copy()
 }
 
-func (self *worker) pendingBlock() *types.Block {
-	self.currentMu.Lock()
-	defer self.currentMu.Unlock()
-
-	if atomic.LoadInt32(&self.mining) == 0 {
-		return types.NewBlock(
-			self.current.header,
-			self.current.txs,
-			nil,
-			self.current.receipts,
-		)
-	}
-	return self.current.Block
+// pendingBlock returns pending block. The returned block can be nil in case the
+// pending block is not initialized.
+func (w *worker) pendingBlock() *types.Block {
+	w.snapshotMu.RLock()
+	defer w.snapshotMu.RUnlock()
+	return w.snapshotBlock
 }
 
 // pendingBlockAndReceipts returns pending block and corresponding receipts.
