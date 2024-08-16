@@ -36,5 +36,4 @@ Geth developers add/remove features and fix bugs in Geth. The `geth-developer` s
 - [Disclosures](/docs/developers/geth-developer/disclosures)
 - [DNS discovery setup guide](/docs/developers/geth-developer/dns-discovery-setup)
 - [Code review guidelines](/docs/developers/geth-developer/code-review-guidelines)
-
-## [Contributing](/docs/developers/geth-developer/contributing)
+- [Contributing](/docs/developers/geth-developer/contributing)
