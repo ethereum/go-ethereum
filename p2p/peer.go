@@ -323,12 +323,18 @@ func (p *Peer) readLoop(errc chan<- error) {
 	for {
 		msg, err := p.rw.ReadMsg()
 		if err != nil {
-			errc <- err
+			select {
+			case <-p.closed:
+			case errc <- err:
+			}
 			return
 		}
 		msg.ReceivedAt = time.Now()
 		if err = p.handle(msg); err != nil {
-			errc <- err
+			select {
+			case <-p.closed:
+			case errc <- err:
+			}
 			return
 		}
 	}
