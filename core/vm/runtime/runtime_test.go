@@ -937,3 +937,63 @@ func TestDelegatedAccountAccessCost(t *testing.T) {
 		}
 	}
 }
+
+func TestManyLargeStacks(t *testing.T) {
+	// This piece of code will push 512 items to the stack, and then call itself
+	// recursively.
+	code := make([]byte, 10)
+	for i := range code {
+		code[i] = byte(vm.PUSH0)
+	}
+	code = append(code, []byte{
+		byte(vm.ADDRESS), // address to call
+		byte(vm.GAS),
+		byte(vm.CALL),
+	}...)
+
+	main := common.HexToAddress("0xbb")
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb.SetCode(main, code)
+
+	//tracer := logger.NewJSONLogger(nil, os.Stdout)
+	var tracer *tracing.Hooks
+	_, _, err := Call(main, nil, &Config{
+		GasLimit: 10_000_000,
+		State:    statedb,
+		EVMConfig: vm.Config{
+			Tracer: tracer,
+		}})
+	if err != nil {
+		t.Fatal("didn't expect error", err)
+	}
+}
+
+func BenchmarkLargeDeepStacks(b *testing.B) {
+	// This piece of code will push 512 items to the stack, and then call itself
+	// recursively.
+	code := make([]byte, 512)
+	for i := range code {
+		code[i] = byte(vm.PUSH0)
+	}
+	code = append(code, []byte{
+		byte(vm.ADDRESS), // address to call
+		byte(vm.GAS),
+		byte(vm.CALL),
+	}...)
+	benchmarkNonModifyingCode(10_000_000, code, "deep-large-stacks-10M", "", b)
+}
+
+func BenchmarkShortDeepStacks(b *testing.B) {
+	// This piece of code will push a few items to the stack, and then call itself
+	// recursively.
+	code := make([]byte, 8)
+	for i := range code {
+		code[i] = byte(vm.PUSH0)
+	}
+	code = append(code, []byte{
+		byte(vm.ADDRESS), // address to call
+		byte(vm.GAS),
+		byte(vm.CALL),
+	}...)
+	benchmarkNonModifyingCode(10_000_000, code, "deep-short-stacks-10M", "", b)
+}
