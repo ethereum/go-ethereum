@@ -172,7 +172,8 @@ func init() {
 	}
 }
 
-// Copy returns a copy of the precompiled contracts.
+// Copy returns a copy of the precompiled contracts. The precompiled
+// contracts are shallow-copied. It should be safe as they are stateless/immutable.
 func (p PrecompiledContracts) Copy() PrecompiledContracts {
 	c := make(PrecompiledContracts)
 	for k, v := range p {

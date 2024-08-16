@@ -146,8 +146,9 @@ type Message struct {
 	// account nonce in state.
 	// This field will be set to true for operations like RPC eth_call.
 	SkipNonceChecks bool
-	// When SkipFromEoACheck is true, the message sender is not checked to be an EOA.
-	SkipFromEoACheck bool
+
+	// When SkipFromEOACheck is true, the message sender is not checked to be an EOA.
+	SkipFromEOACheck bool
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -163,7 +164,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Data:             tx.Data(),
 		AccessList:       tx.AccessList(),
 		SkipNonceChecks:  false,
-		SkipFromEoACheck: false,
+		SkipFromEOACheck: false,
 		BlobHashes:       tx.BlobHashes(),
 		BlobGasFeeCap:    tx.BlobGasFeeCap(),
 	}
@@ -297,7 +298,7 @@ func (st *StateTransition) preCheck() error {
 				msg.From.Hex(), stNonce)
 		}
 	}
-	if !msg.SkipFromEoACheck {
+	if !msg.SkipFromEOACheck {
 		// Make sure the sender is an EOA
 		codeHash := st.state.GetCodeHash(msg.From)
 		if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
