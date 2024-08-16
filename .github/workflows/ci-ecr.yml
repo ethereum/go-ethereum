@@ -1,0 +1,100 @@
+name: Build and Upload geth Binary
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+  actions: write
+
+env:
+  NUM_BINARIES_TO_KEEP: 5
+  ECR_REPOSITORY: geth-bootnode
+
+jobs:
+  # Add  timestamp
+  Timestamp:
+    uses: storyprotocol/gha-workflows/.github/workflows/reusable-timestamp.yml@main
+
+  # Build and upload the geth binary
+  build_and_push:
+    needs: Timestamp
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: arn:aws:iam::478656756051:role/iac-max-role
+          aws-region: us-west-1
+          role-session-name: github-actions
+
+      - name: Set build arguments
+        run: |
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+          echo "VERSION=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+          echo "BUILDNUM=$GITHUB_RUN_NUMBER" >> $GITHUB_ENV
+
+      - name: Login to Amaon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+          
+      - name: Extract ECR repository URI
+        id: ecr-repo
+        run: |
+          echo "REPOSITORY_URI=$(aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --query 'repositories[0].repositoryUri' --output text)" >> $GITHUB_ENV
+
+      - name: Dockerize the geth and bootnode binary
+        env:
+          DOCKER_BUILDKIT: 1
+        run: |
+          docker buildx create --use
+          docker buildx build \
+            --build-arg COMMIT=$COMMIT \
+            --build-arg VERSION=$VERSION \
+            --build-arg BUILDNUM=$BUILDNUM \
+            -t $REPOSITORY_URI:latest \
+            -t $REPOSITORY_URI:$COMMIT \
+            -t $REPOSITORY_URI:$VERSION \
+            --cache-from=type=local,src=/tmp/.buildx-cache \
+            --cache-to=type=local,dest=/tmp/.buildx-cache \
+            --load \
+            -f ./Dockerfile \
+            . 
+      
+      - name: Scan image for vulnerabilities using Trivy
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: ${{ env.REPOSITORY_URI }}:latest
+          format: 'table'
+          exit-code: 1
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'HIGH,CRITICAL'
+
+      - name: Push the Docker image to ECR
+        run: |
+          docker push $REPOSITORY_URI:latest 
+          docker push $REPOSITORY_URI:$COMMIT

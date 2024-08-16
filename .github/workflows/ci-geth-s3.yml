@@ -1,0 +1,77 @@
+name: Build and Upload geth Binary
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+  actions: write
+
+env:
+  NUM_BINARIES_TO_KEEP: 50
+
+jobs:
+  # Add timestamp
+  Timestamp:
+    # limit a few authorized users to trigger this job
+    # since all other jobs depend on this job, no need to secure other jobs
+    if: github.actor == 'andybowu' || github.actor == 'edisonz0718' || github == 'LeoHChen'
+    uses: storyprotocol/gha-workflows/.github/workflows/reusable-timestamp.yml@main
+
+  # Build and upload the geth binary
+  build_and_push:
+    needs: Timestamp
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.1.5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: arn:aws:iam::478656756051:role/iac-max-role
+          aws-region: us-west-1
+          role-session-name: github-actions
+
+      - name: Build the geth binary
+        run: |
+          make geth
+
+      - name: Upload the geth binary to S3
+        run: |
+          export TZ=America/Los_Angeles
+          VERSION=$(date +%Y%m%d%H%M%S)
+          HUMAN_READABLE_VERSION=$(date)
+          echo "Building version $VERSION at $HUMAN_READABLE_VERSION"
+          aws s3 cp ./build/bin/geth s3://iliad-geth-binaries/geth/geth-$VERSION --quiet
+          
+          # Update manifest file
+          aws s3 cp s3://iliad-geth-binaries/geth/manifest.txt manifest.txt --quiet || touch manifest.txt
+          echo $VERSION >> manifest.txt
+          aws s3 cp manifest.txt s3://iliad-geth-binaries/geth/manifest.txt --quiet
+
+          echo "ILIAD_VERSION=$VERSION" >> $GITHUB_ENV
+  
+      - name: Cleanup old binaries
+        run: |
+          # List objects in the bucket and sort by LastModified date
+          aws s3api list-objects-v2 --bucket iliad-geth-binaries --prefix geth/ --query "sort_by(Contents,&LastModified)[*].Key" > all_binaries.json
+          
+          # Extract the list of keys, remove the latest NUM_BINARIES_TO_KEEP
+          BINARIES_TO_DELETE=$(jq -r ".[0:-${NUM_BINARIES_TO_KEEP}][]" all_binaries.json)
+          
+          if [ -n "$BINARIES_TO_DELETE" ]; then
+            # Delete old binaries
+            for key in $BINARIES_TO_DELETE; do
+              aws s3 rm s3://iliad-geth-binaries/$key --quiet
+            done
+            echo "Deleted old binaries: $BINARIES_TO_DELETE"
+          else
+            echo "No old binaries to delete."
+          fi
