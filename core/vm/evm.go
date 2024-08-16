@@ -126,6 +126,8 @@ type EVM struct {
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
+
+	arena *stackArena
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -140,6 +142,7 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		chainConfig: chainConfig,
 		chainRules:  chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time),
 		jumpDests:   newMapJumpDests(),
+		arena:       newArena(),
 	}
 	evm.precompiles = activePrecompiledContracts(evm.chainRules)
 
