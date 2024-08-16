@@ -83,7 +83,7 @@ module "devnet_rpc" {
   vpc_id = local.vpc_id
   aws_subnet_id = local.aws_subnet_id
   ami_id = local.ami_id
-  instance_type = "t3.large"
+  instance_type = "t3.xlarge"
   ssh_key_name = local.ssh_key_name
   rpc_image = local.rpc_image 
   volume_size = 1500
