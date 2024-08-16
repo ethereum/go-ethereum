@@ -979,12 +979,23 @@ type OverrideAccount struct {
 // StateOverride is the collection of overridden accounts.
 type StateOverride map[common.Address]OverrideAccount
 
+func (diff *StateOverride) has(address common.Address) bool {
+	_, ok := (*diff)[address]
+	return ok
+}
+
 // Apply overrides the fields of specified accounts into the given state.
 func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.PrecompiledContracts) error {
 	if diff == nil {
 		return nil
 	}
+	// Tracks destinations of precompiles that were moved.
+	dirtyAddrs := make(map[common.Address]struct{})
 	for addr, account := range *diff {
+		// If a precompile was moved to this address already, it can't be overridden.
+		if _, ok := dirtyAddrs[addr]; ok {
+			return fmt.Errorf("account %s has already been overridden by a precompile", addr.Hex())
+		}
 		p, isPrecompile := precompiles[addr]
 		// The MoveTo feature makes it possible to move a precompile
 		// code to another address. If the target address is another precompile
@@ -994,7 +1005,13 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 			if !isPrecompile {
 				return fmt.Errorf("account %s is not a precompile", addr.Hex())
 			}
+			// Refuse to move a precompile to an address that has been
+			// or will be overridden.
+			if diff.has(*account.MovePrecompileTo) {
+				return fmt.Errorf("account %s is already overridden", account.MovePrecompileTo.Hex())
+			}
 			precompiles[*account.MovePrecompileTo] = p
+			dirtyAddrs[*account.MovePrecompileTo] = struct{}{}
 		}
 		if isPrecompile {
 			delete(precompiles, addr)
