@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	fuzz "github.com/google/gofuzz"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -34,7 +36,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	fuzz "github.com/google/gofuzz"
 )
 
 func FuzzARange(f *testing.F) {

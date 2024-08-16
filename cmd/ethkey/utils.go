@@ -22,8 +22,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/urfave/cli/v2"
+
+	"github.com/ethereum/go-ethereum/cmd/utils"
 )
 
 // getPassphrase obtains a passphrase given by the user.  It first checks the

@@ -17,11 +17,12 @@
 package blsync
 
 import (
+	"github.com/urfave/cli/v2"
+
 	"github.com/ethereum/go-ethereum/beacon/types"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/urfave/cli/v2"
 )
 
 // lightClientConfig contains beacon light client configuration

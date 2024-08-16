@@ -2,7 +2,6 @@ package bn256
 
 import (
 	"crypto/rand"
-
 	"testing"
 )
 

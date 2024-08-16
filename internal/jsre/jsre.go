@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
