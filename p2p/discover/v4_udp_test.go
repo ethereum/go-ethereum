@@ -211,7 +211,7 @@ func TestUDPv4_responseTimeouts(t *testing.T) {
 	for i := 0; i < nReqs; i++ {
 		select {
 		case err := <-timeoutErr:
-			if err != errTimeout {
+			if !errors.Is(err, errTimeout) {
 				t.Fatalf("got non-timeout error on timeoutErr %d: %v", i, err)
 			}
 			nTimeoutsRecv++
@@ -241,7 +241,7 @@ func TestUDPv4_findnodeTimeout(t *testing.T) {
 	toid := enode.ID{1, 2, 3, 4}
 	target := v4wire.Pubkey{4, 5, 6, 7}
 	result, err := test.udp.findnode(toid, toaddr, target)
-	if err != errTimeout {
+	if !errors.Is(err, errTimeout) {
 		t.Error("expected timeout error, got", err)
 	}
 	if len(result) > 0 {

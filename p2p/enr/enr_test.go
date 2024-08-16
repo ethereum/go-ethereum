@@ -19,14 +19,16 @@ package enr
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -274,7 +276,7 @@ func TestDecodeIncomplete(t *testing.T) {
 	for _, test := range tests {
 		var r Record
 		err := rlp.DecodeBytes(test.input, &r)
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			t.Errorf("wrong error for %X: %v", test.input, err)
 		}
 	}

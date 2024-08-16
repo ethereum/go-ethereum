@@ -101,7 +101,7 @@ func TestNodeUsedDataDir(t *testing.T) {
 
 	// Create a second node based on the same data directory and ensure failure
 	_, err = New(&Config{DataDir: dir})
-	if err != ErrDatadirUsed {
+	if !errors.Is(err, ErrDatadirUsed) {
 		t.Fatalf("duplicate datadir failure mismatch: have %v, want %v", err, ErrDatadirUsed)
 	}
 }

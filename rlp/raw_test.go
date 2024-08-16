@@ -129,7 +129,7 @@ func TestSplitUint64(t *testing.T) {
 		if !bytes.Equal(rest, unhex(test.rest)) {
 			t.Errorf("test %d: rest mismatch: got %x, want %s (input %q)", i, rest, test.rest, test.input)
 		}
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
 		}
 	}
@@ -213,7 +213,7 @@ func TestSplit(t *testing.T) {
 		if !bytes.Equal(rest, unhex(test.rest)) {
 			t.Errorf("test %d: rest mismatch: got %x, want %s", i, rest, test.rest)
 		}
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
 		}
 	}
@@ -251,7 +251,7 @@ func TestReadSize(t *testing.T) {
 
 	for _, test := range tests {
 		size, err := readSize(unhex(test.input), test.slen)
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			t.Errorf("readSize(%s, %d): error mismatch: got %q, want %q", test.input, test.slen, err, test.err)
 			continue
 		}

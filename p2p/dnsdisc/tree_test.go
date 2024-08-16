@@ -17,10 +17,12 @@
 package dnsdisc
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
@@ -54,7 +56,7 @@ func TestParseRoot(t *testing.T) {
 		if !reflect.DeepEqual(e, test.e) {
 			t.Errorf("test %d: wrong entry %s, want %s", i, spew.Sdump(e), spew.Sdump(test.e))
 		}
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			t.Errorf("test %d: wrong error %q, want %q", i, err, test.err)
 		}
 	}
@@ -131,7 +133,7 @@ func TestParseEntry(t *testing.T) {
 		if !reflect.DeepEqual(e, test.e) {
 			t.Errorf("test %d: wrong entry %s, want %s", i, spew.Sdump(e), spew.Sdump(test.e))
 		}
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			t.Errorf("test %d: wrong error %q, want %q", i, err, test.err)
 		}
 	}

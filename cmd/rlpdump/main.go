@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"container/list"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -106,7 +107,7 @@ func rlpToText(in *inStream, out io.Writer) error {
 	stream := rlp.NewStream(in, 0)
 	for {
 		if err := dump(in, stream, 0, out); err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				return err
 			}
 			break
