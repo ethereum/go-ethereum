@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -303,11 +304,36 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 			if header := chain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {
 				continue
 			}
+		} else {
+			block := chain.GetBlockByHash(hash)
+			results = transformReceipts(results, block.Transactions())
 		}
 		receipts = append(receipts, results)
 		bytes += len(results)
 	}
 	return receipts
+}
+
+func transformReceipts(blockReceipts []byte, txs []*types.Transaction) []byte {
+	var (
+		out   bytes.Buffer
+		enc   = rlp.NewEncoderBuffer(&out)
+		it, _ = rlp.NewListIterator(blockReceipts)
+	)
+	outer := enc.List()
+	for i := 0; it.Next(); i++ {
+		content, _, _ := rlp.SplitList(it.Value())
+		receiptList := enc.List()
+		if txs[i].Type() != types.LegacyTxType {
+			enc.Write([]byte{txs[i].Type()})
+		}
+		enc.Write(content)
+		enc.ListEnd(receiptList)
+	}
+	enc.ListEnd(outer)
+	enc.Flush()
+
+	return out.Bytes()
 }
 
 func handleNewBlockhashes(backend Backend, msg Decoder, peer *Peer) error {
