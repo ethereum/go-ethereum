@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -35,6 +37,26 @@ type traceResult struct {
 	TxHash common.Hash `json:"txHash,omitempty"` // transaction hash
 	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
 	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+}
+
+// EncodeRLP implments rlp.Encoder
+func (tr *traceResult) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{tr.TxHash, tr.Result, tr.Error})
+}
+
+// DecodeRLP implements rlp.Decoder
+func (tr *traceResult) DecodeRLP(s *rlp.Stream) error {
+	var temp struct {
+		TxHash common.Hash
+		Result []byte
+		Error  string
+	}
+	if err := s.Decode(&temp); err != nil {
+		return err
+	}
+	tr.TxHash = temp.TxHash
+	tr.Error = temp.Error
+	return json.Unmarshal(temp.Result, &tr.Result)
 }
 
 type filter struct {
@@ -249,7 +271,7 @@ func (f *filter) OnBlockEnd(err error) {
 	number := f.latest.Load()
 	hash := f.hash
 	for name, traces := range f.traces {
-		data, err := json.Marshal(traces)
+		data, err := rlp.EncodeToBytes(traces)
 		if err != nil {
 			log.Error("Failed to marshal traces", "error", err)
 			break
@@ -301,7 +323,7 @@ func (f *filter) readBlockTraces(ctx context.Context, name string, blknum uint64
 	}
 
 	var traces []*traceResult
-	err = json.Unmarshal(data, &traces)
+	err = rlp.DecodeBytes(data, &traces)
 	return traces, err
 }
 
