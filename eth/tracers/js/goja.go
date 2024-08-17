@@ -254,6 +254,12 @@ func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from
 		return
 	}
 	t.ctx["gasPrice"] = gasPriceBig
+	coinbase, err := t.toBuf(t.vm, env.Coinbase.Bytes())
+	if err != nil {
+		t.err = err
+		return
+	}
+	t.ctx["coinbase"] = t.vm.ToValue(coinbase)
 }
 
 // OnTxEnd implements the Tracer interface and is invoked at the end of

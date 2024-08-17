@@ -29,7 +29,11 @@ import (
 
 // TransactionTest checks RLP decoding and sender derivation of transactions.
 type TransactionTest struct {
-	RLP            hexutil.Bytes `json:"rlp"`
+	Txbytes hexutil.Bytes `json:"txbytes"`
+	Result  ttResult
+}
+
+type ttResult struct {
 	Byzantium      ttFork
 	Constantinople ttFork
 	Istanbul       ttFork
@@ -73,15 +77,15 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		isHomestead bool
 		isIstanbul  bool
 	}{
-		{"Frontier", types.FrontierSigner{}, tt.Frontier, false, false},
-		{"Homestead", types.HomesteadSigner{}, tt.Homestead, true, false},
-		{"EIP150", types.HomesteadSigner{}, tt.EIP150, true, false},
-		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.EIP158, true, false},
-		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Byzantium, true, false},
-		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Constantinople, true, false},
-		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Istanbul, true, true},
+		{"Frontier", types.FrontierSigner{}, tt.Result.Frontier, false, false},
+		{"Homestead", types.HomesteadSigner{}, tt.Result.Homestead, true, false},
+		{"EIP150", types.HomesteadSigner{}, tt.Result.EIP150, true, false},
+		{"EIP158", types.NewEIP155Signer(config.ChainID), tt.Result.EIP158, true, false},
+		{"Byzantium", types.NewEIP155Signer(config.ChainID), tt.Result.Byzantium, true, false},
+		{"Constantinople", types.NewEIP155Signer(config.ChainID), tt.Result.Constantinople, true, false},
+		{"Istanbul", types.NewEIP155Signer(config.ChainID), tt.Result.Istanbul, true, true},
 	} {
-		sender, txhash, err := validateTx(tt.RLP, testcase.signer, testcase.isHomestead, testcase.isIstanbul)
+		sender, txhash, err := validateTx(tt.Txbytes, testcase.signer, testcase.isHomestead, testcase.isIstanbul)
 
 		if testcase.fork.Sender == (common.UnprefixedAddress{}) {
 			if err == nil {

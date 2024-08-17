@@ -162,7 +162,6 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.String(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.String(SenderFlag.Name))
 	}
-	statedb.CreateAccount(sender)
 
 	if ctx.String(ReceiverFlag.Name) != "" {
 		receiver = common.HexToAddress(ctx.String(ReceiverFlag.Name))
@@ -222,6 +221,7 @@ func runCmd(ctx *cli.Context) error {
 		Time:        genesisConfig.Timestamp,
 		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
+		BaseFee:     genesisConfig.BaseFee,
 		BlobHashes:  blobHashes,
 		BlobBaseFee: blobBaseFee,
 		EVMConfig: vm.Config{

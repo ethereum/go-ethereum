@@ -2424,14 +2424,21 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		slim := types.SlimAccountRLP(*res.accounts[i])
 		rawdb.WriteAccountSnapshot(batch, hash, slim)
 
-		// If the task is complete, drop it into the stack trie to generate
-		// account trie nodes for it
 		if !task.needHeal[i] {
+			// If the storage task is complete, drop it into the stack trie
+			// to generate account trie nodes for it
 			full, err := types.FullAccountRLP(slim) // TODO(karalabe): Slim parsing can be omitted
 			if err != nil {
 				panic(err) // Really shouldn't ever happen
 			}
 			task.genTrie.update(hash[:], full)
+		} else {
+			// If the storage task is incomplete, explicitly delete the corresponding
+			// account item from the account trie to ensure that all nodes along the
+			// path to the incomplete storage trie are cleaned up.
+			if err := task.genTrie.delete(hash[:]); err != nil {
+				panic(err) // Really shouldn't ever happen
+			}
 		}
 	}
 	// Flush anything written just now and update the stats
