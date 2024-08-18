@@ -336,6 +336,7 @@ func applyPaymasterPostOpFrame(vpr *ValidationPhaseResult, executionResult *Exec
 func ApplyRip7560ExecutionPhase(config *params.ChainConfig, vpr *ValidationPhaseResult, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, cfg vm.Config) (*types.Receipt, error) {
 
 	// TODO: snapshot EVM - we will revert back here if postOp fails
+	snapshotId := statedb.Snapshot()
 
 	blockContext := NewEVMBlockContext(header, bc, author)
 	message, err := TransactionToMessage(vpr.Tx, types.MakeSigner(config, header.Number, header.Time), header.BaseFee)
@@ -352,7 +353,9 @@ func ApplyRip7560ExecutionPhase(config *params.ChainConfig, vpr *ValidationPhase
 	if len(vpr.PaymasterContext) != 0 {
 		paymasterPostOpResult, err = applyPaymasterPostOpFrame(vpr, executionResult, evm, gp, statedb, header)
 	}
+	// PostOp failed, reverting execution changes
 	if err != nil {
+		statedb.RevertToSnapshot(snapshotId)
 		return nil, err
 	}
 
