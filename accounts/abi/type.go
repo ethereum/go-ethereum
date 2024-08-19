@@ -219,7 +219,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		typ.T = FunctionTy
 		typ.Size = 24
 	default:
-		if strings.Contains(internalType, "contract") {
+		if strings.HasPrefix(internalType, "contract ") {
 			typ.Size = 20
 			typ.T = AddressTy
 		} else {
