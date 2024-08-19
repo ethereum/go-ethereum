@@ -3324,7 +3324,7 @@ func TestStateOverrideMovePrecompile(t *testing.T) {
 		if len(cpy) != len(tt.expectedPrecompiles) {
 			t.Errorf("test %d: precompile mismatch, want %d, have %d", i, len(tt.expectedPrecompiles), len(cpy))
 		}
-		for k, _ := range tt.expectedPrecompiles {
+		for k := range tt.expectedPrecompiles {
 			if _, ok := cpy[k]; !ok {
 				t.Errorf("test %d: precompile not found: %s", i, k.String())
 			}

@@ -245,7 +245,6 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	b := types.NewBlock(header, &types.Body{Transactions: txes, Withdrawals: withdrawals}, receipts, trie.NewStackTrie(nil))
 	repairLogs(callResults, b.Hash())
 	return b, callResults, nil
-
 }
 
 // repairLogs updates the block hash in the logs present in the result of
@@ -272,7 +271,6 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, 
 	if *gasUsed+uint64(*call.Gas) > blockContext.GasLimit {
 		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", gasUsed, blockContext.GasLimit)}
 	}
-
 	if err := call.CallDefaults(sim.gp.Gas(), header.BaseFee, sim.chainConfig.ChainID); err != nil {
 		return err
 	}

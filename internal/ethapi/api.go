@@ -1268,7 +1268,7 @@ func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockN
 //
 // Note, this function doesn't make any changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrOrHash *rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
 	if len(opts.BlockStateCalls) == 0 {
 		return nil, &invalidParamsError{message: "empty input"}
 	} else if len(opts.BlockStateCalls) > maxSimulateBlocks {
@@ -1278,17 +1278,17 @@ func (s *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrOrH
 		n := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &n
 	}
-	state, base, err := s.b.StateAndHeaderByNumberOrHash(ctx, *blockNrOrHash)
+	state, base, err := api.b.StateAndHeaderByNumberOrHash(ctx, *blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
 	sim := &simulator{
-		b:           s.b,
+		b:           api.b,
 		state:       state,
 		base:        base,
-		chainConfig: s.b.ChainConfig(),
+		chainConfig: api.b.ChainConfig(),
 		// Each tx and all the series of txes shouldn't consume more gas than cap
-		gp:             new(core.GasPool).AddGas(s.b.RPCGasCap()),
+		gp:             new(core.GasPool).AddGas(api.b.RPCGasCap()),
 		traceTransfers: opts.TraceTransfers,
 		validate:       opts.Validation,
 		fullTx:         opts.ReturnFullTransactions,
