@@ -207,7 +207,7 @@ func New(file string, cache int, handles int, namespace string, readonly bool, e
 
 		// The default compaction concurrency(1 thread),
 		// Here use all available CPUs for faster compaction.
-		MaxConcurrentCompactions: func() int { return runtime.NumCPU() },
+		MaxConcurrentCompactions: runtime.NumCPU,
 
 		// Per-level options. Options for at least one level must be specified. The
 		// options for the last level are used for all subsequent levels.
@@ -351,55 +351,6 @@ func (d *Database) NewBatchWithSize(size int) ethdb.Batch {
 	}
 }
 
-// snapshot wraps a pebble snapshot for implementing the Snapshot interface.
-type snapshot struct {
-	db *pebble.Snapshot
-}
-
-// NewSnapshot creates a database snapshot based on the current state.
-// The created snapshot will not be affected by all following mutations
-// happened on the database.
-// Note don't forget to release the snapshot once it's used up, otherwise
-// the stale data will never be cleaned up by the underlying compactor.
-func (d *Database) NewSnapshot() (ethdb.Snapshot, error) {
-	snap := d.db.NewSnapshot()
-	return &snapshot{db: snap}, nil
-}
-
-// Has retrieves if a key is present in the snapshot backing by a key-value
-// data store.
-func (snap *snapshot) Has(key []byte) (bool, error) {
-	_, closer, err := snap.db.Get(key)
-	if err != nil {
-		if err != pebble.ErrNotFound {
-			return false, err
-		} else {
-			return false, nil
-		}
-	}
-	closer.Close()
-	return true, nil
-}
-
-// Get retrieves the given key if it's present in the snapshot backing by
-// key-value data store.
-func (snap *snapshot) Get(key []byte) ([]byte, error) {
-	dat, closer, err := snap.db.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	ret := make([]byte, len(dat))
-	copy(ret, dat)
-	closer.Close()
-	return ret, nil
-}
-
-// Release releases associated resources. Release should always succeed and can
-// be called multiple times without causing error.
-func (snap *snapshot) Release() {
-	snap.db.Close()
-}
-
 // upperBound returns the upper bound for the given prefix
 func upperBound(prefix []byte) (limit []byte) {
 	for i := len(prefix) - 1; i >= 0; i-- {
@@ -416,10 +367,8 @@ func upperBound(prefix []byte) (limit []byte) {
 }
 
 // Stat returns the internal metrics of Pebble in a text format. It's a developer
-// method to read everything there is to read independent of Pebble version.
-//
-// The property is unused in Pebble as there's only one thing to retrieve.
-func (d *Database) Stat(property string) (string, error) {
+// method to read everything there is to read, independent of Pebble version.
+func (d *Database) Stat() (string, error) {
 	return d.db.Metrics().String(), nil
 }
 
@@ -575,7 +524,7 @@ func (b *batch) Put(key, value []byte) error {
 	return nil
 }
 
-// Delete inserts the a key removal into the batch for later committing.
+// Delete inserts the key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key, nil)
 	b.size += len(key)

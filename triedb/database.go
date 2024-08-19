@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/ethereum/go-ethereum/triedb/database"
@@ -43,7 +42,16 @@ type Config struct {
 // default settings.
 var HashDefaults = &Config{
 	Preimages: false,
+	IsVerkle:  false,
 	HashDB:    hashdb.Defaults,
+}
+
+// VerkleDefaults represents a config for holding verkle trie data
+// using path-based scheme with default settings.
+var VerkleDefaults = &Config{
+	Preimages: false,
+	IsVerkle:  true,
+	PathDB:    pathdb.Defaults,
 }
 
 // backend defines the methods needed to access/update trie nodes in different
@@ -74,6 +82,10 @@ type backend interface {
 
 	// Close closes the trie database backend and releases all held resources.
 	Close() error
+
+	// Reader returns a reader for accessing all trie nodes with provided state
+	// root. An error will be returned if the requested state is not available.
+	Reader(root common.Hash) (database.Reader, error)
 }
 
 // Database is the wrapper of the underlying backend which is shared by different
@@ -81,7 +93,6 @@ type backend interface {
 // relevant with trie nodes and node preimages.
 type Database struct {
 	config    *Config        // Configuration for trie database
-	diskdb    ethdb.Database // Persistent database to store the snapshot
 	preimages *preimageStore // The store for caching preimages
 	backend   backend        // The backend for managing trie nodes
 }
@@ -99,7 +110,6 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	}
 	db := &Database{
 		config:    config,
-		diskdb:    diskdb,
 		preimages: preimages,
 	}
 	if config.HashDB != nil && config.PathDB != nil {
@@ -108,14 +118,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	if config.PathDB != nil {
 		db.backend = pathdb.New(diskdb, config.PathDB, config.IsVerkle)
 	} else {
-		var resolver hashdb.ChildResolver
-		if config.IsVerkle {
-			// TODO define verkle resolver
-			log.Crit("verkle does not use a hash db")
-		} else {
-			resolver = trie.MerkleResolver{}
-		}
-		db.backend = hashdb.New(diskdb, config.HashDB, resolver)
+		db.backend = hashdb.New(diskdb, config.HashDB)
 	}
 	return db
 }
@@ -123,13 +126,7 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 // Reader returns a reader for accessing all trie nodes with provided state root.
 // An error will be returned if the requested state is not available.
 func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
-	switch b := db.backend.(type) {
-	case *hashdb.Database:
-		return b.Reader(blockRoot)
-	case *pathdb.Database:
-		return b.Reader(blockRoot)
-	}
-	return nil, errors.New("unknown backend")
+	return db.backend.Reader(blockRoot)
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
@@ -266,14 +263,7 @@ func (db *Database) Recover(target common.Hash) error {
 	if !ok {
 		return errors.New("not supported")
 	}
-	var loader triestate.TrieLoader
-	if db.config.IsVerkle {
-		// TODO define verkle loader
-		log.Crit("Verkle loader is not defined")
-	} else {
-		loader = trie.NewMerkleLoader(db)
-	}
-	return pdb.Recover(target, loader)
+	return pdb.Recover(target)
 }
 
 // Recoverable returns the indicator if the specified state is enabled to be

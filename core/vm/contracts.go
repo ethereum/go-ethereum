@@ -296,10 +296,7 @@ type bigModExp struct {
 var (
 	big1      = big.NewInt(1)
 	big3      = big.NewInt(3)
-	big4      = big.NewInt(4)
 	big7      = big.NewInt(7)
-	big8      = big.NewInt(8)
-	big16     = big.NewInt(16)
 	big20     = big.NewInt(20)
 	big32     = big.NewInt(32)
 	big64     = big.NewInt(64)
@@ -325,13 +322,13 @@ func modexpMultComplexity(x *big.Int) *big.Int {
 	case x.Cmp(big1024) <= 0:
 		// (x ** 2 // 4 ) + ( 96 * x - 3072)
 		x = new(big.Int).Add(
-			new(big.Int).Div(new(big.Int).Mul(x, x), big4),
+			new(big.Int).Rsh(new(big.Int).Mul(x, x), 2),
 			new(big.Int).Sub(new(big.Int).Mul(big96, x), big3072),
 		)
 	default:
 		// (x ** 2 // 16) + (480 * x - 199680)
 		x = new(big.Int).Add(
-			new(big.Int).Div(new(big.Int).Mul(x, x), big16),
+			new(big.Int).Rsh(new(big.Int).Mul(x, x), 4),
 			new(big.Int).Sub(new(big.Int).Mul(big480, x), big199680),
 		)
 	}
@@ -369,7 +366,7 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 	adjExpLen := new(big.Int)
 	if expLen.Cmp(big32) > 0 {
 		adjExpLen.Sub(expLen, big32)
-		adjExpLen.Mul(big8, adjExpLen)
+		adjExpLen.Lsh(adjExpLen, 3)
 	}
 	adjExpLen.Add(adjExpLen, big.NewInt(int64(msb)))
 	// Calculate the gas cost of the operation
@@ -383,8 +380,8 @@ func (c *bigModExp) RequiredGas(input []byte) uint64 {
 		//    ceiling(x/8)^2
 		//
 		//where is x is max(length_of_MODULUS, length_of_BASE)
-		gas = gas.Add(gas, big7)
-		gas = gas.Div(gas, big8)
+		gas.Add(gas, big7)
+		gas.Rsh(gas, 3)
 		gas.Mul(gas, gas)
 
 		gas.Mul(gas, math.BigMax(adjExpLen, big1))

@@ -459,11 +459,11 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 // homestead rules.
 type HomesteadSigner struct{ FrontierSigner }
 
-func (s HomesteadSigner) ChainID() *big.Int {
+func (hs HomesteadSigner) ChainID() *big.Int {
 	return nil
 }
 
-func (s HomesteadSigner) Equal(s2 Signer) bool {
+func (hs HomesteadSigner) Equal(s2 Signer) bool {
 	_, ok := s2.(HomesteadSigner)
 	return ok
 }
@@ -486,11 +486,11 @@ func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
 // frontier rules.
 type FrontierSigner struct{}
 
-func (s FrontierSigner) ChainID() *big.Int {
+func (fs FrontierSigner) ChainID() *big.Int {
 	return nil
 }
 
-func (s FrontierSigner) Equal(s2 Signer) bool {
+func (fs FrontierSigner) Equal(s2 Signer) bool {
 	_, ok := s2.(FrontierSigner)
 	return ok
 }
@@ -572,6 +572,6 @@ func deriveChainId(v *big.Int) *big.Int {
 		}
 		return new(big.Int).SetUint64((v - 35) / 2)
 	}
-	v = new(big.Int).Sub(v, big.NewInt(35))
-	return v.Div(v, big.NewInt(2))
+	vCopy := new(big.Int).Sub(v, big.NewInt(35))
+	return vCopy.Rsh(vCopy, 1)
 }

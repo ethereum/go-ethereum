@@ -103,7 +103,7 @@ var (
 	// to allow concurrent retrievals.
 	accountConcurrency = 16
 
-	// storageConcurrency is the number of chunks to split the a large contract
+	// storageConcurrency is the number of chunks to split a large contract
 	// storage trie into to allow concurrent retrievals.
 	storageConcurrency = 16
 )
@@ -2424,14 +2424,21 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 		slim := types.SlimAccountRLP(*res.accounts[i])
 		rawdb.WriteAccountSnapshot(batch, hash, slim)
 
-		// If the task is complete, drop it into the stack trie to generate
-		// account trie nodes for it
 		if !task.needHeal[i] {
+			// If the storage task is complete, drop it into the stack trie
+			// to generate account trie nodes for it
 			full, err := types.FullAccountRLP(slim) // TODO(karalabe): Slim parsing can be omitted
 			if err != nil {
 				panic(err) // Really shouldn't ever happen
 			}
 			task.genTrie.update(hash[:], full)
+		} else {
+			// If the storage task is incomplete, explicitly delete the corresponding
+			// account item from the account trie to ensure that all nodes along the
+			// path to the incomplete storage trie are cleaned up.
+			if err := task.genTrie.delete(hash[:]); err != nil {
+				panic(err) // Really shouldn't ever happen
+			}
 		}
 	}
 	// Flush anything written just now and update the stats
@@ -3250,9 +3257,9 @@ func (t *healRequestSort) Merge() []TrieNodePathSet {
 // sortByAccountPath takes hashes and paths, and sorts them. After that, it generates
 // the TrieNodePaths and merges paths which belongs to the same account path.
 func sortByAccountPath(paths []string, hashes []common.Hash) ([]string, []common.Hash, []trie.SyncPath, []TrieNodePathSet) {
-	var syncPaths []trie.SyncPath
-	for _, path := range paths {
-		syncPaths = append(syncPaths, trie.NewSyncPath([]byte(path)))
+	syncPaths := make([]trie.SyncPath, len(paths))
+	for i, path := range paths {
+		syncPaths[i] = trie.NewSyncPath([]byte(path))
 	}
 	n := &healRequestSort{paths, hashes, syncPaths}
 	sort.Sort(n)

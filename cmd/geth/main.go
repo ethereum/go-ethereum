@@ -156,6 +156,7 @@ var (
 		utils.BeaconGenesisRootFlag,
 		utils.BeaconGenesisTimeFlag,
 		utils.BeaconCheckpointFlag,
+		utils.CollectWitnessFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{
@@ -359,8 +360,6 @@ func geth(ctx *cli.Context) error {
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
-	debug.Memsize.Add("node", stack)
-
 	// Start up the node itself
 	utils.StartNode(ctx, stack, isConsole)
 

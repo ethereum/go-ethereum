@@ -979,11 +979,11 @@ func TestSimultaneousNewBlock(t *testing.T) {
 					defer wg.Done()
 					if newResp, err := api.NewPayloadV1(*execData); err != nil {
 						errMu.Lock()
-						testErr = fmt.Errorf("Failed to insert block: %w", err)
+						testErr = fmt.Errorf("failed to insert block: %w", err)
 						errMu.Unlock()
 					} else if newResp.Status != "VALID" {
 						errMu.Lock()
-						testErr = fmt.Errorf("Failed to insert block: %v", newResp.Status)
+						testErr = fmt.Errorf("failed to insert block: %v", newResp.Status)
 						errMu.Unlock()
 					}
 				}()
@@ -1018,7 +1018,7 @@ func TestSimultaneousNewBlock(t *testing.T) {
 					defer wg.Done()
 					if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
 						errMu.Lock()
-						testErr = fmt.Errorf("Failed to insert block: %w", err)
+						testErr = fmt.Errorf("failed to insert block: %w", err)
 						errMu.Unlock()
 					}
 				}()

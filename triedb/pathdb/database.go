@@ -152,6 +152,14 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	}
 	config = config.sanitize()
 
+	// Establish a dedicated database namespace tailored for verkle-specific
+	// data, ensuring the isolation of both verkle and merkle tree data. It's
+	// important to note that the introduction of a prefix won't lead to
+	// substantial storage overhead, as the underlying database will efficiently
+	// compress the shared key prefix.
+	if isVerkle {
+		diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
+	}
 	db := &Database{
 		readOnly:   config.ReadOnly,
 		isVerkle:   isVerkle,
@@ -190,7 +198,7 @@ func (db *Database) repairHistory() error {
 		// all of them. Fix the tests first.
 		return nil
 	}
-	freezer, err := rawdb.NewStateFreezer(ancient, false)
+	freezer, err := rawdb.NewStateFreezer(ancient, db.isVerkle, db.readOnly)
 	if err != nil {
 		log.Crit("Failed to open state history freezer", "err", err)
 	}
@@ -345,7 +353,7 @@ func (db *Database) Enable(root common.Hash) error {
 // Recover rollbacks the database to a specified historical point.
 // The state is supported as the rollback destination only if it's
 // canonical state and the corresponding trie histories are existent.
-func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error {
+func (db *Database) Recover(root common.Hash) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -371,7 +379,7 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 		if err != nil {
 			return err
 		}
-		dl, err = dl.revert(h, loader)
+		dl, err = dl.revert(h)
 		if err != nil {
 			return err
 		}

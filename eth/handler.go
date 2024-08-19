@@ -180,7 +180,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return nil, errors.New("snap sync not supported with snapshots disabled")
 	}
 	// Construct the downloader (long sync)
-	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, nil, h.removePeer, h.enableSyncedFeatures)
+	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)

@@ -67,9 +67,9 @@ func (vs *ValidationMessages) Info(msg string) {
 }
 
 // GetWarnings returns an error with all messages of type WARN of above, or nil if no warnings were present
-func (v *ValidationMessages) GetWarnings() error {
+func (vs *ValidationMessages) GetWarnings() error {
 	var messages []string
-	for _, msg := range v.Messages {
+	for _, msg := range vs.Messages {
 		if msg.Typ == WARN || msg.Typ == CRIT {
 			messages = append(messages, msg.Message)
 		}
@@ -843,39 +843,35 @@ func (t Types) validate() error {
 	return nil
 }
 
-// Checks if the primitive value is valid
-func isPrimitiveTypeValid(primitiveType string) bool {
-	if primitiveType == "address" ||
-		primitiveType == "address[]" ||
-		primitiveType == "bool" ||
-		primitiveType == "bool[]" ||
-		primitiveType == "string" ||
-		primitiveType == "string[]" ||
-		primitiveType == "bytes" ||
-		primitiveType == "bytes[]" ||
-		primitiveType == "int" ||
-		primitiveType == "int[]" ||
-		primitiveType == "uint" ||
-		primitiveType == "uint[]" {
-		return true
+var validPrimitiveTypes = map[string]struct{}{}
+
+// build the set of valid primitive types
+func init() {
+	// Types those are trivially valid
+	for _, t := range []string{
+		"address", "address[]", "bool", "bool[]", "string", "string[]",
+		"bytes", "bytes[]", "int", "int[]", "uint", "uint[]",
+	} {
+		validPrimitiveTypes[t] = struct{}{}
 	}
 	// For 'bytesN', 'bytesN[]', we allow N from 1 to 32
 	for n := 1; n <= 32; n++ {
-		// e.g. 'bytes28' or 'bytes28[]'
-		if primitiveType == fmt.Sprintf("bytes%d", n) || primitiveType == fmt.Sprintf("bytes%d[]", n) {
-			return true
-		}
+		validPrimitiveTypes[fmt.Sprintf("bytes%d", n)] = struct{}{}
+		validPrimitiveTypes[fmt.Sprintf("bytes%d[]", n)] = struct{}{}
 	}
 	// For 'intN','intN[]' and 'uintN','uintN[]' we allow N in increments of 8, from 8 up to 256
 	for n := 8; n <= 256; n += 8 {
-		if primitiveType == fmt.Sprintf("int%d", n) || primitiveType == fmt.Sprintf("int%d[]", n) {
-			return true
-		}
-		if primitiveType == fmt.Sprintf("uint%d", n) || primitiveType == fmt.Sprintf("uint%d[]", n) {
-			return true
-		}
+		validPrimitiveTypes[fmt.Sprintf("int%d", n)] = struct{}{}
+		validPrimitiveTypes[fmt.Sprintf("int%d[]", n)] = struct{}{}
+		validPrimitiveTypes[fmt.Sprintf("uint%d", n)] = struct{}{}
+		validPrimitiveTypes[fmt.Sprintf("uint%d[]", n)] = struct{}{}
 	}
-	return false
+}
+
+// Checks if the primitive value is valid
+func isPrimitiveTypeValid(primitiveType string) bool {
+	_, ok := validPrimitiveTypes[primitiveType]
+	return ok
 }
 
 // validate checks if the given domain is valid, i.e. contains at least

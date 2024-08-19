@@ -335,7 +335,7 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 			log.Warn("Final block not available in database", "hash", update.FinalizedBlockHash)
 			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("final block not available in database"))
 		} else if rawdb.ReadCanonicalHash(api.eth.ChainDb(), finalBlock.NumberU64()) != update.FinalizedBlockHash {
-			log.Warn("Final block not in canonical chain", "number", block.NumberU64(), "hash", update.HeadBlockHash)
+			log.Warn("Final block not in canonical chain", "number", finalBlock.NumberU64(), "hash", update.FinalizedBlockHash)
 			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("final block not in canonical chain"))
 		}
 		// Set the finalized block
@@ -546,7 +546,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			bgu = strconv.Itoa(int(*params.BlobGasUsed))
 		}
 		ebg := "nil"
-		if params.BlobGasUsed != nil {
+		if params.ExcessBlobGas != nil {
 			ebg = strconv.Itoa(int(*params.ExcessBlobGas))
 		}
 		log.Warn("Invalid NewPayload params",

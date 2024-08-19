@@ -141,7 +141,7 @@ func (b *testWorkerBackend) TxPool() *txpool.TxPool       { return b.txPool }
 
 func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*Miner, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
-	backend.txPool.Add(pendingTxs, true, false)
+	backend.txPool.Add(pendingTxs, true, true)
 	w := New(backend, testConfig, engine)
 	return w, backend
 }

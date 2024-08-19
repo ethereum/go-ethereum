@@ -143,7 +143,7 @@ func (bc *testBlockChain) CurrentFinalBlock() *types.Header {
 	}
 }
 
-func (bt *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return nil
 }
 
