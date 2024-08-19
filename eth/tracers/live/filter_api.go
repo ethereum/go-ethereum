@@ -26,7 +26,7 @@ func (api *filterAPI) isSupportedTracer(tracer string) bool {
 	return ok
 }
 
-func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *traceConfig) ([]*traceResult, error) {
+func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *traceConfig) ([]interface{}, error) {
 	tracer := defaultTraceConfig.Tracer
 	if cfg != nil {
 		tracer = cfg.Tracer
@@ -41,5 +41,18 @@ func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *t
 		blknum = api.filter.latest.Load()
 	}
 
-	return api.filter.readBlockTraces(ctx, tracer, blknum)
+	traces, err := api.filter.readBlockTraces(ctx, tracer, blknum)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]interface{}, len(traces))
+	for i, trace := range traces {
+		if tracer == "parityTracer" {
+			results[i] = trace.Result
+		} else {
+			results[i] = trace
+		}
+	}
+
+	return results, nil
 }
