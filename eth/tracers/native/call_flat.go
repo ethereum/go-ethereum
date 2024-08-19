@@ -38,6 +38,7 @@ import (
 
 func init() {
 	tracers.DefaultDirectory.Register("flatCallTracer", newFlatCallTracer, false)
+	tracers.DefaultDirectory.Register("parityTracer", newParityTracer, false)
 }
 
 var parityErrorMapping = map[string]string{
@@ -151,6 +152,11 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trac
 		Stop:      ft.Stop,
 		GetResult: ft.GetResult,
 	}, nil
+}
+
+// newParityTracer returns a new flatCallTracer with parity style.
+func newParityTracer(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer, error) {
+	return newFlatCallTracer(ctx, []byte(`{"includePrecompiles": true, "convertParityErrors": true}`))
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
