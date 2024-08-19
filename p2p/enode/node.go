@@ -172,8 +172,20 @@ func ParseForAddEnr(validSchemes enr.IdentityScheme, input string) (*Node, error
 	var ip6 netip.Addr
 	n.Load((*enr.IPv4Addr)(&ip4))
 	n.Load((*enr.IPv6Addr)(&ip6))
-	n.setIP4(ip4)
-	n.setIP6(ip6)
+	valid4 := ip4.IsValid()
+	valid6 := ip6.IsValid()
+	switch {
+	case valid4 && valid6:
+		if localityScore(ip4) >= localityScore(ip6) {
+			n.setIP4(ip4)
+		} else {
+			n.setIP6(ip6)
+		}
+	case valid4:
+		n.setIP4(ip4)
+	case valid6:
+		n.setIP6(ip6)
+	}
 	return n, nil
 }
 
