@@ -54,23 +54,14 @@ func (a *simulatedBeaconAPI) loop() {
 	)
 	defer newTxsSub.Unsubscribe()
 	defer newWxsSub.Unsubscribe()
-
-	// commit is a non-blocking method to initate Commit() on the simulator.
-	commit := func() {
-		select {
-		case doCommit <- struct{}{}:
-		default:
-		}
-	}
 	// a background thread which signals to the simulator when to commit
 	// based on messages over doCommit.
 	go func() {
 		for _ = range doCommit {
 			a.sim.Commit()
 			a.sim.eth.TxPool().Sync()
-			executable, _ := a.sim.eth.TxPool().Stats()
-			if executable != 0 {
-				commit()
+			if executable, _ := a.sim.eth.TxPool().Stats(); executable > 0 {
+				a.sim.Commit()
 			}
 		}
 	}()
@@ -81,9 +72,15 @@ func (a *simulatedBeaconAPI) loop() {
 			close(doCommit)
 			return
 		case <-newWxs:
-			commit()
+			select {
+			case doCommit <- struct{}{}:
+			default:
+			}
 		case <-newTxs:
-			commit()
+			select {
+			case doCommit <- struct{}{}:
+			default:
+			}
 		}
 	}
 }
