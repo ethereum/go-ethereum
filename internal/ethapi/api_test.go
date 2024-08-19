@@ -2007,6 +2007,23 @@ func TestSimulateV1(t *testing.T) {
 			blocks: []simBlock{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: {
+						// Yul code:
+						// object "Test" {
+						//    code {
+						//        // Get the gas price from the transaction
+						//        let gasPrice := gasprice()
+						//
+						//        // Get the base fee from the block
+						//        let baseFee := basefee()
+						//
+						//        // Store gasPrice and baseFee in memory
+						//        mstore(0x0, gasPrice)
+						//        mstore(0x20, baseFee)
+						//
+						//        // Return the data
+						//        return(0x0, 0x40)
+						//    }
+						// }
 						Code: hex2Bytes("3a489060005260205260406000f3"),
 					},
 				},
@@ -2098,6 +2115,23 @@ func TestSimulateV1(t *testing.T) {
 			blocks: []simBlock{{
 				StateOverrides: &StateOverride{
 					randomAccounts[2].addr: {
+						// Yul code:
+						// object "Test" {
+						//    code {
+						//        // Get the gas price from the transaction
+						//        let gasPrice := gasprice()
+						//
+						//        // Get the base fee from the block
+						//        let baseFee := basefee()
+						//
+						//        // Store gasPrice and baseFee in memory
+						//        mstore(0x0, gasPrice)
+						//        mstore(0x20, baseFee)
+						//
+						//        // Return the data
+						//        return(0x0, 0x40)
+						//    }
+						// }
 						Code: hex2Bytes("3a489060005260205260406000f3"),
 					},
 				},
