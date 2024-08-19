@@ -60,7 +60,10 @@ func (a *simulatedBeaconAPI) loop() {
 		for _ = range doCommit {
 			a.sim.Commit()
 			a.sim.eth.TxPool().Sync()
-			if executable, _ := a.sim.eth.TxPool().Stats(); executable > 0 {
+			for {
+				if executable, _ := a.sim.eth.TxPool().Stats(); executable == 0 {
+					break
+				}
 				a.sim.Commit()
 			}
 		}
