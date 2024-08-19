@@ -54,7 +54,8 @@ func (a *simulatedBeaconAPI) loop() {
 	)
 	defer newTxsSub.Unsubscribe()
 	defer newWxsSub.Unsubscribe()
-	// a background thread which signals to the simulator when to commit
+
+	// A background thread which signals to the simulator when to commit
 	// based on messages over doCommit.
 	go func() {
 		for _ = range doCommit {

@@ -54,11 +54,10 @@ type newWithdrawalsEvent struct{ Withdrawals types.Withdrawals }
 // add queues a withdrawal for future inclusion.
 func (w *withdrawalQueue) add(withdrawal *types.Withdrawal) error {
 	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	w.pending = append(w.pending, withdrawal)
-	w.feed.Send(newWithdrawalsEvent{types.Withdrawals{withdrawal}})
+	w.mu.Unlock()
 
+	w.feed.Send(newWithdrawalsEvent{types.Withdrawals{withdrawal}})
 	return nil
 }
 
