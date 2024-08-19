@@ -1,6 +1,7 @@
 module github.com/ethereum/go-ethereum
 
 go 1.22
+
 toolchain go1.22.0
 
 require (
