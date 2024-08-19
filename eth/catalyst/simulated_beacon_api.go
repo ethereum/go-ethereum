@@ -58,14 +58,14 @@ func (a *simulatedBeaconAPI) loop() {
 	// A background thread which signals to the simulator when to commit
 	// based on messages over doCommit.
 	go func() {
-		for _ = range doCommit {
+		for range doCommit {
 			a.sim.Commit()
 			a.sim.eth.TxPool().Sync()
 
 			// It's worth noting that in case a tx ends up in the pool listed as
 			// "executable", but for whatever reason the miner does not include it in
 			// a block -- maybe the miner is enforcing a higher tip than the pool --
-			// this code will spinloop.
+			// this code will spinloopk.
 			for {
 				if executable, _ := a.sim.eth.TxPool().Stats(); executable == 0 {
 					break
