@@ -88,8 +88,8 @@ func TestSimulateSanitizeBlockOrder(t *testing.T) {
 			if b.BlockOverrides.Time == nil {
 				t.Fatalf("testcase %d: block time not set", i)
 			}
-			if (uint64)(*b.BlockOverrides.Time) != tc.expected[bi].timestamp {
-				t.Errorf("testcase %d: block timestamp mismatch. Want %d, have %d", i, tc.expected[bi].timestamp, (uint64)(*b.BlockOverrides.Time))
+			if uint64(*b.BlockOverrides.Time) != tc.expected[bi].timestamp {
+				t.Errorf("testcase %d: block timestamp mismatch. Want %d, have %d", i, tc.expected[bi].timestamp, uint64(*b.BlockOverrides.Time))
 			}
 			have := b.BlockOverrides.Number.ToInt().Uint64()
 			if have != tc.expected[bi].number {

@@ -264,18 +264,15 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, 
 		nonce := state.GetNonce(call.from())
 		call.Nonce = (*hexutil.Uint64)(&nonce)
 	}
-	var gas uint64
-	if call.Gas != nil {
-		gas = uint64(*call.Gas)
-	}
-	if *gasUsed+gas > blockContext.GasLimit {
-		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", gasUsed, blockContext.GasLimit)}
-	}
 	// Let the call run wild unless explicitly specified.
 	if call.Gas == nil {
 		remaining := blockContext.GasLimit - *gasUsed
 		call.Gas = (*hexutil.Uint64)(&remaining)
 	}
+	if *gasUsed+uint64(*call.Gas) > blockContext.GasLimit {
+		return &blockGasLimitReachedError{fmt.Sprintf("block gas limit reached: %d >= %d", gasUsed, blockContext.GasLimit)}
+	}
+
 	if err := call.CallDefaults(sim.gp.Gas(), header.BaseFee, sim.chainConfig.ChainID); err != nil {
 		return err
 	}
