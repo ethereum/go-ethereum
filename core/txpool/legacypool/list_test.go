@@ -17,6 +17,7 @@
 package legacypool
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -129,11 +130,18 @@ func TestFilterTxConditional(t *testing.T) {
 
 	options.KnownAccounts = types.KnownAccounts{
 		common.Address{19: 1}: &types.Value{
-			Single: common.HexToRefHash("0xe734938daf39aae1fa4ee64dc3155d7c049f28b57a8ada8ad9e86832e0253bef"),
+			Single: common.HexToRefHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 		},
 	}
 
+	trie, _ := state.StorageTrie(common.Address{19: 1})
+	fmt.Println("before", trie)
+
 	state.SetState(common.Address{19: 1}, common.Hash{}, common.Hash{30: 1})
+
+	trie, _ = state.StorageTrie(common.Address{19: 1})
+	fmt.Println("after", trie.Hash())
+
 	tx2.PutOptions(&options)
 	list.Add(tx2, DefaultConfig.PriceBump)
 
@@ -145,6 +153,9 @@ func TestFilterTxConditional(t *testing.T) {
 
 	// Set state that conflicts with tx2's policy
 	state.SetState(common.Address{19: 1}, common.Hash{}, common.Hash{31: 1})
+
+	trie, _ = state.StorageTrie(common.Address{19: 1})
+	fmt.Println("after2", trie.Hash())
 
 	// tx2 should be the single transaction filtered out
 	drops = list.FilterTxConditional(state)

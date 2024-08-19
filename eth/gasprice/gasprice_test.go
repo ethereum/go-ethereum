@@ -18,26 +18,21 @@ package gasprice
 
 import (
 	"context"
-	"crypto/sha256"
-	"fmt"
 	"math"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/holiman/uint256"
 )
 
 const testHead = 32
@@ -151,28 +146,25 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 			Alloc:  types.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 		}
 		signer = types.LatestSigner(gspec.Config)
-
-		// Compute empty blob hash.
-		emptyBlob          = kzg4844.Blob{}
-		emptyBlobCommit, _ = kzg4844.BlobToCommitment(&emptyBlob)
-		emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 	)
 
 	config.LondonBlock = londonBlock
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
-	var engine consensus.Engine = beacon.New(ethash.NewFaker())
-	td := params.GenesisDifficulty.Uint64()
+	config.TerminalTotalDifficulty = common.Big0
+	// var engine consensus.Engine = beacon.New(ethash.NewFaker())
+	// td := params.GenesisDifficulty.Uint64()
+	engine := ethash.NewFaker()
 
-	if cancunBlock != nil {
-		// ts := gspec.Timestamp + cancunBlock.Uint64()*10 // fixed 10 sec block time in blockgen
-		config.ShanghaiBlock = londonBlock
-		config.CancunBlock = cancunBlock
-		signer = types.LatestSigner(gspec.Config)
-	}
+	// if cancunBlock != nil {
+	// 	ts := gspec.Timestamp + cancunBlock.Uint64()*10 // fixed 10 sec block time in blockgen
+	// 	config.ShanghaiTime = &ts
+	// 	config.CancunTime = &ts
+	// 	signer = types.LatestSigner(gspec.Config)
+	// }
 
 	// Generate testing blocks
-	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, testHead+1, func(i int, b *core.BlockGen) {
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, testHead+1, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{1})
 
 		var txdata types.TxData
@@ -198,39 +190,14 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pe
 		}
 
 		b.AddTx(types.MustSignNewTx(key, signer, txdata))
-
-		if cancunBlock != nil && b.Number().Cmp(cancunBlock) >= 0 {
-			b.SetPoS()
-
-			// put more blobs in each new block
-			for j := 0; j < i && j < 6; j++ {
-				blobTx := &types.BlobTx{
-					ChainID:    uint256.MustFromBig(gspec.Config.ChainID),
-					Nonce:      b.TxNonce(addr),
-					To:         common.Address{},
-					Gas:        30000,
-					GasFeeCap:  uint256.NewInt(100 * params.GWei),
-					GasTipCap:  uint256.NewInt(uint64(i+1) * params.GWei),
-					Data:       []byte{},
-					BlobFeeCap: uint256.NewInt(1),
-					BlobHashes: []common.Hash{emptyBlobVHash},
-					Value:      uint256.NewInt(100),
-					Sidecar:    nil,
-				}
-				b.AddTx(types.MustSignNewTx(key, signer, blobTx))
-			}
-		}
-		td += b.Difficulty().Uint64()
 	})
 	// Construct testing chain
-	gspec.Config.TerminalTotalDifficulty = new(big.Int).SetUint64(td)
-	chain, err := core.NewBlockChain(db, &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec, nil, engine, vm.Config{}, nil, nil, nil)
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), &core.CacheConfig{TrieCleanNoPrefetch: true}, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create local chain, %v", err)
 	}
-	if i, err := chain.InsertChain(blocks); err != nil {
-		panic(fmt.Errorf("error inserting block %d: %w", i, err))
-	}
+
+	chain.InsertChain(blocks)
 	chain.SetFinalized(chain.GetBlockByNumber(25).Header())
 	chain.SetSafe(chain.GetBlockByNumber(25).Header())
 

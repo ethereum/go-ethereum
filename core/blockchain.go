@@ -572,10 +572,26 @@ func NewParallelBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis 
 	return bc, nil
 }
 
-func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (types.Receipts, []*types.Log, uint64, *state.StateDB, error) {
+func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ types.Receipts, _ []*types.Log, _ uint64, _ *state.StateDB, blockEndErr error) {
 	// Process the block using processor and parallelProcessor at the same time, take the one which finishes first, cancel the other, and return the result
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	if bc.logger != nil && bc.logger.OnBlockStart != nil {
+		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+		bc.logger.OnBlockStart(tracing.BlockEvent{
+			Block:     block,
+			TD:        td,
+			Finalized: bc.CurrentFinalBlock(),
+			Safe:      bc.CurrentSafeBlock(),
+		})
+	}
+
+	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
+		defer func() {
+			bc.logger.OnBlockEnd(blockEndErr)
+		}()
+	}
 
 	type Result struct {
 		receipts types.Receipts
@@ -595,6 +611,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (ty
 		if err != nil {
 			return nil, nil, 0, nil, err
 		}
+		parallelStatedb.SetLogger(bc.logger)
 
 		processorCount++
 
@@ -618,6 +635,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (ty
 		if err != nil {
 			return nil, nil, 0, nil, err
 		}
+		statedb.SetLogger(bc.logger)
 
 		processorCount++
 
@@ -631,6 +649,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (ty
 				}
 			}
 			statedb.StartPrefetcher("chain", witness)
+
 			receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig, ctx)
 			resultChan <- Result{receipts, logs, usedGas, err, statedb, blockExecutionSerialCounter}
 		}()
