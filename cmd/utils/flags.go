@@ -812,8 +812,9 @@ var (
 	DiscoveryV5Flag = &cli.BoolFlag{
 		Name:     "discovery.v5",
 		Aliases:  []string{"discv5"},
-		Usage:    "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
+		Usage:    "Enables the V5 discovery mechanism",
 		Category: flags.NetworkingCategory,
+		Value:    true,
 	}
 	NetrestrictFlag = &cli.StringFlag{
 		Name:     "netrestrict",
