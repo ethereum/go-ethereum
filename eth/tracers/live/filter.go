@@ -98,6 +98,10 @@ func toKVKey(name string, number uint64, hash common.Hash) []byte {
 	case "callTracer":
 		typo = byte('C')
 	case "flatCallTracer":
+		typo = byte('F')
+	case "prestateCallTracer":
+		typo = byte('S')
+	case "parityTracer":
 		typo = byte('P')
 	default:
 		panic("not supported yet")
