@@ -26,15 +26,14 @@ import (
 
 // simulatedBeaconAPI provides a RPC API for SimulatedBeacon.
 type simulatedBeaconAPI struct {
-	sim      *SimulatedBeacon
-	doCommit chan struct{}
+	sim *SimulatedBeacon
 }
 
 // newSimulatedBeaconAPI returns an instance of simulatedBeaconAPI with a
 // buffered commit channel. If period is zero, it starts a goroutine to handle
 // new tx events.
 func newSimulatedBeaconAPI(sim *SimulatedBeacon) *simulatedBeaconAPI {
-	api := &simulatedBeaconAPI{sim: sim, doCommit: make(chan struct{}, 1)}
+	api := &simulatedBeaconAPI{sim: sim}
 	if sim.period == 0 {
 		// mine on demand if period is set to 0
 		go api.loop()
@@ -51,46 +50,40 @@ func (a *simulatedBeaconAPI) loop() {
 		newWxs    = make(chan newWithdrawalsEvent)
 		newTxsSub = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
 		newWxsSub = a.sim.withdrawals.subscribe(newWxs)
+		doCommit  = make(chan struct{}, 1)
 	)
 	defer newTxsSub.Unsubscribe()
 	defer newWxsSub.Unsubscribe()
 
-	go a.worker()
-
-	for {
+	// commit is a non-blocking method to initate Commit() on the simulator.
+	commit := func() {
 		select {
-		case <-a.sim.shutdownCh:
-			return
-		case <-newWxs:
-			a.commit()
-		case <-newTxs:
-			a.commit()
+		case doCommit <- struct{}{}:
+		default:
 		}
 	}
-}
-
-// commit is a non-blocking method to initate Commit() on the simulator.
-func (a *simulatedBeaconAPI) commit() {
-	select {
-	case a.doCommit <- struct{}{}:
-	default:
-	}
-}
-
-// worker runs in the background and signals to the simulator when to commit
-// based on messages over doCommit.
-func (a *simulatedBeaconAPI) worker() {
-	for {
-		select {
-		case <-a.sim.shutdownCh:
-			return
-		case <-a.doCommit:
+	// a background thread which signals to the simulator when to commit
+	// based on messages over doCommit.
+	go func() {
+		for _ = range doCommit {
 			a.sim.Commit()
 			a.sim.eth.TxPool().Sync()
 			executable, _ := a.sim.eth.TxPool().Stats()
 			if executable != 0 {
-				a.commit()
+				commit()
 			}
+		}
+	}()
+
+	for {
+		select {
+		case <-a.sim.shutdownCh:
+			close(doCommit)
+			return
+		case <-newWxs:
+			commit()
+		case <-newTxs:
+			commit()
 		}
 	}
 }
