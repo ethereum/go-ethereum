@@ -30,7 +30,8 @@ func init() {
 }
 
 const (
-	tableSize = 2 * 1024 * 1024 * 1024
+	tableSize    = 2 * 1024 * 1024 * 1024
+	parityTracer = "parityTracer"
 )
 
 type traceResult struct {
@@ -66,7 +67,7 @@ type filter struct {
 	blockCh    chan uint64
 	stopCh     chan struct{}
 	tables     map[string]bool
-	traces     map[string][]*traceResult
+	traces     map[string][]interface{}
 	tracer     *native.MuxTracer
 	latest     atomic.Uint64
 	offset     atomic.Uint64
@@ -97,12 +98,16 @@ func toKVKey(name string, number uint64, hash common.Hash) []byte {
 	switch name {
 	case "callTracer":
 		typo = byte('C')
+	case "prestateTracer":
+		typo = byte('S')
 	case "flatCallTracer":
+		typo = byte('F')
+	case parityTracer:
 		typo = byte('P')
 	default:
 		panic("not supported yet")
 	}
-	// TODO: have some prefix?
+	// TODO: need some prefix?
 	key := append(encodeBlockNumber(number), hash.Bytes()...)
 	key = append(key, typo)
 
@@ -137,7 +142,7 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 
 	muxTracers := t.Tracers()
 	tables := make(map[string]bool, len(muxTracers))
-	traces := make(map[string][]*traceResult, len(muxTracers))
+	traces := make(map[string][]interface{}, len(muxTracers))
 	for name := range muxTracers {
 		tables[toTraceTable(name)] = false
 		traces[name] = nil
@@ -230,7 +235,7 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	// reset local cache
 	txs := ev.Block.Transactions().Len()
 	for name := range f.traces {
-		f.traces[name] = make([]*traceResult, 0, txs)
+		f.traces[name] = make([]interface{}, 0, txs)
 	}
 
 	// save the earliest arrived blknum as the offset
@@ -252,8 +257,12 @@ func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 	for name, tt := range f.tracer.Tracers() {
 		trace := &traceResult{TxHash: receipt.TxHash}
 		result, err := tt.GetResult()
+		if name == parityTracer {
+			f.traces[name] = append(f.traces[name], result)
+			continue
+		}
 		if err != nil {
-			log.Error("Failed to get tracer results", "number", f.latest.Load(), "error", err)
+			log.Error("Failed to get tracer result", "number", f.latest.Load(), "txhash", receipt.TxHash, "error", err)
 			trace.Error = err.Error()
 		} else {
 			trace.Result = result
