@@ -1095,7 +1095,7 @@ func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
 
 // MakeHeader returns a new header object with the overridden
 // fields.
-// Note: MakeHeader ignores blobGasPrice if set. That's because
+// Note: MakeHeader ignores BlobBaseFee if set. That's because
 // header has no such field.
 func (o *BlockOverrides) MakeHeader(header *types.Header) *types.Header {
 	if o == nil {

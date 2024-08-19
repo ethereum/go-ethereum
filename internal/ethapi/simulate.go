@@ -42,6 +42,9 @@ const (
 	// maxSimulateBlocks is the maximum number of blocks that can be simulated
 	// in a single request.
 	maxSimulateBlocks = 256
+
+	// timestampIncrement is the default increment between block timestamps.
+	timestampIncrement = 1
 )
 
 // simBlock is a batch of calls to be simulated sequentially.
@@ -106,7 +109,7 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[str
 	defer cancel()
 
 	var err error
-	blocks, err = sim.sanitizeBlockOrder(blocks)
+	blocks, err = sim.sanitizeChain(blocks)
 	if err != nil {
 		return nil, err
 	}
@@ -287,14 +290,16 @@ func (sim *simulator) activePrecompiles(ctx context.Context, base *types.Header)
 	return vm.ActivePrecompiledContracts(rules).Copy()
 }
 
-// sanitizeBlockOrder iterates the blocks checking that block numbers
-// are strictly increasing. When necessary it will generate empty blocks.
-// It modifies the block's override object.
-func (sim *simulator) sanitizeBlockOrder(blocks []simBlock) ([]simBlock, error) {
+// sanitizeChain checks the chain integrity. Specifically it checks that
+// block numbers and timestamp are strictly increasing, setting default values
+// when necessary. Gaps in block numbers are filled with empty blocks.
+// Note: It modifies the block's override object.
+func (sim *simulator) sanitizeChain(blocks []simBlock) ([]simBlock, error) {
 	var (
-		res        = make([]simBlock, 0, len(blocks))
-		base       = sim.base
-		prevNumber = base.Number
+		res           = make([]simBlock, 0, len(blocks))
+		base          = sim.base
+		prevNumber    = base.Number
+		prevTimestamp = base.Time
 	)
 	for _, block := range blocks {
 		if block.BlockOverrides == nil {
@@ -317,12 +322,25 @@ func (sim *simulator) sanitizeBlockOrder(blocks []simBlock) ([]simBlock, error) 
 			// Assign block number to the empty blocks.
 			for i := uint64(0); i < gap.Uint64(); i++ {
 				n := new(big.Int).Add(prevNumber, big.NewInt(int64(i+1)))
-				b := simBlock{BlockOverrides: &BlockOverrides{Number: (*hexutil.Big)(n)}}
+				t := prevTimestamp + timestampIncrement
+				b := simBlock{BlockOverrides: &BlockOverrides{Number: (*hexutil.Big)(n), Time: (*hexutil.Uint64)(&t)}}
+				prevTimestamp = t
 				res = append(res, b)
 			}
 		}
 		// Only append block after filling a potential gap.
 		prevNumber = block.BlockOverrides.Number.ToInt()
+		var t uint64
+		if block.BlockOverrides.Time == nil {
+			t = prevTimestamp + timestampIncrement
+			block.BlockOverrides.Time = (*hexutil.Uint64)(&t)
+		} else {
+			t = uint64(*block.BlockOverrides.Time)
+			if t <= prevTimestamp {
+				return nil, &invalidBlockTimestampError{fmt.Sprintf("block timestamps must be in order: %d <= %d", t, prevTimestamp)}
+			}
+		}
+		prevTimestamp = t
 		res = append(res, block)
 	}
 	return res, nil
@@ -333,23 +351,15 @@ func (sim *simulator) sanitizeBlockOrder(blocks []simBlock) ([]simBlock, error) 
 // It assumes blocks are in order and numbers have been validated.
 func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 	var (
-		res           = make([]*types.Header, len(blocks))
-		base          = sim.base
-		prevTimestamp = base.Time
-		header        = base
+		res    = make([]*types.Header, len(blocks))
+		base   = sim.base
+		header = base
 	)
 	for bi, block := range blocks {
 		if block.BlockOverrides == nil || block.BlockOverrides.Number == nil {
 			return nil, errors.New("empty block number")
 		}
 		overrides := block.BlockOverrides
-		if overrides.Time == nil {
-			t := prevTimestamp + 1
-			overrides.Time = (*hexutil.Uint64)(&t)
-		} else if time := (*uint64)(overrides.Time); *time <= prevTimestamp {
-			return nil, &invalidBlockTimestampError{fmt.Sprintf("block timestamps must be in order: %d <= %d", *time, prevTimestamp)}
-		}
-		prevTimestamp = uint64(*overrides.Time)
 
 		var withdrawalsHash *common.Hash
 		if sim.chainConfig.IsShanghai(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
