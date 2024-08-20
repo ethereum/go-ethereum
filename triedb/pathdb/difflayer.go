@@ -38,7 +38,8 @@ type diffLayer struct {
 	states *StateSetWithOrigin // Associated state changes along with origin value
 
 	parent layer        // Parent layer modified by this one, never nil, **can be changed**
-	lock   sync.RWMutex // Lock used to protect parent
+	stale  bool         // Signals that the layer became stale (referenced disk layer became stale)
+	lock   sync.RWMutex // Lock used to protect parent and stale fields
 }
 
 // newDiffLayer creates a new diff layer on top of an existing layer.
@@ -77,6 +78,25 @@ func (dl *diffLayer) parentLayer() layer {
 	return dl.parent
 }
 
+// isStale returns whether this layer has become stale or if it's still live.
+func (dl *diffLayer) isStale() bool {
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	return dl.stale
+}
+
+// markStale sets the stale flag as true.
+func (dl *diffLayer) markStale() {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	if dl.stale {
+		panic("triedb diff layer is stale")
+	}
+	dl.stale = true
+}
+
 // node implements the layer interface, retrieving the trie node blob with the
 // provided node information. No error will be returned if the node is not found.
 func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error) {
@@ -85,6 +105,9 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
+	if dl.stale {
+		return nil, common.Hash{}, nil, errSnapshotStale
+	}
 	// If the trie node is known locally, return it
 	n, ok := dl.nodes.node(owner, path)
 	if ok {
@@ -156,7 +179,7 @@ func (dl *diffLayer) update(root common.Hash, id uint64, block uint64, nodes *no
 }
 
 // persist flushes the diff layer and all its parent layers to disk layer.
-func (dl *diffLayer) persist(force bool) (layer, error) {
+func (dl *diffLayer) persist(force bool) (*diskLayer, error) {
 	if parent, ok := dl.parentLayer().(*diffLayer); ok {
 		// Hold the lock to prevent any read operation until the new
 		// parent is linked correctly.
@@ -183,7 +206,7 @@ func (dl *diffLayer) size() uint64 {
 
 // diffToDisk merges a bottom-most diff into the persistent disk layer underneath
 // it. The method will panic if called onto a non-bottom-most diff layer.
-func diffToDisk(layer *diffLayer, force bool) (layer, error) {
+func diffToDisk(layer *diffLayer, force bool) (*diskLayer, error) {
 	disk, ok := layer.parentLayer().(*diskLayer)
 	if !ok {
 		panic(fmt.Sprintf("unknown layer type: %T", layer.parentLayer()))
