@@ -149,12 +149,6 @@ func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) 
 	return fn(db)
 }
 
-// MigrateTable processes the entries in a given table in sequence
-// converting them to a new format if they're of an old format.
-func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
-	return errNotSupported
-}
-
 // AncientDatadir returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) AncientDatadir() (string, error) {
 	return "", errNotSupported
