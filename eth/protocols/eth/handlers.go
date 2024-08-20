@@ -305,8 +305,11 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 				continue
 			}
 		} else {
-			block := chain.GetBlockByHash(hash)
-			results = transformReceipts(results, block.Transactions())
+			header := chain.GetHeaderByHash(hash)
+			if header.ReceiptHash != types.EmptyReceiptsHash {
+				body := chain.GetBody(hash)
+				results = transformReceipts(results, body.Transactions)
+			}
 		}
 		receipts = append(receipts, results)
 		bytes += len(results)
