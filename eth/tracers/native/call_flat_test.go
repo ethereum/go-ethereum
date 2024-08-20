@@ -31,7 +31,7 @@ import (
 )
 
 func TestCallFlatStop(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("flatCallTracer", &tracers.Context{}, nil)
+	tracer, err := tracers.DefaultDirectory.New("flatCallTracer", nil)
 	require.NoError(t, err)
 
 	// this error should be returned by GetResult

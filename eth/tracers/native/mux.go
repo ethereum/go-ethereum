@@ -38,7 +38,7 @@ type muxTracer struct {
 }
 
 // newMuxTracer returns a new mux tracer.
-func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
+func newMuxTracer(cfg json.RawMessage) (*tracers.Tracer, error) {
 	var config map[string]json.RawMessage
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -48,7 +48,7 @@ func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, e
 	objects := make([]*tracers.Tracer, 0, len(config))
 	names := make([]string, 0, len(config))
 	for k, v := range config {
-		t, err := tracers.DefaultDirectory.New(k, ctx, v)
+		t, err := tracers.DefaultDirectory.New(k, v)
 		if err != nil {
 			return nil, err
 		}

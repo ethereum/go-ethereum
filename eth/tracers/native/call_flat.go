@@ -125,7 +125,7 @@ type flatCallTracerConfig struct {
 }
 
 // newFlatCallTracer returns a new flatCallTracer.
-func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
+func newFlatCallTracer(cfg json.RawMessage) (*tracers.Tracer, error) {
 	var config flatCallTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -135,12 +135,12 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trac
 
 	// Create inner call tracer with default configuration, don't forward
 	// the OnlyTopCall or WithLog to inner for now
-	t, err := newCallTracerObject(ctx, nil)
+	t, err := newCallTracerObject(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	ft := &flatCallTracer{tracer: t, ctx: ctx, config: config}
+	ft := &flatCallTracer{tracer: t, config: config}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: ft.OnTxStart,
@@ -211,6 +211,12 @@ func (t *flatCallTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 }
 
 func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
+	t.ctx = &tracers.Context{
+		BlockHash:   receipt.BlockHash,
+		BlockNumber: receipt.BlockNumber,
+		TxIndex:     int(receipt.TransactionIndex),
+		TxHash:      receipt.TxHash,
+	}
 	if t.interrupt.Load() {
 		return
 	}

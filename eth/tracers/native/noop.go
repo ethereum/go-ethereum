@@ -35,7 +35,7 @@ func init() {
 type noopTracer struct{}
 
 // newNoopTracer returns a new noop tracer.
-func newNoopTracer(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer, error) {
+func newNoopTracer(_ json.RawMessage) (*tracers.Tracer, error) {
 	t := &noopTracer{}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
