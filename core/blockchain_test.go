@@ -1367,7 +1367,7 @@ func TestBlocksHashCacheUpdate(t *testing.T) {
 		}
 		cachedAt, _ := chain.blocksHashCache.Get(uint64(3))
 
-		if len(cachedAt.([]common.Hash)) != 2 {
+		if len(cachedAt) != 2 {
 			t.Error("BlocksHashCache doesn't add new cache after concating new fork ")
 		}
 	})

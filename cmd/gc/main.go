@@ -20,7 +20,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/ethdb/leveldb"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 )
 
 var (
@@ -29,7 +29,7 @@ var (
 	sercureKey   = []byte("secure-key-")
 	nWorker      = runtime.NumCPU() / 2
 	cleanAddress = []common.Address{common.BlockSignersBinary}
-	cache        *lru.Cache
+	cache        *lru.Cache[common.Hash, struct{}]
 	finish       = int32(0)
 	running      = true
 	stateRoots   = make(chan TrieRoot)
@@ -58,7 +58,7 @@ func main() {
 	currentHeader := core.GetHeader(lddb, head, core.GetBlockNumber(lddb, head))
 	tridb := trie.NewDatabase(lddb)
 	catchEventInterupt(db)
-	cache, _ = lru.New(*cacheSize)
+	cache = lru.NewCache[common.Hash, struct{}](*cacheSize)
 	go func() {
 		for i := uint64(1); i <= currentHeader.Number.Uint64(); i++ {
 			hash := core.GetCanonicalHash(lddb, i)
@@ -222,7 +222,7 @@ func processNodes(node StateNode, db *leveldb.Database) ([17]*StateNode, [17]*[]
 				}
 			}
 		}
-		cache.Add(commonHash, true)
+		cache.Add(commonHash, struct{}{})
 	}
 	return newNodes, keys, number
 }

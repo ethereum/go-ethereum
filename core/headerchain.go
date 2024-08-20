@@ -27,13 +27,13 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -56,9 +56,9 @@ type HeaderChain struct {
 	currentHeader     atomic.Value // Current head of the header chain (may be above the block chain!)
 	currentHeaderHash common.Hash  // Hash of the current head of the header chain (prevent recomputing all the time)
 
-	headerCache *lru.Cache // Cache for the most recent block headers
-	tdCache     *lru.Cache // Cache for the most recent block total difficulties
-	numberCache *lru.Cache // Cache for the most recent block numbers
+	headerCache *lru.Cache[common.Hash, *types.Header]
+	tdCache     *lru.Cache[common.Hash, *big.Int] // most recent total difficulties
+	numberCache *lru.Cache[common.Hash, uint64]   // most recent block numbers
 
 	procInterrupt func() bool
 
@@ -72,10 +72,6 @@ type HeaderChain struct {
 //	procInterrupt points to the parent's interrupt semaphore
 //	wg points to the parent's shutdown wait group
 func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, procInterrupt func() bool) (*HeaderChain, error) {
-	headerCache, _ := lru.New(headerCacheLimit)
-	tdCache, _ := lru.New(tdCacheLimit)
-	numberCache, _ := lru.New(numberCacheLimit)
-
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 	if err != nil {
@@ -85,9 +81,9 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	hc := &HeaderChain{
 		config:        config,
 		chainDb:       chainDb,
-		headerCache:   headerCache,
-		tdCache:       tdCache,
-		numberCache:   numberCache,
+		headerCache:   lru.NewCache[common.Hash, *types.Header](headerCacheLimit),
+		tdCache:       lru.NewCache[common.Hash, *big.Int](tdCacheLimit),
+		numberCache:   lru.NewCache[common.Hash, uint64](numberCacheLimit),
 		procInterrupt: procInterrupt,
 		rand:          mrand.New(mrand.NewSource(seed.Int64())),
 		engine:        engine,
@@ -113,7 +109,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 // from the cache or database
 func (hc *HeaderChain) GetBlockNumber(hash common.Hash) uint64 {
 	if cached, ok := hc.numberCache.Get(hash); ok {
-		return cached.(uint64)
+		return cached
 	}
 	number := GetBlockNumber(hc.chainDb, hash)
 	if number != missingNumber {
@@ -312,7 +308,7 @@ func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []co
 func (hc *HeaderChain) GetTd(hash common.Hash, number uint64) *big.Int {
 	// Short circuit if the td's already in the cache, retrieve otherwise
 	if cached, ok := hc.tdCache.Get(hash); ok {
-		return cached.(*big.Int)
+		return cached
 	}
 	td := GetTd(hc.chainDb, hash, number)
 	if td == nil {
@@ -344,7 +340,7 @@ func (hc *HeaderChain) WriteTd(hash common.Hash, number uint64, td *big.Int) err
 func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	// Short circuit if the header's already in the cache, retrieve otherwise
 	if header, ok := hc.headerCache.Get(hash); ok {
-		return header.(*types.Header)
+		return header
 	}
 	header := GetHeader(hc.chainDb, hash, number)
 	if header == nil {
