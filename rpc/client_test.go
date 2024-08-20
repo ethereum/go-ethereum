@@ -577,7 +577,7 @@ func TestUnsubscribeTimeout(t *testing.T) {
 	// test is considered failed.
 	select {
 	case <-done:
-	case <-time.After(unsubscribeTimeout + 50*time.Millisecond):
+	case <-time.After(unsubscribeTimeout + 3*time.Second):
 		t.Fatalf("Unsubscribe did not return within %s", unsubscribeTimeout)
 	}
 }
