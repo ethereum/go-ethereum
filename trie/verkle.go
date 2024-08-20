@@ -216,7 +216,7 @@ func (t *VerkleTrie) RollBackAccount(addr common.Address) error {
 	codeSize := binary.LittleEndian.Uint64(codeSizeBytes)
 
 	// Delete the account header + first 64 slots + first 128 code chunks
-	_, err = t.root.(*verkle.InternalNode).DeleteAtStem(codeSizeKey, t.nodeResolver)
+	_, err = t.root.(*verkle.InternalNode).DeleteAtStem(codeSizeKey[:31], t.nodeResolver)
 	if err != nil {
 		return fmt.Errorf("error rolling back account header: %w", err)
 	}
