@@ -44,8 +44,8 @@ type Tracer struct {
 	Stop func(err error)
 }
 
-type ctorFn func(*Context, json.RawMessage) (*Tracer, error)
-type jsCtorFn func(string, *Context, json.RawMessage) (*Tracer, error)
+type ctorFn func(json.RawMessage) (*Tracer, error)
+type jsCtorFn func(string, json.RawMessage) (*Tracer, error)
 
 type elem struct {
 	ctor ctorFn
@@ -78,12 +78,12 @@ func (d *directory) RegisterJSEval(f jsCtorFn) {
 // New returns a new instance of a tracer, by iterating through the
 // registered lookups. Name is either name of an existing tracer
 // or an arbitrary JS code.
-func (d *directory) New(name string, ctx *Context, cfg json.RawMessage) (*Tracer, error) {
+func (d *directory) New(name string, cfg json.RawMessage) (*Tracer, error) {
 	if elem, ok := d.elems[name]; ok {
-		return elem.ctor(ctx, cfg)
+		return elem.ctor(cfg)
 	}
 	// Assume JS code
-	return d.jsEval(name, ctx, cfg)
+	return d.jsEval(name, cfg)
 }
 
 // IsJS will return true if the given tracer will evaluate
