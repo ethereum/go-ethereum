@@ -12,7 +12,6 @@ import (
 
 const (
 	freezeThreshold = 64
-	kvdbHeadKey     = "FilterFreezerHead"
 	kvdbTailKey     = "FilterFreezerTail"
 )
 
@@ -28,18 +27,16 @@ func (f *filter) freeze() {
 			}
 			lastFinalized = finalizedBlock
 
-			head, tail := f.getFreezerHeadTail()
-
-			// If tail is 0 (not found in kvdb), use the offset
-			if tail == 0 {
-				tail = f.offset.Load()
-			}
+			tail := f.getFreezerTail()
 
 			// Freeze at most freezeThreshold blocks
 			freezeUpTo := finalizedBlock
 			freezeUpTo = min(freezeUpTo, tail+freezeThreshold)
+			if freezeUpTo <= tail {
+				continue
+			}
 
-			log.Info("Move traces from kvdb to frdb", "from", tail, "to", freezeUpTo)
+			log.Info("Move traces from kvdb to frdb", "from", tail, "to", freezeUpTo-1)
 			for blknum := tail; blknum < freezeUpTo; blknum++ {
 				if err := f.moveBlockToFreezer(blknum); err != nil {
 					log.Error("Failed to move block to freezer", "block", blknum, "error", err)
@@ -47,38 +44,24 @@ func (f *filter) freeze() {
 				}
 			}
 
-			// Update head and tail
-			if freezeUpTo > tail {
-				if err := f.updateFreezerTail(freezeUpTo); err != nil {
-					log.Error("Failed to update freezer tail", "error", err)
-				}
-			}
-			if freezeUpTo > head {
-				if err := f.updateFreezerHead(freezeUpTo); err != nil {
-					log.Error("Failed to update freezer head", "error", err)
-				}
+			// Update the tail of the freezer
+			if err := f.updateFreezerTail(freezeUpTo); err != nil {
+				log.Error("Failed to update freezer tail", "error", err)
 			}
 		}
 	}
 }
 
-func (f *filter) getFreezerHeadTail() (head, tail uint64) {
-	headBytes, _ := f.kvdb.Get([]byte(kvdbHeadKey))
+func (f *filter) getFreezerTail() (tail uint64) {
 	tailBytes, _ := f.kvdb.Get([]byte(kvdbTailKey))
 
-	if len(headBytes) > 0 {
-		head = binary.BigEndian.Uint64(headBytes)
-	}
 	if len(tailBytes) > 0 {
 		tail = binary.BigEndian.Uint64(tailBytes)
+	} else {
+		// If tail is 0 (not found in kvdb), use the offset
+		tail = f.offset.Load()
 	}
 	return
-}
-
-func (f *filter) updateFreezerHead(head uint64) error {
-	headBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(headBytes, head)
-	return f.kvdb.Put([]byte(kvdbHeadKey), headBytes)
 }
 
 func (f *filter) updateFreezerTail(tail uint64) error {

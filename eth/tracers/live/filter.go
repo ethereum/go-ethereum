@@ -212,11 +212,6 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 		},
 	}
 
-	// Initialize head if it doesn't exist
-	head, _ := f.getFreezerHeadTail()
-	if head == 0 {
-		f.updateFreezerHead(f.latest.Load())
-	}
 	go f.freeze()
 
 	return hooks, apis, nil
@@ -303,12 +298,7 @@ func (f *filter) readBlockTraces(ctx context.Context, name string, blknum uint64
 		return nil, errors.New("historical data not available")
 	}
 
-	_, tail := f.getFreezerHeadTail()
-
-	// If tail is 0 (not found in kvdb), use the offset
-	if tail == 0 {
-		tail = f.offset.Load()
-	}
+	tail := f.getFreezerTail()
 
 	// Determine whether to read from kvdb or frdb
 	var (
