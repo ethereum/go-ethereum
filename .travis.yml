@@ -15,7 +15,7 @@ jobs:
       if: type = push
       os: linux
       arch: amd64
-      dist: noble
+      dist: focal
       go: 1.23.x
       env:
         - docker
@@ -32,7 +32,7 @@ jobs:
       if: type = push
       os: linux
       arch: arm64
-      dist: noble
+      dist: focal
       go: 1.23.x
       env:
         - docker
@@ -49,7 +49,7 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      dist: noble
+      dist: focal
       sudo: required
       go: 1.23.x
       env:
@@ -100,7 +100,7 @@ jobs:
       if: type = push
       os: linux
       arch: amd64
-      dist: noble
+      dist: focal
       go: 1.23.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
@@ -108,7 +108,7 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      dist: noble
+      dist: focal
       go: 1.22.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
@@ -117,7 +117,7 @@ jobs:
     - stage: build
       if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
-      dist: noble
+      dist: focal
       go: 1.23.x
       env:
         - ubuntu-ppa
@@ -133,7 +133,7 @@ jobs:
     - stage: build
       if: type = cron
       os: linux
-      dist: noble
+      dist: focal
       go: 1.23.x
       env:
         - azure-purge
@@ -146,7 +146,7 @@ jobs:
     - stage: build
       if: type = cron
       os: linux
-      dist: noble
+      dist: focal
       go: 1.23.x
       env:
         - racetests
