@@ -547,7 +547,9 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 			}
 			return
 		}
-		if t.handlePacket(from, buf[:nbytes]) != nil && unhandled != nil {
+		if err := t.handlePacket(from, buf[:nbytes]); err != nil && unhandled == nil {
+			t.log.Debug("Bad discv4 packet", "addr", from, "err", err)
+		} else if err != nil && unhandled != nil {
 			select {
 			case unhandled <- ReadPacket{buf[:nbytes], from}:
 			default:
@@ -564,7 +566,6 @@ func (t *UDPv4) handlePacket(from netip.AddrPort, buf []byte) error {
 
 	rawpacket, fromKey, hash, err := v4wire.Decode(buf)
 	if err != nil {
-		t.log.Debug("Bad discv4 packet", "addr", from, "err", err)
 		return err
 	}
 	packet := t.wrapPacket(rawpacket)

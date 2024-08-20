@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 
@@ -376,87 +374,6 @@ func checkAncientCount(t *testing.T, f *Freezer, kind string, n uint64) {
 		t.Errorf("Ancient(%q, %d) didn't return expected error", kind, index)
 	} else if err != errOutOfBounds {
 		t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
-	}
-}
-
-func TestRenameWindows(t *testing.T) {
-	var (
-		fname   = "file.bin"
-		fname2  = "file2.bin"
-		data    = []byte{1, 2, 3, 4}
-		data2   = []byte{2, 3, 4, 5}
-		data3   = []byte{3, 5, 6, 7}
-		dataLen = 4
-	)
-
-	// Create 2 temp dirs
-	dir1 := t.TempDir()
-	dir2 := t.TempDir()
-
-	// Create file in dir1 and fill with data
-	f, err := os.Create(filepath.Join(dir1, fname))
-	if err != nil {
-		t.Fatal(err)
-	}
-	f2, err := os.Create(filepath.Join(dir1, fname2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	f3, err := os.Create(filepath.Join(dir2, fname2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.Write(data); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f2.Write(data2); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f3.Write(data3); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := f2.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := f3.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(f.Name(), filepath.Join(dir2, fname)); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(f2.Name(), filepath.Join(dir2, fname2)); err != nil {
-		t.Fatal(err)
-	}
-
-	// Check file contents
-	f, err = os.Open(filepath.Join(dir2, fname))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	defer os.Remove(f.Name())
-	buf := make([]byte, dataLen)
-	if _, err := f.Read(buf); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(buf, data) {
-		t.Errorf("unexpected file contents. Got %v\n", buf)
-	}
-
-	f, err = os.Open(filepath.Join(dir2, fname2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	defer os.Remove(f.Name())
-	if _, err := f.Read(buf); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(buf, data2) {
-		t.Errorf("unexpected file contents. Got %v\n", buf)
 	}
 }
 
