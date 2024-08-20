@@ -34,6 +34,7 @@ var (
 	ErrWriteProtection          = errors.New("write protection")
 	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
+	ErrNonceUintOverflow        = errors.New("nonce uint64 overflow")
 
 	// errStopToken is an internal token indicating interpreter loop termination,
 	// never returned to outside callers.
