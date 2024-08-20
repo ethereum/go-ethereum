@@ -314,6 +314,9 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 	return receipts
 }
 
+// transformReceipts takes a slice of rlp-encoded receipts, and transactions,
+// and applies the type-encoding on the receipts (for non-legacy receipts).
+// e.g. for non-legacy receipts: receipt-data -> {tx-type || receipt-data}
 func transformReceipts(blockReceipts []byte, txs []*types.Transaction) []byte {
 	var (
 		out   bytes.Buffer
@@ -322,13 +325,15 @@ func transformReceipts(blockReceipts []byte, txs []*types.Transaction) []byte {
 	)
 	outer := enc.List()
 	for i := 0; it.Next(); i++ {
-		content, _, _ := rlp.SplitList(it.Value())
-		receiptList := enc.List()
-		if txs[i].Type() != types.LegacyTxType {
+		if txs[i].Type() == types.LegacyTxType {
+			enc.Write(it.Value())
+		} else {
+			content, _, _ := rlp.SplitList(it.Value())
+			receiptList := enc.List()
 			enc.Write([]byte{txs[i].Type()})
+			enc.Write(content)
+			enc.ListEnd(receiptList)
 		}
-		enc.Write(content)
-		enc.ListEnd(receiptList)
 	}
 	enc.ListEnd(outer)
 	enc.Flush()
