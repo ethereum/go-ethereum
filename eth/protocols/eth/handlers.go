@@ -327,13 +327,13 @@ func transformReceipts(blockReceipts []byte, txs []*types.Transaction) []byte {
 	for i := 0; it.Next(); i++ {
 		if txs[i].Type() == types.LegacyTxType {
 			enc.Write(it.Value())
-		} else {
-			content, _, _ := rlp.SplitList(it.Value())
-			receiptList := enc.List()
-			enc.Write([]byte{txs[i].Type()})
-			enc.Write(content)
-			enc.ListEnd(receiptList)
+			continue
 		}
+		content, _, _ := rlp.SplitList(it.Value())
+		receiptList := enc.List()
+		enc.Write([]byte{txs[i].Type()})
+		enc.Write(content)
+		enc.ListEnd(receiptList)
 	}
 	enc.ListEnd(outer)
 	enc.Flush()
