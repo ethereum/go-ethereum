@@ -518,6 +518,70 @@ func TestClientCloseUnsubscribeRace(t *testing.T) {
 	}
 }
 
+// unsubscribeBlocker will wait for the quit channel to process an unsubscribe
+// request.
+type unsubscribeBlocker struct {
+	ServerCodec
+	quit chan struct{}
+}
+
+func (b *unsubscribeBlocker) readBatch() ([]*jsonrpcMessage, bool, error) {
+	msgs, batch, err := b.ServerCodec.readBatch()
+	for _, msg := range msgs {
+		if msg.isUnsubscribe() {
+			<-b.quit
+		}
+	}
+	return msgs, batch, err
+}
+
+// TestUnsubscribeTimeout verifies that calling the client's Unsubscribe
+// function will eventually timeout and not block forever in case the serve does
+// not respond.
+// It reproducers the issue https://github.com/ethereum/go-ethereum/issues/30156
+func TestUnsubscribeTimeout(t *testing.T) {
+	srv := NewServer()
+	srv.RegisterName("nftest", new(notificationTestService))
+
+	// Setup middleware to block on unsubscribe.
+	p1, p2 := net.Pipe()
+	blocker := &unsubscribeBlocker{ServerCodec: NewCodec(p1), quit: make(chan struct{})}
+	defer close(blocker.quit)
+
+	// Serve the middleware.
+	go srv.ServeCodec(blocker, OptionMethodInvocation|OptionSubscriptions)
+	defer srv.Stop()
+
+	// Create the client on the other end of the pipe.
+	cfg := new(clientConfig)
+	client, _ := newClient(context.Background(), cfg, func(context.Context) (ServerCodec, error) {
+		return NewCodec(p2), nil
+	})
+	defer client.Close()
+
+	// Start subscription.
+	sub, err := client.Subscribe(context.Background(), "nftest", make(chan int), "someSubscription", 1, 1)
+	if err != nil {
+		t.Fatalf("failed to subscribe: %v", err)
+	}
+
+	// Now on a separate thread, attempt to unsubscribe. Since the middleware
+	// won't return, the function will only return if it times out on the request.
+	done := make(chan struct{})
+	go func() {
+		sub.Unsubscribe()
+		done <- struct{}{}
+	}()
+
+	// Wait for the timeout. If the expected time for the timeout elapses, the
+	// test is considered failed.
+	select {
+	case <-done:
+	case <-time.After(unsubscribeTimeout + 3*time.Second):
+		t.Fatalf("Unsubscribe did not return within %s", unsubscribeTimeout)
+	}
+}
+
 // unsubscribeRecorder collects the subscription IDs of *_unsubscribe calls.
 type unsubscribeRecorder struct {
 	ServerCodec
