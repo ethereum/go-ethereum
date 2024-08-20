@@ -90,7 +90,7 @@ func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCo
 func TestTracer(t *testing.T) {
 	execTracer := func(code string, contract []byte) ([]byte, string) {
 		t.Helper()
-		tracer, err := newJsTracer(code, nil, nil)
+		tracer, err := newJsTracer(code, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -167,7 +167,7 @@ func TestTracer(t *testing.T) {
 
 func TestHalt(t *testing.T) {
 	timeout := errors.New("stahp")
-	tracer, err := newJsTracer("{step: function() { while(1); }, result: function() { return null; }, fault: function(){}}", nil, nil)
+	tracer, err := newJsTracer("{step: function() { while(1); }, result: function() { return null; }, fault: function(){}}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestHalt(t *testing.T) {
 }
 
 func TestHaltBetweenSteps(t *testing.T) {
-	tracer, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }}", nil, nil)
+	tracer, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 func TestNoStepExec(t *testing.T) {
 	execTracer := func(code string) []byte {
 		t.Helper()
-		tracer, err := newJsTracer(code, nil, nil)
+		tracer, err := newJsTracer(code, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -241,7 +241,7 @@ func TestIsPrecompile(t *testing.T) {
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)
 	txCtx := vm.TxContext{GasPrice: big.NewInt(100000)}
-	tracer, err := newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
+	tracer, err := newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +255,7 @@ func TestIsPrecompile(t *testing.T) {
 		t.Errorf("tracer should not consider blake2f as precompile in byzantium")
 	}
 
-	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil, nil)
+	tracer, _ = newJsTracer("{addr: toAddress('0000000000000000000000000000000000000009'), res: null, step: function() { this.res = isPrecompiled(this.addr); }, fault: function() {}, result: function() { return this.res; }}", nil)
 	blockCtx = vm.BlockContext{BlockNumber: big.NewInt(250)}
 	res, err = runTrace(tracer, &vmContext{blockCtx, txCtx}, chaincfg, nil)
 	if err != nil {
@@ -268,14 +268,14 @@ func TestIsPrecompile(t *testing.T) {
 
 func TestEnterExit(t *testing.T) {
 	// test that either both or none of enter() and exit() are defined
-	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(tracers.Context), nil); err == nil {
+	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", nil); err == nil {
 		t.Fatal("tracer creation should've failed without exit() definition")
 	}
-	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", new(tracers.Context), nil); err != nil {
+	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}, exit: function() {}}", nil); err != nil {
 		t.Fatal(err)
 	}
 	// test that the enter and exit method are correctly invoked and the values passed
-	tracer, err := newJsTracer("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", new(tracers.Context), nil)
+	tracer, err := newJsTracer("{enters: 0, exits: 0, enterGas: 0, gasUsed: 0, step: function() {}, fault: function() {}, result: function() { return {enters: this.enters, exits: this.exits, enterGas: this.enterGas, gasUsed: this.gasUsed} }, enter: function(frame) { this.enters++; this.enterGas = frame.getGas(); }, exit: function(res) { this.exits++; this.gasUsed = res.getGasUsed(); }}", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestEnterExit(t *testing.T) {
 
 func TestSetup(t *testing.T) {
 	// Test empty config
-	_, err := newJsTracer(`{setup: function(cfg) { if (cfg !== "{}") { throw("invalid empty config") } }, fault: function() {}, result: function() {}}`, new(tracers.Context), nil)
+	_, err := newJsTracer(`{setup: function(cfg) { if (cfg !== "{}") { throw("invalid empty config") } }, fault: function() {}, result: function() {}}`, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -307,12 +307,12 @@ func TestSetup(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Test no setup func
-	_, err = newJsTracer(`{fault: function() {}, result: function() {}}`, new(tracers.Context), cfg)
+	_, err = newJsTracer(`{fault: function() {}, result: function() {}}`, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Test config value
-	tracer, err := newJsTracer("{config: null, setup: function(cfg) { this.config = JSON.parse(cfg) }, step: function() {}, fault: function() {}, result: function() { return this.config.foo }}", new(tracers.Context), cfg)
+	tracer, err := newJsTracer("{config: null, setup: function(cfg) { this.config = JSON.parse(cfg) }, step: function() {}, fault: function() {}, result: function() { return this.config.foo }}", cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
