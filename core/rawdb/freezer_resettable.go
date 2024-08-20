@@ -202,15 +202,6 @@ func (f *resettableFreezer) Sync() error {
 	return f.freezer.Sync()
 }
 
-// MigrateTable processes the entries in a given table in sequence
-// converting them to a new format if they're of an old format.
-func (f *resettableFreezer) MigrateTable(kind string, convert convertLegacyFn) error {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
-	return f.freezer.MigrateTable(kind, convert)
-}
-
 // cleanup removes the directory located in the specified path
 // has the name with deletion marker suffix.
 func cleanup(path string) error {
