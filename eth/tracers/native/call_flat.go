@@ -220,13 +220,12 @@ func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if t.interrupt.Load() {
 		return
 	}
-	if t.ctx == nil {
-		t.ctx = &tracers.Context{
-			BlockHash:   receipt.BlockHash,
-			BlockNumber: receipt.BlockNumber,
-			TxHash:      receipt.TxHash,
-			TxIndex:     int(receipt.TransactionIndex),
-		}
+	// Always set context with receipt data.
+	t.ctx = &tracers.Context{
+		BlockHash:   receipt.BlockHash,
+		BlockNumber: receipt.BlockNumber,
+		TxHash:      receipt.TxHash,
+		TxIndex:     int(receipt.TransactionIndex),
 	}
 	t.tracer.OnTxEnd(receipt, err)
 }
