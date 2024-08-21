@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
+
+var errTxNotFound = errors.New("transaction not found")
 
 type filterAPI struct {
 	backend tracers.Backend
@@ -27,13 +31,9 @@ func (api *filterAPI) isSupportedTracer(tracer string) bool {
 }
 
 func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *traceConfig) ([]interface{}, error) {
-	tracer := defaultTraceConfig.Tracer
-	if cfg != nil {
-		tracer = cfg.Tracer
-	}
-
-	if !api.isSupportedTracer(tracer) {
-		return nil, errors.New("tracer not found")
+	tracer, err := api.getTracerOrDefault(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	blknum := uint64(blockNr.Int64())
@@ -55,4 +55,41 @@ func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *t
 	}
 
 	return results, nil
+}
+
+func (api *filterAPI) getTracerOrDefault(cfg *traceConfig) (string, error) {
+	if cfg == nil {
+		return defaultTraceConfig.Tracer, nil
+	}
+	tracer := cfg.Tracer
+
+	if !api.isSupportedTracer(tracer) {
+		return "", errors.New("tracer not found")
+	}
+	return tracer, nil
+}
+
+func (api *filterAPI) Transaction(ctx context.Context, hash common.Hash, cfg *traceConfig) (interface{}, error) {
+	tracer, err := api.getTracerOrDefault(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	found, _, _, blknum, index, err := api.backend.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, ethapi.NewTxIndexingError()
+	}
+	if !found {
+		return nil, errTxNotFound
+	}
+	traces, err := api.filter.readBlockTraces(ctx, tracer, blknum)
+	if err != nil {
+		return nil, err
+	}
+
+	if index >= uint64(len(traces)) {
+		return nil, nil
+	}
+
+	return traces[index].Result, nil
 }
