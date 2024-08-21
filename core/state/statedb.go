@@ -248,7 +248,7 @@ func (s *StateDB) Error() error {
 }
 
 func (s *StateDB) AddLog(log *types.Log) {
-	s.journal.JournalLog(s.thash)
+	s.journal.Log(s.thash)
 
 	log.TxHash = s.thash
 	log.TxIndex = uint(s.txIndex)
@@ -293,14 +293,14 @@ func (s *StateDB) Preimages() map[common.Hash][]byte {
 
 // AddRefund adds gas to the refund counter
 func (s *StateDB) AddRefund(gas uint64) {
-	s.journal.JournalRefundChange(s.refund)
+	s.journal.RefundChange(s.refund)
 	s.refund += gas
 }
 
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
-	s.journal.JournalRefundChange(s.refund)
+	s.journal.RefundChange(s.refund)
 	if gas > s.refund {
 		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
 	}
@@ -508,7 +508,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 	// If it is already marked as self-destructed, we do not need to add it
 	// for journalling a second time.
 	if !stateObject.selfDestructed {
-		s.journal.JournalDestruct(addr)
+		s.journal.Destruct(addr)
 		stateObject.markSelfdestructed()
 	}
 }
@@ -531,7 +531,7 @@ func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash)
 	if prev == value {
 		return
 	}
-	s.journal.JournalSetTransientState(addr, key, prev)
+	s.journal.SetTransientState(addr, key, prev)
 	s.setTransientState(addr, key, value)
 }
 
@@ -650,7 +650,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 // existing account with the given address, otherwise it will be silently overwritten.
 func (s *StateDB) createObject(addr common.Address) *stateObject {
 	obj := newObject(s, addr, nil)
-	s.journal.JournalCreate(addr)
+	s.journal.Create(addr)
 	s.setStateObject(obj)
 	return obj
 }
@@ -1387,7 +1387,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
 	if s.accessList.AddAddress(addr) {
-		s.journal.JournalAccessListAddAccount(addr)
+		s.journal.AccessListAddAccount(addr)
 	}
 }
 
@@ -1399,10 +1399,10 @@ func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 		// scope of 'address' without having the 'address' become already added
 		// to the access list (via call-variant, create, etc).
 		// Better safe than sorry, though
-		s.journal.JournalAccessListAddAccount(addr)
+		s.journal.AccessListAddAccount(addr)
 	}
 	if slotMod {
-		s.journal.JournalAccessListAddSlot(addr, slot)
+		s.journal.AccessListAddSlot(addr, slot)
 	}
 }
 

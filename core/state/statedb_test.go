@@ -360,7 +360,7 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			args: make([]int64, 1),
 		},
 		{
-			name: "SetState",
+			name: "SetStorage",
 			fn: func(a testAction, s *StateDB) {
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))

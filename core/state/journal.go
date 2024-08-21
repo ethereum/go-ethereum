@@ -148,30 +148,30 @@ func (j *journal) copy() *journal {
 	}
 }
 
-func (j *journal) JournalAccessListAddAccount(addr common.Address) {
+func (j *journal) AccessListAddAccount(addr common.Address) {
 	j.append(accessListAddAccountChange{&addr})
 }
 
-func (j *journal) JournalAccessListAddSlot(addr common.Address, slot common.Hash) {
+func (j *journal) AccessListAddSlot(addr common.Address, slot common.Hash) {
 	j.append(accessListAddSlotChange{
 		address: &addr,
 		slot:    &slot,
 	})
 }
 
-func (j *journal) JournalLog(txHash common.Hash) {
+func (j *journal) Log(txHash common.Hash) {
 	j.append(addLogChange{txhash: txHash})
 }
 
-func (j *journal) JournalCreate(addr common.Address) {
+func (j *journal) Create(addr common.Address) {
 	j.append(createObjectChange{account: &addr})
 }
 
-func (j *journal) JournalDestruct(addr common.Address) {
+func (j *journal) Destruct(addr common.Address) {
 	j.append(selfDestructChange{account: &addr})
 }
 
-func (j *journal) JournalSetState(addr common.Address, key, prev, origin common.Hash) {
+func (j *journal) SetStorage(addr common.Address, key, prev, origin common.Hash) {
 	j.append(storageChange{
 		account:   &addr,
 		key:       key,
@@ -180,7 +180,7 @@ func (j *journal) JournalSetState(addr common.Address, key, prev, origin common.
 	})
 }
 
-func (j *journal) JournalSetTransientState(addr common.Address, key, prev common.Hash) {
+func (j *journal) SetTransientState(addr common.Address, key, prev common.Hash) {
 	j.append(transientStorageChange{
 		account:  &addr,
 		key:      key,
@@ -188,29 +188,29 @@ func (j *journal) JournalSetTransientState(addr common.Address, key, prev common
 	})
 }
 
-func (j *journal) JournalRefundChange(previous uint64) {
+func (j *journal) RefundChange(previous uint64) {
 	j.append(refundChange{prev: previous})
 }
 
-func (j *journal) JournalBalanceChange(addr common.Address, previous *uint256.Int) {
+func (j *journal) BalanceChange(addr common.Address, previous *uint256.Int) {
 	j.append(balanceChange{
 		account: &addr,
 		prev:    previous.Clone(),
 	})
 }
 
-func (j *journal) JournalSetCode(address common.Address) {
+func (j *journal) SetCode(address common.Address) {
 	j.append(codeChange{account: &address})
 }
 
-func (j *journal) JournalNonceChange(address common.Address, prev uint64) {
+func (j *journal) NonceChange(address common.Address, prev uint64) {
 	j.append(nonceChange{
 		account: &address,
 		prev:    prev,
 	})
 }
 
-func (j *journal) JournalTouch(address common.Address) {
+func (j *journal) Touch(address common.Address) {
 	j.append(touchChange{
 		account: &address,
 	})
