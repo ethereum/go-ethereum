@@ -1383,8 +1383,10 @@ func (d *Downloader) fetchReceipts(from uint64, beaconMode bool) error {
 // queue until the stream ends or a failure occurs.
 func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode bool) error {
 	var (
-		mode = d.getMode()
+		mode       = d.getMode()
+		gotHeaders = false // Wait for batches of headers to process
 	)
+
 	for {
 		select {
 		case <-d.cancelCh:
@@ -1404,6 +1406,10 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 				// violations from malicious peers. That is not needed in beacon
 				// mode and we can skip to terminating sync.
 				if !beaconMode {
+					head := d.blockchain.CurrentBlock()
+					if !gotHeaders && td.Cmp(d.blockchain.GetTd(head.Hash(), head.Number.Uint64())) > 0 {
+						return errStallingPeer
+					}
 					// If snap or light syncing, ensure promised headers are indeed delivered. This is
 					// needed to detect scenarios where an attacker feeds a bad pivot and then bails out
 					// of delivering the post-pivot blocks that would flag the invalid content.
@@ -1422,6 +1428,8 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 			}
 			// Otherwise split the chunk of headers into batches and process them
 			headers, hashes := task.headers, task.hashes
+
+			gotHeaders = true
 
 			for len(headers) > 0 {
 				// Terminate if something failed in between processing chunks

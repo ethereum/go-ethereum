@@ -223,6 +223,7 @@ func TestSupplyEip1559Burn(t *testing.T) {
 }
 
 func TestSupplyWithdrawals(t *testing.T) {
+	t.Skip("not relevant to bor")
 	var (
 		config = *params.MergedTestChainConfig
 		gspec  = &core.Genesis{

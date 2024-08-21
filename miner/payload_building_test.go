@@ -17,7 +17,6 @@
 package miner
 
 import (
-	"math/big"
 	"reflect"
 	"testing"
 	"time"
@@ -26,43 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-func init() {
-	testTxPoolConfig = legacypool.DefaultConfig
-	testTxPoolConfig.Journal = ""
-	ethashChainConfig = new(params.ChainConfig)
-	*ethashChainConfig = *params.TestChainConfig
-	cliqueChainConfig = new(params.ChainConfig)
-	*cliqueChainConfig = *params.TestChainConfig
-	cliqueChainConfig.Clique = &params.CliqueConfig{
-		Period: 10,
-		Epoch:  30000,
-	}
-
-	signer := types.LatestSigner(params.TestChainConfig)
-	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
-		ChainID:  params.TestChainConfig.ChainID,
-		Nonce:    0,
-		To:       &testUserAddress,
-		Value:    big.NewInt(1000),
-		Gas:      params.TxGas,
-		GasPrice: big.NewInt(params.InitialBaseFee),
-	})
-	pendingTxs = append(pendingTxs, tx1)
-
-	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
-		Nonce:    1,
-		To:       &testUserAddress,
-		Value:    big.NewInt(1000),
-		Gas:      params.TxGas,
-		GasPrice: big.NewInt(params.InitialBaseFee),
-	})
-	newTxs = append(newTxs, tx2)
-}
 
 func TestBuildPayload(t *testing.T) {
 	var (

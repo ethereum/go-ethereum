@@ -539,6 +539,10 @@ var (
 		TerminalTotalDifficultyPassed: true,
 		Ethash:                        new(EthashConfig),
 		Clique:                        nil,
+		Bor: &BorConfig{
+			Sprint: map[string]uint64{
+				"0": 4},
+			BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}},
 	}
 
 	// NonActivatedConfig defines the chain configuration without activating
