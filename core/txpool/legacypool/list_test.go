@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/holiman/uint256"
@@ -130,14 +131,18 @@ func TestFilterTxConditional(t *testing.T) {
 
 	options.KnownAccounts = types.KnownAccounts{
 		common.Address{19: 1}: &types.Value{
-			Single: common.HexToRefHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
+			Single: common.HexToRefHash("0xe734938daf39aae1fa4ee64dc3155d7c049f28b57a8ada8ad9e86832e0253bef"),
 		},
 	}
+
+	state.AddBalance(common.Address{19: 1}, uint256.NewInt(1000), tracing.BalanceChangeTransfer)
 
 	trie, _ := state.StorageTrie(common.Address{19: 1})
 	fmt.Println("before", trie)
 
 	state.SetState(common.Address{19: 1}, common.Hash{}, common.Hash{30: 1})
+
+	state.Finalise(true)
 
 	trie, _ = state.StorageTrie(common.Address{19: 1})
 	fmt.Println("after", trie.Hash())
@@ -153,6 +158,8 @@ func TestFilterTxConditional(t *testing.T) {
 
 	// Set state that conflicts with tx2's policy
 	state.SetState(common.Address{19: 1}, common.Hash{}, common.Hash{31: 1})
+
+	state.Finalise(true)
 
 	trie, _ = state.StorageTrie(common.Address{19: 1})
 	fmt.Println("after2", trie.Hash())
