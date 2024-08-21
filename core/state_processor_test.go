@@ -513,7 +513,12 @@ func TestProcessVerkle(t *testing.T) {
 		}
 	})
 
-	err := verkle.Verify(proofs[1], chain[0].Root().Bytes(), chain[1].Root().Bytes(), statediffs[1])
+	// Check proof for both blocks
+	err := verkle.Verify(proofs[0], gspec.ToBlock().Root().Bytes(), chain[0].Root().Bytes(), statediffs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = verkle.Verify(proofs[1], chain[0].Root().Bytes(), chain[1].Root().Bytes(), statediffs[1])
 	if err != nil {
 		t.Fatal(err)
 	}
