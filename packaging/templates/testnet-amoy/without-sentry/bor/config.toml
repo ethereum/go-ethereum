@@ -6,7 +6,8 @@ chain = "amoy"
 # vmdebug = false
 datadir = "/var/lib/bor/data"
 # ancient = ""
-# db.engine = "leveldb"
+db.engine = "pebble"
+state.scheme = "path"
 # keystore = "$BOR_DIR/keystore"
 # "rpc.batchlimit" = 100
 # "rpc.returndatalimit" = 100000
@@ -25,7 +26,7 @@ syncmode = "full"
     # debug = true
 
 [p2p]
-    maxpeers = 50
+    maxpeers = 200
     port = 30303
     # maxpendpeers = 50
     # bind = "0.0.0.0"

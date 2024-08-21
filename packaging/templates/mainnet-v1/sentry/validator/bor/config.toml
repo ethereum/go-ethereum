@@ -6,7 +6,8 @@ chain = "mainnet"
 # vmdebug = false
 datadir = "/var/lib/bor/data"
 # ancient = ""
-# "db.engine" = "leveldb"
+db.engine = "pebble"
+state.scheme = "path"
 # keystore = "$BOR_DIR/keystore"
 # "rpc.batchlimit" = 100
 # "rpc.returndatalimit" = 100000
@@ -26,7 +27,7 @@ syncmode = "full"
     # enable-block-tracking = false
 
 [p2p]
-    maxpeers = 20
+    maxpeers = 200
     port = 30303
     nodiscover = true
     # maxpendpeers = 50

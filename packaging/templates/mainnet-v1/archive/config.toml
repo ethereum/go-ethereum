@@ -24,7 +24,7 @@ gcmode = "archive"
     # enable-block-tracking = false
 
 [p2p]
-    maxpeers = 50
+    maxpeers = 200
     port = 30303
     # maxpendpeers = 50
     # bind = "0.0.0.0"
