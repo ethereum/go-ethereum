@@ -5,8 +5,9 @@
 
   tasks:
     - name: Update RPC image version
+        # export RPC_IMAGE={{ rpc_image }}
       shell: |
-        export RPC_IMAGE={{ rpc_image }}
+        export RPC_IMAGE=xinfinorg/devnet:dev-upgrade-stable-5024107
         cd {{ deploy_path }}
         git pull
         ./docker-down.sh
