@@ -1,11 +1,14 @@
-chain = "amoy"
+# NOTE: Update and uncomment: `keystore`, `password`, and `unlock` fields.
+
+chain = "mainnet"
 # identity = "node_name"
 # verbosity = 3
 # vmdebug = false
 datadir = "/var/lib/bor/data"
 # ancient = ""
-# db.engine = "leveldb"
-# keystore = ""
+db.engine = "pebble"
+state.scheme = "path"
+# keystore = "$BOR_DIR/keystore"
 # "rpc.batchlimit" = 100
 # "rpc.returndatalimit" = 100000
 syncmode = "full"
@@ -21,24 +24,26 @@ syncmode = "full"
     # json = false
     # backtrace = ""
     # debug = true
+    # enable-block-tracking = false
 
 [p2p]
     maxpeers = 200
     port = 30303
+    nodiscover = true
     # maxpendpeers = 50
     # bind = "0.0.0.0"
-    # nodiscover = false
     # nat = "any"
     # netrestrict = ""
     # nodekey = ""
     # nodekeyhex = ""
     # txarrivalwait = "500ms"
     # [p2p.discovery]
+        # v4disc = true
         # v5disc = false
-        # bootnodes = []
+        # bootnodes = ["enode://b8f1cc9c5d4403703fbf377116469667d2b1823c0daf16b7250aa576bacf399e42c3930ccfcb02c5df6879565a2b8931335565f0e8d3f8e72385ecf4a4bf160a@3.36.224.80:30303", "enode://8729e0c825f3d9cad382555f3e46dcff21af323e89025a0e6312df541f4a9e73abfa562d64906f5e59c51fe6f0501b3e61b07979606c56329c020ed739910759@54.194.245.5:30303"]
         # bootnodesv4 = []
         # bootnodesv5 = []
-        # static-nodes = []
+        # static-nodes = ["<sentry-ip>:<sentry-p2p-port>"] # Recommended setting with sentry <> validator architecture
         # trusted-nodes = []
         # dns = []
 
@@ -49,21 +54,21 @@ syncmode = "full"
 
 [txpool]
     nolocals = true
+    pricelimit = 25000000000
     accountslots = 16
-    globalslots = 131072
-    accountqueue = 64
-    globalqueue = 131072
+    globalslots = 32768
+    accountqueue = 16
+    globalqueue = 32768
     lifetime = "1h30m0s"
     # locals = []
     # journal = ""
     # rejournal = "1h0m0s"
-    # pricelimit = 25000000000
     # pricebump = 10
 
 [miner]
+    mine = true
     gaslimit = 30000000
-    # gasprice = "25000000000"
-    # mine = false
+    gasprice = "25000000000"
     # etherbase = ""
     # extradata = ""
     # recommit = "2m5s"
@@ -80,7 +85,7 @@ syncmode = "full"
     [jsonrpc.http]
         enabled = true
         port = 8545
-        host = "0.0.0.0"
+        host = "127.0.0.1"
         api = ["eth", "net", "web3", "txpool", "bor"]
         vhosts = ["*"]
         corsdomain = ["*"]
@@ -113,13 +118,13 @@ syncmode = "full"
         # write = "30s"
         # idle = "2m0s"
 
-# [gpo]
+[gpo]
     # blocks = 20
     # percentile = 60
     # maxheaderhistory = 1024
     # maxblockhistory = 1024
     # maxprice = "5000000000000"
-    # ignoreprice = "25000000000"
+    ignoreprice = "25000000000"
 
 [telemetry]
     metrics = true
@@ -138,24 +143,23 @@ syncmode = "full"
         # organization = ""
     # [telemetry.influx.tags]
 
-# [cache]
-    # cache = 1024
+[cache]
+    cache = 4096
     # gc = 25
     # snapshot = 10
     # database = 50
     # trie = 15
-    # journal = "triecache"
-    # rejournal = "1h0m0s"
     # noprefetch = false
     # preimages = false
     # txlookuplimit = 2350000
+    # blocklogs = 32
     # timeout = "1h0m0s"
     # fdlimit = 0
 
-# [accounts]
-    # unlock = []
-    # password = ""
-    # allow-insecure-unlock = false
+[accounts]
+    allow-insecure-unlock = true
+    # password = "$BOR_DIR/password.txt"
+    # unlock = ["$ADDRESS"]
     # lightkdf = false
     # disable-bor-wallet = false
 

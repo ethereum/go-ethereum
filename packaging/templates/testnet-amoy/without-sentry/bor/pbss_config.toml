@@ -1,11 +1,14 @@
+# NOTE: Update and uncomment: `keystore`, `password`, and `unlock` fields.
+
 chain = "amoy"
 # identity = "node_name"
 # verbosity = 3
 # vmdebug = false
 datadir = "/var/lib/bor/data"
 # ancient = ""
-# db.engine = "leveldb"
-# keystore = ""
+db.engine = "pebble"
+state.scheme = "path"
+# keystore = "$BOR_DIR/keystore"
 # "rpc.batchlimit" = 100
 # "rpc.returndatalimit" = 100000
 syncmode = "full"
@@ -61,9 +64,9 @@ syncmode = "full"
     # pricebump = 10
 
 [miner]
+    mine = true
     gaslimit = 30000000
     # gasprice = "25000000000"
-    # mine = false
     # etherbase = ""
     # extradata = ""
     # recommit = "2m5s"
@@ -114,12 +117,12 @@ syncmode = "full"
         # idle = "2m0s"
 
 # [gpo]
-    # blocks = 20
-    # percentile = 60
-    # maxheaderhistory = 1024
-    # maxblockhistory = 1024
-    # maxprice = "5000000000000"
-    # ignoreprice = "25000000000"
+#     blocks = 20
+#     percentile = 60
+#     maxheaderhistory = 1024
+#     maxblockhistory = 1024
+#     maxprice = "5000000000000"
+#     ignoreprice = "25000000000"
 
 [telemetry]
     metrics = true
@@ -139,23 +142,23 @@ syncmode = "full"
     # [telemetry.influx.tags]
 
 # [cache]
-    # cache = 1024
-    # gc = 25
-    # snapshot = 10
-    # database = 50
-    # trie = 15
-    # journal = "triecache"
-    # rejournal = "1h0m0s"
-    # noprefetch = false
-    # preimages = false
-    # txlookuplimit = 2350000
-    # timeout = "1h0m0s"
-    # fdlimit = 0
+#     cache = 1024
+#     gc = 25
+#     snapshot = 10
+#     database = 50
+#     trie = 15
+#     journal = "triecache"
+#     rejournal = "1h0m0s"
+#     noprefetch = false
+#     preimages = false
+#     txlookuplimit = 2350000
+#     timeout = "1h0m0s"
+#     fdlimit = 0
 
-# [accounts]
-    # unlock = []
-    # password = ""
-    # allow-insecure-unlock = false
+[accounts]
+    allow-insecure-unlock = true
+    # password = "$BOR_DIR/password.txt"
+    # unlock = ["$ADDRESS"]
     # lightkdf = false
     # disable-bor-wallet = false
 

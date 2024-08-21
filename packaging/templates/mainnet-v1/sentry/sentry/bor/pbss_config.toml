@@ -1,10 +1,11 @@
-chain = "amoy"
+chain = "mainnet"
 # identity = "node_name"
 # verbosity = 3
 # vmdebug = false
 datadir = "/var/lib/bor/data"
 # ancient = ""
-# db.engine = "leveldb"
+db.engine = "pebble"
+state.scheme = "path"
 # keystore = ""
 # "rpc.batchlimit" = 100
 # "rpc.returndatalimit" = 100000
@@ -21,6 +22,7 @@ syncmode = "full"
     # json = false
     # backtrace = ""
     # debug = true
+    # enable-block-tracking = false
 
 [p2p]
     maxpeers = 200
@@ -34,12 +36,13 @@ syncmode = "full"
     # nodekeyhex = ""
     # txarrivalwait = "500ms"
     # [p2p.discovery]
+        # v4disc = true
         # v5disc = false
         # bootnodes = []
         # bootnodesv4 = []
         # bootnodesv5 = []
         # static-nodes = []
-        # trusted-nodes = []
+        # trusted-nodes = ["<validator-ip>:<validator-p2p-port>"] # Recommended setting with sentry <> validator architecture
         # dns = []
 
 # [heimdall]
@@ -49,20 +52,20 @@ syncmode = "full"
 
 [txpool]
     nolocals = true
+    pricelimit = 25000000000
     accountslots = 16
-    globalslots = 131072
-    accountqueue = 64
-    globalqueue = 131072
+    globalslots = 32768
+    accountqueue = 16
+    globalqueue = 32768
     lifetime = "1h30m0s"
     # locals = []
     # journal = ""
     # rejournal = "1h0m0s"
-    # pricelimit = 25000000000
     # pricebump = 10
 
 [miner]
     gaslimit = 30000000
-    # gasprice = "25000000000"
+    gasprice = "25000000000"
     # mine = false
     # etherbase = ""
     # extradata = ""
@@ -80,7 +83,7 @@ syncmode = "full"
     [jsonrpc.http]
         enabled = true
         port = 8545
-        host = "0.0.0.0"
+        host = "127.0.0.1"
         api = ["eth", "net", "web3", "txpool", "bor"]
         vhosts = ["*"]
         corsdomain = ["*"]
@@ -113,13 +116,13 @@ syncmode = "full"
         # write = "30s"
         # idle = "2m0s"
 
-# [gpo]
+[gpo]
     # blocks = 20
     # percentile = 60
     # maxheaderhistory = 1024
     # maxblockhistory = 1024
     # maxprice = "5000000000000"
-    # ignoreprice = "25000000000"
+    ignoreprice = "25000000000"
 
 [telemetry]
     metrics = true
@@ -138,17 +141,16 @@ syncmode = "full"
         # organization = ""
     # [telemetry.influx.tags]
 
-# [cache]
-    # cache = 1024
+[cache]
+    cache = 4096
     # gc = 25
     # snapshot = 10
     # database = 50
     # trie = 15
-    # journal = "triecache"
-    # rejournal = "1h0m0s"
     # noprefetch = false
     # preimages = false
     # txlookuplimit = 2350000
+    # blocklogs = 32
     # timeout = "1h0m0s"
     # fdlimit = 0
 

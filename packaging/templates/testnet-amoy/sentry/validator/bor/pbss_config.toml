@@ -1,11 +1,14 @@
+# NOTE: Update and uncomment: `keystore`, `password`, and `unlock` fields.
+
 chain = "amoy"
 # identity = "node_name"
 # verbosity = 3
 # vmdebug = false
 datadir = "/var/lib/bor/data"
 # ancient = ""
-# db.engine = "leveldb"
-# keystore = ""
+db.engine = "pebble"
+state.scheme = "path"
+# keystore = "$BOR_DIR/keystore"
 # "rpc.batchlimit" = 100
 # "rpc.returndatalimit" = 100000
 syncmode = "full"
@@ -25,9 +28,9 @@ syncmode = "full"
 [p2p]
     maxpeers = 200
     port = 30303
+    nodiscover = true
     # maxpendpeers = 50
     # bind = "0.0.0.0"
-    # nodiscover = false
     # nat = "any"
     # netrestrict = ""
     # nodekey = ""
@@ -61,9 +64,9 @@ syncmode = "full"
     # pricebump = 10
 
 [miner]
+    mine = true
     gaslimit = 30000000
     # gasprice = "25000000000"
-    # mine = false
     # etherbase = ""
     # extradata = ""
     # recommit = "2m5s"
@@ -152,10 +155,10 @@ syncmode = "full"
     # timeout = "1h0m0s"
     # fdlimit = 0
 
-# [accounts]
-    # unlock = []
-    # password = ""
-    # allow-insecure-unlock = false
+[accounts]
+    allow-insecure-unlock = true
+    # password = "$BOR_DIR/password.txt"
+    # unlock = ["$ADDRESS"]
     # lightkdf = false
     # disable-bor-wallet = false
 
@@ -167,7 +170,6 @@ syncmode = "full"
     # period = 0
     # gaslimit = 11500000
 
-# [pprof]
 #   pprof = false
 #   port = 6060
 #   addr = "127.0.0.1"
