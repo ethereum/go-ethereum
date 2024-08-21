@@ -404,15 +404,15 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 			return nil, fmt.Errorf("error opening pre-state tree root: %w", err)
 		}
 
-		vtrpre, okpre := preTrie.(*trie.VerkleTrie)
-		vtrpost, okpost := state.GetTrie().(*trie.VerkleTrie)
+		vktPreTrie, okpre := preTrie.(*trie.VerkleTrie)
+		vktPostTrie, okpost := state.GetTrie().(*trie.VerkleTrie)
 		if okpre && okpost {
 			if len(keys) > 0 {
-				p, k, err := vtrpre.Proof(vtrpost, keys, vtrpre.FlatdbNodeResolver)
+				verkleProof, stateDiff, err := vktPreTrie.Proof(vktPostTrie, keys, vktPreTrie.FlatdbNodeResolver)
 				if err != nil {
 					return nil, fmt.Errorf("error generating verkle proof for block %d: %w", header.Number, err)
 				}
-				block.SetVerkleProof(p, k)
+				return block.WithWitness(&types.ExecutionWitness{StateDiff: stateDiff, VerkleProof: verkleProof}), nil
 			}
 		}
 	}

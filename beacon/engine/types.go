@@ -252,7 +252,9 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 		BlobGasUsed:      data.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
 	}
-	block := types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals, Witness: data.ExecutionWitness})
+	block := types.NewBlockWithHeader(header)
+	block = block.WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals})
+	block = block.WithWitness(data.ExecutionWitness)
 	if block.Hash() != data.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", data.BlockHash, block.Hash())
 	}

@@ -179,8 +179,7 @@ func (h *Header) EmptyReceipts() bool {
 type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
-	Withdrawals  []*Withdrawal     `rlp:"optional"`
-	Witness      *ExecutionWitness `rlp:"-"`
+	Withdrawals  []*Withdrawal `rlp:"optional"`
 }
 
 // Block represents an Ethereum block.
@@ -341,7 +340,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Body returns the non-header content of the block.
 // Note the returned data is not an independent copy.
 func (b *Block) Body() *Body {
-	return &Body{b.transactions, b.uncles, b.withdrawals, b.witness}
+	return &Body{b.transactions, b.uncles, b.withdrawals}
 }
 
 // Accessors for body data. These do not return a copy because the content
@@ -473,10 +472,24 @@ func (b *Block) WithBody(body Body) *Block {
 		transactions: slices.Clone(body.Transactions),
 		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  slices.Clone(body.Withdrawals),
-		witness:      body.Witness,
 	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])
+	}
+	return block
+}
+
+func (b *Block) WithWitness(witness *ExecutionWitness) *Block {
+
+	block := &Block{
+		header:       b.header,
+		transactions: slices.Clone(b.transactions),
+		uncles:       make([]*Header, len(b.uncles)),
+		withdrawals:  slices.Clone(b.withdrawals),
+		witness:      witness,
+	}
+	for i := range b.uncles {
+		block.uncles[i] = CopyHeader(b.uncles[i])
 	}
 	return block
 }
