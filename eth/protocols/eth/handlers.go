@@ -307,8 +307,10 @@ func serviceGetReceiptsQuery69(chain *core.BlockChain, query GetReceiptsRequest)
 		} else {
 			header := chain.GetHeaderByHash(hash)
 			if header.ReceiptHash != types.EmptyReceiptsHash {
-				body := chain.GetBody(hash)
-				results = transformReceipts(results, body.Transactions)
+				body := new(types.Body)
+				if err := rlp.DecodeBytes(chain.GetBodyRLP(hash), &body); err == nil {
+					results = transformReceipts(results, body.Transactions)
+				}
 			}
 		}
 		receipts = append(receipts, results)
