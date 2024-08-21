@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	bazil.org/fuse v0.0.0-20180421153158-65cc252bf669
-	github.com/VictoriaMetrics/fastcache v1.12.1
+	github.com/VictoriaMetrics/fastcache v1.12.2
 	github.com/aristanetworks/goarista v0.0.0-20231019142648-8c6f0862ab98
 	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6
 	github.com/cespare/cp v1.1.1
@@ -40,7 +40,7 @@ require (
 	golang.org/x/crypto v0.15.0
 	golang.org/x/net v0.17.0
 	golang.org/x/sync v0.4.0
-	golang.org/x/sys v0.14.0
+	golang.org/x/sys v0.24.0
 	golang.org/x/tools v0.14.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce
@@ -52,7 +52,7 @@ require github.com/deckarep/golang-set v1.8.0
 
 require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/dop251/goja v0.0.0-20200106141417-aaec0e7bde29 // indirect
 	github.com/elastic/gosigar v0.8.1-0.20180330100440-37f05ff46ffa // indirect
