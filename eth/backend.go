@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/pruner"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
@@ -195,17 +196,20 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateHistory:        config.StateHistory,
 			StateScheme:         scheme,
 		}
+		liveTracer *tracing.Hooks
+		liveAPIs   []rpc.API
 	)
 	if config.VMTrace != "" {
 		var traceConfig json.RawMessage
 		if config.VMTraceJsonConfig != "" {
 			traceConfig = json.RawMessage(config.VMTraceJsonConfig)
 		}
-		t, err := tracers.LiveDirectory.New(config.VMTrace, traceConfig)
+		var err error
+		liveTracer, liveAPIs, err = tracers.LiveDirectory.New(config.VMTrace, traceConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tracer %s: %v", config.VMTrace, err)
 		}
-		vmConfig.Tracer = t
+		vmConfig.Tracer = liveTracer
 	}
 	// Override the chain config with provided settings.
 	var overrides core.ChainOverrides
@@ -267,6 +271,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	stack.RegisterAPIs(eth.APIs())
 	stack.RegisterProtocols(eth.Protocols())
 	stack.RegisterLifecycle(eth)
+
+	// Set live tracer's backend and register the live tracer APIs
+	if liveTracer != nil {
+		liveTracer.SetBackend(eth.APIBackend)
+		if liveAPIs != nil {
+			stack.RegisterAPIs(liveAPIs)
+		}
+	}
 
 	// Successful startup; push a marker and check previous unclean shutdowns.
 	eth.shutdownTracker.MarkStartup()

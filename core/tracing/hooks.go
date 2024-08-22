@@ -17,11 +17,13 @@
 package tracing
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/uint256"
 )
 
@@ -66,6 +68,16 @@ type BlockEvent struct {
 	TD        *big.Int
 	Finalized *types.Header
 	Safe      *types.Header
+}
+
+// Backend interface provides the common API services (that are provided by
+// both full and light clients) with access to necessary functions.
+type Backend interface {
+	HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
+	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
+	BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
+	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+	GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error)
 }
 
 type (
@@ -171,6 +183,7 @@ type (
 )
 
 type Hooks struct {
+	Backend Backend
 	// VM events
 	OnTxStart   TxStartHook
 	OnTxEnd     TxEndHook
@@ -194,6 +207,11 @@ type Hooks struct {
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+}
+
+// SetBackend sets a backend to the hooks, use this backend to read chain data.
+func (h *Hooks) SetBackend(backend Backend) {
+	h.Backend = backend
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
