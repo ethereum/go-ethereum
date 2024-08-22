@@ -211,14 +211,17 @@ func (t *flatCallTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 }
 
 func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
-	t.ctx = &tracers.Context{
-		BlockHash:   receipt.BlockHash,
-		BlockNumber: receipt.BlockNumber,
-		TxIndex:     int(receipt.TransactionIndex),
-		TxHash:      receipt.TxHash,
-	}
 	if t.interrupt.Load() {
 		return
+	}
+	// Set the context for the tracer only if receipt is available and no error occured
+	if err == nil && receipt != nil {
+		t.ctx = &tracers.Context{
+			BlockHash:   receipt.BlockHash,
+			BlockNumber: receipt.BlockNumber,
+			TxIndex:     int(receipt.TransactionIndex),
+			TxHash:      receipt.TxHash,
+		}
 	}
 	t.tracer.OnTxEnd(receipt, err)
 }
