@@ -41,13 +41,27 @@ type Extras[C any, R any] struct {
 // result in a typed-nil bug. This pattern most-closely resembles a fully
 // generic implementation and users SHOULD wrap the type assertions in a shared
 // package.
-func RegisterExtras[C any, R any](e Extras[C, R]) {
+func RegisterExtras[C any, R any](e Extras[C, R]) ExtraPayloadGetter[C, R] {
 	if registeredExtras != nil {
 		panic("re-registration of Extras")
 	}
 	mustBeStruct[C]()
 	mustBeStruct[R]()
 	registeredExtras = &e
+	return ExtraPayloadGetter[C, R]{}
+}
+
+// An ExtraPayloadGettter ...
+type ExtraPayloadGetter[C any, R any] struct{}
+
+// FromChainConfig ...
+func (ExtraPayloadGetter[C, R]) FromChainConfig(c *ChainConfig) *C {
+	return pseudo.NewValueUnsafe[*C](c.ExtraPayload()).Get()
+}
+
+// FromRules ...
+func (ExtraPayloadGetter[C, R]) FromRules(r *Rules) *R {
+	return pseudo.NewValueUnsafe[*R](r.ExtraPayload()).Get()
 }
 
 func mustBeStruct[T any]() {

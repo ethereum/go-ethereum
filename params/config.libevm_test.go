@@ -26,8 +26,9 @@ func ExampleRegisterExtras() {
 		}
 	)
 
-	// In practice, this would be called inside an init() func.
-	RegisterExtras(Extras[chainConfigExtra, rulesExtra]{
+	// In practice, this would be called inside an init() func and the `getter`
+	// used to access the ExtraPayload() values in a type-safe way.
+	getter := RegisterExtras(Extras[chainConfigExtra, rulesExtra]{
 		NewForRules: func(cc *ChainConfig, r *Rules, cEx *chainConfigExtra, blockNum *big.Int, isMerge bool, timestamp uint64) *rulesExtra {
 			// This function is called at the end of ChainConfig.Rules(),
 			// receiving a pointer to the Rules that will be returned. It MAY
@@ -49,8 +50,8 @@ func ExampleRegisterExtras() {
 		}
 	}`)
 
-	var config ChainConfig
-	if err := json.Unmarshal(buf, &config); err != nil {
+	config := new(ChainConfig)
+	if err := json.Unmarshal(buf, config); err != nil {
 		log.Fatal(err)
 	}
 
@@ -59,9 +60,9 @@ func ExampleRegisterExtras() {
 	// the registered types. They MAY, however, be nil pointers. In practice,
 	// callers SHOULD abstract the type assertion in a reusable function to
 	// provide a seamless devex.
-	ccExtra := config.ExtraPayload().Interface().(*chainConfigExtra)
+	ccExtra := getter.FromChainConfig(config)
 	rules := config.Rules(nil, false, 0)
-	rExtra := rules.ExtraPayload().Interface().(*rulesExtra)
+	rExtra := getter.FromRules(&rules)
 
 	if ccExtra != nil {
 		fmt.Println(ccExtra.Foo)
@@ -82,14 +83,14 @@ func ExampleChainConfig_ExtraPayload() {
 		rulesExtra       struct{}
 	)
 	// Typically called in an `init()` function.
-	RegisterExtras(Extras[chainConfigExtra, rulesExtra]{ /*...*/ })
+	getter := RegisterExtras(Extras[chainConfigExtra, rulesExtra]{ /*...*/ })
 	defer testOnlyClearRegisteredExtras()
 
 	var c ChainConfig // Sourced from elsewhere, typically unmarshalled from JSON.
 
 	// Both ChainConfig.ExtraPayload() and Rules.ExtraPayload() return `any`
 	// that are guaranteed to be pointers to the registered types.
-	extra := c.ExtraPayload().Interface().(*chainConfigExtra)
+	extra := getter.FromChainConfig(&c)
 
 	// Act on the extra payload...
 	if extra != nil {

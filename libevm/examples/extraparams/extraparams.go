@@ -3,12 +3,13 @@ package extraparams
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/libevm/pseudo"
 	"github.com/ethereum/go-ethereum/params"
 )
 
+var getter params.ExtraPayloadGetter[ChainConfigExtra, RulesExtra]
+
 func init() {
-	params.RegisterExtras(params.Extras[ChainConfigExtra, RulesExtra]{
+	getter = params.RegisterExtras(params.Extras[ChainConfigExtra, RulesExtra]{
 		NewForRules: constructRulesExtra,
 	})
 }
@@ -28,9 +29,9 @@ func constructRulesExtra(c *params.ChainConfig, r *params.Rules, cEx *ChainConfi
 }
 
 func FromChainConfig(c *params.ChainConfig) *ChainConfigExtra {
-	return pseudo.NewValueUnsafe[*ChainConfigExtra](c.ExtraPayload()).Get()
+	return getter.FromChainConfig(c)
 }
 
 func FromRules(r *params.Rules) *RulesExtra {
-	return pseudo.NewValueUnsafe[*RulesExtra](r.ExtraPayload()).Get()
+	return getter.FromRules(r)
 }
