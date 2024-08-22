@@ -5,10 +5,9 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/core/tracing"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type ctorFunc func(config json.RawMessage, backend Backend) (*tracing.Hooks, []rpc.API, error)
+type ctorFunc func(config json.RawMessage, backend Backend) (*tracing.Hooks, error)
 
 // LiveDirectory is the collection of tracers which can be used
 // during normal block import operations.
@@ -24,9 +23,9 @@ func (d *liveDirectory) Register(name string, f ctorFunc) {
 }
 
 // New instantiates a tracer by name.
-func (d *liveDirectory) New(name string, config json.RawMessage, backend Backend) (*tracing.Hooks, []rpc.API, error) {
+func (d *liveDirectory) New(name string, config json.RawMessage, backend Backend) (*tracing.Hooks, error) {
 	if f, ok := d.elems[name]; ok {
 		return f(config, backend)
 	}
-	return nil, nil, errors.New("not found")
+	return nil, errors.New("not found")
 }
