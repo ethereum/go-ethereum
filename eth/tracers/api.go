@@ -1392,11 +1392,6 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 		config.BorTx = newBoolPtr(false)
 	}
 
-	_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, vmenv, context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("tracing failed: %w", err)
-	}
-
 	if *config.BorTx {
 		callmsg := prepareCallMessage(*message)
 		// nolint : contextcheck
@@ -1404,8 +1399,10 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 			return nil, fmt.Errorf("tracing failed: %w", err)
 		}
 	} else {
-		// nolint : contextcheck
-		if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.GasLimit), context.Background()); err != nil {
+		// Call Prepare to clear out the statedb access list
+		statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
+		_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, vmenv, context.Background())
+		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %w", err)
 		}
 	}

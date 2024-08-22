@@ -469,7 +469,6 @@ func TestTraceTransaction(t *testing.T) {
 	api := NewAPI(backend)
 
 	result, err := api.TraceTransaction(context.Background(), target, nil)
-	fmt.Println("Anshal trace txn - ", result)
 	if err != nil {
 		t.Errorf("Failed to trace transaction %v", err)
 	}
