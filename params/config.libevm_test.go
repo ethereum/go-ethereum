@@ -184,13 +184,13 @@ func TestRegisterExtras(t *testing.T) {
 
 			got := new(ChainConfig)
 			require.NoError(t, json.Unmarshal(buf, got))
-			assert.Equal(t, tt.ccExtra.Interface(), got.ExtraPayload().Interface())
+			assert.Equal(t, tt.ccExtra.Interface(), got.extraPayload().Interface())
 			assert.Equal(t, in, got)
 			// TODO: do we need an explicit test of the JSON output, or is a
 			// Marshal-Unmarshal round trip sufficient?
 
 			gotRules := got.Rules(nil, false, 0)
-			assert.Equal(t, tt.wantRulesExtra, gotRules.ExtraPayload().Interface())
+			assert.Equal(t, tt.wantRulesExtra, gotRules.extraPayload().Interface())
 		})
 	}
 }
@@ -212,14 +212,14 @@ func TestExtrasPanic(t *testing.T) {
 
 	assertPanics(
 		t, func() {
-			new(ChainConfig).ExtraPayload()
+			new(ChainConfig).extraPayload()
 		},
 		"before RegisterExtras",
 	)
 
 	assertPanics(
 		t, func() {
-			new(Rules).ExtraPayload()
+			new(Rules).extraPayload()
 		},
 		"before RegisterExtras",
 	)

@@ -32,8 +32,8 @@ type Extras[C any, R any] struct {
 // [ChainConfig.Rules] will call the `NewForRules` function of the registered
 // [Extras] to create a new `*R`.
 //
-// The payloads can be accessed via the [ChainConfig.ExtraPayload] and
-// [Rules.ExtraPayload] methods, which will always return a `*C` or `*R`
+// The payloads can be accessed via the [ChainConfig.extraPayload] and
+// [Rules.extraPayload] methods, which will always return a `*C` or `*R`
 // respectively however these pointers may themselves be nil.
 //
 // As the `ExtraPayload()` methods are not generic and return `any`, their
@@ -56,12 +56,12 @@ type ExtraPayloadGetter[C any, R any] struct{}
 
 // FromChainConfig ...
 func (ExtraPayloadGetter[C, R]) FromChainConfig(c *ChainConfig) *C {
-	return pseudo.NewValueUnsafe[*C](c.ExtraPayload()).Get()
+	return pseudo.NewValueUnsafe[*C](c.extraPayload()).Get()
 }
 
 // FromRules ...
 func (ExtraPayloadGetter[C, R]) FromRules(r *Rules) *R {
-	return pseudo.NewValueUnsafe[*R](r.ExtraPayload()).Get()
+	return pseudo.NewValueUnsafe[*R](r.extraPayload()).Get()
 }
 
 func mustBeStruct[T any]() {
@@ -130,12 +130,12 @@ func (c *ChainConfig) addRulesExtra(r *Rules, blockNum *big.Int, isMerge bool, t
 	}
 }
 
-// ExtraPayload returns the extra payload carried by the ChainConfig and can
+// extraPayload returns the extra payload carried by the ChainConfig and can
 // only be called if [RegisterExtras] was called. The returned value is always
 // of type `*C` as registered, but may be nil. Callers MUST immediately
 // type-assert the returned value to `*C` to avoid typed-nil bugs. See the
 // example for the intended usage pattern.
-func (c *ChainConfig) ExtraPayload() *pseudo.Type {
+func (c *ChainConfig) extraPayload() *pseudo.Type {
 	if registeredExtras == nil {
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", c))
 	}
@@ -145,12 +145,12 @@ func (c *ChainConfig) ExtraPayload() *pseudo.Type {
 	return c.extra
 }
 
-// ExtraPayload returns the extra payload carried by the Rules and can only be
+// extraPayload returns the extra payload carried by the Rules and can only be
 // called if [RegisterExtras] was called. The returned value is always of type
 // `*R` as registered, but may be nil. Callers MUST immediately type-assert the
 // returned value to `*R` to avoid typed-nil bugs. See the example on
-// [ChainConfig.ExtraPayload] for the intended usage pattern.
-func (r *Rules) ExtraPayload() *pseudo.Type {
+// [ChainConfig.extraPayload] for the intended usage pattern.
+func (r *Rules) extraPayload() *pseudo.Type {
 	if registeredExtras == nil {
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", r))
 	}
