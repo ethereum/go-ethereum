@@ -2,8 +2,6 @@ package params
 
 import (
 	"encoding/json"
-	"fmt"
-	"log"
 	"math/big"
 	"testing"
 
@@ -14,88 +12,6 @@ import (
 
 func testOnlyClearRegisteredExtras() {
 	registeredExtras = nil
-}
-
-func ExampleRegisterExtras() {
-	type (
-		chainConfigExtra struct {
-			Foo string `json:"foo"`
-		}
-		rulesExtra struct {
-			FooCopy string
-		}
-	)
-
-	// In practice, this would be called inside an init() func and the `getter`
-	// used to access the ExtraPayload() values in a type-safe way.
-	getter := RegisterExtras(Extras[chainConfigExtra, rulesExtra]{
-		NewForRules: func(cc *ChainConfig, r *Rules, cEx *chainConfigExtra, blockNum *big.Int, isMerge bool, timestamp uint64) *rulesExtra {
-			// This function is called at the end of ChainConfig.Rules(),
-			// receiving a pointer to the Rules that will be returned. It MAY
-			// modify the Rules but MUST NOT modify the ChainConfig. The value
-			// that it returns will be available via Rules.ExtraPayload().
-			return &rulesExtra{
-				FooCopy: fmt.Sprintf("copy of: %q", cEx.Foo),
-			}
-		},
-	})
-	defer testOnlyClearRegisteredExtras()
-
-	// ChainConfig now unmarshals any JSON field named "extra" into a pointer to
-	// the registered type, which is available via the ExtraPayload() method.
-	buf := []byte(`{
-		"chainId": 1234,
-		"extra": {
-			"foo": "hello, world"
-		}
-	}`)
-
-	config := new(ChainConfig)
-	if err := json.Unmarshal(buf, config); err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(config.ChainID)
-	// The values returned by ExtraPayload() are guaranteed to be pointers to
-	// the registered types. They MAY, however, be nil pointers. In practice,
-	// callers SHOULD abstract the type assertion in a reusable function to
-	// provide a seamless devex.
-	ccExtra := getter.FromChainConfig(config)
-	rules := config.Rules(nil, false, 0)
-	rExtra := getter.FromRules(&rules)
-
-	if ccExtra != nil {
-		fmt.Println(ccExtra.Foo)
-	}
-	if rExtra != nil {
-		fmt.Println(rExtra.FooCopy)
-	}
-
-	// Output:
-	// 1234
-	// hello, world
-	// copy of: "hello, world"
-}
-
-func ExampleChainConfig_ExtraPayload() {
-	type (
-		chainConfigExtra struct{}
-		rulesExtra       struct{}
-	)
-	// Typically called in an `init()` function.
-	getter := RegisterExtras(Extras[chainConfigExtra, rulesExtra]{ /*...*/ })
-	defer testOnlyClearRegisteredExtras()
-
-	var c ChainConfig // Sourced from elsewhere, typically unmarshalled from JSON.
-
-	// Both ChainConfig.ExtraPayload() and Rules.ExtraPayload() return `any`
-	// that are guaranteed to be pointers to the registered types.
-	extra := getter.FromChainConfig(&c)
-
-	// Act on the extra payload...
-	if extra != nil {
-		// ...
-	}
 }
 
 type rawJSON struct {
@@ -171,6 +87,7 @@ func TestRegisterExtras(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testOnlyClearRegisteredExtras()
 			tt.register()
 			defer testOnlyClearRegisteredExtras()
 
@@ -196,6 +113,9 @@ func TestRegisterExtras(t *testing.T) {
 }
 
 func TestExtrasPanic(t *testing.T) {
+	testOnlyClearRegisteredExtras()
+	defer testOnlyClearRegisteredExtras()
+
 	assertPanics(
 		t, func() {
 			RegisterExtras(Extras[int, struct{}]{})
@@ -225,7 +145,6 @@ func TestExtrasPanic(t *testing.T) {
 	)
 
 	RegisterExtras(Extras[struct{}, struct{}]{})
-	defer testOnlyClearRegisteredExtras()
 
 	assertPanics(
 		t, func() {
