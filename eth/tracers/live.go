@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 )
 
-type ctorFunc func(config json.RawMessage, backend Backend) (*tracing.Hooks, error)
+type ctorFunc func(config json.RawMessage) (*tracing.Hooks, error)
 
 // LiveDirectory is the collection of tracers which can be used
 // during normal block import operations.
@@ -23,9 +23,9 @@ func (d *liveDirectory) Register(name string, f ctorFunc) {
 }
 
 // New instantiates a tracer by name.
-func (d *liveDirectory) New(name string, config json.RawMessage, backend Backend) (*tracing.Hooks, error) {
+func (d *liveDirectory) New(name string, config json.RawMessage) (*tracing.Hooks, error) {
 	if f, ok := d.elems[name]; ok {
-		return f(config, backend)
+		return f(config)
 	}
 	return nil, errors.New("not found")
 }
