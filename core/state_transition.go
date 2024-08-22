@@ -247,6 +247,7 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 	sender := st.from() // err checked in preCheck
 
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
+	eip3529 := st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber)
 	contractCreation := msg.To() == nil
 
 	// Pay intrinsic gas
@@ -293,7 +294,13 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 			return nil, 0, false, vmerr, nil
 		}
 	}
-	st.refundGas()
+	if !eip3529 {
+		// Before EIP-3529: refunds were capped to gasUsed / 2
+		st.refundGas(params.RefundQuotient)
+	} else {
+		// After EIP-3529: refunds are capped to gasUsed / 5
+		st.refundGas(params.RefundQuotientEIP3529)
+	}
 
 	if st.evm.Context.BlockNumber.Cmp(common.TIPTRC21Fee) > 0 {
 		if (owner != common.Address{}) {
@@ -306,9 +313,9 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 	return ret, st.gasUsed(), vmerr != nil, nil, vmerr
 }
 
-func (st *StateTransition) refundGas() {
-	// Apply refund counter, capped to half of the used gas.
-	refund := st.gasUsed() / 2
+func (st *StateTransition) refundGas(refundQuotient uint64) {
+	// Apply refund counter, capped to a refund quotient
+	refund := st.gasUsed() / refundQuotient
 	if refund > st.state.GetRefund() {
 		refund = st.state.GetRefund()
 	}

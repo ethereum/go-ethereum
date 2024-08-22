@@ -23,10 +23,10 @@ var (
 )
 
 const (
-	GasLimitBoundDivisor uint64 = 1024    // The bound divisor of the gas limit, used in update calculations.
-	MinGasLimit          uint64 = 5000    // Minimum the gas limit may ever be.
+	GasLimitBoundDivisor uint64 = 1024               // The bound divisor of the gas limit, used in update calculations.
+	MinGasLimit          uint64 = 5000               // Minimum the gas limit may ever be.
 	MaxGasLimit          uint64 = 0x7fffffffffffffff // Maximum the gas limit (2^63-1).
-	GenesisGasLimit      uint64 = 4712388 // Gas limit of the Genesis block.
+	GenesisGasLimit      uint64 = 4712388            // Gas limit of the Genesis block.
 	XDCGenesisGasLimit   uint64 = 84000000
 
 	MaximumExtraDataSize  uint64 = 32    // Maximum size extra data may be after Genesis.
@@ -64,8 +64,8 @@ const (
 
 	TxAccessListAddressGas    uint64 = 2400 // Per address specified in EIP 2930 access list
 	TxAccessListStorageKeyGas uint64 = 1900 // Per storage key specified in EIP 2930 access list
-	
-	TxDataNonZeroGas uint64 = 68    // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
+
+	TxDataNonZeroGas uint64 = 68 // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
 
 	MaxCodeSize = 24576 // Maximum bytecode to permit for a contract
 
@@ -83,6 +83,11 @@ const (
 	Bn256PairingBaseGas     uint64 = 100000 // Base price for an elliptic curve pairing check
 	Bn256PairingPerPointGas uint64 = 80000  // Per-point price for an elliptic curve pairing check
 	XDCXPriceGas            uint64 = 1
+
+	// The Refund Quotient is the cap on how much of the used gas can be refunded. Before EIP-3529,
+	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
+	RefundQuotient        uint64 = 2
+	RefundQuotientEIP3529 uint64 = 5
 )
 
 var (
@@ -106,6 +111,16 @@ const (
 	SstoreSetGasEIP2200               uint64 = 20000 // Once per SSTORE operation from clean zero to non-zero
 	SstoreResetGasEIP2200             uint64 = 5000  // Once per SSTORE operation from clean non-zero to something else
 	SstoreClearsScheduleRefundEIP2200 uint64 = 15000 // Once per SSTORE operation for clearing an originally existing storage slot
+
+	ColdAccountAccessCostEIP2929 = uint64(2600) // COLD_ACCOUNT_ACCESS_COST
+	ColdSloadCostEIP2929         = uint64(2100) // COLD_SLOAD_COST
+	WarmStorageReadCostEIP2929   = uint64(100)  // WARM_STORAGE_READ_COST
+
+	// In EIP-2200: SstoreResetGas was 5000.
+	// In EIP-2929: SstoreResetGas was changed to '5000 - COLD_SLOAD_COST'.
+	// In EIP-3529: SSTORE_CLEARS_SCHEDULE is defined as SSTORE_RESET_GAS + ACCESS_LIST_STORAGE_KEY_COST
+	// Which becomes: 5000 - 2100 + 1900 = 4800
+	SstoreClearsScheduleRefundEIP3529 uint64 = SstoreResetGasEIP2200 - ColdSloadCostEIP2929 + TxAccessListStorageKeyGas
 
 	Create2Gas               uint64 = 32000 // Once per CREATE2 operation
 	SelfdestructRefundGas    uint64 = 24000 // Refunded following a selfdestruct operation.
