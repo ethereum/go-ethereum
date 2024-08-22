@@ -84,6 +84,7 @@ func newEip1559InstructionSet() JumpTable {
 	instructionSet := newShanghaiInstructionSet()
 	enable2929(&instructionSet) // Gas cost increases for state access opcodes https://eips.ethereum.org/EIPS/eip-2929
 	enable3529(&instructionSet) // EIP-3529: Reduction in refunds https://eips.ethereum.org/EIPS/eip-3529
+	enable3860(&instructionSet) // Limit and meter initcode
 	return validate(instructionSet)
 }
 

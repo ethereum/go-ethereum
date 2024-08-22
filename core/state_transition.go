@@ -90,7 +90,7 @@ type Message interface {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead bool, isEIP3860 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -98,8 +98,9 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, 
 	} else {
 		gas = params.TxGas
 	}
+	dataLen := uint64(len(data))
 	// Bump the required gas by the amount of transactional data
-	if len(data) > 0 {
+	if dataLen > 0 {
 		// Zero and non-zero bytes are priced differently
 		var nz uint64
 		for _, byt := range data {
@@ -113,17 +114,34 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, 
 		}
 		gas += nz * params.TxDataNonZeroGas
 
-		z := uint64(len(data)) - nz
+		z := dataLen - nz
 		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
 			return 0, ErrGasUintOverflow
 		}
 		gas += z * params.TxDataZeroGas
+
+		if isContractCreation && isEIP3860 {
+			lenWords := toWordSize(dataLen)
+			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
+				return 0, ErrGasUintOverflow
+			}
+			gas += lenWords * params.InitCodeWordGas
+		}
 	}
 	if accessList != nil {
 		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
 		gas += uint64(accessList.StorageKeys()) * params.TxAccessListStorageKeyGas
 	}
 	return gas, nil
+}
+
+// toWordSize returns the ceiled word size required for init code payment calculation.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
+	}
+
+	return (size + 31) / 32
 }
 
 // NewStateTransition initialises and returns a new state transition object.
@@ -286,14 +304,18 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 	if err = st.preCheck(); err != nil {
 		return nil, 0, false, err, nil
 	}
-	msg := st.msg
-	sender := st.from() // err checked in preCheck
-	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
-	eip3529 := st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber)
-	contractCreation := msg.To() == nil
+
+	var (
+		msg              = st.msg
+		sender           = st.from() // err checked in preCheck
+		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber)
+		homestead        = rules.IsHomestead
+		eip3529          = rules.IsEIP1559
+		contractCreation = msg.To() == nil
+	)
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, rules.IsEIP1559)
 	if err != nil {
 		return nil, 0, false, err, nil
 	}
@@ -302,7 +324,12 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 	}
 	st.gas -= gas
 
-	if rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber); rules.IsEIP1559 {
+	// Check whether the init code size has been exceeded.
+	if rules.IsEIP1559 && contractCreation && len(st.data) > params.MaxInitCodeSize {
+		return nil, 0, false, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(st.data), params.MaxInitCodeSize), nil
+	}
+
+	if rules.IsEIP1559 {
 		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 	}
 

@@ -702,7 +702,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 
 	if tx.To() == nil || (tx.To() != nil && !tx.IsSpecialTransaction()) {
 		// Ensure the transaction has more gas than the basic tx fee.
-		intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true)
+		intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, true, pool.eip1559)
 		if err != nil {
 			return err
 		}
