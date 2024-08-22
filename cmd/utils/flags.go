@@ -1930,19 +1930,6 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
-
-	// register the live tracer
-	if cfg.VMTrace != "" {
-		var traceConfig json.RawMessage
-		if cfg.VMTraceJsonConfig != "" {
-			traceConfig = json.RawMessage(cfg.VMTraceJsonConfig)
-		}
-		t, err := tracers.LiveDirectory.New(cfg.VMTrace, traceConfig)
-		if err != nil {
-			Fatalf("failed to create tracer %s: %v", cfg.VMTrace, err)
-		}
-		backend.BlockChain().SetLogger(t)
-	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
 }
