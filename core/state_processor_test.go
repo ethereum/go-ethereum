@@ -557,10 +557,10 @@ func TestProcessParentBlockHash(t *testing.T) {
 
 		// make sure that the state is correct
 		if have := getParentBlockHash(statedb, 1); have != hashA {
-			t.Errorf("expected parent hash %v, got %v", hashA, have)
+			t.Errorf("want parent hash %v, have %v", hashA, have)
 		}
 		if have := getParentBlockHash(statedb, 0); have != hashB {
-			t.Errorf("expected parent hash %v, got %v", hashB, have)
+			t.Errorf("want parent hash %v, have %v", hashB, have)
 		}
 	}
 	t.Run("MPT", func(t *testing.T) {

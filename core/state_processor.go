@@ -81,7 +81,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
 	}
 	if p.config.IsPrague(block.Number(), block.Time()) {
-		// This should not underflow as genesis block is not processed.
 		ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
 	// Iterate over and process the individual transactions
@@ -217,11 +216,13 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 // ProcessParentBlockHash stores the parent block hash in the history storage contract
 // as per EIP-2935.
 func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.StateDB) {
-	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallStart != nil {
-		vmenv.Config.Tracer.OnSystemCallStart()
-	}
-	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallEnd != nil {
-		defer vmenv.Config.Tracer.OnSystemCallEnd()
+	if vmenv.Config.Tracer != nil {
+		if Config.Tracer.OnSystemCallStart != nil {
+			vmenv.Config.Tracer.OnSystemCallStart()
+		}
+		if vmenv.Config.Tracer.OnSystemCallEnd != nil {
+			defer vmenv.Config.Tracer.OnSystemCallEnd()
+		}
 	}
 
 	msg := &Message{
