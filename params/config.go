@@ -611,7 +611,9 @@ type CliqueConfig struct {
 	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
 	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
 
-	RelaxedPeriod bool `json:"relaxed_period"` // Relaxes the period to be just an upper bound
+	RelaxedPeriod    bool           `json:"relaxed_period"`     // Relaxes the period to be just an upper bound
+	ShadowForkHeight uint64         `json:"shadow_fork_height"` // Allows shadow forking consensus layer at given height
+	ShadowForkSigner common.Address `json:"shadow_fork_signer"` // Sets the address to be the authorized signer after the shadow fork
 }
 
 // String implements the stringer interface, returning the consensus engine details.

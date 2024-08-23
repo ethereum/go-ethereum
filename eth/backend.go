@@ -267,6 +267,8 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 		BloomCache:     uint64(cacheLimit),
 		EventMux:       eth.eventMux,
 		RequiredBlocks: config.RequiredBlocks,
+
+		ShadowForkPeerIDs: config.ShadowForkPeerIDs,
 	}); err != nil {
 		return nil, err
 	}

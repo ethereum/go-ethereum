@@ -20,6 +20,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -93,6 +94,8 @@ type handlerConfig struct {
 	BloomCache     uint64                 // Megabytes to alloc for snap sync bloom
 	EventMux       *event.TypeMux         // Legacy event mux, deprecate for `feed`
 	RequiredBlocks map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
+
+	ShadowForkPeerIDs []string // List of peer ids that take part in the shadow-fork
 }
 
 type handler struct {
@@ -128,6 +131,8 @@ type handler struct {
 
 	handlerStartCh chan struct{}
 	handlerDoneCh  chan struct{}
+
+	shadowForkPeerIDs []string
 }
 
 // newHandler returns a handler for all Ethereum chain management protocol.
@@ -149,6 +154,8 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		quitSync:       make(chan struct{}),
 		handlerDoneCh:  make(chan struct{}),
 		handlerStartCh: make(chan struct{}),
+
+		shadowForkPeerIDs: config.ShadowForkPeerIDs,
 	}
 	if config.Sync == downloader.FullSync {
 		// Currently in Scroll we only support full sync,
@@ -269,7 +276,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return h.chain.InsertChain(blocks)
 	}
-	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, h.removePeer)
+
+	fetcherDropPeerFunc := h.removePeer
+	// If we are shadowforking, don't drop peers.
+	if config.ShadowForkPeerIDs != nil {
+		fetcherDropPeerFunc = func(id string) {}
+	}
+	h.blockFetcher = fetcher.NewBlockFetcher(false, nil, h.chain.GetBlockByHash, validator, h.BroadcastBlock, heighter, nil, inserter, fetcherDropPeerFunc)
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
 		p := h.peers.peer(peer)
@@ -396,7 +409,9 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 
 	// Propagate existing transactions. new transactions appearing
 	// after this will be sent via broadcasts.
-	h.syncTransactions(peer)
+	if h.shadowForkPeerIDs == nil || slices.Contains(h.shadowForkPeerIDs, peer.ID()) {
+		h.syncTransactions(peer)
+	}
 
 	// Create a notification channel for pending requests if the peer goes down
 	dead := make(chan struct{})
@@ -567,7 +582,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		}
 	}
 	hash := block.Hash()
-	peers := h.peers.peersWithoutBlock(hash)
+	peers := onlyShadowForkPeers(h.shadowForkPeerIDs, h.peers.peersWithoutBlock(hash))
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
@@ -620,7 +635,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 			continue
 		}
 
-		peers := h.peers.peersWithoutTransaction(tx.Hash())
+		peers := onlyShadowForkPeers(h.shadowForkPeerIDs, h.peers.peersWithoutTransaction(tx.Hash()))
 
 		var numDirect int
 		switch {
@@ -694,4 +709,17 @@ func (h *handler) enableSyncedFeatures() {
 	if h.chain.TrieDB().Scheme() == rawdb.PathScheme {
 		h.chain.TrieDB().SetBufferSize(pathdb.DefaultBufferSize)
 	}
+}
+
+// onlyShadowForkPeers filters out peers that are not part of the shadow fork
+func onlyShadowForkPeers[peerT interface {
+	ID() string
+}](shadowForkPeerIDs []string, peers []peerT) []peerT {
+	if shadowForkPeerIDs == nil {
+		return peers
+	}
+
+	return slices.DeleteFunc(peers, func(peer peerT) bool {
+		return !slices.Contains(shadowForkPeerIDs, peer.ID())
+	})
 }
