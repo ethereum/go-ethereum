@@ -505,19 +505,6 @@ func (b *Block) Hash() common.Hash {
 	return h
 }
 
-// SetVerkleProof attaches an execution witness + proof to the block in a verkle context.
-func (b *Block) SetVerkleProof(vp *verkle.VerkleProof, statediff verkle.StateDiff) {
-	b.witness = &ExecutionWitness{statediff, vp}
-	if statediff == nil {
-		b.witness.StateDiff = []verkle.StemStateDiff{}
-	}
-	if vp == nil {
-		b.witness.VerkleProof = &verkle.VerkleProof{
-			IPAProof: &verkle.IPAProof{},
-		}
-	}
-}
-
 type Blocks []*Block
 
 // HeaderParentHashFromRLP returns the parentHash of an RLP-encoded
