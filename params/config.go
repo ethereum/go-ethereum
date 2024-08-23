@@ -168,6 +168,7 @@ var (
 		BernoulliBlock:                big.NewInt(0),
 		CurieBlock:                    big.NewInt(0),
 		DarwinTime:                    newUint64(0),
+		DarwinV2Time:                  newUint64(0),
 		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           nil,
@@ -315,6 +316,7 @@ var (
 		BernoulliBlock:                big.NewInt(0),
 		CurieBlock:                    big.NewInt(0),
 		DarwinTime:                    newUint64(0),
+		DarwinV2Time:                  newUint64(0),
 		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           nil,
@@ -361,6 +363,7 @@ var (
 		BernoulliBlock:                big.NewInt(0),
 		CurieBlock:                    big.NewInt(0),
 		DarwinTime:                    newUint64(0),
+		DarwinV2Time:                  newUint64(0),
 		Scroll: ScrollConfig{
 			UseZktrie:                 true,
 			FeeVaultAddress:           &common.Address{123},
@@ -405,6 +408,7 @@ var (
 		BernoulliBlock:                big.NewInt(0),
 		CurieBlock:                    big.NewInt(0),
 		DarwinTime:                    newUint64(0),
+		DarwinV2Time:                  newUint64(0),
 		Scroll: ScrollConfig{
 			UseZktrie:                 false,
 			FeeVaultAddress:           nil,
@@ -502,6 +506,7 @@ type ChainConfig struct {
 	PragueTime   *uint64 `json:"pragueTime,omitempty"`   // Prague switch time (nil = no fork, 0 = already on prague)
 	VerkleTime   *uint64 `json:"verkleTime,omitempty"`   // Verkle switch time (nil = no fork, 0 = already on verkle)
 	DarwinTime   *uint64 `json:"darwinTime,omitempty"`   // Darwin switch time (nil = no fork, 0 = already on darwin)
+	DarwinV2Time *uint64 `json:"darwinv2Time,omitempty"` // DarwinV2 switch time (nil = no fork, 0 = already on darwinv2)
 
 	// TerminalTotalDifficulty is the amount of total difficulty reached by
 	// the network that triggers the consensus upgrade.
@@ -715,6 +720,9 @@ func (c *ChainConfig) Description() string {
 	if c.DarwinTime != nil {
 		banner += fmt.Sprintf(" - Darwin:                      @%-10v\n", *c.DarwinTime)
 	}
+	if c.DarwinV2Time != nil {
+		banner += fmt.Sprintf(" - DarwinV2:                    @%-10v\n", *c.DarwinV2Time)
+	}
 	banner += "\n"
 
 	banner += "Scroll Config:\n"
@@ -844,6 +852,11 @@ func (c *ChainConfig) IsDarwin(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.DarwinTime, time)
 }
 
+// IsDarwinV2 returns whether num is either equal to the DarwinV2 fork block or greater.
+func (c *ChainConfig) IsDarwinV2(num *big.Int, time uint64) bool {
+	return c.IsLondon(num) && isTimestampForked(c.DarwinV2Time, time)
+}
+
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time uint64) *ConfigCompatError {
@@ -904,6 +917,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "shanghaiTime", timestamp: c.ShanghaiTime},
 		{name: "curieBlock", block: c.CurieBlock, optional: true},
 		{name: "darwinTime", timestamp: c.DarwinTime, optional: true},
+		{name: "darwinV2Time", timestamp: c.DarwinV2Time, optional: true},
 	} {
 		if lastFork.name != "" {
 			switch {
@@ -1024,6 +1038,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	}
 	if isForkTimestampIncompatible(c.DarwinTime, newcfg.DarwinTime, headTimestamp) {
 		return newTimestampCompatError("Darwin fork timestamp", c.DarwinTime, newcfg.DarwinTime)
+	}
+	if isForkTimestampIncompatible(c.DarwinV2Time, newcfg.DarwinV2Time, headTimestamp) {
+		return newTimestampCompatError("DarwinV2 fork timestamp", c.DarwinV2Time, newcfg.DarwinV2Time)
 	}
 	return nil
 }
@@ -1171,7 +1188,8 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
 	IsVerkle                                                bool
-	IsArchimedes, IsBernoulli, IsCurie, IsDarwin            bool
+	IsArchimedes, IsBernoulli, IsCurie                      bool
+	IsDarwin, IsDarwinV2                                    bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -1201,5 +1219,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsBernoulli:      c.IsBernoulli(num),
 		IsCurie:          c.IsCurie(num),
 		IsDarwin:         c.IsDarwin(num, timestamp),
+		IsDarwinV2:       c.IsDarwinV2(num, timestamp),
 	}
 }
