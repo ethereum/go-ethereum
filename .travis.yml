@@ -63,6 +63,7 @@ jobs:
 
         # build 386
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+        - git status --porcelain
         - go run build/ci.go install -dlgo -arch 386
         - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
