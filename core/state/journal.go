@@ -63,26 +63,26 @@ func newJournal() *journal {
 	}
 }
 
-// Reset clears the journal, after this operation the journal can be used
-// anew. It is semantically similar to calling 'newJournal', but the underlying
-// slices can be reused
-func (j *journal) Reset() {
+// reset clears the journal, after this operation the journal can be used
+// as new. It is semantically similar to calling 'newJournal', but the underlying
+// slices can be reused.
+func (j *journal) reset() {
 	j.entries = j.entries[:0]
 	j.validRevisions = j.validRevisions[:0]
 	clear(j.dirties)
 	j.nextRevisionId = 0
 }
 
-// Snapshot returns an identifier for the current revision of the state.
-func (j *journal) Snapshot() int {
+// snapshot returns an identifier for the current revision of the state.
+func (j *journal) snapshot() int {
 	id := j.nextRevisionId
 	j.nextRevisionId++
 	j.validRevisions = append(j.validRevisions, revision{id, j.length()})
 	return id
 }
 
-// RevertToSnapshot reverts all state changes made since the given revision.
-func (j *journal) RevertToSnapshot(revid int, s *StateDB) {
+// revertToSnapshot reverts all state changes made since the given revision.
+func (j *journal) revertToSnapshot(revid int, s *StateDB) {
 	// Find the snapshot in the stack of valid snapshots.
 	idx := sort.Search(len(j.validRevisions), func(i int) bool {
 		return j.validRevisions[i].id >= revid
@@ -148,30 +148,23 @@ func (j *journal) copy() *journal {
 	}
 }
 
-func (j *journal) AccessListAddAccount(addr common.Address) {
-	j.append(accessListAddAccountChange{&addr})
-}
-
-func (j *journal) AccessListAddSlot(addr common.Address, slot common.Hash) {
-	j.append(accessListAddSlotChange{
-		address: &addr,
-		slot:    &slot,
-	})
-}
-
-func (j *journal) Log(txHash common.Hash) {
+func (j *journal) logChange(txHash common.Hash) {
 	j.append(addLogChange{txhash: txHash})
 }
 
-func (j *journal) Create(addr common.Address) {
+func (j *journal) createObject(addr common.Address) {
 	j.append(createObjectChange{account: &addr})
 }
 
-func (j *journal) Destruct(addr common.Address) {
+func (j *journal) createContract(addr common.Address) {
+	j.append(createContractChange{account: addr})
+}
+
+func (j *journal) destruct(addr common.Address) {
 	j.append(selfDestructChange{account: &addr})
 }
 
-func (j *journal) SetStorage(addr common.Address, key, prev, origin common.Hash) {
+func (j *journal) storageChange(addr common.Address, key, prev, origin common.Hash) {
 	j.append(storageChange{
 		account:   &addr,
 		key:       key,
@@ -180,7 +173,7 @@ func (j *journal) SetStorage(addr common.Address, key, prev, origin common.Hash)
 	})
 }
 
-func (j *journal) SetTransientState(addr common.Address, key, prev common.Hash) {
+func (j *journal) transientStateChange(addr common.Address, key, prev common.Hash) {
 	j.append(transientStorageChange{
 		account:  &addr,
 		key:      key,
@@ -188,29 +181,29 @@ func (j *journal) SetTransientState(addr common.Address, key, prev common.Hash) 
 	})
 }
 
-func (j *journal) RefundChange(previous uint64) {
+func (j *journal) refundChange(previous uint64) {
 	j.append(refundChange{prev: previous})
 }
 
-func (j *journal) BalanceChange(addr common.Address, previous *uint256.Int) {
+func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
 	j.append(balanceChange{
 		account: &addr,
 		prev:    previous.Clone(),
 	})
 }
 
-func (j *journal) SetCode(address common.Address) {
+func (j *journal) codeChange(address common.Address) {
 	j.append(codeChange{account: &address})
 }
 
-func (j *journal) NonceChange(address common.Address, prev uint64) {
+func (j *journal) nonceChange(address common.Address, prev uint64) {
 	j.append(nonceChange{
 		account: &address,
 		prev:    prev,
 	})
 }
 
-func (j *journal) Touch(address common.Address) {
+func (j *journal) touchChange(address common.Address) {
 	j.append(touchChange{
 		account: &address,
 	})
@@ -219,6 +212,17 @@ func (j *journal) Touch(address common.Address) {
 		// flattened journals.
 		j.dirty(address)
 	}
+}
+
+func (j *journal) accessListAddAccount(addr common.Address) {
+	j.append(accessListAddAccountChange{&addr})
+}
+
+func (j *journal) accessListAddSlot(addr common.Address, slot common.Hash) {
+	j.append(accessListAddSlotChange{
+		address: &addr,
+		slot:    &slot,
+	})
 }
 
 type (
