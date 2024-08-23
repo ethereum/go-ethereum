@@ -49,7 +49,7 @@ func TestRegisterExtras(t *testing.T) {
 			name: "Rules payload copied from ChainConfig payload",
 			register: func() {
 				RegisterExtras(Extras[ccExtraA, rulesExtraA]{
-					NewForRules: func(cc *ChainConfig, r *Rules, ex *ccExtraA, _ *big.Int, _ bool, _ uint64) *rulesExtraA {
+					NewRules: func(cc *ChainConfig, r *Rules, ex *ccExtraA, _ *big.Int, _ bool, _ uint64) *rulesExtraA {
 						return &rulesExtraA{
 							A: ex.A,
 						}

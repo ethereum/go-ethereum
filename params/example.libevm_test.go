@@ -12,7 +12,7 @@ import (
 // TODO: explain why this isn't in an init()
 func initFn() {
 	getter = params.RegisterExtras(params.Extras[ChainConfigExtra, RulesExtra]{
-		NewForRules: constructRulesExtra,
+		NewRules: constructRulesExtra,
 	})
 }
 

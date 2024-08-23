@@ -12,13 +12,13 @@ import (
 // Extras are arbitrary payloads to be added as extra fields in [ChainConfig]
 // and [Rules] structs. See [RegisterExtras].
 type Extras[C any, R any] struct {
-	// NewForRules, if non-nil is called at the end of [ChainConfig.Rules] with
-	// the newly created [Rules] and the [ChainConfig] extra payload. Its
-	// returned value will be the extra payload of the [Rules]. If NewForRules
-	// is nil then so too will the [Rules] extra payload be a nil `*R`.
+	// NewRules, if non-nil is called at the end of [ChainConfig.Rules] with the
+	// newly created [Rules] and other context from the method call. Its
+	// returned value will be the extra payload of the [Rules]. If NewRules is
+	// nil then so too will the [Rules] extra payload be a nil `*R`.
 	//
-	// NewForRules MAY modify the [Rules] but MUST NOT modify the [ChainConfig].
-	NewForRules func(_ *ChainConfig, _ *Rules, _ *C, blockNum *big.Int, isMerge bool, timestamp uint64) *R
+	// NewRules MAY modify the [Rules] but MUST NOT modify the [ChainConfig].
+	NewRules func(_ *ChainConfig, _ *Rules, _ *C, blockNum *big.Int, isMerge bool, timestamp uint64) *R
 }
 
 // RegisterExtras registers the types `C` and `R` such that they are carried as
@@ -28,19 +28,16 @@ type Extras[C any, R any] struct {
 //
 // After registration, JSON unmarshalling of a [ChainConfig] will create a new
 // `*C` and unmarshal the JSON key "extra" into it. Conversely, JSON marshalling
-// will populate the "extra" key with the contents of the `*C`. Calls to
-// [ChainConfig.Rules] will call the `NewForRules` function of the registered
-// [Extras] to create a new `*R`.
+// will populate the "extra" key with the contents of the `*C`. Both the
+// [json.Marshaler] and [json.Unmarshaler] interfaces are honoured if
+// implemented by `C` and/or `R.`
 //
-// The payloads can be accessed via the [ChainConfig.extraPayload] and
-// [Rules.extraPayload] methods, which will always return a `*C` or `*R`
-// respectively however these pointers may themselves be nil.
+// Calls to [ChainConfig.Rules] will call the `NewRules` function of the
+// registered [Extras] to create a new `*R`.
 //
-// As the `ExtraPayload()` methods are not generic and return `any`, their
-// values MUST be type-asserted to the returned type; failure to do so may
-// result in a typed-nil bug. This pattern most-closely resembles a fully
-// generic implementation and users SHOULD wrap the type assertions in a shared
-// package.
+// The payloads can be accessed via the [ExtraPayloadGetter.FromChainConfig] and
+// [ExtraPayloadGetter.FromRules] methods of the getter returned by
+// RegisterExtras.
 func RegisterExtras[C any, R any](e Extras[C, R]) ExtraPayloadGetter[C, R] {
 	if registeredExtras != nil {
 		panic("re-registration of Extras")
@@ -51,15 +48,28 @@ func RegisterExtras[C any, R any](e Extras[C, R]) ExtraPayloadGetter[C, R] {
 	return ExtraPayloadGetter[C, R]{}
 }
 
-// An ExtraPayloadGettter ...
-type ExtraPayloadGetter[C any, R any] struct{}
+// registeredExtras holds the [Extras] registered via [RegisterExtras]. As we
+// don't know `C` and `R` at compile time, it must be an interface.
+var registeredExtras interface {
+	nilForChainConfig() *pseudo.Type
+	nilForRules() *pseudo.Type
+	newForChainConfig() *pseudo.Type
+	newForRules(_ *ChainConfig, _ *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type
+}
 
-// FromChainConfig ...
+// An ExtraPayloadGettter provides strongly typed access to the extra payloads
+// carried by [ChainConfig] and [Rules] structs. The only valid way to construct
+// a getter is by a call to [RegisterExtras].
+type ExtraPayloadGetter[C any, R any] struct {
+	_ struct{} // make godoc show unexported fields so nobody tries to make their own getter ;)
+}
+
+// FromChainConfig returns the ChainConfig's extra payload.
 func (ExtraPayloadGetter[C, R]) FromChainConfig(c *ChainConfig) *C {
 	return pseudo.MustNewValue[*C](c.extraPayload()).Get()
 }
 
-// FromRules ...
+// FromRules returns the Rules' extra payload.
 func (ExtraPayloadGetter[C, R]) FromRules(r *Rules) *R {
 	return pseudo.MustNewValue[*R](r.extraPayload()).Get()
 }
@@ -71,24 +81,14 @@ func mustBeStruct[T any]() {
 	}
 }
 
+// notStructMessage returns the message with which [mustBeStruct] might panic.
+// It exists to avoid change-detector tests should the message contents change.
 func notStructMessage[T any]() string {
 	var x T
 	return fmt.Sprintf("%T is not a struct", x)
 }
 
-var registeredExtras interface {
-	nilForChainConfig() *pseudo.Type
-	nilForRules() *pseudo.Type
-	newForChainConfig() *pseudo.Type
-	newForRules(_ *ChainConfig, _ *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type
-}
-
-var (
-	_ json.Unmarshaler = (*ChainConfig)(nil)
-	_ json.Marshaler   = (*ChainConfig)(nil)
-)
-
-// UnmarshalJSON ... TODO
+// UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	// We need to bypass this UnmarshalJSON() method when we again call
 	// json.Unmarshal(). The `raw` type won't inherit the method.
@@ -113,7 +113,7 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON ... TODO
+// MarshalJSON implements the [json.Marshaler] interface.
 func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 	type raw ChainConfig
 	cc := &struct {
@@ -123,6 +123,13 @@ func (c *ChainConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(cc)
 }
 
+var _ interface {
+	json.Marshaler
+	json.Unmarshaler
+} = (*ChainConfig)(nil)
+
+// addRulesExtra is called at the end of [ChainConfig.Rules]; it exists to
+// abstract the libevm-specific behaviour outside of original geth code.
 func (c *ChainConfig) addRulesExtra(r *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) {
 	r.extra = nil
 	if registeredExtras != nil {
@@ -130,13 +137,15 @@ func (c *ChainConfig) addRulesExtra(r *Rules, blockNum *big.Int, isMerge bool, t
 	}
 }
 
-// extraPayload returns the extra payload carried by the ChainConfig and can
-// only be called if [RegisterExtras] was called. The returned value is always
-// of type `*C` as registered, but may be nil. Callers MUST immediately
-// type-assert the returned value to `*C` to avoid typed-nil bugs. See the
-// example for the intended usage pattern.
+// extraPayload returns the ChainConfig's extra payload iff [RegisterExtras] has
+// already been called. If the payload hasn't been populated (typically via
+// unmarshalling of JSON), a nil value is constructed and returned.
 func (c *ChainConfig) extraPayload() *pseudo.Type {
 	if registeredExtras == nil {
+		// This will only happen if someone constructs an [ExtraPayloadGetter]
+		// directly, without a call to [RegisterExtras].
+		//
+		// See https://google.github.io/styleguide/go/best-practices#when-to-panic
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", c))
 	}
 	if c.extra == nil {
@@ -145,13 +154,10 @@ func (c *ChainConfig) extraPayload() *pseudo.Type {
 	return c.extra
 }
 
-// extraPayload returns the extra payload carried by the Rules and can only be
-// called if [RegisterExtras] was called. The returned value is always of type
-// `*R` as registered, but may be nil. Callers MUST immediately type-assert the
-// returned value to `*R` to avoid typed-nil bugs. See the example on
-// [ChainConfig.extraPayload] for the intended usage pattern.
+// extraPayload is equivalent to [ChainConfig.extraPayload].
 func (r *Rules) extraPayload() *pseudo.Type {
 	if registeredExtras == nil {
+		// See ChainConfig.extraPayload() equivalent.
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", r))
 	}
 	if r.extra == nil {
@@ -159,6 +165,10 @@ func (r *Rules) extraPayload() *pseudo.Type {
 	}
 	return r.extra
 }
+
+/**
+ * Start of Extras implementing the registeredExtras interface.
+ */
 
 func (Extras[C, R]) nilForChainConfig() *pseudo.Type { return pseudo.Zero[*C]().Type }
 func (Extras[C, R]) nilForRules() *pseudo.Type       { return pseudo.Zero[*R]().Type }
@@ -169,8 +179,12 @@ func (*Extras[C, R]) newForChainConfig() *pseudo.Type {
 }
 
 func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type {
-	if e.NewForRules == nil {
+	if e.NewRules == nil {
 		return e.nilForRules()
 	}
-	return pseudo.From(e.NewForRules(c, r, c.extra.Interface().(*C), blockNum, isMerge, timestamp)).Type
+	return pseudo.From(e.NewRules(c, r, c.extra.Interface().(*C), blockNum, isMerge, timestamp)).Type
 }
+
+/**
+ * End of Extras implementing the registeredExtras interface.
+ */
