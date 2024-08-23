@@ -35,7 +35,7 @@ func init() {
 type noopTracer struct{}
 
 // newNoopTracer returns a new noop tracer.
-func newNoopTracer() tracers.Tracer {
+func newNoopTracer(ctx *tracers.Context) tracers.Tracer {
 	return &noopTracer{}
 }
 

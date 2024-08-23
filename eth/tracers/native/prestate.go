@@ -61,7 +61,7 @@ type prestateTracer struct {
 	deleted   map[common.Address]bool
 }
 
-func newPrestateTracer() tracers.Tracer {
+func newPrestateTracer(ctx *tracers.Context) tracers.Tracer {
 	return &prestateTracer{
 		pre:     state{},
 		post:    state{},

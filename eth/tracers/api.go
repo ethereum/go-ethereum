@@ -194,6 +194,7 @@ type StdTraceConfig struct {
 
 // txTraceResult is the result of a single transaction trace.
 type txTraceResult struct {
+	TxHash common.Hash `json:"txHash"`           // Hash of the transaction being traced
 	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
 	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
 }
@@ -280,9 +281,10 @@ func (api *API) traceChain(ctx context.Context, start, end *types.Block, config 
 				for i, tx := range task.block.Transactions() {
 					msg, _ := tx.AsMessage(signer, task.block.BaseFee())
 					txctx := &Context{
-						BlockHash: task.block.Hash(),
-						TxIndex:   i,
-						TxHash:    tx.Hash(),
+						BlockNumber: task.block.NumberU64(),
+						BlockHash:   task.block.Hash(),
+						TxIndex:     i,
+						TxHash:      tx.Hash(),
 					}
 
 					l1DataFee, err := fees.CalculateL1DataFee(tx, task.statedb, api.backend.ChainConfig(), task.block.Number())
@@ -613,6 +615,7 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	}
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), api.backend.ChainConfig(), nil)
 	blockHash := block.Hash()
+	blockNumber := block.NumberU64()
 	for th := 0; th < threads; th++ {
 		pend.Add(1)
 		go func() {
@@ -621,23 +624,33 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 			for task := range jobs {
 				msg, _ := txs[task.index].AsMessage(signer, block.BaseFee())
 				txctx := &Context{
-					BlockHash: blockHash,
-					TxIndex:   task.index,
-					TxHash:    txs[task.index].Hash(),
+					BlockNumber: blockNumber,
+					BlockHash:   blockHash,
+					TxIndex:     task.index,
+					TxHash:      txs[task.index].Hash(),
 				}
 
 				l1DataFee, err := fees.CalculateL1DataFee(txs[task.index], task.statedb, api.backend.ChainConfig(), block.Number())
 				if err != nil {
 					// though it's not a "tracing error", we still need to put it here
-					results[task.index] = &txTraceResult{Error: err.Error()}
+					results[task.index] = &txTraceResult{
+						TxHash: txs[task.index].Hash(),
+						Error:  err.Error(),
+					}
 					continue
 				}
 				res, err := api.traceTx(ctx, msg, txctx, blockCtx, task.statedb, config, l1DataFee)
 				if err != nil {
-					results[task.index] = &txTraceResult{Error: err.Error()}
+					results[task.index] = &txTraceResult{
+						TxHash: txs[task.index].Hash(),
+						Error:  err.Error(),
+					}
 					continue
 				}
-				results[task.index] = &txTraceResult{Result: res}
+				results[task.index] = &txTraceResult{
+					TxHash: txs[task.index].Hash(),
+					Result: res,
+				}
 			}
 		}()
 	}

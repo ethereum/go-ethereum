@@ -314,9 +314,10 @@ func (env *TraceEnv) getTxResult(state *state.StateDB, index int, block *types.B
 
 	txContext := core.NewEVMTxContext(msg)
 	tracerContext := tracers.Context{
-		BlockHash: block.Hash(),
-		TxIndex:   index,
-		TxHash:    tx.Hash(),
+		BlockNumber: block.NumberU64(),
+		BlockHash:   block.Hash(),
+		TxIndex:     index,
+		TxHash:      tx.Hash(),
 	}
 	callTracer, err := tracers.New("callTracer", &tracerContext)
 	if err != nil {
