@@ -27,6 +27,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
@@ -847,6 +848,12 @@ var (
 		Usage: "Enable circuit capacity check during block validation",
 	}
 
+	CircuitCapacityCheckWorkersFlag = cli.UintFlag{
+		Name:  "ccc.numworkers",
+		Usage: "Set the number of workers that will be used for background CCC tasks",
+		Value: uint(runtime.GOMAXPROCS(0)),
+	}
+
 	// Rollup verify service settings
 	RollupVerifyEnabledFlag = cli.BoolFlag{
 		Name:  "rollup.verify",
@@ -1572,6 +1579,10 @@ func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {
 func setCircuitCapacityCheck(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(CircuitCapacityCheckEnabledFlag.Name) {
 		cfg.CheckCircuitCapacity = ctx.GlobalBool(CircuitCapacityCheckEnabledFlag.Name)
+		cfg.CCCMaxWorkers = runtime.GOMAXPROCS(0)
+		if ctx.GlobalIsSet(CircuitCapacityCheckWorkersFlag.Name) {
+			cfg.CCCMaxWorkers = int(ctx.GlobalUint(CircuitCapacityCheckWorkersFlag.Name))
+		}
 	}
 }
 

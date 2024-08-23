@@ -44,7 +44,10 @@ func (ccc *Checker) ApplyTransaction(traces *types.BlockTrace) (*types.RowConsum
 	}
 	if ccc.skipError != nil {
 		if traces.Transactions[0].TxHash == ccc.skipHash {
-			return nil, ccc.skipError
+			return &types.RowConsumption{types.SubCircuitRowUsage{
+				Name:      "mock",
+				RowNumber: 1_000_001,
+			}}, ccc.skipError
 		}
 	}
 	return &types.RowConsumption{types.SubCircuitRowUsage{

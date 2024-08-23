@@ -53,6 +53,7 @@ require (
 	github.com/scroll-tech/da-codec v0.1.1-0.20240822151711-9e32313056ac
 	github.com/scroll-tech/zktrie v0.8.4
 	github.com/shirou/gopsutil v3.21.11+incompatible
+	github.com/sourcegraph/conc v0.3.0
 	github.com/status-im/keycard-go v0.0.0-20190316090335-8537d3370df4
 	github.com/stretchr/testify v1.9.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
@@ -99,6 +100,8 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/net v0.16.0 // indirect
 	golang.org/x/term v0.15.0 // indirect
 	google.golang.org/protobuf v1.23.0 // indirect
