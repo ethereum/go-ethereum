@@ -16,6 +16,13 @@ type ChunkBlockRange struct {
 	EndBlockNumber   uint64
 }
 
+// CommittedBatchMeta holds metadata for committed batches.
+type CommittedBatchMeta struct {
+	Version             uint8
+	BlobVersionedHashes []common.Hash
+	ChunkBlockRanges    []*ChunkBlockRange
+}
+
 // FinalizedBatchMeta holds metadata for finalized batches.
 type FinalizedBatchMeta struct {
 	BatchHash            common.Hash
@@ -53,6 +60,7 @@ func ReadRollupEventSyncedL1BlockNumber(db ethdb.Reader) *uint64 {
 
 // WriteBatchChunkRanges writes the block ranges for each chunk within a batch to the database.
 // It serializes the chunk ranges using RLP and stores them under a key derived from the batch index.
+// for backward compatibility, new info is also stored in CommittedBatchMeta.
 func WriteBatchChunkRanges(db ethdb.KeyValueWriter, batchIndex uint64, chunkBlockRanges []*ChunkBlockRange) {
 	value, err := rlp.EncodeToBytes(chunkBlockRanges)
 	if err != nil {
@@ -65,6 +73,7 @@ func WriteBatchChunkRanges(db ethdb.KeyValueWriter, batchIndex uint64, chunkBloc
 
 // DeleteBatchChunkRanges removes the block ranges of all chunks associated with a specific batch from the database.
 // Note: Only non-finalized batches can be reverted.
+// for backward compatibility, new info is also stored in CommittedBatchMeta.
 func DeleteBatchChunkRanges(db ethdb.KeyValueWriter, batchIndex uint64) {
 	if err := db.Delete(batchChunkRangesKey(batchIndex)); err != nil {
 		log.Crit("failed to delete batch chunk ranges", "batch index", batchIndex, "err", err)
@@ -73,6 +82,7 @@ func DeleteBatchChunkRanges(db ethdb.KeyValueWriter, batchIndex uint64) {
 
 // ReadBatchChunkRanges retrieves the block ranges of all chunks associated with a specific batch from the database.
 // It returns a list of ChunkBlockRange pointers, or nil if no chunk ranges are found for the given batch index.
+// for backward compatibility, new info is also stored in CommittedBatchMeta.
 func ReadBatchChunkRanges(db ethdb.Reader, batchIndex uint64) []*ChunkBlockRange {
 	data, err := db.Get(batchChunkRangesKey(batchIndex))
 	if err != nil && isNotFoundErr(err) {
@@ -91,13 +101,12 @@ func ReadBatchChunkRanges(db ethdb.Reader, batchIndex uint64) []*ChunkBlockRange
 
 // WriteFinalizedBatchMeta stores the metadata of a finalized batch in the database.
 func WriteFinalizedBatchMeta(db ethdb.KeyValueWriter, batchIndex uint64, finalizedBatchMeta *FinalizedBatchMeta) {
-	var err error
 	value, err := rlp.EncodeToBytes(finalizedBatchMeta)
 	if err != nil {
-		log.Crit("failed to RLP encode batch metadata", "batch index", batchIndex, "finalized batch meta", finalizedBatchMeta, "err", err)
+		log.Crit("failed to RLP encode finalized batch metadata", "batch index", batchIndex, "finalized batch meta", finalizedBatchMeta, "err", err)
 	}
 	if err := db.Put(batchMetaKey(batchIndex), value); err != nil {
-		log.Crit("failed to store batch metadata", "batch index", batchIndex, "value", value, "err", err)
+		log.Crit("failed to store finalized batch metadata", "batch index", batchIndex, "value", value, "err", err)
 	}
 }
 
@@ -170,4 +179,32 @@ func ReadLastFinalizedBatchIndex(db ethdb.Reader) *uint64 {
 
 	lastFinalizedBatchIndex := number.Uint64()
 	return &lastFinalizedBatchIndex
+}
+
+// WriteCommittedBatchMeta stores the CommittedBatchMeta for a specific batch in the database.
+func WriteCommittedBatchMeta(db ethdb.KeyValueWriter, batchIndex uint64, committedBatchMeta *CommittedBatchMeta) {
+	value, err := rlp.EncodeToBytes(committedBatchMeta)
+	if err != nil {
+		log.Crit("failed to RLP encode committed batch metadata", "batch index", batchIndex, "committed batch meta", committedBatchMeta, "err", err)
+	}
+	if err := db.Put(committedBatchMetaKey(batchIndex), value); err != nil {
+		log.Crit("failed to store committed batch metadata", "batch index", batchIndex, "value", value, "err", err)
+	}
+}
+
+// ReadCommittedBatchMeta fetches the CommittedBatchMeta for a specific batch from the database.
+func ReadCommittedBatchMeta(db ethdb.Reader, batchIndex uint64) *CommittedBatchMeta {
+	data, err := db.Get(committedBatchMetaKey(batchIndex))
+	if err != nil && isNotFoundErr(err) {
+		return nil
+	}
+	if err != nil {
+		log.Crit("failed to read committed batch metadata from database", "batch index", batchIndex, "err", err)
+	}
+
+	cbm := new(CommittedBatchMeta)
+	if err := rlp.Decode(bytes.NewReader(data), cbm); err != nil {
+		log.Crit("Invalid CommittedBatchMeta RLP", "batch index", batchIndex, "data", data, "err", err)
+	}
+	return cbm
 }
