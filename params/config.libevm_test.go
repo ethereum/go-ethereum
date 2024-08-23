@@ -10,6 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testOnlyClearRegisteredExtras SHOULD be called before every call to
+// [RegisterExtras] and then defer-called afterwards. This is a workaround for
+// the single-call limitation on [RegisterExtras].
 func testOnlyClearRegisteredExtras() {
 	registeredExtras = nil
 }
@@ -18,10 +21,10 @@ type rawJSON struct {
 	json.RawMessage
 }
 
-var (
-	_ json.Unmarshaler = (*rawJSON)(nil)
-	_ json.Marshaler   = (*rawJSON)(nil)
-)
+var _ interface {
+	json.Marshaler
+	json.Unmarshaler
+} = (*rawJSON)(nil)
 
 func TestRegisterExtras(t *testing.T) {
 	type (
