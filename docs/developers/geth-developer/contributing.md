@@ -3,7 +3,7 @@ title: Contributing
 description: Guidelines for contributing to Geth
 ---
 
-We welcome contributions from anyone on the internet, and are grateful for even the smallest of fixes!
+We welcome contributions from anyone on the internet, and are grateful even for small fixes!
 
 ## Contributing to the Geth source code {#contributing-to-source-code}
 
