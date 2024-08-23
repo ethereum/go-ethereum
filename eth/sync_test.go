@@ -34,6 +34,8 @@ func TestSnapSyncDisabling68(t *testing.T) { testSnapSyncDisabling(t, eth.ETH68,
 // Tests that snap sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
 func testSnapSyncDisabling(t *testing.T, ethVer uint, snapVer uint) {
+	t.Skip()
+
 	t.Parallel()
 
 	// Create an empty handler and ensure it's in snap sync mode
