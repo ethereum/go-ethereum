@@ -56,9 +56,9 @@ func TestRegisterExtras(t *testing.T) {
 					},
 				})
 			},
-			ccExtra: pseudo.OnlyType(pseudo.From(&ccExtraA{
+			ccExtra: pseudo.From(&ccExtraA{
 				A: "hello",
-			})),
+			}).Type,
 			wantRulesExtra: &rulesExtraA{
 				A: "hello",
 			},
@@ -68,9 +68,9 @@ func TestRegisterExtras(t *testing.T) {
 			register: func() {
 				RegisterExtras(Extras[ccExtraB, rulesExtraB]{})
 			},
-			ccExtra: pseudo.OnlyType(pseudo.From(&ccExtraB{
+			ccExtra: pseudo.From(&ccExtraB{
 				B: "world",
-			})),
+			}).Type,
 			wantRulesExtra: (*rulesExtraB)(nil),
 		},
 		{
@@ -78,9 +78,9 @@ func TestRegisterExtras(t *testing.T) {
 			register: func() {
 				RegisterExtras(Extras[rawJSON, struct{}]{})
 			},
-			ccExtra: pseudo.OnlyType(pseudo.From(&rawJSON{
+			ccExtra: pseudo.From(&rawJSON{
 				RawMessage: []byte(`"hello, world"`),
-			})),
+			}).Type,
 			wantRulesExtra: (*struct{})(nil),
 		},
 	}

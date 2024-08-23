@@ -56,12 +56,12 @@ type ExtraPayloadGetter[C any, R any] struct{}
 
 // FromChainConfig ...
 func (ExtraPayloadGetter[C, R]) FromChainConfig(c *ChainConfig) *C {
-	return pseudo.NewValueUnsafe[*C](c.extraPayload()).Get()
+	return pseudo.MustNewValue[*C](c.extraPayload()).Get()
 }
 
 // FromRules ...
 func (ExtraPayloadGetter[C, R]) FromRules(r *Rules) *R {
-	return pseudo.NewValueUnsafe[*R](r.extraPayload()).Get()
+	return pseudo.MustNewValue[*R](r.extraPayload()).Get()
 }
 
 func mustBeStruct[T any]() {
@@ -160,19 +160,17 @@ func (r *Rules) extraPayload() *pseudo.Type {
 	return r.extra
 }
 
-func (Extras[C, R]) nilForChainConfig() *pseudo.Type { return pseudo.OnlyType(pseudo.Zero[*C]()) }
-func (Extras[C, R]) nilForRules() *pseudo.Type       { return pseudo.OnlyType(pseudo.Zero[*R]()) }
+func (Extras[C, R]) nilForChainConfig() *pseudo.Type { return pseudo.Zero[*C]().Type }
+func (Extras[C, R]) nilForRules() *pseudo.Type       { return pseudo.Zero[*R]().Type }
 
 func (*Extras[C, R]) newForChainConfig() *pseudo.Type {
 	var x C
-	return pseudo.OnlyType(pseudo.From(&x))
+	return pseudo.From(&x).Type
 }
 
 func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type {
 	if e.NewForRules == nil {
 		return e.nilForRules()
 	}
-	return pseudo.OnlyType(
-		pseudo.From(e.NewForRules(c, r, c.extra.Interface().(*C), blockNum, isMerge, timestamp)),
-	)
+	return pseudo.From(e.NewForRules(c, r, c.extra.Interface().(*C), blockNum, isMerge, timestamp)).Type
 }

@@ -15,7 +15,7 @@ func TestType(t *testing.T) {
 
 	testType(
 		t, "From[uint](314159)",
-		func() (*Type, *Value[uint]) {
+		func() *Pseudo[uint] {
 			return From[uint](314159)
 		},
 		314159, 0, struct{}{},
@@ -24,20 +24,20 @@ func TestType(t *testing.T) {
 	testType(t, "nil pointer", Zero[*float64], (*float64)(nil), new(float64), 0)
 }
 
-func testType[T any](t *testing.T, name string, ctor func() (*Type, *Value[T]), init T, setTo T, invalid any) {
+func testType[T any](t *testing.T, name string, ctor func() *Pseudo[T], init T, setTo T, invalid any) {
 	t.Run(name, func(t *testing.T) {
-		typ, val := ctor()
+		typ, val := ctor().TypeAndValue()
 		assert.Equal(t, init, val.Get())
 		val.Set(setTo)
 		assert.Equal(t, setTo, val.Get())
 
 		t.Run("set to invalid type", func(t *testing.T) {
-			wantErr := &InvalidTypeError[T]{SetTo: invalid}
+			wantErr := &invalidTypeError[T]{SetTo: invalid}
 
 			assertError := func(t *testing.T, err any) {
 				t.Helper()
 				switch err := err.(type) {
-				case *InvalidTypeError[T]:
+				case *invalidTypeError[T]:
 					assert.Equal(t, wantErr, err)
 				default:
 					t.Errorf("got error %v; want %v", err, wantErr)
@@ -60,9 +60,20 @@ func testType[T any](t *testing.T, name string, ctor func() (*Type, *Value[T]), 
 			buf, err := json.Marshal(typ)
 			require.NoError(t, err)
 
-			got, gotVal := Zero[T]()
+			got, gotVal := Zero[T]().TypeAndValue()
 			require.NoError(t, json.Unmarshal(buf, &got))
 			assert.Equal(t, val.Get(), gotVal.Get())
 		})
 	})
+}
+
+func ExamplePseudo_TypeAndValue() {
+	typ, val := From("hello").TypeAndValue()
+
+	// But, if only one is needed:
+	typ = From("world").Type
+	val = From("this isn't coupled to the Type").Value
+
+	_ = typ
+	_ = val
 }
