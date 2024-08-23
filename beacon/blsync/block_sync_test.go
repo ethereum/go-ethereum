@@ -70,7 +70,10 @@ func TestBlockSync(t *testing.T) {
 		t.Helper()
 		var expNumber, headNumber uint64
 		if expHead != nil {
-			p, _ := expHead.ExecutionPayload()
+			p, err := expHead.ExecutionPayload()
+			if err != nil {
+				t.Fatalf("expHead.ExecutionPayload() failed: %v", err)
+			}
 			expNumber = p.NumberU64()
 		}
 		select {
