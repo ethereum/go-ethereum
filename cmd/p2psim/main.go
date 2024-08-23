@@ -19,20 +19,21 @@
 // Here is an example of creating a 2 node network with the first node
 // connected to the second:
 //
-//	$ p2psim node create
-//	Created node01
+//     $ p2psim node create
+//     Created node01
 //
-//	$ p2psim node start node01
-//	Started node01
+//     $ p2psim node start node01
+//     Started node01
 //
-//	$ p2psim node create
-//	Created node02
+//     $ p2psim node create
+//     Created node02
 //
-//	$ p2psim node start node02
-//	Started node02
+//     $ p2psim node start node02
+//     Started node02
 //
-//	$ p2psim node connect node01 node02
-//	Connected node01 to node02
+//     $ p2psim node connect node01 node02
+//     Connected node01 to node02
+//
 package main
 
 import (
@@ -46,7 +47,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/XinFinOrg/XDPoSChain/p2p/simulations"
 	"github.com/XinFinOrg/XDPoSChain/p2p/simulations/adapters"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
@@ -282,7 +283,7 @@ func createNode(ctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		config.ID = enode.PubkeyToIDV4(&privKey.PublicKey)
+		config.ID = discover.PubkeyID(&privKey.PublicKey)
 		config.PrivateKey = privKey
 	}
 	if services := ctx.String("services"); services != "" {

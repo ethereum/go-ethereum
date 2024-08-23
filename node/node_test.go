@@ -453,9 +453,9 @@ func TestProtocolGather(t *testing.T) {
 		Count int
 		Maker InstrumentingWrapper
 	}{
-		"zero": {0, InstrumentedServiceMakerA},
-		"one":  {1, InstrumentedServiceMakerB},
-		"many": {10, InstrumentedServiceMakerC},
+		"Zero Protocols":  {0, InstrumentedServiceMakerA},
+		"Single Protocol": {1, InstrumentedServiceMakerB},
+		"Many Protocols":  {25, InstrumentedServiceMakerC},
 	}
 	for id, config := range services {
 		protocols := make([]p2p.Protocol, config.Count)
@@ -479,7 +479,7 @@ func TestProtocolGather(t *testing.T) {
 	defer stack.Stop()
 
 	protocols := stack.Server().Protocols
-	if len(protocols) != 11 {
+	if len(protocols) != 26 {
 		t.Fatalf("mismatching number of protocols launched: have %d, want %d", len(protocols), 26)
 	}
 	for id, config := range services {

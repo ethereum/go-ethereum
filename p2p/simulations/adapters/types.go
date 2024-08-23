@@ -21,14 +21,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
-	"strconv"
 
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/gorilla/websocket"
@@ -40,6 +38,7 @@ import (
 // * SimNode    - An in-memory node
 // * ExecNode   - A child process node
 // * DockerNode - A Docker container node
+//
 type Node interface {
 	// Addr returns the node's address (e.g. an Enode URL)
 	Addr() []byte
@@ -78,7 +77,7 @@ type NodeAdapter interface {
 type NodeConfig struct {
 	// ID is the node's ID which is used to identify the node in the
 	// simulation network
-	ID enode.ID
+	ID discover.NodeID
 
 	// PrivateKey is the node's private key which is used by the devp2p
 	// stack to encrypt communications
@@ -97,9 +96,7 @@ type NodeConfig struct {
 	Services []string
 
 	// function to sanction or prevent suggesting a peer
-	Reachable func(id enode.ID) bool
-
-	Port uint16
+	Reachable func(id discover.NodeID) bool
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding
@@ -134,9 +131,11 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	if confJSON.ID != "" {
-		if err := n.ID.UnmarshalText([]byte(confJSON.ID)); err != nil {
+		nodeID, err := discover.HexID(confJSON.ID)
+		if err != nil {
 			return err
 		}
+		n.ID = nodeID
 	}
 
 	if confJSON.PrivateKey != "" {
@@ -157,49 +156,20 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Node returns the node descriptor represented by the config.
-func (n *NodeConfig) Node() *enode.Node {
-	return enode.NewV4(&n.PrivateKey.PublicKey, net.IP{127, 0, 0, 1}, int(n.Port), int(n.Port))
-}
-
 // RandomNodeConfig returns node configuration with a randomly generated ID and
 // PrivateKey
 func RandomNodeConfig() *NodeConfig {
-	prvkey, err := crypto.GenerateKey()
+	key, err := crypto.GenerateKey()
 	if err != nil {
 		panic("unable to generate key")
 	}
-
-	port, err := assignTCPPort()
-	if err != nil {
-		panic("unable to assign tcp port")
-	}
-
-	enodId := enode.PubkeyToIDV4(&prvkey.PublicKey)
+	var id discover.NodeID
+	pubkey := crypto.FromECDSAPub(&key.PublicKey)
+	copy(id[:], pubkey[1:])
 	return &NodeConfig{
-		PrivateKey:      prvkey,
-		ID:              enodId,
-		Name:            fmt.Sprintf("node_%s", enodId.String()),
-		Port:            port,
-		EnableMsgEvents: true,
+		ID:         id,
+		PrivateKey: key,
 	}
-}
-
-func assignTCPPort() (uint16, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
-	}
-	l.Close()
-	_, port, err := net.SplitHostPort(l.Addr().String())
-	if err != nil {
-		return 0, err
-	}
-	p, err := strconv.ParseInt(port, 10, 32)
-	if err != nil {
-		return 0, err
-	}
-	return uint16(p), nil
 }
 
 // ServiceContext is a collection of options and methods which can be utilised
@@ -216,7 +186,7 @@ type ServiceContext struct {
 // other nodes in the network (for example a simulated Swarm node which needs
 // to connect to a Geth node to resolve ENS names)
 type RPCDialer interface {
-	DialRPC(id enode.ID) (*rpc.Client, error)
+	DialRPC(id discover.NodeID) (*rpc.Client, error)
 }
 
 // Services is a collection of services which can be run in a simulation
