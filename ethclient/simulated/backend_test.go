@@ -258,10 +258,7 @@ func TestCommitReturnValue(t *testing.T) {
 	}
 
 	// Create a block in the original chain (containing a transaction to force different block hashes)
-	head, _ := client.HeaderByNumber(ctx, nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
-	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
-	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
+	tx, _ := newTx(sim, testKey)
 	if err := client.SendTransaction(ctx, tx); err != nil {
 		t.Errorf("sending transaction: %v", err)
 	}
