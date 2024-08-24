@@ -213,7 +213,9 @@ func TestForkResendTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create transaction: %v", err)
 	}
-	client.SendTransaction(ctx, tx)
+	if err := client.SendTransaction(ctx, tx); err != nil {
+		t.Fatalf("sending transaction: %v", err)
+	}
 	sim.Commit()
 
 	// 3.
@@ -260,7 +262,9 @@ func TestCommitReturnValue(t *testing.T) {
 	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
 	_tx := types.NewTransaction(0, testAddr, big.NewInt(1000), params.TxGas, gasPrice, nil)
 	tx, _ := types.SignTx(_tx, types.HomesteadSigner{}, testKey)
-	client.SendTransaction(ctx, tx)
+	if err := client.SendTransaction(ctx, tx); err != nil {
+		t.Errorf("sending transaction: %v", err)
+	}
 
 	h2 := sim.Commit()
 
