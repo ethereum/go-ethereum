@@ -1,0 +1,41 @@
+---
+name: Last
+on:
+  pull_request:
+    types: [labeled]
+    labels: ['CI:Build']
+    branches:
+      - master
+
+  workflow_dispatch:
+
+#maybe also a solution        if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+
+jobs:
+  build:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    runs-on: ubuntu-latest
+    steps:
+      # - run: echo "Your PR has been merged. The building of a new docker image is going to start soon."
+
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@3
+        with:
+          platforms: linux/amd64,linux/arm64
+          tags: user/app:latest
+          secrets: |
+            "github_token=${{ secrets.GITHUB_TOKEN }}"  
+  
+
+      - name: Build Docker image
+        run: |
+          echo "The building of a new docker image is going to start now."
+          docker build . --file Dockerfile --tag my-image:${{ github.event.number }} --push
+
+      - name: Push Docker image to registry
+        run: |
+          docker tag my-image:${{ github.event.number }} my-registry.com/my-image:${{ github.event.number }}
+          docker push my-registry.com/my-image:${{ github.event.number }}   
