@@ -40,7 +40,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
 	"github.com/XinFinOrg/XDPoSChain/whisper/mailserver"
 	whisper "github.com/XinFinOrg/XDPoSChain/whisper/whisperv6"
@@ -174,7 +174,7 @@ func initialize() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*argVerbosity), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	done = make(chan struct{})
-	var peers []*enode.Node
+	var peers []*discover.Node
 	var err error
 
 	if *generateKey {
@@ -202,7 +202,7 @@ func initialize() {
 		if len(*argEnode) == 0 {
 			argEnode = scanLineA("Please enter the peer's enode: ")
 		}
-		peer := enode.MustParseV4(*argEnode)
+		peer := discover.MustParseNode(*argEnode)
 		peers = append(peers, peer)
 	}
 
@@ -748,11 +748,11 @@ func requestExpiredMessagesLoop() {
 }
 
 func extractIDFromEnode(s string) []byte {
-	n, err := enode.ParseV4(s)
+	n, err := discover.ParseNode(s)
 	if err != nil {
 		utils.Fatalf("Failed to parse enode: %s", err)
 	}
-	return n.ID().Bytes()
+	return n.ID[:]
 }
 
 // obfuscateBloom adds 16 random bits to the the bloom

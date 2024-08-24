@@ -25,7 +25,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 )
 
 const (
@@ -44,12 +44,6 @@ type txsync struct {
 
 // syncTransactions starts sending all currently pending transactions to the given peer.
 func (pm *ProtocolManager) syncTransactions(p *peer) {
-	// Assemble the set of transaction to broadcast or announce to the remote
-	// peer. Fun fact, this is quite an expensive operation as it needs to sort
-	// the transactions if the sorting is not cached yet. However, with a random
-	// order, insertions could overflow the non-executable queues and get dropped.
-	//
-	// TODO(karalabe): Figure out if we could get away with random order somehow
 	var txs types.Transactions
 	pending, _ := pm.txpool.Pending()
 	for _, batch := range pending {
@@ -58,40 +52,26 @@ func (pm *ProtocolManager) syncTransactions(p *peer) {
 	if len(txs) == 0 {
 		return
 	}
-	// The eth/65 protocol introduces proper transaction announcements, so instead
-	// of dripping transactions across multiple peers, just send the entire list as
-	// an announcement and let the remote side decide what they need (likely nothing).
-	if isEth65OrHigher(p.version) {
-		hashes := make([]common.Hash, len(txs))
-		for i, tx := range txs {
-			hashes[i] = tx.Hash()
-		}
-		p.AsyncSendPooledTransactionHashes(hashes)
-		return
-	}
-	// Out of luck, peer is running legacy protocols, drop the txs over
 	select {
-	case pm.txsyncCh <- &txsync{p: p, txs: txs}:
+	case pm.txsyncCh <- &txsync{p, txs}:
 	case <-pm.quitSync:
 	}
 }
 
-// txsyncLoop64 takes care of the initial transaction sync for each new
+// txsyncLoop takes care of the initial transaction sync for each new
 // connection. When a new peer appears, we relay all currently pending
 // transactions. In order to minimise egress bandwidth usage, we send
 // the transactions in small packs to one peer at a time.
-func (pm *ProtocolManager) txsyncLoop64() {
+func (pm *ProtocolManager) txsyncLoop() {
 	var (
-		pending = make(map[enode.ID]*txsync)
+		pending = make(map[discover.NodeID]*txsync)
 		sending = false               // whether a send is active
 		pack    = new(txsync)         // the pack that is being sent
 		done    = make(chan error, 1) // result of the send
 	)
+
 	// send starts a sending a pack of transactions from the sync.
 	send := func(s *txsync) {
-		if isEth65OrHigher(s.p.version) {
-			panic("initial transaction syncer running on eth/65+")
-		}
 		// Fill pack with transactions up to the target size.
 		size := common.StorageSize(0)
 		pack.p = s.p
@@ -108,7 +88,7 @@ func (pm *ProtocolManager) txsyncLoop64() {
 		// Send the pack in the background.
 		s.p.Log().Trace("Sending batch of transactions", "count", len(pack.txs), "bytes", size)
 		sending = true
-		go func() { done <- pack.p.SendTransactions64(pack.txs) }()
+		go func() { done <- pack.p.SendTransactions(pack.txs) }()
 	}
 
 	// pick chooses the next pending sync.
@@ -153,11 +133,9 @@ func (pm *ProtocolManager) txsyncLoop64() {
 // downloading hashes and blocks as well as handling the announcement handler.
 func (pm *ProtocolManager) syncer() {
 	// Start and ensure cleanup of sync mechanisms
-	pm.blockFetcher.Start()
-	pm.txFetcher.Start()
+	pm.fetcher.Start()
 	pm.bft.Start()
-	defer pm.blockFetcher.Stop()
-	defer pm.txFetcher.Stop()
+	defer pm.fetcher.Stop()
 	defer pm.bft.Stop()
 	defer pm.downloader.Terminate()
 

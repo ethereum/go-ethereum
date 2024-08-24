@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/light"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/XinFinOrg/XDPoSChain/p2p/discv5"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
@@ -165,7 +167,8 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protoco
 				var entry *poolEntry
 				peer := manager.newPeer(int(version), networkId, p, rw)
 				if manager.serverPool != nil {
-					entry = manager.serverPool.connect(peer, peer.Node())
+					addr := p.RemoteAddr().(*net.TCPAddr)
+					entry = manager.serverPool.connect(peer, addr.IP, uint16(addr.Port))
 				}
 				peer.poolEntry = entry
 				select {
@@ -186,6 +189,12 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, protoco
 			},
 			NodeInfo: func() interface{} {
 				return manager.NodeInfo()
+			},
+			PeerInfo: func(id discover.NodeID) interface{} {
+				if p := manager.peers.Peer(fmt.Sprintf("%x", id[:8])); p != nil {
+					return p.Info()
+				}
+				return nil
 			},
 		})
 	}
@@ -385,11 +394,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-		if err := req.sanityCheck(); err != nil {
-			return err
-		}
+
 		if p.requestAnnounceType == announceTypeSigned {
-			if err := req.checkSignature(p.ID()); err != nil {
+			if err := req.checkSignature(p.pubKey); err != nil {
 				p.Log().Trace("Invalid announcement signature", "err", err)
 				return err
 			}

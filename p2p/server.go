@@ -18,29 +18,20 @@
 package p2p
 
 import (
-	"bytes"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"net"
-	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/mclock"
-	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/event"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/XinFinOrg/XDPoSChain/p2p/discv5"
-	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
-	"github.com/XinFinOrg/XDPoSChain/p2p/enr"
 	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
 	"github.com/XinFinOrg/XDPoSChain/p2p/netutil"
-	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 const (
@@ -94,7 +85,7 @@ type Config struct {
 
 	// BootstrapNodes are used to establish connectivity
 	// with the rest of the network.
-	BootstrapNodes []*enode.Node
+	BootstrapNodes []*discover.Node
 
 	// BootstrapNodesV5 are used to establish connectivity
 	// with the rest of the network using the V5 discovery
@@ -103,11 +94,11 @@ type Config struct {
 
 	// Static nodes are used as pre-configured connections which are always
 	// maintained and re-connected on disconnects.
-	StaticNodes []*enode.Node
+	StaticNodes []*discover.Node
 
 	// Trusted nodes are used as pre-configured connections which are always
 	// allowed to connect, even above the peer limit.
-	TrustedNodes []*enode.Node
+	TrustedNodes []*discover.Node
 
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
@@ -164,8 +155,6 @@ type Server struct {
 	lock    sync.Mutex // protects running
 	running bool
 
-	nodedb       *enode.DB
-	localnode    *enode.LocalNode
 	ntab         discoverTable
 	listener     net.Listener
 	ourHandshake *protoHandshake
@@ -177,10 +166,8 @@ type Server struct {
 	peerOpDone chan struct{}
 
 	quit          chan struct{}
-	addstatic     chan *enode.Node
-	removestatic  chan *enode.Node
-	addtrusted    chan *enode.Node
-	removetrusted chan *enode.Node
+	addstatic     chan *discover.Node
+	removestatic  chan *discover.Node
 	posthandshake chan *conn
 	addpeer       chan *conn
 	delpeer       chan peerDrop
@@ -189,7 +176,7 @@ type Server struct {
 	log           log.Logger
 }
 
-type peerOpFunc func(map[enode.ID]*Peer)
+type peerOpFunc func(map[discover.NodeID]*Peer)
 
 type peerDrop struct {
 	*Peer
@@ -197,7 +184,7 @@ type peerDrop struct {
 	requested bool // true if signaled by the peer
 }
 
-type connFlag int32
+type connFlag int
 
 const (
 	dynDialedConn connFlag = 1 << iota
@@ -211,16 +198,16 @@ const (
 type conn struct {
 	fd net.Conn
 	transport
-	node  *enode.Node
 	flags connFlag
-	cont  chan error // The run loop uses cont to signal errors to SetupConn.
-	caps  []Cap      // valid after the protocol handshake
-	name  string     // valid after the protocol handshake
+	cont  chan error      // The run loop uses cont to signal errors to SetupConn.
+	id    discover.NodeID // valid after the encryption handshake
+	caps  []Cap           // valid after the protocol handshake
+	name  string          // valid after the protocol handshake
 }
 
 type transport interface {
 	// The two handshakes.
-	doEncHandshake(prv *ecdsa.PrivateKey, dialDest *ecdsa.PublicKey) (*ecdsa.PublicKey, error)
+	doEncHandshake(prv *ecdsa.PrivateKey, dialDest *discover.Node) (discover.NodeID, error)
 	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
 	// The MsgReadWriter can only be used after the encryption
 	// handshake has completed. The code uses conn.id to track this
@@ -234,8 +221,8 @@ type transport interface {
 
 func (c *conn) String() string {
 	s := c.flags.String()
-	if (c.node.ID() != enode.ID{}) {
-		s += " " + c.node.ID().String()
+	if (c.id != discover.NodeID{}) {
+		s += " " + c.id.String()
 	}
 	s += " " + c.fd.RemoteAddr().String()
 	return s
@@ -262,23 +249,7 @@ func (f connFlag) String() string {
 }
 
 func (c *conn) is(f connFlag) bool {
-	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
-	return flags&f != 0
-}
-
-func (c *conn) set(f connFlag, val bool) {
-	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
-	if val {
-		flags |= f
-	} else {
-		flags &= ^f
-	}
-	atomic.StoreInt32((*int32)(&c.flags), int32(flags))
-}
-
-// LocalNode returns the local node record.
-func (srv *Server) LocalNode() *enode.LocalNode {
-	return srv.localnode
+	return c.flags&f != 0
 }
 
 // Peers returns all connected peers.
@@ -288,7 +259,7 @@ func (srv *Server) Peers() []*Peer {
 	// Note: We'd love to put this function into a variable but
 	// that seems to cause a weird compiler error in some
 	// environments.
-	case srv.peerOp <- func(peers map[enode.ID]*Peer) {
+	case srv.peerOp <- func(peers map[discover.NodeID]*Peer) {
 		for _, p := range peers {
 			ps = append(ps, p)
 		}
@@ -303,7 +274,7 @@ func (srv *Server) Peers() []*Peer {
 func (srv *Server) PeerCount() int {
 	var count int
 	select {
-	case srv.peerOp <- func(ps map[enode.ID]*Peer) { count = len(ps) }:
+	case srv.peerOp <- func(ps map[discover.NodeID]*Peer) { count = len(ps) }:
 		<-srv.peerOpDone
 	case <-srv.quit:
 	}
@@ -313,7 +284,8 @@ func (srv *Server) PeerCount() int {
 // AddPeer connects to the given node and maintains the connection until the
 // server is shut down. If the connection fails for any reason, the server will
 // attempt to reconnect the peer.
-func (srv *Server) AddPeer(node *enode.Node) {
+func (srv *Server) AddPeer(node *discover.Node) {
+
 	select {
 	case srv.addstatic <- node:
 	case <-srv.quit:
@@ -321,26 +293,9 @@ func (srv *Server) AddPeer(node *enode.Node) {
 }
 
 // RemovePeer disconnects from the given node
-func (srv *Server) RemovePeer(node *enode.Node) {
+func (srv *Server) RemovePeer(node *discover.Node) {
 	select {
 	case srv.removestatic <- node:
-	case <-srv.quit:
-	}
-}
-
-// AddTrustedPeer adds the given node to a reserved whitelist which allows the
-// node to always connect, even if the slot are full.
-func (srv *Server) AddTrustedPeer(node *enode.Node) {
-	select {
-	case srv.addtrusted <- node:
-	case <-srv.quit:
-	}
-}
-
-// RemoveTrustedPeer removes the given node from the trusted peer set.
-func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
-	select {
-	case srv.removetrusted <- node:
 	case <-srv.quit:
 	}
 }
@@ -351,15 +306,34 @@ func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
 }
 
 // Self returns the local node's endpoint information.
-func (srv *Server) Self() *enode.Node {
+func (srv *Server) Self() *discover.Node {
 	srv.lock.Lock()
-	ln := srv.localnode
-	srv.lock.Unlock()
+	defer srv.lock.Unlock()
 
-	if ln == nil {
-		return enode.NewV4(&srv.PrivateKey.PublicKey, net.ParseIP("0.0.0.0"), 0, 0)
+	if !srv.running {
+		return &discover.Node{IP: net.ParseIP("0.0.0.0")}
 	}
-	return ln.Node()
+	return srv.makeSelf(srv.listener, srv.ntab)
+}
+
+func (srv *Server) makeSelf(listener net.Listener, ntab discoverTable) *discover.Node {
+	// If the server's not running, return an empty node.
+	// If the node is running but discovery is off, manually assemble the node infos.
+	if ntab == nil {
+		// Inbound connections disabled, use zero address.
+		if listener == nil {
+			return &discover.Node{IP: net.ParseIP("0.0.0.0"), ID: discover.PubkeyID(&srv.PrivateKey.PublicKey)}
+		}
+		// Otherwise inject the listener address too
+		addr := listener.Addr().(*net.TCPAddr)
+		return &discover.Node{
+			ID:  discover.PubkeyID(&srv.PrivateKey.PublicKey),
+			IP:  addr.IP,
+			TCP: uint16(addr.Port),
+		}
+	}
+	// Otherwise return the discovery node.
+	return ntab.Self()
 }
 
 // Stop terminates the server and all active peer connections.
@@ -418,9 +392,7 @@ func (srv *Server) Start() (err error) {
 	if srv.log == nil {
 		srv.log = log.New()
 	}
-	if srv.NoDial && srv.ListenAddr == "" {
-		srv.log.Warn("P2P server will be useless, neither dialing nor listening")
-	}
+	srv.log.Info("Starting P2P networking")
 
 	// static fields
 	if srv.PrivateKey == nil {
@@ -436,127 +408,70 @@ func (srv *Server) Start() (err error) {
 	srv.addpeer = make(chan *conn)
 	srv.delpeer = make(chan peerDrop)
 	srv.posthandshake = make(chan *conn)
-	srv.addstatic = make(chan *enode.Node)
-	srv.removestatic = make(chan *enode.Node)
-	srv.addtrusted = make(chan *enode.Node)
-	srv.removetrusted = make(chan *enode.Node)
+	srv.addstatic = make(chan *discover.Node)
+	srv.removestatic = make(chan *discover.Node)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 
-	if err := srv.setupLocalNode(); err != nil {
-		return err
-	}
-	if srv.ListenAddr != "" {
-		if err := srv.setupListening(); err != nil {
+	var (
+		conn      *net.UDPConn
+		sconn     *sharedUDPConn
+		realaddr  *net.UDPAddr
+		unhandled chan discover.ReadPacket
+	)
+
+	if !srv.NoDiscovery || srv.DiscoveryV5 {
+		addr, err := net.ResolveUDPAddr("udp", srv.ListenAddr)
+		if err != nil {
 			return err
 		}
-	}
-	if err := srv.setupDiscovery(); err != nil {
-		return err
-	}
-
-	dynPeers := srv.maxDialedConns()
-	dialer := newDialState(srv.localnode.ID(), srv.StaticNodes, srv.BootstrapNodes, srv.ntab, dynPeers, srv.NetRestrict)
-	srv.loopWG.Add(1)
-	go srv.run(dialer)
-	return nil
-}
-
-func (srv *Server) setupLocalNode() error {
-	// Create the devp2p handshake.
-	pubkey := crypto.FromECDSAPub(&srv.PrivateKey.PublicKey)
-	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: pubkey[1:]}
-	for _, p := range srv.Protocols {
-		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
-	}
-	sort.Sort(capsByNameAndVersion(srv.ourHandshake.Caps))
-
-	// Create the local node.
-	db, err := enode.OpenDB(srv.Config.NodeDatabase)
-	if err != nil {
-		return err
-	}
-	srv.nodedb = db
-	srv.localnode = enode.NewLocalNode(db, srv.PrivateKey)
-	srv.localnode.SetFallbackIP(net.IP{127, 0, 0, 1})
-	srv.localnode.Set(capsByNameAndVersion(srv.ourHandshake.Caps))
-	// TODO: check conflicts
-	for _, p := range srv.Protocols {
-		for _, e := range p.Attributes {
-			srv.localnode.Set(e)
+		conn, err = net.ListenUDP("udp", addr)
+		if err != nil {
+			return err
 		}
-	}
-	switch srv.NAT.(type) {
-	case nil:
-		// No NAT interface, do nothing.
-	case nat.ExtIP:
-		// ExtIP doesn't block, set the IP right away.
-		ip, _ := srv.NAT.ExternalIP()
-		srv.localnode.SetStaticIP(ip)
-	default:
-		// Ask the router about the IP. This takes a while and blocks startup,
-		// do it in the background.
-		srv.loopWG.Add(1)
-		go func() {
-			defer srv.loopWG.Done()
-			if ip, err := srv.NAT.ExternalIP(); err == nil {
-				srv.localnode.SetStaticIP(ip)
+		realaddr = conn.LocalAddr().(*net.UDPAddr)
+		if srv.NAT != nil {
+			if !realaddr.IP.IsLoopback() {
+				go nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
 			}
-		}()
-	}
-	return nil
-}
-
-func (srv *Server) setupDiscovery() error {
-	if srv.NoDiscovery && !srv.DiscoveryV5 {
-		return nil
-	}
-
-	addr, err := net.ResolveUDPAddr("udp", srv.ListenAddr)
-	if err != nil {
-		return err
-	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
-	}
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-	srv.log.Debug("UDP listener up", "addr", realaddr)
-	if srv.NAT != nil {
-		if !realaddr.IP.IsLoopback() {
-			go nat.Map(srv.NAT, srv.quit, "udp", realaddr.Port, realaddr.Port, "ethereum discovery")
+			// TODO: react to external IP changes over time.
+			if ext, err := srv.NAT.ExternalIP(); err == nil {
+				realaddr = &net.UDPAddr{IP: ext, Port: realaddr.Port}
+			}
 		}
 	}
-	srv.localnode.SetFallbackUDP(realaddr.Port)
 
-	// Discovery V4
-	var unhandled chan discover.ReadPacket
-	var sconn *sharedUDPConn
+	if !srv.NoDiscovery && srv.DiscoveryV5 {
+		unhandled = make(chan discover.ReadPacket, 100)
+		sconn = &sharedUDPConn{conn, unhandled}
+	}
+
+	// node table
 	if !srv.NoDiscovery {
-		if srv.DiscoveryV5 {
-			unhandled = make(chan discover.ReadPacket, 100)
-			sconn = &sharedUDPConn{conn, unhandled}
-		}
 		cfg := discover.Config{
-			PrivateKey:  srv.PrivateKey,
-			NetRestrict: srv.NetRestrict,
-			Bootnodes:   srv.BootstrapNodes,
-			Unhandled:   unhandled,
+			PrivateKey:   srv.PrivateKey,
+			AnnounceAddr: realaddr,
+			NodeDBPath:   srv.NodeDatabase,
+			NetRestrict:  srv.NetRestrict,
+			Bootnodes:    srv.BootstrapNodes,
+			Unhandled:    unhandled,
 		}
-		ntab, err := discover.ListenUDP(conn, srv.localnode, cfg)
+		ntab, err := discover.ListenUDP(conn, cfg)
 		if err != nil {
 			return err
 		}
 		srv.ntab = ntab
 	}
-	// Discovery V5
+
 	if srv.DiscoveryV5 {
-		var ntab *discv5.Network
-		var err error
+		var (
+			ntab *discv5.Network
+			err  error
+		)
 		if sconn != nil {
-			ntab, err = discv5.ListenUDP(srv.PrivateKey, sconn, "", srv.NetRestrict)
+			ntab, err = discv5.ListenUDP(srv.PrivateKey, sconn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
 		} else {
-			ntab, err = discv5.ListenUDP(srv.PrivateKey, conn, "", srv.NetRestrict)
+			ntab, err = discv5.ListenUDP(srv.PrivateKey, conn, realaddr, "", srv.NetRestrict) //srv.NodeDatabase)
 		}
 		if err != nil {
 			return err
@@ -566,10 +481,32 @@ func (srv *Server) setupDiscovery() error {
 		}
 		srv.DiscV5 = ntab
 	}
+
+	dynPeers := srv.maxDialedConns()
+	dialer := newDialState(srv.StaticNodes, srv.BootstrapNodes, srv.ntab, dynPeers, srv.NetRestrict)
+
+	// handshake
+	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: discover.PubkeyID(&srv.PrivateKey.PublicKey)}
+	for _, p := range srv.Protocols {
+		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
+	}
+	// listen/dial
+	if srv.ListenAddr != "" {
+		if err := srv.startListening(); err != nil {
+			return err
+		}
+	}
+	if srv.NoDial && srv.ListenAddr == "" {
+		srv.log.Warn("P2P server will be useless, neither dialing nor listening")
+	}
+
+	srv.loopWG.Add(1)
+	go srv.run(dialer)
+	srv.running = true
 	return nil
 }
 
-func (srv *Server) setupListening() error {
+func (srv *Server) startListening() error {
 	// Launch the TCP listener.
 	listener, err := net.Listen("tcp", srv.ListenAddr)
 	if err != nil {
@@ -578,11 +515,8 @@ func (srv *Server) setupListening() error {
 	laddr := listener.Addr().(*net.TCPAddr)
 	srv.ListenAddr = laddr.String()
 	srv.listener = listener
-	srv.localnode.Set(enr.TCP(laddr.Port))
-
 	srv.loopWG.Add(1)
 	go srv.listenLoop()
-
 	// Map the TCP listening port if NAT is configured.
 	if !laddr.IP.IsLoopback() && srv.NAT != nil {
 		srv.loopWG.Add(1)
@@ -595,29 +529,27 @@ func (srv *Server) setupListening() error {
 }
 
 type dialer interface {
-	newTasks(running int, peers map[enode.ID]*Peer, now time.Time) []task
+	newTasks(running int, peers map[discover.NodeID]*Peer, now time.Time) []task
 	taskDone(task, time.Time)
-	addStatic(*enode.Node)
-	removeStatic(*enode.Node)
+	addStatic(*discover.Node)
+	removeStatic(*discover.Node)
 }
 
 func (srv *Server) run(dialstate dialer) {
-	srv.log.Info("Started P2P networking", "self", srv.localnode.Node())
 	defer srv.loopWG.Done()
-	defer srv.nodedb.Close()
-
 	var (
-		peers        = make(map[enode.ID]*Peer)
+		peers        = make(map[discover.NodeID]*Peer)
 		inboundCount = 0
-		trusted      = make(map[enode.ID]bool, len(srv.TrustedNodes))
+		trusted      = make(map[discover.NodeID]bool, len(srv.TrustedNodes))
 		taskdone     = make(chan task, maxActiveDialTasks)
 		runningTasks []task
 		queuedTasks  []task // tasks that can't run yet
 	)
 	// Put trusted nodes into a map to speed up checks.
-	// Trusted peers are loaded on startup or added via AddTrustedPeer RPC.
+	// Trusted peers are loaded on startup and cannot be
+	// modified while the server is running.
 	for _, n := range srv.TrustedNodes {
-		trusted[n.ID()] = true
+		trusted[n.ID] = true
 	}
 
 	// removes t from runningTasks
@@ -667,31 +599,11 @@ running:
 		case n := <-srv.removestatic:
 			// This channel is used by RemovePeer to send a
 			// disconnect request to a peer and begin the
-			// stop keeping the node connected.
-			srv.log.Trace("Removing static node", "node", n)
+			// stop keeping the node connected
+			srv.log.Debug("Removing static node", "node", n)
 			dialstate.removeStatic(n)
-			if p, ok := peers[n.ID()]; ok {
+			if p, ok := peers[n.ID]; ok {
 				p.Disconnect(DiscRequested)
-			}
-		case n := <-srv.addtrusted:
-			// This channel is used by AddTrustedPeer to add an enode
-			// to the trusted node set.
-			srv.log.Trace("Adding trusted node", "node", n)
-			trusted[n.ID()] = true
-			// Mark any already-connected peer as trusted
-			if p, ok := peers[n.ID()]; ok {
-				p.rw.set(trustedConn, true)
-			}
-		case n := <-srv.removetrusted:
-			// This channel is used by RemoveTrustedPeer to remove an enode
-			// from the trusted node set.
-			srv.log.Trace("Removing trusted node", "node", n)
-			if _, ok := trusted[n.ID()]; ok {
-				delete(trusted, n.ID())
-			}
-			// Unmark any already-connected peer as trusted
-			if p, ok := peers[n.ID()]; ok {
-				p.rw.set(trustedConn, false)
 			}
 		case op := <-srv.peerOp:
 			// This channel is used by Peers and PeerCount.
@@ -707,7 +619,7 @@ running:
 		case c := <-srv.posthandshake:
 			// A connection has passed the encryption handshake so
 			// the remote identity is known (but hasn't been verified yet).
-			if trusted[c.node.ID()] {
+			if trusted[c.id] {
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
 			}
@@ -729,21 +641,19 @@ running:
 				if srv.EnableMsgEvents {
 					p.events = &srv.peerFeed
 				}
-				go srv.runPeer(p)
-
 				name := truncateName(c.name)
-				if peers[c.node.ID()] != nil {
-					peers[c.node.ID()].PairPeer = p
+
+				go srv.runPeer(p)
+				if peers[c.id] != nil {
+					peers[c.id].PairPeer = p
 					srv.log.Debug("Adding p2p pair peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
 				} else {
-					peers[c.node.ID()] = p
+					peers[c.id] = p
 					srv.log.Debug("Adding p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
 				}
 				if p.Inbound() {
 					inboundCount++
 				}
-			} else {
-				srv.log.Debug("Error adding p2p peer", "err", err)
 			}
 			// The dialer logic relies on the assumption that
 			// dial tasks complete after the peer has been added or
@@ -787,7 +697,7 @@ running:
 	}
 }
 
-func (srv *Server) protoHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+func (srv *Server) protoHandshakeChecks(peers map[discover.NodeID]*Peer, inboundCount int, c *conn) error {
 	// Drop connections with no matching protocols.
 	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
 		return DiscUselessPeer
@@ -797,15 +707,19 @@ func (srv *Server) protoHandshakeChecks(peers map[enode.ID]*Peer, inboundCount i
 	return srv.encHandshakeChecks(peers, inboundCount, c)
 }
 
-func (srv *Server) encHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+func (srv *Server) encHandshakeChecks(peers map[discover.NodeID]*Peer, inboundCount int, c *conn) error {
 	switch {
 	case !c.is(trustedConn|staticDialedConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
 	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
 		return DiscTooManyPeers
-	case peers[c.node.ID()] != nil:
-		return DiscAlreadyConnected
-	case c.node.ID() == srv.localnode.ID():
+	case peers[c.id] != nil:
+		exitPeer := peers[c.id]
+		if exitPeer.PairPeer != nil {
+			return DiscAlreadyConnected
+		}
+		return nil
+	case c.id == srv.Self().ID:
 		return DiscSelf
 	default:
 		return nil
@@ -815,6 +729,7 @@ func (srv *Server) encHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int
 func (srv *Server) maxInboundConns() int {
 	return srv.MaxPeers - srv.maxDialedConns()
 }
+
 func (srv *Server) maxDialedConns() int {
 	if srv.NoDiscovery || srv.NoDial {
 		return 0
@@ -826,11 +741,15 @@ func (srv *Server) maxDialedConns() int {
 	return srv.MaxPeers / r
 }
 
+type tempError interface {
+	Temporary() bool
+}
+
 // listenLoop runs in its own goroutine and accepts
 // inbound connections.
 func (srv *Server) listenLoop() {
 	defer srv.loopWG.Done()
-	srv.log.Debug("TCP listener up", "addr", srv.listener.Addr())
+	srv.log.Info("RLPx listener up", "self", srv.makeSelf(srv.listener, srv.ntab))
 
 	tokens := defaultMaxPendingPeers
 	if srv.MaxPendingPeers > 0 {
@@ -851,7 +770,7 @@ func (srv *Server) listenLoop() {
 		)
 		for {
 			fd, err = srv.listener.Accept()
-			if netutil.IsTemporaryError(err) {
+			if tempErr, ok := err.(tempError); ok && tempErr.Temporary() {
 				srv.log.Debug("Temporary read error", "err", err)
 				continue
 			} else if err != nil {
@@ -883,17 +802,21 @@ func (srv *Server) listenLoop() {
 // SetupConn runs the handshakes and attempts to add the connection
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
-func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
+func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) error {
+	self := srv.Self()
+	if self == nil {
+		return errors.New("shutdown")
+	}
 	c := &conn{fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
 	err := srv.setupConn(c, flags, dialDest)
 	if err != nil {
 		c.close(err)
-		srv.log.Trace("Setting up connection failed", "addr", fd.RemoteAddr(), "err", err)
+		srv.log.Trace("Setting up connection failed", "id", c.id, "err", err)
 	}
 	return err
 }
 
-func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) error {
+func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) error {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
 	running := srv.running
@@ -901,30 +824,18 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	if !running {
 		return errServerStopped
 	}
-	// If dialing, figure out the remote public key.
-	var dialPubkey *ecdsa.PublicKey
-	if dialDest != nil {
-		dialPubkey = new(ecdsa.PublicKey)
-		if err := dialDest.Load((*enode.Secp256k1)(dialPubkey)); err != nil {
-			return fmt.Errorf("dial destination doesn't have a secp256k1 public key")
-		}
-	}
 	// Run the encryption handshake.
-	remotePubkey, err := c.doEncHandshake(srv.PrivateKey, dialPubkey)
-	if err != nil {
+	var err error
+	if c.id, err = c.doEncHandshake(srv.PrivateKey, dialDest); err != nil {
 		srv.log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
 		return err
 	}
-	if dialDest != nil {
-		// For dialed connections, check that the remote public key matches.
-		if dialPubkey.X.Cmp(remotePubkey.X) != 0 || dialPubkey.Y.Cmp(remotePubkey.Y) != 0 {
-			return DiscUnexpectedIdentity
-		}
-		c.node = dialDest
-	} else {
-		c.node = nodeFromConn(remotePubkey, c.fd)
+	clog := srv.log.New("id", c.id, "addr", c.fd.RemoteAddr(), "conn", c.flags)
+	// For dialed connections, check that the remote public key matches.
+	if dialDest != nil && c.id != dialDest.ID {
+		clog.Trace("Dialed identity mismatch", "want", c, dialDest.ID)
+		return DiscUnexpectedIdentity
 	}
-	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	err = srv.checkpoint(c, srv.posthandshake)
 	if err != nil {
 		clog.Trace("Rejected peer before protocol handshake", "err", err)
@@ -936,14 +847,13 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		clog.Trace("Failed proto handshake", "err", err)
 		return err
 	}
-	if id := c.node.ID(); !bytes.Equal(crypto.Keccak256(phs.ID), id[:]) {
-		clog.Trace("Wrong devp2p handshake identity", "phsid", fmt.Sprintf("%x", phs.ID))
+	if phs.ID != c.id {
+		clog.Trace("Wrong devp2p handshake identity", "err", phs.ID)
 		return DiscUnexpectedIdentity
 	}
 	c.caps, c.name = phs.Caps, phs.Name
 	err = srv.checkpoint(c, srv.addpeer)
 	if err != nil {
-		clog.Debug("Rejected peer", "err", err, "c.node.ID()", c.node.ID())
 		clog.Trace("Rejected peer", "err", err)
 		return err
 	}
@@ -951,16 +861,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	// launched by run.
 	clog.Trace("connection set up", "inbound", dialDest == nil)
 	return nil
-}
-
-func nodeFromConn(pubkey *ecdsa.PublicKey, conn net.Conn) *enode.Node {
-	var ip net.IP
-	var port int
-	if tcp, ok := conn.RemoteAddr().(*net.TCPAddr); ok {
-		ip = tcp.IP
-		port = tcp.Port
-	}
-	return enode.NewV4(pubkey, ip, port, port)
 }
 
 func truncateName(s string) string {
@@ -1020,7 +920,6 @@ type NodeInfo struct {
 	ID    string `json:"id"`    // Unique node identifier (also the encryption key)
 	Name  string `json:"name"`  // Name of the node, including client type, version, OS, custom data
 	Enode string `json:"enode"` // Enode URL for adding this peer from remote peers
-	ENR   string `json:"enr"`   // Ethereum Node Record
 	IP    string `json:"ip"`    // IP address of the node
 	Ports struct {
 		Discovery int `json:"discovery"` // UDP listening port for discovery protocol
@@ -1032,21 +931,19 @@ type NodeInfo struct {
 
 // NodeInfo gathers and returns a collection of metadata known about the host.
 func (srv *Server) NodeInfo() *NodeInfo {
-	// Gather and assemble the generic node infos
 	node := srv.Self()
+
+	// Gather and assemble the generic node infos
 	info := &NodeInfo{
 		Name:       srv.Name,
 		Enode:      node.String(),
-		ID:         node.ID().String(),
-		IP:         node.IP().String(),
+		ID:         node.ID.String(),
+		IP:         node.IP.String(),
 		ListenAddr: srv.ListenAddr,
 		Protocols:  make(map[string]interface{}),
 	}
-	info.Ports.Discovery = node.UDP()
-	info.Ports.Listener = node.TCP()
-	if enc, err := rlp.EncodeToBytes(node.Record()); err == nil {
-		info.ENR = "0x" + hex.EncodeToString(enc)
-	}
+	info.Ports.Discovery = int(node.UDP)
+	info.Ports.Listener = int(node.TCP)
 
 	// Gather all the running protocol infos (only once per protocol type)
 	for _, proto := range srv.Protocols {

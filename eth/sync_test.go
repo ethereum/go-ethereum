@@ -23,18 +23,12 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/p2p"
-	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 )
-
-func TestFastSyncDisabling63(t *testing.T) { testFastSyncDisabling(t, 63) }
-func TestFastSyncDisabling64(t *testing.T) { testFastSyncDisabling(t, 64) }
-func TestFastSyncDisabling65(t *testing.T) { testFastSyncDisabling(t, 65) }
-func TestFastSyncDisabling100(t *testing.T) { testFastSyncDisabling(t, 100) }
-func TestFastSyncDisabling101(t *testing.T) { testFastSyncDisabling(t, 101) }
 
 // Tests that fast sync gets disabled as soon as a real block is successfully
 // imported into the blockchain.
-func testFastSyncDisabling(t *testing.T, protocol int) {
+func TestFastSyncDisabling(t *testing.T) {
 	// Create a pristine protocol manager, check that fast sync is left enabled
 	pmEmpty, _ := newTestProtocolManagerMust(t, downloader.FastSync, 0, nil, nil)
 	if atomic.LoadUint32(&pmEmpty.fastSync) == 0 {
@@ -48,8 +42,8 @@ func testFastSyncDisabling(t *testing.T, protocol int) {
 	// Sync up the two peers
 	io1, io2 := p2p.MsgPipe()
 
-	go pmFull.handle(pmFull.newPeer(protocol, p2p.NewPeer(enode.ID{}, "empty", nil), io2, pmFull.txpool.Get))
-	go pmEmpty.handle(pmEmpty.newPeer(protocol, p2p.NewPeer(enode.ID{}, "full", nil), io1, pmEmpty.txpool.Get))
+	go pmFull.handle(pmFull.newPeer(63, p2p.NewPeer(discover.NodeID{}, "empty", nil), io2))
+	go pmEmpty.handle(pmEmpty.newPeer(63, p2p.NewPeer(discover.NodeID{}, "full", nil), io1))
 
 	time.Sleep(250 * time.Millisecond)
 	pmEmpty.synchronise(pmEmpty.peers.BestPeer())

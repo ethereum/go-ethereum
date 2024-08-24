@@ -28,12 +28,8 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/node"
-	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/docker/docker/pkg/reexec"
-)
-
-var (
-	ErrLinuxOnly = errors.New("DockerAdapter can only be used on Linux as it uses the current binary (which must be a Linux binary)")
 )
 
 // DockerAdapter is a NodeAdapter which runs simulation nodes inside Docker
@@ -64,7 +60,7 @@ func NewDockerAdapter() (*DockerAdapter, error) {
 
 	return &DockerAdapter{
 		ExecAdapter{
-			nodes: make(map[enode.ID]*ExecNode),
+			nodes: make(map[discover.NodeID]*ExecNode),
 		},
 	}, nil
 }

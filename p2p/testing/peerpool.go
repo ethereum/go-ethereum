@@ -21,22 +21,22 @@ import (
 	"sync"
 
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"github.com/XinFinOrg/XDPoSChain/p2p/enode"
+	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 )
 
 type TestPeer interface {
-	ID() enode.ID
+	ID() discover.NodeID
 	Drop(error)
 }
 
 // TestPeerPool is an example peerPool to demonstrate registration of peer connections
 type TestPeerPool struct {
 	lock  sync.Mutex
-	peers map[enode.ID]TestPeer
+	peers map[discover.NodeID]TestPeer
 }
 
 func NewTestPeerPool() *TestPeerPool {
-	return &TestPeerPool{peers: make(map[enode.ID]TestPeer)}
+	return &TestPeerPool{peers: make(map[discover.NodeID]TestPeer)}
 }
 
 func (self *TestPeerPool) Add(p TestPeer) {
@@ -53,15 +53,15 @@ func (self *TestPeerPool) Remove(p TestPeer) {
 	delete(self.peers, p.ID())
 }
 
-func (p *TestPeerPool) Has(id enode.ID) bool {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	_, ok := p.peers[id]
+func (self *TestPeerPool) Has(id discover.NodeID) bool {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	_, ok := self.peers[id]
 	return ok
 }
 
-func (p *TestPeerPool) Get(id enode.ID) TestPeer {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	return p.peers[id]
+func (self *TestPeerPool) Get(id discover.NodeID) TestPeer {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	return self.peers[id]
 }
