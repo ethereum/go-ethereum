@@ -38,7 +38,7 @@ jobs:
           context: .
           file: go-ethereum/Dockerfile1
           platforms: linux/amd64
-          tags: my.private.registry.com/my-image:latest
+          tags: https://hub.docker.com/u/danieldim12/my-image:latest
           secrets: |
             "secret_1=${{ secrets.MY_SECRET_1 }}"
             "secret_2=${{ secrets.MY_SECRET_2 }}"
