@@ -1,8 +1,11 @@
 name: Build & push
 
 on:
-  push:
-    branches: [ main ]
+  pull_request:
+    types: [labeled]
+    tags: ['CI:Build']
+    branches:
+      - master
 
   workflow_dispatch:
 
@@ -14,6 +17,7 @@ jobs:
   push-app-image:
     runs-on: ubuntu-latest
     environment: production
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
 
     steps:
       - uses: actions/checkout@v3
