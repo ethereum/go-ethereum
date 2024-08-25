@@ -1,0 +1,44 @@
+name: Build & push
+
+on:
+  push:
+    branches: [ main ]
+
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: ./
+
+jobs:
+  push-app-image:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Login to private registry
+        uses: docker/login-action@v2
+        with:
+          registry: my.private.registry.com
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build the app image
+        uses: docker/build-push-action@v4
+        with:
+          push: true
+          context: .
+          file: go-ethereum/Dockerfile1
+          platforms: linux/amd64
+          tags: my.private.registry.com/my-image:latest
+          secrets: |
+            "secret_1=${{ secrets.MY_SECRET_1 }}"
+            "secret_2=${{ secrets.MY_SECRET_2 }}"
