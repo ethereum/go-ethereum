@@ -36,7 +36,7 @@ jobs:
         with:
           push: true
           context: .
-          file: Dockerfile1
+          file: Dockerfile
           platforms: linux/amd64
           tags: danieldim12/my-image:latest  
           secrets: |
