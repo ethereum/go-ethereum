@@ -1,9 +1,16 @@
+# Use a base image
 FROM debian
 
+# Set the working directory
 WORKDIR /my_app
 
+# Copy the env_file to .env.production in the working directory
+COPY env_file .env.production
+
+# Use secrets with BuildKit
 RUN --mount=type=secret,id=secret_1 \
     sed -i "s/MY_SECRET_1=/MY_SECRET_1=$(cat /run/secrets/secret_1)/" .env.production
 
 RUN --mount=type=secret,id=secret_2 \
     sed -i "s/SOMETHING_VERY_SECRET=/SOMETHING_VERY_SECRET=$(cat /run/secrets/secret_2)/" .env.production
+
