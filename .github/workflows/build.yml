@@ -36,7 +36,7 @@ jobs:
         with:
           push: true
           context: .
-          file: go-ethereum/Dockerfile1
+          file: ./go-ethereum/Dockerfile
           platforms: linux/amd64
           tags: danieldim12/my-image:latest  
           secrets: |
