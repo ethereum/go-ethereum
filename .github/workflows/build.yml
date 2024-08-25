@@ -1,10 +1,8 @@
-name: Last
+name: Build & push
+
 on:
-  pull_request:
-    types: [labeled]
-    labels: ['CI:Build']
-    branches:
-      - master
+  push:
+    branches: [ main ]
 
   workflow_dispatch:
 
@@ -17,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    #if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
 
     steps:
       - uses: actions/checkout@v3
@@ -35,14 +33,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      - name: Build and push the app image
-        uses: docker/build-push-action@v4
-        with:
-          push: true
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          tags: danieldim12/my-image:latest  
-          secrets: |
-            "secret_1=${{ secrets.MY_SECRET_1 }}"
-            "secret_2=${{ secrets.MY_SECRET_2 }}"
+      - name: Build Docker image
+        run: |
+          echo "The building of a new docker image is going to start now."
+          docker build . --file Dockerfile1 --tag my-image:${{ github.event.number }} --push
+
+      - name: Push Docker image to registry
+        run: |
+          docker tag my-image:${{ github.event.number }} danieldim12/my-picture:${{ github.event.number }}
+          docker push danieldim12/my-picture:${{ github.event.number }}   
