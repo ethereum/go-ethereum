@@ -76,8 +76,8 @@ var (
 	snapshotStorageReadTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
 
-	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/reads/single", nil)
-	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/reads/single", nil)
+	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
+	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
 
 	triedbCommitTimer = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
