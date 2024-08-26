@@ -183,7 +183,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *state.StateDB) {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
 		if tracer.OnSystemCallStart != nil {
-			tracer.OnSystemCallStart()
+			tracer.OnSystemCallStart(vmenv.GetVMContext())
 		}
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
@@ -212,7 +212,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.StateDB) {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
 		if tracer.OnSystemCallStart != nil {
-			tracer.OnSystemCallStart()
+			tracer.OnSystemCallStart(vmenv.GetVMContext())
 		}
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()

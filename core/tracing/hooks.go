@@ -142,7 +142,7 @@ type (
 	//
 	// Note that system call happens outside normal transaction execution, so the `OnTxStart/OnTxEnd` hooks
 	// will not be invoked.
-	OnSystemCallStartHook = func()
+	OnSystemCallStartHook = func(vm *VMContext)
 
 	// OnSystemCallEndHook is called when a system call has finished executing. Today,
 	// this hook is invoked when the EIP-4788 system call is about to be executed to set the
