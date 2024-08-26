@@ -41,6 +41,7 @@ type StateDB interface {
 	GetBalance(common.Address) *uint256.Int
 	GetNonce(common.Address) uint64
 	GetCode(common.Address) []byte
+	GetCodeHash(common.Address) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
 	GetRefund() uint64
