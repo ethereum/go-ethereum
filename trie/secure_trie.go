@@ -182,7 +182,7 @@ func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 }
 
 // UpdateAccount will abstract the write of an account to the secure trie.
-func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccount) error {
+func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccount, _ int) error {
 	hk := t.hashKey(address.Bytes())
 	data, err := rlp.EncodeToBytes(acc)
 	if err != nil {

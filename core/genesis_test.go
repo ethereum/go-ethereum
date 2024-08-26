@@ -294,7 +294,7 @@ func TestVerkleGenesisCommit(t *testing.T) {
 		},
 	}
 
-	expected := common.FromHex("14398d42be3394ff8d50681816a4b7bf8d8283306f577faba2d5bc57498de23b")
+	expected := common.FromHex("4a83dc39eb688dbcfaf581d60e82de18f875e38786ebce5833342011d6fef37b")
 	got := genesis.ToBlock().Root().Bytes()
 	if !bytes.Equal(got, expected) {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)

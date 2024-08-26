@@ -485,8 +485,49 @@ func TestProcessVerkle(t *testing.T) {
 
 	txCost1 := params.TxGas
 	txCost2 := params.TxGas
-	contractCreationCost := intrinsicContractCreationGas + uint64(2039 /* execution costs */)
-	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(57444 /* execution costs */)
+	contractCreationCost := intrinsicContractCreationGas +
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* creation with value */
+		739 /* execution costs */
+	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas +
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (tx) */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (CREATE at pc=0x20) */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #0 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #1 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #2 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #3 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #4 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #5 */
+		params.WitnessChunkReadCost + /* SLOAD in constructor */
+		params.WitnessChunkWriteCost + /* SSTORE in constructor */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (CREATE at PC=0x121) */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #0 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #1 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #2 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #3 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #4 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #5 */
+		params.WitnessChunkReadCost + /* SLOAD in constructor */
+		params.WitnessChunkWriteCost + /* SSTORE in constructor */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash for tx creation */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #0 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #1 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #2 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #3 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #4 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #5 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #6 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #7 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #8 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #9 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #10 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #11 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #12 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #13 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #14 */
+		4844 /* execution costs */
 	blockGasUsagesExpected := []uint64{
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
