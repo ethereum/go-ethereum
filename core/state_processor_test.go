@@ -59,6 +59,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			BernoulliBlock:      big.NewInt(0),
 			CurieBlock:          big.NewInt(0),
 			DarwinTime:          new(uint64),
+			DarwinV2Time:        new(uint64),
 			Ethash:              new(params.EthashConfig),
 		}
 		signer  = types.LatestSigner(config)

@@ -284,6 +284,7 @@ var (
 		BernoulliBlock:      nil,
 		CurieBlock:          nil,
 		DarwinTime:          nil,
+		DarwinV2Time:        nil,
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -323,6 +324,7 @@ var (
 		BernoulliBlock:      big.NewInt(3747132),
 		CurieBlock:          big.NewInt(4740239),
 		DarwinTime:          newUint64(1723622400),
+		DarwinV2Time:        newUint64(1724832000),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -362,6 +364,7 @@ var (
 		BernoulliBlock:      big.NewInt(5220340),
 		CurieBlock:          big.NewInt(7096836),
 		DarwinTime:          newUint64(1724227200),
+		DarwinV2Time:        newUint64(1725264000),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -407,6 +410,7 @@ var (
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
 		DarwinTime:              new(uint64),
+		DarwinV2Time:            new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -450,6 +454,7 @@ var (
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
 		DarwinTime:              new(uint64),
+		DarwinV2Time:            new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  nil,
 		Clique:                  &CliqueConfig{Period: 0, Epoch: 30000},
@@ -488,6 +493,7 @@ var (
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
 		DarwinTime:              new(uint64),
+		DarwinV2Time:            new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -527,6 +533,7 @@ var (
 		BernoulliBlock:          big.NewInt(0),
 		CurieBlock:              big.NewInt(0),
 		DarwinTime:              new(uint64),
+		DarwinV2Time:            new(uint64),
 		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
@@ -744,7 +751,15 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, Engine: %v, Scroll config: %v}",
+	darwinTime := "<nil>"
+	if c.DarwinTime != nil {
+		darwinTime = fmt.Sprintf("@%v", *c.DarwinTime)
+	}
+	darwinV2Time := "<nil>"
+	if c.DarwinV2Time != nil {
+		darwinV2Time = fmt.Sprintf("@%v", *c.DarwinV2Time)
+	}
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Arrow Glacier: %v, Archimedes: %v, Shanghai: %v, Bernoulli: %v, Curie: %v, Darwin: %v, DarwinV2: %v, Engine: %v, Scroll config: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -764,7 +779,8 @@ func (c *ChainConfig) String() string {
 		c.ShanghaiBlock,
 		c.BernoulliBlock,
 		c.CurieBlock,
-		c.DarwinTime,
+		darwinTime,
+		darwinV2Time,
 		engine,
 		c.Scroll,
 	)
