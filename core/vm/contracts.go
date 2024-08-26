@@ -805,7 +805,7 @@ func (c *bls12381G1MultiExp) Run(input []byte) ([]byte, error) {
 
 	// Compute r = e_0 * p_0 + e_1 * p_1 + ... + e_(k-1) * p_(k-1)
 	r := new(bls12381.G1Affine)
-	r.MultiExp(points, scalars, ecc.MultiExpConfig{})
+	r.MultiExp(points, scalars, ecc.MultiExpConfig{NbTasks: 1})
 
 	// Encode the G1 point to 128 bytes
 	return encodePointG1(r), nil
@@ -940,7 +940,7 @@ func (c *bls12381G2MultiExp) Run(input []byte) ([]byte, error) {
 
 	// Compute r = e_0 * p_0 + e_1 * p_1 + ... + e_(k-1) * p_(k-1)
 	r := new(bls12381.G2Affine)
-	r.MultiExp(points, scalars, ecc.MultiExpConfig{})
+	r.MultiExp(points, scalars, ecc.MultiExpConfig{NbTasks: 1})
 
 	// Encode the G2 point to 256 bytes.
 	return encodePointG2(r), nil
