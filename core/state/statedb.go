@@ -887,8 +887,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			return nil
 		})
 	}
-	// If witness building is enabled, gather all the read-only accesses
-	if s.witness != nil {
+	// If witness building is enabled, gather all the read-only accesses.
+	// Skip witness collection in Verkle mode, they will be gathered
+	// together at the end.
+	if s.witness != nil && !s.db.TrieDB().IsVerkle() {
 		// Pull in anything that has been accessed before destruction
 		for _, obj := range s.stateObjectsDestruct {
 			// Skip any objects that haven't touched their storage
@@ -929,7 +931,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
 	// here could result in losing uncommitted changes from storage.
 	start = time.Now()
-	if s.prefetcher != nil && (s.trie == nil || !s.trie.IsVerkle()) {
+	if s.prefetcher != nil {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
 			log.Error("Failed to retrieve account pre-fetcher trie")
 		} else {
