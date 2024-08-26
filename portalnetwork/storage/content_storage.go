@@ -8,6 +8,8 @@ import (
 
 var ErrContentNotFound = fmt.Errorf("content not found")
 
+var MaxDistance = uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+
 type ContentType byte
 
 type ContentKey struct {
