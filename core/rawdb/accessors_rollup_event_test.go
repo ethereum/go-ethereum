@@ -211,7 +211,7 @@ func TestBatchChunkRanges(t *testing.T) {
 	DeleteBatchChunkRanges(db, uint64(len(chunks)+1))
 }
 
-func TestWriteReadCommittedBatchMeta(t *testing.T) {
+func TestWriteReadDeleteCommittedBatchMeta(t *testing.T) {
 	db := NewMemoryDatabase()
 
 	testCases := []struct {
@@ -261,6 +261,19 @@ func TestWriteReadCommittedBatchMeta(t *testing.T) {
 	if got := ReadCommittedBatchMeta(db, 256); got != nil {
 		t.Fatalf("Expected nil for non-existing value, got %+v", got)
 	}
+
+	// delete: revert batch
+	for _, tc := range testCases {
+		DeleteCommittedBatchMeta(db, tc.batchIndex)
+
+		readChunkRange := ReadCommittedBatchMeta(db, tc.batchIndex)
+		if readChunkRange != nil {
+			t.Fatal("Committed batch metadata was not deleted", "batch index", tc.batchIndex)
+		}
+	}
+
+	// delete non-existing value: ensure the delete operation handles non-existing values without errors.
+	DeleteCommittedBatchMeta(db, 256)
 }
 
 func TestOverwriteCommittedBatchMeta(t *testing.T) {

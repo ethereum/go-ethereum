@@ -219,6 +219,7 @@ func (s *RollupSyncService) parseAndUpdateRollupEventLogs(logs []types.Log, endB
 			batchIndex := event.BatchIndex.Uint64()
 			log.Trace("found new RevertBatch event", "batch index", batchIndex)
 
+			rawdb.DeleteCommittedBatchMeta(s.db, batchIndex)
 			rawdb.DeleteBatchChunkRanges(s.db, batchIndex)
 
 		case s.l1FinalizeBatchEventSignature:

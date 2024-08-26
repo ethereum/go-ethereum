@@ -208,3 +208,11 @@ func ReadCommittedBatchMeta(db ethdb.Reader, batchIndex uint64) *CommittedBatchM
 	}
 	return cbm
 }
+
+// DeleteCommittedBatchMeta removes the block ranges of all chunks associated with a specific batch from the database.
+// Note: Only non-finalized batches can be reverted.
+func DeleteCommittedBatchMeta(db ethdb.KeyValueWriter, batchIndex uint64) {
+	if err := db.Delete(committedBatchMetaKey(batchIndex)); err != nil {
+		log.Crit("failed to delete committed batch metadata", "batch index", batchIndex, "err", err)
+	}
+}
