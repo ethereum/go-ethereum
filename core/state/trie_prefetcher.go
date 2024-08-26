@@ -330,7 +330,8 @@ func (sf *subfetcher) terminate(async bool) {
 
 // openTrie resolves the target trie from database for prefetching.
 func (sf *subfetcher) openTrie() error {
-	// Open the verkle tree if the sub-fetcher is in verkle mode
+	// Open the verkle tree if the sub-fetcher is in verkle mode. Note, there is
+	// only a single fetcher for verkle.
 	if sf.db.TrieDB().IsVerkle() {
 		tr, err := sf.db.OpenTrie(sf.state)
 		if err != nil {
