@@ -483,13 +483,13 @@ func (b *Block) WithWitness(witness *ExecutionWitness) *Block {
 
 	block := &Block{
 		header:       b.header,
-		transactions: slices.Clone(b.transactions),
+		transactions: b.transactions,
 		uncles:       make([]*Header, len(b.uncles)),
-		withdrawals:  slices.Clone(b.withdrawals),
+		withdrawals:  b.withdrawals,
 		witness:      witness,
 	}
 	for i := range b.uncles {
-		block.uncles[i] = CopyHeader(b.uncles[i])
+		block.uncles[i] = b.uncles[i]
 	}
 	return block
 }
