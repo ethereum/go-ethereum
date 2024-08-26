@@ -172,7 +172,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		fetcher = newSubfetcher(p.db, p.root, root, addr)
+		fetcher = newSubfetcher(p.db, p.root, owner, root, addr)
 		p.fetchers[id] = fetcher
 	}
 	return fetcher.schedule(keys, read)
@@ -223,6 +223,7 @@ func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
 type subfetcher struct {
 	db    Database       // Database to load trie nodes through
 	state common.Hash    // Root hash of the state to prefetch
+	owner common.Hash    // Owner of the trie, usually account hash
 	root  common.Hash    // Root hash of the trie to prefetch
 	addr  common.Address // Address of the account that the trie belongs to
 	trie  Trie           // Trie being populated with nodes
@@ -253,10 +254,11 @@ type subfetcherTask struct {
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, state common.Hash, root common.Hash, addr common.Address) *subfetcher {
+func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
 	sf := &subfetcher{
 		db:        db,
 		state:     state,
+		owner:     owner,
 		root:      root,
 		addr:      addr,
 		wake:      make(chan struct{}, 1),
@@ -330,7 +332,7 @@ func (sf *subfetcher) terminate(async bool) {
 func (sf *subfetcher) openTrie() error {
 	// Open the verkle tree if the sub-fetcher is in verkle mode
 	if sf.db.TrieDB().IsVerkle() {
-		tr, err := sf.db.OpenTrie(sf.root)
+		tr, err := sf.db.OpenTrie(sf.state)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening verkle trie", "root", sf.root, "err", err)
 			return err
@@ -339,8 +341,8 @@ func (sf *subfetcher) openTrie() error {
 		return nil
 	}
 	// Open the merkle tree if the sub-fetcher is in merkle mode
-	if sf.addr == (common.Address{}) {
-		tr, err := sf.db.OpenTrie(sf.root)
+	if sf.owner == (common.Hash{}) {
+		tr, err := sf.db.OpenTrie(sf.state)
 		if err != nil {
 			log.Warn("Trie prefetcher failed opening account trie", "root", sf.root, "err", err)
 			return err
