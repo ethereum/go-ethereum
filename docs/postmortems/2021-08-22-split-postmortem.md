@@ -62,7 +62,7 @@ Since we had merged the removal of `ETH65`, if the entire network were to upgrad
 
 - Announce an upcoming security release on Tuesday (August 24th), via Twitter and official channels, plus reach out to downstream projects.
 - Temporarily revert the `ETH65`-removal.
-- Place the fix into the PR optimizing the jumpdest analysis [233381](https://github.com/ethereum/go-ethereum/pull/23381). 
+- Place the fix into the PR optimizing the jumpdest analysis [23381](https://github.com/ethereum/go-ethereum/pull/23381). 
 - After 4-8 weeks, release details about the vulnerability. 
 
 
