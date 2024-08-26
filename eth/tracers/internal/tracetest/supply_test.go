@@ -360,7 +360,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// 2. Test post Cancun
 	cancunBlock := big.NewInt(0)
 	gspec.Config.ShanghaiBlock = cancunBlock
-	gspec.Config.ShanghaiBlock = cancunBlock
+	gspec.Config.CancunBlock = cancunBlock
 
 	postCancunOutput, postCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {

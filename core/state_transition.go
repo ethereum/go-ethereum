@@ -501,10 +501,10 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		gasRefund = st.refundGas(params.RefundQuotientEIP3529)
 	}
 
-	effectiveTip := uint256.NewInt(msg.GasPrice.Uint64())
+	effectiveTip := msg.GasPrice
 
 	if rules.IsLondon {
-		effectiveTip = cmath.BigMinUint256(cmath.BigIntToUint256Int(msg.GasTipCap), new(uint256.Int).Sub(cmath.BigIntToUint256Int(msg.GasFeeCap), cmath.BigIntToUint256Int(st.evm.Context.BaseFee)))
+		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
 	}
 
 	// TODO(raneet10): Double check. We might want to inculcate this fix in a separate condition
@@ -518,27 +518,26 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	// 	st.state.AddBalance(st.evm.Context.Coinbase, fee)
 	// }
 
-	fee := new(uint256.Int).SetUint64(st.gasUsed())
-	fee.Mul(fee, effectiveTip)
+	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
 
-	var burnAmount *uint256.Int
+	var burnAmount *big.Int
 
 	var burntContractAddress common.Address
 
 	if rules.IsLondon {
 		burntContractAddress = common.HexToAddress(st.evm.ChainConfig().Bor.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
-		burnAmount = new(uint256.Int).Mul(new(uint256.Int).SetUint64(st.gasUsed()), cmath.BigIntToUint256Int(st.evm.Context.BaseFee))
+		burnAmount = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
 
 		if !st.noFeeBurnAndTip {
-			st.state.AddBalance(burntContractAddress, burnAmount, tracing.BalanceChangeTransfer)
+			st.state.AddBalance(burntContractAddress, uint256.NewInt(burnAmount.Uint64()), tracing.BalanceChangeTransfer)
 		}
 	}
 
 	if !st.noFeeBurnAndTip {
-		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
+		st.state.AddBalance(st.evm.Context.Coinbase, uint256.NewInt(amount.Uint64()), tracing.BalanceIncreaseRewardTransactionFee)
 
 		// add the coinbase to the witness iff the fee is greater than 0
-		if rules.IsEIP4762 && fee.Sign() != 0 {
+		if rules.IsEIP4762 && amount.Sign() != 0 {
 			st.evm.AccessEvents.BalanceGas(st.evm.Context.Coinbase, true)
 		}
 
@@ -553,11 +552,11 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 			msg.From,
 			st.evm.Context.Coinbase,
 
-			fee.ToBig(),
+			amount,
 			input1.ToBig(),
 			input2.ToBig(),
-			output1.Sub(output1, fee.ToBig()),
-			output2.Add(output2, fee.ToBig()),
+			output1.Sub(output1, amount),
+			output2.Add(output2, amount),
 		)
 	}
 
@@ -567,9 +566,9 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		Err:                  vmerr,
 		ReturnData:           ret,
 		SenderInitBalance:    input1.ToBig(),
-		FeeBurnt:             burnAmount.ToBig(),
+		FeeBurnt:             burnAmount,
 		BurntContractAddress: burntContractAddress,
-		FeeTipped:            fee.ToBig(),
+		FeeTipped:            amount,
 	}, nil
 }
 
