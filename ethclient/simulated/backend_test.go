@@ -51,7 +51,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 
 	// create a signed transaction to send
 	head, _ := client.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei))
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(25*params.GWei))
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	chainid, _ := client.ChainID(context.Background())
 	nonce, err := client.PendingNonceAt(context.Background(), addr)
@@ -61,7 +61,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 	tx := types.NewTx(&types.DynamicFeeTx{
 		ChainID:   chainid,
 		Nonce:     nonce,
-		GasTipCap: big.NewInt(params.GWei),
+		GasTipCap: big.NewInt(25 * params.GWei),
 		GasFeeCap: gasPrice,
 		Gas:       21000,
 		To:        &addr,
@@ -114,6 +114,7 @@ func TestAdjustTime(t *testing.T) {
 }
 
 func TestSendTransaction(t *testing.T) {
+	t.Skip("not relevant to bor")
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 

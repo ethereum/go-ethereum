@@ -1007,22 +1007,23 @@ func TestCall(t *testing.T) {
 			},
 			expectErr: core.ErrBlobTxCreate,
 		},
+		// BOR Doens't support blob tx
 		// BLOBHASH opcode
-		{
-			blockNumber: rpc.LatestBlockNumber,
-			call: TransactionArgs{
-				From:       &accounts[1].addr,
-				To:         &randomAccounts[2].addr,
-				BlobHashes: []common.Hash{{0x01, 0x22}},
-				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
-			},
-			overrides: StateOverride{
-				randomAccounts[2].addr: {
-					Code: hex2Bytes("60004960005260206000f3"),
-				},
-			},
-			want: "0x0122000000000000000000000000000000000000000000000000000000000000",
-		},
+		// {
+		// 	blockNumber: rpc.LatestBlockNumber,
+		// 	call: TransactionArgs{
+		// 		From:       &accounts[1].addr,
+		// 		To:         &randomAccounts[2].addr,
+		// 		BlobHashes: []common.Hash{{0x01, 0x22}},
+		// 		BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
+		// 	},
+		// 	overrides: StateOverride{
+		// 		randomAccounts[2].addr: {
+		// 			Code: hex2Bytes("60004960005260206000f3"),
+		// 		},
+		// 	},
+		// 	want: "0x0122000000000000000000000000000000000000000000000000000000000000",
+		// },
 	}
 	for i, tc := range testSuite {
 		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
