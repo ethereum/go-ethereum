@@ -245,6 +245,9 @@ const (
 	// account within the same tx (captured at end of tx).
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
+
+	// BalanceChangeRevert is emitted when the balance is reverted back to a previous value due to call failure.
+	BalanceChangeRevert BalanceChangeReason = 15
 )
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
