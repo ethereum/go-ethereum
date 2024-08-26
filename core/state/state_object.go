@@ -239,6 +239,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		}
 	}
 	s.originStorage[key] = value
+	s.db.StorageLoaded++
 	return value
 }
 

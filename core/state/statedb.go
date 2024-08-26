@@ -163,10 +163,12 @@ type StateDB struct {
 	SnapshotCommits      time.Duration
 	TrieDBCommits        time.Duration
 
-	AccountUpdated int
-	StorageUpdated atomic.Int64
-	AccountDeleted int
-	StorageDeleted atomic.Int64
+	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
+	AccountUpdated int          // Number of accounts updated during the state transition
+	AccountDeleted int          // Number of accounts deleted during the state transition
+	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
+	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
+	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
 }
 
 // New creates a new state from a given trie.
@@ -601,6 +603,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		s.SnapshotAccountReads += time.Since(start)
 		if err == nil {
 			if acc == nil {
+				s.AccountLoaded++
 				return nil
 			}
 			data = &types.StateAccount{
@@ -629,6 +632,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 			return nil
 		}
 		if data == nil {
+			s.AccountLoaded++
 			return nil
 		}
 	}
@@ -643,6 +647,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	// Insert into the live set
 	obj := newObject(s, addr, data)
 	s.setStateObject(obj)
+	s.AccountLoaded++
 	return obj
 }
 
@@ -1286,6 +1291,8 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	if err := workers.Wait(); err != nil {
 		return nil, err
 	}
+	accountReadMeters.Mark(int64(s.AccountLoaded))
+	storageReadMeters.Mark(int64(s.StorageLoaded))
 	accountUpdatedMeter.Mark(int64(s.AccountUpdated))
 	storageUpdatedMeter.Mark(s.StorageUpdated.Load())
 	accountDeletedMeter.Mark(int64(s.AccountDeleted))
@@ -1294,7 +1301,10 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
 	storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
 	storageTriesDeletedMeter.Mark(int64(storageTrieNodesDeleted))
-	s.AccountUpdated, s.AccountDeleted = 0, 0
+
+	// Clear the metric markers
+	s.AccountLoaded, s.AccountUpdated, s.AccountDeleted = 0, 0, 0
+	s.StorageLoaded = 0
 	s.StorageUpdated.Store(0)
 	s.StorageDeleted.Store(0)
 
