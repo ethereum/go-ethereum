@@ -29,8 +29,10 @@ import (
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/common/prque"
 	"github.com/scroll-tech/go-ethereum/consensus/misc"
+	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
@@ -109,11 +111,12 @@ var (
 	queuedEvictionMeter  = metrics.NewRegisteredMeter("txpool/queued/eviction", nil)  // Dropped due to lifetime
 
 	// General tx metrics
-	knownTxMeter       = metrics.NewRegisteredMeter("txpool/known", nil)
-	validTxMeter       = metrics.NewRegisteredMeter("txpool/valid", nil)
-	invalidTxMeter     = metrics.NewRegisteredMeter("txpool/invalid", nil)
-	underpricedTxMeter = metrics.NewRegisteredMeter("txpool/underpriced", nil)
-	overflowedTxMeter  = metrics.NewRegisteredMeter("txpool/overflowed", nil)
+	knownTxMeter        = metrics.NewRegisteredMeter("txpool/known", nil)
+	knownSkippedTxMeter = metrics.NewRegisteredMeter("txpool/known/skipped", nil)
+	validTxMeter        = metrics.NewRegisteredMeter("txpool/valid", nil)
+	invalidTxMeter      = metrics.NewRegisteredMeter("txpool/invalid", nil)
+	underpricedTxMeter  = metrics.NewRegisteredMeter("txpool/underpriced", nil)
+	overflowedTxMeter   = metrics.NewRegisteredMeter("txpool/overflowed", nil)
 	// throttleTxMeter counts how many transactions are rejected due to too-many-changes between
 	// txpool reorgs.
 	throttleTxMeter = metrics.NewRegisteredMeter("txpool/throttle", nil)
@@ -154,6 +157,8 @@ type blockChain interface {
 	StateAt(root common.Hash) (*state.StateDB, error)
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
+
+	Database() ethdb.Database
 }
 
 // TxPoolConfig are the configuration parameters of the transaction pool.
@@ -279,6 +284,8 @@ type TxPool struct {
 	initDoneCh               chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+
+	isMiner atomic.Bool
 }
 
 type txpoolResetRequest struct {
@@ -490,6 +497,17 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	}
 
 	log.Info("Transaction pool price threshold updated", "price", price)
+}
+
+// SetIsMiner updates the miner status of the node.
+func (pool *TxPool) SetIsMiner(isMiner bool) {
+	pool.isMiner.Store(isMiner)
+	log.Info("Transaction pool miner status updated", "isMiner", isMiner)
+}
+
+// IsMiner returns the current miner status of the node.
+func (pool *TxPool) IsMiner() bool {
+	return pool.isMiner.Load()
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable
@@ -767,6 +785,13 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		knownTxMeter.Mark(1)
 		return false, ErrAlreadyKnown
 	}
+
+	if pool.IsMiner() && rawdb.IsSkippedTransaction(pool.chain.Database(), hash) {
+		log.Trace("Discarding already known skipped transaction", "hash", hash)
+		knownSkippedTxMeter.Mark(1)
+		return false, ErrAlreadyKnown
+	}
+
 	// Make the local flag. If it's from local source or it's from the network but
 	// the sender is marked as local previously, treat it as the local transaction.
 	isLocal := local || pool.locals.containsTx(tx)

@@ -158,6 +158,16 @@ func ReadSkippedTransaction(db ethdb.Reader, txHash common.Hash) *SkippedTransac
 	return &stxV2
 }
 
+// IsSkippedTransaction checks if a transaction exists as a skipped transaction in the database.
+func IsSkippedTransaction(db ethdb.Reader, txHash common.Hash) bool {
+	exists, err := db.Has(SkippedTransactionKey(txHash))
+	if err != nil {
+		log.Error("Failed to check skipped transaction", "hash", txHash.String(), "err", err)
+		return false
+	}
+	return exists
+}
+
 // writeSkippedTransactionHash writes the hash of a skipped transaction to the database.
 func writeSkippedTransactionHash(db ethdb.KeyValueWriter, index uint64, txHash common.Hash) {
 	if err := db.Put(SkippedTransactionHashKey(index), txHash[:]); err != nil {
