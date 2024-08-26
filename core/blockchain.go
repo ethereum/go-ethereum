@@ -76,6 +76,9 @@ var (
 	snapshotStorageReadTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/storage/reads", nil)
 	snapshotCommitTimer      = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
 
+	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
+	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
+
 	triedbCommitTimer = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
 	blockInsertTimer     = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
@@ -1947,18 +1950,25 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	proctime := time.Since(start) // processing + validation
 
 	// Update the metrics touched during block processing and validation
-	accountReadTimer.Update(statedb.AccountReads)                   // Account reads are complete(in processing)
-	storageReadTimer.Update(statedb.StorageReads)                   // Storage reads are complete(in processing)
-	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads)   // Account reads are complete(in processing)
-	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads)   // Storage reads are complete(in processing)
+	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete(in processing)
+	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete(in processing)
+	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete(in processing)
+	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete(in processing)
+
+	accountRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
+	storageRead := statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
+	if statedb.AccountLoaded != 0 {
+		accountReadSingleTimer.Update(accountRead / time.Duration(statedb.AccountLoaded))
+	}
+	if statedb.StorageLoaded != 0 {
+		storageReadSingleTimer.Update(storageRead / time.Duration(statedb.StorageLoaded))
+	}
 	accountUpdateTimer.Update(statedb.AccountUpdates)               // Account updates are complete(in validation)
 	storageUpdateTimer.Update(statedb.StorageUpdates)               // Storage updates are complete(in validation)
 	accountHashTimer.Update(statedb.AccountHashes)                  // Account hashes are complete(in validation)
 	triehash := statedb.AccountHashes                               // The time spent on tries hashing
 	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates   // The time spent on tries update
-	trieRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
-	trieRead += statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
-	blockExecutionTimer.Update(ptime - trieRead)                    // The time spent on EVM processing
+	blockExecutionTimer.Update(ptime - (accountRead + storageRead)) // The time spent on EVM processing
 	blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
 
 	// Write the block to the chain and get the status.
