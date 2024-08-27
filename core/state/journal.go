@@ -63,9 +63,9 @@ func newJournal() *journal {
 	}
 }
 
-// reset clears the journal, after this operation the journal can be used
-// as new. It is semantically similar to calling 'newJournal', but the underlying
-// slices can be reused.
+// reset clears the journal, after this operation the journal can be used anew.
+// It is semantically similar to calling 'newJournal', but the underlying slices
+// can be reused.
 func (j *journal) reset() {
 	j.entries = j.entries[:0]
 	j.validRevisions = j.validRevisions[:0]
@@ -192,7 +192,7 @@ func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
 	})
 }
 
-func (j *journal) codeChange(address common.Address) {
+func (j *journal) setCode(address common.Address) {
 	j.append(codeChange{account: &address})
 }
 
