@@ -26,8 +26,13 @@ import (
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/p2p"
 	"github.com/scroll-tech/go-ethereum/rlp"
+)
+
+var (
+	peerRequestTxsCntGauge = metrics.NewRegisteredGauge("eth/protocols/eth/peer/request/txs", nil)
 )
 
 const (
@@ -421,6 +426,7 @@ func (p *Peer) RequestTxs(hashes []common.Hash) error {
 	id := rand.Uint64()
 
 	log.Debug("Requesting transactions", "RequestId", id, "Peer.id", p.id, "count", len(hashes))
+	peerRequestTxsCntGauge.Update(int64(len(hashes)))
 
 	requestTracker.Track(p.id, p.version, GetPooledTransactionsMsg, PooledTransactionsMsg, id)
 	return p2p.Send(p.rw, GetPooledTransactionsMsg, &GetPooledTransactionsPacket66{

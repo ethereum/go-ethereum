@@ -36,9 +36,15 @@ import (
 	"github.com/scroll-tech/go-ethereum/ethdb"
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/log"
+	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/p2p"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/trie"
+)
+
+var (
+	annoTxsLenGauge   = metrics.NewRegisteredGauge("eth/handler/broadast/announce/txs", nil)
+	directTxsLenGauge = metrics.NewRegisteredGauge("eth/handler/broadast/direct/txs", nil)
 )
 
 const (
@@ -523,6 +529,13 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 	log.Debug("Transaction broadcast", "txs", len(txs),
 		"announce packs", annoPeers, "announced hashes", annoCount,
 		"tx packs", directPeers, "broadcast txs", directCount)
+
+	if directPeers > 0 {
+		directTxsLenGauge.Update(int64(directCount / directPeers))
+	}
+	if annoPeers > 0 {
+		annoTxsLenGauge.Update(int64(annoCount / annoPeers))
+	}
 }
 
 // minedBroadcastLoop sends mined blocks to connected peers.
