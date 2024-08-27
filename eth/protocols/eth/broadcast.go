@@ -21,6 +21,7 @@ import (
 
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/log"
 )
 
 const (
@@ -92,10 +93,13 @@ func (p *Peer) broadcastTransactions() {
 			if len(txs) > 0 {
 				done = make(chan struct{})
 				go func() {
+					log.Debug("Sending transactions", "count", len(txs))
 					if err := p.SendTransactions(txs); err != nil {
+						log.Debug("Sending transactions", "count", len(txs), "err", err)
 						fail <- err
 						return
 					}
+					log.Debug("Sent transactions", "count", len(txs))
 					close(done)
 					p.Log().Trace("Sent transactions", "count", len(txs))
 				}()
@@ -110,6 +114,7 @@ func (p *Peer) broadcastTransactions() {
 			}
 			// New batch of transactions to be broadcast, queue them (with cap)
 			queue = append(queue, hashes...)
+			log.Debug("Queue size in broadcastTransactions", "len(hashes)", len(hashes), "len(queue)", len(queue), "maxQueuedTxs", maxQueuedTxs)
 			if len(queue) > maxQueuedTxs {
 				// Fancy copy and resize to ensure buffer doesn't grow indefinitely
 				queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxs:])]
@@ -159,10 +164,13 @@ func (p *Peer) announceTransactions() {
 			if len(pending) > 0 {
 				done = make(chan struct{})
 				go func() {
+					log.Debug("Sending transaction announcements", "count", len(pending))
 					if err := p.sendPooledTransactionHashes(pending); err != nil {
+						log.Debug("Sending transaction announcements", "count", len(pending), "err", err)
 						fail <- err
 						return
 					}
+					log.Debug("Sent transaction announcements", "count", len(pending))
 					close(done)
 					p.Log().Trace("Sent transaction announcements", "count", len(pending))
 				}()
@@ -177,6 +185,7 @@ func (p *Peer) announceTransactions() {
 			}
 			// New batch of transactions to be broadcast, queue them (with cap)
 			queue = append(queue, hashes...)
+			log.Debug("Queue size in announceTransactions", "len(hashes)", len(hashes), "len(queue)", len(queue), "maxQueuedTxAnns", maxQueuedTxAnns)
 			if len(queue) > maxQueuedTxAnns {
 				// Fancy copy and resize to ensure buffer doesn't grow indefinitely
 				queue = queue[:copy(queue, queue[len(queue)-maxQueuedTxAnns:])]
