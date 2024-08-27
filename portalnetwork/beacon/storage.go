@@ -120,8 +120,7 @@ func (bs *BeaconStorage) Put(contentKey []byte, contentId []byte, content []byte
 }
 
 func (bs *BeaconStorage) Radius() *uint256.Int {
-	// TODO
-	panic("implement me")
+	return storage.MaxDistance
 }
 
 func (bs *BeaconStorage) getContentValue(contentId []byte) ([]byte, error) {

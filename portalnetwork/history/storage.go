@@ -38,10 +38,6 @@ const (
 		ORDER BY distance DESC`
 )
 
-var (
-	maxDistance = uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-)
-
 var _ storage.ContentStorage = &ContentStorage{}
 var once sync.Once
 
@@ -108,7 +104,7 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 		storageCapacityInBytes: config.StorageCapacityMB * 1000000,
 		log:                    log.New("history_storage"),
 	}
-	hs.radius.Store(maxDistance)
+	hs.radius.Store(storage.MaxDistance)
 	err := hs.createTable()
 	if err != nil {
 		return nil, err
