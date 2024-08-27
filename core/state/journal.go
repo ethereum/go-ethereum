@@ -202,7 +202,7 @@ func (ch selfDestructChange) revert(s *StateDB) {
 	obj := s.getStateObject(*ch.account)
 	if obj != nil {
 		obj.selfDestructed = ch.prev
-		obj.setBalance(ch.prevbalance)
+		obj.setBalanceLogged(ch.prevbalance, tracing.BalanceChangeRevert)
 	}
 }
 
