@@ -351,7 +351,7 @@ func ChunkifyCode(code []byte) ChunkedCode {
 
 // UpdateContractCode implements state.Trie, writing the provided contract code
 // into the trie.
-// Note that the code-size *must* be already saved by a previuos UpdateAccount call.
+// Note that the code-size *must* be already saved by a previous UpdateAccount call.
 func (t *VerkleTrie) UpdateContractCode(addr common.Address, codeHash common.Hash, code []byte) error {
 	var (
 		chunks = ChunkifyCode(code)
