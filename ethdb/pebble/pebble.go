@@ -557,7 +557,7 @@ func (b *batch) Reset() {
 // Replay replays the batch contents.
 func (b *batch) Replay(w ethdb.KeyValueWriter) (bErr error) {
 	reader := b.b.Reader()
-	for {
+	for bErr == nil {
 		kind, k, v, ok, err := reader.Next()
 		if !ok || err != nil {
 			break
