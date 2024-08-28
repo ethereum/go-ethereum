@@ -236,11 +236,10 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 		return nil, l.reason
 	}
 	failed := l.err != nil
-	returnData := common.CopyBytes(l.output)
+	var returnVal string
 	// Return data when successful and revert reason when reverted, otherwise empty.
-	returnVal := fmt.Sprintf("%x", returnData)
-	if failed && l.err != vm.ErrExecutionReverted {
-		returnVal = ""
+	if !failed || l.err == vm.ErrExecutionReverted {
+		returnVal = hexutil.Encode(l.output)
 	}
 	return json.Marshal(&ExecutionResult{
 		Gas:         l.usedGas,
