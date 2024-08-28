@@ -293,7 +293,9 @@ func (d *Database) Has(key []byte) (bool, error) {
 	} else if err != nil {
 		return false, err
 	}
-	closer.Close()
+	if err = closer.Close(); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -308,10 +310,10 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ret := make([]byte, len(dat))
-	copy(ret, dat)
-	closer.Close()
-	return ret, nil
+	if err = closer.Close(); err != nil {
+		return nil, err
+	}
+	return common.CopyBytes(dat), nil
 }
 
 // Put inserts the given value into the key-value store.
@@ -518,17 +520,17 @@ type batch struct {
 }
 
 // Put inserts the given value into the batch for later committing.
-func (b *batch) Put(key, value []byte) error {
-	b.b.Set(key, value, nil)
+func (b *batch) Put(key, value []byte) (err error) {
+	err = b.b.Set(key, value, nil)
 	b.size += len(key) + len(value)
-	return nil
+	return
 }
 
 // Delete inserts the key removal into the batch for later committing.
-func (b *batch) Delete(key []byte) error {
-	b.b.Delete(key, nil)
+func (b *batch) Delete(key []byte) (err error) {
+	err = b.b.Delete(key, nil)
 	b.size += len(key)
-	return nil
+	return
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
@@ -553,7 +555,7 @@ func (b *batch) Reset() {
 }
 
 // Replay replays the batch contents.
-func (b *batch) Replay(w ethdb.KeyValueWriter) error {
+func (b *batch) Replay(w ethdb.KeyValueWriter) (bErr error) {
 	reader := b.b.Reader()
 	for {
 		kind, k, v, ok, err := reader.Next()
@@ -563,14 +565,14 @@ func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 		// The (k,v) slices might be overwritten if the batch is reset/reused,
 		// and the receiver should copy them if they are to be retained long-term.
 		if kind == pebble.InternalKeyKindSet {
-			w.Put(k, v)
+			bErr = w.Put(k, v)
 		} else if kind == pebble.InternalKeyKindDelete {
-			w.Delete(k)
+			bErr = w.Delete(k)
 		} else {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)
 		}
 	}
-	return nil
+	return
 }
 
 // pebbleIterator is a wrapper of underlying iterator in storage engine.
