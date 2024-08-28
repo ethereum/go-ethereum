@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.6.0](https://github.com/taikoxyz/taiko-geth/compare/v1.5.0...v1.6.0) (2024-08-26)
+
+
+### Features
+
+* **consensus:** update `ValidateAnchorTx` ([#289](https://github.com/taikoxyz/taiko-geth/issues/289)) ([8ff161f](https://github.com/taikoxyz/taiko-geth/commit/8ff161fb39b76ef15585d26033131433c4530a3e))
+* **core:** changes based on the latest `block.extradata` format ([#295](https://github.com/taikoxyz/taiko-geth/issues/295)) ([a875cc8](https://github.com/taikoxyz/taiko-geth/commit/a875cc83b907b026b88da887ce0a0d46c91d6980))
+* **core:** decode basefee params from `block.extraData` ([#290](https://github.com/taikoxyz/taiko-geth/issues/290)) ([83564ba](https://github.com/taikoxyz/taiko-geth/commit/83564ba6fc9c20b1fa28ff94d65d5e19211a1aa2))
+* **core:** introduce `BasefeeSharingPctg` in `BlockMetadata` ([#287](https://github.com/taikoxyz/taiko-geth/issues/287)) ([e6487f0](https://github.com/taikoxyz/taiko-geth/commit/e6487f00ed74139fb4169cf4ccd70488d933a01a))
+* **eip1559:** remove `CalcBaseFeeOntake()` method ([#293](https://github.com/taikoxyz/taiko-geth/issues/293)) ([124fde7](https://github.com/taikoxyz/taiko-geth/commit/124fde7e025d6ba88c5cf796d6a0a5fd19c21a19))
+* **miner:** improve `prepareWork()` ([#292](https://github.com/taikoxyz/taiko-geth/issues/292)) ([06b2903](https://github.com/taikoxyz/taiko-geth/commit/06b29039cbf1f72d6163c0c4f658053acfcc5c47))
+* **taiko_genesis:** update interanl devnet genesis JSON for ontake hardfork ([#288](https://github.com/taikoxyz/taiko-geth/issues/288)) ([a748b91](https://github.com/taikoxyz/taiko-geth/commit/a748b914abb1b5bc2a25fe40de6e38bb70e4235a))
+* **taiko_genesis:** update interanl devnet genesis JSON for ontake hardfork ([#291](https://github.com/taikoxyz/taiko-geth/issues/291)) ([217c9ec](https://github.com/taikoxyz/taiko-geth/commit/217c9ec0f42f4785b44b8d2dbc4c046eb43e1d02))
+* **taiko_genesis:** update internal devnet genesis JSON ([#285](https://github.com/taikoxyz/taiko-geth/issues/285)) ([b137b2a](https://github.com/taikoxyz/taiko-geth/commit/b137b2ac113dfe899bc538220cbdadf45b24f133))
+* **taiko_genesis:** update internal devnet genesis JSON ([#296](https://github.com/taikoxyz/taiko-geth/issues/296)) ([882a6cd](https://github.com/taikoxyz/taiko-geth/commit/882a6cd3294cd1c74eac37fbc37c54e64f0dc363))
+
+
+### Bug Fixes
+
+* **taiko_miner:** fix a typo ([#299](https://github.com/taikoxyz/taiko-geth/issues/299)) ([5faa71b](https://github.com/taikoxyz/taiko-geth/commit/5faa71b531cc889fb66868380d9063e8c78c7646))
+* **txpool:** basefee requires mintip to not be nil. ([#297](https://github.com/taikoxyz/taiko-geth/issues/297)) ([6315fd4](https://github.com/taikoxyz/taiko-geth/commit/6315fd49697701beb1f18b8c8c0a6bdf97e862d5))
+
 ## [1.5.0](https://github.com/taikoxyz/taiko-geth/compare/v1.4.0...v1.5.0) (2024-07-03)
 
 
