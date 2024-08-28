@@ -39,3 +39,71 @@ jobs:
           file: Dockerfile
           push: true
           tags: scrolltech/l2geth:${{inputs.tag}}-arm64
+
+  build-and-push-amd64-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Extract docker metadata
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: scrolltech/l2geth
+          tags: |
+            type=ref,event=tag,enable=${{ github.event_name == 'push' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+          flavor: |
+            latest=false
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: Dockerfile
+          # push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-amd64
+          labels: ${{ steps.meta.outputs.labels }}
+
+  publish-multi-arch-image:
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-push-amd64-image
+      - build-and-push-arm64-image
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Extract docker metadata
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: scrolltech/l2geth
+          tags: |
+            type=ref,event=tag,enable=${{ github.event_name == 'push' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+          flavor: |
+            latest=false
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build multiarch image
+        run: |
+          docker manifest create scrolltech/l2geth:$image_multiarch_name --amend scrolltech/l2geth:$image_amd64_name --amend scrolltech/l2geth:$image_arm64_name && \  
+          docker manifest push scrolltech/l2geth:$image_multiarch_name
+        env:
+          image_arm64_name: "${{ steps.meta.outputs.tags }}-arm64"
+          image_amd64_name: "${{ steps.meta.outputs.tags }}-amd64"
+          image_multiarch_name: "${{ steps.meta.outputs.tags }}-multiarch"
