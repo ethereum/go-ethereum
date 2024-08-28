@@ -12,7 +12,8 @@ import (
 var (
 	InternalDevnetOntakeBlock = new(big.Int).SetUint64(2)
 	HeklaOntakeBlock          = new(big.Int).SetUint64(793_000)
-	MainnetOntakeBlock        = new(big.Int).SetUint64(374_400)
+	// TODO: update this value when mainnet fork height is decided
+	MainnetOntakeBlock = new(big.Int).SetUint64(9_000_000)
 )
 
 // TaikoGenesisBlock returns the Taiko network genesis block configs.
