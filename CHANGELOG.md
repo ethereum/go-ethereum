@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/taikoxyz/taiko-geth/compare/v1.6.0...v1.6.1) (2024-08-28)
+
+
+### Bug Fixes
+
+* **taiko_genesis:** update devnet Ontake fork hight ([#302](https://github.com/taikoxyz/taiko-geth/issues/302)) ([d065dd2](https://github.com/taikoxyz/taiko-geth/commit/d065dd2c3d005fb01590ecc82cda9c91678dfd13))
+
 ## [1.6.0](https://github.com/taikoxyz/taiko-geth/compare/v1.5.0...v1.6.0) (2024-08-26)
 
 
