@@ -29,17 +29,17 @@ import (
 )
 
 var (
-	newPooledTxHashesFailGauge    = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/newpooledtxhashes/fail", nil)
+	newPooledTxHashesFailCounter  = metrics.NewRegisteredCounter("eth/protocols/eth/handlers/newpooledtxhashes/fail", nil)
 	newPooledTxHashesLenGauge     = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/newpooledtxhashes/len", nil)
-	getPooledTxsFailGauge         = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/getpooledtxs/fail", nil)
+	getPooledTxsFailCounter       = metrics.NewRegisteredCounter("eth/protocols/eth/handlers/getpooledtxs/fail", nil)
 	getPooledTxsQueryLenGauge     = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/getpooledtxs/query", nil)
 	getPooledTxsRetrievedLenGauge = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/getpooledtxs/retrieved", nil)
-	handleTxsFailGauge            = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/handletxs/fail", nil)
+	handleTxsFailCounter          = metrics.NewRegisteredCounter("eth/protocols/eth/handlers/handletxs/fail", nil)
 	handleTxsLenGauge             = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/handletxs/len", nil)
-	handleTxsNilGauge             = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/handletxs/nil", nil)
-	pooledTxs66FailGauge          = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/pooledtxs66/fail", nil)
+	handleTxsNilCounter           = metrics.NewRegisteredCounter("eth/protocols/eth/handlers/handletxs/nil", nil)
+	pooledTxs66FailCounter        = metrics.NewRegisteredCounter("eth/protocols/eth/handlers/pooledtxs66/fail", nil)
 	pooledTxs66LenGauge           = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/pooledtxs66/len", nil)
-	pooledTxs66NillGauge          = metrics.NewRegisteredGauge("eth/protocols/eth/handlers/pooledtxs66/nil", nil)
+	pooledTxs66NilCounter         = metrics.NewRegisteredCounter("eth/protocols/eth/handlers/pooledtxs66/nil", nil)
 )
 
 // handleGetBlockHeaders66 is the eth/66 version of handleGetBlockHeaders
@@ -339,7 +339,7 @@ func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) 
 	ann := new(NewPooledTransactionHashesPacket)
 	if err := msg.Decode(ann); err != nil {
 		log.Debug("Failed to decode `NewPooledTransactionHashesPacket`", "peer", peer.String(), "err", err)
-		newPooledTxHashesFailGauge.Inc(1)
+		newPooledTxHashesFailCounter.Inc(1)
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	// Schedule all the unknown hashes for retrieval
@@ -356,7 +356,7 @@ func handleGetPooledTransactions66(backend Backend, msg Decoder, peer *Peer) err
 	var query GetPooledTransactionsPacket66
 	if err := msg.Decode(&query); err != nil {
 		log.Debug("Failed to decode `GetPooledTransactionsPacket66`", "peer", peer.String(), "err", err)
-		getPooledTxsFailGauge.Inc(1)
+		getPooledTxsFailCounter.Inc(1)
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
 	hashes, txs := answerGetPooledTransactions(backend, query.GetPooledTransactionsPacket, peer)
@@ -402,7 +402,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	// Transactions can be processed, parse all of them and deliver to the pool
 	var txs TransactionsPacket
 	if err := msg.Decode(&txs); err != nil {
-		handleTxsFailGauge.Inc(1)
+		handleTxsFailCounter.Inc(1)
 		log.Debug("Failed to decode `TransactionsPacket`", "peer", peer.String(), "err", err)
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
@@ -411,7 +411,7 @@ func handleTransactions(backend Backend, msg Decoder, peer *Peer) error {
 	for i, tx := range txs {
 		// Validate and mark the remote transaction
 		if tx == nil {
-			handleTxsNilGauge.Inc(1)
+			handleTxsNilCounter.Inc(1)
 			log.Debug("handleTransactions: transaction is nil", "peer", peer.String(), "i", i)
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}
@@ -428,7 +428,7 @@ func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error 
 	// Transactions can be processed, parse all of them and deliver to the pool
 	var txs PooledTransactionsPacket66
 	if err := msg.Decode(&txs); err != nil {
-		pooledTxs66FailGauge.Inc(1)
+		pooledTxs66FailCounter.Inc(1)
 		log.Debug("Failed to decode `PooledTransactionsPacket66`", "peer", peer.String(), "err", err)
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
@@ -437,7 +437,7 @@ func handlePooledTransactions66(backend Backend, msg Decoder, peer *Peer) error 
 	for i, tx := range txs.PooledTransactionsPacket {
 		// Validate and mark the remote transaction
 		if tx == nil {
-			pooledTxs66NillGauge.Inc(1)
+			pooledTxs66NilCounter.Inc(1)
 			log.Debug("handlePooledTransactions: transaction is nil", "peer", peer.String(), "i", i)
 			return fmt.Errorf("%w: transaction %d is nil", errDecode, i)
 		}

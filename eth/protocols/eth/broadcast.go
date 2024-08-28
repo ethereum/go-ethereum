@@ -27,11 +27,11 @@ import (
 
 var (
 	broadcastSendTxsLenGauge    = metrics.NewRegisteredGauge("eth/protocols/eth/broadcast/direct/txs", nil)
-	broadcastSendTxsFailGauge   = metrics.NewRegisteredGauge("eth/protocols/eth/broadcast/direct/fail", nil)
+	broadcastSendTxsFailCounter = metrics.NewRegisteredCounter("eth/protocols/eth/broadcast/direct/fail", nil)
 	broadcastSendHashesLenGauge = metrics.NewRegisteredGauge("eth/protocols/eth/broadcast/direct/hashes", nil)
 	broadcastSendQueueLenGauge  = metrics.NewRegisteredGauge("eth/protocols/eth/broadcast/direct/queue", nil)
 	broadcastAnnoTxsLenGauge    = metrics.NewRegisteredGauge("eth/protocols/eth/broadcast/anno/txs", nil)
-	broadcastAnnoTxsFailGauge   = metrics.NewRegisteredGauge("eth/protocols/eth/broadcast/anno/fail", nil)
+	broadcastAnnoTxsFailCounter = metrics.NewRegisteredCounter("eth/protocols/eth/broadcast/anno/fail", nil)
 	broadcastAnnoHashesLenGauge = metrics.NewRegisteredGauge("eth/protocols/eth/broadcast/anno/hashes", nil)
 	broadcastAnnoQueueLenGauge  = metrics.NewRegisteredGauge("eth/protocols/eth/broadcast/anno/queue", nil)
 )
@@ -109,7 +109,7 @@ func (p *Peer) broadcastTransactions() {
 					broadcastSendTxsLenGauge.Update(int64(len(txs)))
 					if err := p.SendTransactions(txs); err != nil {
 						log.Debug("Sending transactions", "count", len(txs), "err", err)
-						broadcastSendTxsFailGauge.Inc(1)
+						broadcastSendTxsFailCounter.Inc(1)
 						fail <- err
 						return
 					}
@@ -184,7 +184,7 @@ func (p *Peer) announceTransactions() {
 					broadcastAnnoTxsLenGauge.Update(int64(len(pending)))
 					if err := p.sendPooledTransactionHashes(pending); err != nil {
 						log.Debug("Sending transaction announcements", "count", len(pending), "err", err)
-						broadcastAnnoTxsFailGauge.Inc(1)
+						broadcastAnnoTxsFailCounter.Inc(1)
 						fail <- err
 						return
 					}
