@@ -446,8 +446,8 @@ func (t *freezerTable) repairIndex() error {
 			continue
 		}
 		// Ensure that the first non-head index refers to the earliest file,
-		// or the next file if the earliest file is not sufficient to
-		// place the first item.
+		// or the next file if the earliest file has no space to place the
+		// first item.
 		if offset == indexEntrySize {
 			if entry.filenum != head.filenum && entry.filenum != head.filenum+1 {
 				log.Error("Corrupted index item detected", "earliest", head.filenum, "filenumber", entry.filenum)
@@ -474,11 +474,18 @@ func (t *freezerTable) repairIndex() error {
 	return nil
 }
 
-// checkIndexItems checks the validity of two consecutive index items. The index
-// item is regarded as invalid if:
-// - file number of two index items are not same and not monotonically increasing
-// - data offset of two index items with same file number are out of order
-// - zero data offset with an increasing file number
+// checkIndexItems validates the correctness of two consecutive index items based
+// on the following rules:
+//
+//   - The file number of two consecutive index items must either be the same or
+//     increase monotonically. If the file number decreases or skips in a
+//     non-sequential manner, the index item is considered invalid.
+//
+//   - For index items with the same file number, the data offset must be in
+//     non-decreasing order. Note: Two index items with the same file number
+//     and the same data offset are permitted if the entry size is zero.
+//
+//   - The first index item in a new data file must not have a zero data offset.
 func (t *freezerTable) checkIndexItems(a, b indexEntry) error {
 	if b.filenum != a.filenum && b.filenum != a.filenum+1 {
 		return fmt.Errorf("index items with inconsistent file number, prev: %d, next: %d", a.filenum, b.filenum)
