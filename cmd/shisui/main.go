@@ -121,14 +121,14 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, addr string) err
 		return err
 	}
 
-	if slices.Contains(config.Networks, portalwire.HistoryNetworkName) {
+	if slices.Contains(config.Networks, portalwire.History.Name()) {
 		err = initHistory(config, server, conn, localNode, discV5)
 		if err != nil {
 			return err
 		}
 	}
 
-	if slices.Contains(config.Networks, portalwire.BeaconNetworkName) {
+	if slices.Contains(config.Networks, portalwire.Beacon.Name()) {
 		err = initBeacon(config, server, conn, localNode, discV5)
 		if err != nil {
 			return err
@@ -181,7 +181,7 @@ func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, local
 	}
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	protocol, err := discover.NewPortalProtocol(config.Protocol, string(portalwire.HistoryNetwork), config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
+	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.History, config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
 
 	if err != nil {
 		return err
@@ -222,7 +222,7 @@ func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localN
 	}
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	protocol, err := discover.NewPortalProtocol(config.Protocol, string(portalwire.BeaconLightClientNetwork), config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
+	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.Beacon, config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
 
 	if err != nil {
 		return err

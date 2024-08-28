@@ -85,7 +85,7 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 	}
 
 	contentQueue := make(chan *ContentElement, 50)
-	portalProtocol, err := NewPortalProtocol(conf, string(portalwire.HistoryNetwork), privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
+	portalProtocol, err := NewPortalProtocol(conf, portalwire.History, privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}

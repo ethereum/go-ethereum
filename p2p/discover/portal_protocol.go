@@ -206,16 +206,15 @@ func defaultContentIdFunc(contentKey []byte) []byte {
 	return digest[:]
 }
 
-func NewPortalProtocol(config *PortalProtocolConfig, protocolId string, privateKey *ecdsa.PrivateKey, conn UDPConn, localNode *enode.LocalNode, discV5 *UDPv5, storage storage.ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
+func NewPortalProtocol(config *PortalProtocolConfig, protocolId portalwire.ProtocolId, privateKey *ecdsa.PrivateKey, conn UDPConn, localNode *enode.LocalNode, discV5 *UDPv5, storage storage.ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
 	closeCtx, cancelCloseCtx := context.WithCancel(context.Background())
 
-	protocolName := portalwire.NetworkNameMap[protocolId]
 	protocol := &PortalProtocol{
 		cachedIds:      make(map[string]enode.ID),
-		protocolId:     protocolId,
-		protocolName:   protocolName,
+		protocolId:     string(protocolId),
+		protocolName:   protocolId.Name(),
 		ListenAddr:     config.ListenAddr,
-		Log:            log.New("protocol", protocolName),
+		Log:            log.New("protocol", protocolId.Name()),
 		PrivateKey:     privateKey,
 		NetRestrict:    config.NetRestrict,
 		BootstrapNodes: config.BootstrapNodes,
@@ -250,7 +249,7 @@ func (p *PortalProtocol) Start() error {
 	}
 
 	p.DiscV5.RegisterTalkHandler(p.protocolId, p.handleTalkRequest)
-	p.DiscV5.RegisterTalkHandler(string(portalwire.UTPNetwork), p.handleUtpTalkRequest)
+	p.DiscV5.RegisterTalkHandler(string(portalwire.Utp), p.handleUtpTalkRequest)
 
 	go p.table.loop()
 
@@ -326,7 +325,7 @@ func (p *PortalProtocol) setupUDPListening() error {
 			defer p.cachedIdsLock.Unlock()
 			if id, ok := p.cachedIds[addr.String()]; ok {
 				//_, err := p.DiscV5.TalkRequestToID(id, addr, string(portalwire.UTPNetwork), buf)
-				req := &v5wire.TalkRequest{Protocol: string(portalwire.UTPNetwork), Message: buf}
+				req := &v5wire.TalkRequest{Protocol: string(portalwire.Utp), Message: buf}
 				p.DiscV5.sendFromAnotherThread(id, netip.AddrPortFrom(netutil.IPToAddr(addr.IP), uint16(addr.Port)), req)
 
 				return len(buf), err
