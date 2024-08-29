@@ -205,6 +205,9 @@ type Block struct {
 	transactions Transactions
 	withdrawals  Withdrawals
 
+	// witness is not an encoded part of the block body.
+	// It is held in Block in order for easy relaying to the places
+	// that process it.
 	witness *ExecutionWitness
 
 	// caches
@@ -461,6 +464,7 @@ func (b *Block) WithSeal(header *Header) *Block {
 		transactions: b.transactions,
 		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
+		witness:      b.witness,
 	}
 }
 
@@ -472,6 +476,7 @@ func (b *Block) WithBody(body Body) *Block {
 		transactions: slices.Clone(body.Transactions),
 		uncles:       make([]*Header, len(body.Uncles)),
 		withdrawals:  slices.Clone(body.Withdrawals),
+		witness:      b.witness,
 	}
 	for i := range body.Uncles {
 		block.uncles[i] = CopyHeader(body.Uncles[i])
@@ -480,18 +485,13 @@ func (b *Block) WithBody(body Body) *Block {
 }
 
 func (b *Block) WithWitness(witness *ExecutionWitness) *Block {
-
-	block := &Block{
+	return &Block{
 		header:       b.header,
 		transactions: b.transactions,
-		uncles:       make([]*Header, len(b.uncles)),
+		uncles:       b.uncles,
 		withdrawals:  b.withdrawals,
 		witness:      witness,
 	}
-	for i := range b.uncles {
-		block.uncles[i] = b.uncles[i]
-	}
-	return block
 }
 
 // Hash returns the keccak256 hash of b's header.
