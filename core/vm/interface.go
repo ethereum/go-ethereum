@@ -90,6 +90,8 @@ type StateDB interface {
 	AddPreimage(common.Hash, []byte)
 
 	Witness() *stateless.Witness
+
+	IsSlotFilled(common.Address, common.Hash) bool
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
