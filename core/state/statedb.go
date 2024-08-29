@@ -130,7 +130,8 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList *accessList
+	accessList   *accessList
+	accessEvents *AccessEvents
 
 	// Transient storage
 	transientStorage transientStorage
@@ -183,6 +184,9 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 		hasher:               crypto.NewKeccakState(),
+	}
+	if db.TrieDB().IsVerkle() {
+		sdb.accessEvents = NewAccessEvents(db.(*cachingDB).pointCache)
 	}
 	if sdb.snaps != nil {
 		sdb.snap = sdb.snaps.Snapshot(root)
@@ -708,6 +712,9 @@ func (s *StateDB) Copy() *StateDB {
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
+	}
+	if s.accessEvents != nil {
+		state.accessEvents = s.accessEvents.Copy()
 	}
 	// Deep copy cached state objects.
 	for addr, obj := range s.stateObjects {
@@ -1451,4 +1458,8 @@ func (s *StateDB) PointCache() *utils.PointCache {
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
 	return s.witness
+}
+
+func (s *StateDB) AccessEvents() *AccessEvents {
+	return s.accessEvents
 }

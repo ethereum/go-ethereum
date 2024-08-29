@@ -387,8 +387,39 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(true)
 
-	// Assemble and return the final block.
-	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)), nil
+	// Assemble the final block.
+	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+
+	// Create the block witness and attach to block.
+	// This step needs to happen as late as possible to catch all access events.
+	if chain.Config().IsVerkle(header.Number, header.Time) {
+		keys := state.AccessEvents().Keys()
+
+		// Open the pre-tree to prove the pre-state against
+		parent := chain.GetHeaderByNumber(header.Number.Uint64() - 1)
+		if parent == nil {
+			return nil, fmt.Errorf("nil parent header for block %d", header.Number)
+		}
+
+		preTrie, err := state.Database().OpenTrie(parent.Root)
+		if err != nil {
+			return nil, fmt.Errorf("error opening pre-state tree root: %w", err)
+		}
+
+		vktPreTrie, okpre := preTrie.(*trie.VerkleTrie)
+		vktPostTrie, okpost := state.GetTrie().(*trie.VerkleTrie)
+		if okpre && okpost {
+			if len(keys) > 0 {
+				verkleProof, stateDiff, err := vktPreTrie.Proof(vktPostTrie, keys, vktPreTrie.FlatdbNodeResolver)
+				if err != nil {
+					return nil, fmt.Errorf("error generating verkle proof for block %d: %w", header.Number, err)
+				}
+				block = block.WithWitness(&types.ExecutionWitness{StateDiff: stateDiff, VerkleProof: verkleProof})
+			}
+		}
+	}
+
+	return block, nil
 }
 
 // Seal generates a new sealing request for the given input block and pushes

@@ -467,9 +467,8 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			panic(fmt.Sprintf("trie write error: %v", err))
 		}
 
-		// TODO uncomment when proof generation is merged
-		// proofs = append(proofs, block.ExecutionWitness().VerkleProof)
-		// keyvals = append(keyvals, block.ExecutionWitness().StateDiff)
+		proofs = append(proofs, block.ExecutionWitness().VerkleProof)
+		keyvals = append(keyvals, block.ExecutionWitness().StateDiff)
 
 		return block, b.receipts
 	}
