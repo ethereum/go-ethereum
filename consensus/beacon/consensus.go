@@ -386,10 +386,12 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 
 	// Assign the final state root to header.
 	header.Root = state.IntermediateRoot(true)
-	// Assemble and return the final block.
 
+	// Assemble the final block.
 	block := types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 
+	// Create the block witness and attach to block.
+	// This step needs to happen as late as possible to catch all access events.
 	if chain.Config().IsVerkle(header.Number, header.Time) {
 		keys := state.AccessEvents().Keys()
 
@@ -412,10 +414,11 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 				if err != nil {
 					return nil, fmt.Errorf("error generating verkle proof for block %d: %w", header.Number, err)
 				}
-				return block.WithWitness(&types.ExecutionWitness{StateDiff: stateDiff, VerkleProof: verkleProof}), nil
+				block = block.WithWitness(&types.ExecutionWitness{StateDiff: stateDiff, VerkleProof: verkleProof})
 			}
 		}
 	}
+
 	return block, nil
 }
 
