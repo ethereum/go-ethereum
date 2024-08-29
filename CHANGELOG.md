@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/taikoxyz/taiko-geth/compare/v1.6.1...v1.7.0) (2024-08-29)
+
+
+### Features
+
+* **taiko_genesis:** update genesis JSONs ([#305](https://github.com/taikoxyz/taiko-geth/issues/305)) ([73df1f1](https://github.com/taikoxyz/taiko-geth/commit/73df1f1a116bdb530c5a8bd7fc20b64b491f2f3c))
+
+
+### Bug Fixes
+
+* **core:** fix a transaction `Message` assembling issue ([#308](https://github.com/taikoxyz/taiko-geth/issues/308)) ([04d76e8](https://github.com/taikoxyz/taiko-geth/commit/04d76e8f012e8a3d89d04f38dabac08e758f5a00))
+
 ## [1.6.1](https://github.com/taikoxyz/taiko-geth/compare/v1.6.0...v1.6.1) (2024-08-28)
 
 
