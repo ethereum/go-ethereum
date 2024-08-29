@@ -1584,6 +1584,10 @@ func (p *BlobPool) RemoveTx(hash common.Hash, outofbound bool, unreserve bool) i
 func (p *BlobPool) PauseReorgs() {
 	log.Debug("skip BlobPool `PauseReorgs`")
 }
+
 func (p *BlobPool) ResumeReorgs() {
 	log.Debug("skip BlobPool `ResumeReorgs`")
+}
+
+func (pool *BlobPool) SetIsMiner(isMiner bool) {
 }

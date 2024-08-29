@@ -147,4 +147,5 @@ type SubPool interface {
 
 	PauseReorgs()
 	ResumeReorgs()
+	SetIsMiner(isMiner bool)
 }

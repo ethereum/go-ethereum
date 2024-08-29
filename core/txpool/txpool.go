@@ -455,3 +455,9 @@ func (pool *TxPool) StatsWithMinBaseFee(minBaseFee *big.Int) (pending int, queue
 	}
 	return pending, queued
 }
+
+func (pool *TxPool) SetIsMiner(isMiner bool) {
+	for _, subpool := range pool.subpools {
+		subpool.SetIsMiner(isMiner)
+	}
+}
