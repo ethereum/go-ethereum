@@ -872,7 +872,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		value        = scope.Stack.pop()
 		salt         = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
-		input        = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 	)
 	if int(idx) >= len(scope.Contract.Container.ContainerCode) {
 		return nil, fmt.Errorf("invalid subcontainer")
@@ -927,7 +927,7 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	if int(idx) >= len(scope.Contract.Container.ContainerSections) {
 		return nil, fmt.Errorf("invalid subcontainer")
 	}
-	ret := scope.Memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
+	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 	containerCode := scope.Contract.Container.ContainerCode[idx]
 	deployedCode := append(containerCode, ret...)
 	if len(deployedCode) == 0 {
@@ -1060,7 +1060,7 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	// safe a memory alloc
 	temp := addr
 	// Get the arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	if interpreter.readOnly && !value.IsZero() {
 		return nil, ErrWriteProtection
@@ -1098,7 +1098,7 @@ func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCont
 	// safe a memory alloc
 	temp := addr
 	// Get arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	// Check that we're only calling non-legacy contracts
 	var (
@@ -1144,7 +1144,7 @@ func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContex
 	// safe a memory alloc
 	temp := addr
 	// Get arguments from the memory.
-	args := scope.Memory.GetPtr(int64(inOffset.Uint64()), int64(inSize.Uint64()))
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
 	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
 	if err == ErrExecutionReverted {

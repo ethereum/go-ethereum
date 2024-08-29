@@ -485,7 +485,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.chainRules.IsPrague {
 		if isInitcodeEOF {
 			if !fromEOF {
-				return nil, common.Address{}, gas, ErrLegacyCode
+				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, ErrLegacyCode)
 			}
 			// If the initcode is EOF, verify it is well-formed.
 			var c Container
@@ -564,7 +564,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Reject legacy contract deployment from EOF.
 	if err == nil && isInitcodeEOF && !hasEOFMagic(ret) {
-		err = ErrLegacyCode
+		err = fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, ErrLegacyCode)
 	}
 	// Reject EOF deployment from legacy.
 	if err == nil && !isInitcodeEOF && hasEOFMagic(ret) {

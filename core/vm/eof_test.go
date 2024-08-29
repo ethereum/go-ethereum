@@ -67,7 +67,7 @@ func TestEOFMarshaling(t *testing.T) {
 			got Container
 		)
 		t.Logf("b: %#x", b)
-		if err := got.UnmarshalBinary(b); err != nil && err != test.err {
+		if err := got.UnmarshalBinary(b, true); err != nil && err != test.err {
 			t.Fatalf("test %d: got error \"%v\", want \"%v\"", i, err, test.err)
 		}
 		if !reflect.DeepEqual(got, test.want) {
@@ -78,7 +78,7 @@ func TestEOFMarshaling(t *testing.T) {
 
 func TestEOFSubcontainer(t *testing.T) {
 	var subcontainer = new(Container)
-	if err := subcontainer.UnmarshalBinary(common.Hex2Bytes("ef000101000402000100010400000000800000fe")); err != nil {
+	if err := subcontainer.UnmarshalBinary(common.Hex2Bytes("ef000101000402000100010400000000800000fe"), true); err != nil {
 		t.Fatal(err)
 	}
 	container := Container{
@@ -92,7 +92,7 @@ func TestEOFSubcontainer(t *testing.T) {
 		b   = container.MarshalBinary()
 		got Container
 	)
-	if err := got.UnmarshalBinary(b); err != nil {
+	if err := got.UnmarshalBinary(b, true); err != nil {
 		t.Fatal(err)
 	}
 	fmt.Print(got)
@@ -112,7 +112,7 @@ func TestMarshaling(t *testing.T) {
 			t.Fatalf("test %d: error decoding: %v", i, err)
 		}
 		var got Container
-		if err := got.UnmarshalBinary(s); err != nil {
+		if err := got.UnmarshalBinary(s, true); err != nil {
 			t.Fatalf("test %d: got error %v", i, err)
 		}
 	}

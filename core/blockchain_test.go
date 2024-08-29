@@ -4632,7 +4632,7 @@ func TestEOF(t *testing.T) {
 								byte(vm.PUSH1),
 								byte(0),
 								byte(vm.RJUMPV), // jump over invalid op
-								byte(1),
+								byte(0),
 								byte(0),
 								byte(1),
 
@@ -4658,6 +4658,7 @@ func TestEOF(t *testing.T) {
 	gspec.Config.BerlinBlock = common.Big0
 	gspec.Config.LondonBlock = common.Big0
 	gspec.Config.ShanghaiTime = u64(0)
+	gspec.Config.PragueTime = u64(0)
 	signer := types.LatestSigner(gspec.Config)
 
 	container := vm.Container{
