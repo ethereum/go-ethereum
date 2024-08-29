@@ -310,10 +310,12 @@ func (d *Database) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ret := make([]byte, len(dat))
+	copy(ret, dat)
 	if err = closer.Close(); err != nil {
 		return nil, err
 	}
-	return common.CopyBytes(dat), nil
+	return ret, nil
 }
 
 // Put inserts the given value into the key-value store.
@@ -520,17 +522,17 @@ type batch struct {
 }
 
 // Put inserts the given value into the batch for later committing.
-func (b *batch) Put(key, value []byte) (err error) {
-	err = b.b.Set(key, value, nil)
+func (b *batch) Put(key, value []byte) error {
+	err := b.b.Set(key, value, nil)
 	b.size += len(key) + len(value)
-	return
+	return err
 }
 
 // Delete inserts the key removal into the batch for later committing.
-func (b *batch) Delete(key []byte) (err error) {
-	err = b.b.Delete(key, nil)
+func (b *batch) Delete(key []byte) error {
+	err := b.b.Delete(key, nil)
 	b.size += len(key)
-	return
+	return err
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
@@ -555,24 +557,27 @@ func (b *batch) Reset() {
 }
 
 // Replay replays the batch contents.
-func (b *batch) Replay(w ethdb.KeyValueWriter) (bErr error) {
+func (b *batch) Replay(w ethdb.KeyValueWriter) error {
 	reader := b.b.Reader()
-	for bErr == nil {
+	for {
 		kind, k, v, ok, err := reader.Next()
 		if !ok || err != nil {
-			break
+			return err
 		}
 		// The (k,v) slices might be overwritten if the batch is reset/reused,
 		// and the receiver should copy them if they are to be retained long-term.
 		if kind == pebble.InternalKeyKindSet {
-			bErr = w.Put(k, v)
+			if err = w.Put(k, v); err != nil {
+				return err
+			}
 		} else if kind == pebble.InternalKeyKindDelete {
-			bErr = w.Delete(k)
+			if err = w.Delete(k); err != nil {
+				return err
+			}
 		} else {
 			return fmt.Errorf("unhandled operation, keytype: %v", kind)
 		}
 	}
-	return
 }
 
 // pebbleIterator is a wrapper of underlying iterator in storage engine.
