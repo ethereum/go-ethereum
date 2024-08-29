@@ -65,7 +65,7 @@ func setupBeaconNetwork(addr string, bootNodes []*enode.Node) (*BeaconNetwork, e
 
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	portalProtocol, err := discover.NewPortalProtocol(conf, string(portalwire.BeaconLightClientNetwork), privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
+	portalProtocol, err := discover.NewPortalProtocol(conf, portalwire.Beacon, privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}

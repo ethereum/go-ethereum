@@ -37,28 +37,53 @@ const (
 )
 
 // Protocol IDs for the portal protocol.
+// var (
+// 	StateNetwork             = []byte{0x50, 0x0a}
+// 	HistoryNetwork           = []byte{0x50, 0x0b}
+// 	TxGossipNetwork          = []byte{0x50, 0x0c}
+// 	HeaderGossipNetwork      = []byte{0x50, 0x0d}
+// 	CanonicalIndicesNetwork  = []byte{0x50, 0x0e}
+// 	BeaconLightClientNetwork = []byte{0x50, 0x1a}
+// 	UTPNetwork               = []byte{0x75, 0x74, 0x70}
+// 	Rendezvous               = []byte{0x72, 0x65, 0x6e}
+// )
+
+type ProtocolId []byte
+
 var (
-	StateNetwork             = []byte{0x50, 0x0a}
-	HistoryNetwork           = []byte{0x50, 0x0b}
-	TxGossipNetwork          = []byte{0x50, 0x0c}
-	HeaderGossipNetwork      = []byte{0x50, 0x0d}
-	CanonicalIndicesNetwork  = []byte{0x50, 0x0e}
-	BeaconLightClientNetwork = []byte{0x50, 0x1a}
-	UTPNetwork               = []byte{0x75, 0x74, 0x70}
-	Rendezvous               = []byte{0x72, 0x65, 0x6e}
+	State             ProtocolId = []byte{0x50, 0x0A}
+	History           ProtocolId = []byte{0x50, 0x0B}
+	Beacon            ProtocolId = []byte{0x50, 0x0C}
+	CanonicalIndices  ProtocolId = []byte{0x50, 0x0D}
+	VerkleState       ProtocolId = []byte{0x50, 0x0E}
+	TransactionGossip ProtocolId = []byte{0x50, 0x0F}
+	Utp               ProtocolId = []byte{0x75, 0x74, 0x70}
 )
 
-const (
-	HistoryNetworkName = "history"
-	BeaconNetworkName  = "beacon"
-	StateNetworkName   = "state"
-)
-
-var NetworkNameMap = map[string]string{
-	string(StateNetwork):             StateNetworkName,
-	string(HistoryNetwork):           HistoryNetworkName,
-	string(BeaconLightClientNetwork): BeaconNetworkName,
+var protocalName = map[string]string{
+	string(State):             "state",
+	string(History):           "history",
+	string(Beacon):            "beacon",
+	string(CanonicalIndices):  "canonical indices",
+	string(VerkleState):       "verkle state",
+	string(TransactionGossip): "transaction gossip",
 }
+
+func (p ProtocolId) Name() string {
+	return protocalName[string(p)]
+}
+
+// const (
+// 	HistoryNetworkName = "history"
+// 	BeaconNetworkName  = "beacon"
+// 	StateNetworkName   = "state"
+// )
+
+// var NetworkNameMap = map[string]string{
+// 	string(StateNetwork):             StateNetworkName,
+// 	string(HistoryNetwork):           HistoryNetworkName,
+// 	string(BeaconLightClientNetwork): BeaconNetworkName,
+// }
 
 type ContentKV struct {
 	ContentKey []byte

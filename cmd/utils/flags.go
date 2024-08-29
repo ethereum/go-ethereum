@@ -1033,7 +1033,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Name:     "networks",
 		Usage:    "Portal sub networks: history, beacon, state",
 		Category: flags.PortalNetworkCategory,
-		Value:    cli.NewStringSlice(portalwire.HistoryNetworkName),
+		Value:    cli.NewStringSlice(portalwire.History.Name()),
 	}
 )
 
