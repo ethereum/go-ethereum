@@ -56,6 +56,14 @@ func (t *BlockTest) UnmarshalJSON(in []byte) error {
 	return json.Unmarshal(in, &t.json)
 }
 
+func (t *BlockTest) FromChain(chain *core.BlockChain, start, end uint64) (BlockTest, error) {
+	bt := BlockTest{}
+	if head := chain.CurrentHeader().Number.Uint64(); head < end {
+		return bt, fmt.Errorf("Chain is shorter than requested segment: %d < %d", head, end)
+	}
+	return bt, nil
+}
+
 type btJSON struct {
 	Blocks     []btBlock             `json:"blocks"`
 	Genesis    btHeader              `json:"genesisBlockHeader"`
