@@ -36,4 +36,5 @@ Geth developers add/remove features and fix bugs in Geth. The `geth-developer` s
 - [Disclosures](/docs/developers/geth-developer/disclosures)
 - [DNS discovery setup guide](/docs/developers/geth-developer/dns-discovery-setup)
 - [Code review guidelines](/docs/developers/geth-developer/code-review-guidelines)
+- [Deploy Geth Lighthouse Ethereum Nodes via AWS Blockchain Node Runners](/docs/developers/geth-developer/aws-blockchain-node-runners)
 - [Contributing](/docs/developers/geth-developer/contributing)
