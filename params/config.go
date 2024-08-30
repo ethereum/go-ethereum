@@ -205,6 +205,7 @@ var (
 		BernoulliBlock:      big.NewInt(3747132),
 		CurieBlock:          big.NewInt(4740239),
 		DarwinTime:          newUint64(1723622400),
+		DarwinV2Time:        newUint64(1724832000),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,
@@ -245,6 +246,7 @@ var (
 		BernoulliBlock:      big.NewInt(5220340),
 		CurieBlock:          big.NewInt(7096836),
 		DarwinTime:          newUint64(1724227200),
+		DarwinV2Time:        newUint64(1725264000),
 		Clique: &CliqueConfig{
 			Period: 3,
 			Epoch:  30000,

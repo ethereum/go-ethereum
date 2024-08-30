@@ -67,6 +67,7 @@ func TestStateProcessorErrors(t *testing.T) {
 			BernoulliBlock:                big.NewInt(0),
 			CurieBlock:                    big.NewInt(0),
 			DarwinTime:                    new(uint64),
+			DarwinV2Time:                  new(uint64),
 		}
 		signer  = types.LatestSigner(config)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

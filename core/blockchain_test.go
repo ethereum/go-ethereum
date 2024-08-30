@@ -4728,6 +4728,7 @@ func TestCurieTransition(t *testing.T) {
 	json.Unmarshal(b, &config)
 	config.CurieBlock = big.NewInt(2)
 	config.DarwinTime = nil
+	config.DarwinV2Time = nil
 
 	var (
 		db      = rawdb.NewMemoryDatabase()

@@ -153,11 +153,14 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool, pendingTxC
 	config.CurieBlock = londonBlock
 	config.ShanghaiTime = nil
 	config.DarwinTime = nil
+	config.DarwinV2Time = nil
 	if londonBlock != nil {
 		shanghaiTime := londonBlock.Uint64() * 12
 		config.ShanghaiTime = &shanghaiTime
 		darwinTime := londonBlock.Uint64() * 12
 		config.DarwinTime = &darwinTime
+		darwinV2Time := londonBlock.Uint64() * 12
+		config.DarwinV2Time = &darwinV2Time
 	}
 
 	config.TerminalTotalDifficulty = common.Big0
