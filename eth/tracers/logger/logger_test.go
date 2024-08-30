@@ -80,18 +80,33 @@ func TestStoreCapture(t *testing.T) {
 // logs bloat and confusion. See https://github.com/ethereum/go-ethereum/issues/24487
 func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 	tests := []struct {
-		name string
-		log  *StructLog
-		want string
+		name       string
+		log        *StructLog
+		want       string
+		wantLegacy string
 	}{
 		{"empty err and no fields", &StructLog{},
-			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`,
+			`{"pc":0,"op":"STOP","gas":0,"gasCost":0,"depth":0}`,
+		},
 		{"with err", &StructLog{Err: errors.New("this failed")},
-			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP","error":"this failed"}`},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP","error":"this failed"}`,
+			`{"pc":0,"op":"STOP","gas":0,"gasCost":0,"depth":0,"error":"this failed"}`},
 		{"with mem", &StructLog{Memory: make([]byte, 2), MemorySize: 2},
-			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memory":"0x0000","memSize":2,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memory":"0x0000","memSize":2,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`,
+			`{"pc":0,"op":"STOP","gas":0,"gasCost":0,"depth":0,"memory":[]}`},
 		{"with 0-size mem", &StructLog{Memory: make([]byte, 0)},
-			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`,
+			`{"pc":0,"op":"STOP","gas":0,"gasCost":0,"depth":0,"memory":[]}`},
+		{"with stack mem", &StructLog{Memory: make([]byte, 0), Stack: make([]uint256.Int, 0)},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":[],"depth":0,"refund":0,"opName":"STOP"}`,
+			`{"pc":0,"op":"STOP","gas":0,"gasCost":0,"depth":0,"stack":[],"memory":[]}`},
+		{"with empty storage", &StructLog{Memory: make([]byte, 32), Storage: make(map[common.Hash]common.Hash)},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memory":"0x0000000000000000000000000000000000000000000000000000000000000000","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`,
+			`{"pc":0,"op":"STOP","gas":0,"gasCost":0,"depth":0,"memory":["0000000000000000000000000000000000000000000000000000000000000000"],"storage":{}}`},
+		{"with storage", &StructLog{Storage: map[common.Hash]common.Hash{common.HexToHash("0x1234"): common.HexToHash("0xaabb")}},
+			`{"pc":0,"op":0,"gas":"0x0","gasCost":"0x0","memSize":0,"stack":null,"depth":0,"refund":0,"opName":"STOP"}`,
+			`{"pc":0,"op":"STOP","gas":0,"gasCost":0,"depth":0,"storage":{"0000000000000000000000000000000000000000000000000000000000001234":"000000000000000000000000000000000000000000000000000000000000aabb"}}`},
 	}
 
 	for _, tt := range tests {
@@ -101,6 +116,14 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 				t.Fatal(err)
 			}
 			if have, want := string(blob), tt.want; have != want {
+				t.Fatalf("mismatched results\n\thave: %v\n\twant: %v", have, want)
+			}
+			// now check the legacy rpc output too
+			blob, err = json.Marshal((formatLogs([]StructLog{*tt.log}))[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if have, want := string(blob), tt.wantLegacy; have != want {
 				t.Fatalf("mismatched results\n\thave: %v\n\twant: %v", have, want)
 			}
 		})
