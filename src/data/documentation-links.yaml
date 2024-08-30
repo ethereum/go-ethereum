@@ -118,6 +118,8 @@
           to: /docs/developers/geth-developer/dns-discovery-setup
         - id: Code review guidelines
           to: /docs/developers/geth-developer/code-review-guidelines
+        - id: Deploy Geth Lighthouse Ethereum Nodes via AWS Blockchain Node Runners
+          to: /docs/developers/geth-developer/aws-blockchain-node-runners
     - id: Contributing
       to: /docs/developers/geth-developer/contributing
 - id: Monitoring
