@@ -231,3 +231,123 @@ func (c *ContractBytecodeKey) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) c
 		&c.NodeHash,
 	)
 }
+
+const MaxTrieNodeLength = 1026
+// A content value type, used when retrieving a trie node.
+type TrieNode struct {
+	Node []byte
+} 
+
+func (t *TrieNode) Deserialize(dr *codec.DecodingReader) error {
+	return dr.ByteList((*[]byte)(&t.Node), uint64(MaxTrieNodeLength))
+}
+
+func (t TrieNode) Serialize(w *codec.EncodingWriter) error {
+	return w.Write(t.Node)
+}
+
+func (t TrieNode) ByteLength() (out uint64) {
+	return uint64(len(t.Node))
+}
+
+func (t *TrieNode) FixedLength() uint64 {
+	return 0
+}
+
+func (t TrieNode) HashTreeRoot(hFn tree.HashFn) tree.Root {
+	return hFn.ByteListHTR(t.Node, MaxTrieNodeLength)
+}
+
+const MaxTrieProofLength = 65
+
+type TrieProof []TrieNode
+
+func (r *TrieProof) Deserialize(dr *codec.DecodingReader) error {
+	return dr.List(func() codec.Deserializable {
+		i := len(*r)
+		*r = append(*r, TrieNode{})
+		return &((*r)[i])
+	}, 0, MaxTrieProofLength)
+}
+
+func (r TrieProof) Serialize(w *codec.EncodingWriter) error {
+	return w.List(func(i uint64) codec.Serializable {
+		return &r[i]
+	}, 0, uint64(len(r)))
+}
+
+func (r TrieProof) ByteLength() (out uint64) {
+	for _, v := range r {
+		out += v.ByteLength() + codec.OFFSET_SIZE
+	}
+	return
+}
+
+func (r *TrieProof) FixedLength(_ *common.Spec) uint64 {
+	return 0
+}
+
+func (r TrieProof) HashTreeRoot(hFn tree.HashFn) common.Root {
+	length := uint64(len(r))
+	return hFn.ComplexListHTR(func(i uint64) tree.HTR {
+		if i < length {
+			return &r[i]
+		}
+		return nil
+	}, length, MaxTrieProofLength)
+}
+
+const MaxContractBytecodeLength = 32768
+// A content value type, used when retrieving contract's bytecode.
+type ContractBytecode struct {
+	Code []byte
+} 
+
+func (t *ContractBytecode) Deserialize(dr *codec.DecodingReader) error {
+	return dr.ByteList((*[]byte)(&t.Code), uint64(MaxContractBytecodeLength))
+}
+
+func (t ContractBytecode) Serialize(w *codec.EncodingWriter) error {
+	return w.Write(t.Code)
+}
+
+func (t ContractBytecode) ByteLength() (out uint64) {
+	return uint64(len(t.Code))
+}
+
+func (t *ContractBytecode) FixedLength() uint64 {
+	return 0
+}
+
+func (t ContractBytecode) HashTreeRoot(hFn tree.HashFn) tree.Root {
+	return hFn.ByteListHTR(t.Code, MaxContractBytecodeLength)
+}
+
+
+// A content value type, used when offering a trie node from the account trie.
+type AccountTrieNodeWithProof struct{
+    /// An proof for the account trie node.
+    Proof TrieProof
+    /// A block at which the proof is anchored.
+    BlockHash common.Bytes32
+}
+
+// A content value type, used when offering a trie node from the contract storage trie.
+type ContractStorageTrieNodeWithProof struct {
+	// A proof for the contract storage trie node.
+	StoregeProof TrieProof
+	// A proof for the account state.
+	AccountProof TrieProof
+	// A block at which the proof is anchored.
+	BlockHash common.Bytes32
+}
+
+// A content value type, used when offering contract's bytecode.
+type ContractBytecodeWithProof struct {
+	// A contract's bytecode.
+	Code ContractBytecode
+	// A proof for the account state of the corresponding contract.
+	AccountProof TrieProof
+	// A block at which the proof is anchored.
+	BlockHash common.Bytes32
+}
