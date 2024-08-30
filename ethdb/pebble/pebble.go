@@ -523,16 +523,20 @@ type batch struct {
 
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
-	err := b.b.Set(key, value, nil)
+	if err := b.b.Set(key, value, nil); err != nil {
+		return err
+	}
 	b.size += len(key) + len(value)
-	return err
+	return nil
 }
 
 // Delete inserts the key removal into the batch for later committing.
 func (b *batch) Delete(key []byte) error {
-	err := b.b.Delete(key, nil)
+	if err := b.b.Delete(key, nil); err != nil {
+		return err
+	}
 	b.size += len(key)
-	return err
+	return nil
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
