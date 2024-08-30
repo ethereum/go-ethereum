@@ -24,26 +24,24 @@ import (
 	"github.com/holiman/uint256"
 )
 
+var activators = map[int]func(*JumpTable){
+	3855: enable3855,
+	3198: enable3198,
+	2929: enable2929,
+	2200: enable2200,
+	1884: enable1884,
+	1344: enable1344,
+}
+
 // EnableEIP enables the given EIP on the config.
 // This operation writes in-place, and callers need to ensure that the globally
 // defined jump tables are not polluted.
 func EnableEIP(eipNum int, jt *JumpTable) error {
-	switch eipNum {
-	case 3855:
-		enable3855(jt)
-	case 3198:
-		enable3198(jt)
-	case 2929:
-		enable2929(jt)
-	case 2200:
-		enable2200(jt)
-	case 1884:
-		enable1884(jt)
-	case 1344:
-		enable1344(jt)
-	default:
+	enablerFn, ok := activators[eipNum]
+	if !ok {
 		return fmt.Errorf("undefined eip %d", eipNum)
 	}
+	enablerFn(jt)
 	return nil
 }
 
