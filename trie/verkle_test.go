@@ -61,7 +61,7 @@ func TestVerkleTreeReadWrite(t *testing.T) {
 	tr, _ := NewVerkleTrie(types.EmptyVerkleHash, db, utils.NewPointCache(100))
 
 	for addr, acct := range accounts {
-		if err := tr.UpdateAccount(addr, acct); err != nil {
+		if err := tr.UpdateAccount(addr, acct, 0); err != nil {
 			t.Fatalf("Failed to update account, %v", err)
 		}
 		for key, val := range storages[addr] {
@@ -96,19 +96,19 @@ func TestVerkleRollBack(t *testing.T) {
 	tr, _ := NewVerkleTrie(types.EmptyVerkleHash, db, utils.NewPointCache(100))
 
 	for addr, acct := range accounts {
-		if err := tr.UpdateAccount(addr, acct); err != nil {
+		// create more than 128 chunks of code
+		code := make([]byte, 129*32)
+		for i := 0; i < len(code); i += 2 {
+			code[i] = 0x60
+			code[i+1] = byte(i % 256)
+		}
+		if err := tr.UpdateAccount(addr, acct, len(code)); err != nil {
 			t.Fatalf("Failed to update account, %v", err)
 		}
 		for key, val := range storages[addr] {
 			if err := tr.UpdateStorage(addr, key.Bytes(), val); err != nil {
 				t.Fatalf("Failed to update account, %v", err)
 			}
-		}
-		// create more than 128 chunks of code
-		code := make([]byte, 129*32)
-		for i := 0; i < len(code); i += 2 {
-			code[i] = 0x60
-			code[i+1] = byte(i % 256)
 		}
 		hash := crypto.Keccak256Hash(code)
 		if err := tr.UpdateContractCode(addr, hash, code); err != nil {
