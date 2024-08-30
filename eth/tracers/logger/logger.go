@@ -425,17 +425,17 @@ type ExecutionResult struct {
 // StructLogRes stores a structured log emitted by the EVM while replaying a
 // transaction in debug mode
 type StructLogRes struct {
-	Pc            uint64             `json:"pc"`
-	Op            string             `json:"op"`
-	Gas           uint64             `json:"gas"`
-	GasCost       uint64             `json:"gasCost"`
-	Depth         int                `json:"depth"`
-	Error         string             `json:"error,omitempty"`
-	Stack         *[]string          `json:"stack,omitempty"`
-	ReturnData    string             `json:"returnData,omitempty"`
-	Memory        *[]string          `json:"memory,omitempty"`
-	Storage       *map[string]string `json:"storage,omitempty"`
-	RefundCounter uint64             `json:"refund,omitempty"`
+	Pc            uint64            `json:"pc"`
+	Op            string            `json:"op"`
+	Gas           uint64            `json:"gas"`
+	GasCost       uint64            `json:"gasCost"`
+	Depth         int               `json:"depth"`
+	Error         string            `json:"error,omitempty"`
+	Stack         []string          `json:"stack,omitempty"`
+	ReturnData    string            `json:"returnData,omitempty"`
+	Memory        []string          `json:"memory,omitempty"`
+	Storage       map[string]string `json:"storage,omitempty"`
+	RefundCounter uint64            `json:"refund,omitempty"`
 }
 
 // formatLogs formats EVM returned structured logs for json output
@@ -456,7 +456,7 @@ func formatLogs(logs []StructLog) []StructLogRes {
 			for i, stackValue := range trace.Stack {
 				stack[i] = stackValue.Hex()
 			}
-			formatted[index].Stack = &stack
+			formatted[index].Stack = stack
 		}
 		if trace.ReturnData != nil && len(trace.ReturnData) > 0 {
 			formatted[index].ReturnData = hexutil.Bytes(trace.ReturnData).String()
@@ -464,16 +464,16 @@ func formatLogs(logs []StructLog) []StructLogRes {
 		if trace.Memory != nil {
 			memory := make([]string, 0, (len(trace.Memory)+31)/32)
 			for i := 0; i+32 <= len(trace.Memory); i += 32 {
-				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
+				memory = append(memory, hexutil.Encode(trace.Memory[i:i+32]))
 			}
-			formatted[index].Memory = &memory
+			formatted[index].Memory = memory
 		}
 		if trace.Storage != nil {
-			storage := make(map[string]string)
+			storage := make(map[string]string, len(trace.Storage))
 			for i, storageValue := range trace.Storage {
-				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+				storage[fmt.Sprintf("%x", i)] = storageValue.Hex()
 			}
-			formatted[index].Storage = &storage
+			formatted[index].Storage = storage
 		}
 	}
 	return formatted
