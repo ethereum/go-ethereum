@@ -82,7 +82,6 @@ type Ethereum struct {
 	handler            *handler
 	ethDialCandidates  enode.Iterator
 	snapDialCandidates enode.Iterator
-	merger             *consensus.Merger
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -583,7 +582,6 @@ func (s *Ethereum) Synced() bool                       { return s.handler.synced
 func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedFeatures() }
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
-func (s *Ethereum) Merger() *consensus.Merger          { return s.merger }
 
 // SetAuthorized sets the authorized bool variable
 // denoting that consensus has been authorized while creation
@@ -842,6 +840,7 @@ func (s *Ethereum) Stop() error {
 	close(s.closeCh)
 
 	s.txPool.Close()
+	s.miner.Close()
 	s.blockchain.Stop()
 
 	// Clean shutdown marker as the last thing before closing db

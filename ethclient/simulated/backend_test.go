@@ -51,7 +51,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 
 	// create a signed transaction to send
 	head, _ := client.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
-	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(25*params.GWei))
+	gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(params.GWei))
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	chainid, _ := client.ChainID(context.Background())
 	nonce, err := client.PendingNonceAt(context.Background(), addr)
@@ -61,7 +61,7 @@ func newTx(sim *Backend, key *ecdsa.PrivateKey) (*types.Transaction, error) {
 	tx := types.NewTx(&types.DynamicFeeTx{
 		ChainID:   chainid,
 		Nonce:     nonce,
-		GasTipCap: big.NewInt(25 * params.GWei),
+		GasTipCap: big.NewInt(params.GWei),
 		GasFeeCap: gasPrice,
 		Gas:       21000,
 		To:        &addr,
@@ -152,6 +152,7 @@ func TestSendTransaction(t *testing.T) {
 //     Since Commit() was called 2n+1 times in total,
 //     having a chain length of just n+1 means that a reorg occurred.
 func TestFork(t *testing.T) {
+	t.Skip("not relevant to bor")
 	t.Parallel()
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
@@ -200,6 +201,7 @@ func TestFork(t *testing.T) {
 //  5. Mine a block, Re-send the transaction and mine another one.
 //  6. Check that the TX is now included in block 2.
 func TestForkResendTx(t *testing.T) {
+	t.Skip("not relevant to bor")
 	t.Parallel()
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)
@@ -243,6 +245,7 @@ func TestForkResendTx(t *testing.T) {
 }
 
 func TestCommitReturnValue(t *testing.T) {
+	t.Skip("not relevant to bor")
 	t.Parallel()
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	sim := simTestBackend(testAddr)

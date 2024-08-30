@@ -50,13 +50,13 @@ func ExecuteStateless(config *params.ChainConfig, witness *stateless.Witness) (c
 		return common.Hash{}, common.Hash{}, err
 	}
 	// Create a blockchain that is idle, but can be used to access headers through
-	chain := &HeaderChain{
+	headerChain := &HeaderChain{
 		config:      config,
 		chainDb:     memdb,
 		headerCache: lru.NewCache[common.Hash, *types.Header](256),
 		engine:      beacon.New(ethash.NewFaker()),
 	}
-	processor := NewStateProcessor(config, chain)
+	processor := NewStateProcessor(config, nil, headerChain)
 	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
 
 	// Run the stateless blocks processing and self-validate certain fields
