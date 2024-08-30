@@ -15,7 +15,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 	var (
 		stackBounds    = make(map[int]*bounds)
 		maxStackHeight = int(metadata[section].Input)
-		debugging      = true
+		debugging      = !true
 	)
 
 	setBounds := func(pos, min, maxi int) *bounds {
@@ -179,10 +179,10 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 						return 0, ErrInvalidBackwardJump
 					}
 					change := int(params.StackLimit) - jt[nextOP].maxStack + jt[nextOP].minStack
-					if have, want := nextBounds.max+change, currentBounds.max; have != want {
+					if have, want := nextBounds.max+change, currentBounds.max; have < want {
 						return 0, fmt.Errorf("%w want %d as max got %d at pos %d,", ErrInvalidBackwardJump, want, have, pos)
 					}
-					if have, want := nextBounds.min+change, currentBounds.min; have != want {
+					if have, want := nextBounds.min+change, currentBounds.min; have < want {
 						return 0, fmt.Errorf("%w want %d as min got %d at pos %d,", ErrInvalidBackwardJump, want, have, pos)
 					}
 					if currentStackMax != nextBounds.max {

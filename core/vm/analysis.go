@@ -132,13 +132,13 @@ func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 	for pc := uint64(0); pc < uint64(len(code)); {
 		var (
 			op      = OpCode(code[pc])
-			numbits uint8
+			numbits uint16
 		)
 		pc++
 
 		switch {
 		case op >= PUSH1 && op <= PUSH32:
-			numbits = uint8(op - PUSH1 + 1)
+			numbits = uint16(op - PUSH1 + 1)
 		case op == RJUMP || op == RJUMPI || op == CALLF || op == JUMPF || op == DATALOADN:
 			numbits = 2
 		case op == RJUMPV:
@@ -153,11 +153,11 @@ func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 				// Count missing, no more bits to mark.
 				return bits
 			}
-			numbits = code[pc]*2 + 1
+			numbits = uint16(code[pc])*2 + 3
 			if pc+uint64(numbits) > end {
 				// Jump table is truncated, mark as many bits
 				// as possible.
-				numbits = uint8(end - pc)
+				numbits = uint16(end - pc)
 			}
 		case op == DUPN || op == SWAPN || op == EXCHANGE || op == EOFCREATE || op == RETURNCONTRACT:
 			numbits = 1
