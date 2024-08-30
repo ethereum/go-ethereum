@@ -55,6 +55,7 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
@@ -728,6 +729,7 @@ func doDocker(cmdline []string) {
 		image    = flag.Bool("image", false, `Whether to build and push an arch specific docker image`)
 		manifest = flag.String("manifest", "", `Push a multi-arch docker image for the specified architectures (usually "amd64,arm64")`)
 		upload   = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
+		debug    = flag.Bool("debug", false, `Build a complementary image with Delve debugger support`)
 	)
 	flag.CommandLine.Parse(cmdline)
 
@@ -763,8 +765,16 @@ func doDocker(cmdline []string) {
 	}
 	// If architecture specific image builds are requested, build and push them
 	if *image {
-		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
-		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
+		buildArgsSet := [][]string{
+			{"build", "--build-arg", "COMMIT=" + env.Commit, "--build-arg", "VERSION=" + params.VersionWithMeta, "--build-arg", "BUILDNUM=" + env.Buildnum, "--tag", fmt.Sprintf("%s:TAG", *upload), "."},
+			{"build", "--build-arg", "COMMIT=" + env.Commit, "--build-arg", "VERSION=" + params.VersionWithMeta, "--build-arg", "BUILDNUM=" + env.Buildnum, "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", "."},
+		}
+		if *debug {
+			buildArgsSet = append(buildArgsSet, []string{"buildx", "build", "--build-arg", "COMMIT=" + env.Commit, "--build-arg", "VERSION=" + params.VersionWithMeta, "--build-arg", "BUILDNUM=" + env.Buildnum, "--build-arg", "GOFLAGS=-gcflags=all=-N -gcflags=all=-l", "--tag", fmt.Sprintf("%s:debug-TAG", *upload), "-f", "Dockerfile.alltools", "."})
+		}
+		for _, buildArgs := range buildArgsSet {
+			build.MustRunCommand("docker", buildArgs...)
+		}
 
 		// Tag and upload the images to Docker Hub
 		for _, tag := range tags {
