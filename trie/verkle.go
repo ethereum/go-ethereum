@@ -96,10 +96,9 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	if values == nil {
 		return nil, nil
 	}
-	acc.Nonce = binary.BigEndian.Uint64(values[utils.BasicDataLeafKey][utils.BasicDataNonceOffset:])
-	var balance [16]byte
-	copy(balance[:], values[utils.BasicDataLeafKey][utils.BasicDataBalanceOffset:])
-	acc.Balance = new(uint256.Int).SetBytes(balance[:])
+	basicData := values[utils.BasicDataLeafKey]
+	acc.Nonce = binary.BigEndian.Uint64(basicData[utils.BasicDataNonceOffset:])
+	acc.Balance = new(uint256.Int).SetBytes(basicData[utils.BasicDataBalanceOffset : utils.BasicDataBalanceOffset+16])
 	acc.CodeHash = values[utils.CodeHashLeafKey]
 
 	// TODO account.Root is leave as empty. How should we handle the legacy account?
@@ -133,8 +132,10 @@ func (t *VerkleTrie) UpdateAccount(addr common.Address, acc *types.StateAccount,
 	// 4 bytes, so we need to shift the offset 1 byte to the left.
 	binary.BigEndian.PutUint32(basicData[utils.BasicDataCodeSizeOffset-1:], uint32(codeLen))
 	binary.BigEndian.PutUint64(basicData[utils.BasicDataNonceOffset:], acc.Nonce)
-	balanceBytes := acc.Balance.Bytes()
-	copy(basicData[32-len(balanceBytes):], balanceBytes[:])
+	if acc.Balance.ByteLen() > 16 {
+		panic("balance too large")
+	}
+	acc.Balance.WriteToSlice(basicData[utils.BasicDataBalanceOffset : utils.BasicDataBalanceOffset+16])
 	values[utils.BasicDataLeafKey] = basicData[:]
 	values[utils.CodeHashLeafKey] = acc.CodeHash[:]
 
