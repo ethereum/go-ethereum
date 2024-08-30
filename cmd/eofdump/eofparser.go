@@ -148,8 +148,7 @@ func eofParser(ctx *cli.Context) error {
 		if t[l-1] == '\n' {
 			t = t[:l-1] // remove newline
 		}
-		_, err := parseAndValidate(t, false)
-		if err != nil {
+		if _, err := parseAndValidate(t, false); err != nil {
 			if err2 := errors.Unwrap(err); err2 != nil {
 				err = err2
 			}
