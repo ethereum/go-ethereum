@@ -505,6 +505,13 @@ func (c *ChainConfig) IsTerminalPoWBlock(parentTotalDiff *big.Int, totalDiff *bi
 	return parentTotalDiff.Cmp(c.TerminalTotalDifficulty) < 0 && totalDiff.Cmp(c.TerminalTotalDifficulty) >= 0
 }
 
+// IsParis returns whether the given block is either equal to the Paris (merge)
+// fork or greater.
+// Note: Only usable for post-merge networks where MergeNetsplitBlock has been configured.
+func (c *ChainConfig) IsParis(num *big.Int) bool {
+	return c.IsLondon(num) && isBlockForked(c.MergeNetsplitBlock, num)
+}
+
 // IsShanghai returns whether time is either equal to the Shanghai fork time or greater.
 func (c *ChainConfig) IsShanghai(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.ShanghaiTime, time)
@@ -704,8 +711,8 @@ func (c *ChainConfig) ElasticityMultiplier() uint64 {
 	return DefaultElasticityMultiplier
 }
 
-// LatestFork returns the latest time-based fork that would be active for the given time.
-func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
+// LatestPostLondonFork returns the latest time-based fork that would be active for the given time.
+func (c *ChainConfig) LatestPostLondonFork(time uint64) forks.Fork {
 	// Assume last non-time-based fork has passed.
 	london := c.LondonBlock
 
@@ -718,6 +725,47 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 		return forks.Shanghai
 	default:
 		return forks.Paris
+	}
+}
+
+func (c *ChainConfig) LatestFork(num *big.Int, time uint64) forks.Fork {
+	switch {
+	case c.IsPrague(num, time):
+		return forks.Prague
+	case c.IsCancun(num, time):
+		return forks.Cancun
+	case c.IsShanghai(num, time):
+		return forks.Shanghai
+	case c.IsParis(num):
+		return forks.Paris
+	case c.IsGrayGlacier(num):
+		return forks.GrayGlacier
+	case c.IsArrowGlacier(num):
+		return forks.ArrowGlacier
+	case c.IsLondon(num):
+		return forks.London
+	case c.IsBerlin(num):
+		return forks.Berlin
+	case c.IsMuirGlacier(num):
+		return forks.MuirGlacier
+	case c.IsIstanbul(num):
+		return forks.Istanbul
+	case c.IsPetersburg(num):
+		return forks.Petersburg
+	case c.IsConstantinople(num):
+		return forks.Constantinople
+	case c.IsByzantium(num):
+		return forks.Byzantium
+	case c.IsEIP158(num):
+		return forks.SpuriousDragon
+	case c.IsEIP155(num):
+		return forks.TangerineWhistle
+	case c.IsEIP150(num):
+		return forks.DAO
+	case c.IsHomestead(num):
+		return forks.Homestead
+	default:
+		return forks.Frontier
 	}
 }
 

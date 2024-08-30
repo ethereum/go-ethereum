@@ -1958,6 +1958,25 @@ func (api *NetAPI) Version() string {
 	return fmt.Sprintf("%d", api.networkVersion)
 }
 
+// GethAPI offers geth-specific API methods.
+type GethAPI struct {
+	b Backend
+}
+
+// NewGethAPI creates a new net API instance.
+func NewGethAPI(b Backend) *GethAPI {
+	return &GethAPI{b: b}
+}
+
+// Fork returns the latest enabled fork as of the given block.
+func (api *GethAPI) Fork(ctx context.Context, num rpc.BlockNumber) (string, error) {
+	b, err := api.b.BlockByNumber(ctx, num)
+	if err != nil {
+		return "", fmt.Errorf("block #%d not found", num)
+	}
+	return api.b.ChainConfig().LatestFork(b.Number(), b.Time()).String(), nil
+}
+
 // checkTxFee is an internal function used to check whether the fee of
 // the given transaction is _reasonable_(under the cap).
 func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {

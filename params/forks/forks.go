@@ -40,3 +40,48 @@ const (
 	Cancun
 	Prague
 )
+
+func (f Fork) String() string {
+	switch f {
+	case Prague:
+		return "prague"
+	case Cancun:
+		return "cancun"
+	case Shanghai:
+		return "shanghai"
+	case Paris:
+		return "paris"
+	case GrayGlacier:
+		return "grayGlacier"
+	case ArrowGlacier:
+		return "arrowGlacier"
+	case London:
+		return "london"
+	case Berlin:
+		return "berlin"
+	case MuirGlacier:
+		return "muirGlacier"
+	case Istanbul:
+		return "istanbul"
+	case Petersburg:
+		return "petersburg"
+	case Constantinople:
+		return "constantinople"
+	case Byzantium:
+		return "byzantium"
+	case SpuriousDragon:
+		return "spuriousDragon"
+	case TangerineWhistle:
+		return "tangerineWhistle"
+	case DAO:
+		return "dao"
+	case Homestead:
+		return "homestead"
+	case FrontierThawing:
+		return "frontierThawing"
+	case Frontier:
+		return "frontier"
+	default:
+		panic("unknown fork")
+	}
+}

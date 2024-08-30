@@ -720,3 +720,17 @@ web3._extend({
 	],
 });
 `
+
+const GethJs = `
+web3._extend({
+	property: 'geth',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'fork',
+			call: 'geth_fork',
+			params: 1
+		}),
+	],
+});
+`
