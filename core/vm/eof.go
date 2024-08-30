@@ -319,10 +319,14 @@ func (c *Container) unmarshaSubContainer(b []byte, isInitcode bool, topLevel boo
 // ValidateCode validates each code section of the container against the EOF v1
 // rule set.
 func (c *Container) ValidateCode(jt *JumpTable, isInitCode bool) error {
-	return c.validateSubContainer(jt, isInitCode, NotRefByEither)
+	refBy := NotRefByEither
+	if isInitCode {
+		refBy = RefByEOFCreate
+	}
+	return c.validateSubContainer(jt, refBy)
 }
 
-func (c *Container) validateSubContainer(jt *JumpTable, isInitCode bool, refBy int) error {
+func (c *Container) validateSubContainer(jt *JumpTable, refBy int) error {
 	visited := make(map[int]struct{})
 	subContainerVisited := make(map[int]int)
 	toVisit := []int{0}
@@ -338,7 +342,7 @@ func (c *Container) validateSubContainer(jt *JumpTable, isInitCode bool, refBy i
 			code  = c.Code[index]
 		)
 		if _, ok := visited[index]; !ok {
-			res, err := validateCode(code, index, c, jt, isInitCode || refBy == RefByEOFCreate)
+			res, err := validateCode(code, index, c, jt, refBy == RefByEOFCreate)
 			if err != nil {
 				return err
 			}
@@ -375,7 +379,7 @@ func (c *Container) validateSubContainer(jt *JumpTable, isInitCode bool, refBy i
 		if !ok {
 			return ErrOrphanedSubcontainer
 		}
-		if err := container.validateSubContainer(jt, isInitCode, reference); err != nil {
+		if err := container.validateSubContainer(jt, reference); err != nil {
 			return err
 		}
 	}
