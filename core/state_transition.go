@@ -520,6 +520,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			st.gasRemaining = 0
 			st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
 		}
+		fmt.Println(vmerr)
 	} else {
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
 	}

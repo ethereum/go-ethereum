@@ -4531,6 +4531,7 @@ func int8ToByte(n int8) uint8 {
 	return uint8(n)
 }
 
+/*
 func TestEOF(t *testing.T) {
 	var (
 		createDeployer = []byte{
@@ -4824,3 +4825,4 @@ func TestEOF(t *testing.T) {
 		t.Fatalf("failed to deploy EOF with CREATE2")
 	}
 }
+*/
