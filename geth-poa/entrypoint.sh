@@ -221,6 +221,49 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--miner.gasprice=1000000000 \
 		--gpo.maxprice=500000000000 \
 		"$NAT_FLAG"
+elif [ "$GETH_NODE_TYPE" = "archive" ]; then
+	echo "Starting archive node"
+	echo "BOOTNODE_ENDPOINT is set to: $BOOTNODE_ENDPOINT"
+	GETH_PORT="${GETH_PORT:-30311}"
+
+	exec "$GETH_BIN_PATH" \
+		--verbosity="$GETH_VERBOSITY" \
+		--log.format="$GETH_LOG_FORMAT" \
+		$LOG_TAGS_OPTION \
+		--datadir="$GETH_DATA_DIR" \
+		--port="$GETH_PORT" \
+		--syncmode="${GETH_SYNC_MODE}" \
+		--gcmode=archive \
+		--state.scheme=path \
+		--db.engine=pebble \
+		--http \
+		--http.corsdomain="*" \
+		--http.vhosts="*" \
+		--http.addr="$NODE_IP" \
+		--http.port="$RPC_PORT" \
+		--http.api=web3,debug,eth,txpool,net,engine \
+		--bootnodes $BOOTNODE_ENDPOINT \
+		--networkid=$CHAIN_ID \
+		--password="$GETH_DATA_DIR"/password \
+		--metrics \
+		--metrics.addr="$NODE_IP" \
+		--metrics.port=6060 \
+		--pprof \
+		--pprof.addr="$NODE_IP" \
+		--pprof.port=60601 \
+		--ws \
+		--ws.addr="$NODE_IP" \
+		--ws.port="$WS_PORT" \
+		--ws.origins="*" \
+		--ws.api=debug,eth,txpool,net,engine \
+		--rpc.allow-unprotected-txs \
+		--authrpc.addr="$NODE_IP" \
+		--authrpc.port="8551" \
+		--authrpc.vhosts="*" \
+		--txpool.accountqueue=512 \
+		--miner.gasprice=1000000000 \
+		--gpo.maxprice=500000000000 \
+		"$NAT_FLAG"
 else
 	echo "Invalid GETH_NODE_TYPE specified"
 fi
