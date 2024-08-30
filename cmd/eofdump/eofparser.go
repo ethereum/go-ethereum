@@ -65,6 +65,7 @@ var (
 		vm.ErrInvalidCodeTermination.Error(): 23,
 		vm.ErrUnreachableCode.Error():        24,
 	}
+	initcode = "INITCODE"
 )
 
 type RefTests struct {
@@ -72,9 +73,9 @@ type RefTests struct {
 }
 
 type EOFTest struct {
-	IsInitCode bool                `json:"isInitCode"`
-	Code       string              `json:"code"`
-	Results    map[string]etResult `json:"results"`
+	Code          string              `json:"code"`
+	Results       map[string]etResult `json:"results"`
+	ContainerKind string              `json:"containerKind"`
 }
 
 type etResult struct {
@@ -175,7 +176,7 @@ func ExecuteTest(src []byte) (int, int, error) {
 				total++
 				// TODO(matt): all tests currently run against
 				// shanghai EOF, add support for custom forks.
-				_, err := parseAndValidate(tt.Code, tt.IsInitCode)
+				_, err := parseAndValidate(tt.Code, tt.ContainerKind == initcode)
 				if err2 := errors.Unwrap(err); err2 != nil {
 					err = err2
 				}
