@@ -15,7 +15,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 	var (
 		stackBounds    = make(map[int]*bounds)
 		maxStackHeight = int(metadata[section].Input)
-		debugging      = !true
+		debugging      = true
 	)
 
 	setBounds := func(pos, min, maxi int) *bounds {
@@ -118,7 +118,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 			nextPos := pos + 2 + parseInt16(code[pos+1:])
 			next = append(next, nextPos)
 			// We set the stack bounds of the destination
-			// and skip the argument
+			// and skip the argument, only for RJUMP, all other opcodes are handled later
 			if nextPos+1 < pos {
 				nextBounds, ok := stackBounds[nextPos+1]
 				if !ok {
@@ -128,7 +128,12 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 					return 0, ErrInvalidMaxStackHeight
 				}
 			}
-			setBounds(next[0]+1, currentStackMin, currentStackMax)
+			nextBounds, ok := stackBounds[nextPos+1]
+			if !ok {
+				setBounds(nextPos+1, currentStackMin, currentStackMax)
+			} else {
+				setBounds(nextPos+1, min(nextBounds.min, currentStackMin), max(nextBounds.max, currentStackMax))
+			}
 		case RJUMPI:
 			arg := parseInt16(code[pos+1:])
 			next = append(next, pos+2)
