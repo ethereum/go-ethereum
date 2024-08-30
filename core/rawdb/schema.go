@@ -153,6 +153,7 @@ var (
 	batchMetaPrefix                   = []byte("R-bm")
 	finalizedL2BlockNumberKey         = []byte("R-finalized")
 	lastFinalizedBatchIndexKey        = []byte("R-finalizedBatchIndex")
+	committedBatchMetaPrefix          = []byte("R-cbm")
 
 	// Row consumption
 	rowConsumptionPrefix = []byte("rc") // rowConsumptionPrefix + hash -> row consumption by block
@@ -414,4 +415,9 @@ func batchChunkRangesKey(batchIndex uint64) []byte {
 // batchMetaKey = batchMetaPrefix + batch index (uint64 big endian)
 func batchMetaKey(batchIndex uint64) []byte {
 	return append(batchMetaPrefix, encodeBigEndian(batchIndex)...)
+}
+
+// committedBatchMetaKey = committedBatchMetaPrefix + batch index (uint64 big endian)
+func committedBatchMetaKey(batchIndex uint64) []byte {
+	return append(committedBatchMetaPrefix, encodeBigEndian(batchIndex)...)
 }
