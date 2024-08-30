@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package tracetest
+package live
 
 import (
 	"bufio"
@@ -28,7 +28,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -37,33 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
-
-	// Force-load live packages, to trigger registration
-	_ "github.com/ethereum/go-ethereum/eth/tracers/live"
 )
-
-type supplyInfoIssuance struct {
-	GenesisAlloc *hexutil.Big `json:"genesisAlloc,omitempty"`
-	Reward       *hexutil.Big `json:"reward,omitempty"`
-	Withdrawals  *hexutil.Big `json:"withdrawals,omitempty"`
-}
-
-type supplyInfoBurn struct {
-	EIP1559 *hexutil.Big `json:"1559,omitempty"`
-	Blob    *hexutil.Big `json:"blob,omitempty"`
-	Misc    *hexutil.Big `json:"misc,omitempty"`
-}
-
-type supplyInfo struct {
-	Issuance *supplyInfoIssuance `json:"issuance,omitempty"`
-	Burn     *supplyInfoBurn     `json:"burn,omitempty"`
-
-	// Block info
-	Number     uint64      `json:"blockNumber"`
-	Hash       common.Hash `json:"hash"`
-	ParentHash common.Hash `json:"parentHash"`
-}
 
 func emptyBlockGenerationFunc(b *core.BlockGen) {}
 
@@ -73,25 +48,27 @@ func TestSupplyOmittedFields(t *testing.T) {
 		gspec  = &core.Genesis{
 			Config: &config,
 		}
+		expected = []supplyInfo{{
+			Number:     0,
+			Hash:       common.HexToHash("0x52f276d96f0afaaf2c3cb358868bdc2779c4b0cb8de3e7e5302e247c0b66a703"),
+			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		}, {
+			Number:     1,
+			Hash:       common.HexToHash("0xe430cdf604a88b9d713d4f89fd100ddddf38c1cc6b049e3d5df563c7bfd320fc"),
+			ParentHash: common.HexToHash("0x52f276d96f0afaaf2c3cb358868bdc2779c4b0cb8de3e7e5302e247c0b66a703"),
+		}}
 	)
-
 	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
-
-	out, _, err := testSupplyTracer(t, gspec, func(b *core.BlockGen) {
+	out, db, chain, err := testSupplyTracer(t, gspec, func(b *core.BlockGen) {
 		b.SetPoS()
 	})
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
 
-	expected := supplyInfo{
-		Number:     0,
-		Hash:       common.HexToHash("0xc02ee8ee5b54a40e43f0fa827d431e1bd4f217e941790dda10b2521d1925a20b"),
-		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-	}
-	actual := out[expected.Number]
+	compareAsJSON(t, expected, out)
+	writeArtifact(t, "omitted_fields_cancun", db, chain, expected)
 
-	compareAsJSON(t, expected, actual)
 }
 
 func TestSupplyGenesisAlloc(t *testing.T) {
@@ -103,61 +80,36 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 		eth1    = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 
 		config = *params.AllEthashProtocolChanges
-
-		gspec = &core.Genesis{
+		gspec  = &core.Genesis{
 			Config: &config,
 			Alloc: types.GenesisAlloc{
 				addr1: {Balance: eth1},
 				addr2: {Balance: eth1},
 			},
 		}
+		expected = []supplyInfo{{
+			Issuance: &supplyInfoIssuance{
+				GenesisAlloc: new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
+			},
+			Number:     0,
+			Hash:       common.HexToHash("0xbcc9466e9fc6a8b56f4b29ca353a421ff8b51a0c1a58ca4743b427605b08f2ca"),
+			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		}, {
+			Issuance: &supplyInfoIssuance{
+				Reward: new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
+			},
+			Number:     1,
+			Hash:       common.HexToHash("0x37bb7e9b45f4fb7b311abb5f815e3e00d3382d83a2c39b9b0bd22b717566cd04"),
+			ParentHash: common.HexToHash("0xbcc9466e9fc6a8b56f4b29ca353a421ff8b51a0c1a58ca4743b427605b08f2ca"),
+		}}
 	)
 
-	expected := supplyInfo{
-		Issuance: &supplyInfoIssuance{
-			GenesisAlloc: (*hexutil.Big)(new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))),
-		},
-		Number:     0,
-		Hash:       common.HexToHash("0xbcc9466e9fc6a8b56f4b29ca353a421ff8b51a0c1a58ca4743b427605b08f2ca"),
-		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-	}
-
-	out, _, err := testSupplyTracer(t, gspec, emptyBlockGenerationFunc)
+	out, db, chain, err := testSupplyTracer(t, gspec, emptyBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
-
-	actual := out[expected.Number]
-
-	compareAsJSON(t, expected, actual)
-}
-
-func TestSupplyRewards(t *testing.T) {
-	var (
-		config = *params.AllEthashProtocolChanges
-
-		gspec = &core.Genesis{
-			Config: &config,
-		}
-	)
-
-	expected := supplyInfo{
-		Issuance: &supplyInfoIssuance{
-			Reward: (*hexutil.Big)(new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))),
-		},
-		Number:     1,
-		Hash:       common.HexToHash("0xcbb08370505be503dafedc4e96d139ea27aba3cbc580148568b8a307b3f51052"),
-		ParentHash: common.HexToHash("0xadeda0a83e337b6c073e3f0e9a17531a04009b397a9588c093b628f21b8bc5a3"),
-	}
-
-	out, _, err := testSupplyTracer(t, gspec, emptyBlockGenerationFunc)
-	if err != nil {
-		t.Fatalf("failed to test supply tracer: %v", err)
-	}
-
-	actual := out[expected.Number]
-
-	compareAsJSON(t, expected, actual)
+	compareAsJSON(t, expected, out)
+	writeArtifact(t, "genesis_alloc_grayGlacier", db, chain, expected)
 }
 
 func TestSupplyEip1559Burn(t *testing.T) {
@@ -179,9 +131,8 @@ func TestSupplyEip1559Burn(t *testing.T) {
 			},
 		}
 	)
-
-	signer := types.LatestSigner(gspec.Config)
-
+	config.ChainID = big.NewInt(1)
+	signer := types.LatestSigner(&config)
 	eip1559BlockGenerationFunc := func(b *core.BlockGen) {
 		txdata := &types.DynamicFeeTx{
 			ChainID:   gspec.Config.ChainID,
@@ -197,7 +148,7 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		b.AddTx(tx)
 	}
 
-	out, chain, err := testSupplyTracer(t, gspec, eip1559BlockGenerationFunc)
+	out, db, chain, err := testSupplyTracer(t, gspec, eip1559BlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
@@ -205,21 +156,27 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		head     = chain.CurrentBlock()
 		reward   = new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))
 		burn     = new(big.Int).Mul(big.NewInt(21000), head.BaseFee)
-		expected = supplyInfo{
+		expected = []supplyInfo{{
 			Issuance: &supplyInfoIssuance{
-				Reward: (*hexutil.Big)(reward),
+				GenesisAlloc: eth1,
+			},
+			Number:     0,
+			Hash:       common.HexToHash("0xc4265421181cafc43e4b97ae4f21530e37e00320f219a13311482c9c552bcdc7"),
+			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		}, {
+			Issuance: &supplyInfoIssuance{
+				Reward: reward,
 			},
 			Burn: &supplyInfoBurn{
-				EIP1559: (*hexutil.Big)(burn),
+				EIP1559: burn,
 			},
 			Number:     1,
 			Hash:       head.Hash(),
 			ParentHash: head.ParentHash,
-		}
+		}}
 	)
-
-	actual := out[expected.Number]
-	compareAsJSON(t, expected, actual)
+	compareAsJSON(t, expected, out)
+	writeArtifact(t, "eip1559_burn_grayGlacier", db, chain, expected)
 }
 
 func TestSupplyWithdrawals(t *testing.T) {
@@ -240,7 +197,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 		})
 	}
 
-	out, chain, err := testSupplyTracer(t, gspec, withdrawalsBlockGenerationFunc)
+	out, _, chain, err := testSupplyTracer(t, gspec, withdrawalsBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
@@ -249,7 +206,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 		head     = chain.CurrentBlock()
 		expected = supplyInfo{
 			Issuance: &supplyInfoIssuance{
-				Withdrawals: (*hexutil.Big)(big.NewInt(1337000000000)),
+				Withdrawals: big.NewInt(1337000000000),
 			},
 			Number:     1,
 			Hash:       head.Hash(),
@@ -320,7 +277,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	}
 
 	// 1. Test pre Cancun
-	preCancunOutput, preCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
+	preCancunOutput, _, preCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("Pre-cancun failed to test supply tracer: %v", err)
 	}
@@ -344,8 +301,8 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// Check live trace output
 	expected := supplyInfo{
 		Burn: &supplyInfoBurn{
-			EIP1559: (*hexutil.Big)(big.NewInt(55289500000000)),
-			Misc:    (*hexutil.Big)(big.NewInt(5000000000)),
+			EIP1559: big.NewInt(55289500000000),
+			Misc:    big.NewInt(5000000000),
 		},
 		Number:     1,
 		Hash:       head.Hash(),
@@ -361,7 +318,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	gspec.Config.ShanghaiTime = &cancunTime
 	gspec.Config.CancunTime = &cancunTime
 
-	postCancunOutput, postCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
+	postCancunOutput, _, postCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("Post-cancun failed to test supply tracer: %v", err)
 	}
@@ -385,7 +342,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 	head = postCancunChain.CurrentBlock()
 	expected = supplyInfo{
 		Burn: &supplyInfoBurn{
-			EIP1559: (*hexutil.Big)(big.NewInt(55289500000000)),
+			EIP1559: big.NewInt(55289500000000),
 		},
 		Number:     1,
 		Hash:       head.Hash(),
@@ -501,7 +458,7 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 		b.AddTx(tx)
 	}
 
-	output, chain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
+	output, _, chain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
@@ -530,8 +487,8 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 
 	expected := supplyInfo{
 		Burn: &supplyInfoBurn{
-			EIP1559: (*hexutil.Big)(new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed())))),
-			Misc:    (*hexutil.Big)(eth5), // 5ETH burned from contract B
+			EIP1559: new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed()))),
+			Misc:    eth5, // 5ETH burned from contract B
 		},
 		Number:     1,
 		Hash:       block.Hash(),
@@ -543,7 +500,7 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 	compareAsJSON(t, expected, actual)
 }
 
-func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, *core.BlockChain, error) {
+func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, ethdb.Database, *core.BlockChain, error) {
 	var (
 		engine = beacon.New(ethash.NewFaker())
 	)
@@ -554,12 +511,13 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 	// Load supply tracer
 	tracer, err := tracers.LiveDirectory.New("supply", json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
 	}
 
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), core.DefaultCacheConfigWithScheme(rawdb.PathScheme), genesis, nil, engine, vm.Config{Tracer: tracer}, nil)
+	db := rawdb.NewMemoryDatabase()
+	chain, err := core.NewBlockChain(db, core.DefaultCacheConfigWithScheme(rawdb.PathScheme), genesis, nil, engine, vm.Config{Tracer: tracer}, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create tester chain: %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to create tester chain: %v", err)
 	}
 	defer chain.Stop()
 
@@ -568,14 +526,15 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 		gen(b)
 	})
 
+	fmt.Printf("blocks: %v\n", blocks)
 	if n, err := chain.InsertChain(blocks); err != nil {
-		return nil, chain, fmt.Errorf("block %d: failed to insert into chain: %v", n, err)
+		return nil, nil, chain, fmt.Errorf("block %d: failed to insert into chain: %v", n, err)
 	}
 
 	// Check and compare the results
 	file, err := os.OpenFile(traceOutputFilename, os.O_RDONLY, 0666)
 	if err != nil {
-		return nil, chain, fmt.Errorf("failed to open output file: %v", err)
+		return nil, nil, chain, fmt.Errorf("failed to open output file: %v", err)
 	}
 	defer file.Close()
 
@@ -587,13 +546,13 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 
 		var info supplyInfo
 		if err := json.Unmarshal(blockBytes, &info); err != nil {
-			return nil, chain, fmt.Errorf("failed to unmarshal result: %v", err)
+			return nil, nil, chain, fmt.Errorf("failed to unmarshal result: %v", err)
 		}
 
 		output = append(output, info)
 	}
 
-	return output, chain, nil
+	return output, db, chain, nil
 }
 
 func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
@@ -602,13 +561,26 @@ func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
 	if err != nil {
 		t.Fatalf("failed to marshal expected value to JSON: %v", err)
 	}
-
 	have, err := json.Marshal(actual)
 	if err != nil {
 		t.Fatalf("failed to marshal actual value to JSON: %v", err)
 	}
-
 	if !bytes.Equal(want, have) {
 		t.Fatalf("incorrect supply info:\nwant %s\nhave %s", string(want), string(have))
 	}
+}
+
+func writeArtifact(t *testing.T, name string, db ethdb.Database, chain *core.BlockChain, expected []supplyInfo) {
+	bt, err := btFromChain(db, chain)
+	if err != nil {
+		t.Fatalf("failed to fill tests from chain: %v", err)
+	}
+	bt.Expected = expected
+	result := make(map[string]any)
+	result[name] = bt
+	enc, err := json.MarshalIndent(&result, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal tests: %v", err)
+	}
+	t.Logf("Tests: %s", enc)
 }

@@ -416,7 +416,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 	if bc.logger != nil && bc.logger.OnGenesisBlock != nil {
 		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
-			alloc, err := getGenesisState(bc.db, block.Hash())
+			alloc, err := GetGenesisState(bc.db, block.Hash())
 			if err != nil {
 				return nil, fmt.Errorf("failed to get genesis state: %w", err)
 			}

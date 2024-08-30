@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 	"unicode"
-
-	"github.com/ethereum/go-ethereum/tests"
 )
 
 func TestSupplyTracerBlockchain(t *testing.T) {
@@ -25,7 +23,7 @@ func TestSupplyTracerBlockchain(t *testing.T) {
 			continue
 		}
 		file := file // capture range variable
-		var testcases map[string]*tests.BlockTest
+		var testcases map[string]*BlockTest
 		var blob []byte
 		// Call tracer test found, read if from disk
 		if blob, err = os.ReadFile(filepath.Join("testdata", dirPath, file.Name())); err != nil {
@@ -45,7 +43,7 @@ func TestSupplyTracerBlockchain(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to create call tracer: %v", err)
 				}
-				if err := test.Run(false, "path", false, tracer, nil); err != nil {
+				if err := test.bt.Run(false, "path", false, tracer, nil); err != nil {
 					t.Errorf("failed to run test: %v\n", err)
 				}
 				// Check and compare the results
@@ -54,20 +52,26 @@ func TestSupplyTracerBlockchain(t *testing.T) {
 					t.Fatalf("failed to open output file: %v", err)
 				}
 				defer file.Close()
-				var output []supplyInfo
-				scanner := bufio.NewScanner(file)
 
+				var (
+					output  []supplyInfo
+					scanner = bufio.NewScanner(file)
+				)
 				for scanner.Scan() {
 					blockBytes := scanner.Bytes()
-
 					var info supplyInfo
 					if err := json.Unmarshal(blockBytes, &info); err != nil {
 						t.Fatalf("failed to unmarshal result: %v", err)
 					}
-
 					output = append(output, info)
 				}
-				fmt.Printf("output: %v\n", output)
+				if len(output) != len(test.Expected) {
+					fmt.Printf("output: %v\n", output)
+					t.Fatalf("expected %d supply infos, got %d", len(test.Expected), len(output))
+				}
+				for i, expected := range test.Expected {
+					compareAsJSON(t, expected, output[i])
+				}
 			})
 		}
 	}
