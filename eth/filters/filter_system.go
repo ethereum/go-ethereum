@@ -186,7 +186,9 @@ const (
 	// rmLogsChanSize is the size of channel listening to RemovedLogsEvent.
 	rmLogsChanSize = 10
 	// logsChanSize is the size of channel listening to LogsEvent.
-	logsChanSize = 10
+	// Updated to fix TestEth2NeBlock testcase, as the feed was unable to send
+	// logs to the channel. check - @anshalshukla
+	logsChanSize = 100
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
 	// stateEvChanSize is the size of channel listening to StateSyncEvent.

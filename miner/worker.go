@@ -653,7 +653,7 @@ func (w *worker) mainLoop(ctx context.Context) {
 
 				tcount := w.current.tcount
 
-				w.commitTransactions(w.current, plainTxs, blobTxs, nil, context.Background())
+				w.commitTransactions(w.current, plainTxs, blobTxs, nil, new(uint256.Int), context.Background())
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -915,7 +915,7 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, inte
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32, interruptCtx context.Context) error {
+func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32, minTip *uint256.Int, interruptCtx context.Context) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -1028,7 +1028,11 @@ mainloop:
 			txs.Pop()
 			continue
 		}
-
+		// If we don't receive enough tip for the next transaction, skip the account
+		if ptip.Cmp(minTip) < 0 {
+			log.Trace("Not enough tip for transaction", "hash", ltx.Hash, "tip", ptip, "needed", minTip)
+			break // If the next-best is too low, surely no better will be available
+		}
 		// Transaction seems to fit, pull it up from the pool
 		tx := ltx.Resolve()
 		if tx == nil {
@@ -1518,7 +1522,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		})
 
 		tracing.Exec(ctx, "", "worker.LocalCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactions(env, plainTxs, blobTxs, interrupt, interruptCtx)
+			err = w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int), interruptCtx)
 		})
 
 		if err != nil {
@@ -1542,7 +1546,7 @@ func (w *worker) fillTransactions(ctx context.Context, interrupt *atomic.Int32, 
 		})
 
 		tracing.Exec(ctx, "", "worker.RemoteCommitTransactions", func(ctx context.Context, span trace.Span) {
-			err = w.commitTransactions(env, plainTxs, blobTxs, interrupt, interruptCtx)
+			err = w.commitTransactions(env, plainTxs, blobTxs, interrupt, new(uint256.Int), interruptCtx)
 		})
 
 		if err != nil {
@@ -1734,7 +1738,7 @@ func getInterruptTimer(ctx context.Context, work *environment, current *types.Bl
 // the deep copy first.
 func (w *worker) commit(ctx context.Context, env *environment, interval func(), update bool, start time.Time) error {
 	if w.IsRunning() {
-		ctx, span := tracing.StartSpan(ctx, "commit")
+		_, span := tracing.StartSpan(ctx, "commit")
 		defer tracing.EndSpan(span)
 
 		if interval != nil {
@@ -1744,7 +1748,7 @@ func (w *worker) commit(ctx context.Context, env *environment, interval func(), 
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
 		// Withdrawals are set to nil here, because this is only called in PoW.
-		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, &types.Body{
+		_, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, &types.Body{
 			Transactions: env.txs,
 		}, env.receipts)
 		tracing.SetAttributes(
@@ -1760,20 +1764,6 @@ func (w *worker) commit(ctx context.Context, env *environment, interval func(), 
 			return err
 		}
 
-		// If we're post merge, just ignore
-		if !w.isTTDReached(block.Header()) {
-			select {
-			case w.taskCh <- &task{ctx: ctx, receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
-				fees := totalFees(block, env.receipts)
-				feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
-				log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
-					"txs", env.tcount, "gas", block.GasUsed(), "fees", feesInEther,
-					"elapsed", common.PrettyDuration(time.Since(start)))
-
-			case <-w.exitCh:
-				log.Info("Worker has exited")
-			}
-		}
 	}
 
 	if update {
@@ -1800,13 +1790,6 @@ func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
 	case <-w.exitCh:
 		return &newPayloadResult{err: errors.New("miner closed")}
 	}
-}
-
-// isTTDReached returns the indicator if the given block has reached the total
-// terminal difficulty for The Merge transition.
-func (w *worker) isTTDReached(header *types.Header) bool {
-	td, ttd := w.chain.GetTd(header.ParentHash, header.Number.Uint64()-1), w.chain.Config().TerminalTotalDifficulty
-	return td != nil && ttd != nil && td.Cmp(ttd) >= 0
 }
 
 // adjustResubmitInterval adjusts the resubmit interval.

@@ -175,7 +175,7 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 				}
 				txset := newTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, txset, nil, nil, context.Background())
+				w.commitTransactions(w.current, txset, nil, nil, new(uint256.Int), context.Background())
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
