@@ -1738,7 +1738,7 @@ func getInterruptTimer(ctx context.Context, work *environment, current *types.Bl
 // the deep copy first.
 func (w *worker) commit(ctx context.Context, env *environment, interval func(), update bool, start time.Time) error {
 	if w.IsRunning() {
-		_, span := tracing.StartSpan(ctx, "commit")
+		ctx, span := tracing.StartSpan(ctx, "commit")
 		defer tracing.EndSpan(span)
 
 		if interval != nil {
@@ -1748,7 +1748,7 @@ func (w *worker) commit(ctx context.Context, env *environment, interval func(), 
 		// https://github.com/ethereum/go-ethereum/issues/24299
 		env := env.copy()
 		// Withdrawals are set to nil here, because this is only called in PoW.
-		_, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, &types.Body{
+		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, &types.Body{
 			Transactions: env.txs,
 		}, env.receipts)
 		tracing.SetAttributes(
@@ -1764,6 +1764,20 @@ func (w *worker) commit(ctx context.Context, env *environment, interval func(), 
 			return err
 		}
 
+		// If we're post merge, just ignore
+		if !w.isTTDReached(block.Header()) {
+			select {
+			case w.taskCh <- &task{ctx: ctx, receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
+				fees := totalFees(block, env.receipts)
+				feesInEther := new(big.Float).Quo(new(big.Float).SetInt(fees), big.NewFloat(params.Ether))
+				log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+					"txs", env.tcount, "gas", block.GasUsed(), "fees", feesInEther,
+					"elapsed", common.PrettyDuration(time.Since(start)))
+
+			case <-w.exitCh:
+				log.Info("Worker has exited")
+			}
+		}
 	}
 
 	if update {
@@ -1790,6 +1804,13 @@ func (w *worker) getSealingBlock(params *generateParams) *newPayloadResult {
 	case <-w.exitCh:
 		return &newPayloadResult{err: errors.New("miner closed")}
 	}
+}
+
+// isTTDReached returns the indicator if the given block has reached the total
+// terminal difficulty for The Merge transition.
+func (w *worker) isTTDReached(header *types.Header) bool {
+	td, ttd := w.chain.GetTd(header.ParentHash, header.Number.Uint64()-1), w.chain.Config().TerminalTotalDifficulty
+	return td != nil && ttd != nil && td.Cmp(ttd) >= 0
 }
 
 // adjustResubmitInterval adjusts the resubmit interval.
