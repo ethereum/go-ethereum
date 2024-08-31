@@ -8,9 +8,6 @@ import (
 )
 
 func TestServer_DeveloperMode(t *testing.T) {
-	// TODO: As developer mode uses clique consensus, block production might not work
-	// directly. We need some workaround to get the dev mode work.
-	t.Skip("TODO: Skipping tests as dev mode is not working as expected")
 	t.Parallel()
 
 	// get the default config
