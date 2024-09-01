@@ -1061,6 +1061,8 @@ func TestSignTransaction(t *testing.T) {
 			Alloc:  types.GenesisAlloc{},
 		}
 	)
+	_, acc := newTestAccountManager(t)
+	genesis.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		b.SetPoS()
 	})
