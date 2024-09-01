@@ -1603,6 +1603,10 @@ func TestRPCMarshalBlock(t *testing.T) {
 }
 
 func TestRPCGetBlockOrHeader(t *testing.T) {
+	// Note: Upstream (geth) tests have a different genesis hash as it has a different
+	// state root hash due to allocating balance separately in test backend. Because
+	// that is commented out in bor, we use the old genesis hash in the test files.
+
 	t.Parallel()
 
 	// Initialize test accounts
