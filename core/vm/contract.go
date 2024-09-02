@@ -93,16 +93,25 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 	if OpCode(c.Code[udest]) != JUMPDEST {
 		return false
 	}
-	// Do we have it locally already?
+	return c.isCode(udest)
+}
+
+// isCode returns true if the provided PC location is an actual opcode, as
+// opposed to a data-segment following a PUSHN operation.
+func (c *Contract) isCode(udest uint64) bool {
+	// Do we already have an analysis laying around?
 	if c.analysis != nil {
 		return c.analysis.codeSegment(udest)
 	}
-	// If we have the code hash (but no analysis), we should look into the
-	// parent analysis map and see if the analysis has been made previously
+	// Do we have a contract hash already?
+	// If we do have a hash, that means it's a 'regular' contract. For regular
+	// contracts ( not temporary initcode), we store the analysis in a map
 	if c.CodeHash != (common.Hash{}) {
+		// Does parent context have the analysis?
 		analysis, exist := c.jumpdests[c.CodeHash]
 		if !exist {
 			// Do the analysis and save in parent context
+			// We do not need to store it in c.analysis
 			analysis = codeBitmap(c.Code)
 			c.jumpdests[c.CodeHash] = analysis
 		}
@@ -114,7 +123,9 @@ func (c *Contract) validJumpdest(dest *uint256.Int) bool {
 	// in state trie. In that case, we do an analysis, and save it locally, so
 	// we don't have to recalculate it for every JUMP instruction in the execution
 	// However, we don't save it within the parent context
-	c.analysis = codeBitmap(c.Code)
+	if c.analysis == nil {
+		c.analysis = codeBitmap(c.Code)
+	}
 	return c.analysis.codeSegment(udest)
 }
 
