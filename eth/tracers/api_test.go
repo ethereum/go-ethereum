@@ -604,7 +604,7 @@ func TestIOdump(t *testing.T) {
 
 	// Initialize test accounts
 	accounts := newAccounts(5)
-	genesis := &core.Genesis{Alloc: core.GenesisAlloc{
+	genesis := &core.Genesis{Alloc: types.GenesisAlloc{
 		accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 		accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 		accounts[2].addr: {Balance: big.NewInt(params.Ether)},

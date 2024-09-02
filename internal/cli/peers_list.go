@@ -41,21 +41,21 @@ func (p *PeersListCommand) Flags() *flagset.Flagset {
 }
 
 // Synopsis implements the cli.Command interface
-func (c *PeersListCommand) Synopsis() string {
+func (p *PeersListCommand) Synopsis() string {
 	return ""
 }
 
 // Run implements the cli.Command interface
-func (c *PeersListCommand) Run(args []string) int {
-	flags := c.Flags()
+func (p *PeersListCommand) Run(args []string) int {
+	flags := p.Flags()
 	if err := flags.Parse(args); err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
-	borClt, err := c.BorConn()
+	borClt, err := p.BorConn()
 	if err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
@@ -63,11 +63,11 @@ func (c *PeersListCommand) Run(args []string) int {
 	resp, err := borClt.PeersList(context.Background(), req)
 
 	if err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
-	c.UI.Output(formatPeers(resp.Peers))
+	p.UI.Output(formatPeers(resp.Peers))
 
 	return 0
 }

@@ -1935,21 +1935,6 @@ func (s *StateDB) ValidateKnownAccounts(knownAccounts types.KnownAccounts) error
 	return nil
 }
 
-// convertAccountSet converts a provided account set from address keyed to hash keyed.
-func (s *StateDB) convertAccountSet(set map[common.Address]*types.StateAccount) map[common.Hash]struct{} {
-	ret := make(map[common.Hash]struct{}, len(set))
-	for addr := range set {
-		obj, exist := s.stateObjects[addr]
-		if !exist {
-			ret[crypto.Keccak256Hash(addr[:])] = struct{}{}
-		} else {
-			ret[obj.addrHash] = struct{}{}
-		}
-	}
-
-	return ret
-}
-
 // markDelete is invoked when an account is deleted but the deletion is
 // not yet committed. The pending mutation is cached and will be applied
 // all together

@@ -466,12 +466,11 @@ func (n *Node) startRPC() error {
 		}
 
 		if err := server.enableWS(openAPIs, wsConfig{
-			executionPoolSize:           n.config.WSJsonRPCExecutionPoolSize,
-			executionPoolRequestTimeout: n.config.WSJsonRPCExecutionPoolRequestTimeout,
-			Modules:                     n.config.WSModules,
-			Origins:                     n.config.WSOrigins,
-			prefix:                      n.config.WSPathPrefix,
-			rpcEndpointConfig:           rpcConfig,
+			executionPoolSize: n.config.WSJsonRPCExecutionPoolSize,
+			Modules:           n.config.WSModules,
+			Origins:           n.config.WSOrigins,
+			prefix:            n.config.WSPathPrefix,
+			rpcEndpointConfig: rpcConfig,
 		}); err != nil {
 			return err
 		}

@@ -45,19 +45,17 @@ type httpConfig struct {
 	prefix             string // path prefix on which to mount http handler
 
 	// Execution pool config
-	executionPoolSize           uint64
-	executionPoolRequestTimeout time.Duration
+	executionPoolSize uint64
 	rpcEndpointConfig
 }
 
 // wsConfig is the JSON-RPC/Websocket configuration
 type wsConfig struct {
 	// Execution pool config
-	executionPoolSize           uint64
-	executionPoolRequestTimeout time.Duration
-	Origins                     []string
-	Modules                     []string
-	prefix                      string // path prefix on which to mount ws handler
+	executionPoolSize uint64
+	Origins           []string
+	Modules           []string
+	prefix            string // path prefix on which to mount ws handler
 	rpcEndpointConfig
 }
 

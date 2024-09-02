@@ -2519,6 +2519,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 // blockProcessingResult is a summary of block processing
 // used for updating the stats.
+// nolint
 type blockProcessingResult struct {
 	usedGas  uint64
 	procTime time.Duration

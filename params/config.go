@@ -678,7 +678,7 @@ type BorConfig struct {
 }
 
 // String implements the stringer interface, returning the consensus engine details.
-func (b *BorConfig) String() string {
+func (c *BorConfig) String() string {
 	return "bor"
 }
 
@@ -1258,6 +1258,7 @@ func newBlockCompatError(what string, storedblock, newblock *big.Int) *ConfigCom
 	return err
 }
 
+// nolint
 func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCompatError {
 	var rew *uint64
 	switch {

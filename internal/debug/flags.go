@@ -32,10 +32,10 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
-	"github.com/urfave/cli/v2"
-	"gopkg.in/natefinch/lumberjack.v2"
+	colorable "github.com/mattn/go-colorable"
+	isatty "github.com/mattn/go-isatty"
+	cli "github.com/urfave/cli/v2"
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 )
 
 var Memsize memsizeui.Handler

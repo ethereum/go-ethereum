@@ -32,7 +32,7 @@ type SnapshotCommand struct {
 }
 
 // MarkDown implements cli.MarkDown interface
-func (a *SnapshotCommand) MarkDown() string {
+func (c *SnapshotCommand) MarkDown() string {
 	items := []string{
 		"# snapshot",
 		"The ```snapshot``` command groups snapshot related actions:",

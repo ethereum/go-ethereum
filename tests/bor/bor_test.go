@@ -772,7 +772,7 @@ func TestEIP1559Transition(t *testing.T) {
 		funds = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 		gspec = &core.Genesis{
 			Config: params.BorUnittestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: funds},
 				addr2: {Balance: funds},
 				addr3: {Balance: funds},
@@ -989,7 +989,7 @@ func TestBurnContract(t *testing.T) {
 		funds = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 		gspec = &core.Genesis{
 			Config: params.BorUnittestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: funds},
 				addr2: {Balance: funds},
 				addr3: {Balance: funds},
@@ -1274,7 +1274,7 @@ func TestEIP1559TransitionWithEIP155(t *testing.T) {
 		funds = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 		gspec = &core.Genesis{
 			Config: params.BorUnittestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: funds},
 				addr2: {Balance: funds},
 				addr3: {Balance: funds},
@@ -1347,7 +1347,7 @@ func TestTransitionWithoutEIP155(t *testing.T) {
 		funds = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
 		gspec = &core.Genesis{
 			Config: params.BorUnittestChainConfig,
-			Alloc: core.GenesisAlloc{
+			Alloc: types.GenesisAlloc{
 				addr1: {Balance: funds},
 				addr2: {Balance: funds},
 				addr3: {Balance: funds},

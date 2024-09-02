@@ -685,8 +685,8 @@ func NewBlockChainAPI(b Backend) *BlockChainAPI {
 }
 
 // GetTransactionReceiptsByBlock returns the transaction receipts for the given block number or hash.
-func (s *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
-	block, err := s.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+func (api *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
 		return nil, err
 	}
@@ -695,7 +695,7 @@ func (s *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, block
 		return nil, errors.New("block not found")
 	}
 
-	receipts, err := s.b.GetReceipts(ctx, block.Hash())
+	receipts, err := api.b.GetReceipts(ctx, block.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -704,13 +704,13 @@ func (s *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, block
 
 	var txHash common.Hash
 
-	borReceipt := rawdb.ReadBorReceipt(s.b.ChainDb(), block.Hash(), block.NumberU64(), s.b.ChainConfig())
+	borReceipt := rawdb.ReadBorReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64(), api.b.ChainConfig())
 	if borReceipt != nil {
 		receipts = append(receipts, borReceipt)
 
 		txHash = types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
 		if txHash != (common.Hash{}) {
-			borTx, _, _, _, _ := s.b.GetBorBlockTransactionWithBlockHash(ctx, txHash, block.Hash())
+			borTx, _, _, _, _ := api.b.GetBorBlockTransactionWithBlockHash(ctx, txHash, block.Hash())
 			txs = append(txs, borTx)
 		}
 	}
@@ -724,7 +724,7 @@ func (s *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, block
 	for idx, receipt := range receipts {
 		tx := txs[idx]
 
-		signer := types.MakeSigner(s.b.ChainConfig(), block.Number(), block.Time())
+		signer := types.MakeSigner(api.b.ChainConfig(), block.Number(), block.Time())
 		from, _ := types.Sender(signer, tx)
 
 		fields := map[string]interface{}{

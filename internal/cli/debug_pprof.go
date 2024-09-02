@@ -21,11 +21,11 @@ type DebugPprofCommand struct {
 	skiptrace bool
 }
 
-func (p *DebugPprofCommand) MarkDown() string {
+func (d *DebugPprofCommand) MarkDown() string {
 	items := []string{
 		"# Debug Pprof",
 		"The ```debug pprof <enode>``` command will create an archive containing bor pprof traces.",
-		p.Flags().MarkDown(),
+		d.Flags().MarkDown(),
 	}
 
 	return strings.Join(items, "\n\n")

@@ -17,11 +17,11 @@ type DebugBlockCommand struct {
 	output string
 }
 
-func (p *DebugBlockCommand) MarkDown() string {
+func (c *DebugBlockCommand) MarkDown() string {
 	items := []string{
 		"# Debug trace",
 		"The ```bor debug block <number>``` command will create an archive containing traces of a bor block.",
-		p.Flags().MarkDown(),
+		c.Flags().MarkDown(),
 	}
 
 	return strings.Join(items, "\n\n")
