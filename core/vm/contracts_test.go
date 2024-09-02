@@ -23,10 +23,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-	"github.com/XinFinOrg/XDPoSChain/params"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 )
 
@@ -496,10 +492,9 @@ var blake2FTests = []precompiledTest{
 func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in))
-	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		if res, err := RunPrecompiledContract(p, in, contract); err != nil {
+	gas := p.RequiredGas(in)
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, gas), func(t *testing.T) {
+		if res, _, err := RunPrecompiledContract(nil, p, in, gas); err != nil {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.expected {
 			t.Errorf("Expected %v, got %v", test.expected, common.Bytes2Hex(res))
@@ -513,21 +508,12 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 }
 
 func testXDCxPrecompiled(addr string, test precompiledTest, t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	stateCache := tradingstate.NewDatabase(db)
-	tradingStateDB, _ := tradingstate.New(common.Hash{}, stateCache)
-	tradingStateDB.SetLastPrice(tradingstate.GetTradingOrderBookHash(common.HexToAddress(BTCAddress), common.HexToAddress(USDTAddress)), BTCUSDTLastPrice)
-	tradingStateDB.SetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(common.HexToAddress(BTCAddress), common.HexToAddress(USDTAddress)), BTCUSDTEpochPrice)
-
-	evm := NewEVM(BlockContext{BlockNumber: common.Big1}, TxContext{}, nil, tradingStateDB, &params.ChainConfig{ByzantiumBlock: common.Big0}, Config{})
 	contractAddr := common.HexToAddress(addr)
 	p := PrecompiledContractsByzantium[contractAddr]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in))
-	contract.SetCallCode(&contractAddr, common.Hash{}, []byte{})
-	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		if res, err := run(evm, contract, in, false); err != nil {
+	gas := p.RequiredGas(in)
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, gas), func(t *testing.T) {
+		if res, _, err := RunPrecompiledContract(nil, p, in, gas); err != nil {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.expected {
 			t.Errorf("Expected %v, got %v", test.expected, common.Bytes2Hex(res))
@@ -536,16 +522,12 @@ func testXDCxPrecompiled(addr string, test precompiledTest, t *testing.T) {
 }
 
 func testPrecompiledWithEmptyTradingState(addr string, test precompiledTest, t *testing.T) {
-	evm := NewEVM(BlockContext{BlockNumber: common.Big1}, TxContext{}, nil, nil, &params.ChainConfig{ByzantiumBlock: common.Big0}, Config{})
-
 	contractAddr := common.HexToAddress(addr)
 	p := PrecompiledContractsByzantium[contractAddr]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in))
-	contract.SetCallCode(&contractAddr, common.Hash{}, []byte{})
-	t.Run(fmt.Sprintf("testPrecompiledWithEmptyTradingState-%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		if res, err := run(evm, contract, in, false); err != nil {
+	gas := p.RequiredGas(in)
+	t.Run(fmt.Sprintf("testPrecompiledWithEmptyTradingState-%s-Gas=%d", test.name, gas), func(t *testing.T) {
+		if res, _, err := RunPrecompiledContract(nil, p, in, gas); err != nil {
 			t.Error(err)
 		} else if common.Bytes2Hex(res) != test.expected {
 			t.Errorf("Expected %v, got %v", test.expected, common.Bytes2Hex(res))
@@ -556,10 +538,10 @@ func testPrecompiledWithEmptyTradingState(addr string, test precompiledTest, t *
 func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
 	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), p.RequiredGas(in)-1)
-	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(t *testing.T) {
-		_, err := RunPrecompiledContract(p, in, contract)
+	gas := p.RequiredGas(in) - 1
+
+	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, gas), func(t *testing.T) {
+		_, _, err := RunPrecompiledContract(nil, p, in, gas)
 		if err.Error() != "out of gas" {
 			t.Errorf("Expected error [out of gas], got [%v]", err)
 		}
@@ -574,11 +556,9 @@ func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
 func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing.T) {
 	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
-	contract := NewContract(AccountRef(common.HexToAddress("31337")),
-		nil, new(big.Int), p.RequiredGas(in))
-
+	gas := p.RequiredGas(in)
 	t.Run(test.name, func(t *testing.T) {
-		_, err := RunPrecompiledContract(p, in, contract)
+		_, _, err := RunPrecompiledContract(nil, p, in, gas)
 		if !reflect.DeepEqual(err, test.expectedError) {
 			t.Errorf("Expected error [%v], got [%v]", test.expectedError, err)
 		}
@@ -597,8 +577,6 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	reqGas := p.RequiredGas(in)
-	contract := NewContract(AccountRef(common.HexToAddress("1337")),
-		nil, new(big.Int), reqGas)
 
 	var (
 		res  []byte
@@ -606,12 +584,11 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 		data = make([]byte, len(in))
 	)
 
-	bench.Run(fmt.Sprintf("%s-Gas=%d", test.name, contract.Gas), func(bench *testing.B) {
+	bench.Run(fmt.Sprintf("%s-Gas=%d", test.name, reqGas), func(bench *testing.B) {
 		bench.ResetTimer()
 		for i := 0; i < bench.N; i++ {
-			contract.Gas = reqGas
 			copy(data, in)
-			res, err = RunPrecompiledContract(p, data, contract)
+			res, _, err = RunPrecompiledContract(nil, p, data, reqGas)
 		}
 		bench.StopTimer()
 		//Check if it is correct

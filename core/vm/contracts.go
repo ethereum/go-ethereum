@@ -135,12 +135,29 @@ func ActivePrecompiles(rules params.Rules) []common.Address {
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
-func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
-	gas := p.RequiredGas(input)
-	if contract.UseGas(gas) {
-		return p.Run(input)
+// It returns
+// - the returned bytes,
+// - the _remaining_ gas,
+// - any error that occurred
+func RunPrecompiledContract(evm *EVM, p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+	if evm != nil {
+		if evm.chainConfig.IsTIPXDCXReceiver(evm.Context.BlockNumber) {
+			switch p := p.(type) {
+			case *XDCxEpochPrice:
+				p.SetTradingState(evm.tradingStateDB)
+			case *XDCxLastPrice:
+				p.SetTradingState(evm.tradingStateDB)
+			}
+		}
 	}
-	return nil, ErrOutOfGas
+
+	gasCost := p.RequiredGas(input)
+	if suppliedGas < gasCost {
+		return nil, 0, ErrOutOfGas
+	}
+	suppliedGas -= gasCost
+	output, err := p.Run(input)
+	return output, suppliedGas, err
 }
 
 // ECRECOVER implemented as a native contract.
@@ -230,6 +247,7 @@ func (c *dataCopy) Run(in []byte) ([]byte, error) {
 type bigModExp struct{}
 
 var (
+	big0      = big.NewInt(0)
 	big1      = big.NewInt(1)
 	big4      = big.NewInt(4)
 	big8      = big.NewInt(8)
