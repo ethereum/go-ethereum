@@ -445,6 +445,7 @@ func TestJWT(t *testing.T) {
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
 		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	srv.stop()
 }
