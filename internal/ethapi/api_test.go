@@ -59,7 +59,6 @@ import (
 )
 
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
-	t.Parallel()
 	var (
 		signer = types.LatestSigner(config)
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -96,6 +95,8 @@ func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainCo
 }
 
 func TestTransaction_RoundTripRpcJSON(t *testing.T) {
+	t.Parallel()
+
 	var (
 		config = params.AllEthashProtocolChanges
 		tests  = allTransactionTypes(common.Address{0xde, 0xad}, config)
@@ -104,6 +105,8 @@ func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 }
 
 func TestTransactionBlobTx(t *testing.T) {
+	t.Parallel()
+
 	config := *params.TestChainConfig
 	config.ShanghaiTime = new(uint64)
 	config.CancunTime = new(uint64)
@@ -1272,6 +1275,8 @@ func TestFillBlobTransaction(t *testing.T) {
 	}
 	for _, tc := range suite {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res, err := api.FillTransaction(context.Background(), tc.args)
 			if len(tc.err) > 0 {
 				if err == nil {
