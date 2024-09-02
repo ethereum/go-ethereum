@@ -2,6 +2,7 @@ package engine_v2_tests
 
 import (
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
@@ -108,4 +109,62 @@ func TestGetMissedRoundsInEpochByBlockNum(t *testing.T) {
 	assert.Equal(t, data.MissedRounds[0].ParentBlockNum, big.NewInt(1802))
 
 	assert.NotEqual(t, data.MissedRounds[0].Miner, data.MissedRounds[1].Miner)
+}
+
+func TestGetEpochNumbersBetween(t *testing.T) {
+	_, bc, _, _, _ := PrepareXDCTestBlockChainWith128Candidates(t, 1802, params.TestXDPoSMockChainConfig)
+
+	engine := bc.GetBlockChain().Engine().(*XDPoS.XDPoS)
+
+	begin := rpc.BlockNumber(1800)
+	end := rpc.BlockNumber(1802)
+	numbers, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetEpochNumbersBetween(&begin, &end)
+
+	assert.True(t, reflect.DeepEqual([]uint64{1800}, numbers))
+	assert.Nil(t, err)
+
+	begin = rpc.BlockNumber(1799)
+	end = rpc.BlockNumber(1802)
+	numbers, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetEpochNumbersBetween(&begin, &end)
+
+	assert.True(t, reflect.DeepEqual([]uint64{1800}, numbers))
+	assert.Nil(t, err)
+
+	begin = rpc.BlockNumber(1799)
+	end = rpc.BlockNumber(1802)
+	numbers, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetEpochNumbersBetween(&begin, &end)
+
+	assert.True(t, reflect.DeepEqual([]uint64{1800}, numbers))
+	assert.Nil(t, err)
+
+	begin = rpc.BlockNumber(901)
+	end = rpc.BlockNumber(1802)
+	numbers, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetEpochNumbersBetween(&begin, &end)
+
+	assert.True(t, reflect.DeepEqual([]uint64{901, 1800}, numbers))
+	assert.Nil(t, err)
+
+	// 900 is V1, not V2, so error
+	begin = rpc.BlockNumber(900)
+	end = rpc.BlockNumber(1802)
+	numbers, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetEpochNumbersBetween(&begin, &end)
+
+	assert.Nil(t, numbers)
+	assert.EqualError(t, err, "not supported in the v1 consensus")
+
+	// 1803 not exist
+	begin = rpc.BlockNumber(901)
+	end = rpc.BlockNumber(1803)
+	numbers, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetEpochNumbersBetween(&begin, &end)
+
+	assert.Nil(t, numbers)
+	assert.EqualError(t, err, "illegal end block number")
+
+	// 1803 not exist
+	begin = rpc.BlockNumber(1803)
+	end = rpc.BlockNumber(1803)
+	numbers, err = engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetEpochNumbersBetween(&begin, &end)
+
+	assert.Nil(t, numbers)
+	assert.EqualError(t, err, "illegal begin block number")
 }

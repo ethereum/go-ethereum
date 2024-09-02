@@ -550,3 +550,13 @@ func (x *XDPoS) CacheSigningTxs(hash common.Hash, txs []*types.Transaction) []*t
 func (x *XDPoS) GetCachedSigningTxs(hash common.Hash) (interface{}, bool) {
 	return x.signingTxsCache.Get(hash)
 }
+
+func (x *XDPoS) GetEpochSwitchInfoBetween(chain consensus.ChainReader, begin, end *types.Header) ([]*types.EpochSwitchInfo, error) {
+	beginBlockVersion := x.config.BlockConsensusVersion(begin.Number, begin.Extra, ExtraFieldCheck)
+	endBlockVersion := x.config.BlockConsensusVersion(end.Number, end.Extra, ExtraFieldCheck)
+	if beginBlockVersion == params.ConsensusEngineVersion2 && endBlockVersion == params.ConsensusEngineVersion2 {
+		return x.EngineV2.GetEpochSwitchInfoBetween(chain, begin, end)
+	}
+	// Default "v1"
+	return nil, errors.New("not supported in the v1 consensus")
+}
