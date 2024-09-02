@@ -800,6 +800,8 @@ func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 		return nil, nil
 	}
 	offset := parseInt16(code[*pc+2+2*idx.Uint64():])
+	// move pc past op and count byte (2), move past count number of 16bit offsets (count*2), add relative offset, subtract 1 to
+	// account for interpreter loop.
 	*pc = uint64(int64(*pc+2+count*2) + int64(offset) - 1)
 	return nil, nil
 }
@@ -825,7 +827,7 @@ func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	scope.ReturnStack = append(scope.ReturnStack, retCtx)
 	scope.CodeSection = uint64(idx)
 	*pc = 0
-	*pc -= 1 // hacks xD
+	*pc -= 1 // hacks xD (interpreter loop)
 	return nil, nil
 }
 
@@ -858,7 +860,7 @@ func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	}
 	scope.CodeSection = uint64(idx)
 	*pc = 0
-	*pc -= 1 // hacks xD
+	*pc -= 1 // hacks xD (interpreter loop)
 	return nil, nil
 }
 
@@ -952,7 +954,7 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	)
 	scope.ReturnStack = scope.ReturnStack[:last]
 	scope.CodeSection = retCtx.Section
-	*pc = retCtx.Pc - 1
+	*pc = retCtx.Pc - 1 // account for interpreter loop
 	return c.MarshalBinary(), errStopToken
 }
 
@@ -961,7 +963,6 @@ func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		stackItem        = scope.Stack.pop()
 		offset, overflow = stackItem.Uint64WithOverflow()
 	)
-
 	if overflow {
 		stackItem.Clear()
 		scope.Stack.push(&stackItem)
@@ -979,7 +980,7 @@ func opDataLoadN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	)
 	data := getData(scope.Contract.Container.Data, offset, 32)
 	scope.Stack.push(new(uint256.Int).SetBytes(data))
-	*pc += 2
+	*pc += 2 // move past 2 byte immediate
 	return nil, nil
 }
 
@@ -1009,7 +1010,7 @@ func opDupN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		index = int(code[*pc+1]) + 1
 	)
 	scope.Stack.dup(index)
-	*pc += 1
+	*pc += 1 // move past immediate
 	return nil, nil
 }
 
@@ -1019,7 +1020,7 @@ func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 		index = int(code[*pc+1]) + 1
 	)
 	scope.Stack.swap(index + 1)
-	*pc += 1
+	*pc += 1 // move past immediate
 	return nil, nil
 }
 
@@ -1031,7 +1032,7 @@ func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		m     = (index & 0x0F) + 1
 	)
 	scope.Stack.swapN(n+1, n+m+1)
-	*pc += 1
+	*pc += 1 // move past immediate
 	return nil, nil
 }
 

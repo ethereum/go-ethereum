@@ -192,7 +192,7 @@ func (c *Container) unmarshalSubContainer(b []byte, isInitcode bool, topLevel bo
 		return fmt.Errorf("%w: found section kind %x instead", ErrMissingCodeHeader, kind)
 	}
 	if len(codeSizes) != typesSize/4 {
-		return fmt.Errorf("%w: mismatch of code sections cound and type signatures, types %d, code %d", ErrInvalidCodeSize, typesSize/4, len(codeSizes))
+		return fmt.Errorf("%w: mismatch of code sections found and type signatures, types %d, code %d", ErrInvalidCodeSize, typesSize/4, len(codeSizes))
 	}
 
 	// Parse (optional) container section header.
