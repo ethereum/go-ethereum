@@ -190,7 +190,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	s.db.StorageLoaded++
 
 	start := time.Now()
-	value, err := s.db.reader.Storage(s.address, key)
+	_, value, err := s.db.reader.Storage(s.address, key)
 	if err != nil {
 		s.db.setError(err)
 		return common.Hash{}
@@ -205,6 +205,37 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	}
 	s.originStorage[key] = value
 	return value
+}
+
+// StateExists returns the flag indicating the storage slot is existent or not.
+func (s *stateObject) StateExists(key common.Hash) bool {
+	// Short circuit if the slot can be found in either dirty map (modified within
+	// the current transaction) or the pending storage (modified within the current
+	// block).
+	//
+	// Note, the slot is regarded as existent even they are marked as deleted,
+	// specifically the value is [32]byte{}, as there is no delete notion in verkle
+	// world anymore and the deletions will be translated to a special marker
+	// writing ultimately.
+	//
+	// Note, there is no account deletion since cancun fork (as for verkle
+	// world), the account destruct checking can be skipped.
+	if _, dirty := s.dirtyStorage[key]; dirty {
+		return true
+	}
+	if _, pending := s.pendingStorage[key]; pending {
+		return true
+	}
+	start := time.Now()
+	exists, _, err := s.db.reader.Storage(s.address, key)
+	if err != nil {
+		s.db.setError(err)
+		return false
+	}
+	s.db.StorageLoaded++
+	s.db.StorageReads += time.Since(start)
+
+	return exists
 }
 
 // SetState updates a value in account storage.

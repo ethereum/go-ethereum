@@ -112,13 +112,16 @@ func (t *VerkleTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 // GetStorage implements state.Trie, retrieving the storage slot with the specified
 // account address and storage key. If the specified slot is not in the verkle tree,
 // nil will be returned. If the tree is corrupted, an error will be returned.
-func (t *VerkleTrie) GetStorage(addr common.Address, key []byte) ([]byte, error) {
+func (t *VerkleTrie) GetStorage(addr common.Address, key []byte) (bool, []byte, error) {
 	k := utils.StorageSlotKeyWithEvaluatedAddress(t.cache.Get(addr.Bytes()), key)
 	val, err := t.root.Get(k, t.nodeResolver)
 	if err != nil {
-		return nil, err
+		return false, nil, err
 	}
-	return common.TrimLeftZeroes(val), nil
+	if len(val) == 0 {
+		return false, nil, nil
+	}
+	return true, common.TrimLeftZeroes(val), nil
 }
 
 // UpdateAccount implements state.Trie, writing the provided account into the tree.
