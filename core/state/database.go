@@ -90,10 +90,11 @@ type Trie interface {
 	// be returned.
 	GetAccount(address common.Address) (*types.StateAccount, error)
 
-	// GetStorage returns the value for key stored in the trie. The value bytes
+	// GetStorage returns the value for key stored in the trie along with a flag
+	// whether the requested storage slot is existent or not. The value bytes
 	// must not be modified by the caller. If a node was not found in the database,
 	// a trie.MissingNodeError is returned.
-	GetStorage(addr common.Address, key []byte) ([]byte, error)
+	GetStorage(addr common.Address, key []byte) (bool, []byte, error)
 
 	// UpdateAccount abstracts an account write to the trie. It encodes the
 	// provided account object with associated algorithm and then updates it

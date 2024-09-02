@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/trie/triestate"
@@ -390,6 +391,16 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 		return stateObject.GetCommittedState(hash)
 	}
 	return common.Hash{}
+}
+
+// StateExists returns the flag indicating whether the storage slot specified by
+// address and storage key is existent.
+func (s *StateDB) StateExists(addr common.Address, key common.Hash) bool {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.StateExists(key)
+	}
+	return false
 }
 
 // Database retrieves the low level database supporting the lower level trie ops.
@@ -1267,7 +1278,24 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 		// If snapshotting is enabled, update the snapshot tree with this new version
 		if snap := s.db.Snapshot(); snap != nil {
 			start := time.Now()
-			if err := snap.Update(ret.root, ret.originRoot, ret.destructs, ret.accounts, ret.storages); err != nil {
+
+			storages := ret.storages
+			if s.db.TrieDB().IsVerkle() {
+				zero, _ := rlp.EncodeToBytes(common.Hash{}.Bytes())
+				storages = make(map[common.Hash]map[common.Hash][]byte)
+				for addrHash, slots := range ret.storages {
+					subset := make(map[common.Hash][]byte)
+					storages[addrHash] = subset
+					for slotHash, slot := range slots {
+						if len(slot) == 0 {
+							subset[slotHash] = zero
+						} else {
+							subset[slotHash] = slot
+						}
+					}
+				}
+			}
+			if err := snap.Update(ret.root, ret.originRoot, ret.destructs, ret.accounts, storages); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", ret.originRoot, "to", ret.root, "err", err)
 			}
 			// Keep 128 diff layers in the memory, persistent layer is 129th.

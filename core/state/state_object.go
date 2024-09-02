@@ -190,7 +190,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	s.db.StorageLoaded++
 
 	start := time.Now()
-	value, err := s.db.reader.Storage(s.address, key)
+	_, value, err := s.db.reader.Storage(s.address, key)
 	if err != nil {
 		s.db.setError(err)
 		return common.Hash{}
@@ -205,6 +205,39 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 	}
 	s.originStorage[key] = value
 	return value
+}
+
+// StateExists returns the flag indicating the storage slot is existent or not.
+func (s *stateObject) StateExists(key common.Hash) bool {
+	_, dirty := s.dirtyStorage[key]
+	if dirty {
+		return true
+	}
+	if _, pending := s.pendingStorage[key]; pending {
+		return true
+	}
+	// If the object was destructed in *this* block (and potentially resurrected),
+	// the storage has been cleared out, and we should *not* consult the previous
+	// database about any storage values. The only possible alternatives are:
+	//   1) resurrect happened, and new slot values were set -- those should
+	//      have been handles via pendingStorage above.
+	//   2) we don't have new values, and can deliver empty response back
+	//
+	// Note, there is no account deletion in verkle, this check can be literally
+	// ignored.
+	if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
+		return false
+	}
+	s.db.StorageLoaded++
+	start := time.Now()
+	exists, _, err := s.db.reader.Storage(s.address, key)
+	if err != nil {
+		s.db.setError(err)
+		return false
+	}
+	s.db.StorageReads += time.Since(start)
+
+	return exists
 }
 
 // SetState updates a value in account storage.
