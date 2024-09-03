@@ -7,6 +7,8 @@ import (
 	"github.com/protolambda/ztyp/tree"
 )
 
+const BeaconGenesisTime uint64 = 1606824023
+
 var _ ConsensusAPI = &PortalLightApi{}
 
 type PortalLightApi struct {
@@ -43,3 +45,7 @@ func (api *PortalLightApi) ChainID() uint64 {
 func (api *PortalLightApi) Name() string {
 	return "portal"
 }
+
+// func CurrentSlot() uint64 {
+
+// }
