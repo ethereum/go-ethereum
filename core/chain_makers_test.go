@@ -62,7 +62,7 @@ func TestGeneratePOSChain(t *testing.T) {
 	config.ShanghaiBlock = common.Big0
 	config.CancunBlock = common.Big0
 	config.PragueBlock = common.Big0
-	config.VerkleBlock = common.Big0
+	// config.VerkleBlock = common.Big0
 
 	// init 0xaa with some storage elements
 	storage := make(map[common.Hash]common.Hash)

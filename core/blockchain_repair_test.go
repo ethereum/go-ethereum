@@ -118,8 +118,14 @@ func testShortSnapSyncedRepair(t *testing.T, snapshots bool) {
 // not yet committed, but the process crashed. In this case we expect the chain to
 // detect that it was fast syncing and not delete anything, since we can just pick
 // up directly where we left off.
-func TestShortSnapSyncingRepair(t *testing.T)              { testShortSnapSyncingRepair(t, false) }
-func TestShortSnapSyncingRepairWithSnapshots(t *testing.T) { testShortSnapSyncingRepair(t, true) }
+func TestShortSnapSyncingRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
+	testShortSnapSyncingRepair(t, false)
+}
+func TestShortSnapSyncingRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
+	testShortSnapSyncingRepair(t, true)
+}
 
 func testShortSnapSyncingRepair(t *testing.T, snapshots bool) {
 	// Chain:

@@ -436,6 +436,18 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
+// SetTxLookupLimit is responsible for updating the txlookup limit to the
+// original one stored in db if the new mismatches with the old one.
+func (bc *BlockChain) SetTxLookupLimit(limit uint64) {
+	bc.txIndexer.limit = limit
+}
+
+// TxLookupLimit retrieves the txlookup limit used by blockchain to prune
+// stale transaction indices.
+func (bc *BlockChain) TxLookupLimit() uint64 {
+	return bc.txIndexer.limit
+}
+
 // TxIndexProgress returns the transaction indexing progress.
 func (bc *BlockChain) TxIndexProgress() (TxIndexProgress, error) {
 	if bc.txIndexer == nil {

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
@@ -261,13 +262,13 @@ func (h *handler) doSync(op *chainSyncOp) error {
 		// has been indexed. So here for the user-experience wise, it's non-optimal
 		// that user can't change limit during the snap sync. If changed, Geth
 		// will just blindly use the original one.
-		// limit := h.chain.TxLookupLimit()
-		// if stored := rawdb.ReadFastTxLookupLimit(h.database); stored == nil {
-		// 	rawdb.WriteFastTxLookupLimit(h.database, limit)
-		// } else if *stored != limit {
-		// 	h.chain.SetTxLookupLimit(*stored)
-		// 	log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
-		// }
+		limit := h.chain.TxLookupLimit()
+		if stored := rawdb.ReadFastTxLookupLimit(h.database); stored == nil {
+			rawdb.WriteFastTxLookupLimit(h.database, limit)
+		} else if *stored != limit {
+			h.chain.SetTxLookupLimit(*stored)
+			log.Warn("Update txLookup limit", "provided", limit, "updated", *stored)
+		}
 	}
 	// Run the sync cycle, and disable snap sync if we're past the pivot block
 	err := h.downloader.LegacySync(op.peer.ID(), op.head, op.td, h.chain.Config().TerminalTotalDifficulty, op.mode)

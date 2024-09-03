@@ -442,6 +442,7 @@ var (
 )
 
 func TestProcessVerkle(t *testing.T) {
+	t.Skip("not relevant to bor")
 	var (
 		config = &params.ChainConfig{
 			ChainID:                       big.NewInt(1),
