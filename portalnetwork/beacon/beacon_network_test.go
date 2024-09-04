@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
+	"github.com/protolambda/ztyp/codec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -251,4 +253,72 @@ func TestGossipTwoNodes(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, res, val)
 	}
+}
+
+func TestLightClientBootstrapValidation(t *testing.T) {
+	bootstrap, err := GetLightClientBootstrap(0)
+	require.NoError(t, err)
+	contentKey := make([]byte, 33)
+	contentKey[0] = byte(LightClientBootstrap)
+	bn := NewBeaconNetwork(nil)
+	var buf bytes.Buffer
+	bootstrap.Serialize(bn.spec, codec.NewEncodingWriter(&buf))
+	err = bn.validateContent(contentKey, buf.Bytes())
+	require.NoError(t, err)
+}
+
+func TestLightClienUpdateValidation(t *testing.T) {
+	update, err := GetClientUpdate(0)
+	require.NoError(t, err)
+	key := &LightClientUpdateKey{
+		StartPeriod: 0,
+		Count:       1,
+	}
+	updateRange := LightClientUpdateRange([]ForkedLightClientUpdate{update})
+	keyData, err := key.MarshalSSZ()
+	require.NoError(t, err)
+	contentKey := make([]byte, 0)
+	contentKey = append(contentKey, byte(LightClientUpdate))
+	contentKey = append(contentKey, keyData...)
+	bn := NewBeaconNetwork(nil)
+	var buf bytes.Buffer
+	updateRange.Serialize(bn.spec, codec.NewEncodingWriter(&buf))
+	err = bn.validateContent(contentKey, buf.Bytes())
+	require.NoError(t, err)
+}
+
+func TestLightClientFinalityUpdateValidation(t *testing.T) {
+	update, err := GetLightClientFinalityUpdate(0)
+	require.NoError(t, err)
+	key := &LightClientFinalityUpdateKey{
+		FinalizedSlot: 17748599031001599584,
+	}
+	keyData, err := key.MarshalSSZ()
+	require.NoError(t, err)
+	contentKey := make([]byte, 0)
+	contentKey = append(contentKey, byte(LightClientFinalityUpdate))
+	contentKey = append(contentKey, keyData...)
+	bn := NewBeaconNetwork(nil)
+	var buf bytes.Buffer
+	update.Serialize(bn.spec, codec.NewEncodingWriter(&buf))
+	err = bn.validateContent(contentKey, buf.Bytes())
+	require.NoError(t, err)
+}
+
+func TestLightClientOptimisticUpdateValidation(t *testing.T) {
+	update, err := GetLightClientOptimisticUpdate(0)
+	require.NoError(t, err)
+	key := &LightClientOptimisticUpdateKey{
+		OptimisticSlot: 6292665015452153680,
+	}
+	keyData, err := key.MarshalSSZ()
+	require.NoError(t, err)
+	contentKey := make([]byte, 0)
+	contentKey = append(contentKey, byte(LightClientOptimisticUpdate))
+	contentKey = append(contentKey, keyData...)
+	bn := NewBeaconNetwork(nil)
+	var buf bytes.Buffer
+	update.Serialize(bn.spec, codec.NewEncodingWriter(&buf))
+	err = bn.validateContent(contentKey, buf.Bytes())
+	require.NoError(t, err)
 }
