@@ -132,7 +132,6 @@ func TestEraFilename(t *testing.T) {
 		expected string
 	}{
 		{"mainnet", 1, common.Hash{1}, "mainnet-00001-01000000.era1"},
-		{"goerli", 99999, common.HexToHash("0xdeadbeef00000000000000000000000000000000000000000000000000000000"), "goerli-99999-deadbeef.era1"},
 	} {
 		got := Filename(tt.network, tt.epoch, tt.root)
 		if tt.expected != got {

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -121,7 +122,11 @@ func NewBeaconLightApi(url string, customHeaders map[string]string) *BeaconLight
 }
 
 func (api *BeaconLightApi) httpGet(path string) ([]byte, error) {
-	req, err := http.NewRequest("GET", api.url+path, nil)
+	uri, err := api.buildURL(path, nil)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -545,9 +550,13 @@ func (api *BeaconLightApi) StartHeadListener(listener HeadEventListener) func() 
 // established. It can only return nil when the context is canceled.
 func (api *BeaconLightApi) startEventStream(ctx context.Context, listener *HeadEventListener) *eventsource.Stream {
 	for retry := true; retry; retry = ctxSleep(ctx, 5*time.Second) {
-		path := "/eth/v1/events?topics=head&topics=light_client_finality_update&topics=light_client_optimistic_update"
 		log.Trace("Sending event subscription request")
-		req, err := http.NewRequestWithContext(ctx, "GET", api.url+path, nil)
+		uri, err := api.buildURL("/eth/v1/events", map[string][]string{"topics": {"head", "light_client_finality_update", "light_client_optimistic_update"}})
+		if err != nil {
+			listener.OnError(fmt.Errorf("error creating event subscription URL: %v", err))
+			continue
+		}
+		req, err := http.NewRequestWithContext(ctx, "GET", uri, nil)
 		if err != nil {
 			listener.OnError(fmt.Errorf("error creating event subscription request: %v", err))
 			continue
@@ -575,4 +584,16 @@ func ctxSleep(ctx context.Context, timeout time.Duration) (ok bool) {
 	case <-ctx.Done():
 		return false
 	}
+}
+
+func (api *BeaconLightApi) buildURL(path string, params url.Values) (string, error) {
+	uri, err := url.Parse(api.url)
+	if err != nil {
+		return "", err
+	}
+	uri = uri.JoinPath(path)
+	if params != nil {
+		uri.RawQuery = params.Encode()
+	}
+	return uri.String(), nil
 }

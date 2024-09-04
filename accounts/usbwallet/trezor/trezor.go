@@ -39,8 +39,8 @@
 //   - Download the latest protoc https://github.com/protocolbuffers/protobuf/releases
 //   - Build with the usual `./configure && make` and ensure it's on your $PATH
 //   - Delete all the .proto and .pb.go files, pull in fresh ones from Trezor
-//   - Grab the latest Go plugin `go get -u github.com/golang/protobuf/protoc-gen-go`
-//   - Vendor in the latest Go plugin `govendor fetch github.com/golang/protobuf/...`
+//   - Grab the latest Go plugin `go get -u google.golang.org/protobuf/cmd/protoc-gen-go`
+//   - Vendor in the latest Go plugin `govendor fetch google.golang.org/protobuf/...`
 
 //go:generate protoc -I/usr/local/include:. --go_out=paths=source_relative:. messages.proto messages-common.proto messages-management.proto messages-ethereum.proto
 
@@ -50,7 +50,7 @@ package trezor
 import (
 	"reflect"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 // Type returns the protocol buffer type number of a specific message. If the

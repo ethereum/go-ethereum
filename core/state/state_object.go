@@ -114,14 +114,7 @@ func (s *stateObject) markSelfdestructed() {
 }
 
 func (s *stateObject) touch() {
-	s.db.journal.append(touchChange{
-		account: &s.address,
-	})
-	if s.address == ripemd {
-		// Explicitly put it in the dirty-cache, which is otherwise generated from
-		// flattened journals.
-		s.db.journal.dirty(s.address)
-	}
+	s.db.journal.touchChange(s.address)
 }
 
 // getTrie returns the associated storage trie. The trie will be opened if it's
@@ -150,7 +143,7 @@ func (s *stateObject) getTrie() (Trie, error) {
 func (s *stateObject) getPrefetchedTrie() Trie {
 	// If there's nothing to meaningfully return, let the user figure it out by
 	// pulling the trie from disk.
-	if s.data.Root == types.EmptyRootHash || s.db.prefetcher == nil {
+	if (s.data.Root == types.EmptyRootHash && !s.db.db.TrieDB().IsVerkle()) || s.db.prefetcher == nil {
 		return nil
 	}
 	// Attempt to retrieve the trie from the prefetcher
@@ -239,6 +232,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		}
 	}
 	s.originStorage[key] = value
+	s.db.StorageLoaded++
 	return value
 }
 
@@ -251,16 +245,11 @@ func (s *stateObject) SetState(key, value common.Hash) {
 		return
 	}
 	// New value is different, update and journal the change
-	s.db.journal.append(storageChange{
-		account:   &s.address,
-		key:       key,
-		prevvalue: prev,
-		origvalue: origin,
-	})
+	s.db.journal.storageChange(s.address, key, prev, origin)
+	s.setState(key, value, origin)
 	if s.db.logger != nil && s.db.logger.OnStorageChange != nil {
 		s.db.logger.OnStorageChange(s.address, key, prev, value)
 	}
-	s.setState(key, value, origin)
 }
 
 // setState updates a value in account dirty storage. The dirtiness will be
@@ -510,10 +499,7 @@ func (s *stateObject) SubBalance(amount *uint256.Int, reason tracing.BalanceChan
 }
 
 func (s *stateObject) SetBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
-	s.db.journal.append(balanceChange{
-		account: &s.address,
-		prev:    new(uint256.Int).Set(s.data.Balance),
-	})
+	s.db.journal.balanceChange(s.address, s.data.Balance)
 	if s.db.logger != nil && s.db.logger.OnBalanceChange != nil {
 		s.db.logger.OnBalanceChange(s.address, s.Balance().ToBig(), amount.ToBig(), reason)
 	}
@@ -589,14 +575,10 @@ func (s *stateObject) CodeSize() int {
 }
 
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
-	prevcode := s.Code()
-	s.db.journal.append(codeChange{
-		account:  &s.address,
-		prevhash: s.CodeHash(),
-		prevcode: prevcode,
-	})
+	s.db.journal.setCode(s.address)
 	if s.db.logger != nil && s.db.logger.OnCodeChange != nil {
-		s.db.logger.OnCodeChange(s.address, common.BytesToHash(s.CodeHash()), prevcode, codeHash, code)
+		// TODO remove prevcode from this callback
+		s.db.logger.OnCodeChange(s.address, common.BytesToHash(s.CodeHash()), nil, codeHash, code)
 	}
 	s.setCode(codeHash, code)
 }
@@ -608,10 +590,7 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 }
 
 func (s *stateObject) SetNonce(nonce uint64) {
-	s.db.journal.append(nonceChange{
-		account: &s.address,
-		prev:    s.data.Nonce,
-	})
+	s.db.journal.nonceChange(s.address, s.data.Nonce)
 	if s.db.logger != nil && s.db.logger.OnNonceChange != nil {
 		s.db.logger.OnNonceChange(s.address, s.data.Nonce, nonce)
 	}

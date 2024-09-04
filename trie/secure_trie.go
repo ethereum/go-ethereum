@@ -182,7 +182,7 @@ func (t *StateTrie) UpdateStorage(_ common.Address, key, value []byte) error {
 }
 
 // UpdateAccount will abstract the write of an account to the secure trie.
-func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccount) error {
+func (t *StateTrie) UpdateAccount(address common.Address, acc *types.StateAccount, _ int) error {
 	hk := t.hashKey(address.Bytes())
 	data, err := rlp.EncodeToBytes(acc)
 	if err != nil {
@@ -250,11 +250,11 @@ func (t *StateTrie) Witness() map[string]struct{} {
 func (t *StateTrie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
-		preimages := make(map[common.Hash][]byte, len(t.secKeyCache))
-		for hk, key := range t.secKeyCache {
-			preimages[common.BytesToHash([]byte(hk))] = key
-		}
 		if t.preimages != nil {
+			preimages := make(map[common.Hash][]byte, len(t.secKeyCache))
+			for hk, key := range t.secKeyCache {
+				preimages[common.BytesToHash([]byte(hk))] = key
+			}
 			t.preimages.InsertPreimage(preimages)
 		}
 		t.secKeyCache = make(map[string][]byte)
