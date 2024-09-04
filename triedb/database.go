@@ -330,7 +330,7 @@ func (db *Database) IsVerkle() bool {
 	return db.config.IsVerkle
 }
 
-// Disk returns the underlying disk.
+// Disk returns the underlying disk database.
 func (db *Database) Disk() ethdb.Database {
 	return db.disk
 }
