@@ -30,7 +30,7 @@ func TestSupplyTracerBlockchain(t *testing.T) {
 			t.Fatalf("failed to read testcase: %v", err)
 		}
 		if err := json.Unmarshal(blob, &testcases); err != nil {
-			t.Fatalf("failed to parse testcase: %v", err)
+			t.Fatalf("failed to parse testcase %s: %v", file.Name(), err)
 		}
 		for testname, test := range testcases {
 			t.Run(fmt.Sprintf("%s/%s", camel(strings.TrimSuffix(file.Name(), ".json")), testname), func(t *testing.T) {

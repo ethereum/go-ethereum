@@ -197,25 +197,28 @@ func TestSupplyWithdrawals(t *testing.T) {
 		})
 	}
 
-	out, _, chain, err := testSupplyTracer(t, gspec, withdrawalsBlockGenerationFunc)
+	out, db, chain, err := testSupplyTracer(t, gspec, withdrawalsBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("failed to test supply tracer: %v", err)
 	}
 
 	var (
 		head     = chain.CurrentBlock()
-		expected = supplyInfo{
+		expected = []supplyInfo{{
+			Number:     0,
+			Hash:       common.HexToHash("0x52f276d96f0afaaf2c3cb358868bdc2779c4b0cb8de3e7e5302e247c0b66a703"),
+			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		}, {
 			Issuance: &supplyInfoIssuance{
 				Withdrawals: big.NewInt(1337000000000),
 			},
 			Number:     1,
 			Hash:       head.Hash(),
 			ParentHash: head.ParentHash,
-		}
-		actual = out[expected.Number]
+		}}
 	)
-
-	compareAsJSON(t, expected, actual)
+	compareAsJSON(t, expected, out)
+	writeArtifact(t, "withdrawals_cancun", db, chain, expected)
 }
 
 // Tests fund retrieval after contract's selfdestruct.
