@@ -97,6 +97,7 @@ type handlerConfig struct {
 	EventMux            *event.TypeMux      // Legacy event mux, deprecate for `feed`
 	checker             ethereum.ChainValidator
 	RequiredBlocks      map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
+	EthAPI              *ethapi.BlockChainAPI  // EthAPI to interact
 	enableBlockTracking bool                   // Whether to log information collected while tracking block lifecycle
 }
 
@@ -155,6 +156,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		txpool:              config.TxPool,
 		chain:               config.Chain,
 		peers:               newPeerSet(),
+		ethAPI:              config.EthAPI,
 		requiredBlocks:      config.RequiredBlocks,
 		enableBlockTracking: config.enableBlockTracking,
 		quitSync:            make(chan struct{}),
