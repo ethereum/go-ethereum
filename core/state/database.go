@@ -61,9 +61,6 @@ type Database interface {
 	// ContractCodeSize retrieves a particular contracts code's size.
 	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
 
-	// DiskDB returns the underlying key-value disk database.
-	DiskDB() ethdb.KeyValueStore
-
 	// PointCache returns the cache holding points used in verkle tree key computation
 	PointCache() *utils.PointCache
 
@@ -271,11 +268,6 @@ func (db *CachingDB) ContractCodeSize(addr common.Address, codeHash common.Hash)
 	}
 	code, err := db.ContractCode(addr, codeHash)
 	return len(code), err
-}
-
-// DiskDB returns the underlying key-value disk database.
-func (db *CachingDB) DiskDB() ethdb.KeyValueStore {
-	return db.disk
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.
