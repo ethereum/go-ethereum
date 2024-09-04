@@ -1055,13 +1055,14 @@ func TestSimulateV1(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
 	var (
-		accounts  = newAccounts(3)
-		genBlocks = 10
-		signer    = types.HomesteadSigner{}
-		cac       = common.HexToAddress("0x0000000000000000000000000000000000000cac")
-		bab       = common.HexToAddress("0x0000000000000000000000000000000000000bab")
-		coinbase  = "0x000000000000000000000000000000000000ffff"
-		genesis   = &core.Genesis{
+		accounts     = newAccounts(3)
+		fixedAccount = newTestAccount()
+		genBlocks    = 10
+		signer       = types.HomesteadSigner{}
+		cac          = common.HexToAddress("0x0000000000000000000000000000000000000cac")
+		bab          = common.HexToAddress("0x0000000000000000000000000000000000000bab")
+		coinbase     = "0x000000000000000000000000000000000000ffff"
+		genesis      = &core.Genesis{
 			Config: params.TestChainConfig,
 			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
@@ -1631,19 +1632,19 @@ func TestSimulateV1(t *testing.T) {
 					From:  &accounts[0].addr,
 					To:    &randomAccounts[0].addr,
 					Value: (*hexutil.Big)(big.NewInt(50)),
-					Input: hex2Bytes(strings.TrimPrefix(randomAccounts[1].addr.String(), "0x")),
+					Input: hex2Bytes(strings.TrimPrefix(fixedAccount.addr.String(), "0x")),
 				}},
 			}},
 			includeTransfers: &includeTransfers,
 			want: []blockRes{{
 				Number:        "0xb",
 				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xd984",
+				GasUsed:       "0x77dc",
 				Miner:         coinbase,
 				BaseFeePerGas: "0x0",
 				Calls: []callRes{{
 					ReturnValue: "0x",
-					GasUsed:     "0xd984",
+					GasUsed:     "0x77dc",
 					Logs: []log{{
 						Address: transferAddress,
 						Topics: []common.Hash{
@@ -1658,7 +1659,7 @@ func TestSimulateV1(t *testing.T) {
 						Topics: []common.Hash{
 							transferTopic,
 							addressToHash(randomAccounts[0].addr),
-							addressToHash(randomAccounts[1].addr),
+							addressToHash(fixedAccount.addr),
 						},
 						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(100)).Bytes()),
 						BlockNumber: hexutil.Uint64(11),
@@ -2528,6 +2529,14 @@ func newAccounts(n int) (accounts []account) {
 	}
 	slices.SortFunc(accounts, func(a, b account) int { return a.addr.Cmp(b.addr) })
 	return accounts
+}
+
+func newTestAccount() account {
+	// testKey is a private key to use for funding a tester account.
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	// testAddr is the Ethereum address of the tester account.
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	return account{key: key, addr: addr}
 }
 
 func newRPCBalance(balance *big.Int) *hexutil.Big {
