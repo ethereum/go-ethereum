@@ -210,7 +210,11 @@ func (db *CachingDB) OpenTrie(root common.Hash) (Trie, error) {
 	if db.triedb.IsVerkle() {
 		return trie.NewVerkleTrie(root, db.triedb, db.pointCache)
 	}
-	return trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+	tr, err := trie.NewStateTrie(trie.StateTrieID(root), db.triedb)
+	if err != nil {
+		return nil, err
+	}
+	return tr, nil
 }
 
 // OpenStorageTrie opens the storage trie of an account.
@@ -221,7 +225,11 @@ func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 	if db.triedb.IsVerkle() {
 		return self, nil
 	}
-	return trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
+	tr, err := trie.NewStateTrie(trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root), db.triedb)
+	if err != nil {
+		return nil, err
+	}
+	return tr, nil
 }
 
 // ContractCode retrieves a particular contract's code.
