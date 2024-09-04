@@ -265,7 +265,7 @@ func NewEventSystem(sys *FilterSystem) *EventSystem {
 	m.stateSyncSub = m.backend.SubscribeStateSyncEvent(m.stateSyncCh)
 
 	// Make sure none of the subscriptions are empty
-	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil {
+	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
 		log.Crit("Subscribe for event system failed")
 	}
 
@@ -458,6 +458,7 @@ func (es *EventSystem) eventLoop() {
 	defer func() {
 		es.txsSub.Unsubscribe()
 		es.logsSub.Unsubscribe()
+		es.pendingLogsSub.Unsubscribe()
 		es.rmLogsSub.Unsubscribe()
 		es.chainSub.Unsubscribe()
 		es.stateSyncSub.Unsubscribe()

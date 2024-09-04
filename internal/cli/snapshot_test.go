@@ -46,6 +46,7 @@ var (
 )
 
 func TestOfflineBlockPrune(t *testing.T) {
+	t.Skip("PBSS does not support ancient block pruning")
 	t.Parallel()
 
 	// Corner case for 0 remain in ancinetStore.
