@@ -172,10 +172,10 @@ func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 	}
 }
 
-// NewDatabaseForTesting is similar to NewDatabase, but it sets up the different
-// data sources using the same provided database with default config for testing.
-func NewDatabaseForTesting(db ethdb.Database) *CachingDB {
-	return NewDatabase(triedb.NewDatabase(db, nil), nil)
+// NewDatabaseForTesting is similar to NewDatabase, but it initializes the caching
+// db by using an ephemeral memory db with default config for testing.
+func NewDatabaseForTesting() *CachingDB {
+	return NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
 }
 
 // Reader returns a state reader associated with the specified state root.

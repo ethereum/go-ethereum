@@ -26,20 +26,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 
 type stateEnv struct {
-	db    ethdb.Database
 	state *StateDB
 }
 
 func newStateEnv() *stateEnv {
-	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(types.EmptyRootHash, NewDatabaseForTesting(db))
-	return &stateEnv{db: db, state: sdb}
+	sdb, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	return &stateEnv{state: sdb}
 }
 
 func TestDump(t *testing.T) {
@@ -47,7 +44,7 @@ func TestDump(t *testing.T) {
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
 	tdb := NewDatabase(triedb, nil)
 	sdb, _ := New(types.EmptyRootHash, tdb)
-	s := &stateEnv{db: db, state: sdb}
+	s := &stateEnv{state: sdb}
 
 	// generate a few entries
 	obj1 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01}))
@@ -105,7 +102,7 @@ func TestIterativeDump(t *testing.T) {
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
 	tdb := NewDatabase(triedb, nil)
 	sdb, _ := New(types.EmptyRootHash, tdb)
-	s := &stateEnv{db: db, state: sdb}
+	s := &stateEnv{state: sdb}
 
 	// generate a few entries
 	obj1 := s.state.getOrNewStateObject(common.BytesToAddress([]byte{0x01}))
@@ -197,7 +194,7 @@ func TestSnapshotEmpty(t *testing.T) {
 }
 
 func TestCreateObjectRevert(t *testing.T) {
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(rawdb.NewMemoryDatabase()))
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 	addr := common.BytesToAddress([]byte("so0"))
 	snap := state.Snapshot()
 

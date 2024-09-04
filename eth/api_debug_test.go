@@ -136,7 +136,7 @@ func TestEmptyAccountRange(t *testing.T) {
 	t.Parallel()
 
 	var (
-		statedb = state.NewDatabaseForTesting(rawdb.NewMemoryDatabase())
+		statedb = state.NewDatabaseForTesting()
 		st, _   = state.New(types.EmptyRootHash, statedb)
 	)
 	// Commit(although nothing to flush) and re-init the statedb

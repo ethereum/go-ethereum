@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -602,7 +601,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		}
 	}
 	t.Run("MPT", func(t *testing.T) {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(rawdb.NewDatabase(memorydb.New())))
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		test(statedb)
 	})
 	t.Run("Verkle", func(t *testing.T) {
