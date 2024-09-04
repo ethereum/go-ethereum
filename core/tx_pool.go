@@ -94,6 +94,8 @@ var (
 var (
 	evictionInterval    = time.Minute     // Time interval to check for evictable transactions
 	statsReportInterval = 8 * time.Second // Time interval to report transaction pool stats
+
+	dumpReorgTxHashThreshold = 100 // Number of transaction hashse to dump when runReorg
 )
 
 var (
@@ -1362,6 +1364,13 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 			txs = append(txs, set.Flatten()...)
 		}
 		pool.txFeed.Send(NewTxsEvent{txs})
+
+		log.Debug("runReorg", "len(txs)", len(txs))
+		if len(txs) > dumpReorgTxHashThreshold {
+			for _, txs := range txs {
+				log.Debug("dumping runReorg tx hashes", "txHash", txs.Hash().Hex())
+			}
+		}
 	}
 }
 
