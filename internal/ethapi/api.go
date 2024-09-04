@@ -1268,6 +1268,9 @@ func RPCMarshalHeader(head *types.Header) map[string]interface{} {
 	if head.ParentBeaconRoot != nil {
 		result["parentBeaconBlockRoot"] = head.ParentBeaconRoot
 	}
+	if head.RequestsHash != nil {
+		result["requestsRoot"] = head.RequestsHash
+	}
 	return result
 }
 
@@ -1302,6 +1305,9 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	fields["uncles"] = uncleHashes
 	if block.Header().WithdrawalsHash != nil {
 		fields["withdrawals"] = block.Withdrawals()
+	}
+	if block.Header().RequestsHash != nil {
+		fields["requests"] = block.Requests()
 	}
 	return fields
 }

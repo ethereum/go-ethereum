@@ -163,13 +163,14 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		if err != nil {
 			return err
 		}
-		receipts, _, usedGas, err := blockchain.processor.Process(block, statedb, vm.Config{})
+		res, err := blockchain.processor.Process(block, statedb, vm.Config{})
 		if err != nil {
-			blockchain.reportBlock(block, receipts, err)
+			blockchain.reportBlock(block, res, err)
 			return err
 		}
-		if err = blockchain.validator.ValidateState(block, statedb, receipts, usedGas, false); err != nil {
-			blockchain.reportBlock(block, receipts, err)
+		err = blockchain.validator.ValidateState(block, statedb, res, false)
+		if err != nil {
+			blockchain.reportBlock(block, res, err)
 			return err
 		}
 
@@ -4218,5 +4219,92 @@ func TestEIP3651(t *testing.T) {
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
+	}
+}
+
+func TestEIP6110(t *testing.T) {
+	var (
+		engine = beacon.NewFaker()
+
+		// A sender who makes transactions, has some funds
+		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr   = crypto.PubkeyToAddress(key.PublicKey)
+		funds  = new(big.Int).Mul(common.Big1, big.NewInt(params.Ether))
+		config = *params.AllEthashProtocolChanges
+		gspec  = &Genesis{
+			Config: &config,
+			Alloc: types.GenesisAlloc{
+				addr: {Balance: funds},
+				config.DepositContractAddress: {
+					// Simple deposit generator, source: https://gist.github.com/lightclient/54abb2af2465d6969fa6d1920b9ad9d7
+					Code:    common.Hex2Bytes("6080604052366103aa575f603067ffffffffffffffff811115610025576100246103ae565b5b6040519080825280601f01601f1916602001820160405280156100575781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f8151811061007d5761007c6103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f602067ffffffffffffffff8111156100c7576100c66103ae565b5b6040519080825280601f01601f1916602001820160405280156100f95781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f8151811061011f5761011e6103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f600867ffffffffffffffff811115610169576101686103ae565b5b6040519080825280601f01601f19166020018201604052801561019b5781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f815181106101c1576101c06103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f606067ffffffffffffffff81111561020b5761020a6103ae565b5b6040519080825280601f01601f19166020018201604052801561023d5781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f81518110610263576102626103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f600867ffffffffffffffff8111156102ad576102ac6103ae565b5b6040519080825280601f01601f1916602001820160405280156102df5781602001600182028036833780820191505090505b5090505f8054906101000a900460ff1660f81b815f81518110610305576103046103db565b5b60200101907effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff191690815f1a9053505f8081819054906101000a900460ff168092919061035090610441565b91906101000a81548160ff021916908360ff160217905550507f649bbc62d0e31342afea4e5cd82d4049e7e1ee912fc0889aa790803be39038c585858585856040516103a09594939291906104d9565b60405180910390a1005b5f80fd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52604160045260245ffd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52603260045260245ffd5b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b5f60ff82169050919050565b5f61044b82610435565b915060ff820361045e5761045d610408565b5b600182019050919050565b5f81519050919050565b5f82825260208201905092915050565b8281835e5f83830152505050565b5f601f19601f8301169050919050565b5f6104ab82610469565b6104b58185610473565b93506104c5818560208601610483565b6104ce81610491565b840191505092915050565b5f60a0820190508181035f8301526104f181886104a1565b9050818103602083015261050581876104a1565b9050818103604083015261051981866104a1565b9050818103606083015261052d81856104a1565b9050818103608083015261054181846104a1565b9050969550505050505056fea26469706673582212208569967e58690162d7d6fe3513d07b393b4c15e70f41505cbbfd08f53eba739364736f6c63430008190033"),
+					Nonce:   0,
+					Balance: big.NewInt(0),
+				},
+			},
+		}
+	)
+
+	gspec.Config.BerlinBlock = common.Big0
+	gspec.Config.LondonBlock = common.Big0
+	gspec.Config.TerminalTotalDifficulty = common.Big0
+	gspec.Config.TerminalTotalDifficultyPassed = true
+	gspec.Config.ShanghaiTime = u64(0)
+	gspec.Config.CancunTime = u64(0)
+	gspec.Config.PragueTime = u64(0)
+	signer := types.LatestSigner(gspec.Config)
+
+	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
+		for i := 0; i < 5; i++ {
+			txdata := &types.DynamicFeeTx{
+				ChainID:    gspec.Config.ChainID,
+				Nonce:      uint64(i),
+				To:         &config.DepositContractAddress,
+				Gas:        500000,
+				GasFeeCap:  newGwei(5),
+				GasTipCap:  big.NewInt(2),
+				AccessList: nil,
+				Data:       []byte{},
+			}
+			tx := types.NewTx(txdata)
+			tx, _ = types.SignTx(tx, signer, key)
+			b.AddTx(tx)
+		}
+	})
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{DisableStack: true}, os.Stderr).Hooks()}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+
+	block := chain.GetBlockByNumber(1)
+	if len(block.Requests()) != 5 {
+		t.Fatalf("failed to retrieve deposits: have %d, want %d", len(block.Requests()), 5)
+	}
+
+	// Verify each index is correct.
+	for want, req := range block.Requests() {
+		d, ok := req.Inner().(*types.Deposit)
+		if !ok {
+			t.Fatalf("expected deposit object")
+		}
+		if got := int(d.PublicKey[0]); got != want {
+			t.Fatalf("invalid pubkey: have %d, want %d", got, want)
+		}
+		if got := int(d.WithdrawalCredentials[0]); got != want {
+			t.Fatalf("invalid withdrawal credentials: have %d, want %d", got, want)
+		}
+		if d.Amount != uint64(want) {
+			t.Fatalf("invalid amounbt: have %d, want %d", d.Amount, want)
+		}
+		if got := int(d.Signature[0]); got != want {
+			t.Fatalf("invalid signature: have %d, want %d", got, want)
+		}
+		if d.Index != uint64(want) {
+			t.Fatalf("invalid index: have %d, want %d", d.Index, want)
+		}
 	}
 }

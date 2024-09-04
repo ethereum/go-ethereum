@@ -53,7 +53,7 @@ func NewStateProcessor(config *params.ChainConfig, chain *HeaderChain) *StatePro
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*ProcessResult, error) {
 	var (
 		receipts    types.Receipts
 		usedGas     = new(uint64)
@@ -71,6 +71,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	var (
 		context vm.BlockContext
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
+		err     error
 	)
 	context = NewEVMBlockContext(header, p.chain, nil)
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
@@ -84,21 +85,35 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i)
 
 		receipt, err := ApplyTransactionWithEVM(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+	// Read requests if Prague is enabled.
+	var requests types.Requests
+	if p.config.IsPrague(block.Number(), block.Time()) {
+		requests, err = ParseDepositLogs(allLogs, p.config)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.chain.engine.Finalize(p.chain, header, statedb, block.Body())
 
-	return receipts, allLogs, *usedGas, nil
+	return &ProcessResult{
+		Receipts: receipts,
+		Requests: requests,
+		Logs:     allLogs,
+		GasUsed:  *usedGas,
+	}, nil
 }
 
 // ApplyTransactionWithEVM attempts to apply a transaction to the given state database
@@ -238,4 +253,20 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.
 	statedb.AddAddressToAccessList(params.HistoryStorageAddress)
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	statedb.Finalise(true)
+}
+
+// ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
+// BeaconDepositContract.
+func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) (types.Requests, error) {
+	deposits := make(types.Requests, 0)
+	for _, log := range logs {
+		if log.Address == config.DepositContractAddress {
+			d, err := types.UnpackIntoDeposit(log.Data)
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse deposit data: %v", err)
+			}
+			deposits = append(deposits, types.NewRequest(d))
+		}
+	}
+	return deposits, nil
 }
