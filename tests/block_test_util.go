@@ -64,7 +64,7 @@ func (t *BlockTest) MarshalJSON() ([]byte, error) {
 }
 
 // FromChain creates a BlockTest from the history of the given chain.
-func FromChain(db ethdb.Database, chain *core.BlockChain) (BlockTest, error) {
+func FromChain(db ethdb.Database, chain *core.BlockChain, post *types.GenesisAlloc) (BlockTest, error) {
 	var (
 		bt     = BlockTest{}
 		head   = chain.CurrentHeader()
@@ -86,12 +86,15 @@ func FromChain(db ethdb.Database, chain *core.BlockChain) (BlockTest, error) {
 	if err != nil {
 		return bt, fmt.Errorf("failed to get genesis alloc: %v", err)
 	}
+	if post == nil {
+		post = &types.GenesisAlloc{}
+	}
 	bt.json = btJSON{
 		Network:   capitalize(chain.Config().LatestFork(head.Number, head.Time).String()),
 		Blocks:    blocks,
 		Genesis:   FromHeader(chain.Genesis().Header()),
 		Pre:       alloc,
-		Post:      make(types.GenesisAlloc),
+		Post:      *post,
 		BestBlock: common.UnprefixedHash(head.Hash()),
 	}
 	return bt, nil

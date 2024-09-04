@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/tests"
 )
@@ -13,8 +14,8 @@ type BlockTest struct {
 	Expected []supplyInfo `json:"expected"`
 }
 
-func btFromChain(db ethdb.Database, chain *core.BlockChain) (*BlockTest, error) {
-	bt, err := tests.FromChain(db, chain)
+func btFromChain(db ethdb.Database, chain *core.BlockChain, post *types.GenesisAlloc) (*BlockTest, error) {
+	bt, err := tests.FromChain(db, chain, post)
 	if err != nil {
 		return nil, err
 	}
