@@ -68,7 +68,7 @@ func newTesterWithNotification(t *testing.T, success func()) *downloadTester {
 		Alloc:   types.GenesisAlloc{testAddress: {Balance: big.NewInt(1000000000000000)}},
 		BaseFee: big.NewInt(params.InitialBaseFee),
 	}
-	chain, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -230,6 +230,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 		txsHashes        = make([]common.Hash, len(bodies))
 		uncleHashes      = make([]common.Hash, len(bodies))
 		withdrawalHashes = make([]common.Hash, len(bodies))
+		requestsHashes   = make([]common.Hash, len(bodies))
 	)
 	hasher := trie.NewStackTrie(nil)
 	for i, body := range bodies {
@@ -248,7 +249,7 @@ func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash, sink chan *et
 	res := &eth.Response{
 		Req:  req,
 		Res:  (*eth.BlockBodiesResponse)(&bodies),
-		Meta: [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes},
+		Meta: [][]common.Hash{txsHashes, uncleHashes, withdrawalHashes, requestsHashes},
 		Time: 1,
 		Done: make(chan error, 1), // Ignore the returned status
 	}
