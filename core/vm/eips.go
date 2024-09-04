@@ -789,20 +789,20 @@ func opRjumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 // opRjumpv implements the RJUMPV opcode
 func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code  = scope.Contract.CodeAt(scope.CodeSection)
-		count = uint64(code[*pc+1]) + 1
-		idx   = scope.Stack.pop()
+		code     = scope.Contract.CodeAt(scope.CodeSection)
+		maxIndex = uint64(code[*pc+1]) + 1
+		idx      = scope.Stack.pop()
 	)
-	if idx, overflow := idx.Uint64WithOverflow(); overflow || idx >= count {
+	if idx, overflow := idx.Uint64WithOverflow(); overflow || idx >= maxIndex {
 		// Index out-of-bounds, don't branch, just skip over immediate
 		// argument.
-		*pc += 1 + count*2
+		*pc += 1 + maxIndex*2
 		return nil, nil
 	}
 	offset := parseInt16(code[*pc+2+2*idx.Uint64():])
 	// move pc past op and count byte (2), move past count number of 16bit offsets (count*2), add relative offset, subtract 1 to
 	// account for interpreter loop.
-	*pc = uint64(int64(*pc+2+count*2) + int64(offset) - 1)
+	*pc = uint64(int64(*pc+2+maxIndex*2) + int64(offset) - 1)
 	return nil, nil
 }
 
@@ -816,7 +816,7 @@ func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	if scope.Stack.len()+int(typ.MaxStackHeight)-int(typ.Input) > 1024 {
 		return nil, fmt.Errorf("stack overflow")
 	}
-	if len(scope.ReturnStack) > 1024 {
+	if scope.ReturnStack.Len() > 1024 {
 		return nil, fmt.Errorf("return stack overflow")
 	}
 	retCtx := &ReturnContext{
@@ -826,23 +826,18 @@ func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	}
 	scope.ReturnStack = append(scope.ReturnStack, retCtx)
 	scope.CodeSection = uint64(idx)
-	*pc = 0
-	*pc -= 1 // hacks xD (interpreter loop)
+	*pc = uint64(math.MaxUint64)
 	return nil, nil
 }
 
 // opRetf implements the RETF opcode
 func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	var (
-		last   = len(scope.ReturnStack) - 1
-		retCtx = scope.ReturnStack[last]
-	)
-	scope.ReturnStack = scope.ReturnStack[:last]
+	retCtx := scope.ReturnStack.Pop()
 	scope.CodeSection = retCtx.Section
 	*pc = retCtx.Pc - 1
 
 	// If returning from top frame, exit cleanly.
-	if len(scope.ReturnStack) == 0 {
+	if scope.ReturnStack.Len() == 0 {
 		return nil, errStopToken
 	}
 	return nil, nil
@@ -858,8 +853,7 @@ func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 		return nil, fmt.Errorf("stack overflow")
 	}
 	scope.CodeSection = uint64(idx)
-	*pc = 0
-	*pc -= 1 // hacks xD (interpreter loop)
+	*pc = uint64(math.MaxUint64)
 	return nil, nil
 }
 
@@ -947,11 +941,7 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	}
 	c.DataSize = len(c.Data)
 	// Restore context
-	var (
-		last   = len(scope.ReturnStack) - 1
-		retCtx = scope.ReturnStack[last]
-	)
-	scope.ReturnStack = scope.ReturnStack[:last]
+	retCtx := scope.ReturnStack.Pop()
 	scope.CodeSection = retCtx.Section
 	*pc = retCtx.Pc - 1 // account for interpreter loop
 	return c.MarshalBinary(), errStopToken

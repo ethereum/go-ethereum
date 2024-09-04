@@ -44,8 +44,24 @@ type ScopeContext struct {
 	Contract *Contract
 
 	CodeSection  uint64
-	ReturnStack  []*ReturnContext
+	ReturnStack  ReturnStack
 	InitCodeMode bool
+}
+
+type ReturnStack []*ReturnContext
+
+// Pop removes an element from the return stack
+// Panics if the return stack is empty, which should
+// never happen, since EOF code is verified for that.
+func (ctx *ReturnStack) Pop() *ReturnContext {
+	item := (*ctx)[ctx.Len()-1]
+	*ctx = (*ctx)[:ctx.Len()-1]
+	return item
+}
+
+// Len returns the length of the return stack
+func (ctx *ReturnStack) Len() int {
+	return len(*ctx)
 }
 
 type ReturnContext struct {
