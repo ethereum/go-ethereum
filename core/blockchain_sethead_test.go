@@ -2040,7 +2040,7 @@ func testSetHeadWithScheme(t *testing.T, tt *rewindTest, snapshots bool, scheme 
 		dbconfig.HashDB = hashdb.Defaults
 	}
 	chain.triedb = triedb.NewDatabase(chain.db, dbconfig)
-	chain.stateCache = state.NewDatabaseWithNodeDB(chain.db, chain.triedb)
+	chain.stateDb = state.NewDatabase(chain.db, chain.triedb, chain.snaps)
 
 	// Force run a freeze cycle
 	type freezer interface {

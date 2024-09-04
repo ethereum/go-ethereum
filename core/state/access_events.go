@@ -44,6 +44,7 @@ var zeroTreeIndex uint256.Int
 type AccessEvents struct {
 	branches map[branchAccessKey]mode
 	chunks   map[chunkAccessKey]mode
+	fills    map[chunkAccessKey]struct{}
 
 	pointCache *utils.PointCache
 }
@@ -52,6 +53,7 @@ func NewAccessEvents(pointCache *utils.PointCache) *AccessEvents {
 	return &AccessEvents{
 		branches:   make(map[branchAccessKey]mode),
 		chunks:     make(map[chunkAccessKey]mode),
+		fills:      make(map[chunkAccessKey]struct{}),
 		pointCache: pointCache,
 	}
 }
@@ -65,6 +67,9 @@ func (ae *AccessEvents) Merge(other *AccessEvents) {
 	}
 	for k, chunk := range other.chunks {
 		ae.chunks[k] |= chunk
+	}
+	for k := range other.fills {
+		ae.fills[k] = struct{}{}
 	}
 }
 
@@ -85,17 +90,24 @@ func (ae *AccessEvents) Copy() *AccessEvents {
 	cpy := &AccessEvents{
 		branches:   maps.Clone(ae.branches),
 		chunks:     maps.Clone(ae.chunks),
+		fills:      maps.Clone(ae.fills),
 		pointCache: ae.pointCache,
 	}
 	return cpy
 }
 
+// Reset resets all values of an access event, except its `fills` and point cache fields
+func (ae *AccessEvents) Reset() {
+	ae.branches = make(map[branchAccessKey]mode)
+	ae.chunks = make(map[chunkAccessKey]mode)
+}
+
 // AddAccount returns the gas to be charged for each of the currently cold
 // member fields of an account.
-func (ae *AccessEvents) AddAccount(addr common.Address, isWrite bool) uint64 {
+func (ae *AccessEvents) AddAccount(addr common.Address, isWrite, isFill bool) uint64 {
 	var gas uint64
-	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, isWrite)
-	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, isWrite)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, isWrite, isFill)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, isWrite, isFill)
 	return gas
 }
 
@@ -104,16 +116,18 @@ func (ae *AccessEvents) AddAccount(addr common.Address, isWrite bool) uint64 {
 // call to that account.
 func (ae *AccessEvents) MessageCallGas(destination common.Address) uint64 {
 	var gas uint64
-	gas += ae.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.BasicDataLeafKey, false)
+	gas += ae.touchAddressAndChargeGas(destination, zeroTreeIndex, utils.BasicDataLeafKey, false, false)
 	return gas
 }
 
 // ValueTransferGas returns the gas to be charged for each of the currently
 // cold balance member fields of the caller and the callee accounts.
-func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address) uint64 {
+func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address, isFill bool) uint64 {
 	var gas uint64
-	gas += ae.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, utils.BasicDataLeafKey, true)
-	gas += ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BasicDataLeafKey, true)
+	// TODO have a test to see what happens what happens when a tx from a non-existing
+	// account to another account (existing or not).
+	gas += ae.touchAddressAndChargeGas(callerAddr, zeroTreeIndex, utils.BasicDataLeafKey, true, false)
+	gas += ae.touchAddressAndChargeGas(targetAddr, zeroTreeIndex, utils.BasicDataLeafKey, true, isFill)
 	return gas
 }
 
@@ -121,34 +135,41 @@ func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address) 
 // a contract creation.
 func (ae *AccessEvents) ContractCreateInitGas(addr common.Address, createSendsValue bool) uint64 {
 	var gas uint64
-	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, true)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, true, true)
 	return gas
 }
 
 // AddTxOrigin adds the member fields of the sender account to the access event list,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
 func (ae *AccessEvents) AddTxOrigin(originAddr common.Address) {
-	ae.touchAddressAndChargeGas(originAddr, zeroTreeIndex, utils.BasicDataLeafKey, true)
-	ae.touchAddressAndChargeGas(originAddr, zeroTreeIndex, utils.CodeHashLeafKey, false)
+	ae.touchAddressAndChargeGas(originAddr, zeroTreeIndex, utils.BasicDataLeafKey, true, false)
+	ae.touchAddressAndChargeGas(originAddr, zeroTreeIndex, utils.CodeHashLeafKey, false, false)
 }
 
 // AddTxDestination adds the member fields of the sender account to the access event list,
 // so that cold accesses are not charged, since they are covered by the 21000 gas.
 func (ae *AccessEvents) AddTxDestination(addr common.Address, sendsValue bool) {
-	ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, sendsValue)
-	ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, false)
+	// For the balance, isFill is always set to true, as it will be covered by
+	// the intrinsic tx gas if needed. If the destination is written to during
+	// the contract execution, before the state db layer has saved it to disk,
+	// the fill cost will already have been covered by the intrinsic gas.
+	ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, sendsValue, true)
+	// This is set to false, because the hash leaf key isn't going to be written
+	// to by the contract execution, and the potential creation is covered by the
+	// intrinsic gas.
+	ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, false, false)
 }
 
 // SlotGas returns the amount of gas to be charged for a cold storage access.
-func (ae *AccessEvents) SlotGas(addr common.Address, slot common.Hash, isWrite bool) uint64 {
+func (ae *AccessEvents) SlotGas(addr common.Address, slot common.Hash, isWrite, isFill bool) uint64 {
 	treeIndex, subIndex := utils.StorageIndex(slot.Bytes())
-	return ae.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite)
+	return ae.touchAddressAndChargeGas(addr, *treeIndex, subIndex, isWrite, isFill)
 }
 
 // touchAddressAndChargeGas adds any missing access event to the access event list, and returns the cold
 // access cost to be charged, if need be.
-func (ae *AccessEvents) touchAddressAndChargeGas(addr common.Address, treeIndex uint256.Int, subIndex byte, isWrite bool) uint64 {
-	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := ae.touchAddress(addr, treeIndex, subIndex, isWrite)
+func (ae *AccessEvents) touchAddressAndChargeGas(addr common.Address, treeIndex uint256.Int, subIndex byte, isWrite, isFill bool) uint64 {
+	stemRead, selectorRead, stemWrite, selectorWrite, selectorFill := ae.touchAddress(addr, treeIndex, subIndex, isWrite, isFill)
 
 	var gas uint64
 	if stemRead {
@@ -170,7 +191,7 @@ func (ae *AccessEvents) touchAddressAndChargeGas(addr common.Address, treeIndex 
 }
 
 // touchAddress adds any missing access event to the access event list.
-func (ae *AccessEvents) touchAddress(addr common.Address, treeIndex uint256.Int, subIndex byte, isWrite bool) (bool, bool, bool, bool, bool) {
+func (ae *AccessEvents) touchAddress(addr common.Address, treeIndex uint256.Int, subIndex byte, isWrite, isFill bool) (bool, bool, bool, bool, bool) {
 	branchKey := newBranchAccessKey(addr, treeIndex)
 	chunkKey := newChunkAccessKey(branchKey, subIndex)
 
@@ -198,7 +219,11 @@ func (ae *AccessEvents) touchAddress(addr common.Address, treeIndex uint256.Int,
 			chunkWrite = true
 			ae.chunks[chunkKey] |= AccessWitnessWriteFlag
 		}
-		// TODO: charge chunk filling costs if the leaf was previously empty in the state
+		_, ok := ae.fills[chunkKey]
+		if isFill && !ok {
+			chunkFill = true
+			ae.fills[chunkKey] = struct{}{}
+		}
 	}
 	return branchRead, chunkRead, branchWrite, chunkWrite, chunkFill
 }
@@ -228,7 +253,7 @@ func newChunkAccessKey(branchKey branchAccessKey, leafKey byte) chunkAccessKey {
 }
 
 // CodeChunksRangeGas is a helper function to touch every chunk in a code range and charge witness gas costs
-func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC, size uint64, codeLen uint64, isWrite bool) uint64 {
+func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC, size uint64, codeLen uint64, isWrite, isFill bool) uint64 {
 	// note that in the case where the copied code is outside the range of the
 	// contract code but touches the last leaf with contract code in it,
 	// we don't include the last leaf of code in the AccessWitness.  The
@@ -251,7 +276,7 @@ func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC,
 	for chunkNumber := startPC / 31; chunkNumber <= endPC/31; chunkNumber++ {
 		treeIndex := *uint256.NewInt((chunkNumber + 128) / 256)
 		subIndex := byte((chunkNumber + 128) % 256)
-		gas := ae.touchAddressAndChargeGas(contractAddr, treeIndex, subIndex, isWrite)
+		gas := ae.touchAddressAndChargeGas(contractAddr, treeIndex, subIndex, isWrite, isFill)
 		var overflow bool
 		statelessGasCharged, overflow = math.SafeAdd(statelessGasCharged, gas)
 		if overflow {
@@ -265,8 +290,8 @@ func (ae *AccessEvents) CodeChunksRangeGas(contractAddr common.Address, startPC,
 // amount of gas that it costs.
 // Note that an access in write mode implies an access in read mode, whereas an
 // access in read mode does not imply an access in write mode.
-func (ae *AccessEvents) BasicDataGas(addr common.Address, isWrite bool) uint64 {
-	return ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, isWrite)
+func (ae *AccessEvents) BasicDataGas(addr common.Address, isWrite, isFill bool) uint64 {
+	return ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, isWrite, isFill)
 }
 
 // CodeHashGas adds the account's code hash to the accessed data, and returns the
@@ -274,6 +299,6 @@ func (ae *AccessEvents) BasicDataGas(addr common.Address, isWrite bool) uint64 {
 // in write mode. If false, the charged gas corresponds to an access in read mode.
 // Note that an access in write mode implies an access in read mode, whereas an access in
 // read mode does not imply an access in write mode.
-func (ae *AccessEvents) CodeHashGas(addr common.Address, isWrite bool) uint64 {
-	return ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, isWrite)
+func (ae *AccessEvents) CodeHashGas(addr common.Address, isWrite, isFill bool) uint64 {
+	return ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, isWrite, isFill)
 }

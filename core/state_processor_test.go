@@ -602,7 +602,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		}
 	}
 	t.Run("MPT", func(t *testing.T) {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(rawdb.NewDatabase(memorydb.New())))
 		test(statedb)
 	})
 	t.Run("Verkle", func(t *testing.T) {
@@ -610,7 +610,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
-		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(db, triedb, nil))
 		test(statedb)
 	})
 }
