@@ -164,9 +164,9 @@ type CachingDB struct {
 }
 
 // NewDatabase creates a state database with the provided data sources.
-func NewDatabase(disk ethdb.Database, triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
+func NewDatabase(triedb *triedb.Database, snap *snapshot.Tree) *CachingDB {
 	return &CachingDB{
-		disk:          disk,
+		disk:          triedb.Disk(),
 		triedb:        triedb,
 		snap:          snap,
 		codeCache:     lru.NewSizeConstrainedCache[common.Hash, []byte](codeCacheSize),
@@ -178,7 +178,7 @@ func NewDatabase(disk ethdb.Database, triedb *triedb.Database, snap *snapshot.Tr
 // NewDatabaseForTesting is similar to NewDatabase, but it sets up the different
 // data sources using the same provided database with default config for testing.
 func NewDatabaseForTesting(db ethdb.Database) *CachingDB {
-	return NewDatabase(db, triedb.NewDatabase(db, nil), nil)
+	return NewDatabase(triedb.NewDatabase(db, nil), nil)
 }
 
 // Reader returns a state reader associated with the specified state root.
@@ -291,11 +291,6 @@ func (db *CachingDB) PointCache() *utils.PointCache {
 // Snapshot returns the underlying state snapshot.
 func (db *CachingDB) Snapshot() *snapshot.Tree {
 	return db.snap
-}
-
-// SetSnapshot sets the provided state snapshot.
-func (db *CachingDB) SetSnapshot(snap *snapshot.Tree) {
-	db.snap = snap
 }
 
 // mustCopyTrie returns a deep-copied trie.

@@ -52,7 +52,7 @@ func TestUpdateLeaks(t *testing.T) {
 	var (
 		db  = rawdb.NewMemoryDatabase()
 		tdb = triedb.NewDatabase(db, nil)
-		sdb = NewDatabase(db, tdb, nil)
+		sdb = NewDatabase(tdb, nil)
 	)
 	state, _ := New(types.EmptyRootHash, sdb)
 
@@ -90,8 +90,8 @@ func TestIntermediateLeaks(t *testing.T) {
 	finalDb := rawdb.NewMemoryDatabase()
 	transNdb := triedb.NewDatabase(transDb, nil)
 	finalNdb := triedb.NewDatabase(finalDb, nil)
-	transState, _ := New(types.EmptyRootHash, NewDatabase(transDb, transNdb, nil))
-	finalState, _ := New(types.EmptyRootHash, NewDatabase(finalDb, finalNdb, nil))
+	transState, _ := New(types.EmptyRootHash, NewDatabase(transNdb, nil))
+	finalState, _ := New(types.EmptyRootHash, NewDatabase(finalNdb, nil))
 
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, uint256.NewInt(uint64(11*i)+uint64(tweak)), tracing.BalanceChangeUnspecified)
@@ -989,7 +989,7 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 			CleanCacheSize: 0,
 		}}) // disable caching
 	}
-	db := NewDatabase(memDb, tdb, nil)
+	db := NewDatabase(tdb, nil)
 
 	var root common.Hash
 	state, _ := New(types.EmptyRootHash, db)
@@ -1211,7 +1211,7 @@ func TestFlushOrderDataLoss(t *testing.T) {
 	var (
 		memdb    = rawdb.NewMemoryDatabase()
 		triedb   = triedb.NewDatabase(memdb, triedb.HashDefaults)
-		statedb  = NewDatabase(memdb, triedb, nil)
+		statedb  = NewDatabase(triedb, nil)
 		state, _ = New(types.EmptyRootHash, statedb)
 	)
 	for a := byte(0); a < 10; a++ {
@@ -1284,7 +1284,7 @@ func TestDeleteStorage(t *testing.T) {
 		disk     = rawdb.NewMemoryDatabase()
 		tdb      = triedb.NewDatabase(disk, nil)
 		snaps, _ = snapshot.New(snapshot.Config{CacheSize: 10}, disk, tdb, types.EmptyRootHash)
-		db       = NewDatabase(disk, tdb, snaps)
+		db       = NewDatabase(tdb, snaps)
 		state, _ = New(types.EmptyRootHash, db)
 		addr     = common.HexToAddress("0x1")
 	)
@@ -1299,8 +1299,8 @@ func TestDeleteStorage(t *testing.T) {
 	root, _ := state.Commit(0, true)
 
 	// Init phase done, create two states, one with snap and one without
-	fastState, _ := New(root, NewDatabase(disk, tdb, snaps))
-	slowState, _ := New(root, NewDatabase(disk, tdb, nil))
+	fastState, _ := New(root, NewDatabase(tdb, snaps))
+	slowState, _ := New(root, NewDatabase(tdb, nil))
 
 	obj := fastState.getOrNewStateObject(addr)
 	storageRoot := obj.data.Root
@@ -1338,7 +1338,7 @@ func TestStorageDirtiness(t *testing.T) {
 	var (
 		disk       = rawdb.NewMemoryDatabase()
 		tdb        = triedb.NewDatabase(disk, nil)
-		db         = NewDatabase(disk, tdb, nil)
+		db         = NewDatabase(tdb, nil)
 		state, _   = New(types.EmptyRootHash, db)
 		addr       = common.HexToAddress("0x1")
 		checkDirty = func(key common.Hash, value common.Hash, dirty bool) {

@@ -610,7 +610,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
-		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(db, triedb, nil))
+		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))
 		test(statedb)
 	})
 }

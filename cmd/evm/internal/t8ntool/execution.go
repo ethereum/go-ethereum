@@ -413,7 +413,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB {
 	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
-	sdb := state.NewDatabase(db, tdb, nil)
+	sdb := state.NewDatabase(tdb, nil)
 	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)

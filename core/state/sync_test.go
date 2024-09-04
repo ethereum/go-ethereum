@@ -53,7 +53,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 	}
 	db := rawdb.NewMemoryDatabase()
 	nodeDb := triedb.NewDatabase(db, config)
-	sdb := NewDatabase(db, nodeDb, nil)
+	sdb := NewDatabase(nodeDb, nil)
 	state, _ := New(types.EmptyRootHash, sdb)
 
 	// Fill it with some arbitrary data
@@ -94,7 +94,7 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, scheme string, root com
 		config.PathDB = pathdb.Defaults
 	}
 	// Check root availability and state contents
-	state, err := New(root, NewDatabase(db, triedb.NewDatabase(db, &config), nil))
+	state, err := New(root, NewDatabase(triedb.NewDatabase(db, &config), nil))
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
@@ -120,7 +120,7 @@ func checkStateConsistency(db ethdb.Database, scheme string, root common.Hash) e
 	if scheme == rawdb.PathScheme {
 		config.PathDB = pathdb.Defaults
 	}
-	state, err := New(root, NewDatabase(db, triedb.NewDatabase(db, config), nil))
+	state, err := New(root, NewDatabase(triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return err
 	}

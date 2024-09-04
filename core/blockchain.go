@@ -308,7 +308,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		return nil, err
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
-	bc.stateDb = state.NewDatabase(bc.db, bc.triedb, nil)
+	bc.stateDb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
@@ -448,7 +448,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
 
 		// Re-initialize the state database with snapshot
-		bc.stateDb = state.NewDatabase(bc.db, bc.triedb, bc.snaps)
+		bc.stateDb = state.NewDatabase(bc.triedb, bc.snaps)
 	}
 
 	// Rewind the chain in case of an incompatible config upgrade.

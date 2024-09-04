@@ -45,7 +45,7 @@ func newStateEnv() *stateEnv {
 func TestDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
-	tdb := NewDatabase(db, triedb, nil)
+	tdb := NewDatabase(triedb, nil)
 	sdb, _ := New(types.EmptyRootHash, tdb)
 	s := &stateEnv{db: db, state: sdb}
 
@@ -103,7 +103,7 @@ func TestDump(t *testing.T) {
 func TestIterativeDump(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	triedb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
-	tdb := NewDatabase(db, triedb, nil)
+	tdb := NewDatabase(triedb, nil)
 	sdb, _ := New(types.EmptyRootHash, tdb)
 	s := &stateEnv{db: db, state: sdb}
 

@@ -216,7 +216,7 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, NewDatabase(disk, tdb, snaps))
+		state, err := New(root, NewDatabase(tdb, snaps))
 		if err != nil {
 			panic(err)
 		}
