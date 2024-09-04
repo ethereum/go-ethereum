@@ -1793,21 +1793,19 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		// transactions and probabilistically some of the account/storage trie nodes.
 		var followupInterrupt atomic.Bool
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
-			if followup, err := it.peek(); followup != nil && err == nil {
-				throwaway, _ := state.New(parent.Root, bc.statedb)
+			followup := block
+			throwaway, _ := state.New(parent.Root, bc.statedb)
+			go func(start time.Time, followup *types.Block, throwaway *state.StateDB) {
+				// Disable tracing for prefetcher executions.
+				vmCfg := bc.vmConfig
+				vmCfg.Tracer = nil
+				bc.prefetcher.Prefetch(followup, throwaway, vmCfg, &followupInterrupt)
 
-				go func(start time.Time, followup *types.Block, throwaway *state.StateDB) {
-					// Disable tracing for prefetcher executions.
-					vmCfg := bc.vmConfig
-					vmCfg.Tracer = nil
-					bc.prefetcher.Prefetch(followup, throwaway, vmCfg, &followupInterrupt)
-
-					blockPrefetchExecuteTimer.Update(time.Since(start))
-					if followupInterrupt.Load() {
-						blockPrefetchInterruptMeter.Mark(1)
-					}
-				}(time.Now(), followup, throwaway)
-			}
+				blockPrefetchExecuteTimer.Update(time.Since(start))
+				if followupInterrupt.Load() {
+					blockPrefetchInterruptMeter.Mark(1)
+				}
+			}(time.Now(), followup, throwaway)
 		}
 
 		// The traced section of block import.
