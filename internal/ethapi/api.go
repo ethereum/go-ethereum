@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"strings"
 	"time"
@@ -1164,7 +1165,7 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		blockOverrides.Apply(&blockCtx)
 	}
 	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
-	precompiles := vm.ActivePrecompiledContracts(rules).Copy()
+	precompiles := maps.Clone(vm.ActivePrecompiledContracts(rules))
 	if err := overrides.Apply(state, precompiles); err != nil {
 		return nil, err
 	}

@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -172,16 +173,6 @@ func init() {
 	}
 }
 
-// Copy returns a copy of the precompiled contracts. The precompiled
-// contracts are shallow-copied. It should be safe as they are stateless/immutable.
-func (p PrecompiledContracts) Copy() PrecompiledContracts {
-	c := make(PrecompiledContracts)
-	for k, v := range p {
-		c[k] = v
-	}
-	return c
-}
-
 func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 	switch {
 	case rules.IsVerkle:
@@ -203,7 +194,7 @@ func activePrecompiledContracts(rules params.Rules) PrecompiledContracts {
 
 // ActivePrecompiledContracts returns a copy of precompiled contracts enabled with the current configuration.
 func ActivePrecompiledContracts(rules params.Rules) PrecompiledContracts {
-	return activePrecompiledContracts(rules).Copy()
+	return maps.Clone(activePrecompiledContracts(rules))
 }
 
 // ActivePrecompiles returns the precompile addresses enabled with the current configuration.

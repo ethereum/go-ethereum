@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"time"
 
@@ -282,7 +283,7 @@ func (sim *simulator) activePrecompiles(ctx context.Context, base *types.Header)
 		blockContext = core.NewEVMBlockContext(base, NewChainContext(ctx, sim.b), nil)
 		rules        = sim.chainConfig.Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
 	)
-	return vm.ActivePrecompiledContracts(rules).Copy()
+	return maps.Clone(vm.ActivePrecompiledContracts(rules))
 }
 
 // sanitizeChain checks the chain integrity. Specifically it checks that
