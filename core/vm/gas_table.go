@@ -396,7 +396,7 @@ func gasCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize
 	}
 	if evm.chainRules.IsEIP4762 {
 		if transfersValue {
-			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address))
+			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address, !evm.StateDB.Exist(address)))
 			if overflow {
 				return 0, ErrGasUintOverflow
 			}
@@ -432,7 +432,7 @@ func gasCallCode(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memory
 		address := common.Address(stack.Back(1).Bytes20())
 		transfersValue := !stack.Back(2).IsZero()
 		if transfersValue {
-			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address))
+			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address, !evm.StateDB.Exist(address)))
 			if overflow {
 				return 0, ErrGasUintOverflow
 			}
