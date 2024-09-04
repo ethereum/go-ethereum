@@ -49,3 +49,8 @@ func ReadBlockRowConsumptionRLP(db ethdb.Reader, l2BlockHash common.Hash) rlp.Ra
 	}
 	return data
 }
+
+// DeleteBlockRowConsumption deletes a RowConsumption of the block from the database
+func DeleteBlockRowConsumption(db ethdb.KeyValueWriter, l2BlockHash common.Hash) error {
+	return db.Delete(rowConsumptionKey(l2BlockHash))
+}

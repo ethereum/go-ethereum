@@ -17,8 +17,8 @@
 package miner
 
 import (
-	"bytes"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
@@ -32,13 +32,13 @@ import (
 	"github.com/scroll-tech/go-ethereum/core/rawdb"
 	"github.com/scroll-tech/go-ethereum/core/state"
 	"github.com/scroll-tech/go-ethereum/core/types"
+	"github.com/scroll-tech/go-ethereum/core/vm"
 	"github.com/scroll-tech/go-ethereum/event"
 	"github.com/scroll-tech/go-ethereum/log"
 	"github.com/scroll-tech/go-ethereum/metrics"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rollup/ccc"
 	"github.com/scroll-tech/go-ethereum/rollup/fees"
-	"github.com/scroll-tech/go-ethereum/rollup/pipeline"
 	"github.com/scroll-tech/go-ethereum/trie"
 )
 
@@ -52,18 +52,19 @@ const (
 )
 
 var (
+	deadCh = make(chan time.Time)
+
+	ErrUnexpectedL1MessageIndex = errors.New("unexpected L1 message index")
+
 	// Metrics for the skipped txs
-	l1TxGasLimitExceededCounter       = metrics.NewRegisteredCounter("miner/skipped_txs/l1/gas_limit_exceeded", nil)
-	l1TxRowConsumptionOverflowCounter = metrics.NewRegisteredCounter("miner/skipped_txs/l1/row_consumption_overflow", nil)
-	l2TxRowConsumptionOverflowCounter = metrics.NewRegisteredCounter("miner/skipped_txs/l2/row_consumption_overflow", nil)
-	l1TxCccUnknownErrCounter          = metrics.NewRegisteredCounter("miner/skipped_txs/l1/ccc_unknown_err", nil)
-	l2TxCccUnknownErrCounter          = metrics.NewRegisteredCounter("miner/skipped_txs/l2/ccc_unknown_err", nil)
-	l1TxStrangeErrCounter             = metrics.NewRegisteredCounter("miner/skipped_txs/l1/strange_err", nil)
+	l1SkippedCounter = metrics.NewRegisteredCounter("miner/skipped_txs/l1", nil)
+	l2SkippedCounter = metrics.NewRegisteredCounter("miner/skipped_txs/l2", nil)
 
 	collectL1MsgsTimer = metrics.NewRegisteredTimer("miner/collect_l1_msgs", nil)
 	prepareTimer       = metrics.NewRegisteredTimer("miner/prepare", nil)
 	collectL2Timer     = metrics.NewRegisteredTimer("miner/collect_l2_txns", nil)
 	l2CommitTimer      = metrics.NewRegisteredTimer("miner/commit", nil)
+	cccStallTimer      = metrics.NewRegisteredTimer("miner/ccc_stall", nil)
 
 	commitReasonCCCCounter      = metrics.NewRegisteredCounter("miner/commit_reason_ccc", nil)
 	commitReasonDeadlineCounter = metrics.NewRegisteredCounter("miner/commit_reason_deadline", nil)
@@ -75,6 +76,39 @@ var (
 type prioritizedTransaction struct {
 	blockNumber uint64
 	tx          *types.Transaction
+}
+
+// work represents the active block building task
+type work struct {
+	deadlineTimer   *time.Timer
+	deadlineReached bool
+	cccLogger       *ccc.Logger
+	vmConfig        vm.Config
+
+	reorgReason error
+
+	// accumulated state
+	nextL1MsgIndex uint64
+	gasPool        *core.GasPool
+	blockSize      common.StorageSize
+
+	header        *types.Header
+	state         *state.StateDB
+	txs           types.Transactions
+	receipts      types.Receipts
+	coalescedLogs []*types.Log
+}
+
+func (w *work) deadlineCh() <-chan time.Time {
+	if w == nil {
+		return deadCh
+	}
+	return w.deadlineTimer.C
+}
+
+type reorgTrigger struct {
+	block  *types.Block
+	reason error
 }
 
 // worker is the main object which takes care of submitting new work to consensus engine
@@ -99,11 +133,10 @@ type worker struct {
 	// Channels
 	startCh chan struct{}
 	exitCh  chan struct{}
+	reorgCh chan reorgTrigger
 
-	wg sync.WaitGroup
-
-	currentPipelineStart time.Time
-	currentPipeline      *pipeline.Pipeline
+	wg      sync.WaitGroup
+	current *work
 
 	mu       sync.RWMutex // The lock used to protect the coinbase and extra fields
 	coinbase common.Address
@@ -128,29 +161,33 @@ type worker struct {
 	// External functions
 	isLocalBlock func(block *types.Block) bool // Function used to determine whether the specified block is mined by local miner.
 
-	circuitCapacityChecker *ccc.Checker
-	prioritizedTx          *prioritizedTransaction
+	prioritizedTx *prioritizedTransaction
+
+	asyncChecker *ccc.AsyncChecker
 
 	// Test hooks
 	beforeTxHook func() // Method to call before processing a transaction.
+
+	errCountdown int
+	skipTxHash   common.Hash
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
-		config:                 config,
-		chainConfig:            chainConfig,
-		engine:                 engine,
-		eth:                    eth,
-		mux:                    mux,
-		chain:                  eth.BlockChain(),
-		isLocalBlock:           isLocalBlock,
-		txsCh:                  make(chan core.NewTxsEvent, txChanSize),
-		chainHeadCh:            make(chan core.ChainHeadEvent, chainHeadChanSize),
-		exitCh:                 make(chan struct{}),
-		startCh:                make(chan struct{}, 1),
-		circuitCapacityChecker: ccc.NewChecker(true),
+		config:       config,
+		chainConfig:  chainConfig,
+		engine:       engine,
+		eth:          eth,
+		mux:          mux,
+		chain:        eth.BlockChain(),
+		isLocalBlock: isLocalBlock,
+		txsCh:        make(chan core.NewTxsEvent, txChanSize),
+		chainHeadCh:  make(chan core.ChainHeadEvent, chainHeadChanSize),
+		exitCh:       make(chan struct{}),
+		startCh:      make(chan struct{}, 1),
+		reorgCh:      make(chan reorgTrigger, 1),
 	}
-	log.Info("created new worker", "CircuitCapacityChecker ID", worker.circuitCapacityChecker.ID)
+	worker.asyncChecker = ccc.NewAsyncChecker(worker.chain, config.CCCMaxWorkers, false).WithOnFailingBlock(worker.onBlockFailingCCC)
 
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -172,12 +209,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		worker.startCh <- struct{}{}
 	}
 	return worker
-}
-
-// getCCC returns a pointer to this worker's CCC instance.
-// Only used in tests.
-func (w *worker) getCCC() *ccc.Checker {
-	return w.circuitCapacityChecker
 }
 
 // setEtherbase sets the etherbase used to initialize the block coinbase field.
@@ -261,44 +292,93 @@ func (w *worker) close() {
 	w.wg.Wait()
 }
 
+// checkHeadRowConsumption will start some initial workers to CCC check block close to the HEAD
+func (w *worker) checkHeadRowConsumption() error {
+	checkStart := uint64(1)
+	numOfBlocksToCheck := uint64(w.config.CCCMaxWorkers + 1)
+	currentHeight := w.chain.CurrentHeader().Number.Uint64()
+	if currentHeight > numOfBlocksToCheck {
+		checkStart = currentHeight - numOfBlocksToCheck
+	}
+
+	for curBlockNum := checkStart; curBlockNum <= currentHeight; curBlockNum++ {
+		block := w.chain.GetBlockByNumber(curBlockNum)
+		// only spawn CCC checkers for blocks with no row consumption data stored in DB
+		if rawdb.ReadBlockRowConsumption(w.chain.Database(), block.Hash()) == nil {
+			if err := w.asyncChecker.Check(block); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // mainLoop is a standalone goroutine to regenerate the sealing task based on the received event.
 func (w *worker) mainLoop() {
 	defer w.wg.Done()
+	defer w.asyncChecker.Wait()
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
-
-	deadCh := make(chan *pipeline.Result)
-	pipelineResultCh := func() <-chan *pipeline.Result {
-		if w.currentPipeline == nil {
-			return deadCh
+	defer func() {
+		// training wheels on
+		// lets not crash the node and allow us some time to inspect
+		p := recover()
+		if p != nil {
+			log.Error("worker mainLoop panic", "panic", p)
 		}
-		return w.currentPipeline.ResultCh
-	}
+	}()
 
+	var err error
 	for {
+		if _, isRetryable := err.(retryableCommitError); isRetryable {
+			if _, err = w.tryCommitNewWork(time.Now(), w.current.header.ParentHash, w.current.reorgReason); err != nil {
+				continue
+			}
+		} else if err != nil {
+			log.Error("failed to mine block", "err", err)
+			w.current = nil
+		}
+
+		// check for reorgs first to lower the chances of trying to handle another
+		// event eventhough a reorg is pending (due to Go `select` pseudo-randomly picking a case
+		// to execute if multiple of them are ready)
+		select {
+		case trigger := <-w.reorgCh:
+			err = w.handleReorg(&trigger)
+			continue
+		default:
+		}
+
 		select {
 		case <-w.startCh:
-			w.startNewPipeline(time.Now().Unix())
-		case <-w.chainHeadCh:
-			w.startNewPipeline(time.Now().Unix())
-		case result := <-pipelineResultCh():
-			w.handlePipelineResult(result)
+			if err := w.checkHeadRowConsumption(); err != nil {
+				log.Error("failed to start head checkers", "err", err)
+				return
+			}
+
+			_, err = w.tryCommitNewWork(time.Now(), w.chain.CurrentHeader().Hash(), nil)
+		case trigger := <-w.reorgCh:
+			err = w.handleReorg(&trigger)
+		case chainHead := <-w.chainHeadCh:
+			if w.isCanonical(chainHead.Block.Header()) {
+				_, err = w.tryCommitNewWork(time.Now(), chainHead.Block.Hash(), nil)
+			}
+		case <-w.current.deadlineCh():
+			w.current.deadlineReached = true
+			if len(w.current.txs) > 0 {
+				_, err = w.commit(false)
+			}
 		case ev := <-w.txsCh:
 			// Apply transactions to the pending state
 			//
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if w.currentPipeline != nil {
-				txs := make(map[common.Address]types.Transactions)
-				signer := types.MakeSigner(w.chainConfig, w.currentPipeline.Header.Number)
-				for _, tx := range ev.Txs {
-					acc, _ := types.Sender(signer, tx)
-					txs[acc] = append(txs[acc], tx)
-				}
-				txset := types.NewTransactionsByPriceAndNonce(signer, txs, w.currentPipeline.Header.BaseFee)
-				if result := w.currentPipeline.TryPushTxns(txset, w.onTxFailingInPipeline); result != nil {
-					w.handlePipelineResult(result)
+			if w.current != nil {
+				shouldCommit, _ := w.processTxnSlice(ev.Txs)
+				if shouldCommit || w.current.deadlineReached {
+					_, err = w.commit(false)
 				}
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
@@ -316,19 +396,19 @@ func (w *worker) mainLoop() {
 
 // updateSnapshot updates pending snapshot block and state.
 // Note this function assumes the current variable is thread safe.
-func (w *worker) updateSnapshot(current *pipeline.BlockCandidate) {
+func (w *worker) updateSnapshot() {
 	w.snapshotMu.Lock()
 	defer w.snapshotMu.Unlock()
 
 	w.snapshotBlock = types.NewBlock(
-		current.Header,
-		current.Txs,
+		w.current.header,
+		w.current.txs,
 		nil,
-		current.Receipts,
+		w.current.receipts,
 		trie.NewStackTrie(nil),
 	)
-	w.snapshotReceipts = copyReceipts(current.Receipts)
-	w.snapshotState = current.State.Copy()
+	w.snapshotReceipts = copyReceipts(w.current.receipts)
+	w.snapshotState = w.current.state.Copy()
 }
 
 func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx {
@@ -336,113 +416,132 @@ func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx
 	return rawdb.ReadL1MessagesFrom(w.eth.ChainDb(), startIndex, maxCount)
 }
 
-// startNewPipeline generates several new sealing tasks based on the parent block.
-func (w *worker) startNewPipeline(timestamp int64) {
-
-	if w.currentPipeline != nil {
-		w.currentPipeline.Release()
-		w.currentPipeline = nil
-	}
-
-	parent := w.chain.CurrentBlock()
-
-	num := parent.Number()
+// newWork
+func (w *worker) newWork(now time.Time, parentHash common.Hash, reorgReason error) error {
+	parent := w.chain.GetBlockByHash(parentHash)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
+		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		GasLimit:   core.CalcGasLimit(parent.GasLimit(), w.config.GasCeil),
 		Extra:      w.extra,
-		Time:       uint64(timestamp),
+		Time:       uint64(now.Unix()),
 	}
+
+	parentState, err := w.chain.StateAt(parent.Root())
+	if err != nil {
+		return fmt.Errorf("failed to fetch parent state: %w", err)
+	}
+
 	// Set baseFee if we are on an EIP-1559 chain
 	if w.chainConfig.IsCurie(header.Number) {
-		state, err := w.chain.StateAt(parent.Root())
-		if err != nil {
-			log.Error("Failed to create mining context", "err", err)
-			return
-		}
-		parentL1BaseFee := fees.GetL1BaseFee(state)
+		parentL1BaseFee := fees.GetL1BaseFee(parentState)
 		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header(), parentL1BaseFee)
 	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {
 		if w.coinbase == (common.Address{}) {
-			log.Error("Refusing to mine without etherbase")
-			return
+			return errors.New("refusing to mine without etherbase")
 		}
 		header.Coinbase = w.coinbase
 	}
 
 	prepareStart := time.Now()
 	if err := w.engine.Prepare(w.chain, header); err != nil {
-		log.Error("Failed to prepare header for mining", "err", err)
-		return
+		return fmt.Errorf("failed to prepare header for mining: %w", err)
 	}
 	prepareTimer.UpdateSince(prepareStart)
 
-	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
-	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil {
-		// Check whether the block is among the fork extra-override range
-		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
-			// Depending whether we support or oppose the fork, override differently
-			if w.chainConfig.DAOForkSupport {
-				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
-				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
-			}
-		}
+	var nextL1MsgIndex uint64
+	if dbVal := rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), header.ParentHash); dbVal != nil {
+		nextL1MsgIndex = *dbVal
 	}
 
-	parentState, err := w.chain.StateAt(parent.Root())
+	vmConfig := *w.chain.GetVMConfig()
+	cccLogger := ccc.NewLogger()
+	vmConfig.Debug = true
+	vmConfig.Tracer = cccLogger
+
+	deadline := time.Unix(int64(header.Time), 0)
+	if w.chainConfig.Clique != nil && w.chainConfig.Clique.RelaxedPeriod {
+		// clique with relaxed period uses time.Now() as the header.Time, calculate the deadline
+		deadline = time.Unix(int64(header.Time+w.chainConfig.Clique.Period), 0)
+	}
+
+	w.current = &work{
+		deadlineTimer:  time.NewTimer(time.Until(deadline)),
+		cccLogger:      cccLogger,
+		vmConfig:       vmConfig,
+		header:         header,
+		state:          parentState,
+		txs:            types.Transactions{},
+		receipts:       types.Receipts{},
+		coalescedLogs:  []*types.Log{},
+		gasPool:        new(core.GasPool).AddGas(header.GasLimit),
+		nextL1MsgIndex: nextL1MsgIndex,
+		reorgReason:    reorgReason,
+	}
+	return nil
+}
+
+// tryCommitNewWork
+func (w *worker) tryCommitNewWork(now time.Time, parent common.Hash, reorgReason error) (common.Hash, error) {
+	err := w.newWork(now, parent, reorgReason)
 	if err != nil {
-		log.Error("failed to fetch parent state", "err", err)
-		return
+		return common.Hash{}, fmt.Errorf("failed creating new work: %w", err)
 	}
 
-	// Apply special state transition at Curie block
-	if w.chainConfig.CurieBlock != nil && w.chainConfig.CurieBlock.Cmp(header.Number) == 0 {
-		misc.ApplyCurieHardFork(parentState)
+	shouldCommit, err := w.handleForks()
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed handling forks: %w", err)
+	}
 
-		var nextL1MsgIndex uint64
-		if dbVal := rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), header.ParentHash); dbVal != nil {
-			nextL1MsgIndex = *dbVal
+	// check if we are reorging
+	reorging := w.chain.GetBlockByNumber(w.current.header.Number.Uint64()) != nil
+	if !shouldCommit && reorging {
+		shouldCommit, err = w.processReorgedTxns(w.current.reorgReason)
+	}
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed handling reorged txns: %w", err)
+	}
+
+	if !shouldCommit {
+		shouldCommit, err = w.processTxPool()
+	}
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed processing tx pool: %w", err)
+	}
+
+	if shouldCommit {
+		// if reorging, force committing even if we are not "running"
+		// this can happen when sequencer is instructed to shutdown while handling a reorg
+		// we should make sure reorg is not interrupted
+		if blockHash, err := w.commit(reorging); err != nil {
+			return common.Hash{}, fmt.Errorf("failed committing new work: %w", err)
+		} else {
+			return blockHash, nil
 		}
-
-		// zkEVM requirement: Curie transition block contains 0 transactions, bypass pipeline.
-		err = w.commit(&pipeline.Result{
-			// Note: Signer nodes will not store CCC results for empty blocks in their database.
-			// In practice, this is acceptable, since this block will never overflow, and follower
-			// nodes will still store CCC results.
-			Rows: &types.RowConsumption{},
-			FinalBlock: &pipeline.BlockCandidate{
-				Header:         header,
-				State:          parentState,
-				Txs:            types.Transactions{},
-				Receipts:       types.Receipts{},
-				CoalescedLogs:  []*types.Log{},
-				NextL1MsgIndex: nextL1MsgIndex,
-			},
-		})
-
-		if err != nil {
-			log.Error("failed to commit Curie fork block", "reason", err)
-		}
-
-		return
 	}
+	return common.Hash{}, nil
+}
 
-	// fetch l1Txs
-	var l1Messages []types.L1MessageTx
-	if w.chainConfig.Scroll.ShouldIncludeL1Messages() {
-		common.WithTimer(collectL1MsgsTimer, func() {
-			l1Messages = w.collectPendingL1Messages(*rawdb.ReadFirstQueueIndexNotInL2Block(w.eth.ChainDb(), parent.Hash()))
-		})
+// handleForks
+func (w *worker) handleForks() (bool, error) {
+	if w.chainConfig.CurieBlock != nil && w.chainConfig.CurieBlock.Cmp(w.current.header.Number) == 0 {
+		misc.ApplyCurieHardFork(w.current.state)
+		return true, nil
 	}
+	return false, nil
+}
 
+// processTxPool
+func (w *worker) processTxPool() (bool, error) {
 	tidyPendingStart := time.Now()
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().PendingWithMax(false, w.config.MaxAccountsNum)
+
+	// Allow txpool to be reorged as we build current block
+	w.eth.TxPool().ResumeReorgs()
+
 	// Split the pending transactions into locals and remotes
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
 	for _, account := range w.eth.TxPool().Locals() {
@@ -453,165 +552,199 @@ func (w *worker) startNewPipeline(timestamp int64) {
 	}
 	collectL2Timer.UpdateSince(tidyPendingStart)
 
-	// Allow txpool to be reorged as we build current block
-	w.eth.TxPool().ResumeReorgs()
-
-	var nextL1MsgIndex uint64
-	if dbIndex := rawdb.ReadFirstQueueIndexNotInL2Block(w.chain.Database(), parent.Hash()); dbIndex != nil {
-		nextL1MsgIndex = *dbIndex
-	} else {
-		log.Error("failed to read nextL1MsgIndex", "parent", parent.Hash())
-		return
-	}
-
-	w.currentPipelineStart = time.Now()
-	pipelineCCC := w.getCCC()
-	if !w.isRunning() {
-		pipelineCCC = nil
-	}
-	w.currentPipeline = pipeline.NewPipeline(w.chain, *w.chain.GetVMConfig(), parentState, header, nextL1MsgIndex, pipelineCCC).WithBeforeTxHook(w.beforeTxHook)
-
-	deadline := time.Unix(int64(header.Time), 0)
-	if w.chainConfig.Clique != nil && w.chainConfig.Clique.RelaxedPeriod {
-		// clique with relaxed period uses time.Now() as the header.Time, calculate the deadline
-		deadline = time.Unix(int64(header.Time+w.chainConfig.Clique.Period), 0)
-	}
-
-	if err := w.currentPipeline.Start(deadline); err != nil {
-		log.Error("failed to start pipeline", "err", err)
-		return
+	// fetch l1Txs
+	var l1Messages []types.L1MessageTx
+	if w.chainConfig.Scroll.ShouldIncludeL1Messages() {
+		common.WithTimer(collectL1MsgsTimer, func() {
+			l1Messages = w.collectPendingL1Messages(w.current.nextL1MsgIndex)
+		})
 	}
 
 	// Short circuit if there is no available pending transactions.
 	// But if we disable empty precommit already, ignore it. Since
 	// empty block is necessary to keep the liveness of the network.
 	if len(localTxs) == 0 && len(remoteTxs) == 0 && len(l1Messages) == 0 && atomic.LoadUint32(&w.noempty) == 0 {
-		return
+		return false, nil
 	}
 
 	if w.chainConfig.Scroll.ShouldIncludeL1Messages() && len(l1Messages) > 0 {
 		log.Trace("Processing L1 messages for inclusion", "count", len(l1Messages))
 		txs, err := types.NewL1MessagesByQueueIndex(l1Messages)
 		if err != nil {
-			log.Error("Failed to create L1 message set", "l1Messages", l1Messages, "err", err)
-			return
+			return false, fmt.Errorf("failed to create L1 message set: %w", err)
 		}
 
-		if result := w.currentPipeline.TryPushTxns(txs, w.onTxFailingInPipeline); result != nil {
-			w.handlePipelineResult(result)
-			return
+		if shouldCommit, err := w.processTxns(txs); err != nil {
+			return false, fmt.Errorf("failed to include l1 msgs: %w", err)
+		} else if shouldCommit {
+			return true, nil
 		}
 	}
-	signer := types.MakeSigner(w.chainConfig, header.Number)
 
-	if w.prioritizedTx != nil && w.currentPipeline.Header.Number.Uint64() > w.prioritizedTx.blockNumber {
+	signer := types.MakeSigner(w.chainConfig, w.current.header.Number)
+	if w.prioritizedTx != nil && w.current.header.Number.Uint64() > w.prioritizedTx.blockNumber {
 		w.prioritizedTx = nil
 	}
 	if w.prioritizedTx != nil {
 		from, _ := types.Sender(signer, w.prioritizedTx.tx) // error already checked before
 		txList := map[common.Address]types.Transactions{from: []*types.Transaction{w.prioritizedTx.tx}}
-		txs := types.NewTransactionsByPriceAndNonce(signer, txList, header.BaseFee)
-		if result := w.currentPipeline.TryPushTxns(txs, w.onTxFailingInPipeline); result != nil {
-			w.handlePipelineResult(result)
-			return
+		txs := types.NewTransactionsByPriceAndNonce(signer, txList, w.current.header.BaseFee)
+
+		if shouldCommit, err := w.processTxns(txs); err != nil {
+			return false, fmt.Errorf("failed to include prioritized tx: %w", err)
+		} else if shouldCommit {
+			return true, nil
 		}
 	}
 
 	if len(localTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(signer, localTxs, header.BaseFee)
-		if result := w.currentPipeline.TryPushTxns(txs, w.onTxFailingInPipeline); result != nil {
-			w.handlePipelineResult(result)
-			return
-		}
-	}
-	if len(remoteTxs) > 0 {
-		txs := types.NewTransactionsByPriceAndNonce(signer, remoteTxs, header.BaseFee)
-		if result := w.currentPipeline.TryPushTxns(txs, w.onTxFailingInPipeline); result != nil {
-			w.handlePipelineResult(result)
-			return
+		txs := types.NewTransactionsByPriceAndNonce(signer, localTxs, w.current.header.BaseFee)
+		if shouldCommit, err := w.processTxns(txs); err != nil {
+			return false, fmt.Errorf("failed to include locals: %w", err)
+		} else if shouldCommit {
+			return true, nil
 		}
 	}
 
-	// pipelineCCC was nil, so the block was built for RPC purposes only. Stop the pipeline immediately
-	// and update the pending block.
-	if pipelineCCC == nil {
-		w.currentPipeline.Stop()
+	if len(remoteTxs) > 0 {
+		txs := types.NewTransactionsByPriceAndNonce(signer, remoteTxs, w.current.header.BaseFee)
+		if shouldCommit, err := w.processTxns(txs); err != nil {
+			return false, fmt.Errorf("failed to include remotes: %w", err)
+		} else if shouldCommit {
+			return true, nil
+		}
 	}
+
+	return false, nil
 }
 
-func (w *worker) handlePipelineResult(res *pipeline.Result) error {
-	startingHeader := w.currentPipeline.Header
-	w.currentPipeline.Release()
-	w.currentPipeline = nil
+// processTxnSlice
+func (w *worker) processTxnSlice(txns types.Transactions) (bool, error) {
+	txsMap := make(map[common.Address]types.Transactions)
+	signer := types.MakeSigner(w.chainConfig, w.current.header.Number)
+	for _, tx := range txns {
+		acc, _ := types.Sender(signer, tx)
+		txsMap[acc] = append(txsMap[acc], tx)
+	}
+	txset := types.NewTransactionsByPriceAndNonce(signer, txsMap, w.current.header.BaseFee)
+	return w.processTxns(txset)
+}
 
-	if res.FinalBlock != nil {
-		w.updateSnapshot(res.FinalBlock)
+// processReorgedTxns
+func (w *worker) processReorgedTxns(reason error) (bool, error) {
+	reorgedBlock := w.chain.GetBlockByNumber(w.current.header.Number.Uint64())
+	commitGasCounter.Dec(int64(reorgedBlock.GasUsed()))
+	reorgedTxns := reorgedBlock.Transactions()
+	var errorWithTxnIdx *ccc.ErrorWithTxnIdx
+	if len(reorgedTxns) > 0 && errors.As(reason, &errorWithTxnIdx) {
+		if errorWithTxnIdx.ShouldSkip {
+			w.skipTransaction(reorgedTxns[errorWithTxnIdx.TxIdx], reason)
+		}
+
+		// if errorWithTxnIdx.TxIdx is 0, we will end up creating an empty block.
+		// This is necessary to make sure that same height can not fail CCC check multiple times.
+		// Each reorg forces a block to be appended to the chain. If we let the same block to trigger
+		// multiple reorgs, we can't guarantee an upper bound on reorg depth anymore. We can revisit this
+		// when we can handle reorgs on sidechains that we are building to replace the canonical chain.
+		reorgedTxns = reorgedTxns[:errorWithTxnIdx.TxIdx]
 	}
 
-	// Rows being nil without an OverflowingTx means that block didn't go thru CCC,
-	// which means that we are not the sequencer. Do not attempt to commit.
-	if res.Rows == nil && res.OverflowingTx == nil {
-		return nil
-	}
+	w.processTxnSlice(reorgedTxns)
+	return true, nil
+}
 
-	if res.OverflowingTx != nil {
-		if res.FinalBlock == nil {
-			// first txn overflowed the circuit, skip
-			log.Info("Circuit capacity limit reached for a single tx", "tx", res.OverflowingTx.Hash().String(),
-				"isL1Message", res.OverflowingTx.IsL1MessageTx(), "reason", res.CCCErr.Error())
+// processTxns
+func (w *worker) processTxns(txs types.OrderedTransactionSet) (bool, error) {
+	for {
+		tx := txs.Peek()
+		if tx == nil {
+			break
+		}
 
-			// Store skipped transaction in local db
-			overflowingTrace := res.OverflowingTrace
-			if !w.config.StoreSkippedTxTraces {
-				overflowingTrace = nil
-			}
-			rawdb.WriteSkippedTransaction(w.eth.ChainDb(), res.OverflowingTx, overflowingTrace, res.CCCErr.Error(),
-				startingHeader.Number.Uint64(), nil)
-
-			if overflowingL1MsgTx := res.OverflowingTx.AsL1MessageTx(); overflowingL1MsgTx != nil {
-				rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), startingHeader.ParentHash, overflowingL1MsgTx.QueueIndex+1)
-			} else {
-				w.prioritizedTx = nil
-				w.eth.TxPool().RemoveTx(res.OverflowingTx.Hash(), true)
-			}
-		} else if !res.OverflowingTx.IsL1MessageTx() {
-			// prioritize overflowing L2 message as the first txn next block
-			// no need to prioritize L1 messages, they are fetched in order
-			// and processed first in every block anyways
-			w.prioritizedTx = &prioritizedTransaction{
-				blockNumber: startingHeader.Number.Uint64() + 1,
-				tx:          res.OverflowingTx,
-			}
+		shouldCommit, err := w.processTxn(tx)
+		if shouldCommit {
+			return true, nil
 		}
 
 		switch {
-		case res.OverflowingTx.IsL1MessageTx() &&
-			errors.Is(res.CCCErr, ccc.ErrBlockRowConsumptionOverflow):
-			l1TxRowConsumptionOverflowCounter.Inc(1)
-		case !res.OverflowingTx.IsL1MessageTx() &&
-			errors.Is(res.CCCErr, ccc.ErrBlockRowConsumptionOverflow):
-			l2TxRowConsumptionOverflowCounter.Inc(1)
-		case res.OverflowingTx.IsL1MessageTx() &&
-			errors.Is(res.CCCErr, ccc.ErrUnknown):
-			l1TxCccUnknownErrCounter.Inc(1)
-		case !res.OverflowingTx.IsL1MessageTx() &&
-			errors.Is(res.CCCErr, ccc.ErrUnknown):
-			l2TxCccUnknownErrCounter.Inc(1)
+		case err == nil, errors.Is(err, core.ErrNonceTooLow):
+			txs.Shift()
+		default:
+			w.onTxFailing(w.current.txs.Len(), tx, err)
+			if errors.Is(err, ccc.ErrBlockRowConsumptionOverflow) && w.current.txs.Len() > 0 {
+				return true, nil
+			}
+
+			if tx.IsL1MessageTx() {
+				txs.Shift()
+			} else {
+				txs.Pop()
+			}
 		}
 	}
 
-	var commitError error
-	if res.FinalBlock != nil {
-		if commitError = w.commit(res); commitError == nil {
-			return nil
-		}
-		log.Error("Commit failed", "header", res.FinalBlock.Header, "reason", commitError)
-		if _, isRetryable := commitError.(retryableCommitError); !isRetryable {
-			return commitError
-		}
+	return false, nil
+}
+
+// processTxn
+func (w *worker) processTxn(tx *types.Transaction) (bool, error) {
+	if w.beforeTxHook != nil {
+		w.beforeTxHook()
 	}
-	w.startNewPipeline(time.Now().Unix())
-	return nil
+
+	// If we don't have enough gas for any further transactions then we're done
+	if w.current.gasPool.Gas() < params.TxGas {
+		return true, nil
+	}
+
+	// If we have collected enough transactions then we're done
+	// Originally we only limit l2txs count, but now strictly limit total txs number.
+	if !w.chain.Config().Scroll.IsValidTxCount(w.current.txs.Len() + 1) {
+		return true, nil
+	}
+
+	if tx.IsL1MessageTx() && tx.AsL1MessageTx().QueueIndex != w.current.nextL1MsgIndex {
+		// Continue, we might still be able to include some L2 messages
+		return false, ErrUnexpectedL1MessageIndex
+	}
+
+	if !tx.IsL1MessageTx() && !w.chain.Config().Scroll.IsValidBlockSize(w.current.blockSize+tx.Size()) {
+		// can't fit this txn in this block, silently ignore and continue looking for more txns
+		return false, errors.New("tx too big")
+	}
+
+	// Start executing the transaction
+	w.current.state.SetTxContext(tx.Hash(), w.current.txs.Len())
+
+	// create new snapshot for `core.ApplyTransaction`
+	snapState := w.current.state.Snapshot()
+	snapGasPool := *w.current.gasPool
+	snapGasUsed := w.current.header.GasUsed
+	snapCccLogger := w.current.cccLogger.Snapshot()
+
+	w.forceTestErr(tx)
+	receipt, err := core.ApplyTransaction(w.chain.Config(), w.chain, nil /* coinbase will default to chainConfig.Scroll.FeeVaultAddress */, w.current.gasPool,
+		w.current.state, w.current.header, tx, &w.current.header.GasUsed, w.current.vmConfig)
+	if err != nil {
+		w.current.state.RevertToSnapshot(snapState)
+		*w.current.gasPool = snapGasPool
+		w.current.header.GasUsed = snapGasUsed
+		*w.current.cccLogger = *snapCccLogger
+		return false, err
+	}
+
+	// Everything ok, collect the logs and shift in the next transaction from the same account
+	w.current.coalescedLogs = append(w.current.coalescedLogs, receipt.Logs...)
+	w.current.txs = append(w.current.txs, tx)
+	w.current.receipts = append(w.current.receipts, receipt)
+
+	if !tx.IsL1MessageTx() {
+		// only consider block size limit for L2 transactions
+		w.current.blockSize += tx.Size()
+	} else {
+		w.current.nextL1MsgIndex = tx.AsL1MessageTx().QueueIndex + 1
+	}
+	return false, nil
 }
 
 // retryableCommitError wraps an error that happened during commit phase and indicates that worker can retry to build a new block
@@ -629,34 +762,31 @@ func (e retryableCommitError) Unwrap() error {
 
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
-func (w *worker) commit(res *pipeline.Result) error {
+func (w *worker) commit(force bool) (common.Hash, error) {
 	sealDelay := time.Duration(0)
 	defer func(t0 time.Time) {
 		l2CommitTimer.Update(time.Since(t0) - sealDelay)
 	}(time.Now())
 
-	if res.CCCErr != nil {
-		commitReasonCCCCounter.Inc(1)
-	} else {
-		commitReasonDeadlineCounter.Inc(1)
+	w.updateSnapshot()
+	if !w.isRunning() && !force {
+		return common.Hash{}, nil
 	}
-	commitGasCounter.Inc(int64(res.FinalBlock.Header.GasUsed))
 
-	block, err := w.engine.FinalizeAndAssemble(w.chain, res.FinalBlock.Header, res.FinalBlock.State,
-		res.FinalBlock.Txs, nil, res.FinalBlock.Receipts)
+	block, err := w.engine.FinalizeAndAssemble(w.chain, w.current.header, w.current.state,
+		w.current.txs, nil, w.current.receipts)
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	sealHash := w.engine.SealHash(block.Header())
 	log.Info("Committing new mining work", "number", block.Number(), "sealhash", sealHash,
-		"txs", res.FinalBlock.Txs.Len(),
-		"gas", block.GasUsed(), "fees", totalFees(block, res.FinalBlock.Receipts),
-		"elapsed", common.PrettyDuration(time.Since(w.currentPipelineStart)))
+		"txs", w.current.txs.Len(),
+		"gas", block.GasUsed(), "fees", totalFees(block, w.current.receipts))
 
 	resultCh, stopCh := make(chan *types.Block), make(chan struct{})
 	if err := w.engine.Seal(w.chain, block, resultCh, stopCh); err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	// Clique.Seal() will only wait for a second before giving up on us. So make sure there is nothing computational heavy
 	// or a call that blocks between the call to Seal and the line below. Seal might introduce some delay, so we keep track of
@@ -665,17 +795,17 @@ func (w *worker) commit(res *pipeline.Result) error {
 	block = <-resultCh
 	sealDelay = time.Since(sealStart)
 	if block == nil {
-		return errors.New("missed seal response from consensus engine")
+		return common.Hash{}, errors.New("missed seal response from consensus engine")
 	}
 
 	// verify the generated block with local consensus engine to make sure everything is as expected
 	if err = w.engine.VerifyHeader(w.chain, block.Header(), true); err != nil {
-		return retryableCommitError{inner: err}
+		return common.Hash{}, retryableCommitError{inner: err}
 	}
 
 	blockHash := block.Hash()
 
-	for i, receipt := range res.FinalBlock.Receipts {
+	for i, receipt := range w.current.receipts {
 		// add block location fields
 		receipt.BlockHash = blockHash
 		receipt.BlockNumber = block.Number()
@@ -686,7 +816,7 @@ func (w *worker) commit(res *pipeline.Result) error {
 		}
 	}
 
-	for _, log := range res.FinalBlock.CoalescedLogs {
+	for _, log := range w.current.coalescedLogs {
 		log.BlockHash = blockHash
 	}
 
@@ -701,36 +831,27 @@ func (w *worker) commit(res *pipeline.Result) error {
 			"Worker WriteFirstQueueIndexNotInL2Block",
 			"number", block.Number(),
 			"hash", blockHash.String(),
-			"nextL1MsgIndex", res.FinalBlock.NextL1MsgIndex,
+			"nextL1MsgIndex", w.current.nextL1MsgIndex,
 		)
-		rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), blockHash, res.FinalBlock.NextL1MsgIndex)
+		rawdb.WriteFirstQueueIndexNotInL2Block(w.eth.ChainDb(), blockHash, w.current.nextL1MsgIndex)
 	} else {
 		log.Trace(
 			"Worker WriteFirstQueueIndexNotInL2Block: not overwriting existing index",
 			"number", block.Number(),
 			"hash", blockHash.String(),
 			"index", *index,
-			"nextL1MsgIndex", res.FinalBlock.NextL1MsgIndex,
+			"nextL1MsgIndex", w.current.nextL1MsgIndex,
 		)
 	}
-	// Store circuit row consumption.
-	log.Trace(
-		"Worker write block row consumption",
-		"id", w.circuitCapacityChecker.ID,
-		"number", block.Number(),
-		"hash", blockHash.String(),
-		"accRows", res.Rows,
-	)
 
 	// A new block event will trigger a reorg in the txpool, pause reorgs to defer this until we fetch txns for next block.
 	// We may end up trying to process txns that we already included in the previous block, but they will all fail the nonce check
 	w.eth.TxPool().PauseReorgs()
 
-	rawdb.WriteBlockRowConsumption(w.eth.ChainDb(), blockHash, res.Rows)
 	// Commit block and state to database.
-	_, err = w.chain.WriteBlockWithState(block, res.FinalBlock.Receipts, res.FinalBlock.CoalescedLogs, res.FinalBlock.State, true)
+	_, err = w.chain.WriteBlockWithState(block, w.current.receipts, w.current.coalescedLogs, w.current.state, true)
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 
 	log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealHash, "hash", blockHash)
@@ -738,7 +859,20 @@ func (w *worker) commit(res *pipeline.Result) error {
 	// Broadcast the block and announce chain insertion event
 	w.mux.Post(core.NewMinedBlockEvent{Block: block})
 
-	return nil
+	checkStart := time.Now()
+	if err = w.asyncChecker.Check(block); err != nil {
+		log.Error("failed to launch CCC background task", "err", err)
+	}
+	cccStallTimer.UpdateSince(checkStart)
+
+	commitGasCounter.Inc(int64(block.GasUsed()))
+	if w.current.deadlineReached {
+		commitReasonDeadlineCounter.Inc(1)
+	} else {
+		commitReasonCCCCounter.Inc(1)
+	}
+	w.current = nil
+	return block.Hash(), nil
 }
 
 // copyReceipts makes a deep copy of the given receipts.
@@ -751,57 +885,67 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 	return result
 }
 
-func (w *worker) onTxFailingInPipeline(txIndex int, tx *types.Transaction, err error) bool {
+func (w *worker) onTxFailing(txIndex int, tx *types.Transaction, err error) {
 	if !w.isRunning() {
-		return false
+		return
 	}
 
-	writeTrace := func() {
-		var trace *types.BlockTrace
-		var errWithTrace *pipeline.ErrorWithTrace
-		if w.config.StoreSkippedTxTraces && errors.As(err, &errWithTrace) {
-			trace = errWithTrace.Trace
-		}
-		rawdb.WriteSkippedTransaction(w.eth.ChainDb(), tx, trace, err.Error(),
-			w.currentPipeline.Header.Number.Uint64(), nil)
-	}
-
-	switch {
-	case errors.Is(err, core.ErrGasLimitReached) && tx.IsL1MessageTx():
-		// If this block already contains some L1 messages try again in the next block.
+	if errors.Is(err, ccc.ErrBlockRowConsumptionOverflow) {
 		if txIndex > 0 {
-			break
+			if !tx.IsL1MessageTx() {
+				// prioritize overflowing L2 message as the first txn next block
+				// no need to prioritize L1 messages, they are fetched in order
+				// and processed first in every block anyways
+				w.prioritizedTx = &prioritizedTransaction{
+					blockNumber: w.current.header.Number.Uint64() + 1,
+					tx:          tx,
+				}
+			}
+			return
 		}
-		// A single L1 message leads to out-of-gas. Skip it.
-		queueIndex := tx.AsL1MessageTx().QueueIndex
-		log.Info("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block",
-			w.currentPipeline.Header.Number, "reason", "gas limit exceeded")
-		writeTrace()
-		l1TxGasLimitExceededCounter.Inc(1)
 
-	case errors.Is(err, core.ErrInsufficientFunds):
+		// first txn overflowed the circuit, skip
+		w.skipTransaction(tx, err)
+	} else if tx.IsL1MessageTx() {
+		if errors.Is(err, ErrUnexpectedL1MessageIndex) {
+			log.Warn(
+				"Unexpected L1 message queue index in worker", "got", tx.AsL1MessageTx().QueueIndex,
+			)
+			return
+		} else if txIndex > 0 {
+			// If this block already contains some L1 messages try again in the next block.
+			return
+		}
+
+		queueIndex := tx.AsL1MessageTx().QueueIndex
+		log.Warn("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block",
+			w.current.header.Number, "reason", err)
+		rawdb.WriteSkippedTransaction(w.eth.ChainDb(), tx, nil, err.Error(),
+			w.current.header.Number.Uint64(), nil)
+		w.current.nextL1MsgIndex = queueIndex + 1
+		l1SkippedCounter.Inc(1)
+	} else if errors.Is(err, core.ErrInsufficientFunds) {
 		log.Trace("Skipping tx with insufficient funds", "tx", tx.Hash().String())
 		w.eth.TxPool().RemoveTx(tx.Hash(), true)
-
-	case errors.Is(err, pipeline.ErrUnexpectedL1MessageIndex):
-		log.Warn(
-			"Unexpected L1 message queue index in worker",
-			"got", tx.AsL1MessageTx().QueueIndex,
-		)
-	case errors.Is(err, core.ErrGasLimitReached), errors.Is(err, core.ErrNonceTooLow), errors.Is(err, core.ErrNonceTooHigh), errors.Is(err, core.ErrTxTypeNotSupported):
-		break
-	default:
-		// Strange error
-		log.Debug("Transaction failed, account skipped", "hash", tx.Hash().String(), "err", err)
-		if tx.IsL1MessageTx() {
-			queueIndex := tx.AsL1MessageTx().QueueIndex
-			log.Info("Skipping L1 message", "queueIndex", queueIndex, "tx", tx.Hash().String(), "block",
-				w.currentPipeline.Header.Number, "reason", "strange error", "err", err)
-			writeTrace()
-			l1TxStrangeErrCounter.Inc(1)
-		}
 	}
-	return false
+}
+
+// skipTransaction
+func (w *worker) skipTransaction(tx *types.Transaction, err error) {
+	log.Info("Circuit capacity limit reached for a single tx", "isL1Message", tx.IsL1MessageTx(), "tx", tx.Hash().String())
+	rawdb.WriteSkippedTransaction(w.eth.ChainDb(), tx, nil, err.Error(),
+		w.current.header.Number.Uint64(), nil)
+	if tx.IsL1MessageTx() {
+		w.current.nextL1MsgIndex = tx.AsL1MessageTx().QueueIndex + 1
+		l1SkippedCounter.Inc(1)
+	} else {
+		if w.prioritizedTx != nil && w.prioritizedTx.tx.Hash() == tx.Hash() {
+			w.prioritizedTx = nil
+		}
+
+		w.eth.TxPool().RemoveTx(tx.Hash(), true)
+		l2SkippedCounter.Inc(1)
+	}
 }
 
 // totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.
@@ -812,4 +956,69 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Float {
 		feesWei.Add(feesWei, new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), minerFee))
 	}
 	return new(big.Float).Quo(new(big.Float).SetInt(feesWei), new(big.Float).SetInt(big.NewInt(params.Ether)))
+}
+
+func (w *worker) forceTestErr(tx *types.Transaction) {
+	if w.skipTxHash == tx.Hash() {
+		w.current.cccLogger.ForceError()
+	}
+
+	w.errCountdown--
+	if w.errCountdown == 0 {
+		w.current.cccLogger.ForceError()
+	}
+}
+
+// scheduleCCCError schedules an CCC error with a countdown, only used in tests.
+func (w *worker) scheduleCCCError(countdown int) {
+	w.errCountdown = countdown
+}
+
+// skip forces a txn to be skipped by worker
+func (w *worker) skip(txHash common.Hash) {
+	w.skipTxHash = txHash
+}
+
+// onBlockFailingCCC is called when block produced by worker fails CCC
+func (w *worker) onBlockFailingCCC(failingBlock *types.Block, err error) {
+	log.Warn("block failed CCC", "hash", failingBlock.Hash().Hex(), "number", failingBlock.NumberU64(), "err", err)
+	w.reorgCh <- reorgTrigger{
+		block:  failingBlock,
+		reason: err,
+	}
+}
+
+// handleReorg reorgs all blocks following the trigger block
+func (w *worker) handleReorg(trigger *reorgTrigger) error {
+	parentHash := trigger.block.ParentHash()
+	reorgReason := trigger.reason
+
+	for {
+		if !w.isCanonical(trigger.block.Header()) {
+			// trigger block is no longer part of the canonical chain, we are done
+			return nil
+		}
+
+		newBlockHash, err := w.tryCommitNewWork(time.Now(), parentHash, reorgReason)
+		if err != nil {
+			return err
+		}
+
+		// we created replacement blocks for all existing blocks in canonical chain, but not quite ready to commit the new HEAD
+		if newBlockHash == (common.Hash{}) {
+			// force committing the new canonical head to trigger a reorg in blockchain
+			// otherwise we might ignore CCC errors from the new side chain since it is not canonical yet
+			newBlockHash, err = w.commit(true)
+			if err != nil {
+				return err
+			}
+		}
+
+		parentHash = newBlockHash
+		reorgReason = nil // clear reorg reason after trigger block gets reorged
+	}
+}
+
+func (w *worker) isCanonical(header *types.Header) bool {
+	return w.chain.GetBlockByNumber(header.Number.Uint64()).Hash() == header.Hash()
 }

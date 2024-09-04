@@ -1551,6 +1551,11 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.GlobalIsSet(LegacyMinerGasTargetFlag.Name) {
 		log.Warn("The generic --miner.gastarget flag is deprecated and will be removed in the future!")
 	}
+
+	cfg.CCCMaxWorkers = runtime.GOMAXPROCS(0)
+	if ctx.GlobalIsSet(CircuitCapacityCheckWorkersFlag.Name) {
+		cfg.CCCMaxWorkers = int(ctx.GlobalUint(CircuitCapacityCheckWorkersFlag.Name))
+	}
 }
 
 func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {

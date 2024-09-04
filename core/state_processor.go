@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -132,6 +133,11 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	// Apply the transaction to the current state (included in the env).
 	applyMessageStartTime := time.Now()
 	result, err := ApplyMessage(evm, msg, gp, l1DataFee)
+	if evm.Config.Debug {
+		if erroringTracer, ok := evm.Config.Tracer.(interface{ Error() error }); ok {
+			err = errors.Join(err, erroringTracer.Error())
+		}
+	}
 	applyMessageTimer.Update(time.Since(applyMessageStartTime))
 	if err != nil {
 		return nil, err

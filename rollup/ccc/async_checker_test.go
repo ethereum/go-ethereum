@@ -76,6 +76,6 @@ func TestAsyncChecker(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 	require.Equal(t, reorgBlocks[3].Hash(), failingBlockHash)
-	require.Equal(t, uint(3), errWithIdx.txIdx)
-	require.True(t, errWithIdx.shouldSkip)
+	require.Equal(t, uint(3), errWithIdx.TxIdx)
+	require.True(t, errWithIdx.ShouldSkip)
 }

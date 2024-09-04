@@ -251,6 +251,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux) {
 	config := Config{
 		Etherbase:      common.HexToAddress("123456789"),
 		MaxAccountsNum: math.MaxInt,
+		CCCMaxWorkers:  2,
 	}
 	// Create chainConfig
 	memdb := memorydb.New()

@@ -90,6 +90,7 @@ type Message interface {
 	Data() []byte
 	AccessList() types.AccessList
 	IsL1MessageTx() bool
+	TxSize() common.StorageSize
 }
 
 // ExecutionResult includes all output after executing given evm
