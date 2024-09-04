@@ -635,7 +635,7 @@ func (c *ChainConfig) IsTIPXDCXReceiver(num *big.Int) bool {
 }
 
 func (c *ChainConfig) IsXDCxDisable(num *big.Int) bool {
-	return isForked(common.TIPXDCXReceiverDisable, num)
+	return isForked(common.TIPXDCXMinerDisable, num)
 }
 
 func (c *ChainConfig) IsTIPXDCXLending(num *big.Int) bool {
