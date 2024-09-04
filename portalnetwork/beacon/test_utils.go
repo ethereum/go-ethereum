@@ -3,17 +3,75 @@ package beacon
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"os"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/golang/snappy"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
 )
+
+func SetupBeaconNetwork(addr string, bootNodes []*enode.Node) (*BeaconNetwork, error) {
+	conf := discover.DefaultPortalProtocolConfig()
+	if addr != "" {
+		conf.ListenAddr = addr
+	}
+	if bootNodes != nil {
+		conf.BootstrapNodes = bootNodes
+	}
+
+	addr1, err := net.ResolveUDPAddr("udp", conf.ListenAddr)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := net.ListenUDP("udp", addr1)
+	if err != nil {
+		return nil, err
+	}
+
+	privKey, err := crypto.GenerateKey()
+	if err != nil {
+		panic("couldn't generate key: " + err.Error())
+	}
+
+	discCfg := discover.Config{
+		PrivateKey:  privKey,
+		NetRestrict: conf.NetRestrict,
+		Bootnodes:   conf.BootstrapNodes,
+	}
+
+	nodeDB, err := enode.OpenDB(conf.NodeDBPath)
+	if err != nil {
+		return nil, err
+	}
+
+	localNode := enode.NewLocalNode(nodeDB, privKey)
+	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
+	localNode.Set(discover.Tag)
+
+	discV5, err := discover.ListenV5(conn, localNode, discCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	contentQueue := make(chan *discover.ContentElement, 50)
+
+	portalProtocol, err := discover.NewPortalProtocol(conf, portalwire.Beacon, privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewBeaconNetwork(portalProtocol), nil
+}
 
 func GetLightClientBootstrap(number uint8) (ForkedLightClientBootstrap, error) {
 	file, err := os.ReadFile(fmt.Sprintf("testdata/beacon/LightClientBootstrap/ssz_random/case_%d/serialized.ssz_snappy", number))
@@ -58,7 +116,7 @@ func GetClientUpdate(number uint8) (ForkedLightClientUpdate, error) {
 }
 
 func GetLightClientFinalityUpdate(number uint8) (ForkedLightClientFinalityUpdate, error) {
-	file, err := os.ReadFile(fmt.Sprintf("testdata/beacon/LightClientFinalityUpdate/ssz_random/case_%d/serialized.ssz_snappy", number))
+	file, err := os.ReadFile(fmt.Sprintf("testdata/beacon/deneb/LightClientFinalityUpdate/ssz_random/case_%d/serialized.ssz_snappy", number))
 	if err != nil {
 		return ForkedLightClientFinalityUpdate{}, err
 	}
@@ -66,7 +124,7 @@ func GetLightClientFinalityUpdate(number uint8) (ForkedLightClientFinalityUpdate
 	if err != nil {
 		return ForkedLightClientFinalityUpdate{}, err
 	}
-	update := &capella.LightClientFinalityUpdate{}
+	update := &deneb.LightClientFinalityUpdate{}
 	err = update.Deserialize(configs.Mainnet, codec.NewDecodingReader(bytes.NewReader(data), uint64(len(data))))
 	if err != nil {
 		return ForkedLightClientFinalityUpdate{}, err
@@ -80,7 +138,7 @@ func GetLightClientFinalityUpdate(number uint8) (ForkedLightClientFinalityUpdate
 }
 
 func GetLightClientOptimisticUpdate(number uint8) (ForkedLightClientOptimisticUpdate, error) {
-	file, err := os.ReadFile(fmt.Sprintf("testdata/beacon/LightClientOptimisticUpdate/ssz_random/case_%d/serialized.ssz_snappy", number))
+	file, err := os.ReadFile(fmt.Sprintf("testdata/beacon/deneb/LightClientOptimisticUpdate/ssz_random/case_%d/serialized.ssz_snappy", number))
 	if err != nil {
 		return ForkedLightClientOptimisticUpdate{}, err
 	}
@@ -91,7 +149,7 @@ func GetLightClientOptimisticUpdate(number uint8) (ForkedLightClientOptimisticUp
 	bootstrap := &ForkedLightClientOptimisticUpdate{}
 
 	forkData := make([]byte, 0)
-	forkData = append(forkData, Capella[:]...)
+	forkData = append(forkData, Deneb[:]...)
 	forkData = append(forkData, data...)
 	err = bootstrap.Deserialize(configs.Mainnet, codec.NewDecodingReader(bytes.NewReader(forkData), uint64(len(forkData))))
 	if err != nil {
@@ -166,14 +224,16 @@ func BuildHistoricalSummariesProof(beaconState deneb.BeaconState) ([][]byte, err
 
 	leavesBytes := make([][]byte, 0)
 	for _, item := range leaves {
-		leavesBytes = append(leavesBytes, item[:])
+		dest := make([]byte, len(item))
+		copy(dest, item[:])
+		leavesBytes = append(leavesBytes, dest)
 	}
 
 	tree, err := ssz.TreeFromChunks(leavesBytes)
 	if err != nil {
 		return nil, err
 	}
-	proof, err := tree.Prove(27)
+	proof, err := tree.Prove(59)
 	if err != nil {
 		return nil, err
 	}
