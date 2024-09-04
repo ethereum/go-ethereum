@@ -307,6 +307,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		BloomCache:          uint64(cacheLimit),
 		EventMux:            eth.eventMux,
 		RequiredBlocks:      config.RequiredBlocks,
+		EthAPI:              blockChainAPI,
 		checker:             checker,
 		enableBlockTracking: eth.config.EnableBlockTracking,
 	}); err != nil {
