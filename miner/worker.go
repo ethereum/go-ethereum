@@ -113,10 +113,18 @@ func (miner *Miner) generateWork(params *generateParams) *newPayloadResult {
 	}
 	// Read requests if Prague is enabled.
 	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
-		requests, err := core.ParseDepositLogs(allLogs, miner.chainConfig)
+		// Parse Deposits
+		requests := make([]*types.Request, 0)
+		reqs, err := core.ParseDepositLogs(allLogs, miner.chainConfig)
 		if err != nil {
 			return &newPayloadResult{err: err}
 		}
+		requests = append(requests, reqs...)
+		// Process WithdrawalRequests
+		context := core.NewEVMBlockContext(work.header, miner.chain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, work.state, miner.chainConfig, vm.Config{})
+		wxs := core.ProcessDequeueWithdrawalRequests(vmenv, work.state)
+		requests = append(requests, wxs...)
 		body.Requests = requests
 	}
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)

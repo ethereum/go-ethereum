@@ -32,7 +32,8 @@ var (
 
 // Request types.
 const (
-	DepositRequestType = 0x00
+	DepositRequestType    = 0x00
+	WithdrawalRequestType = 0x01
 )
 
 // Request is an EIP-7685 request object. It represents execution layer
@@ -149,6 +150,8 @@ func (r *Request) decode(b []byte) (RequestData, error) {
 	switch b[0] {
 	case DepositRequestType:
 		inner = new(Deposit)
+	case WithdrawalRequestType:
+		inner = new(WithdrawalRequest)
 	default:
 		return nil, ErrRequestTypeNotSupported
 	}

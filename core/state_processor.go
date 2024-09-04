@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -103,6 +104,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		if err != nil {
 			return nil, err
 		}
+		wxs := ProcessDequeueWithdrawalRequests(vmenv, statedb)
+		requests = append(requests, wxs...)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -274,4 +277,41 @@ func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) (types.Requ
 		}
 	}
 	return deposits, nil
+}
+
+// ProcessDequeueWithdrawalRequests applies the EIP-7002 system call to the withdrawal requests contract.
+func ProcessDequeueWithdrawalRequests(vmenv *vm.EVM, statedb *state.StateDB) types.Requests {
+	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallStart != nil {
+		vmenv.Config.Tracer.OnSystemCallStart()
+	}
+	if vmenv.Config.Tracer != nil && vmenv.Config.Tracer.OnSystemCallEnd != nil {
+		defer vmenv.Config.Tracer.OnSystemCallEnd()
+	}
+	msg := &Message{
+		From:      params.SystemAddress,
+		GasLimit:  30_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
+		To:        &params.WithdrawalRequestsAddress,
+	}
+	vmenv.Reset(NewEVMTxContext(msg), statedb)
+	statedb.AddAddressToAccessList(params.WithdrawalRequestsAddress)
+	ret, _, _ := vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
+	statedb.Finalise(true)
+
+	// Parse out the exits.
+	var reqs types.Requests
+	for i := 0; i < len(ret)/76; i++ {
+		start := i * 76
+		var pubkey [48]byte
+		copy(pubkey[:], ret[start+20:start+68])
+		wx := &types.WithdrawalRequest{
+			Source:    common.BytesToAddress(ret[start : start+20]),
+			PublicKey: pubkey,
+			Amount:    binary.BigEndian.Uint64(ret[start+68:]),
+		}
+		reqs = append(reqs, types.NewRequest(wx))
+	}
+	return reqs
 }

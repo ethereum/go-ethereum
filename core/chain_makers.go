@@ -355,6 +355,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 				}
 				requests = append(requests, d...)
 			}
+
+			var (
+				blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
+				vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vm.Config{})
+			)
+			wxs := ProcessDequeueWithdrawalRequests(vmenv, statedb)
+			requests = append(requests, wxs...)
 		}
 
 		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals, Requests: requests}
