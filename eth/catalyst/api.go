@@ -872,12 +872,13 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engin
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
 		body := getBody(block)
+		// Nil out the V2 values, clients should know to not request V1 objects
+		// after Prague.
 		if body != nil {
-			// Nil out the V2 values, clients should know to not request V1 objects
-			// after Prague.
 			body.Deposits = nil
+			bodies[i].WithdrawalRequests = nil
+			bodies[i] = body
 		}
-		bodies[i] = body
 	}
 	return bodies
 }
@@ -905,6 +906,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) 
 	for i := range bodies {
 		if bodies[i] != nil {
 			bodies[i].Deposits = nil
+			bodies[i].WithdrawalRequests = nil
 		}
 	}
 	return bodies, nil
@@ -943,10 +945,11 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBody {
 	}
 
 	var (
-		body            = block.Body()
-		txs             = make([]hexutil.Bytes, len(body.Transactions))
-		withdrawals     = body.Withdrawals
-		depositRequests types.Deposits
+		body               = block.Body()
+		txs                = make([]hexutil.Bytes, len(body.Transactions))
+		withdrawals        = body.Withdrawals
+		depositRequests    types.Deposits
+		withdrawalRequests types.WithdrawalRequests
 	)
 
 	for j, tx := range body.Transactions {
@@ -963,15 +966,18 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBody {
 		// type has activated yet or if there are just no requests of that type from
 		// only the block.
 		for _, req := range block.Requests() {
-			if d, ok := req.Inner().(*types.Deposit); ok {
-				depositRequests = append(depositRequests, d)
+			switch v := req.Inner().(type) {
+			case *types.Deposit:
+				depositRequests = append(depositRequests, v)
+			case *types.WithdrawalRequest:
+				withdrawalRequests = append(withdrawalRequests, v)
 			}
 		}
 	}
-
 	return &engine.ExecutionPayloadBody{
-		TransactionData: txs,
-		Withdrawals:     withdrawals,
-		Deposits:        depositRequests,
+		TransactionData:    txs,
+		Withdrawals:        withdrawals,
+		Deposits:           depositRequests,
+		WithdrawalRequests: withdrawalRequests,
 	}
 }

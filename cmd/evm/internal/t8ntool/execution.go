@@ -53,21 +53,22 @@ type Prestate struct {
 // ExecutionResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type ExecutionResult struct {
-	StateRoot            common.Hash           `json:"stateRoot"`
-	TxRoot               common.Hash           `json:"txRoot"`
-	ReceiptRoot          common.Hash           `json:"receiptsRoot"`
-	LogsHash             common.Hash           `json:"logsHash"`
-	Bloom                types.Bloom           `json:"logsBloom"        gencodec:"required"`
-	Receipts             types.Receipts        `json:"receipts"`
-	Rejected             []*rejectedTx         `json:"rejected,omitempty"`
-	Difficulty           *math.HexOrDecimal256 `json:"currentDifficulty" gencodec:"required"`
-	GasUsed              math.HexOrDecimal64   `json:"gasUsed"`
-	BaseFee              *math.HexOrDecimal256 `json:"currentBaseFee,omitempty"`
-	WithdrawalsRoot      *common.Hash          `json:"withdrawalsRoot,omitempty"`
-	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
-	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
-	RequestsHash         *common.Hash          `json:"requestsRoot,omitempty"`
-	DepositRequests      *types.Deposits       `json:"depositRequests,omitempty"`
+	StateRoot            common.Hash              `json:"stateRoot"`
+	TxRoot               common.Hash              `json:"txRoot"`
+	ReceiptRoot          common.Hash              `json:"receiptsRoot"`
+	LogsHash             common.Hash              `json:"logsHash"`
+	Bloom                types.Bloom              `json:"logsBloom"        gencodec:"required"`
+	Receipts             types.Receipts           `json:"receipts"`
+	Rejected             []*rejectedTx            `json:"rejected,omitempty"`
+	Difficulty           *math.HexOrDecimal256    `json:"currentDifficulty" gencodec:"required"`
+	GasUsed              math.HexOrDecimal64      `json:"gasUsed"`
+	BaseFee              *math.HexOrDecimal256    `json:"currentBaseFee,omitempty"`
+	WithdrawalsRoot      *common.Hash             `json:"withdrawalsRoot,omitempty"`
+	CurrentExcessBlobGas *math.HexOrDecimal64     `json:"currentExcessBlobGas,omitempty"`
+	CurrentBlobGasUsed   *math.HexOrDecimal64     `json:"blobGasUsed,omitempty"`
+	RequestsHash         *common.Hash             `json:"requestsRoot,omitempty"`
+	DepositRequests      types.Deposits           `json:"depositRequests,omitempty"`
+	WithdrawalRequests   types.WithdrawalRequests `json:"withdrawalRequests,omitempty"`
 }
 
 type ommer struct {
@@ -354,33 +355,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		amount := new(big.Int).Mul(new(big.Int).SetUint64(w.Amount), big.NewInt(params.GWei))
 		statedb.AddBalance(w.Address, uint256.MustFromBig(amount), tracing.BalanceIncreaseWithdrawal)
 	}
-	// Commit block
-	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber))
-	if err != nil {
-		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
-	}
-	execRs := &ExecutionResult{
-		StateRoot:   root,
-		TxRoot:      types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
-		ReceiptRoot: types.DeriveSha(receipts, trie.NewStackTrie(nil)),
-		Bloom:       types.CreateBloom(receipts),
-		LogsHash:    rlpHash(statedb.Logs()),
-		Receipts:    receipts,
-		Rejected:    rejectedTxs,
-		Difficulty:  (*math.HexOrDecimal256)(vmContext.Difficulty),
-		GasUsed:     (math.HexOrDecimal64)(gasUsed),
-		BaseFee:     (*math.HexOrDecimal256)(vmContext.BaseFee),
-	}
-	if pre.Env.Withdrawals != nil {
-		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
-		execRs.WithdrawalsRoot = &h
-	}
-	if vmContext.BlobBaseFee != nil {
-		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(&excessBlobGas)
-		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
-	}
+	// Retrieve deposit and withdrawal requests
+	var (
+		depositRequests    types.Deposits
+		withdrawalRequests types.WithdrawalRequests
+		requestsHash       *common.Hash
+	)
 	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
-		// Parse the requests from the logs
+		// Parse deposit requests from the logs
 		var allLogs []*types.Log
 		for _, receipt := range receipts {
 			allLogs = append(allLogs, receipt.Logs...)
@@ -389,17 +371,52 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		if err != nil {
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
+		// Process the withdrawal requests contract execution
+		vmenv := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
+		wxs := core.ProcessDequeueWithdrawalRequests(vmenv, statedb)
+		requests = append(requests, wxs...)
 		// Calculate the requests root
 		h := types.DeriveSha(requests, trie.NewStackTrie(nil))
-		execRs.RequestsHash = &h
+		requestsHash = &h
 		// Get the deposits from the requests
-		deposits := make(types.Deposits, 0)
+		depositRequests = make(types.Deposits, 0)
+		withdrawalRequests = make(types.WithdrawalRequests, 0)
 		for _, req := range requests {
-			if dep, ok := req.Inner().(*types.Deposit); ok {
-				deposits = append(deposits, dep)
+			switch v := req.Inner().(type) {
+			case *types.Deposit:
+				depositRequests = append(depositRequests, v)
+			case *types.WithdrawalRequest:
+				withdrawalRequests = append(withdrawalRequests, v)
 			}
 		}
-		execRs.DepositRequests = &deposits
+	}
+	// Commit block
+	root, err := statedb.Commit(vmContext.BlockNumber.Uint64(), chainConfig.IsEIP158(vmContext.BlockNumber))
+	if err != nil {
+		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))
+	}
+	execRs := &ExecutionResult{
+		StateRoot:          root,
+		TxRoot:             types.DeriveSha(includedTxs, trie.NewStackTrie(nil)),
+		ReceiptRoot:        types.DeriveSha(receipts, trie.NewStackTrie(nil)),
+		Bloom:              types.CreateBloom(receipts),
+		LogsHash:           rlpHash(statedb.Logs()),
+		Receipts:           receipts,
+		Rejected:           rejectedTxs,
+		Difficulty:         (*math.HexOrDecimal256)(vmContext.Difficulty),
+		GasUsed:            (math.HexOrDecimal64)(gasUsed),
+		BaseFee:            (*math.HexOrDecimal256)(vmContext.BaseFee),
+		RequestsHash:       requestsHash,
+		DepositRequests:    depositRequests,
+		WithdrawalRequests: withdrawalRequests,
+	}
+	if pre.Env.Withdrawals != nil {
+		h := types.DeriveSha(types.Withdrawals(pre.Env.Withdrawals), trie.NewStackTrie(nil))
+		execRs.WithdrawalsRoot = &h
+	}
+	if vmContext.BlobBaseFee != nil {
+		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(&excessBlobGas)
+		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
 	}
 	// Re-create statedb instance with new root upon the updated database
 	// for accessing latest states.
