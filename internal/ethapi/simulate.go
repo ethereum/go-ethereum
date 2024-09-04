@@ -197,7 +197,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		if err := sim.sanitizeCall(&call, sim.state, header, blockContext, &gasUsed); err != nil {
 			return nil, nil, err
 		}
-		tx := call.ToTransaction(call.GasPrice == nil)
+		tx := call.ToTransaction(types.DynamicFeeTxType)
 		txes[i] = tx
 		tracer.reset(tx.Hash(), uint(i))
 		// EoA check is always skipped, even in validation mode.
