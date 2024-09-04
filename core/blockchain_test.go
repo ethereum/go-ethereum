@@ -4277,7 +4277,7 @@ func TestEIP6110(t *testing.T) {
 			b.AddTx(tx)
 		}
 	})
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{DisableStack: true}, os.Stderr).Hooks()}, nil, nil)
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{DisableStack: true}, os.Stderr).Hooks()}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
