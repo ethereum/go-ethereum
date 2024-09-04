@@ -846,7 +846,6 @@ func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 		return nil, errStopToken
 	}
 	return nil, nil
->>>>>>> 3532f16eb7 (core/vm: add eof container)
 }
 
 func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
