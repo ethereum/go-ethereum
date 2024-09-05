@@ -173,9 +173,9 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	}
 
 	var (
-		op          OpCode        // current opcode
-		mem         = NewMemory() // bound memory
-		stack       = newstack()  // local stack
+		op          OpCode                 // current opcode
+		mem         = NewMemory()          // bound memory
+		stack       = in.evm.arena.stack() // local stack
 		callContext = &ScopeContext{
 			Memory:   mem,
 			Stack:    stack,
@@ -197,7 +197,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	// so that it gets executed _after_: the OnOpcode needs the stacks before
 	// they are returned to the pools
 	defer func() {
-		returnStack(stack)
+		stack.release()
 		mem.Free()
 	}()
 	contract.Input = input
