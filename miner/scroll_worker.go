@@ -331,15 +331,6 @@ func (w *worker) mainLoop() {
 
 	var err error
 	for {
-		if _, isRetryable := err.(retryableCommitError); isRetryable {
-			if _, err = w.tryCommitNewWork(time.Now(), w.current.header.ParentHash, w.current.reorgReason); err != nil {
-				continue
-			}
-		} else if err != nil {
-			log.Error("failed to mine block", "err", err)
-			w.current = nil
-		}
-
 		// check for reorgs first to lower the chances of trying to handle another
 		// event eventhough a reorg is pending (due to Go `select` pseudo-randomly picking a case
 		// to execute if multiple of them are ready)
@@ -347,7 +338,20 @@ func (w *worker) mainLoop() {
 		case trigger := <-w.reorgCh:
 			err = w.handleReorg(&trigger)
 			continue
+			// System stopped
+		case <-w.exitCh:
+			return
 		default:
+		}
+
+		if _, isRetryable := err.(retryableCommitError); isRetryable {
+			log.Warn("failed to commit to a block, retrying", "err", err)
+			if _, err = w.tryCommitNewWork(time.Now(), w.current.header.ParentHash, w.current.reorgReason); err != nil {
+				continue
+			}
+		} else if err != nil {
+			log.Error("failed to mine block", "err", err)
+			w.current = nil
 		}
 
 		select {
@@ -843,6 +847,18 @@ func (w *worker) commit(force bool) (common.Hash, error) {
 			"index", *index,
 			"nextL1MsgIndex", w.current.nextL1MsgIndex,
 		)
+	}
+
+	currentHeight := w.current.header.Number.Uint64()
+	maxReorgDepth := uint64(w.config.CCCMaxWorkers + 1)
+	if currentHeight > maxReorgDepth {
+		ancestorHeight := currentHeight - maxReorgDepth
+		ancestorHash := w.chain.GetHeaderByNumber(ancestorHeight).Hash()
+		if rawdb.ReadBlockRowConsumption(w.chain.Database(), ancestorHash) == nil {
+			// reject committing to a block if its ancestor doesn't have its RC stored in DB yet.
+			// which may either mean that it failed CCC or it is still in the process of being checked
+			return common.Hash{}, retryableCommitError{inner: errors.New("ancestor doesn't have RC yet")}
+		}
 	}
 
 	// A new block event will trigger a reorg in the txpool, pause reorgs to defer this until we fetch txns for next block.
