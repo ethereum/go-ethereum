@@ -31,7 +31,7 @@ import (
 )
 
 func filledStateDB() *StateDB {
-	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -67,8 +67,11 @@ func TestUseAfterTerminate(t *testing.T) {
 }
 
 func TestVerklePrefetcher(t *testing.T) {
-	db := NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), triedb.VerkleDefaults)
-	state, err := New(types.EmptyRootHash, db, nil)
+	disk := rawdb.NewMemoryDatabase()
+	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+	sdb := NewDatabase(db, nil)
+
+	state, err := New(types.EmptyRootHash, sdb)
 	if err != nil {
 		t.Fatalf("failed to initialize state: %v", err)
 	}
@@ -82,9 +85,9 @@ func TestVerklePrefetcher(t *testing.T) {
 	state.SetState(addr, skey, sval)                                             // Change the storage trie
 	root, _ := state.Commit(0, true)
 
-	state, _ = New(root, db, nil)
+	state, _ = New(root, sdb)
 	sRoot := state.GetStorageRoot(addr)
-	fetcher := newTriePrefetcher(db, root, "", false)
+	fetcher := newTriePrefetcher(sdb, root, "", false)
 
 	// Read account
 	fetcher.prefetch(common.Hash{}, root, common.Address{}, [][]byte{
