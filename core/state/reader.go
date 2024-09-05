@@ -117,6 +117,8 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	if len(ret) == 0 {
 		return common.Hash{}, nil
 	}
+	// Perform the rlp-decode as the slot value is RLP-encoded in the state
+	// snapshot.
 	_, content, _, err := rlp.Split(ret)
 	if err != nil {
 		return common.Hash{}, err
