@@ -41,7 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 var (
@@ -793,7 +793,7 @@ func TestEIP1559Transition(t *testing.T) {
 
 	gspec.Config.BerlinBlock = common.Big0
 	gspec.Config.LondonBlock = common.Big0
-	genesis := gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
+	genesis := gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 	signer := types.LatestSigner(gspec.Config)
 
 	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *core.BlockGen) {
@@ -821,9 +821,9 @@ func TestEIP1559Transition(t *testing.T) {
 	})
 
 	diskdb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(diskdb, trie.NewDatabase(diskdb, trie.HashDefaults))
+	gspec.MustCommit(diskdb, triedb.NewDatabase(diskdb, triedb.HashDefaults))
 
-	chain, err := core.NewBlockChain(diskdb, nil, gspec, nil, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(diskdb, nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -843,17 +843,17 @@ func TestEIP1559Transition(t *testing.T) {
 	state, _ := chain.State()
 
 	// 3: Ensure that miner received only the tx's tip.
-	actual := state.GetBalance(block.Coinbase())
+	actual := state.GetBalance(block.Coinbase()).ToBig()
 	expected := new(big.Int).Add(
 		new(big.Int).SetUint64(block.GasUsed()*block.Transactions()[0].GasTipCap().Uint64()),
-		ethash.ConstantinopleBlockReward,
+		ethash.ConstantinopleBlockReward.ToBig(),
 	)
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// check burnt contract balance
-	actual = state.GetBalance(common.HexToAddress(params.BorUnittestChainConfig.Bor.CalculateBurntContract(block.NumberU64())))
+	actual = state.GetBalance(common.HexToAddress(params.BorUnittestChainConfig.Bor.CalculateBurntContract(block.NumberU64()))).ToBig()
 	expected = new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee())
 	burntContractBalance := expected
 	if actual.Cmp(expected) != 0 {
@@ -861,7 +861,7 @@ func TestEIP1559Transition(t *testing.T) {
 	}
 
 	// 4: Ensure the tx sender paid for the gasUsed * (tip + block baseFee).
-	actual = new(big.Int).Sub(funds, state.GetBalance(addr1))
+	actual = new(big.Int).Sub(funds, state.GetBalance(addr1).ToBig())
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
@@ -891,17 +891,17 @@ func TestEIP1559Transition(t *testing.T) {
 	effectiveTip := block.Transactions()[0].GasTipCap().Uint64() - block.BaseFee().Uint64()
 
 	// 6+5: Ensure that miner received only the tx's effective tip.
-	actual = state.GetBalance(block.Coinbase())
+	actual = state.GetBalance(block.Coinbase()).ToBig()
 	expected = new(big.Int).Add(
 		new(big.Int).SetUint64(block.GasUsed()*effectiveTip),
-		ethash.ConstantinopleBlockReward,
+		ethash.ConstantinopleBlockReward.ToBig(),
 	)
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// check burnt contract balance
-	actual = state.GetBalance(common.HexToAddress(params.BorUnittestChainConfig.Bor.CalculateBurntContract(block.NumberU64())))
+	actual = state.GetBalance(common.HexToAddress(params.BorUnittestChainConfig.Bor.CalculateBurntContract(block.NumberU64()))).ToBig()
 	expected = new(big.Int).Add(burntContractBalance, new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee()))
 	burntContractBalance = expected
 	if actual.Cmp(expected) != 0 {
@@ -909,7 +909,7 @@ func TestEIP1559Transition(t *testing.T) {
 	}
 
 	// 4: Ensure the tx sender paid for the gasUsed * (effectiveTip + block baseFee).
-	actual = new(big.Int).Sub(funds, state.GetBalance(addr2))
+	actual = new(big.Int).Sub(funds, state.GetBalance(addr2).ToBig())
 	expected = new(big.Int).SetUint64(block.GasUsed() * (effectiveTip + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
@@ -959,7 +959,7 @@ func TestEIP1559Transition(t *testing.T) {
 	state, _ = chain.State()
 
 	// check burnt contract balance
-	actual = state.GetBalance(common.HexToAddress(params.BorUnittestChainConfig.Bor.CalculateBurntContract(block.NumberU64())))
+	actual = state.GetBalance(common.HexToAddress(params.BorUnittestChainConfig.Bor.CalculateBurntContract(block.NumberU64()))).ToBig()
 	burntAmount := new(big.Int).Mul(
 		block.BaseFee(),
 		big.NewInt(int64(block.GasUsed())),
@@ -1016,7 +1016,7 @@ func TestBurnContract(t *testing.T) {
 		"2": "0x000000000000000000000000000000000000aaad",
 		"3": "0x000000000000000000000000000000000000aaae",
 	}
-	genesis := gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
+	genesis := gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 	signer := types.LatestSigner(gspec.Config)
 
 	blocks, _ := core.GenerateChain(gspec.Config, genesis, engine, db, 1, func(i int, b *core.BlockGen) {
@@ -1044,9 +1044,9 @@ func TestBurnContract(t *testing.T) {
 	})
 
 	diskdb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(diskdb, trie.NewDatabase(diskdb, trie.HashDefaults))
+	gspec.MustCommit(diskdb, triedb.NewDatabase(diskdb, triedb.HashDefaults))
 
-	chain, err := core.NewBlockChain(diskdb, nil, gspec, nil, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(diskdb, nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -1066,24 +1066,24 @@ func TestBurnContract(t *testing.T) {
 	state, _ := chain.State()
 
 	// 3: Ensure that miner received only the tx's tip.
-	actual := state.GetBalance(block.Coinbase())
+	actual := state.GetBalance(block.Coinbase()).ToBig()
 	expected := new(big.Int).Add(
 		new(big.Int).SetUint64(block.GasUsed()*block.Transactions()[0].GasTipCap().Uint64()),
-		ethash.ConstantinopleBlockReward,
+		ethash.ConstantinopleBlockReward.ToBig(),
 	)
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// check burnt contract balance
-	actual = state.GetBalance(common.HexToAddress(gspec.Config.Bor.CalculateBurntContract(block.NumberU64())))
+	actual = state.GetBalance(common.HexToAddress(gspec.Config.Bor.CalculateBurntContract(block.NumberU64()))).ToBig()
 	expected = new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee())
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("burnt contract balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// 4: Ensure the tx sender paid for the gasUsed * (tip + block baseFee).
-	actual = new(big.Int).Sub(funds, state.GetBalance(addr1))
+	actual = new(big.Int).Sub(funds, state.GetBalance(addr1).ToBig())
 	expected = new(big.Int).SetUint64(block.GasUsed() * (block.Transactions()[0].GasTipCap().Uint64() + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
@@ -1113,24 +1113,24 @@ func TestBurnContract(t *testing.T) {
 	effectiveTip := block.Transactions()[0].GasTipCap().Uint64() - block.BaseFee().Uint64()
 
 	// 6+5: Ensure that miner received only the tx's effective tip.
-	actual = state.GetBalance(block.Coinbase())
+	actual = state.GetBalance(block.Coinbase()).ToBig()
 	expected = new(big.Int).Add(
 		new(big.Int).SetUint64(block.GasUsed()*effectiveTip),
-		ethash.ConstantinopleBlockReward,
+		ethash.ConstantinopleBlockReward.ToBig(),
 	)
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// check burnt contract balance
-	actual = state.GetBalance(common.HexToAddress(gspec.Config.Bor.CalculateBurntContract(block.NumberU64())))
+	actual = state.GetBalance(common.HexToAddress(gspec.Config.Bor.CalculateBurntContract(block.NumberU64()))).ToBig()
 	expected = new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee())
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("burnt contract balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// 4: Ensure the tx sender paid for the gasUsed * (effectiveTip + block baseFee).
-	actual = new(big.Int).Sub(funds, state.GetBalance(addr2))
+	actual = new(big.Int).Sub(funds, state.GetBalance(addr2).ToBig())
 	expected = new(big.Int).SetUint64(block.GasUsed() * (effectiveTip + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
@@ -1160,24 +1160,24 @@ func TestBurnContract(t *testing.T) {
 	effectiveTip = block.Transactions()[0].GasTipCap().Uint64() - block.BaseFee().Uint64()
 
 	// 6+5: Ensure that miner received only the tx's effective tip.
-	actual = state.GetBalance(block.Coinbase())
+	actual = state.GetBalance(block.Coinbase()).ToBig()
 	expected = new(big.Int).Add(
 		new(big.Int).SetUint64(block.GasUsed()*effectiveTip),
-		ethash.ConstantinopleBlockReward,
+		ethash.ConstantinopleBlockReward.ToBig(),
 	)
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("miner balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// check burnt contract balance
-	actual = state.GetBalance(common.HexToAddress(gspec.Config.Bor.CalculateBurntContract(block.NumberU64())))
+	actual = state.GetBalance(common.HexToAddress(gspec.Config.Bor.CalculateBurntContract(block.NumberU64()))).ToBig()
 	expected = new(big.Int).Mul(new(big.Int).SetUint64(block.GasUsed()), block.BaseFee())
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("burnt contract balance incorrect: expected %d, got %d", expected, actual)
 	}
 
 	// 4: Ensure the tx sender paid for the gasUsed * (effectiveTip + block baseFee).
-	actual = new(big.Int).Sub(funds, state.GetBalance(addr3))
+	actual = new(big.Int).Sub(funds, state.GetBalance(addr3).ToBig())
 	expected = new(big.Int).SetUint64(block.GasUsed() * (effectiveTip + block.BaseFee().Uint64()))
 	if actual.Cmp(expected) != 0 {
 		t.Fatalf("sender balance incorrect: expected %d, got %d", expected, actual)
@@ -1293,7 +1293,7 @@ func TestEIP1559TransitionWithEIP155(t *testing.T) {
 		}
 	)
 
-	genesis := gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
+	genesis := gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 
 	// Use signer without chain ID
 	signer := types.HomesteadSigner{}
@@ -1366,7 +1366,7 @@ func TestTransitionWithoutEIP155(t *testing.T) {
 		}
 	)
 
-	genesis := gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
+	genesis := gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 
 	// Use signer without chain ID
 	signer := types.HomesteadSigner{}
@@ -1398,9 +1398,9 @@ func TestTransitionWithoutEIP155(t *testing.T) {
 	})
 
 	diskdb := rawdb.NewMemoryDatabase()
-	gspec.MustCommit(diskdb, trie.NewDatabase(diskdb, trie.HashDefaults))
+	gspec.MustCommit(diskdb, triedb.NewDatabase(diskdb, triedb.HashDefaults))
 
-	chain, err := core.NewBlockChain(diskdb, nil, gspec, nil, engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(diskdb, nil, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
