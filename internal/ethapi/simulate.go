@@ -169,7 +169,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	if block.BlockOverrides.BlobBaseFee != nil {
 		blockContext.BlobBaseFee = block.BlockOverrides.BlobBaseFee.ToInt()
 	}
-	precompiles := sim.activePrecompiles(ctx, sim.base)
+	precompiles := sim.activePrecompiles(sim.base)
 	// State overrides are applied prior to execution of a block
 	if err := block.StateOverrides.Apply(sim.state, precompiles); err != nil {
 		return nil, nil, err
@@ -278,10 +278,10 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, 
 	return nil
 }
 
-func (sim *simulator) activePrecompiles(ctx context.Context, base *types.Header) vm.PrecompiledContracts {
+func (sim *simulator) activePrecompiles(base *types.Header) vm.PrecompiledContracts {
 	var (
-		blockContext = core.NewEVMBlockContext(base, NewChainContext(ctx, sim.b), nil)
-		rules        = sim.chainConfig.Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
+		isMerge = (base.Difficulty.Sign() == 0)
+		rules   = sim.chainConfig.Rules(base.Number, isMerge, base.Time)
 	)
 	return maps.Clone(vm.ActivePrecompiledContracts(rules))
 }
