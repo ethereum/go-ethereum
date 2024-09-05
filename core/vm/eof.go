@@ -206,6 +206,9 @@ func (c *Container) unmarshalSubContainer(b []byte, isInitcode bool, topLevel bo
 		if kind != kindContainer {
 			panic("somethings wrong")
 		}
+		if len(containerSizes) == 0 {
+			return fmt.Errorf("%w: total container count must not be zero", ErrInvalidContainerSectionSize)
+		}
 		offset = offset + 2 + 2*len(containerSizes) + 1
 	}
 

@@ -170,7 +170,7 @@ func ExecuteTest(src []byte) (int, int, error) {
 		return 0, 0, err
 	}
 	passed, total := 0, 0
-	for _, tests := range testsByName {
+	for testsName, tests := range testsByName {
 		for name, tt := range tests.Vectors {
 			for fork, r := range tt.Results {
 				total++
@@ -181,11 +181,11 @@ func ExecuteTest(src []byte) (int, int, error) {
 					err = err2
 				}
 				if r.Result && err != nil {
-					fmt.Fprintf(os.Stderr, "%s, %s: expected success, got %v\n", name, fork, err)
+					fmt.Fprintf(os.Stderr, "%s %s, %s: expected success, got %v\n", testsName, name, fork, err)
 					continue
 				}
 				if !r.Result && err == nil {
-					fmt.Fprintf(os.Stderr, "%s, %s: expected error %s, got %v\n", name, fork, r.Exception, err)
+					fmt.Fprintf(os.Stderr, "%s %s, %s: expected error %s, got %v\n", testsName, name, fork, r.Exception, err)
 					continue
 				}
 				/*

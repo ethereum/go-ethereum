@@ -26,6 +26,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 	// set the initial stack bounds
 	setBounds(0, int(metadata[section].Input), int(metadata[section].Input))
 
+	qualifiedExit := false
 	for pos := 0; pos < len(code); pos++ {
 		op := OpCode(code[pos])
 		currentBounds := stackBounds[pos]
@@ -62,9 +63,14 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 			if currentBounds.max != currentBounds.min {
 				return 0, fmt.Errorf("%w: max %d, min %d, at pos %d", ErrInvalidNumberOfOutputs, currentBounds.max, currentBounds.min, pos)
 			}
-			if have, want := int(metadata[section].Output), currentBounds.min; have != want {
+			have := int(metadata[section].Output)
+			if have >= maxOutputItems {
+				return 0, fmt.Errorf("%w: at pos %d", ErrInvalidNonReturningFlag, pos)
+			}
+			if want := currentBounds.min; have != want {
 				return 0, fmt.Errorf("%w: have %d, want %d, at pos %d", ErrInvalidOutputs, have, want, pos)
 			}
+			qualifiedExit = true
 		case JUMPF:
 			arg, _ := parseUint16(code[pos+1:])
 			newSection := metadata[arg]
@@ -76,6 +82,9 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
 				}
 			} else {
+				if metadata[section].Output < newSection.Output {
+					return 0, fmt.Errorf("%w: at pos %d", ErrInvalidNumberOfOutputs, pos)
+				}
 				if currentBounds.max != currentBounds.min {
 					return 0, fmt.Errorf("%w: max %d, min %d, at pos %d", ErrInvalidNumberOfOutputs, currentBounds.max, currentBounds.min, pos)
 				}
@@ -83,6 +92,7 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 					return 0, fmt.Errorf("%w: at pos %d", ErrInvalidNumberOfOutputs, pos)
 				}
 			}
+			qualifiedExit = qualifiedExit || newSection.Output < maxOutputItems
 		case DUPN:
 			arg := int(code[pos+1]) + 1
 			if want, have := arg, currentBounds.min; want > have {
@@ -175,11 +185,13 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 					// target reached via backwards jump
 					nextBounds, ok := stackBounds[nextPC]
 					if !ok {
-						fmt.Print("2")
 						return 0, ErrInvalidBackwardJump
 					}
 					if currentStackMax != nextBounds.max {
 						return 0, fmt.Errorf("%w want %d as current max got %d at pos %d,", ErrInvalidBackwardJump, currentStackMax, nextBounds.max, pos)
+					}
+					if currentStackMin != nextBounds.min {
+						return 0, fmt.Errorf("%w want %d as current min got %d at pos %d,", ErrInvalidBackwardJump, currentStackMin, nextBounds.min, pos)
 					}
 				}
 			}
@@ -191,6 +203,9 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 			pos = next[0]
 		}
 
+	}
+	if qualifiedExit != (metadata[section].Output < maxOutputItems) {
+		return 0, fmt.Errorf("%w no RETF or qualified JUMPF", ErrInvalidNonReturningFlag)
 	}
 	if maxStackHeight >= int(params.StackLimit) {
 		return 0, ErrStackOverflow{maxStackHeight, int(params.StackLimit)}
