@@ -45,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/holiman/uint256"
 )
 
 var (
@@ -610,8 +611,8 @@ func TestTracingWithOverrides(t *testing.T) {
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config: &TraceCallConfig{
-				StateOverrides: &ethapi.StateOverride{
-					randomAccounts[0].addr: ethapi.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+				StateOverrides: map[common.Address]state.OverrideAccount{
+					randomAccounts[0].addr: {Balance: uint256.MustFromBig(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
 				},
 			},
 			want: `{"gas":21000,"failed":false,"returnValue":""}`,
@@ -652,9 +653,9 @@ func TestTracingWithOverrides(t *testing.T) {
 			},
 			config: &TraceCallConfig{
 				//Tracer: &tracer,
-				StateOverrides: &ethapi.StateOverride{
-					randomAccounts[2].addr: ethapi.OverrideAccount{
-						Code:      newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033")),
+				StateOverrides: map[common.Address]state.OverrideAccount{
+					randomAccounts[2].addr: {
+						Code:      newRawBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033")),
 						StateDiff: newStates([]common.Hash{{}}, []common.Hash{common.BigToHash(big.NewInt(123))}),
 					},
 				},
@@ -719,9 +720,9 @@ func TestTracingWithOverrides(t *testing.T) {
 				Data: newRPCBytes(common.Hex2Bytes("f8a8fd6d")), //
 			},
 			config: &TraceCallConfig{
-				StateOverrides: &ethapi.StateOverride{
-					randomAccounts[2].addr: ethapi.OverrideAccount{
-						Code: newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060325760003560e01c806366e41cb7146037578063f8a8fd6d14603f575b600080fd5b603d6057565b005b60456062565b60405190815260200160405180910390f35b610539600090815580fd5b60006001600081905550306001600160a01b03166366e41cb76040518163ffffffff1660e01b8152600401600060405180830381600087803b15801560a657600080fd5b505af192505050801560b6575060015b60e9573d80801560e1576040519150601f19603f3d011682016040523d82523d6000602084013e60e6565b606091505b50505b506000549056fea26469706673582212205ce45de745a5308f713cb2f448589177ba5a442d1a2eff945afaa8915961b4d064736f6c634300080c0033")),
+				StateOverrides: map[common.Address]state.OverrideAccount{
+					randomAccounts[2].addr: {
+						Code: newRawBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060325760003560e01c806366e41cb7146037578063f8a8fd6d14603f575b600080fd5b603d6057565b005b60456062565b60405190815260200160405180910390f35b610539600090815580fd5b60006001600081905550306001600160a01b03166366e41cb76040518163ffffffff1660e01b8152600401600060405180830381600087803b15801560a657600080fd5b505af192505050801560b6575060015b60e9573d80801560e1576040519150601f19603f3d011682016040523d82523d6000602084013e60e6565b606091505b50505b506000549056fea26469706673582212205ce45de745a5308f713cb2f448589177ba5a442d1a2eff945afaa8915961b4d064736f6c634300080c0033")),
 					},
 				},
 			},
@@ -735,9 +736,9 @@ func TestTracingWithOverrides(t *testing.T) {
 				Data: newRPCBytes(common.Hex2Bytes("f8a8fd6d")), //
 			},
 			config: &TraceCallConfig{
-				StateOverrides: &ethapi.StateOverride{
-					randomAccounts[2].addr: ethapi.OverrideAccount{
-						Code:  newRPCBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060325760003560e01c806366e41cb7146037578063f8a8fd6d14603f575b600080fd5b603d6057565b005b60456062565b60405190815260200160405180910390f35b610539600090815580fd5b60006001600081905550306001600160a01b03166366e41cb76040518163ffffffff1660e01b8152600401600060405180830381600087803b15801560a657600080fd5b505af192505050801560b6575060015b60e9573d80801560e1576040519150601f19603f3d011682016040523d82523d6000602084013e60e6565b606091505b50505b506000549056fea26469706673582212205ce45de745a5308f713cb2f448589177ba5a442d1a2eff945afaa8915961b4d064736f6c634300080c0033")),
+				StateOverrides: map[common.Address]state.OverrideAccount{
+					randomAccounts[2].addr: {
+						Code:  newRawBytes(common.Hex2Bytes("6080604052348015600f57600080fd5b506004361060325760003560e01c806366e41cb7146037578063f8a8fd6d14603f575b600080fd5b603d6057565b005b60456062565b60405190815260200160405180910390f35b610539600090815580fd5b60006001600081905550306001600160a01b03166366e41cb76040518163ffffffff1660e01b8152600401600060405180830381600087803b15801560a657600080fd5b505af192505050801560b6575060015b60e9573d80801560e1576040519150601f19603f3d011682016040523d82523d6000602084013e60e6565b606091505b50505b506000549056fea26469706673582212205ce45de745a5308f713cb2f448589177ba5a442d1a2eff945afaa8915961b4d064736f6c634300080c0033")),
 						State: newStates([]common.Hash{{}}, []common.Hash{{}}),
 					},
 				},
@@ -753,9 +754,9 @@ func TestTracingWithOverrides(t *testing.T) {
 				Data: newRPCBytes(common.Hex2Bytes("f8a8fd6d")), //
 			},
 			config: &TraceCallConfig{
-				StateOverrides: &ethapi.StateOverride{
-					storageAccount: ethapi.OverrideAccount{
-						Code: newRPCBytes([]byte{
+				StateOverrides: map[common.Address]state.OverrideAccount{
+					storageAccount: {
+						Code: newRawBytes([]byte{
 							// SLOAD(3) + SLOAD(4) (which is 0x77)
 							byte(vm.PUSH1), 0x04,
 							byte(vm.SLOAD),
@@ -788,9 +789,9 @@ func TestTracingWithOverrides(t *testing.T) {
 				Data: newRPCBytes(common.Hex2Bytes("f8a8fd6d")), //
 			},
 			config: &TraceCallConfig{
-				StateOverrides: &ethapi.StateOverride{
-					storageAccount: ethapi.OverrideAccount{
-						Code: newRPCBytes([]byte{
+				StateOverrides: map[common.Address]state.OverrideAccount{
+					storageAccount: {
+						Code: newRawBytes([]byte{
 							// SLOAD(3) + SLOAD(4) (which is now 0x11 + 0x00)
 							byte(vm.PUSH1), 0x04,
 							byte(vm.SLOAD),
@@ -826,9 +827,9 @@ func TestTracingWithOverrides(t *testing.T) {
 				Data: newRPCBytes(common.Hex2Bytes("f8a8fd6d")), //
 			},
 			config: &TraceCallConfig{
-				StateOverrides: &ethapi.StateOverride{
-					storageAccount: ethapi.OverrideAccount{
-						Code: newRPCBytes([]byte{
+				StateOverrides: map[common.Address]state.OverrideAccount{
+					storageAccount: {
+						Code: newRawBytes([]byte{
 							// SLOAD(3) + SLOAD(4) (which is now 0x11 + 0x44)
 							byte(vm.PUSH1), 0x04,
 							byte(vm.SLOAD),
@@ -898,14 +899,13 @@ func newAccounts(n int) (accounts []Account) {
 	return accounts
 }
 
-func newRPCBalance(balance *big.Int) *hexutil.Big {
-	rpcBalance := (*hexutil.Big)(balance)
-	return rpcBalance
-}
-
 func newRPCBytes(bytes []byte) *hexutil.Bytes {
 	rpcBytes := hexutil.Bytes(bytes)
 	return &rpcBytes
+}
+
+func newRawBytes(bytes []byte) *[]byte {
+	return &bytes
 }
 
 func newStates(keys []common.Hash, vals []common.Hash) map[common.Hash]common.Hash {
