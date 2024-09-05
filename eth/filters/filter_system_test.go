@@ -601,7 +601,9 @@ func TestPendingTxFilterDeadlock(t *testing.T) {
 	subs := make([]*Subscription, 20)
 	for i := 0; i < len(subs); i++ {
 		fid := api.NewPendingTransactionFilter(nil)
+		api.filtersMu.Lock()
 		f, ok := api.filters[fid]
+		api.filtersMu.Unlock()
 		if !ok {
 			t.Fatalf("Filter %s should exist", fid)
 		}
