@@ -96,6 +96,9 @@ type simulator struct {
 
 // execute runs the simulation of a series of blocks.
 func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]map[string]interface{}, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var (
 		cancel  context.CancelFunc
 		timeout = sim.b.RPCEVMTimeout()
@@ -194,6 +197,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		evm.SetPrecompiles(precompiles)
 	}
 	for i, call := range block.Calls {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
 		if err := sim.sanitizeCall(&call, sim.state, header, blockContext, &gasUsed); err != nil {
 			return nil, nil, err
 		}
