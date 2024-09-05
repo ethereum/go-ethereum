@@ -17,15 +17,12 @@
 package main
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"runtime"
 	"strings"
-	"unicode"
 
+	"github.com/BurntSushi/toml"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/external"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -44,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/naoina/toml"
 	"github.com/urfave/cli/v2"
 )
 
@@ -65,39 +61,17 @@ var (
 	}
 )
 
-// These settings ensure that TOML keys use the same names as Go struct fields.
-var tomlSettings = toml.Config{
-	NormFieldName: func(rt reflect.Type, key string) string {
-		return key
-	},
-	FieldToKey: func(rt reflect.Type, field string) string {
-		return field
-	},
-	MissingField: func(rt reflect.Type, field string) error {
-		id := fmt.Sprintf("%s.%s", rt.String(), field)
-		if deprecatedConfigFields[id] {
-			log.Warn(fmt.Sprintf("Config field '%s' is deprecated and won't have any effect.", id))
-			return nil
-		}
-		var link string
-		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
-			link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
-		}
-		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
-	},
-}
-
 var deprecatedConfigFields = map[string]bool{
-	"ethconfig.Config.EVMInterpreter":          true,
-	"ethconfig.Config.EWASMInterpreter":        true,
-	"ethconfig.Config.TrieCleanCacheJournal":   true,
-	"ethconfig.Config.TrieCleanCacheRejournal": true,
-	"ethconfig.Config.LightServ":               true,
-	"ethconfig.Config.LightIngress":            true,
-	"ethconfig.Config.LightEgress":             true,
-	"ethconfig.Config.LightPeers":              true,
-	"ethconfig.Config.LightNoPrune":            true,
-	"ethconfig.Config.LightNoSyncServe":        true,
+	"Eth.EVMInterpreter":          true,
+	"Eth.EWASMInterpreter":        true,
+	"Eth.TrieCleanCacheJournal":   true,
+	"Eth.TrieCleanCacheRejournal": true,
+	"Eth.LightServ":               true,
+	"Eth.LightIngress":            true,
+	"Eth.LightEgress":             true,
+	"Eth.LightPeers":              true,
+	"Eth.LightNoPrune":            true,
+	"Eth.LightNoSyncServe":        true,
 }
 
 type ethstatsConfig struct {
@@ -112,18 +86,22 @@ type gethConfig struct {
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
-	f, err := os.Open(file)
+	metadata, err := toml.DecodeFile(file, cfg)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	err = tomlSettings.NewDecoder(bufio.NewReader(f)).Decode(cfg)
-	// Add file name to errors that have a line number.
-	if _, ok := err.(*toml.LineError); ok {
-		err = errors.New(file + ", " + err.Error())
+	// Check for deprecated fields
+	undecoded := metadata.Undecoded()
+	for id, deprecated := range deprecatedConfigFields {
+		for _, key := range undecoded {
+			if key.String() == id && deprecated {
+				log.Warn(fmt.Sprintf("Config field '%s' is deprecated and won't have any effect.", id))
+			}
+		}
 	}
-	return err
+
+	return nil
 }
 
 func defaultNodeConfig() node.Config {
@@ -263,7 +241,7 @@ func dumpConfig(ctx *cli.Context) error {
 		comment += "# Note: this config doesn't contain the genesis block.\n\n"
 	}
 
-	out, err := tomlSettings.Marshal(&cfg)
+	out, err := toml.Marshal(&cfg)
 	if err != nil {
 		return err
 	}
