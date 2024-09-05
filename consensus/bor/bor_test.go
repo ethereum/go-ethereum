@@ -53,7 +53,7 @@ func TestGenesisContractChange(t *testing.T) {
 	}
 
 	genspec := &core.Genesis{
-		Alloc: map[common.Address]core.GenesisAccount{
+		Alloc: map[common.Address]types.Account{
 			addr0: {
 				Balance: big.NewInt(0),
 				Code:    []byte{0x1, 0x1},

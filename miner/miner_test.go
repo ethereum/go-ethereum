@@ -58,6 +58,7 @@ func (m *mockBackend) TxPool() *txpool.TxPool {
 	return m.txPool
 }
 
+// nolint : unused
 type testBlockChain struct {
 	root          common.Hash
 	config        *params.ChainConfig
@@ -367,7 +368,7 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 // 		GasLimit:   gasLimit,
 // 		BaseFee:    big.NewInt(params.InitialBaseFee),
 // 		Difficulty: big.NewInt(1),
-// 		Alloc: map[common.Address]core.GenesisAccount{
+// 		Alloc: map[common.Address]types.Account{
 // 			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
 // 			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
 // 			common.BytesToAddress([]byte{3}): {Balance: big.NewInt(1)}, // RIPEMD

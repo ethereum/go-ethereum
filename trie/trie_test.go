@@ -903,7 +903,6 @@ func (s *spongeDb) Put(key []byte, value []byte) error {
 	} else {
 		s.keys = append(s.keys, string(key))
 		s.values[string(key)] = string(value)
-
 	}
 	return nil
 }

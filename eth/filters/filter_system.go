@@ -427,19 +427,6 @@ func (es *EventSystem) handleLogs(filters filterIndex, ev []*types.Log) {
 	}
 }
 
-func (es *EventSystem) handlePendingLogs(filters filterIndex, ev []*types.Log) {
-	if len(ev) == 0 {
-		return
-	}
-
-	for _, f := range filters[PendingLogsSubscription] {
-		matchedLogs := filterLogs(ev, nil, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics)
-		if len(matchedLogs) > 0 {
-			f.logs <- matchedLogs
-		}
-	}
-}
-
 func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) {
 	for _, f := range filters[PendingTransactionsSubscription] {
 		f.txs <- ev.Txs

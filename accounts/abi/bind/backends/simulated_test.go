@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/leak"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -47,7 +46,7 @@ func TestSimulatedBackend(t *testing.T) {
 	key, _ := crypto.GenerateKey() // nolint: gosec
 	auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 	genAlloc := make(types.GenesisAlloc)
-	genAlloc[auth.From] = core.GenesisAccount{Balance: big.NewInt(9223372036854775807)}
+	genAlloc[auth.From] = types.Account{Balance: big.NewInt(9223372036854775807)}
 
 	sim := NewSimulatedBackend(genAlloc, gasLimit)
 	defer sim.Close()

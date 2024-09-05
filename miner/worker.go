@@ -185,8 +185,6 @@ type newPayloadResult struct {
 	block    *types.Block
 	fees     *big.Int               // total block fees
 	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
-	stateDB  *state.StateDB         // StateDB after executing the transactions
-	receipts []*types.Receipt       // Receipts collected during construction
 }
 
 // getWorkReq represents a request for getting a new sealing work with provided parameters.

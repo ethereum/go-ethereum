@@ -1882,7 +1882,7 @@ type TransactionAPI struct {
 }
 
 // returns block transactions along with state-sync transaction if present
-// nolint: unparam
+// nolint : unused
 func (api *TransactionAPI) getAllBlockTransactions(ctx context.Context, block *types.Block) (types.Transactions, bool) {
 	txs := block.Transactions()
 
@@ -2058,7 +2058,6 @@ func (api *TransactionAPI) GetRawTransactionByHash(ctx context.Context, hash com
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-
 	borTx := false
 
 	found, tx, blockHash, blockNumber, index, err := api.b.GetTransaction(ctx, hash)

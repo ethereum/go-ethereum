@@ -30,9 +30,8 @@ import (
 )
 
 var (
-	peers             []string
-	txs               []*types.Transaction
-	testTxArrivalWait = 500 * time.Millisecond
+	peers []string
+	txs   []*types.Transaction
 )
 
 func init() {

@@ -113,6 +113,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		return nil, nil, 0, fmt.Errorf("withdrawals before shanghai")
 	}
 	// Bor does not support withdrawals
+	// nolint
 	if withdrawals != nil {
 		withdrawals = nil
 	}

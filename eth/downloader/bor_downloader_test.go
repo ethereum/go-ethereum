@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	"github.com/stretchr/testify/assert"
 )
 
 // downloadTester is a test simulator for mocking out local block chain.
@@ -1474,4 +1475,95 @@ func (w *whitelistFake) RemoveMilestoneID(milestoneId string) {
 }
 func (w *whitelistFake) GetMilestoneIDsList() []string {
 	return nil
+}
+
+// TestFakedSyncProgress67WhitelistMatch tests if in case of whitelisted
+// checkpoint match with opposite peer, the sync should succeed.
+func TestFakedSyncProgress68WhitelistMatch(t *testing.T) {
+	t.Parallel()
+
+	protocol := uint(eth.ETH68)
+	mode := FullSync
+
+	tester := newTester(t)
+	validate := func(count int) (bool, error) {
+		return true, nil
+	}
+	tester.downloader.ChainValidator = newWhitelistFake(validate)
+
+	defer tester.terminate()
+
+	chainA := testChainForkLightA.blocks
+	tester.newPeer("light", protocol, chainA[1:])
+
+	// Synchronise with the peer and make sure all blocks were retrieved
+	if err := tester.sync("light", nil, mode); err != nil {
+		t.Fatal("succeeded attacker synchronisation")
+	}
+}
+
+// TestFakedSyncProgress67NoRemoteCheckpoint tests if in case of missing/invalid
+// checkpointed blocks with opposite peer, the sync should fail initially but
+// with the retry mechanism, it should succeed eventually.
+func TestFakedSyncProgress68NoRemoteCheckpoint(t *testing.T) {
+	t.Parallel()
+
+	protocol := uint(eth.ETH68)
+	mode := FullSync
+
+	tester := newTester(t)
+	validate := func(count int) (bool, error) {
+		// only return the `ErrNoRemoteCheckpoint` error for the first call
+		if count == 0 {
+			return false, whitelist.ErrNoRemote
+		}
+
+		return true, nil
+	}
+
+	tester.downloader.ChainValidator = newWhitelistFake(validate)
+
+	defer tester.terminate()
+
+	chainA := testChainForkLightA.blocks
+	tester.newPeer("light", protocol, chainA[1:])
+
+	// Set the max validation threshold equal to chain length to enforce validation
+	tester.downloader.maxValidationThreshold = uint64(len(chainA) - 1)
+
+	// Synchronise with the peer and make sure all blocks were retrieved
+	// Should fail in first attempt
+	err := tester.sync("light", nil, mode)
+	assert.Equal(t, whitelist.ErrNoRemote, err, "failed synchronisation")
+
+	// Try syncing again, should succeed
+	if err := tester.sync("light", nil, mode); err != nil {
+		t.Fatal("succeeded attacker synchronisation")
+	}
+}
+
+// TestFakedSyncProgress67BypassWhitelistValidation tests if peer validation
+// via whitelist is bypassed when remote peer is far away or not
+func TestFakedSyncProgress68BypassWhitelistValidation(t *testing.T) {
+	protocol := uint(eth.ETH68)
+	mode := FullSync
+
+	tester := newTester(t)
+	validate := func(count int) (bool, error) {
+		return false, whitelist.ErrNoRemote
+	}
+
+	tester.downloader.ChainValidator = newWhitelistFake(validate)
+
+	defer tester.terminate()
+
+	// 1223 length chain
+	chainA := testChainBase.blocks
+	tester.newPeer("light", protocol, chainA[1:])
+
+	// Although the validate function above returns an error (which says that
+	// remote peer doesn't have that block), sync will go through as the chain
+	// import length is 1223 which is more than the default threshold of 1024
+	err := tester.sync("light", nil, mode)
+	assert.NoError(t, err, "failed synchronisation")
 }

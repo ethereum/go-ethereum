@@ -81,6 +81,8 @@ func NewStateTrie(id *ID, db database.Database) (*StateTrie, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// nolint
 	tr := &StateTrie{trie: *trie, db: db}
 
 	// link the preimage store if it's supported

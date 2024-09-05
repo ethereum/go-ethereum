@@ -602,7 +602,6 @@ func hexToCompact(hex []byte) []byte {
 
 // TestSnapTrieNodes various forms of GetTrieNodes requests.
 func (s *Suite) TestSnapTrieNodes(t *utesting.T) {
-
 	var (
 		// This is the known address of the snap storage testing contract.
 		storageAcct     = common.HexToAddress("0x8bebc8ba651aee624937e7d897853ac30c95a067")
@@ -867,13 +866,11 @@ func (s *Suite) snapGetStorageRanges(t *utesting.T, tc *stRangesTest) error {
 
 	res, ok := msg.(*snap.StorageRangesPacket)
 	if !ok {
-
 		return fmt.Errorf("account range response wrong: %T %v", msg, msg)
 	}
 
 	// Ensure the ranges are monotonically increasing
 	for i, slots := range res.Slots {
-
 		for j := 1; j < len(slots); j++ {
 			if bytes.Compare(slots[j-1].Hash[:], slots[j].Hash[:]) >= 0 {
 				return fmt.Errorf("storage slots not monotonically increasing for account #%d: #%d [%x] vs #%d [%x]", i, j-1, slots[j-1].Hash[:], j, slots[j].Hash[:])

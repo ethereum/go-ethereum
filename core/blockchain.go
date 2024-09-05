@@ -1659,7 +1659,6 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 	// writeLive writes blockchain and corresponding receipt chain into active store.
 	writeLive := func(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
-
 		headers := make([]*types.Header, 0, len(blockChain))
 		var (
 			skipPresenceCheck = false
@@ -2520,7 +2519,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 
 // blockProcessingResult is a summary of block processing
 // used for updating the stats.
-// nolint
+// nolint : unused
 type blockProcessingResult struct {
 	usedGas  uint64
 	procTime time.Duration
@@ -2529,6 +2528,7 @@ type blockProcessingResult struct {
 
 // processBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
+// nolint : unused
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
 	if bc.logger != nil && bc.logger.OnBlockStart != nil {
 		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)

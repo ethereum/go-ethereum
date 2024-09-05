@@ -90,6 +90,7 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 }
 
 // body returns a representation of the fetch result as a types.Body object.
+// nolint : unused
 func (f *fetchResult) body() types.Body {
 	return types.Body{
 		Transactions: f.Transactions,

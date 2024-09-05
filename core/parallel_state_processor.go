@@ -364,6 +364,8 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 			shouldDelayFeeCal = false
 
 			statedb.StopPrefetcher()
+
+			// nolint
 			*statedb = *backupStateDB
 
 			allLogs = []*types.Log{}

@@ -481,7 +481,6 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 	)
 
 	if contractCreation {
-
 		// nolint : contextcheck
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
 
