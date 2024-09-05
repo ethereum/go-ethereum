@@ -1,6 +1,7 @@
 package beacon
 
 import (
+	"encoding/binary"
 	"errors"
 
 	"github.com/protolambda/zrnt/eth2/beacon/altair"
@@ -36,6 +37,37 @@ type LightClientFinalityUpdateKey struct {
 
 type LightClientOptimisticUpdateKey struct {
 	OptimisticSlot uint64
+}
+
+type HistoricalSummariesWithProofKey struct {
+	Epoch uint64
+}
+
+func (v HistoricalSummariesWithProofKey) ByteLength() uint64 {
+	return 8
+}
+
+func (v HistoricalSummariesWithProofKey) FixedLength() uint64 {
+	return 8
+}
+
+func (v HistoricalSummariesWithProofKey) Serialize(w *codec.EncodingWriter) error {
+	return w.WriteUint64(v.Epoch)
+}
+
+func (v *HistoricalSummariesWithProofKey) Deserialize(r *codec.DecodingReader) error {
+	d, err := r.ReadUint64()
+	if err != nil {
+		return err
+	}
+	v.Epoch = d
+	return nil
+}
+
+func (v HistoricalSummariesWithProofKey) HashTreeRoot(h tree.HashFn) common.Root {
+	newRoot := common.Root{}
+	binary.LittleEndian.PutUint64(newRoot[:], v.Epoch)
+	return newRoot
 }
 
 type ForkedLightClientBootstrap struct {
@@ -305,22 +337,60 @@ type HistoricalSummariesWithProof struct {
 	Proof               *HistoricalSummariesProof
 }
 
-func (hswp *HistoricalSummariesWithProof) Deserialize(spec *common.Spec, dr *codec.DecodingReader) error {
+func (hswp HistoricalSummariesWithProof) Deserialize(spec *common.Spec, dr *codec.DecodingReader) error {
 	return dr.Container(&hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
 }
 
-func (hswp *HistoricalSummariesWithProof) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
+func (hswp HistoricalSummariesWithProof) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
 	return w.Container(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
 }
 
-func (hswp *HistoricalSummariesWithProof) ByteLength(spec *common.Spec) uint64 {
+func (hswp HistoricalSummariesWithProof) ByteLength(spec *common.Spec) uint64 {
 	return codec.ContainerLength(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
 }
 
-func (hswp *HistoricalSummariesWithProof) FixedLength(_ *common.Spec) uint64 {
+func (hswp HistoricalSummariesWithProof) FixedLength(_ *common.Spec) uint64 {
 	return 0
 }
 
-func (hswp *HistoricalSummariesWithProof) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) common.Root {
+func (hswp HistoricalSummariesWithProof) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) common.Root {
 	return hFn.HashTreeRoot(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
+}
+
+type ForkedHistoricalSummariesWithProof struct {
+	ForkDigest                   common.ForkDigest
+	HistoricalSummariesWithProof HistoricalSummariesWithProof
+}
+
+func (fhswp *ForkedHistoricalSummariesWithProof) Deserialize(spec *common.Spec, dr *codec.DecodingReader) error {
+	_, err := dr.Read(fhswp.ForkDigest[:])
+	if err != nil {
+		return err
+	}
+
+	err = fhswp.HistoricalSummariesWithProof.Deserialize(spec, dr)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (fhswp *ForkedHistoricalSummariesWithProof) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
+	if err := w.Write(fhswp.ForkDigest[:]); err != nil {
+		return err
+	}
+	return fhswp.HistoricalSummariesWithProof.Serialize(spec, w)
+}
+
+func (fhswp ForkedHistoricalSummariesWithProof) FixedLength(_ *common.Spec) uint64 {
+	return 0
+}
+
+func (fhswp ForkedHistoricalSummariesWithProof) ByteLength(spec *common.Spec) uint64 {
+	return 4 + fhswp.HistoricalSummariesWithProof.ByteLength(spec)
+}
+
+func (fhswp ForkedHistoricalSummariesWithProof) HashTreeRoot(spec *common.Spec, h tree.HashFn) common.Root {
+	return h.HashTreeRoot(fhswp.ForkDigest, spec.Wrap(common.SpecObj(fhswp.HistoricalSummariesWithProof)))
 }
