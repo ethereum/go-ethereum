@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
@@ -23,7 +24,6 @@ const (
 	LightClientFinalityUpdate   storage.ContentType = 0x12
 	LightClientOptimisticUpdate storage.ContentType = 0x13
 	HistoricalSummaries         storage.ContentType = 0x14
-	BeaconGenesisTime           uint64              = 1606824023
 )
 
 type BeaconNetwork struct {
@@ -170,18 +170,85 @@ func (bn *BeaconNetwork) validateContent(contentKey []byte, content []byte) erro
 	switch storage.ContentType(contentKey[0]) {
 	case LightClientUpdate:
 		var lightClientUpdateRange LightClientUpdateRange = make([]ForkedLightClientUpdate, 0)
-		return lightClientUpdateRange.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+		err := lightClientUpdateRange.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+		if err != nil {
+			return err
+		}
+		lightClientUpdateKey := &LightClientUpdateKey{}
+		err = lightClientUpdateKey.UnmarshalSSZ(contentKey[1:])
+		if err != nil {
+			return err
+		}
+		if lightClientUpdateKey.Count != uint64(len(lightClientUpdateRange)) {
+			return fmt.Errorf("light client updates count does not match the content key count: %d != %d", len(lightClientUpdateRange), lightClientUpdateKey.Count)
+		}
+		return nil
 	case LightClientBootstrap:
 		var forkedLightClientBootstrap ForkedLightClientBootstrap
-		return forkedLightClientBootstrap.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
-	// TODO: IF WE NEED LIGHT CLIENT VERIFY
+		err := forkedLightClientBootstrap.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+		if err != nil {
+			return err
+		}
+		currentSlot := bn.spec.TimeToSlot(common.Timestamp(time.Now().Unix()), common.Timestamp(BeaconGenesisTime))
+
+		genericBootstrap, err := FromBootstrap(forkedLightClientBootstrap.Bootstrap)
+		if err != nil {
+			return err
+		}
+		fourMonth := time.Hour * 24 * 30 * 4
+		fourMonthInSlots := common.Timestamp(fourMonth.Seconds()) / (bn.spec.SECONDS_PER_SLOT)
+		fourMonthAgoSlot := currentSlot - common.Slot(fourMonthInSlots)
+
+		if genericBootstrap.Header.Slot < fourMonthAgoSlot {
+			return fmt.Errorf("light client bootstrap slot is too old: %d", genericBootstrap.Header.Slot)
+		}
+		return nil
 	case LightClientFinalityUpdate:
+		lightClientFinalityUpdateKey := &LightClientFinalityUpdateKey{}
+		err := lightClientFinalityUpdateKey.UnmarshalSSZ(contentKey[1:])
+		if err != nil {
+			return err
+		}
 		var forkedLightClientFinalityUpdate ForkedLightClientFinalityUpdate
-		return forkedLightClientFinalityUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
-	// TODO: IF WE NEED LIGHT CLIENT VERIFY
+		err = forkedLightClientFinalityUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+		if err != nil {
+			return err
+		}
+		if forkedLightClientFinalityUpdate.ForkDigest != Deneb {
+			return fmt.Errorf("light client finality update is not from the recent fork. Expected deneb, got %v", forkedLightClientFinalityUpdate.ForkDigest)
+		}
+		finalizedSlot := lightClientFinalityUpdateKey.FinalizedSlot
+		genericUpdate, err := FromLightClientFinalityUpdate(forkedLightClientFinalityUpdate.LightClientFinalityUpdate)
+		if err != nil {
+			return err
+		}
+		if finalizedSlot != uint64(genericUpdate.FinalizedHeader.Slot) {
+			return fmt.Errorf("light client finality update finalized slot does not match the content key finalized slot: %d != %d", genericUpdate.FinalizedHeader.Slot, finalizedSlot)
+		}
+		return nil
 	case LightClientOptimisticUpdate:
+		lightClientOptimisticUpdateKey := &LightClientOptimisticUpdateKey{}
+		err := lightClientOptimisticUpdateKey.UnmarshalSSZ(contentKey[1:])
+		if err != nil {
+			return err
+		}
 		var forkedLightClientOptimisticUpdate ForkedLightClientOptimisticUpdate
-		return forkedLightClientOptimisticUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+		err = forkedLightClientOptimisticUpdate.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+		if err != nil {
+			return err
+		}
+		if forkedLightClientOptimisticUpdate.ForkDigest != Deneb {
+			return fmt.Errorf("light client optimistic update is not from the recent fork. Expected deneb, got %v", forkedLightClientOptimisticUpdate.ForkDigest)
+		}
+		genericUpdate, err := FromLightClientOptimisticUpdate(forkedLightClientOptimisticUpdate.LightClientOptimisticUpdate)
+		if err != nil {
+			return err
+		}
+		// Check if key signature slot matches the light client optimistic update signature slot
+		if lightClientOptimisticUpdateKey.OptimisticSlot != uint64(genericUpdate.SignatureSlot) {
+			return fmt.Errorf("light client optimistic update signature slot does not match the content key signature slot: %d != %d", genericUpdate.SignatureSlot, lightClientOptimisticUpdateKey.OptimisticSlot)
+		}
+		return nil
 	// TODO: VERIFY
 	case HistoricalSummaries:
 		var historicalSummaries HistoricalSummariesProof
