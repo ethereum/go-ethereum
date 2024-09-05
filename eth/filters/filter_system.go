@@ -187,7 +187,7 @@ const (
 	rmLogsChanSize = 10
 	// logsChanSize is the size of channel listening to LogsEvent.
 	// Updated to fix TestEth2NeBlock testcase, as the feed was unable to send
-	// logs to the channel. check - @anshalshukla
+	// logs to the channel. todo: @anshalshukla
 	logsChanSize = 100
 	// chainEvChanSize is the size of channel listening to ChainEvent.
 	chainEvChanSize = 10
