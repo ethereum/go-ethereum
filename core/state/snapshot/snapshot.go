@@ -266,9 +266,7 @@ func (t *Tree) Disable() {
 
 		case *diffLayer:
 			// If the layer is a simple diff, simply mark as stale
-			layer.lock.Lock()
-			layer.stale.Store(true)
-			layer.lock.Unlock()
+			layer.markStale()
 
 		default:
 			panic(fmt.Sprintf("unknown layer type: %T", layer))
@@ -725,9 +723,7 @@ func (t *Tree) Rebuild(root common.Hash) {
 
 		case *diffLayer:
 			// If the layer is a simple diff, simply mark as stale
-			layer.lock.Lock()
-			layer.stale.Store(true)
-			layer.lock.Unlock()
+			layer.markStale()
 
 		default:
 			panic(fmt.Sprintf("unknown layer type: %T", layer))

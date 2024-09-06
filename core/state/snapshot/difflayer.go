@@ -541,3 +541,11 @@ func (dl *diffLayer) StorageList(accountHash common.Hash) ([]common.Hash, bool) 
 	dl.memory += uint64(len(dl.storageList)*common.HashLength + common.HashLength)
 	return storageList, destructed
 }
+
+// markStale sets the stale flag as true.
+func (dl *diffLayer) markStale() {
+	dl.lock.Lock()
+	defer dl.lock.Unlock()
+
+	dl.stale.Store(true)
+}
