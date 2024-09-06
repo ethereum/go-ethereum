@@ -191,7 +191,7 @@ func (c *AsyncChecker) checkerTask(block *types.Block, ccc *Checker, forkCtx con
 				err:   err,
 				// if the txn is the first in block or the additional resource utilization caused
 				// by this txn alone is enough to overflow the circuit, skip
-				ShouldSkip: txIdx == 0 || (curRc != nil && curRc.Difference(*accRc).IsOverflown()),
+				ShouldSkip: txIdx == 0 || curRc == nil || curRc.Difference(*accRc).IsOverflown(),
 				AccRc:      curRc,
 			}
 			return failingCallback
