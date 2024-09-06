@@ -64,7 +64,7 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 // Use this in transaction-handling code where the current block number is unknown. If you
 // have the current block number available, use MakeSigner instead.
 func LatestSigner(config *params.ChainConfig) Signer {
-	var signer Signer = HomesteadSigner{}
+	var signer Signer
 	if config.ChainID != nil {
 		switch {
 		case config.CancunTime != nil:
@@ -75,7 +75,11 @@ func LatestSigner(config *params.ChainConfig) Signer {
 			signer = NewEIP2930Signer(config.ChainID)
 		case config.EIP155Block != nil:
 			signer = NewEIP155Signer(config.ChainID)
+		default:
+			signer = HomesteadSigner{}
 		}
+	} else {
+		signer = HomesteadSigner{}
 	}
 	return signer
 }
@@ -88,9 +92,11 @@ func LatestSigner(config *params.ChainConfig) Signer {
 // configuration are unknown. If you have a ChainConfig, use LatestSigner instead.
 // If you have a ChainConfig and know the current block number, use MakeSigner instead.
 func LatestSignerForChainID(chainID *big.Int) Signer {
-	var signer Signer = HomesteadSigner{}
+	var signer Signer
 	if chainID != nil {
 		signer = NewCancunSigner(chainID)
+	} else {
+		signer = HomesteadSigner{}
 	}
 	return signer
 }
