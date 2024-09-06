@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -32,10 +33,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/maps"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -58,6 +55,9 @@ import (
 	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 )
 
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
@@ -3291,8 +3291,8 @@ func (p *precompileContract) RequiredGas(input []byte) uint64 { return 0 }
 func (p *precompileContract) Run(input []byte) ([]byte, error) { return nil, nil }
 
 func TestStateOverrideMovePrecompile(t *testing.T) {
-	db := state.NewDatabase(rawdb.NewMemoryDatabase())
-	statedb, err := state.New(common.Hash{}, db, nil)
+	db := state.NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
+	statedb, err := state.New(common.Hash{}, db)
 	if err != nil {
 		t.Fatalf("failed to create statedb: %v", err)
 	}
