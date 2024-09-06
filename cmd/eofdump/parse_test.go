@@ -104,7 +104,10 @@ func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 			if err != nil {
 				panic(err) // rotten corpus
 			}
-			have := parse(b, isInitCode)
+			have := "OK"
+			if _, err := parse(b, isInitCode); err != nil {
+				have = fmt.Sprintf("ERR: %v", err)
+			}
 			if false { // Change this to generate the want-output
 				fmt.Printf("%v\n", have)
 			} else {
@@ -125,19 +128,4 @@ func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 		}
 		corpus.Close()
 	}
-}
-
-func parse(data []byte, isInitCode bool) string {
-	var (
-		jt  = vm.NewPragueEOFInstructionSetForTesting()
-		c   vm.Container
-		err = c.UnmarshalBinary(data, isInitCode)
-	)
-	if err == nil {
-		if err = c.ValidateCode(&jt, isInitCode); err == nil {
-			return "OK"
-		}
-		return fmt.Sprintf("ERR: %v", err)
-	}
-	return fmt.Sprintf("ERR: %v", err)
 }

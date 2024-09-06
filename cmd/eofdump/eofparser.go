@@ -211,6 +211,11 @@ func parseAndValidate(s string, isInitCode bool) (*vm.Container, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode data: %w", err)
 	}
+	return parse(b, isInitCode)
+}
+
+func parse(b []byte, isInitCode bool) (*vm.Container, error) {
+
 	var c vm.Container
 	if err := c.UnmarshalBinary(b, isInitCode); err != nil {
 		return nil, err
