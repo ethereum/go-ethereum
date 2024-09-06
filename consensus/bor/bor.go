@@ -360,6 +360,7 @@ func (c *Bor) verifyHeader(chain consensus.ChainHeaderReader, header *types.Head
 	}
 
 	if isSprintEnd && signersBytes%validatorHeaderBytesLength != 0 {
+		log.Warn("Invalid validator set", "number", number, "signersBytes", signersBytes)
 		return errInvalidSpanValidators
 	}
 
@@ -478,11 +479,13 @@ func (c *Bor) verifyCascadingFields(chain consensus.ChainHeaderReader, header *t
 		}
 
 		if len(newValidators) != len(headerVals) {
+			log.Warn("Invalid validator set", "block number", number, "newValidators", newValidators, "headerVals", headerVals)
 			return errInvalidSpanValidators
 		}
 
 		for i, val := range newValidators {
 			if !bytes.Equal(val.HeaderBytes(), headerVals[i].HeaderBytes()) {
+				log.Warn("Invalid validator set", "block number", number, "index", i, "local validator", val, "header validator", headerVals[i])
 				return errInvalidSpanValidators
 			}
 		}
@@ -1416,6 +1419,11 @@ func getUpdatedValidatorSet(oldValidatorSet *valset.ValidatorSet, newVals []*val
 	}
 
 	if err := v.UpdateWithChangeSet(changes); err != nil {
+		changesStr := ""
+		for _, change := range changes {
+			changesStr += fmt.Sprintf("Address: %s, VotingPower: %d\n", change.Address, change.VotingPower)
+		}
+		log.Warn("Changes in validator set", "changes", changesStr)
 		log.Error("Error while updating change set", "error", err)
 	}
 
