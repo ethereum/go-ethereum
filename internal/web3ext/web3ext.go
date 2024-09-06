@@ -617,6 +617,12 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null, null],
 		}),
 		new web3._extend.Method({
+			name: 'simulateV1',
+			call: 'eth_simulateV1',
+			params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputDefaultBlockNumberFormatter],
+		}),
+		new web3._extend.Method({
 			name: 'getBlockReceipts',
 			call: 'eth_getBlockReceipts',
 			params: 1,
