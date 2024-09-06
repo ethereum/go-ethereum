@@ -89,7 +89,7 @@ type Container struct {
 	ContainerSections []*Container
 	ContainerCode     [][]byte
 	Data              []byte
-	DataSize          int // might be less than len(Data)
+	DataSize          int // might be more than len(Data)
 }
 
 // FunctionMetadata is an EOF function signature.
@@ -292,7 +292,10 @@ func (c *Container) unmarshalSubContainer(b []byte, isInitcode bool, topLevel bo
 			c := new(Container)
 			end := min(idx+size, len(b))
 			if err := c.unmarshalSubContainer(b[idx:end], isInitcode, false); err != nil {
-				return fmt.Errorf("%w for section %d", err, i)
+				if topLevel {
+					return fmt.Errorf("%w in sub container %d", err, i)
+				}
+				return err
 			}
 			container = append(container, c)
 			containerCode = append(containerCode, b[idx:end])

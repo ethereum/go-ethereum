@@ -120,9 +120,15 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable,
 			if arg >= len(container.Types) {
 				return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
 			}
+			// TODO check if that is actually a problem
+			// JUMPF operand must point to a code section with equal or fewer number of outputs as the section in which it resides, or to a section with 0x80 as outputs (non-returning)
+			if container.Types[arg].Output > container.Types[section].Output {
+				return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidSectionArgument, arg, len(container.Types), i)
+			}
 			visitedCode[arg] = struct{}{}
 		case op == DATALOADN:
 			arg, _ := parseUint16(code[i+1:])
+			// TODO why are we checking this? We should just pad
 			if arg+32 > len(container.Data) {
 				return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", ErrInvalidDataloadNArgument, arg, len(container.Data), i)
 			}
