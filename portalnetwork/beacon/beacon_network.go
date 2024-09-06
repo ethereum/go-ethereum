@@ -32,6 +32,7 @@ type BeaconNetwork struct {
 	log            log.Logger
 	closeCtx       context.Context
 	closeFunc      context.CancelFunc
+	// lightClient    *ConsensusLightClient
 }
 
 func NewBeaconNetwork(portalProtocol *discover.PortalProtocol) *BeaconNetwork {
