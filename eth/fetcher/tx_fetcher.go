@@ -22,7 +22,6 @@ import (
 	"math"
 	mrand "math/rand"
 	"sort"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -176,7 +175,7 @@ type TxFetcher struct {
 	drop    chan *txDrop
 	quit    chan struct{}
 
-	txSeq       atomic.Uint64                      // Unique transaction sequence number
+	txSeq       uint64                             // Unique transaction sequence number
 	underpriced *lru.Cache[common.Hash, time.Time] // Transactions discarded as too cheap (don't re-fetch)
 
 	// Stage 1: Waiting lists for newly discovered transactions that might be
@@ -443,6 +442,14 @@ func (f *TxFetcher) loop() {
 				idleWait   = len(f.waittime) == 0
 				_, oldPeer = f.announces[ann.origin]
 				hasBlob    bool
+
+				// nextSeq returns the next available sequence number for tagging
+				// transaction announcement and also bump it internally.
+				nextSeq = func() uint64 {
+					seq := f.txSeq
+					f.txSeq++
+					return seq
+				}
 			)
 			for i, hash := range ann.hashes {
 				// If the transaction is already downloading, add it to the list
@@ -455,13 +462,13 @@ func (f *TxFetcher) loop() {
 					if announces := f.announces[ann.origin]; announces != nil {
 						announces[hash] = &txMetadataWithSeq{
 							txMetadata: ann.metas[i],
-							seq:        f.txSeq.Add(1),
+							seq:        nextSeq(),
 						}
 					} else {
 						f.announces[ann.origin] = map[common.Hash]*txMetadataWithSeq{
 							hash: {
 								txMetadata: ann.metas[i],
-								seq:        f.txSeq.Add(1),
+								seq:        nextSeq(),
 							},
 						}
 					}
@@ -476,13 +483,13 @@ func (f *TxFetcher) loop() {
 					if announces := f.announces[ann.origin]; announces != nil {
 						announces[hash] = &txMetadataWithSeq{
 							txMetadata: ann.metas[i],
-							seq:        f.txSeq.Add(1),
+							seq:        nextSeq(),
 						}
 					} else {
 						f.announces[ann.origin] = map[common.Hash]*txMetadataWithSeq{
 							hash: {
 								txMetadata: ann.metas[i],
-								seq:        f.txSeq.Add(1),
+								seq:        nextSeq(),
 							},
 						}
 					}
@@ -503,13 +510,13 @@ func (f *TxFetcher) loop() {
 					if waitslots := f.waitslots[ann.origin]; waitslots != nil {
 						waitslots[hash] = &txMetadataWithSeq{
 							txMetadata: ann.metas[i],
-							seq:        f.txSeq.Add(1),
+							seq:        nextSeq(),
 						}
 					} else {
 						f.waitslots[ann.origin] = map[common.Hash]*txMetadataWithSeq{
 							hash: {
 								txMetadata: ann.metas[i],
-								seq:        f.txSeq.Add(1),
+								seq:        nextSeq(),
 							},
 						}
 					}
@@ -529,13 +536,13 @@ func (f *TxFetcher) loop() {
 				if waitslots := f.waitslots[ann.origin]; waitslots != nil {
 					waitslots[hash] = &txMetadataWithSeq{
 						txMetadata: ann.metas[i],
-						seq:        f.txSeq.Add(1),
+						seq:        nextSeq(),
 					}
 				} else {
 					f.waitslots[ann.origin] = map[common.Hash]*txMetadataWithSeq{
 						hash: {
 							txMetadata: ann.metas[i],
-							seq:        f.txSeq.Add(1),
+							seq:        nextSeq(),
 						},
 					}
 				}
@@ -997,7 +1004,7 @@ func (f *TxFetcher) forEachAnnounce(announces map[common.Hash]*txMetadataWithSeq
 		meta txMetadata
 		seq  uint64
 	}
-	// process announcements by their arrival order
+	// Process announcements by their arrival order
 	list := make([]announcement, 0, len(announces))
 	for hash, entry := range announces {
 		list = append(list, announcement{hash: hash, meta: entry.txMetadata, seq: entry.seq})
