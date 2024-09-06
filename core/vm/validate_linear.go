@@ -82,9 +82,6 @@ func validateControlFlow2(code []byte, section int, metadata []*FunctionMetadata
 					return 0, fmt.Errorf("%w: at pos %d", ErrStackUnderflow{stackLen: have, required: want}, pos)
 				}
 			} else {
-				if metadata[section].Output < newSection.Output {
-					return 0, fmt.Errorf("%w: at pos %d", ErrInvalidNumberOfOutputs, pos)
-				}
 				if currentBounds.max != currentBounds.min {
 					return 0, fmt.Errorf("%w: max %d, min %d, at pos %d", ErrInvalidNumberOfOutputs, currentBounds.max, currentBounds.min, pos)
 				}
