@@ -69,7 +69,7 @@ type TraceEnv struct {
 	// The following Mutexes are used to protect against parallel read/write,
 	// since txs are executed in parallel.
 	pMu sync.Mutex // for `TraceEnv.StorageTrace.Proofs`
-	sMu sync.Mutex // for `TraceEnv.state``
+	sMu sync.Mutex // for `TraceEnv.state`
 	cMu sync.Mutex // for `TraceEnv.Codes`
 
 	*types.StorageTrace
