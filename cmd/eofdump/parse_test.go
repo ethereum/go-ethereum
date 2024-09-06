@@ -94,6 +94,7 @@ func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 		t.Logf("# Reading seed data from %v", fname)
 		scanner := bufio.NewScanner(corpus)
 		scanner.Buffer(make([]byte, 1024), 10*1024*1024)
+		line := 1
 		for scanner.Scan() {
 			s := scanner.Text()
 			if len(s) >= 2 && strings.HasPrefix(s, "0x") {
@@ -104,11 +105,22 @@ func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 				panic(err) // rotten corpus
 			}
 			have := parse(b, isInitCode)
-			want := wantFn()
-			if have != want {
-				t.Fatalf("input %x, isInit: %v \nhave: %q\nwant: %q\n",
-					b, isInitCode, have, want)
+			if false { // Change this to generate the want-output
+				fmt.Printf("%v\n", have)
+			} else {
+				want := wantFn()
+				if have != want {
+					if len(want) > 100 {
+						want = want[:100]
+					}
+					if len(b) > 100 {
+						b = b[:100]
+					}
+					t.Fatalf("%v:%d\ninput %x\nisInit: %v\nhave: %q\nwant: %q\n",
+						fname, line, b, isInitCode, have, want)
+				}
 			}
+			line++
 
 		}
 		corpus.Close()
