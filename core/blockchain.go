@@ -72,14 +72,11 @@ var (
 	storageUpdateTimer = metrics.NewRegisteredResettingTimer("chain/storage/updates", nil)
 	storageCommitTimer = metrics.NewRegisteredResettingTimer("chain/storage/commits", nil)
 
-	snapshotAccountReadTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/account/reads", nil)
-	snapshotStorageReadTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/storage/reads", nil)
-	snapshotCommitTimer      = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
-
 	accountReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/account/single/reads", nil)
 	storageReadSingleTimer = metrics.NewRegisteredResettingTimer("chain/storage/single/reads", nil)
 
-	triedbCommitTimer = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
+	snapshotCommitTimer = metrics.NewRegisteredResettingTimer("chain/snapshot/commits", nil)
+	triedbCommitTimer   = metrics.NewRegisteredResettingTimer("chain/triedb/commits", nil)
 
 	blockInsertTimer     = metrics.NewRegisteredResettingTimer("chain/inserts", nil)
 	blockValidationTimer = metrics.NewRegisteredResettingTimer("chain/validation", nil)
@@ -220,7 +217,7 @@ type BlockChain struct {
 	lastWrite     uint64                           // Last block when the state was flushed
 	flushInterval atomic.Int64                     // Time interval (processing time) after which to flush a state
 	triedb        *triedb.Database                 // The database handler for maintaining trie nodes.
-	stateCache    state.Database                   // State database to reuse between imports (contains state cache)
+	statedb       *state.CachingDB                 // State database to reuse between imports (contains state cache)
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
 	hc            *HeaderChain
@@ -311,7 +308,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		return nil, err
 	}
 	bc.flushInterval.Store(int64(cacheConfig.TrieTimeLimit))
-	bc.stateCache = state.NewDatabaseWithNodeDB(bc.db, bc.triedb)
+	bc.statedb = state.NewDatabase(bc.triedb, nil)
 	bc.validator = NewBlockValidator(chainConfig, bc)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc.hc)
 	bc.processor = NewStateProcessor(chainConfig, bc.hc)
@@ -449,7 +446,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			AsyncBuild: !bc.cacheConfig.SnapshotWait,
 		}
 		bc.snaps, _ = snapshot.New(snapconfig, bc.db, bc.triedb, head.Root)
+
+		// Re-initialize the state database with snapshot
+		bc.statedb = state.NewDatabase(bc.triedb, bc.snaps)
 	}
+
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
@@ -1767,7 +1768,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		statedb, err := state.New(parent.Root, bc.statedb)
 		if err != nil {
 			return it.index, err
 		}
@@ -1793,7 +1794,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		var followupInterrupt atomic.Bool
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
-				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
+				throwaway, _ := state.New(parent.Root, bc.statedb)
 
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB) {
 					// Disable tracing for prefetcher executions.
@@ -1914,26 +1915,21 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 	proctime := time.Since(start) // processing + validation
 
 	// Update the metrics touched during block processing and validation
-	accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete(in processing)
-	storageReadTimer.Update(statedb.StorageReads)                 // Storage reads are complete(in processing)
-	snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete(in processing)
-	snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete(in processing)
-
-	accountRead := statedb.SnapshotAccountReads + statedb.AccountReads // The time spent on account read
-	storageRead := statedb.SnapshotStorageReads + statedb.StorageReads // The time spent on storage read
+	accountReadTimer.Update(statedb.AccountReads) // Account reads are complete(in processing)
+	storageReadTimer.Update(statedb.StorageReads) // Storage reads are complete(in processing)
 	if statedb.AccountLoaded != 0 {
-		accountReadSingleTimer.Update(accountRead / time.Duration(statedb.AccountLoaded))
+		accountReadSingleTimer.Update(statedb.AccountReads / time.Duration(statedb.AccountLoaded))
 	}
 	if statedb.StorageLoaded != 0 {
-		storageReadSingleTimer.Update(storageRead / time.Duration(statedb.StorageLoaded))
+		storageReadSingleTimer.Update(statedb.StorageReads / time.Duration(statedb.StorageLoaded))
 	}
-	accountUpdateTimer.Update(statedb.AccountUpdates)               // Account updates are complete(in validation)
-	storageUpdateTimer.Update(statedb.StorageUpdates)               // Storage updates are complete(in validation)
-	accountHashTimer.Update(statedb.AccountHashes)                  // Account hashes are complete(in validation)
-	triehash := statedb.AccountHashes                               // The time spent on tries hashing
-	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates   // The time spent on tries update
-	blockExecutionTimer.Update(ptime - (accountRead + storageRead)) // The time spent on EVM processing
-	blockValidationTimer.Update(vtime - (triehash + trieUpdate))    // The time spent on block validation
+	accountUpdateTimer.Update(statedb.AccountUpdates)                                 // Account updates are complete(in validation)
+	storageUpdateTimer.Update(statedb.StorageUpdates)                                 // Storage updates are complete(in validation)
+	accountHashTimer.Update(statedb.AccountHashes)                                    // Account hashes are complete(in validation)
+	triehash := statedb.AccountHashes                                                 // The time spent on tries hashing
+	trieUpdate := statedb.AccountUpdates + statedb.StorageUpdates                     // The time spent on tries update
+	blockExecutionTimer.Update(ptime - (statedb.AccountReads + statedb.StorageReads)) // The time spent on EVM processing
+	blockValidationTimer.Update(vtime - (triehash + trieUpdate))                      // The time spent on block validation
 
 	// Write the block to the chain and get the status.
 	var (

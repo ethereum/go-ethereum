@@ -197,7 +197,6 @@ func (test *stateTest) run() bool {
 		}
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})
-		sdb       = NewDatabaseWithNodeDB(disk, tdb)
 		byzantium = rand.Intn(2) == 0
 	)
 	defer disk.Close()
@@ -217,7 +216,7 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, sdb, snaps)
+		state, err := New(root, NewDatabase(tdb, snaps))
 		if err != nil {
 			panic(err)
 		}

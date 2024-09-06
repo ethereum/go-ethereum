@@ -127,8 +127,8 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 	}
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
-	db := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), config)
-	statedb, err := state.New(types.EmptyRootHash, db, nil)
+	db := rawdb.NewMemoryDatabase()
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabase(triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -147,8 +147,8 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 
 // flushAlloc is very similar with hash, but the main difference is all the
 // generated states will be persisted into the given database.
-func flushAlloc(ga *types.GenesisAlloc, db ethdb.Database, triedb *triedb.Database) (common.Hash, error) {
-	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, error) {
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabase(triedb, nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -497,7 +497,7 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 		return nil, errors.New("can't start clique chain without signers")
 	}
 	// flush the data to disk and compute the state root
-	root, err := flushAlloc(&g.Alloc, db, triedb)
+	root, err := flushAlloc(&g.Alloc, triedb)
 	if err != nil {
 		return nil, err
 	}
