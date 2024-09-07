@@ -1409,9 +1409,11 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 		al.AddAddress(sender)
 		if dst != nil {
 			al.AddAddress(*dst)
-			// TODO: is this right?
-			if addr, ok := types.ParseDelegation(s.GetCode(*dst)); ok {
-				al.AddAddress(addr)
+			if rules.IsPrague {
+				// Add delegation target
+				if addr, ok := types.ParseDelegation(s.GetCode(*dst)); ok {
+					al.AddAddress(addr)
+				}
 			}
 			// If it's a create-tx, the destination will be added inside evm.create
 		}

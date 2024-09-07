@@ -495,6 +495,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			if exists := st.state.Exist(authority); exists {
 				st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 			}
+			// Special case, when msg.To is to an authority being set in the tx, we
+			// need to add it to the access list. Usually this happens in StateDB
+			// Prepare(..).
+			if st.msg.To != nil && *st.msg.To == authority {
+				st.state.AddAddressToAccessList(auth.Address)
+			}
 			st.state.SetNonce(authority, auth.Nonce+1)
 			st.state.SetCode(authority, types.AddressToDelegation(auth.Address))
 		}

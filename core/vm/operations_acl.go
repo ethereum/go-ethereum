@@ -328,12 +328,10 @@ func gasEip7702CodeCheck(evm *EVM, contract *Contract, stack *Stack, mem *Memory
 		if evm.StateDB.AddressInAccessList(addr) {
 			cost += params.WarmStorageReadCostEIP2929
 		} else {
-			// fmt.Println("adding ", addr, "to acl")
 			evm.StateDB.AddAddressToAccessList(addr)
 			cost += params.ColdAccountAccessCostEIP2929
 		}
 	}
-	// fmt.Println("cost is", cost)
 	return cost, nil
 }
 
