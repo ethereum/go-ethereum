@@ -30,10 +30,10 @@ var (
 )
 
 type ConsensusAPI interface {
+	GetBootstrap(blockRoot common.Root) (common.SpecObj, error)
 	GetUpdates(firstPeriod, count uint64) ([]common.SpecObj, error)
-	GetCheckpointData(checkpointHash common.Root) (common.SpecObj, error)
-	GetFinalityData() (common.SpecObj, error)
-	GetOptimisticData() (common.SpecObj, error)
+	GetFinalityUpdate() (common.SpecObj, error)
+	GetOptimisticUpdate() (common.SpecObj, error)
 	ChainID() uint64
 	Name() string
 }
@@ -174,7 +174,7 @@ func (c *ConsensusLightClient) Sync() error {
 		c.ApplyUpdate(update)
 	}
 
-	finalityUpdate, err := c.API.GetFinalityData()
+	finalityUpdate, err := c.API.GetFinalityUpdate()
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func (c *ConsensusLightClient) Sync() error {
 	}
 	c.ApplyFinalityUpdate(finalityUpdate)
 
-	optimisticUpdate, err := c.API.GetOptimisticData()
+	optimisticUpdate, err := c.API.GetOptimisticUpdate()
 	if err != nil {
 		return err
 	}
@@ -199,7 +199,7 @@ func (c *ConsensusLightClient) Sync() error {
 }
 
 func (c *ConsensusLightClient) Advance() error {
-	finalityUpdate, err := c.API.GetFinalityData()
+	finalityUpdate, err := c.API.GetFinalityUpdate()
 	if err != nil {
 		return err
 	}
@@ -209,7 +209,7 @@ func (c *ConsensusLightClient) Advance() error {
 	}
 	c.ApplyFinalityUpdate(finalityUpdate)
 
-	optimisticUpdate, err := c.API.GetOptimisticData()
+	optimisticUpdate, err := c.API.GetOptimisticUpdate()
 	if err != nil {
 		return err
 	}
@@ -240,7 +240,7 @@ func (c *ConsensusLightClient) Advance() error {
 }
 
 func (c *ConsensusLightClient) bootstrap() error {
-	forkedBootstrap, err := c.API.GetCheckpointData(c.InitialCheckpoint)
+	forkedBootstrap, err := c.API.GetBootstrap(c.InitialCheckpoint)
 	if err != nil {
 		return err
 	}

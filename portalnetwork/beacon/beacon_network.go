@@ -14,6 +14,7 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/zrnt/eth2/configs"
+	"github.com/protolambda/zrnt/eth2/util/merkle"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
 )
@@ -32,6 +33,7 @@ type BeaconNetwork struct {
 	log            log.Logger
 	closeCtx       context.Context
 	closeFunc      context.CancelFunc
+	lightClient    *ConsensusLightClient
 }
 
 func NewBeaconNetwork(portalProtocol *discover.PortalProtocol) *BeaconNetwork {
@@ -251,8 +253,29 @@ func (bn *BeaconNetwork) validateContent(contentKey []byte, content []byte) erro
 		return nil
 	// TODO: VERIFY
 	case HistoricalSummaries:
-		var historicalSummaries HistoricalSummariesProof
-		return historicalSummaries.Deserialize(codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+		key := &HistoricalSummariesWithProofKey{}
+		err := key.Deserialize(codec.NewDecodingReader(bytes.NewReader(contentKey[1:]), uint64(len(contentKey[1:]))))
+		if err != nil {
+			return err
+		}
+		forkedHistoricalSummariesWithProof := &ForkedHistoricalSummariesWithProof{}
+		err = forkedHistoricalSummariesWithProof.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+		if err != nil {
+			return err
+		}
+		if forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH != common.Epoch(key.Epoch) {
+			return fmt.Errorf("historical summaries with proof epoch does not match the content key epoch: %d != %d", forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH, key.Epoch)
+		}
+
+		// TODO get root from light client
+		header := bn.lightClient.GetFinalityHeader()
+		latestFinalizedRoot := header.StateRoot
+
+		valid := bn.stateSummariesValidation(*forkedHistoricalSummariesWithProof, latestFinalizedRoot)
+		if !valid {
+			return errors.New("merkle proof validation failed for HistoricalSummariesProof")
+		}
+		return nil
 	default:
 		return fmt.Errorf("unknown content type %v", contentKey[0])
 	}
@@ -304,4 +327,12 @@ func (bn *BeaconNetwork) processContentLoop(ctx context.Context) {
 			}(ctx)
 		}
 	}
+}
+
+func (bn *BeaconNetwork) stateSummariesValidation(f ForkedHistoricalSummariesWithProof, latestFinalizedRoot common.Root) bool {
+	proof := f.HistoricalSummariesWithProof.Proof
+	summariesRoot := f.HistoricalSummariesWithProof.HistoricalSummaries.HashTreeRoot(bn.spec, tree.GetHashFn())
+
+	gIndex := 59
+	return merkle.VerifyMerkleBranch(summariesRoot, proof.Proof[:], 5, uint64(gIndex), latestFinalizedRoot)
 }

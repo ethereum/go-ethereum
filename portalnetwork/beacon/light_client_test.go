@@ -38,7 +38,7 @@ func (m MockConsensusAPI) GetUpdates(_, _ uint64) ([]common.SpecObj, error) {
 	return res, nil
 }
 
-func (m MockConsensusAPI) GetCheckpointData(_ common.Root) (common.SpecObj, error) {
+func (m MockConsensusAPI) GetBootstrap(_ common.Root) (common.SpecObj, error) {
 	jsonStr, _ := os.ReadFile(m.testdataDir + "/bootstrap.json")
 
 	bootstrap := &capella.LightClientBootstrap{}
@@ -47,7 +47,7 @@ func (m MockConsensusAPI) GetCheckpointData(_ common.Root) (common.SpecObj, erro
 	return bootstrap, nil
 }
 
-func (m MockConsensusAPI) GetFinalityData() (common.SpecObj, error) {
+func (m MockConsensusAPI) GetFinalityUpdate() (common.SpecObj, error) {
 	jsonStr, _ := os.ReadFile(m.testdataDir + "/finality.json")
 
 	finality := &capella.LightClientFinalityUpdate{}
@@ -56,7 +56,7 @@ func (m MockConsensusAPI) GetFinalityData() (common.SpecObj, error) {
 	return finality, nil
 }
 
-func (m MockConsensusAPI) GetOptimisticData() (common.SpecObj, error) {
+func (m MockConsensusAPI) GetOptimisticUpdate() (common.SpecObj, error) {
 	jsonStr, _ := os.ReadFile(m.testdataDir + "/optimistic.json")
 
 	optimistic := &capella.LightClientOptimisticUpdate{}
@@ -140,7 +140,7 @@ func TestVerifyFinalityUpdate(t *testing.T) {
 	client, err := getClient(false, t)
 	require.NoError(t, err)
 
-	update, err := client.API.GetFinalityData()
+	update, err := client.API.GetFinalityUpdate()
 	require.NoError(t, err)
 
 	// normal
@@ -154,7 +154,7 @@ func TestVerifyFinalityUpdate(t *testing.T) {
 	err = client.VerifyGenericUpdate(genericUpdate)
 	require.Equal(t, ErrInvalidFinalityProof, err)
 	// ErrInvalidSignature
-	update, err = client.API.GetFinalityData()
+	update, err = client.API.GetFinalityUpdate()
 	require.NoError(t, err)
 
 	genericUpdate, err = FromLightClientFinalityUpdate(update)
@@ -168,7 +168,7 @@ func TestVerifyOptimisticUpdate(t *testing.T) {
 	client, err := getClient(false, t)
 	require.NoError(t, err)
 
-	update, err := client.API.GetOptimisticData()
+	update, err := client.API.GetOptimisticUpdate()
 	require.NoError(t, err)
 
 	// normal
