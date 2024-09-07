@@ -232,6 +232,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// The contract is a scoped environment for this execution context only.
 		code := evm.StateDB.ResolveCode(addr)
 		if witness := evm.StateDB.Witness(); witness != nil {
+			witness.AddCode(evm.StateDB.GetCode(addr))
 			witness.AddCode(code)
 		}
 		if len(code) == 0 {
@@ -302,6 +303,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(caller.Address()), value, gas)
 		if witness := evm.StateDB.Witness(); witness != nil {
+			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), evm.StateDB.ResolveCode(addrCopy))
@@ -352,6 +354,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
 		if witness := evm.StateDB.Witness(); witness != nil {
+			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), evm.StateDB.ResolveCode(addrCopy))
@@ -410,6 +413,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		// The contract is a scoped environment for this execution context only.
 		contract := NewContract(caller, AccountRef(addrCopy), new(uint256.Int), gas)
 		if witness := evm.StateDB.Witness(); witness != nil {
+			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 			witness.AddCode(evm.StateDB.ResolveCode(addrCopy))
 		}
 		contract.SetCallCode(&addrCopy, evm.StateDB.ResolveCodeHash(addrCopy), evm.StateDB.ResolveCode(addrCopy))

@@ -342,6 +342,7 @@ func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	slot := scope.Stack.peek()
 	address := slot.Bytes20()
 	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
+		witness.AddCode(interpreter.evm.StateDB.GetCode(address))
 		witness.AddCode(interpreter.evm.StateDB.ResolveCode(address))
 	}
 	slot.SetUint64(uint64(len(interpreter.evm.StateDB.ResolveCode(slot.Bytes20()))))
@@ -384,6 +385,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	addr := common.Address(a.Bytes20())
 	code := interpreter.evm.StateDB.ResolveCode(addr)
 	if witness := interpreter.evm.StateDB.Witness(); witness != nil {
+		witness.AddCode(interpreter.evm.StateDB.GetCode(addr))
 		witness.AddCode(code)
 	}
 	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
