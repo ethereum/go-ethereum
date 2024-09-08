@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -480,6 +481,52 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 	return gas, nil
 }
 
+func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	var (
+		gas            uint64
+		transfersValue = !stack.Back(2).IsZero()
+		address        = common.Address(stack.Back(1).Bytes20())
+	)
+	if transfersValue && evm.StateDB.Empty(address) {
+		gas += params.CallNewAccountGas
+	}
+	if transfersValue && !evm.chainRules.IsEIP4762 { // Non-verkle
+		gas += params.CallValueTransferGas
+	} else if transfersValue && evm.chainRules.IsEIP4762 { // Verkle
+		gas += evm.AccessEvents.ValueTransferGas(contract.Address(), address)
+	}
+	memoryGas, err := gasEOFMemCost(evm, contract, stack, mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+// gasEOFMemCost calculates the cost of an external call in EOF, but does not
+// take value-transfer-related costs into account: only mem expansion costs.
+func gasEOFMemCost(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	evm.callGasTemp, err = callGas(true, contract.Gas, gas, new(uint256.Int).SetUint64(contract.Gas))
+	if err != nil {
+		return 0, err
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
+}
+
+var gasExtDelegateCall = gasEOFMemCost
+var gasExtStaticCall = gasEOFMemCost
+
 func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var gas uint64
 	// EIP150 homestead gas reprice fork:
@@ -501,4 +548,10 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 		evm.StateDB.AddRefund(params.SelfdestructRefundGas)
 	}
 	return gas, nil
+}
+
+// gasEOFCreate returns the gas-cost for EOF-Create. Hashing charge needs to be
+// deducted in the opcode itself, since it depends on the immediate
+func gasEOFCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return memoryGasCost(mem, memorySize)
 }
