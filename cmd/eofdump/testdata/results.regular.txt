@@ -1750,24 +1750,24 @@ ERR: invalid number of outputs: at pos 7
 OK
 OK
 OK
-ERR: invalid section argument: arg 2, last 4, pos 7
-ERR: invalid section argument: arg 2, last 4, pos 7
-ERR: invalid section argument: arg 2, last 4, pos 7
-ERR: invalid section argument: arg 2, last 4, pos 7
 OK
-ERR: invalid section argument: arg 2, last 4, pos 9
-ERR: invalid section argument: arg 2, last 4, pos 9
-ERR: invalid section argument: arg 2, last 4, pos 11
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+OK
+ERR: invalid number of outputs: arg 2, last 4, pos 9
+ERR: invalid number of outputs: arg 2, last 4, pos 9
 OK
 OK
-ERR: invalid section argument: arg 2, last 4, pos 11
 OK
-ERR: invalid section argument: arg 2, last 4, pos 15
+ERR: invalid number of outputs: arg 2, last 4, pos 11
 OK
 OK
 OK
 OK
-ERR: invalid section argument: arg 2, last 4, pos 261
+OK
+OK
+OK
 OK
 OK
 ERR: invalid code size: mismatch of code sections found and type signatures, types 25, code 1
@@ -1841,7 +1841,7 @@ ERR: invalid code termination: end with ADDRESS, pos 7
 ERR: invalid magic: want ef00 in sub container 0
 ERR: undefined instruction: op opcode 0xea not defined, pos 4
 ERR: stack underflow (1 <=> 2): at pos 1
-ERR: missing data header: found section 0 instead in sub container 0
+ERR: invalid container section size: total container count must not be zero in sub container 0
 ERR: invalid max stack height in code section 0: have 4, want 260
 ERR: invalid container size: have 49114, want 49108
 ERR: invalid container size: have 49111, want 49108
@@ -1958,7 +1958,7 @@ ERR: invalid max stack height in code section 0: have 3, want 2
 ERR: stack underflow (0 <=> 10): at pos 609
 ERR: stack underflow (0 <=> 2): at pos 664
 ERR: invalid jump destination: out-of-bounds offset: offset -7968, dest -7531, pos 435
-ERR: invalid number of outputs: have 128, want 835, at pos 899
+ERR: Invalid non-returning flag, bad RETF: at pos 899
 ERR: invalid jump destination: out-of-bounds offset: offset -6401, dest -5227, pos 662
 ERR: invalid jump destination: out-of-bounds offset: offset -6401, dest -5227, pos 662
 ERR: invalid jump destination: out-of-bounds offset: offset -6401, dest -5227, pos 662
@@ -2025,9 +2025,9 @@ ERR: stack underflow (0 <=> 48): at pos 0
 ERR: invalid container size: have 24, want 20 in sub container 0
 ERR: stack limit reached 1087 (1024): at pos 1022
 ERR: invalid number of outputs: at pos 0
-ERR: invalid number of outputs: have 128, want 7, at pos 9
-ERR: invalid section argument: arg 2, last 4, pos 7
-ERR: invalid section argument: arg 2, last 4, pos 7
+ERR: Invalid non-returning flag, bad RETF: at pos 9
+ERR: Invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+ERR: invalid number of outputs: arg 2, last 4, pos 7
 ERR: missing code header: found section kind 30 instead
 ERR: missing code header: found section kind 30 instead
 ERR: missing code header: found section kind 30 instead

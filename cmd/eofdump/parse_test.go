@@ -69,7 +69,7 @@ func TestEofParseRegular(t *testing.T) {
 
 func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 	var wantFn func() string
-
+	var wantLoc = 0
 	{ // Configure the want-reader
 		wants, err := os.Open(wantFile)
 		if err != nil {
@@ -79,6 +79,7 @@ func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 		scanner.Buffer(make([]byte, 1024), 10*1024*1024)
 		wantFn = func() string {
 			if scanner.Scan() {
+				wantLoc++
 				return scanner.Text()
 			}
 			return "end of file reached"
@@ -119,8 +120,8 @@ func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 					if len(b) > 100 {
 						b = b[:100]
 					}
-					t.Fatalf("%v:%d\ninput %x\nisInit: %v\nhave: %q\nwant: %q\n",
-						fname, line, b, isInitCode, have, want)
+					t.Fatalf("%v:%d\n%v\ninput %x\nisInit: %v\nhave: %q\nwant: %q\n",
+						fname, line, fmt.Sprintf("%v:%d", wantFile, wantLoc), b, isInitCode, have, want)
 				}
 			}
 			line++

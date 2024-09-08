@@ -1841,7 +1841,7 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid magic: want ef00 in sub container 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: missing data header: found section 0 instead in sub container 0
+ERR: invalid container section size: total container count must not be zero in sub container 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid magic: want ef00 in sub container 0
 ERR: missing code header: found section kind 80 instead in sub container 0
@@ -2025,7 +2025,7 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: eofcreate with truncated section: container 0, have 4, claimed 0, pos 8
 ERR: stack limit reached 1087 (1024): at pos 1022
 ERR: invalid number of outputs: at pos 0
-ERR: invalid number of outputs: have 128, want 7, at pos 9
+ERR: Invalid non-returning flag, bad RETF: at pos 9
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: missing code header: found section kind 30 instead
