@@ -37,7 +37,7 @@ const (
 	TxGasContractCreation   uint64 = 53000 // Per transaction that creates a contract. NOTE: Not payable on data of calls between transactions.
 	TxDataZeroGas           uint64 = 4     // Per byte of data attached to a transaction that equals zero. NOTE: Not payable on data of calls between transactions.
 	TokenPerNonZeroByte7623 uint64 = 4     // Token cost per non-zero byte as specified by EIP-7623.
-	CostFloorPerToken7623   uint64 = 17    // Cost floor per byte of data as specified by EIP-7623.
+	CostFloorPerToken7623   uint64 = 10    // Cost floor per byte of data as specified by EIP-7623.
 	QuadCoeffDiv            uint64 = 512   // Divisor for the quadratic particle of the memory cost equation.
 	LogDataGas              uint64 = 8     // Per byte in a LOG* operation's data.
 	CallStipend             uint64 = 2300  // Free gas given at beginning of call.
