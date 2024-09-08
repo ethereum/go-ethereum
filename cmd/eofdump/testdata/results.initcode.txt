@@ -1831,6 +1831,7 @@ ERR: truncated immediate: jump table truncated, op RJUMPV, pos 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid magic: want ef00 in sub container 0
 ERR: invalid container size: have 32, want 37032 in sub container 0
+ERR: invalid magic: want ef00 in sub container 0
 ERR: invalid max stack height in code section 519: have 0, want 32
 ERR: unreachable code
 ERR: unreachable code
@@ -1852,12 +1853,16 @@ ERR: invalid type section size: type section must not exceed 4*1024, have 6148 i
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: unexpected EOF
+ERR: invalid number of outputs: max 2, min 1, at pos 7
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12345, pos 7
 ERR: truncated top level container
 ERR: missing code header: found section kind 30 instead in sub container 0
+ERR: invalid container section size: total container count must not be zero in sub container 0
 ERR: missing data header: found section 30 instead in sub container 0
 ERR: invalid magic: want ef00 in sub container 0
 ERR: eofcreate with truncated section: container 0, have 0, claimed 12336, pos 8
@@ -1876,10 +1881,17 @@ ERR: unexpected EOF in sub container 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12346, pos 4
 ERR: missing type header: found section kind 30 instead in sub container 0
 ERR: initcode contains a RETURN or STOP opcode
+ERR: unreachable code
+ERR: Invalid non-returning flag, bad RETF: at pos 13
+ERR: unreachable code
 ERR: invalid max stack height in code section 0: have 12, want 48
+ERR: stack underflow (5 <=> 6): at pos 8
 ERR: unexpected EOF in sub container 0
+ERR: stack underflow (9 <=> 49): at pos 9
 ERR: invalid code termination: end with ADDRESS, pos 15
 ERR: invalid max stack height in code section 0: have 4, want 48
 ERR: invalid type content, max stack height exceeds limit for section 0: have 12336 in sub container 0
@@ -1888,16 +1900,24 @@ ERR: unexpected EOF in sub container 0
 ERR: invalid magic: want ef00 in sub container 0
 ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 64 in sub container 0
 ERR: invalid container size: have 12188, want 21148 in sub container 0
+ERR: section already referenced, arg :0
+ERR: stack underflow (3 <=> 233): at pos 6
+ERR: unreachable code: arg 253, last 1, pos 13
 ERR: invalid magic: want ef00 in sub container 0
 ERR: missing data header: found section fe instead in sub container 0
 ERR: invalid type content, max stack height exceeds limit for section 0: have 65007 in sub container 0
 ERR: section already referenced, arg :0
+ERR: subcontainer not referenced at all
 ERR: truncated immediate: op PUSH20, pos 6
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12342, pos 4
+ERR: invalid backward jump want 4 as current min got 5 at pos 12,
+ERR: initcode contains a RETURN or STOP opcode
 ERR: unreachable code: arg 48, last 1, pos 13
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid max stack height
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -1914,16 +1934,43 @@ ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12341, p
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12381, pos 43
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12381, pos 43
+ERR: invalid backward jump want 0 as current max got 1 at pos 2,
 ERR: invalid jump destination: out-of-bounds offset: offset 12, dest 528, pos 440
 ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 517, pos 348
 ERR: invalid jump destination: out-of-bounds offset: offset 252, dest 768, pos 270
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: out-of-bounds offset: offset 244, dest 760, pos 282
+ERR: initcode contains a RETURN or STOP opcode
+ERR: stack underflow (0 <=> 2): at pos 515
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: out-of-bounds offset: offset 31611, dest 31865, pos 6
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
 ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 7, dest 523, pos 514
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -1948,6 +1995,7 @@ ERR: invalid jump destination: out-of-bounds offset: offset -8055, dest -7641, p
 ERR: invalid jump destination: offset into immediate: offset -255, dest 39, pos 8
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: out-of-bounds offset: offset -256, dest -248, pos 6
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -1957,6 +2005,16 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: offset into immediate: offset 1, dest 517, pos 6
+ERR: invalid jump destination: offset into immediate: offset 1, dest 517, pos 6
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: out-of-bounds offset: offset -7968, dest -7531, pos 435
 ERR: invalid jump destination: out-of-bounds offset: offset -7968, dest -7531, pos 435
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -1978,14 +2036,20 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: offset into immediate: offset 7, dest 523, pos 4
 ERR: invalid jump destination: offset into immediate: offset 602, dest 1118, pos 174
 ERR: unexpected EOF in sub container 51
+ERR: section already referenced, arg :96
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid type content, max stack height exceeds limit for section 0: have 1026 in sub container 40
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid type section size: type section size must be divisible by 4, have 1535 in sub container 15
 ERR: missing header terminator: have 4 in sub container 5
 ERR: invalid container section size number of container section exceed: 256: have 257
+ERR: stack underflow (1 <=> 2): at pos 54
 ERR: initcode contains a RETURN or STOP opcode
+ERR: stack underflow (1 <=> 2): at pos 164
 ERR: stack underflow (1 <=> 2): at pos 307
 ERR: missing code header: found section kind 4 instead in sub container 46
 ERR: unexpected EOF in sub container 146
@@ -1994,15 +2058,24 @@ ERR: stack underflow (1 <=> 3): at pos 2532
 ERR: undefined instruction: op SELFDESTRUCT, pos 2106
 ERR: invalid max stack height
 ERR: invalid max stack height
+ERR: invalid max stack height
 ERR: subcontainer not referenced at all
 ERR: initcode contains a RETURN or STOP opcode
 ERR: stack underflow (1 <=> 2): at pos 867
 ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: undefined instruction: op opcode 0xfc not defined, pos 251
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
 ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
 ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
 ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
 ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
+ERR: invalid jump destination: out-of-bounds offset: offset 24832, dest 25509, pos 675
+ERR: invalid jump destination: out-of-bounds offset: offset -21151, dest -20628, pos 521
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: undefined instruction: op opcode 0xc8 not defined, pos 1179
@@ -2014,10 +2087,49 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: undefined instruction: op CALLCODE, pos 3487
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -7168, pos 58
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -7168, pos 58
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: out-of-bounds offset: offset 25600, dest 25650, pos 48
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: offset into immediate: offset 102, dest 1277, pos 975
+ERR: invalid jump destination: offset into immediate: offset 102, dest 1277, pos 975
 ERR: initcode contains a RETURN or STOP opcode
 ERR: unexpected EOF
 ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: offset into immediate: offset -7454, dest 10684, pos 17684
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: offset into immediate: offset -7454, dest 9550, pos 16550
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: offset into immediate: offset 127, dest 8866, pos 8315
+ERR: invalid jump destination: offset into immediate: offset 127, dest 8866, pos 8315
+ERR: invalid jump destination: offset into immediate: offset 127, dest 8866, pos 8315
 ERR: callf into non-returning section: section 0
 ERR: unreachable code
 ERR: initcode contains a RETURN or STOP opcode
@@ -2025,7 +2137,22 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: eofcreate with truncated section: container 0, have 4, claimed 0, pos 8
 ERR: stack limit reached 1087 (1024): at pos 1022
 ERR: invalid number of outputs: at pos 0
+ERR: Invalid non-returning flag, bad RETF no RETF or qualified JUMPF
 ERR: Invalid non-returning flag, bad RETF: at pos 9
+ERR: initcode contains a RETURN or STOP opcode
+ERR: stack limit reached 1107 (1024): at pos 1106
+ERR: stack limit reached 1102 (1024)
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid number of outputs: max 1, min 0, at pos 7
+ERR: invalid max stack height in code section 2: have 0, want 48
+ERR: unreachable code
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12339, pos 1
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid number of outputs: have 0, want 4, at pos 6
+ERR: invalid number of outputs: at pos 3
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+ERR: stack underflow (4 <=> 48): at pos 4
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: missing code header: found section kind 30 instead

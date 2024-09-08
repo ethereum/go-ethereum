@@ -1831,6 +1831,7 @@ ERR: truncated immediate: jump table truncated, op RJUMPV, pos 0
 ERR: invalid code termination: end with ADDRESS, pos 5
 ERR: invalid magic: want ef00 in sub container 0
 ERR: invalid container size: have 95, want 94
+ERR: invalid container size: have 81, want 80
 ERR: incompatible container kind
 ERR: incompatible container kind
 ERR: incompatible container kind
@@ -1851,6 +1852,9 @@ ERR: invalid container size: have 47487, want 32639 in sub container 0
 ERR: invalid type section size: type section must not exceed 4*1024, have 6148 in sub container 0
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12344, pos 4
 ERR: truncated immediate: jump table truncated, op RJUMPV, pos 3
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid number of outputs: max 2, min 1, at pos 7
 ERR: unreachable code
 ERR: unreachable code
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12341, pos 3
@@ -1858,6 +1862,7 @@ ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12345, p
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12345, pos 7
 ERR: invalid container size: have 56, want 55
 ERR: invalid container size: have 56, want 55
+ERR: invalid container size: have 90, want 83
 ERR: invalid container size: have 92, want 83
 ERR: invalid magic: want ef00 in sub container 0
 ERR: eofcreate with truncated section: container 0, have 0, claimed 12336, pos 8
@@ -1876,10 +1881,17 @@ ERR: invalid container size: have 109, want 106
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12348, pos 10
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12341, pos 3
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12349, pos 11
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12346, pos 4
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12346, pos 4
 ERR: invalid container size: have 89, want 86
 ERR: invalid jump destination: offset into immediate: offset -12, dest 1, pos 11
+ERR: unreachable code
+ERR: Invalid non-returning flag, bad RETF: at pos 13
+ERR: unreachable code
 ERR: invalid max stack height in code section 0: have 12, want 48
+ERR: stack underflow (5 <=> 6): at pos 8
 ERR: invalid container size: have 90, want 87
+ERR: stack underflow (9 <=> 49): at pos 9
 ERR: invalid code termination: end with ADDRESS, pos 15
 ERR: invalid max stack height in code section 0: have 4, want 48
 ERR: invalid type content, max stack height exceeds limit for section 0: have 12336 in sub container 0
@@ -1888,16 +1900,24 @@ ERR: unexpected EOF in sub container 0
 ERR: invalid magic: want ef00 in sub container 0
 ERR: invalid container size: have 24594, want 24590
 ERR: invalid container size: have 12188, want 21148 in sub container 0
+ERR: section already referenced, arg :0
+ERR: stack underflow (3 <=> 233): at pos 6
+ERR: unreachable code: arg 253, last 1, pos 13
 ERR: invalid container size: have 24594, want 24591
 ERR: missing data header: found section fe instead in sub container 0
 ERR: invalid type content, max stack height exceeds limit for section 0: have 65007 in sub container 0
 ERR: section already referenced, arg :0
+ERR: subcontainer not referenced at all
 ERR: truncated immediate: op PUSH20, pos 6
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12342, pos 4
+ERR: invalid backward jump want 4 as current min got 5 at pos 12,
+ERR: invalid backward jump want 0 as current min got 1 at pos 12,
 ERR: unreachable code: arg 48, last 1, pos 13
+ERR: section already referenced, arg :0
 ERR: unreachable code: arg 48, last 2, pos 8
 ERR: invalid code termination: end with ADDRESS, pos 1
 ERR: invalid section argument: arg 12336, last 1, pos 14
+ERR: invalid max stack height
 ERR: invalid code termination: end with ADDRESS, pos 18
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12358, pos 6
 ERR: unreachable code
@@ -1914,11 +1934,27 @@ ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12341, p
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12355, pos 17
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12381, pos 43
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12381, pos 43
+ERR: invalid backward jump want 0 as current max got 1 at pos 2,
 ERR: invalid jump destination: out-of-bounds offset: offset 12, dest 528, pos 440
 ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 517, pos 348
 ERR: invalid jump destination: out-of-bounds offset: offset 252, dest 768, pos 270
+ERR: stack underflow (0 <=> 1): at pos 515
 ERR: invalid jump destination: out-of-bounds offset: offset 244, dest 760, pos 282
+ERR: stack underflow (0 <=> 1): at pos 516
+ERR: stack underflow (0 <=> 2): at pos 515
+ERR: invalid backward jump want 0 as current max got 1 at pos 1,
+ERR: invalid backward jump want 0 as current max got 1 at pos 1,
+ERR: stack underflow (0 <=> 1): at pos 516
+ERR: stack underflow (0 <=> 1): at pos 516
 ERR: invalid jump destination: out-of-bounds offset: offset 31611, dest 31865, pos 6
+ERR: invalid jump destination: offset into immediate: offset 256, dest 330, pos 10
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
 ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
 ERR: unreachable code
 ERR: unreachable code
@@ -1927,11 +1963,22 @@ ERR: invalid jump destination: offset into immediate: offset 7, dest 523, pos 51
 ERR: unreachable code
 ERR: undefined instruction: op SELFDESTRUCT, pos 276
 ERR: unreachable code
+ERR: undefined instruction: op opcode 0xc not defined, pos 118
+ERR: unreachable code
+ERR: undefined instruction: op SELFDESTRUCT, pos 144
+ERR: unreachable code
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
+ERR: undefined instruction: op opcode 0xdf not defined, pos 34
 ERR: undefined instruction: op opcode 0xdf not defined, pos 34
 ERR: undefined instruction: op opcode 0xdf not defined, pos 34
 ERR: undefined instruction: op opcode 0xdf not defined, pos 34
 ERR: unreachable code
 ERR: undefined instruction: op opcode 0xde not defined, pos 546
+ERR: unreachable code
 ERR: unreachable code
 ERR: unreachable code
 ERR: unreachable code
@@ -1948,15 +1995,26 @@ ERR: invalid jump destination: out-of-bounds offset: offset -8055, dest -7641, p
 ERR: invalid jump destination: offset into immediate: offset -255, dest 39, pos 8
 ERR: invalid max stack height in code section 0: have 3, want 2
 ERR: stack underflow (0 <=> 1): at pos 530
+ERR: invalid jump destination: out-of-bounds offset: offset -256, dest -248, pos 6
 ERR: stack underflow (0 <=> 2): at pos 560
+ERR: stack underflow (0 <=> 10): at pos 609
 ERR: stack underflow (0 <=> 1): at pos 545
 ERR: stack underflow (0 <=> 10): at pos 609
 ERR: stack underflow (0 <=> 2): at pos 560
 ERR: stack underflow (0 <=> 2): at pos 605
+ERR: invalid max stack height in code section 0: have 11, want 2
 ERR: invalid max stack height in code section 0: have 4, want 2
 ERR: invalid max stack height in code section 0: have 3, want 2
 ERR: stack underflow (0 <=> 10): at pos 609
+ERR: invalid number of outputs: max 1, min 0, at pos 546
+ERR: stack underflow (0 <=> 2): at pos 630
+ERR: invalid max stack height in code section 0: have 140, want 2
+ERR: stack underflow (0 <=> 1): at pos 594
+ERR: invalid jump destination: offset into immediate: offset 1, dest 517, pos 6
+ERR: invalid jump destination: offset into immediate: offset 1, dest 517, pos 6
+ERR: stack underflow (0 <=> 2): at pos 670
 ERR: stack underflow (0 <=> 2): at pos 664
+ERR: invalid jump destination: out-of-bounds offset: offset -7968, dest -7531, pos 435
 ERR: invalid jump destination: out-of-bounds offset: offset -7968, dest -7531, pos 435
 ERR: Invalid non-returning flag, bad RETF: at pos 899
 ERR: invalid jump destination: out-of-bounds offset: offset -6401, dest -5227, pos 662
@@ -1978,13 +2036,19 @@ ERR: stack underflow (174 <=> 203): at pos 1041
 ERR: stack underflow (235 <=> 257): at pos 881
 ERR: stack underflow (243 <=> 247): at pos 821
 ERR: stack underflow (252 <=> 257): at pos 771
+ERR: invalid jump destination: offset into immediate: offset 7, dest 523, pos 4
 ERR: invalid jump destination: offset into immediate: offset 602, dest 1118, pos 174
 ERR: invalid container size: have 15404, want 15353
+ERR: incompatible container kind
 ERR: invalid code termination: end with BLOCKHASH, pos 1
+ERR: invalid max stack height in code section 0: have 2, want 10
 ERR: invalid container size: have 15384, want 15383
+ERR: invalid max stack height in code section 0: have 0, want 100
 ERR: invalid container size: have 15384, want 15383
 ERR: missing header terminator: have 4 in sub container 5
 ERR: invalid container size: have 15434, want 15433
+ERR: incompatible container kind
+ERR: incompatible container kind
 ERR: incompatible container kind
 ERR: incompatible container kind
 ERR: missing code header: found section kind 4 instead in sub container 46
@@ -1999,25 +2063,73 @@ ERR: incompatible container kind
 ERR: incompatible container kind
 ERR: incompatible container kind
 ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: incompatible container kind
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
 ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
 ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26281, pos 1446
 ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
 ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
+ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
+ERR: invalid jump destination: out-of-bounds offset: offset 24832, dest 25509, pos 675
+ERR: invalid jump destination: out-of-bounds offset: offset -21151, dest -20628, pos 521
 ERR: invalid dataloadN argument: arg 24833, last 0, pos 1397
 ERR: invalid jump destination: out-of-bounds offset: offset 24833, dest 26278, pos 1443
+ERR: stack limit reached 1048 (1024): at pos 75
 ERR: undefined instruction: op opcode 0xc8 not defined, pos 1179
 ERR: invalid dataloadN argument: arg 5, last 32, pos 1728
 ERR: invalid dataloadN argument: arg 62719, last 32, pos 945
 ERR: invalid dataloadN argument: arg 16, last 32, pos 771
 ERR: invalid dataloadN argument: arg 1, last 32, pos 81
-ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
-ERR: invalid max stack height in code section 0: have 1022, want 1023
-ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
-ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
-ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
-ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
-ERR: unexpected EOF
 ERR: unreachable code
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: undefined instruction: op opcode 0x23 not defined, pos 3824
+ERR: invalid max stack height in code section 0: have 1022, want 1023
+ERR: unreachable code
+ERR: invalid max stack height in code section 0: have 1020, want 1023
+ERR: invalid max stack height in code section 0: have 1015, want 1023
+ERR: undefined instruction: op CALLCODE, pos 3487
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -7168, pos 58
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -7168, pos 58
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2380, pos 2086
+ERR: invalid jump destination: offset into immediate: offset 98, dest 2385, pos 2091
+ERR: invalid jump destination: out-of-bounds offset: offset 25600, dest 25650, pos 48
+ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
+ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
+ERR: invalid jump destination: out-of-bounds offset: offset -7711, dest -2524, pos 5185
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: out-of-bounds offset: offset -7680, dest -6420, pos 806
+ERR: invalid jump destination: offset into immediate: offset 102, dest 1277, pos 975
+ERR: invalid jump destination: offset into immediate: offset 102, dest 1277, pos 975
+ERR: invalid jump destination: offset into immediate: offset 102, dest 1282, pos 980
+ERR: unexpected EOF
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 30988, dest 38761, pos 7771
+ERR: invalid jump destination: out-of-bounds offset: offset 29440, dest 32042, pos 2500
+ERR: invalid jump destination: offset into immediate: offset -7454, dest 10684, pos 17684
+ERR: invalid jump destination: offset into immediate: offset -7454, dest 10684, pos 17684
+ERR: invalid jump destination: out-of-bounds offset: offset 29440, dest 47578, pos 17724
+ERR: invalid jump destination: out-of-bounds offset: offset 29440, dest 47578, pos 17724
+ERR: invalid jump destination: offset into immediate: offset -7454, dest 9550, pos 16550
+ERR: invalid jump destination: offset into immediate: offset 226, dest 2235, pos 1559
+ERR: invalid jump destination: offset into immediate: offset 226, dest 2235, pos 1559
+ERR: unreachable code
+ERR: invalid jump destination: offset into immediate: offset 127, dest 8866, pos 8315
+ERR: invalid jump destination: offset into immediate: offset 127, dest 8866, pos 8315
+ERR: invalid jump destination: offset into immediate: offset 127, dest 8866, pos 8315
 ERR: callf into non-returning section: section 0
 ERR: unreachable code
 ERR: stack underflow (0 <=> 48): at pos 0
@@ -2025,9 +2137,24 @@ ERR: stack underflow (0 <=> 48): at pos 0
 ERR: invalid container size: have 24, want 20 in sub container 0
 ERR: stack limit reached 1087 (1024): at pos 1022
 ERR: invalid number of outputs: at pos 0
-ERR: Invalid non-returning flag, bad RETF: at pos 9
 ERR: Invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+ERR: Invalid non-returning flag, bad RETF: at pos 9
+ERR: stack limit reached 1107 (1024): at pos 1106
+ERR: stack limit reached 1107 (1024): at pos 1106
+ERR: stack limit reached 1102 (1024)
+ERR: callf into non-returning section: section 3
+ERR: invalid number of outputs: max 1, min 0, at pos 7
+ERR: invalid max stack height in code section 2: have 0, want 48
+ERR: unreachable code
+ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12339, pos 1
+ERR: Invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+ERR: invalid number of outputs: have 0, want 4, at pos 6
+ERR: invalid number of outputs: at pos 3
 ERR: invalid number of outputs: arg 2, last 4, pos 7
+ERR: stack underflow (4 <=> 48): at pos 4
+ERR: invalid number of outputs: arg 2, last 4, pos 7
+ERR: invalid number of outputs: have 2, want 4, at pos 8
+ERR: invalid number of outputs: max 6, min 5, at pos 13
 ERR: missing code header: found section kind 30 instead
 ERR: missing code header: found section kind 30 instead
 ERR: missing code header: found section kind 30 instead
