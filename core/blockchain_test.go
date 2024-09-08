@@ -18,7 +18,6 @@ package core
 
 import (
 	"encoding/binary"
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -4418,11 +4417,14 @@ func TestRequests(t *testing.T) {
 		}
 	})
 
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr).Hooks()}, nil, nil)
+	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{Tracer: logger.NewMarkdownLogger(&logger.Config{}, os.Stderr).Hooks()}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
 	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
 
 	// Verify the withdrawal requests match.
 	block := chain.GetBlockByNumber(1)
@@ -4474,57 +4476,8 @@ func TestRequests(t *testing.T) {
 		}
 		if want.TargetPublicKey != got.TargetPublicKey {
 			t.Fatalf("wrong target public key: want %s, got %s", common.Bytes2Hex(want.TargetPublicKey[:]), common.Bytes2Hex(got.TargetPublicKey[:]))
-		}// Verify the withdrawal requests match.
-	block := chain.GetBlockByNumber(1)
-	if block == nil {
-		t.Fatalf("failed to retrieve block 1")
-	}
-
-	// Verify the withdrawal requests match.
-	got := block.Requests()
-	if len(got) != 2 {
-		t.Fatalf("wrong number of withdrawal requests: wanted 2, got %d", len(got))
-	}
-	for i, want := range wxs {
-		got, ok := got[i].Inner().(*types.WithdrawalRequest)
-		if !ok {
-			t.Fatalf("expected withdrawal request")
-		}
-		if want.Source != got.Source {
-			t.Fatalf("wrong source address: want %s, got %s", want.Source, got.Source)
-		}
-		if want.PublicKey != got.PublicKey {
-			t.Fatalf("wrong public key: want %s, got %s", common.Bytes2Hex(want.PublicKey[:]), common.Bytes2Hex(got.PublicKey[:]))
-		}
-		if want.Amount != got.Amount {
-			t.Fatalf("wrong amount: want %d, got %d", want.Amount, got.Amount)
 		}
 	}
-
-	// Verify the consolidation requests match. Even though both requests are sent
-	// in block two, only one is dequeued at a time.
-	for i, want := range cxs {
-		block := chain.GetBlockByNumber(uint64(i + 2))
-		if block == nil {
-			t.Fatalf("failed to retrieve block")
-		}
-		requests := block.Requests()
-		if len(requests) != 1 {
-			t.Fatalf("wrong number of consolidation requests: wanted 1, got %d", len(got))
-		}
-		got, ok := requests[0].Inner().(*types.ConsolidationRequest)
-		if !ok {
-			t.Fatalf("expected consolidation request")
-		}
-		if want.Source != got.Source {
-			t.Fatalf("wrong source address: want %s, got %s", want.Source, got.Source)
-		}
-		if want.SourcePublicKey != got.SourcePublicKey {
-			t.Fatalf("wrong source public key: want %s, got %s", common.Bytes2Hex(want.SourcePublicKey[:]), common.Bytes2Hex(got.SourcePublicKey[:]))
-		}
-		if want.TargetPublicKey != got.TargetPublicKey {
-			t.Fatalf("wrong target public key: want %s, got %s", common.Bytes2Hex(want.TargetPublicKey[:]), common.Bytes2Hex(got.TargetPublicKey[:]))
-		}
 }
 
 func int8ToByte(n int8) uint8 {
