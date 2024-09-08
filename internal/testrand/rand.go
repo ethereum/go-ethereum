@@ -19,7 +19,7 @@ package testrand
 import (
 	crand "crypto/rand"
 	"encoding/binary"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -31,14 +31,16 @@ var prng = initRand()
 func initRand() *mrand.Rand {
 	var seed [8]byte
 	crand.Read(seed[:])
-	rnd := mrand.New(mrand.NewSource(int64(binary.LittleEndian.Uint64(seed[:]))))
+	rnd := mrand.New(mrand.NewPCG(binary.LittleEndian.Uint64(seed[:]), binary.LittleEndian.Uint64(seed[:])))
 	return rnd
 }
 
 // Bytes generates a random byte slice with specified length.
 func Bytes(n int) []byte {
 	r := make([]byte, n)
-	prng.Read(r)
+	for i := range r {
+		r[i] = byte(mrand.Int())
+	}
 	return r
 }
 

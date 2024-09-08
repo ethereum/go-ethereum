@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 
@@ -166,7 +166,7 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 			defer wg.Done()
 			for frozen := range written {
 				for rc := 0; rc < 80; rc++ {
-					num := uint64(rand.Intn(int(frozen)))
+					num := uint64(rand.IntN(int(frozen)))
 					value, err := f.Ancient("test", num)
 					if err != nil {
 						panic(fmt.Errorf("error reading %d (frozen %d): %v", num, frozen, err))

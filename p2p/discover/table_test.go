@@ -19,7 +19,7 @@ package discover
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"reflect"
 	"slices"
@@ -264,7 +264,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	t := &closeTest{
 		Self:   gen(enode.ID{}, rand).(enode.ID),
 		Target: gen(enode.ID{}, rand).(enode.ID),
-		N:      rand.Intn(bucketSize),
+		N:      rand.IntN(bucketSize),
 	}
 	for _, id := range gen([]enode.ID{}, rand).([]enode.ID) {
 		r := new(enr.Record)
@@ -486,7 +486,7 @@ func gen(typ interface{}, rand *rand.Rand) interface{} {
 func quickcfg() *quick.Config {
 	return &quick.Config{
 		MaxCount: 5000,
-		Rand:     rand.New(rand.NewSource(time.Now().Unix())),
+		Rand:     rand.New(rand.NewPCG(uint64(time.Now().Unix()), uint64(time.Now().Unix()))),
 	}
 }
 

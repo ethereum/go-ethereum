@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -36,7 +36,7 @@ var (
 
 func init() {
 	// Random is nice, but we need it deterministic
-	rand := rand.New(rand.NewSource(0x3a29))
+	rand := rand.New(rand.NewPCG(0x3a29, 0x3a29))
 
 	peers = make([]string, 10)
 	for i := 0; i < len(peers); i++ {
@@ -44,7 +44,7 @@ func init() {
 	}
 	txs = make([]*types.Transaction, 65536) // We need to bump enough to hit all the limits
 	for i := 0; i < len(txs); i++ {
-		txs[i] = types.NewTransaction(rand.Uint64(), common.Address{byte(rand.Intn(256))}, new(big.Int), 0, new(big.Int), nil)
+		txs[i] = types.NewTransaction(rand.Uint64(), common.Address{byte(rand.IntN(256))}, new(big.Int), 0, new(big.Int), nil)
 	}
 }
 
@@ -75,7 +75,7 @@ func fuzz(input []byte) int {
 	}
 	// Create a fetcher and hook into it's simulated fields
 	clock := new(mclock.Simulated)
-	rand := rand.New(rand.NewSource(0x3a29)) // Same used in package tests!!!
+	rand := rand.New(rand.NewPCG(0x3a29, 0x3a29)) // Same used in package tests!!!
 
 	f := fetcher.NewTxFetcherForTests(
 		func(common.Hash) bool { return false },

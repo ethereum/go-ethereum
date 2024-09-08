@@ -19,7 +19,7 @@ package fetcher
 import (
 	"errors"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"testing"
 	"time"
@@ -1292,7 +1292,7 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 	// Create a slew of transactions to max out the underpriced set
 	var txs []*types.Transaction
 	for i := 0; i < maxTxUnderpricedSetSize+1; i++ {
-		txs = append(txs, types.NewTransaction(rand.Uint64(), common.Address{byte(rand.Intn(256))}, new(big.Int), 0, new(big.Int), nil))
+		txs = append(txs, types.NewTransaction(rand.Uint64(), common.Address{byte(rand.IntN(256))}, new(big.Int), 0, new(big.Int), nil))
 	}
 	var (
 		hashes []common.Hash
@@ -1842,7 +1842,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 	fetcher := tt.init()
 	fetcher.clock = clock
 	fetcher.step = wait
-	fetcher.rand = rand.New(rand.NewSource(0x3a29))
+	fetcher.rand = rand.New(rand.New(rand.NewPCG(uint64(0x3a29), uint64(0x3a29))))
 
 	fetcher.Start()
 	defer fetcher.Stop()

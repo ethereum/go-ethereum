@@ -9,7 +9,7 @@
 package prque
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 )
 
@@ -103,7 +103,7 @@ func BenchmarkPush(b *testing.B) {
 	prio := make([]int64, b.N)
 	for i := 0; i < len(data); i++ {
 		data[i] = rand.Int()
-		prio[i] = rand.Int63()
+		prio[i] = rand.Int64()
 	}
 	// Execute the benchmark
 	b.ResetTimer()
@@ -119,7 +119,7 @@ func BenchmarkPop(b *testing.B) {
 	prio := make([]int64, b.N)
 	for i := 0; i < len(data); i++ {
 		data[i] = rand.Int()
-		prio[i] = rand.Int63()
+		prio[i] = rand.Int64()
 	}
 	queue := New[int64, int](nil)
 	for i := 0; i < len(data); i++ {

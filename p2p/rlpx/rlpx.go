@@ -29,7 +29,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"net"
 	"time"
 
@@ -635,7 +635,7 @@ func (h *handshakeState) sealEIP8(msg interface{}) ([]byte, error) {
 	}
 	// Pad with random amount of data. the amount needs to be at least 100 bytes to make
 	// the message distinguishable from pre-EIP-8 handshakes.
-	h.wbuf.appendZero(mrand.Intn(100) + 100)
+	h.wbuf.appendZero(mrand.IntN(100) + 100)
 
 	prefix := make([]byte, 2)
 	binary.BigEndian.PutUint16(prefix, uint16(len(h.wbuf.data)+eciesOverhead))

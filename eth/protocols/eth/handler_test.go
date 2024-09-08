@@ -19,7 +19,7 @@ package eth
 import (
 	"math"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -393,7 +393,7 @@ func testGetBlockBodies(t *testing.T, protocol uint) {
 		)
 		for j := 0; j < tt.random; j++ {
 			for {
-				num := rand.Int63n(int64(backend.chain.CurrentBlock().Number.Uint64()))
+				num := rand.Int64N(int64(backend.chain.CurrentBlock().Number.Uint64()))
 				if !seen[num] {
 					seen[num] = true
 

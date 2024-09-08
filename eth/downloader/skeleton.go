@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"time"
 
@@ -712,7 +712,7 @@ func (s *skeleton) assignTasks(success chan *headerResponse, fail chan *headerRe
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
 		for {
-			reqid = uint64(rand.Int63())
+			reqid = uint64(rand.Int64())
 			if reqid == 0 {
 				continue
 			}

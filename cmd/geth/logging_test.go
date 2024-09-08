@@ -24,7 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"os/exec"
 	"strings"
@@ -201,7 +201,7 @@ func TestFileOut(t *testing.T) {
 	var (
 		have, want []byte
 		err        error
-		path       = fmt.Sprintf("%s/test_file_out-%d", t.TempDir(), rand.Int63())
+		path       = fmt.Sprintf("%s/test_file_out-%d", t.TempDir(), rand.Int64())
 	)
 	if want, err = runSelf(fmt.Sprintf("--log.file=%s", path), "logtest"); err != nil {
 		t.Fatal(err)
@@ -221,7 +221,7 @@ func TestRotatingFileOut(t *testing.T) {
 	var (
 		have, want []byte
 		err        error
-		path       = fmt.Sprintf("%s/test_file_out-%d", t.TempDir(), rand.Int63())
+		path       = fmt.Sprintf("%s/test_file_out-%d", t.TempDir(), rand.Int64())
 	)
 	if want, err = runSelf(fmt.Sprintf("--log.file=%s", path), "--log.rotate", "logtest"); err != nil {
 		t.Fatal(err)

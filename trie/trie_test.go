@@ -23,7 +23,8 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"math/rand"
+	"math"
+	"math/rand/v2"
 	"reflect"
 	"sort"
 	"testing"
@@ -404,27 +405,29 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(generateSteps(finishedFn, r))
 }
 
-func generateSteps(finished func() bool, r io.Reader) randTest {
+func generateSteps(finished func() bool, r *rand.Rand) randTest {
 	var allKeys [][]byte
-	var one = []byte{0}
+	one := 0
 	genKey := func() []byte {
-		r.Read(one)
-		if len(allKeys) < 2 || one[0]%100 > 90 {
+		one = r.IntN(math.MaxInt8)
+		if len(allKeys) < 2 || one%100 > 90 {
 			// new key
-			size := one[0] % 50
+			size := one % 50
 			key := make([]byte, size)
-			r.Read(key)
+			for i := 0; i < size; i++ {
+				key[i] = byte(r.IntN(math.MaxInt8))
+			}
 			allKeys = append(allKeys, key)
 			return key
 		}
 		// use existing key
-		idx := int(one[0]) % len(allKeys)
+		idx := int(one) % len(allKeys)
 		return allKeys[idx]
 	}
 	var steps randTest
 	for !finished() {
-		r.Read(one)
-		step := randTestStep{op: int(one[0]) % opMax}
+		one = r.IntN(math.MaxInt8)
+		step := randTestStep{op: int(one) % opMax}
 		switch step.op {
 		case opUpdate:
 			step.key = genKey()
@@ -487,7 +490,7 @@ func runRandTestBool(rt randTest) bool {
 
 func runRandTest(rt randTest) error {
 	var scheme = rawdb.HashScheme
-	if rand.Intn(2) == 0 {
+	if rand.IntN(2) == 0 {
 		scheme = rawdb.PathScheme
 	}
 	var (
@@ -776,18 +779,20 @@ func TestCommitAfterHash(t *testing.T) {
 
 func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 	// Make the random benchmark deterministic
-	random := rand.New(rand.NewSource(0))
+	random := rand.New(rand.NewPCG(0, 0))
 	// Create a realistic account trie to hash
 	addresses = make([][20]byte, size)
 	for i := 0; i < len(addresses); i++ {
 		data := make([]byte, 20)
-		random.Read(data)
+		for i := range data {
+			data[i] = byte(random.Int())
+		}
 		copy(addresses[i][:], data)
 	}
 	accounts = make([][]byte, len(addresses))
 	for i := 0; i < len(accounts); i++ {
 		var (
-			nonce = uint64(random.Int63())
+			nonce = uint64(random.Int64())
 			root  = types.EmptyRootHash
 			code  = crypto.Keccak256(nil)
 		)
@@ -797,7 +802,9 @@ func makeAccounts(size int) (addresses [][20]byte, accounts [][]byte) {
 		// Therefore, we instead just read via byte buffer
 		numBytes := random.Uint32() % 33 // [0, 32] bytes
 		balanceBytes := make([]byte, numBytes)
-		random.Read(balanceBytes)
+		for i := range balanceBytes {
+			balanceBytes[i] = byte(prng.Int())
+		}
 		balance := new(uint256.Int).SetBytes(balanceBytes)
 		data, _ := rlp.EncodeToBytes(&types.StateAccount{Nonce: nonce, Balance: balance, Root: root, CodeHash: code})
 		accounts[i] = data
@@ -914,7 +921,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 		{200, common.FromHex("dde92ca9812e068e6982d04b40846dc65a61a9fd4996fc0f55f2fde172a8e13c")},
 		{2000, common.FromHex("ab553a7f9aff82e3929c382908e30ef7dd17a332933e92ba3fe873fc661ef382")},
 	} {
-		prng := rand.New(rand.NewSource(int64(i)))
+		prng := rand.New(rand.NewPCG(uint64(i), uint64(i)))
 		// This spongeDb is used to check the sequence of disk-db-writes
 		s := &spongeDb{sponge: crypto.NewKeccakState()}
 		db := newTestDatabase(rawdb.NewDatabase(s), rawdb.HashScheme)
@@ -924,13 +931,17 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 			key := make([]byte, 32)
 			var val []byte
 			// 50% short elements, 50% large elements
-			if prng.Intn(2) == 0 {
-				val = make([]byte, 1+prng.Intn(32))
+			if prng.IntN(2) == 0 {
+				val = make([]byte, 1+prng.IntN(32))
 			} else {
-				val = make([]byte, 1+prng.Intn(4096))
+				val = make([]byte, 1+prng.IntN(4096))
 			}
-			prng.Read(key)
-			prng.Read(val)
+			for i := range key {
+				key[i] = byte(prng.Int())
+			}
+			for i := range val {
+				val[i] = byte(prng.Int())
+			}
 			trie.MustUpdate(key, val)
 		}
 		// Flush trie -> database
@@ -946,7 +957,7 @@ func TestCommitSequenceRandomBlobs(t *testing.T) {
 
 func TestCommitSequenceStackTrie(t *testing.T) {
 	for count := 1; count < 200; count++ {
-		prng := rand.New(rand.NewSource(int64(count)))
+		prng := rand.New(rand.NewPCG(uint64(count), uint64(count)))
 		// This spongeDb is used to check the sequence of disk-db-writes
 		s := &spongeDb{
 			sponge: sha3.NewLegacyKeccak256(),
@@ -973,12 +984,14 @@ func TestCommitSequenceStackTrie(t *testing.T) {
 			binary.BigEndian.PutUint64(key, uint64(i))
 			var val []byte
 			// 50% short elements, 50% large elements
-			if prng.Intn(2) == 0 {
-				val = make([]byte, 1+prng.Intn(32))
+			if prng.IntN(2) == 0 {
+				val = make([]byte, 1+prng.IntN(32))
 			} else {
-				val = make([]byte, 1+prng.Intn(1024))
+				val = make([]byte, 1+prng.IntN(1024))
 			}
-			prng.Read(val)
+			for i := range val {
+				val[i] = byte(prng.Int())
+			}
 			trie.Update(key, val)
 			stTrie.Update(key, val)
 		}
@@ -1187,8 +1200,12 @@ func TestDecodeNode(t *testing.T) {
 		elems = make([]byte, 20)
 	)
 	for i := 0; i < 5000000; i++ {
-		prng.Read(hash)
-		prng.Read(elems)
+		for i := range hash {
+			hash[i] = byte(prng.Int())
+		}
+		for i := range elems {
+			elems[i] = byte(prng.Int())
+		}
 		decodeNode(hash, elems)
 	}
 }
@@ -1201,8 +1218,42 @@ func FuzzTrie(f *testing.F) {
 			steps--
 			return steps < 0 || input.Len() == 0
 		}
-		if err := runRandTest(generateSteps(finishedFn, input)); err != nil {
+		if err := runRandTest(generateFuzzSteps(finishedFn, input)); err != nil {
 			t.Fatal(err)
 		}
 	})
+}
+
+func generateFuzzSteps(finished func() bool, r io.Reader) randTest {
+	var allKeys [][]byte
+	var one = []byte{0}
+	genKey := func() []byte {
+		r.Read(one)
+		if len(allKeys) < 2 || one[0]%100 > 90 {
+			// new key
+			size := one[0] % 50
+			key := make([]byte, size)
+			r.Read(key)
+			allKeys = append(allKeys, key)
+			return key
+		}
+		// use existing key
+		idx := int(one[0]) % len(allKeys)
+		return allKeys[idx]
+	}
+	var steps randTest
+	for !finished() {
+		r.Read(one)
+		step := randTestStep{op: int(one[0]) % opMax}
+		switch step.op {
+		case opUpdate:
+			step.key = genKey()
+			step.value = make([]byte, 8)
+			binary.BigEndian.PutUint64(step.value, uint64(len(steps)))
+		case opGet, opDelete, opProve:
+			step.key = genKey()
+		}
+		steps = append(steps, step)
+	}
+	return steps
 }

@@ -22,7 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"reflect"
 	"strings"
@@ -392,9 +392,11 @@ func BenchmarkThroughput(b *testing.B) {
 		conn1, conn2  = NewConn(pipe1, nil), NewConn(pipe2, &keyA.PublicKey)
 		handshakeDone = make(chan error, 1)
 		msgdata       = make([]byte, 1024)
-		rand          = rand.New(rand.NewSource(1337))
+		rand          = rand.New(rand.NewPCG(1337, 1337))
 	)
-	rand.Read(msgdata)
+	for i := range msgdata {
+		msgdata[i] = byte(rand.Int())
+	}
 
 	// Server side.
 	go func() {

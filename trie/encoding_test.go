@@ -20,7 +20,7 @@ import (
 	"bytes"
 	crand "crypto/rand"
 	"encoding/hex"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 )
 
@@ -95,7 +95,7 @@ func TestHexToCompactInPlace(t *testing.T) {
 
 func TestHexToCompactInPlaceRandom(t *testing.T) {
 	for i := 0; i < 10000; i++ {
-		l := rand.Intn(128)
+		l := rand.IntN(128)
 		key := make([]byte, l)
 		crand.Read(key)
 		hexBytes := keybytesToHex(key)

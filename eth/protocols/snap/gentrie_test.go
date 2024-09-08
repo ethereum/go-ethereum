@@ -18,7 +18,7 @@ package snap
 
 import (
 	"bytes"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"testing"
 
@@ -163,12 +163,12 @@ func buildPartial(owner common.Hash, db ethdb.KeyValueReader, batch ethdb.Batch,
 func TestPartialGentree(t *testing.T) {
 	for round := 0; round < 100; round++ {
 		var (
-			n       = rand.Intn(1024) + 10
+			n       = rand.IntN(1024) + 10
 			entries []*kv
 		)
 		for i := 0; i < n; i++ {
 			var val []byte
-			if rand.Intn(3) == 0 {
+			if rand.IntN(3) == 0 {
 				val = testrand.Bytes(3)
 			} else {
 				val = testrand.Bytes(32)
@@ -223,8 +223,8 @@ func TestPartialGentree(t *testing.T) {
 				last  int
 			)
 			for {
-				first = rand.Intn(len(entries))
-				last = rand.Intn(len(entries))
+				first = rand.IntN(len(entries))
+				last = rand.IntN(len(entries))
 				if first <= last {
 					break
 				}
@@ -255,12 +255,12 @@ func TestPartialGentree(t *testing.T) {
 func TestGentreeDanglingClearing(t *testing.T) {
 	for round := 0; round < 100; round++ {
 		var (
-			n       = rand.Intn(1024) + 10
+			n       = rand.IntN(1024) + 10
 			entries []*kv
 		)
 		for i := 0; i < n; i++ {
 			var val []byte
-			if rand.Intn(3) == 0 {
+			if rand.IntN(3) == 0 {
 				val = testrand.Bytes(3)
 			} else {
 				val = testrand.Bytes(32)
@@ -332,8 +332,8 @@ func TestGentreeDanglingClearing(t *testing.T) {
 				last  int
 			)
 			for {
-				first = rand.Intn(len(entries))
-				last = rand.Intn(len(entries))
+				first = rand.IntN(len(entries))
+				last = rand.IntN(len(entries))
 				if first <= last {
 					break
 				}
@@ -365,7 +365,7 @@ func TestFlushPartialTree(t *testing.T) {
 	var entries []*kv
 	for i := 0; i < 1024; i++ {
 		var val []byte
-		if rand.Intn(3) == 0 {
+		if rand.IntN(3) == 0 {
 			val = testrand.Bytes(3)
 		} else {
 			val = testrand.Bytes(32)
@@ -410,7 +410,7 @@ func TestFlushPartialTree(t *testing.T) {
 		tr := newPathTrie(common.Hash{}, c.first != 0, db, batch)
 		for i := c.first; i <= c.last; i++ {
 			tr.update(entries[i].k, entries[i].v)
-			if rand.Intn(2) == 0 {
+			if rand.IntN(2) == 0 {
 				tr.commit(false)
 
 				batch.Replay(combined)
@@ -449,7 +449,7 @@ func TestBoundSplit(t *testing.T) {
 	var entries []*kv
 	for i := 0; i < 1024; i++ {
 		var val []byte
-		if rand.Intn(3) == 0 {
+		if rand.IntN(3) == 0 {
 			val = testrand.Bytes(3)
 		} else {
 			val = testrand.Bytes(32)
@@ -473,7 +473,7 @@ func TestBoundSplit(t *testing.T) {
 			if next == len(entries) {
 				break
 			}
-			last = rand.Intn(len(entries)-next) + next
+			last = rand.IntN(len(entries)-next) + next
 
 			r := buildPartial(common.Hash{}, db, db.NewBatch(), entries, next, last)
 			set := r.modifies()
@@ -523,7 +523,7 @@ func TestTinyPartialTree(t *testing.T) {
 	var entries []*kv
 	for i := 0; i < 1024; i++ {
 		var val []byte
-		if rand.Intn(3) == 0 {
+		if rand.IntN(3) == 0 {
 			val = testrand.Bytes(3)
 		} else {
 			val = testrand.Bytes(32)

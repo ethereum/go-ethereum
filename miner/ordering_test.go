@@ -19,7 +19,7 @@ package miner
 import (
 	"crypto/ecdsa"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -61,7 +61,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 		count := 25
 		for i := 0; i < 25; i++ {
 			var tx *types.Transaction
-			gasFeeCap := rand.Intn(50)
+			gasFeeCap := rand.IntN(50)
 			if baseFee == nil {
 				tx = types.NewTx(&types.LegacyTx{
 					Nonce:    uint64(start + i),
@@ -78,7 +78,7 @@ func testTransactionPriceNonceSort(t *testing.T, baseFee *big.Int) {
 					Value:     big.NewInt(100),
 					Gas:       100,
 					GasFeeCap: big.NewInt(int64(gasFeeCap)),
-					GasTipCap: big.NewInt(int64(rand.Intn(gasFeeCap + 1))),
+					GasTipCap: big.NewInt(int64(rand.IntN(gasFeeCap + 1))),
 					Data:      nil,
 				})
 				if count == 25 && int64(gasFeeCap) < baseFee.Int64() {

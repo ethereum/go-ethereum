@@ -17,7 +17,7 @@
 package enode
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"testing"
@@ -90,7 +90,7 @@ func TestLocalNodeSeqPersist(t *testing.T) {
 // This test checks behavior of the endpoint predictor.
 func TestLocalNodeEndpoint(t *testing.T) {
 	var (
-		rng       = rand.New(rand.NewSource(4))
+		rng       = rand.New(rand.NewPCG(4, 4))
 		fallback  = &net.UDPAddr{IP: net.IP{127, 0, 0, 1}, Port: 80}
 		predicted = &net.UDPAddr{IP: net.IP{127, 0, 1, 2}, Port: 81}
 		staticIP  = net.IP{127, 0, 1, 2}

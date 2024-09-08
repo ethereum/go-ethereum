@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -29,11 +29,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
+var rnd = rand.New(rand.NewPCG(uint64(time.Now().Unix()), uint64(time.Now().Unix())))
 
 func randomString(strlen int) string {
 	b := make([]byte, strlen)
-	rnd.Read(b)
+	for i := range b {
+		b[i] = byte(rand.Int())
+	}
 	return string(b)
 }
 

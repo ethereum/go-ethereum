@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -111,7 +111,7 @@ func execStateTest(t *testing.T, st *testMatcher, test *StateTest) {
 		// one.
 		executionMask := 0xf
 		if testing.Short() {
-			executionMask = (1 << (rand.Int63() & 4))
+			executionMask = (1 << (rand.Int64() & 4))
 		}
 		t.Run(key+"/hash/trie", func(t *testing.T) {
 			if executionMask&0x1 == 0 {

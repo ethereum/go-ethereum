@@ -17,7 +17,7 @@
 package event
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -113,7 +113,7 @@ func TestMuxConcurrent(t *testing.T) {
 		}
 	}
 	sub := func(i int) {
-		time.Sleep(time.Duration(rand.Intn(99)) * time.Millisecond)
+		time.Sleep(time.Duration(rand.IntN(99)) * time.Millisecond)
 		sub := mux.Subscribe(testEvent(0))
 		<-sub.Chan()
 		sub.Unsubscribe()

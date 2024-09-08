@@ -23,7 +23,7 @@ import (
 	"fmt"
 	gomath "math"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -1046,7 +1046,7 @@ func (s *Syncer) assignAccountTasks(success chan *accountResponse, fail chan *ac
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
 		for {
-			reqid = uint64(rand.Int63())
+			reqid = uint64(rand.Int64())
 			if reqid == 0 {
 				continue
 			}
@@ -1147,7 +1147,7 @@ func (s *Syncer) assignBytecodeTasks(success chan *bytecodeResponse, fail chan *
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
 		for {
-			reqid = uint64(rand.Int63())
+			reqid = uint64(rand.Int64())
 			if reqid == 0 {
 				continue
 			}
@@ -1251,7 +1251,7 @@ func (s *Syncer) assignStorageTasks(success chan *storageResponse, fail chan *st
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
 		for {
-			reqid = uint64(rand.Int63())
+			reqid = uint64(rand.Int64())
 			if reqid == 0 {
 				continue
 			}
@@ -1419,7 +1419,7 @@ func (s *Syncer) assignTrienodeHealTasks(success chan *trienodeHealResponse, fai
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
 		for {
-			reqid = uint64(rand.Int63())
+			reqid = uint64(rand.Int64())
 			if reqid == 0 {
 				continue
 			}
@@ -1547,7 +1547,7 @@ func (s *Syncer) assignBytecodeHealTasks(success chan *bytecodeHealResponse, fai
 		// Matched a pending task to an idle peer, allocate a unique request id
 		var reqid uint64
 		for {
-			reqid = uint64(rand.Int63())
+			reqid = uint64(rand.Int64())
 			if reqid == 0 {
 				continue
 			}

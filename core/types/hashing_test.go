@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -174,9 +174,9 @@ type dummyDerivableList struct {
 
 func newDummy(seed int) *dummyDerivableList {
 	d := &dummyDerivableList{}
-	src := mrand.NewSource(int64(seed))
+	src := mrand.New(mrand.NewPCG(uint64(seed), uint64(seed)))
 	// don't use lists longer than 4K items
-	d.len = int(src.Int63() & 0x0FFF)
+	d.len = int(src.Int64() & 0x0FFF)
 	d.seed = seed
 	return d
 }
@@ -186,10 +186,14 @@ func (d *dummyDerivableList) Len() int {
 }
 
 func (d *dummyDerivableList) EncodeIndex(i int, w *bytes.Buffer) {
-	src := mrand.NewSource(int64(d.seed + i))
+	src := mrand.New(mrand.NewPCG(uint64(d.seed+i), uint64(d.seed+i)))
 	// max item size 256, at least 1 byte per item
-	size := 1 + src.Int63()&0x00FF
-	io.CopyN(w, mrand.New(src), size)
+	size := 1 + src.Int64()&0x00FF
+	b := make([]byte, size)
+	for i := range size {
+		b[i] = byte(src.Int())
+	}
+	io.CopyN(w, bytes.NewBuffer(b), size)
 }
 
 func printList(l types.DerivableList) {

@@ -21,7 +21,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -42,10 +42,10 @@ func TestAccountIteratorBasics(t *testing.T) {
 		data := randomAccount()
 
 		accounts[h] = data
-		if rand.Intn(4) == 0 {
+		if rand.IntN(4) == 0 {
 			destructs[h] = struct{}{}
 		}
-		if rand.Intn(2) == 0 {
+		if rand.IntN(2) == 0 {
 			accStorage := make(map[common.Hash][]byte)
 			value := make([]byte, 32)
 			crand.Read(value)
@@ -81,7 +81,7 @@ func TestStorageIteratorBasics(t *testing.T) {
 		var nilstorage int
 		for i := 0; i < 100; i++ {
 			crand.Read(value)
-			if rand.Intn(2) == 0 {
+			if rand.IntN(2) == 0 {
 				accStorage[randomHash()] = common.CopyBytes(value)
 			} else {
 				accStorage[randomHash()] = nil // delete slot
@@ -1028,7 +1028,7 @@ func benchmarkAccountIteration(b *testing.B, iterator func(snap snapshot) Accoun
 		layers[i] = make(map[common.Hash][]byte)
 	}
 	for i := 0; i < b.N; i++ {
-		depth := rand.Intn(len(layers))
+		depth := rand.IntN(len(layers))
 		layers[depth][randomHash()] = randomAccount()
 	}
 	stack := snapshot(emptyLayer())

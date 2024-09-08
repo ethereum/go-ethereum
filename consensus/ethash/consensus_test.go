@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"testing"

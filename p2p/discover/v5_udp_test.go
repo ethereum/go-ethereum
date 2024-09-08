@@ -21,7 +21,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"reflect"
@@ -56,7 +56,7 @@ func TestUDPv5_lookupE2E(t *testing.T) {
 		defer node.Close()
 	}
 	last := nodes[N-1]
-	target := nodes[rand.Intn(N-2)].Self()
+	target := nodes[rand.IntN(N-2)].Self()
 
 	// It is expected that all nodes can be found.
 	expectedResult := make([]*enode.Node, len(nodes))

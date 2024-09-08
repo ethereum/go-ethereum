@@ -20,7 +20,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -161,7 +161,7 @@ func TestFork(t *testing.T) {
 	parent, _ := client.HeaderByNumber(ctx, nil)
 
 	// 2.
-	n := int(rand.Int31n(21))
+	n := int(rand.Int32N(21))
 	for i := 0; i < n; i++ {
 		sim.Commit()
 	}

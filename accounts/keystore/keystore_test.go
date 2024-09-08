@@ -17,7 +17,7 @@
 package keystore
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"runtime"
 	"slices"

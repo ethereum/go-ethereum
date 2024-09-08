@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"sync"
@@ -120,9 +120,10 @@ func (n *upnp) addAnyPortMapping(protocol string, extport, intport int, ip net.I
 
 func (n *upnp) randomPort() int {
 	if n.rand == nil {
-		n.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+		seed := uint64(time.Now().UnixNano())
+		n.rand = rand.New(rand.NewPCG(seed, seed))
 	}
-	return n.rand.Intn(math.MaxUint16-10000) + 10000
+	return n.rand.IntN(math.MaxUint16-10000) + 10000
 }
 
 func (n *upnp) internalAddress() (net.IP, error) {

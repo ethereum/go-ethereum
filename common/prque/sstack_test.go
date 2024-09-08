@@ -9,7 +9,7 @@
 package prque
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"testing"
 )
@@ -19,7 +19,7 @@ func TestSstack(t *testing.T) {
 	size := 16 * blockSize
 	data := make([]*item[int64, int], size)
 	for i := 0; i < size; i++ {
-		data[i] = &item[int64, int]{rand.Int(), rand.Int63()}
+		data[i] = &item[int64, int]{rand.Int(), rand.Int64()}
 	}
 	stack := newSstack[int64, int](nil)
 	for rep := 0; rep < 2; rep++ {
@@ -74,7 +74,7 @@ func TestSstackReset(t *testing.T) {
 	size := 16 * blockSize
 	data := make([]*item[int64, int], size)
 	for i := 0; i < size; i++ {
-		data[i] = &item[int64, int]{rand.Int(), rand.Int63()}
+		data[i] = &item[int64, int]{rand.Int(), rand.Int64()}
 	}
 	stack := newSstack[int64, int](nil)
 	for rep := 0; rep < 2; rep++ {

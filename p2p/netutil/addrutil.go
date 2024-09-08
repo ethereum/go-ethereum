@@ -18,7 +18,7 @@ package netutil
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 )
@@ -54,12 +54,14 @@ func IPToAddr(ip net.IP) netip.Addr {
 // RandomAddr creates a random IP address.
 func RandomAddr(rng *rand.Rand, ipv4 bool) netip.Addr {
 	var bytes []byte
-	if ipv4 || rng.Intn(2) == 0 {
+	if ipv4 || rng.IntN(2) == 0 {
 		bytes = make([]byte, 4)
 	} else {
 		bytes = make([]byte, 16)
 	}
-	rng.Read(bytes)
+	for i := range bytes {
+		bytes[i] = byte(rand.Int())
+	}
 	addr, ok := netip.AddrFromSlice(bytes)
 	if !ok {
 		panic(fmt.Errorf("BUG! invalid IP %v", bytes))

@@ -21,7 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"reflect"
 	"testing"

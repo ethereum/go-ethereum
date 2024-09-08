@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -758,7 +758,7 @@ func (s *Suite) snapGetAccountRange(t *utesting.T, tc *accRangeTest) error {
 	}
 	// write request
 	req := &snap.GetAccountRangePacket{
-		ID:     uint64(rand.Int63()),
+		ID:     uint64(rand.Int64()),
 		Root:   tc.root,
 		Origin: tc.startingHash,
 		Limit:  tc.limitHash,
@@ -828,7 +828,7 @@ func (s *Suite) snapGetStorageRanges(t *utesting.T, tc *stRangesTest) error {
 
 	// write request
 	req := &snap.GetStorageRangesPacket{
-		ID:       uint64(rand.Int63()),
+		ID:       uint64(rand.Int64()),
 		Root:     tc.root,
 		Accounts: tc.accounts,
 		Origin:   tc.origin,
@@ -882,7 +882,7 @@ func (s *Suite) snapGetByteCodes(t *utesting.T, tc *byteCodesTest) error {
 	}
 	// write request
 	req := &snap.GetByteCodesPacket{
-		ID:     uint64(rand.Int63()),
+		ID:     uint64(rand.Int64()),
 		Hashes: tc.hashes,
 		Bytes:  tc.nBytes,
 	}
@@ -942,7 +942,7 @@ func (s *Suite) snapGetTrieNodes(t *utesting.T, tc *trieNodesTest) error {
 
 	// write0 request
 	req := &snap.GetTrieNodesPacket{
-		ID:    uint64(rand.Int63()),
+		ID:    uint64(rand.Int64()),
 		Root:  tc.root,
 		Paths: tc.paths,
 		Bytes: tc.nBytes,

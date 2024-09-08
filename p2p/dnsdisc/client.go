@@ -21,7 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"sync"
@@ -312,7 +312,7 @@ func (it *randomIterator) pickTree() *clientTree {
 		switch {
 		case canSync:
 			// Pick a random tree.
-			return trees[rand.Intn(len(trees))]
+			return trees[rand.IntN(len(trees))]
 		case len(trees) > 0:
 			// No sync action can be performed on any tree right now. The only meaningful
 			// thing to do is waiting for any root record to get updated.

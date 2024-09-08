@@ -17,7 +17,7 @@
 package dnsdisc
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"strconv"
 	"testing"
 )
@@ -67,7 +67,7 @@ func TestLinkCacheRandom(t *testing.T) {
 	var lc linkCache
 	var remove []string
 	for i := 0; i < 100; i++ {
-		a, b := tags[rand.Intn(len(tags))], tags[rand.Intn(len(tags))]
+		a, b := tags[rand.IntN(len(tags))], tags[rand.IntN(len(tags))]
 		lc.addLink(a, b)
 		remove = append(remove, a)
 	}

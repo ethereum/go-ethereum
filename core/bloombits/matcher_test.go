@@ -18,7 +18,7 @@ package bloombits
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -115,7 +115,7 @@ func makeRandomIndexes(lengths []int, max int) [][]bloomIndexes {
 		res[i] = make([]bloomIndexes, topics)
 		for j := 0; j < topics; j++ {
 			for k := 0; k < len(res[i][j]); k++ {
-				res[i][j][k] = uint(rand.Intn(max-1) + 2)
+				res[i][j][k] = uint(rand.IntN(max-1) + 2)
 			}
 		}
 	}

@@ -18,7 +18,7 @@ package eth
 
 import (
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 
 	mapset "github.com/deckarep/golang-set/v2"

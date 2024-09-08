@@ -19,7 +19,7 @@ package bloombits
 import (
 	"bytes"
 	crand "crypto/rand"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"

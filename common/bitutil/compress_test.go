@@ -19,7 +19,7 @@ package bitutil
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -167,14 +167,14 @@ func BenchmarkEncoding4KBSaturated(b *testing.B) { benchmarkEncoding(b, 4096, 0.
 
 func benchmarkEncoding(b *testing.B, bytes int, fill float64) {
 	// Generate a random slice of bytes to compress
-	random := rand.NewSource(0) // reproducible and comparable
+	random := rand.New(rand.NewPCG(0, 0)) // reproducible and comparable
 
 	data := make([]byte, bytes)
 	bits := int(float64(bytes) * 8 * fill)
 
 	for i := 0; i < bits; i++ {
-		idx := random.Int63() % int64(len(data))
-		bit := uint(random.Int63() % 8)
+		idx := random.Int64() % int64(len(data))
+		bit := uint(random.Int64() % 8)
 		data[idx] |= 1 << bit
 	}
 	// Reset the benchmark and measure encoding/decoding

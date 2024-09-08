@@ -17,7 +17,7 @@
 package tests
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"

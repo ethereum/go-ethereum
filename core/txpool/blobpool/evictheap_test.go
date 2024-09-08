@@ -18,7 +18,7 @@ package blobpool
 
 import (
 	"container/heap"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,7 +26,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var rand = mrand.New(mrand.NewSource(1))
+var rand = mrand.New(mrand.NewPCG(1, 1))
 
 // verifyHeapInternals verifies that all accounts present in the index are also
 // present in the heap and internals are consistent across various indices.
@@ -193,7 +193,15 @@ func benchmarkPriceHeapReinit(b *testing.B, datacap uint64) {
 	index := make(map[common.Address][]*blobTxMeta)
 	for i := 0; i < int(blobs); i++ {
 		var addr common.Address
-		rand.Read(addr[:])
+
+		addr.SetBytes(func() []byte {
+			ret := make([]byte, common.AddressLength)
+			randInts := rand.Perm(256)
+			for i, v := range randInts {
+				ret[i] = byte(v)
+			}
+			return ret
+		}())
 
 		var (
 			execTip = uint256.NewInt(rand.Uint64())
@@ -253,7 +261,14 @@ func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 	index := make(map[common.Address][]*blobTxMeta)
 	for i := 0; i < int(blobs); i++ {
 		var addr common.Address
-		rand.Read(addr[:])
+		addr.SetBytes(func() []byte {
+			ret := make([]byte, common.AddressLength)
+			randInts := rand.Perm(256)
+			for i, v := range randInts {
+				ret[i] = byte(v)
+			}
+			return ret
+		}())
 
 		var (
 			execTip = uint256.NewInt(rand.Uint64())
@@ -284,7 +299,14 @@ func benchmarkPriceHeapOverflow(b *testing.B, datacap uint64) {
 		metas = make([]*blobTxMeta, b.N)
 	)
 	for i := 0; i < b.N; i++ {
-		rand.Read(addrs[i][:])
+		addrs[i].SetBytes(func() []byte {
+			ret := make([]byte, common.AddressLength)
+			randInts := rand.Perm(256)
+			for i, v := range randInts {
+				ret[i] = byte(v)
+			}
+			return ret
+		}())
 
 		var (
 			execTip = uint256.NewInt(rand.Uint64())

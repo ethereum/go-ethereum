@@ -460,7 +460,7 @@ func (tab *Table) loadSeedNodes() {
 
 func (tab *Table) nextRefreshTime() time.Duration {
 	half := tab.cfg.RefreshInterval / 2
-	return half + time.Duration(tab.rand.Int63n(int64(half)))
+	return half + time.Duration(tab.rand.Int64N(int64(half)))
 }
 
 // bucket returns the bucket for the given node ID hash.
@@ -605,7 +605,7 @@ func (tab *Table) deleteInBucket(b *bucket, id enode.ID) *tableNode {
 		tab.log.Debug("Removed dead node", "b", b.index, "id", n.ID(), "ip", n.IPAddr())
 		return nil
 	}
-	rindex := tab.rand.Intn(len(b.replacements))
+	rindex := tab.rand.IntN(len(b.replacements))
 	rep := b.replacements[rindex]
 	b.replacements = slices.Delete(b.replacements, rindex, rindex+1)
 	b.entries = append(b.entries, rep)

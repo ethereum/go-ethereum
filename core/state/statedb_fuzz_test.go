@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"strings"
 	"testing"
@@ -109,7 +109,7 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 	}
 	var nonRandom = index != -1
 	if index == -1 {
-		index = r.Intn(len(actions))
+		index = r.IntN(len(actions))
 	}
 	action := actions[index]
 	var names []string
@@ -118,9 +118,9 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 	}
 	for i := range action.args {
 		if nonRandom {
-			action.args[i] = rand.Int63n(10000) + 1 // set balance to non-zero
+			action.args[i] = rand.Int64N(10000) + 1 // set balance to non-zero
 		} else {
-			action.args[i] = rand.Int63n(10000)
+			action.args[i] = rand.Int64N(10000)
 		}
 		names = append(names, fmt.Sprint(action.args[i]))
 	}
@@ -135,7 +135,7 @@ func (*stateTest) Generate(r *rand.Rand, size int) reflect.Value {
 	for i := range addrs {
 		addrs[i][0] = byte(i)
 	}
-	actions := make([][]testAction, rand.Intn(5)+1)
+	actions := make([][]testAction, rand.IntN(5)+1)
 
 	for i := 0; i < len(actions); i++ {
 		actions[i] = make([]testAction, size)
@@ -146,7 +146,7 @@ func (*stateTest) Generate(r *rand.Rand, size int) reflect.Value {
 				actions[i][j] = newStateTestAction(common.HexToAddress("0xdeadbeef"), r, 0)
 				continue
 			}
-			actions[i][j] = newStateTestAction(addrs[r.Intn(len(addrs))], r, -1)
+			actions[i][j] = newStateTestAction(addrs[r.IntN(len(addrs))], r, -1)
 		}
 	}
 	chunk := int(math.Sqrt(float64(size)))
@@ -197,13 +197,13 @@ func (test *stateTest) run() bool {
 		}
 		disk      = rawdb.NewMemoryDatabase()
 		tdb       = triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults})
-		byzantium = rand.Intn(2) == 0
+		byzantium = rand.IntN(2) == 0
 	)
 	defer disk.Close()
 	defer tdb.Close()
 
 	var snaps *snapshot.Tree
-	if rand.Intn(3) == 0 {
+	if rand.IntN(3) == 0 {
 		snaps, _ = snapshot.New(snapshot.Config{
 			CacheSize:  1,
 			Recovery:   false,

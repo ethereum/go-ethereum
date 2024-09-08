@@ -2,7 +2,7 @@ package metrics
 
 import (
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"runtime"
 	"testing"
 	"time"
@@ -158,7 +158,7 @@ func TestExpDecaySampleRescale(t *testing.T) {
 
 func TestExpDecaySampleSnapshot(t *testing.T) {
 	now := time.Now()
-	s := NewExpDecaySample(100, 0.99).(*ExpDecaySample).SetRand(rand.New(rand.NewSource(1)))
+	s := NewExpDecaySample(100, 0.99).(*ExpDecaySample).SetRand(rand.New(rand.NewPCG(1, 1)))
 	for i := 1; i <= 10000; i++ {
 		s.(*ExpDecaySample).update(now.Add(time.Duration(i)), int64(i))
 	}
@@ -169,7 +169,7 @@ func TestExpDecaySampleSnapshot(t *testing.T) {
 
 func TestExpDecaySampleStatistics(t *testing.T) {
 	now := time.Now()
-	s := NewExpDecaySample(100, 0.99).(*ExpDecaySample).SetRand(rand.New(rand.NewSource(1)))
+	s := NewExpDecaySample(100, 0.99).(*ExpDecaySample).SetRand(rand.New(rand.NewPCG(1, 1)))
 	for i := 1; i <= 10000; i++ {
 		s.(*ExpDecaySample).update(now.Add(time.Duration(i)), int64(i))
 	}
@@ -219,7 +219,7 @@ func TestUniformSampleIncludesTail(t *testing.T) {
 }
 
 func TestUniformSampleSnapshot(t *testing.T) {
-	s := NewUniformSample(100).(*UniformSample).SetRand(rand.New(rand.NewSource(1)))
+	s := NewUniformSample(100).(*UniformSample).SetRand(rand.New(rand.NewPCG(1, 1)))
 	for i := 1; i <= 10000; i++ {
 		s.Update(int64(i))
 	}
@@ -229,7 +229,7 @@ func TestUniformSampleSnapshot(t *testing.T) {
 }
 
 func TestUniformSampleStatistics(t *testing.T) {
-	s := NewUniformSample(100).(*UniformSample).SetRand(rand.New(rand.NewSource(1)))
+	s := NewUniformSample(100).(*UniformSample).SetRand(rand.New(rand.NewPCG(1, 1)))
 	for i := 1; i <= 10000; i++ {
 		s.Update(int64(i))
 	}
@@ -327,7 +327,7 @@ func TestUniformSampleConcurrentUpdateCount(t *testing.T) {
 		for {
 			select {
 			case <-t.C:
-				s.Update(rand.Int63())
+				s.Update(rand.Int64())
 			case <-quit:
 				t.Stop()
 				return
@@ -345,7 +345,7 @@ func BenchmarkCalculatePercentiles(b *testing.B) {
 	pss := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
 	var vals []int64
 	for i := 0; i < 1000; i++ {
-		vals = append(vals, int64(rand.Int31()))
+		vals = append(vals, int64(rand.Int32()))
 	}
 	v := make([]int64, len(vals))
 	b.ResetTimer()

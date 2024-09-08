@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"slices"
 	"strings"
@@ -471,13 +471,13 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			args: make([]int64, 2),
 		},
 	}
-	action := actions[r.Intn(len(actions))]
+	action := actions[r.IntN(len(actions))]
 	var nameargs []string
 	if !action.noAddr {
 		nameargs = append(nameargs, addr.Hex())
 	}
 	for i := range action.args {
-		action.args[i] = rand.Int63n(100)
+		action.args[i] = rand.Int64N(100)
 		nameargs = append(nameargs, fmt.Sprint(action.args[i]))
 	}
 	action.name += strings.Join(nameargs, ", ")
@@ -494,7 +494,7 @@ func (*snapshotTest) Generate(r *rand.Rand, size int) reflect.Value {
 	}
 	actions := make([]testAction, size)
 	for i := range actions {
-		addr := addrs[r.Intn(len(addrs))]
+		addr := addrs[r.IntN(len(addrs))]
 		actions[i] = newTestAction(addr, r)
 	}
 	// Generate snapshot indexes.
@@ -506,7 +506,7 @@ func (*snapshotTest) Generate(r *rand.Rand, size int) reflect.Value {
 	snaplen := len(actions) / nsnapshots
 	for i := range snapshots {
 		// Try to place the snapshots some number of actions apart from each other.
-		snapshots[i] = (i * snaplen) + r.Intn(snaplen)
+		snapshots[i] = (i * snaplen) + r.IntN(snaplen)
 	}
 	return reflect.ValueOf(&snapshotTest{addrs, actions, snapshots, nil})
 }

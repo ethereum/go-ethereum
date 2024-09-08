@@ -18,7 +18,7 @@ package netutil
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"reflect"
@@ -264,7 +264,7 @@ func TestDistinctNetSet(t *testing.T) {
 func TestDistinctNetSetAddRemove(t *testing.T) {
 	cfg := &quick.Config{
 		Values: func(s []reflect.Value, rng *rand.Rand) {
-			slice := make([]netip.Addr, rng.Intn(20)+1)
+			slice := make([]netip.Addr, rng.IntN(20)+1)
 			for i := range slice {
 				slice[i] = RandomAddr(rng, false)
 			}

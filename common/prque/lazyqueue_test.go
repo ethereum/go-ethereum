@@ -17,7 +17,7 @@
 package prque
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -65,7 +65,7 @@ func TestLazyQueue(t *testing.T) {
 	)
 
 	for i := range items[:] {
-		items[i].p = rand.Int63n(testPriorityStep * 10)
+		items[i].p = rand.Int64N(testPriorityStep * 10)
 		if items[i].p > maxPri {
 			maxPri = items[i].p
 		}
@@ -95,9 +95,9 @@ func TestLazyQueue(t *testing.T) {
 	}()
 
 	for c := 0; c < testSteps; c++ {
-		i := rand.Intn(testItems)
+		i := rand.IntN(testItems)
 		lock.Lock()
-		items[i].p += rand.Int63n(testPriorityStep*2-1) + 1
+		items[i].p += rand.Int64N(testPriorityStep*2-1) + 1
 		if items[i].p > maxPri {
 			maxPri = items[i].p
 		}
@@ -105,7 +105,7 @@ func TestLazyQueue(t *testing.T) {
 		if items[i].p > items[i].maxp {
 			q.Update(items[i].index)
 		}
-		if rand.Intn(100) == 0 {
+		if rand.IntN(100) == 0 {
 			p := q.PopItem().(*lazyItem)
 			if p.p != maxPri {
 				lock.Unlock()

@@ -19,7 +19,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -413,14 +413,14 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool, scheme string) {
 		)
 		for {
 			if memonly {
-				rpath = paths[rand.Intn(len(paths))]
+				rpath = paths[rand.IntN(len(paths))]
 				n := nodes.Nodes[string(rpath)]
 				if n == nil {
 					continue
 				}
 				rhash = n.Hash
 			} else {
-				index := rand.Intn(len(paths))
+				index := rand.IntN(len(paths))
 				rpath = paths[index]
 				rhash = hashes[index]
 			}

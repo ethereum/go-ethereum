@@ -24,7 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"reflect"
@@ -167,7 +167,7 @@ func TestUDPv4_responseTimeouts(t *testing.T) {
 	defer test.close()
 
 	randomDuration := func(max time.Duration) time.Duration {
-		return time.Duration(rand.Int63n(int64(max)))
+		return time.Duration(rand.Int64N(int64(max)))
 	}
 
 	var (
@@ -182,7 +182,7 @@ func TestUDPv4_responseTimeouts(t *testing.T) {
 		// For all other requests, a reply is scheduled to arrive
 		// within the timeout window.
 		p := &replyMatcher{
-			ptype:    byte(rand.Intn(255)),
+			ptype:    byte(rand.IntN(255)),
 			callback: func(v4wire.Packet) (bool, bool) { return true, true },
 		}
 		binary.BigEndian.PutUint64(p.from[:], uint64(i))

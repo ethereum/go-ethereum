@@ -21,7 +21,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"reflect"
 	"strconv"
@@ -508,7 +508,7 @@ func newkey() *ecdsa.PrivateKey {
 
 func randomID() (id enode.ID) {
 	for i := range id {
-		id[i] = byte(rand.Intn(255))
+		id[i] = byte(rand.IntN(255))
 	}
 	return id
 }

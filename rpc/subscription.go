@@ -24,7 +24,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"strings"
 	"sync"
@@ -60,22 +60,24 @@ func NewID() ID {
 // randomIDGenerator returns a function generates a random IDs.
 func randomIDGenerator() func() ID {
 	var buf = make([]byte, 8)
-	var seed int64
+	var seed uint64
 	if _, err := crand.Read(buf); err == nil {
-		seed = int64(binary.BigEndian.Uint64(buf))
+		seed = binary.BigEndian.Uint64(buf)
 	} else {
-		seed = int64(time.Now().Nanosecond())
+		seed = uint64(time.Now().Nanosecond())
 	}
 
 	var (
 		mu  sync.Mutex
-		rng = rand.New(rand.NewSource(seed))
+		rng = rand.New(rand.NewPCG(seed, seed))
 	)
 	return func() ID {
 		mu.Lock()
 		defer mu.Unlock()
 		id := make([]byte, 16)
-		rng.Read(id)
+		for i := range id {
+			id[i] = byte(rng.Int())
+		}
 		return encodeID(id)
 	}
 }

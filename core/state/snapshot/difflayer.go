@@ -20,7 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -80,15 +80,15 @@ var (
 
 func init() {
 	// Init the bloom offsets in the range [0:24] (requires 8 bytes)
-	bloomDestructHasherOffset = rand.Intn(25)
-	bloomAccountHasherOffset = rand.Intn(25)
-	bloomStorageHasherOffset = rand.Intn(25)
+	bloomDestructHasherOffset = rand.IntN(25)
+	bloomAccountHasherOffset = rand.IntN(25)
+	bloomStorageHasherOffset = rand.IntN(25)
 
 	// The destruct and account blooms must be different, as the storage slots
 	// will check for destruction too for every bloom miss. It should not collide
 	// with modified accounts.
 	for bloomAccountHasherOffset == bloomDestructHasherOffset {
-		bloomAccountHasherOffset = rand.Intn(25)
+		bloomAccountHasherOffset = rand.IntN(25)
 	}
 }
 

@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -589,7 +589,7 @@ func testIncompleteSync(t *testing.T, scheme string) {
 	}
 	// Sanity check that removing any node from the database is detected
 	for i, path := range addedKeys {
-		if rand.Int31n(100) > 5 {
+		if rand.Int32N(100) > 5 {
 			// Only check 5 percent of added keys as a sanity check
 			continue
 		}

@@ -2,7 +2,7 @@ package metrics
 
 import (
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"sync"
 	"time"
@@ -359,9 +359,9 @@ func (s *UniformSample) Update(v int64) {
 	} else {
 		var r int64
 		if s.rand != nil {
-			r = s.rand.Int63n(s.count)
+			r = s.rand.Int64N(s.count)
 		} else {
-			r = rand.Int63n(s.count)
+			r = rand.Int64N(s.count)
 		}
 		if r < int64(len(s.values)) {
 			s.values[int(r)] = v

@@ -20,7 +20,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"runtime"
 	"testing"

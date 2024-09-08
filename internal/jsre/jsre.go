@@ -23,7 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"time"
 
@@ -90,9 +90,7 @@ func randomSource() *rand.Rand {
 	if _, err := crand.Read(bytes); err == nil {
 		seed = int64(binary.LittleEndian.Uint64(bytes))
 	}
-
-	src := rand.NewSource(seed)
-	return rand.New(src)
+	return rand.New(rand.New(rand.NewPCG(uint64(seed), uint64(seed))))
 }
 
 // This function runs the main event loop from a goroutine that is started

@@ -22,7 +22,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -150,8 +150,8 @@ func (cfg dialConfig) withDefaults() dialConfig {
 	if cfg.rand == nil {
 		seedb := make([]byte, 8)
 		crand.Read(seedb)
-		seed := int64(binary.BigEndian.Uint64(seedb))
-		cfg.rand = mrand.New(mrand.NewSource(seed))
+		seed := binary.BigEndian.Uint64(seedb)
+		cfg.rand = mrand.New(mrand.NewPCG(seed, seed))
 	}
 	return cfg
 }
@@ -397,7 +397,7 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 // startStaticDials starts n static dial tasks.
 func (d *dialScheduler) startStaticDials(n int) (started int) {
 	for started = 0; started < n && len(d.staticPool) > 0; started++ {
-		idx := d.rand.Intn(len(d.staticPool))
+		idx := d.rand.IntN(len(d.staticPool))
 		task := d.staticPool[idx]
 		d.startDial(task)
 		d.removeFromStaticPool(idx)

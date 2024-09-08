@@ -22,7 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"slices"
 	"sync"
@@ -96,7 +96,7 @@ func idAtDistance(a enode.ID, n int) (b enode.ID) {
 	}
 	b[pos] = a[pos]&^bit | ^a[pos]&bit // TODO: randomize end bits
 	for i := pos + 1; i < len(a); i++ {
-		b[i] = byte(rand.Intn(255))
+		b[i] = byte(rand.IntN(255))
 	}
 	return b
 }

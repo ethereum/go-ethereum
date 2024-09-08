@@ -22,7 +22,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"slices"
 	"sync"
 	"testing"
@@ -1797,7 +1797,7 @@ func makeUnevenStorageTrie(owner common.Hash, slots int, db *triedb.Database) (c
 	for i := 0; i < 3; i++ {
 		var n int
 		for {
-			n = mrand.Intn(15) // the last range is set empty deliberately
+			n = mrand.IntN(15) // the last range is set empty deliberately
 			if _, ok := chosen[byte(n)]; ok {
 				continue
 			}

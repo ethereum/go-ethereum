@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -56,8 +56,8 @@ func testChainIndexer(t *testing.T, count int) {
 	backends := make([]*testChainIndexBackend, count)
 	for i := 0; i < count; i++ {
 		var (
-			sectionSize = uint64(rand.Intn(100) + 1)
-			confirmsReq = uint64(rand.Intn(10))
+			sectionSize = uint64(rand.IntN(100) + 1)
+			confirmsReq = uint64(rand.IntN(10))
 		)
 		backends[i] = &testChainIndexBackend{t: t, processCh: make(chan uint64)}
 		backends[i].indexer = NewChainIndexer(db, rawdb.NewTable(db, string([]byte{byte(i)})), backends[i], sectionSize, confirmsReq, 0, fmt.Sprintf("indexer-%d", i))
@@ -92,7 +92,7 @@ func testChainIndexer(t *testing.T, count int) {
 	}
 	// inject inserts a new random canonical header into the database directly
 	inject := func(number uint64) {
-		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int63()).Bytes()}
+		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int64()).Bytes()}
 		if number > 0 {
 			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
 		}

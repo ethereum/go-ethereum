@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1205,7 +1205,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 				return nil
 			}
 			var ret []uint64
-			index := rand.Intn(length)
+			index := rand.IntN(length)
 			for i := index; len(ret) < n && i < length; i++ {
 				ret = append(ret, items[i])
 			}
@@ -1229,11 +1229,11 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 
 	var steps randTest
 	for i := 0; i < size; i++ {
-		step := randTestStep{op: r.Intn(opMax)}
+		step := randTestStep{op: r.IntN(opMax)}
 		switch step.op {
 		case opReload, opCheckAll:
 		case opAppend:
-			num := r.Intn(3)
+			num := r.IntN(3)
 			step.items = addItems(num)
 			if len(step.items) == 0 {
 				step.blobs = nil
@@ -1241,12 +1241,12 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 				step.blobs = getVals(step.items[0], num)
 			}
 		case opRetrieve:
-			step.items = getItems(r.Intn(3))
+			step.items = getItems(r.IntN(3))
 		case opTruncateHead:
 			if len(items) == 0 {
 				step.target = deleted
 			} else {
-				index := r.Intn(len(items))
+				index := r.IntN(len(items))
 				items = items[:index]
 				step.target = deleted + uint64(index)
 			}
@@ -1257,7 +1257,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 			if len(items) == 0 {
 				step.target = deleted
 			} else {
-				index := r.Intn(len(items))
+				index := r.IntN(len(items))
 				items = items[index:]
 				deleted += uint64(index)
 				step.target = deleted

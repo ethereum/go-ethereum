@@ -21,7 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -357,7 +357,7 @@ func testClientCancel(transport string, t *testing.T) {
 			var (
 				ctx     context.Context
 				cancel  func()
-				timeout = time.Duration(rand.Int63n(int64(maxContextCancelTimeout)))
+				timeout = time.Duration(rand.Int64N(int64(maxContextCancelTimeout)))
 			)
 			if index < ncallers/2 {
 				// For half of the callers, create a context without deadline
@@ -899,7 +899,7 @@ func httpTestClient(srv *Server, transport string, fl *flakeyListener) (*Client,
 
 func ipcTestClient(srv *Server, fl *flakeyListener) (*Client, net.Listener) {
 	// Listen on a random endpoint.
-	endpoint := fmt.Sprintf("go-ethereum-test-ipc-%d-%d", os.Getpid(), rand.Int63())
+	endpoint := fmt.Sprintf("go-ethereum-test-ipc-%d-%d", os.Getpid(), rand.Int64())
 	if runtime.GOOS == "windows" {
 		endpoint = `\\.\pipe\` + endpoint
 	} else {
@@ -931,12 +931,12 @@ type flakeyListener struct {
 }
 
 func (l *flakeyListener) Accept() (net.Conn, error) {
-	delay := time.Duration(rand.Int63n(int64(l.maxAcceptDelay)))
+	delay := time.Duration(rand.Int64N(int64(l.maxAcceptDelay)))
 	time.Sleep(delay)
 
 	c, err := l.Listener.Accept()
 	if err == nil {
-		timeout := time.Duration(rand.Int63n(int64(l.maxKillTimeout)))
+		timeout := time.Duration(rand.Int64N(int64(l.maxKillTimeout)))
 		time.AfterFunc(timeout, func() {
 			log.Debug(fmt.Sprintf("killing conn %v after %v", c.LocalAddr(), timeout))
 			c.Close()

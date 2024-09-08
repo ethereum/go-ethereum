@@ -19,7 +19,7 @@ package snapshot
 import (
 	"bytes"
 	crand "crypto/rand"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -68,10 +68,10 @@ func TestMergeBasics(t *testing.T) {
 		data := randomAccount()
 
 		accounts[h] = data
-		if rand.Intn(4) == 0 {
+		if rand.IntN(4) == 0 {
 			destructs[h] = struct{}{}
 		}
-		if rand.Intn(2) == 0 {
+		if rand.IntN(2) == 0 {
 			accStorage := make(map[common.Hash][]byte)
 			value := make([]byte, 32)
 			crand.Read(value)

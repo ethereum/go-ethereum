@@ -20,7 +20,7 @@ import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"sync"
@@ -99,8 +99,8 @@ type ReadPacket struct {
 }
 
 type randomSource interface {
-	Intn(int) int
-	Int63n(int64) int64
+	IntN(int) int
+	Int64N(int64) int64
 	Shuffle(int, func(int, int))
 }
 
@@ -114,23 +114,23 @@ func (r *reseedingRandom) seed() {
 	var b [8]byte
 	crand.Read(b[:])
 	seed := binary.BigEndian.Uint64(b[:])
-	new := rand.New(rand.NewSource(int64(seed)))
+	new := rand.New(rand.NewPCG(seed, seed))
 
 	r.mu.Lock()
 	r.cur = new
 	r.mu.Unlock()
 }
 
-func (r *reseedingRandom) Intn(n int) int {
+func (r *reseedingRandom) IntN(n int) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.cur.Intn(n)
+	return r.cur.IntN(n)
 }
 
-func (r *reseedingRandom) Int63n(n int64) int64 {
+func (r *reseedingRandom) Int64N(n int64) int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.cur.Int63n(n)
+	return r.cur.Int64N(n)
 }
 
 func (r *reseedingRandom) Shuffle(n int, swap func(i, j int)) {

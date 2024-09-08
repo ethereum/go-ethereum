@@ -18,7 +18,7 @@ package legacypool
 
 import (
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"

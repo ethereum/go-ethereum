@@ -22,7 +22,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"reflect"
 	"sync"
 	"testing"

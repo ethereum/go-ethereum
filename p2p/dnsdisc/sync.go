@@ -18,7 +18,7 @@ package dnsdisc
 
 import (
 	"context"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -131,7 +131,7 @@ func (ct *clientTree) syncNextLink(ctx context.Context) error {
 }
 
 func (ct *clientTree) syncNextRandomENR(ctx context.Context) (*enode.Node, error) {
-	index := rand.Intn(len(ct.enrs.missing))
+	index := rand.IntN(len(ct.enrs.missing))
 	hash := ct.enrs.missing[index]
 	e, err := ct.enrs.resolveNext(ctx, hash)
 	if err != nil {

@@ -20,7 +20,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 )
 
@@ -192,7 +192,7 @@ func BenchmarkLRU(b *testing.B) {
 		values   = make([][]byte, capacity)
 	)
 	for i := range indexes {
-		indexes[i] = rand.Intn(capacity)
+		indexes[i] = rand.IntN(capacity)
 	}
 	for i := range keys {
 		b := make([]byte, 32)

@@ -208,7 +208,7 @@ func (list *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude
 		return nil
 	}
 	for i := 0; i < len(list.nodes)*3; i++ {
-		n := list.nodes[rand.Intn(len(list.nodes))]
+		n := list.nodes[rand.IntN(len(list.nodes))]
 		_, excluded := exclude[n.ID()]
 		if !excluded {
 			return n
@@ -218,7 +218,7 @@ func (list *revalidationList) get(now mclock.AbsTime, rand randomSource, exclude
 }
 
 func (list *revalidationList) schedule(now mclock.AbsTime, rand randomSource) {
-	list.nextTime = now.Add(time.Duration(rand.Int63n(int64(list.interval))))
+	list.nextTime = now.Add(time.Duration(rand.Int64N(int64(list.interval))))
 }
 
 func (list *revalidationList) push(n *tableNode, now mclock.AbsTime, rand randomSource) {

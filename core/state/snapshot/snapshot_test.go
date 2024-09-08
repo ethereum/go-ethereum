@@ -20,7 +20,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 

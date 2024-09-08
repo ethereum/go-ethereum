@@ -21,7 +21,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	mrand "math/rand"
+	mrand "math/rand/v2"
 	"slices"
 	"testing"
 
@@ -38,14 +38,16 @@ var prng = initRnd()
 func initRnd() *mrand.Rand {
 	var seed [8]byte
 	crand.Read(seed[:])
-	rnd := mrand.New(mrand.NewSource(int64(binary.LittleEndian.Uint64(seed[:]))))
+	rnd := mrand.New(mrand.NewPCG(binary.LittleEndian.Uint64(seed[:]), binary.LittleEndian.Uint64(seed[:])))
 	fmt.Printf("Seed: %x\n", seed)
 	return rnd
 }
 
 func randBytes(n int) []byte {
 	r := make([]byte, n)
-	prng.Read(r)
+	for i := range r {
+		r[i] = byte(prng.Int())
+	}
 	return r
 }
 
@@ -124,7 +126,7 @@ func TestBadProof(t *testing.T) {
 				t.Fatalf("prover %d: nil proof", i)
 			}
 			it := proof.NewIterator(nil, nil)
-			for i, d := 0, mrand.Intn(proof.Len()); i <= d; i++ {
+			for i, d := 0, mrand.IntN(proof.Len()); i <= d; i++ {
 				it.Next()
 			}
 			key := it.Key()
@@ -175,8 +177,8 @@ func TestRangeProof(t *testing.T) {
 	}
 	slices.SortFunc(entries, (*kv).cmp)
 	for i := 0; i < 500; i++ {
-		start := mrand.Intn(len(entries))
-		end := mrand.Intn(len(entries)-start) + start + 1
+		start := mrand.IntN(len(entries))
+		end := mrand.IntN(len(entries)-start) + start + 1
 
 		proof := memorydb.New()
 		if err := trie.Prove(entries[start].k, proof); err != nil {
@@ -208,8 +210,8 @@ func TestRangeProofWithNonExistentProof(t *testing.T) {
 	}
 	slices.SortFunc(entries, (*kv).cmp)
 	for i := 0; i < 500; i++ {
-		start := mrand.Intn(len(entries))
-		end := mrand.Intn(len(entries)-start) + start + 1
+		start := mrand.IntN(len(entries))
+		end := mrand.IntN(len(entries)-start) + start + 1
 		proof := memorydb.New()
 
 		// Short circuit if the decreased key is same with the previous key
@@ -457,8 +459,8 @@ func TestBadRangeProof(t *testing.T) {
 	slices.SortFunc(entries, (*kv).cmp)
 
 	for i := 0; i < 500; i++ {
-		start := mrand.Intn(len(entries))
-		end := mrand.Intn(len(entries)-start) + start + 1
+		start := mrand.IntN(len(entries))
+		end := mrand.IntN(len(entries)-start) + start + 1
 		proof := memorydb.New()
 		if err := trie.Prove(entries[start].k, proof); err != nil {
 			t.Fatalf("Failed to prove the first node %v", err)
@@ -473,20 +475,20 @@ func TestBadRangeProof(t *testing.T) {
 			vals = append(vals, entries[i].v)
 		}
 		var first = keys[0]
-		testcase := mrand.Intn(6)
+		testcase := mrand.IntN(6)
 		var index int
 		switch testcase {
 		case 0:
 			// Modified key
-			index = mrand.Intn(end - start)
+			index = mrand.IntN(end - start)
 			keys[index] = randBytes(32) // In theory it can't be same
 		case 1:
 			// Modified val
-			index = mrand.Intn(end - start)
+			index = mrand.IntN(end - start)
 			vals[index] = randBytes(20) // In theory it can't be same
 		case 2:
 			// Gapped entry slice
-			index = mrand.Intn(end - start)
+			index = mrand.IntN(end - start)
 			if (index == 0 && start < 100) || (index == end-start-1) {
 				continue
 			}
@@ -494,8 +496,8 @@ func TestBadRangeProof(t *testing.T) {
 			vals = append(vals[:index], vals[index+1:]...)
 		case 3:
 			// Out of order
-			index1 := mrand.Intn(end - start)
-			index2 := mrand.Intn(end - start)
+			index1 := mrand.IntN(end - start)
+			index2 := mrand.IntN(end - start)
 			if index1 == index2 {
 				continue
 			}
@@ -503,11 +505,11 @@ func TestBadRangeProof(t *testing.T) {
 			vals[index1], vals[index2] = vals[index2], vals[index1]
 		case 4:
 			// Set random key to nil, do nothing
-			index = mrand.Intn(end - start)
+			index = mrand.IntN(end - start)
 			keys[index] = nil
 		case 5:
 			// Set random value to nil, deletion
-			index = mrand.Intn(end - start)
+			index = mrand.IntN(end - start)
 			vals[index] = nil
 		}
 		_, err := VerifyRangeProof(trie.Hash(), first, keys, vals, proof)
@@ -801,8 +803,8 @@ func TestAllElementsEmptyValueRangeProof(t *testing.T) {
 
 // mutateByte changes one byte in b.
 func mutateByte(b []byte) {
-	for r := mrand.Intn(len(b)); ; {
-		new := byte(mrand.Intn(255))
+	for r := mrand.IntN(len(b)); ; {
+		new := byte(mrand.IntN(255))
 		if new != b[r] {
 			b[r] = new
 			break

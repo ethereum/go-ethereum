@@ -1,7 +1,7 @@
 package log
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 )
 
@@ -11,7 +11,7 @@ func BenchmarkPrettyInt64Logfmt(b *testing.B) {
 	buf := make([]byte, 100)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		sink = appendInt64(buf, rand.Int63())
+		sink = appendInt64(buf, rand.Int64())
 	}
 }
 

@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path"
 	"sync"

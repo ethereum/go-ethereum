@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"sync"
 	"testing"
@@ -317,14 +317,14 @@ func XTestDelivery(t *testing.T) {
 		i := 4
 		for {
 			peer := dummyPeer(fmt.Sprintf("peer-%d", i))
-			f, _, _ := q.ReserveBodies(peer, rand.Intn(30))
+			f, _, _ := q.ReserveBodies(peer, rand.IntN(30))
 			if f != nil {
 				var (
 					emptyList []*types.Header
 					txset     [][]*types.Transaction
 					uncleset  [][]*types.Header
 				)
-				numToSkip := rand.Intn(len(f.Headers))
+				numToSkip := rand.IntN(len(f.Headers))
 				for _, hdr := range f.Headers[0 : len(f.Headers)-numToSkip] {
 					txset = append(txset, world.getTransactions(hdr.Number.Uint64()))
 					uncleset = append(uncleset, emptyList)
@@ -356,7 +356,7 @@ func XTestDelivery(t *testing.T) {
 		// reserve receiptfetch
 		peer := dummyPeer("peer-3")
 		for {
-			f, _, _ := q.ReserveReceipts(peer, rand.Intn(50))
+			f, _, _ := q.ReserveReceipts(peer, rand.IntN(50))
 			if f != nil {
 				var rcs [][]*types.Receipt
 				for _, hdr := range f.Headers {
@@ -384,7 +384,7 @@ func XTestDelivery(t *testing.T) {
 			time.Sleep(300 * time.Millisecond)
 			//world.tick()
 			//fmt.Printf("trying to progress\n")
-			world.progress(rand.Intn(100))
+			world.progress(rand.IntN(100))
 		}
 		for i := 0; i < 50; i++ {
 			time.Sleep(2990 * time.Millisecond)
