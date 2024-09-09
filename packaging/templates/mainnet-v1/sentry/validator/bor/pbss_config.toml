@@ -6,12 +6,13 @@ chain = "mainnet"
 # vmdebug = false
 datadir = "/var/lib/bor/data"
 # ancient = ""
-db.engine = "pebble"
-state.scheme = "path"
+"db.engine" = "pebble"
+"state.scheme" = "path"
 # keystore = "$BOR_DIR/keystore"
 # "rpc.batchlimit" = 100
 # "rpc.returndatalimit" = 100000
 syncmode = "full"
+# PBSS does not support archive
 # gcmode = "full"
 # snapshot = true
 # ethstats = ""
