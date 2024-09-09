@@ -63,7 +63,7 @@ type Logger struct {
 }
 
 func NewLogger() *Logger {
-	const miscKeccakUsage = 50_000   // heuristically selected safe number to account for Rust side implementation details
+	const miscKeccakUsage = 100_000  // heuristically selected safe number to account for Rust side implementation details
 	const miscBytecodeUsage = 50_000 // to account for the inaccuracies in bytecode tracking
 	return &Logger{
 		codesAccessed: make(map[common.Hash]bool),
