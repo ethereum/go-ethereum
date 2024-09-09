@@ -10,6 +10,7 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/multicall"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -257,6 +258,41 @@ var (
 			{{end}}
 		}
 
+		func (_{{$contract.Type}} *{{$contract.Type}}Caller) {{.Normalized.Name}}Multicall(
+			{{range .Normalized.Inputs}}{{.Name}} {{bindtype .Type $structs}},{{end}}
+		) *multicall.MultiCallMetaData[{{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}}]{{end}}{{end}} {
+			return multicall.Describe(
+				_{{$contract.Type}}.contract.Address(),
+				_{{$contract.Type}}.contract.ABI(),
+				func(data []byte) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}*{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}}{{end}}{{end}}, error) {
+					out, err := _{{$contract.Type}}.contract.ABI().Unpack("{{.Original.Name}}", data)
+					if err != nil {
+						panic(err)
+					}
+					{{if .Structured}}
+					outstruct := new(struct{ {{range .Normalized.Outputs}} {{.Name}} {{bindtype .Type $structs}}; {{end}} })
+					if err != nil {
+						return *outstruct, err
+					}
+					{{range $i, $t := .Normalized.Outputs}}
+					outstruct.{{.Name}} = *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
+
+					return *outstruct, err
+					{{else}}
+					if err != nil {
+						return {{range $i, $_ := .Normalized.Outputs}}*new({{bindtype .Type $structs}}), {{end}} err
+					}
+					{{range $i, $t := .Normalized.Outputs}}
+					out{{$i}} := *abi.ConvertType(out[{{$i}}], new({{bindtype .Type $structs}})).(*{{bindtype .Type $structs}}){{end}}
+
+					return {{range $i, $t := .Normalized.Outputs}}out{{$i}}{{end}}, nil
+					{{end}}
+				},
+				"{{.Original.Name}}",{{range .Normalized.Inputs}}
+				{{.Name}},{{end}}
+			)
+		}
+
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.ID}}.
 		//
 		// Solidity: {{.Original.String}}
@@ -284,6 +320,13 @@ var (
 		//
 		// Solidity: {{.Original.String}}
 		func (_{{$contract.Type}} *{{$contract.Type}}Session) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type $structs}} {{end}}) (*types.Transaction, error) {
+		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.TransactOpts {{range $i, $_ := .Normalized.Inputs}}, {{.Name}}{{end}})
+		}
+
+		// {{.Normalized.Name}} is a paid mutator transaction binding the contract method 0x{{printf "%x" .Original.ID}}.
+		//
+		// Solidity: {{.Original.String}}
+		func (_{{$contract.Type}} *{{$contract.Type}}Session) {{.Normalized.Name}}Multicall({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type $structs}} {{end}}) (*types.Transaction, error) {
 		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.TransactOpts {{range $i, $_ := .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 

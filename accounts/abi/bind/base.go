@@ -120,6 +120,14 @@ type BoundContract struct {
 	filterer   ContractFilterer   // Event filtering to interact with the blockchain
 }
 
+func (b *BoundContract) Address() common.Address {
+	return b.address
+}
+
+func (b *BoundContract) ABI() abi.ABI {
+	return b.abi
+}
+
 // NewBoundContract creates a low level contract interface through which calls
 // and transactions may be made through.
 func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller, transactor ContractTransactor, filterer ContractFilterer) *BoundContract {
