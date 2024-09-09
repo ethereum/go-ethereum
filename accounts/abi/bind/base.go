@@ -120,12 +120,12 @@ type BoundContract struct {
 	filterer   ContractFilterer   // Event filtering to interact with the blockchain
 }
 
-func (b *BoundContract) Address() common.Address {
-	return b.address
+func (c *BoundContract) Address() common.Address {
+	return c.address
 }
 
-func (b *BoundContract) ABI() abi.ABI {
-	return b.abi
+func (c *BoundContract) ABI() abi.ABI {
+	return c.abi
 }
 
 // NewBoundContract creates a low level contract interface through which calls

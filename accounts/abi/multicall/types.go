@@ -37,10 +37,11 @@ type RawMulticall struct {
 }
 
 type MulticallClient struct {
-	Contract     *bind.BoundContract
-	ABI          *abi.ABI
-	Context      context.Context
-	MaxBatchSize *uint64
+	Contract            *bind.BoundContract
+	ABI                 *abi.ABI
+	Context             context.Context
+	MaxBatchSize        *uint64
+	OverrideCallOptions *bind.CallOpts
 }
 
 type Multicall3Result struct {

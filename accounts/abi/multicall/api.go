@@ -15,10 +15,13 @@ import (
 type MulticallClientOptions struct {
 	// the address of the multicall3 contract. if unset, defaults to the usual address.
 	// for sensible values, see: https://www.multicall3.com/deployments
-	address *common.Address
+	Address *common.Address
 
 	// optional: if set, will batch requests to the node. Reasonable values for this include 2048 / 4096 byte chunks.
-	maxBatchSizeBytes *uint64
+	MaxBatchSizeBytes *uint64
+
+	// optional: additional options to specify when performing the eth_call (e.g the block height / number)
+	OverrideCallOptions *bind.CallOpts
 }
 
 /**
@@ -40,14 +43,14 @@ func NewClient(ctx context.Context, eth *ethclient.Client, opts *MulticallClient
 	}
 
 	contractAddress := func() common.Address {
-		if opts.address == nil {
+		if opts.Address == nil {
 			// also taken from: https://www.multicall3.com/ -- it's deployed at the same addr on most chains
 			return common.HexToAddress("0xcA11bde05977b3631167028862bE2a173976CA11")
 		}
-		return *opts.address
+		return *opts.Address
 	}()
 
-	return &MulticallClient{MaxBatchSize: opts.maxBatchSizeBytes, Context: ctx, ABI: &parsed, Contract: bind.NewBoundContract(contractAddress, parsed, eth, eth, eth)}, nil
+	return &MulticallClient{OverrideCallOptions: opts.OverrideCallOptions, MaxBatchSize: opts.MaxBatchSizeBytes, Context: ctx, ABI: &parsed, Contract: bind.NewBoundContract(contractAddress, parsed, eth, eth, eth)}, nil
 }
 
 /**
@@ -74,7 +77,7 @@ func Perform[A any, B any](mc MulticallClient, a *MultiCallMetaData[A], b *Multi
 	if err != nil {
 		return nil, nil, fmt.Errorf("error performing multicall: %s", err.Error())
 	}
-	return any(res[0].Value).(*A), any(res[1].Value).(*B), nil
+	return res[0].Value.(*A), res[1].Value.(*B), nil
 }
 
 /**
@@ -85,7 +88,7 @@ func Perform3[A any, B any, C any](mc MulticallClient, a *MultiCallMetaData[A], 
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error performing multicall: %s", err.Error())
 	}
-	return any(res[0].Value).(*A), any(res[1].Value).(*B), any(res[2].Value).(*C), nil
+	return res[0].Value.(*A), res[1].Value.(*B), res[2].Value.(*C), nil
 }
 
 /**
@@ -96,7 +99,7 @@ func Perform4[A any, B any, C any, D any](mc MulticallClient, a *MultiCallMetaDa
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("error performing multicall: %s", err.Error())
 	}
-	return any(res[0].Value).(*A), any(res[1].Value).(*B), any(res[2].Value).(*C), any(res[3].Value).(*D), nil
+	return res[0].Value.(*A), res[1].Value.(*B), res[2].Value.(*C), res[3].Value.(*D), nil
 }
 
 /**
@@ -107,7 +110,7 @@ func Perform5[A any, B any, C any, D any, E any](mc MulticallClient, a *MultiCal
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("error performing multicall: %s", err.Error())
 	}
-	return any(res[0].Value).(*A), any(res[1].Value).(*B), any(res[2].Value).(*C), any(res[3].Value).(*D), any(res[4].Value).(*E), nil
+	return res[0].Value.(*A), res[1].Value.(*B), res[2].Value.(*C), res[3].Value.(*D), res[4].Value.(*E), nil
 }
 
 /**
@@ -121,10 +124,8 @@ func PerformMany[A any](mc MulticallClient, requests ...*MultiCallMetaData[A]) (
 		return nil, fmt.Errorf("multicall failed: %s", err.Error())
 	}
 
-	// unwind results
 	unwoundResults := mapArray(res, func(d DeserializedMulticall3Result, i uint64) A {
-		// force these back to A
-		return any(d.Value).(A)
+		return d.Value.(A)
 	})
 	return &unwoundResults, nil
 }
@@ -156,7 +157,7 @@ func doMultiCall(mc MulticallClient, calls ...RawMulticall) ([]DeserializedMulti
 	for _, multicalls := range chunkedCalls {
 		var res []interface{}
 		// we can't use the generated abi, as we want an eth_call simulation (and aggregate3 is payable, which triggers an eth_sendTransaction in abigen)
-		err := mc.Contract.Call(&bind.CallOpts{}, &res, "aggregate3", multicalls)
+		err := mc.Contract.Call(mc.OverrideCallOptions, &res, "aggregate3", multicalls)
 		if err != nil {
 			return nil, fmt.Errorf("aggregate3 failed: %s", err)
 		}
