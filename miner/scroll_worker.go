@@ -774,14 +774,14 @@ func (e retryableCommitError) Unwrap() error {
 
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
-func (w *worker) commit(force bool) (common.Hash, error) {
+func (w *worker) commit(reorging bool) (common.Hash, error) {
 	sealDelay := time.Duration(0)
 	defer func(t0 time.Time) {
 		l2CommitTimer.Update(time.Since(t0) - sealDelay)
 	}(time.Now())
 
 	w.updateSnapshot()
-	if !w.isRunning() && !force {
+	if !w.isRunning() && !reorging {
 		return common.Hash{}, nil
 	}
 
@@ -858,7 +858,7 @@ func (w *worker) commit(force bool) (common.Hash, error) {
 
 	currentHeight := w.current.header.Number.Uint64()
 	maxReorgDepth := uint64(w.config.CCCMaxWorkers + 1)
-	if currentHeight > maxReorgDepth {
+	if !reorging && currentHeight > maxReorgDepth {
 		ancestorHeight := currentHeight - maxReorgDepth
 		ancestorHash := w.chain.GetHeaderByNumber(ancestorHeight).Hash()
 		if rawdb.ReadBlockRowConsumption(w.chain.Database(), ancestorHash) == nil {
