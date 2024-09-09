@@ -50,6 +50,10 @@ func NewClient(ctx context.Context, eth *ethclient.Client, opts *MulticallClient
 	return &MulticallClient{MaxBatchSize: opts.maxBatchSizeBytes, Context: ctx, ABI: &parsed, Contract: bind.NewBoundContract(contractAddress, parsed, eth, eth, eth)}, nil
 }
 
+/**
+ * Describes an `eth_call` to make to a node during a multicall, as well as the typed golang code to deserialize the response from the call.
+ * Typically `multicall.Describe` should be emitted by `abigen` -- see generated code for sample implementations.
+ */
 func Describe[T any](contractAddress common.Address, abi abi.ABI, deserialize func([]byte) (T, error), method string, params ...interface{}) *MultiCallMetaData[T] {
 	callData, err := abi.Pack(method, params...)
 	if err != nil {
@@ -62,6 +66,9 @@ func Describe[T any](contractAddress common.Address, abi abi.ABI, deserialize fu
 	}
 }
 
+/**
+ * Sends 2 calls the node under one `multicall` invocation, returning the deserialized values.
+ */
 func Perform[A any, B any](mc MulticallClient, a *MultiCallMetaData[A], b *MultiCallMetaData[B]) (*A, *B, error) {
 	res, err := doMultiCall(mc, a.Raw(), b.Raw())
 	if err != nil {
@@ -70,6 +77,9 @@ func Perform[A any, B any](mc MulticallClient, a *MultiCallMetaData[A], b *Multi
 	return any(res[0].Value).(*A), any(res[1].Value).(*B), nil
 }
 
+/**
+ * Sends 3 calls the node under one `multicall` invocation, returning the deserialized values.
+ */
 func Perform3[A any, B any, C any](mc MulticallClient, a *MultiCallMetaData[A], b *MultiCallMetaData[B], c *MultiCallMetaData[C]) (*A, *B, *C, error) {
 	res, err := doMultiCall(mc, a.Raw(), b.Raw(), c.Raw())
 	if err != nil {
@@ -78,6 +88,9 @@ func Perform3[A any, B any, C any](mc MulticallClient, a *MultiCallMetaData[A], 
 	return any(res[0].Value).(*A), any(res[1].Value).(*B), any(res[2].Value).(*C), nil
 }
 
+/**
+ * Sends 4 calls the node under one `multicall` invocation, returning the deserialized values.
+ */
 func Perform4[A any, B any, C any, D any](mc MulticallClient, a *MultiCallMetaData[A], b *MultiCallMetaData[B], c *MultiCallMetaData[C], d *MultiCallMetaData[D]) (*A, *B, *C, *D, error) {
 	res, err := doMultiCall(mc, a.Raw(), b.Raw(), c.Raw(), d.Raw())
 	if err != nil {
@@ -86,6 +99,9 @@ func Perform4[A any, B any, C any, D any](mc MulticallClient, a *MultiCallMetaDa
 	return any(res[0].Value).(*A), any(res[1].Value).(*B), any(res[2].Value).(*C), any(res[3].Value).(*D), nil
 }
 
+/**
+ * Sends 5 calls the node under one `multicall` invocation, returning the deserialized values.
+ */
 func Perform5[A any, B any, C any, D any, E any](mc MulticallClient, a *MultiCallMetaData[A], b *MultiCallMetaData[B], c *MultiCallMetaData[C], d *MultiCallMetaData[D], e *MultiCallMetaData[E]) (*A, *B, *C, *D, *E, error) {
 	res, err := doMultiCall(mc, a.Raw(), b.Raw(), c.Raw(), d.Raw(), e.Raw())
 	if err != nil {
@@ -94,6 +110,9 @@ func Perform5[A any, B any, C any, D any, E any](mc MulticallClient, a *MultiCal
 	return any(res[0].Value).(*A), any(res[1].Value).(*B), any(res[2].Value).(*C), any(res[3].Value).(*D), any(res[4].Value).(*E), nil
 }
 
+/**
+ * Sends an indeterminate number calls the node under one `multicall` invocation, returning the deserialized values.
+ */
 func PerformMany[A any](mc MulticallClient, requests ...*MultiCallMetaData[A]) (*[]A, error) {
 	res, err := doMultiCall(mc, mapArray(requests, func(mc *MultiCallMetaData[A], index uint64) RawMulticall {
 		return mc.Raw()
