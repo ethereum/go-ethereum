@@ -108,7 +108,8 @@ func (*Extras[C, R]) getter() (g ExtraPayloadGetter[C, R]) { return }
 
 // mustBeStruct panics if `T` isn't a struct.
 func mustBeStruct[T any]() {
-	if k := reflect.TypeFor[T]().Kind(); k != reflect.Struct {
+	var x T
+	if k := reflect.TypeOf(x).Kind(); k != reflect.Struct {
 		panic(notStructMessage[T]())
 	}
 }

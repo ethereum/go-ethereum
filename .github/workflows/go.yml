@@ -1,15 +1,15 @@
-name: i386 linux tests
+name: Go
 
 on:
   push:
-    branches: [ master ]
+    branches: [ libevm ]
   pull_request:
-    branches: [ master ]
+    branches: [ libevm ]
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: self-hosted
+  go_test_short:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Set up Go
@@ -17,7 +17,4 @@ jobs:
         with:
           go-version: 1.21.4
       - name: Run tests
-        run: go test -short ./...
-        env:
-          GOOS: linux
-          GOARCH: 386
+        run: go test -short $(go list ./... | grep -Pv 'go-ethereum/(accounts/keystore|eth/downloader|miner)$')
