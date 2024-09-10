@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"math/big"
 	"math/rand"
 	"reflect"
 	"slices"
@@ -1217,14 +1218,14 @@ func TestMVHashMapRevertConcurrent(t *testing.T) {
 
 	// Tx0 touches the account. Amount doesn't matter.
 	// This is to make sure that Tx1 and Tx2 will use the same state object from Tx0.
-	states[0].AddBalance(addr, common.Big0)
+	states[0].AddBalance(addr, uint256.MustFromBig(common.Big0), tracing.BalanceChangeUnspecified)
 	states[0].Finalise(false)
 	states[0].FlushMVWriteSet()
 
 	// Tx1 creates the account and add balance
 	snapshot1 := states[1].Snapshot()
 	states[1].CreateAccount(addr)
-	states[1].AddBalance(addr, balance)
+	states[1].AddBalance(addr, uint256.MustFromBig(balance), tracing.BalanceChangeUnspecified)
 
 	// Tx2 creates the account, reverts.
 	snapshot2 := states[2].Snapshot()
@@ -1233,7 +1234,7 @@ func TestMVHashMapRevertConcurrent(t *testing.T) {
 	states[2].Finalise(false)
 
 	// Tx2 adds balance
-	states[2].AddBalance(addr, balance)
+	states[2].AddBalance(addr, uint256.MustFromBig(balance), tracing.BalanceChangeUnspecified)
 
 	// Tx1 now reverts
 	states[1].RevertToSnapshot(snapshot1)
