@@ -316,10 +316,15 @@ func TestSupplySelfdestruct(t *testing.T) {
 			Hash:       head.Hash(),
 			ParentHash: head.ParentHash,
 		}}
+		post = &types.GenesisAlloc{
+			dad: {Balance: eth1},
+			aa:  {Balance: big.NewInt(0), Code: gspec.Alloc[aa].Code},
+			bb:  {Balance: big.NewInt(0)},
+		}
 	)
 
 	compareAsJSON(t, expected, preCancunOutput)
-	preCancunTest, err := btFromChain(preCancunDB, preCancunChain, nil)
+	preCancunTest, err := btFromChain(preCancunDB, preCancunChain, post)
 	if err != nil {
 		t.Fatalf("failed to fill tests from chain: %v", err)
 	}
@@ -373,9 +378,14 @@ func TestSupplySelfdestruct(t *testing.T) {
 		Hash:       head.Hash(),
 		ParentHash: head.ParentHash,
 	}}
+	post = &types.GenesisAlloc{
+		dad: {Balance: eth1},
+		aa:  {Balance: big.NewInt(0), Code: gspec.Alloc[aa].Code},
+		bb:  {Balance: gwei5, Code: gspec.Alloc[bb].Code},
+	}
 
 	compareAsJSON(t, expected, postCancunOutput)
-	postCancunTest, err := btFromChain(postCancunDB, postCancunChain, nil)
+	postCancunTest, err := btFromChain(postCancunDB, postCancunChain, post)
 	if err != nil {
 		t.Fatalf("failed to fill tests from chain: %v", err)
 	}
