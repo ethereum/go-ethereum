@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/libevm/pseudo"
 	"github.com/ethereum/go-ethereum/params/forks"
 )
 
@@ -365,6 +366,8 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+
+	extra *pseudo.Type // See RegisterExtras()
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -902,6 +905,8 @@ type Rules struct {
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
 	IsVerkle                                                bool
+
+	extra *pseudo.Type // See RegisterExtras()
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -912,7 +917,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 	}
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
-	return Rules{
+	r := Rules{
 		ChainID:          new(big.Int).Set(chainID),
 		IsHomestead:      c.IsHomestead(num),
 		IsEIP150:         c.IsEIP150(num),
@@ -930,4 +935,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
 		IsVerkle:         isMerge && c.IsVerkle(num, timestamp),
 	}
+	c.addRulesExtra(&r, num, isMerge, timestamp)
+	return r
 }
