@@ -12,14 +12,17 @@ import (
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestForkedLightClientBootstrap(t *testing.T) {
-	filePath := "testdata/light_client_bootstrap.json"
+	filePath := "testdata/types/light_client_bootstrap.json"
 
-	f, _ := os.Open(filePath)
-	jsonStr, _ := io.ReadAll(f)
-
+	f, err := os.Open(filePath)
+	require.NoError(t, err)
+	jsonStr, err := io.ReadAll(f)
+	require.NoError(t, err)
 	var result map[string]interface{}
 	_ = json.Unmarshal(jsonStr, &result)
 
@@ -39,11 +42,12 @@ func TestForkedLightClientBootstrap(t *testing.T) {
 }
 
 func TestLightClientUpdateRange(t *testing.T) {
-	filePath := "testdata/light_client_updates_by_range.json"
+	filePath := "testdata/types/light_client_updates_by_range.json"
 
-	f, _ := os.Open(filePath)
-	jsonStr, _ := io.ReadAll(f)
-
+	f, err := os.Open(filePath)
+	require.NoError(t, err)
+	jsonStr, err := io.ReadAll(f)
+	require.NoError(t, err)
 	var result map[string]interface{}
 	_ = json.Unmarshal(jsonStr, &result)
 
@@ -64,10 +68,12 @@ func TestLightClientUpdateRange(t *testing.T) {
 }
 
 func TestForkedLightClientOptimisticUpdate(t *testing.T) {
-	filePath := "testdata/light_client_optimistic_update.json"
+	filePath := "testdata/types/light_client_optimistic_update.json"
 
-	f, _ := os.Open(filePath)
-	jsonStr, _ := io.ReadAll(f)
+	f, err := os.Open(filePath)
+	require.NoError(t, err)
+	jsonStr, err := io.ReadAll(f)
+	require.NoError(t, err)
 
 	var result map[string]interface{}
 	_ = json.Unmarshal(jsonStr, &result)
@@ -88,10 +94,12 @@ func TestForkedLightClientOptimisticUpdate(t *testing.T) {
 }
 
 func TestForkedLightClientFinalityUpdate(t *testing.T) {
-	filePath := "testdata/light_client_finality_update.json"
+	filePath := "testdata/types/light_client_finality_update.json"
 
-	f, _ := os.Open(filePath)
-	jsonStr, _ := io.ReadAll(f)
+	f, err := os.Open(filePath)
+	require.NoError(t, err)
+	jsonStr, err := io.ReadAll(f)
+	require.NoError(t, err)
 
 	var result map[string]interface{}
 	_ = json.Unmarshal(jsonStr, &result)
@@ -109,4 +117,37 @@ func TestForkedLightClientFinalityUpdate(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, b, buf.Bytes())
 	}
+}
+
+type TestProof struct {
+	ContentKey                    string   `yaml:"content_key"`
+	ContentValue                  string   `yaml:"content_value"`
+	BeaconStateRoot               string   `yaml:"beacon_state_root"`
+	HistoricalSummariesRoot       string   `yaml:"historical_summaries_root"`
+	HistoricalSummariesStateProof []string `yaml:"historical_summaries_state_proof"`
+	Epoch                         uint64   `yaml:"epoch"`
+}
+
+func TestForkedHistoricalSummariesWithProof(t *testing.T) {
+	filePath := "testdata/types/historical_summaries_with_proof.yaml"
+
+	f, err := os.Open(filePath)
+	require.NoError(t, err)
+	contentBytes, err := io.ReadAll(f)
+	require.NoError(t, err)
+	testData := TestProof{}
+	err = yaml.Unmarshal(contentBytes, &testData)
+	require.NoError(t, err)
+
+	historyKey := &HistoricalSummariesWithProofKey{}
+	contentKey := hexutil.MustDecode(testData.ContentKey)
+	err = historyKey.Deserialize(codec.NewDecodingReader(bytes.NewReader(contentKey[1:]), uint64(len(contentKey)-1)))
+	require.NoError(t, err)
+	require.Equal(t, testData.Epoch, historyKey.Epoch)
+
+	historyProof := &ForkedHistoricalSummariesWithProof{}
+	content := hexutil.MustDecode(testData.ContentValue)
+	err = historyProof.Deserialize(configs.Mainnet, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+	require.NoError(t, err)
+	require.Equal(t, historyProof.HistoricalSummariesWithProof.EPOCH, testData.Epoch)
 }

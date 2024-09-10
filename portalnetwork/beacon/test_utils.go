@@ -181,7 +181,7 @@ func GetHistorySummariesWithProof() (HistoricalSummariesWithProof, error) {
 	return HistoricalSummariesWithProof{
 		EPOCH:               common.Epoch(uint64(beaconState.Slot) / 32),
 		HistoricalSummaries: beaconState.HistoricalSummaries,
-		Proof: &HistoricalSummariesProof{
+		Proof: HistoricalSummariesProof{
 			Proof: summariesProof,
 		},
 	}, nil
