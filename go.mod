@@ -63,7 +63,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0
 	github.com/maticnetwork/crand v1.0.2
 	github.com/maticnetwork/heimdall v1.0.4
-	github.com/maticnetwork/polyproto v0.0.3-0.20230216113155-340ea926ca53
+	github.com/maticnetwork/polyproto v0.0.3
 	github.com/mattn/go-colorable v0.1.13
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mitchellh/cli v1.1.5
@@ -289,5 +289,3 @@ replace github.com/ethereum/go-ethereum => github.com/maticnetwork/bor v1.2.7
 replace github.com/Masterminds/goutils => github.com/Masterminds/goutils v1.1.1
 
 replace go.mongodb.org/mongo-driver => go.mongodb.org/mongo-driver v1.14.0
-
-replace github.com/maticnetwork/polyproto => github.com/anshalshukla/polyproto v0.0.0-20240621120311-ddd84287b14e

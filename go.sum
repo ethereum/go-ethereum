@@ -815,8 +815,6 @@ github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d/go.mod h1:rBZYJk5
 github.com/allegro/bigcache v1.2.1-0.20190218064605-e24eb225f156 h1:eMwmnE/GDgah4HI848JfFxHt+iPb26b4zyfspmqY0/8=
 github.com/allegro/bigcache v1.2.1-0.20190218064605-e24eb225f156/go.mod h1:Cb/ax3seSYIx7SuZdm2G2xzfwmv3TPSk2ucNfQESPXM=
 github.com/andybalholm/brotli v1.0.4/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=
-github.com/anshalshukla/polyproto v0.0.0-20240621120311-ddd84287b14e h1:mpjnlMMyAXoioTDnltukXW6dnH/aPRmoRkB0bpQS+go=
-github.com/anshalshukla/polyproto v0.0.0-20240621120311-ddd84287b14e/go.mod h1:e1mU2EXSwEpn5jM7GfNwu3AupsV6WAGoPFFfswXOF0o=
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/apache/arrow/go/v10 v10.0.1/go.mod h1:YvhnlEePVnBS4+0z3fhPfUy7W1Ikj0Ih0vcRo/gZ1M0=
 github.com/apache/arrow/go/v11 v11.0.0/go.mod h1:Eg5OsL5H+e299f7u5ssuXsuHQVEGC4xei5aX110hRiI=
@@ -1693,6 +1691,9 @@ github.com/maticnetwork/crand v1.0.2/go.mod h1:/NRNL3bj2eYdqpWmoIP5puxndTpi0XRxp
 github.com/maticnetwork/heimdall v0.3.1-0.20230227104835-81bd1055b0bc/go.mod h1:P2DoKhovYP9G9Kj2EH/zHaiRJF1jNU7ZJOyelG4UCa8=
 github.com/maticnetwork/heimdall v1.0.4 h1:xSsLn6JE/KqF3Fs9Wlx1s4dclJf2cduIodx2tL6K/cg=
 github.com/maticnetwork/heimdall v1.0.4/go.mod h1:Xh7KFvtbs/SVNjOI8IgYmk6JdzYx89eU/XUwH0AgHLs=
+github.com/maticnetwork/polyproto v0.0.3-0.20230216113155-340ea926ca53/go.mod h1:e1mU2EXSwEpn5jM7GfNwu3AupsV6WAGoPFFfswXOF0o=
+github.com/maticnetwork/polyproto v0.0.3 h1:a69rIp97fcl3ABY4LlVX9B2t1qhLa0Jhny3HNOzReBU=
+github.com/maticnetwork/polyproto v0.0.3/go.mod h1:e1mU2EXSwEpn5jM7GfNwu3AupsV6WAGoPFFfswXOF0o=
 github.com/maticnetwork/tendermint v0.33.0 h1:f+vORM02BoUOlCvnu3Zjw5rv6l6JSNVchWjH03rUuR8=
 github.com/maticnetwork/tendermint v0.33.0/go.mod h1:D2fcnxGk6bje+LoPwImuKSSYLiK7/G06IynGNDSEcJk=
 github.com/matryer/moq v0.0.0-20190312154309-6cfb0558e1bd/go.mod h1:9ELz6aaclSIGnZBoaSLZ3NAl1VTufbOrXBPvtcy6WiQ=
