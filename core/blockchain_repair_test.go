@@ -78,8 +78,15 @@ func testShortRepair(t *testing.T, snapshots bool) {
 // already committed, after which the process crashed. In this case we expect the full
 // chain to be rolled back to the committed block, but the chain data itself left in
 // the database for replaying.
-func TestShortSnapSyncedRepair(t *testing.T)              { testShortSnapSyncedRepair(t, false) }
-func TestShortSnapSyncedRepairWithSnapshots(t *testing.T) { testShortSnapSyncedRepair(t, true) }
+func TestShortSnapSyncedRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
+	testShortSnapSyncedRepair(t, false)
+}
+
+func TestShortSnapSyncedRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
+	testShortSnapSyncedRepair(t, true)
+}
 
 func testShortSnapSyncedRepair(t *testing.T, snapshots bool) {
 	// Chain:
@@ -128,6 +135,7 @@ func TestShortSnapSyncingRepairWithSnapshots(t *testing.T) {
 }
 
 func testShortSnapSyncingRepair(t *testing.T, snapshots bool) {
+	t.Skip("snap sync not supported in bor")
 	// Chain:
 	//   G->C1->C2->C3->C4->C5->C6->C7->C8 (HEAD)
 	//
@@ -209,9 +217,11 @@ func testShortOldForkedRepair(t *testing.T, snapshots bool) {
 // this case we expect the canonical chain to be rolled back to the committed block,
 // but the chain data itself left in the database for replaying.
 func TestShortOldForkedSnapSyncedRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testShortOldForkedSnapSyncedRepair(t, false)
 }
 func TestShortOldForkedSnapSyncedRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testShortOldForkedSnapSyncedRepair(t, true)
 }
 
@@ -346,9 +356,11 @@ func testShortNewlyForkedRepair(t *testing.T, snapshots bool) {
 // In this case we expect the canonical chain to be rolled back to the committed
 // block, but the chain data itself left in the database for replaying.
 func TestShortNewlyForkedSnapSyncedRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testShortNewlyForkedSnapSyncedRepair(t, false)
 }
 func TestShortNewlyForkedSnapSyncedRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testShortNewlyForkedSnapSyncedRepair(t, true)
 }
 
@@ -481,9 +493,11 @@ func testShortReorgedRepair(t *testing.T, snapshots bool) {
 // crashed. In this case we expect the canonical chain to be rolled back to the
 // committed block, but the chain data itself left in the database for replaying.
 func TestShortReorgedSnapSyncedRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testShortReorgedSnapSyncedRepair(t, false)
 }
 func TestShortReorgedSnapSyncedRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testShortReorgedSnapSyncedRepair(t, true)
 }
 
@@ -662,9 +676,11 @@ func testLongDeepRepair(t *testing.T, snapshots bool) {
 // which the process crashed. In this case we expect the chain to be rolled back
 // to the committed block, with everything afterwards kept as fast sync data.
 func TestLongSnapSyncedShallowRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongSnapSyncedShallowRepair(t, false)
 }
 func TestLongSnapSyncedShallowRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongSnapSyncedShallowRepair(t, true)
 }
 
@@ -710,8 +726,14 @@ func testLongSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // sync pivot point - older than the ancient limit - was already committed, after
 // which the process crashed. In this case we expect the chain to be rolled back
 // to the committed block, with everything afterwards deleted.
-func TestLongSnapSyncedDeepRepair(t *testing.T)              { testLongSnapSyncedDeepRepair(t, false) }
-func TestLongSnapSyncedDeepRepairWithSnapshots(t *testing.T) { testLongSnapSyncedDeepRepair(t, true) }
+func TestLongSnapSyncedDeepRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
+	testLongSnapSyncedDeepRepair(t, false)
+}
+func TestLongSnapSyncedDeepRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
+	testLongSnapSyncedDeepRepair(t, true)
+}
 
 func testLongSnapSyncedDeepRepair(t *testing.T, snapshots bool) {
 	// Chain:
@@ -952,9 +974,11 @@ func testLongOldForkedDeepRepair(t *testing.T, snapshots bool) {
 // to be rolled back to the committed block, with everything afterwards kept as
 // fast sync data; the side chain completely nuked by the freezer.
 func TestLongOldForkedSnapSyncedShallowRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongOldForkedSnapSyncedShallowRepair(t, false)
 }
 func TestLongOldForkedSnapSyncedShallowRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongOldForkedSnapSyncedShallowRepair(t, true)
 }
 
@@ -1004,9 +1028,11 @@ func testLongOldForkedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // chain to be rolled back to the committed block, with everything afterwards deleted;
 // the side chain completely nuked by the freezer.
 func TestLongOldForkedSnapSyncedDeepRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongOldForkedSnapSyncedDeepRepair(t, false)
 }
 func TestLongOldForkedSnapSyncedDeepRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongOldForkedSnapSyncedDeepRepair(t, true)
 }
 
@@ -1258,9 +1284,11 @@ func testLongNewerForkedDeepRepair(t *testing.T, snapshots bool) {
 // to be rolled back to the committed block, with everything afterwards kept as fast
 // sync data; the side chain completely nuked by the freezer.
 func TestLongNewerForkedSnapSyncedShallowRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongNewerForkedSnapSyncedShallowRepair(t, false)
 }
 func TestLongNewerForkedSnapSyncedShallowRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongNewerForkedSnapSyncedShallowRepair(t, true)
 }
 
@@ -1310,9 +1338,11 @@ func testLongNewerForkedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // chain to be rolled back to the committed block, with everything afterwards deleted;
 // the side chain completely nuked by the freezer.
 func TestLongNewerForkedSnapSyncedDeepRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongNewerForkedSnapSyncedDeepRepair(t, false)
 }
 func TestLongNewerForkedSnapSyncedDeepRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongNewerForkedSnapSyncedDeepRepair(t, true)
 }
 
@@ -1558,9 +1588,11 @@ func testLongReorgedDeepRepair(t *testing.T, snapshots bool) {
 // afterwards kept as fast sync data. The side chain completely nuked by the
 // freezer.
 func TestLongReorgedSnapSyncedShallowRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongReorgedSnapSyncedShallowRepair(t, false)
 }
 func TestLongReorgedSnapSyncedShallowRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongReorgedSnapSyncedShallowRepair(t, true)
 }
 
@@ -1609,9 +1641,11 @@ func testLongReorgedSnapSyncedShallowRepair(t *testing.T, snapshots bool) {
 // expect the canonical chains to be rolled back to the committed block, with
 // everything afterwards deleted. The side chain completely nuked by the freezer.
 func TestLongReorgedSnapSyncedDeepRepair(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongReorgedSnapSyncedDeepRepair(t, false)
 }
 func TestLongReorgedSnapSyncedDeepRepairWithSnapshots(t *testing.T) {
+	t.Skip("snap sync not supported in bor")
 	testLongReorgedSnapSyncedDeepRepair(t, true)
 }
 
