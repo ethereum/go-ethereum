@@ -33,6 +33,7 @@ import (
 	"testing/quick"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/blockstm"
@@ -47,7 +48,6 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
-	"github.com/holiman/uint256"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -1242,15 +1242,15 @@ func TestMVHashMapRevertConcurrent(t *testing.T) {
 
 	// Balance after executing Tx0 should be 0 because it shouldn't be affected by Tx1 or Tx2
 	b := states[0].GetBalance(addr)
-	assert.Equal(t, common.Big0, b)
+	assert.Equal(t, uint256.MustFromBig(common.Big0), b)
 
 	// Balance after executing Tx1 should be 0 because Tx1 got reverted
 	b = states[1].GetBalance(addr)
-	assert.Equal(t, common.Big0, b)
+	assert.Equal(t, uint256.MustFromBig(common.Big0), b)
 
 	// Balance after executing Tx2 should be 100 because its snapshot is taken before Tx1 got reverted
 	b = states[2].GetBalance(addr)
-	assert.Equal(t, balance, b)
+	assert.Equal(t, uint256.MustFromBig(balance), b)
 }
 
 // TestCopyOfCopy tests that modified objects are carried over to the copy, and the copy of the copy.
