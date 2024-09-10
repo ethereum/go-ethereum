@@ -20,6 +20,8 @@
 
 package core
 
+// TEST CI
+
 import (
 	"math/big"
 	"path/filepath"
