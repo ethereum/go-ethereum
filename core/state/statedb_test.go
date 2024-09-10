@@ -1196,6 +1196,62 @@ func TestApplyMVWriteSet(t *testing.T) {
 	assert.Equal(t, sSingleProcess.IntermediateRoot(true), sClean.IntermediateRoot(true))
 }
 
+func TestMVHashMapRevertConcurrent(t *testing.T) {
+	t.Parallel()
+
+	db := NewDatabase(rawdb.NewMemoryDatabase())
+	mvhm := blockstm.MakeMVHashMap()
+	s, _ := NewWithMVHashmap(common.Hash{}, db, nil, mvhm)
+
+	states := []*StateDB{s}
+
+	// Create copies of the original state for each transition
+	for i := 1; i <= 2; i++ {
+		sCopy := s.Copy()
+		sCopy.txIndex = i
+		states = append(states, sCopy)
+	}
+
+	addr := common.HexToAddress("0x01")
+	balance := new(big.Int).SetUint64(uint64(100))
+
+	// Tx0 touches the account. Amount doesn't matter.
+	// This is to make sure that Tx1 and Tx2 will use the same state object from Tx0.
+	states[0].AddBalance(addr, common.Big0)
+	states[0].Finalise(false)
+	states[0].FlushMVWriteSet()
+
+	// Tx1 creates the account and add balance
+	snapshot1 := states[1].Snapshot()
+	states[1].CreateAccount(addr)
+	states[1].AddBalance(addr, balance)
+
+	// Tx2 creates the account, reverts.
+	snapshot2 := states[2].Snapshot()
+	states[2].CreateAccount(addr)
+	states[2].RevertToSnapshot(snapshot2)
+	states[2].Finalise(false)
+
+	// Tx2 adds balance
+	states[2].AddBalance(addr, balance)
+
+	// Tx1 now reverts
+	states[1].RevertToSnapshot(snapshot1)
+	states[1].Finalise(false)
+
+	// Balance after executing Tx0 should be 0 because it shouldn't be affected by Tx1 or Tx2
+	b := states[0].GetBalance(addr)
+	assert.Equal(t, common.Big0, b)
+
+	// Balance after executing Tx1 should be 0 because Tx1 got reverted
+	b = states[1].GetBalance(addr)
+	assert.Equal(t, common.Big0, b)
+
+	// Balance after executing Tx2 should be 100 because its snapshot is taken before Tx1 got reverted
+	b = states[2].GetBalance(addr)
+	assert.Equal(t, balance, b)
+}
+
 // TestCopyOfCopy tests that modified objects are carried over to the copy, and the copy of the copy.
 // See https://github.com/ethereum/go-ethereum/pull/15225#issuecomment-380191512
 func TestCopyOfCopy(t *testing.T) {
