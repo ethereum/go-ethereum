@@ -254,32 +254,27 @@ func TestSupplySelfdestruct(t *testing.T) {
 				},
 			},
 		}
+		signer = types.LatestSigner(gspec.Config)
+
+		testBlockGenerationFunc = func(b *core.BlockGen) {
+			txdata := &types.LegacyTx{
+				Nonce:    0,
+				To:       &aa,
+				Value:    gwei5,
+				Gas:      150000,
+				GasPrice: gwei5,
+				Data:     []byte{},
+			}
+
+			tx := types.NewTx(txdata)
+			tx, _ = types.SignTx(tx, signer, key1)
+
+			b.AddTx(tx)
+		}
 	)
 
-	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
-
-	signer := types.LatestSigner(gspec.Config)
-
-	testBlockGenerationFunc := func(b *core.BlockGen) {
-		b.SetPoS()
-
-		txdata := &types.LegacyTx{
-			Nonce:    0,
-			To:       &aa,
-			Value:    gwei5,
-			Gas:      150000,
-			GasPrice: gwei5,
-			Data:     []byte{},
-		}
-
-		tx := types.NewTx(txdata)
-		tx, _ = types.SignTx(tx, signer, key1)
-
-		b.AddTx(tx)
-	}
-
 	// 1. Test pre Cancun
-	preCancunOutput, _, preCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
+	preCancunOutput, preCancunDB, preCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("Pre-cancun failed to test supply tracer: %v", err)
 	}
@@ -299,28 +294,49 @@ func TestSupplySelfdestruct(t *testing.T) {
 		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
 
-	head := preCancunChain.CurrentBlock()
-	// Check live trace output
-	expected := supplyInfo{
-		Burn: &supplyInfoBurn{
-			EIP1559: big.NewInt(55289500000000),
-			Misc:    big.NewInt(5000000000),
-		},
-		Number:     1,
-		Hash:       head.Hash(),
-		ParentHash: head.ParentHash,
+	var (
+		head = preCancunChain.CurrentBlock()
+		// Check live trace output
+		expected = []supplyInfo{{
+			Issuance: &supplyInfoIssuance{
+				GenesisAlloc: new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether)),
+			},
+			Number:     0,
+			Hash:       common.HexToHash("0xdd9fbe877f0b43987d2f0cda0df176b7939be14f33eb5137f16e6eddf4562706"),
+			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		}, {
+			Issuance: &supplyInfoIssuance{
+				Reward: new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether)),
+			},
+			Burn: &supplyInfoBurn{
+				EIP1559: big.NewInt(55289500000000),
+				Misc:    big.NewInt(5000000000),
+			},
+			Number:     1,
+			Hash:       head.Hash(),
+			ParentHash: head.ParentHash,
+		}}
+	)
+
+	compareAsJSON(t, expected, preCancunOutput)
+	preCancunTest, err := btFromChain(preCancunDB, preCancunChain, nil)
+	if err != nil {
+		t.Fatalf("failed to fill tests from chain: %v", err)
 	}
-
-	actual := preCancunOutput[expected.Number]
-
-	compareAsJSON(t, expected, actual)
+	preCancunTest.Expected = expected
 
 	// 2. Test post Cancun
 	cancunTime := uint64(0)
+	gspec.Config = params.MergedTestChainConfig
 	gspec.Config.ShanghaiTime = &cancunTime
 	gspec.Config.CancunTime = &cancunTime
-
-	postCancunOutput, _, postCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
+	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
+	signer = types.LatestSigner(gspec.Config)
+	posTestBlockGenerationFunc := func(b *core.BlockGen) {
+		b.SetPoS()
+		testBlockGenerationFunc(b)
+	}
+	postCancunOutput, postCancunDB, postCancunChain, err := testSupplyTracer(t, gspec, posTestBlockGenerationFunc)
 	if err != nil {
 		t.Fatalf("Post-cancun failed to test supply tracer: %v", err)
 	}
@@ -342,18 +358,29 @@ func TestSupplySelfdestruct(t *testing.T) {
 
 	// Check live trace output
 	head = postCancunChain.CurrentBlock()
-	expected = supplyInfo{
+	expected = []supplyInfo{{
+		Issuance: &supplyInfoIssuance{
+			GenesisAlloc: new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether)),
+		},
+		Number:     0,
+		Hash:       common.HexToHash("0x16d2bb0b366d3963bf2d8d75cb4b3bc0f233047c948fa746cbd38ac82bf9cfe9"),
+		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+	}, {
 		Burn: &supplyInfoBurn{
 			EIP1559: big.NewInt(55289500000000),
 		},
 		Number:     1,
 		Hash:       head.Hash(),
 		ParentHash: head.ParentHash,
+	}}
+
+	compareAsJSON(t, expected, postCancunOutput)
+	postCancunTest, err := btFromChain(postCancunDB, postCancunChain, nil)
+	if err != nil {
+		t.Fatalf("failed to fill tests from chain: %v", err)
 	}
-
-	actual = postCancunOutput[expected.Number]
-
-	compareAsJSON(t, expected, actual)
+	postCancunTest.Expected = expected
+	writeBTs(t, map[string]*BlockTest{"selfdestruct_grayGlacier": preCancunTest, "selfdestruct_cancun": postCancunTest})
 }
 
 // Tests selfdestructing contract to send its balance to itself (burn).
@@ -531,7 +558,6 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 		gen(b)
 	})
 
-	fmt.Printf("blocks: %v\n", blocks)
 	if n, err := chain.InsertChain(blocks); err != nil {
 		return nil, nil, chain, fmt.Errorf("block %d: failed to insert into chain: %v", n, err)
 	}
@@ -581,9 +607,11 @@ func writeArtifact(t *testing.T, name string, db ethdb.Database, chain *core.Blo
 		t.Fatalf("failed to fill tests from chain: %v", err)
 	}
 	bt.Expected = expected
-	result := make(map[string]any)
-	result[name] = bt
-	enc, err := json.MarshalIndent(&result, "", "  ")
+	writeBTs(t, map[string]*BlockTest{name: bt})
+}
+
+func writeBTs(t *testing.T, tests map[string]*BlockTest) {
+	enc, err := json.MarshalIndent(&tests, "", "  ")
 	if err != nil {
 		t.Fatalf("failed to marshal tests: %v", err)
 	}
