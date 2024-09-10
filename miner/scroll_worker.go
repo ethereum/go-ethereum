@@ -440,6 +440,13 @@ func (w *worker) newWork(now time.Time, parentHash common.Hash, reorgReason erro
 		Time:       uint64(now.Unix()),
 	}
 
+	if reorgReason != nil {
+		// if we are replacing a failing block, reuse the timestamp to make sure
+		// the information we get from AsyncChecker is reliable. Changing timestamp
+		// might alter execution flow of reorged transactions.
+		header.Time = w.chain.GetHeaderByNumber(header.Number.Uint64()).Time
+	}
+
 	parentState, err := w.chain.StateAt(parent.Root())
 	if err != nil {
 		return fmt.Errorf("failed to fetch parent state: %w", err)
