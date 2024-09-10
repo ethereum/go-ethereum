@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/taikoxyz/taiko-geth/compare/v1.7.0...v1.8.0) (2024-09-09)
+
+
+### Features
+
+* **core:** update `ontakeForkHeight` to Sep 24, 2024 ([#309](https://github.com/taikoxyz/taiko-geth/issues/309)) ([4e05e58](https://github.com/taikoxyz/taiko-geth/commit/4e05e5893b18482a90b1560019f93e90745cc0e0))
+
 ## [1.7.0](https://github.com/taikoxyz/taiko-geth/compare/v1.6.1...v1.7.0) (2024-08-29)
 
 
