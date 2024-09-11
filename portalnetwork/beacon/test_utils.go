@@ -165,18 +165,18 @@ func GetHistorySummariesWithProof() (HistoricalSummariesWithProof, common.Root, 
 	}
 	data, err := snappy.Decode(nil, file)
 	if err != nil {
-		return HistoricalSummariesWithProof{}, common.Root{},err
+		return HistoricalSummariesWithProof{}, common.Root{}, err
 	}
 
 	beaconState := &deneb.BeaconState{}
 	err = beaconState.Deserialize(configs.Mainnet, codec.NewDecodingReader(bytes.NewReader(data), uint64(len(data))))
 	if err != nil {
-		return HistoricalSummariesWithProof{}, common.Root{},err
+		return HistoricalSummariesWithProof{}, common.Root{}, err
 	}
 	root := beaconState.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
 	proof, err := BuildHistoricalSummariesProof(*beaconState)
 	if err != nil {
-		return HistoricalSummariesWithProof{}, common.Root{},err
+		return HistoricalSummariesWithProof{}, common.Root{}, err
 	}
 	summariesProof := [5]common.Bytes32{tree.Root(proof[0]), tree.Root(proof[1]), tree.Root(proof[2]), tree.Root(proof[3]), tree.Root(proof[4])}
 	return HistoricalSummariesWithProof{

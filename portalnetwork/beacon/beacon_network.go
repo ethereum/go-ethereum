@@ -321,19 +321,19 @@ func (bn *BeaconNetwork) processContentLoop(ctx context.Context) {
 
 func (bn *BeaconNetwork) generalSummariesValidation(contentKey, content []byte) (*ForkedHistoricalSummariesWithProof, error) {
 	key := &HistoricalSummariesWithProofKey{}
-		err := key.Deserialize(codec.NewDecodingReader(bytes.NewReader(contentKey[1:]), uint64(len(contentKey[1:]))))
-		if err != nil {
-			return nil, err
-		}
-		forkedHistoricalSummariesWithProof := &ForkedHistoricalSummariesWithProof{}
-		err = forkedHistoricalSummariesWithProof.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
-		if err != nil {
-			return nil, err
-		}
-		if forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH != common.Epoch(key.Epoch) {
-			return nil, fmt.Errorf("historical summaries with proof epoch does not match the content key epoch: %d != %d", forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH, key.Epoch)
-		}
-		return forkedHistoricalSummariesWithProof, nil
+	err := key.Deserialize(codec.NewDecodingReader(bytes.NewReader(contentKey[1:]), uint64(len(contentKey[1:]))))
+	if err != nil {
+		return nil, err
+	}
+	forkedHistoricalSummariesWithProof := &ForkedHistoricalSummariesWithProof{}
+	err = forkedHistoricalSummariesWithProof.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+	if err != nil {
+		return nil, err
+	}
+	if forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH != common.Epoch(key.Epoch) {
+		return nil, fmt.Errorf("historical summaries with proof epoch does not match the content key epoch: %d != %d", forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH, key.Epoch)
+	}
+	return forkedHistoricalSummariesWithProof, nil
 }
 
 func (bn *BeaconNetwork) stateSummariesValidation(f ForkedHistoricalSummariesWithProof, latestFinalizedRoot common.Root) bool {
