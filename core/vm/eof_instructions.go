@@ -16,11 +16,6 @@
 
 package vm
 
-// opExtCodeCopyEOF implements the EXTCODECOPY opcode for EOF-enabled forks.
-func opExtCodeCopyEOF(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
-}
-
 // opRjump implements the RJUMP opcode.
 func opRjump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	panic("not implemented")

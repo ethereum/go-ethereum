@@ -55,3 +55,9 @@ func init() {
 	terminals[REVERT] = true
 	terminals[INVALID] = true
 }
+
+// Immediates returns the number bytes of immediates (argument not from
+// stack but from code) a given opcode has.
+func Immediates(op OpCode) int {
+	return int(immediates[op])
+}

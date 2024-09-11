@@ -247,9 +247,9 @@ func TestValidateCode(t *testing.T) {
 		},
 	} {
 		container := &Container{
-			types:    test.metadata,
-			data:     make([]byte, 0),
-			sections: make([]*Container, 0),
+			types:         test.metadata,
+			data:          make([]byte, 0),
+			subContainers: make([]*Container, 0),
 		}
 		_, err := validateCode(test.code, test.section, container, &pragueEOFInstructionSet, false)
 		if !errors.Is(err, test.err) {
@@ -269,9 +269,9 @@ func BenchmarkRJUMPI(b *testing.B) {
 	}
 	code = append(code, byte(STOP))
 	container := &Container{
-		types:    []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-		data:     make([]byte, 0),
-		sections: make([]*Container, 0),
+		types:         []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
+		data:          make([]byte, 0),
+		subContainers: make([]*Container, 0),
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -299,9 +299,9 @@ func BenchmarkRJUMPV(b *testing.B) {
 	code = append(code, byte(PUSH0))
 	code = append(code, byte(STOP))
 	container := &Container{
-		types:    []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-		data:     make([]byte, 0),
-		sections: make([]*Container, 0),
+		types:         []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
+		data:          make([]byte, 0),
+		subContainers: make([]*Container, 0),
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -322,7 +322,7 @@ func BenchmarkEOFValidation(b *testing.B) {
 	}
 	code = append(code, byte(STOP))
 	// First container
-	container.code = append(container.code, code)
+	container.codeSections = append(container.codeSections, code)
 	container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
 
 	inner := []byte{
@@ -330,12 +330,12 @@ func BenchmarkEOFValidation(b *testing.B) {
 	}
 
 	for i := 0; i < 1023; i++ {
-		container.code = append(container.code, inner)
+		container.codeSections = append(container.codeSections, inner)
 		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
 	}
 
 	for i := 0; i < 12; i++ {
-		container.code[i+1] = code
+		container.codeSections[i+1] = code
 	}
 
 	bin := container.MarshalBinary()
@@ -365,7 +365,7 @@ func BenchmarkEOFValidation2(b *testing.B) {
 	}
 	code = append(code, byte(STOP))
 	// First container
-	container.code = append(container.code, code)
+	container.codeSections = append(container.codeSections, code)
 	container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
 
 	inner := []byte{
@@ -384,7 +384,7 @@ func BenchmarkEOFValidation2(b *testing.B) {
 	}
 
 	for i := 0; i < 1023; i++ {
-		container.code = append(container.code, inner)
+		container.codeSections = append(container.codeSections, inner)
 		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
 	}
 
@@ -425,15 +425,15 @@ func BenchmarkEOFValidation3(b *testing.B) {
 	}
 	code = append(code, byte(STOP))
 	// First container
-	container.code = append(container.code, code)
+	container.codeSections = append(container.codeSections, code)
 	container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 1})
 
 	for i := 0; i < 1023; i++ {
-		container.code = append(container.code, []byte{byte(RJUMP), 0x00, 0x00, byte(JUMPF), 0x00, 0x00})
+		container.codeSections = append(container.codeSections, []byte{byte(RJUMP), 0x00, 0x00, byte(JUMPF), 0x00, 0x00})
 		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
 	}
 	for i := 0; i < 65; i++ {
-		container.code[i+1] = append(snippet, byte(STOP))
+		container.codeSections[i+1] = append(snippet, byte(STOP))
 		container.types[i+1] = &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 1}
 	}
 	bin := container.MarshalBinary()
@@ -468,9 +468,9 @@ func BenchmarkRJUMPI_2(b *testing.B) {
 	}
 	code = append(code, byte(STOP))
 	container := &Container{
-		types:    []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-		data:     make([]byte, 0),
-		sections: make([]*Container, 0),
+		types:         []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
+		data:          make([]byte, 0),
+		subContainers: make([]*Container, 0),
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

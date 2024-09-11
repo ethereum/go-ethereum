@@ -24,6 +24,8 @@ import (
 type OpCode byte
 
 // IsPush specifies if an opcode is a PUSH opcode.
+// @deprecated: this method is often used in order to know if there are immediates.
+// Please use `vm.Immediates` instead.
 func (op OpCode) IsPush() bool {
 	return PUSH0 <= op && op <= PUSH32
 }

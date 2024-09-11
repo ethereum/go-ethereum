@@ -50,13 +50,13 @@ func FuzzEofParsing(f *testing.F) {
 		if err := c.UnmarshalBinary(data, true); err == nil {
 			c.ValidateCode(&jt, true)
 			if have := c.MarshalBinary(); !bytes.Equal(have, data) {
-				f.Fatal("Unmarshal-> Marshal failure!")
+				t.Fatal("Unmarshal-> Marshal failure!")
 			}
 		}
 		if err := c.UnmarshalBinary(data, false); err == nil {
 			c.ValidateCode(&jt, false)
 			if have := c.MarshalBinary(); !bytes.Equal(have, data) {
-				f.Fatal("Unmarshal-> Marshal failure!")
+				t.Fatal("Unmarshal-> Marshal failure!")
 			}
 		}
 		if !bytes.Equal(cpy, data) {
@@ -131,7 +131,6 @@ func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 				}
 			}
 			line++
-
 		}
 		corpus.Close()
 	}

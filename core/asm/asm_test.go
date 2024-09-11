@@ -29,10 +29,11 @@ func TestInstructionIterator(t *testing.T) {
 		code    string
 		wantErr string
 	}{
-		{2, "61000000", ""},                             // valid code
-		{0, "6100", "incomplete push instruction at 0"}, // invalid code
-		{2, "5900", ""},                                 // push0
-		{0, "", ""},                                     // empty
+		{2, "61000000", ""},                        // valid code
+		{0, "6100", "incomplete instruction at 0"}, // invalid code
+		{2, "5900", ""},                            // push0
+		{0, "", ""},                                // empty
+		{2, "d1aabb00", ""},                        // DATALOADN(aabb),STOP
 
 	} {
 		var (

@@ -36,7 +36,9 @@ func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 		pc++
 
 		switch {
-		case op >= PUSH1 && op <= PUSH32:
+		case op < PUSH1:
+			continue
+		case op <= PUSH32:
 			numbits = uint16(op - PUSH1 + 1)
 		case op == RJUMP || op == RJUMPI || op == CALLF || op == JUMPF || op == DATALOADN:
 			numbits = 2

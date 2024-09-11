@@ -535,6 +535,13 @@ func enable4762(jt *JumpTable) {
 }
 
 // enableEOF applies the EOF changes.
+// OBS! For EOF, there are two changes:
+//  1. Two separate jumptables are required. One, EOF-jumptable, is used by
+//     eof contracts. This one contains things like RJUMP.
+//  2. The regular non-eof jumptable also needs to be modified, specifically to
+//     modify how EXTCODECOPY works under the hood.
+//
+// This method _only_ deals with case 1.
 func enableEOF(jt *JumpTable) {
 	// Deprecate opcodes
 	undefined := &operation{
