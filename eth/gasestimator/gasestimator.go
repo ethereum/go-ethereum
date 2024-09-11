@@ -74,11 +74,13 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 		balance := opts.State.GetBalance(call.From).ToBig()
 
 		available := balance
+		transfer := "0"
 		if call.Value != nil {
 			if call.Value.Cmp(available) >= 0 {
 				return 0, nil, core.ErrInsufficientFundsForTransfer
 			}
 			available.Sub(available, call.Value)
+			transfer = call.Value.String()
 		}
 		if opts.Config.IsCancun(opts.Header.Number, opts.Header.Time) && len(call.BlobHashes) > 0 {
 			blobGasPerBlob := new(big.Int).SetInt64(params.BlobTxBlobGasPerBlob)
@@ -94,13 +96,13 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 
 		// If the allowance is larger than maximum uint64, skip checking
 		if allowance.IsUint64() && hi > allowance.Uint64() {
-			transfer := call.Value
-			if transfer == nil {
-				transfer = new(big.Int)
-			}
 			log.Debug("Gas estimation capped by limited funds", "original", hi, "balance", balance,
 				"sent", transfer, "maxFeePerGas", feeCap, "fundable", allowance)
+
 			hi = allowance.Uint64()
+			if hi < params.TxGas {
+				return 0, nil, core.ErrInsufficientFunds
+			}
 		}
 	}
 	// Recap the highest gas allowance with specified gascap.
