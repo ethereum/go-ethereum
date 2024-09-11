@@ -101,7 +101,7 @@ func TestContractCreateInitGas(t *testing.T) {
 
 	// Check cold read cost, without a value
 	gas := ae.ContractCreateInitGas(testAddr)
-	if want := params.WitnessBranchWriteCost + params.WitnessBranchReadCost + params.WitnessChunkWriteCost + params.WitnessChunkReadCost; gas != want {
+	if want := params.WitnessBranchWriteCost + params.WitnessBranchReadCost + 2*params.WitnessChunkWriteCost + 2*params.WitnessChunkReadCost; gas != want {
 		t.Fatalf("incorrect gas computed, got %d, want %d", gas, want)
 	}
 
