@@ -1,4 +1,5 @@
-// Package hookstest provides test doubles for testing subsets of libevm hooks.
+// Package hookstest provides test doubles and convenience wrappers for testing
+// libevm hooks.
 package hookstest
 
 import (
@@ -10,6 +11,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// Register clears any registered [params.Extras] and then registers `extras`
+// for the liftime of the current test, clearing them via tb's
+// [testing.TB.Cleanup].
+func Register[C params.ChainConfigHooks, R params.RulesHooks](tb testing.TB, extras params.Extras[C, R]) {
+	params.TestOnlyClearRegisteredExtras()
+	tb.Cleanup(params.TestOnlyClearRegisteredExtras)
+	params.RegisterExtras(extras)
+}
+
 // A Stub is a test double for [params.ChainConfigHooks] and
 // [params.RulesHooks]. Each of the fields, if non-nil, back their respective
 // hook methods, which otherwise fall back to the default behaviour.
@@ -19,17 +29,14 @@ type Stub struct {
 	CanCreateContractFn     func(*libevm.AddressContext, libevm.StateReader) error
 }
 
-// RegisterForRules clears any registered [params.Extras] and then registers s
-// as [params.RulesHooks], which are themselves cleared by the
-// [testing.TB.Cleanup] routine.
-func (s *Stub) RegisterForRules(tb testing.TB) {
-	params.TestOnlyClearRegisteredExtras()
-	params.RegisterExtras(params.Extras[params.NOOPHooks, Stub]{
-		NewRules: func(_ *params.ChainConfig, _ *params.Rules, _ *params.NOOPHooks, blockNum *big.Int, isMerge bool, timestamp uint64) *Stub {
+// Register is a convenience wrapper for registering s as both the
+// [params.ChainConfigHooks] and [params.RulesHooks] via [Register].
+func (s *Stub) Register(tb testing.TB) {
+	Register(tb, params.Extras[Stub, Stub]{
+		NewRules: func(_ *params.ChainConfig, _ *params.Rules, _ *Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *Stub {
 			return s
 		},
 	})
-	tb.Cleanup(params.TestOnlyClearRegisteredExtras)
 }
 
 func (s Stub) PrecompileOverride(a common.Address) (libevm.PrecompiledContract, bool) {

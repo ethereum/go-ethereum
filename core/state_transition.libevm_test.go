@@ -25,7 +25,7 @@ func TestCanExecuteTransaction(t *testing.T) {
 			return makeErr(from, to, s.GetState(account, slot))
 		},
 	}
-	hooks.RegisterForRules(t)
+	hooks.Register(t)
 
 	value := rng.Hash()
 

@@ -64,7 +64,7 @@ func TestPrecompileOverride(t *testing.T) {
 					},
 				},
 			}
-			hooks.RegisterForRules(t)
+			hooks.Register(t)
 
 			t.Run(fmt.Sprintf("%T.Call([overridden precompile address = %v])", &vm.EVM{}, tt.addr), func(t *testing.T) {
 				_, evm := ethtest.NewZeroEVM(t)
@@ -103,7 +103,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			),
 		},
 	}
-	hooks.RegisterForRules(t)
+	hooks.Register(t)
 
 	caller := rng.Address()
 	input := rng.Bytes(8)
@@ -133,7 +133,7 @@ func TestCanCreateContract(t *testing.T) {
 			return makeErr(cc, s.GetState(account, slot))
 		},
 	}
-	hooks.RegisterForRules(t)
+	hooks.Register(t)
 
 	origin := rng.Address()
 	caller := rng.Address()
