@@ -528,12 +528,12 @@ func (st *StateTransition) TransitionDb(interruptCtx context.Context) (*Executio
 		burnAmount = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
 
 		if !st.noFeeBurnAndTip {
-			st.state.AddBalance(burntContractAddress, uint256.NewInt(burnAmount.Uint64()), tracing.BalanceChangeTransfer)
+			st.state.AddBalance(burntContractAddress, cmath.BigIntToUint256Int(burnAmount), tracing.BalanceChangeTransfer)
 		}
 	}
 
 	if !st.noFeeBurnAndTip {
-		st.state.AddBalance(st.evm.Context.Coinbase, uint256.NewInt(amount.Uint64()), tracing.BalanceIncreaseRewardTransactionFee)
+		st.state.AddBalance(st.evm.Context.Coinbase, cmath.BigIntToUint256Int(amount), tracing.BalanceIncreaseRewardTransactionFee)
 
 		// add the coinbase to the witness iff the fee is greater than 0
 		if rules.IsEIP4762 && amount.Sign() != 0 {
