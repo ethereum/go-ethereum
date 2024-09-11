@@ -104,8 +104,6 @@ func TestRegisterExtras(t *testing.T) {
 			require.NoError(t, json.Unmarshal(buf, got))
 			assert.Equal(t, tt.ccExtra.Interface(), got.extraPayload().Interface())
 			assert.Equal(t, in, got)
-			// TODO: do we need an explicit test of the JSON output, or is a
-			// Marshal-Unmarshal round trip sufficient?
 
 			gotRules := got.Rules(nil, false, 0)
 			assert.Equal(t, tt.wantRulesExtra, gotRules.extraPayload().Interface())

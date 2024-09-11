@@ -1,7 +1,6 @@
 package params
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -14,6 +13,15 @@ import (
 // Extras are arbitrary payloads to be added as extra fields in [ChainConfig]
 // and [Rules] structs. See [RegisterExtras].
 type Extras[C ChainConfigHooks, R RulesHooks] struct {
+	// ReuseJSONRoot, if true, signals that JSON unmarshalling of a
+	// [ChainConfig] MUST reuse the root JSON input when unmarshalling the extra
+	// payload. If false, it is assumed that the extra JSON payload is nested in
+	// the "extra" key.
+	//
+	// *NOTE* this requires multiple passes for both marshalling and
+	// unmarshalling of JSON so is inefficient and should be used as a last
+	// resort.
+	ReuseJSONRoot bool
 	// NewRules, if non-nil is called at the end of [ChainConfig.Rules] with the
 	// newly created [Rules] and other context from the method call. Its
 	// returned value will be the extra payload of the [Rules]. If NewRules is
@@ -51,10 +59,11 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 
 	getter := e.getter()
 	registeredExtras = &extraConstructors{
-		chainConfig: pseudo.NewConstructor[C](),
-		rules:       pseudo.NewConstructor[R](),
-		newForRules: e.newForRules,
-		getter:      getter,
+		chainConfig:   pseudo.NewConstructor[C](),
+		rules:         pseudo.NewConstructor[R](),
+		reuseJSONRoot: e.ReuseJSONRoot,
+		newForRules:   e.newForRules,
+		getter:        getter,
 	}
 	return getter
 }
@@ -87,6 +96,7 @@ var registeredExtras *extraConstructors
 
 type extraConstructors struct {
 	chainConfig, rules pseudo.Constructor
+	reuseJSONRoot      bool
 	newForRules        func(_ *ChainConfig, _ *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type
 	// use top-level hooksFrom<X>() functions instead of these as they handle
 	// instances where no [Extras] were registered.
@@ -157,42 +167,6 @@ func (e ExtraPayloadGetter[C, R]) hooksFromRules(r *Rules) RulesHooks {
 	}
 	return NOOPHooks{}
 }
-
-// UnmarshalJSON implements the [json.Unmarshaler] interface.
-func (c *ChainConfig) UnmarshalJSON(data []byte) error {
-	type raw ChainConfig // doesn't inherit methods so avoids recursing back here (infinitely)
-	cc := &struct {
-		*raw
-		Extra *pseudo.Type `json:"extra"`
-	}{
-		raw: (*raw)(c), // embedded to achieve regular JSON unmarshalling
-	}
-	if e := registeredExtras; e != nil {
-		cc.Extra = e.chainConfig.NilPointer() // `c.extra` is otherwise unexported
-	}
-
-	if err := json.Unmarshal(data, cc); err != nil {
-		return err
-	}
-	c.extra = cc.Extra
-	return nil
-}
-
-// MarshalJSON implements the [json.Marshaler] interface.
-func (c *ChainConfig) MarshalJSON() ([]byte, error) {
-	// See UnmarshalJSON() for rationale.
-	type raw ChainConfig
-	cc := &struct {
-		*raw
-		Extra *pseudo.Type `json:"extra"`
-	}{raw: (*raw)(c), Extra: c.extra}
-	return json.Marshal(cc)
-}
-
-var _ interface {
-	json.Marshaler
-	json.Unmarshaler
-} = (*ChainConfig)(nil)
 
 // addRulesExtra is called at the end of [ChainConfig.Rules]; it exists to
 // abstract the libevm-specific behaviour outside of original geth code.
