@@ -149,5 +149,5 @@ func TestForkedHistoricalSummariesWithProof(t *testing.T) {
 	content := hexutil.MustDecode(testData.ContentValue)
 	err = historyProof.Deserialize(configs.Mainnet, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
 	require.NoError(t, err)
-	require.Equal(t, historyProof.HistoricalSummariesWithProof.EPOCH, testData.Epoch)
+	require.Equal(t, uint64(historyProof.HistoricalSummariesWithProof.EPOCH), testData.Epoch)
 }
