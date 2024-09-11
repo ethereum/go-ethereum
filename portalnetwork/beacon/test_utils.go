@@ -158,24 +158,25 @@ func GetLightClientOptimisticUpdate(number uint8) (ForkedLightClientOptimisticUp
 	return *bootstrap, nil
 }
 
-func GetHistorySummariesWithProof() (HistoricalSummariesWithProof, error) {
+func GetHistorySummariesWithProof() (HistoricalSummariesWithProof, common.Root, error) {
 	file, err := os.ReadFile("testdata/beacon/BeaconState/ssz_random/case_0/serialized.ssz_snappy")
 	if err != nil {
-		return HistoricalSummariesWithProof{}, err
+		return HistoricalSummariesWithProof{}, common.Root{}, err
 	}
 	data, err := snappy.Decode(nil, file)
 	if err != nil {
-		return HistoricalSummariesWithProof{}, err
+		return HistoricalSummariesWithProof{}, common.Root{},err
 	}
 
 	beaconState := &deneb.BeaconState{}
 	err = beaconState.Deserialize(configs.Mainnet, codec.NewDecodingReader(bytes.NewReader(data), uint64(len(data))))
 	if err != nil {
-		return HistoricalSummariesWithProof{}, err
+		return HistoricalSummariesWithProof{}, common.Root{},err
 	}
+	root := beaconState.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
 	proof, err := BuildHistoricalSummariesProof(*beaconState)
 	if err != nil {
-		return HistoricalSummariesWithProof{}, err
+		return HistoricalSummariesWithProof{}, common.Root{},err
 	}
 	summariesProof := [5]common.Bytes32{tree.Root(proof[0]), tree.Root(proof[1]), tree.Root(proof[2]), tree.Root(proof[3]), tree.Root(proof[4])}
 	return HistoricalSummariesWithProof{
@@ -184,7 +185,7 @@ func GetHistorySummariesWithProof() (HistoricalSummariesWithProof, error) {
 		Proof: HistoricalSummariesProof{
 			Proof: summariesProof,
 		},
-	}, nil
+	}, root, nil
 }
 
 func BuildHistoricalSummariesProof(beaconState deneb.BeaconState) ([][]byte, error) {
@@ -205,18 +206,18 @@ func BuildHistoricalSummariesProof(beaconState deneb.BeaconState) ([][]byte, err
 	leaves[13] = beaconState.RandaoMixes.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
 	leaves[14] = beaconState.Slashings.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
 	leaves[15] = beaconState.PreviousEpochParticipation.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
-	leaves[16] = beaconState.JustificationBits.HashTreeRoot(tree.GetHashFn())
-	leaves[17] = beaconState.PreviousEpochParticipation.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
-	leaves[18] = beaconState.CurrentJustifiedCheckpoint.HashTreeRoot(tree.GetHashFn())
-	leaves[19] = beaconState.FinalizedCheckpoint.HashTreeRoot(tree.GetHashFn())
-	leaves[20] = beaconState.InactivityScores.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
-	leaves[21] = beaconState.CurrentSyncCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
-	leaves[22] = beaconState.NextSyncCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
-	leaves[23] = beaconState.LatestExecutionPayloadHeader.HashTreeRoot(tree.GetHashFn())
-	leaves[24] = beaconState.NextWithdrawalIndex.HashTreeRoot(tree.GetHashFn())
-	leaves[25] = beaconState.NextWithdrawalValidatorIndex.HashTreeRoot(tree.GetHashFn())
-	leaves[26] = beaconState.HistoricalSummaries.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
-	leaves[27] = tree.Root{}
+	leaves[16] = beaconState.CurrentEpochParticipation.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
+	leaves[17] = beaconState.JustificationBits.HashTreeRoot(tree.GetHashFn())
+	leaves[18] = beaconState.PreviousJustifiedCheckpoint.HashTreeRoot(tree.GetHashFn())
+	leaves[19] = beaconState.CurrentJustifiedCheckpoint.HashTreeRoot(tree.GetHashFn())
+	leaves[20] = beaconState.FinalizedCheckpoint.HashTreeRoot(tree.GetHashFn())
+	leaves[21] = beaconState.InactivityScores.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
+	leaves[22] = beaconState.CurrentSyncCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
+	leaves[23] = beaconState.NextSyncCommittee.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
+	leaves[24] = beaconState.LatestExecutionPayloadHeader.HashTreeRoot(tree.GetHashFn())
+	leaves[25] = beaconState.NextWithdrawalIndex.HashTreeRoot(tree.GetHashFn())
+	leaves[26] = beaconState.NextWithdrawalValidatorIndex.HashTreeRoot(tree.GetHashFn())
+	leaves[27] = beaconState.HistoricalSummaries.HashTreeRoot(configs.Mainnet, tree.GetHashFn())
 	leaves[28] = tree.Root{}
 	leaves[29] = tree.Root{}
 	leaves[30] = tree.Root{}

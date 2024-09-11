@@ -253,20 +253,10 @@ func (bn *BeaconNetwork) validateContent(contentKey []byte, content []byte) erro
 		return nil
 	// TODO: VERIFY
 	case HistoricalSummaries:
-		key := &HistoricalSummariesWithProofKey{}
-		err := key.Deserialize(codec.NewDecodingReader(bytes.NewReader(contentKey[1:]), uint64(len(contentKey[1:]))))
+		forkedHistoricalSummariesWithProof, err := bn.generalSummariesValidation(contentKey, content)
 		if err != nil {
 			return err
 		}
-		forkedHistoricalSummariesWithProof := &ForkedHistoricalSummariesWithProof{}
-		err = forkedHistoricalSummariesWithProof.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
-		if err != nil {
-			return err
-		}
-		if forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH != common.Epoch(key.Epoch) {
-			return fmt.Errorf("historical summaries with proof epoch does not match the content key epoch: %d != %d", forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH, key.Epoch)
-		}
-
 		// TODO get root from light client
 		header := bn.lightClient.GetFinalityHeader()
 		latestFinalizedRoot := header.StateRoot
@@ -327,6 +317,23 @@ func (bn *BeaconNetwork) processContentLoop(ctx context.Context) {
 			}(ctx)
 		}
 	}
+}
+
+func (bn *BeaconNetwork) generalSummariesValidation(contentKey, content []byte) (*ForkedHistoricalSummariesWithProof, error) {
+	key := &HistoricalSummariesWithProofKey{}
+		err := key.Deserialize(codec.NewDecodingReader(bytes.NewReader(contentKey[1:]), uint64(len(contentKey[1:]))))
+		if err != nil {
+			return nil, err
+		}
+		forkedHistoricalSummariesWithProof := &ForkedHistoricalSummariesWithProof{}
+		err = forkedHistoricalSummariesWithProof.Deserialize(bn.spec, codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+		if err != nil {
+			return nil, err
+		}
+		if forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH != common.Epoch(key.Epoch) {
+			return nil, fmt.Errorf("historical summaries with proof epoch does not match the content key epoch: %d != %d", forkedHistoricalSummariesWithProof.HistoricalSummariesWithProof.EPOCH, key.Epoch)
+		}
+		return forkedHistoricalSummariesWithProof, nil
 }
 
 func (bn *BeaconNetwork) stateSummariesValidation(f ForkedHistoricalSummariesWithProof, latestFinalizedRoot common.Root) bool {
