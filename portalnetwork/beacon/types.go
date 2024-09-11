@@ -329,32 +329,30 @@ func (hsp *HistoricalSummariesProof) HashTreeRoot(hFn tree.HashFn) common.Root {
 	}, 5)
 }
 
-// TODO: Add tests for HistoricalSummariesWithProof
-
 type HistoricalSummariesWithProof struct {
 	EPOCH               common.Epoch
 	HistoricalSummaries capella.HistoricalSummaries
-	Proof               *HistoricalSummariesProof
+	Proof               HistoricalSummariesProof
 }
 
-func (hswp HistoricalSummariesWithProof) Deserialize(spec *common.Spec, dr *codec.DecodingReader) error {
-	return dr.Container(&hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
+func (hswp *HistoricalSummariesWithProof) Deserialize(spec *common.Spec, dr *codec.DecodingReader) error {
+	return dr.Container(&hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), &hswp.Proof)
 }
 
-func (hswp HistoricalSummariesWithProof) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
-	return w.Container(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
+func (hswp *HistoricalSummariesWithProof) Serialize(spec *common.Spec, w *codec.EncodingWriter) error {
+	return w.Container(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), &hswp.Proof)
 }
 
-func (hswp HistoricalSummariesWithProof) ByteLength(spec *common.Spec) uint64 {
-	return codec.ContainerLength(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
+func (hswp *HistoricalSummariesWithProof) ByteLength(spec *common.Spec) uint64 {
+	return codec.ContainerLength(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), &hswp.Proof)
 }
 
-func (hswp HistoricalSummariesWithProof) FixedLength(_ *common.Spec) uint64 {
+func (hswp *HistoricalSummariesWithProof) FixedLength(_ *common.Spec) uint64 {
 	return 0
 }
 
-func (hswp HistoricalSummariesWithProof) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) common.Root {
-	return hFn.HashTreeRoot(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), hswp.Proof)
+func (hswp *HistoricalSummariesWithProof) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) common.Root {
+	return hFn.HashTreeRoot(hswp.EPOCH, spec.Wrap(&hswp.HistoricalSummaries), &hswp.Proof)
 }
 
 type ForkedHistoricalSummariesWithProof struct {
@@ -392,5 +390,5 @@ func (fhswp ForkedHistoricalSummariesWithProof) ByteLength(spec *common.Spec) ui
 }
 
 func (fhswp ForkedHistoricalSummariesWithProof) HashTreeRoot(spec *common.Spec, h tree.HashFn) common.Root {
-	return h.HashTreeRoot(fhswp.ForkDigest, spec.Wrap(common.SpecObj(fhswp.HistoricalSummariesWithProof)))
+	return h.HashTreeRoot(fhswp.ForkDigest, spec.Wrap(common.SpecObj(&fhswp.HistoricalSummariesWithProof)))
 }
