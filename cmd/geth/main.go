@@ -151,6 +151,7 @@ var (
 		utils.L1ConfirmationsFlag,
 		utils.L1DeploymentBlockFlag,
 		utils.CircuitCapacityCheckEnabledFlag,
+		utils.CircuitCapacityCheckWorkersFlag,
 		utils.RollupVerifyEnabledFlag,
 		utils.ShadowforkPeersFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)

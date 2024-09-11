@@ -113,7 +113,7 @@ func (ccc *Checker) applyTransactionRustTrace(rustTrace unsafe.Pointer) (*types.
 		return nil, ErrUnknown
 	}
 	if !result.AccRowUsage.IsOk {
-		return nil, ErrBlockRowConsumptionOverflow
+		return (*types.RowConsumption)(&result.AccRowUsage.RowUsageDetails), ErrBlockRowConsumptionOverflow
 	}
 	return (*types.RowConsumption)(&result.AccRowUsage.RowUsageDetails), nil
 }
@@ -153,7 +153,7 @@ func (ccc *Checker) ApplyBlock(traces *types.BlockTrace) (*types.RowConsumption,
 		return nil, ErrUnknown
 	}
 	if !result.AccRowUsage.IsOk {
-		return nil, ErrBlockRowConsumptionOverflow
+		return (*types.RowConsumption)(&result.AccRowUsage.RowUsageDetails), ErrBlockRowConsumptionOverflow
 	}
 	return (*types.RowConsumption)(&result.AccRowUsage.RowUsageDetails), nil
 }

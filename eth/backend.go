@@ -57,9 +57,9 @@ import (
 	"github.com/scroll-tech/go-ethereum/p2p/enode"
 	"github.com/scroll-tech/go-ethereum/params"
 	"github.com/scroll-tech/go-ethereum/rlp"
+	"github.com/scroll-tech/go-ethereum/rollup/ccc"
 	"github.com/scroll-tech/go-ethereum/rollup/rollup_sync_service"
 	"github.com/scroll-tech/go-ethereum/rollup/sync_service"
-	"github.com/scroll-tech/go-ethereum/rollup/tracing"
 	"github.com/scroll-tech/go-ethereum/rpc"
 )
 
@@ -75,6 +75,7 @@ type Ethereum struct {
 	txPool            *txpool.TxPool
 	syncService       *sync_service.SyncService
 	rollupSyncService *rollup_sync_service.RollupSyncService
+	asyncChecker      *ccc.AsyncChecker
 
 	blockchain         *core.BlockChain
 	handler            *handler
@@ -220,8 +221,11 @@ func New(stack *node.Node, config *ethconfig.Config, l1Client sync_service.EthCl
 		return nil, err
 	}
 	if config.CheckCircuitCapacity {
-		tracer := tracing.NewTracerWrapper()
-		eth.blockchain.Validator().SetupTracerAndCircuitCapacityChecker(tracer)
+		eth.asyncChecker = ccc.NewAsyncChecker(eth.blockchain, config.CCCMaxWorkers, true)
+		eth.asyncChecker.WithOnFailingBlock(func(b *types.Block, err error) {
+			log.Warn("block failed CCC check, it will be reorged by the sequencer", "hash", b.Hash(), "err", err)
+		})
+		eth.blockchain.Validator().WithAsyncValidator(eth.asyncChecker.Check)
 	}
 	eth.bloomIndexer.Start(eth.blockchain)
 
@@ -572,6 +576,9 @@ func (s *Ethereum) Stop() error {
 		s.rollupSyncService.Stop()
 	}
 	s.miner.Close()
+	if s.config.CheckCircuitCapacity {
+		s.asyncChecker.Wait()
+	}
 	s.blockchain.Stop()
 	s.engine.Close()
 
