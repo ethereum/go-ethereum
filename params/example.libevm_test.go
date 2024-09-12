@@ -30,12 +30,12 @@ func initFn() {
 	// This registration makes *all* [params.ChainConfig] and [params.Rules]
 	// instances respect the payload types. They do not need to be modified to
 	// know about `extraparams`.
-	getter = params.RegisterExtras(params.Extras[ChainConfigExtra, RulesExtra]{
+	payloads = params.RegisterExtras(params.Extras[ChainConfigExtra, RulesExtra]{
 		NewRules: constructRulesExtra,
 	})
 }
 
-var getter params.ExtraPayloadGetter[ChainConfigExtra, RulesExtra]
+var payloads params.ExtraPayloads[ChainConfigExtra, RulesExtra]
 
 // constructRulesExtra acts as an adjunct to the [params.ChainConfig.Rules]
 // method. Its primary purpose is to construct the extra payload for the
@@ -67,12 +67,12 @@ type RulesExtra struct {
 
 // FromChainConfig returns the extra payload carried by the ChainConfig.
 func FromChainConfig(c *params.ChainConfig) ChainConfigExtra {
-	return getter.FromChainConfig(c)
+	return payloads.FromChainConfig(c)
 }
 
 // FromRules returns the extra payload carried by the Rules.
 func FromRules(r *params.Rules) RulesExtra {
-	return getter.FromRules(r)
+	return payloads.FromRules(r)
 }
 
 // myForkPrecompiledContracts is analogous to the vm.PrecompiledContracts<Fork>
@@ -114,7 +114,7 @@ func (r RulesExtra) CanCreateContract(*libevm.AddressContext, libevm.StateReader
 
 // This example demonstrates how the rest of this file would be used from a
 // *different* package.
-func ExampleExtraPayloadGetter() {
+func ExampleExtraPayloads() {
 	initFn() // Outside of an example this is unnecessary as the function will be a regular init().
 
 	const forkTime = 530003640

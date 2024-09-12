@@ -47,27 +47,27 @@ type Extras[C ChainConfigHooks, R RulesHooks] struct {
 // Calls to [ChainConfig.Rules] will call the `NewRules` function of the
 // registered [Extras] to create a new `R`.
 //
-// The payloads can be accessed via the [ExtraPayloadGetter.FromChainConfig] and
-// [ExtraPayloadGetter.FromRules] methods of the getter returned by
-// RegisterExtras. Where stated in the interface definitions, they will also be
-// used as hooks to alter Ethereum behaviour; if this isn't desired then they
-// can embed [NOOPHooks] to satisfy either interface.
-func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPayloadGetter[C, R] {
+// The payloads can be accessed via the [ExtraPayloads.FromChainConfig] and
+// [ExtraPayloads.FromRules] methods of the accessor returned by RegisterExtras.
+// Where stated in the interface definitions, they will also be used as hooks to
+// alter Ethereum behaviour; if this isn't desired then they can embed
+// [NOOPHooks] to satisfy either interface.
+func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPayloads[C, R] {
 	if registeredExtras != nil {
 		panic("re-registration of Extras")
 	}
 	mustBeStructOrPointerToOne[C]()
 	mustBeStructOrPointerToOne[R]()
 
-	getter := e.getter()
+	payloads := e.payloads()
 	registeredExtras = &extraConstructors{
 		newChainConfig: pseudo.NewConstructor[C]().Zero,
 		newRules:       pseudo.NewConstructor[R]().Zero,
 		reuseJSONRoot:  e.ReuseJSONRoot,
 		newForRules:    e.newForRules,
-		getter:         getter,
+		payloads:       payloads,
 	}
-	return getter
+	return payloads
 }
 
 // TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
@@ -102,7 +102,7 @@ type extraConstructors struct {
 	newForRules              func(_ *ChainConfig, _ *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type
 	// use top-level hooksFrom<X>() functions instead of these as they handle
 	// instances where no [Extras] were registered.
-	getter interface {
+	payloads interface {
 		hooksFromChainConfig(*ChainConfig) ChainConfigHooks
 		hooksFromRules(*Rules) RulesHooks
 	}
@@ -112,11 +112,11 @@ func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, 
 	if e.NewRules == nil {
 		return registeredExtras.newRules()
 	}
-	rExtra := e.NewRules(c, r, e.getter().FromChainConfig(c), blockNum, isMerge, timestamp)
+	rExtra := e.NewRules(c, r, e.payloads().FromChainConfig(c), blockNum, isMerge, timestamp)
 	return pseudo.From(rExtra).Type
 }
 
-func (*Extras[C, R]) getter() (g ExtraPayloadGetter[C, R]) { return }
+func (*Extras[C, R]) payloads() (g ExtraPayloads[C, R]) { return }
 
 // mustBeStructOrPointerToOne panics if `T` isn't a struct or a *struct.
 func mustBeStructOrPointerToOne[T any]() {
@@ -140,44 +140,56 @@ func notStructMessage[T any]() string {
 	return fmt.Sprintf("%T is not a struct nor a pointer to a struct", x)
 }
 
-// An ExtraPayloadGettter provides strongly typed access to the extra payloads
-// carried by [ChainConfig] and [Rules] structs. The only valid way to construct
-// a getter is by a call to [RegisterExtras].
-type ExtraPayloadGetter[C ChainConfigHooks, R RulesHooks] struct {
-	_ struct{} // make godoc show unexported fields so nobody tries to make their own getter ;)
+// ExtraPayloads provides strongly typed access to the extra payloads carried by
+// [ChainConfig] and [Rules] structs. The only valid way to construct an
+// instance is by a call to [RegisterExtras].
+type ExtraPayloads[C ChainConfigHooks, R RulesHooks] struct {
+	_ struct{} // make godoc show unexported fields so nobody tries to make their own instance ;)
 }
 
 // FromChainConfig returns the ChainConfig's extra payload.
-func (ExtraPayloadGetter[C, R]) FromChainConfig(c *ChainConfig) C {
+func (ExtraPayloads[C, R]) FromChainConfig(c *ChainConfig) C {
 	return pseudo.MustNewValue[C](c.extraPayload()).Get()
 }
 
 // PointerFromChainConfig returns a pointer to the ChainConfig's extra payload.
 // This is guaranteed to be non-nil.
-func (ExtraPayloadGetter[C, R]) PointerFromChainConfig(c *ChainConfig) *C {
+func (ExtraPayloads[C, R]) PointerFromChainConfig(c *ChainConfig) *C {
 	return pseudo.MustPointerTo[C](c.extraPayload()).Value.Get()
+}
+
+// SetOnChainConfig sets the ChainConfig's extra payload. It is equivalent to
+// `*e.PointerFromChainConfig(cc) = val`.
+func (e ExtraPayloads[C, R]) SetOnChainConfig(cc *ChainConfig, val C) {
+	*e.PointerFromChainConfig(cc) = val
 }
 
 // hooksFromChainConfig is equivalent to FromChainConfig(), but returns an
 // interface instead of the concrete type implementing it; this allows it to be
 // used in non-generic code.
-func (e ExtraPayloadGetter[C, R]) hooksFromChainConfig(c *ChainConfig) ChainConfigHooks {
+func (e ExtraPayloads[C, R]) hooksFromChainConfig(c *ChainConfig) ChainConfigHooks {
 	return e.FromChainConfig(c)
 }
 
 // FromRules returns the Rules' extra payload.
-func (ExtraPayloadGetter[C, R]) FromRules(r *Rules) R {
+func (ExtraPayloads[C, R]) FromRules(r *Rules) R {
 	return pseudo.MustNewValue[R](r.extraPayload()).Get()
 }
 
 // PointerFromRules returns a pointer to the Rules's extra payload. This is
 // guaranteed to be non-nil.
-func (ExtraPayloadGetter[C, R]) PointerFromRules(r *Rules) *R {
+func (ExtraPayloads[C, R]) PointerFromRules(r *Rules) *R {
 	return pseudo.MustPointerTo[R](r.extraPayload()).Value.Get()
 }
 
+// SetOnRules sets the Rules' extra payload. It is equivalent to
+// `*e.PointerFromRules(r) = val`.
+func (e ExtraPayloads[C, R]) SetOnRules(r *Rules, val R) {
+	*e.PointerFromRules(r) = val
+}
+
 // hooksFromRules is the [RulesHooks] equivalent of hooksFromChainConfig().
-func (e ExtraPayloadGetter[C, R]) hooksFromRules(r *Rules) RulesHooks {
+func (e ExtraPayloads[C, R]) hooksFromRules(r *Rules) RulesHooks {
 	return e.FromRules(r)
 }
 
@@ -195,7 +207,7 @@ func (c *ChainConfig) addRulesExtra(r *Rules, blockNum *big.Int, isMerge bool, t
 // unmarshalling of JSON), a nil value is constructed and returned.
 func (c *ChainConfig) extraPayload() *pseudo.Type {
 	if registeredExtras == nil {
-		// This will only happen if someone constructs an [ExtraPayloadGetter]
+		// This will only happen if someone constructs an [ExtraPayloads]
 		// directly, without a call to [RegisterExtras].
 		//
 		// See https://google.github.io/styleguide/go/best-practices#when-to-panic
