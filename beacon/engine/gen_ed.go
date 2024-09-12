@@ -34,7 +34,7 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 		Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 		BlobGasUsed      *hexutil.Uint64         `json:"blobGasUsed"`
 		ExcessBlobGas    *hexutil.Uint64         `json:"excessBlobGas"`
-		Deposits         types.Deposits          `json:"depositRequests"`
+		Requests         []hexutil.Bytes         `json:"depositRequests"`
 		ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 	}
 	var enc ExecutableData
@@ -60,7 +60,12 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 	enc.Withdrawals = e.Withdrawals
 	enc.BlobGasUsed = (*hexutil.Uint64)(e.BlobGasUsed)
 	enc.ExcessBlobGas = (*hexutil.Uint64)(e.ExcessBlobGas)
-	enc.Deposits = e.Deposits
+	if e.Requests != nil {
+		enc.Requests = make([]hexutil.Bytes, len(e.Requests))
+		for k, v := range e.Requests {
+			enc.Requests[k] = v
+		}
+	}
 	enc.ExecutionWitness = e.ExecutionWitness
 	return json.Marshal(&enc)
 }
@@ -85,7 +90,7 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 		Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 		BlobGasUsed      *hexutil.Uint64         `json:"blobGasUsed"`
 		ExcessBlobGas    *hexutil.Uint64         `json:"excessBlobGas"`
-		Deposits         *types.Deposits         `json:"depositRequests"`
+		Requests         []hexutil.Bytes         `json:"depositRequests"`
 		ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 	}
 	var dec ExecutableData
@@ -160,8 +165,11 @@ func (e *ExecutableData) UnmarshalJSON(input []byte) error {
 	if dec.ExcessBlobGas != nil {
 		e.ExcessBlobGas = (*uint64)(dec.ExcessBlobGas)
 	}
-	if dec.Deposits != nil {
-		e.Deposits = *dec.Deposits
+	if dec.Requests != nil {
+		e.Requests = make([][]byte, len(dec.Requests))
+		for k, v := range dec.Requests {
+			e.Requests[k] = v
+		}
 	}
 	if dec.ExecutionWitness != nil {
 		e.ExecutionWitness = dec.ExecutionWitness

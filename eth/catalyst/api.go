@@ -604,8 +604,8 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 	if params.BlobGasUsed == nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil blobGasUsed post-cancun"))
 	}
-	if params.Deposits == nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil deposits post-prague"))
+	if params.Requests == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil requests post-prague"))
 	}
 
 	if versionedHashes == nil {
@@ -842,7 +842,7 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 			"params.ExcessBlobGas", ebg,
 			"len(params.Transactions)", len(params.Transactions),
 			"len(params.Withdrawals)", len(params.Withdrawals),
-			"len(params.Deposits)", len(params.Deposits),
+			"len(params.Requests)", len(params.Requests),
 			"beaconRoot", beaconRoot,
 			"error", err)
 		return api.invalid(err, nil), nil
@@ -1189,7 +1189,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engin
 		if body != nil {
 			// Nil out the V2 values, clients should know to not request V1 objects
 			// after Prague.
-			body.Deposits = nil
+			body.Requests = nil
 		}
 		bodies[i] = body
 	}
@@ -1218,7 +1218,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) 
 	// after Prague.
 	for i := range bodies {
 		if bodies[i] != nil {
-			bodies[i].Deposits = nil
+			bodies[i].Requests = nil
 		}
 	}
 	return bodies, nil
@@ -1257,35 +1257,26 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBody {
 	}
 
 	var (
-		body            = block.Body()
-		txs             = make([]hexutil.Bytes, len(body.Transactions))
-		withdrawals     = body.Withdrawals
-		depositRequests types.Deposits
+		body   = block.Body()
+		result engine.ExecutionPayloadBody
 	)
 
+	result.TransactionData = make([]hexutil.Bytes, len(body.Transactions))
 	for j, tx := range body.Transactions {
-		txs[j], _ = tx.MarshalBinary()
+		result.TransactionData[j], _ = tx.MarshalBinary()
 	}
 
 	// Post-shanghai withdrawals MUST be set to empty slice instead of nil
-	if withdrawals == nil && block.Header().WithdrawalsHash != nil {
-		withdrawals = make([]*types.Withdrawal, 0)
+	if body.Withdrawals != nil && block.Header().WithdrawalsHash != nil {
+		result.Withdrawals = make([]*types.Withdrawal, 0)
 	}
 
-	if block.Header().RequestsHash != nil {
-		// TODO: this isn't future proof because we can't determine if a request
-		// type has activated yet or if there are just no requests of that type from
-		// only the block.
-		for _, req := range block.Requests() {
-			if d, ok := req.Inner().(*types.Deposit); ok {
-				depositRequests = append(depositRequests, d)
-			}
+	if reqs := block.Requests(); reqs != nil {
+		result.Requests = make([]hexutil.Bytes, len(reqs))
+		for j, req := range reqs {
+			result.Requests[j] = req
 		}
 	}
 
-	return &engine.ExecutionPayloadBody{
-		TransactionData: txs,
-		Withdrawals:     withdrawals,
-		Deposits:        depositRequests,
-	}
+	return &result
 }

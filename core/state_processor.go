@@ -97,7 +97,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Read requests if Prague is enabled.
-	var requests types.Requests
+	var requests [][]byte
 	if p.config.IsPrague(block.Number(), block.Time()) {
 		requests, err = ParseDepositLogs(allLogs, p.config)
 		if err != nil {
@@ -262,15 +262,15 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.
 
 // ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
 // BeaconDepositContract.
-func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) (types.Requests, error) {
-	deposits := make(types.Requests, 0)
+func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) ([][]byte, error) {
+	deposits := make([][]byte, 0)
 	for _, log := range logs {
 		if log.Address == config.DepositContractAddress {
-			d, err := types.UnpackIntoDeposit(log.Data)
+			request, err := types.DepositLogToRequest(log.Data)
 			if err != nil {
 				return nil, fmt.Errorf("unable to parse deposit data: %v", err)
 			}
-			deposits = append(deposits, types.NewRequest(d))
+			deposits = append(deposits, request)
 		}
 	}
 	return deposits, nil

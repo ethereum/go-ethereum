@@ -785,7 +785,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListHashes []common.Hash,
 	uncleLists [][]*types.Header, uncleListHashes []common.Hash,
 	withdrawalLists [][]*types.Withdrawal, withdrawalListHashes []common.Hash,
-	requestsLists [][]*types.Request, requestsListHashes []common.Hash) (int, error) {
+	requestsLists [][][]byte, requestsListHashes []common.Hash) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 

@@ -184,7 +184,7 @@ type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
 	Withdrawals  []*Withdrawal `rlp:"optional"`
-	Requests     []*Request    `rlp:"optional"`
+	Requests     [][]byte      `rlp:"optional"`
 }
 
 // Block represents an Ethereum block.
@@ -209,7 +209,7 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 	withdrawals  Withdrawals
-	requests     Requests
+	requests     [][]byte
 
 	// witness is not an encoded part of the block body.
 	// It is held in Block in order for easy relaying to the places
@@ -232,7 +232,7 @@ type extblock struct {
 	Txs         []*Transaction
 	Uncles      []*Header
 	Withdrawals []*Withdrawal `rlp:"optional"`
-	Requests    []*Request    `rlp:"optional"`
+	Requests    [][]byte      `rlp:"optional"`
 }
 
 // NewBlock creates a new block. The input data is copied, changes to header and to the
@@ -292,9 +292,9 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher
 		b.header.RequestsHash = nil
 	} else if len(requests) == 0 {
 		b.header.RequestsHash = &EmptyRequestsHash
-		b.requests = Requests{}
+		b.requests = [][]byte{}
 	} else {
-		h := DeriveSha(Requests(requests), hasher)
+		h := CalcRequestHash(requests)
 		b.header.RequestsHash = &h
 		b.requests = slices.Clone(requests)
 	}
@@ -376,7 +376,7 @@ func (b *Block) Body() *Body {
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
 func (b *Block) Withdrawals() Withdrawals   { return b.withdrawals }
-func (b *Block) Requests() Requests         { return b.requests }
+func (b *Block) Requests() [][]byte         { return b.requests }
 
 func (b *Block) Transaction(hash common.Hash) *Transaction {
 	for _, transaction := range b.transactions {
@@ -472,6 +472,13 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 		return EmptyUncleHash
 	}
 	return rlpHash(uncles)
+}
+
+func CalcRequestHash(requests [][]byte) common.Hash {
+	if len(requests) == 0 {
+		return EmptyRequestsHash
+	}
+	return rlpHash(requests)
 }
 
 // NewBlockWithHeader creates a block with the given header data. The

@@ -449,7 +449,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 	}
 	var (
 		withdrawals []*types.Withdrawal
-		requests    types.Requests
+		requests    [][]byte
 	)
 	if conf := g.Config; conf != nil {
 		num := big.NewInt(int64(g.Number))
@@ -474,7 +474,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		}
 		if conf.IsPrague(num, g.Timestamp) {
 			head.RequestsHash = &types.EmptyRequestsHash
-			requests = make(types.Requests, 0)
+			requests = make([][]byte, 0)
 		}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals, Requests: requests}, nil, trie.NewStackTrie(nil))

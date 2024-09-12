@@ -1569,18 +1569,13 @@ func equalBody(a *types.Body, b *engine.ExecutionPayloadBody) bool {
 		return false
 	}
 
-	var deposits types.Deposits
+	var requests [][]byte
 	if a.Requests != nil {
-		// If requests is non-nil, it means deposits are available in block and we
+		// If requests is non-nil, it means requests are available in block and we
 		// should return an empty slice instead of nil if there are no deposits.
-		deposits = make(types.Deposits, 0)
+		requests = make([][]byte, 0)
 	}
-	for _, r := range a.Requests {
-		if d, ok := r.Inner().(*types.Deposit); ok {
-			deposits = append(deposits, d)
-		}
-	}
-	return reflect.DeepEqual(deposits, b.Deposits)
+	return reflect.DeepEqual(requests, b.Requests)
 }
 
 func TestBlockToPayloadWithBlobs(t *testing.T) {
