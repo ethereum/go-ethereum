@@ -1433,10 +1433,10 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		uncleHashes[i] = uncle.Hash()
 	}
 	fields["uncles"] = uncleHashes
-	if block.Header().WithdrawalsHash != nil {
+	if block.Withdrawals() != nil {
 		fields["withdrawals"] = block.Withdrawals()
 	}
-	if block.Header().RequestsHash != nil {
+	if block.Requests() != nil {
 		// Convert requests to hex.
 		hexreq := make([]hexutil.Bytes, len(block.Requests()))
 		for i, req := range block.Requests() {
