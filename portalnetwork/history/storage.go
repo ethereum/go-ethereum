@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math/big"
 	"os"
 	"path"
@@ -73,8 +74,8 @@ func greater(a, b []byte) int {
 	return bytes.Compare(a, b)
 }
 
-func NewDB(dataDir string) (*sql.DB, error) {
-	dbPath := path.Join(dataDir, "history")
+func NewDB(dataDir string, network string) (*sql.DB, error) {
+	dbPath := path.Join(dataDir, network)
 	err := os.MkdirAll(dbPath, 0755)
 	if err != nil {
 		return nil, err
@@ -93,7 +94,7 @@ func NewDB(dataDir string) (*sql.DB, error) {
 			},
 		})
 	})
-	sqlDb, err := sql.Open("sqlite3_custom", path.Join(dbPath, sqliteName))
+	sqlDb, err := sql.Open("sqlite3_custom", path.Join(dbPath, fmt.Sprintf("%s.sqlite", network)))
 	return sqlDb, err
 }
 
@@ -102,7 +103,7 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 		nodeId:                 config.NodeId,
 		sqliteDB:               config.DB,
 		storageCapacityInBytes: config.StorageCapacityMB * 1000000,
-		log:                    log.New("history_storage"),
+		log:                    log.New("storage", config.NetworkName),
 	}
 	hs.radius.Store(storage.MaxDistance)
 	err := hs.createTable()

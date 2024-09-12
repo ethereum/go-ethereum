@@ -12,4 +12,5 @@ type PortalStorageConfig struct {
 	DB                *sql.DB
 	NodeId            enode.ID
 	Spec              *common.Spec
+	NetworkName       string
 }

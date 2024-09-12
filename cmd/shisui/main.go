@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/portalnetwork/beacon"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
+	"github.com/ethereum/go-ethereum/portalnetwork/state"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/ethereum/go-ethereum/portalnetwork/web3"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -135,6 +136,13 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, addr string) err
 		}
 	}
 
+	if slices.Contains(config.Networks, portalwire.State.Name()) {
+		err = initState(config, server, conn, localNode, discV5)
+		if err != nil {
+			return err
+		}
+	}
+
 	httpServer := &http.Server{
 		Addr:    addr,
 		Handler: server,
@@ -167,7 +175,8 @@ func initDiscV5(config Config, conn discover.UDPConn) (*discover.UDPv5, *enode.L
 }
 
 func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) error {
-	db, err := history.NewDB(config.DataDir)
+	networkName := portalwire.History.Name()
+	db, err := history.NewDB(config.DataDir, networkName)
 	if err != nil {
 		return err
 	}
@@ -175,6 +184,7 @@ func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, local
 		StorageCapacityMB: config.DataCapacity,
 		DB:                db,
 		NodeId:            localNode.ID(),
+		NetworkName:       networkName,
 	})
 	if err != nil {
 		return err
@@ -237,6 +247,38 @@ func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localN
 
 	beaconNetwork := beacon.NewBeaconNetwork(protocol)
 	return beaconNetwork.Start()
+}
+
+func initState(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) error {
+	networkName := portalwire.State.Name()
+	db, err := history.NewDB(config.DataDir, networkName)
+	if err != nil {
+		return err
+	}
+	contentStorage, err := history.NewHistoryStorage(storage.PortalStorageConfig{
+		StorageCapacityMB: config.DataCapacity,
+		DB:                db,
+		NodeId:            localNode.ID(),
+		NetworkName:       networkName,
+	})
+	if err != nil {
+		return err
+	}
+	contentQueue := make(chan *discover.ContentElement, 50)
+
+	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.State, config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
+
+	if err != nil {
+		return err
+	}
+	api := discover.NewPortalAPI(protocol)
+	stateNetworkAPI := state.NewStateNetworkAPI(api)
+	err = server.RegisterName("portal", stateNetworkAPI)
+	if err != nil {
+		return err
+	}
+	historyNetwork := state.NewStateNetwork(protocol)
+	return historyNetwork.Start()
 }
 
 func getPortalConfig(ctx *cli.Context) (*Config, error) {

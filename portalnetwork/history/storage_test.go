@@ -28,7 +28,7 @@ func genBytes(length int) []byte {
 }
 
 func newContentStorage(storageCapacityInMB uint64, nodeId enode.ID, nodeDataDir string) (*ContentStorage, error) {
-	db, err := NewDB(nodeDataDir)
+	db, err := NewDB(nodeDataDir, "history")
 	if err != nil {
 		return nil, err
 	}
