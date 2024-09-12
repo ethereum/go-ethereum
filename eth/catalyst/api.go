@@ -1256,19 +1256,17 @@ func getBody(block *types.Block) *engine.ExecutionPayloadBody {
 		return nil
 	}
 
-	var (
-		body   = block.Body()
-		result engine.ExecutionPayloadBody
-	)
+	var result engine.ExecutionPayloadBody
 
-	result.TransactionData = make([]hexutil.Bytes, len(body.Transactions))
-	for j, tx := range body.Transactions {
+	result.TransactionData = make([]hexutil.Bytes, len(block.Transactions()))
+	for j, tx := range block.Transactions() {
 		result.TransactionData[j], _ = tx.MarshalBinary()
 	}
 
 	// Post-shanghai withdrawals MUST be set to empty slice instead of nil
-	if body.Withdrawals != nil && block.Header().WithdrawalsHash != nil {
-		result.Withdrawals = make([]*types.Withdrawal, 0)
+	result.Withdrawals = block.Withdrawals()
+	if block.Withdrawals() == nil && block.Header().WithdrawalsHash != nil {
+		result.Withdrawals = []*types.Withdrawal{}
 	}
 
 	if reqs := block.Requests(); reqs != nil {
