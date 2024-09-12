@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	crand "crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -1416,8 +1418,8 @@ func TestGetBlockBodiesByHash(t *testing.T) {
 	for k, test := range tests {
 		result := api.GetPayloadBodiesByHashV2(test.hashes)
 		for i, r := range result {
-			if !equalBody(test.results[i], r) {
-				t.Fatalf("test %v: invalid response: expected %+v got %+v", k, test.results[i], r)
+			if err := checkEqualBody(test.results[i], r); err != nil {
+				t.Fatalf("test %v: invalid response: %v\nexpected %+v\ngot %+v", k, err, test.results[i], r)
 			}
 		}
 	}
@@ -1494,8 +1496,8 @@ func TestGetBlockBodiesByRange(t *testing.T) {
 		}
 		if len(result) == len(test.results) {
 			for i, r := range result {
-				if !equalBody(test.results[i], r) {
-					t.Fatalf("test %d: invalid response: expected \n%+v\ngot\n%+v", k, test.results[i], r)
+				if err := checkEqualBody(test.results[i], r); err != nil {
+					t.Fatalf("test %d: invalid response: %v\nexpected %+v\ngot %+v", k, err, test.results[i], r)
 				}
 			}
 		} else {
@@ -1549,33 +1551,32 @@ func TestGetBlockBodiesByRangeInvalidParams(t *testing.T) {
 	}
 }
 
-func equalBody(a *types.Body, b *engine.ExecutionPayloadBody) bool {
+func checkEqualBody(a *types.Body, b *engine.ExecutionPayloadBody) error {
 	if a == nil && b == nil {
-		return true
+		return nil
 	} else if a == nil || b == nil {
-		return false
+		return errors.New("nil vs. non-nil")
 	}
 	if len(a.Transactions) != len(b.TransactionData) {
-		return false
+		return errors.New("transactions length mismatch")
 	}
 	for i, tx := range a.Transactions {
 		data, _ := tx.MarshalBinary()
 		if !bytes.Equal(data, b.TransactionData[i]) {
-			return false
+			return fmt.Errorf("transaction %d mismatch", i)
 		}
 	}
-
 	if !reflect.DeepEqual(a.Withdrawals, b.Withdrawals) {
-		return false
+		return fmt.Errorf("withdrawals mismatch")
 	}
 
-	var requests [][]byte
-	if a.Requests != nil {
-		// If requests is non-nil, it means requests are available in block and we
-		// should return an empty slice instead of nil if there are no deposits.
-		requests = make([][]byte, 0)
+	reqEqual := slices.EqualFunc(a.Requests, b.Requests, func(a []byte, b hexutil.Bytes) bool {
+		return bytes.Equal(a, b)
+	})
+	if !reqEqual {
+		return fmt.Errorf("requests mismatch")
 	}
-	return reflect.DeepEqual(requests, b.Requests)
+	return nil
 }
 
 func TestBlockToPayloadWithBlobs(t *testing.T) {
