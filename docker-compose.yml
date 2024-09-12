@@ -1,0 +1,24 @@
+version: '3'
+
+services:
+  geth-node:
+    image: your-dockerhub-username/geth:latest
+    container_name: geth-devnet
+    ports:
+      - "8545:8545"
+      - "30303:30303"
+    command: |
+      --dev
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api personal,eth,net,web3
+      --allow-insecure-unlock
+    volumes:
+      - ./data:/root/.ethereum
+    networks:
+      - devnet
+
+networks:
+  devnet:
+    driver: bridge
