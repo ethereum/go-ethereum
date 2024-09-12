@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -92,6 +93,11 @@ func (r *Request) EncodeRLP(w io.Writer) error {
 func (r *Request) encode(w *bytes.Buffer) error {
 	w.WriteByte(r.Type())
 	return r.inner.encode(w)
+}
+
+// MarshalJSON marshals as JSON.
+func (r *Request) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.inner)
 }
 
 // MarshalBinary returns the canonical encoding of the request.
