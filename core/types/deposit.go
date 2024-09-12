@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	depositRequestType = 0x01
+	depositRequestType = 0x00
 	depositRequestSize = 192 + 1
 )
 
