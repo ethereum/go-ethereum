@@ -294,7 +294,7 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher TrieHasher
 		b.header.RequestsHash = &EmptyRequestsHash
 		b.requests = [][]byte{}
 	} else {
-		h := CalcRequestHash(requests)
+		h := CalcRequestsHash(requests)
 		b.header.RequestsHash = &h
 		b.requests = slices.Clone(requests)
 	}
@@ -474,7 +474,7 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 	return rlpHash(uncles)
 }
 
-func CalcRequestHash(requests [][]byte) common.Hash {
+func CalcRequestsHash(requests [][]byte) common.Hash {
 	if len(requests) == 0 {
 		return EmptyRequestsHash
 	}

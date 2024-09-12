@@ -260,7 +260,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 	// Compute requestsHash if any requests are non-nil.
 	var requestsHash *common.Hash
 	if data.Requests != nil {
-		h := types.CalcRequestHash(data.Requests)
+		h := types.CalcRequestsHash(data.Requests)
 		requestsHash = &h
 	}
 	header := &types.Header{

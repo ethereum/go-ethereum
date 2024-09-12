@@ -145,7 +145,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the parsed requests match the expected header value.
 	if header.RequestsHash != nil {
-		reqhash := types.CalcRequestHash(res.Requests)
+		reqhash := types.CalcRequestsHash(res.Requests)
 		if reqhash != *header.RequestsHash {
 			return fmt.Errorf("invalid deposit root hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
 		}

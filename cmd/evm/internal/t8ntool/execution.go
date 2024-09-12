@@ -390,7 +390,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
 		// Calculate the requests root
-		h := types.CalcRequestHash(requests)
+		h := types.CalcRequestsHash(requests)
 		execRs.RequestsHash = &h
 		execRs.Requests = requests
 	}
