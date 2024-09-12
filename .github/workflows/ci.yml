@@ -107,7 +107,7 @@ jobs:
         - name: Test
           run: make test
 
-        - uses: actions/upload-artifact@v2
+        - uses: actions/upload-artifact@v3
           with:
             name: unitTest-coverage
             path: cover.out
@@ -158,7 +158,7 @@ jobs:
         - name: test-integration
           run: make test-integration
 
-        - uses: actions/upload-artifact@v2
+        - uses: actions/upload-artifact@v3
           with:
             name: integrationTest-coverage
             path: cover.out
