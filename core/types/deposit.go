@@ -31,8 +31,8 @@ func DepositLogToRequest(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("deposit wrong length: want 576, have %d", len(data))
 	}
 
-	var outputRequest = make([]byte, depositRequestSize)
-	outputRequest[0] = depositRequestType
+	var request = make([]byte, depositRequestSize)
+	request[0] = depositRequestType
 	const (
 		pubkeyOffset         = 1
 		withdrawalCredOffset = pubkeyOffset + 48
@@ -47,20 +47,20 @@ func DepositLogToRequest(data []byte) ([]byte, error) {
 	// PublicKey is the first element. ABI encoding pads values to 32 bytes, so
 	// despite BLS public keys being length 48, the value length here is 64. Then
 	// skip over the next length value.
-	copy(outputRequest[pubkeyOffset:], data[b:b+48])
+	copy(request[pubkeyOffset:], data[b:b+48])
 	b += 48 + 16 + 32
 	// WithdrawalCredentials is 32 bytes. Read that value then skip over next
 	// length.
-	copy(outputRequest[withdrawalCredOffset:], data[b:b+32])
+	copy(request[withdrawalCredOffset:], data[b:b+32])
 	b += 32 + 32
 	// Amount is 8 bytes, but it is padded to 32. Skip over it and the next
 	// length.
-	copy(outputRequest[amountOffset:], data[b:b+8])
+	copy(request[amountOffset:], data[b:b+8])
 	b += 8 + 24 + 32
 	// Signature is 96 bytes. Skip over it and the next length.
-	copy(outputRequest[signatureOffset:], data[b:b+96])
+	copy(request[signatureOffset:], data[b:b+96])
 	b += 96 + 32
 	// Index is 8 bytes.
-	copy(outputRequest[indexOffset:], data[b:b+8])
-	return outputRequest, nil
+	copy(request[indexOffset:], data[b:b+8])
+	return request, nil
 }
