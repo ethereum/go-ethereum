@@ -2,7 +2,7 @@ version: '3'
 
 services:
   geth-node:
-    image: your-dockerhub-username/geth:latest
+    image: "${DOCKER_USERNAME}/geth:latest"  # Use environment variable for Docker Hub username
     container_name: geth-devnet
     ports:
       - "8545:8545"
