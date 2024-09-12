@@ -664,8 +664,10 @@ func (bc *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 //
 // Note, this function assumes that the `mu` mutex is held!
 func (bc *BlockChain) insert(block *types.Block, writeBlock bool) {
+
 	blockHash := block.Hash()
 	blockNumberU64 := block.NumberU64()
+
 	// If the block is on a side chain or an unknown one, force other heads onto it too
 	updateHeads := GetCanonicalHash(bc.db, blockNumberU64) != blockHash
 
