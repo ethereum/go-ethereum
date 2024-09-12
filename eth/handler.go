@@ -525,8 +525,6 @@ func (h *handler) Start(maxPeers int) {
 
 func (h *handler) Stop() {
 	h.txsSub.Unsubscribe() // quits txBroadcastLoop
-	h.txFetcher.Stop()
-	h.downloader.Terminate()
 	h.minedBlockSub.Unsubscribe()
 
 	// Quit chainSync and txsync64.

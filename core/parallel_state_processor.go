@@ -363,8 +363,6 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		if task.shouldRerunWithoutFeeDelay {
 			shouldDelayFeeCal = false
 
-			statedb.StopPrefetcher()
-
 			// nolint
 			*statedb = *backupStateDB
 

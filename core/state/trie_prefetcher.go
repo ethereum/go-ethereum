@@ -61,6 +61,8 @@ type triePrefetcher struct {
 	storageDupWriteMeter  metrics.Meter
 	storageDupCrossMeter  metrics.Meter
 	storageWasteMeter     metrics.Meter
+
+	lock sync.RWMutex // Use RWMutex for better read/write locking
 }
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string, noreads bool) *triePrefetcher {
@@ -94,6 +96,9 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string, noreads 
 // to all of them. Depending on the async parameter, the method will either block
 // until all subfetchers spin down, or return immediately.
 func (p *triePrefetcher) terminate(async bool) {
+	p.lock.Lock()         // Lock for writing
+	defer p.lock.Unlock() // Ensure the lock is released after the function
+
 	// Short circuit if the fetcher is already closed
 	select {
 	case <-p.term:
@@ -109,6 +114,9 @@ func (p *triePrefetcher) terminate(async bool) {
 
 // report aggregates the pre-fetching and usage metrics and reports them.
 func (p *triePrefetcher) report() {
+	p.lock.RLock()         // Lock for reading
+	defer p.lock.RUnlock() // Ensure the lock is released after the function
+
 	if !metrics.Enabled {
 		return
 	}
@@ -157,6 +165,9 @@ func (p *triePrefetcher) report() {
 //     repeated.
 //  2. Finalize of the main account trie. This happens only once per block.
 func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr common.Address, keys [][]byte, read bool) error {
+	p.lock.Lock()         // Lock for writing
+	defer p.lock.Unlock() // Ensure the lock is released after the function
+
 	// If the state item is only being read, but reads are disabled, return
 	if read && p.noreads {
 		return nil
@@ -181,6 +192,9 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 // the given trie terminates. If no fetcher exists for the request, nil will be
 // returned.
 func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
+	p.lock.RLock()         // Lock for reading
+	defer p.lock.RUnlock() // Ensure the lock is released after the function
+
 	// Bail if no trie was prefetched for this root
 	fetcher := p.fetchers[p.trieID(owner, root)]
 	if fetcher == nil {
@@ -195,6 +209,9 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 // used marks a batch of state items used to allow creating statistics as to
 // how useful or wasteful the fetcher is.
 func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte) {
+	p.lock.Lock()         // Lock for writing
+	defer p.lock.Unlock() // Ensure the lock is released after the function
+
 	if fetcher := p.fetchers[p.trieID(owner, root)]; fetcher != nil {
 		fetcher.wait() // ensure the fetcher's idle before poking in its internals
 		fetcher.used = used

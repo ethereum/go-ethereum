@@ -43,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -617,15 +616,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		processorCount++
 
 		go func() {
-			// todo: @anshalshukla || @cffls - check witness collection and requirement in start prefetchers
-			var witness *stateless.Witness
-			if bc.vmConfig.EnableWitnessCollection {
-				witness, err = stateless.NewWitness(bc, block)
-				if err != nil {
-					return
-				}
-			}
-			parallelStatedb.StartPrefetcher("chain", witness)
+			parallelStatedb.StartPrefetcher("chain", nil)
 			receipts, logs, usedGas, err := bc.parallelProcessor.Process(block, parallelStatedb, bc.vmConfig, ctx)
 			resultChan <- Result{receipts, logs, usedGas, err, parallelStatedb, blockExecutionParallelCounter}
 		}()
@@ -641,16 +632,7 @@ func (bc *BlockChain) ProcessBlock(block *types.Block, parent *types.Header) (_ 
 		processorCount++
 
 		go func() {
-			// todo: @anshalshukla || @cffls - check witness collection and requirement in start prefetchers
-			var witness *stateless.Witness
-			if bc.vmConfig.EnableWitnessCollection {
-				witness, err = stateless.NewWitness(bc, block)
-				if err != nil {
-					return
-				}
-			}
-			statedb.StartPrefetcher("chain", witness)
-
+			statedb.StartPrefetcher("chain", nil)
 			receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig, ctx)
 			resultChan <- Result{receipts, logs, usedGas, err, statedb, blockExecutionSerialCounter}
 		}()
@@ -2318,27 +2300,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool) (int, error)
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
-		if err != nil {
-			return it.index, err
-		}
-		statedb.SetLogger(bc.logger)
-
-		// If we are past Byzantium, enable prefetching to pull in trie node paths
-		// while processing transactions. Before Byzantium the prefetcher is mostly
-		// useless due to the intermediate root hashing after each transaction.
-		if bc.chainConfig.IsByzantium(block.Number()) {
-			var witness *stateless.Witness
-			if bc.vmConfig.EnableWitnessCollection {
-				witness, err = stateless.NewWitness(bc, block)
-				if err != nil {
-					return it.index, err
-				}
-			}
-			statedb.StartPrefetcher("chain", witness)
-		}
-		activeState = statedb
 
 		// If we have a followup block, run that against the current state to pre-cache
 		// transactions and probabilistically some of the account/storage trie nodes.

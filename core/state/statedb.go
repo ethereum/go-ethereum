@@ -1179,6 +1179,10 @@ func (s *StateDB) Copy() *StateDB {
 	state.accessList = s.accessList.Copy()
 	state.transientStorage = s.transientStorage.Copy()
 
+	if s.prefetcher != nil {
+		state.prefetcher = s.prefetcher
+	}
+
 	if s.mvHashmap != nil {
 		state.mvHashmap = s.mvHashmap
 	}
