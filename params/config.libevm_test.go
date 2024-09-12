@@ -50,26 +50,36 @@ func TestRegisterExtras(t *testing.T) {
 			name: "Rules payload copied from ChainConfig payload",
 			register: func() {
 				RegisterExtras(Extras[ccExtraA, rulesExtraA]{
-					NewRules: func(cc *ChainConfig, r *Rules, ex *ccExtraA, _ *big.Int, _ bool, _ uint64) *rulesExtraA {
-						return &rulesExtraA{
+					NewRules: func(cc *ChainConfig, r *Rules, ex ccExtraA, _ *big.Int, _ bool, _ uint64) rulesExtraA {
+						return rulesExtraA{
 							A: ex.A,
 						}
 					},
 				})
 			},
-			ccExtra: pseudo.From(&ccExtraA{
+			ccExtra: pseudo.From(ccExtraA{
 				A: "hello",
 			}).Type,
-			wantRulesExtra: &rulesExtraA{
+			wantRulesExtra: rulesExtraA{
 				A: "hello",
 			},
 		},
 		{
-			name: "no NewForRules() function results in typed but nil pointer",
+			name: "no NewForRules() function results in zero value",
 			register: func() {
 				RegisterExtras(Extras[ccExtraB, rulesExtraB]{})
 			},
-			ccExtra: pseudo.From(&ccExtraB{
+			ccExtra: pseudo.From(ccExtraB{
+				B: "world",
+			}).Type,
+			wantRulesExtra: rulesExtraB{},
+		},
+		{
+			name: "no NewForRules() function results in nil pointer",
+			register: func() {
+				RegisterExtras(Extras[ccExtraB, *rulesExtraB]{})
+			},
+			ccExtra: pseudo.From(ccExtraB{
 				B: "world",
 			}).Type,
 			wantRulesExtra: (*rulesExtraB)(nil),
@@ -79,10 +89,10 @@ func TestRegisterExtras(t *testing.T) {
 			register: func() {
 				RegisterExtras(Extras[rawJSON, struct{ RulesHooks }]{})
 			},
-			ccExtra: pseudo.From(&rawJSON{
+			ccExtra: pseudo.From(rawJSON{
 				RawMessage: []byte(`"hello, world"`),
 			}).Type,
-			wantRulesExtra: (*struct{ RulesHooks })(nil),
+			wantRulesExtra: struct{ RulesHooks }{},
 		},
 	}
 
@@ -111,6 +121,75 @@ func TestRegisterExtras(t *testing.T) {
 	}
 }
 
+func TestModificationOfZeroExtras(t *testing.T) {
+	type (
+		ccExtra struct {
+			X int
+			NOOPHooks
+		}
+		rulesExtra struct {
+			X int
+			NOOPHooks
+		}
+	)
+
+	TestOnlyClearRegisteredExtras()
+	t.Cleanup(TestOnlyClearRegisteredExtras)
+	getter := RegisterExtras(Extras[ccExtra, rulesExtra]{})
+
+	config := new(ChainConfig)
+	rules := new(Rules)
+	// These assertion helpers are defined before any modifications so that the
+	// closure is demonstrably over the original zero values.
+	assertChainConfigExtra := func(t *testing.T, want ccExtra, msg string) {
+		t.Helper()
+		assert.Equalf(t, want, getter.FromChainConfig(config), "%T: "+msg, &config)
+	}
+	assertRulesExtra := func(t *testing.T, want rulesExtra, msg string) {
+		t.Helper()
+		assert.Equalf(t, want, getter.FromRules(rules), "%T: "+msg, &rules)
+	}
+
+	assertChainConfigExtra(t, ccExtra{}, "zero value")
+	assertRulesExtra(t, rulesExtra{}, "zero value")
+
+	const answer = 42
+	getter.PointerFromChainConfig(config).X = answer
+	assertChainConfigExtra(t, ccExtra{X: answer}, "after setting via pointer field")
+
+	const pi = 314159
+	getter.PointerFromRules(rules).X = pi
+	assertRulesExtra(t, rulesExtra{X: pi}, "after setting via pointer field")
+
+	ccReplace := ccExtra{X: 142857}
+	*getter.PointerFromChainConfig(config) = ccReplace
+	assertChainConfigExtra(t, ccReplace, "after replacement of entire extra via `*pointer = x`")
+
+	rulesReplace := rulesExtra{X: 18101986}
+	*getter.PointerFromRules(rules) = rulesReplace
+	assertRulesExtra(t, rulesReplace, "after replacement of entire extra via `*pointer = x`")
+
+	if t.Failed() {
+		// The test of shallow copying is now guaranteed to fail.
+		return
+	}
+	t.Run("shallow copy", func(t *testing.T) {
+		ccCopy := *config
+		rCopy := *rules
+
+		assert.Equal(t, getter.FromChainConfig(&ccCopy), ccReplace, "ChainConfig extras copied")
+		assert.Equal(t, getter.FromRules(&rCopy), rulesReplace, "Rules extras copied")
+
+		const seqUp = 123456789
+		getter.PointerFromChainConfig(&ccCopy).X = seqUp
+		assertChainConfigExtra(t, ccExtra{X: seqUp}, "original changed because copy only shallow")
+
+		const seqDown = 987654321
+		getter.PointerFromRules(&rCopy).X = seqDown
+		assertRulesExtra(t, rulesExtra{X: seqDown}, "original changed because copy only shallow")
+	})
+}
+
 func TestExtrasPanic(t *testing.T) {
 	TestOnlyClearRegisteredExtras()
 	defer TestOnlyClearRegisteredExtras()
@@ -131,7 +210,7 @@ func TestExtrasPanic(t *testing.T) {
 
 	assertPanics(
 		t, func() {
-			mustBeStruct[int]()
+			mustBeStructOrPointerToOne[int]()
 		},
 		notStructMessage[int](),
 	)

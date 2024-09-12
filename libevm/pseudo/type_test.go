@@ -77,3 +77,26 @@ func ExamplePseudo_TypeAndValue() {
 	_ = typ
 	_ = val
 }
+
+func TestPointer(t *testing.T) {
+	type carrier struct {
+		payload int
+	}
+
+	typ, val := From(carrier{42}).TypeAndValue()
+
+	t.Run("invalid type", func(t *testing.T) {
+		_, err := PointerTo[int](typ)
+		require.Errorf(t, err, "PointerTo[int](%T)", carrier{})
+	})
+
+	t.Run("valid type", func(t *testing.T) {
+		ptrVal := MustPointerTo[carrier](typ).Value
+
+		assert.Equal(t, 42, val.Get().payload, "before setting via pointer")
+		var ptr *carrier = ptrVal.Get()
+		ptr.payload = 314159
+		assert.Equal(t, 314159, val.Get().payload, "after setting via pointer")
+	})
+
+}

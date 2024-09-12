@@ -40,9 +40,25 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			name: "reuse top-level JSON",
+			name: "reuse top-level JSON with non-pointer",
 			register: func() {
 				RegisterExtras(Extras[rootJSONChainConfigExtra, NOOPHooks]{
+					ReuseJSONRoot: true,
+				})
+			},
+			jsonInput: `{
+				"chainId": 5678,
+				"foo": "hello"
+			}`,
+			want: &ChainConfig{
+				ChainID: big.NewInt(5678),
+				extra:   pseudo.From(rootJSONChainConfigExtra{TopLevelFoo: "hello"}).Type,
+			},
+		},
+		{
+			name: "reuse top-level JSON with pointer",
+			register: func() {
+				RegisterExtras(Extras[*rootJSONChainConfigExtra, NOOPHooks]{
 					ReuseJSONRoot: true,
 				})
 			},
@@ -56,9 +72,25 @@ func TestChainConfigJSONRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			name: "nested JSON",
+			name: "nested JSON with non-pointer",
 			register: func() {
 				RegisterExtras(Extras[nestedChainConfigExtra, NOOPHooks]{
+					ReuseJSONRoot: false, // explicit zero value only for tests
+				})
+			},
+			jsonInput: `{
+				"chainId": 42,
+				"extra": {"foo": "world"}
+			}`,
+			want: &ChainConfig{
+				ChainID: big.NewInt(42),
+				extra:   pseudo.From(nestedChainConfigExtra{NestedFoo: "world"}).Type,
+			},
+		},
+		{
+			name: "nested JSON with pointer",
+			register: func() {
+				RegisterExtras(Extras[*nestedChainConfigExtra, NOOPHooks]{
 					ReuseJSONRoot: false, // explicit zero value only for tests
 				})
 			},

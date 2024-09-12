@@ -40,8 +40,8 @@ var getter params.ExtraPayloadGetter[ChainConfigExtra, RulesExtra]
 // constructRulesExtra acts as an adjunct to the [params.ChainConfig.Rules]
 // method. Its primary purpose is to construct the extra payload for the
 // [params.Rules] but it MAY also modify the [params.Rules].
-func constructRulesExtra(c *params.ChainConfig, r *params.Rules, cEx *ChainConfigExtra, blockNum *big.Int, isMerge bool, timestamp uint64) *RulesExtra {
-	return &RulesExtra{
+func constructRulesExtra(c *params.ChainConfig, r *params.Rules, cEx ChainConfigExtra, blockNum *big.Int, isMerge bool, timestamp uint64) RulesExtra {
+	return RulesExtra{
 		IsMyFork:  cEx.MyForkTime != nil && *cEx.MyForkTime <= timestamp,
 		timestamp: timestamp,
 	}
@@ -66,12 +66,12 @@ type RulesExtra struct {
 }
 
 // FromChainConfig returns the extra payload carried by the ChainConfig.
-func FromChainConfig(c *params.ChainConfig) *ChainConfigExtra {
+func FromChainConfig(c *params.ChainConfig) ChainConfigExtra {
 	return getter.FromChainConfig(c)
 }
 
 // FromRules returns the extra payload carried by the Rules.
-func FromRules(r *params.Rules) *RulesExtra {
+func FromRules(r *params.Rules) RulesExtra {
 	return getter.FromRules(r)
 }
 
@@ -137,16 +137,14 @@ func ExampleExtraPayloadGetter() {
 	fmt.Println("Chain ID", config.ChainID) // original geth fields work as expected
 
 	ccExtra := FromChainConfig(config) // extraparams.FromChainConfig() in practice
-	if ccExtra != nil && ccExtra.MyForkTime != nil {
+	if ccExtra.MyForkTime != nil {
 		fmt.Println("Fork time", *ccExtra.MyForkTime)
 	}
 
 	for _, time := range []uint64{forkTime - 1, forkTime, forkTime + 1} {
 		rules := config.Rules(nil, false, time)
 		rExtra := FromRules(&rules) // extraparams.FromRules() in practice
-		if rExtra != nil {
-			fmt.Printf("IsMyFork at %v: %t\n", rExtra.timestamp, rExtra.IsMyFork)
-		}
+		fmt.Printf("IsMyFork at %v: %t\n", rExtra.timestamp, rExtra.IsMyFork)
 	}
 
 	// Output:

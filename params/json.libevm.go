@@ -30,7 +30,7 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 		return c.unmarshalJSONWithExtra(data)
 
 	case reg != nil && reg.reuseJSONRoot: // although the latter is redundant, it's clearer
-		c.extra = reg.chainConfig.NilPointer()
+		c.extra = reg.newChainConfig()
 		if err := json.Unmarshal(data, c.extra); err != nil {
 			c.extra = nil
 			return err
@@ -47,7 +47,7 @@ func (c *ChainConfig) UnmarshalJSON(data []byte) error {
 func (c *ChainConfig) unmarshalJSONWithExtra(data []byte) error {
 	cc := &chainConfigWithExportedExtra{
 		chainConfigWithoutMethods: (*chainConfigWithoutMethods)(c),
-		Extra:                     registeredExtras.chainConfig.NilPointer(),
+		Extra:                     registeredExtras.newChainConfig(),
 	}
 	if err := json.Unmarshal(data, cc); err != nil {
 		return err

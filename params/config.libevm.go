@@ -25,25 +25,27 @@ type Extras[C ChainConfigHooks, R RulesHooks] struct {
 	// NewRules, if non-nil is called at the end of [ChainConfig.Rules] with the
 	// newly created [Rules] and other context from the method call. Its
 	// returned value will be the extra payload of the [Rules]. If NewRules is
-	// nil then so too will the [Rules] extra payload be a nil `*R`.
+	// nil then so too will the [Rules] extra payload be a zero-value `R`.
 	//
 	// NewRules MAY modify the [Rules] but MUST NOT modify the [ChainConfig].
-	NewRules func(_ *ChainConfig, _ *Rules, _ *C, blockNum *big.Int, isMerge bool, timestamp uint64) *R
+	// TODO(arr4n): add the [Rules] to the return signature to make it clearer
+	// that the caller can modify the generated Rules.
+	NewRules func(_ *ChainConfig, _ *Rules, _ C, blockNum *big.Int, isMerge bool, timestamp uint64) R
 }
 
 // RegisterExtras registers the types `C` and `R` such that they are carried as
 // extra payloads in [ChainConfig] and [Rules] structs, respectively. It is
 // expected to be called in an `init()` function and MUST NOT be called more
-// than once. Both `C` and `R` MUST be structs.
+// than once. Both `C` and `R` MUST be structs or pointers to structs.
 //
 // After registration, JSON unmarshalling of a [ChainConfig] will create a new
-// `*C` and unmarshal the JSON key "extra" into it. Conversely, JSON marshalling
-// will populate the "extra" key with the contents of the `*C`. Both the
+// `C` and unmarshal the JSON key "extra" into it. Conversely, JSON marshalling
+// will populate the "extra" key with the contents of the `C`. Both the
 // [json.Marshaler] and [json.Unmarshaler] interfaces are honoured if
 // implemented by `C` and/or `R.`
 //
 // Calls to [ChainConfig.Rules] will call the `NewRules` function of the
-// registered [Extras] to create a new `*R`.
+// registered [Extras] to create a new `R`.
 //
 // The payloads can be accessed via the [ExtraPayloadGetter.FromChainConfig] and
 // [ExtraPayloadGetter.FromRules] methods of the getter returned by
@@ -54,16 +56,16 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 	if registeredExtras != nil {
 		panic("re-registration of Extras")
 	}
-	mustBeStruct[C]()
-	mustBeStruct[R]()
+	mustBeStructOrPointerToOne[C]()
+	mustBeStructOrPointerToOne[R]()
 
 	getter := e.getter()
 	registeredExtras = &extraConstructors{
-		chainConfig:   pseudo.NewConstructor[C](),
-		rules:         pseudo.NewConstructor[R](),
-		reuseJSONRoot: e.ReuseJSONRoot,
-		newForRules:   e.newForRules,
-		getter:        getter,
+		newChainConfig: pseudo.NewConstructor[C]().Zero,
+		newRules:       pseudo.NewConstructor[R]().Zero,
+		reuseJSONRoot:  e.ReuseJSONRoot,
+		newForRules:    e.newForRules,
+		getter:         getter,
 	}
 	return getter
 }
@@ -95,9 +97,9 @@ func TestOnlyClearRegisteredExtras() {
 var registeredExtras *extraConstructors
 
 type extraConstructors struct {
-	chainConfig, rules pseudo.Constructor
-	reuseJSONRoot      bool
-	newForRules        func(_ *ChainConfig, _ *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type
+	newChainConfig, newRules func() *pseudo.Type
+	reuseJSONRoot            bool
+	newForRules              func(_ *ChainConfig, _ *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type
 	// use top-level hooksFrom<X>() functions instead of these as they handle
 	// instances where no [Extras] were registered.
 	getter interface {
@@ -108,7 +110,7 @@ type extraConstructors struct {
 
 func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, isMerge bool, timestamp uint64) *pseudo.Type {
 	if e.NewRules == nil {
-		return registeredExtras.rules.NilPointer()
+		return registeredExtras.newRules()
 	}
 	rExtra := e.NewRules(c, r, e.getter().FromChainConfig(c), blockNum, isMerge, timestamp)
 	return pseudo.From(rExtra).Type
@@ -116,19 +118,26 @@ func (e *Extras[C, R]) newForRules(c *ChainConfig, r *Rules, blockNum *big.Int, 
 
 func (*Extras[C, R]) getter() (g ExtraPayloadGetter[C, R]) { return }
 
-// mustBeStruct panics if `T` isn't a struct.
-func mustBeStruct[T any]() {
+// mustBeStructOrPointerToOne panics if `T` isn't a struct or a *struct.
+func mustBeStructOrPointerToOne[T any]() {
 	var x T
-	if k := reflect.TypeOf(x).Kind(); k != reflect.Struct {
-		panic(notStructMessage[T]())
+	switch t := reflect.TypeOf(x); t.Kind() {
+	case reflect.Struct:
+		return
+	case reflect.Pointer:
+		if t.Elem().Kind() == reflect.Struct {
+			return
+		}
 	}
+	panic(notStructMessage[T]())
 }
 
-// notStructMessage returns the message with which [mustBeStruct] might panic.
-// It exists to avoid change-detector tests should the message contents change.
+// notStructMessage returns the message with which [mustBeStructOrPointerToOne]
+// might panic. It exists to avoid change-detector tests should the message
+// contents change.
 func notStructMessage[T any]() string {
 	var x T
-	return fmt.Sprintf("%T is not a struct", x)
+	return fmt.Sprintf("%T is not a struct nor a pointer to a struct", x)
 }
 
 // An ExtraPayloadGettter provides strongly typed access to the extra payloads
@@ -139,33 +148,37 @@ type ExtraPayloadGetter[C ChainConfigHooks, R RulesHooks] struct {
 }
 
 // FromChainConfig returns the ChainConfig's extra payload.
-func (ExtraPayloadGetter[C, R]) FromChainConfig(c *ChainConfig) *C {
-	return pseudo.MustNewValue[*C](c.extraPayload()).Get()
+func (ExtraPayloadGetter[C, R]) FromChainConfig(c *ChainConfig) C {
+	return pseudo.MustNewValue[C](c.extraPayload()).Get()
+}
+
+// PointerFromChainConfig returns a pointer to the ChainConfig's extra payload.
+// This is guaranteed to be non-nil.
+func (ExtraPayloadGetter[C, R]) PointerFromChainConfig(c *ChainConfig) *C {
+	return pseudo.MustPointerTo[C](c.extraPayload()).Value.Get()
 }
 
 // hooksFromChainConfig is equivalent to FromChainConfig(), but returns an
 // interface instead of the concrete type implementing it; this allows it to be
-// used in non-generic code. If the concrete-type value is nil (typically
-// because no [Extras] were registered) a [noopHooks] is returned so it can be
-// used without nil checks.
+// used in non-generic code.
 func (e ExtraPayloadGetter[C, R]) hooksFromChainConfig(c *ChainConfig) ChainConfigHooks {
-	if h := e.FromChainConfig(c); h != nil {
-		return *h
-	}
-	return NOOPHooks{}
+	return e.FromChainConfig(c)
 }
 
 // FromRules returns the Rules' extra payload.
-func (ExtraPayloadGetter[C, R]) FromRules(r *Rules) *R {
-	return pseudo.MustNewValue[*R](r.extraPayload()).Get()
+func (ExtraPayloadGetter[C, R]) FromRules(r *Rules) R {
+	return pseudo.MustNewValue[R](r.extraPayload()).Get()
+}
+
+// PointerFromRules returns a pointer to the Rules's extra payload. This is
+// guaranteed to be non-nil.
+func (ExtraPayloadGetter[C, R]) PointerFromRules(r *Rules) *R {
+	return pseudo.MustPointerTo[R](r.extraPayload()).Value.Get()
 }
 
 // hooksFromRules is the [RulesHooks] equivalent of hooksFromChainConfig().
 func (e ExtraPayloadGetter[C, R]) hooksFromRules(r *Rules) RulesHooks {
-	if h := e.FromRules(r); h != nil {
-		return *h
-	}
-	return NOOPHooks{}
+	return e.FromRules(r)
 }
 
 // addRulesExtra is called at the end of [ChainConfig.Rules]; it exists to
@@ -189,7 +202,7 @@ func (c *ChainConfig) extraPayload() *pseudo.Type {
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", c))
 	}
 	if c.extra == nil {
-		c.extra = registeredExtras.chainConfig.NilPointer()
+		c.extra = registeredExtras.newChainConfig()
 	}
 	return c.extra
 }
@@ -201,7 +214,7 @@ func (r *Rules) extraPayload() *pseudo.Type {
 		panic(fmt.Sprintf("%T.ExtraPayload() called before RegisterExtras()", r))
 	}
 	if r.extra == nil {
-		r.extra = registeredExtras.rules.NilPointer()
+		r.extra = registeredExtras.newRules()
 	}
 	return r.extra
 }

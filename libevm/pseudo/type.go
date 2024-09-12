@@ -60,6 +60,27 @@ func Zero[T any]() *Pseudo[T] {
 	return From[T](x)
 }
 
+// PointerTo is equivalent to [From] called with a pointer to the payload
+// carried by `t`. It first confirms that the payload is of type `T`.
+func PointerTo[T any](t *Type) (*Pseudo[*T], error) {
+	c, ok := t.val.(*concrete[T])
+	if !ok {
+		var want *T
+		return nil, fmt.Errorf("cannot create *Pseudo[%T] from *Type carrying %T", want, t.val.get())
+	}
+	return From(&c.val), nil
+}
+
+// MustPointerTo is equivalent to [PointerTo] except that it panics instead of
+// returning an error.
+func MustPointerTo[T any](t *Type) *Pseudo[*T] {
+	p, err := PointerTo[T](t)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
 // Interface returns the wrapped value as an `any`, equivalent to
 // [reflect.Value.Interface]. Prefer [Value.Get].
 func (t *Type) Interface() any { return t.val.get() }

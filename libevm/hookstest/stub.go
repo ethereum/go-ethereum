@@ -32,7 +32,7 @@ type Stub struct {
 // Register is a convenience wrapper for registering s as both the
 // [params.ChainConfigHooks] and [params.RulesHooks] via [Register].
 func (s *Stub) Register(tb testing.TB) {
-	Register(tb, params.Extras[Stub, Stub]{
+	Register(tb, params.Extras[*Stub, *Stub]{
 		NewRules: func(_ *params.ChainConfig, _ *params.Rules, _ *Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *Stub {
 			return s
 		},
