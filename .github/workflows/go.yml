@@ -17,4 +17,7 @@ jobs:
         with:
           go-version: 1.21.4
       - name: Run tests
-        run: go test -short $(go list ./... | grep -Pv 'go-ethereum/(accounts/keystore|eth/downloader|miner)$')
+        run: | # Upstream flakes are race conditions exacerbated by concurrent tests
+          FLAKY_REGEX='go-ethereum/(eth|accounts/keystore|eth/downloader|miner)$';
+          go list ./... | grep -P "${FLAKY_REGEX}" | xargs -n 1 go test -short;
+          go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
