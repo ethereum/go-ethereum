@@ -9,7 +9,8 @@ on:
 
 jobs:
   build:
-    runs-on: self-hosted
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'CI:Build')
+    runs-on: ubuntu-latest    # Change this to use GitHub-hosted runner
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
