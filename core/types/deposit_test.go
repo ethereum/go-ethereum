@@ -86,6 +86,9 @@ func FuzzUnpackIntoDeposit(f *testing.F) {
 		if err != nil {
 			t.Errorf("error unpacking deposit: %v", err)
 		}
+		if len(got) != depositRequestSize {
+			t.Errorf("wrong output size: %d, want %d", len(got), depositRequestSize)
+		}
 		if !bytes.Equal(enc, got) {
 			t.Errorf("roundtrip failed: want %x, got %x", enc, got)
 		}

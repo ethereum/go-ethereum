@@ -32,7 +32,7 @@ func DepositLogToRequest(data []byte) ([]byte, error) {
 	}
 
 	var outputRequest = make([]byte, depositRequestSize)
-	outputRequest[0] = depositRequestSize
+	outputRequest[0] = depositRequestType
 	const (
 		pubkeyOffset         = 1
 		withdrawalCredOffset = pubkeyOffset + 48
