@@ -1,8 +1,9 @@
 package ethtest
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/exp/rand"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // PseudoRand extends [rand.Rand] (*not* crypto/rand).
@@ -17,7 +18,7 @@ func NewPseudoRand(seed uint64) *PseudoRand {
 
 // Address returns a pseudorandom address.
 func (r *PseudoRand) Address() (a common.Address) {
-	r.Read(a[:])
+	r.Read(a[:]) //nolint:gosec,errcheck // Guaranteed nil error
 	return a
 }
 
@@ -29,13 +30,13 @@ func (r *PseudoRand) AddressPtr() *common.Address {
 
 // Hash returns a pseudorandom hash.
 func (r *PseudoRand) Hash() (h common.Hash) {
-	r.Read(h[:])
+	r.Read(h[:]) //nolint:gosec,errcheck // Guaranteed nil error
 	return h
 }
 
 // Bytes returns `n` pseudorandom bytes.
 func (r *PseudoRand) Bytes(n uint) []byte {
 	b := make([]byte, n)
-	r.Read(b)
+	r.Read(b) //nolint:gosec,errcheck // Guaranteed nil error
 	return b
 }

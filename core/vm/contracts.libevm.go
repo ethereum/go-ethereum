@@ -3,9 +3,10 @@ package vm
 import (
 	"fmt"
 
+	"github.com/holiman/uint256"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 // evmCallArgs mirrors the parameters of the [EVM] methods Call(), CallCode(),

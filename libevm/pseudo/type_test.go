@@ -24,6 +24,7 @@ func TestType(t *testing.T) {
 	testType(t, "nil pointer", Zero[*float64], (*float64)(nil), new(float64), 0)
 }
 
+//nolint:thelper // This is the test itself so we want local line numbers reported.
 func testType[T any](t *testing.T, name string, ctor func() *Pseudo[T], init T, setTo T, invalid any) {
 	t.Run(name, func(t *testing.T) {
 		typ, val := ctor().TypeAndValue()
@@ -67,6 +68,7 @@ func testType[T any](t *testing.T, name string, ctor func() *Pseudo[T], init T, 
 	})
 }
 
+//nolint:ineffassign,testableexamples // Although `typ` is overwritten it's to demonstrate different approaches
 func ExamplePseudo_TypeAndValue() {
 	typ, val := From("hello").TypeAndValue()
 
@@ -98,5 +100,4 @@ func TestPointer(t *testing.T) {
 		ptr.payload = 314159
 		assert.Equal(t, 314159, val.Get().payload, "after setting via pointer")
 	})
-
 }

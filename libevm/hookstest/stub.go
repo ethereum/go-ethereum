@@ -12,9 +12,10 @@ import (
 )
 
 // Register clears any registered [params.Extras] and then registers `extras`
-// for the liftime of the current test, clearing them via tb's
+// for the lifetime of the current test, clearing them via tb's
 // [testing.TB.Cleanup].
 func Register[C params.ChainConfigHooks, R params.RulesHooks](tb testing.TB, extras params.Extras[C, R]) {
+	tb.Helper()
 	params.TestOnlyClearRegisteredExtras()
 	tb.Cleanup(params.TestOnlyClearRegisteredExtras)
 	params.RegisterExtras(extras)
@@ -32,6 +33,7 @@ type Stub struct {
 // Register is a convenience wrapper for registering s as both the
 // [params.ChainConfigHooks] and [params.RulesHooks] via [Register].
 func (s *Stub) Register(tb testing.TB) {
+	tb.Helper()
 	Register(tb, params.Extras[*Stub, *Stub]{
 		NewRules: func(_ *params.ChainConfig, _ *params.Rules, _ *Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *Stub {
 			return s
@@ -39,6 +41,9 @@ func (s *Stub) Register(tb testing.TB) {
 	})
 }
 
+// PrecompileOverride uses the s.PrecompileOverrides map, if non-empty, as the
+// canonical source of all overrides. If the map is empty then no precompiles
+// are overridden.
 func (s Stub) PrecompileOverride(a common.Address) (libevm.PrecompiledContract, bool) {
 	if len(s.PrecompileOverrides) == 0 {
 		return nil, false
@@ -47,6 +52,8 @@ func (s Stub) PrecompileOverride(a common.Address) (libevm.PrecompiledContract, 
 	return p, ok
 }
 
+// CanExecuteTransaction proxies arguments to the s.CanExecuteTransactionFn
+// function if non-nil, otherwise it acts as a noop.
 func (s Stub) CanExecuteTransaction(from common.Address, to *common.Address, sr libevm.StateReader) error {
 	if f := s.CanExecuteTransactionFn; f != nil {
 		return f(from, to, sr)
@@ -54,6 +61,8 @@ func (s Stub) CanExecuteTransaction(from common.Address, to *common.Address, sr 
 	return nil
 }
 
+// CanCreateContract proxies arguments to the s.CanCreateContractFn function if
+// non-nil, otherwise it acts as a noop.
 func (s Stub) CanCreateContract(cc *libevm.AddressContext, sr libevm.StateReader) error {
 	if f := s.CanCreateContractFn; f != nil {
 		return f(cc, sr)

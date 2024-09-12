@@ -4,6 +4,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/rand"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -11,10 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/libevm/ethtest"
 	"github.com/ethereum/go-ethereum/libevm/hookstest"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 )
 
 type precompileStub struct {

@@ -3,58 +3,112 @@
 run:
   timeout: 20m
   tests: true
-  # default is true. Enables skipping of directories:
-  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
-  skip-dirs-use-default: true
-  skip-files:
-    - core/genesis_alloc.go
 
 linters:
-  disable-all: true
   enable:
+    # Every available linter at the time of writing was considered (quickly) and
+    # inclusion was liberal. Linters are good at detecting code smells, but if
+    # we find that a particular one causes too many false positives then we can
+    # configure it better or, as a last resort, remove it.
+    - containedctx
+    - errcheck
+    - forcetypeassert
+    - gci
+    - gocheckcompilerdirectives
+    - gofmt
     - goimports
-    - gosimple
+    - gomodguard
+    - gosec
     - govet
     - ineffassign
+    # TODO(arr4n): investigate ireturn
     - misspell
-    - unconvert
-    - typecheck
-    - unused
+    - nakedret
+    - nestif
+    - nilerr
+    - nolintlint
+    - reassign
+    - revive
+    - sloglint
     - staticcheck
-    - bidichk
-    - durationcheck
-    - exportloopref
+    - tagliatelle
+    - testableexamples
+    - testifylint
+    - thelper
+    - tparallel
+    - unconvert
+    - usestdlibvars
+    - unused
     - whitespace
 
-    # - structcheck # lots of false positives
-    # - errcheck #lot of false positives
-    # - contextcheck
-    # - errchkjson # lots of false positives
-    # - errorlint # this check crashes
-    # - exhaustive # silly check
-    # - makezero # false positives
-    # - nilerr # several intentional
-
 linters-settings:
-  gofmt:
-    simplify: true
+  gci:
+    custom-order: true
+    sections:
+      - standard
+      - default
+      - localmodule
+      # The rest of these break developer expections, in increasing order of
+      # divergence, so are at the end to increase the chance of being seen.
+      - alias
+      - dot
+      - blank
+  gomodguard:
+    blocked:
+      modules:
+        - github.com/ava-labs/avalanchego:
+        - github.com/ava-labs/coreth:
+        - github.com/ava-labs/subnet-evm:
+  revive:
+    rules:
+      - name: unused-parameter
+        # Method parameters may be equired by interfaces and forcing them to be
+        # named _ is of questionable benefit.
+        disabled: true
 
 issues:
-  exclude-rules:
-    - path: crypto/bn256/cloudflare/optate.go
+   exclude-dirs-use-default: false
+   exclude-rules:
+    - path-except: libevm
       linters:
-        - deadcode
+        # If any issue is flagged in a non-libevm file, add the linter here
+        # because the problem isn't under our control.
+        - containedctx
+        - forcetypeassert
+        - errcheck
+        - gci
+        - gofmt
+        - gosec
+        - gosimple
+        - govet
+        - nakedret
+        - nestif
+        - nilerr
+        - nolintlint
+        - revive
         - staticcheck
-    - path: internal/build/pgp.go
-      text: 'SA1019: "golang.org/x/crypto/openpgp" is deprecated: this package is unmaintained except for security fixes.'
-    - path: core/vm/contracts.go
-      text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'
-    - path: accounts/usbwallet/trezor.go
-      text: 'SA1019: "github.com/golang/protobuf/proto" is deprecated: Use the "google.golang.org/protobuf/proto" package instead.'
-    - path: accounts/usbwallet/trezor/
-      text: 'SA1019: "github.com/golang/protobuf/proto" is deprecated: Use the "google.golang.org/protobuf/proto" package instead.'
-  exclude:
-    - 'SA1019: event.TypeMux is deprecated: use Feed'
-    - 'SA1019: strings.Title is deprecated'
-    - 'SA1019: strings.Title has been deprecated since Go 1.18 and an alternative has been available since Go 1.0: The rule Title uses for word boundaries does not handle Unicode punctuation properly. Use golang.org/x/text/cases instead.'
-    - 'SA1029: should not use built-in type string as key for value'
+        - tagliatelle
+        - testableexamples
+        - testifylint
+        - thelper
+        - tparallel
+        - usestdlibvars
+        - varnamelen
+        - wastedassign
+        - whitespace
+   include:
+   # Many of the default exclusions are because, verbatim "Annoying issue",
+   # which defeats the point of a linter.
+        - EXC0002
+        - EXC0004
+        - EXC0005
+        - EXC0006
+        - EXC0007
+        - EXC0008
+        - EXC0009
+        - EXC0010
+        - EXC0011
+        - EXC0012
+        - EXC0013
+        - EXC0014
+        - EXC0015

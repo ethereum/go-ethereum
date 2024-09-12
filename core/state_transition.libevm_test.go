@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/libevm/ethtest"
 	"github.com/ethereum/go-ethereum/libevm/hookstest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCanExecuteTransaction(t *testing.T) {

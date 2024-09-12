@@ -5,13 +5,14 @@ package ethtest
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/stretchr/testify/require"
 )
 
 // NewZeroEVM returns a new EVM backed by a [rawdb.NewMemoryDatabase]; all other

@@ -1,0 +1,25 @@
+name: golangci-lint
+
+on:
+  push:
+    branches: [ libevm ]
+  pull_request:
+    branches: [ libevm ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60

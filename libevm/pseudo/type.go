@@ -106,10 +106,10 @@ func MustNewValue[T any](t *Type) *Value[T] {
 }
 
 // Get returns the value.
-func (a *Value[T]) Get() T { return a.t.val.get().(T) }
+func (v *Value[T]) Get() T { return v.t.val.get().(T) } //nolint:forcetypeassert // invariant
 
 // Set sets the value.
-func (a *Value[T]) Set(v T) { a.t.val.mustSet(v) }
+func (v *Value[T]) Set(val T) { v.t.val.mustSet(val) }
 
 // MarshalJSON implements the [json.Marshaler] interface.
 func (t *Type) MarshalJSON() ([]byte, error) { return t.val.MarshalJSON() }

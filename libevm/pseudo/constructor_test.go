@@ -14,6 +14,7 @@ func TestConstructor(t *testing.T) {
 	testConstructor[struct{ x string }](t)
 }
 
+//nolint:thelper // This is the test itself so we want local line numbers reported.
 func testConstructor[T any](t *testing.T) {
 	var zero T
 	t.Run(fmt.Sprintf("%T", zero), func(t *testing.T) {
