@@ -151,10 +151,6 @@ func (api *BeaconLightApi) httpGet(path string, params url.Values) ([]byte, erro
 	}
 }
 
-func (api *BeaconLightApi) httpGetf(format string, params ...any) ([]byte, error) {
-	return api.httpGet(fmt.Sprintf(format, params...), nil)
-}
-
 // GetBestUpdatesAndCommittees fetches and validates LightClientUpdate for given
 // period and full serialized committee for the next period (committee root hash
 // equals update.NextSyncCommitteeRoot).
@@ -320,7 +316,7 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool,
 	} else {
 		blockId = blockRoot.Hex()
 	}
-	resp, err := api.httpGetf("/eth/v1/beacon/headers/%s", blockId)
+	resp, err := api.httpGet(fmt.Sprintf("/eth/v1/beacon/headers/%s", blockId), nil)
 	if err != nil {
 		return types.Header{}, false, false, err
 	}
@@ -351,7 +347,7 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool,
 
 // GetCheckpointData fetches and validates bootstrap data belonging to the given checkpoint.
 func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types.BootstrapData, error) {
-	resp, err := api.httpGetf("/eth/v1/beacon/light_client/bootstrap/0x%x", checkpointHash[:])
+	resp, err := api.httpGet(fmt.Sprintf("/eth/v1/beacon/light_client/bootstrap/0x%x", checkpointHash[:]), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +389,7 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 }
 
 func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconBlock, error) {
-	resp, err := api.httpGetf("/eth/v2/beacon/blocks/0x%x", blockRoot)
+	resp, err := api.httpGet(fmt.Sprintf("/eth/v2/beacon/blocks/0x%x", blockRoot), nil)
 	if err != nil {
 		return nil, err
 	}
