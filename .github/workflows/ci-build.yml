@@ -23,8 +23,8 @@ jobs:
 
     - name: Build Docker image
       run: |
-        docker build . -t your-dockerhub-username/geth:latest
+        docker build . -t ${{ secrets.DOCKER_USERNAME }}/geth:latest
 
     - name: Push Docker image
       run: |
-        docker push your-dockerhub-username/geth:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/geth:latest
