@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -96,7 +95,7 @@ func newSkeletonTestPeer(id string, headers []*types.Header) *skeletonTestPeer {
 	}
 }
 
-// newSkeletonTestPeerWithHook creates a new mock peer to test the skeleton sync with,
+// newSkeletonTestPeer creates a new mock peer to test the skeleton sync with,
 // and sets an optional serve hook that can return headers for delivery instead
 // of the predefined chain. Useful for emulating malicious behavior that would
 // otherwise require dedicated peer types.
@@ -388,9 +387,23 @@ func TestSkeletonSyncInit(t *testing.T) {
 		_ = skeleton.Terminate()
 
 		// Ensure the correct resulting sync status
-		expect := skeletonExpect{state: tt.newstate}
-		if err := checkSkeletonProgress(db, false, nil, expect); err != nil {
-			t.Errorf("test %d: %v", i, err)
+		var progress skeletonProgress
+
+		_ = json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+
+		if len(progress.Subchains) != len(tt.newstate) {
+			t.Errorf("test %d: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.newstate))
+			continue
+		}
+
+		for j := 0; j < len(progress.Subchains); j++ {
+			if progress.Subchains[j].Head != tt.newstate[j].Head {
+				t.Errorf("test %d: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.newstate[j].Head)
+			}
+
+			if progress.Subchains[j].Tail != tt.newstate[j].Tail {
+				t.Errorf("test %d: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.newstate[j].Tail)
+			}
 		}
 	}
 }
@@ -496,37 +509,31 @@ func TestSkeletonSyncExtend(t *testing.T) {
 		skeleton.Terminate()
 
 		// Ensure the correct resulting sync status
-		expect := skeletonExpect{state: tt.newstate}
-		if err := checkSkeletonProgress(db, false, nil, expect); err != nil {
-			t.Errorf("test %d: %v", i, err)
+		var progress skeletonProgress
+
+		json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+
+		if len(progress.Subchains) != len(tt.newstate) {
+			t.Errorf("test %d: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.newstate))
+			continue
+		}
+
+		for j := 0; j < len(progress.Subchains); j++ {
+			if progress.Subchains[j].Head != tt.newstate[j].Head {
+				t.Errorf("test %d: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.newstate[j].Head)
+			}
+
+			if progress.Subchains[j].Tail != tt.newstate[j].Tail {
+				t.Errorf("test %d: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.newstate[j].Tail)
+			}
 		}
 	}
-}
-
-type skeletonExpect struct {
-	state []*subchain // Expected sync state after the post-init event
-	serve uint64      // Expected number of header retrievals after initial cycle
-	drop  uint64      // Expected number of peers dropped after initial cycle
-}
-
-type skeletonTest struct {
-	fill          bool // Whether to run a real backfiller in this test case
-	unpredictable bool // Whether to ignore drops/serves due to uncertain packet assignments
-
-	head  *types.Header       // New head header to announce to reorg to
-	peers []*skeletonTestPeer // Initial peer set to start the sync with
-	mid   skeletonExpect
-
-	newHead *types.Header     // New header to anoint on top of the old one
-	newPeer *skeletonTestPeer // New peer to join the skeleton syncer
-	end     skeletonExpect
 }
 
 // Tests that the skeleton sync correctly retrieves headers from one or more
 // peers without duplicates or other strange side effects.
 func TestSkeletonSyncRetrievals(t *testing.T) {
-	//log.SetDefault(log.NewLogger(log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, false))))
-
+	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	// Since skeleton headers don't need to be meaningful, beyond a parent hash
 	// progression, create a long fake chain to test with.
 	chain := []*types.Header{{Number: big.NewInt(0)}}
@@ -550,7 +557,23 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			Extra:      []byte("B"), // force a different hash
 		})
 	}
-	tests := []skeletonTest{
+
+	tests := []struct {
+		fill          bool // Whether to run a real backfiller in this test case
+		unpredictable bool // Whether to ignore drops/serves due to uncertain packet assignments
+
+		head     *types.Header       // New head header to announce to reorg to
+		peers    []*skeletonTestPeer // Initial peer set to start the sync with
+		midstate []*subchain         // Expected sync state after initial cycle
+		midserve uint64              // Expected number of header retrievals after initial cycle
+		middrop  uint64              // Expected number of peers dropped after initial cycle
+
+		newHead  *types.Header     // New header to anoint on top of the old one
+		newPeer  *skeletonTestPeer // New peer to join the skeleton syncer
+		endstate []*subchain       // Expected sync state after the post-init event
+		endserve uint64            // Expected number of header retrievals after the post-init event
+		enddrop  uint64            // Expected number of peers dropped after the post-init event
+	}{
 		// Completely empty database with only the genesis set. The sync is expected
 		// to create a single subchain with the requested head. No peers however, so
 		// the sync should be stuck without any progression.
@@ -558,16 +581,12 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		// When a new peer is added, it should detect the join and fill the headers
 		// to the genesis block.
 		{
-			head: chain[len(chain)-1],
-			mid: skeletonExpect{
-				state: []*subchain{{Head: uint64(len(chain) - 1), Tail: uint64(len(chain) - 1)}},
-			},
+			head:     chain[len(chain)-1],
+			midstate: []*subchain{{Head: uint64(len(chain) - 1), Tail: uint64(len(chain) - 1)}},
 
-			newPeer: newSkeletonTestPeer("test-peer", chain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
-				serve: uint64(len(chain) - 2), // len - head - genesis
-			},
+			newPeer:  newSkeletonTestPeer("test-peer", chain),
+			endstate: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
+			endserve: uint64(len(chain) - 2), // len - head - genesis
 		},
 		// Completely empty database with only the genesis set. The sync is expected
 		// to create a single subchain with the requested head. With one valid peer,
@@ -575,18 +594,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		//
 		// Adding a second peer should not have any effect.
 		{
-			head:  chain[len(chain)-1],
-			peers: []*skeletonTestPeer{newSkeletonTestPeer("test-peer-1", chain)},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
-				serve: uint64(len(chain) - 2), // len - head - genesis
-			},
+			head:     chain[len(chain)-1],
+			peers:    []*skeletonTestPeer{newSkeletonTestPeer("test-peer-1", chain)},
+			midstate: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
+			midserve: uint64(len(chain) - 2), // len - head - genesis
 
-			newPeer: newSkeletonTestPeer("test-peer-2", chain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
-				serve: uint64(len(chain) - 2), // len - head - genesis
-			},
+			newPeer:  newSkeletonTestPeer("test-peer-2", chain),
+			endstate: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
+			endserve: uint64(len(chain) - 2), // len - head - genesis
 		},
 		// Completely empty database with only the genesis set. The sync is expected
 		// to create a single subchain with the requested head. With many valid peers,
@@ -600,16 +615,12 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 				newSkeletonTestPeer("test-peer-2", chain),
 				newSkeletonTestPeer("test-peer-3", chain),
 			},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
-				serve: uint64(len(chain) - 2), // len - head - genesis
-			},
+			midstate: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
+			midserve: uint64(len(chain) - 2), // len - head - genesis
 
-			newPeer: newSkeletonTestPeer("test-peer-4", chain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
-				serve: uint64(len(chain) - 2), // len - head - genesis
-			},
+			newPeer:  newSkeletonTestPeer("test-peer-4", chain),
+			endstate: []*subchain{{Head: uint64(len(chain) - 1), Tail: 1}},
+			endserve: uint64(len(chain) - 2), // len - head - genesis
 		},
 		// This test checks if a peer tries to withhold a header - *on* the sync
 		// boundary - instead of sending the requested amount. The malicious short
@@ -621,18 +632,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			peers: []*skeletonTestPeer{
 				newSkeletonTestPeer("header-skipper", append(append(append([]*types.Header{}, chain[:99]...), nil), chain[100:]...)),
 			},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
-				serve: requestHeaders + 101 - 3, // len - head - genesis - missing
-				drop:  1,                        // penalize shortened header deliveries
-			},
+			midstate: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
+			midserve: requestHeaders + 101 - 3, // len - head - genesis - missing
+			middrop:  1,                        // penalize shortened header deliveries
 
-			newPeer: newSkeletonTestPeer("good-peer", chain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
-				serve: (requestHeaders + 101 - 3) + (100 - 1), // midserve + lenrest - genesis
-				drop:  1,                                      // no new drops
-			},
+			newPeer:  newSkeletonTestPeer("good-peer", chain),
+			endstate: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
+			endserve: (requestHeaders + 101 - 3) + (100 - 1), // midserve + lenrest - genesis
+			enddrop:  1,                                      // no new drops
 		},
 		// This test checks if a peer tries to withhold a header - *off* the sync
 		// boundary - instead of sending the requested amount. The malicious short
@@ -644,18 +651,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			peers: []*skeletonTestPeer{
 				newSkeletonTestPeer("header-skipper", append(append(append([]*types.Header{}, chain[:50]...), nil), chain[51:]...)),
 			},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
-				serve: requestHeaders + 101 - 3, // len - head - genesis - missing
-				drop:  1,                        // penalize shortened header deliveries
-			},
+			midstate: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
+			midserve: requestHeaders + 101 - 3, // len - head - genesis - missing
+			middrop:  1,                        // penalize shortened header deliveries
 
-			newPeer: newSkeletonTestPeer("good-peer", chain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
-				serve: (requestHeaders + 101 - 3) + (100 - 1), // midserve + lenrest - genesis
-				drop:  1,                                      // no new drops
-			},
+			newPeer:  newSkeletonTestPeer("good-peer", chain),
+			endstate: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
+			endserve: (requestHeaders + 101 - 3) + (100 - 1), // midserve + lenrest - genesis
+			enddrop:  1,                                      // no new drops
 		},
 		// This test checks if a peer tries to duplicate a header - *on* the sync
 		// boundary - instead of sending the correct sequence. The malicious duped
@@ -667,18 +670,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			peers: []*skeletonTestPeer{
 				newSkeletonTestPeer("header-duper", append(append(append([]*types.Header{}, chain[:99]...), chain[98]), chain[100:]...)),
 			},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
-				serve: requestHeaders + 101 - 2, // len - head - genesis
-				drop:  1,                        // penalize invalid header sequences
-			},
+			midstate: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
+			midserve: requestHeaders + 101 - 2, // len - head - genesis
+			middrop:  1,                        // penalize invalid header sequences
 
-			newPeer: newSkeletonTestPeer("good-peer", chain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
-				serve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
-				drop:  1,                                      // no new drops
-			},
+			newPeer:  newSkeletonTestPeer("good-peer", chain),
+			endstate: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
+			endserve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
+			enddrop:  1,                                      // no new drops
 		},
 		// This test checks if a peer tries to duplicate a header - *off* the sync
 		// boundary - instead of sending the correct sequence. The malicious duped
@@ -690,18 +689,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			peers: []*skeletonTestPeer{
 				newSkeletonTestPeer("header-duper", append(append(append([]*types.Header{}, chain[:50]...), chain[49]), chain[51:]...)),
 			},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
-				serve: requestHeaders + 101 - 2, // len - head - genesis
-				drop:  1,                        // penalize invalid header sequences
-			},
+			midstate: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
+			midserve: requestHeaders + 101 - 2, // len - head - genesis
+			middrop:  1,                        // penalize invalid header sequences
 
-			newPeer: newSkeletonTestPeer("good-peer", chain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
-				serve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
-				drop:  1,                                      // no new drops
-			},
+			newPeer:  newSkeletonTestPeer("good-peer", chain),
+			endstate: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
+			endserve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
+			enddrop:  1,                                      // no new drops
 		},
 		// This test checks if a peer tries to inject a different header - *on*
 		// the sync boundary - instead of sending the correct sequence. The bad
@@ -724,18 +719,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 					),
 				),
 			},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
-				serve: requestHeaders + 101 - 2, // len - head - genesis
-				drop:  1,                        // different set of headers, drop // TODO(karalabe): maybe just diff sync?
-			},
+			midstate: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
+			midserve: requestHeaders + 101 - 2, // len - head - genesis
+			middrop:  1,                        // different set of headers, drop // TODO(karalabe): maybe just diff sync?
 
-			newPeer: newSkeletonTestPeer("good-peer", chain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
-				serve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
-				drop:  1,                                      // no new drops
-			},
+			newPeer:  newSkeletonTestPeer("good-peer", chain),
+			endstate: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
+			endserve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
+			enddrop:  1,                                      // no new drops
 		},
 		// This test checks if a peer tries to inject a different header - *off*
 		// the sync boundary - instead of sending the correct sequence. The bad
@@ -758,18 +749,14 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 					),
 				),
 			},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
-				serve: requestHeaders + 101 - 2, // len - head - genesis
-				drop:  1,                        // different set of headers, drop
-			},
+			midstate: []*subchain{{Head: requestHeaders + 100, Tail: 100}},
+			midserve: requestHeaders + 101 - 2, // len - head - genesis
+			middrop:  1,                        // different set of headers, drop
 
-			newPeer: newSkeletonTestPeer("good-peer", chain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
-				serve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
-				drop:  1,                                      // no new drops
-			},
+			newPeer:  newSkeletonTestPeer("good-peer", chain),
+			endstate: []*subchain{{Head: requestHeaders + 100, Tail: 1}},
+			endserve: (requestHeaders + 101 - 2) + (100 - 1), // midserve + lenrest - genesis
+			enddrop:  1,                                      // no new drops
 		},
 		// This test reproduces a bug caught during review (kudos to @holiman)
 		// where a subchain is merged with a previously interrupted one, causing
@@ -799,16 +786,12 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 					return nil // Fallback to default behavior, just delayed
 				}),
 			},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: 2 * requestHeaders, Tail: 1}},
-				serve: 2*requestHeaders - 1, // len - head - genesis
-			},
+			midstate: []*subchain{{Head: 2 * requestHeaders, Tail: 1}},
+			midserve: 2*requestHeaders - 1, // len - head - genesis
 
-			newHead: chain[2*requestHeaders+2],
-			end: skeletonExpect{
-				state: []*subchain{{Head: 2*requestHeaders + 2, Tail: 1}},
-				serve: 4 * requestHeaders,
-			},
+			newHead:  chain[2*requestHeaders+2],
+			endstate: []*subchain{{Head: 2*requestHeaders + 2, Tail: 1}},
+			endserve: 4 * requestHeaders,
 		},
 		// This test reproduces a bug caught by (@rjl493456442) where a skeleton
 		// header goes missing, causing the sync to get stuck and/or panic.
@@ -830,17 +813,13 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 			fill:          true,
 			unpredictable: true, // We have good and bad peer too, bad may be dropped, test too short for certainty
 
-			head:  chain[len(chain)/2+1], // Sync up until the sidechain common ancestor + 2
-			peers: []*skeletonTestPeer{newSkeletonTestPeer("test-peer-oldchain", chain)},
-			mid: skeletonExpect{
-				state: []*subchain{{Head: uint64(len(chain)/2 + 1), Tail: 1}},
-			},
+			head:     chain[len(chain)/2+1], // Sync up until the sidechain common ancestor + 2
+			peers:    []*skeletonTestPeer{newSkeletonTestPeer("test-peer-oldchain", chain)},
+			midstate: []*subchain{{Head: uint64(len(chain)/2 + 1), Tail: 1}},
 
-			newHead: sidechain[len(sidechain)/2+3], // Sync up until the sidechain common ancestor + 4
-			newPeer: newSkeletonTestPeer("test-peer-newchain", sidechain),
-			end: skeletonExpect{
-				state: []*subchain{{Head: uint64(len(sidechain)/2 + 3), Tail: uint64(len(chain) / 2)}},
-			},
+			newHead:  sidechain[len(sidechain)/2+3], // Sync up until the sidechain common ancestor + 4
+			newPeer:  newSkeletonTestPeer("test-peer-newchain", sidechain),
+			endstate: []*subchain{{Head: uint64(len(sidechain)/2 + 3), Tail: uint64(len(chain) / 2)}},
 		},
 	}
 	for i, tt := range tests {
@@ -853,7 +832,7 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		// Create a peer set to feed headers through
 		peerset := newPeerSet()
 		for _, peer := range tt.peers {
-			peerset.Register(newPeerConnection(peer.id, eth.ETH68, peer, log.New("id", peer.id)))
+			peerset.Register(newPeerConnection(peer.id, eth.ETH67, peer, log.New("id", peer.id)))
 		}
 		// Create a peer dropper to track malicious peers
 		dropped := make(map[string]int)
@@ -906,84 +885,138 @@ func TestSkeletonSyncRetrievals(t *testing.T) {
 		skeleton := newSkeleton(db, peerset, drop, filler)
 		_ = skeleton.Sync(tt.head, nil, true)
 
+		var progress skeletonProgress
 		// Wait a bit (bleah) for the initial sync loop to go to idle. This might
 		// be either a finish or a never-start hence why there's no event to hook.
+		check := func() error {
+			if len(progress.Subchains) != len(tt.midstate) {
+				return fmt.Errorf("test %d, mid state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.midstate))
+			}
+
+			for j := 0; j < len(progress.Subchains); j++ {
+				if progress.Subchains[j].Head != tt.midstate[j].Head {
+					return fmt.Errorf("test %d, mid state: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.midstate[j].Head)
+				}
+
+				if progress.Subchains[j].Tail != tt.midstate[j].Tail {
+					return fmt.Errorf("test %d, mid state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.midstate[j].Tail)
+				}
+			}
+
+			return nil
+		}
+
 		waitStart := time.Now()
 		for waitTime := 20 * time.Millisecond; time.Since(waitStart) < 2*time.Second; waitTime = waitTime * 2 {
 			time.Sleep(waitTime)
-			if err := checkSkeletonProgress(db, tt.unpredictable, tt.peers, tt.mid); err == nil {
+			// Check the post-init end state if it matches the required results
+			json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+
+			if err := check(); err == nil {
 				break
 			}
 		}
-		if err := checkSkeletonProgress(db, tt.unpredictable, tt.peers, tt.mid); err != nil {
-			t.Errorf("test %d, mid: %v", i, err)
+
+		if err := check(); err != nil {
+			t.Error(err)
 			continue
 		}
 
-		// Apply the post-init events if there's any
-		endpeers := tt.peers
-		if tt.newPeer != nil {
-			if err := peerset.Register(newPeerConnection(tt.newPeer.id, eth.ETH68, tt.newPeer, log.New("id", tt.newPeer.id))); err != nil {
-				t.Errorf("test %d: failed to register new peer: %v", i, err)
+		if !tt.unpredictable {
+			var served uint64
+			for _, peer := range tt.peers {
+				served += peer.served.Load()
 			}
-			time.Sleep(time.Millisecond * 50) // given time for peer registration
-			endpeers = append(tt.peers, tt.newPeer)
+
+			if served != tt.midserve {
+				t.Errorf("test %d, mid state: served headers mismatch: have %d, want %d", i, served, tt.midserve)
+			}
+
+			var drops uint64
+
+			for _, peer := range tt.peers {
+				drops += peer.dropped.Load()
+			}
+
+			if drops != tt.middrop {
+				t.Errorf("test %d, mid state: dropped peers mismatch: have %d, want %d", i, drops, tt.middrop)
+			}
 		}
+		// Apply the post-init events if there's any
 		if tt.newHead != nil {
-			skeleton.Sync(tt.newHead, nil, true)
+			_ = skeleton.Sync(tt.newHead, nil, true)
 		}
 
+		if tt.newPeer != nil {
+			if err := peerset.Register(newPeerConnection(tt.newPeer.id, eth.ETH67, tt.newPeer, log.New("id", tt.newPeer.id))); err != nil {
+				t.Errorf("test %d: failed to register new peer: %v", i, err)
+			}
+		}
 		// Wait a bit (bleah) for the second sync loop to go to idle. This might
 		// be either a finish or a never-start hence why there's no event to hook.
+		check = func() error {
+			if len(progress.Subchains) != len(tt.endstate) {
+				return fmt.Errorf("test %d, end state: subchain count mismatch: have %d, want %d", i, len(progress.Subchains), len(tt.endstate))
+			}
+
+			for j := 0; j < len(progress.Subchains); j++ {
+				if progress.Subchains[j].Head != tt.endstate[j].Head {
+					return fmt.Errorf("test %d, end state: subchain %d head mismatch: have %d, want %d", i, j, progress.Subchains[j].Head, tt.endstate[j].Head)
+				}
+
+				if progress.Subchains[j].Tail != tt.endstate[j].Tail {
+					return fmt.Errorf("test %d, end state: subchain %d tail mismatch: have %d, want %d", i, j, progress.Subchains[j].Tail, tt.endstate[j].Tail)
+				}
+			}
+
+			return nil
+		}
 		waitStart = time.Now()
 
 		for waitTime := 20 * time.Millisecond; time.Since(waitStart) < 2*time.Second; waitTime = waitTime * 2 {
 			time.Sleep(waitTime)
-			if err := checkSkeletonProgress(db, tt.unpredictable, endpeers, tt.end); err == nil {
+			// Check the post-init end state if it matches the required results
+			json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
+
+			if err := check(); err == nil {
 				break
 			}
 		}
-		if err := checkSkeletonProgress(db, tt.unpredictable, endpeers, tt.end); err != nil {
-			t.Errorf("test %d, end: %v", i, err)
+
+		if err := check(); err != nil {
+			t.Error(err)
 			continue
 		}
 		// Check that the peers served no more headers than we actually needed
+		if !tt.unpredictable {
+			served := uint64(0)
+			for _, peer := range tt.peers {
+				served += peer.served.Load()
+			}
+
+			if tt.newPeer != nil {
+				served += tt.newPeer.served.Load()
+			}
+
+			if served != tt.endserve {
+				t.Errorf("test %d, end state: served headers mismatch: have %d, want %d", i, served, tt.endserve)
+			}
+
+			drops := uint64(0)
+
+			for _, peer := range tt.peers {
+				drops += peer.dropped.Load()
+			}
+
+			if tt.newPeer != nil {
+				drops += tt.newPeer.dropped.Load()
+			}
+
+			if drops != tt.enddrop {
+				t.Errorf("test %d, end state: dropped peers mismatch: have %d, want %d", i, drops, tt.middrop)
+			}
+		}
 		// Clean up any leftover skeleton sync resources
 		skeleton.Terminate()
 	}
-}
-
-func checkSkeletonProgress(db ethdb.KeyValueReader, unpredictable bool, peers []*skeletonTestPeer, expected skeletonExpect) error {
-	var progress skeletonProgress
-	// Check the post-init end state if it matches the required results
-	json.Unmarshal(rawdb.ReadSkeletonSyncStatus(db), &progress)
-
-	if len(progress.Subchains) != len(expected.state) {
-		return fmt.Errorf("subchain count mismatch: have %d, want %d", len(progress.Subchains), len(expected.state))
-	}
-	for j := 0; j < len(progress.Subchains); j++ {
-		if progress.Subchains[j].Head != expected.state[j].Head {
-			return fmt.Errorf("subchain %d head mismatch: have %d, want %d", j, progress.Subchains[j].Head, expected.state[j].Head)
-		}
-		if progress.Subchains[j].Tail != expected.state[j].Tail {
-			return fmt.Errorf("subchain %d tail mismatch: have %d, want %d", j, progress.Subchains[j].Tail, expected.state[j].Tail)
-		}
-	}
-	if !unpredictable {
-		var served uint64
-		for _, peer := range peers {
-			served += peer.served.Load()
-		}
-		if served != expected.serve {
-			return fmt.Errorf("served headers mismatch: have %d, want %d", served, expected.serve)
-		}
-		var drops uint64
-		for _, peer := range peers {
-			drops += peer.dropped.Load()
-		}
-		if drops != expected.drop {
-			return fmt.Errorf("dropped peers mismatch: have %d, want %d", drops, expected.drop)
-		}
-	}
-	return nil
 }

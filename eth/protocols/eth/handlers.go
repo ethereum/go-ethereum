@@ -207,7 +207,7 @@ func serviceContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHe
 		return headers
 	}
 	{ // Last mode: deliver ancestors of H
-		for i := uint64(1); i < count; i++ {
+		for i := uint64(1); header != nil && i < count; i++ {
 			header = chain.GetHeaderByHash(header.ParentHash)
 			if header == nil {
 				break
@@ -425,13 +425,33 @@ func handleReceipts(backend Backend, msg Decoder, peer *Peer) error {
 	}, metadata)
 }
 
-func handleNewPooledTransactionHashes(backend Backend, msg Decoder, peer *Peer) error {
+func handleNewPooledTransactionHashes67(backend Backend, msg Decoder, peer *Peer) error {
 	// New transaction announcement arrived, make sure we have
 	// a valid and fresh chain to handle them
 	if !backend.AcceptTxs() {
 		return nil
 	}
-	ann := new(NewPooledTransactionHashesPacket)
+	ann := new(NewPooledTransactionHashesPacket67)
+	if err := msg.Decode(ann); err != nil {
+		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
+	}
+	// Schedule all the unknown hashes for retrieval
+	for _, hash := range *ann {
+		peer.markTransaction(hash)
+	}
+
+	return backend.Handle(peer, ann)
+}
+
+func handleNewPooledTransactionHashes68(backend Backend, msg Decoder, peer *Peer) error {
+	// New transaction announcement arrived, make sure we have
+	// a valid and fresh chain to handle them
+	if !backend.AcceptTxs() {
+		return nil
+	}
+
+	ann := new(NewPooledTransactionHashesPacket68)
+
 	if err := msg.Decode(ann); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
