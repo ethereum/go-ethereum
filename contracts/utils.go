@@ -87,7 +87,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 
 		// Create and send tx to smart contract for sign validate block.
 		nonce := pool.Nonce(account.Address)
-		tx := CreateTxSign(block.Number(), block.Hash(), nonce, common.HexToAddress(common.BlockSigners))
+		tx := CreateTxSign(block.Number(), block.Hash(), nonce, common.BlockSignersBinary)
 		txSigned, err := wallet.SignTx(account, tx, chainConfig.ChainId)
 		if err != nil {
 			log.Error("Fail to create tx sign", "error", err)
@@ -112,7 +112,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			// Only process when private key empty in state db.
 			// Save randomize key into state db.
 			randomizeKeyValue := RandStringByte(32)
-			tx, err := BuildTxSecretRandomize(nonce+1, common.HexToAddress(common.RandomizeSMC), chainConfig.XDPoS.Epoch, randomizeKeyValue)
+			tx, err := BuildTxSecretRandomize(nonce+1, common.RandomizeSMCBinary, chainConfig.XDPoS.Epoch, randomizeKeyValue)
 			if err != nil {
 				log.Error("Fail to get tx opening for randomize", "error", err)
 				return err
@@ -141,7 +141,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 				return err
 			}
 
-			tx, err := BuildTxOpeningRandomize(nonce+1, common.HexToAddress(common.RandomizeSMC), randomizeKeyValue)
+			tx, err := BuildTxOpeningRandomize(nonce+1, common.RandomizeSMCBinary, randomizeKeyValue)
 			if err != nil {
 				log.Error("Fail to get tx opening for randomize", "error", err)
 				return err
@@ -232,7 +232,7 @@ func GetSignersByExecutingEVM(addrBlockSigner common.Address, client bind.Contra
 
 // Get random from randomize contract.
 func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common.Address) (int64, error) {
-	randomize, err := randomizeContract.NewXDCRandomize(common.HexToAddress(common.RandomizeSMC), client)
+	randomize, err := randomizeContract.NewXDCRandomize(common.RandomizeSMCBinary, client)
 	if err != nil {
 		log.Error("Fail to get instance of randomize", "error", err)
 	}
@@ -407,7 +407,7 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 
 	log.Info("Signers data", "totalSigner", totalSigner, "totalReward", chainReward)
 	for addr, signer := range signers {
-		log.Info("Signer reward", "signer", addr, "sign", signer.Sign, "reward", signer.Reward)
+		log.Debug("Signer reward", "signer", addr, "sign", signer.Sign, "reward", signer.Reward)
 	}
 
 	return resultSigners, nil

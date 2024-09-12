@@ -18,7 +18,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	type Receipt struct {
 		Type              hexutil.Uint64 `json:"type,omitempty"`
 		PostState         hexutil.Bytes  `json:"root"`
-		Status            hexutil.Uint   `json:"status"`
+		Status            hexutil.Uint64 `json:"status"`
 		CumulativeGasUsed hexutil.Uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 		Bloom             Bloom          `json:"logsBloom"         gencodec:"required"`
 		Logs              []*Log         `json:"logs"              gencodec:"required"`
@@ -32,7 +32,7 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 	var enc Receipt
 	enc.Type = hexutil.Uint64(r.Type)
 	enc.PostState = r.PostState
-	enc.Status = hexutil.Uint(r.Status)
+	enc.Status = hexutil.Uint64(r.Status)
 	enc.CumulativeGasUsed = hexutil.Uint64(r.CumulativeGasUsed)
 	enc.Bloom = r.Bloom
 	enc.Logs = r.Logs
@@ -50,7 +50,7 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 	type Receipt struct {
 		Type              *hexutil.Uint64 `json:"type,omitempty"`
 		PostState         *hexutil.Bytes  `json:"root"`
-		Status            *hexutil.Uint   `json:"status"`
+		Status            *hexutil.Uint64 `json:"status"`
 		CumulativeGasUsed *hexutil.Uint64 `json:"cumulativeGasUsed" gencodec:"required"`
 		Bloom             *Bloom          `json:"logsBloom"         gencodec:"required"`
 		Logs              []*Log          `json:"logs"              gencodec:"required"`
@@ -72,7 +72,7 @@ func (r *Receipt) UnmarshalJSON(input []byte) error {
 		r.PostState = *dec.PostState
 	}
 	if dec.Status != nil {
-		r.Status = uint(*dec.Status)
+		r.Status = uint64(*dec.Status)
 	}
 	if dec.CumulativeGasUsed == nil {
 		return errors.New("missing required field 'cumulativeGasUsed' for Receipt")

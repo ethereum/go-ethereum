@@ -27,7 +27,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/keystore"
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
-	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/console"
 	"github.com/XinFinOrg/XDPoSChain/core"
@@ -37,6 +36,10 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/node"
+
+	// Force-load the native, to trigger registration
+	_ "github.com/XinFinOrg/XDPoSChain/eth/tracers/native"
+
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -89,10 +92,12 @@ var (
 		//utils.LightServFlag,
 		//utils.LightPeersFlag,
 		//utils.LightKDFFlag,
-		//utils.CacheFlag,
-		//utils.CacheDatabaseFlag,
+		utils.CacheFlag,
+		utils.CacheDatabaseFlag,
 		//utils.CacheGCFlag,
 		//utils.TrieCacheGenFlag,
+		utils.CacheLogSizeFlag,
+		utils.FDLimitFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
@@ -127,6 +132,8 @@ var (
 		//utils.NoCompactionFlag,
 		//utils.GpoBlocksFlag,
 		//utils.GpoPercentileFlag,
+		utils.GpoMaxGasPriceFlag,
+		utils.GpoIgnoreGasPriceFlag,
 		//utils.ExtraDataFlag,
 		configFileFlag,
 		utils.AnnounceTxsFlag,
@@ -148,6 +155,7 @@ var (
 		utils.WSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
+		utils.RPCGlobalTxFeeCap,
 	}
 
 	whisperFlags = []cli.Flag{
@@ -310,16 +318,9 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 			ok := false
 			slaveMode := ctx.GlobalIsSet(utils.XDCSlaveModeFlag.Name)
 			var err error
-			if common.IsTestnet {
-				ok, err = ethereum.ValidateMasternodeTestnet()
-				if err != nil {
-					utils.Fatalf("Can't verify masternode permission: %v", err)
-				}
-			} else {
-				ok, err = ethereum.ValidateMasternode()
-				if err != nil {
-					utils.Fatalf("Can't verify masternode permission: %v", err)
-				}
+			ok, err = ethereum.ValidateMasternode()
+			if err != nil {
+				utils.Fatalf("Can't verify masternode permission: %v", err)
 			}
 			if ok {
 				if slaveMode {
@@ -351,16 +352,10 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 				log.Info("Update consensus parameters")
 				chain := ethereum.BlockChain()
 				engine.UpdateParams(chain.CurrentHeader())
-				if common.IsTestnet {
-					ok, err = ethereum.ValidateMasternodeTestnet()
-					if err != nil {
-						utils.Fatalf("Can't verify masternode permission: %v", err)
-					}
-				} else {
-					ok, err = ethereum.ValidateMasternode()
-					if err != nil {
-						utils.Fatalf("Can't verify masternode permission: %v", err)
-					}
+
+				ok, err = ethereum.ValidateMasternode()
+				if err != nil {
+					utils.Fatalf("Can't verify masternode permission: %v", err)
 				}
 				if !ok {
 					if started {

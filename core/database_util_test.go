@@ -38,9 +38,7 @@ func TestHeaderStorage(t *testing.T) {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
 	// Write and verify the header in the database
-	if err := WriteHeader(db, header); err != nil {
-		t.Fatalf("Failed to write header into database: %v", err)
-	}
+	rawdb.WriteHeader(db, header)
 	if entry := GetHeader(db, header.Hash(), header.Number.Uint64()); entry == nil {
 		t.Fatalf("Stored header not found")
 	} else if entry.Hash() != header.Hash() {
@@ -78,9 +76,7 @@ func TestBodyStorage(t *testing.T) {
 		t.Fatalf("Non existent body returned: %v", entry)
 	}
 	// Write and verify the body in the database
-	if err := WriteBody(db, hash, 0, body); err != nil {
-		t.Fatalf("Failed to write body into database: %v", err)
-	}
+	rawdb.WriteBody(db, hash, 0, body)
 	if entry := GetBody(db, hash, 0); entry == nil {
 		t.Fatalf("Stored body not found")
 	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(types.Transactions(body.Transactions)) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(body.Uncles) {
@@ -124,9 +120,7 @@ func TestBlockStorage(t *testing.T) {
 		t.Fatalf("Non existent body returned: %v", entry)
 	}
 	// Write and verify the block in the database
-	if err := WriteBlock(db, block); err != nil {
-		t.Fatalf("Failed to write block into database: %v", err)
-	}
+	rawdb.WriteBlock(db, block)
 	if entry := GetBlock(db, block.Hash(), block.NumberU64()); entry == nil {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
@@ -165,30 +159,22 @@ func TestPartialBlockStorage(t *testing.T) {
 		ReceiptHash: types.EmptyRootHash,
 	})
 	// Store a header and check that it's not recognized as a block
-	if err := WriteHeader(db, block.Header()); err != nil {
-		t.Fatalf("Failed to write header into database: %v", err)
-	}
+	rawdb.WriteHeader(db, block.Header())
 	if entry := GetBlock(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
 	DeleteHeader(db, block.Hash(), block.NumberU64())
 
 	// Store a body and check that it's not recognized as a block
-	if err := WriteBody(db, block.Hash(), block.NumberU64(), block.Body()); err != nil {
-		t.Fatalf("Failed to write body into database: %v", err)
-	}
+	rawdb.WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
 	if entry := GetBlock(db, block.Hash(), block.NumberU64()); entry != nil {
 		t.Fatalf("Non existent block returned: %v", entry)
 	}
 	DeleteBody(db, block.Hash(), block.NumberU64())
 
 	// Store a header and a body separately and check reassembly
-	if err := WriteHeader(db, block.Header()); err != nil {
-		t.Fatalf("Failed to write header into database: %v", err)
-	}
-	if err := WriteBody(db, block.Hash(), block.NumberU64(), block.Body()); err != nil {
-		t.Fatalf("Failed to write body into database: %v", err)
-	}
+	rawdb.WriteHeader(db, block.Header())
+	rawdb.WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
 	if entry := GetBlock(db, block.Hash(), block.NumberU64()); entry == nil {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
@@ -231,9 +217,7 @@ func TestCanonicalMappingStorage(t *testing.T) {
 		t.Fatalf("Non existent canonical mapping returned: %v", entry)
 	}
 	// Write and verify the TD in the database
-	if err := WriteCanonicalHash(db, hash, number); err != nil {
-		t.Fatalf("Failed to write canonical mapping into database: %v", err)
-	}
+	rawdb.WriteCanonicalHash(db, hash, number)
 	if entry := GetCanonicalHash(db, number); entry == (common.Hash{}) {
 		t.Fatalf("Stored canonical mapping not found")
 	} else if entry != hash {
@@ -268,9 +252,7 @@ func TestHeadStorage(t *testing.T) {
 	if err := WriteHeadHeaderHash(db, blockHead.Hash()); err != nil {
 		t.Fatalf("Failed to write head header hash: %v", err)
 	}
-	if err := WriteHeadBlockHash(db, blockFull.Hash()); err != nil {
-		t.Fatalf("Failed to write head block hash: %v", err)
-	}
+	rawdb.WriteHeadBlockHash(db, blockFull.Hash())
 	if err := WriteHeadFastBlockHash(db, blockFast.Hash()); err != nil {
 		t.Fatalf("Failed to write fast head block hash: %v", err)
 	}
@@ -304,9 +286,7 @@ func TestLookupStorage(t *testing.T) {
 		}
 	}
 	// Insert all the transactions into the database, and verify contents
-	if err := WriteBlock(db, block); err != nil {
-		t.Fatalf("failed to write block contents: %v", err)
-	}
+	rawdb.WriteBlock(db, block)
 	if err := WriteTxLookupEntries(db, block); err != nil {
 		t.Fatalf("failed to write transactions: %v", err)
 	}

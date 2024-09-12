@@ -1347,7 +1347,7 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 	defer tester.terminate()
 
 	for i, tt := range tests {
-		// Register a new peer and ensure it's presence
+		// Register a new peer and ensure its presence
 		id := fmt.Sprintf("test %d", i)
 		if err := tester.newPeer(id, protocol, []common.Hash{tester.genesis.Hash()}, nil, nil, nil); err != nil {
 			t.Fatalf("test %d: failed to register new peer: %v", i, err)

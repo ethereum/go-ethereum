@@ -25,6 +25,7 @@ const (
 	Wei      = 1
 	Ada      = 1e3
 	Babbage  = 1e6
+	GWei     = 1e9
 	Shannon  = 1e9
 	Szabo    = 1e12
 	Finney   = 1e15

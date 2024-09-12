@@ -48,6 +48,7 @@ type Node struct {
 
 	serverConfig p2p.Config
 	server       *p2p.Server // Currently running P2P networking layer
+	state        int         // Tracks state of node lifecycle
 
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
 	services     map[reflect.Type]Service // Currently running services
@@ -73,6 +74,10 @@ type Node struct {
 
 	log log.Logger
 }
+
+const (
+	initializingState = iota
+)
 
 // New creates a new P2P node, ready for protocol registration.
 func New(conf *Config) (*Node, error) {
@@ -300,6 +305,17 @@ func (n *Node) stopInProc() {
 		n.inprocHandler.Stop()
 		n.inprocHandler = nil
 	}
+}
+
+// RegisterAPIs registers the APIs a service provides on the node.
+func (n *Node) RegisterAPIs(apis []rpc.API) {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if n.state != initializingState {
+		panic("can't register APIs on running/stopped node")
+	}
+	n.rpcAPIs = append(n.rpcAPIs, apis...)
 }
 
 // startIPC initializes and starts the IPC RPC endpoint.

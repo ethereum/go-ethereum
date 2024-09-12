@@ -273,7 +273,7 @@ func (self *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error 
 			}
 			delete(expects, event.Peer)
 		case <-timeout:
-			return fmt.Errorf("timed out waiting for peers to disconnect")
+			return errors.New("timed out waiting for peers to disconnect")
 		}
 	}
 	return nil

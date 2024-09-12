@@ -51,6 +51,20 @@ const (
 )
 
 var (
+	BlockSignersBinary                     = Address{19: 0x89} // xdc0000000000000000000000000000000000000089
+	MasternodeVotingSMCBinary              = Address{19: 0x88} // xdc0000000000000000000000000000000000000088
+	RandomizeSMCBinary                     = Address{19: 0x90} // xdc0000000000000000000000000000000000000090
+	FoudationAddrBinary                    = Address{19: 0x68} // xdc0000000000000000000000000000000000000068
+	TeamAddrBinary                         = Address{19: 0x99} // xdc0000000000000000000000000000000000000099
+	XDCXAddrBinary                         = Address{19: 0x91} // xdc0000000000000000000000000000000000000091
+	TradingStateAddrBinary                 = Address{19: 0x92} // xdc0000000000000000000000000000000000000092
+	XDCXLendingAddressBinary               = Address{19: 0x93} // xdc0000000000000000000000000000000000000093
+	XDCXLendingFinalizedTradeAddressBinary = Address{19: 0x94} // xdc0000000000000000000000000000000000000094
+	XDCNativeAddressBinary                 = Address{19: 0x01} // xdc0000000000000000000000000000000000000001
+	LendingLockAddressBinary               = Address{19: 0x11} // xdc0000000000000000000000000000000000000011
+)
+
+var (
 	hashT    = reflect.TypeOf(Hash{})
 	addressT = reflect.TypeOf(Address{})
 )
@@ -256,7 +270,7 @@ func (a *Address) Set(other Address) {
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
 	// Handle '0x' or 'xdc' prefix here.
-	if (Enable0xPrefix) {
+	if Enable0xPrefix {
 		return hexutil.Bytes(a[:]).MarshalText()
 	} else {
 		return hexutil.Bytes(a[:]).MarshalXDCText()

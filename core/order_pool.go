@@ -468,7 +468,7 @@ func (pool *OrderPool) validateOrder(tx *types.OrderTransaction) error {
 			}
 			XDCXServ := XDPoSEngine.GetXDCXService()
 			if XDCXServ == nil {
-				return fmt.Errorf("XDCx not found in order validation")
+				return errors.New("XDCx not found in order validation")
 			}
 			baseDecimal, err := XDCXServ.GetTokenDecimal(pool.chain, cloneStateDb, tx.BaseToken())
 			if err != nil {

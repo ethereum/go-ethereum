@@ -1,6 +1,7 @@
 package engine_v2
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -99,7 +100,7 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 	}
 	if snap == nil || len(snap.NextEpochCandidates) == 0 {
 		log.Error("[verifyTC] Something wrong with the snapshot from gapNumber", "messageGapNumber", timeoutCert.GapNumber, "snapshot", snap)
-		return fmt.Errorf("empty master node lists from snapshot")
+		return errors.New("empty master node lists from snapshot")
 	}
 
 	signatures, duplicates := UniqueSignatures(timeoutCert.Signatures)
@@ -145,7 +146,7 @@ func (x *XDPoS_v2) verifyTC(chain consensus.ChainReader, timeoutCert *types.Time
 						haveError = fmt.Errorf("error while verifying TC message signatures, %s", err)
 					} else {
 						log.Warn("[verifyTC] Signature not verified doing TC verification", "timeoutCert.Round", timeoutCert.Round, "timeoutCert.GapNumber", timeoutCert.GapNumber, "Signatures len", len(signatures))
-						haveError = fmt.Errorf("fail to verify TC due to signature mis-match")
+						haveError = errors.New("fail to verify TC due to signature mis-match")
 					}
 				}
 				mutex.Unlock() // Unlock after modifying haveError

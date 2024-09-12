@@ -32,7 +32,6 @@ import (
 )
 
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
-
 var (
 	ErrInvalidSig               = errors.New("invalid transaction v, r, s values")
 	ErrUnexpectedProtection     = errors.New("transaction type does not supported EIP-155 protected signatures")
@@ -45,11 +44,11 @@ var (
 	errVYParityMissing          = errors.New("missing 'yParity' or 'v' field in transaction")
 	errEmptyTypedTx             = errors.New("empty typed transaction bytes")
 	errNoSigner                 = errors.New("missing signing methods")
-	skipNonceDestinationAddress = map[string]bool{
-		common.XDCXAddr:                         true,
-		common.TradingStateAddr:                 true,
-		common.XDCXLendingAddress:               true,
-		common.XDCXLendingFinalizedTradeAddress: true,
+	skipNonceDestinationAddress = map[common.Address]bool{
+		common.XDCXAddrBinary:                         true,
+		common.TradingStateAddrBinary:                 true,
+		common.XDCXLendingAddressBinary:               true,
+		common.XDCXLendingFinalizedTradeAddressBinary: true,
 	}
 )
 
@@ -406,121 +405,68 @@ func (tx *Transaction) TxCost(number *big.Int) *big.Int {
 }
 
 func (tx *Transaction) IsSpecialTransaction() bool {
-	if tx.To() == nil {
-		return false
-	}
-	toBytes := tx.To().Bytes()
-	randomizeSMCBytes := common.HexToAddress(common.RandomizeSMC).Bytes()
-	blockSignersBytes := common.HexToAddress(common.BlockSigners).Bytes()
-	return bytes.Equal(toBytes, randomizeSMCBytes) || bytes.Equal(toBytes, blockSignersBytes)
+	to := tx.To()
+	return to != nil && (*to == common.RandomizeSMCBinary || *to == common.BlockSignersBinary)
 }
 
 func (tx *Transaction) IsTradingTransaction() bool {
-	if tx.To() == nil {
-		return false
-	}
-
-	if tx.To().String() != common.XDCXAddr {
-		return false
-	}
-
-	return true
+	to := tx.To()
+	return to != nil && *to == common.XDCXAddrBinary
 }
 
 func (tx *Transaction) IsLendingTransaction() bool {
-	if tx.To() == nil {
-		return false
-	}
-
-	if tx.To().String() != common.XDCXLendingAddress {
-		return false
-	}
-	return true
+	to := tx.To()
+	return to != nil && *to == common.XDCXLendingAddressBinary
 }
 
 func (tx *Transaction) IsLendingFinalizedTradeTransaction() bool {
-	if tx.To() == nil {
-		return false
-	}
-
-	if tx.To().String() != common.XDCXLendingFinalizedTradeAddress {
-		return false
-	}
-	return true
+	to := tx.To()
+	return to != nil && *to == common.XDCXLendingFinalizedTradeAddressBinary
 }
 
 func (tx *Transaction) IsSkipNonceTransaction() bool {
-	if tx.To() == nil {
-		return false
-	}
-	if skip := skipNonceDestinationAddress[tx.To().String()]; skip {
-		return true
-	}
-	return false
+	to := tx.To()
+	return to != nil && skipNonceDestinationAddress[*to]
 }
 
 func (tx *Transaction) IsSigningTransaction() bool {
-	if tx.To() == nil {
+	to := tx.To()
+	if to == nil || *to != common.BlockSignersBinary {
 		return false
 	}
-
-	if tx.To().String() != common.BlockSigners {
+	data := tx.Data()
+	if len(data) != (32*2 + 4) {
 		return false
 	}
-
-	method := common.ToHex(tx.Data()[0:4])
-
-	if method != common.SignMethod {
-		return false
-	}
-
-	if len(tx.Data()) != (32*2 + 4) {
-		return false
-	}
-
-	return true
+	method := common.ToHex(data[0:4])
+	return method == common.SignMethod
 }
 
 func (tx *Transaction) IsVotingTransaction() (bool, *common.Address) {
-	if tx.To() == nil {
+	to := tx.To()
+	if to == nil || *to != common.MasternodeVotingSMCBinary {
 		return false, nil
 	}
-	b := (tx.To().String() == common.MasternodeVotingSMC)
-
-	if !b {
-		return b, nil
+	var end int
+	data := tx.Data()
+	method := common.ToHex(data[0:4])
+	if method == common.VoteMethod || method == common.ProposeMethod || method == common.ResignMethod {
+		end = len(data)
+	} else if method == common.UnvoteMethod {
+		end = len(data) - 32
+	} else {
+		return false, nil
 	}
 
-	method := common.ToHex(tx.Data()[0:4])
-	if b = (method == common.VoteMethod); b {
-		addr := tx.Data()[len(tx.Data())-20:]
-		m := common.BytesToAddress(addr)
-		return b, &m
-	}
+	addr := data[end-20 : end]
+	m := common.BytesToAddress(addr)
+	return true, &m
 
-	if b = (method == common.UnvoteMethod); b {
-		addr := tx.Data()[len(tx.Data())-32-20 : len(tx.Data())-32]
-		m := common.BytesToAddress(addr)
-		return b, &m
-	}
-
-	if b = (method == common.ProposeMethod); b {
-		addr := tx.Data()[len(tx.Data())-20:]
-		m := common.BytesToAddress(addr)
-		return b, &m
-	}
-
-	if b = (method == common.ResignMethod); b {
-		addr := tx.Data()[len(tx.Data())-20:]
-		m := common.BytesToAddress(addr)
-		return b, &m
-	}
-
-	return b, nil
 }
 
 func (tx *Transaction) IsXDCXApplyTransaction() bool {
-	if tx.To() == nil {
+	to := tx.To()
+	if to == nil {
 		return false
 	}
 
@@ -528,26 +474,22 @@ func (tx *Transaction) IsXDCXApplyTransaction() bool {
 	if common.IsTestnet {
 		addr = common.XDCXListingSMCTestNet
 	}
-	if tx.To().String() != addr.String() {
+	if *to != addr {
 		return false
 	}
-
-	method := common.ToHex(tx.Data()[0:4])
-
-	if method != common.XDCXApplyMethod {
-		return false
-	}
-
+	data := tx.Data()
 	// 4 bytes for function name
 	// 32 bytes for 1 parameter
-	if len(tx.Data()) != (32 + 4) {
+	if len(data) != (32 + 4) {
 		return false
 	}
-	return true
+	method := common.ToHex(data[0:4])
+	return method == common.XDCXApplyMethod
 }
 
 func (tx *Transaction) IsXDCZApplyTransaction() bool {
-	if tx.To() == nil {
+	to := tx.To()
+	if to == nil {
 		return false
 	}
 
@@ -555,22 +497,17 @@ func (tx *Transaction) IsXDCZApplyTransaction() bool {
 	if common.IsTestnet {
 		addr = common.TRC21IssuerSMCTestNet
 	}
-	if tx.To().String() != addr.String() {
+	if *to != addr {
 		return false
 	}
-
-	method := common.ToHex(tx.Data()[0:4])
-	if method != common.XDCZApplyMethod {
-		return false
-	}
-
+	data := tx.Data()
 	// 4 bytes for function name
 	// 32 bytes for 1 parameter
-	if len(tx.Data()) != (32 + 4) {
+	if len(data) != (32 + 4) {
 		return false
 	}
-
-	return true
+	method := common.ToHex(data[0:4])
+	return method == common.XDCZApplyMethod
 }
 
 func (tx *Transaction) String() string {
@@ -841,3 +778,8 @@ func (m Message) CheckNonce() bool          { return m.checkNonce }
 func (m Message) AccessList() AccessList    { return m.accessList }
 
 func (m *Message) SetNonce(nonce uint64) { m.nonce = nonce }
+
+func (m *Message) SetBalanceTokenFeeForCall() {
+	m.balanceTokenFee = new(big.Int).SetUint64(m.gasLimit)
+	m.balanceTokenFee.Mul(m.balanceTokenFee, m.gasPrice)
+}

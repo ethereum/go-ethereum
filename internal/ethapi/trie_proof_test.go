@@ -2,7 +2,7 @@ package ethapi
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"math/big"
 	"reflect"
 	"testing"
@@ -36,7 +36,7 @@ func (n *proofPairList) Get(key []byte) ([]byte, error) {
 			return b, nil
 		}
 	}
-	return nil, fmt.Errorf("key not found")
+	return nil, errors.New("key not found")
 }
 
 func TestTransactionProof(t *testing.T) {

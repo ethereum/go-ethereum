@@ -34,10 +34,12 @@ var (
 	ErrWriteProtection          = errors.New("write protection")
 	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
+	ErrNonceUintOverflow        = errors.New("nonce uint64 overflow")
+	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
 
 	// errStopToken is an internal token indicating interpreter loop termination,
 	// never returned to outside callers.
-	errStopToken = errors.New("stop token")	
+	errStopToken = errors.New("stop token")
 )
 
 // ErrStackUnderflow wraps an evm error when the items on the stack less

@@ -20,9 +20,9 @@ import (
 	"fmt"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/trie"
-	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -107,16 +107,15 @@ func NewDatabase(db ethdb.Database) Database {
 // is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
 // large memory cache.
 func NewDatabaseWithCache(db ethdb.Database, cache int) Database {
-	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{
 		db:            trie.NewDatabaseWithCache(db, cache),
-		codeSizeCache: csc,
+		codeSizeCache: lru.NewCache[common.Hash, int](codeSizeCacheSize),
 	}
 }
 
 type cachingDB struct {
 	db            *trie.Database
-	codeSizeCache *lru.Cache
+	codeSizeCache *lru.Cache[common.Hash, int]
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -151,7 +150,7 @@ func (db *cachingDB) ContractCode(addrHash, codeHash common.Hash) ([]byte, error
 // ContractCodeSize retrieves a particular contracts code's size.
 func (db *cachingDB) ContractCodeSize(addrHash, codeHash common.Hash) (int, error) {
 	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
-		return cached.(int), nil
+		return cached, nil
 	}
 	code, err := db.ContractCode(addrHash, codeHash)
 	return len(code), err

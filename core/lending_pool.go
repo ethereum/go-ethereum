@@ -435,7 +435,7 @@ func (pool *LendingPool) validateNewLending(cloneStateDb *state.StateDB, cloneLe
 		validCollateral := false
 		collateralList := lendingstate.GetCollaterals(cloneStateDb, tx.RelayerAddress(), tx.LendingToken(), tx.Term())
 		for _, collateral := range collateralList {
-			if tx.CollateralToken().String() == collateral.String() {
+			if tx.CollateralToken() == collateral {
 				validCollateral = true
 				break
 			}
@@ -476,10 +476,10 @@ func (pool *LendingPool) validateRepayLending(cloneStateDb *state.StateDB, clone
 	if lendingTrade == lendingstate.EmptyLendingTrade {
 		return ErrInvalidLendingTradeID
 	}
-	if tx.UserAddress().String() != lendingTrade.Borrower.String() {
+	if tx.UserAddress() != lendingTrade.Borrower {
 		return ErrInvalidLendingUserAddress
 	}
-	if tx.RelayerAddress().String() != lendingTrade.BorrowingRelayer.String() {
+	if tx.RelayerAddress() != lendingTrade.BorrowingRelayer {
 		return ErrInvalidLendingRelayer
 	}
 	if err := pool.validateBalance(cloneStateDb, cloneLendingStateDb, tx, tx.CollateralToken()); err != nil {
@@ -499,10 +499,10 @@ func (pool *LendingPool) validateTopupLending(cloneStateDb *state.StateDB, clone
 	if lendingTrade == lendingstate.EmptyLendingTrade {
 		return ErrInvalidLendingTradeID
 	}
-	if tx.UserAddress().String() != lendingTrade.Borrower.String() {
+	if tx.UserAddress() != lendingTrade.Borrower {
 		return ErrInvalidLendingUserAddress
 	}
-	if tx.RelayerAddress().String() != lendingTrade.BorrowingRelayer.String() {
+	if tx.RelayerAddress() != lendingTrade.BorrowingRelayer {
 		return ErrInvalidLendingRelayer
 	}
 	if err := pool.validateBalance(cloneStateDb, cloneLendingStateDb, tx, lendingTrade.CollateralToken); err != nil {
@@ -519,7 +519,7 @@ func (pool *LendingPool) validateBalance(cloneStateDb *state.StateDB, cloneLendi
 	XDCXServ := XDPoSEngine.GetXDCXService()
 	lendingServ := XDPoSEngine.GetLendingService()
 	if XDCXServ == nil {
-		return fmt.Errorf("XDCx not found in order validation")
+		return errors.New("XDCx not found in order validation")
 	}
 	lendingTokenDecimal, err := XDCXServ.GetTokenDecimal(pool.chain, cloneStateDb, tx.LendingToken())
 	if err != nil {
@@ -554,10 +554,10 @@ func (pool *LendingPool) validateBalance(cloneStateDb *state.StateDB, cloneLendi
 		}
 	}
 	if lendTokenXDCPrice == nil || lendTokenXDCPrice.Sign() == 0 {
-		if tx.LendingToken().String() == common.XDCNativeAddress {
+		if tx.LendingToken() == common.XDCNativeAddressBinary {
 			lendTokenXDCPrice = common.BasePrice
 		} else {
-			lendTokenXDCPrice, err = lendingServ.GetMediumTradePriceBeforeEpoch(pool.chain, cloneStateDb, cloneTradingStateDb, tx.LendingToken(), common.HexToAddress(common.XDCNativeAddress))
+			lendTokenXDCPrice, err = lendingServ.GetMediumTradePriceBeforeEpoch(pool.chain, cloneStateDb, cloneTradingStateDb, tx.LendingToken(), common.XDCNativeAddressBinary)
 			if err != nil {
 				return err
 			}

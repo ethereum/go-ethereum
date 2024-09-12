@@ -150,7 +150,7 @@ func TestRewardBalance(t *testing.T) {
 		logCaps[i] = &logCap{accounts[randIndex].From.String(), randCap}
 	}
 
-	foundationAddr := common.HexToAddress(common.FoudationAddr)
+	foundationAddr := common.FoudationAddrBinary
 	totalReward := new(big.Int).SetInt64(15 * 1000)
 	rewards, err := GetRewardBalancesRate(foundationAddr, acc3Addr, totalReward, baseValidator)
 	if err != nil {
@@ -309,13 +309,13 @@ func TestStatedbUtils(t *testing.T) {
 		return true
 	}
 	contractBackend.ForEachStorageAt(ctx, validatorAddress, nil, f)
-	genesisAlloc[common.HexToAddress(common.MasternodeVotingSMC)] = core.GenesisAccount{
+	genesisAlloc[common.MasternodeVotingSMCBinary] = core.GenesisAccount{
 		Balance: validatorCap,
 		Code:    code,
 		Storage: storage,
 	}
 	contractBackendForValidator := backends.NewXDCSimulatedBackend(genesisAlloc, 10000000, params.TestXDPoSMockChainConfig)
-	validator, err := NewValidator(transactOpts, common.HexToAddress(common.MasternodeVotingSMC), contractBackendForValidator)
+	validator, err := NewValidator(transactOpts, common.MasternodeVotingSMCBinary, contractBackendForValidator)
 	if err != nil {
 		t.Fatalf("can't get validator object: %v", err)
 	}

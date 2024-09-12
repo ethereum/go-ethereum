@@ -356,27 +356,10 @@ func GetBloomBits(db DatabaseReader, bit uint, section uint64, head common.Hash)
 	return db.Get(key)
 }
 
-// WriteCanonicalHash stores the canonical hash for the given block number.
-func WriteCanonicalHash(db ethdb.KeyValueWriter, hash common.Hash, number uint64) error {
-	key := append(append(headerPrefix, encodeBlockNumber(number)...), numSuffix...)
-	if err := db.Put(key, hash.Bytes()); err != nil {
-		log.Crit("Failed to store number to hash mapping", "err", err)
-	}
-	return nil
-}
-
 // WriteHeadHeaderHash stores the head header's hash.
 func WriteHeadHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) error {
 	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
 		log.Crit("Failed to store last header's hash", "err", err)
-	}
-	return nil
-}
-
-// WriteHeadBlockHash stores the head block's hash.
-func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) error {
-	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
-		log.Crit("Failed to store last block's hash", "err", err)
 	}
 	return nil
 }
@@ -398,44 +381,6 @@ func WriteTrieSyncProgress(db ethdb.KeyValueWriter, count uint64) error {
 	return nil
 }
 
-// WriteHeader serializes a block header into the database.
-func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) error {
-	data, err := rlp.EncodeToBytes(header)
-	if err != nil {
-		return err
-	}
-	hash := header.Hash().Bytes()
-	num := header.Number.Uint64()
-	encNum := encodeBlockNumber(num)
-	key := append(blockHashPrefix, hash...)
-	if err := db.Put(key, encNum); err != nil {
-		log.Crit("Failed to store hash to number mapping", "err", err)
-	}
-	key = append(append(headerPrefix, encNum...), hash...)
-	if err := db.Put(key, data); err != nil {
-		log.Crit("Failed to store header", "err", err)
-	}
-	return nil
-}
-
-// WriteBody serializes the body of a block into the database.
-func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *types.Body) error {
-	data, err := rlp.EncodeToBytes(body)
-	if err != nil {
-		return err
-	}
-	return WriteBodyRLP(db, hash, number, data)
-}
-
-// WriteBodyRLP writes a serialized body of a block into the database.
-func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp rlp.RawValue) error {
-	key := append(append(bodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
-	if err := db.Put(key, rlp); err != nil {
-		log.Crit("Failed to store block body", "err", err)
-	}
-	return nil
-}
-
 // WriteTd serializes the total difficulty of a block into the database.
 func WriteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64, td *big.Int) error {
 	data, err := rlp.EncodeToBytes(td)
@@ -445,19 +390,6 @@ func WriteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64, td *big.I
 	key := append(append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...), tdSuffix...)
 	if err := db.Put(key, data); err != nil {
 		log.Crit("Failed to store block total difficulty", "err", err)
-	}
-	return nil
-}
-
-// WriteBlock serializes a block into the database, header and body separately.
-func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) error {
-	// Store the body first to retain database consistency
-	if err := WriteBody(db, block.Hash(), block.NumberU64(), block.Body()); err != nil {
-		return err
-	}
-	// Store the header too, signaling full block ownership
-	if err := WriteHeader(db, block.Header()); err != nil {
-		return err
 	}
 	return nil
 }

@@ -27,6 +27,9 @@ variable ssh_key_name {
 variable rpc_image {
   type = string
 }
+variable volume_size{
+  type = number
+}
 
 resource "aws_security_group" "rpc_sg" {
   name_prefix = "${var.network}_rpc_sg"
@@ -75,9 +78,9 @@ resource "aws_instance" "rpc_instance" {
                             }
   key_name                = var.ssh_key_name
   vpc_security_group_ids  = [aws_security_group.rpc_sg.id]
-  ebs_block_device {
-    device_name = "/dev/xvda"
-    volume_size = 500
+
+  root_block_device {
+    volume_size = var.volume_size
   }
 
 

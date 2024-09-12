@@ -32,7 +32,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/internal/debug"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/node"
@@ -90,7 +90,7 @@ type Bootnodes struct {
 }
 
 type XDCConfig struct {
-	Eth         eth.Config
+	Eth         ethconfig.Config
 	Shh         whisper.Config
 	Node        node.Config
 	Ethstats    ethstatsConfig
@@ -129,7 +129,7 @@ func defaultNodeConfig() node.Config {
 func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	// Load defaults.
 	cfg := XDCConfig{
-		Eth:         eth.DefaultConfig,
+		Eth:         ethconfig.Defaults,
 		Shh:         whisper.DefaultConfig,
 		XDCX:        XDCx.DefaultConfig,
 		Node:        defaultNodeConfig(),

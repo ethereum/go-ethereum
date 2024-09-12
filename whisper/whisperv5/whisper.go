@@ -247,7 +247,7 @@ func (w *Whisper) NewKeyPair() (string, error) {
 		return "", err
 	}
 	if !validatePrivateKey(key) {
-		return "", fmt.Errorf("failed to generate valid key")
+		return "", errors.New("failed to generate valid key")
 	}
 
 	id, err := GenerateRandomID()
@@ -259,7 +259,7 @@ func (w *Whisper) NewKeyPair() (string, error) {
 	defer w.keyMu.Unlock()
 
 	if w.privateKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errors.New("failed to generate unique ID")
 	}
 	w.privateKeys[id] = key
 	return id, nil
@@ -305,7 +305,7 @@ func (w *Whisper) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 	defer w.keyMu.RUnlock()
 	key := w.privateKeys[id]
 	if key == nil {
-		return nil, fmt.Errorf("invalid id")
+		return nil, errors.New("invalid id")
 	}
 	return key, nil
 }
@@ -318,7 +318,7 @@ func (w *Whisper) GenerateSymKey() (string, error) {
 	if err != nil {
 		return "", err
 	} else if !validateSymmetricKey(key) {
-		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
+		return "", errors.New("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
 	id, err := GenerateRandomID()
@@ -330,7 +330,7 @@ func (w *Whisper) GenerateSymKey() (string, error) {
 	defer w.keyMu.Unlock()
 
 	if w.symKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errors.New("failed to generate unique ID")
 	}
 	w.symKeys[id] = key
 	return id, nil
@@ -351,7 +351,7 @@ func (w *Whisper) AddSymKeyDirect(key []byte) (string, error) {
 	defer w.keyMu.Unlock()
 
 	if w.symKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errors.New("failed to generate unique ID")
 	}
 	w.symKeys[id] = key
 	return id, nil
@@ -364,7 +364,7 @@ func (w *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
 	if w.HasSymKey(id) {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errors.New("failed to generate unique ID")
 	}
 
 	derived, err := deriveKeyMaterial([]byte(password), EnvelopeVersion)
@@ -377,7 +377,7 @@ func (w *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 
 	// double check is necessary, because deriveKeyMaterial() is very slow
 	if w.symKeys[id] != nil {
-		return "", fmt.Errorf("critical error: failed to generate unique ID")
+		return "", errors.New("critical error: failed to generate unique ID")
 	}
 	w.symKeys[id] = derived
 	return id, nil
@@ -409,7 +409,7 @@ func (w *Whisper) GetSymKey(id string) ([]byte, error) {
 	if w.symKeys[id] != nil {
 		return w.symKeys[id], nil
 	}
-	return nil, fmt.Errorf("non-existent key ID")
+	return nil, errors.New("non-existent key ID")
 }
 
 // Subscribe installs a new message handler used for filtering, decrypting
@@ -427,7 +427,7 @@ func (w *Whisper) GetFilter(id string) *Filter {
 func (w *Whisper) Unsubscribe(id string) error {
 	ok := w.filters.Uninstall(id)
 	if !ok {
-		return fmt.Errorf("Unsubscribe: Invalid ID")
+		return errors.New("Unsubscribe: Invalid ID")
 	}
 	return nil
 }
@@ -440,7 +440,7 @@ func (w *Whisper) Send(envelope *Envelope) error {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("failed to add envelope")
+		return errors.New("failed to add envelope")
 	}
 	return err
 }
@@ -576,7 +576,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 
 	if envelope.Expiry < now {
 		if envelope.Expiry+SynchAllowance*2 < now {
-			return false, fmt.Errorf("very old message")
+			return false, errors.New("very old message")
 		} else {
 			log.Debug("expired envelope dropped", "hash", envelope.Hash().Hex())
 			return false, nil // drop envelope without error
@@ -851,7 +851,7 @@ func GenerateRandomID() (id string, err error) {
 		return "", err
 	}
 	if !validateSymmetricKey(buf) {
-		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
+		return "", errors.New("error in generateRandomID: crypto/rand failed to generate random data")
 	}
 	id = common.Bytes2Hex(buf)
 	return id, err

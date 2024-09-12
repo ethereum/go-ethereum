@@ -379,7 +379,7 @@ func (whisper *Whisper) NewKeyPair() (string, error) {
 		return "", err
 	}
 	if !validatePrivateKey(key) {
-		return "", fmt.Errorf("failed to generate valid key")
+		return "", errors.New("failed to generate valid key")
 	}
 
 	id, err := GenerateRandomID()
@@ -391,7 +391,7 @@ func (whisper *Whisper) NewKeyPair() (string, error) {
 	defer whisper.keyMu.Unlock()
 
 	if whisper.privateKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errors.New("failed to generate unique ID")
 	}
 	whisper.privateKeys[id] = key
 	return id, nil
@@ -437,7 +437,7 @@ func (whisper *Whisper) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 	defer whisper.keyMu.RUnlock()
 	key := whisper.privateKeys[id]
 	if key == nil {
-		return nil, fmt.Errorf("invalid id")
+		return nil, errors.New("invalid id")
 	}
 	return key, nil
 }
@@ -449,7 +449,7 @@ func (whisper *Whisper) GenerateSymKey() (string, error) {
 	if err != nil {
 		return "", err
 	} else if !validateDataIntegrity(key, aesKeyLength) {
-		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
+		return "", errors.New("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
 	id, err := GenerateRandomID()
@@ -461,7 +461,7 @@ func (whisper *Whisper) GenerateSymKey() (string, error) {
 	defer whisper.keyMu.Unlock()
 
 	if whisper.symKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errors.New("failed to generate unique ID")
 	}
 	whisper.symKeys[id] = key
 	return id, nil
@@ -482,7 +482,7 @@ func (whisper *Whisper) AddSymKeyDirect(key []byte) (string, error) {
 	defer whisper.keyMu.Unlock()
 
 	if whisper.symKeys[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errors.New("failed to generate unique ID")
 	}
 	whisper.symKeys[id] = key
 	return id, nil
@@ -495,7 +495,7 @@ func (whisper *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
 	if whisper.HasSymKey(id) {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errors.New("failed to generate unique ID")
 	}
 
 	// kdf should run no less than 0.1 seconds on an average computer,
@@ -510,7 +510,7 @@ func (whisper *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 
 	// double check is necessary, because deriveKeyMaterial() is very slow
 	if whisper.symKeys[id] != nil {
-		return "", fmt.Errorf("critical error: failed to generate unique ID")
+		return "", errors.New("critical error: failed to generate unique ID")
 	}
 	whisper.symKeys[id] = derived
 	return id, nil
@@ -542,7 +542,7 @@ func (whisper *Whisper) GetSymKey(id string) ([]byte, error) {
 	if whisper.symKeys[id] != nil {
 		return whisper.symKeys[id], nil
 	}
-	return nil, fmt.Errorf("non-existent key ID")
+	return nil, errors.New("non-existent key ID")
 }
 
 // Subscribe installs a new message handler used for filtering, decrypting
@@ -581,7 +581,7 @@ func (whisper *Whisper) GetFilter(id string) *Filter {
 func (whisper *Whisper) Unsubscribe(id string) error {
 	ok := whisper.filters.Uninstall(id)
 	if !ok {
-		return fmt.Errorf("Unsubscribe: Invalid ID")
+		return errors.New("Unsubscribe: Invalid ID")
 	}
 	return nil
 }
@@ -591,7 +591,7 @@ func (whisper *Whisper) Unsubscribe(id string) error {
 func (whisper *Whisper) Send(envelope *Envelope) error {
 	ok, err := whisper.add(envelope, false)
 	if err == nil && !ok {
-		return fmt.Errorf("failed to add envelope")
+		return errors.New("failed to add envelope")
 	}
 	return err
 }
@@ -762,7 +762,7 @@ func (whisper *Whisper) add(envelope *Envelope, isP2P bool) (bool, error) {
 
 	if envelope.Expiry < now {
 		if envelope.Expiry+DefaultSyncAllowance*2 < now {
-			return false, fmt.Errorf("very old message")
+			return false, errors.New("very old message")
 		}
 		log.Debug("expired envelope dropped", "hash", envelope.Hash().Hex())
 		return false, nil // drop envelope without error
@@ -1009,7 +1009,7 @@ func GenerateRandomID() (id string, err error) {
 		return "", err
 	}
 	if !validateDataIntegrity(buf, keyIDSize) {
-		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
+		return "", errors.New("error in generateRandomID: crypto/rand failed to generate random data")
 	}
 	id = common.Bytes2Hex(buf)
 	return id, err
