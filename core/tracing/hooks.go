@@ -306,6 +306,8 @@ const (
 	GasChangeWitnessContractCreation GasChangeReason = 16
 	// GasChangeWitnessCodeChunk is the amount charged for touching one or more contract code chunks
 	GasChangeWitnessCodeChunk GasChangeReason = 17
+	// GasChangeWitnessContractCollisionCheck the amount charged for checking a contract collision
+	GasChangeWitnessContractCollisionCheck GasChangeReason = 17
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as
 	// it will be "manually" tracked by a direct emit of the gas change event.

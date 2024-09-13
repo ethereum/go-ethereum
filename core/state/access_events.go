@@ -117,11 +117,23 @@ func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address) 
 	return gas
 }
 
+// ContractCreateCPreheck charges access costs before
+// a contract creation is initiated. It is just reads, because the
+// address collision is done before the transfer, and so no write
+// are guaranteed to happen at this point.
+func (ae *AccessEvents) ContractCreatePreCheckGas(addr common.Address) uint64 {
+	var gas uint64
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, false)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, false)
+	return gas
+}
+
 // ContractCreateInitGas returns the access gas costs for the initialization of
 // a contract creation.
-func (ae *AccessEvents) ContractCreateInitGas(addr common.Address, createSendsValue bool) uint64 {
+func (ae *AccessEvents) ContractCreateInitGas(addr common.Address) uint64 {
 	var gas uint64
 	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, true)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, true)
 	return gas
 }
 
