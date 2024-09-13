@@ -1055,13 +1055,20 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if interpreter.readOnly && !value.IsZero() {
 		return nil, ErrWriteProtection
 	}
-	if !value.IsZero() {
-		gas += params.CallStipend
+
+	var (
+		ret       []byte
+		returnGas uint64
+		err       error
+	)
+	if interpreter.evm.callGasTemp == 0 {
+		// zero temp call gas indicates a min retained gas error
+		ret, returnGas, err = nil, 0, ErrExecutionReverted
+	} else {
+		ret, returnGas, err = interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
 	}
 
-	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
-
-	if err == ErrExecutionReverted {
+	if err == ErrExecutionReverted || err == ErrInsufficientBalance || err == ErrDepth {
 		temp.SetOne()
 	} else if err != nil {
 		temp.SetUint64(2)
@@ -1102,11 +1109,14 @@ func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCont
 		err = ErrExecutionReverted
 		ret = nil
 		returnGas = gas
+	} else if interpreter.evm.callGasTemp == 0 {
+		// zero temp call gas indicates a min retained gas error
+		ret, returnGas, err = nil, 0, ErrExecutionReverted
 	} else {
 		ret, returnGas, err = interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, true)
 	}
 
-	if err == ErrExecutionReverted {
+	if err == ErrExecutionReverted || err == ErrDepth {
 		temp.SetOne()
 	} else if err != nil {
 		temp.SetUint64(2)
@@ -1136,8 +1146,19 @@ func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContex
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
-	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
-	if err == ErrExecutionReverted {
+	var (
+		ret       []byte
+		returnGas uint64
+		err       error
+	)
+	if interpreter.evm.callGasTemp == 0 {
+		// zero temp call gas indicates a min retained gas error
+		ret, returnGas, err = nil, 0, ErrExecutionReverted
+	} else {
+		ret, returnGas, err = interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
+	}
+
+	if err == ErrExecutionReverted || err == ErrDepth {
 		temp.SetOne()
 	} else if err != nil {
 		temp.SetUint64(2)
