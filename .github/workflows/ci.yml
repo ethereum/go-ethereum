@@ -107,7 +107,7 @@ jobs:
         - name: Test
           run: make test
 
-        - uses: actions/upload-artifact@v2
+        - uses: actions/upload-artifact@v4.4.0
           with:
             name: unitTest-coverage
             path: cover.out
@@ -158,7 +158,7 @@ jobs:
         - name: test-integration
           run: make test-integration
 
-        - uses: actions/upload-artifact@v2
+        - uses: actions/upload-artifact@v4.4.0
           with:
             name: integrationTest-coverage
             path: cover.out
@@ -174,7 +174,7 @@ jobs:
         - name: Checkout
           uses: actions/checkout@v3
         - name: Download artifacts
-          uses: actions/download-artifact@v2
+          uses: actions/download-artifact@v4.1.8
         - name: Upload coverage to Codecov
           uses: codecov/codecov-action@v3
 
@@ -258,7 +258,7 @@ jobs:
 
         - name: Upload logs
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4.4.0
           with:
             name: logs_${{ github.run_id }}
             path: |
@@ -277,7 +277,7 @@ jobs:
 
         - name: Upload code and chain data
           if: always()
-          uses: actions/upload-artifact@v3
+          uses: actions/upload-artifact@v4.4.0
           with:
             name: code_${{ github.run_id }}
             path: code.tar.gz
