@@ -1,0 +1,72 @@
+package state
+
+import (
+	"fmt"
+	"os"
+	"testing"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/portalnetwork/history"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
+)
+
+type TestCase struct {
+	BlockHeader           string `yaml:"block_header"`
+	ContentKey            string `yaml:"content_key"`
+	ContentValueOffer     string `yaml:"content_value_offer"`
+	ContentValueRetrieval string `yaml:"content_value_retrieval"`
+}
+
+func getTestCases(filename string) ([]TestCase, error) {
+	file, err := os.ReadFile(fmt.Sprintf("./testdata/%s", filename))
+	if err != nil {
+		return nil, err
+	}
+	res := make([]TestCase, 0)
+	err = yaml.Unmarshal(file, &res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+type MockAPI struct {
+	header string
+}
+
+func (p *MockAPI) HistoryRecursiveFindContent(contentKeyHex string) (*discover.ContentInfo, error) {
+	headerWithProof := &history.BlockHeaderWithProof{
+		Header: hexutil.MustDecode(p.header),
+		Proof: &history.BlockHeaderProof{
+			Selector: 0,
+			Proof:    [][]byte{},
+		},
+	}
+	data, err := headerWithProof.MarshalSSZ()
+	if err != nil {
+		return nil, err
+	}
+	return &discover.ContentInfo{
+		Content:     hexutil.Encode(data),
+		UtpTransfer: false,
+	}, nil
+}
+
+func TestValidateAccountTrieNode(t *testing.T) {
+	cases, err := getTestCases("account_trie_node.yaml")
+	require.NoError(t, err)
+
+	for _, tt := range cases {
+		server := rpc.NewServer()
+		api := &MockAPI{
+			header: tt.BlockHeader,
+		}
+		server.RegisterName("portal", api)
+		bn := NewStateNetwork(nil, server)
+		err = bn.validateContent(hexutil.MustDecode(tt.ContentKey), hexutil.MustDecode(tt.ContentValueOffer))
+		require.NoError(t, err)
+	}
+}

@@ -4,9 +4,16 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
+)
+
+const (
+	AccountTrieNodeType         byte = 0x20
+	ContractStorageTrieNodeType byte = 0x21
+	ContractByteCodeType        byte = 0x22
 )
 
 var _ common.SSZObj = (*Nibbles)(nil)
@@ -232,7 +239,7 @@ func (c *ContractBytecodeKey) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) c
 	)
 }
 
-const MaxTrieNodeLength = 1026
+const MaxTrieNodeLength = 1024
 
 type EncodedTrieNode []byte
 
@@ -254,6 +261,10 @@ func (e *EncodedTrieNode) FixedLength() uint64 {
 
 func (e EncodedTrieNode) HashTreeRoot(hFn tree.HashFn) tree.Root {
 	return hFn.ByteListHTR(e, MaxTrieNodeLength)
+}
+
+func (e *EncodedTrieNode) NodeHash() common.Bytes32 {
+	return tree.Root(crypto.Keccak256(*e))
 }
 
 // A content value type, used when retrieving a trie node.

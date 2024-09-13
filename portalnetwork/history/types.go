@@ -58,8 +58,23 @@ func (p *BlockHeaderProof) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(p)
 }
 
-func (p *BlockHeaderProof) MarshalSSZTo(_ []byte) (dst []byte, err error) {
-	return ssz.MarshalSSZ(p)
+func (p *BlockHeaderProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	dst = append(dst, byte(p.Selector))
+	if p.Selector != none {
+		if len(p.Proof) != 15 {
+			err = ssz.ErrBytesLengthFn("proofs size should be", len(p.Proof), 15)
+			return
+		}
+		for _, item := range p.Proof {
+			if len(item) != 32 {
+				err = ssz.ErrBytesLengthFn("single proof size should be", len(item), 32)
+				return
+			}
+			dst = append(dst, item...)
+		}
+	}
+	return
 }
 
 func (p *BlockHeaderProof) UnmarshalSSZ(buf []byte) (err error) {
