@@ -95,9 +95,41 @@ func (r *Request) encode(w *bytes.Buffer) error {
 	return r.inner.encode(w)
 }
 
-// MarshalJSON marshals as JSON.
+// Request intermediate type for json codec
+type requestMarshaling struct {
+	Type byte            `json:"type"`
+	Data json.RawMessage `json:"data"`
+}
+
+// UnmarshalJSON implements json.Marshaler interface
 func (r *Request) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.inner)
+	if r.inner == nil {
+		return nil, errors.New("no request data")
+	}
+
+	data, err := json.Marshal(r.inner)
+	if err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(requestMarshaling{Type: r.inner.requestType(), Data: data})
+}
+
+// UnmarshalJSON implements json.Unmarshaler interface
+func (r *Request) UnmarshalJSON(b []byte) error {
+	var raw requestMarshaling
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+
+	switch raw.Type {
+	case DepositRequestType:
+		r.inner = new(Deposit)
+	default:
+		return ErrRequestTypeNotSupported
+	}
+
+	return json.Unmarshal(raw.Data, r.inner)
 }
 
 // MarshalBinary returns the canonical encoding of the request.
