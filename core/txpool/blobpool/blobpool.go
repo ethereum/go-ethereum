@@ -566,7 +566,7 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			ids    []uint64
 			nonces []uint64
 		)
-		for txs[0].nonce < next {
+		for ; len(txs) > 0 && txs[0].nonce < next; txs = txs[1:] {
 			ids = append(ids, txs[0].id)
 			nonces = append(nonces, txs[0].nonce)
 
@@ -578,7 +578,6 @@ func (p *BlobPool) recheck(addr common.Address, inclusions map[common.Hash]uint6
 			if inclusions != nil {
 				p.offload(addr, txs[0].nonce, txs[0].id, inclusions)
 			}
-			txs = txs[1:]
 		}
 		log.Trace("Dropping overlapped blob transactions", "from", addr, "overlapped", nonces, "ids", ids, "left", len(txs))
 		dropOverlappedMeter.Mark(int64(len(ids)))
