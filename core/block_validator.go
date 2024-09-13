@@ -83,6 +83,18 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		return errors.New("withdrawals present in block body")
 	}
 
+	if header.RequestsHash != nil {
+		if block.Requests() == nil {
+			return errors.New("missing requests in block body")
+		}
+		// todo: update after the #30425 is merged
+		if hash := types.DeriveSha(block.Requests(), trie.NewStackTrie(nil)); hash != *header.RequestsHash {
+			return fmt.Errorf("requests root hash mismatch (header value %x, calculated %x)", *header.RequestsHash, hash)
+		}
+	} else if block.Requests() != nil {
+		return errors.New("requests present in block body")
+	}
+
 	// Blob transactions may be present after the Cancun fork.
 	var blobs int
 	for i, tx := range block.Transactions() {
