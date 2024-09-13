@@ -70,6 +70,7 @@ type fetchResult struct {
 	Transactions types.Transactions
 	Receipts     types.Receipts
 	Withdrawals  types.Withdrawals
+	Requests     types.Requests
 }
 
 func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
@@ -78,8 +79,13 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 	}
 	if !header.EmptyBody() {
 		item.pending.Store(item.pending.Load() | (1 << bodyType))
-	} else if header.WithdrawalsHash != nil {
-		item.Withdrawals = make(types.Withdrawals, 0)
+	} else {
+		if header.WithdrawalsHash != nil {
+			item.Withdrawals = make(types.Withdrawals, 0)
+		}
+		if header.RequestsHash != nil {
+			item.Requests = make(types.Requests, 0)
+		}
 	}
 	if fastSync && !header.EmptyReceipts() {
 		item.pending.Store(item.pending.Load() | (1 << receiptType))
@@ -93,6 +99,7 @@ func (f *fetchResult) body() types.Body {
 		Transactions: f.Transactions,
 		Uncles:       f.Uncles,
 		Withdrawals:  f.Withdrawals,
+		Requests:     f.Requests,
 	}
 }
 
@@ -860,6 +867,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 		result.Transactions = txLists[index]
 		result.Uncles = uncleLists[index]
 		result.Withdrawals = withdrawalLists[index]
+		result.Requests = requestsLists[index]
 		result.SetBodyDone()
 	}
 	return q.deliver(id, q.blockTaskPool, q.blockTaskQueue, q.blockPendPool,
