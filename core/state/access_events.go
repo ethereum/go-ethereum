@@ -121,10 +121,10 @@ func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address) 
 // a contract creation is initiated. It is just reads, because the
 // address collision is done before the transfer, and so no write
 // are guaranteed to happen at this point.
-func (aw *AccessEvents) ContractCreatePreCheckGas(addr common.Address) uint64 {
+func (ae *AccessEvents) ContractCreatePreCheckGas(addr common.Address) uint64 {
 	var gas uint64
-	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, false)
-	gas += aw.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, false)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.BasicDataLeafKey, false)
+	gas += ae.touchAddressAndChargeGas(addr, zeroTreeIndex, utils.CodeHashLeafKey, false)
 	return gas
 }
 
