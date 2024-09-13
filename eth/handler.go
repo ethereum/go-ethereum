@@ -512,9 +512,6 @@ func (h *handler) Start(maxPeers int) {
 	h.minedBlockSub = h.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go h.minedBroadcastLoop()
 
-	// start sync handlers
-	h.txFetcher.Start()
-
 	h.wg.Add(1)
 	go h.chainSync.loop()
 
