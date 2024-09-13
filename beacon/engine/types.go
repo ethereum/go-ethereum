@@ -76,6 +76,7 @@ type ExecutableData struct {
 	Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 	BlobGasUsed      *uint64                 `json:"blobGasUsed"`
 	ExcessBlobGas    *uint64                 `json:"excessBlobGas"`
+	Deposits         types.Deposits          `json:"depositRequests"`
 	ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 }
 
@@ -231,6 +232,19 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 		h := types.DeriveSha(types.Withdrawals(data.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
+	// Compute requestsHash if any requests are non-nil.
+	var (
+		requestsHash *common.Hash
+		requests     types.Requests
+	)
+	if data.Deposits != nil {
+		requests = make(types.Requests, 0)
+		for _, d := range data.Deposits {
+			requests = append(requests, types.NewRequest(d))
+		}
+		h := types.DeriveSha(requests, trie.NewStackTrie(nil))
+		requestsHash = &h
+	}
 	header := &types.Header{
 		ParentHash:       data.ParentHash,
 		UncleHash:        types.EmptyUncleHash,
@@ -251,9 +265,10 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 		ExcessBlobGas:    data.ExcessBlobGas,
 		BlobGasUsed:      data.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
+		RequestsHash:     requestsHash,
 	}
 	block := types.NewBlockWithHeader(header)
-	block = block.WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals})
+	block = block.WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals, Requests: requests})
 	block = block.WithWitness(data.ExecutionWitness)
 	if block.Hash() != data.BlockHash {
 		return nil, fmt.Errorf("blockhash mismatch, want %x, got %x", data.BlockHash, block.Hash())
@@ -296,13 +311,30 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(sidecar.Proofs[j][:]))
 		}
 	}
+	setRequests(block.Requests(), data)
 	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees, BlobsBundle: &bundle, Override: false}
 }
 
-// ExecutionPayloadBodyV1 is used in the response to GetPayloadBodiesByHashV1 and GetPayloadBodiesByRangeV1
-type ExecutionPayloadBodyV1 struct {
+// setRequests differentiates the different request types and
+// assigns them to the associated fields in ExecutableData.
+func setRequests(requests types.Requests, data *ExecutableData) {
+	if requests != nil {
+		// If requests is non-nil, it means deposits are available in block and we
+		// should return an empty slice instead of nil if there are no deposits.
+		data.Deposits = make(types.Deposits, 0)
+	}
+	for _, r := range requests {
+		if d, ok := r.Inner().(*types.Deposit); ok {
+			data.Deposits = append(data.Deposits, d)
+		}
+	}
+}
+
+// ExecutionPayloadBody is used in the response to GetPayloadBodiesByHash and GetPayloadBodiesByRange
+type ExecutionPayloadBody struct {
 	TransactionData []hexutil.Bytes     `json:"transactions"`
 	Withdrawals     []*types.Withdrawal `json:"withdrawals"`
+	Deposits        types.Deposits      `json:"depositRequests"`
 }
 
 // Client identifiers to support ClientVersionV1.

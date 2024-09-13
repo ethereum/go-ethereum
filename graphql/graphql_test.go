@@ -453,6 +453,7 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 		TrieDirtyCache: 5,
 		TrieTimeout:    60 * time.Minute,
 		SnapshotCache:  5,
+		RPCGasCap:      1000000,
 		StateScheme:    rawdb.HashScheme,
 	}
 	var engine consensus.Engine = ethash.NewFaker()

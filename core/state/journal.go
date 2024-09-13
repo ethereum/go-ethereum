@@ -153,7 +153,7 @@ func (j *journal) logChange(txHash common.Hash) {
 }
 
 func (j *journal) createObject(addr common.Address) {
-	j.append(createObjectChange{account: &addr})
+	j.append(createObjectChange{account: addr})
 }
 
 func (j *journal) createContract(addr common.Address) {
@@ -161,12 +161,12 @@ func (j *journal) createContract(addr common.Address) {
 }
 
 func (j *journal) destruct(addr common.Address) {
-	j.append(selfDestructChange{account: &addr})
+	j.append(selfDestructChange{account: addr})
 }
 
 func (j *journal) storageChange(addr common.Address, key, prev, origin common.Hash) {
 	j.append(storageChange{
-		account:   &addr,
+		account:   addr,
 		key:       key,
 		prevvalue: prev,
 		origvalue: origin,
@@ -175,7 +175,7 @@ func (j *journal) storageChange(addr common.Address, key, prev, origin common.Ha
 
 func (j *journal) transientStateChange(addr common.Address, key, prev common.Hash) {
 	j.append(transientStorageChange{
-		account:  &addr,
+		account:  addr,
 		key:      key,
 		prevalue: prev,
 	})
@@ -187,25 +187,25 @@ func (j *journal) refundChange(previous uint64) {
 
 func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
 	j.append(balanceChange{
-		account: &addr,
+		account: addr,
 		prev:    previous.Clone(),
 	})
 }
 
 func (j *journal) setCode(address common.Address) {
-	j.append(codeChange{account: &address})
+	j.append(codeChange{account: address})
 }
 
 func (j *journal) nonceChange(address common.Address, prev uint64) {
 	j.append(nonceChange{
-		account: &address,
+		account: address,
 		prev:    prev,
 	})
 }
 
 func (j *journal) touchChange(address common.Address) {
 	j.append(touchChange{
-		account: &address,
+		account: address,
 	})
 	if address == ripemd {
 		// Explicitly put it in the dirty-cache, which is otherwise generated from
@@ -215,50 +215,48 @@ func (j *journal) touchChange(address common.Address) {
 }
 
 func (j *journal) accessListAddAccount(addr common.Address) {
-	j.append(accessListAddAccountChange{&addr})
+	j.append(accessListAddAccountChange{addr})
 }
 
 func (j *journal) accessListAddSlot(addr common.Address, slot common.Hash) {
 	j.append(accessListAddSlotChange{
-		address: &addr,
-		slot:    &slot,
+		address: addr,
+		slot:    slot,
 	})
 }
 
 type (
 	// Changes to the account trie.
 	createObjectChange struct {
-		account *common.Address
+		account common.Address
 	}
-
 	// createContractChange represents an account becoming a contract-account.
 	// This event happens prior to executing initcode. The journal-event simply
 	// manages the created-flag, in order to allow same-tx destruction.
 	createContractChange struct {
 		account common.Address
 	}
-
 	selfDestructChange struct {
-		account *common.Address
+		account common.Address
 	}
 
 	// Changes to individual accounts.
 	balanceChange struct {
-		account *common.Address
+		account common.Address
 		prev    *uint256.Int
 	}
 	nonceChange struct {
-		account *common.Address
+		account common.Address
 		prev    uint64
 	}
 	storageChange struct {
-		account   *common.Address
+		account   common.Address
 		key       common.Hash
 		prevvalue common.Hash
 		origvalue common.Hash
 	}
 	codeChange struct {
-		account *common.Address
+		account common.Address
 	}
 
 	// Changes to other state values.
@@ -269,31 +267,31 @@ type (
 		txhash common.Hash
 	}
 	touchChange struct {
-		account *common.Address
+		account common.Address
 	}
 
 	// Changes to the access list
 	accessListAddAccountChange struct {
-		address *common.Address
+		address common.Address
 	}
 	accessListAddSlotChange struct {
-		address *common.Address
-		slot    *common.Hash
+		address common.Address
+		slot    common.Hash
 	}
 
 	// Changes to transient storage
 	transientStorageChange struct {
-		account       *common.Address
+		account       common.Address
 		key, prevalue common.Hash
 	}
 )
 
 func (ch createObjectChange) revert(s *StateDB) {
-	delete(s.stateObjects, *ch.account)
+	delete(s.stateObjects, ch.account)
 }
 
 func (ch createObjectChange) dirtied() *common.Address {
-	return ch.account
+	return &ch.account
 }
 
 func (ch createObjectChange) copy() journalEntry {
@@ -317,14 +315,14 @@ func (ch createContractChange) copy() journalEntry {
 }
 
 func (ch selfDestructChange) revert(s *StateDB) {
-	obj := s.getStateObject(*ch.account)
+	obj := s.getStateObject(ch.account)
 	if obj != nil {
 		obj.selfDestructed = false
 	}
 }
 
 func (ch selfDestructChange) dirtied() *common.Address {
-	return ch.account
+	return &ch.account
 }
 
 func (ch selfDestructChange) copy() journalEntry {
@@ -339,7 +337,7 @@ func (ch touchChange) revert(s *StateDB) {
 }
 
 func (ch touchChange) dirtied() *common.Address {
-	return ch.account
+	return &ch.account
 }
 
 func (ch touchChange) copy() journalEntry {
@@ -349,11 +347,11 @@ func (ch touchChange) copy() journalEntry {
 }
 
 func (ch balanceChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setBalance(ch.prev)
+	s.getStateObject(ch.account).setBalance(ch.prev)
 }
 
 func (ch balanceChange) dirtied() *common.Address {
-	return ch.account
+	return &ch.account
 }
 
 func (ch balanceChange) copy() journalEntry {
@@ -364,11 +362,11 @@ func (ch balanceChange) copy() journalEntry {
 }
 
 func (ch nonceChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setNonce(ch.prev)
+	s.getStateObject(ch.account).setNonce(ch.prev)
 }
 
 func (ch nonceChange) dirtied() *common.Address {
-	return ch.account
+	return &ch.account
 }
 
 func (ch nonceChange) copy() journalEntry {
@@ -379,11 +377,11 @@ func (ch nonceChange) copy() journalEntry {
 }
 
 func (ch codeChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setCode(types.EmptyCodeHash, nil)
+	s.getStateObject(ch.account).setCode(types.EmptyCodeHash, nil)
 }
 
 func (ch codeChange) dirtied() *common.Address {
-	return ch.account
+	return &ch.account
 }
 
 func (ch codeChange) copy() journalEntry {
@@ -391,11 +389,11 @@ func (ch codeChange) copy() journalEntry {
 }
 
 func (ch storageChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setState(ch.key, ch.prevvalue, ch.origvalue)
+	s.getStateObject(ch.account).setState(ch.key, ch.prevvalue, ch.origvalue)
 }
 
 func (ch storageChange) dirtied() *common.Address {
-	return ch.account
+	return &ch.account
 }
 
 func (ch storageChange) copy() journalEntry {
@@ -407,7 +405,7 @@ func (ch storageChange) copy() journalEntry {
 }
 
 func (ch transientStorageChange) revert(s *StateDB) {
-	s.setTransientState(*ch.account, ch.key, ch.prevalue)
+	s.setTransientState(ch.account, ch.key, ch.prevalue)
 }
 
 func (ch transientStorageChange) dirtied() *common.Address {
@@ -466,7 +464,7 @@ func (ch accessListAddAccountChange) revert(s *StateDB) {
 		(addr) at this point, since no storage adds can remain when come upon
 		a single (addr) change.
 	*/
-	s.accessList.DeleteAddress(*ch.address)
+	s.accessList.DeleteAddress(ch.address)
 }
 
 func (ch accessListAddAccountChange) dirtied() *common.Address {
@@ -480,7 +478,7 @@ func (ch accessListAddAccountChange) copy() journalEntry {
 }
 
 func (ch accessListAddSlotChange) revert(s *StateDB) {
-	s.accessList.DeleteSlot(*ch.address, *ch.slot)
+	s.accessList.DeleteSlot(ch.address, ch.slot)
 }
 
 func (ch accessListAddSlotChange) dirtied() *common.Address {
