@@ -14,6 +14,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
@@ -23,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/portalnetwork/beacon"
+	"github.com/ethereum/go-ethereum/portalnetwork/ethapi"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
 	"github.com/ethereum/go-ethereum/portalnetwork/state"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
@@ -122,8 +124,9 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, addr string) err
 		return err
 	}
 
+	var historyNetwork *history.HistoryNetwork
 	if slices.Contains(config.Networks, portalwire.History.Name()) {
-		err = initHistory(config, server, conn, localNode, discV5)
+		historyNetwork, err = initHistory(config, server, conn, localNode, discV5)
 		if err != nil {
 			return err
 		}
@@ -141,6 +144,16 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, addr string) err
 		if err != nil {
 			return err
 		}
+	}
+
+	ethapi := &ethapi.API{
+		History: historyNetwork,
+		//static configuration of ChainId, currently only mainnet implemented
+		ChainID: core.DefaultGenesisBlock().Config.ChainID,
+	}
+	err = server.RegisterName("eth", ethapi)
+	if err != nil {
+		return err
 	}
 
 	httpServer := &http.Server{
@@ -174,11 +187,11 @@ func initDiscV5(config Config, conn discover.UDPConn) (*discover.UDPv5, *enode.L
 	return discV5, localNode, nil
 }
 
-func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) error {
+func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) (*history.HistoryNetwork, error) {
 	networkName := portalwire.History.Name()
 	db, err := history.NewDB(config.DataDir, networkName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	contentStorage, err := history.NewHistoryStorage(storage.PortalStorageConfig{
 		StorageCapacityMB: config.DataCapacity,
@@ -187,27 +200,27 @@ func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, local
 		NetworkName:       networkName,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	contentQueue := make(chan *discover.ContentElement, 50)
 
 	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.History, config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 	historyAPI := discover.NewPortalAPI(protocol)
 	historyNetworkAPI := history.NewHistoryNetworkAPI(historyAPI)
 	err = server.RegisterName("portal", historyNetworkAPI)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	accumulator, err := history.NewMasterAccumulator()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	historyNetwork := history.NewHistoryNetwork(protocol, &accumulator)
-	return historyNetwork.Start()
+	return historyNetwork, historyNetwork.Start()
 }
 
 func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) error {
