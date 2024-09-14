@@ -482,11 +482,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Validate initcode per EOF rules. If caller is EOF and initcode is legacy, fail.
 	isInitcodeEOF := hasEOFMagic(codeAndHash.code)
-	if evm.chainRules.IsPrague {
-		if isInitcodeEOF {
-			if !allowEOF {
-				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, ErrLegacyCode)
-			}
+	if isInitcodeEOF {
+		if allowEOF {
 			// If the initcode is EOF, verify it is well-formed.
 			var c Container
 			if err := c.UnmarshalBinary(codeAndHash.code, isInitcodeEOF); err != nil {
@@ -496,7 +493,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, err)
 			}
 			contract.Container = &c
-		} else if allowEOF {
+		} else {
 			// Don't allow EOF contract to execute legacy initcode.
 			return nil, common.Address{}, gas, ErrLegacyCode
 		}
@@ -573,7 +570,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if err == nil && len(ret) >= 1 && HasEOFByte(ret) {
-		if evm.chainRules.IsShanghai {
+		if evm.chainRules.IsPrague && isInitcodeEOF {
+			fmt.Printf("FIXME - valid EOF deployment\n")
 			// Don't reject EOF contracts after Shanghai
 		} else if evm.chainRules.IsLondon {
 			err = ErrInvalidCode

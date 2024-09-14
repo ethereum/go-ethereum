@@ -517,7 +517,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// invalid, the tx is considered valid (so update nonce), but
 		// is to be treated as an exceptional abort (so burn all gas).
 		if errors.Is(vmerr, vm.ErrInvalidEOFInitcode) {
-			st.gasRemaining = 0
+			//st.gasRemaining = 0
 			st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
 		}
 	} else {
