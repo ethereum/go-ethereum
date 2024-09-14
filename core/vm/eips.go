@@ -924,7 +924,6 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	}
 	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 	containerCode := scope.Contract.Container.ContainerCode[idx]
-	//deployedCode := append(containerCode, ret...)
 	if len(containerCode) == 0 {
 		return nil, errors.New("nonexistant subcontainer")
 	}
