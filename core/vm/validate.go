@@ -155,9 +155,6 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable,
 			if ct := container.ContainerSections[arg]; len(ct.Data) != ct.DataSize {
 				return nil, fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", ErrEOFCreateWithTruncatedSection, arg, len(ct.Data), ct.DataSize, i)
 			}
-			if _, ok := visitedSubcontainers[arg]; ok {
-				return nil, fmt.Errorf("section already referenced, arg :%d", arg)
-			}
 			// We need to store per subcontainer how it was referenced
 			if v, ok := visitedSubcontainers[arg]; ok && v != RefByEOFCreate {
 				return nil, fmt.Errorf("section already referenced, arg :%d", arg)

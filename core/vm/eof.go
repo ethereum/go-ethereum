@@ -145,10 +145,15 @@ func (c *Container) MarshalBinary() []byte {
 
 // UnmarshalBinary decodes an EOF container.
 func (c *Container) UnmarshalBinary(b []byte, isInitcode bool) error {
-	return c.unmarshalSubContainer(b, isInitcode, true)
+	return c.unmarshalContainer(b, isInitcode, true)
 }
 
-func (c *Container) unmarshalSubContainer(b []byte, isInitcode bool, topLevel bool) error {
+// UnmarshalSubContainer decodes an EOF container that is container in another container
+func (c *Container) UnmarshalSubContainer(b []byte, isInitcode bool) error {
+	return c.unmarshalContainer(b, isInitcode, false)
+}
+
+func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool) error {
 	if !hasEOFMagic(b) {
 		return fmt.Errorf("%w: want %x", ErrInvalidMagic, eofMagic)
 	}
@@ -294,7 +299,7 @@ func (c *Container) unmarshalSubContainer(b []byte, isInitcode bool, topLevel bo
 			}
 			c := new(Container)
 			end := min(idx+size, len(b))
-			if err := c.unmarshalSubContainer(b[idx:end], isInitcode, false); err != nil {
+			if err := c.unmarshalContainer(b[idx:end], isInitcode, false); err != nil {
 				if topLevel {
 					return fmt.Errorf("%w in sub container %d", err, i)
 				}

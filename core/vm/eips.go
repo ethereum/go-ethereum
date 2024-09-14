@@ -924,22 +924,28 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	}
 	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 	containerCode := scope.Contract.Container.ContainerCode[idx]
-	deployedCode := append(containerCode, ret...)
-	if len(deployedCode) == 0 {
+	//deployedCode := append(containerCode, ret...)
+	if len(containerCode) == 0 {
 		return nil, errors.New("nonexistant subcontainer")
 	}
 	// Validate the subcontainer
 	var c Container
-	if err := c.UnmarshalBinary(deployedCode, true); err != nil {
+	if err := c.UnmarshalSubContainer(containerCode, false); err != nil {
 		return nil, err
 	}
-	if err := c.ValidateCode(interpreter.tableEOF, true); err != nil {
-		return nil, err
-	}
+
+	// append the auxdata
+	c.Data = append(c.Data, ret...)
 	if len(c.Data) < c.DataSize {
-		return nil, errors.New("invalid subcontainer")
+		return nil, errors.New("incomplete aux data")
 	}
 	c.DataSize = len(c.Data)
+
+	// probably unneeded as subcontainers are deeply validated
+	if err := c.ValidateCode(interpreter.tableEOF, false); err != nil {
+		return nil, err
+	}
+
 	// Restore context
 	retCtx := scope.ReturnStack.Pop()
 	scope.CodeSection = retCtx.Section
