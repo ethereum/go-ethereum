@@ -1,0 +1,38 @@
+name: libevm delta
+
+on:
+  push:
+    branches: [ libevm ]
+  pull_request:
+    branches: [ libevm ]
+  workflow_dispatch:
+
+jobs:
+  diffs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # everything
+          fetch-tags: true
+      
+      - name: Color-blindness a11y
+        run: | # https://davidmathlogic.com/colorblind/#%23D81B60-%231E88E5-%23FFC107-%23004D40:~:text=8%20pairs%20of%20contrasting%20colors
+          git config color.diff.old "#DC3220";
+          git config color.diff.new "#005AB5";
+
+      - name: git diff libevm-base
+        run: |
+          git diff --diff-filter=a --word-diff --unified=0 --color=always \
+            libevm-base \
+            ':(exclude).golangci.yml' \
+            ':(exclude).github/**';
+      
+      - name: git diff libevm-base..libevm
+        run: |
+          git checkout libevm --;
+          git diff --diff-filter=a --word-diff --unified=0 --color=always \
+            libevm-base \
+            ':(exclude).golangci.yml' \
+            ':(exclude).github/**';
+
