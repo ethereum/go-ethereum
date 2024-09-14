@@ -512,7 +512,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
-		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
+		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value, rules.IsPrague)
 		// Special case for EOF, if the initcode or deployed code is
 		// invalid, the tx is considered valid (so update nonce), but
 		// is to be treated as an exceptional abort (so burn all gas).

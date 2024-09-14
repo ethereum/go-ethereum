@@ -457,7 +457,7 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode, input []byte, fromEOF bool) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode, input []byte, allowEOF bool) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller.Address(), address, codeAndHash.code, gas, value.ToBig())
 		defer func(startGas uint64) {
@@ -484,7 +484,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	isInitcodeEOF := hasEOFMagic(codeAndHash.code)
 	if evm.chainRules.IsPrague {
 		if isInitcodeEOF {
-			if !fromEOF {
+			if !allowEOF {
 				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, ErrLegacyCode)
 			}
 			// If the initcode is EOF, verify it is well-formed.
@@ -496,7 +496,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, err)
 			}
 			contract.Container = &c
-		} else if fromEOF {
+		} else if allowEOF {
 			// Don't allow EOF contract to execute legacy initcode.
 			return nil, common.Address{}, gas, ErrLegacyCode
 		}
@@ -619,9 +619,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint256.Int, allowEOF bool) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, nil, false)
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, nil, allowEOF)
 }
 
 // Create2 creates a new contract using code as deployment code.
