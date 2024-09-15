@@ -20,7 +20,6 @@ import (
 	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/holiman/uint256"
 )
 
@@ -202,7 +201,7 @@ func (ch selfDestructChange) revert(s *StateDB) {
 	obj := s.getStateObject(*ch.account)
 	if obj != nil {
 		obj.selfDestructed = ch.prev
-		obj.setBalanceLogged(ch.prevbalance, tracing.BalanceChangeRevert)
+		obj.setBalance(ch.prevbalance)
 	}
 }
 
@@ -234,7 +233,7 @@ func (ch touchChange) copy() journalEntry {
 }
 
 func (ch balanceChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setBalanceLogged(ch.prev, tracing.BalanceChangeRevert)
+	s.getStateObject(*ch.account).setBalance(ch.prev)
 }
 
 func (ch balanceChange) dirtied() *common.Address {
@@ -249,7 +248,7 @@ func (ch balanceChange) copy() journalEntry {
 }
 
 func (ch nonceChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setNonceLogged(ch.prev)
+	s.getStateObject(*ch.account).setNonce(ch.prev)
 }
 
 func (ch nonceChange) dirtied() *common.Address {
@@ -264,7 +263,7 @@ func (ch nonceChange) copy() journalEntry {
 }
 
 func (ch codeChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setCodeLogged(common.BytesToHash(ch.prevhash), ch.prevcode)
+	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
 }
 
 func (ch codeChange) dirtied() *common.Address {
@@ -280,7 +279,7 @@ func (ch codeChange) copy() journalEntry {
 }
 
 func (ch storageChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setStateLogged(ch.key, ch.prevvalue, ch.origvalue)
+	s.getStateObject(*ch.account).setState(ch.key, ch.prevvalue, ch.origvalue)
 }
 
 func (ch storageChange) dirtied() *common.Address {

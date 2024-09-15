@@ -257,11 +257,6 @@ func (s *stateObject) SetState(key, value common.Hash) {
 		prevvalue: prev,
 		origvalue: origin,
 	})
-	s.setStateLogged(key, value, origin)
-}
-
-func (s *stateObject) setStateLogged(key, value, origin common.Hash) {
-	prev, _ := s.getState(key)
 	if s.db.logger != nil && s.db.logger.OnStorageChange != nil {
 		s.db.logger.OnStorageChange(s.address, key, prev, value)
 	}
@@ -519,10 +514,6 @@ func (s *stateObject) SetBalance(amount *uint256.Int, reason tracing.BalanceChan
 		account: &s.address,
 		prev:    new(uint256.Int).Set(s.data.Balance),
 	})
-	s.setBalanceLogged(amount, reason)
-}
-
-func (s *stateObject) setBalanceLogged(amount *uint256.Int, reason tracing.BalanceChangeReason) {
 	if s.db.logger != nil && s.db.logger.OnBalanceChange != nil {
 		s.db.logger.OnBalanceChange(s.address, s.Balance().ToBig(), amount.ToBig(), reason)
 	}
@@ -604,11 +595,6 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 		prevhash: s.CodeHash(),
 		prevcode: prevcode,
 	})
-	s.setCodeLogged(codeHash, code)
-}
-
-func (s *stateObject) setCodeLogged(codeHash common.Hash, code []byte) {
-	prevcode := s.Code()
 	if s.db.logger != nil && s.db.logger.OnCodeChange != nil {
 		s.db.logger.OnCodeChange(s.address, common.BytesToHash(s.CodeHash()), prevcode, codeHash, code)
 	}
@@ -626,10 +612,6 @@ func (s *stateObject) SetNonce(nonce uint64) {
 		account: &s.address,
 		prev:    s.data.Nonce,
 	})
-	s.setNonceLogged(nonce)
-}
-
-func (s *stateObject) setNonceLogged(nonce uint64) {
 	if s.db.logger != nil && s.db.logger.OnNonceChange != nil {
 		s.db.logger.OnNonceChange(s.address, s.data.Nonce, nonce)
 	}
