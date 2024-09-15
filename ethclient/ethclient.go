@@ -467,11 +467,7 @@ func toFilterArg(q ethereum.FilterQuery) (interface{}, error) {
 			return nil, errors.New("cannot specify both BlockHash and FromBlock/ToBlock")
 		}
 	} else {
-		if q.FromBlock == nil {
-			arg["fromBlock"] = "0x0"
-		} else {
-			arg["fromBlock"] = toBlockNumArg(q.FromBlock)
-		}
+		arg["fromBlock"] = toBlockNumArg(q.FromBlock)
 		arg["toBlock"] = toBlockNumArg(q.ToBlock)
 	}
 	return arg, nil

@@ -92,7 +92,7 @@ func TestToFilterArg(t *testing.T) {
 			},
 			map[string]interface{}{
 				"address":   addresses,
-				"fromBlock": "0x0",
+				"fromBlock": "latest",
 				"toBlock":   "latest",
 				"topics":    [][]common.Hash{},
 			},
