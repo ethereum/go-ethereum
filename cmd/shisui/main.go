@@ -290,7 +290,8 @@ func initState(config Config, server *rpc.Server, conn discover.UDPConn, localNo
 	if err != nil {
 		return err
 	}
-	historyNetwork := state.NewStateNetwork(protocol, server)
+	client := rpc.DialInProc(server)
+	historyNetwork := state.NewStateNetwork(protocol, client)
 	return historyNetwork.Start()
 }
 

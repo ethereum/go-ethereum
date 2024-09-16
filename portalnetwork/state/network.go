@@ -29,11 +29,8 @@ type StateNetwork struct {
 	client         *rpc.Client
 }
 
-func NewStateNetwork(portalProtocol *discover.PortalProtocol, rpcServer *rpc.Server) *StateNetwork {
+func NewStateNetwork(portalProtocol *discover.PortalProtocol, client *rpc.Client) *StateNetwork {
 	ctx, cancel := context.WithCancel(context.Background())
-
-	client := rpc.DialInProc(rpcServer)
-
 	return &StateNetwork{
 		portalProtocol: portalProtocol,
 		closeCtx:       ctx,

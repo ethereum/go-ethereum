@@ -65,7 +65,8 @@ func TestValidateAccountTrieNode(t *testing.T) {
 			header: tt.BlockHeader,
 		}
 		server.RegisterName("portal", api)
-		bn := NewStateNetwork(nil, server)
+		client := rpc.DialInProc(server)
+		bn := NewStateNetwork(nil, client)
 		err = bn.validateContent(hexutil.MustDecode(tt.ContentKey), hexutil.MustDecode(tt.ContentValueOffer))
 		require.NoError(t, err)
 	}
