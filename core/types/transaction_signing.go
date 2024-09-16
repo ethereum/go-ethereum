@@ -64,21 +64,24 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint
 // Use this in transaction-handling code where the current block number is unknown. If you
 // have the current block number available, use MakeSigner instead.
 func LatestSigner(config *params.ChainConfig) Signer {
+	var signer Signer
 	if config.ChainID != nil {
-		if config.CancunTime != nil {
-			return NewCancunSigner(config.ChainID)
+		switch {
+		case config.CancunTime != nil:
+			signer = NewCancunSigner(config.ChainID)
+		case config.LondonBlock != nil:
+			signer = NewLondonSigner(config.ChainID)
+		case config.BerlinBlock != nil:
+			signer = NewEIP2930Signer(config.ChainID)
+		case config.EIP155Block != nil:
+			signer = NewEIP155Signer(config.ChainID)
+		default:
+			signer = HomesteadSigner{}
 		}
-		if config.LondonBlock != nil {
-			return NewLondonSigner(config.ChainID)
-		}
-		if config.BerlinBlock != nil {
-			return NewEIP2930Signer(config.ChainID)
-		}
-		if config.EIP155Block != nil {
-			return NewEIP155Signer(config.ChainID)
-		}
+	} else {
+		signer = HomesteadSigner{}
 	}
-	return HomesteadSigner{}
+	return signer
 }
 
 // LatestSignerForChainID returns the 'most permissive' Signer available. Specifically,
@@ -89,10 +92,13 @@ func LatestSigner(config *params.ChainConfig) Signer {
 // configuration are unknown. If you have a ChainConfig, use LatestSigner instead.
 // If you have a ChainConfig and know the current block number, use MakeSigner instead.
 func LatestSignerForChainID(chainID *big.Int) Signer {
-	if chainID == nil {
-		return HomesteadSigner{}
+	var signer Signer
+	if chainID != nil {
+		signer = NewCancunSigner(chainID)
+	} else {
+		signer = HomesteadSigner{}
 	}
-	return NewCancunSigner(chainID)
+	return signer
 }
 
 // SignTx signs the transaction using the given signer and private key.
