@@ -44,6 +44,7 @@ var (
 		Name:     "subtest.index",
 		Usage:    "The index of the subtest to run",
 		Category: flags.VMCategory,
+		Value:    -1, // default to select all subtest indices
 	}
 	TestNameFlag = &cli.StringFlag{
 		Name:     "subtest.name",
@@ -114,7 +115,8 @@ type stateTestCase struct {
 	st   tests.StateSubtest
 }
 
-func aggregateSubtests(ctx *cli.Context, testsByName map[string]tests.StateTest) []stateTestCase {
+// collectMatchedSubtests returns test cases which match against provided filtering CLI parameters
+func collectMatchedSubtests(ctx *cli.Context, testsByName map[string]tests.StateTest) []stateTestCase {
 	res := []stateTestCase{}
 
 	subtestName := ctx.String(TestNameFlag.Name)
@@ -152,7 +154,7 @@ func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, benc
 		return err
 	}
 
-	matchingTests := aggregateSubtests(ctx, testsByName)
+	matchingTests := collectMatchedSubtests(ctx, testsByName)
 
 	// Iterate over all the tests, run them and aggregate the results
 	results := make([]StatetestResult, 0, len(testsByName))
@@ -189,9 +191,8 @@ func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, benc
 	var gasUsed uint64
 	result := testing.Benchmark(func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			for _, test := range matchingTests {
-				_, _, gasUsed, _ = test.test.RunNoVerify(test.st, cfg, false, rawdb.HashScheme)
-			}
+			test := matchingTests[0]
+			_, _, gasUsed, _ = test.test.RunNoVerify(test.st, cfg, false, rawdb.HashScheme)
 		}
 	})
 	var stats execStats
