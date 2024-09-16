@@ -2,6 +2,52 @@
 
 All notable changes to the tracing interface will be documented in this file.
 
+## [Unreleased]
+
+The tracing interface has been extended with backwards-compatible changes to support more use-cases and simplify tracer code. The most notable changes are state read hooks as well a state journaling library which emits events when a call is reverted.
+
+### New methods
+
+- `OnReorg(reverted []*types.Block)`: This hook is called when a reorg is detected. The `reverted` slice contains the blocks that are no longer part of the canonical chain.
+- `OnBalanceRead(addr common.Address, balance *big.Int)`: This hook is called when an account balance is read.
+- `OnNonceRead(addr common.Address, nonce uint64)`: This hook is called when an account nonce is read.
+- `OnCodeRead(addr common.Address, code []byte)`: This hook is called when an account code is read.
+- `OnCodeSizeRead(addr common.Address, size int)`: This hook is called when an account code size is read.
+- `OnCodeHashRead(addr common.Address, codeHash common.Hash)`: This hook is called when an account code hash is read.
+- `OnStorageRead(addr common.Address, slot common.Hash, value common.Hash)`: This hook is called when an account storage slot is read.
+
+### Modified methods
+
+- `OnSystemCallStart()` -> `OnSystemCallStart(vm *VMContext)`. This allows access to EVM context during system calls.
+
+### Modified types
+
+- `VMContext.StateDB` has been extended with `GetCodeHash(addr common.Address) common.Hash` method used to retrieve the code hash an account.
+- `BalanceChangeReason` has been extended with the `BalanceChangeRevert` reason. More on that below.
+
+### State journaling
+
+Tracers receive state changes events from the node. The tracer was so far expected to keep track of modified accounts and slots and revert those changes when a call frame failed. Now a utility tracer wrapper is provided which will emit "reverse change" events when a call frame fails. To use this feature the hooks have to be wrapped prior to registering the tracer. The following example demonstrates how to use the state journaling library:
+
+```go
+func init() {
+    tracers.LiveDirectory.Register("test", func (cfg json.RawMessage) (*tracing.Hooks, error) {
+		hooks, err := newTestTracer(cfg)
+        if err != nil {
+			return nil, err
+        }
+		return tracing.WrapWithJournal(hooks)
+    })
+}
+```
+
+The state changes that are covered by the journaling library are:
+
+- `OnBalanceChange`
+- `OnNonceChange`
+- `OnCodeChange`
+- `OnStorageChange`
+
 ## [v1.14.3]
 
 There have been minor backwards-compatible changes to the tracing interface to explicitly mark the execution of **system** contracts. As of now the only system call updates the parent beacon block root as per [EIP-4788](https://eips.ethereum.org/EIPS/eip-4788). Other system calls are being considered for the future hardfork.
@@ -75,6 +121,6 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 - `CaptureState` -> `OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error)`. `op` is of type `byte` which can be cast to `vm.OpCode` when necessary. A `*vm.ScopeContext` is not passed anymore. It is replaced by `tracing.OpContext` which offers access to the memory, stack and current contract.
 - `CaptureFault` -> `OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error)`. Similar to above.
 
-[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.0...master
+[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.8...master
 [v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0
 [v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
