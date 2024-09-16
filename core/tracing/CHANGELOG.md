@@ -32,11 +32,11 @@ Tracers receive state changes events from the node. The tracer was so far expect
 ```go
 func init() {
     tracers.LiveDirectory.Register("test", func (cfg json.RawMessage) (*tracing.Hooks, error) {
-		hooks, err := newTestTracer(cfg)
+        hooks, err := newTestTracer(cfg)
         if err != nil {
-			return nil, err
+            return nil, err
         }
-		return tracing.WrapWithJournal(hooks)
+        return tracing.WrapWithJournal(hooks)
     })
 }
 ```
