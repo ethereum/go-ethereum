@@ -183,11 +183,14 @@ func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, benc
 
 	if !bench {
 		return nil
+	} else if len(matchingTests) != 1 {
+		return fmt.Errorf("can only benchmark single state test case (more than one matching params)")
 	}
+	var gasUsed uint64
 	result := testing.Benchmark(func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			for _, test := range matchingTests {
-				test.test.Run(test.st, cfg, false, rawdb.HashScheme, func(err error, tstate *tests.StateTestState) {})
+				_, _, gasUsed, _ = test.test.RunNoVerify(test.st, cfg, false, rawdb.HashScheme)
 			}
 		}
 	})
@@ -201,6 +204,6 @@ func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, benc
 execution time:  %v
 allocations:     %d
 allocated bytes: %d
-`, 0, stats.time, stats.allocs, stats.bytesAllocated)
+`, gasUsed, stats.time, stats.allocs, stats.bytesAllocated)
 	return nil
 }
