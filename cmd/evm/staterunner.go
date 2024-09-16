@@ -20,7 +20,10 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"os"
+	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -31,11 +34,33 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var (
+	ForkFlag = &cli.StringFlag{
+		Name:     "subtest.fork",
+		Usage:    "The hard-fork to run the test against",
+		Category: flags.VMCategory,
+	}
+	IdxFlag = &cli.IntFlag{
+		Name:     "subtest.index",
+		Usage:    "The index of the subtest to run",
+		Category: flags.VMCategory,
+	}
+	TestNameFlag = &cli.StringFlag{
+		Name:     "subtest.name",
+		Usage:    "The hard-fork to run the test against",
+		Category: flags.VMCategory,
+	}
+)
 var stateTestCommand = &cli.Command{
 	Action:    stateTestCmd,
 	Name:      "statetest",
 	Usage:     "Executes the given state tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
 	ArgsUsage: "<file>",
+	Flags: []cli.Flag{
+		ForkFlag,
+		IdxFlag,
+		TestNameFlag,
+	},
 }
 
 // StatetestResult contains the execution status after running a state test, any
@@ -67,7 +92,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	}
 	// Load the test content from the input file
 	if len(ctx.Args().First()) != 0 {
-		return runStateTest(ctx.Args().First(), cfg, ctx.Bool(DumpFlag.Name))
+		return runStateTest(ctx, ctx.Args().First(), cfg, ctx.Bool(DumpFlag.Name), ctx.Bool(BenchFlag.Name))
 	}
 	// Read filenames from stdin and execute back-to-back
 	scanner := bufio.NewScanner(os.Stdin)
@@ -76,15 +101,48 @@ func stateTestCmd(ctx *cli.Context) error {
 		if len(fname) == 0 {
 			return nil
 		}
-		if err := runStateTest(fname, cfg, ctx.Bool(DumpFlag.Name)); err != nil {
+		if err := runStateTest(ctx, fname, cfg, ctx.Bool(DumpFlag.Name), ctx.Bool(BenchFlag.Name)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+type stateTestCase struct {
+	name string
+	test tests.StateTest
+	st   tests.StateSubtest
+}
+
+func aggregateSubtests(ctx *cli.Context, testsByName map[string]tests.StateTest) []stateTestCase {
+	res := []stateTestCase{}
+
+	subtestName := ctx.String(TestNameFlag.Name)
+	if subtestName != "" {
+		if subtest, ok := testsByName[subtestName]; ok {
+			testsByName := make(map[string]tests.StateTest)
+			testsByName[subtestName] = subtest
+		}
+	}
+	idx := ctx.Int(IdxFlag.Name)
+	fork := ctx.String(ForkFlag.Name)
+
+	for key, test := range testsByName {
+		for _, st := range test.Subtests() {
+			if idx != -1 && st.Index != idx {
+				continue
+			}
+			if fork != "" && st.Fork != fork {
+				continue
+			}
+			res = append(res, stateTestCase{name: key, st: st, test: test})
+		}
+	}
+	return res
+}
+
 // runStateTest loads the state-test given by fname, and executes the test.
-func runStateTest(fname string, cfg vm.Config, dump bool) error {
+func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, bench bool) error {
 	src, err := os.ReadFile(fname)
 	if err != nil {
 		return err
@@ -94,33 +152,55 @@ func runStateTest(fname string, cfg vm.Config, dump bool) error {
 		return err
 	}
 
+	matchingTests := aggregateSubtests(ctx, testsByName)
+
 	// Iterate over all the tests, run them and aggregate the results
 	results := make([]StatetestResult, 0, len(testsByName))
-	for key, test := range testsByName {
-		for _, st := range test.Subtests() {
-			// Run the test and aggregate the result
-			result := &StatetestResult{Name: key, Fork: st.Fork, Pass: true}
-			test.Run(st, cfg, false, rawdb.HashScheme, func(err error, tstate *tests.StateTestState) {
-				var root common.Hash
-				if tstate.StateDB != nil {
-					root = tstate.StateDB.IntermediateRoot(false)
-					result.Root = &root
-					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
-					if dump { // Dump any state to aid debugging
-						cpy, _ := state.New(root, tstate.StateDB.Database())
-						dump := cpy.RawDump(nil)
-						result.State = &dump
-					}
+	for _, test := range matchingTests {
+		// Run the test and aggregate the result
+		result := &StatetestResult{Name: test.name, Fork: test.st.Fork, Pass: true}
+		test.test.Run(test.st, cfg, false, rawdb.HashScheme, func(err error, tstate *tests.StateTestState) {
+			var root common.Hash
+			if tstate.StateDB != nil {
+				root = tstate.StateDB.IntermediateRoot(false)
+				result.Root = &root
+				fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
+				if dump { // Dump any state to aid debugging
+					cpy, _ := state.New(root, tstate.StateDB.Database())
+					dump := cpy.RawDump(nil)
+					result.State = &dump
 				}
-				if err != nil {
-					// Test failed, mark as so
-					result.Pass, result.Error = false, err.Error()
-				}
-			})
-			results = append(results, *result)
-		}
+			}
+			if err != nil {
+				// Test failed, mark as so
+				result.Pass, result.Error = false, err.Error()
+			}
+		})
+		results = append(results, *result)
 	}
 	out, _ := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))
+
+	if !bench {
+		return nil
+	}
+	result := testing.Benchmark(func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			for _, test := range matchingTests {
+				test.test.Run(test.st, cfg, false, rawdb.HashScheme, func(err error, tstate *tests.StateTestState) {})
+			}
+		}
+	})
+	var stats execStats
+	// Get the average execution time from the benchmarking result.
+	// There are other useful stats here that could be reported.
+	stats.time = time.Duration(result.NsPerOp())
+	stats.allocs = result.AllocsPerOp()
+	stats.bytesAllocated = result.AllocedBytesPerOp()
+	fmt.Fprintf(os.Stderr, `EVM gas used:    %d
+execution time:  %v
+allocations:     %d
+allocated bytes: %d
+`, 0, stats.time, stats.allocs, stats.bytesAllocated)
 	return nil
 }
