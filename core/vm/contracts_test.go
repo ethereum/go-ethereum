@@ -519,7 +519,7 @@ func testXDCxPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	tradingStateDB.SetLastPrice(tradingstate.GetTradingOrderBookHash(common.HexToAddress(BTCAddress), common.HexToAddress(USDTAddress)), BTCUSDTLastPrice)
 	tradingStateDB.SetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(common.HexToAddress(BTCAddress), common.HexToAddress(USDTAddress)), BTCUSDTEpochPrice)
 
-	evm := NewEVM(Context{BlockNumber: common.Big1}, nil, tradingStateDB, &params.ChainConfig{ByzantiumBlock: common.Big0}, Config{})
+	evm := NewEVM(BlockContext{BlockNumber: common.Big1}, TxContext{}, nil, tradingStateDB, &params.ChainConfig{ByzantiumBlock: common.Big0}, Config{})
 	contractAddr := common.HexToAddress(addr)
 	p := PrecompiledContractsByzantium[contractAddr]
 	in := common.Hex2Bytes(test.input)
@@ -536,7 +536,7 @@ func testXDCxPrecompiled(addr string, test precompiledTest, t *testing.T) {
 }
 
 func testPrecompiledWithEmptyTradingState(addr string, test precompiledTest, t *testing.T) {
-	evm := NewEVM(Context{BlockNumber: common.Big1}, nil, nil, &params.ChainConfig{ByzantiumBlock: common.Big0}, Config{})
+	evm := NewEVM(BlockContext{BlockNumber: common.Big1}, TxContext{}, nil, nil, &params.ChainConfig{ByzantiumBlock: common.Big0}, Config{})
 
 	contractAddr := common.HexToAddress(addr)
 	p := PrecompiledContractsByzantium[contractAddr]

@@ -135,8 +135,9 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				}
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, nil, false, balanceTokenFee, header.Number)}
 
-				context := core.NewEVMContext(msg, header, bc, nil)
-				vmenv := vm.NewEVM(context, statedb, nil, config, vm.Config{})
+				context := core.NewEVMBlockContext(header, bc, nil)
+				txContext := core.NewEVMTxContext(msg)
+				vmenv := vm.NewEVM(context, txContext, statedb, nil, config, vm.Config{})
 
 				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxUint64)
@@ -154,8 +155,9 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				balanceTokenFee = value
 			}
 			msg := callmsg{types.NewMessage(testBankAddress, &testContractAddr, 0, new(big.Int), 100000, new(big.Int), data, nil, false, balanceTokenFee, header.Number)}
-			context := core.NewEVMContext(msg, header, lc, nil)
-			vmenv := vm.NewEVM(context, statedb, nil, config, vm.Config{})
+			context := core.NewEVMBlockContext(header, lc, nil)
+			txContext := core.NewEVMTxContext(msg)
+			vmenv := vm.NewEVM(context, txContext, statedb, nil, config, vm.Config{})
 			gp := new(core.GasPool).AddGas(math.MaxUint64)
 			owner := common.Address{}
 			ret, _, _, _, _ := core.ApplyMessage(vmenv, msg, gp, owner)

@@ -379,10 +379,12 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call XDPoSChain.Cal
 			msg.CallMsg.BalanceTokenFee = value
 		}
 	}
-	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
+
+	txContext := core.NewEVMTxContext(msg)
+	evmContext := core.NewEVMBlockContext(block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(evmContext, statedb, nil, b.config, vm.Config{})
+	vmenv := vm.NewEVM(evmContext, txContext, statedb, nil, b.config, vm.Config{})
 	gaspool := new(core.GasPool).AddGas(math.MaxUint64)
 	owner := common.Address{}
 	ret, usedGas, failed, err, _ = core.NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)

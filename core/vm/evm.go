@@ -63,7 +63,7 @@ func (evm *EVM) precompile2(addr common.Address) (PrecompiledContract, bool) {
 	switch {
 	case evm.chainRules.IsXDCxDisable:
 		precompiles = PrecompiledContractsXDCv2
-	case evm.chainRules.IsIstanbul && evm.ChainConfig().IsTIPXDCXCancellationFee(evm.BlockNumber):
+	case evm.chainRules.IsIstanbul && evm.ChainConfig().IsTIPXDCXCancellationFee(evm.Context.BlockNumber):
 		precompiles = PrecompiledContractsIstanbul
 	case evm.chainRules.IsByzantium:
 		precompiles = PrecompiledContractsByzantium
@@ -78,7 +78,7 @@ func (evm *EVM) precompile2(addr common.Address) (PrecompiledContract, bool) {
 func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, error) {
 	if contract.CodeAddr != nil {
 		if p, isPrecompile := evm.precompile(*contract.CodeAddr); isPrecompile {
-			if evm.chainConfig.IsTIPXDCXReceiver(evm.BlockNumber) {
+			if evm.chainConfig.IsTIPXDCXReceiver(evm.Context.BlockNumber) {
 				switch p := p.(type) {
 				case *XDCxEpochPrice:
 					p.SetTradingState(evm.tradingStateDB)
@@ -89,7 +89,7 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 			return RunPrecompiledContract(p, input, contract)
 		}
 	}
-	if evm.ChainConfig().IsTIPXDCXCancellationFee(evm.BlockNumber) {
+	if evm.ChainConfig().IsTIPXDCXCancellationFee(evm.Context.BlockNumber) {
 		for _, interpreter := range evm.interpreters {
 			if interpreter.CanRun(contract.Code) {
 				if evm.interpreter != interpreter {
@@ -110,9 +110,9 @@ func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, err
 	return nil, errors.New("no compatible interpreter")
 }
 
-// Context provides the EVM with auxiliary information. Once provided
+// BlockContext provides the EVM with auxiliary information. Once provided
 // it shouldn't be modified.
-type Context struct {
+type BlockContext struct {
 	// CanTransfer returns whether the account contains
 	// sufficient ether to transfer the value
 	CanTransfer CanTransferFunc
@@ -121,10 +121,6 @@ type Context struct {
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
 
-	// Message information
-	Origin   common.Address // Provides information for ORIGIN
-	GasPrice *big.Int       // Provides information for GASPRICE
-
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
 	GasLimit    uint64         // Provides information for GASLIMIT
@@ -132,6 +128,14 @@ type Context struct {
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 	Random      *common.Hash   // Provides information for PREVRANDAO
+}
+
+// TxContext provides the EVM with information about a transaction.
+// All fields can change between transactions.
+type TxContext struct {
+	// Message information
+	Origin   common.Address // Provides information for ORIGIN
+	GasPrice *big.Int       // Provides information for GASPRICE
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -144,8 +148,9 @@ type Context struct {
 //
 // The EVM should never be reused and is not thread safe.
 type EVM struct {
-	// Context provides auxiliary blockchain related information
-	Context
+	// BlockContext provides auxiliary blockchain related information
+	Context BlockContext
+	TxContext
 	// StateDB gives access to the underlying state
 	StateDB StateDB
 
@@ -176,14 +181,15 @@ type EVM struct {
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(ctx Context, statedb StateDB, tradingStateDB *tradingstate.TradingStateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
+func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, tradingStateDB *tradingstate.TradingStateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
 	evm := &EVM{
-		Context:        ctx,
+		Context:        blockCtx,
+		TxContext:      txCtx,
 		StateDB:        statedb,
 		tradingStateDB: tradingStateDB,
 		vmConfig:       vmConfig,
 		chainConfig:    chainConfig,
-		chainRules:     chainConfig.Rules(ctx.BlockNumber),
+		chainRules:     chainConfig.Rules(blockCtx.BlockNumber),
 		interpreters:   make([]Interpreter, 0, 1),
 	}
 
@@ -193,6 +199,13 @@ func NewEVM(ctx Context, statedb StateDB, tradingStateDB *tradingstate.TradingSt
 	evm.interpreter = evm.interpreters[0]
 
 	return evm
+}
+
+// Reset resets the EVM with a new transaction context.Reset
+// This is not threadsafe and should only be done very cautiously.
+func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
+	evm.TxContext = txCtx
+	evm.StateDB = statedb
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -245,7 +258,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+	evm.Context.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	// Capture the tracer start/end events in debug mode
 	if evm.vmConfig.Debug {
@@ -390,7 +403,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	contract := NewContract(caller, to, new(big.Int), gas)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 
-	if evm.ChainConfig().IsTIPXDCXCancellationFee(evm.BlockNumber) {
+	if evm.ChainConfig().IsTIPXDCXCancellationFee(evm.Context.BlockNumber) {
 		// We do an AddBalance of zero here, just in order to trigger a touch.
 		// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
 		// but is the correct thing to do and matters on other networks, in tests, and potential
@@ -409,7 +422,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in Homestead this also counts for code storage gas errors.
-	ret, err = run(evm, contract, input, evm.ChainConfig().IsTIPXDCXCancellationFee(evm.BlockNumber))
+	ret, err = run(evm, contract, input, evm.ChainConfig().IsTIPXDCXCancellationFee(evm.Context.BlockNumber))
 	gas = contract.Gas
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
@@ -439,7 +452,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, common.Address{}, gas, ErrDepth
 	}
-	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
+	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
@@ -463,7 +476,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1)
 	}
-	evm.Transfer(evm.StateDB, caller.Address(), address, value)
+	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.

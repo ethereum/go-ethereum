@@ -86,6 +86,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 	InitSignerInTransactions(p.config, header, block.Transactions())
 	balanceUpdated := map[common.Address]*big.Int{}
 	totalFeeUsed := big.NewInt(0)
+	blockContext := NewEVMBlockContext(header, p.bc, nil)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, tradingState, p.config, cfg)
+	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		// check black-list txs after hf
 		if (block.Number().Uint64() >= common.BlackListHFNumber) && !common.IsTestnet {
@@ -113,7 +116,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 			}
 		}
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, gas, err, tokenFeeUsed := ApplyTransaction(p.config, balanceFee, p.bc, nil, gp, statedb, tradingState, header, tx, usedGas, cfg)
+		receipt, gas, err, tokenFeeUsed := applyTransaction(p.config, balanceFee, p.bc, nil, gp, statedb, tradingState, header, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -159,6 +162,8 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 	if cBlock.stop {
 		return nil, nil, 0, ErrStopPreparingBlock
 	}
+	blockContext := NewEVMBlockContext(header, p.bc, nil)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, tradingState, p.config, cfg)
 	// Iterate over and process the individual transactions
 	receipts = make([]*types.Receipt, block.Transactions().Len())
 	for i, tx := range block.Transactions() {
@@ -188,7 +193,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 			}
 		}
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, gas, err, tokenFeeUsed := ApplyTransaction(p.config, balanceFee, p.bc, nil, gp, statedb, tradingState, header, tx, usedGas, cfg)
+		receipt, gas, err, tokenFeeUsed := applyTransaction(p.config, balanceFee, p.bc, nil, gp, statedb, tradingState, header, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -210,11 +215,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 	return receipts, allLogs, *usedGas, nil
 }
 
-// ApplyTransaction attempts to apply a transaction to the given state database
-// and uses the input parameters for its environment. It returns the receipt
-// for the transaction, gas used and an error if the transaction failed,
-// indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error, bool) {
+func applyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, uint64, error, bool) {
 	to := tx.To()
 	if to != nil && *to == common.BlockSignersBinary && config.IsTIPSigning(header.Number) {
 		return ApplySignTransaction(config, statedb, header, tx, usedGas)
@@ -243,11 +244,12 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	if err != nil {
 		return nil, 0, err, false
 	}
-	// Create a new context to be used in the EVM environment.
-	context := NewEVMContext(msg, header, bc, author)
-	// Create a new environment which holds all relevant information
-	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(context, statedb, XDCxState, config, cfg)
+
+	// Create a new context to be used in the EVM environment
+	txContext := NewEVMTxContext(msg)
+
+	// Update the evm with the new transaction context.
+	evm.Reset(txContext, statedb)
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	var beneficiary common.Address
@@ -404,7 +406,7 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	// End Bypass blacklist address
 
 	// Apply the transaction to the current state (included in the env)
-	_, gas, failed, err, _ := ApplyMessage(vmenv, msg, gp, coinbaseOwner)
+	_, gas, failed, err, _ := ApplyMessage(evm, msg, gp, coinbaseOwner)
 
 	if err != nil {
 		return nil, 0, err, false
@@ -432,7 +434,7 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
-		receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
+		receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 	}
 
 	// Set the receipt logs and create the bloom filter.
@@ -445,6 +447,17 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 		state.PayFeeWithTRC21TxFail(statedb, msg.From(), *to)
 	}
 	return receipt, gas, err, balanceFee != nil
+}
+
+// ApplyTransaction attempts to apply a transaction to the given state database
+// and uses the input parameters for its environment. It returns the receipt
+// for the transaction, gas used and an error if the transaction failed,
+// indicating the block was invalid.
+func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*big.Int, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, XDCxState *tradingstate.TradingStateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error, bool) {
+	// Create a new context to be used in the EVM environment
+	blockContext := NewEVMBlockContext(header, bc, author)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, XDCxState, config, cfg)
+	return applyTransaction(config, tokensFee, bc, author, gp, statedb, XDCxState, header, tx , usedGas, vmenv)
 }
 
 func ApplySignTransaction(config *params.ChainConfig, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, uint64, error, bool) {

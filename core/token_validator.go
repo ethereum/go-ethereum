@@ -108,10 +108,11 @@ func CallContractWithState(call ethereum.CallMsg, chain consensus.ChainContext, 
 			msg.CallMsg.BalanceTokenFee = value
 		}
 	}
-	evmContext := NewEVMContext(msg, chain.CurrentHeader(), chain, nil)
+	txContext := NewEVMTxContext(msg)
+	evmContext := NewEVMBlockContext(chain.CurrentHeader(), chain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(evmContext, statedb, nil, chain.Config(), vm.Config{})
+	vmenv := vm.NewEVM(evmContext, txContext, statedb, nil, chain.Config(), vm.Config{})
 	gaspool := new(GasPool).AddGas(1000000)
 	owner := common.Address{}
 	rval, _, _, err, _ := NewStateTransition(vmenv, msg, gaspool).TransitionDb(owner)

@@ -670,7 +670,7 @@ func (jst *JsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 	jst.ctx["to"] = to
 	jst.ctx["input"] = input
 	jst.ctx["gas"] = gas
-	jst.ctx["gasPrice"] = env.Context.GasPrice
+	jst.ctx["gasPrice"] = env.TxContext.GasPrice
 	jst.ctx["value"] = value
 
 	// Initialize the context

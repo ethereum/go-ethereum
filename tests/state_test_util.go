@@ -137,9 +137,10 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config) (*state.StateD
 	}
 
 	// Prepare the EVM.
-	context := core.NewEVMContext(msg, block.Header(), nil, &t.json.Env.Coinbase)
+	txContext := core.NewEVMTxContext(msg)
+	context := core.NewEVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
 	context.GetHash = vmTestBlockHash
-	evm := vm.NewEVM(context, statedb, nil, config, vmconfig)
+	evm := vm.NewEVM(context, txContext, statedb, nil, config, vmconfig)
 
 	// Execute the message.
 	snapshot := statedb.Snapshot()
