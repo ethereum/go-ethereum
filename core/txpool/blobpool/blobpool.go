@@ -940,7 +940,7 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 	}
 	// Generate the set of transactions per address to pull back into the pool,
 	// also updating the rest along the way
-	reinject := make(map[common.Address][]*types.Transaction)
+	reinject := make(map[common.Address][]*types.Transaction, len(transactors))
 	for addr := range transactors {
 		// Generate the set that was lost to reinject into the pool
 		lost := make([]*types.Transaction, 0, len(discarded[addr]))
@@ -949,7 +949,9 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 				lost = append(lost, tx)
 			}
 		}
-		reinject[addr] = lost
+		if len(lost) > 0 {
+			reinject[addr] = lost
+		}
 
 		// Update the set that was already reincluded to track the blocks in limbo
 		for _, tx := range types.TxDifference(included[addr], discarded[addr]) {
