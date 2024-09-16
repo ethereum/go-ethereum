@@ -1073,7 +1073,7 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 		ret, returnGas, err = interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
 	}
 
-	if err == ErrExecutionReverted || err == ErrInsufficientBalance || err == ErrDepth {
+	if errors.Is(err, ErrExecutionReverted) || errors.Is(err, ErrInsufficientBalance) || errors.Is(err, ErrDepth) {
 		temp.SetOne()
 	} else if err != nil {
 		temp.SetUint64(2)

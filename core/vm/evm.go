@@ -571,7 +571,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if err == nil && len(ret) >= 1 && HasEOFByte(ret) {
 		if evm.chainRules.IsPrague && isInitcodeEOF {
-			fmt.Printf("FIXME - valid EOF deployment\n")
 			// Don't reject EOF contracts after Shanghai
 		} else if evm.chainRules.IsLondon {
 			err = ErrInvalidCode
