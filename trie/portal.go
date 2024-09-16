@@ -16,7 +16,7 @@ func DecodeTrieNode(hash, buf []byte) (node, error) {
 	return decodeNodeUnsafe(hash, buf)
 }
 
-func TraverseTrieNode(node node, path []byte) (hashNode, []byte, error) {
+func TraverseTrieNode(node node, path []byte) ([]byte, []byte, error) {
 	switch v := node.(type) {
 	case *fullNode:
 		first := path[0]
@@ -33,7 +33,7 @@ func TraverseTrieNode(node node, path []byte) (hashNode, []byte, error) {
 			if !bytes.Equal(prePath, path) {
 				return nil, nil, ErrDifferentLeafPrefix
 			}
-			return (v.Val).(hashNode), path, nil
+			return (v.Val).(valueNode), path, nil
 		} else {
 			for index, key := range v.Key {
 				if path[index] != key {

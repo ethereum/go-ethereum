@@ -107,9 +107,9 @@ func (h *StateNetwork) validateContent(contentKey []byte, content []byte) error 
 	case AccountTrieNodeType:
 		return h.validateAccountTrieNode(contentKey[1:], content)
 	case ContractStorageTrieNodeType:
-		return validateContractStorageTrieNode(h.spec, contentKey[1:], content)
+		return h.validateContractStorageTrieNode(contentKey[1:], content)
 	case ContractByteCodeType:
-		return validateContractByteCode(h.spec, contentKey[1:], content)
+		return h.validateContractByteCode(contentKey[1:], content)
 	}
 	return errors.New("unknown content type")
 }
@@ -135,11 +135,53 @@ func (h *StateNetwork) validateAccountTrieNode(contentKey []byte, content []byte
 	return err
 }
 
-func validateContractStorageTrieNode(spec *common.Spec, contentKey []byte, content []byte) error {
-	return nil
+func (h *StateNetwork) validateContractStorageTrieNode(contentKey []byte, content []byte) error {
+	contractStorageKey := &ContractStorageTrieNodeKey{}
+	err := contractStorageKey.Deserialize(codec.NewDecodingReader(bytes.NewReader(contentKey), uint64(len(contentKey))))
+	if err != nil {
+		return err
+	}
+	contractProof := &ContractStorageTrieNodeWithProof{}
+	err = contractProof.Deserialize(codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+	if err != nil {
+		return err
+	}
+	stateRoot, err := h.getStateRoot(contractProof.BlockHash)
+
+	if err != nil {
+		return err
+	}
+
+	accountState, err := validateAccountState(stateRoot, contractStorageKey.AddressHash, &contractProof.AccountProof)
+	if err != nil {
+		return err
+	}
+	err = validateNodeTrieProof(common.Bytes32(accountState.Root), contractStorageKey.NodeHash, &contractStorageKey.Path, &contractProof.StoregeProof)
+	return err
 }
 
-func validateContractByteCode(spec *common.Spec, contentKey []byte, content []byte) error {
+func (h *StateNetwork) validateContractByteCode(contentKey []byte, content []byte) error {
+	contractByteCodeKey := &ContractBytecodeKey{}
+	err := contractByteCodeKey.Deserialize(codec.NewDecodingReader(bytes.NewReader(contentKey), uint64(len(contentKey))))
+	if err != nil {
+		return err
+	}
+	contractBytecodeWithProof := &ContractBytecodeWithProof{}
+	err = contractBytecodeWithProof.Deserialize(codec.NewDecodingReader(bytes.NewReader(content), uint64(len(content))))
+	if err != nil {
+		return err
+	}
+	stateRoot, err := h.getStateRoot(contractBytecodeWithProof.BlockHash)
+	if err != nil {
+		return err
+	}
+	accountState, err := validateAccountState(stateRoot, contractByteCodeKey.AddressHash, &contractBytecodeWithProof.AccountProof)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(accountState.CodeHash, contractByteCodeKey.CodeHash[:]) {
+		return errors.New("account state is invalid")
+	}
 	return nil
 }
 
@@ -185,6 +227,27 @@ func validateNodeTrieProof(rootHash common.Bytes32, nodeHash common.Bytes32, pat
 		return err
 	}
 	return nil
+}
+
+func validateAccountState(rootHash common.Bytes32, addrrssHash common.Bytes32, proof *TrieProof) (*types.StateAccount, error) {
+	path := make([]byte, 0, len(addrrssHash)*2)
+	for _, item := range addrrssHash {
+		before, after := unpackNibblePair(item)
+		path = append(path, before, after)
+	}
+	lastProof, p, err := validateTrieProof(rootHash, path, proof)
+	if err != nil {
+		return nil, err
+	}
+	n, err := trie.DecodeTrieNode(nil, lastProof)
+	if err != nil {
+		return nil, err
+	}
+	stateBytes, _, err := trie.TraverseTrieNode(n, p)
+	if err != nil {
+		return nil, err
+	}
+	return types.FullAccount(stateBytes)
 }
 
 func validateTrieProof(rootHash common.Bytes32, path []byte, proof *TrieProof) (EncodedTrieNode, []byte, error) {

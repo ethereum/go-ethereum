@@ -71,3 +71,35 @@ func TestValidateAccountTrieNode(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+func TestValidateContractStorage(t *testing.T) {
+	cases, err := getTestCases("contract_storage_trie_node.yaml")
+	require.NoError(t, err)
+
+	for _, tt := range cases {
+		server := rpc.NewServer()
+		api := &MockAPI{
+			header: tt.BlockHeader,
+		}
+		server.RegisterName("portal", api)
+		bn := NewStateNetwork(nil, server)
+		err = bn.validateContent(hexutil.MustDecode(tt.ContentKey), hexutil.MustDecode(tt.ContentValueOffer))
+		require.NoError(t, err)
+	}
+}
+
+func TestValidateContractByte(t *testing.T) {
+	cases, err := getTestCases("contract_bytecode.yaml")
+	require.NoError(t, err)
+
+	for _, tt := range cases {
+		server := rpc.NewServer()
+		api := &MockAPI{
+			header: tt.BlockHeader,
+		}
+		server.RegisterName("portal", api)
+		bn := NewStateNetwork(nil, server)
+		err = bn.validateContent(hexutil.MustDecode(tt.ContentKey), hexutil.MustDecode(tt.ContentValueOffer))
+		require.NoError(t, err)
+	}
+}
