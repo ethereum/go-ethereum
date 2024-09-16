@@ -7,10 +7,18 @@ All notable changes to the tracing interface will be documented in this file.
 ### Modified types
 
 - `GasChangeReason` has been extended with the following reasons which will be enabled only post-Verkle. There shouldn't be any gas changes with those reasons prior to the fork.
+  - `GasChangeWitnessContractCollisionCheck` flags the event of adding to the witness when checking for contract address collision.
+
+## [v1.14.4]
+
+This release contained only minor extensions to the tracing interface.
+
+### Modified types
+
+- `GasChangeReason` has been extended with the following reasons will be active only post-Verkle.
   - `GasChangeWitnessContractInit` flags the event of adding to the witness during the contract creation initialization step.
   - `GasChangeWitnessContractCreation` flags the event of adding to the witness during the contract creation finalization step.
   - `GasChangeWitnessCodeChunk` flags the event of adding one or more contract code chunks to the witness.
-  - `GasChangeWitnessContractCollisionCheck` flags the event of adding to the witness when checking for contract address collision.
 
 ## [v1.14.3]
 
@@ -88,3 +96,4 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 [unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.8...master
 [v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0
 [v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
+[v1.14.4]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.4
