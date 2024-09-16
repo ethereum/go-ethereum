@@ -772,6 +772,11 @@ web3._extend({
 			call: 'txpool_contentFrom',
 			params: 1,
 		}),
+		new web3._extend.Method({
+			name: 'removeTransactionByHash',
+			call: 'txpool_removeTransactionByHash',
+			params: 1
+		}),
 	]
 });
 `
