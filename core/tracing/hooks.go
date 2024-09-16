@@ -300,7 +300,7 @@ const (
 	GasChangeCallStorageColdAccess GasChangeReason = 13
 	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert.
 	GasChangeCallFailedExecution GasChangeReason = 14
-	// GasChangeWitnessContractInit flags the event of of adding to the witness during the contract creation initialization step
+	// GasChangeWitnessContractInit flags the event of adding to the witness during the contract creation initialization step
 	GasChangeWitnessContractInit GasChangeReason = 15
 	// GasChangeWitnessContractCreation flags the event of adding to the witness during the contract creation finalization step
 	GasChangeWitnessContractCreation GasChangeReason = 16
