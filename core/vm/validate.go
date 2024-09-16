@@ -182,9 +182,6 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable,
 			if visitedSubcontainers == nil {
 				visitedSubcontainers = make(map[int]int)
 			}
-			if _, ok := visitedSubcontainers[arg]; ok {
-				return nil, fmt.Errorf("section already referenced, arg :%d", arg)
-			}
 			// We need to store per subcontainer how it was referenced
 			if v, ok := visitedSubcontainers[arg]; ok && v != refByEOFCreate {
 				return nil, fmt.Errorf("section already referenced, arg :%d", arg)

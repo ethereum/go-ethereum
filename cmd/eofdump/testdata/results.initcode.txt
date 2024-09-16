@@ -1906,7 +1906,7 @@ ERR: unreachable code: arg 253, last 1, pos 13
 ERR: invalid magic: want ef00 in sub container 0
 ERR: missing data header: found section fe instead in sub container 0
 ERR: invalid type content, max stack height exceeds limit for section 0: have 65007 in sub container 0
-ERR: section already referenced, arg :0
+ERR: stack underflow (0 <=> 4): at pos 0
 ERR: subcontainer not referenced at all
 ERR: truncated immediate: op PUSH20, pos 6
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12342, pos 4

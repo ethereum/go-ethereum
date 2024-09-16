@@ -258,6 +258,8 @@ func TestValidateCode(t *testing.T) {
 	}
 }
 
+// BenchmarkRJUMPI tries to benchmark the RJUMPI opcode validation
+// For this we do a bunch of RJUMPIs that jump backwards (in a potential infinite loop).
 func BenchmarkRJUMPI(b *testing.B) {
 	snippet := []byte{
 		byte(PUSH0),
@@ -275,13 +277,15 @@ func BenchmarkRJUMPI(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet, true)
+		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
+// BenchmarkRJUMPV tries to benchmark the validation of the RJUMPV opcode
+// for this we set up as many RJUMPV opcodes with a full jumptable (containing 0s) as possible.
 func BenchmarkRJUMPV(b *testing.B) {
 	snippet := []byte{
 		byte(PUSH0),
@@ -305,13 +309,18 @@ func BenchmarkRJUMPV(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet, true)
+		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
+// BenchmarkEOFValidation tries to benchmark the code validation for the CALLF/RETF operation.
+// For this we set up code that calls into 1024 code sections which can either
+// - just contain a RETF opcode
+// - or code to again call into 1024 code sections.
+// We can't have all code sections calling each other, otherwise we would exceed 48KB.
 func BenchmarkEOFValidation(b *testing.B) {
 	var container Container
 	var code []byte
@@ -320,22 +329,21 @@ func BenchmarkEOFValidation(b *testing.B) {
 		code = append(code, byte(CALLF))
 		code = binary.BigEndian.AppendUint16(code, uint16(i%(maxSections-1))+1)
 	}
-	code = append(code, byte(STOP))
 	// First container
-	container.codeSections = append(container.codeSections, code)
+	container.codeSections = append(container.codeSections, append(code, byte(STOP)))
 	container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
 
 	inner := []byte{
-		byte(STOP),
+		byte(RETF),
 	}
 
 	for i := 0; i < 1023; i++ {
 		container.codeSections = append(container.codeSections, inner)
-		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
+		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 0})
 	}
 
 	for i := 0; i < 12; i++ {
-		container.codeSections[i+1] = code
+		container.codeSections[i+1] = append(code, byte(RETF))
 	}
 
 	bin := container.MarshalBinary()
@@ -349,12 +357,16 @@ func BenchmarkEOFValidation(b *testing.B) {
 		if err := container2.UnmarshalBinary(bin, true); err != nil {
 			b.Fatal(err)
 		}
-		if err := container2.ValidateCode(&pragueEOFInstructionSet, true); err != nil {
+		if err := container2.ValidateCode(&pragueEOFInstructionSet, false); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
+// BenchmarkEOFValidation tries to benchmark the code validation for the CALLF/RETF operation.
+// For this we set up code that calls into 1024 code sections which
+// - contain calls to some other code sections.
+// We can't have all code sections calling each other, otherwise we would exceed 48KB.
 func BenchmarkEOFValidation2(b *testing.B) {
 	var container Container
 	var code []byte
@@ -380,12 +392,13 @@ func BenchmarkEOFValidation2(b *testing.B) {
 		byte(CALLF), 0x03, 0xF6,
 		byte(CALLF), 0x03, 0xF7,
 		byte(CALLF), 0x03, 0xF8,
-		byte(JUMPF), 0x00, 0x00,
+		byte(CALLF), 0x03, 0xF,
+		byte(RETF),
 	}
 
 	for i := 0; i < 1023; i++ {
 		container.codeSections = append(container.codeSections, inner)
-		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
+		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 0})
 	}
 
 	bin := container.MarshalBinary()
@@ -399,12 +412,17 @@ func BenchmarkEOFValidation2(b *testing.B) {
 		if err := container2.UnmarshalBinary(bin, true); err != nil {
 			b.Fatal(err)
 		}
-		if err := container2.ValidateCode(&pragueEOFInstructionSet, true); err != nil {
+		if err := container2.ValidateCode(&pragueEOFInstructionSet, false); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
+// BenchmarkEOFValidation3 tries to benchmark the code validation for the CALLF/RETF and RJUMPI/V operations.
+// For this we set up code that calls into 1024 code sections which either
+// - contain an RJUMP opcode
+// - contain calls to other code sections
+// We can't have all code sections calling each other, otherwise we would exceed 48KB.
 func BenchmarkEOFValidation3(b *testing.B) {
 	var container Container
 	var code []byte
@@ -418,23 +436,25 @@ func BenchmarkEOFValidation3(b *testing.B) {
 		snippet = append(snippet, []byte{0x00, 0x00}...)
 	}
 	code = append(code, snippet...)
+	// First container, calls into all other containers
 	maxSections := 1024
 	for i := 0; i < maxSections; i++ {
 		code = append(code, byte(CALLF))
 		code = binary.BigEndian.AppendUint16(code, uint16(i%(maxSections-1))+1)
 	}
 	code = append(code, byte(STOP))
-	// First container
 	container.codeSections = append(container.codeSections, code)
 	container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 1})
 
+	// Other containers
 	for i := 0; i < 1023; i++ {
-		container.codeSections = append(container.codeSections, []byte{byte(RJUMP), 0x00, 0x00, byte(JUMPF), 0x00, 0x00})
-		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 0})
+		container.codeSections = append(container.codeSections, []byte{byte(RJUMP), 0x00, 0x00, byte(RETF)})
+		container.types = append(container.types, &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 0})
 	}
-	for i := 0; i < 65; i++ {
-		container.codeSections[i+1] = append(snippet, byte(STOP))
-		container.types[i+1] = &functionMetadata{inputs: 0, outputs: 0x80, maxStackHeight: 1}
+	// Other containers
+	for i := 0; i < 68; i++ {
+		container.codeSections[i+1] = append(snippet, byte(RETF))
+		container.types[i+1] = &functionMetadata{inputs: 0, outputs: 0, maxStackHeight: 1}
 	}
 	bin := container.MarshalBinary()
 	if len(bin) > 48*1024 {
@@ -448,7 +468,7 @@ func BenchmarkEOFValidation3(b *testing.B) {
 			if err := container2.UnmarshalBinary(bin, true); err != nil {
 				b.Fatal(err)
 			}
-			if err := container2.ValidateCode(&pragueEOFInstructionSet, true); err != nil {
+			if err := container2.ValidateCode(&pragueEOFInstructionSet, false); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -474,7 +494,7 @@ func BenchmarkRJUMPI_2(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet, true)
+		_, err := validateCode(code, 0, container, &pragueEOFInstructionSet, false)
 		if err != nil {
 			b.Fatal(err)
 		}

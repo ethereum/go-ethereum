@@ -34,6 +34,7 @@ func TestInstructionIterator(t *testing.T) {
 		{2, "5900", ""},                            // push0
 		{0, "", ""},                                // empty
 		{2, "d1aabb00", ""},                        // DATALOADN(aabb),STOP
+		{0, "d1aa", "incomplete instruction at 0"}, // DATALOADN(aa) invalid
 
 	} {
 		var (

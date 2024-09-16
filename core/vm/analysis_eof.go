@@ -35,14 +35,7 @@ func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 		)
 		pc++
 
-		switch {
-		case op < PUSH1:
-			continue
-		case op <= PUSH32:
-			numbits = uint16(op - PUSH1 + 1)
-		case op == RJUMP || op == RJUMPI || op == CALLF || op == JUMPF || op == DATALOADN:
-			numbits = 2
-		case op == RJUMPV:
+		if op == RJUMPV {
 			// RJUMPV is unique as it has a variable sized operand.
 			// The total size is determined by the count byte which
 			// immediate proceeds RJUMPV. Truncation will be caught
@@ -60,11 +53,11 @@ func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 				// as possible.
 				numbits = uint16(end - pc)
 			}
-		case op == DUPN || op == SWAPN || op == EXCHANGE || op == EOFCREATE || op == RETURNCONTRACT:
-			numbits = 1
-		default:
-			// Op had no immediate operand, continue.
-			continue
+		} else {
+			numbits = uint16(Immediates(op))
+			if numbits == 0 {
+				continue
+			}
 		}
 
 		if numbits >= 8 {
