@@ -173,8 +173,6 @@ func (c *AsyncChecker) checkerTask(block *types.Block, ccc *Checker, forkCtx con
 	}
 
 	header := block.Header()
-	header.GasUsed = 0
-	gasPool := new(core.GasPool).AddGas(header.GasLimit)
 	ccc.Reset()
 
 	accRc := new(types.RowConsumption)
@@ -184,7 +182,7 @@ func (c *AsyncChecker) checkerTask(block *types.Block, ccc *Checker, forkCtx con
 		}
 
 		var curRc *types.RowConsumption
-		curRc, err = c.checkTxAndApply(parent, header, statedb, gasPool, tx, ccc)
+		curRc, err = c.checkTx(parent, header, statedb, tx, ccc)
 		if err != nil {
 			err = &ErrorWithTxnIdx{
 				TxIdx: uint(txIdx),
@@ -208,39 +206,14 @@ func (c *AsyncChecker) checkerTask(block *types.Block, ccc *Checker, forkCtx con
 	}
 }
 
-func (c *AsyncChecker) checkTxAndApply(parent *types.Block, header *types.Header, state *state.StateDB, gasPool *core.GasPool, tx *types.Transaction, ccc *Checker) (*types.RowConsumption, error) {
-	// don't commit the state during tracing for circuit capacity checker, otherwise we cannot revert.
-	// and even if we don't commit the state, the `refund` value will still be correct, as explained in `CommitTransaction`
-	commitStateAfterApply := false
-	snap := state.Snapshot()
-
-	// 1. we have to check circuit capacity before `core.ApplyTransaction`,
-	// because if the tx can be successfully executed but circuit capacity overflows, it will be inconvenient to revert.
-	// 2. even if we don't commit to the state during the tracing (which means `clearJournalAndRefund` is not called during the tracing),
-	// the `refund` value will still be correct, because:
-	// 2.1 when starting handling the first tx, `state.refund` is 0 by default,
-	// 2.2 after tracing, the state is either committed in `core.ApplyTransaction`, or reverted, so the `state.refund` can be cleared,
-	// 2.3 when starting handling the following txs, `state.refund` comes as 0
+func (c *AsyncChecker) checkTx(parent *types.Block, header *types.Header, state *state.StateDB, tx *types.Transaction, ccc *Checker) (*types.RowConsumption, error) {
 	trace, err := tracing.NewTracerWrapper().CreateTraceEnvAndGetBlockTrace(c.bc.Config(), c.bc, c.bc.Engine(), c.bc.Database(),
-		state, parent, types.NewBlockWithHeader(header).WithBody([]*types.Transaction{tx}, nil), commitStateAfterApply)
-	// `w.current.traceEnv.State` & `w.current.state` share a same pointer to the state, so only need to revert `w.current.state`
-	// revert to snapshot for calling `core.ApplyMessage` again, (both `traceEnv.GetBlockTrace` & `core.ApplyTransaction` will call `core.ApplyMessage`)
-	state.RevertToSnapshot(snap)
+		state, parent, types.NewBlockWithHeader(header).WithBody([]*types.Transaction{tx}, nil), true)
 	if err != nil {
 		return nil, err
 	}
 
-	rc, err := ccc.ApplyTransaction(trace)
-	if err != nil {
-		return rc, err
-	}
-
-	_, err = core.ApplyTransaction(c.bc.Config(), c.bc, nil /* coinbase will default to chainConfig.Scroll.FeeVaultAddress */, gasPool,
-		state, header, tx, &header.GasUsed, *c.bc.GetVMConfig())
-	if err != nil {
-		return nil, err
-	}
-	return rc, nil
+	return ccc.ApplyTransaction(trace)
 }
 
 // ScheduleError forces a block to error on a given transaction index
