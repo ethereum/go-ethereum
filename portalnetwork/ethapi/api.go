@@ -40,7 +40,6 @@ func rpcMarshalBlock(block *types.Block, fullTx bool, chainId *big.Int) (map[str
 		fields["withdrawals"] = block.Withdrawals()
 	}
 	return fields, nil
-
 }
 
 func RPCMarshalHeader(head *types.Header) map[string]interface{} {
@@ -89,7 +88,6 @@ func newRPCTransactionFromBlockIndex(b *types.Block, index uint64, chainId *big.
 }
 
 func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, blockTime uint64, index uint64, baseFee *big.Int, chainId *big.Int) *RPCTransaction {
-
 	config := &params.ChainConfig{
 		ChainID: chainId,
 	}
@@ -207,12 +205,10 @@ type API struct {
 }
 
 func (p *API) ChainId() hexutil.Uint64 {
-
 	return (hexutil.Uint64)(p.ChainID.Uint64())
 }
 
 func (p *API) GetBlockByHash(hash *common.Hash, fullTransactions bool) (map[string]interface{}, error) {
-
 	blockHeader, err := p.History.GetBlockHeader(hash.Bytes())
 	if err != nil {
 		log.Error(err.Error())
@@ -227,5 +223,4 @@ func (p *API) GetBlockByHash(hash *common.Hash, fullTransactions bool) (map[stri
 
 	block := types.NewBlockWithHeader(blockHeader).WithBody(*blockBody)
 	return rpcMarshalBlock(block, fullTransactions, p.ChainID)
-
 }
