@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package live
+package main
 
 import (
 	"bufio"
@@ -25,9 +25,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -38,11 +38,80 @@ import (
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/tests"
+
+	_ "github.com/ethereum/go-ethereum/eth/tracers/live"
 )
+
+type supplyInfoIssuance struct {
+	GenesisAlloc *hexutil.Big `json:"genesisAlloc,omitempty"`
+	Reward       *hexutil.Big `json:"reward,omitempty"`
+	Withdrawals  *hexutil.Big `json:"withdrawals,omitempty"`
+}
+
+type supplyInfoBurn struct {
+	EIP1559 *hexutil.Big `json:"1559,omitempty"`
+	Blob    *hexutil.Big `json:"blob,omitempty"`
+	Misc    *hexutil.Big `json:"misc,omitempty"`
+}
+
+type supplyInfo struct {
+	Issuance *supplyInfoIssuance `json:"issuance,omitempty"`
+	Burn     *supplyInfoBurn     `json:"burn,omitempty"`
+
+	// Block info
+	Number     uint64      `json:"blockNumber"`
+	Hash       common.Hash `json:"hash"`
+	ParentHash common.Hash `json:"parentHash"`
+}
+
+func main() {
+	// Takes a path where the filled tests will be written.
+	if len(os.Args) < 2 {
+		fmt.Println("Please provide a path as a command-line argument")
+		os.Exit(1)
+	}
+
+	path, err := filepath.Abs(os.Args[1])
+	if err != nil {
+		fmt.Printf("Error resolving path: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create all directories in the path if they don't exist
+	if err := os.MkdirAll(path, 0755); err != nil {
+		fmt.Printf("failed to create directory: %v\n", err)
+		os.Exit(1)
+	}
+	if err := fillSupplyOmittedFields(path); err != nil {
+		fmt.Printf("fillSupplyOmittedFields failed: %v\n", err)
+		os.Exit(1)
+	}
+	if err := fillSupplyGenesisAlloc(path); err != nil {
+		fmt.Printf("fillSupplyGenesisAlloc failed: %v\n", err)
+		os.Exit(1)
+	}
+	if err := fillSupplyEip1559Burn(path); err != nil {
+		fmt.Printf("fillSupplyEip1559Burn failed: %v\n")
+		os.Exit(1)
+	}
+	if err := fillSupplyWithdrawals(path); err != nil {
+		fmt.Printf("fillSupplyWithdrawals failed: %v\n", err)
+		os.Exit(1)
+	}
+	if err := fillSupplySelfdestruct(path); err != nil {
+		fmt.Printf("fillSupplySelfdestruct failed: %v\n", err)
+		os.Exit(1)
+	}
+	if err := fillSupplySelfdestructItselfAndRevert(path); err != nil {
+		fmt.Printf("fillSupplySelfdestructItselfAndRevert failed: %v\n", err)
+		os.Exit(1)
+	}
+}
 
 func emptyBlockGenerationFunc(b *core.BlockGen) {}
 
-func TestSupplyOmittedFields(t *testing.T) {
+func fillSupplyOmittedFields(path string) error {
 	var (
 		config = *params.MergedTestChainConfig
 		gspec  = &core.Genesis{
@@ -59,18 +128,22 @@ func TestSupplyOmittedFields(t *testing.T) {
 		}}
 	)
 	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
-	out, db, chain, err := testSupplyTracer(t, gspec, func(b *core.BlockGen) {
+	out, db, chain, err := testSupplyTracer(gspec, func(b *core.BlockGen) {
 		b.SetPoS()
 	})
 	if err != nil {
-		t.Fatalf("failed to test supply tracer: %v", err)
+		return fmt.Errorf("failed to test supply tracer: %v", err)
 	}
-
-	compareAsJSON(t, expected, out)
-	writeArtifact(t, "omitted_fields_cancun", db, chain, expected, nil)
+	if err := compareAsJSON(expected, out); err != nil {
+		return err
+	}
+	if err := writeArtifact(filepath.Join(path, "omitted_fields.json"), "omitted_fields_cancun", db, chain, expected, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
-func TestSupplyGenesisAlloc(t *testing.T) {
+func fillSupplyGenesisAlloc(path string) error {
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -88,14 +161,14 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 		}
 		expected = []supplyInfo{{
 			Issuance: &supplyInfoIssuance{
-				GenesisAlloc: new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
+				GenesisAlloc: (*hexutil.Big)(new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))),
 			},
 			Number:     0,
 			Hash:       common.HexToHash("0xbcc9466e9fc6a8b56f4b29ca353a421ff8b51a0c1a58ca4743b427605b08f2ca"),
 			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		}, {
 			Issuance: &supplyInfoIssuance{
-				Reward: new(big.Int).Mul(common.Big2, big.NewInt(params.Ether)),
+				Reward: (*hexutil.Big)(new(big.Int).Mul(common.Big2, big.NewInt(params.Ether))),
 			},
 			Number:     1,
 			Hash:       common.HexToHash("0x37bb7e9b45f4fb7b311abb5f815e3e00d3382d83a2c39b9b0bd22b717566cd04"),
@@ -103,15 +176,20 @@ func TestSupplyGenesisAlloc(t *testing.T) {
 		}}
 	)
 
-	out, db, chain, err := testSupplyTracer(t, gspec, emptyBlockGenerationFunc)
+	out, db, chain, err := testSupplyTracer(gspec, emptyBlockGenerationFunc)
 	if err != nil {
-		t.Fatalf("failed to test supply tracer: %v", err)
+		return fmt.Errorf("failed to test supply tracer: %v", err)
 	}
-	compareAsJSON(t, expected, out)
-	writeArtifact(t, "genesis_alloc_grayGlacier", db, chain, expected, nil)
+	if err := compareAsJSON(expected, out); err != nil {
+		return err
+	}
+	if err := writeArtifact(filepath.Join(path, "genesis_alloc.json"), "genesis_alloc_grayGlacier", db, chain, expected, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
-func TestSupplyEip1559Burn(t *testing.T) {
+func fillSupplyEip1559Burn(path string) error {
 	var (
 		config = *params.AllEthashProtocolChanges
 
@@ -147,9 +225,9 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		b.AddTx(tx)
 	}
 
-	out, db, chain, err := testSupplyTracer(t, gspec, eip1559BlockGenerationFunc)
+	out, db, chain, err := testSupplyTracer(gspec, eip1559BlockGenerationFunc)
 	if err != nil {
-		t.Fatalf("failed to test supply tracer: %v", err)
+		return fmt.Errorf("failed to test supply tracer: %v", err)
 	}
 	var (
 		head     = chain.CurrentBlock()
@@ -157,28 +235,33 @@ func TestSupplyEip1559Burn(t *testing.T) {
 		burn     = new(big.Int).Mul(big.NewInt(21000), head.BaseFee)
 		expected = []supplyInfo{{
 			Issuance: &supplyInfoIssuance{
-				GenesisAlloc: eth1,
+				GenesisAlloc: (*hexutil.Big)(eth1),
 			},
 			Number:     0,
 			Hash:       common.HexToHash("0xc4265421181cafc43e4b97ae4f21530e37e00320f219a13311482c9c552bcdc7"),
 			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		}, {
 			Issuance: &supplyInfoIssuance{
-				Reward: reward,
+				Reward: (*hexutil.Big)(reward),
 			},
 			Burn: &supplyInfoBurn{
-				EIP1559: burn,
+				EIP1559: (*hexutil.Big)(burn),
 			},
 			Number:     1,
 			Hash:       head.Hash(),
 			ParentHash: head.ParentHash,
 		}}
 	)
-	compareAsJSON(t, expected, out)
-	writeArtifact(t, "eip1559_burn_grayGlacier", db, chain, expected, nil)
+	if err := compareAsJSON(expected, out); err != nil {
+		return err
+	}
+	if err := writeArtifact(filepath.Join(path, "eip1559_burn.json"), "eip1559_burn_grayGlacier", db, chain, expected, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
-func TestSupplyWithdrawals(t *testing.T) {
+func fillSupplyWithdrawals(path string) error {
 	var (
 		config = *params.MergedTestChainConfig
 		gspec  = &core.Genesis{
@@ -196,9 +279,9 @@ func TestSupplyWithdrawals(t *testing.T) {
 		})
 	}
 
-	out, db, chain, err := testSupplyTracer(t, gspec, withdrawalsBlockGenerationFunc)
+	out, db, chain, err := testSupplyTracer(gspec, withdrawalsBlockGenerationFunc)
 	if err != nil {
-		t.Fatalf("failed to test supply tracer: %v", err)
+		return fmt.Errorf("failed to test supply tracer: %v", err)
 	}
 
 	var (
@@ -209,15 +292,20 @@ func TestSupplyWithdrawals(t *testing.T) {
 			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		}, {
 			Issuance: &supplyInfoIssuance{
-				Withdrawals: big.NewInt(1337000000000),
+				Withdrawals: (*hexutil.Big)(big.NewInt(1337000000000)),
 			},
 			Number:     1,
 			Hash:       head.Hash(),
 			ParentHash: head.ParentHash,
 		}}
 	)
-	compareAsJSON(t, expected, out)
-	writeArtifact(t, "withdrawals_cancun", db, chain, expected, nil)
+	if err := compareAsJSON(expected, out); err != nil {
+		return err
+	}
+	if err := writeArtifact(filepath.Join(path, "withdrawals.json"), "withdrawals_cancun", db, chain, expected, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Tests fund retrieval after contract's selfdestruct.
@@ -225,7 +313,7 @@ func TestSupplyWithdrawals(t *testing.T) {
 // after the selfdestruct opcode executes from Contract A.
 // Because Contract B is removed only at the end of the transaction
 // the ether sent in between is burnt before Cancun hard fork.
-func TestSupplySelfdestruct(t *testing.T) {
+func fillSupplySelfdestruct(path string) error {
 	var (
 		config = *params.TestChainConfig
 
@@ -274,9 +362,9 @@ func TestSupplySelfdestruct(t *testing.T) {
 	)
 
 	// 1. Test pre Cancun
-	preCancunOutput, preCancunDB, preCancunChain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
+	preCancunOutput, preCancunDB, preCancunChain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
 	if err != nil {
-		t.Fatalf("Pre-cancun failed to test supply tracer: %v", err)
+		return fmt.Errorf("failed to test supply tracer: %v", err)
 	}
 
 	// Check balance at state:
@@ -285,13 +373,13 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// 3. B has 0 ether
 	statedb, _ := preCancunChain.State()
 	if got, exp := statedb.GetBalance(dad), eth1; got.CmpBig(exp) != 0 {
-		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", dad, got, exp)
+		return fmt.Errorf("Pre-cancun address \"%v\" balance, got %v exp %v\n", dad, got, exp)
 	}
 	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.CmpBig(exp) != 0 {
-		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", aa, got, exp)
+		return fmt.Errorf("Pre-cancun address \"%v\" balance, got %v exp %v\n", aa, got, exp)
 	}
 	if got, exp := statedb.GetBalance(bb), big.NewInt(0); got.CmpBig(exp) != 0 {
-		t.Fatalf("Pre-cancun address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+		return fmt.Errorf("Pre-cancun address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
 
 	var (
@@ -299,18 +387,18 @@ func TestSupplySelfdestruct(t *testing.T) {
 		// Check live trace output
 		expected = []supplyInfo{{
 			Issuance: &supplyInfoIssuance{
-				GenesisAlloc: new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether)),
+				GenesisAlloc: (*hexutil.Big)(new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether))),
 			},
 			Number:     0,
 			Hash:       common.HexToHash("0xdd9fbe877f0b43987d2f0cda0df176b7939be14f33eb5137f16e6eddf4562706"),
 			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		}, {
 			Issuance: &supplyInfoIssuance{
-				Reward: new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether)),
+				Reward: (*hexutil.Big)(new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether))),
 			},
 			Burn: &supplyInfoBurn{
-				EIP1559: big.NewInt(55289500000000),
-				Misc:    big.NewInt(5000000000),
+				EIP1559: (*hexutil.Big)(big.NewInt(55289500000000)),
+				Misc:    (*hexutil.Big)(big.NewInt(5000000000)),
 			},
 			Number:     1,
 			Hash:       head.Hash(),
@@ -323,10 +411,12 @@ func TestSupplySelfdestruct(t *testing.T) {
 		}
 	)
 
-	compareAsJSON(t, expected, preCancunOutput)
+	if err := compareAsJSON(expected, preCancunOutput); err != nil {
+		return err
+	}
 	preCancunTest, err := btFromChain(preCancunDB, preCancunChain, post)
 	if err != nil {
-		t.Fatalf("failed to fill tests from chain: %v", err)
+		return fmt.Errorf("failed to fill tests from chain: %v", err)
 	}
 	preCancunTest.Expected = expected
 
@@ -341,9 +431,9 @@ func TestSupplySelfdestruct(t *testing.T) {
 		b.SetPoS()
 		testBlockGenerationFunc(b)
 	}
-	postCancunOutput, postCancunDB, postCancunChain, err := testSupplyTracer(t, gspec, posTestBlockGenerationFunc)
+	postCancunOutput, postCancunDB, postCancunChain, err := testSupplyTracer(gspec, posTestBlockGenerationFunc)
 	if err != nil {
-		t.Fatalf("Post-cancun failed to test supply tracer: %v", err)
+		return fmt.Errorf("Post-cancun failed to test supply tracer: %v", err)
 	}
 
 	// Check balance at state:
@@ -352,27 +442,27 @@ func TestSupplySelfdestruct(t *testing.T) {
 	// 3. B has 5 gwei
 	statedb, _ = postCancunChain.State()
 	if got, exp := statedb.GetBalance(dad), eth1; got.CmpBig(exp) != 0 {
-		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", dad, got, exp)
+		return fmt.Errorf("Post-shanghai address \"%v\" balance, got %v exp %v\n", dad, got, exp)
 	}
 	if got, exp := statedb.GetBalance(aa), big.NewInt(0); got.CmpBig(exp) != 0 {
-		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", aa, got, exp)
+		return fmt.Errorf("Post-shanghai address \"%v\" balance, got %v exp %v\n", aa, got, exp)
 	}
 	if got, exp := statedb.GetBalance(bb), gwei5; got.CmpBig(exp) != 0 {
-		t.Fatalf("Post-shanghai address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+		return fmt.Errorf("Post-shanghai address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
 
 	// Check live trace output
 	head = postCancunChain.CurrentBlock()
 	expected = []supplyInfo{{
 		Issuance: &supplyInfoIssuance{
-			GenesisAlloc: new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether)),
+			GenesisAlloc: (*hexutil.Big)(new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether))),
 		},
 		Number:     0,
 		Hash:       common.HexToHash("0x16d2bb0b366d3963bf2d8d75cb4b3bc0f233047c948fa746cbd38ac82bf9cfe9"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}, {
 		Burn: &supplyInfoBurn{
-			EIP1559: big.NewInt(55289500000000),
+			EIP1559: (*hexutil.Big)(big.NewInt(55289500000000)),
 		},
 		Number:     1,
 		Hash:       head.Hash(),
@@ -384,13 +474,18 @@ func TestSupplySelfdestruct(t *testing.T) {
 		bb:  {Balance: gwei5, Code: gspec.Alloc[bb].Code},
 	}
 
-	compareAsJSON(t, expected, postCancunOutput)
+	if err := compareAsJSON(expected, postCancunOutput); err != nil {
+		return err
+	}
 	postCancunTest, err := btFromChain(postCancunDB, postCancunChain, post)
 	if err != nil {
-		t.Fatalf("failed to fill tests from chain: %v", err)
+		return fmt.Errorf("failed to fill tests from chain: %v", err)
 	}
 	postCancunTest.Expected = expected
-	writeBTs(t, map[string]*BlockTest{"selfdestruct_grayGlacier": preCancunTest, "selfdestruct_cancun": postCancunTest})
+	if err := writeBTs(filepath.Join(path, "selfdestruct.json"), map[string]*blockTest{"selfdestruct_grayGlacier": preCancunTest, "selfdestruct_cancun": postCancunTest}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Tests selfdestructing contract to send its balance to itself (burn).
@@ -400,7 +495,7 @@ func TestSupplySelfdestruct(t *testing.T) {
 //   - Contract C selfdestructs and sends the eth1 to itself.
 //   - Contract D calls C and reverts (Burn amount of C
 //     has to be reverted as well).
-func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
+func fillSupplySelfdestructItselfAndRevert(path string) error {
 	var (
 		config = *params.TestChainConfig
 
@@ -492,9 +587,9 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 		b.AddTx(tx)
 	}
 
-	output, db, chain, err := testSupplyTracer(t, gspec, testBlockGenerationFunc)
+	output, db, chain, err := testSupplyTracer(gspec, testBlockGenerationFunc)
 	if err != nil {
-		t.Fatalf("failed to test supply tracer: %v", err)
+		return fmt.Errorf("failed to test supply tracer: %v", err)
 	}
 
 	// Check balance at state:
@@ -504,50 +599,61 @@ func TestSupplySelfdestructItselfAndRevert(t *testing.T) {
 	// 4. D has 1 ether, reverted
 	statedb, _ := chain.State()
 	if got, exp := statedb.GetBalance(aa), common.Big0; got.CmpBig(exp) != 0 {
-		t.Fatalf("address \"%v\" balance, got %v exp %v\n", aa, got, exp)
+		return fmt.Errorf("address \"%v\" balance, got %v exp %v\n", aa, got, exp)
 	}
 	if got, exp := statedb.GetBalance(bb), common.Big0; got.CmpBig(exp) != 0 {
-		t.Fatalf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+		return fmt.Errorf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
 	}
 	if got, exp := statedb.GetBalance(cc), eth1; got.CmpBig(exp) != 0 {
-		t.Fatalf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+		return fmt.Errorf("address \"%v\" balance, got %v exp %v\n", cc, got, exp)
 	}
 	if got, exp := statedb.GetBalance(dd), eth2; got.CmpBig(exp) != 0 {
-		t.Fatalf("address \"%v\" balance, got %v exp %v\n", bb, got, exp)
+		return fmt.Errorf("address \"%v\" balance, got %v exp %v\n", dd, got, exp)
 	}
 
 	// Check live trace output
 	block := chain.GetBlockByNumber(1)
 	expected := []supplyInfo{{
 		Issuance: &supplyInfoIssuance{
-			GenesisAlloc: new(big.Int).Mul(big.NewInt(9), big.NewInt(params.Ether)),
+			GenesisAlloc: (*hexutil.Big)(new(big.Int).Mul(big.NewInt(9), big.NewInt(params.Ether))),
 		},
 		Number:     0,
 		Hash:       common.HexToHash("0xaf41e72f748de317965454508c749f7e14dc4fe444cd07bca4c981c7e952364d"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}, {
 		Burn: &supplyInfoBurn{
-			EIP1559: new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed()))),
-			Misc:    eth5, // 5ETH burned from contract B
+			EIP1559: (*hexutil.Big)(new(big.Int).Mul(block.BaseFee(), big.NewInt(int64(block.GasUsed())))),
+			Misc:    (*hexutil.Big)(eth5), // 5ETH burned from contract B
 		},
 		Issuance: &supplyInfoIssuance{
-			Reward: eth2,
+			Reward: (*hexutil.Big)(eth2),
 		},
 		Number:     1,
 		Hash:       block.Hash(),
 		ParentHash: block.ParentHash(),
 	}}
 
-	compareAsJSON(t, expected, output)
-	writeArtifact(t, "selfdestruct_itself_and_revert_grayGlacier", db, chain, expected, nil)
+	if err := compareAsJSON(expected, output); err != nil {
+		return err
+	}
+	if err := writeArtifact(filepath.Join(path, "selfdestruct_itself_and_revert.json"), "selfdestruct_itself_and_revert_grayGlacier", db, chain, expected, nil); err != nil {
+		return err
+	}
+	return nil
 }
 
-func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, ethdb.Database, *core.BlockChain, error) {
+func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]supplyInfo, ethdb.Database, *core.BlockChain, error) {
 	var (
 		engine = beacon.New(ethash.NewFaker())
 	)
 
-	traceOutputPath := filepath.ToSlash(t.TempDir())
+	tempDir, err := os.MkdirTemp("", "supply-filler-")
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to generate directory for tracer outputs: %v", err)
+	}
+	defer os.RemoveAll(tempDir) // Clean up
+
+	traceOutputPath := filepath.ToSlash(tempDir)
 	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
 
 	// Load supply tracer
@@ -596,34 +702,64 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 	return output, db, chain, nil
 }
 
-func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
-	t.Helper()
+func compareAsJSON(expected interface{}, actual interface{}) error {
 	want, err := json.Marshal(expected)
 	if err != nil {
-		t.Fatalf("failed to marshal expected value to JSON: %v", err)
+		return fmt.Errorf("failed to marshal expected value to JSON: %v", err)
 	}
 	have, err := json.Marshal(actual)
 	if err != nil {
-		t.Fatalf("failed to marshal actual value to JSON: %v", err)
+		return fmt.Errorf("failed to marshal actual value to JSON: %v", err)
 	}
 	if !bytes.Equal(want, have) {
-		t.Fatalf("incorrect supply info:\nwant %s\nhave %s", string(want), string(have))
+		return fmt.Errorf("incorrect supply info:\nwant %s\nhave %s", string(want), string(have))
 	}
+	return nil
 }
 
-func writeArtifact(t *testing.T, name string, db ethdb.Database, chain *core.BlockChain, expected []supplyInfo, post *types.GenesisAlloc) {
+func writeArtifact(path, name string, db ethdb.Database, chain *core.BlockChain, expected []supplyInfo, post *types.GenesisAlloc) error {
 	bt, err := btFromChain(db, chain, post)
 	if err != nil {
-		t.Fatalf("failed to fill tests from chain: %v", err)
+		return fmt.Errorf("failed to fill tests from chain: %v", err)
 	}
 	bt.Expected = expected
-	writeBTs(t, map[string]*BlockTest{name: bt})
+	return writeBTs(path, map[string]*blockTest{name: bt})
 }
 
-func writeBTs(t *testing.T, tests map[string]*BlockTest) {
+type blockTest struct {
+	bt       *tests.BlockTest
+	Expected []supplyInfo `json:"expected"`
+}
+
+func writeBTs(path string, tests map[string]*blockTest) error {
 	enc, err := json.MarshalIndent(&tests, "", "  ")
 	if err != nil {
-		t.Fatalf("failed to marshal tests: %v", err)
+		return fmt.Errorf("failed to marshal tests: %v", err)
 	}
-	t.Logf("Tests: %s", enc)
+	if err := os.WriteFile(path, enc, 0644); err != nil {
+		return fmt.Errorf("failed to write test to file: %v", err)
+	}
+	return nil
+}
+
+func btFromChain(db ethdb.Database, chain *core.BlockChain, post *types.GenesisAlloc) (*blockTest, error) {
+	bt, err := tests.FromChain(db, chain, post)
+	if err != nil {
+		return nil, err
+	}
+	return &blockTest{bt: &bt}, nil
+}
+
+func (bt *blockTest) MarshalJSON() ([]byte, error) {
+	enc, err := json.Marshal(bt.bt)
+	if err != nil {
+		return nil, err
+	}
+	// Insert the expected supply info
+	result := make(map[string]any)
+	if err := json.Unmarshal(enc, &result); err != nil {
+		return nil, err
+	}
+	result["expected"] = bt.Expected
+	return json.Marshal(result)
 }

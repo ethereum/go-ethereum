@@ -72,7 +72,6 @@ func FromChain(db ethdb.Database, chain *core.BlockChain, post *types.GenesisAll
 	)
 	for i := 1; i <= int(head.Number.Uint64()); i++ {
 		block := chain.GetBlockByNumber(uint64(i))
-		fmt.Printf("block: %v\n", block)
 		if block == nil {
 			return bt, fmt.Errorf("block %d not found", i)
 		}

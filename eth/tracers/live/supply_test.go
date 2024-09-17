@@ -2,6 +2,7 @@ package live
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,8 +11,31 @@ import (
 	"strings"
 	"testing"
 	"unicode"
+
+	"github.com/ethereum/go-ethereum/tests"
 )
 
+type blockTest struct {
+	bt       *tests.BlockTest
+	Expected []supplyInfo `json:"expected"`
+}
+
+func (bt *blockTest) UnmarshalJSON(data []byte) error {
+	tmp := make(map[string]json.RawMessage)
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(tmp["expected"], &bt.Expected); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &bt.bt); err != nil {
+		return err
+	}
+	return nil
+}
+
+// The tests have been filled using the executable at
+// eth/tracers/live/tracetest/supply_filler.go.
 func TestSupplyTracerBlockchain(t *testing.T) {
 	dirPath := "supply"
 	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
@@ -23,7 +47,7 @@ func TestSupplyTracerBlockchain(t *testing.T) {
 			continue
 		}
 		file := file // capture range variable
-		var testcases map[string]*BlockTest
+		var testcases map[string]*blockTest
 		var blob []byte
 		// Call tracer test found, read if from disk
 		if blob, err = os.ReadFile(filepath.Join("testdata", dirPath, file.Name())); err != nil {
@@ -84,4 +108,18 @@ func camel(str string) string {
 		pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
 	}
 	return strings.Join(pieces, "")
+}
+
+func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
+	want, err := json.Marshal(expected)
+	if err != nil {
+		t.Fatalf("failed to marshal expected value to JSON: %v", err)
+	}
+	have, err := json.Marshal(actual)
+	if err != nil {
+		t.Fatalf("failed to marshal actual value to JSON: %v", err)
+	}
+	if !bytes.Equal(want, have) {
+		t.Fatalf("incorrect supply info:\nexpected:\n%s\ngot:\n%s", string(want), string(have))
+	}
 }
