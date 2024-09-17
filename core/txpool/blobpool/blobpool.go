@@ -1035,7 +1035,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 						nonces  = make([]uint64, len(dropTxs))
 					)
 					for j, tx := range dropTxs {
-						p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], txs[i].costCap)
+						p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], tx.costCap)
 						p.stored -= uint64(tx.size)
 						delete(p.lookup, tx.hash)
 						ids[j], nonces[j] = tx.id, tx.nonce
