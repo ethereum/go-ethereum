@@ -705,6 +705,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if uint64(tx.Size()) > txMaxSize {
 		return ErrOversizedData
 	}
+	// Reject transactions that cannot fit into a block even as a single transaction
+	if !pool.chainconfig.Scroll.IsValidBlockSize(tx.Size()) {
+		return ErrOversizedData
+	}
 	// Check whether the init code size has been exceeded.
 	if pool.shanghai && tx.To() == nil && len(tx.Data()) > params.MaxInitCodeSize {
 		return fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(tx.Data()), params.MaxInitCodeSize)

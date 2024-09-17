@@ -2677,3 +2677,32 @@ func TestStatsWithMinBaseFee(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateTxBlockSize(t *testing.T) {
+	pool, key := setupTxPoolWithConfig(params.ScrollMainnetChainConfig)
+	defer pool.Stop()
+
+	account := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, account, big.NewInt(1000000000000000000))
+
+	validTx := pricedDataTransaction(1, 2100000, big.NewInt(1), key, uint64(*pool.chainconfig.Scroll.MaxTxPayloadBytesPerBlock)-128)
+	oversizedTx := pricedDataTransaction(2, 2100000, big.NewInt(1), key, uint64(*pool.chainconfig.Scroll.MaxTxPayloadBytesPerBlock))
+
+	tests := []struct {
+		name string
+		tx   *types.Transaction
+		want error
+	}{
+		{"Valid transaction", validTx, nil},
+		{"Oversized transaction", oversizedTx, ErrOversizedData},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := pool.validateTx(tt.tx, false)
+			if err != tt.want {
+				t.Errorf("validateTx() error = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
