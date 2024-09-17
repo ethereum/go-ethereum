@@ -1,13 +1,19 @@
 package params
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/libevm"
 )
 
 // ChainConfigHooks are required for all types registered as [Extras] for
 // [ChainConfig] payloads.
-type ChainConfigHooks interface{}
+type ChainConfigHooks interface {
+	CheckConfigForkOrder() error
+	CheckConfigCompatible(newcfg *ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError
+	Description() string
+}
 
 // TODO(arr4n): given the choice of whether a hook should be defined on a
 // ChainConfig or on the Rules, what are the guiding principles? A ChainConfig
@@ -67,6 +73,21 @@ var _ interface {
 	ChainConfigHooks
 	RulesHooks
 } = NOOPHooks{}
+
+// CheckConfigForkOrder verifies all (otherwise valid) fork orders.
+func (NOOPHooks) CheckConfigForkOrder() error {
+	return nil
+}
+
+// CheckConfigCompatible verifies all (otherwise valid) new configs.
+func (NOOPHooks) CheckConfigCompatible(*ChainConfig, *big.Int, uint64) *ConfigCompatError {
+	return nil
+}
+
+// Description returns the empty string.
+func (NOOPHooks) Description() string {
+	return ""
+}
 
 // CanExecuteTransaction allows all (otherwise valid) transactions.
 func (NOOPHooks) CanExecuteTransaction(_ common.Address, _ *common.Address, _ libevm.StateReader) error {

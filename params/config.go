@@ -478,7 +478,7 @@ func (c *ChainConfig) Description() string {
 	if c.VerkleTime != nil {
 		banner += fmt.Sprintf(" - Verkle:                      @%-10v\n", *c.VerkleTime)
 	}
-	return banner
+	return banner + c.Hooks().Description()
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
@@ -671,7 +671,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 			lastFork = cur
 		}
 	}
-	return nil
+	return c.Hooks().CheckConfigForkOrder()
 }
 
 func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, headTimestamp uint64) *ConfigCompatError {
@@ -742,7 +742,7 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkTimestampIncompatible(c.VerkleTime, newcfg.VerkleTime, headTimestamp) {
 		return newTimestampCompatError("Verkle fork timestamp", c.VerkleTime, newcfg.VerkleTime)
 	}
-	return nil
+	return c.Hooks().CheckConfigCompatible(newcfg, headNumber, headTimestamp)
 }
 
 // BaseFeeChangeDenominator bounds the amount the base fee can change between blocks.

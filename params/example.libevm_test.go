@@ -51,6 +51,11 @@ func constructRulesExtra(c *params.ChainConfig, r *params.Rules, cEx ChainConfig
 // the standard [params.ChainConfig] struct.
 type ChainConfigExtra struct {
 	MyForkTime *uint64 `json:"myForkTime"`
+
+	// (Optional) If not all hooks are desirable then embedding a [NOOPHooks]
+	// allows the type to satisfy the [ChainConfigHooks] interface, resulting in
+	// default Ethereum behaviour.
+	params.NOOPHooks
 }
 
 // RulesExtra can be any struct. It too mirrors a common pattern in
@@ -59,9 +64,6 @@ type RulesExtra struct {
 	IsMyFork  bool
 	timestamp uint64
 
-	// (Optional) If not all hooks are desirable then embedding a [NOOPHooks]
-	// allows the type to satisfy the [RulesHooks] interface, resulting in
-	// default Ethereum behaviour.
 	params.NOOPHooks
 }
 

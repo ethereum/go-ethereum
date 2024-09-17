@@ -14,17 +14,20 @@ import (
 // Register clears any registered [params.Extras] and then registers `extras`
 // for the lifetime of the current test, clearing them via tb's
 // [testing.TB.Cleanup].
-func Register[C params.ChainConfigHooks, R params.RulesHooks](tb testing.TB, extras params.Extras[C, R]) {
+func Register[C params.ChainConfigHooks, R params.RulesHooks](tb testing.TB, extras params.Extras[C, R]) params.ExtraPayloads[C, R] {
 	tb.Helper()
 	params.TestOnlyClearRegisteredExtras()
 	tb.Cleanup(params.TestOnlyClearRegisteredExtras)
-	params.RegisterExtras(extras)
+	return params.RegisterExtras(extras)
 }
 
 // A Stub is a test double for [params.ChainConfigHooks] and
 // [params.RulesHooks]. Each of the fields, if non-nil, back their respective
 // hook methods, which otherwise fall back to the default behaviour.
 type Stub struct {
+	CheckConfigForkOrderFn  func() error
+	CheckConfigCompatibleFn func(*params.ChainConfig, *big.Int, uint64) *params.ConfigCompatError
+	DescriptionSuffix       string
 	PrecompileOverrides     map[common.Address]libevm.PrecompiledContract
 	CanExecuteTransactionFn func(common.Address, *common.Address, libevm.StateReader) error
 	CanCreateContractFn     func(*libevm.AddressContext, uint64, libevm.StateReader) (uint64, error)
@@ -32,9 +35,9 @@ type Stub struct {
 
 // Register is a convenience wrapper for registering s as both the
 // [params.ChainConfigHooks] and [params.RulesHooks] via [Register].
-func (s *Stub) Register(tb testing.TB) {
+func (s *Stub) Register(tb testing.TB) params.ExtraPayloads[*Stub, *Stub] {
 	tb.Helper()
-	Register(tb, params.Extras[*Stub, *Stub]{
+	return Register(tb, params.Extras[*Stub, *Stub]{
 		NewRules: func(_ *params.ChainConfig, _ *params.Rules, _ *Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *Stub {
 			return s
 		},
@@ -50,6 +53,29 @@ func (s Stub) PrecompileOverride(a common.Address) (libevm.PrecompiledContract, 
 	}
 	p, ok := s.PrecompileOverrides[a]
 	return p, ok
+}
+
+// CheckConfigForkOrder proxies arguments to the s.CheckConfigForkOrderFn
+// function if non-nil, otherwise it acts as a noop.
+func (s Stub) CheckConfigForkOrder() error {
+	if f := s.CheckConfigForkOrderFn; f != nil {
+		return f()
+	}
+	return nil
+}
+
+// CheckConfigCompatible proxies arguments to the s.CheckConfigCompatibleFn
+// function if non-nil, otherwise it acts as a noop.
+func (s Stub) CheckConfigCompatible(newcfg *params.ChainConfig, headNumber *big.Int, headTimestamp uint64) *params.ConfigCompatError {
+	if f := s.CheckConfigCompatibleFn; f != nil {
+		return f(newcfg, headNumber, headTimestamp)
+	}
+	return nil
+}
+
+// Description returns s.DescriptionSuffix.
+func (s Stub) Description() string {
+	return s.DescriptionSuffix
 }
 
 // CanExecuteTransaction proxies arguments to the s.CanExecuteTransactionFn
