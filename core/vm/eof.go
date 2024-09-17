@@ -245,7 +245,7 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 		return fmt.Errorf("%w: have %d, want %d", ErrInvalidContainerSize, len(b), expectedSize)
 	}
 	// Only check that the expected size is not exceed on non-initcode
-	if !isInitcode && len(b) > expectedSize {
+	if (!topLevel || !isInitcode) && len(b) > expectedSize {
 		return fmt.Errorf("%w: have %d, want %d", ErrInvalidContainerSize, len(b), expectedSize)
 	}
 
