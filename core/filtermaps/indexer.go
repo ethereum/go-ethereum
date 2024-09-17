@@ -107,7 +107,7 @@ func (f *FilterMaps) getRange() filterMapsRange {
 
 // tryInit attempts to initialize the log index structure.
 func (f *FilterMaps) tryInit(head *types.Header) {
-	receipts := f.chain.GetReceiptsByHash(head.Hash())
+	receipts := rawdb.ReadRawReceipts(f.db, head.Hash(), head.Number.Uint64())
 	if receipts == nil {
 		log.Error("Could not retrieve block receipts for init block", "number", head.Number, "hash", head.Hash())
 		return
@@ -176,7 +176,7 @@ func (f *FilterMaps) tryUpdateHead(newHead *types.Header) {
 	update := f.newUpdateBatch()
 	for i := len(newHeaders) - 1; i >= 0; i-- {
 		newHeader := newHeaders[i]
-		receipts := f.chain.GetReceiptsByHash(newHeader.Hash())
+		receipts := rawdb.ReadRawReceipts(f.db, newHeader.Hash(), newHeader.Number.Uint64())
 		if receipts == nil {
 			log.Error("Could not retrieve block receipts for new block", "number", newHeader.Number, "hash", newHeader.Hash())
 			break
@@ -218,7 +218,7 @@ func (f *FilterMaps) tryExtendTail(stopFn func() bool) {
 			log.Error("Tail header not found", "number", number-1, "hash", parentHash)
 			break
 		}
-		receipts := f.chain.GetReceiptsByHash(newTail.Hash())
+		receipts := rawdb.ReadRawReceipts(f.db, newTail.Hash(), newTail.Number.Uint64())
 		if receipts == nil {
 			log.Error("Could not retrieve block receipts for tail block", "number", newTail.Number, "hash", newTail.Hash())
 			break
