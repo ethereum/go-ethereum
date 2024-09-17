@@ -36,7 +36,7 @@ const (
 // https://eips.ethereum.org/EIPS/eip-7745
 type FilterMaps struct {
 	lock    sync.RWMutex
-	db      ethdb.KeyValueStore
+	db      ethdb.Database
 	closeCh chan chan struct{}
 
 	filterMapsRange
@@ -86,7 +86,7 @@ type filterMapsRange struct {
 
 // NewFilterMaps creates a new FilterMaps and starts the indexer in order to keep
 // the structure in sync with the given blockchain.
-func NewFilterMaps(db ethdb.KeyValueStore, chain *core.BlockChain) *FilterMaps {
+func NewFilterMaps(db ethdb.Database, chain *core.BlockChain) *FilterMaps {
 	rs, err := rawdb.ReadFilterMapsRange(db)
 	if err != nil {
 		log.Error("Error reading log index range", "error", err)
@@ -298,7 +298,7 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 	}
 	// get block receipts
 	hash := f.chain.GetCanonicalHash(firstBlockNumber)
-	receipts := f.chain.GetReceiptsByHash(hash) //TODO small cache
+	receipts := rawdb.ReadRawReceipts(f.db, hash, firstBlockNumber) //TODO small cache
 	if receipts == nil {
 		return nil, errors.New("receipts not found")
 	}
