@@ -185,3 +185,7 @@ func (a *AccessListTracer) AccessList() types.AccessList {
 func (a *AccessListTracer) Equal(other *AccessListTracer) bool {
 	return a.list.equal(other.list)
 }
+
+func (a *AccessListTracer) IsDebug() bool {
+	return false
+}

@@ -25,6 +25,11 @@ func WriteBlockRowConsumption(db ethdb.KeyValueWriter, l2BlockHash common.Hash, 
 	}
 }
 
+// DeleteBlockRowConsumption deletes a RowConsumption of the block from the database
+func DeleteBlockRowConsumption(db ethdb.KeyValueWriter, l2BlockHash common.Hash) error {
+	return db.Delete(rowConsumptionKey(l2BlockHash))
+}
+
 // ReadBlockRowConsumption retrieves the RowConsumption corresponding to the block hash.
 func ReadBlockRowConsumption(db ethdb.Reader, l2BlockHash common.Hash) *types.RowConsumption {
 	data := ReadBlockRowConsumptionRLP(db, l2BlockHash)

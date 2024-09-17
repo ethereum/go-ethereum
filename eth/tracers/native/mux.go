@@ -122,6 +122,10 @@ func (t *MuxTracer) CaptureTxEnd(restGas uint64) {
 	}
 }
 
+func (t *MuxTracer) IsDebug() bool {
+	return false
+}
+
 // GetResult returns an empty json object.
 func (t *MuxTracer) GetResult() (json.RawMessage, error) {
 	resObject := make(map[string]json.RawMessage)

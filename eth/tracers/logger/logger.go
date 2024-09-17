@@ -420,6 +420,8 @@ func (l *StructLogger) UpdatedStorages() map[common.Address]Storage {
 // CreatedAccount return the account data in case it is a create tx
 func (l *StructLogger) CreatedAccount() *types.AccountWrapper { return l.createdAccount }
 
+func (l *StructLogger) IsDebug() bool { return l.cfg.Debug }
+
 // WriteTrace writes a formatted trace to the given writer
 func WriteTrace(writer io.Writer, logs []StructLog) {
 	for _, log := range logs {

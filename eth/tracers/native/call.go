@@ -259,6 +259,10 @@ func (t *CallTracer) CaptureTxEnd(restGas uint64) {
 	}
 }
 
+func (t *CallTracer) IsDebug() bool {
+	return false
+}
+
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
 func (t *CallTracer) GetResult() (json.RawMessage, error) {

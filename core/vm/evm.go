@@ -20,11 +20,11 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/holiman/uint256"
 	"github.com/scroll-tech/go-ethereum/common"
 	"github.com/scroll-tech/go-ethereum/core/types"
 	"github.com/scroll-tech/go-ethereum/crypto"
 	"github.com/scroll-tech/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 type (
@@ -85,10 +85,13 @@ type BlockContext struct {
 // All fields can change between transactions.
 type TxContext struct {
 	// Message information
-	Origin     common.Address  // Provides information for ORIGIN
-	To         *common.Address // Provides information for TO in trace
-	GasPrice   *big.Int        // Provides information for GASPRICE
-	BlobHashes []common.Hash   // Provides information for BLOBHASH
+	Origin     common.Address // Provides information for ORIGIN
+	GasPrice   *big.Int       // Provides information for GASPRICE
+	BlobHashes []common.Hash  // Provides information for BLOBHASH
+
+	To            *common.Address // Provides information for TO in trace
+	IsL1MessageTx bool            // Provides information for trace
+	TxSize        uint64          // Provides information for trace
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides

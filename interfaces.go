@@ -149,6 +149,7 @@ type CallMsg struct {
 
 	// scroll-related:
 	// not need to have a `IsL1MessageTx` field, should always be false
+	// not need to have a `TxSize` field, not known at the moment
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by

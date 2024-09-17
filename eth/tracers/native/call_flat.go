@@ -213,6 +213,10 @@ func (t *flatCallTracer) CaptureTxEnd(restGas uint64) {
 	t.tracer.CaptureTxEnd(restGas)
 }
 
+func (t *flatCallTracer) IsDebug() bool {
+	return false
+}
+
 // GetResult returns an empty json object.
 func (t *flatCallTracer) GetResult() (json.RawMessage, error) {
 	if len(t.tracer.callstack) < 1 {

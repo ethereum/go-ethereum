@@ -327,6 +327,10 @@ func (t *jsTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 	}
 }
 
+func (t *jsTracer) IsDebug() bool {
+	return false
+}
+
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *jsTracer) CaptureExit(output []byte, gasUsed uint64, err error) {

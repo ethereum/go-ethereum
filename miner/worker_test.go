@@ -71,6 +71,7 @@ var (
 		Recommit:       time.Second,
 		GasCeil:        params.GenesisGasLimit,
 		MaxAccountsNum: math.MaxInt,
+		CCCMaxWorkers:  2,
 	}
 )
 

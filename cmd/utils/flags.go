@@ -1716,6 +1716,10 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.IsSet(MinerMaxAccountsNumFlag.Name) {
 		cfg.MaxAccountsNum = ctx.Int(MinerMaxAccountsNumFlag.Name)
 	}
+	cfg.CCCMaxWorkers = runtime.GOMAXPROCS(0)
+	if ctx.IsSet(CircuitCapacityCheckWorkersFlag.Name) {
+		cfg.CCCMaxWorkers = int(ctx.Uint(CircuitCapacityCheckWorkersFlag.Name))
+	}
 }
 
 func setRequiredBlocks(ctx *cli.Context, cfg *ethconfig.Config) {

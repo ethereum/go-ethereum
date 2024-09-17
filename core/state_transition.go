@@ -155,6 +155,7 @@ type Message struct {
 
 	// scroll-related fields
 	IsL1MessageTx bool
+	TxSize        uint64
 }
 
 func (m *Message) GetFrom() common.Address         { return m.From }
@@ -168,6 +169,7 @@ func (m *Message) GetNonce() uint64                { return m.Nonce }
 func (m *Message) GetData() []byte                 { return m.Data }
 func (m *Message) GetAccessList() types.AccessList { return m.AccessList }
 func (m *Message) GetIsL1MessageTx() bool          { return m.IsL1MessageTx }
+func (m *Message) GetTxSize() uint64               { return m.TxSize }
 
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
@@ -185,6 +187,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		BlobHashes:        tx.BlobHashes(),
 		BlobGasFeeCap:     tx.BlobGasFeeCap(),
 		IsL1MessageTx:     tx.IsL1MessageTx(),
+		TxSize:            tx.Size(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
