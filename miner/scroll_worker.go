@@ -70,6 +70,9 @@ var (
 	commitReasonCCCCounter      = metrics.NewRegisteredCounter("miner/commit_reason_ccc", nil)
 	commitReasonDeadlineCounter = metrics.NewRegisteredCounter("miner/commit_reason_deadline", nil)
 	commitGasCounter            = metrics.NewRegisteredCounter("miner/commit_gas", nil)
+
+	missingRCOnRestartCounter = metrics.NewRegisteredCounter("miner/missing_rc_on_restart", nil)
+	missingAncestorRCCounter  = metrics.NewRegisteredCounter("miner/missing_ancestor_rc", nil)
 )
 
 // prioritizedTransaction represents a single transaction that
@@ -306,6 +309,8 @@ func (w *worker) checkHeadRowConsumption() error {
 		block := w.chain.GetBlockByNumber(curBlockNum)
 		// only spawn CCC checkers for blocks with no row consumption data stored in DB
 		if rawdb.ReadBlockRowConsumption(w.chain.Database(), block.Hash()) == nil {
+			missingRCOnRestartCounter.Inc(1)
+
 			if err := w.asyncChecker.Check(block); err != nil {
 				return err
 			}
@@ -870,6 +875,8 @@ func (w *worker) commit(reorging bool) (common.Hash, error) {
 		ancestorHeight := currentHeight - maxReorgDepth
 		ancestorHash := w.chain.GetHeaderByNumber(ancestorHeight).Hash()
 		if rawdb.ReadBlockRowConsumption(w.chain.Database(), ancestorHash) == nil {
+			missingAncestorRCCounter.Inc(1)
+
 			// reject committing to a block if its ancestor doesn't have its RC stored in DB yet.
 			// which may either mean that it failed CCC or it is still in the process of being checked
 			return common.Hash{}, retryableCommitError{inner: errors.New("ancestor doesn't have RC yet")}
