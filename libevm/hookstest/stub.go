@@ -27,7 +27,7 @@ func Register[C params.ChainConfigHooks, R params.RulesHooks](tb testing.TB, ext
 type Stub struct {
 	PrecompileOverrides     map[common.Address]libevm.PrecompiledContract
 	CanExecuteTransactionFn func(common.Address, *common.Address, libevm.StateReader) error
-	CanCreateContractFn     func(*libevm.AddressContext, libevm.StateReader) error
+	CanCreateContractFn     func(*libevm.AddressContext, uint64, libevm.StateReader) (uint64, error)
 }
 
 // Register is a convenience wrapper for registering s as both the
@@ -63,11 +63,11 @@ func (s Stub) CanExecuteTransaction(from common.Address, to *common.Address, sr 
 
 // CanCreateContract proxies arguments to the s.CanCreateContractFn function if
 // non-nil, otherwise it acts as a noop.
-func (s Stub) CanCreateContract(cc *libevm.AddressContext, sr libevm.StateReader) error {
+func (s Stub) CanCreateContract(cc *libevm.AddressContext, gas uint64, sr libevm.StateReader) (uint64, error) {
 	if f := s.CanCreateContractFn; f != nil {
-		return f(cc, sr)
+		return f(cc, gas, sr)
 	}
-	return nil
+	return gas, nil
 }
 
 var _ interface {

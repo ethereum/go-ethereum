@@ -105,11 +105,12 @@ func (r RulesExtra) PrecompileOverride(addr common.Address) (_ libevm.Precompile
 // CanCreateContract implements the required [params.RuleHooks] method. Access
 // to state allows it to be configured on-chain however this is an optional
 // implementation detail.
-func (r RulesExtra) CanCreateContract(*libevm.AddressContext, libevm.StateReader) error {
+func (r RulesExtra) CanCreateContract(_ *libevm.AddressContext, gas uint64, _ libevm.StateReader) (uint64, error) {
 	if time.Unix(int64(r.timestamp), 0).UTC().Day() != int(time.Tuesday) { //nolint:gosec // G115 timestamp won't overflow int64 for millions of years so this is someone else's problem
-		return errors.New("uh oh")
+		// Consumes all remaining gas.
+		return 0, errors.New("uh oh")
 	}
-	return nil
+	return gas, nil
 }
 
 // This example demonstrates how the rest of this file would be used from a

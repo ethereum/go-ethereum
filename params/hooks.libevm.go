@@ -32,7 +32,9 @@ type RulesHooks interface {
 // RulesAllowlistHooks are a subset of [RulesHooks] that gate actions, signalled
 // by returning a nil (allowed) or non-nil (blocked) error.
 type RulesAllowlistHooks interface {
-	CanCreateContract(*libevm.AddressContext, libevm.StateReader) error
+	// CanCreateContract is called after the deployer's nonce is incremented but
+	// before all other state-modifying actions.
+	CanCreateContract(_ *libevm.AddressContext, gas uint64, _ libevm.StateReader) (gasRemaining uint64, _ error)
 	CanExecuteTransaction(from common.Address, to *common.Address, _ libevm.StateReader) error
 }
 
@@ -71,9 +73,10 @@ func (NOOPHooks) CanExecuteTransaction(_ common.Address, _ *common.Address, _ li
 	return nil
 }
 
-// CanCreateContract allows all (otherwise valid) contract deployment.
-func (NOOPHooks) CanCreateContract(*libevm.AddressContext, libevm.StateReader) error {
-	return nil
+// CanCreateContract allows all (otherwise valid) contract deployment, not
+// consuming any more gas.
+func (NOOPHooks) CanCreateContract(_ *libevm.AddressContext, gas uint64, _ libevm.StateReader) (uint64, error) {
+	return gas, nil
 }
 
 // PrecompileOverride instructs the EVM interpreter to use the default

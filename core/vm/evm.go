@@ -428,10 +428,6 @@ func (c *codeAndHash) Hash() common.Hash {
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
-	cc := &libevm.AddressContext{Origin: evm.Origin, Caller: caller.Address(), Self: address}
-	if err := evm.chainRules.Hooks().CanCreateContract(cc, evm.StateDB); err != nil {
-		return nil, common.Address{}, gas, err
-	}
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth) {
@@ -455,6 +451,19 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) {
 		return nil, common.Address{}, 0, ErrContractAddressCollision
 	}
+
+	//libevm:start
+	//
+	// This check MUST be placed after the caller's nonce is incremented but
+	// before all other state-modifying behaviour, even if changes may be
+	// reverted to the snapshot.
+	addrs := &libevm.AddressContext{Origin: evm.Origin, Caller: caller.Address(), Self: address}
+	gas, err := evm.chainRules.Hooks().CanCreateContract(addrs, gas, evm.StateDB)
+	if err != nil {
+		return nil, common.Address{}, gas, err
+	}
+	//libevm:end
+
 	// Create a new account on the state
 	snapshot := evm.StateDB.Snapshot()
 	evm.StateDB.CreateAccount(address)
