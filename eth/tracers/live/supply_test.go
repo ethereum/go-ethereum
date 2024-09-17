@@ -35,10 +35,10 @@ func (bt *blockTest) UnmarshalJSON(data []byte) error {
 }
 
 // The tests have been filled using the executable at
-// eth/tracers/live/tracetest/supply_filler.go.
+// eth/tracers/live/tests/supply_filler.go.
 func TestSupplyTracerBlockchain(t *testing.T) {
-	dirPath := "supply"
-	files, err := os.ReadDir(filepath.Join("testdata", dirPath))
+	dirPath := filepath.Join("tests", "supply")
+	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)
 	}
@@ -49,8 +49,8 @@ func TestSupplyTracerBlockchain(t *testing.T) {
 		file := file // capture range variable
 		var testcases map[string]*blockTest
 		var blob []byte
-		// Call tracer test found, read if from disk
-		if blob, err = os.ReadFile(filepath.Join("testdata", dirPath, file.Name())); err != nil {
+		// Tracer test found, read if from disk
+		if blob, err = os.ReadFile(filepath.Join(dirPath, file.Name())); err != nil {
 			t.Fatalf("failed to read testcase: %v", err)
 		}
 		if err := json.Unmarshal(blob, &testcases); err != nil {
@@ -65,7 +65,7 @@ func TestSupplyTracerBlockchain(t *testing.T) {
 				// Load supply tracer
 				tracer, err := newSupply(json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
 				if err != nil {
-					t.Fatalf("failed to create call tracer: %v", err)
+					t.Fatalf("failed to create tracer: %v", err)
 				}
 				if err := test.bt.Run(false, "path", false, tracer, nil); err != nil {
 					t.Errorf("failed to run test: %v\n", err)

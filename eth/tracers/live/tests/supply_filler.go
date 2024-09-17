@@ -659,7 +659,7 @@ func testSupplyTracer(genesis *core.Genesis, gen func(*core.BlockGen)) ([]supply
 	// Load supply tracer
 	tracer, err := tracers.LiveDirectory.New("supply", json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create call tracer: %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to create tracer: %v", err)
 	}
 
 	db := rawdb.NewMemoryDatabase()
