@@ -1028,7 +1028,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 		for addr, txs := range p.index {
 			for i, tx := range txs {
 				if tx.execTipCap.Cmp(p.gasTip) < 0 {
-					// Drop the offending transaction
+					// Drop the offending transaction and everything afterwards, no gaps allowed
 					var (
 						dropTxs = txs[i:]
 						ids     = make([]uint64, len(dropTxs))
