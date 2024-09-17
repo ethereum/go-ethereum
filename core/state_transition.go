@@ -515,7 +515,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value, rules.IsPrague)
 		// Special case for EOF, if the initcode or deployed code is
 		// invalid, the tx is considered valid (so update nonce), but
-		// is to be treated as an exceptional abort (so burn all gas).
+		// gas for initcode execution is not consumed.
+		// Only intrinsic creation transaction costs are charged.
 		if errors.Is(vmerr, vm.ErrInvalidEOFInitcode) {
 			st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
 		}
