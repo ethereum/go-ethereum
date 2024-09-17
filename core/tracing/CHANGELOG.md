@@ -15,7 +15,7 @@ This release contained only minor extensions to the tracing interface.
 
 ### Modified types
 
-- `GasChangeReason` has been extended with the following reasons will be active only post-Verkle.
+- `GasChangeReason` has been extended with the following reasons that will only be active post-Verkle.
   - `GasChangeWitnessContractInit` flags the event of adding to the witness during the contract creation initialization step.
   - `GasChangeWitnessContractCreation` flags the event of adding to the witness during the contract creation finalization step.
   - `GasChangeWitnessCodeChunk` flags the event of adding one or more contract code chunks to the witness.
