@@ -1039,6 +1039,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 						p.stored -= uint64(tx.size)
 						delete(p.lookup, tx.hash)
 						ids[j], nonces[j] = tx.id, tx.nonce
+						txs[i+j] = nil
 					}
 					// Clear out the dropped transactions from the index
 					if i > 0 {
