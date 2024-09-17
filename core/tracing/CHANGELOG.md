@@ -2,6 +2,24 @@
 
 All notable changes to the tracing interface will be documented in this file.
 
+## [Unreleased]
+
+### Modified types
+
+- `GasChangeReason` has been extended with the following reasons which will be enabled only post-Verkle. There shouldn't be any gas changes with those reasons prior to the fork.
+  - `GasChangeWitnessContractCollisionCheck` flags the event of adding to the witness when checking for contract address collision.
+
+## [v1.14.4]
+
+This release contained only minor extensions to the tracing interface.
+
+### Modified types
+
+- `GasChangeReason` has been extended with the following reasons that will only be active post-Verkle.
+  - `GasChangeWitnessContractInit` flags the event of adding to the witness during the contract creation initialization step.
+  - `GasChangeWitnessContractCreation` flags the event of adding to the witness during the contract creation finalization step.
+  - `GasChangeWitnessCodeChunk` flags the event of adding one or more contract code chunks to the witness.
+
 ## [v1.14.3]
 
 There have been minor backwards-compatible changes to the tracing interface to explicitly mark the execution of **system** contracts. As of now the only system call updates the parent beacon block root as per [EIP-4788](https://eips.ethereum.org/EIPS/eip-4788). Other system calls are being considered for the future hardfork.
@@ -75,6 +93,7 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 - `CaptureState` -> `OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error)`. `op` is of type `byte` which can be cast to `vm.OpCode` when necessary. A `*vm.ScopeContext` is not passed anymore. It is replaced by `tracing.OpContext` which offers access to the memory, stack and current contract.
 - `CaptureFault` -> `OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error)`. Similar to above.
 
-[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.0...master
+[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.8...master
 [v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0
 [v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
+[v1.14.4]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.4
