@@ -2,10 +2,12 @@ package vm
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/libevm"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -99,6 +101,10 @@ type PrecompileEnvironment interface {
 	// ReadOnlyState will always be non-nil.
 	ReadOnlyState() libevm.StateReader
 	Addresses() *libevm.AddressContext
+
+	BlockHeader() (types.Header, error)
+	BlockNumber() *big.Int
+	BlockTime() uint64
 }
 
 //
@@ -151,6 +157,24 @@ func (args *evmCallArgs) Addresses() *libevm.AddressContext {
 		Self:   args.addr,
 	}
 }
+
+func (args *evmCallArgs) BlockHeader() (types.Header, error) {
+	hdr := args.evm.Context.Header
+	if hdr == nil {
+		// Although [core.NewEVMBlockContext] sets the field and is in the
+		// typical hot path (e.g. miner), there are other ways to create a
+		// [vm.BlockContext] (e.g. directly in tests) that may result in no
+		// available header.
+		return types.Header{}, fmt.Errorf("nil %T in current %T", hdr, args.evm.Context)
+	}
+	return *hdr, nil
+}
+
+func (args *evmCallArgs) BlockNumber() *big.Int {
+	return new(big.Int).Set(args.evm.Context.BlockNumber)
+}
+
+func (args *evmCallArgs) BlockTime() uint64 { return args.evm.Context.Time }
 
 var (
 	// These lock in the assumptions made when implementing [evmCallArgs]. If

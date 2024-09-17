@@ -19,13 +19,13 @@ import (
 // arguments to [vm.NewEVM] are the zero values of their respective types,
 // except for the use of [core.CanTransfer] and [core.Transfer] instead of nil
 // functions.
-func NewZeroEVM(tb testing.TB) (*state.StateDB, *vm.EVM) {
+func NewZeroEVM(tb testing.TB, opts ...EVMOption) (*state.StateDB, *vm.EVM) {
 	tb.Helper()
 
 	sdb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	require.NoError(tb, err, "state.New()")
 
-	return sdb, vm.NewEVM(
+	vm := vm.NewEVM(
 		vm.BlockContext{
 			CanTransfer: core.CanTransfer,
 			Transfer:    core.Transfer,
@@ -35,4 +35,27 @@ func NewZeroEVM(tb testing.TB) (*state.StateDB, *vm.EVM) {
 		&params.ChainConfig{},
 		vm.Config{},
 	)
+	for _, o := range opts {
+		o.apply(vm)
+	}
+
+	return sdb, vm
+}
+
+// An EVMOption configures the EVM returned by [NewZeroEVM].
+type EVMOption interface {
+	apply(*vm.EVM)
+}
+
+type funcOption func(*vm.EVM)
+
+var _ EVMOption = funcOption(nil)
+
+func (f funcOption) apply(vm *vm.EVM) { f(vm) }
+
+// WithBlockContext overrides the default context.
+func WithBlockContext(c vm.BlockContext) EVMOption {
+	return funcOption(func(vm *vm.EVM) {
+		vm.Context = c
+	})
 }

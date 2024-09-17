@@ -3,6 +3,8 @@ package vm_test
 import (
 	"fmt"
 	"math/big"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/holiman/uint256"
@@ -11,6 +13,8 @@ import (
 	"golang.org/x/exp/rand"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/libevm"
@@ -79,6 +83,31 @@ func TestPrecompileOverride(t *testing.T) {
 	}
 }
 
+type statefulPrecompileOutput struct {
+	Caller, Self            common.Address
+	StateValue              common.Hash
+	ReadOnly                bool
+	BlockNumber, Difficulty *big.Int
+	BlockTime               uint64
+	Input                   []byte
+}
+
+func (o statefulPrecompileOutput) String() string {
+	var lines []string
+	out := reflect.ValueOf(o)
+	for i, n := 0, out.NumField(); i < n; i++ {
+		name := out.Type().Field(i).Name
+		fld := out.Field(i).Interface()
+
+		verb := "%v"
+		if _, ok := fld.([]byte); ok {
+			verb = "%#x"
+		}
+		lines = append(lines, fmt.Sprintf("%s: "+verb, name, fld))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func TestNewStatefulPrecompile(t *testing.T) {
 	rng := ethtest.NewPseudoRand(314159)
 	precompile := rng.Address()
@@ -87,20 +116,27 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	const gasLimit = 1e6
 	gasCost := rng.Uint64n(gasLimit)
 
-	makeOutput := func(caller, self common.Address, input []byte, stateVal common.Hash, readOnly bool) []byte {
-		return []byte(fmt.Sprintf(
-			"Caller: %v Precompile: %v State: %v Read-only: %t, Input: %#x",
-			caller, self, stateVal, readOnly, input,
-		))
-	}
 	run := func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) ([]byte, uint64, error) {
 		if got, want := env.StateDB() != nil, !env.ReadOnly(); got != want {
 			return nil, 0, fmt.Errorf("PrecompileEnvironment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
 		}
+		hdr, err := env.BlockHeader()
+		if err != nil {
+			return nil, 0, err
+		}
 
 		addrs := env.Addresses()
-		val := env.ReadOnlyState().GetState(precompile, slot)
-		return makeOutput(addrs.Caller, addrs.Self, input, val, env.ReadOnly()), suppliedGas - gasCost, nil
+		out := &statefulPrecompileOutput{
+			Caller:      addrs.Caller,
+			Self:        addrs.Self,
+			StateValue:  env.ReadOnlyState().GetState(precompile, slot),
+			ReadOnly:    env.ReadOnly(),
+			BlockNumber: env.BlockNumber(),
+			BlockTime:   env.BlockTime(),
+			Difficulty:  hdr.Difficulty,
+			Input:       input,
+		}
+		return []byte(out.String()), suppliedGas - gasCost, nil
 	}
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
@@ -109,11 +145,18 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	}
 	hooks.Register(t)
 
+	header := &types.Header{
+		Number:     rng.BigUint64(),
+		Time:       rng.Uint64(),
+		Difficulty: rng.BigUint64(),
+	}
 	caller := rng.Address()
 	input := rng.Bytes(8)
 	value := rng.Hash()
 
-	state, evm := ethtest.NewZeroEVM(t)
+	state, evm := ethtest.NewZeroEVM(t, ethtest.WithBlockContext(
+		core.NewEVMBlockContext(header, nil, rng.AddressPtr()),
+	))
 	state.SetState(precompile, slot, value)
 
 	tests := []struct {
@@ -155,12 +198,21 @@ func TestNewStatefulPrecompile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wantReturnData := makeOutput(caller, precompile, input, value, tt.wantReadOnly)
+			wantReturnData := statefulPrecompileOutput{
+				Caller:      caller,
+				Self:        precompile,
+				StateValue:  value,
+				ReadOnly:    tt.wantReadOnly,
+				BlockNumber: header.Number,
+				BlockTime:   header.Time,
+				Difficulty:  header.Difficulty,
+				Input:       input,
+			}.String()
 			wantGasLeft := gasLimit - gasCost
 
 			gotReturnData, gotGasLeft, err := tt.call()
 			require.NoError(t, err)
-			assert.Equal(t, string(wantReturnData), string(gotReturnData))
+			assert.Equal(t, wantReturnData, string(gotReturnData))
 			assert.Equal(t, wantGasLeft, gotGasLeft)
 		})
 	}

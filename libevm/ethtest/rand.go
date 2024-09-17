@@ -1,6 +1,8 @@
 package ethtest
 
 import (
+	"math/big"
+
 	"golang.org/x/exp/rand"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,4 +41,9 @@ func (r *PseudoRand) Bytes(n uint) []byte {
 	b := make([]byte, n)
 	r.Read(b) //nolint:gosec,errcheck // Guaranteed nil error
 	return b
+}
+
+// Big returns [rand.Rand.Uint64] as a [big.Int].
+func (r *PseudoRand) BigUint64() *big.Int {
+	return new(big.Int).SetUint64(r.Uint64())
 }
