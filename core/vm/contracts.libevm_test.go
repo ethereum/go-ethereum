@@ -93,23 +93,18 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			caller, self, stateVal, readOnly, input,
 		))
 	}
-	run := func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+	run := func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) ([]byte, uint64, error) {
 		if got, want := env.StateDB() != nil, !env.ReadOnly(); got != want {
-			return nil, fmt.Errorf("PrecompileEnvironment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
+			return nil, 0, fmt.Errorf("PrecompileEnvironment().StateDB() must be non-nil i.f.f. not read-only; got non-nil? %t; want %t", got, want)
 		}
 
 		addrs := env.Addresses()
 		val := env.ReadOnlyState().GetState(precompile, slot)
-		return makeOutput(addrs.Caller, addrs.Self, input, val, env.ReadOnly()), nil
+		return makeOutput(addrs.Caller, addrs.Self, input, val, env.ReadOnly()), suppliedGas - gasCost, nil
 	}
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
-			precompile: vm.NewStatefulPrecompile(
-				run,
-				func(b []byte) uint64 {
-					return gasCost
-				},
-			),
+			precompile: vm.NewStatefulPrecompile(run),
 		},
 	}
 	hooks.Register(t)
@@ -204,13 +199,12 @@ func TestInheritReadOnly(t *testing.T) {
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 			precompile: vm.NewStatefulPrecompile(
-				func(env vm.PrecompileEnvironment, input []byte) ([]byte, error) {
+				func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) ([]byte, uint64, error) {
 					if env.ReadOnly() {
-						return []byte{ifReadOnly}, nil
+						return []byte{ifReadOnly}, suppliedGas, nil
 					}
-					return []byte{ifNotReadOnly}, nil
+					return []byte{ifNotReadOnly}, suppliedGas, nil
 				},
-				func([]byte) uint64 { return 0 },
 			),
 		},
 	}

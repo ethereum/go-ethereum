@@ -174,8 +174,7 @@ func (args *evmCallArgs) RunPrecompiledContract(p PrecompiledContract, input []b
 		return nil, 0, ErrOutOfGas
 	}
 	suppliedGas -= gasCost
-	output, err := args.run(p, input)
-	return output, suppliedGas, err
+	return args.run(p, input, suppliedGas)
 }
 
 // ECRECOVER implemented as a native contract.
