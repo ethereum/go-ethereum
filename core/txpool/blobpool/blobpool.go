@@ -1030,23 +1030,15 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 				if tx.execTipCap.Cmp(p.gasTip) < 0 {
 					// Drop the offending transaction
 					var (
-						ids    = []uint64{tx.id}
-						nonces = []uint64{tx.nonce}
+						dropTxs = txs[i:]
+						ids     = make([]uint64, len(dropTxs))
+						nonces  = make([]uint64, len(dropTxs))
 					)
-					p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], txs[i].costCap)
-					p.stored -= uint64(tx.size)
-					delete(p.lookup, tx.hash)
-					txs[i] = nil
-
-					// Drop everything afterwards, no gaps allowed
-					for j, tx := range txs[i+1:] {
-						ids = append(ids, tx.id)
-						nonces = append(nonces, tx.nonce)
-
-						p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], tx.costCap)
+					for j, tx := range dropTxs {
+						p.spent[addr] = new(uint256.Int).Sub(p.spent[addr], txs[i].costCap)
 						p.stored -= uint64(tx.size)
 						delete(p.lookup, tx.hash)
-						txs[i+1+j] = nil
+						ids[j], nonces[j] = tx.id, tx.nonce
 					}
 					// Clear out the dropped transactions from the index
 					if i > 0 {
