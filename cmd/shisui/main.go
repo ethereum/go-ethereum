@@ -131,32 +131,32 @@ func sigInterrupt(clientChan <-chan *Client) {
 			log.Warn("Waiting for the client to start...")
 		}
 		c := <-clientChan
-		closePortalRpcServer(c)
+		c.closePortalRpcServer()
 	}()
 
 	<-interrupt
 	os.Exit(1)
 }
 
-func closePortalRpcServer(client *Client) {
+func (cli *Client) closePortalRpcServer() {
 	log.Info("Closing Database...")
-	client.DiscV5API.DiscV5.LocalNode().Database().Close()
+	cli.DiscV5API.DiscV5.LocalNode().Database().Close()
 	log.Info("Closing UDPv5 protocol...")
-	client.DiscV5API.DiscV5.Close()
-	if client.HistoryNetwork != nil {
+	cli.DiscV5API.DiscV5.Close()
+	if cli.HistoryNetwork != nil {
 		log.Info("Closing history network...")
-		client.HistoryNetwork.Stop()
+		cli.HistoryNetwork.Stop()
 	}
-	if client.BeaconNetwork != nil {
+	if cli.BeaconNetwork != nil {
 		log.Info("Closing beacon network...")
-		client.BeaconNetwork.Stop()
+		cli.BeaconNetwork.Stop()
 	}
-	if client.StateNetwork != nil {
+	if cli.StateNetwork != nil {
 		log.Info("Closing state network...")
-		client.StateNetwork.Stop()
+		cli.StateNetwork.Stop()
 	}
 	log.Info("Closing servers...")
-	client.Server.Close()
+	cli.Server.Close()
 
 	os.Exit(1)
 }
