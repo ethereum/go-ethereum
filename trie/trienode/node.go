@@ -90,13 +90,13 @@ func (set *NodeSet) ForEachWithOrder(callback func(path string, n *Node)) {
 }
 
 // AddNode adds the provided node into set.
-func (set *NodeSet) AddNode(path []byte, n *Node) {
+func (set *NodeSet) AddNode(path string, n *Node) {
 	if n.IsDeleted() {
 		set.deletes += 1
 	} else {
 		set.updates += 1
 	}
-	set.Nodes[string(path)] = n
+	set.Nodes[path] = n
 }
 
 // Merge adds a set of nodes into the set.
