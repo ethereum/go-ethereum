@@ -25,7 +25,7 @@ func NewZeroEVM(tb testing.TB, opts ...EVMOption) (*state.StateDB, *vm.EVM) {
 	sdb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 	require.NoError(tb, err, "state.New()")
 
-	vm := vm.NewEVM(
+	args := &evmConstructorArgs{
 		vm.BlockContext{
 			CanTransfer: core.CanTransfer,
 			Transfer:    core.Transfer,
@@ -34,28 +34,49 @@ func NewZeroEVM(tb testing.TB, opts ...EVMOption) (*state.StateDB, *vm.EVM) {
 		sdb,
 		&params.ChainConfig{},
 		vm.Config{},
-	)
+	}
 	for _, o := range opts {
-		o.apply(vm)
+		o.apply(args)
 	}
 
-	return sdb, vm
+	return sdb, vm.NewEVM(
+		args.blockContext,
+		args.txContext,
+		args.stateDB,
+		args.chainConfig,
+		args.config,
+	)
+}
+
+type evmConstructorArgs struct {
+	blockContext vm.BlockContext
+	txContext    vm.TxContext
+	stateDB      vm.StateDB
+	chainConfig  *params.ChainConfig
+	config       vm.Config
 }
 
 // An EVMOption configures the EVM returned by [NewZeroEVM].
 type EVMOption interface {
-	apply(*vm.EVM)
+	apply(*evmConstructorArgs)
 }
 
-type funcOption func(*vm.EVM)
+type funcOption func(*evmConstructorArgs)
 
 var _ EVMOption = funcOption(nil)
 
-func (f funcOption) apply(vm *vm.EVM) { f(vm) }
+func (f funcOption) apply(args *evmConstructorArgs) { f(args) }
 
 // WithBlockContext overrides the default context.
 func WithBlockContext(c vm.BlockContext) EVMOption {
-	return funcOption(func(vm *vm.EVM) {
-		vm.Context = c
+	return funcOption(func(args *evmConstructorArgs) {
+		args.blockContext = c
+	})
+}
+
+// WithBlockContext overrides the default context.
+func WithChainConfig(c *params.ChainConfig) EVMOption {
+	return funcOption(func(args *evmConstructorArgs) {
+		args.chainConfig = c
 	})
 }

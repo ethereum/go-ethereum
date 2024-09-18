@@ -84,6 +84,7 @@ func TestPrecompileOverride(t *testing.T) {
 }
 
 type statefulPrecompileOutput struct {
+	ChainID                 *big.Int
 	Caller, Self            common.Address
 	StateValue              common.Hash
 	ReadOnly                bool
@@ -127,6 +128,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 
 		addrs := env.Addresses()
 		out := &statefulPrecompileOutput{
+			ChainID:     env.ChainConfig().ChainID,
 			Caller:      addrs.Caller,
 			Self:        addrs.Self,
 			StateValue:  env.ReadOnlyState().GetState(precompile, slot),
@@ -153,10 +155,17 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	caller := rng.Address()
 	input := rng.Bytes(8)
 	value := rng.Hash()
+	chainID := rng.BigUint64()
 
-	state, evm := ethtest.NewZeroEVM(t, ethtest.WithBlockContext(
-		core.NewEVMBlockContext(header, nil, rng.AddressPtr()),
-	))
+	state, evm := ethtest.NewZeroEVM(
+		t,
+		ethtest.WithBlockContext(
+			core.NewEVMBlockContext(header, nil, rng.AddressPtr()),
+		),
+		ethtest.WithChainConfig(
+			&params.ChainConfig{ChainID: chainID},
+		),
+	)
 	state.SetState(precompile, slot, value)
 
 	tests := []struct {
@@ -199,6 +208,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			wantReturnData := statefulPrecompileOutput{
+				ChainID:     chainID,
 				Caller:      caller,
 				Self:        precompile,
 				StateValue:  value,
