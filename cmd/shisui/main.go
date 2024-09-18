@@ -96,7 +96,7 @@ func shisui(ctx *cli.Context) error {
 	setDefaultLogger(*config)
 
 	clientChan := make(chan *Client, 1)
-	go sigInterrupt(clientChan)
+	go handlerInterrupt(clientChan)
 
 	addr, err := net.ResolveUDPAddr("udp", config.Protocol.ListenAddr)
 	if err != nil {
@@ -118,7 +118,7 @@ func setDefaultLogger(config Config) {
 	log.SetDefault(defaultLogger)
 }
 
-func sigInterrupt(clientChan <-chan *Client) {
+func handlerInterrupt(clientChan <-chan *Client) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(interrupt)
