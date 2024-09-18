@@ -1377,7 +1377,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 
 // setEtherbase retrieves the etherbase from the directly specified command line flags.
 func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
-	if ctx.IsSet(MinerEtherbaseFlag.Name) {
+	if !ctx.IsSet(MinerEtherbaseFlag.Name) {
 		return
 	}
 
@@ -2018,6 +2018,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
 		}
 	}
+
+	log.Info("flags", "genesis", cfg.Genesis)
 	// Set any dangling config values
 	if ctx.String(CryptoKZGFlag.Name) != "gokzg" && ctx.String(CryptoKZGFlag.Name) != "ckzg" {
 		Fatalf("--%s flag must be 'gokzg' or 'ckzg'", CryptoKZGFlag.Name)
@@ -2093,6 +2095,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	}})
 
 	// avoiding constructor changed by introducing new method to set genesis
+	log.Info("filterAPI", "genesis", ethcfg.Genesis)
 	filterAPI.SetChainConfig(ethcfg.Genesis.Config)
 
 	return filterSystem

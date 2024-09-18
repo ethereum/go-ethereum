@@ -141,8 +141,6 @@ var (
 		utils.DNSDiscoveryFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperGasLimitFlag,
-		utils.SepoliaFlag,
-		utils.GoerliFlag,
 		utils.MumbaiFlag,
 		utils.AmoyFlag,
 		utils.BorMainnetFlag,
