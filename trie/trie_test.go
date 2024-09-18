@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
@@ -1205,4 +1206,44 @@ func FuzzTrie(f *testing.F) {
 			t.Fatal(err)
 		}
 	})
+}
+
+func BenchmarkCommit(b *testing.B) {
+	benchmarkCommit(b, 500)
+	benchmarkCommit(b, 1000)
+	benchmarkCommit(b, 2000)
+	benchmarkCommit(b, 5000)
+}
+
+func benchmarkCommit(b *testing.B, n int) {
+	b.Run(fmt.Sprintf("commit-%vnodes-single", n), func(b *testing.B) {
+		testCommit(b, n, false)
+	})
+
+	b.Run(fmt.Sprintf("commit-%vnodes-parallel", n), func(b *testing.B) {
+		testCommit(b, n, true)
+	})
+}
+
+func testCommit(b *testing.B, n int, parallel bool) {
+	// test 10 times to get a better average
+	N := 10
+	tries := make([]*Trie, N)
+	for i := 0; i < N; i++ {
+		tries[i] = NewEmpty(nil)
+		for j := 0; j < n; j++ {
+			key := testrand.Bytes(32)
+			val := testrand.Bytes(32)
+			tries[i].Update(key, val)
+		}
+		tries[i].Hash()
+		if !parallel {
+			tries[i].mutate = 0
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < 10; i++ {
+		tries[i].Commit(true)
+	}
 }
