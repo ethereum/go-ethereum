@@ -24,11 +24,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
 
 func filledStateDB() *StateDB {
-	state, _ := New(types.EmptyRootHash, NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -60,5 +63,49 @@ func TestUseAfterTerminate(t *testing.T) {
 	}
 	if tr := prefetcher.trie(common.Hash{}, db.originalRoot); tr == nil {
 		t.Errorf("Prefetcher returned nil trie after terminate")
+	}
+}
+
+func TestVerklePrefetcher(t *testing.T) {
+	disk := rawdb.NewMemoryDatabase()
+	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
+	sdb := NewDatabase(db, nil)
+
+	state, err := New(types.EmptyRootHash, sdb)
+	if err != nil {
+		t.Fatalf("failed to initialize state: %v", err)
+	}
+	// Create an account and check if the retrieved balance is correct
+	addr := testrand.Address()
+	skey := testrand.Hash()
+	sval := testrand.Hash()
+
+	state.SetBalance(addr, uint256.NewInt(42), tracing.BalanceChangeUnspecified) // Change the account trie
+	state.SetCode(addr, []byte("hello"))                                         // Change an external metadata
+	state.SetState(addr, skey, sval)                                             // Change the storage trie
+	root, _ := state.Commit(0, true)
+
+	state, _ = New(root, sdb)
+	sRoot := state.GetStorageRoot(addr)
+	fetcher := newTriePrefetcher(sdb, root, "", false)
+
+	// Read account
+	fetcher.prefetch(common.Hash{}, root, common.Address{}, [][]byte{
+		addr.Bytes(),
+	}, false)
+
+	// Read storage slot
+	fetcher.prefetch(crypto.Keccak256Hash(addr.Bytes()), sRoot, addr, [][]byte{
+		skey.Bytes(),
+	}, false)
+
+	fetcher.terminate(false)
+	accountTrie := fetcher.trie(common.Hash{}, root)
+	storageTrie := fetcher.trie(crypto.Keccak256Hash(addr.Bytes()), sRoot)
+
+	rootA := accountTrie.Hash()
+	rootB := storageTrie.Hash()
+	if rootA != rootB {
+		t.Fatal("Two different tries are retrieved")
 	}
 }

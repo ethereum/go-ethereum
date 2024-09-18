@@ -124,11 +124,6 @@ type AncientWriter interface {
 
 	// Sync flushes all in-memory ancient store data to disk.
 	Sync() error
-
-	// MigrateTable processes and migrates entries of a given table to a new format.
-	// The second argument is a function that takes a raw entry and returns it
-	// in the newest format.
-	MigrateTable(string, func([]byte) ([]byte, error)) error
 }
 
 // AncientWriteOp is given to the function argument of ModifyAncients.

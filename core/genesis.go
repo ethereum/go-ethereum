@@ -127,8 +127,8 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 	}
 	// Create an ephemeral in-memory database for computing hash,
 	// all the derived states will be discarded to not pollute disk.
-	db := state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), config)
-	statedb, err := state.New(types.EmptyRootHash, db, nil)
+	db := rawdb.NewMemoryDatabase()
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabase(triedb.NewDatabase(db, config), nil))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -145,13 +145,12 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 	return statedb.Commit(0, false)
 }
 
-// flushAlloc is very similar with hash, but the main difference is all the generated
-// states will be persisted into the given database. Also, the genesis state
-// specification will be flushed as well.
-func flushAlloc(ga *types.GenesisAlloc, db ethdb.Database, triedb *triedb.Database, blockhash common.Hash) error {
-	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+// flushAlloc is very similar with hash, but the main difference is all the
+// generated states will be persisted into the given database.
+func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, error) {
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabase(triedb, nil))
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	for addr, account := range *ga {
 		if account.Balance != nil {
@@ -167,21 +166,15 @@ func flushAlloc(ga *types.GenesisAlloc, db ethdb.Database, triedb *triedb.Databa
 	}
 	root, err := statedb.Commit(0, false)
 	if err != nil {
-		return err
+		return common.Hash{}, err
 	}
 	// Commit newly generated states into disk if it's not empty.
 	if root != types.EmptyRootHash {
 		if err := triedb.Commit(root, true); err != nil {
-			return err
+			return common.Hash{}, err
 		}
 	}
-	// Marshal the genesis state specification and persist.
-	blob, err := json.Marshal(ga)
-	if err != nil {
-		return err
-	}
-	rawdb.WriteGenesisStateSpec(db, blockhash, blob)
-	return nil
+	return root, nil
 }
 
 func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.GenesisAlloc, err error) {
@@ -203,8 +196,6 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.Gene
 	switch blockhash {
 	case params.MainnetGenesisHash:
 		genesis = DefaultGenesisBlock()
-	case params.GoerliGenesisHash:
-		genesis = DefaultGoerliGenesisBlock()
 	case params.SepoliaGenesisHash:
 		genesis = DefaultSepoliaGenesisBlock()
 	case params.HoleskyGenesisHash:
@@ -407,8 +398,6 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.HoleskyChainConfig
 	case ghash == params.SepoliaGenesisHash:
 		return params.SepoliaChainConfig
-	case ghash == params.GoerliGenesisHash:
-		return params.GoerliChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -426,6 +415,11 @@ func (g *Genesis) ToBlock() *types.Block {
 	if err != nil {
 		panic(err)
 	}
+	return g.toBlockWithRoot(root)
+}
+
+// toBlockWithRoot constructs the genesis block with the given genesis state root.
+func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
 		Nonce:      types.EncodeNonce(g.Nonce),
@@ -453,7 +447,10 @@ func (g *Genesis) ToBlock() *types.Block {
 			head.BaseFee = new(big.Int).SetUint64(params.InitialBaseFee)
 		}
 	}
-	var withdrawals []*types.Withdrawal
+	var (
+		withdrawals []*types.Withdrawal
+		requests    types.Requests
+	)
 	if conf := g.Config; conf != nil {
 		num := big.NewInt(int64(g.Number))
 		if conf.IsShanghai(num, g.Timestamp) {
@@ -475,15 +472,18 @@ func (g *Genesis) ToBlock() *types.Block {
 				head.BlobGasUsed = new(uint64)
 			}
 		}
+		if conf.IsPrague(num, g.Timestamp) {
+			head.RequestsHash = &types.EmptyRequestsHash
+			requests = make(types.Requests, 0)
+		}
 	}
-	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))
+	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals, Requests: requests}, nil, trie.NewStackTrie(nil))
 }
 
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Block, error) {
-	block := g.ToBlock()
-	if block.Number().Sign() != 0 {
+	if g.Number != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
 	}
 	config := g.Config
@@ -493,15 +493,22 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *triedb.Database) (*types.Blo
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	if config.Clique != nil && len(block.Extra()) < 32+crypto.SignatureLength {
+	if config.Clique != nil && len(g.ExtraData) < 32+crypto.SignatureLength {
 		return nil, errors.New("can't start clique chain without signers")
 	}
-	// All the checks has passed, flushAlloc the states derived from the genesis
-	// specification as well as the specification itself into the provided
-	// database.
-	if err := flushAlloc(&g.Alloc, db, triedb, block.Hash()); err != nil {
+	// flush the data to disk and compute the state root
+	root, err := flushAlloc(&g.Alloc, triedb)
+	if err != nil {
 		return nil, err
 	}
+	block := g.toBlockWithRoot(root)
+
+	// Marshal the genesis state specification and persist.
+	blob, err := json.Marshal(g.Alloc)
+	if err != nil {
+		return nil, err
+	}
+	rawdb.WriteGenesisStateSpec(db, block.Hash(), blob)
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
@@ -532,18 +539,6 @@ func DefaultGenesisBlock() *Genesis {
 		GasLimit:   5000,
 		Difficulty: big.NewInt(17179869184),
 		Alloc:      decodePrealloc(mainnetAllocData),
-	}
-}
-
-// DefaultGoerliGenesisBlock returns the Görli network genesis block.
-func DefaultGoerliGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.GoerliChainConfig,
-		Timestamp:  1548854791,
-		ExtraData:  hexutil.MustDecode("0x22466c6578692069732061207468696e6722202d204166726900000000000000e0a2bd4258d2768837baa26a28fe71dc079f84c70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-		GasLimit:   10485760,
-		Difficulty: big.NewInt(1),
-		Alloc:      decodePrealloc(goerliAllocData),
 	}
 }
 
@@ -595,6 +590,8 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
 			// Pre-deploy EIP-4788 system contract
 			params.BeaconRootsAddress: {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
+			// Pre-deploy EIP-2935 history contract.
+			params.HistoryStorageAddress: {Nonce: 1, Code: params.HistoryStorageCode},
 		},
 	}
 	if faucet != nil {

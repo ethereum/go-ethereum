@@ -666,7 +666,7 @@ func (t *Trie) Witness() map[string]struct{} {
 	if len(t.tracer.accessList) == 0 {
 		return nil
 	}
-	witness := make(map[string]struct{})
+	witness := make(map[string]struct{}, len(t.tracer.accessList))
 	for _, node := range t.tracer.accessList {
 		witness[string(node)] = struct{}{}
 	}

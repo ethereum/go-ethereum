@@ -258,24 +258,11 @@ func (t *Tree) Disable() {
 	for _, layer := range t.layers {
 		switch layer := layer.(type) {
 		case *diskLayer:
-
-			layer.lock.RLock()
-			generating := layer.genMarker != nil
-			layer.lock.RUnlock()
-			if !generating {
-				// Generator is already aborted or finished
-				break
-			}
-			// If the base layer is generating, abort it
-			if layer.genAbort != nil {
-				abort := make(chan *generatorStats)
-				layer.genAbort <- abort
-				<-abort
-			}
-			// Layer should be inactive now, mark it as stale
-			layer.lock.Lock()
-			layer.stale = true
-			layer.lock.Unlock()
+			// TODO this function will hang if it's called twice. Will
+			// fix it in the following PRs.
+			layer.stopGeneration()
+			layer.markStale()
+			layer.Release()
 
 		case *diffLayer:
 			// If the layer is a simple diff, simply mark as stale
@@ -730,16 +717,11 @@ func (t *Tree) Rebuild(root common.Hash) {
 	for _, layer := range t.layers {
 		switch layer := layer.(type) {
 		case *diskLayer:
-			// If the base layer is generating, abort it and save
-			if layer.genAbort != nil {
-				abort := make(chan *generatorStats)
-				layer.genAbort <- abort
-				<-abort
-			}
-			// Layer should be inactive now, mark it as stale
-			layer.lock.Lock()
-			layer.stale = true
-			layer.lock.Unlock()
+			// TODO this function will hang if it's called twice. Will
+			// fix it in the following PRs.
+			layer.stopGeneration()
+			layer.markStale()
+			layer.Release()
 
 		case *diffLayer:
 			// If the layer is a simple diff, simply mark as stale

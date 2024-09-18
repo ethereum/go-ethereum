@@ -425,8 +425,6 @@ func importHistory(ctx *cli.Context) error {
 			network = "mainnet"
 		case ctx.Bool(utils.SepoliaFlag.Name):
 			network = "sepolia"
-		case ctx.Bool(utils.GoerliFlag.Name):
-			network = "goerli"
 		}
 	} else {
 		// No network flag set, try to determine network based on files
@@ -586,7 +584,7 @@ func dump(ctx *cli.Context) error {
 	triedb := utils.MakeTrieDatabase(ctx, db, true, true, false) // always enable preimage lookup
 	defer triedb.Close()
 
-	state, err := state.New(root, state.NewDatabaseWithNodeDB(db, triedb), nil)
+	state, err := state.New(root, state.NewDatabase(triedb, nil))
 	if err != nil {
 		return err
 	}

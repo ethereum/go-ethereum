@@ -101,9 +101,7 @@ func (w *Witness) AddState(nodes map[string]struct{}) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	for node := range nodes {
-		w.State[node] = struct{}{}
-	}
+	maps.Copy(w.State, nodes)
 }
 
 // Copy deep-copies the witness object.  Witness.Block isn't deep-copied as it

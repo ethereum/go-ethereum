@@ -222,7 +222,7 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 	if logs := rlpHash(st.StateDB.Logs()); logs != common.Hash(post.Logs) {
 		return fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
-	st.StateDB, _ = state.New(root, st.StateDB.Database(), st.Snapshots)
+	st.StateDB, _ = state.New(root, st.StateDB.Database())
 	return nil
 }
 
@@ -297,19 +297,17 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	if tracer := vmconfig.Tracer; tracer != nil && tracer.OnTxStart != nil {
 		tracer.OnTxStart(evm.GetVMContext(), nil, msg.From)
-		if evm.Config.Tracer.OnTxEnd != nil {
-			defer func() {
-				evm.Config.Tracer.OnTxEnd(nil, err)
-			}()
-		}
 	}
 	// Execute the message.
 	snapshot := st.StateDB.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
-	_, err = core.ApplyMessage(evm, msg, gaspool)
+	vmRet, err := core.ApplyMessage(evm, msg, gaspool)
 	if err != nil {
 		st.StateDB.RevertToSnapshot(snapshot)
+		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
+			evm.Config.Tracer.OnTxEnd(nil, err)
+		}
 	}
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where
@@ -320,6 +318,10 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	// Commit state mutations into database.
 	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()))
+	if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
+		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
+		tracer.OnTxEnd(receipt, nil)
+	}
 	return st, root, err
 }
 
@@ -460,8 +462,8 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		tconf.PathDB = pathdb.Defaults
 	}
 	triedb := triedb.NewDatabase(db, tconf)
-	sdb := state.NewDatabaseWithNodeDB(db, triedb)
-	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
+	sdb := state.NewDatabase(triedb, nil)
+	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -484,7 +486,8 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	statedb, _ = state.New(root, sdb, snaps)
+	sdb = state.NewDatabase(triedb, snaps)
+	statedb, _ = state.New(root, sdb)
 	return StateTestState{statedb, triedb, snaps}
 }
 

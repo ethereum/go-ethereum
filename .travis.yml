@@ -15,8 +15,8 @@ jobs:
       if: type = push
       os: linux
       arch: amd64
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       env:
         - docker
       services:
@@ -32,8 +32,8 @@ jobs:
       if: type = push
       os: linux
       arch: arm64
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       env:
         - docker
       services:
@@ -49,9 +49,9 @@ jobs:
     - stage: build
       if: type = push
       os: linux
-      dist: noble
+      dist: focal
       sudo: required
-      go: 1.22.x
+      go: 1.23.x
       env:
         - azure-linux
       git:
@@ -63,6 +63,7 @@ jobs:
 
         # build 386
         - sudo -E apt-get -yq --no-install-suggests --no-install-recommends install gcc-multilib
+        - git status --porcelain
         - go run build/ci.go install -dlgo -arch 386
         - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
 
@@ -84,7 +85,7 @@ jobs:
       if: type = push
       os: osx
       osx_image: xcode14.2
-      go: 1.22.x
+      go: 1.23.x
       env:
         - azure-osx
       git:
@@ -100,16 +101,16 @@ jobs:
       if: type = push
       os: linux
       arch: amd64
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
     - stage: build
       if: type = push
       os: linux
-      dist: noble
-      go: 1.21.x
+      dist: focal
+      go: 1.22.x
       script:
         - travis_wait 45 go run build/ci.go test $TEST_PACKAGES
 
@@ -117,8 +118,8 @@ jobs:
     - stage: build
       if: type = cron || (type = push && tag ~= /^v[0-9]/)
       os: linux
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       env:
         - ubuntu-ppa
       git:
@@ -133,8 +134,8 @@ jobs:
     - stage: build
       if: type = cron
       os: linux
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       env:
         - azure-purge
       git:
@@ -146,8 +147,8 @@ jobs:
     - stage: build
       if: type = cron
       os: linux
-      dist: noble
-      go: 1.22.x
+      dist: focal
+      go: 1.23.x
       env:
         - racetests
       script:

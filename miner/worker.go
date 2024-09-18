@@ -105,7 +105,20 @@ func (miner *Miner) generateWork(params *generateParams) *newPayloadResult {
 			log.Warn("Block building is interrupted", "allowance", common.PrettyDuration(miner.config.Recommit))
 		}
 	}
+
 	body := types.Body{Transactions: work.txs, Withdrawals: params.withdrawals}
+	allLogs := make([]*types.Log, 0)
+	for _, r := range work.receipts {
+		allLogs = append(allLogs, r.Logs...)
+	}
+	// Read requests if Prague is enabled.
+	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
+		requests, err := core.ParseDepositLogs(allLogs, miner.chainConfig)
+		if err != nil {
+			return &newPayloadResult{err: err}
+		}
+		body.Requests = requests
+	}
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
 	if err != nil {
 		return &newPayloadResult{err: err}
@@ -199,6 +212,11 @@ func (miner *Miner) prepareWork(genParams *generateParams) (*environment, error)
 		context := core.NewEVMBlockContext(header, miner.chain, nil)
 		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, miner.chainConfig, vm.Config{})
 		core.ProcessBeaconBlockRoot(*header.ParentBeaconRoot, vmenv, env.state)
+	}
+	if miner.chainConfig.IsPrague(header.Number, header.Time) {
+		context := core.NewEVMBlockContext(header, miner.chain, nil)
+		vmenv := vm.NewEVM(context, vm.TxContext{}, env.state, miner.chainConfig, vm.Config{})
+		core.ProcessParentBlockHash(header.ParentHash, vmenv, env.state)
 	}
 	return env, nil
 }

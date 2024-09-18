@@ -40,6 +40,7 @@ var (
 //
 // Note, the prefetcher's API is not thread safe.
 type triePrefetcher struct {
+	verkle   bool                   // Flag whether the prefetcher is in verkle mode
 	db       Database               // Database to fetch trie nodes through
 	root     common.Hash            // Root hash of the account trie for metrics
 	fetchers map[string]*subfetcher // Subfetchers for each trie
@@ -66,6 +67,7 @@ type triePrefetcher struct {
 func newTriePrefetcher(db Database, root common.Hash, namespace string, noreads bool) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	return &triePrefetcher{
+		verkle:   db.TrieDB().IsVerkle(),
 		db:       db,
 		root:     root,
 		fetchers: make(map[string]*subfetcher), // Active prefetchers use the fetchers map
@@ -196,12 +198,18 @@ func (p *triePrefetcher) trie(owner common.Hash, root common.Hash) Trie {
 func (p *triePrefetcher) used(owner common.Hash, root common.Hash, used [][]byte) {
 	if fetcher := p.fetchers[p.trieID(owner, root)]; fetcher != nil {
 		fetcher.wait() // ensure the fetcher's idle before poking in its internals
-		fetcher.used = used
+		fetcher.used = append(fetcher.used, used...)
 	}
 }
 
 // trieID returns an unique trie identifier consists the trie owner and root hash.
 func (p *triePrefetcher) trieID(owner common.Hash, root common.Hash) string {
+	// The trie in verkle is only identified by state root
+	if p.verkle {
+		return p.root.Hex()
+	}
+	// The trie in merkle is either identified by state root (account trie),
+	// or identified by the owner and trie root (storage trie)
 	trieID := make([]byte, common.HashLength*2)
 	copy(trieID, owner.Bytes())
 	copy(trieID[common.HashLength:], root.Bytes())
@@ -320,29 +328,47 @@ func (sf *subfetcher) terminate(async bool) {
 	<-sf.term
 }
 
+// openTrie resolves the target trie from database for prefetching.
+func (sf *subfetcher) openTrie() error {
+	// Open the verkle tree if the sub-fetcher is in verkle mode. Note, there is
+	// only a single fetcher for verkle.
+	if sf.db.TrieDB().IsVerkle() {
+		tr, err := sf.db.OpenTrie(sf.state)
+		if err != nil {
+			log.Warn("Trie prefetcher failed opening verkle trie", "root", sf.root, "err", err)
+			return err
+		}
+		sf.trie = tr
+		return nil
+	}
+	// Open the merkle tree if the sub-fetcher is in merkle mode
+	if sf.owner == (common.Hash{}) {
+		tr, err := sf.db.OpenTrie(sf.state)
+		if err != nil {
+			log.Warn("Trie prefetcher failed opening account trie", "root", sf.root, "err", err)
+			return err
+		}
+		sf.trie = tr
+		return nil
+	}
+	tr, err := sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
+	if err != nil {
+		log.Warn("Trie prefetcher failed opening storage trie", "root", sf.root, "err", err)
+		return err
+	}
+	sf.trie = tr
+	return nil
+}
+
 // loop loads newly-scheduled trie tasks as they are received and loads them, stopping
 // when requested.
 func (sf *subfetcher) loop() {
 	// No matter how the loop stops, signal anyone waiting that it's terminated
 	defer close(sf.term)
 
-	// Start by opening the trie and stop processing if it fails
-	if sf.owner == (common.Hash{}) {
-		trie, err := sf.db.OpenTrie(sf.root)
-		if err != nil {
-			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
-			return
-		}
-		sf.trie = trie
-	} else {
-		trie, err := sf.db.OpenStorageTrie(sf.state, sf.addr, sf.root, nil)
-		if err != nil {
-			log.Warn("Trie prefetcher failed opening trie", "root", sf.root, "err", err)
-			return
-		}
-		sf.trie = trie
+	if err := sf.openTrie(); err != nil {
+		return
 	}
-	// Trie opened successfully, keep prefetching items
 	for {
 		select {
 		case <-sf.wake:

@@ -42,8 +42,7 @@ import (
 func ExecuteStateless(config *params.ChainConfig, witness *stateless.Witness) (common.Hash, common.Hash, error) {
 	// Create and populate the state database to serve as the stateless backend
 	memdb := witness.MakeHashDB()
-
-	db, err := state.New(witness.Root(), state.NewDatabaseWithConfig(memdb, triedb.HashDefaults), nil)
+	db, err := state.New(witness.Root(), state.NewDatabase(triedb.NewDatabase(memdb, triedb.HashDefaults), nil))
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
@@ -58,15 +57,15 @@ func ExecuteStateless(config *params.ChainConfig, witness *stateless.Witness) (c
 	validator := NewBlockValidator(config, nil) // No chain, we only validate the state, not the block
 
 	// Run the stateless blocks processing and self-validate certain fields
-	receipts, _, usedGas, err := processor.Process(witness.Block, db, vm.Config{})
+	res, err := processor.Process(witness.Block, db, vm.Config{})
 	if err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
-	if err = validator.ValidateState(witness.Block, db, receipts, usedGas, true); err != nil {
+	if err = validator.ValidateState(witness.Block, db, res, true); err != nil {
 		return common.Hash{}, common.Hash{}, err
 	}
 	// Almost everything validated, but receipt and state root needs to be returned
-	receiptRoot := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+	receiptRoot := types.DeriveSha(res.Receipts, trie.NewStackTrie(nil))
 	stateRoot := db.IntermediateRoot(config.IsEIP158(witness.Block.Number()))
 
 	return receiptRoot, stateRoot, nil

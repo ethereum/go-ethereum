@@ -23,7 +23,6 @@ import (
 	"maps"
 	"math/big"
 	"slices"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -47,11 +46,6 @@ import (
 
 // TriesInMemory represents the number of layers that are kept in RAM.
 const TriesInMemory = 128
-
-type revision struct {
-	id           int
-	journalIndex int
-}
 
 type mutationType int
 
@@ -88,10 +82,8 @@ type StateDB struct {
 	db         Database
 	prefetcher *triePrefetcher
 	trie       Trie
-	hasher     crypto.KeccakState
 	logger     *tracing.Hooks
-	snaps      *snapshot.Tree    // Nil if snapshot is not available
-	snap       snapshot.Snapshot // Nil if snapshot is not available
+	reader     Reader
 
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
@@ -136,42 +128,45 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList *accessList
+	accessList   *accessList
+	accessEvents *AccessEvents
 
 	// Transient storage
 	transientStorage transientStorage
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
-	journal        *journal
-	validRevisions []revision
-	nextRevisionId int
+	journal *journal
 
 	// State witness if cross validation is needed
 	witness *stateless.Witness
 
 	// Measurements gathered during execution for debugging purposes
-	AccountReads         time.Duration
-	AccountHashes        time.Duration
-	AccountUpdates       time.Duration
-	AccountCommits       time.Duration
-	StorageReads         time.Duration
-	StorageUpdates       time.Duration
-	StorageCommits       time.Duration
-	SnapshotAccountReads time.Duration
-	SnapshotStorageReads time.Duration
-	SnapshotCommits      time.Duration
-	TrieDBCommits        time.Duration
+	AccountReads    time.Duration
+	AccountHashes   time.Duration
+	AccountUpdates  time.Duration
+	AccountCommits  time.Duration
+	StorageReads    time.Duration
+	StorageUpdates  time.Duration
+	StorageCommits  time.Duration
+	SnapshotCommits time.Duration
+	TrieDBCommits   time.Duration
 
-	AccountUpdated int
-	StorageUpdated atomic.Int64
-	AccountDeleted int
-	StorageDeleted atomic.Int64
+	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
+	AccountUpdated int          // Number of accounts updated during the state transition
+	AccountDeleted int          // Number of accounts deleted during the state transition
+	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
+	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
+	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+func New(root common.Hash, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
+	if err != nil {
+		return nil, err
+	}
+	reader, err := db.Reader(root)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +174,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		db:                   db,
 		trie:                 tr,
 		originalRoot:         root,
-		snaps:                snaps,
+		reader:               reader,
 		stateObjects:         make(map[common.Address]*stateObject),
 		stateObjectsDestruct: make(map[common.Address]*stateObject),
 		mutations:            make(map[common.Address]*mutation),
@@ -188,10 +183,9 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
-		hasher:               crypto.NewKeccakState(),
 	}
-	if sdb.snaps != nil {
-		sdb.snap = sdb.snaps.Snapshot(root)
+	if db.TrieDB().IsVerkle() {
+		sdb.accessEvents = NewAccessEvents(db.PointCache())
 	}
 	return sdb, nil
 }
@@ -206,30 +200,23 @@ func (s *StateDB) SetLogger(l *tracing.Hooks) {
 // commit phase, most of the needed data is already hot.
 func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) {
 	// Terminate any previously running prefetcher
-	if s.prefetcher != nil {
-		s.prefetcher.terminate(false)
-		s.prefetcher.report()
-		s.prefetcher = nil
-	}
+	s.StopPrefetcher()
+
 	// Enable witness collection if requested
 	s.witness = witness
 
-	// If snapshots are enabled, start prefethers explicitly
-	if s.snap != nil {
-		s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, witness == nil)
-
-		// With the switch to the Proof-of-Stake consensus algorithm, block production
-		// rewards are now handled at the consensus layer. Consequently, a block may
-		// have no state transitions if it contains no transactions and no withdrawals.
-		// In such cases, the account trie won't be scheduled for prefetching, leading
-		// to unnecessary error logs.
-		//
-		// To prevent this, the account trie is always scheduled for prefetching once
-		// the prefetcher is constructed. For more details, see:
-		// https://github.com/ethereum/go-ethereum/issues/29880
-		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, nil, false); err != nil {
-			log.Error("Failed to prefetch account trie", "root", s.originalRoot, "err", err)
-		}
+	// With the switch to the Proof-of-Stake consensus algorithm, block production
+	// rewards are now handled at the consensus layer. Consequently, a block may
+	// have no state transitions if it contains no transactions and no withdrawals.
+	// In such cases, the account trie won't be scheduled for prefetching, leading
+	// to unnecessary error logs.
+	//
+	// To prevent this, the account trie is always scheduled for prefetching once
+	// the prefetcher is constructed. For more details, see:
+	// https://github.com/ethereum/go-ethereum/issues/29880
+	s.prefetcher = newTriePrefetcher(s.db, s.originalRoot, namespace, witness == nil)
+	if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, nil, false); err != nil {
+		log.Error("Failed to prefetch account trie", "root", s.originalRoot, "err", err)
 	}
 }
 
@@ -256,7 +243,7 @@ func (s *StateDB) Error() error {
 }
 
 func (s *StateDB) AddLog(log *types.Log) {
-	s.journal.append(addLogChange{txhash: s.thash})
+	s.journal.logChange(s.thash)
 
 	log.TxHash = s.thash
 	log.TxIndex = uint(s.txIndex)
@@ -290,7 +277,6 @@ func (s *StateDB) Logs() []*types.Log {
 // AddPreimage records a SHA3 preimage seen by the VM.
 func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
 	if _, ok := s.preimages[hash]; !ok {
-		s.journal.append(addPreimageChange{hash: hash})
 		s.preimages[hash] = slices.Clone(preimage)
 	}
 }
@@ -302,14 +288,14 @@ func (s *StateDB) Preimages() map[common.Hash][]byte {
 
 // AddRefund adds gas to the refund counter
 func (s *StateDB) AddRefund(gas uint64) {
-	s.journal.append(refundChange{prev: s.refund})
+	s.journal.refundChange(s.refund)
 	s.refund += gas
 }
 
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
-	s.journal.append(refundChange{prev: s.refund})
+	s.journal.refundChange(s.refund)
 	if gas > s.refund {
 		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
 	}
@@ -506,20 +492,17 @@ func (s *StateDB) SelfDestruct(addr common.Address) {
 	if stateObject == nil {
 		return
 	}
-	var (
-		prev = new(uint256.Int).Set(stateObject.Balance())
-		n    = new(uint256.Int)
-	)
-	s.journal.append(selfDestructChange{
-		account:     &addr,
-		prev:        stateObject.selfDestructed,
-		prevbalance: prev,
-	})
-	if s.logger != nil && s.logger.OnBalanceChange != nil && prev.Sign() > 0 {
-		s.logger.OnBalanceChange(addr, prev.ToBig(), n.ToBig(), tracing.BalanceDecreaseSelfdestruct)
+	// Regardless of whether it is already destructed or not, we do have to
+	// journal the balance-change, if we set it to zero here.
+	if !stateObject.Balance().IsZero() {
+		stateObject.SetBalance(new(uint256.Int), tracing.BalanceDecreaseSelfdestruct)
 	}
-	stateObject.markSelfdestructed()
-	stateObject.data.Balance = n
+	// If it is already marked as self-destructed, we do not need to add it
+	// for journalling a second time.
+	if !stateObject.selfDestructed {
+		s.journal.destruct(addr)
+		stateObject.markSelfdestructed()
+	}
 }
 
 func (s *StateDB) Selfdestruct6780(addr common.Address) {
@@ -540,11 +523,7 @@ func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash)
 	if prev == value {
 		return
 	}
-	s.journal.append(transientStorageChange{
-		account:  &addr,
-		key:      key,
-		prevalue: prev,
-	})
+	s.journal.transientStateChange(addr, key, prev)
 	s.setTransientState(addr, key, value)
 }
 
@@ -567,7 +546,7 @@ func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common
 func (s *StateDB) updateStateObject(obj *stateObject) {
 	// Encode the account and update the account trie
 	addr := obj.Address()
-	if err := s.trie.UpdateAccount(addr, &obj.data); err != nil {
+	if err := s.trie.UpdateAccount(addr, &obj.data, len(obj.code)); err != nil {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", addr[:], err))
 	}
 	if obj.dirtyCode {
@@ -593,56 +572,30 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if _, ok := s.stateObjectsDestruct[addr]; ok {
 		return nil
 	}
-	// If no live objects are available, attempt to use snapshots
-	var data *types.StateAccount
-	if s.snap != nil {
-		start := time.Now()
-		acc, err := s.snap.Account(crypto.HashData(s.hasher, addr.Bytes()))
-		s.SnapshotAccountReads += time.Since(start)
-		if err == nil {
-			if acc == nil {
-				return nil
-			}
-			data = &types.StateAccount{
-				Nonce:    acc.Nonce,
-				Balance:  acc.Balance,
-				CodeHash: acc.CodeHash,
-				Root:     common.BytesToHash(acc.Root),
-			}
-			if len(data.CodeHash) == 0 {
-				data.CodeHash = types.EmptyCodeHash.Bytes()
-			}
-			if data.Root == (common.Hash{}) {
-				data.Root = types.EmptyRootHash
-			}
-		}
-	}
-	// If snapshot unavailable or reading from it failed, load from the database
-	if data == nil {
-		start := time.Now()
-		var err error
-		data, err = s.trie.GetAccount(addr)
-		s.AccountReads += time.Since(start)
+	s.AccountLoaded++
 
-		if err != nil {
-			s.setError(fmt.Errorf("getDeleteStateObject (%x) error: %w", addr.Bytes(), err))
-			return nil
-		}
-		if data == nil {
-			return nil
-		}
+	start := time.Now()
+	acct, err := s.reader.Account(addr)
+	if err != nil {
+		s.setError(fmt.Errorf("getStateObject (%x) error: %w", addr.Bytes(), err))
+		return nil
 	}
-	// Independent of where we loaded the data from, add it to the prefetcher.
-	// Whilst this would be a bit weird if snapshots are disabled, but we still
-	// want the trie nodes to end up in the prefetcher too, so just push through.
+	s.AccountReads += time.Since(start)
+
+	// Short circuit if the account is not found
+	if acct == nil {
+		return nil
+	}
+	// Schedule the resolved account for prefetching if it's enabled.
 	if s.prefetcher != nil {
 		if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, [][]byte{addr[:]}, true); err != nil {
 			log.Error("Failed to prefetch account", "addr", addr, "err", err)
 		}
 	}
 	// Insert into the live set
-	obj := newObject(s, addr, data)
+	obj := newObject(s, addr, acct)
 	s.setStateObject(obj)
+	s.AccountLoaded++
 	return obj
 }
 
@@ -663,7 +616,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 // existing account with the given address, otherwise it will be silently overwritten.
 func (s *StateDB) createObject(addr common.Address) *stateObject {
 	obj := newObject(s, addr, nil)
-	s.journal.append(createObjectChange{account: &addr})
+	s.journal.createObject(addr)
 	s.setStateObject(obj)
 	return obj
 }
@@ -685,7 +638,7 @@ func (s *StateDB) CreateContract(addr common.Address) {
 	obj := s.getStateObject(addr)
 	if !obj.newContract {
 		obj.newContract = true
-		s.journal.append(createContractChange{account: addr})
+		s.journal.createContract(addr)
 	}
 }
 
@@ -695,8 +648,8 @@ func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		db:                   s.db,
-		trie:                 s.db.CopyTrie(s.trie),
-		hasher:               crypto.NewKeccakState(),
+		trie:                 mustCopyTrie(s.trie),
+		reader:               s.reader.Copy(),
 		originalRoot:         s.originalRoot,
 		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
 		stateObjectsDestruct: make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),
@@ -708,19 +661,22 @@ func (s *StateDB) Copy() *StateDB {
 		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
 		logSize:              s.logSize,
 		preimages:            maps.Clone(s.preimages),
-		journal:              s.journal.copy(),
-		validRevisions:       slices.Clone(s.validRevisions),
-		nextRevisionId:       s.nextRevisionId,
 
-		// In order for the block producer to be able to use and make additions
-		// to the snapshot tree, we need to copy that as well. Otherwise, any
-		// block mined by ourselves will cause gaps in the tree, and force the
-		// miner to operate trie-backed only.
-		snaps: s.snaps,
-		snap:  s.snap,
+		// Do we need to copy the access list and transient storage?
+		// In practice: No. At the start of a transaction, these two lists are empty.
+		// In practice, we only ever copy state _between_ transactions/blocks, never
+		// in the middle of a transaction. However, it doesn't cost us much to copy
+		// empty lists, so we do it anyway to not blow up if we ever decide copy them
+		// in the middle of a transaction.
+		accessList:       s.accessList.Copy(),
+		transientStorage: s.transientStorage.Copy(),
+		journal:          s.journal.copy(),
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
+	}
+	if s.accessEvents != nil {
+		state.accessEvents = s.accessEvents.Copy()
 	}
 	// Deep copy cached state objects.
 	for addr, obj := range s.stateObjects {
@@ -743,39 +699,17 @@ func (s *StateDB) Copy() *StateDB {
 		}
 		state.logs[hash] = cpy
 	}
-	// Do we need to copy the access list and transient storage?
-	// In practice: No. At the start of a transaction, these two lists are empty.
-	// In practice, we only ever copy state _between_ transactions/blocks, never
-	// in the middle of a transaction. However, it doesn't cost us much to copy
-	// empty lists, so we do it anyway to not blow up if we ever decide copy them
-	// in the middle of a transaction.
-	state.accessList = s.accessList.Copy()
-	state.transientStorage = s.transientStorage.Copy()
 	return state
 }
 
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
-	id := s.nextRevisionId
-	s.nextRevisionId++
-	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length()})
-	return id
+	return s.journal.snapshot()
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
 func (s *StateDB) RevertToSnapshot(revid int) {
-	// Find the snapshot in the stack of valid snapshots.
-	idx := sort.Search(len(s.validRevisions), func(i int) bool {
-		return s.validRevisions[i].id >= revid
-	})
-	if idx == len(s.validRevisions) || s.validRevisions[idx].id != revid {
-		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
-	}
-	snapshot := s.validRevisions[idx].journalIndex
-
-	// Replay the journal to undo changes and remove invalidated snapshots
-	s.journal.revert(s, snapshot)
-	s.validRevisions = s.validRevisions[:idx]
+	s.journal.revertToSnapshot(revid, s)
 }
 
 // GetRefund returns the current value of the refund counter.
@@ -882,8 +816,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 			return nil
 		})
 	}
-	// If witness building is enabled, gather all the read-only accesses
-	if s.witness != nil {
+	// If witness building is enabled, gather all the read-only accesses.
+	// Skip witness collection in Verkle mode, they will be gathered
+	// together at the end.
+	if s.witness != nil && !s.db.TrieDB().IsVerkle() {
 		// Pull in anything that has been accessed before destruction
 		for _, obj := range s.stateObjectsDestruct {
 			// Skip any objects that haven't touched their storage
@@ -924,7 +860,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
 	// here could result in losing uncommitted changes from storage.
 	start = time.Now()
-	if s.prefetcher != nil && (s.trie == nil || !s.trie.IsVerkle()) {
+	if s.prefetcher != nil {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
 			log.Error("Failed to retrieve account pre-fetcher trie")
 		} else {
@@ -989,19 +925,16 @@ func (s *StateDB) SetTxContext(thash common.Hash, ti int) {
 }
 
 func (s *StateDB) clearJournalAndRefund() {
-	if len(s.journal.entries) > 0 {
-		s.journal = newJournal()
-		s.refund = 0
-	}
-	s.validRevisions = s.validRevisions[:0] // Snapshots can be created without journal entries
+	s.journal.reset()
+	s.refund = 0
 }
 
 // fastDeleteStorage is the function that efficiently deletes the storage trie
 // of a specific account. It leverages the associated state snapshot for fast
 // storage iteration and constructs trie node deletion markers by creating
 // stack trie with iterated slots.
-func (s *StateDB) fastDeleteStorage(addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, *trienode.NodeSet, error) {
-	iter, err := s.snaps.StorageIterator(s.originalRoot, addrHash, common.Hash{})
+func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, *trienode.NodeSet, error) {
+	iter, err := snaps.StorageIterator(s.originalRoot, addrHash, common.Hash{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1079,10 +1012,11 @@ func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root 
 	// The fast approach can be failed if the snapshot is not fully
 	// generated, or it's internally corrupted. Fallback to the slow
 	// one just in case.
-	if s.snap != nil {
-		slots, nodes, err = s.fastDeleteStorage(addrHash, root)
+	snaps := s.db.Snapshot()
+	if snaps != nil {
+		slots, nodes, err = s.fastDeleteStorage(snaps, addrHash, root)
 	}
-	if s.snap == nil || err != nil {
+	if snaps == nil || err != nil {
 		slots, nodes, err = s.slowDeleteStorage(addr, addrHash, root)
 	}
 	if err != nil {
@@ -1286,6 +1220,8 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	if err := workers.Wait(); err != nil {
 		return nil, err
 	}
+	accountReadMeters.Mark(int64(s.AccountLoaded))
+	storageReadMeters.Mark(int64(s.StorageLoaded))
 	accountUpdatedMeter.Mark(int64(s.AccountUpdated))
 	storageUpdatedMeter.Mark(s.StorageUpdated.Load())
 	accountDeletedMeter.Mark(int64(s.AccountDeleted))
@@ -1294,7 +1230,10 @@ func (s *StateDB) commit(deleteEmptyObjects bool) (*stateUpdate, error) {
 	accountTrieDeletedMeter.Mark(int64(accountTrieNodesDeleted))
 	storageTriesUpdatedMeter.Mark(int64(storageTrieNodesUpdated))
 	storageTriesDeletedMeter.Mark(int64(storageTrieNodesDeleted))
-	s.AccountUpdated, s.AccountDeleted = 0, 0
+
+	// Clear the metric markers
+	s.AccountLoaded, s.AccountUpdated, s.AccountDeleted = 0, 0, 0
+	s.StorageLoaded = 0
 	s.StorageUpdated.Store(0)
 	s.StorageDeleted.Store(0)
 
@@ -1315,7 +1254,7 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 		return nil, err
 	}
 	// Commit dirty contract code if any exists
-	if db := s.db.DiskDB(); db != nil && len(ret.codes) > 0 {
+	if db := s.db.TrieDB().Disk(); db != nil && len(ret.codes) > 0 {
 		batch := db.NewBatch()
 		for _, code := range ret.codes {
 			rawdb.WriteCode(batch, code.hash, code.blob)
@@ -1326,18 +1265,16 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 	}
 	if !ret.empty() {
 		// If snapshotting is enabled, update the snapshot tree with this new version
-		if s.snap != nil {
-			s.snap = nil
-
+		if snap := s.db.Snapshot(); snap != nil {
 			start := time.Now()
-			if err := s.snaps.Update(ret.root, ret.originRoot, ret.destructs, ret.accounts, ret.storages); err != nil {
+			if err := snap.Update(ret.root, ret.originRoot, ret.destructs, ret.accounts, ret.storages); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", ret.originRoot, "to", ret.root, "err", err)
 			}
 			// Keep 128 diff layers in the memory, persistent layer is 129th.
 			// - head layer is paired with HEAD state
 			// - head-1 layer is paired with HEAD-1 state
 			// - head-127 layer(bottom-most diff layer) is paired with HEAD-127 state
-			if err := s.snaps.Cap(ret.root, TriesInMemory); err != nil {
+			if err := snap.Cap(ret.root, TriesInMemory); err != nil {
 				log.Warn("Failed to cap snapshot tree", "root", ret.root, "layers", TriesInMemory, "err", err)
 			}
 			s.SnapshotCommits += time.Since(start)
@@ -1352,6 +1289,7 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 			s.TrieDBCommits += time.Since(start)
 		}
 	}
+	s.reader, _ = s.db.Reader(s.originalRoot)
 	return ret, err
 }
 
@@ -1419,7 +1357,7 @@ func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, d
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
 	if s.accessList.AddAddress(addr) {
-		s.journal.append(accessListAddAccountChange{&addr})
+		s.journal.accessListAddAccount(addr)
 	}
 }
 
@@ -1431,13 +1369,10 @@ func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
 		// scope of 'address' without having the 'address' become already added
 		// to the access list (via call-variant, create, etc).
 		// Better safe than sorry, though
-		s.journal.append(accessListAddAccountChange{&addr})
+		s.journal.accessListAddAccount(addr)
 	}
 	if slotMod {
-		s.journal.append(accessListAddSlotChange{
-			address: &addr,
-			slot:    &slot,
-		})
+		s.journal.accessListAddSlot(addr, slot)
 	}
 }
 
@@ -1470,6 +1405,7 @@ func (s *StateDB) markUpdate(addr common.Address) {
 	s.mutations[addr].typ = update
 }
 
+// PointCache returns the point cache used by verkle tree.
 func (s *StateDB) PointCache() *utils.PointCache {
 	return s.db.PointCache()
 }
@@ -1477,4 +1413,8 @@ func (s *StateDB) PointCache() *utils.PointCache {
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
 	return s.witness
+}
+
+func (s *StateDB) AccessEvents() *AccessEvents {
+	return s.accessEvents
 }

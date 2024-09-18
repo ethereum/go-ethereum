@@ -66,6 +66,8 @@ type ExecutionResult struct {
 	WithdrawalsRoot      *common.Hash          `json:"withdrawalsRoot,omitempty"`
 	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
+	RequestsHash         *common.Hash          `json:"requestsRoot,omitempty"`
+	DepositRequests      *types.Deposits       `json:"depositRequests,omitempty"`
 }
 
 type ommer struct {
@@ -196,7 +198,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
 	}
-
+	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
+		var (
+			prevNumber = pre.Env.Number - 1
+			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
+			evm        = vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
+		)
+		core.ProcessParentBlockHash(prevHash, evm, statedb)
+	}
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()
 		if err != nil {
@@ -370,9 +379,31 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(&excessBlobGas)
 		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
 	}
+	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
+		// Parse the requests from the logs
+		var allLogs []*types.Log
+		for _, receipt := range receipts {
+			allLogs = append(allLogs, receipt.Logs...)
+		}
+		requests, err := core.ParseDepositLogs(allLogs, chainConfig)
+		if err != nil {
+			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
+		}
+		// Calculate the requests root
+		h := types.DeriveSha(requests, trie.NewStackTrie(nil))
+		execRs.RequestsHash = &h
+		// Get the deposits from the requests
+		deposits := make(types.Deposits, 0)
+		for _, req := range requests {
+			if dep, ok := req.Inner().(*types.Deposit); ok {
+				deposits = append(deposits, dep)
+			}
+		}
+		execRs.DepositRequests = &deposits
+	}
 	// Re-create statedb instance with new root upon the updated database
 	// for accessing latest states.
-	statedb, err = state.New(root, statedb.Database(), nil)
+	statedb, err = state.New(root, statedb.Database())
 	if err != nil {
 		return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not reopen state: %v", err))
 	}
@@ -381,8 +412,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 }
 
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB {
-	sdb := state.NewDatabaseWithConfig(db, &triedb.Config{Preimages: true})
-	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
+	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
+	sdb := state.NewDatabase(tdb, nil)
+	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -393,7 +425,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc) *state.StateDB
 	}
 	// Commit and re-open to start with a clean state.
 	root, _ := statedb.Commit(0, false)
-	statedb, _ = state.New(root, sdb, nil)
+	statedb, _ = state.New(root, sdb)
 	return statedb
 }
 
