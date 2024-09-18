@@ -545,6 +545,8 @@ func (*mdLogger) CaptureTxStart(gasLimit uint64) {}
 
 func (*mdLogger) CaptureTxEnd(restGas uint64) {}
 
+func (t *mdLogger) IsDebug() bool { return t.cfg.Debug }
+
 // FormatLogs formats EVM returned structured logs for json output
 func FormatLogs(logs []StructLog) []types.StructLogRes {
 	formatted := make([]types.StructLogRes, len(logs))
