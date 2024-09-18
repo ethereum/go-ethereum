@@ -539,12 +539,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		rawdb.WriteChainConfig(db, genesisHash, chainConfig)
 	}
 
-	if txLookupLimit == nil {
+	if txLookupLimit != nil {
 		txLookupLimit = new(uint64)
 		*txLookupLimit = txLookupCacheLimit
+		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
 	}
-
-	bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
 
 	return bc, nil
 }
@@ -1569,7 +1568,7 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		// generated.
 		batch := bc.db.NewBatch()
 		for i, block := range blockChain {
-			if bc.txIndexer.limit == 0 || ancientLimit <= bc.txIndexer.limit || block.NumberU64() >= ancientLimit-bc.txIndexer.limit {
+			if bc.txIndexer == nil || bc.txIndexer.limit == 0 || ancientLimit <= bc.txIndexer.limit || block.NumberU64() >= ancientLimit-bc.txIndexer.limit {
 				rawdb.WriteTxLookupEntriesByBlock(batch, block)
 			} else if rawdb.ReadTxIndexTail(bc.db) != nil {
 				rawdb.WriteTxLookupEntriesByBlock(batch, block)

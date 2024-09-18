@@ -1790,7 +1790,6 @@ func testLongReorgedSnapSyncingDeepRepair(t *testing.T, snapshots bool) {
 }
 
 func testRepair(t *testing.T, tt *rewindTest, snapshots bool) {
-	t.Parallel()
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
 		testRepairWithScheme(t, tt, snapshots, scheme)
 	}
