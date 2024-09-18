@@ -20,5 +20,6 @@ les/                            @zsfelfoldi @rjl493456442
 light/                          @zsfelfoldi @rjl493456442
 node/                           @fjl
 p2p/                            @fjl @zsfelfoldi
+params/                         @fjl @holiman @karalabe @gballet @rjl493456442 @zsfelfoldi
 rpc/                            @fjl @holiman
 signer/                         @holiman
