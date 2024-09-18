@@ -139,10 +139,6 @@ func handlerInterrupt(clientChan <-chan *Client) {
 }
 
 func (cli *Client) closePortalRpcServer() {
-	log.Info("Closing Database...")
-	cli.DiscV5API.DiscV5.LocalNode().Database().Close()
-	log.Info("Closing UDPv5 protocol...")
-	cli.DiscV5API.DiscV5.Close()
 	if cli.HistoryNetwork != nil {
 		log.Info("Closing history network...")
 		cli.HistoryNetwork.Stop()
@@ -155,9 +151,12 @@ func (cli *Client) closePortalRpcServer() {
 		log.Info("Closing state network...")
 		cli.StateNetwork.Stop()
 	}
+	log.Info("Closing Database...")
+	cli.DiscV5API.DiscV5.LocalNode().Database().Close()
+	log.Info("Closing UDPv5 protocol...")
+	cli.DiscV5API.DiscV5.Close()
 	log.Info("Closing servers...")
 	cli.Server.Close()
-
 	os.Exit(1)
 }
 
