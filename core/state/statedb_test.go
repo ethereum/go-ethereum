@@ -785,7 +785,7 @@ func TestMVHashMapOverwrite(t *testing.T) {
 	states := []*StateDB{s}
 
 	// Create copies of the original state for each transition
-	for i := 1; i <= 4; i++ {
+	for i := 1; i <= 5; i++ {
 		sCopy := s.Copy()
 		sCopy.txIndex = i
 		states = append(states, sCopy)
@@ -828,9 +828,9 @@ func TestMVHashMapOverwrite(t *testing.T) {
 		states[1].writeMap = nil
 	}
 
-	// Tx2 read should get Tx0's value
-	v = states[2].GetState(addr, key)
-	b = states[2].GetBalance(addr)
+	// Tx3 read should get Tx0's value
+	v = states[3].GetState(addr, key)
+	b = states[3].GetBalance(addr)
 
 	assert.Equal(t, val1, v)
 	assert.Equal(t, balance1, b)
@@ -849,9 +849,9 @@ func TestMVHashMapOverwrite(t *testing.T) {
 		states[0].writeMap = nil
 	}
 
-	// Tx2 read again should get default vals
-	v = states[2].GetState(addr, key)
-	b = states[2].GetBalance(addr)
+	// Tx4 read again should get default vals
+	v = states[4].GetState(addr, key)
+	b = states[4].GetBalance(addr)
 
 	assert.Equal(t, common.Hash{}, v)
 	assert.Equal(t, common.Big0, b)
@@ -867,7 +867,7 @@ func TestMVHashMapWriteNoConflict(t *testing.T) {
 	states := []*StateDB{s}
 
 	// Create copies of the original state for each transition
-	for i := 1; i <= 4; i++ {
+	for i := 1; i <= 6; i++ {
 		sCopy := s.Copy()
 		sCopy.txIndex = i
 		states = append(states, sCopy)
@@ -918,17 +918,17 @@ func TestMVHashMapWriteNoConflict(t *testing.T) {
 		states[2].writeMap = nil
 	}
 
-	assert.Equal(t, val1, states[3].GetState(addr, key1))
-	assert.Equal(t, balance1, states[3].GetBalance(addr))
-	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key2))
+	assert.Equal(t, val1, states[4].GetState(addr, key1))
+	assert.Equal(t, balance1, states[4].GetBalance(addr))
+	assert.Equal(t, common.Hash{}, states[4].GetState(addr, key2))
 
 	// Tx1 revert
 	states[1].RevertToSnapshot(tx1Snapshot)
 	states[1].FlushMVWriteSet()
 
-	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key1))
-	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key2))
-	assert.Equal(t, common.Big0, states[3].GetBalance(addr))
+	assert.Equal(t, common.Hash{}, states[5].GetState(addr, key1))
+	assert.Equal(t, common.Hash{}, states[5].GetState(addr, key2))
+	assert.Equal(t, common.Big0, states[5].GetBalance(addr))
 
 	// Tx1 delete
 	for _, v := range states[1].writeMap {
@@ -937,9 +937,9 @@ func TestMVHashMapWriteNoConflict(t *testing.T) {
 		states[1].writeMap = nil
 	}
 
-	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key1))
-	assert.Equal(t, common.Hash{}, states[3].GetState(addr, key2))
-	assert.Equal(t, common.Big0, states[3].GetBalance(addr))
+	assert.Equal(t, common.Hash{}, states[6].GetState(addr, key1))
+	assert.Equal(t, common.Hash{}, states[6].GetState(addr, key2))
+	assert.Equal(t, common.Big0, states[6].GetBalance(addr))
 }
 
 func TestApplyMVWriteSet(t *testing.T) {
