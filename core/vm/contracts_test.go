@@ -328,6 +328,10 @@ func BenchmarkPrecompiledBLS12381Pairing(b *testing.B)    { benchJson("blsPairin
 func BenchmarkPrecompiledBLS12381MapG1(b *testing.B)      { benchJson("blsMapG1", "f11", b) }
 func BenchmarkPrecompiledBLS12381MapG2(b *testing.B)      { benchJson("blsMapG2", "f12", b) }
 
+func BenchmarkPrecompiledBLS12381MultiExpG1Jwasinger(b *testing.B) {
+	benchJson("blsG1MultiExpJwasinger", "f0c", b)
+}
+
 // Failure tests
 func TestPrecompiledBLS12381G1AddFail(t *testing.T)      { testJsonFail("blsG1Add", "f0a", t) }
 func TestPrecompiledBLS12381G1MulFail(t *testing.T)      { testJsonFail("blsG1Mul", "f0b", t) }
