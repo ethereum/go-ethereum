@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build gofuzz
-
 package bn256
 
 import (
@@ -36,7 +34,7 @@ func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1) {
 	}
 	xg := new(google.G1)
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
 	}
 	return xc, xg
 }
@@ -49,7 +47,7 @@ func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2) {
 	}
 	xg := new(google.G2)
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
 	}
 	return xc, xg
 }
