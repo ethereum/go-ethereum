@@ -180,7 +180,6 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, e
 func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.GenesisAlloc, err error) {
 	blob := rawdb.ReadGenesisStateSpec(db, blockhash)
 	if len(blob) != 0 {
-		fmt.Printf("genesis json: %s\n", blob)
 		if err := alloc.UnmarshalJSON(blob); err != nil {
 			return nil, err
 		}
