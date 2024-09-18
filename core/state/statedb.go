@@ -329,10 +329,13 @@ func MVRead[T any](s *StateDB, k blockstm.Key, defaultV T, readStorage func(s *S
 		return defaultV
 	}
 
-	// TODO: I assume we don't want to overwrite an existing read because this could - for example - change a storage
-	//  read to map if the same value is read multiple times.
-	if _, ok := s.readMap[k]; !ok {
+	if prevRd, ok := s.readMap[k]; !ok {
 		s.readMap[k] = rd
+	} else {
+		if prevRd.Kind != rd.Kind || prevRd.V.TxnIndex != rd.V.TxnIndex || prevRd.V.Incarnation != rd.V.Incarnation {
+			s.dep = rd.V.TxnIndex
+			panic("Read conflict detected")
+		}
 	}
 
 	return
