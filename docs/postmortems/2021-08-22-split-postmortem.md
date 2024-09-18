@@ -1,4 +1,4 @@
-# Minority split 2021-08-27 post mortem
+# Minority split 2021-08-27 post-mortem
 
 This is a post-mortem concerning the minority split that occurred on Ethereum mainnet on block [13107518](https://etherscan.io/block/13107518), at which a minority chain split occurred.
 
