@@ -143,6 +143,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 			blockCtx.BlobBaseFee = new(big.Int)
 		}
 	}
+	blockCtx, txCtx, statedb, chainConfig, config = overrideNewEVMArgs(blockCtx, txCtx, statedb, chainConfig, config)
 	evm := &EVM{
 		Context:     blockCtx,
 		TxContext:   txCtx,
