@@ -47,8 +47,8 @@ func newCommitter(nodes *trienode.NodeSet, tracer *tracer, collectLeaf bool, par
 type wrapNode struct {
 	node     *trienode.Node
 	path     string
-	leafHash common.Hash // optional, the parent hash of the relative leaf
-	leafBlob []byte      // optional, the blob of the relative leaf
+	leafHash common.Hash // optional, the parent hash of the related leaf
+	leafBlob []byte      // optional, the blob of the related leaf
 }
 
 // Commit collapses a node down into a hash node.
@@ -192,7 +192,7 @@ func (c *committer) store(path []byte, n node) (node, *wrapNode) {
 	}
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
-	// length of leaves should be exactly same..
+	// length of leaves should be exactly same.
 	if c.collectLeaf {
 		if sn, ok := n.(*shortNode); ok {
 			if val, ok := sn.Val.(valueNode); ok {
