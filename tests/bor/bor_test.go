@@ -272,6 +272,9 @@ func TestForkWithBlockTime(t *testing.T) {
 		},
 	}
 
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	fdlimit.Raise(2048)
+
 	// Create an Ethash network based off of the Ropsten config
 	// Generate a batch of accounts to seal and fund with
 	faucets := make([]*ecdsa.PrivateKey, 128)
@@ -314,6 +317,7 @@ func TestForkWithBlockTime(t *testing.T) {
 					defer wg.Done()
 
 					for range ticker.C {
+						log.Info("Fetching header", "node", i, "sprint", test.sprint["0"], "change", test.change, "number", test.sprint["0"]*test.change+10)
 						blockHeaders[i] = nodes[i].BlockChain().GetHeaderByNumber(test.sprint["0"]*test.change + 10)
 						if blockHeaders[i] != nil {
 							break
@@ -367,6 +371,9 @@ func TestForkWithBlockTime(t *testing.T) {
 }
 
 func TestInsertingSpanSizeBlocks(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	fdlimit.Raise(2048)
+
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
@@ -430,6 +437,9 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 }
 
 func TestFetchStateSyncEvents(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	fdlimit.Raise(2048)
+
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
@@ -505,6 +515,9 @@ func validateStateSyncEvents(t *testing.T, expected []*clerk.EventRecordWithTime
 }
 
 func TestFetchStateSyncEvents_2(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	fdlimit.Raise(2048)
+
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
@@ -607,6 +620,9 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 }
 
 func TestOutOfTurnSigning(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	fdlimit.Raise(2048)
+
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
@@ -701,6 +717,8 @@ func TestOutOfTurnSigning(t *testing.T) {
 }
 
 func TestSignerNotFound(t *testing.T) {
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	fdlimit.Raise(2048)
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()

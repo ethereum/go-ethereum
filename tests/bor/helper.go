@@ -124,8 +124,9 @@ func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
 	}
 
 	ethConf := &eth.Config{
-		Genesis: gen,
-		BorLogs: true,
+		Genesis:     gen,
+		BorLogs:     true,
+		StateScheme: "hash",
 	}
 
 	ethConf.Genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
