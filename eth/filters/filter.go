@@ -19,10 +19,8 @@ package filters
 import (
 	"context"
 	"errors"
-	"fmt"
+	"math"
 	"math/big"
-
-	//"reflect"
 	"slices"
 	"time"
 
@@ -30,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -120,29 +119,26 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 
 	resolveSpecial := func(number int64) (int64, error) {
-		var hdr *types.Header
 		switch number {
 		case rpc.LatestBlockNumber.Int64(), rpc.PendingBlockNumber.Int64():
 			// we should return head here since we've already captured
 			// that we need to get the pending logs in the pending boolean above
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-			if hdr == nil {
-				return 0, errors.New("latest header not found")
-			}
+			return math.MaxInt64, nil
 		case rpc.FinalizedBlockNumber.Int64():
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
+			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
 			if hdr == nil {
 				return 0, errors.New("finalized header not found")
 			}
+			return hdr.Number.Int64(), nil
 		case rpc.SafeBlockNumber.Int64():
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
+			hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
 			if hdr == nil {
 				return 0, errors.New("safe header not found")
 			}
+			return hdr.Number.Int64(), nil
 		default:
 			return number, nil
 		}
-		return hdr.Number.Int64(), nil
 	}
 
 	var err error
@@ -155,26 +151,11 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 
 	start := time.Now()
-	logs, err := filtermaps.GetPotentialMatches(ctx, f.sys.backend, uint64(f.begin), uint64(f.end), f.addresses, f.topics)
+	mb := f.sys.backend.NewMatcherBackend()
+	logs, _, _, _, err := filtermaps.GetPotentialMatches(ctx, mb, uint64(f.begin), uint64(f.end), f.addresses, f.topics)
+	mb.Close()
 	fmLogs := filterLogs(logs, nil, nil, f.addresses, f.topics)
-	fmt.Println("filtermaps (new) runtime", time.Since(start), "true matches", len(fmLogs), "false positives", len(logs)-len(fmLogs))
-
-	//TODO remove
-	/*f.bbMatchCount = 0
-		start = time.Now()
-		logChan, errChan := f.rangeLogsAsync(ctx)
-		var bbLogs []*types.Log
-	loop:
-		for {
-			select {
-			case log := <-logChan:
-				bbLogs = append(bbLogs, log)
-			case <-errChan:
-				break loop
-			}
-		}
-		fmt.Println("bloombits (old) runtime", time.Since(start), "true matches", len(bbLogs), "false positives", f.bbMatchCount-uint64(len(bbLogs)))
-		fmt.Println("DeepEqual", reflect.DeepEqual(fmLogs, bbLogs))*/
+	log.Debug("Finished log search", "run time", time.Since(start), "true matches", len(fmLogs), "false positives", len(logs)-len(fmLogs))
 	return fmLogs, err
 }
 

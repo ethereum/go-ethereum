@@ -22,30 +22,35 @@ const (
 // updateLoop initializes and updates the log index structure according to the
 // canonical chain.
 func (f *FilterMaps) updateLoop() {
-	headEventCh := make(chan core.ChainHeadEvent)
-	sub := f.chain.SubscribeChainHeadEvent(headEventCh)
-	defer sub.Unsubscribe()
+	var (
+		headEventCh = make(chan core.ChainHeadEvent)
+		sub         = f.chain.SubscribeChainHeadEvent(headEventCh)
+		head        *types.Header
+		stop        bool
+		syncMatcher *FilterMapsMatcherBackend
+	)
 
-	head := f.chain.CurrentBlock()
-	if head == nil {
-		select {
-		case ev := <-headEventCh:
-			head = ev.Block.Header()
-		case ch := <-f.closeCh:
-			close(ch)
-			return
+	defer func() {
+		sub.Unsubscribe()
+		if syncMatcher != nil {
+			syncMatcher.synced(head)
+			syncMatcher = nil
 		}
-	}
-	fmr := f.getRange()
+	}()
 
-	var stop bool
 	wait := func() {
+		if syncMatcher != nil {
+			syncMatcher.synced(head)
+			syncMatcher = nil
+		}
 		if stop {
 			return
 		}
 		select {
 		case ev := <-headEventCh:
 			head = ev.Block.Header()
+		case syncMatcher = <-f.matcherSyncCh:
+			head = f.chain.CurrentBlock()
 		case <-time.After(time.Second * 20):
 			// keep updating log index during syncing
 			head = f.chain.CurrentBlock()
@@ -54,10 +59,21 @@ func (f *FilterMaps) updateLoop() {
 			stop = true
 		}
 	}
+	for head == nil {
+		wait()
+		if stop {
+			return
+		}
+	}
+	fmr := f.getRange()
 
 	for !stop {
 		if !fmr.initialized {
 			f.tryInit(head)
+			if syncMatcher != nil {
+				syncMatcher.synced(head)
+				syncMatcher = nil
+			}
 			fmr = f.getRange()
 			if !fmr.initialized {
 				wait()
@@ -73,12 +89,18 @@ func (f *FilterMaps) updateLoop() {
 				continue
 			}
 		}
+		if syncMatcher != nil {
+			syncMatcher.synced(head)
+			syncMatcher = nil
+		}
 		// log index head is at latest chain head; process tail blocks if possible
 		f.tryExtendTail(func() bool {
 			// return true if tail processing needs to be stopped
 			select {
 			case ev := <-headEventCh:
 				head = ev.Block.Header()
+			case syncMatcher = <-f.matcherSyncCh:
+				head = f.chain.CurrentBlock()
 			case ch := <-f.closeCh:
 				close(ch)
 				stop = true
@@ -549,6 +571,9 @@ func (u *updateBatch) makeRevertPoint() (*revertPoint, error) {
 // number from memory cache or from the database if available. If no such revert
 // point is available then it returns no result and no error.
 func (f *FilterMaps) getRevertPoint(blockNumber uint64) (*revertPoint, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
 	if blockNumber > f.headBlockNumber {
 		blockNumber = f.headBlockNumber
 	}
@@ -577,6 +602,9 @@ func (f *FilterMaps) getRevertPoint(blockNumber uint64) (*revertPoint, error) {
 
 // revertTo reverts the log index to the given revert point.
 func (f *FilterMaps) revertTo(rp *revertPoint) error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
 	batch := f.db.NewBatch()
 	afterLastMap := uint32((f.headLvPointer + valuesPerMap - 1) >> logValuesPerMap)
 	if rp.mapIndex >= afterLastMap {
