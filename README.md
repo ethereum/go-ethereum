@@ -1,3 +1,7 @@
+## rollup-geth
+
+Implements RIP/EIPs on top of go-ethereum implementation aimed at L2 rollups
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
