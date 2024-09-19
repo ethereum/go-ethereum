@@ -222,8 +222,8 @@ type snapshotTest struct {
 
 func (snaptest *snapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	// fmt.Println(tt.dump())
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	// fmt.Println(snaptest.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Restart the chain normally
@@ -245,8 +245,8 @@ type crashSnapshotTest struct {
 
 func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	// fmt.Println(tt.dump())
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	// fmt.Println(snaptest.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Pull the plug on the database, simulating a hard crash
@@ -297,8 +297,8 @@ type gappedSnapshotTest struct {
 
 func (snaptest *gappedSnapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	// fmt.Println(tt.dump())
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	// fmt.Println(snaptest.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Insert blocks without enabling snapshot if gapping is required.
@@ -341,8 +341,8 @@ type setHeadSnapshotTest struct {
 
 func (snaptest *setHeadSnapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	// fmt.Println(tt.dump())
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	// fmt.Println(snaptest.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Rewind the chain if setHead operation is required.
@@ -370,8 +370,8 @@ type wipeCrashSnapshotTest struct {
 
 func (snaptest *wipeCrashSnapshotTest) test(t *testing.T) {
 	// It's hard to follow the test case, visualize the input
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-	// fmt.Println(tt.dump())
+	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
+	// fmt.Println(snaptest.dump())
 	chain, blocks := snaptest.prepare(t)
 
 	// Firstly, stop the chain properly, with all snapshot journal
