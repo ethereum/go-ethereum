@@ -50,6 +50,7 @@ func newCollector() *collector {
 // Add adds the metric i to the collector. This method returns an error if the
 // metric type is not supported/known.
 func (c *collector) Add(name string, i any) error {
+	fmt.Println(name, i)
 	switch m := i.(type) {
 	case metrics.Counter:
 		c.addCounter(name, m.Snapshot())
@@ -57,6 +58,8 @@ func (c *collector) Add(name string, i any) error {
 		c.addCounterFloat64(name, m.Snapshot())
 	case metrics.Gauge:
 		c.addGauge(name, m.Snapshot())
+	case metrics.ResettingGauge:
+		c.addResettingGauge(name, m.Snapshot())
 	case metrics.GaugeFloat64:
 		c.addGaugeFloat64(name, m.Snapshot())
 	case metrics.GaugeInfo:
@@ -84,6 +87,13 @@ func (c *collector) addCounterFloat64(name string, m metrics.CounterFloat64Snaps
 }
 
 func (c *collector) addGauge(name string, m metrics.GaugeSnapshot) {
+	c.writeGaugeCounter(name, m.Value())
+}
+
+func (c *collector) addResettingGauge(name string, m metrics.GaugeSnapshot) {
+	if m.Value() == 0 {
+		return
+	}
 	c.writeGaugeCounter(name, m.Value())
 }
 
