@@ -265,6 +265,7 @@ func (p *PortalProtocol) Start() error {
 func (p *PortalProtocol) Stop() {
 	p.cancelCloseCtx()
 	p.table.close()
+	p.DiscV5.Close()
 	err := p.utp.Close()
 	if err != nil {
 		p.Log.Error("failed to close utp listener", "err", err)
