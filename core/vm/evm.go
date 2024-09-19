@@ -58,22 +58,6 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	return p, ok
 }
 
-func (evm *EVM) precompile2(addr common.Address) (PrecompiledContract, bool) {
-	var precompiles map[common.Address]PrecompiledContract
-	switch {
-	case evm.chainRules.IsXDCxDisable:
-		precompiles = PrecompiledContractsXDCv2
-	case evm.chainRules.IsIstanbul && evm.ChainConfig().IsTIPXDCXCancellationFee(evm.Context.BlockNumber):
-		precompiles = PrecompiledContractsIstanbul
-	case evm.chainRules.IsByzantium:
-		precompiles = PrecompiledContractsByzantium
-	default:
-		precompiles = PrecompiledContractsHomestead
-	}
-	p, ok := precompiles[addr]
-	return p, ok
-}
-
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
 func run(evm *EVM, contract *Contract, input []byte, readOnly bool) ([]byte, error) {
 	if contract.CodeAddr != nil {
@@ -242,7 +226,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		snapshot = evm.StateDB.Snapshot()
 	)
 	if !evm.StateDB.Exist(addr) {
-		_, isPrecompile := evm.precompile2(addr)
+		_, isPrecompile := evm.precompile(addr)
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
 			// Calling a non existing account, don't do anything, but ping the tracer
 			if evm.vmConfig.Debug {
