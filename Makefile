@@ -11,6 +11,7 @@ GORUN = go run
 #? shisui: Build shisui
 shisui:
 	go build ./cmd/shisui/main.go
+	mkdir -p $(GOBIN)
 	cp main $(GOBIN)/shisui
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/shisui\" to launch shisui."
