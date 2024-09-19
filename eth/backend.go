@@ -261,7 +261,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
 	eth.APIBackend = &EthAPIBackend{
-		FilterMapsMatcherBackend: (*filtermaps.FilterMapsMatcherBackend)(eth.filterMaps),
 		extRPCEnabled:            stack.Config().ExtRPCEnabled(),
 		allowUnprotectedTxs:      stack.Config().AllowUnprotectedTxs,
 		eth:                      eth,

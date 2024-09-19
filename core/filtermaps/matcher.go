@@ -2,6 +2,7 @@ package filtermaps
 
 import (
 	"context"
+	"errors"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -18,13 +19,121 @@ type MatcherBackend interface {
 	GetBlockLvPointer(ctx context.Context, blockNumber uint64) (uint64, error)
 	GetFilterMapRow(ctx context.Context, mapIndex, rowIndex uint32) (FilterRow, error)
 	GetLogByLvIndex(ctx context.Context, lvIndex uint64) (*types.Log, error)
+	SyncLogIndex(ctx context.Context) (SyncRange, error)
+	Close()
+}
+
+// SyncRange is returned by MatcherBackend.SyncLogIndex. It contains the latest
+// chain head, the indexed range that is currently consistent with the chain
+// and the valid range that has not been changed and has been consistent with
+// all states of the chain since the previous SyncLogIndex or the creation of
+// the matcher backend.
+type SyncRange struct {
+	Head *types.Header
+	// block range where the index has not changed since the last matcher sync
+	// and therefore the set of matches found in this region is guaranteed to
+	// be valid and complete.
+	Valid                 bool
+	FirstValid, LastValid uint64
+	// block range indexed according to the given chain head.
+	Indexed                   bool
+	FirstIndexed, LastIndexed uint64
 }
 
 // GetPotentialMatches returns a list of logs that are potential matches for the
-// given filter criteria. Note that the returned list may still contain false
-// positives.
-//TODO add protection against reorgs during search
-func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, error) {
+// given filter criteria. If parts of the requested range are not indexed then
+// an error is returned. If parts of the requested range are changed during the
+// search process then potentially incorrect logs are discarded and searched
+// again, ensuring that the returned results are always consistent with the latest
+// state of the chain.
+// If firstBlock or lastBlock are bigger than the head block number then they are
+// substituted with the latest head of the chain, ensuring that a search until
+// the head block is still consistent with the latest canonical chain if a new
+// head has been added during the process.
+// Note that the returned list may still contain false positives.
+func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, *types.Header, uint64, uint64, error) {
+	if firstBlock > lastBlock {
+		return nil, nil, 0, 0, errors.New("invalid search range")
+	}
+	// enforce a consistent state before starting the search in order to be able
+	// to determine valid range later
+	syncRange, err := backend.SyncLogIndex(ctx)
+	if err != nil {
+		return nil, nil, 0, 0, err
+	}
+	headBlock := syncRange.Head.Number.Uint64() // Head is guaranteed != nil
+	// if haveMatches == true then matches correspond to the block number range
+	// between matchFirst and matchLast
+	var (
+		matches               []*types.Log
+		haveMatches           bool
+		matchFirst, matchLast uint64
+	)
+	for !haveMatches || (matchLast < lastBlock && matchLast < headBlock) {
+		// determine range to be searched; for simplicity we only extend the most
+		// recent end of the existing match set by matching between searchFirst
+		// and searchLast.
+		searchFirst, searchLast := firstBlock, lastBlock
+		if searchFirst > headBlock {
+			searchFirst = headBlock
+		}
+		if searchLast > headBlock {
+			searchLast = headBlock
+		}
+		if haveMatches && matchFirst != searchFirst {
+			// searchFirst might change if firstBlock > headBlock
+			matches, haveMatches = nil, false
+		}
+		if haveMatches && matchLast >= searchFirst {
+			searchFirst = matchLast + 1
+		}
+		// check if indexed range covers the requested range
+		if !syncRange.Indexed || syncRange.FirstIndexed > searchFirst || syncRange.LastIndexed < searchLast {
+			return nil, nil, 0, 0, errors.New("log index not available for requested range")
+		}
+		// search for matches in the required range
+		newMatches, err := getPotentialMatches(ctx, backend, searchFirst, searchLast, addresses, topics)
+		if err != nil {
+			return nil, nil, 0, 0, err
+		}
+		// enforce a consistent state again in order to determine the guaranteed
+		// valid range in which the log index has not been changed since the last
+		// sync.
+		syncRange, err = backend.SyncLogIndex(ctx)
+		if err != nil {
+			return nil, nil, 0, 0, err
+		}
+		headBlock = syncRange.Head.Number.Uint64()
+		// return with error if the beginning of the recently searched range might
+		// be invalid due to removed log index
+		if !syncRange.Valid || syncRange.FirstValid > searchFirst || syncRange.LastValid < searchFirst {
+			return nil, nil, 0, 0, errors.New("log index not available for requested range")
+		}
+		// roll back most recent matches if they are not covered by the guaranteed
+		// valid range
+		if syncRange.LastValid < searchLast {
+			for len(newMatches) > 0 && newMatches[len(newMatches)-1].BlockNumber > syncRange.LastValid {
+				newMatches = newMatches[:len(newMatches)-1]
+			}
+			searchLast = syncRange.LastValid
+		}
+		// append new matches to existing ones if the were any
+		if haveMatches {
+			matches = append(matches, newMatches...)
+		} else {
+			matches, haveMatches = newMatches, true
+		}
+		matchLast = searchLast
+	}
+	return matches, syncRange.Head, firstBlock, matchLast, nil
+}
+
+// getPotentialMatches returns a list of logs that are potential matches for the
+// given filter criteria. If parts of the log index in the searched range are
+// missing or changed during the search process then the resulting logs belonging
+// to that block range might be missing or incorrect.
+// Also note that the returned list may contain false positives.
+func getPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, error) {
 	// find the log value index range to search
 	firstIndex, err := backend.GetBlockLvPointer(ctx, firstBlock)
 	if err != nil {

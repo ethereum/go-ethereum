@@ -45,7 +45,6 @@ import (
 
 // EthAPIBackend implements ethapi.Backend and tracers.Backend for full nodes
 type EthAPIBackend struct {
-	*filtermaps.FilterMapsMatcherBackend
 	extRPCEnabled       bool
 	allowUnprotectedTxs bool
 	eth                 *Ethereum
@@ -411,6 +410,10 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
+}
+
+func (b *EthAPIBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+	return b.eth.filterMaps.NewMatcherBackend()
 }
 
 func (b *EthAPIBackend) Engine() consensus.Engine {
