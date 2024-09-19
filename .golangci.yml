@@ -16,6 +16,7 @@ linters:
     - gci
     - gocheckcompilerdirectives
     - gofmt
+    - goheader
     - goimports
     - gomodguard
     - gosec
@@ -53,6 +54,10 @@ linters-settings:
       - alias
       - dot
       - blank
+  goheader:
+    values:
+    template-path: .libevm-header
+
   gomodguard:
     blocked:
       modules:
@@ -78,6 +83,7 @@ issues:
         - errcheck
         - gci
         - gofmt
+        - goheader
         - gosec
         - gosimple
         - govet
@@ -92,6 +98,7 @@ issues:
         - testifylint
         - thelper
         - tparallel
+        - typecheck
         - usestdlibvars
         - varnamelen
         - wastedassign
