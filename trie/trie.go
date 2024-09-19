@@ -37,24 +37,13 @@ import (
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	root  node
-	owner common.Hash
-
-	// Flag whether the commit operation is already performed. If so the
-	// trie is not usable(latest states is invisible).
-	committed bool
-
-	// reader is the handler trie can retrieve nodes from.
-	reader *trieReader
-
-	// tracer is the tool to track the trie changes.
-	tracer *tracer
-
-	// The number of trie mutations that have been performed
-	mutate int
-
-	// The number of mutations that have been hashed
-	hashed int
+	root      node
+	owner     common.Hash
+	committed bool        // The Flag whether the commit operation is already performed
+	reader    *trieReader // The handler trie can retrieve nodes from
+	tracer    *tracer     // The tool to track the trie changes
+	mutate    int         // The number of trie mutations that have been performed
+	hashed    int         // The number of mutations that have been hashed
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -311,7 +300,6 @@ func (t *Trie) Update(key, value []byte) error {
 }
 
 func (t *Trie) update(key, value []byte) error {
-	t.mutate++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
 		_, n, err := t.insert(t.root, nil, k, valueNode(value))
@@ -645,6 +633,7 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	for _, path := range t.tracer.deletedNodes() {
 		nodes.AddNode(path, trienode.NewDeleted())
 	}
+	// If the number of changes is below 100, we let one thread handle it
 	t.root = newCommitter(nodes, t.tracer, collectLeaf, t.mutate > 100).Commit(t.root)
 	t.mutate = 0
 	return rootHash, nodes

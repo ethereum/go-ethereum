@@ -18,7 +18,6 @@ package trie
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -115,36 +114,13 @@ func (c *committer) commit(path []byte, n node, topmost bool) (node, []*wrapNode
 	}
 }
 
-type task struct {
-	node  node
-	index int
-	path  []byte
-}
-
 // commitChildren commits the children of the given fullnode
 func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) ([17]node, []*wrapNode) {
 	var (
 		wg       sync.WaitGroup
 		children [17]node
 		results  [16][]*wrapNode
-		tasks    = make(chan task)
 	)
-	if parallel {
-		worker := func() {
-			defer wg.Done()
-			for t := range tasks {
-				children[t.index], results[t.index] = c.commit(t.path, t.node, false)
-			}
-		}
-		threads := runtime.NumCPU()
-		if threads > 16 {
-			threads = 16
-		}
-		for i := 0; i < threads; i++ {
-			wg.Add(1)
-			go worker()
-		}
-	}
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
 		if child == nil {
@@ -163,15 +139,14 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) ([17
 		if !parallel {
 			children[i], results[i] = c.commit(append(path, byte(i)), child, false)
 		} else {
-			tasks <- task{
-				index: i,
-				node:  child,
-				path:  append(path, byte(i)),
-			}
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				children[index], results[index] = c.commit(append(path, byte(index)), child, false)
+			}(i)
 		}
 	}
 	if parallel {
-		close(tasks)
 		wg.Wait()
 	}
 	// For the 17th child, it's possible the type is valuenode.
@@ -215,7 +190,6 @@ func (c *committer) store(path []byte, n node) (node, *wrapNode) {
 		path: string(path),
 		node: trienode.New(nhash, nodeToBytes(n)),
 	}
-
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
 	// length of leaves should be exactly same..
@@ -227,7 +201,6 @@ func (c *committer) store(path []byte, n node) (node, *wrapNode) {
 			}
 		}
 	}
-
 	return hash, wNode
 }
 
