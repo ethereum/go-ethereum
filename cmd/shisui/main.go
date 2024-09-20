@@ -343,9 +343,10 @@ func initState(config Config, server *rpc.Server, conn discover.UDPConn, localNo
 	if err != nil {
 		return nil, err
 	}
+	stateStore := state.NewStateStorage(contentStorage)
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.State, config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
+	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.State, config.PrivateKey, conn, localNode, discV5, stateStore, contentQueue)
 
 	if err != nil {
 		return nil, err

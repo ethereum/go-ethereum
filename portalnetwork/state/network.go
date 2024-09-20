@@ -96,7 +96,10 @@ func (h *StateNetwork) validateContents(contentKeys [][]byte, contents [][]byte)
 			return fmt.Errorf("content validate failed with content key %x and content %x", contentKey, content)
 		}
 		contentId := h.portalProtocol.ToContentId(contentKey)
-		_ = h.portalProtocol.Put(contentKey, contentId, content)
+		err = h.portalProtocol.Put(contentKey, contentId, content)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

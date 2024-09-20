@@ -243,6 +243,9 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		assert.Equal(t, largeTestContent, data)
 	}()
 	workGroup.Wait()
+	node1.Stop()
+	node2.Stop()
+	node3.Stop()
 }
 
 func TestPortalWireProtocol(t *testing.T) {
