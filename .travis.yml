@@ -49,5 +49,6 @@ jobs:
       script:
         - go1.23.1 version
         - which go
+        - ls -la `which go`
         - which go1.23.1
         - go version
