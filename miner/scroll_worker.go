@@ -396,7 +396,7 @@ func (w *worker) mainLoop() {
 			// be automatically eliminated.
 			if w.current != nil {
 				shouldCommit, _ := w.processTxnSlice(ev.Txs)
-				if shouldCommit || w.current.deadlineReached {
+				if shouldCommit || (w.current.deadlineReached && len(w.current.txs) > 0) {
 					_, err = w.commit()
 				}
 			}
