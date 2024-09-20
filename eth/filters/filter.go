@@ -315,11 +315,11 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 // filterLogs creates a slice of logs matching the given criteria.
 func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
 	var (
-		addressMap = make(map[common.Address]struct{}, len(addresses))
+		addressMap = make(map[common.Address]bool, len(addresses))
 		topicMaps  = make([]map[common.Hash]struct{}, len(topics))
 	)
 	for _, addr := range addresses {
-		addressMap[addr] = struct{}{}
+		addressMap[addr] = true
 	}
 	for i, sub := range topics {
 		var topicMap map[common.Hash]struct{}
@@ -338,7 +338,7 @@ func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []comm
 		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
 			return false
 		}
-		if _, ok := addressMap[log.Address]; !ok {
+		if len(addressMap) > 0 && !addressMap[log.Address] {
 			return false
 		}
 		// If the to filtered topics is greater than the amount of topics in logs, skip.
