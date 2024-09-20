@@ -58,9 +58,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
           echo "%install" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
@@ -71,7 +71,7 @@ jobs:
 
       - name: Build Mainnet Sentry Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -99,9 +99,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
           echo "%install" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/mainnet-v1/sentry/sentry/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/sentry/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-sentry-pbss.spec
@@ -112,7 +112,7 @@ jobs:
 
       - name: Build Mainnet Sentry PBSS Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -140,9 +140,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
           echo "%install" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/mainnet-v1/sentry/validator/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/validator/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
@@ -154,7 +154,7 @@ jobs:
 
       - name: Build Mainnet Validator Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -182,9 +182,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
           echo "%install" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/mainnet-v1/sentry/validator/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/validator/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-validator-pbss.spec
@@ -196,7 +196,7 @@ jobs:
 
       - name: Build Mainnet Validator PBSS Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -224,9 +224,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
           echo "%install" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor_bootnode.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor_bootnode.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
@@ -237,7 +237,7 @@ jobs:
 
       - name: Build Mainnet Boot Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -265,9 +265,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
           echo "%install" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/mainnet-v1/archive/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/archive/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
@@ -278,7 +278,7 @@ jobs:
 
       - name: Build Mainnet Archive Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -286,30 +286,30 @@ jobs:
            -bb packaging/rpm/SPECS/bor-mainnet-archive.spec  
 
       - name: renaming file for rpm release appendage archive mainnet
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-archive-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-archive-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage bootnode mainnet
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage sentry mainnet
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage sentry pbss mainnet
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-pbss-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-pbss-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage validator mainnet
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage validator pbss mainnet
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-pbss-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-pbss-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm
 
       - name: adding shasum for the rpm build mainnet archive
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build mainnet bootnode
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build mainnet sentry
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build mainnet sentry pbss
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build mainnet validator
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build mainnet pbss validator
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
 
       - name: Release bor Packages
         uses: softprops/action-gh-release@v2

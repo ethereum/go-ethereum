@@ -58,9 +58,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
           echo "%install" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/testnet-amoy/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-sentry.spec
@@ -71,7 +71,7 @@ jobs:
 
       - name: Build Amoy Sentry Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -99,9 +99,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
           echo "%install" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/testnet-amoy/sentry/sentry/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/sentry/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-sentry-pbss.spec
@@ -112,7 +112,7 @@ jobs:
 
       - name: Build Amoy Sentry PBSS Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -140,9 +140,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-amoy-validator.spec
           echo "%install" >> packaging/rpm/SPECS/bor-amoy-validator.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-validator.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/testnet-amoy/sentry/validator/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/validator/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-validator.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-validator.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-validator.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-amoy-validator.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-validator.spec
@@ -154,7 +154,7 @@ jobs:
 
       - name: Build Amoy Validator Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -182,9 +182,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
           echo "%install" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/testnet-amoy/sentry/validator/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/validator/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-validator-pbss.spec
@@ -196,7 +196,7 @@ jobs:
 
       - name: Build Amoy Validator PBSS Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -225,9 +225,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
           echo "%install" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/testnet-amoy/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor_bootnode.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor_bootnode.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-bootnode.spec
@@ -238,7 +238,7 @@ jobs:
 
       - name: Build Amoy Boot Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -266,9 +266,9 @@ jobs:
           echo "" >> packaging/rpm/SPECS/bor-amoy-archive.spec
           echo "%install" >> packaging/rpm/SPECS/bor-amoy-archive.spec
           echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-amoy-archive.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/testnet-amoy/archive/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/testnet-amoy/archive/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-amoy-archive.spec
           echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-amoy-archive.spec
-          echo "cp /home/runner/work/bor-dontuse/bor-dontuse/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-archive.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-amoy-archive.spec
           
           echo "%files" >> packaging/rpm/SPECS/bor-amoy-archive.spec
           echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-amoy-archive.spec
@@ -279,7 +279,7 @@ jobs:
 
       - name: Build Amoy Archive Node profile RPM
         run: |
-          rpmbuild --define "_topdir /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build" \
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
            --define "_builddir %{_topdir}/BUILD" \
            --define "_rpmdir %{_topdir}/RPMS" \
            --define "_srcrpmdir %{_topdir}/SRPMS" \
@@ -287,30 +287,30 @@ jobs:
            -bb packaging/rpm/SPECS/bor-amoy-archive.spec 
 
       - name: renaming file for rpm release appendage archive amoy
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-archive-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-archive-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage bootnode amoy
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage sentry amoy
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage sentry pbss amoy
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-pbss-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-pbss-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage validator amoy
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm
       - name: renaming file for rpm release appendage validator pbss amoy
-        run: mv /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-pbss-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-pbss-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm
 
       - name: adding shasum for the rpm build amoy archive
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build amoy bootnode
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build amoy sentry
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build amoy sentry pbss
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-sentry-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build amoy validator
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
       - name: adding shasum for the rpm build amoy validator pbss
-        run: cd /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor-dontuse/bor-dontuse/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-amoy-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-amoy-validator-pbss-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
 
 
       - name: Release bor Packages
