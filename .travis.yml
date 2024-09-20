@@ -24,7 +24,7 @@ jobs:
       os: linux
       arch: arm64
       dist: focal
-      go: 1.23.x
+      go: 1.23.1
       env:
         - docker
       services:
@@ -41,7 +41,7 @@ jobs:
       if: type = push
       os: osx
       osx_image: xcode14.2
-      go: 1.23.x
+      go: 1.23.1
       env:
         - azure-osx
       git:
