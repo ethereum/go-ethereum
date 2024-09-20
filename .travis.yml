@@ -36,3 +36,15 @@ jobs:
       script:
         - go version
 
+
+    - stage: build
+      if: type = push
+      os: osx
+      osx_image: xcode14.2
+      go: 1.23.x
+      env:
+        - azure-osx
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - go version
