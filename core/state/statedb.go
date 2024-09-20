@@ -18,6 +18,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"maps"
@@ -895,6 +896,9 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		}
 		usedAddrs = append(usedAddrs, common.CopyBytes(addr[:])) // Copy needed for closure
 	}
+	// Perform deletes in sorted order to make the touched trie nodes deterministic
+	slices.SortFunc(deletedAddrs, func(a, b common.Address) int { return bytes.Compare(a[:], b[:]) })
+
 	for _, deletedAddr := range deletedAddrs {
 		s.deleteStateObject(deletedAddr)
 		s.AccountDeleted += 1

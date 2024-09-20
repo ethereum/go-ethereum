@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"slices"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -348,6 +349,9 @@ func (s *stateObject) updateTrie() (Trie, error) {
 		// Cache the items for preloading
 		used = append(used, common.CopyBytes(key[:])) // Copy needed for closure
 	}
+	// Perform deletes in sorted order to make the touched trie nodes deterministic
+	slices.SortFunc(deletions, func(a, b common.Hash) int { return bytes.Compare(a[:], b[:]) })
+
 	for _, key := range deletions {
 		if err := tr.DeleteStorage(s.address, key[:]); err != nil {
 			s.db.setError(err)
