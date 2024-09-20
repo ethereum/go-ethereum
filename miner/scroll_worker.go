@@ -507,6 +507,10 @@ func (w *worker) newWork(now time.Time, parentHash common.Hash, reorging bool, r
 		reorging:       reorging,
 		reorgReason:    reorgReason,
 	}
+
+	// initiliaze pending block with an empty block to make sure we always have
+	// a pending block to serve RPC requests
+	w.updateSnapshot()
 	return nil
 }
 
