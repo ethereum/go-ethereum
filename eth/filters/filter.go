@@ -19,13 +19,11 @@ package filters
 import (
 	"context"
 	"errors"
-	"math/big"
-	"slices"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
+	"math/big"
 )
 
 // Filter can be used to retrieve and filter logs.
@@ -306,15 +304,32 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	}
 	for i, log := range logs {
 		// Copy log not to modify cache elements
-		logcopy := *log
-		logcopy.TxHash = body.Transactions[logcopy.TxIndex].Hash()
-		logs[i] = &logcopy
+		logCopy := *log
+		logCopy.TxHash = body.Transactions[logCopy.TxIndex].Hash()
+		logs[i] = &logCopy
 	}
 	return logs, nil
 }
 
 // filterLogs creates a slice of logs matching the given criteria.
 func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
+	var (
+		addressMap = make(map[common.Address]struct{}, len(addresses))
+		topicMaps  = make([]map[common.Hash]struct{}, len(topics))
+	)
+	for _, addr := range addresses {
+		addressMap[addr] = struct{}{}
+	}
+	for i, sub := range topics {
+		var topicMap map[common.Hash]struct{}
+		if len(sub) > 0 {
+			topicMap = make(map[common.Hash]struct{}, len(sub))
+			for _, topic := range sub {
+				topicMap[topic] = struct{}{}
+			}
+		}
+		topicMaps[i] = topicMap
+	}
 	var check = func(log *types.Log) bool {
 		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			return false
@@ -322,24 +337,24 @@ func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []comm
 		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
 			return false
 		}
-		if len(addresses) > 0 && !slices.Contains(addresses, log.Address) {
+		if _, ok := addressMap[log.Address]; !ok {
 			return false
 		}
 		// If the to filtered topics is greater than the amount of topics in logs, skip.
-		if len(topics) > len(log.Topics) {
+		if len(topicMaps) > len(log.Topics) {
 			return false
 		}
-		for i, sub := range topics {
-			if len(sub) == 0 {
+		for i, topicMap := range topicMaps {
+			if topicMap == nil {
 				continue // empty rule set == wildcard
 			}
-			if !slices.Contains(sub, log.Topics[i]) {
+			if _, ok := topicMap[log.Topics[i]]; !ok {
 				return false
 			}
 		}
 		return true
 	}
-	var ret []*types.Log
+	var ret = make([]*types.Log, 0, len(logs))
 	for _, log := range logs {
 		if check(log) {
 			ret = append(ret, log)
