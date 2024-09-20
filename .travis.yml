@@ -47,4 +47,7 @@ jobs:
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
+        - go1.23.1 version
+        - which go
+        - which go1.23.1
         - go version
