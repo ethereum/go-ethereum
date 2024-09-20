@@ -85,7 +85,7 @@ jobs:
       if: type = push
       os: osx
       osx_image: xcode14.2
-      go: 1.23.x
+      go: 1.23.1 # See https://github.com/ethereum/go-ethereum/pull/30478
       env:
         - azure-osx
       git:
