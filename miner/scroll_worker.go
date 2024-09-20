@@ -89,6 +89,7 @@ type work struct {
 	cccLogger       *ccc.Logger
 	vmConfig        vm.Config
 
+	reorging    bool
 	reorgReason error
 
 	// accumulated state
@@ -353,7 +354,7 @@ func (w *worker) mainLoop() {
 		var retryableCommitError *retryableCommitError
 		if errors.As(err, &retryableCommitError) {
 			log.Warn("failed to commit to a block, retrying", "err", err)
-			if _, err = w.tryCommitNewWork(time.Now(), w.current.header.ParentHash, w.current.reorgReason); err != nil {
+			if _, err = w.tryCommitNewWork(time.Now(), w.current.header.ParentHash, w.current.reorging, w.current.reorgReason); err != nil {
 				continue
 			}
 		} else if err != nil {
@@ -371,20 +372,20 @@ func (w *worker) mainLoop() {
 					return
 				}
 			}
-			_, err = w.tryCommitNewWork(time.Now(), w.chain.CurrentHeader().Hash(), nil)
+			_, err = w.tryCommitNewWork(time.Now(), w.chain.CurrentHeader().Hash(), false, nil)
 		case trigger := <-w.reorgCh:
 			idleTimer.UpdateSince(idleStart)
 			err = w.handleReorg(&trigger)
 		case chainHead := <-w.chainHeadCh:
 			idleTimer.UpdateSince(idleStart)
 			if w.isCanonical(chainHead.Block.Header()) {
-				_, err = w.tryCommitNewWork(time.Now(), chainHead.Block.Hash(), nil)
+				_, err = w.tryCommitNewWork(time.Now(), chainHead.Block.Hash(), false, nil)
 			}
 		case <-w.current.deadlineCh():
 			idleTimer.UpdateSince(idleStart)
 			w.current.deadlineReached = true
 			if len(w.current.txs) > 0 {
-				_, err = w.commit(false)
+				_, err = w.commit()
 			}
 		case ev := <-w.txsCh:
 			idleTimer.UpdateSince(idleStart)
@@ -396,7 +397,7 @@ func (w *worker) mainLoop() {
 			if w.current != nil {
 				shouldCommit, _ := w.processTxnSlice(ev.Txs)
 				if shouldCommit || w.current.deadlineReached {
-					_, err = w.commit(false)
+					_, err = w.commit()
 				}
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
@@ -435,7 +436,7 @@ func (w *worker) collectPendingL1Messages(startIndex uint64) []types.L1MessageTx
 }
 
 // newWork
-func (w *worker) newWork(now time.Time, parentHash common.Hash, reorgReason error) error {
+func (w *worker) newWork(now time.Time, parentHash common.Hash, reorging bool, reorgReason error) error {
 	parent := w.chain.GetBlockByHash(parentHash)
 	header := &types.Header{
 		ParentHash: parent.Hash(),
@@ -503,14 +504,15 @@ func (w *worker) newWork(now time.Time, parentHash common.Hash, reorgReason erro
 		coalescedLogs:  []*types.Log{},
 		gasPool:        new(core.GasPool).AddGas(header.GasLimit),
 		nextL1MsgIndex: nextL1MsgIndex,
+		reorging:       reorging,
 		reorgReason:    reorgReason,
 	}
 	return nil
 }
 
 // tryCommitNewWork
-func (w *worker) tryCommitNewWork(now time.Time, parent common.Hash, reorgReason error) (common.Hash, error) {
-	err := w.newWork(now, parent, reorgReason)
+func (w *worker) tryCommitNewWork(now time.Time, parent common.Hash, reorging bool, reorgReason error) (common.Hash, error) {
+	err := w.newWork(now, parent, reorging, reorgReason)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed creating new work: %w", err)
 	}
@@ -521,8 +523,7 @@ func (w *worker) tryCommitNewWork(now time.Time, parent common.Hash, reorgReason
 	}
 
 	// check if we are reorging
-	reorging := w.chain.GetBlockByNumber(w.current.header.Number.Uint64()) != nil
-	if !shouldCommit && reorging {
+	if !shouldCommit && w.current.reorging {
 		shouldCommit, err = w.processReorgedTxns(w.current.reorgReason)
 	}
 	if err != nil {
@@ -540,7 +541,7 @@ func (w *worker) tryCommitNewWork(now time.Time, parent common.Hash, reorgReason
 		// if reorging, force committing even if we are not "running"
 		// this can happen when sequencer is instructed to shutdown while handling a reorg
 		// we should make sure reorg is not interrupted
-		if blockHash, err := w.commit(reorging); err != nil {
+		if blockHash, err := w.commit(); err != nil {
 			return common.Hash{}, fmt.Errorf("failed committing new work: %w", err)
 		} else {
 			return blockHash, nil
@@ -658,6 +659,10 @@ func (w *worker) processTxnSlice(txns types.Transactions) (bool, error) {
 // processReorgedTxns
 func (w *worker) processReorgedTxns(reason error) (bool, error) {
 	reorgedBlock := w.chain.GetBlockByNumber(w.current.header.Number.Uint64())
+	if reorgedBlock == nil {
+		return false, nil
+	}
+
 	commitGasCounter.Dec(int64(reorgedBlock.GasUsed()))
 	reorgedTxns := reorgedBlock.Transactions()
 	var errorWithTxnIdx *ccc.ErrorWithTxnIdx
@@ -787,14 +792,14 @@ func (e retryableCommitError) Unwrap() error {
 
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
-func (w *worker) commit(reorging bool) (common.Hash, error) {
+func (w *worker) commit() (common.Hash, error) {
 	sealDelay := time.Duration(0)
 	defer func(t0 time.Time) {
 		l2CommitTimer.Update(time.Since(t0) - sealDelay)
 	}(time.Now())
 
 	w.updateSnapshot()
-	if !w.isRunning() && !reorging {
+	if !w.isRunning() && !w.current.reorging {
 		return common.Hash{}, nil
 	}
 
@@ -871,7 +876,7 @@ func (w *worker) commit(reorging bool) (common.Hash, error) {
 
 	currentHeight := w.current.header.Number.Uint64()
 	maxReorgDepth := uint64(w.config.CCCMaxWorkers + 1)
-	if !reorging && currentHeight > maxReorgDepth {
+	if !w.current.reorging && currentHeight > maxReorgDepth {
 		ancestorHeight := currentHeight - maxReorgDepth
 		ancestorHash := w.chain.GetHeaderByNumber(ancestorHeight).Hash()
 		if rawdb.ReadBlockRowConsumption(w.chain.Database(), ancestorHash) == nil {
@@ -1038,7 +1043,7 @@ func (w *worker) handleReorg(trigger *reorgTrigger) error {
 			return nil
 		}
 
-		newBlockHash, err := w.tryCommitNewWork(time.Now(), parentHash, reorgReason)
+		newBlockHash, err := w.tryCommitNewWork(time.Now(), parentHash, true, reorgReason)
 		if err != nil {
 			return err
 		}
@@ -1047,7 +1052,7 @@ func (w *worker) handleReorg(trigger *reorgTrigger) error {
 		if newBlockHash == (common.Hash{}) {
 			// force committing the new canonical head to trigger a reorg in blockchain
 			// otherwise we might ignore CCC errors from the new side chain since it is not canonical yet
-			newBlockHash, err = w.commit(true)
+			newBlockHash, err = w.commit()
 			if err != nil {
 				return err
 			}
