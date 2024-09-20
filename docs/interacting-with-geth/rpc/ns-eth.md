@@ -5,6 +5,221 @@ description: Documentation for the JSON-RPC API "eth" namespace
 
 Documentation for the API methods in the `eth` namespace can be found on [ethereum.org](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_protocolversion). Geth provides several extensions to the standard "eth" JSON-RPC namespace that are defined below.
 
+### eth_simulateV1 {#eth-simulate-v1}
+The `eth_simulateV1` method allows the simulation of multiple blocks and transactions without creating transactions or blocks on the blockchain. It functions similarly to `eth_call`, but offers more control. Like `eth_call`, `eth_simulateV1` has a maximum gas limit for the entire simulation.
+
+**Parameters:**
+The method takes two parameters:
+1) `Object` - `eth_simulate` payload
+2) `Quantity | Tag` - The block number or the string `latest`, specifying the parent block for the simulation. The simulated blocks will be built on top of this.
+
+The `eth_simulate` payload structure:
+   | Field                    | Type              | Optional | Default | Description                                                                                                                                                                                                                     |
+   | :----------------------- | :---------------- | :------- | :------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+   | `blockStateCalls`        | `BlockStateCalls` | False    | N/A     | Definition of blocks that can contain calls and overrides                                                                                                                                                                       |
+   | `traceTransfers`         | `Binary`          | Yes      | False   | Adds ETH transfers as ERC20 transfer events to the logs. These transfers have emitter contract parameter set as address(`0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`). This allows you to track movements of ETH in your calls. |
+   | `validation`             | `Binary`          | Yes      | False   | When true, the `eth_simulateV1` does all the validation that a normal EVM would do, except contract sender and signature checks. When false, `eth_simulateV1` behaves like `eth_call`.                                          |
+   | `returnFullTransactions` | `Binary`          | Yes      | False   | When true, the method returns full transaction objects, otherwise, just hashes are returned.                                                                                                                                    |
+
+`BlockStateCalls` is an array of objects, the single object definition is described below. The size of this array may be limited depending on the client as a DOS protection. 256 is a common/recommended limit as it is the same limit used by BLOCKHASH opcode.
+   | Field            | Type                       | Description                                                                                                  |
+   | :--------------- | :------------------------- | :----------------------------------------------------------------------------------------------------------- |
+   | `blockOverrides` | `BlockOverrides`           | Overrides fields such as block number or time in a simulated block.                                          |
+   | `stateOverrides` | `StateOverrides`           | State overrides can be used to replace existing blockchain state with new state.                             |
+   | `calls`          | `GenericCallTransaction[]` | An aray of transaction call objects. Please see [here](/docs/interacting-with-geth/rpc/objects) for details. |
+
+The `BlockOverrides` object is as follows:
+   | Field           | Type          | Description |
+   | :-------------- | :------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `number`        | `uint64`      | Block number. When overriding multiple blocks, block numbers must increment. Skipping numbers is allowed and skipped blocks are included in the response. | 
+   | `prevRandao`    | `uint256`     | The previous value of randomness beacon                                                                                                                   |
+   | `time`          | `uint64`      | When overriding time across multiple blocks, time need to be increasing. If time is not specified, it's incremented by one for each block.                |
+   | `gasLimit`      | `uint64`      | Gas limit                                                                                                                                                 |
+   | `feeRecipient`  | `address`     | Fee recipient (also known as coinbase)                                                                                                                    |
+   | `withdrawals`   | `Withdrawals` | Withdrawals made by validators                                                                                                                            |
+   | `baseFeePerGas` | `uint256`     | Base fee per unit of gas                                                                                                                                  |
+   | `blobBaseFee`   | `uint64`      | Base fee per unit of blob gas                                                                                                                             |
+
+The object `withdrawals` is an array of withdrawal objects:
+   | Field            | Type      | Description     |
+   | :--------------- | :-------- | :-------------- |
+   | `index`          | `uint64`  | index           |
+   | `validatorIndex` | `uint64`  | validator index |
+   | `address`        | `address` | address         |
+   | `amount`         | `uint64`  | amount          |
+
+The `StateOverrides` is a dictionary of addresses that will be overriden with the `AccountOverride` object. The account overriding works similar to the `eth_call`, except there's one added field: `movePrecompileToAddress`. Move precompile to address moves addresses precompile into the specified address. This move is done before the `code` override is set. So you can move the precompile somewhere else, and replace the precompile with any EVM bytecode. This EVM bytecode can then call the original precompile in the new address. This makes the most sense for ecrecover precompile. When the specified address is not a precompile, the behaviour is undefined.
+
+   | Field                     | Type             | Optional                                   | Description                                                                                                                                            |
+   | :------------------------ | :--------------- | :----------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `nonce`                   | `uint64`         | Yes                                        | Nonce                                                                                                                                                  |
+   | `balance`                 | `uint256`        | Yes                                        | ETH Balance                                                                                                                                            |
+   | `code`                    | `bytes`          | Yes                                        | EVM bytecode                                                                                                                                           |
+   | `movePrecompileToAddress` | `address`        | Yes                                        | Moves precompile to given address                                                                                                                      |
+   | `state`                   | `AccountStorage` | either `state` or `stateDiff` is mandatory | Key-value mapping to override all slots in the account storage before executing the call. This functions similar to eth_call's state parameter.        |
+   | `stateDiff`               | `AccountStorage` | either `state` or `stateDiff` is mandatory | Key-value mapping to override individual slots in the account storage before executing the call. This functions similar to eth_call's state parameter. |
+
+**Output**
+On a succesfull `eth_simulateV1` call, an array of generated full blocks is returned (the same object that you would get with `eth_getBlockByHash`, except with an added `calls` field), otherwise an error is returned. The blocks contain `calls` field that is defined as follows:
+
+On failure:
+   | Field        | Type                                             | Description                                   |
+   | :----------- | :----------------------------------------------- | :-------------------------------------------- |
+   | `status`     | `"0x0"`                                          | Status indicating that the transaction failed |
+   | `returnData` | `bytes`                                          | Transactions return data                      |
+   | `gasUsed`    | `uint64`                                         | Gas used by the transaction                   |
+   | `error`      | `{ code: uint64, message: string, data: bytes }` | Error code, data and message                  |
+
+On success:
+   | Field        | Type              | Description                                      |
+   | :----------- | :---------------- | :----------------------------------------------- |
+   | `status`     | `"0x1"`           | Status indicating that the transaction succeeded |
+   | `returnData` | `bytes`           | Transactions return data                         |
+   | `gasUsed`    | `uint64`          | Gas used by the transaction                      |
+   | `logs`       | `CallResultLog[]` | Error code and message                           |
+
+the `CallResultLog` is object of form:
+   | Field              | Type        | Description                                                                                                                                |
+   | :----------------- | :---------- | :----------------------------------------------------------------------------------------------------------------------------------------- |
+   | `logIndex`         | `uint256`   | Log index                                                                                                                                  |
+   | `blockHash`        | `hash32`    | Block hash                                                                                                                                 |
+   | `blockNumber`      | `uint64`    | Block number                                                                                                                               |
+   | `transactionHash`  | `hash32`    | Transaction hash                                                                                                                           |
+   | `transactionIndex` | `uint256`   | Transaction index                                                                                                                          |
+   | `address`          | `address`   | Contract that sent the log. When trace transfers is enabled, this field is `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` for ETH transfers. |
+   | `data`             | `bytes`     | Event data                                                                                                                                 |
+   | `topics`           | `bytes32[]` | Array of topics                                                                                                                            |
+ 
+**Example:**
+Here's an simple `eth_simulateV1` call that sets blocks `baseFeePerGas` to `9`, gives us `0.00000002` ETH and then we send ETH to two addresses. You can find that the output has two logs produced by these ETH sends. This is because we have set `traceTransfers` to true.
+```json
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "eth_simulateV1",
+    "params": [
+        {
+            "blockStateCalls": [
+                {
+                    "blockOverrides": {
+                        "baseFeePerGas": "0x9"
+                    },
+                    "stateOverrides": {
+                        "0xc000000000000000000000000000000000000000": {
+                            "balance": "0x4a817c800"
+                        }
+                    },
+                    "calls": [
+                        {
+                            "from": "0xc000000000000000000000000000000000000000",
+                            "to": "0xc000000000000000000000000000000000000001",
+                            "maxFeePerGas": "0xf",
+                            "value": "0x1"
+                        },
+                        {
+                            "from": "0xc000000000000000000000000000000000000000",
+                            "to": "0xc000000000000000000000000000000000000002",
+                            "maxFeePerGas": "0xf",
+                            "value": "0x1"
+                        }
+                    ]
+                }
+            ],
+            "validation": true,
+            "traceTransfers": true
+        },
+        "latest"
+    ]
+}
+```
+
+**Example response:**
+```json
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": [
+        {
+            "baseFeePerGas": "0x9",
+            "blobGasUsed": "0x0",
+            "calls": [
+                {
+                    "returnData": "0x",
+                    "logs": [
+                        {
+                            "address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                            "topics": [
+                                "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                                "0x000000000000000000000000c000000000000000000000000000000000000000",
+                                "0x000000000000000000000000c000000000000000000000000000000000000001"
+                            ],
+                            "data": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                            "blockNumber": "0x13d2747",
+                            "transactionHash": "0xe7217784e0c3f7b35d39303b1165046e9b7e8af9b9cf80d5d5f96c3163de8f51",
+                            "transactionIndex": "0x0",
+                            "blockHash": "0x5e28f54a56dc9df973a058cd54b3eeef8c67a1a613cb5db1df8a0a434c931d56",
+                            "logIndex": "0x0",
+                            "removed": false
+                        }
+                    ],
+                    "gasUsed": "0x5208",
+                    "status": "0x1"
+                },
+                {
+                    "returnData": "0x",
+                    "logs": [
+                        {
+                            "address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                            "topics": [
+                                "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+                                "0x000000000000000000000000c000000000000000000000000000000000000000",
+                                "0x000000000000000000000000c000000000000000000000000000000000000002"
+                            ],
+                            "data": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                            "blockNumber": "0x13d2747",
+                            "transactionHash": "0xf0182201606ec03701ba3a07d965fabdb4b7d06b424f226ea7ec3581802fc6fa",
+                            "transactionIndex": "0x1",
+                            "blockHash": "0x5e28f54a56dc9df973a058cd54b3eeef8c67a1a613cb5db1df8a0a434c931d56",
+                            "logIndex": "0x1",
+                            "removed": false
+                        }
+                    ],
+                    "gasUsed": "0x5208",
+                    "status": "0x1"
+                }
+            ],
+            "difficulty": "0x0",
+            "excessBlobGas": "0x0",
+            "extraData": "0x",
+            "gasLimit": "0x1c9c380",
+            "gasUsed": "0xa410",
+            "hash": "0x5e28f54a56dc9df973a058cd54b3eeef8c67a1a613cb5db1df8a0a434c931d56",
+            "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "miner": "0x4838b106fce9647bdf1e7877bf73ce8b0bad5f97",
+            "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "nonce": "0x0000000000000000",
+            "number": "0x13d2747",
+            "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+            "parentHash": "0xd24222b93a05a066cf79dc20e333f5aa6bb06d36eb50eb2b6b0b744b937e7975",
+            "receiptsRoot": "0x75308898d571eafb5cd8cde8278bf5b3d13c5f6ec074926de3bb895b519264e1",
+            "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "size": "0x298",
+            "stateRoot": "0xbb0740745211507e2a2a6cdb627dfa171ef5050ad2a01e5401c2e3df4be5b919",
+            "timestamp": "0x66ec2853",
+            "totalDifficulty": "0xc70d815d562d3cfa955",
+            "transactions": [
+                "0xe7217784e0c3f7b35d39303b1165046e9b7e8af9b9cf80d5d5f96c3163de8f51",
+                "0xf0182201606ec03701ba3a07d965fabdb4b7d06b424f226ea7ec3581802fc6fa"
+            ],
+            "transactionsRoot": "0x9bdb74f3ce41f5893a02a631e904ae0d21ae8c4e416786d8dbd9cb5c54f1dc0f",
+            "uncles": [],
+            "withdrawals": [],
+            "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+        }
+    ]
+}
+```
+
 ### eth_subscribe, eth_unsubscribe {#eth-subscribe-unsubscribe}
 
 These methods are used for real-time events through subscriptions. See the [subscription documentation](/docs/interacting-with-geth/rpc/pubsub) for more information.
