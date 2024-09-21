@@ -1307,7 +1307,6 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.IsSet(MinerEtherbaseFlag.Name) {
 		log.Warn("Option --miner.etherbase is deprecated as the etherbase is set by the consensus client post-merge")
-		return
 	}
 	if !ctx.IsSet(MinerPendingFeeRecipientFlag.Name) {
 		return
