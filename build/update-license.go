@@ -386,7 +386,10 @@ func writeLicense(info *info) {
 	}
 	// Construct new file content.
 	buf := new(bytes.Buffer)
-	licenseT.Execute(buf, info)
+	err = licenseT.Execute(buf, info)
+	if err != nil {
+		log.Fatalf("error applying template %s: %v\n", info.file, err)
+	}
 	if m := licenseCommentRE.FindIndex(content); m != nil && m[0] == 0 {
 		buf.Write(content[:m[0]])
 		buf.Write(content[m[1]:])
