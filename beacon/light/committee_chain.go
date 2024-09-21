@@ -77,7 +77,6 @@ type CommitteeChain struct {
 	sigVerifier committeeSigVerifier // BLS sig verifier (dummy verifier in tests)
 
 	config             *types.ChainConfig
-	signerThreshold    int
 	minimumUpdateScore types.UpdateScore
 	enforceTime        bool // enforceTime specifies whether the age of a signed header should be checked
 }
@@ -96,14 +95,13 @@ func NewTestCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, si
 // clock source and signature verification for testing purposes.
 func newCommitteeChain(db ethdb.KeyValueStore, config *types.ChainConfig, signerThreshold int, enforceTime bool, sigVerifier committeeSigVerifier, clock mclock.Clock, unixNano func() int64) *CommitteeChain {
 	s := &CommitteeChain{
-		committeeCache:  lru.NewCache[uint64, syncCommittee](10),
-		db:              db,
-		sigVerifier:     sigVerifier,
-		clock:           clock,
-		unixNano:        unixNano,
-		config:          config,
-		signerThreshold: signerThreshold,
-		enforceTime:     enforceTime,
+		committeeCache: lru.NewCache[uint64, syncCommittee](10),
+		db:             db,
+		sigVerifier:    sigVerifier,
+		clock:          clock,
+		unixNano:       unixNano,
+		config:         config,
+		enforceTime:    enforceTime,
 		minimumUpdateScore: types.UpdateScore{
 			SignerCount:    uint32(signerThreshold),
 			SubPeriodIndex: params.SyncPeriodLength / 16,
