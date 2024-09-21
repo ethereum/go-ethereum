@@ -43,6 +43,12 @@ type MockStorage struct {
 	Db map[string][]byte
 }
 
+func NewMockStorage() ContentStorage {
+	return &MockStorage{
+		Db: make(map[string][]byte),
+	}
+}
+
 func (m *MockStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
 	if content, ok := m.Db[string(contentId)]; ok {
 		return content, nil
