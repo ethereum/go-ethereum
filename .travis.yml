@@ -48,7 +48,8 @@ jobs:
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
-        - rm /Users/travis/gopath/bin/go && ln -s /Users/travis/gopath/bin/go1.23.1 /Users/travis/gopath/bin/go && go version
+        - ln -sf /Users/travis/gopath/bin/go1.23.1 /Users/travis/gopath/bin/go
+        - ln -sf /Users/travis/gopath/bin/go1.23.1 /usr/local/bin/go
         - command -v go
         - $(command -v go) version
         - ls -la `command -v go`
