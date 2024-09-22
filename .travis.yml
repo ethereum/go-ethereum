@@ -85,12 +85,13 @@ jobs:
       if: type = push
       os: osx
       osx_image: xcode14.2
-      go: 1.23.x
+      go: 1.23.1 # See https://github.com/ethereum/go-ethereum/pull/30478
       env:
         - azure-osx
       git:
         submodules: false # avoid cloning ethereum/tests
       script:
+        - ln -sf /Users/travis/gopath/bin/go1.23.1 /usr/local/bin/go # Work around travis go-setup bug
         - go run build/ci.go install -dlgo
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -signify SIGNIFY_KEY -upload gethstore/builds
         - go run build/ci.go install -dlgo -arch arm64
