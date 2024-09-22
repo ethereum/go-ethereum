@@ -34,6 +34,7 @@ jobs:
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
+        - ls -la /Users/travis/gopath/bin/
         - go version
 
 
