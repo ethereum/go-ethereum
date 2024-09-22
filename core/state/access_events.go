@@ -28,8 +28,8 @@ import (
 
 // mode specifies how a tree location has been accessed
 // for the byte value:
-// * the first bit is set if the branch has been edited
-// * the second bit is set if the branch has been read
+// * the first bit is set if the branch has been read
+// * the second bit is set if the branch has been edited
 type mode byte
 
 const (
