@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -199,4 +200,11 @@ var (
 	HistoryStorageAddress = common.HexToAddress("0x0aae40965e6800cd9b1f4b05ff21581047e3f91e")
 	// HistoryStorageCode is the code with getters for historical block hashes.
 	HistoryStorageCode = common.FromHex("3373fffffffffffffffffffffffffffffffffffffffe1460575767ffffffffffffffff5f3511605357600143035f3511604b575f35612000014311604b57611fff5f3516545f5260205ff35b5f5f5260205ff35b5f5ffd5b5f35611fff60014303165500")
+)
+
+// [EIP-7708](https://eips.ethereum.org/EIPS/eip-7708) specific params
+var (
+	LogNativeTransferTopicMagic = common.BytesToHash(crypto.Keccak256([]byte("0000000000000000000000000000000000000000000000000000000000000000")))
+	// Proposed here: https://ethereum-magicians.org/t/eip-7708-eth-transfers-emit-a-log/20034/25
+	LogNativeTransferContractAddress = common.HexToAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
 )

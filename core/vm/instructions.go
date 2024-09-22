@@ -328,7 +328,7 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 		return nil, ErrReturnDataOutOfBounds
 	}
 	// we can reuse dataOffset now (aliasing it for clarity)
-	var end = dataOffset
+	end := dataOffset
 	end.Add(&dataOffset, &length)
 	end64, overflow := end.Uint64WithOverflow()
 	if overflow || uint64(len(interpreter.returnData)) < end64 {
@@ -899,6 +899,16 @@ func opSelfdestruct(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	beneficiary := scope.Stack.pop()
 	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
+
+	if shouldLogNonZeroNativeTransfers := balance.Sign() > 0 && interpreter.evm.chainRules.IsEIP7708; shouldLogNonZeroNativeTransfers {
+		interpreter.evm.StateDB.AddLog(&types.Log{
+			Address:     params.LogNativeTransferContractAddress,
+			Topics:      []common.Hash{params.LogNativeTransferTopicMagic, common.BytesToHash(scope.Contract.Address().Bytes()), common.BytesToHash(scope.Caller().Bytes())},
+			Data:        balance.Bytes(),
+			BlockNumber: interpreter.evm.Context.BlockNumber.Uint64(),
+		})
+	}
+
 	interpreter.evm.StateDB.SelfDestruct(scope.Contract.Address())
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {
@@ -919,6 +929,16 @@ func opSelfdestruct6780(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCon
 	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
 	interpreter.evm.StateDB.SubBalance(scope.Contract.Address(), balance, tracing.BalanceDecreaseSelfdestruct)
 	interpreter.evm.StateDB.AddBalance(beneficiary.Bytes20(), balance, tracing.BalanceIncreaseSelfdestruct)
+
+	if shouldLogNonZeroNativeTransfers := balance.Sign() > 0 && interpreter.evm.chainRules.IsEIP7708; shouldLogNonZeroNativeTransfers {
+		interpreter.evm.StateDB.AddLog(&types.Log{
+			Address:     params.LogNativeTransferContractAddress,
+			Topics:      []common.Hash{params.LogNativeTransferTopicMagic, common.BytesToHash(scope.Contract.Address().Bytes()), common.BytesToHash(scope.Caller().Bytes())},
+			Data:        balance.Bytes(),
+			BlockNumber: interpreter.evm.Context.BlockNumber.Uint64(),
+		})
+	}
+
 	interpreter.evm.StateDB.Selfdestruct6780(scope.Contract.Address())
 	if tracer := interpreter.evm.Config.Tracer; tracer != nil {
 		if tracer.OnEnter != nil {

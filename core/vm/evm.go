@@ -205,7 +205,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
+
 	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
+	if shouldLogNonZeroNativeTransfers := value.Sign() > 0 && evm.chainRules.IsEIP7708; shouldLogNonZeroNativeTransfers {
+		evm.StateDB.AddLog(&types.Log{
+			Address:     params.LogNativeTransferContractAddress,
+			Topics:      []common.Hash{params.LogNativeTransferTopicMagic, common.BytesToHash(caller.Address().Bytes()), common.BytesToHash(addr.Bytes())},
+			Data:        value.Bytes(),
+			BlockNumber: evm.Context.BlockNumber.Uint64(),
+		})
+	}
 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
@@ -213,15 +222,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		code := evm.StateDB.GetCode(addr)
-		if witness := evm.StateDB.Witness(); witness != nil {
-			witness.AddCode(code)
-		}
-		if len(code) == 0 {
+		// Call is to contract if "there is contract code", if not it's just
+		// transfer to EOA (Externally owned account)
+		if isToEOA := len(code) == 0; isToEOA {
 			ret, err = nil, nil // gas is unchanged
 		} else {
+			if witness := evm.StateDB.Witness(); witness != nil {
+				witness.AddCode(code)
+			}
+
 			addrCopy := addr
-			// If the account has no code, we can abort here
-			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
 			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
 			ret, err = evm.interpreter.Run(contract, input, false)
@@ -273,7 +283,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -324,7 +334,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -373,7 +383,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
-	var snapshot = evm.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
