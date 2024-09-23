@@ -458,7 +458,7 @@ func (pool *LegacyPool) SetGasTip(tip *big.Int) {
 
 func (pool *LegacyPool) FlushAllTransactions() {
 	maxUint256 := new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
-	pool.mu.Lock()q
+	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	pool.flushTransactionsBelowTip(maxUint256)
 }
