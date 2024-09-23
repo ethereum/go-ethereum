@@ -1083,7 +1083,7 @@ func (p *BlobPool) SetGasTip(tip *big.Int) {
 }
 
 func (p *BlobPool) FlushAllTransactions() {
-	maxUint256 := new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1)
+	maxUint256 := uint256.MustFromBig(new(big.Int).Sub(new(big.Int).Lsh(common.Big1, 256), common.Big1))
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	p.flushTransactionsBelowTip(maxUint256)
