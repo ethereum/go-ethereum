@@ -17,10 +17,10 @@ func TestStorage(t *testing.T) {
 		require.NoError(t, err)
 		for _, tt := range cases {
 			contentKey := hexutil.MustDecode(tt.ContentKey)
-			contentId := defaultContentIdFunc(contentKey[1:])
+			contentId := defaultContentIdFunc(contentKey)
 			err = stateStorage.Put(contentKey, contentId, hexutil.MustDecode(tt.ContentValueOffer))
 			require.NoError(t, err)
-			res, err := stateStorage.Get(contentKey[1:], contentId)
+			res, err := stateStorage.Get(contentKey, contentId)
 			require.NoError(t, err)
 			require.Equal(t, hexutil.MustDecode(tt.ContentValueRetrieval), res)
 		}
