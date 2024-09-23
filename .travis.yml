@@ -8,14 +8,8 @@ jobs:
       arch: amd64
       dist: focal
       go: 1.23.x
-      env:
-        - docker
-      services:
-        - docker
       git:
         submodules: false # avoid cloning ethereum/tests
-      before_install:
-        - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
         - go version
 
@@ -24,37 +18,59 @@ jobs:
       os: linux
       arch: arm64
       dist: focal
-      go: 1.23.1
-      env:
-        - docker
-      services:
-        - docker
+      go: 1.23.x
       git:
         submodules: false # avoid cloning ethereum/tests
-      before_install:
-        - export DOCKER_CLI_EXPERIMENTAL=enabled
+      script:
+        - ls -la /Users/travis/gopath/bin/
+        - go version
+
+    - stage: build
+      if: type = push
+      os: linux
+      arch: arm64
+      dist: focal
+      go: 1.23.1
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - ls -la /Users/travis/gopath/bin/
+        - go version
+
+    - stage: build
+      if: type = push
+      os: linux
+      arch: arm64
+      dist: focal
+      go: 1.23.0
+      git:
+        submodules: false # avoid cloning ethereum/tests
+      script:
+        - ls -la /Users/travis/gopath/bin/
+        - go version
+
+    - stage: build
+      if: type = push
+      os: linux
+      arch: arm64
+      dist: focal
+      go: 1.22.7
+      git:
+        submodules: false # avoid cloning ethereum/tests
       script:
         - ls -la /Users/travis/gopath/bin/
         - go version
 
 
-    - stage: build
-      if: type = push
-      os: osx
-      osx_image: xcode14.2
-      go: 1.23.1
-      env:
-        - azure-osx
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      script:
-#        - ln -sf /Users/travis/gopath/bin/go1.23.1 /Users/travis/gopath/bin/go
-        - ln -sf /Users/travis/gopath/bin/go1.23.1 /usr/local/bin/go
- #       - command -v go
-  #      - $(command -v go) version
-   #     - ls -la `command -v go`
-  #      - which go
-  #      - $(which go) version
-   #     - ls -la `which go`
-    #    - which go1.23.1
-        - go version
+#    - stage: build
+#      if: type = push
+#      os: osx
+#      osx_image: xcode14.2
+#      go: 1.23.1
+#      env:
+#        - azure-osx
+#      git:
+#        submodules: false # avoid cloning ethereum/tests
+#      script:
+#        - ln -sf /Users/travis/gopath/bin/go1.23.1 /usr/local/bin/go
+#        - go version
