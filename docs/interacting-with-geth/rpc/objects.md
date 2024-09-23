@@ -22,6 +22,11 @@ The _transaction call object_ contains all the necessary parameters for executin
 | `input`                | `Binary`     | any   | Yes      | Binary data to send to the target contract. Generally the 4 byte hash of the method signature followed by the ABI encoded parameters. For details please see the [Ethereum Contract ABI](https://docs.soliditylang.org/en/v0.7.0/abi-spec.html). This field was previously called `data`. |
 | `accessList`           | `AccessList` | any   | Yes      | A list of addresses and storage keys that the transaction plans to access. Used in non-legacy, i.e. type 1 and 2 transactions.                                                                                                                                                            |
 | `chainId`              | `Quantity`   | <32   | Yes      | Transaction only valid on networks with this chain ID. Used in non-legacy, i.e. type 1 and 2 transactions.                                                                                                                                                                                |
+| `maxFeePerBlobGas`     | `Quantity`   | <32   | Yes      | Max fee per blob gas the transaction should pay in total. Relevant for blob transactions.  |
+| `blobVersionedHashes`  | `Array`      | any   | Yes      | Blob versioned hashes that can be accessed from EVM. They will be validated in case `blobs` also provided. Relevant for blob transactions.       |
+| `blobs`        | `Array`     | any          | Yes   | EIP-4844 Blobs.       |
+| `commitments`  | `Array`     | any          | Yes   | Commitments to EIP-4844 Blobs. They will be generated if only `blobs` are present and validated if both `blobs` and `commitments` are provided.      |
+| `proofs`  | `Array`     | any          | Yes   | Proofs for EIP-4844 Blobs. They must be provided along with `commitments`. Else they will be generated.    |
 
 Example for a legacy transaction:
 
