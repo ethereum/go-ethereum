@@ -54,7 +54,7 @@ var parityErrorMapping = map[string]string{
 }
 
 var parityErrorMappingStartingWith = map[string]string{
-	"out of gas:":     "Out of gas", // this will convert OOG wrapped errors, eg `out of gas: not enough gas for reentrancy sentry` to `Out of gas`
+	"out of gas:":     "Out of gas", // convert OOG wrapped errors, eg `out of gas: not enough gas for reentrancy sentry`
 	"invalid opcode:": "Bad instruction",
 	"stack underflow": "Stack underflow",
 }
