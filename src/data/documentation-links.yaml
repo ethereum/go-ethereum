@@ -72,6 +72,8 @@
           to: /docs/interacting-with-geth/rpc/ns-personal
         - id: txpool
           to: /docs/interacting-with-geth/rpc/ns-txpool
+        - id: Objects
+          to: /docs/interacting-with-geth/rpc/objects
     - id: JS Console
       to: /docs/interacting-with-geth/javascript-console
     - id: 'JS Console 2: Contracts'
