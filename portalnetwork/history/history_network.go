@@ -5,8 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/protolambda/ztyp/codec"
+	"github.com/protolambda/ztyp/view"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -19,10 +22,11 @@ import (
 type ContentType byte
 
 const (
-	BlockHeaderType      ContentType = 0x00
-	BlockBodyType        ContentType = 0x01
-	ReceiptsType         ContentType = 0x02
-	EpochAccumulatorType ContentType = 0x03
+	BlockHeaderType       ContentType = 0x00
+	BlockBodyType         ContentType = 0x01
+	ReceiptsType          ContentType = 0x02
+	BlockHeaderNumberType ContentType = 0x03
+	// EpochAccumulatorType ContentType = 0x03
 )
 
 var (
@@ -33,6 +37,7 @@ var (
 	ErrContentOutOfRange        = errors.New("content out of range")
 	ErrHeaderWithProofIsInvalid = errors.New("header proof is invalid")
 	ErrInvalidBlockHash         = errors.New("invalid block hash")
+	ErrInvalidBlockNumber       = errors.New("invalid block number")
 )
 
 var emptyReceiptHash = hexutil.MustDecode("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
@@ -250,49 +255,49 @@ func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error)
 	return nil, storage.ErrContentNotFound
 }
 
-func (h *HistoryNetwork) GetEpochAccumulator(epochHash []byte) (*EpochAccumulator, error) {
-	contentKey := newContentKey(EpochAccumulatorType, epochHash).encode()
-	contentId := h.portalProtocol.ToContentId(contentKey)
+// func (h *HistoryNetwork) GetEpochAccumulator(epochHash []byte) (*EpochAccumulator, error) {
+// 	contentKey := newContentKey(EpochAccumulatorType, epochHash).encode()
+// 	contentId := h.portalProtocol.ToContentId(contentKey)
 
-	res, err := h.portalProtocol.Get(contentKey, contentId)
-	// other error
-	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
-		return nil, err
-	}
-	// no error
-	if err == nil {
-		epochAccu, err := decodeEpochAccumulator(res)
-		return epochAccu, err
-	}
-	for retries := 0; retries < requestRetries; retries++ {
-		content, _, err := h.portalProtocol.ContentLookup(contentKey, contentId)
-		if err != nil {
-			h.log.Error("getEpochAccumulator failed", "contentKey", hexutil.Encode(contentKey), "err", err)
-			continue
-		}
-		epochAccu, err := decodeEpochAccumulator(content)
-		if err != nil {
-			h.log.Error("decodeEpochAccumulator failed", "content", hexutil.Encode(content), "err", err)
-			continue
-		}
-		hash, err := epochAccu.HashTreeRoot()
-		if err != nil {
-			h.log.Error("hashTreeRoot failed", "err", err)
-			continue
-		}
-		mixHash := MixInLength(hash, epochSize)
-		if !bytes.Equal(mixHash, epochHash) {
-			h.log.Error("epochHash is not equal", "mixHash", hexutil.Encode(mixHash), "epochHash", hexutil.Encode(epochHash))
-			continue
-		}
-		err = h.portalProtocol.Put(contentKey, contentId, content)
-		if err != nil {
-			h.log.Error("failed to store content in getReceipts", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content))
-		}
-		return epochAccu, nil
-	}
-	return nil, storage.ErrContentNotFound
-}
+// 	res, err := h.portalProtocol.Get(contentKey, contentId)
+// 	// other error
+// 	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
+// 		return nil, err
+// 	}
+// 	// no error
+// 	if err == nil {
+// 		epochAccu, err := decodeEpochAccumulator(res)
+// 		return epochAccu, err
+// 	}
+// 	for retries := 0; retries < requestRetries; retries++ {
+// 		content, _, err := h.portalProtocol.ContentLookup(contentKey, contentId)
+// 		if err != nil {
+// 			h.log.Error("getEpochAccumulator failed", "contentKey", hexutil.Encode(contentKey), "err", err)
+// 			continue
+// 		}
+// 		epochAccu, err := decodeEpochAccumulator(content)
+// 		if err != nil {
+// 			h.log.Error("decodeEpochAccumulator failed", "content", hexutil.Encode(content), "err", err)
+// 			continue
+// 		}
+// 		hash, err := epochAccu.HashTreeRoot()
+// 		if err != nil {
+// 			h.log.Error("hashTreeRoot failed", "err", err)
+// 			continue
+// 		}
+// 		mixHash := MixInLength(hash, epochSize)
+// 		if !bytes.Equal(mixHash, epochHash) {
+// 			h.log.Error("epochHash is not equal", "mixHash", hexutil.Encode(mixHash), "epochHash", hexutil.Encode(epochHash))
+// 			continue
+// 		}
+// 		err = h.portalProtocol.Put(contentKey, contentId, content)
+// 		if err != nil {
+// 			h.log.Error("failed to store content in getReceipts", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content))
+// 		}
+// 		return epochAccu, nil
+// 	}
+// 	return nil, storage.ErrContentNotFound
+// }
 
 func (h *HistoryNetwork) verifyHeader(header *types.Header, proof BlockHeaderProof) (bool, error) {
 	return h.masterAccumulator.VerifyHeader(*header, proof)
@@ -534,9 +539,12 @@ func (h *HistoryNetwork) validateContent(contentKey []byte, content []byte) erro
 		if err != nil {
 			return err
 		}
-		header, err := ValidateBlockHeaderBytes(headerWithProof.Header, contentKey[1:])
+		header, err := DecodeBlockHeader(headerWithProof.Header)
 		if err != nil {
 			return err
+		}
+		if !bytes.Equal(header.Hash().Bytes(), contentKey[1:]) {
+			return ErrInvalidBlockHash
 		}
 		valid, err := h.verifyHeader(header, *headerWithProof.Proof)
 		if err != nil {
@@ -566,25 +574,31 @@ func (h *HistoryNetwork) validateContent(contentKey []byte, content []byte) erro
 		}
 		_, err = ValidatePortalReceiptsBytes(content, header.ReceiptHash.Bytes())
 		return err
-	case EpochAccumulatorType:
-		if !h.masterAccumulator.Contains(contentKey[1:]) {
-			return errors.New("epoch hash is not existed")
-		}
-
-		epochAcc, err := decodeEpochAccumulator(content)
+	case BlockHeaderNumberType:
+		headerWithProof, err := DecodeBlockHeaderWithProof(content)
 		if err != nil {
 			return err
 		}
-		hash, err := epochAcc.HashTreeRoot()
+		header, err := DecodeBlockHeader(headerWithProof.Header)
 		if err != nil {
 			return err
 		}
-
-		epochHash := MixInLength(hash, epochSize)
-		if !bytes.Equal(contentKey[1:], epochHash) {
-			return errors.New("epoch accumulator has invalid root hash")
+		blockNumber := view.Uint64View(0)
+		err = blockNumber.Deserialize(codec.NewDecodingReader(bytes.NewReader(contentKey[1:]), uint64(len(contentKey[1:]))))
+		if err != nil {
+			return err
 		}
-		return nil
+		if header.Number.Cmp(big.NewInt(int64(blockNumber))) != 0 {
+			return ErrInvalidBlockNumber
+		}
+		valid, err := h.verifyHeader(header, *headerWithProof.Proof)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return ErrHeaderWithProofIsInvalid
+		}
+		return err
 	}
 	return errors.New("unknown content type")
 }
@@ -612,6 +626,15 @@ func ValidateBlockHeaderBytes(headerBytes []byte, blockHash []byte) (*types.Head
 	hash := header.Hash()
 	if !bytes.Equal(hash[:], blockHash) {
 		return nil, ErrInvalidBlockHash
+	}
+	return header, nil
+}
+
+func DecodeBlockHeader(headerBytes []byte) (*types.Header, error) {
+	header := new(types.Header)
+	err := rlp.DecodeBytes(headerBytes, header)
+	if err != nil {
+		return nil, err
 	}
 	return header, nil
 }

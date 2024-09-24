@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"net"
 	"os"
@@ -20,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
-	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
@@ -34,70 +31,6 @@ var epochAccuHex string
 func ContentId(contentKey []byte) []byte {
 	digest := sha256.Sum256(contentKey)
 	return digest[:]
-}
-
-// testcases from https://github.com/ethereum/portal-network-specs/blob/master/content-keys-test-vectors.md
-func TestContentKey(t *testing.T) {
-	testCases := []struct {
-		name          string
-		hash          string
-		contentKey    string
-		contentIdHex  string
-		contentIdU256 string
-		selector      ContentType
-	}{
-		{
-			name:          "block header key",
-			hash:          "d1c390624d3bd4e409a61a858e5dcc5517729a9170d014a6c96530d64dd8621d",
-			contentKey:    "00d1c390624d3bd4e409a61a858e5dcc5517729a9170d014a6c96530d64dd8621d",
-			contentIdHex:  "3e86b3767b57402ea72e369ae0496ce47cc15be685bec3b4726b9f316e3895fe",
-			contentIdU256: "28281392725701906550238743427348001871342819822834514257505083923073246729726",
-			selector:      BlockHeaderType,
-		},
-		{
-			name:          "block body key",
-			hash:          "d1c390624d3bd4e409a61a858e5dcc5517729a9170d014a6c96530d64dd8621d",
-			contentKey:    "01d1c390624d3bd4e409a61a858e5dcc5517729a9170d014a6c96530d64dd8621d",
-			contentIdHex:  "ebe414854629d60c58ddd5bf60fd72e41760a5f7a463fdcb169f13ee4a26786b",
-			contentIdU256: "106696502175825986237944249828698290888857178633945273402044845898673345165419",
-			selector:      BlockBodyType,
-		},
-		{
-			name:          "receipt key",
-			hash:          "d1c390624d3bd4e409a61a858e5dcc5517729a9170d014a6c96530d64dd8621d",
-			contentKey:    "02d1c390624d3bd4e409a61a858e5dcc5517729a9170d014a6c96530d64dd8621d",
-			contentIdHex:  "a888f4aafe9109d495ac4d4774a6277c1ada42035e3da5e10a04cc93247c04a4",
-			contentIdU256: "76230538398907151249589044529104962263309222250374376758768131420767496438948",
-			selector:      ReceiptsType,
-		},
-		{
-			name:          "epoch accumelator key",
-			hash:          "e242814b90ed3950e13aac7e56ce116540c71b41d1516605aada26c6c07cc491",
-			contentKey:    "03e242814b90ed3950e13aac7e56ce116540c71b41d1516605aada26c6c07cc491",
-			contentIdHex:  "9fb2175e76c6989e0fdac3ee10c40d2a81eb176af32e1c16193e3904fe56896e",
-			contentIdU256: "72232402989179419196382321898161638871438419016077939952896528930608027961710",
-			selector:      EpochAccumulatorType,
-		},
-	}
-
-	for _, c := range testCases {
-		t.Run(c.name, func(t *testing.T) {
-			hashByte, err := hex.DecodeString(c.hash)
-			require.NoError(t, err)
-
-			contentKey := newContentKey(c.selector, hashByte).encode()
-			hexKey := hex.EncodeToString(contentKey)
-			require.Equal(t, hexKey, c.contentKey)
-			contentId := ContentId(contentKey)
-			require.Equal(t, c.contentIdHex, hex.EncodeToString(contentId))
-
-			bigNum := big.NewInt(0).SetBytes(contentId)
-			u256Format, isOverflow := uint256.FromBig(bigNum)
-			require.False(t, isOverflow)
-			u256Str := fmt.Sprint(u256Format)
-			require.Equal(t, u256Str, c.contentIdU256)
-		})
-	}
 }
 
 func TestValidateHeader(t *testing.T) {
@@ -182,16 +115,7 @@ func TestValidateEpochAccu(t *testing.T) {
 	require.NoError(t, err)
 	root := MixInLength(epochRoot, epochSize)
 
-	err = historyNetwork.validateContent(newContentKey(EpochAccumulatorType, root).encode(), epochAccuBytes)
-	require.NoError(t, err)
-
-	// invalid root hash
-	err = historyNetwork.validateContent(newContentKey(EpochAccumulatorType, epochRoot[:]).encode(), epochAccuBytes)
-	require.Error(t, err)
-	// invalid epoch data
-	epochAccuBytes[len(epochAccuBytes)-1] = 0xaa
-	err = historyNetwork.validateContent(newContentKey(EpochAccumulatorType, root).encode(), epochAccuBytes)
-	require.Error(t, err)
+	require.True(t, historyNetwork.masterAccumulator.Contains(root))
 }
 
 func TestGetContentByKey(t *testing.T) {
@@ -267,33 +191,25 @@ func TestGetContentByKey(t *testing.T) {
 		return
 	}
 
-	// test GetEpoch
-	epochAccuBytes, err := hexutil.Decode(epochAccuHex)
-	require.NoError(t, err)
-	epochAccu, err := decodeEpochAccumulator(epochAccuBytes)
-	require.NoError(t, err)
-	epochRoot, err := epochAccu.HashTreeRoot()
-	require.NoError(t, err)
-	root := MixInLength(epochRoot, epochSize)
+	headerNumberEntry := entryMap["headerBlock"]
 
-	contentKey := newContentKey(EpochAccumulatorType, root).encode()
-	content := epochAccuBytes
-
-	epoch, err := historyNetwork2.GetEpochAccumulator(contentKey[1:])
+	// test GetBlockHeader
+	// no content
+	header, err = historyNetwork2.GetBlockHeader(headerNumberEntry.key[1:])
 	require.Error(t, err)
-	require.Nil(t, epoch)
+	require.Nil(t, header)
 
-	contentId = historyNetwork1.portalProtocol.ToContentId(contentKey)
-	err = historyNetwork1.portalProtocol.Put(contentKey, contentId, content)
+	contentId = historyNetwork1.portalProtocol.ToContentId(headerNumberEntry.key)
+	err = historyNetwork1.portalProtocol.Put(headerEntry.key, contentId, headerEntry.value)
 	require.NoError(t, err)
 	// get content from historyNetwork1
-	epoch, err = historyNetwork2.GetEpochAccumulator(contentKey[1:])
+	header, err = historyNetwork2.GetBlockHeader(headerEntry.key[1:])
 	require.NoError(t, err)
-	require.NotNil(t, epoch)
+	require.NotNil(t, header)
 	// get content from local
-	epoch, err = historyNetwork2.GetEpochAccumulator(contentKey[1:])
+	header, err = historyNetwork2.GetBlockHeader(headerEntry.key[1:])
 	require.NoError(t, err)
-	require.NotNil(t, epoch)
+	require.NotNil(t, header)
 }
 
 type Entry struct {

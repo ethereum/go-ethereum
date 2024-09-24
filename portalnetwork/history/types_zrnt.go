@@ -4,6 +4,7 @@ import (
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/ztyp/codec"
 	"github.com/protolambda/ztyp/tree"
+	"github.com/protolambda/ztyp/view"
 )
 
 const beaconBlockBodyProofLen = 8
@@ -193,3 +194,5 @@ func (h HistoricalRoots) HashTreeRoot(spec *common.Spec, hFn tree.HashFn) common
 		return nil
 	}, length, uint64(spec.HISTORICAL_ROOTS_LIMIT))
 }
+
+type BlockNumberKey view.Uint64View
