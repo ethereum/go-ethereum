@@ -468,6 +468,16 @@ func (p *PortalProtocolAPI) RecursiveFindContent(contentKeyHex string) (*Content
 		return nil, err
 	}
 	contentId := p.portalProtocol.toContentId(contentKey)
+
+	data, err := p.portalProtocol.Get(contentKey, contentId)
+	if err == nil {
+		return &ContentInfo{
+			Content:     hexutil.Encode(data),
+			UtpTransfer: false,
+		}, err
+	}
+	p.portalProtocol.Log.Warn("find content err", "contextKey", hexutil.Encode(contentKey), "err", err)
+
 	content, utpTransfer, err := p.portalProtocol.ContentLookup(contentKey, contentId)
 
 	if err != nil {

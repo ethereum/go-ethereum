@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
@@ -120,6 +121,7 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 
 // Get the content according to the contentId
 func (p *ContentStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
+	p.log.Trace("get content", "contentKey", hexutil.Encode(contentKey), "contentId", hexutil.Encode(contentId))
 	var res []byte
 	err := p.getStmt.QueryRow(contentId).Scan(&res)
 	if errors.Is(err, sql.ErrNoRows) {
