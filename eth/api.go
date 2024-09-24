@@ -254,6 +254,32 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	return true, nil
 }
 
+// SetRollupEventSyncedL1Height sets the synced L1 height for rollup event synchronization
+func (api *PrivateAdminAPI) SetRollupEventSyncedL1Height(height uint64) error {
+	rollupSyncService := api.eth.GetRollupSyncService()
+	if rollupSyncService == nil {
+		return errors.New("RollupSyncService is not available")
+	}
+
+	log.Info("Setting rollup event synced L1 height", "height", height)
+	rollupSyncService.ResetStartSyncHeight(height)
+
+	return nil
+}
+
+// SetL1MessageSyncedL1Height sets the synced L1 height for L1 message synchronization
+func (api *PrivateAdminAPI) SetL1MessageSyncedL1Height(height uint64) error {
+	syncService := api.eth.GetSyncService()
+	if syncService == nil {
+		return errors.New("SyncService is not available")
+	}
+
+	log.Info("Setting L1 message synced L1 height", "height", height)
+	syncService.ResetStartSyncHeight(height)
+
+	return nil
+}
+
 // PublicDebugAPI is the collection of Ethereum full node APIs exposed
 // over the public debugging endpoint.
 type PublicDebugAPI struct {

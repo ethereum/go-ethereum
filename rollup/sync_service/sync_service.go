@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/scroll-tech/go-ethereum/core"
@@ -50,6 +51,7 @@ type SyncService struct {
 	pollInterval         time.Duration
 	latestProcessedBlock uint64
 	scope                event.SubscriptionScope
+	stateMu              sync.Mutex
 }
 
 func NewSyncService(ctx context.Context, genesisConfig *params.ChainConfig, nodeConfig *node.Config, db ethdb.Database, l1Client EthClient) (*SyncService, error) {
@@ -139,6 +141,19 @@ func (s *SyncService) Stop() {
 	}
 }
 
+// ResetStartSyncHeight resets the SyncService to a specific L1 block height
+func (s *SyncService) ResetStartSyncHeight(height uint64) {
+	if s == nil {
+		return
+	}
+
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
+	s.latestProcessedBlock = height
+	log.Info("Reset sync service", "height", height)
+}
+
 // SubscribeNewL1MsgsEvent registers a subscription of NewL1MsgsEvent and
 // starts sending event to the given channel.
 func (s *SyncService) SubscribeNewL1MsgsEvent(ch chan<- core.NewL1MsgsEvent) event.Subscription {
@@ -146,6 +161,9 @@ func (s *SyncService) SubscribeNewL1MsgsEvent(ch chan<- core.NewL1MsgsEvent) eve
 }
 
 func (s *SyncService) fetchMessages() {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
 	latestConfirmed, err := s.client.getLatestConfirmedBlockNumber(s.ctx)
 	if err != nil {
 		log.Warn("Failed to get latest confirmed block number", "err", err)

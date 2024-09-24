@@ -190,6 +190,16 @@ web3._extend({
 			name: 'stopWS',
 			call: 'admin_stopWS'
 		}),
+		new web3._extend.Method({
+			name: 'setRollupEventSyncedL1Height',
+			call: 'admin_setRollupEventSyncedL1Height',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'setL1MessageSyncedL1Height',
+			call: 'admin_setL1MessageSyncedL1Height',
+			params: 1
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

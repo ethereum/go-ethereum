@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/scroll-tech/da-codec/encoding"
@@ -63,6 +64,7 @@ type RollupSyncService struct {
 	l1FinalizeBatchEventSignature common.Hash
 	bc                            *core.BlockChain
 	stack                         *node.Node
+	stateMu                       sync.Mutex
 }
 
 func NewRollupSyncService(ctx context.Context, genesisConfig *params.ChainConfig, db ethdb.Database, l1Client sync_service.EthClient, bc *core.BlockChain, stack *node.Node) (*RollupSyncService, error) {
@@ -157,7 +159,23 @@ func (s *RollupSyncService) Stop() {
 	}
 }
 
+// ResetStartSyncHeight resets the RollupSyncService to a specific L1 block height
+func (s *RollupSyncService) ResetStartSyncHeight(height uint64) {
+	if s == nil {
+		return
+	}
+
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
+	s.latestProcessedBlock = height
+	log.Info("Reset sync service", "height", height)
+}
+
 func (s *RollupSyncService) fetchRollupEvents() {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
 	latestConfirmed, err := s.client.getLatestFinalizedBlockNumber()
 	if err != nil {
 		log.Warn("failed to get latest confirmed block number", "err", err)

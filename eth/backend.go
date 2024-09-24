@@ -609,3 +609,15 @@ func (s *Ethereum) Stop() error {
 
 	return nil
 }
+
+// GetRollupSyncService returns the RollupSyncService of the Ethereum instance.
+// It returns nil if the service is not initialized.
+func (e *Ethereum) GetRollupSyncService() *rollup_sync_service.RollupSyncService {
+	return e.rollupSyncService
+}
+
+// GetSyncService returns the SyncService of the Ethereum instance.
+// It returns nil if the service is not initialized.
+func (e *Ethereum) GetSyncService() *sync_service.SyncService {
+	return e.syncService
+}
