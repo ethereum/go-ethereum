@@ -118,8 +118,7 @@ type stateTestCase struct {
 
 // collectMatchedSubtests returns test cases which match against provided filtering CLI parameters
 func collectMatchedSubtests(ctx *cli.Context, testsByName map[string]tests.StateTest) []stateTestCase {
-	res := []stateTestCase{}
-
+	var res []stateTestCase
 	subtestName := ctx.String(TestNameFlag.Name)
 	if subtestName != "" {
 		if subtest, ok := testsByName[subtestName]; ok {
