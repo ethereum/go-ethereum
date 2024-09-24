@@ -20,10 +20,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/internal/flags"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/internal/flags"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -36,19 +37,19 @@ import (
 
 var (
 	ForkFlag = &cli.StringFlag{
-		Name:     "subtest.fork",
+		Name:     "statetest.fork",
 		Usage:    "The hard-fork to run the test against",
 		Category: flags.VMCategory,
 	}
 	IdxFlag = &cli.IntFlag{
-		Name:     "subtest.index",
+		Name:     "statetest.index",
 		Usage:    "The index of the subtest to run",
 		Category: flags.VMCategory,
 		Value:    -1, // default to select all subtest indices
 	}
 	TestNameFlag = &cli.StringFlag{
-		Name:     "subtest.name",
-		Usage:    "The hard-fork to run the test against",
+		Name:     "statetest.name",
+		Usage:    "The name of the state test to run",
 		Category: flags.VMCategory,
 	}
 )
@@ -157,7 +158,7 @@ func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, benc
 	matchingTests := collectMatchedSubtests(ctx, testsByName)
 
 	// Iterate over all the tests, run them and aggregate the results
-	results := make([]StatetestResult, 0, len(testsByName))
+	var results []StatetestResult
 	for _, test := range matchingTests {
 		// Run the test and aggregate the result
 		result := &StatetestResult{Name: test.name, Fork: test.st.Fork, Pass: true}
