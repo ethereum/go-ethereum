@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
+
 package vm
 
 import "github.com/ethereum/go-ethereum/params"
@@ -29,17 +30,27 @@ func RegisterHooks(h Hooks) {
 var libevmHooks Hooks
 
 // Hooks are arbitrary configuration functions to modify default VM behaviour.
+// See [RegisterHooks].
 type Hooks interface {
 	OverrideNewEVMArgs(*NewEVMArgs) *NewEVMArgs
+	OverrideEVMResetArgs(*EVMResetArgs) *EVMResetArgs
 }
 
-// NewEVMArgs are the arguments received by [NewEVM], available for override.
+// NewEVMArgs are the arguments received by [NewEVM], available for override
+// via [Hooks].
 type NewEVMArgs struct {
 	BlockContext BlockContext
 	TxContext    TxContext
 	StateDB      StateDB
 	ChainConfig  *params.ChainConfig
 	Config       Config
+}
+
+// EVMResetArgs are the arguments received by [EVM.Reset], available for
+// override via [Hooks].
+type EVMResetArgs struct {
+	TxContext TxContext
+	StateDB   StateDB
 }
 
 func overrideNewEVMArgs(
@@ -54,4 +65,12 @@ func overrideNewEVMArgs(
 	}
 	args := libevmHooks.OverrideNewEVMArgs(&NewEVMArgs{blockCtx, txCtx, statedb, chainConfig, config})
 	return args.BlockContext, args.TxContext, args.StateDB, args.ChainConfig, args.Config
+}
+
+func overrideEVMResetArgs(txCtx TxContext, statedb StateDB) (TxContext, StateDB) {
+	if libevmHooks == nil {
+		return txCtx, statedb
+	}
+	args := libevmHooks.OverrideEVMResetArgs(&EVMResetArgs{txCtx, statedb})
+	return args.TxContext, args.StateDB
 }

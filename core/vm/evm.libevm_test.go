@@ -24,13 +24,32 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-type chainIDOverrider struct {
-	chainID int64
+type evmArgOverrider struct {
+	newEVMchainID int64
+
+	resetTxCtx   TxContext
+	resetStateDB StateDB
 }
 
-func (o chainIDOverrider) OverrideNewEVMArgs(args *NewEVMArgs) *NewEVMArgs {
-	args.ChainConfig = &params.ChainConfig{ChainID: big.NewInt(o.chainID)}
+func (o evmArgOverrider) OverrideNewEVMArgs(args *NewEVMArgs) *NewEVMArgs {
+	args.ChainConfig = &params.ChainConfig{ChainID: big.NewInt(o.newEVMchainID)}
 	return args
+}
+
+func (o evmArgOverrider) OverrideEVMResetArgs(*EVMResetArgs) *EVMResetArgs {
+	return &EVMResetArgs{
+		TxContext: o.resetTxCtx,
+		StateDB:   o.resetStateDB,
+	}
+}
+
+func (o evmArgOverrider) register(t *testing.T) {
+	t.Helper()
+	libevmHooks = nil
+	RegisterHooks(o)
+	t.Cleanup(func() {
+		libevmHooks = nil
+	})
 }
 
 func TestOverrideNewEVMArgs(t *testing.T) {
@@ -40,10 +59,27 @@ func TestOverrideNewEVMArgs(t *testing.T) {
 	var _ func(BlockContext, TxContext, StateDB, *params.ChainConfig, Config) *EVM = NewEVM
 
 	const chainID = 13579
-	libevmHooks = nil
-	RegisterHooks(chainIDOverrider{chainID: chainID})
-	defer func() { libevmHooks = nil }()
+	hooks := evmArgOverrider{newEVMchainID: chainID}
+	hooks.register(t)
 
-	got := NewEVM(BlockContext{}, TxContext{}, nil, nil, Config{}).ChainConfig().ChainID
-	require.Equal(t, big.NewInt(chainID), got)
+	evm := NewEVM(BlockContext{}, TxContext{}, nil, nil, Config{})
+	got := evm.ChainConfig().ChainID
+	require.Equalf(t, big.NewInt(chainID), got, "%T.ChainConfig().ChainID set by NewEVM() hook", evm)
+}
+
+func TestOverrideEVMResetArgs(t *testing.T) {
+	// Equivalent to rationale for TestOverrideNewEVMArgs above.
+	var _ func(TxContext, StateDB) = (*EVM)(nil).Reset
+
+	const gasPrice = 1357924680
+	hooks := evmArgOverrider{
+		resetTxCtx: TxContext{
+			GasPrice: big.NewInt(gasPrice),
+		},
+	}
+	hooks.register(t)
+
+	evm := NewEVM(BlockContext{}, TxContext{}, nil, nil, Config{})
+	evm.Reset(TxContext{}, nil)
+	require.Equalf(t, big.NewInt(gasPrice), evm.GasPrice, "%T.GasPrice set by Reset() hook", evm)
 }
