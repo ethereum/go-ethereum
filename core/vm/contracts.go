@@ -29,8 +29,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto/blake2b"
 	"github.com/XinFinOrg/XDPoSChain/crypto/bn256"
 	"github.com/XinFinOrg/XDPoSChain/params"
-
-	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
 )
 
