@@ -127,6 +127,10 @@ func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
 }
 
+func (h *Header) NumberU64() uint64 {
+	return h.Number.Uint64()
+}
+
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
 
 // Size returns the approximate memory used by all internal contents. It is used
@@ -400,7 +404,7 @@ func (b *Block) GasUsed() uint64      { return b.header.GasUsed }
 func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
 func (b *Block) Time() uint64         { return b.header.Time }
 
-func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
+func (b *Block) NumberU64() uint64        { return b.header.NumberU64() }
 func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
 func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
 func (b *Block) Bloom() Bloom             { return b.header.Bloom }
