@@ -227,12 +227,12 @@ func TestForkWithBlockTime(t *testing.T) {
 		{
 			name: "No fork after 2 sprints with producer delay = max block time",
 			sprint: map[string]uint64{
-				"0": 128,
+				"0": 16,
 			},
 			blockTime: map[string]uint64{
-				"0":   5,
-				"128": 2,
-				"256": 8,
+				"0":  5,
+				"16": 2,
+				"32": 8,
 			},
 			change: 2,
 			producerDelay: map[string]uint64{
@@ -243,11 +243,11 @@ func TestForkWithBlockTime(t *testing.T) {
 		{
 			name: "No Fork after 1 sprint producer delay = max block time",
 			sprint: map[string]uint64{
-				"0": 64,
+				"0": 16,
 			},
 			blockTime: map[string]uint64{
 				"0":  5,
-				"64": 2,
+				"16": 2,
 			},
 			change: 1,
 			producerDelay: map[string]uint64{
@@ -281,11 +281,11 @@ func TestForkWithBlockTime(t *testing.T) {
 	for i := 0; i < len(faucets); i++ {
 		faucets[i], _ = crypto.GenerateKey()
 	}
-	genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json", 8)
 
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-
+			t.Parallel()
+			genesis := InitGenesis(t, faucets, "./testdata/genesis_2val.json", 8)
 			genesis.Config.Bor.Sprint = test.sprint
 			genesis.Config.Bor.Period = test.blockTime
 			genesis.Config.Bor.BackupMultiplier = test.blockTime
@@ -371,6 +371,7 @@ func TestForkWithBlockTime(t *testing.T) {
 }
 
 func TestInsertingSpanSizeBlocks(t *testing.T) {
+	t.Parallel()
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	fdlimit.Raise(2048)
 
@@ -437,6 +438,7 @@ func TestInsertingSpanSizeBlocks(t *testing.T) {
 }
 
 func TestFetchStateSyncEvents(t *testing.T) {
+	t.Parallel()
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	fdlimit.Raise(2048)
 
@@ -515,6 +517,7 @@ func validateStateSyncEvents(t *testing.T, expected []*clerk.EventRecordWithTime
 }
 
 func TestFetchStateSyncEvents_2(t *testing.T) {
+	t.Parallel()
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	fdlimit.Raise(2048)
 
@@ -620,6 +623,7 @@ func TestFetchStateSyncEvents_2(t *testing.T) {
 }
 
 func TestOutOfTurnSigning(t *testing.T) {
+	t.Parallel()
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	fdlimit.Raise(2048)
 
@@ -717,6 +721,7 @@ func TestOutOfTurnSigning(t *testing.T) {
 }
 
 func TestSignerNotFound(t *testing.T) {
+	t.Parallel()
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, true)))
 	fdlimit.Raise(2048)
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
@@ -989,6 +994,7 @@ func TestEIP1559Transition(t *testing.T) {
 }
 
 func TestBurnContract(t *testing.T) {
+	t.Parallel()
 	var (
 		aa = common.HexToAddress("0x000000000000000000000000000000000000aaaa")
 
@@ -1203,6 +1209,7 @@ func TestBurnContract(t *testing.T) {
 }
 
 func TestBurnContractContractFetch(t *testing.T) {
+	t.Parallel()
 	config := params.BorUnittestChainConfig
 	config.Bor.BurntContract = map[string]string{
 		"10":  "0x000000000000000000000000000000000000aaab",
@@ -1432,6 +1439,7 @@ func TestTransitionWithoutEIP155(t *testing.T) {
 }
 
 func TestJaipurFork(t *testing.T) {
+	t.Parallel()
 	init := buildEthereumInstance(t, rawdb.NewMemoryDatabase())
 	chain := init.ethereum.BlockChain()
 	engine := init.ethereum.Engine()
