@@ -8,7 +8,12 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type ctorFunc func(config json.RawMessage) (*tracing.Hooks, []rpc.API, error)
+// LiveApiRegister is the interface that used to register JSON-RPC APIs
+type LiveApiRegister interface {
+	RegisterAPIs(apis []rpc.API)
+}
+
+type ctorFunc func(config json.RawMessage, stack LiveApiRegister) (*tracing.Hooks, error)
 
 // LiveDirectory is the collection of tracers which can be used
 // during normal block import operations.
@@ -24,9 +29,9 @@ func (d *liveDirectory) Register(name string, f ctorFunc) {
 }
 
 // New instantiates a tracer by name.
-func (d *liveDirectory) New(name string, config json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
+func (d *liveDirectory) New(name string, config json.RawMessage, stack LiveApiRegister) (*tracing.Hooks, error) {
 	if f, ok := d.elems[name]; ok {
-		return f(config)
+		return f(config, stack)
 	}
-	return nil, nil, errors.New("not found")
+	return nil, errors.New("not found")
 }

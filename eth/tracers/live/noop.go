@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 func init() {
@@ -22,7 +21,7 @@ func init() {
 // as soon as we have a real live tracer.
 type noop struct{}
 
-func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
+func newNoopTracer(_ json.RawMessage, _ tracers.LiveApiRegister) (*tracing.Hooks, error) {
 	t := &noop{}
 	return &tracing.Hooks{
 		OnTxStart:        t.OnTxStart,
@@ -42,7 +41,7 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 		OnCodeChange:     t.OnCodeChange,
 		OnStorageChange:  t.OnStorageChange,
 		OnLog:            t.OnLog,
-	}, nil, nil
+	}, nil
 }
 
 func (t *noop) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {

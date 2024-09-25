@@ -2192,7 +2192,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
 				config = json.RawMessage(ctx.String(VMTraceJsonConfigFlag.Name))
 			}
-			t, _, err := tracers.LiveDirectory.New(name, config)
+			t, err := tracers.LiveDirectory.New(name, config, stack)
 			if err != nil {
 				Fatalf("Failed to create tracer %q: %v", name, err)
 			}

@@ -197,7 +197,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateScheme:         scheme,
 		}
 		liveTracer *tracing.Hooks
-		liveAPIs   []rpc.API
 	)
 	if config.VMTrace != "" {
 		var traceConfig json.RawMessage
@@ -205,7 +204,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			traceConfig = json.RawMessage(config.VMTraceJsonConfig)
 		}
 		var err error
-		liveTracer, liveAPIs, err = tracers.LiveDirectory.New(config.VMTrace, traceConfig)
+		liveTracer, err = tracers.LiveDirectory.New(config.VMTrace, traceConfig, stack)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tracer %s: %v", config.VMTrace, err)
 		}
@@ -275,9 +274,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Set live tracer's backend and register the live tracer APIs
 	if liveTracer != nil {
 		liveTracer.SetBackend(eth.APIBackend)
-		if liveAPIs != nil {
-			stack.RegisterAPIs(liveAPIs)
-		}
 	}
 
 	// Successful startup; push a marker and check previous unclean shutdowns.

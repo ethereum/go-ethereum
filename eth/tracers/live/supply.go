@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -75,15 +74,15 @@ type supplyTracerConfig struct {
 	MaxSize int    `json:"maxSize"` // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
 }
 
-func newSupply(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
+func newSupply(cfg json.RawMessage, _ tracers.LiveApiRegister) (*tracing.Hooks, error) {
 	var config supplyTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
-			return nil, nil, fmt.Errorf("failed to parse config: %v", err)
+			return nil, fmt.Errorf("failed to parse config: %v", err)
 		}
 	}
 	if config.Path == "" {
-		return nil, nil, errors.New("supply tracer output path is required")
+		return nil, errors.New("supply tracer output path is required")
 	}
 
 	// Store traces in a rotating file
@@ -107,7 +106,7 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, []rpc.API, error) {
 		OnEnter:         t.OnEnter,
 		OnExit:          t.OnExit,
 		OnClose:         t.OnClose,
-	}, nil, nil
+	}, nil
 }
 
 func newSupplyInfo() supplyInfo {
