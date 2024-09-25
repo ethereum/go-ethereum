@@ -294,22 +294,25 @@ func ServiceGetAccountRangeQuery(chain *core.BlockChain, req *GetAccountRangePac
 	for it.Next() {
 		hash, account := it.Hash(), common.CopyBytes(it.Account())
 
+		// Verify response size does not exceed the requested limit
+		size += uint64(common.HashLength + len(account))
+		if size > req.Bytes {
+			break
+		}
+
+		// If we've exceeded the request threshold, abort
+		if bytes.Compare(hash[:], req.Limit[:]) > 0 {
+			break
+		}
+
 		// Track the returned interval for the Merkle proofs
 		last = hash
 
 		// Assemble the reply item
-		size += uint64(common.HashLength + len(account))
 		accounts = append(accounts, &AccountData{
 			Hash: hash,
 			Body: account,
 		})
-		// If we've exceeded the request threshold, abort
-		if bytes.Compare(hash[:], req.Limit[:]) >= 0 {
-			break
-		}
-		if size > req.Bytes {
-			break
-		}
 	}
 	it.Release()
 
