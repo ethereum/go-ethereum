@@ -374,7 +374,6 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, b *testing.
 // BenchmarkSimpleLoop test a pretty simple loop which loops until OOG
 // 55 ms
 func BenchmarkSimpleLoop(b *testing.B) {
-
 	staticCallIdentity := []byte{
 		byte(vm.JUMPDEST), //  [ count ]
 		// push args for the call
