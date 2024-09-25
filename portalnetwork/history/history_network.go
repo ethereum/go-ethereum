@@ -255,50 +255,6 @@ func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error)
 	return nil, storage.ErrContentNotFound
 }
 
-// func (h *HistoryNetwork) GetEpochAccumulator(epochHash []byte) (*EpochAccumulator, error) {
-// 	contentKey := newContentKey(EpochAccumulatorType, epochHash).encode()
-// 	contentId := h.portalProtocol.ToContentId(contentKey)
-
-// 	res, err := h.portalProtocol.Get(contentKey, contentId)
-// 	// other error
-// 	if err != nil && !errors.Is(err, storage.ErrContentNotFound) {
-// 		return nil, err
-// 	}
-// 	// no error
-// 	if err == nil {
-// 		epochAccu, err := decodeEpochAccumulator(res)
-// 		return epochAccu, err
-// 	}
-// 	for retries := 0; retries < requestRetries; retries++ {
-// 		content, _, err := h.portalProtocol.ContentLookup(contentKey, contentId)
-// 		if err != nil {
-// 			h.log.Error("getEpochAccumulator failed", "contentKey", hexutil.Encode(contentKey), "err", err)
-// 			continue
-// 		}
-// 		epochAccu, err := decodeEpochAccumulator(content)
-// 		if err != nil {
-// 			h.log.Error("decodeEpochAccumulator failed", "content", hexutil.Encode(content), "err", err)
-// 			continue
-// 		}
-// 		hash, err := epochAccu.HashTreeRoot()
-// 		if err != nil {
-// 			h.log.Error("hashTreeRoot failed", "err", err)
-// 			continue
-// 		}
-// 		mixHash := MixInLength(hash, epochSize)
-// 		if !bytes.Equal(mixHash, epochHash) {
-// 			h.log.Error("epochHash is not equal", "mixHash", hexutil.Encode(mixHash), "epochHash", hexutil.Encode(epochHash))
-// 			continue
-// 		}
-// 		err = h.portalProtocol.Put(contentKey, contentId, content)
-// 		if err != nil {
-// 			h.log.Error("failed to store content in getReceipts", "contentKey", hexutil.Encode(contentKey), "content", hexutil.Encode(content))
-// 		}
-// 		return epochAccu, nil
-// 	}
-// 	return nil, storage.ErrContentNotFound
-// }
-
 func (h *HistoryNetwork) verifyHeader(header *types.Header, proof BlockHeaderProof) (bool, error) {
 	return h.masterAccumulator.VerifyHeader(*header, proof)
 }
