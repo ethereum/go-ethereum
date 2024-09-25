@@ -1397,3 +1397,53 @@ func TestStorageDirtiness(t *testing.T) {
 	state.RevertToSnapshot(snap)
 	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
 }
+
+func TestStorageDirtiness2(t *testing.T) {
+	var (
+		disk       = rawdb.NewMemoryDatabase()
+		tdb        = triedb.NewDatabase(disk, nil)
+		db         = NewDatabase(tdb, nil)
+		state, _   = New(types.EmptyRootHash, db)
+		addr       = common.HexToAddress("0x1")
+		checkDirty = func(key common.Hash, value common.Hash, dirty bool) {
+			t.Helper()
+			obj := state.getStateObject(addr)
+			v, exist := obj.dirtyStorage[key]
+			if exist != dirty {
+				t.Fatalf("unexpected dirty marker, want: %v, have: %v", dirty, exist)
+			}
+			if !exist {
+				return
+			}
+			if v != value {
+				t.Fatalf("unexpected storage slot, want: %x, have: %x", value, v)
+			}
+		}
+	)
+
+	{ // Initiate a state, where an account has SLOT(1) = 0xA, +nonzero balance
+		state.CreateAccount(addr)
+		state.SetBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified) // Prevent empty-delete
+		state.SetState(addr, common.Hash{0x1}, common.Hash{0xa})
+		root, err := state.Commit(0, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Init phase done, load it again
+		if state, err = New(root, NewDatabase(tdb, nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A no-op storage change, no dirty marker
+	state.SetState(addr, common.Hash{0x1}, common.Hash{0xa})
+	checkDirty(common.Hash{0x1}, common.Hash{0xa}, false)
+
+	// Enter new scope
+	snap := state.Snapshot()
+	state.SetState(addr, common.Hash{0x1}, common.Hash{0xb}) // SLOT(1) = 0xB
+	checkDirty(common.Hash{0x1}, common.Hash{0xb}, true)     // Should be flagged dirty
+	state.RevertToSnapshot(snap)                             // Revert scope
+
+	// the storage change has been set back to original, dirtiness should be revoked
+	checkDirty(common.Hash{0x1}, common.Hash{0x1}, false)
+}
