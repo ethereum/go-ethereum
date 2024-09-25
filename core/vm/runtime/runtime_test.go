@@ -498,7 +498,7 @@ func TestEip2929Cases(t *testing.T) {
 		it := asm.NewInstructionIterator(code)
 		for it.Next() {
 			if it.Arg() != nil && 0 < len(it.Arg()) {
-				instrs = append(instrs, fmt.Sprintf("%v 0x%x", it.Op(), it.Arg()))
+				instrs = append(instrs, fmt.Sprintf("%v %#x", it.Op(), it.Arg()))
 			} else {
 				instrs = append(instrs, fmt.Sprintf("%v", it.Op()))
 			}
@@ -506,7 +506,7 @@ func TestEip2929Cases(t *testing.T) {
 		ops := strings.Join(instrs, ", ")
 		fmt.Printf("### Case %d\n\n", id)
 		id++
-		fmt.Printf("%v\n\nBytecode: \n```\n0x%x\n```\nOperations: \n```\n%v\n```\n\n",
+		fmt.Printf("%v\n\nBytecode: \n```\n%#x\n```\nOperations: \n```\n%v\n```\n\n",
 			comment,
 			code, ops)
 		Execute(code, nil, &Config{

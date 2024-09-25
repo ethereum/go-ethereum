@@ -440,7 +440,7 @@ func (op ptrOp) genWrite(ctx *genContext, v string) string {
 
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "if %s == nil {\n", v)
-	fmt.Fprintf(&b, "  w.Write([]byte{0x%X})\n", op.nilValue)
+	fmt.Fprintf(&b, "  w.Write([]byte{%#X})\n", op.nilValue)
 	fmt.Fprintf(&b, "} else {\n")
 	fmt.Fprintf(&b, "  %s", op.elem.genWrite(ctx, vv))
 	fmt.Fprintf(&b, "}\n")

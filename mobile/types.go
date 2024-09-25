@@ -41,7 +41,7 @@ func (n *Nonce) GetBytes() []byte {
 
 // GetHex retrieves the hex string representation of the block nonce.
 func (n *Nonce) GetHex() string {
-	return fmt.Sprintf("0x%x", n.nonce[:])
+	return fmt.Sprintf("%#x", n.nonce[:])
 }
 
 // Bloom represents a 256 bit bloom filter.
@@ -56,7 +56,7 @@ func (b *Bloom) GetBytes() []byte {
 
 // GetHex retrieves the hex string representation of the bloom filter.
 func (b *Bloom) GetHex() string {
-	return fmt.Sprintf("0x%x", b.bloom[:])
+	return fmt.Sprintf("%#x", b.bloom[:])
 }
 
 // Header represents a block header in the Ethereum blockchain.
