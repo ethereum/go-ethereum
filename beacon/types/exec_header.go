@@ -17,6 +17,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -28,18 +29,21 @@ import (
 	"github.com/protolambda/ztyp/tree"
 )
 
+// headerObject is an interface that defines the method to get the HashTreeRoot.
 type headerObject interface {
 	HashTreeRoot(hFn tree.HashFn) zrntcommon.Root
 }
 
+// ExecutionHeader holds a reference to an object that implements the headerObject interface.
 type ExecutionHeader struct {
 	obj headerObject
 }
 
-// ExecutionHeaderFromJSON decodes an execution header from JSON data provided by
-// the beacon chain API.
+// ExecutionHeaderFromJSON decodes an execution header from JSON data provided by the beacon chain API.
+// It selects the appropriate fork (capella, deneb) and unmarshals the data accordingly.
 func ExecutionHeaderFromJSON(forkName string, data []byte) (*ExecutionHeader, error) {
 	var obj headerObject
+
 	switch forkName {
 	case "capella":
 		obj = new(capella.ExecutionPayloadHeader)
@@ -48,33 +52,40 @@ func ExecutionHeaderFromJSON(forkName string, data []byte) (*ExecutionHeader, er
 	default:
 		return nil, fmt.Errorf("unsupported fork: %s", forkName)
 	}
-	if err := json.Unmarshal(data, obj); err != nil {
-		return nil, err
+
+	// Use a streaming decoder for efficiency, especially with large JSON payloads
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if err := decoder.Decode(obj); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal execution header for fork %s: %w", forkName, err)
 	}
 	return &ExecutionHeader{obj: obj}, nil
 }
 
+// NewExecutionHeader initializes a new ExecutionHeader object with the given headerObject.
+// It ensures the object type is one of the supported ExecutionPayloadHeaders (capella, deneb).
 func NewExecutionHeader(obj headerObject) *ExecutionHeader {
 	switch obj.(type) {
-	case *capella.ExecutionPayloadHeader:
-	case *deneb.ExecutionPayloadHeader:
+	case *capella.ExecutionPayloadHeader, *deneb.ExecutionPayloadHeader:
+		// Supported types
 	default:
 		panic(fmt.Errorf("unsupported ExecutionPayloadHeader type %T", obj))
 	}
 	return &ExecutionHeader{obj: obj}
 }
 
+// PayloadRoot returns the Merkle root of the execution payload header.
 func (eh *ExecutionHeader) PayloadRoot() merkle.Value {
 	return merkle.Value(eh.obj.HashTreeRoot(tree.GetHashFn()))
 }
 
+// BlockHash extracts the block hash from the underlying execution payload header.
+// It checks the type of the object and returns the correct block hash based on the type.
 func (eh *ExecutionHeader) BlockHash() common.Hash {
-	switch obj := eh.obj.(type) {
-	case *capella.ExecutionPayloadHeader:
+	if obj, ok := eh.obj.(*capella.ExecutionPayloadHeader); ok {
 		return common.Hash(obj.BlockHash)
-	case *deneb.ExecutionPayloadHeader:
-		return common.Hash(obj.BlockHash)
-	default:
-		panic(fmt.Errorf("unsupported ExecutionPayloadHeader type %T", obj))
 	}
+	if obj, ok := eh.obj.(*deneb.ExecutionPayloadHeader); ok {
+		return common.Hash(obj.BlockHash)
+	}
+	panic(fmt.Errorf("unsupported ExecutionPayloadHeader type %T", eh.obj))
 }
