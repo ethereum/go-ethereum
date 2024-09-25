@@ -68,7 +68,11 @@ func TestUDPv4_Lookup(t *testing.T) {
 func TestUDPv4_LookupIterator(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.close()
+	var wg sync.WaitGroup
+	defer func() {
+		test.close()
+		wg.Wait()
+	}()
 
 	// Seed table with initial nodes.
 	bootnodes := make([]*enode.Node, len(lookupTestnet.dists[256]))
@@ -76,7 +80,6 @@ func TestUDPv4_LookupIterator(t *testing.T) {
 		bootnodes[i] = lookupTestnet.node(256, i)
 	}
 	fillTable(test.table, bootnodes, true)
-	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		serveTestnet(test, lookupTestnet)
@@ -101,8 +104,6 @@ func TestUDPv4_LookupIterator(t *testing.T) {
 	if err := checkNodesEqual(results, want); err != nil {
 		t.Fatal(err)
 	}
-	test.close()
-	wg.Wait()
 }
 
 // TestUDPv4_LookupIteratorClose checks that lookupIterator ends when its Close
@@ -110,7 +111,11 @@ func TestUDPv4_LookupIterator(t *testing.T) {
 func TestUDPv4_LookupIteratorClose(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.close()
+	var wg sync.WaitGroup
+	defer func() {
+		test.close()
+		wg.Wait()
+	}()
 
 	// Seed table with initial nodes.
 	bootnodes := make([]*enode.Node, len(lookupTestnet.dists[256]))
@@ -119,7 +124,6 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 	}
 	fillTable(test.table, bootnodes, true)
 
-	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		serveTestnet(test, lookupTestnet)
@@ -146,8 +150,6 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 	if n := it.Node(); n != nil {
 		t.Errorf("iterator returned non-nil node after close and %d more calls", ncalls)
 	}
-	test.close()
-	wg.Wait()
 }
 
 func serveTestnet(test *udpTest, testnet *preminedTestnet) {
