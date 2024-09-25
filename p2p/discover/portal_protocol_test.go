@@ -413,6 +413,12 @@ func TestContentLookup(t *testing.T) {
 	err = node3.Start()
 	assert.NoError(t, err)
 
+	defer func() {
+		node1.Stop()
+		node2.Stop()
+		node3.Stop()
+	}()
+
 	contentKey := []byte{0x3, 0x4}
 	content := []byte{0x1, 0x2}
 	contentId := node1.toContentId(contentKey)
