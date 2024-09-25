@@ -26,7 +26,7 @@ The `eth_simulate` payload structure:
    | :--------------- | :------------------------- | :----------------------------------------------------------------------------------------------------------- |
    | `blockOverrides` | `BlockOverrides`           | Overrides fields such as block number or time in a simulated block.                                          |
    | `stateOverrides` | `StateOverrides`           | State overrides can be used to replace existing blockchain state with new state.                             |
-   | `calls`          | `GenericCallTransaction[]` | An aray of transaction call objects. Please see [here](/docs/interacting-with-geth/rpc/objects) for details. |
+   | `calls`          | `GenericCallTransaction[]` | An aray of transaction call objects. Please see [Transaction Call Object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) for details. |
 
 The `BlockOverrides` object is as follows:
    | Field           | Type          | Description |
@@ -48,16 +48,7 @@ The object `withdrawals` is an array of withdrawal objects:
    | `address`        | `address` | address         |
    | `amount`         | `uint64`  | amount          |
 
-The `StateOverrides` is a dictionary of addresses that will be overriden with the `AccountOverride` object. The account overriding works similar to the `eth_call`, except there's one added field: `movePrecompileToAddress`. Move precompile to address moves addresses precompile into the specified address. This move is done before the `code` override is set. So you can move the precompile somewhere else, and replace the precompile with any EVM bytecode. This EVM bytecode can then call the original precompile in the new address. This makes the most sense for ecrecover precompile. When the specified address is not a precompile, the behaviour is undefined.
-
-   | Field                     | Type             | Optional                                   | Description                                                                                                                                            |
-   | :------------------------ | :--------------- | :----------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `nonce`                   | `uint64`         | Yes                                        | Nonce                                                                                                                                                  |
-   | `balance`                 | `uint256`        | Yes                                        | ETH Balance                                                                                                                                            |
-   | `code`                    | `bytes`          | Yes                                        | EVM bytecode                                                                                                                                           |
-   | `movePrecompileToAddress` | `address`        | Yes                                        | Moves precompile to given address                                                                                                                      |
-   | `state`                   | `AccountStorage` | either `state` or `stateDiff` is mandatory | Key-value mapping to override all slots in the account storage before executing the call. This functions similar to eth_call's state parameter.        |
-   | `stateDiff`               | `AccountStorage` | either `state` or `stateDiff` is mandatory | Key-value mapping to override individual slots in the account storage before executing the call. This functions similar to eth_call's state parameter. |
+The StateOverrides is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing each block. Please see [State Override Set](/docs/interacting-with-geth/rpc/objects#state-override-set) for details.
 
 **Output**
 On a succesfull `eth_simulateV1` call, an array of generated full blocks is returned (the same object that you would get with `eth_getBlockByHash`, except with an added `calls` field), otherwise an error is returned. The blocks contain `calls` field that is defined as follows:
@@ -89,6 +80,7 @@ the `CallResultLog` is object of form:
    | `address`          | `address`   | Contract that sent the log. When trace transfers is enabled, this field is `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` for ETH transfers. |
    | `data`             | `bytes`     | Event data                                                                                                                                 |
    | `topics`           | `bytes32[]` | Array of topics                                                                                                                            |
+   | `removed`          | `bool`      | Always false. A flag indicating if a log was removed in a chain reorganization, which cannot happen in eth_simulateV1.                     |
  
 **Example:**
 Here's an simple `eth_simulateV1` call that sets blocks `baseFeePerGas` to `9`, gives us `0.00000002` ETH and then we send ETH to two addresses. You can find that the output has two logs produced by these ETH sends. This is because we have set `traceTransfers` to true.
@@ -242,37 +234,7 @@ The method takes 4 parameters: an unsigned transaction object to execute in read
 
 3. `Object` - State override set
 
-   The _state override set_ is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing the call. Each address maps to an object containing:
-
-   | Field       | Type       | Bytes | Optional | Description                                                                                               |
-   | :---------- | :--------- | :---- | :------- | :-------------------------------------------------------------------------------------------------------- |
-   | `balance`   | `Quantity` | <32   | Yes      | Fake balance to set for the account before executing the call.                                            |
-   | `nonce`     | `Quantity` | <8    | Yes      | Fake nonce to set for the account before executing the call.                                              |
-   | `code`      | `Binary`   | any   | Yes      | Fake EVM bytecode to inject into the account before executing the call.                                   |
-   | `state`     | `Object`   | any   | Yes      | Fake key-value mapping to override **all** slots in the account storage before executing the call.        |
-   | `stateDiff` | `Object`   | any   | Yes      | Fake key-value mapping to override **individual** slots in the account storage before executing the call. |
-
-   The goal of the _state override set_ is manyfold:
-
-   - It can be used by DApps to reduce the amount of contract code needed to be deployed on chain. Code that simply returns internal state or does pre-defined validations can be kept off chain and fed to the node on-demand.
-   - It can be used for smart contract analysis by extending the code deployed on chain with custom methods and invoking them. This avoids having to download and reconstruct the entire state in a sandbox to run custom code against.
-   - It can be used to debug smart contracts in an already deployed large suite of contracts by selectively overriding some code or state and seeing how execution changes. Specialized tooling will probably be necessary.
-
-   **Example:**
-
-   ```json
-   {
-     "0xd9c9cd5f6779558b6e0ed4e6acf6b1947e7fa1f3": {
-       "balance": "0xde0b6b3a7640000"
-     },
-     "0xebe8efa441b9302a0d7eaecc277c09d20d684540": {
-       "code": "0x...",
-       "state": {
-         ""
-       }
-     }
-   }
-   ```
+The _state override set_ is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing the call. Please see [State Override Set](/docs/interacting-with-geth/rpc/objects#state-override-set) for details.
 
 4. `Object` - Block override set
 
@@ -369,7 +331,7 @@ Just for the sake of completeness, decoded the response is: `2`.
 
 ### eth_createAccessList {#eth-createaccesslist}
 
-This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles. This method uses the same `transaction` call [object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
+This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type `accessList` based on a given `Transaction`. The `accessList` contains all storage slots and addresses read and written by the transaction, except for the sender account and the precompiles. This method uses the same `transaction` call [Transaction Call Object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) and `blockNumberOrTag` object as `eth_call`. An `accessList` can be used to unstuck contracts that became inaccessible due to gas cost increases.
 
 **Parameters:**
 
