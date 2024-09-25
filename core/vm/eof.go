@@ -19,10 +19,10 @@ package vm
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -81,6 +81,30 @@ type functionMetadata struct {
 	maxStackHeight uint16
 }
 
+// stackDelta returns the #outputs - #inputs
+func (meta *functionMetadata) stackDelta() int {
+	return int(meta.outputs) - int(meta.inputs)
+}
+
+// checkInputs checks the current minimum stack (stackMin) against the required inputs
+// of the metadata, and returns an error if the stack is too shallow.
+func (meta *functionMetadata) checkInputs(stackMin int) error {
+	if int(meta.inputs) > stackMin {
+		return ErrStackUnderflow{stackLen: stackMin, required: int(meta.inputs)}
+	}
+	return nil
+}
+
+// checkStackMax checks the if current maximum stack combined with the
+// functin max stack will result in a stack overflow, and if so returns an error.
+func (meta *functionMetadata) checkStackMax(stackMax int) error {
+	newMaxStack := stackMax + int(meta.maxStackHeight) - int(meta.inputs)
+	if newMaxStack > int(params.StackLimit) {
+		return ErrStackOverflow{stackLen: newMaxStack, limit: int(params.StackLimit)}
+	}
+	return nil
+}
+
 // MarshalBinary encodes an EOF container into binary format.
 func (c *Container) MarshalBinary() []byte {
 	// Build EOF prefix.
@@ -137,7 +161,7 @@ func (c *Container) UnmarshalSubContainer(b []byte, isInitcode bool) error {
 
 func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool) error {
 	if !hasEOFMagic(b) {
-		return fmt.Errorf("%w: want %x", ErrInvalidMagic, eofMagic)
+		return fmt.Errorf("%w: want %x", errInvalidMagic, eofMagic)
 	}
 	if len(b) < 14 {
 		return io.ErrUnexpectedEOF
@@ -146,7 +170,7 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 		return ErrMaxInitCodeSizeExceeded
 	}
 	if !isEOFVersion1(b) {
-		return fmt.Errorf("%w: have %d, want %d", ErrInvalidVersion, b[2], eof1Version)
+		return fmt.Errorf("%w: have %d, want %d", errInvalidVersion, b[2], eof1Version)
 	}
 
 	var (
@@ -161,13 +185,13 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 		return err
 	}
 	if kind != kindTypes {
-		return fmt.Errorf("%w: found section kind %x instead", ErrMissingTypeHeader, kind)
+		return fmt.Errorf("%w: found section kind %x instead", errMissingTypeHeader, kind)
 	}
 	if typesSize < 4 || typesSize%4 != 0 {
-		return fmt.Errorf("%w: type section size must be divisible by 4, have %d", ErrInvalidTypeSize, typesSize)
+		return fmt.Errorf("%w: type section size must be divisible by 4, have %d", errInvalidTypeSize, typesSize)
 	}
 	if typesSize/4 > 1024 {
-		return fmt.Errorf("%w: type section must not exceed 4*1024, have %d", ErrInvalidTypeSize, typesSize)
+		return fmt.Errorf("%w: type section must not exceed 4*1024, have %d", errInvalidTypeSize, typesSize)
 	}
 
 	// Parse code section header.
@@ -176,10 +200,10 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 		return err
 	}
 	if kind != kindCode {
-		return fmt.Errorf("%w: found section kind %x instead", ErrMissingCodeHeader, kind)
+		return fmt.Errorf("%w: found section kind %x instead", errMissingCodeHeader, kind)
 	}
 	if len(codeSizes) != typesSize/4 {
-		return fmt.Errorf("%w: mismatch of code sections found and type signatures, types %d, code %d", ErrInvalidCodeSize, typesSize/4, len(codeSizes))
+		return fmt.Errorf("%w: mismatch of code sections found and type signatures, types %d, code %d", errInvalidCodeSize, typesSize/4, len(codeSizes))
 	}
 
 	// Parse (optional) container section header.
@@ -194,7 +218,7 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 			panic("somethings wrong")
 		}
 		if len(containerSizes) == 0 {
-			return fmt.Errorf("%w: total container count must not be zero", ErrInvalidContainerSectionSize)
+			return fmt.Errorf("%w: total container count must not be zero", errInvalidContainerSectionSize)
 		}
 		offset = offset + 2 + 2*len(containerSizes) + 1
 	}
@@ -205,7 +229,7 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 		return err
 	}
 	if kind != kindData {
-		return fmt.Errorf("%w: found section %x instead", ErrMissingDataHeader, kind)
+		return fmt.Errorf("%w: found section %x instead", errMissingDataHeader, kind)
 	}
 	c.dataSize = dataSize
 
@@ -215,7 +239,7 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 		return fmt.Errorf("%w: invalid offset terminator", io.ErrUnexpectedEOF)
 	}
 	if b[offsetTerminator] != 0 {
-		return fmt.Errorf("%w: have %x", ErrMissingTerminator, b[offsetTerminator])
+		return fmt.Errorf("%w: have %x", errMissingTerminator, b[offsetTerminator])
 	}
 
 	// Verify overall container size.
@@ -224,11 +248,11 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 		expectedSize += sum(containerSizes)
 	}
 	if len(b) < expectedSize-dataSize {
-		return fmt.Errorf("%w: have %d, want %d", ErrInvalidContainerSize, len(b), expectedSize)
+		return fmt.Errorf("%w: have %d, want %d", errInvalidContainerSize, len(b), expectedSize)
 	}
 	// Only check that the expected size is not exceed on non-initcode
-	if !isInitcode && len(b) > expectedSize {
-		return fmt.Errorf("%w: have %d, want %d", ErrInvalidContainerSize, len(b), expectedSize)
+	if (!topLevel || !isInitcode) && len(b) > expectedSize {
+		return fmt.Errorf("%w: have %d, want %d", errInvalidContainerSize, len(b), expectedSize)
 	}
 
 	// Parse types section.
@@ -241,18 +265,18 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 			maxStackHeight: binary.BigEndian.Uint16(b[idx+i*4+2:]),
 		}
 		if sig.inputs > maxInputItems {
-			return fmt.Errorf("%w for section %d: have %d", ErrTooManyInputs, i, sig.inputs)
+			return fmt.Errorf("%w for section %d: have %d", errTooManyInputs, i, sig.inputs)
 		}
 		if sig.outputs > maxOutputItems {
-			return fmt.Errorf("%w for section %d: have %d", ErrTooManyOutputs, i, sig.outputs)
+			return fmt.Errorf("%w for section %d: have %d", errTooManyOutputs, i, sig.outputs)
 		}
 		if sig.maxStackHeight > maxStackHeight {
-			return fmt.Errorf("%w for section %d: have %d", ErrTooLargeMaxStackHeight, i, sig.maxStackHeight)
+			return fmt.Errorf("%w for section %d: have %d", errTooLargeMaxStackHeight, i, sig.maxStackHeight)
 		}
 		types = append(types, sig)
 	}
 	if types[0].inputs != 0 || types[0].outputs != 0x80 {
-		return fmt.Errorf("%w: have %d, %d", ErrInvalidSection0Type, types[0].inputs, types[0].outputs)
+		return fmt.Errorf("%w: have %d, %d", errInvalidSection0Type, types[0].inputs, types[0].outputs)
 	}
 	c.types = types
 
@@ -261,7 +285,7 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 	codeSections := make([][]byte, len(codeSizes))
 	for i, size := range codeSizes {
 		if size == 0 {
-			return fmt.Errorf("%w for section %d: size must not be 0", ErrInvalidCodeSize, i)
+			return fmt.Errorf("%w for section %d: size must not be 0", errInvalidCodeSize, i)
 		}
 		codeSections[i] = b[idx : idx+size]
 		idx += size
@@ -270,13 +294,13 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 	// Parse the optional container sizes.
 	if len(containerSizes) != 0 {
 		if len(containerSizes) > maxContainerSections {
-			return fmt.Errorf("%w number of container section exceed: %v: have %v", ErrInvalidContainerSectionSize, maxContainerSections, len(containerSizes))
+			return fmt.Errorf("%w number of container section exceed: %v: have %v", errInvalidContainerSectionSize, maxContainerSections, len(containerSizes))
 		}
 		subContainerCodes := make([][]byte, 0, len(containerSizes))
 		subContainers := make([]*Container, 0, len(containerSizes))
 		for i, size := range containerSizes {
 			if size == 0 || idx+size > len(b) {
-				return fmt.Errorf("%w for section %d: size must not be 0", ErrInvalidContainerSectionSize, i)
+				return fmt.Errorf("%w for section %d: size must not be 0", errInvalidContainerSectionSize, i)
 			}
 			subC := new(Container)
 			end := min(idx+size, len(b))
@@ -301,7 +325,7 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 		end = min(idx+dataSize, len(b))
 	}
 	if topLevel && len(b) != idx+dataSize {
-		return ErrTruncatedTopLevelContainer
+		return errTruncatedTopLevelContainer
 	}
 	c.data = b[idx:end]
 
@@ -354,22 +378,22 @@ func (c *Container) validateSubContainer(jt *JumpTable, refBy int) error {
 				subContainerVisited[idx] = reference
 			}
 			if refBy == refByReturnContract && res.isInitCode {
-				return ErrIncompatibleContainerKind
+				return errIncompatibleContainerKind
 			}
 			if refBy == refByEOFCreate && res.isRuntime {
-				return ErrIncompatibleContainerKind
+				return errIncompatibleContainerKind
 			}
 		}
 		toVisit = toVisit[1:]
 	}
 	// Make sure every code section is visited at least once.
 	if len(visited) != len(c.codeSections) {
-		return ErrUnreachableCode
+		return errUnreachableCode
 	}
 	for idx, container := range c.subContainers {
 		reference, ok := subContainerVisited[idx]
 		if !ok {
-			return ErrOrphanedSubcontainer
+			return errOrphanedSubcontainer
 		}
 		if err := container.validateSubContainer(jt, reference); err != nil {
 			return err
@@ -440,40 +464,38 @@ func sum(list []int) (s int) {
 }
 
 func (c *Container) String() string {
-	var result string
-	result += "Header\n"
-	result += "-----------\n"
-	result += fmt.Sprintf("EOFMagic: %02x\n", eofMagic)
-	result += fmt.Sprintf("EOFVersion: %02x\n", eof1Version)
-	result += fmt.Sprintf("KindType: %02x\n", kindTypes)
-	result += fmt.Sprintf("TypesSize: %04x\n", len(c.types)*4)
-	result += fmt.Sprintf("KindCode: %02x\n", kindCode)
-	result += fmt.Sprintf("CodeSize: %04x\n", len(c.codeSections))
-	for i, code := range c.codeSections {
-		result += fmt.Sprintf("Code %v length: %04x\n", i, len(code))
+	var output = []string{
+		"Header",
+		fmt.Sprintf("  - EOFMagic: %02x", eofMagic),
+		fmt.Sprintf("  - EOFVersion: %02x", eof1Version),
+		fmt.Sprintf("  - KindType: %02x", kindTypes),
+		fmt.Sprintf("  - TypesSize: %04x", len(c.types)*4),
+		fmt.Sprintf("  - KindCode: %02x", kindCode),
+		fmt.Sprintf("  - KindData: %02x", kindData),
+		fmt.Sprintf("  - DataSize: %04x", len(c.data)),
+		fmt.Sprintf("  - Number of code sections: %d", len(c.codeSections)),
 	}
-	if len(c.subContainers) != 0 {
-		result += fmt.Sprintf("KindContainer: %02x\n", kindContainer)
-		result += fmt.Sprintf("ContainerSize: %04x\n", len(c.subContainers))
+	for i, code := range c.codeSections {
+		output = append(output, fmt.Sprintf("    - Code section %d length: %04x", i, len(code)))
+	}
+
+	output = append(output, fmt.Sprintf("  - Number of subcontainers: %d", len(c.subContainers)))
+	if len(c.subContainers) > 0 {
 		for i, section := range c.subContainers {
-			result += fmt.Sprintf("Container %v length: %04x\n", i, len(section.MarshalBinary()))
+			output = append(output, fmt.Sprintf("    - subcontainer %d length: %04x\n", i, len(section.MarshalBinary())))
 		}
 	}
-	result += fmt.Sprintf("KindData: %02x\n", kindData)
-	result += fmt.Sprintf("DataSize: %04x\n", len(c.data))
-	result += fmt.Sprintf("Terminator: %02x\n", 0x0)
-	result += "-----------\n"
-	result += "Body\n"
-	result += "-----------\n"
+	output = append(output, "Body")
 	for i, typ := range c.types {
-		result += fmt.Sprintf("Type %v: %v\n", i, hex.EncodeToString([]byte{typ.inputs, typ.outputs, byte(typ.maxStackHeight >> 8), byte(typ.maxStackHeight & 0x00ff)}))
+		output = append(output, fmt.Sprintf("  - Type %v: %x", i,
+			[]byte{typ.inputs, typ.outputs, byte(typ.maxStackHeight >> 8), byte(typ.maxStackHeight & 0x00ff)}))
 	}
 	for i, code := range c.codeSections {
-		result += fmt.Sprintf("Code %v: %v\n", i, hex.EncodeToString(code))
+		output = append(output, fmt.Sprintf("  - Code section %d: %#x", i, code))
 	}
 	for i, section := range c.subContainers {
-		result += fmt.Sprintf("Section %v: %v\n", i, hex.EncodeToString(section.MarshalBinary()))
+		output = append(output, fmt.Sprintf("  - Subcontainer %d: %x", i, section.MarshalBinary()))
 	}
-	result += fmt.Sprintf("Data: %v\n", hex.EncodeToString(c.data))
-	return result
+	output = append(output, fmt.Sprintf("  - Data: %#x", c.data))
+	return strings.Join(output, "\n")
 }

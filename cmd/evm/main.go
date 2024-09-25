@@ -138,61 +138,90 @@ var (
 		Usage:    "enable return data output",
 		Category: flags.VMCategory,
 	}
+	refTestFlag = &cli.StringFlag{
+		Name:  "test",
+		Usage: "Path to EOF validation reference test.",
+	}
+	hexFlag = &cli.StringFlag{
+		Name:  "hex",
+		Usage: "single container data parse and validation",
+	}
 )
 
-var stateTransitionCommand = &cli.Command{
-	Name:    "transition",
-	Aliases: []string{"t8n"},
-	Usage:   "Executes a full state transition",
-	Action:  t8ntool.Transition,
-	Flags: []cli.Flag{
-		t8ntool.TraceFlag,
-		t8ntool.TraceTracerFlag,
-		t8ntool.TraceTracerConfigFlag,
-		t8ntool.TraceEnableMemoryFlag,
-		t8ntool.TraceDisableStackFlag,
-		t8ntool.TraceEnableReturnDataFlag,
-		t8ntool.TraceEnableCallFramesFlag,
-		t8ntool.OutputBasedir,
-		t8ntool.OutputAllocFlag,
-		t8ntool.OutputResultFlag,
-		t8ntool.OutputBodyFlag,
-		t8ntool.InputAllocFlag,
-		t8ntool.InputEnvFlag,
-		t8ntool.InputTxsFlag,
-		t8ntool.ForknameFlag,
-		t8ntool.ChainIDFlag,
-		t8ntool.RewardFlag,
-	},
-}
+var (
+	stateTransitionCommand = &cli.Command{
+		Name:    "transition",
+		Aliases: []string{"t8n"},
+		Usage:   "Executes a full state transition",
+		Action:  t8ntool.Transition,
+		Flags: []cli.Flag{
+			t8ntool.TraceFlag,
+			t8ntool.TraceTracerFlag,
+			t8ntool.TraceTracerConfigFlag,
+			t8ntool.TraceEnableMemoryFlag,
+			t8ntool.TraceDisableStackFlag,
+			t8ntool.TraceEnableReturnDataFlag,
+			t8ntool.TraceEnableCallFramesFlag,
+			t8ntool.OutputBasedir,
+			t8ntool.OutputAllocFlag,
+			t8ntool.OutputResultFlag,
+			t8ntool.OutputBodyFlag,
+			t8ntool.InputAllocFlag,
+			t8ntool.InputEnvFlag,
+			t8ntool.InputTxsFlag,
+			t8ntool.ForknameFlag,
+			t8ntool.ChainIDFlag,
+			t8ntool.RewardFlag,
+		},
+	}
 
-var transactionCommand = &cli.Command{
-	Name:    "transaction",
-	Aliases: []string{"t9n"},
-	Usage:   "Performs transaction validation",
-	Action:  t8ntool.Transaction,
-	Flags: []cli.Flag{
-		t8ntool.InputTxsFlag,
-		t8ntool.ChainIDFlag,
-		t8ntool.ForknameFlag,
-	},
-}
+	transactionCommand = &cli.Command{
+		Name:    "transaction",
+		Aliases: []string{"t9n"},
+		Usage:   "Performs transaction validation",
+		Action:  t8ntool.Transaction,
+		Flags: []cli.Flag{
+			t8ntool.InputTxsFlag,
+			t8ntool.ChainIDFlag,
+			t8ntool.ForknameFlag,
+		},
+	}
 
-var blockBuilderCommand = &cli.Command{
-	Name:    "block-builder",
-	Aliases: []string{"b11r"},
-	Usage:   "Builds a block",
-	Action:  t8ntool.BuildBlock,
-	Flags: []cli.Flag{
-		t8ntool.OutputBasedir,
-		t8ntool.OutputBlockFlag,
-		t8ntool.InputHeaderFlag,
-		t8ntool.InputOmmersFlag,
-		t8ntool.InputWithdrawalsFlag,
-		t8ntool.InputTxsRlpFlag,
-		t8ntool.SealCliqueFlag,
-	},
-}
+	blockBuilderCommand = &cli.Command{
+		Name:    "block-builder",
+		Aliases: []string{"b11r"},
+		Usage:   "Builds a block",
+		Action:  t8ntool.BuildBlock,
+		Flags: []cli.Flag{
+			t8ntool.OutputBasedir,
+			t8ntool.OutputBlockFlag,
+			t8ntool.InputHeaderFlag,
+			t8ntool.InputOmmersFlag,
+			t8ntool.InputWithdrawalsFlag,
+			t8ntool.InputTxsRlpFlag,
+			t8ntool.SealCliqueFlag,
+		},
+	}
+	eofParseCommand = &cli.Command{
+		Name:    "eofparse",
+		Aliases: []string{"eof"},
+		Usage:   "Parses hex eof container and returns validation errors (if any)",
+		Action:  eofParseAction,
+		Flags: []cli.Flag{
+			hexFlag,
+			refTestFlag,
+		},
+	}
+
+	eofDumpCommand = &cli.Command{
+		Name:   "eofdump",
+		Usage:  "Parses hex eof container and prints out human-readable representation of the container.",
+		Action: eofDumpAction,
+		Flags: []cli.Flag{
+			hexFlag,
+		},
+	}
+)
 
 // vmFlags contains flags related to running the EVM.
 var vmFlags = []cli.Flag{
@@ -235,6 +264,8 @@ func init() {
 		stateTransitionCommand,
 		transactionCommand,
 		blockBuilderCommand,
+		eofParseCommand,
+		eofDumpCommand,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)
