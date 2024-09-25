@@ -457,7 +457,7 @@ func (c *codeAndHash) Hash() common.Hash {
 }
 
 // create creates a new contract using code as deployment code.
-func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode, input []byte, fromEOF bool) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *uint256.Int, address common.Address, typ OpCode, input []byte, allowEOF bool) (ret []byte, createAddress common.Address, leftOverGas uint64, err error) {
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller.Address(), address, codeAndHash.code, gas, value.ToBig())
 		defer func(startGas uint64) {
@@ -482,11 +482,8 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Validate initcode per EOF rules. If caller is EOF and initcode is legacy, fail.
 	isInitcodeEOF := hasEOFMagic(codeAndHash.code)
-	if evm.chainRules.IsPrague {
-		if isInitcodeEOF {
-			if !fromEOF {
-				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, ErrLegacyCode)
-			}
+	if isInitcodeEOF {
+		if allowEOF {
 			// If the initcode is EOF, verify it is well-formed.
 			var c Container
 			if err := c.UnmarshalBinary(codeAndHash.code, isInitcodeEOF); err != nil {
@@ -496,7 +493,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 				return nil, common.Address{}, gas, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, err)
 			}
 			contract.Container = &c
-		} else if fromEOF {
+		} else {
 			// Don't allow EOF contract to execute legacy initcode.
 			return nil, common.Address{}, gas, ErrLegacyCode
 		}
@@ -573,7 +570,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if err == nil && len(ret) >= 1 && HasEOFByte(ret) {
-		if evm.chainRules.IsShanghai {
+		if evm.chainRules.IsPrague && isInitcodeEOF {
 			// Don't reject EOF contracts after Shanghai
 		} else if evm.chainRules.IsLondon {
 			err = ErrInvalidCode
@@ -619,9 +616,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *uint256.Int, allowEOF bool) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = crypto.CreateAddress(caller.Address(), evm.StateDB.GetNonce(caller.Address()))
-	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, nil, false)
+	return evm.create(caller, &codeAndHash{code: code}, gas, value, contractAddr, CREATE, nil, allowEOF)
 }
 
 // Create2 creates a new contract using code as deployment code.

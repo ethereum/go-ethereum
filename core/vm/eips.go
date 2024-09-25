@@ -924,22 +924,27 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	}
 	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 	containerCode := scope.Contract.Container.ContainerCode[idx]
-	deployedCode := append(containerCode, ret...)
-	if len(deployedCode) == 0 {
+	if len(containerCode) == 0 {
 		return nil, errors.New("nonexistant subcontainer")
 	}
 	// Validate the subcontainer
 	var c Container
-	if err := c.UnmarshalBinary(deployedCode, true); err != nil {
+	if err := c.UnmarshalSubContainer(containerCode, false); err != nil {
 		return nil, err
 	}
-	if err := c.ValidateCode(interpreter.tableEOF, true); err != nil {
-		return nil, err
-	}
+
+	// append the auxdata
+	c.Data = append(c.Data, ret...)
 	if len(c.Data) < c.DataSize {
-		return nil, errors.New("invalid subcontainer")
+		return nil, errors.New("incomplete aux data")
 	}
 	c.DataSize = len(c.Data)
+
+	// probably unneeded as subcontainers are deeply validated
+	if err := c.ValidateCode(interpreter.tableEOF, false); err != nil {
+		return nil, err
+	}
+
 	// Restore context
 	retCtx := scope.ReturnStack.Pop()
 	scope.CodeSection = retCtx.Section
@@ -1055,13 +1060,20 @@ func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	if interpreter.readOnly && !value.IsZero() {
 		return nil, ErrWriteProtection
 	}
-	if !value.IsZero() {
-		gas += params.CallStipend
+
+	var (
+		ret       []byte
+		returnGas uint64
+		err       error
+	)
+	if interpreter.evm.callGasTemp == 0 {
+		// zero temp call gas indicates a min retained gas error
+		ret, returnGas, err = nil, 0, ErrExecutionReverted
+	} else {
+		ret, returnGas, err = interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
 	}
 
-	ret, returnGas, err := interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
-
-	if err == ErrExecutionReverted {
+	if errors.Is(err, ErrExecutionReverted) || errors.Is(err, ErrInsufficientBalance) || errors.Is(err, ErrDepth) {
 		temp.SetOne()
 	} else if err != nil {
 		temp.SetUint64(2)
@@ -1102,11 +1114,14 @@ func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeCont
 		err = ErrExecutionReverted
 		ret = nil
 		returnGas = gas
+	} else if interpreter.evm.callGasTemp == 0 {
+		// zero temp call gas indicates a min retained gas error
+		ret, returnGas, err = nil, 0, ErrExecutionReverted
 	} else {
 		ret, returnGas, err = interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, true)
 	}
 
-	if err == ErrExecutionReverted {
+	if err == ErrExecutionReverted || err == ErrDepth {
 		temp.SetOne()
 	} else if err != nil {
 		temp.SetUint64(2)
@@ -1136,8 +1151,19 @@ func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContex
 	// Get arguments from the memory.
 	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
 
-	ret, returnGas, err := interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
-	if err == ErrExecutionReverted {
+	var (
+		ret       []byte
+		returnGas uint64
+		err       error
+	)
+	if interpreter.evm.callGasTemp == 0 {
+		// zero temp call gas indicates a min retained gas error
+		ret, returnGas, err = nil, 0, ErrExecutionReverted
+	} else {
+		ret, returnGas, err = interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
+	}
+
+	if err == ErrExecutionReverted || err == ErrDepth {
 		temp.SetOne()
 	} else if err != nil {
 		temp.SetUint64(2)

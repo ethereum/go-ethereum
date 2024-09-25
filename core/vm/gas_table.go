@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 // memoryGasCost calculates the quadratic gas for memory expansion. It does so
@@ -484,37 +483,32 @@ func gasStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memo
 func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		gas            uint64
-		transfersValue = !stack.Back(2).IsZero()
-		address        = common.Address(stack.Back(1).Bytes20())
+		transfersValue = !stack.Back(3).IsZero()
+		address        = common.Address(stack.Back(0).Bytes20())
+		overflow       bool
 	)
-	if evm.chainRules.IsEIP158 {
-		if transfersValue && evm.StateDB.Empty(address) {
+	if transfersValue {
+		if evm.StateDB.Empty(address) {
 			gas += params.CallNewAccountGas
 		}
-	} else if !evm.StateDB.Exist(address) {
-		gas += params.CallNewAccountGas
-	}
-	if transfersValue && !evm.chainRules.IsEIP4762 {
-		gas += params.CallValueTransferGas
+		if evm.chainRules.IsEIP4762 {
+			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		} else {
+			gas += params.CallValueTransferGas
+		}
 	}
 	memoryGas, err := memoryGasCost(mem, memorySize)
 	if err != nil {
 		return 0, err
 	}
-	var overflow bool
 	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
 		return 0, ErrGasUintOverflow
 	}
-	if evm.chainRules.IsEIP4762 {
-		if transfersValue {
-			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address))
-			if overflow {
-				return 0, ErrGasUintOverflow
-			}
-		}
-	}
 
-	evm.callGasTemp, err = callGas(true, contract.Gas, gas, new(uint256.Int).SetUint64(contract.Gas))
+	evm.callGasTemp, err = extCallGas(contract.Gas, gas)
 	if err != nil {
 		return 0, err
 	}
@@ -531,7 +525,7 @@ func gasExtDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory,
 	if err != nil {
 		return 0, err
 	}
-	evm.callGasTemp, err = callGas(true, contract.Gas, gas, new(uint256.Int).SetUint64(contract.Gas))
+	evm.callGasTemp, err = extCallGas(contract.Gas, gas)
 	if err != nil {
 		return 0, err
 	}
@@ -547,7 +541,7 @@ func gasExtStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	if err != nil {
 		return 0, err
 	}
-	evm.callGasTemp, err = callGas(true, contract.Gas, gas, new(uint256.Int).SetUint64(contract.Gas))
+	evm.callGasTemp, err = extCallGas(contract.Gas, gas)
 	if err != nil {
 		return 0, err
 	}
