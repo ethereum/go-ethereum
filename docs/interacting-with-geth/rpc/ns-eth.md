@@ -6,7 +6,7 @@ description: Documentation for the JSON-RPC API "eth" namespace
 Documentation for the API methods in the `eth` namespace can be found on [ethereum.org](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_protocolversion). Geth provides several extensions to the standard "eth" JSON-RPC namespace that are defined below.
 
 ### eth_simulateV1 {#eth-simulate-v1}
-The `eth_simulateV1` method allows the simulation of multiple blocks and transactions without creating transactions or blocks on the blockchain. It functions similarly to `eth_call`, but offers more control. Like `eth_call`, `eth_simulateV1` has a maximum gas limit for the entire simulation.
+The `eth_simulateV1` method allows the simulation of multiple blocks and transactions without creating transactions or blocks on the blockchain. It functions similarly to `eth_call`, but offers more control. Like `eth_call`, `eth_simulateV1` has a maximum gas limit for the entire simulation, this limit can be adjusted with command line parameter `--rpc.gascap`.
 
 **Parameters:**
 The method takes two parameters:
@@ -17,11 +17,11 @@ The `eth_simulate` payload structure:
    | Field                    | Type              | Optional | Default | Description                                                                                                                                                                                                                     |
    | :----------------------- | :---------------- | :------- | :------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
    | `blockStateCalls`        | `BlockStateCalls` | False    | N/A     | Definition of blocks that can contain calls and overrides                                                                                                                                                                       |
-   | `traceTransfers`         | `Binary`          | Yes      | False   | Adds ETH transfers as ERC20 transfer events to the logs. These transfers have emitter contract parameter set as address(`0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`). This allows you to track movements of ETH in your calls. |
-   | `validation`             | `Binary`          | Yes      | False   | When true, the `eth_simulateV1` does all the validation that a normal EVM would do, except contract sender and signature checks. When false, `eth_simulateV1` behaves like `eth_call`.                                          |
-   | `returnFullTransactions` | `Binary`          | Yes      | False   | When true, the method returns full transaction objects, otherwise, just hashes are returned.                                                                                                                                    |
+   | `traceTransfers`         | `bool`            | Yes      | False   | Adds ETH transfers as ERC20 transfer events to the logs. These transfers have emitter contract parameter set as address(`0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee`). This allows you to track movements of ETH in your calls. |
+   | `validation`             | `bool`            | Yes      | False   | When true, the `eth_simulateV1` does all the validation that a normal EVM would do, except contract sender and signature checks. When false, `eth_simulateV1` behaves like `eth_call`.                                          |
+   | `returnFullTransactions` | `bool`            | Yes      | False   | When true, the method returns full transaction objects, otherwise, just hashes are returned.                                                                                                                                    |
 
-`BlockStateCalls` is an array of objects, the single object definition is described below. The size of this array may be limited depending on the client as a DOS protection. 256 is a common/recommended limit as it is the same limit used by BLOCKHASH opcode.
+`BlockStateCalls` is an array of objects, the single object definition is described below. The total number of blocks for a single request is limited to 256. This includes any gap blocks that client generated.
    | Field            | Type                       | Description                                                                                                  |
    | :--------------- | :------------------------- | :----------------------------------------------------------------------------------------------------------- |
    | `blockOverrides` | `BlockOverrides`           | Overrides fields such as block number or time in a simulated block.                                          |
@@ -71,12 +71,12 @@ On failure:
    | `error`      | `{ code: uint64, message: string, data: bytes }` | Error code, data and message                  |
 
 On success:
-   | Field        | Type              | Description                                      |
-   | :----------- | :---------------- | :----------------------------------------------- |
-   | `status`     | `"0x1"`           | Status indicating that the transaction succeeded |
-   | `returnData` | `bytes`           | Transactions return data                         |
-   | `gasUsed`    | `uint64`          | Gas used by the transaction                      |
-   | `logs`       | `CallResultLog[]` | Error code and message                           |
+   | Field        | Type              | Description                                                                            |
+   | :----------- | :---------------- | :------------------------------------------------------------------------------------- |
+   | `status`     | `"0x1"`           | Status indicating that the transaction succeeded                                       |
+   | `returnData` | `bytes`           | Transactions return data                                                               |
+   | `gasUsed`    | `uint64`          | Gas used by the transaction                                                            |
+   | `logs`       | `CallResultLog[]` | Log events emitted during call. This includes ETH logs, if `traceTransfers` is enabled |
 
 the `CallResultLog` is object of form:
    | Field              | Type        | Description                                                                                                                                |
