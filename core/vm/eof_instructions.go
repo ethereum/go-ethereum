@@ -16,6 +16,13 @@
 
 package vm
 
+import (
+	"encoding/binary"
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/common/math"
+)
+
 // opRjump implements the RJUMP opcode.
 func opRjump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
@@ -61,12 +68,39 @@ func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 
 // opCallf implements the CALLF opcode
 func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		code = scope.Contract.CodeAt(scope.CodeSection)
+		idx  = binary.BigEndian.Uint16(code[*pc+1:])
+		typ  = scope.Contract.Container.types[idx]
+	)
+	if scope.Stack.len()+int(typ.maxStackHeight)-int(typ.inputs) > 1024 {
+		return nil, fmt.Errorf("stack overflow")
+	}
+	if scope.ReturnStack.Len() > 1024 {
+		return nil, fmt.Errorf("return stack overflow")
+	}
+	retCtx := &ReturnContext{
+		Section:     scope.CodeSection,
+		Pc:          *pc + 3,
+		StackHeight: scope.Stack.len() - int(typ.inputs),
+	}
+	scope.ReturnStack = append(scope.ReturnStack, retCtx)
+	scope.CodeSection = uint64(idx)
+	*pc = uint64(math.MaxUint64)
+	return nil, nil
 }
 
 // opRetf implements the RETF opcode
 func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	retCtx := scope.ReturnStack.Pop()
+	scope.CodeSection = retCtx.Section
+	*pc = retCtx.Pc - 1
+
+	// If returning from top frame, exit cleanly.
+	if scope.ReturnStack.Len() == 0 {
+		return nil, errStopToken
+	}
+	return nil, nil
 }
 
 // opJumpf implements the JUMPF opcode
