@@ -33,7 +33,7 @@ var libevmHooks Hooks
 // See [RegisterHooks].
 type Hooks interface {
 	OverrideNewEVMArgs(*NewEVMArgs) *NewEVMArgs
-	OverrideEVMResetArgs(*EVMResetArgs) *EVMResetArgs
+	OverrideEVMResetArgs(params.Rules, *EVMResetArgs) *EVMResetArgs
 }
 
 // NewEVMArgs are the arguments received by [NewEVM], available for override
@@ -67,10 +67,10 @@ func overrideNewEVMArgs(
 	return args.BlockContext, args.TxContext, args.StateDB, args.ChainConfig, args.Config
 }
 
-func overrideEVMResetArgs(txCtx TxContext, statedb StateDB) (TxContext, StateDB) {
+func (evm *EVM) overrideEVMResetArgs(txCtx TxContext, statedb StateDB) (TxContext, StateDB) {
 	if libevmHooks == nil {
 		return txCtx, statedb
 	}
-	args := libevmHooks.OverrideEVMResetArgs(&EVMResetArgs{txCtx, statedb})
+	args := libevmHooks.OverrideEVMResetArgs(evm.chainRules, &EVMResetArgs{txCtx, statedb})
 	return args.TxContext, args.StateDB
 }

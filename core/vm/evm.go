@@ -159,7 +159,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
-	evm.TxContext, evm.StateDB = overrideEVMResetArgs(txCtx, statedb)
+	evm.TxContext, evm.StateDB = evm.overrideEVMResetArgs(txCtx, statedb)
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
