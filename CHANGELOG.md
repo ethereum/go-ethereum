@@ -1,12 +1,5 @@
 # Changelog
 
-## [1.9.0](https://github.com/taikoxyz/taiko-geth/compare/v1.8.0...v1.9.0) (2024-09-26)
-
-
-### Features
-
-* **taiko_genesis:** update genesis JSONs ([#315](https://github.com/taikoxyz/taiko-geth/issues/315)) ([ae8a194](https://github.com/taikoxyz/taiko-geth/commit/ae8a194c517e39fda7a4c330cd6e5a49a8df3621))
-
 ## [1.8.0](https://github.com/taikoxyz/taiko-geth/compare/v1.7.0...v1.8.0) (2024-09-09)
 
 
