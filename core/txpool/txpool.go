@@ -104,6 +104,13 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	return pool, nil
 }
 
+// FlushAllTransactions removes all transactions from all subpools
+func (p *TxPool) FlushAllTransactions() {
+	for _, subpool := range p.subpools {
+		subpool.FlushAllTransactions()
+	}
+}
+
 // reserver is a method to create an address reservation callback to exclusively
 // assign/deassign addresses to/from subpools. This can ensure that at any point
 // in time, only a single subpool is able to manage an account, avoiding cross
