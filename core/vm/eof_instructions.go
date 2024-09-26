@@ -105,7 +105,17 @@ func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 
 // opJumpf implements the JUMPF opcode
 func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		code = scope.Contract.CodeAt(scope.CodeSection)
+		idx  = binary.BigEndian.Uint16(code[*pc+1:])
+		typ  = scope.Contract.Container.types[idx]
+	)
+	if scope.Stack.len()+int(typ.maxStackHeight)-int(typ.inputs) > 1024 {
+		return nil, fmt.Errorf("stack overflow")
+	}
+	scope.CodeSection = uint64(idx)
+	*pc = uint64(math.MaxUint64)
+	return nil, nil
 }
 
 // opEOFCreate implements the EOFCREATE opcode
