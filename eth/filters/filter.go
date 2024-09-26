@@ -154,6 +154,30 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	mb := f.sys.backend.NewMatcherBackend()
 	logs, _, _, _, err := filtermaps.GetPotentialMatches(ctx, mb, uint64(f.begin), uint64(f.end), f.addresses, f.topics)
 	mb.Close()
+	if err == filtermaps.ErrMatchAll {
+		// revert to legacy filter
+		hdr, _ := f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if hdr == nil {
+			return nil, errors.New("latest header not found")
+		}
+		headNumber := hdr.Number.Int64()
+		if f.begin > headNumber {
+			f.begin = headNumber
+		}
+		if f.end > headNumber {
+			f.end = headNumber
+		}
+		logChan, errChan := f.rangeLogsAsync(ctx)
+		var logs []*types.Log
+		for {
+			select {
+			case log := <-logChan:
+				logs = append(logs, log)
+			case err := <-errChan:
+				return logs, err
+			}
+		}
+	}
 	fmLogs := filterLogs(logs, nil, nil, f.addresses, f.topics)
 	log.Debug("Finished log search", "run time", time.Since(start), "true matches", len(fmLogs), "false positives", len(logs)-len(fmLogs))
 	return fmLogs, err
