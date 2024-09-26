@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -301,10 +302,10 @@ func (st *StateTransition) preCheck() error {
 	}
 	if !msg.SkipFromEOACheck {
 		// Make sure the sender is an EOA
-		codeHash := st.state.GetCodeHash(msg.From)
-		if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
+		code := st.state.GetCode(msg.From)
+		if 0 < len(code) && !bytes.HasPrefix(code, []byte{0xef, 0x01, 0x00}) {
 			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
-				msg.From.Hex(), codeHash)
+				msg.From.Hex(), st.state.GetCodeHash(msg.From))
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
