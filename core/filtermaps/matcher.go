@@ -11,6 +11,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// ErrMatchAll is returned when the specified filter matches everything.
+// Handling this case in filtermaps would require an extra special case and
+// would actually be slower than reverting to legacy filter.
+var ErrMatchAll = errors.New("match all patterns not supported")
+
 // MatcherBackend defines the functions required for searching in the log index
 // data structure. It is currently implemented by FilterMapsMatcherBackend but
 // once EIP-7745 is implemented and active, these functions can also be trustlessly
@@ -198,6 +203,9 @@ func getPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 		}
 		// get the actual logs located at the matching log value indices
 		for _, m := range matches {
+			if m == nil {
+				return nil, ErrMatchAll
+			}
 			mlogs, err := getLogsFromMatches(ctx, backend, firstIndex, lastIndex, m)
 			if err != nil {
 				return logs, err
