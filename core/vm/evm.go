@@ -18,7 +18,9 @@ package vm
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
+	"strings"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -223,7 +225,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
 			ret, err = evm.interpreter.Run(contract, input, false)
 			gas = contract.Gas
 		}
@@ -286,7 +288,8 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		if witness := evm.StateDB.Witness(); witness != nil {
 			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 		}
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
+		code := evm.StateDB.GetCode(addrCopy)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -336,7 +339,8 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		if witness := evm.StateDB.Witness(); witness != nil {
 			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 		}
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
+		code := evm.StateDB.GetCode(addrCopy)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false)
 		gas = contract.Gas
 	}
@@ -394,7 +398,8 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		if witness := evm.StateDB.Witness(); witness != nil {
 			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 		}
-		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), evm.StateDB.GetCode(addrCopy))
+		code := evm.StateDB.GetCode(addrCopy)
+		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
 		// When an error was returned by the EVM or when setting the creation code
 		// above we revert to the snapshot and consume any gas remaining. Additionally
 		// when we're in Homestead this also counts for code storage gas errors.
@@ -616,4 +621,19 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		ChainConfig: evm.ChainConfig(),
 		StateDB:     evm.StateDB,
 	}
+}
+
+// parseContainer tries to parse an EOF container if the Shanghai fork is active. It expects the code to already be validated.
+func (evm *EVM) parseContainer(b []byte) *Container {
+	if evm.chainRules.IsPrague {
+		var c Container
+		if err := c.UnmarshalBinary(b, false); err != nil && strings.HasPrefix(err.Error(), "invalid magic") {
+			return nil
+		} else if err != nil {
+			// Code was already validated, so no other errors should be possible.
+			panic(fmt.Sprintf("unexpected error: %v\ncode: %s\n", err, common.Bytes2Hex(b)))
+		}
+		return &c
+	}
+	return nil
 }
