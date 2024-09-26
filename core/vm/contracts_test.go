@@ -18,8 +18,10 @@ package vm
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
 
@@ -46,6 +48,25 @@ type precompiledFailureTest struct {
 	input         string
 	expectedError error
 	name          string
+}
+
+// allPrecompiles does not map to the actual set of precompiles, as it also contains
+// repriced versions of precompiles at certain slots
+var allPrecompiles = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}):    &ecrecover{},
+	common.BytesToAddress([]byte{2}):    &sha256hash{},
+	common.BytesToAddress([]byte{3}):    &ripemd160hash{},
+	common.BytesToAddress([]byte{4}):    &dataCopy{},
+	common.BytesToAddress([]byte{5}):    &bigModExp{eip2565: false},
+	common.BytesToAddress([]byte{0xf5}): &bigModExp{eip2565: true},
+	common.BytesToAddress([]byte{6}):    &bn256AddIstanbul{},
+	common.BytesToAddress([]byte{7}):    &bn256ScalarMulIstanbul{},
+	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
+	common.BytesToAddress([]byte{9}):    &blake2F{},
+	common.BytesToAddress([]byte{30}):   &ringSignatureVerifier{},
+	common.BytesToAddress([]byte{40}):   &bulletproofVerifier{},
+	common.BytesToAddress([]byte{41}):   &XDCxLastPrice{},
+	common.BytesToAddress([]byte{42}):   &XDCxEpochPrice{},
 }
 
 // modexpTests are the test and benchmark data for the modexp precompiled contract.
@@ -490,7 +511,7 @@ var blake2FTests = []precompiledTest{
 }
 
 func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
-	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	gas := p.RequiredGas(in)
 	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, gas), func(t *testing.T) {
@@ -509,7 +530,7 @@ func testPrecompiled(addr string, test precompiledTest, t *testing.T) {
 
 func testXDCxPrecompiled(addr string, test precompiledTest, t *testing.T) {
 	contractAddr := common.HexToAddress(addr)
-	p := PrecompiledContractsByzantium[contractAddr]
+	p := allPrecompiles[contractAddr]
 	in := common.Hex2Bytes(test.input)
 	gas := p.RequiredGas(in)
 	t.Run(fmt.Sprintf("%s-Gas=%d", test.name, gas), func(t *testing.T) {
@@ -523,7 +544,7 @@ func testXDCxPrecompiled(addr string, test precompiledTest, t *testing.T) {
 
 func testPrecompiledWithEmptyTradingState(addr string, test precompiledTest, t *testing.T) {
 	contractAddr := common.HexToAddress(addr)
-	p := PrecompiledContractsByzantium[contractAddr]
+	p := allPrecompiles[contractAddr]
 	in := common.Hex2Bytes(test.input)
 	gas := p.RequiredGas(in)
 	t.Run(fmt.Sprintf("testPrecompiledWithEmptyTradingState-%s-Gas=%d", test.name, gas), func(t *testing.T) {
@@ -536,7 +557,7 @@ func testPrecompiledWithEmptyTradingState(addr string, test precompiledTest, t *
 }
 
 func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
-	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	gas := p.RequiredGas(in) - 1
 
@@ -554,7 +575,7 @@ func testPrecompiledOOG(addr string, test precompiledTest, t *testing.T) {
 }
 
 func testPrecompiledFailure(addr string, test precompiledFailureTest, t *testing.T) {
-	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	gas := p.RequiredGas(in)
 	t.Run(test.name, func(t *testing.T) {
@@ -574,7 +595,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 	if test.noBenchmark {
 		return
 	}
-	p := PrecompiledContractsIstanbul[common.HexToAddress(addr)]
+	p := allPrecompiles[common.HexToAddress(addr)]
 	in := common.Hex2Bytes(test.input)
 	reqGas := p.RequiredGas(in)
 
@@ -656,6 +677,9 @@ func BenchmarkPrecompiledModExp(bench *testing.B) {
 		benchmarkPrecompiled("05", test, bench)
 	}
 }
+
+func TestPrecompiledModExpEip2565(t *testing.T)      { testJson("modexp_eip2565", "f5", t) }
+func BenchmarkPrecompiledModExpEip2565(b *testing.B) { benchJson("modexp_eip2565", "f5", b) }
 
 // Tests the sample inputs from the elliptic curve addition EIP 213.
 func TestPrecompiledBn256Add(t *testing.T) {
@@ -800,5 +824,34 @@ func TestPrecompiledEcrecover(t *testing.T) {
 	for _, test := range ecRecoverTests {
 		testPrecompiled("01", test, t)
 	}
+}
 
+func testJson(name, addr string, t *testing.T) {
+	tests, err := loadJson(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range tests {
+		testPrecompiled(addr, test, t)
+	}
+}
+
+func benchJson(name, addr string, b *testing.B) {
+	tests, err := loadJson(name)
+	if err != nil {
+		b.Fatal(err)
+	}
+	for _, test := range tests {
+		benchmarkPrecompiled(addr, test, b)
+	}
+}
+
+func loadJson(name string) ([]precompiledTest, error) {
+	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
+	if err != nil {
+		return nil, err
+	}
+	var testcases []precompiledTest
+	err = json.Unmarshal(data, &testcases)
+	return testcases, err
 }
