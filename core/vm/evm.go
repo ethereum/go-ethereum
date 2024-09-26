@@ -544,7 +544,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
 
-	ret, err = evm.initNewContract(contract, address, value, isInitcodeEOF)
+	ret, err = evm.initNewContract(contract, address, value, input, isInitcodeEOF)
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 		if err != ErrExecutionReverted {
@@ -556,7 +556,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 // initNewContract runs a new contract's creation code, performs checks on the
 // resulting code that is to be deployed, and consumes necessary gas.
-func (evm *EVM) initNewContract(contract *Contract, address common.Address, value *uint256.Int, isInitcodeEOF bool) ([]byte, error) {
+func (evm *EVM) initNewContract(contract *Contract, address common.Address, value *uint256.Int, input []byte, isInitcodeEOF bool) ([]byte, error) {
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
 		if !contract.UseGas(evm.AccessEvents.ContractCreateInitGas(address, value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
@@ -564,7 +564,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address, valu
 		}
 	}
 
-	ret, err := evm.interpreter.Run(contract, nil, false, contract.IsDeployment)
+	ret, err := evm.interpreter.Run(contract, input, false, contract.IsDeployment)
 	if err != nil {
 		return ret, err
 	}
@@ -627,7 +627,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 func (evm *EVM) EOFCreate(caller ContractRef, input []byte, subcontainer []byte, gas uint64, endowment *uint256.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	codeAndHash := &codeAndHash{code: subcontainer}
 	contractAddr = crypto.CreateAddress2(caller.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2, input, true)
+	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, EOFCREATE, input, true)
 }
 
 // ChainConfig returns the environment's chain configuration
