@@ -579,16 +579,16 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address, valu
 		return ret, fmt.Errorf("%w: %v", ErrInvalidEOFInitcode, ErrLegacyCode)
 	}
 	// Reject EOF deployment from legacy.
-	if isInitcodeEOF && hasEOFMagic(ret) {
+	if !isInitcodeEOF && hasEOFMagic(ret) {
 		return ret, ErrLegacyCode
 	}
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if len(ret) >= 1 && HasEOFByte(ret) {
 		if evm.chainRules.IsPrague && isInitcodeEOF {
-			// Don't reject EOF contracts after Shanghai
+			// Don't reject EOF contracts after Prague
 		} else if evm.chainRules.IsLondon {
-			err = ErrInvalidCode
+			return ret, ErrInvalidCode
 		}
 	}
 
