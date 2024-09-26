@@ -37,6 +37,7 @@ var (
 	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
 	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
+	ErrInvalidEOFInitcode       = errors.New("invalid eof initcode")
 	ErrNonceUintOverflow        = errors.New("nonce uint64 overflow")
 
 	// errStopToken is an internal token indicating interpreter loop termination,
