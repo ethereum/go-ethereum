@@ -14,8 +14,12 @@ ERR: invalid magic: want ef00
 ERR: invalid magic: want ef00
 ERR: invalid magic: want ef00
 ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
 ERR: unexpected EOF
 ERR: invalid version: have 0, want 1
+ERR: invalid version: have 0, want 1
+ERR: unexpected EOF
+ERR: unexpected EOF
 ERR: unexpected EOF
 ERR: unexpected EOF
 ERR: unexpected EOF
@@ -26,35 +30,76 @@ ERR: invalid type section size: type section size must be divisible by 4, have 1
 ERR: invalid type section size: type section size must be divisible by 4, have 2
 ERR: invalid type section size: type section size must be divisible by 4, have 2
 ERR: invalid type section size: type section size must be divisible by 4, have 3
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: missing code header: found section kind 1 instead
 ERR: missing code header: found section kind 1 instead
 ERR: unexpected EOF
 ERR: unexpected EOF
 ERR: invalid code size: mismatch of code sections found and type signatures, types 1, code 0
 ERR: unexpected EOF
 ERR: unexpected EOF
+ERR: invalid code size for section 0: size must not be 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid code size for section 0: size must not be 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid code size for section 0: size must not be 0
 ERR: unexpected EOF
-ERR: unexpected EOF
-ERR: invalid code size for section 0: size must not be 0
-ERR: invalid code size for section 0: size must not be 0
-ERR: invalid code size for section 0: size must not be 0
 ERR: missing data header: found section 0 instead
+ERR: missing data header: found section 0 instead
+ERR: missing data header: found section 2 instead
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid container section size: total container count must not be zero
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid container section size for section 0: size must not be 0
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: unexpected EOF
 ERR: invalid container size: have 26, want 49177
+ERR: unexpected EOF
+ERR: unexpected EOF
 ERR: invalid container size: have 29, want 49180
 ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: unexpected EOF
+ERR: invalid container size: have 15, want 20
+ERR: invalid container size: have 16, want 20
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
+ERR: invalid container size: have 17, want 20
+ERR: invalid container size: have 18, want 20
 ERR: invalid container size: have 19, want 20
 ERR: initcode contains a RETURN or STOP opcode
 ERR: truncated immediate: op RJUMP, pos 0
+ERR: invalid non-returning flag, bad RETF: at pos 0
+ERR: truncated top level container
 ERR: invalid container size: have 19, want 20
 ERR: invalid type content, too many inputs for section 0: have 128
 ERR: missing header terminator: have 4
 ERR: missing header terminator: have 4
+ERR: missing header terminator: have 5
+ERR: missing header terminator: have 6
 ERR: missing header terminator: have 30
+ERR: missing header terminator: have ff
 ERR: truncated top level container
 ERR: initcode contains a RETURN or STOP opcode
 ERR: missing header terminator: have 4
+ERR: unexpected EOF
+ERR: invalid container size: have 15, want 22
+ERR: invalid container size: have 16, want 22
+ERR: invalid container size: have 17, want 22
+ERR: invalid container size: have 18, want 22
+ERR: invalid container size: have 19, want 22
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
 ERR: truncated top level container
 ERR: truncated top level container
 OK
+ERR: truncated top level container
+ERR: missing header terminator: have 4
 ERR: truncated top level container
 ERR: invalid type content, too many inputs for section 0: have 128
 ERR: initcode contains a RETURN or STOP opcode
@@ -81,8 +126,14 @@ ERR: invalid code termination: end with PUSH0, pos 1
 ERR: invalid code termination: end with DATASIZE, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: max initcode size exceeded
+ERR: missing data header: found section 5 instead
+ERR: missing data header: found section 6 instead
+ERR: missing data header: found section ff instead
+ERR: invalid magic: want ef00 in sub container 0
 ERR: invalid container size: have 15, want 21
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
 ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 1
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 127
 ERR: invalid container size: have 18, want 21
 ERR: invalid container size: have 20, want 21
 ERR: initcode contains a RETURN or STOP opcode
@@ -99,16 +150,20 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid non-returning flag, bad RETF: at pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid type content, too many inputs for section 0: have 129
+ERR: invalid type content, too many inputs for section 0: have 255
 ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 1, 128
 ERR: invalid container size: have 19, want 21
 ERR: invalid type content, too many inputs for section 0: have 128
+ERR: invalid type content, too many inputs for section 0: have 128
+ERR: invalid type content, too many inputs for section 0: have 255
 ERR: missing header terminator: have 30
 ERR: invalid code termination: end with PUSH1, pos 2
 ERR: invalid code termination: end with PUSH1, pos 2
-ERR: truncated top level container
 ERR: undefined instruction: op opcode 0xc not defined, pos 0
 ERR: undefined instruction: op opcode 0xd not defined, pos 0
 ERR: undefined instruction: op opcode 0xe not defined, pos 0
@@ -236,6 +291,7 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP1, pos 2
 ERR: missing data header: found section 0 instead
 ERR: missing data header: found section 0 instead
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
 ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 5, pos 1
 ERR: invalid jump destination: out-of-bounds offset: offset -23, dest -20, pos 1
 ERR: invalid jump destination: out-of-bounds offset: offset -5, dest -2, pos 1
@@ -246,7 +302,7 @@ ERR: invalid section argument: arg 65535, last 1, pos 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: truncated top level container
+ERR: initcode contains a RETURN or STOP opcode
 ERR: truncated top level container
 ERR: truncated immediate: op RJUMPI, pos 2
 ERR: truncated immediate: op RJUMPV, pos 2
@@ -284,7 +340,6 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid container size: have 18, want 22
 ERR: invalid container size: have 21, want 22
 ERR: invalid container size: have 21, want 22
@@ -295,19 +350,14 @@ ERR: truncated top level container
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid container size: have 20, want 23
 ERR: undefined instruction: op opcode 0xef not defined, pos 0
 ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 48, 80
 ERR: invalid container size: have 19, want 23
 ERR: invalid type content, too many inputs for section 0: have 239
-ERR: missing header terminator: have ff
-ERR: truncated top level container
 ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 5, pos 1
-ERR: initcode contains a RETURN or STOP opcode
 ERR: missing header terminator: have 4
 ERR: initcode contains a RETURN or STOP opcode
-OK
 ERR: truncated top level container
 OK
 ERR: initcode contains a RETURN or STOP opcode
@@ -363,17 +413,16 @@ OK
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUPN, pos 3
 ERR: invalid code termination: end with DUP2, pos 3
-ERR: truncated top level container
 ERR: initcode contains a RETURN or STOP opcode
-ERR: truncated top level container
-ERR: truncated top level container
 OK
 ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 4, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset -2, dest 1, pos 1
 ERR: invalid jump destination: offset into immediate: offset -1, dest 2, pos 1
+ERR: initcode contains a RETURN or STOP opcode
 ERR: truncated immediate: op RJUMPI, pos 2
 ERR: truncated immediate: op RJUMPV, pos 2
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -437,20 +486,18 @@ ERR: invalid code termination: end with EXTDELEGATECALL, pos 4
 ERR: invalid code termination: end with EXTSTATICCALL, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP3, pos 4
+ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 0, 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid max stack height
 OK
-ERR: invalid jump destination: offset into immediate: offset -4, dest 1, pos 3
 ERR: truncated immediate: op RJUMPV, pos 2
 ERR: invalid dataloadN argument: arg 65503, last 0, pos 0
-ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: undefined instruction: op JUMP, pos 2
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH4, pos 5
@@ -478,15 +525,23 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid dataloadN argument: arg 65503, last 128, pos 0
 ERR: invalid dataloadN argument: arg 65503, last 32767, pos 0
+ERR: invalid container size: have 19, want 20 in sub container 0
+ERR: initcode contains a RETURN or STOP opcode
 OK
 ERR: unreachable code: arg 1, last 1, pos 4
 ERR: unreachable code: arg 255, last 1, pos 4
+ERR: truncated top level container
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid container size: have 50, want 51
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with EOFCREATE, pos 6
 OK
 OK
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
 ERR: invalid max stack height
+ERR: invalid jump destination: offset into immediate: offset -4, dest 1, pos 3
 ERR: invalid jump destination: out-of-bounds offset: offset 1, dest 6, pos 3
 ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 7, pos 3
 ERR: invalid jump destination: out-of-bounds offset: offset -25, dest -20, pos 3
@@ -498,14 +553,12 @@ ERR: invalid jump destination: offset into immediate: offset -1, dest 4, pos 3
 ERR: invalid jump destination: out-of-bounds offset: offset 0, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset -5, dest 1, pos 4
 ERR: invalid jump destination: offset into immediate: offset -4, dest 2, pos 4
-ERR: invalid jump destination: offset into immediate: offset -5, dest 1, pos 4
-ERR: invalid jump destination: offset into immediate: offset -4, dest 2, pos 4
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 2, dest 5, pos 1
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: unreachable code: arg 0, last 0, pos 4
-ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -540,20 +593,20 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset -3, dest 3, pos 4
 ERR: invalid jump destination: offset into immediate: offset -1, dest 5, pos 4
 ERR: invalid jump destination: out-of-bounds offset: offset 0, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset -5, dest 1, pos 4
+ERR: invalid jump destination: offset into immediate: offset -4, dest 2, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset -6, dest 1, pos 5
 ERR: invalid jump destination: offset into immediate: offset -4, dest 3, pos 5
-ERR: invalid jump destination: offset into immediate: offset -6, dest 1, pos 5
-ERR: invalid jump destination: offset into immediate: offset -4, dest 3, pos 5
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 3, dest 6, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 5, pos 1
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: out-of-bounds offset: offset 2, dest 8, pos 4
-ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH6, pos 7
 ERR: initcode contains a RETURN or STOP opcode
@@ -562,17 +615,15 @@ ERR: invalid code termination: end with SWAP5, pos 7
 ERR: invalid code termination: end with LOG4, pos 7
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP6, pos 7
-ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 2, dest 7, pos 3
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset -6, dest 1, pos 5
 ERR: invalid jump destination: offset into immediate: offset -5, dest 2, pos 5
-ERR: invalid jump destination: offset into immediate: offset -7, dest 1, pos 6
-ERR: invalid jump destination: offset into immediate: offset -4, dest 4, pos 6
+ERR: invalid jump destination: offset into immediate: offset -6, dest 1, pos 5
+ERR: invalid jump destination: offset into immediate: offset -4, dest 3, pos 5
 ERR: invalid jump destination: offset into immediate: offset -7, dest 1, pos 6
 ERR: invalid jump destination: offset into immediate: offset -4, dest 4, pos 6
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 4, dest 7, pos 1
-ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid jump destination: offset into immediate: offset 3, dest 6, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -587,16 +638,17 @@ ERR: invalid code termination: end with SWAP6, pos 8
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP7, pos 8
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 3, dest 8, pos 3
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 2, dest 7, pos 3
 ERR: invalid jump destination: offset into immediate: offset 3, dest 8, pos 3
 ERR: invalid jump destination: offset into immediate: offset -7, dest 1, pos 6
 ERR: invalid jump destination: offset into immediate: offset -5, dest 3, pos 6
-ERR: invalid jump destination: offset into immediate: offset -8, dest 1, pos 7
-ERR: invalid jump destination: offset into immediate: offset -4, dest 5, pos 7
+ERR: invalid jump destination: offset into immediate: offset -7, dest 1, pos 6
+ERR: invalid jump destination: offset into immediate: offset -4, dest 4, pos 6
 ERR: invalid jump destination: offset into immediate: offset -8, dest 1, pos 7
 ERR: invalid jump destination: offset into immediate: offset -4, dest 5, pos 7
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 5, dest 8, pos 1
+ERR: invalid jump destination: offset into immediate: offset 4, dest 7, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -610,29 +662,40 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP8, pos 9
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
+ERR: invalid jump destination: offset into immediate: offset 3, dest 8, pos 3
 ERR: invalid jump destination: offset into immediate: offset -8, dest 1, pos 7
 ERR: invalid jump destination: offset into immediate: offset -5, dest 4, pos 7
-ERR: invalid jump destination: offset into immediate: offset -9, dest 1, pos 8
-ERR: invalid jump destination: offset into immediate: offset -4, dest 6, pos 8
+ERR: invalid jump destination: offset into immediate: offset -8, dest 1, pos 7
+ERR: invalid jump destination: offset into immediate: offset -4, dest 5, pos 7
 ERR: invalid jump destination: offset into immediate: offset -9, dest 1, pos 8
 ERR: invalid jump destination: offset into immediate: offset -4, dest 6, pos 8
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
 ERR: invalid jump destination: offset into immediate: offset 5, dest 8, pos 1
-ERR: invalid jump destination: offset into immediate: offset 6, dest 9, pos 1
+ERR: invalid jump destination: offset into immediate: offset 5, dest 8, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH9, pos 10
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with SWAP8, pos 10
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP9, pos 10
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid container size: have 19, want 20 in sub container 0
+ERR: missing data header: found section 3 instead
 ERR: unreachable code
 ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid container size: have 35, want 55
+ERR: invalid version: have 0, want 1 in sub container 0
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid version: have 255, want 1 in sub container 0
+ERR: unreachable code: arg 1, last 1, pos 8
+ERR: unreachable code: arg 255, last 1, pos 8
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid container size: have 55, want 56
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -644,20 +707,22 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 5, dest 10, pos 3
+ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 3, dest 9, pos 4
 ERR: invalid jump destination: offset into immediate: offset -9, dest 1, pos 8
 ERR: invalid jump destination: offset into immediate: offset -5, dest 5, pos 8
-ERR: invalid jump destination: offset into immediate: offset -10, dest 1, pos 9
-ERR: invalid jump destination: offset into immediate: offset -4, dest 7, pos 9
+ERR: invalid jump destination: offset into immediate: offset -9, dest 1, pos 8
+ERR: invalid jump destination: offset into immediate: offset -4, dest 6, pos 8
 ERR: invalid jump destination: offset into immediate: offset -10, dest 1, pos 9
 ERR: invalid jump destination: offset into immediate: offset -4, dest 7, pos 9
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 4, dest 7, pos 1
 ERR: invalid jump destination: offset into immediate: offset 6, dest 9, pos 1
-ERR: invalid jump destination: offset into immediate: offset 7, dest 10, pos 1
+ERR: invalid jump destination: offset into immediate: offset 6, dest 9, pos 1
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 8, pos 5
 ERR: invalid jump destination: offset into immediate: offset 1, dest 8, pos 5
@@ -670,6 +735,7 @@ ERR: invalid code termination: end with SWAP9, pos 11
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP10, pos 11
 OK
+ERR: invalid container size: have 21, want 20 in sub container 0
 OK
 OK
 ERR: incompatible container kind
@@ -678,16 +744,16 @@ ERR: subcontainer not referenced at all
 ERR: subcontainer not referenced at all
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
 ERR: invalid jump destination: offset into immediate: offset 5, dest 10, pos 3
-ERR: invalid jump destination: offset into immediate: offset 6, dest 11, pos 3
+ERR: invalid jump destination: offset into immediate: offset 5, dest 10, pos 3
 ERR: invalid jump destination: offset into immediate: offset -10, dest 1, pos 9
 ERR: invalid jump destination: offset into immediate: offset -5, dest 6, pos 9
-ERR: invalid jump destination: offset into immediate: offset -11, dest 1, pos 10
-ERR: invalid jump destination: offset into immediate: offset -4, dest 8, pos 10
+ERR: invalid jump destination: offset into immediate: offset -10, dest 1, pos 9
+ERR: invalid jump destination: offset into immediate: offset -4, dest 7, pos 9
 ERR: invalid jump destination: offset into immediate: offset -11, dest 1, pos 10
 ERR: invalid jump destination: offset into immediate: offset -4, dest 8, pos 10
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
 ERR: initcode contains a RETURN or STOP opcode
-ERR: invalid jump destination: offset into immediate: offset 8, dest 11, pos 1
+ERR: invalid jump destination: offset into immediate: offset 7, dest 10, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -697,55 +763,73 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with SWAP10, pos 12
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP11, pos 12
+ERR: invalid container section size for section 0: size must not be 0
+ERR: unexpected EOF in sub container 0
+ERR: truncated top level container
+ERR: truncated top level container
+ERR: initcode contains a RETURN or STOP opcode
+ERR: truncated top level container
+ERR: truncated top level container
+ERR: truncated top level container
+ERR: invalid container size: have 90, want 140
+ERR: invalid container size: have 90, want 32808
+ERR: invalid container size: have 90, want 65575
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
 ERR: invalid jump destination: offset into immediate: offset 4, dest 9, pos 3
 ERR: invalid jump destination: offset into immediate: offset 6, dest 11, pos 3
-ERR: invalid jump destination: offset into immediate: offset 7, dest 12, pos 3
+ERR: invalid jump destination: offset into immediate: offset 6, dest 11, pos 3
 ERR: invalid jump destination: offset into immediate: offset 4, dest 10, pos 4
 ERR: invalid jump destination: offset into immediate: offset 5, dest 11, pos 4
 ERR: invalid jump destination: offset into immediate: offset -11, dest 1, pos 10
 ERR: invalid jump destination: offset into immediate: offset -5, dest 7, pos 10
-ERR: invalid jump destination: offset into immediate: offset -12, dest 1, pos 11
-ERR: invalid jump destination: offset into immediate: offset -4, dest 9, pos 11
+ERR: invalid jump destination: offset into immediate: offset -11, dest 1, pos 10
+ERR: invalid jump destination: offset into immediate: offset -4, dest 8, pos 10
 ERR: invalid jump destination: offset into immediate: offset -12, dest 1, pos 11
 ERR: invalid jump destination: offset into immediate: offset -4, dest 9, pos 11
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 9, dest 12, pos 1
+ERR: invalid jump destination: offset into immediate: offset 8, dest 11, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 10, pos 7
 ERR: invalid jump destination: offset into immediate: offset 1, dest 10, pos 7
 ERR: invalid jump destination: offset into immediate: offset 1, dest 10, pos 7
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: initcode contains a RETURN or STOP opcode
-ERR: invalid jump destination: offset into immediate: offset -1, dest 9, pos 6
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH12, pos 13
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with SWAP11, pos 13
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP12, pos 13
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid magic: want ef00 in sub container 0
+ERR: invalid type content, too many inputs for section 0: have 239
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 8, dest 13, pos 3
+ERR: invalid jump destination: offset into immediate: offset 7, dest 12, pos 3
 ERR: invalid jump destination: offset into immediate: offset 4, dest 10, pos 4
 ERR: invalid jump destination: offset into immediate: offset 6, dest 12, pos 4
 ERR: invalid jump destination: offset into immediate: offset -12, dest 1, pos 11
 ERR: invalid jump destination: offset into immediate: offset -5, dest 8, pos 11
-ERR: invalid jump destination: offset into immediate: offset -13, dest 1, pos 12
-ERR: invalid jump destination: offset into immediate: offset -4, dest 10, pos 12
+ERR: invalid jump destination: offset into immediate: offset -12, dest 1, pos 11
+ERR: invalid jump destination: offset into immediate: offset -4, dest 9, pos 11
 ERR: invalid jump destination: offset into immediate: offset -13, dest 1, pos 12
 ERR: invalid jump destination: offset into immediate: offset -4, dest 10, pos 12
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 10, dest 13, pos 1
+ERR: invalid jump destination: offset into immediate: offset 9, dest 12, pos 1
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 3, dest 9, pos 4
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 11, pos 8
 ERR: invalid jump destination: offset into immediate: offset 1, dest 11, pos 8
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: initcode contains a RETURN or STOP opcode
+ERR: missing header terminator: have 3
+ERR: missing header terminator: have 3
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH13, pos 14
 ERR: initcode contains a RETURN or STOP opcode
@@ -762,18 +846,19 @@ OK
 ERR: initcode contains a RETURN or STOP opcode
 OK
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 9, dest 14, pos 3
+ERR: invalid jump destination: offset into immediate: offset 8, dest 13, pos 3
 ERR: invalid jump destination: offset into immediate: offset -13, dest 1, pos 12
 ERR: invalid jump destination: offset into immediate: offset -5, dest 9, pos 12
-ERR: invalid jump destination: offset into immediate: offset -14, dest 1, pos 13
-ERR: invalid jump destination: offset into immediate: offset -4, dest 11, pos 13
+ERR: invalid jump destination: offset into immediate: offset -13, dest 1, pos 12
+ERR: invalid jump destination: offset into immediate: offset -4, dest 10, pos 12
 ERR: invalid jump destination: offset into immediate: offset -14, dest 1, pos 13
 ERR: invalid jump destination: offset into immediate: offset -4, dest 11, pos 13
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 11, dest 14, pos 1
+ERR: invalid jump destination: offset into immediate: offset 10, dest 13, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 4, dest 10, pos 4
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 12, pos 9
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -784,53 +869,55 @@ ERR: invalid code termination: end with SWAP13, pos 15
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP14, pos 15
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 10, dest 15, pos 3
+ERR: invalid jump destination: offset into immediate: offset 9, dest 14, pos 3
 ERR: invalid jump destination: offset into immediate: offset -14, dest 1, pos 13
 ERR: invalid jump destination: offset into immediate: offset -5, dest 10, pos 13
-ERR: invalid jump destination: offset into immediate: offset -15, dest 1, pos 14
-ERR: invalid jump destination: offset into immediate: offset -4, dest 12, pos 14
+ERR: invalid jump destination: offset into immediate: offset -14, dest 1, pos 13
+ERR: invalid jump destination: offset into immediate: offset -4, dest 11, pos 13
 ERR: invalid jump destination: offset into immediate: offset -15, dest 1, pos 14
 ERR: invalid jump destination: offset into immediate: offset -4, dest 12, pos 14
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 12, dest 15, pos 1
+ERR: invalid jump destination: offset into immediate: offset 11, dest 14, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 5, dest 11, pos 4
 ERR: invalid jump destination: offset into immediate: offset 1, dest 13, pos 10
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: invalid jump destination: offset into immediate: offset 2, dest 14, pos 10
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH15, pos 16
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with SWAP14, pos 16
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP15, pos 16
+OK
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 9, dest 15, pos 4
+ERR: invalid container size: have 51, want 50 in sub container 0
 OK
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 11, dest 16, pos 3
+ERR: invalid jump destination: offset into immediate: offset 10, dest 15, pos 3
 ERR: invalid jump destination: offset into immediate: offset -15, dest 1, pos 14
 ERR: invalid jump destination: offset into immediate: offset -5, dest 11, pos 14
-ERR: invalid jump destination: offset into immediate: offset -16, dest 1, pos 15
-ERR: invalid jump destination: offset into immediate: offset -4, dest 13, pos 15
+ERR: invalid jump destination: offset into immediate: offset -15, dest 1, pos 14
+ERR: invalid jump destination: offset into immediate: offset -4, dest 12, pos 14
 ERR: invalid jump destination: offset into immediate: offset -16, dest 1, pos 15
 ERR: invalid jump destination: offset into immediate: offset -4, dest 13, pos 15
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 13, dest 16, pos 1
+ERR: invalid jump destination: offset into immediate: offset 12, dest 15, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 6, dest 12, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid max stack height
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH16, pos 17
@@ -839,15 +926,15 @@ ERR: invalid code termination: end with SWAP15, pos 17
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with DUP16, pos 17
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 12, dest 17, pos 3
+ERR: invalid jump destination: offset into immediate: offset 11, dest 16, pos 3
 ERR: invalid jump destination: offset into immediate: offset -16, dest 1, pos 15
 ERR: invalid jump destination: offset into immediate: offset -5, dest 12, pos 15
-ERR: invalid jump destination: offset into immediate: offset -17, dest 1, pos 16
-ERR: invalid jump destination: offset into immediate: offset -4, dest 14, pos 16
+ERR: invalid jump destination: offset into immediate: offset -16, dest 1, pos 15
+ERR: invalid jump destination: offset into immediate: offset -4, dest 13, pos 15
 ERR: invalid jump destination: offset into immediate: offset -17, dest 1, pos 16
 ERR: invalid jump destination: offset into immediate: offset -4, dest 14, pos 16
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 14, dest 17, pos 1
+ERR: invalid jump destination: offset into immediate: offset 13, dest 16, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 7, dest 13, pos 4
@@ -858,15 +945,16 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with SWAP16, pos 18
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 13, dest 18, pos 3
+ERR: invalid jump destination: offset into immediate: offset 12, dest 17, pos 3
 ERR: invalid jump destination: offset into immediate: offset -17, dest 1, pos 16
 ERR: invalid jump destination: offset into immediate: offset -5, dest 13, pos 16
-ERR: invalid jump destination: offset into immediate: offset -18, dest 1, pos 17
-ERR: invalid jump destination: offset into immediate: offset -4, dest 15, pos 17
+ERR: invalid jump destination: offset into immediate: offset -17, dest 1, pos 16
+ERR: invalid jump destination: offset into immediate: offset -4, dest 14, pos 16
 ERR: invalid jump destination: offset into immediate: offset -18, dest 1, pos 17
 ERR: invalid jump destination: offset into immediate: offset -4, dest 15, pos 17
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 15, dest 18, pos 1
+ERR: invalid jump destination: offset into immediate: offset 14, dest 17, pos 1
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 8, dest 14, pos 4
@@ -874,258 +962,270 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH18, pos 19
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 14, dest 19, pos 3
+ERR: invalid jump destination: offset into immediate: offset 13, dest 18, pos 3
 ERR: invalid jump destination: offset into immediate: offset -18, dest 1, pos 17
 ERR: invalid jump destination: offset into immediate: offset -5, dest 14, pos 17
-ERR: invalid jump destination: offset into immediate: offset -19, dest 1, pos 18
-ERR: invalid jump destination: offset into immediate: offset -4, dest 16, pos 18
+ERR: invalid jump destination: offset into immediate: offset -18, dest 1, pos 17
+ERR: invalid jump destination: offset into immediate: offset -4, dest 15, pos 17
 ERR: invalid jump destination: offset into immediate: offset -19, dest 1, pos 18
 ERR: invalid jump destination: offset into immediate: offset -4, dest 16, pos 18
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 16, dest 19, pos 1
+ERR: invalid jump destination: offset into immediate: offset 15, dest 18, pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 9, dest 15, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH19, pos 20
+ERR: missing data header: found section 3 instead
+ERR: missing header terminator: have 3
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 15, dest 20, pos 3
+ERR: invalid jump destination: offset into immediate: offset 14, dest 19, pos 3
 ERR: invalid jump destination: offset into immediate: offset -19, dest 1, pos 18
 ERR: invalid jump destination: offset into immediate: offset -5, dest 15, pos 18
-ERR: invalid jump destination: offset into immediate: offset -20, dest 1, pos 19
-ERR: invalid jump destination: offset into immediate: offset -4, dest 17, pos 19
+ERR: invalid jump destination: offset into immediate: offset -19, dest 1, pos 18
+ERR: invalid jump destination: offset into immediate: offset -4, dest 16, pos 18
 ERR: invalid jump destination: offset into immediate: offset -20, dest 1, pos 19
 ERR: invalid jump destination: offset into immediate: offset -4, dest 17, pos 19
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 17, dest 20, pos 1
+ERR: invalid jump destination: offset into immediate: offset 16, dest 19, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 10, dest 16, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH20, pos 21
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 16, dest 21, pos 3
+ERR: invalid jump destination: offset into immediate: offset 15, dest 20, pos 3
 ERR: invalid jump destination: offset into immediate: offset -20, dest 1, pos 19
 ERR: invalid jump destination: offset into immediate: offset -5, dest 16, pos 19
-ERR: invalid jump destination: offset into immediate: offset -21, dest 1, pos 20
-ERR: invalid jump destination: offset into immediate: offset -4, dest 18, pos 20
+ERR: invalid jump destination: offset into immediate: offset -20, dest 1, pos 19
+ERR: invalid jump destination: offset into immediate: offset -4, dest 17, pos 19
 ERR: invalid jump destination: offset into immediate: offset -21, dest 1, pos 20
 ERR: invalid jump destination: offset into immediate: offset -4, dest 18, pos 20
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 18, dest 21, pos 1
+ERR: invalid jump destination: offset into immediate: offset 17, dest 20, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 11, dest 17, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH21, pos 22
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 17, dest 22, pos 3
+ERR: invalid jump destination: offset into immediate: offset 16, dest 21, pos 3
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset -21, dest 1, pos 20
 ERR: invalid jump destination: offset into immediate: offset -5, dest 17, pos 20
-ERR: invalid jump destination: offset into immediate: offset -22, dest 1, pos 21
-ERR: invalid jump destination: offset into immediate: offset -4, dest 19, pos 21
+ERR: invalid jump destination: offset into immediate: offset -21, dest 1, pos 20
+ERR: invalid jump destination: offset into immediate: offset -4, dest 18, pos 20
 ERR: invalid jump destination: offset into immediate: offset -22, dest 1, pos 21
 ERR: invalid jump destination: offset into immediate: offset -4, dest 19, pos 21
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 19, dest 22, pos 1
+ERR: invalid jump destination: offset into immediate: offset 18, dest 21, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 12, dest 18, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH22, pos 23
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 18, dest 23, pos 3
+ERR: invalid jump destination: offset into immediate: offset 17, dest 22, pos 3
 ERR: invalid jump destination: offset into immediate: offset -22, dest 1, pos 21
 ERR: invalid jump destination: offset into immediate: offset -5, dest 18, pos 21
-ERR: invalid jump destination: offset into immediate: offset -23, dest 1, pos 22
-ERR: invalid jump destination: offset into immediate: offset -4, dest 20, pos 22
+ERR: invalid jump destination: offset into immediate: offset -22, dest 1, pos 21
+ERR: invalid jump destination: offset into immediate: offset -4, dest 19, pos 21
 ERR: invalid jump destination: offset into immediate: offset -23, dest 1, pos 22
 ERR: invalid jump destination: offset into immediate: offset -4, dest 20, pos 22
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 20, dest 23, pos 1
+ERR: invalid jump destination: offset into immediate: offset 19, dest 22, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 13, dest 19, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH23, pos 24
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 19, dest 24, pos 3
+ERR: invalid jump destination: offset into immediate: offset 18, dest 23, pos 3
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset -23, dest 1, pos 22
 ERR: invalid jump destination: offset into immediate: offset -5, dest 19, pos 22
-ERR: invalid jump destination: offset into immediate: offset -24, dest 1, pos 23
-ERR: invalid jump destination: offset into immediate: offset -4, dest 21, pos 23
+ERR: invalid jump destination: offset into immediate: offset -23, dest 1, pos 22
+ERR: invalid jump destination: offset into immediate: offset -4, dest 20, pos 22
 ERR: invalid jump destination: offset into immediate: offset -24, dest 1, pos 23
 ERR: invalid jump destination: offset into immediate: offset -4, dest 21, pos 23
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 21, dest 24, pos 1
+ERR: invalid jump destination: offset into immediate: offset 20, dest 23, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 14, dest 20, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH24, pos 25
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 20, dest 25, pos 3
+ERR: invalid jump destination: offset into immediate: offset 19, dest 24, pos 3
 ERR: invalid jump destination: offset into immediate: offset -24, dest 1, pos 23
 ERR: invalid jump destination: offset into immediate: offset -5, dest 20, pos 23
-ERR: invalid jump destination: offset into immediate: offset -25, dest 1, pos 24
-ERR: invalid jump destination: offset into immediate: offset -4, dest 22, pos 24
+ERR: invalid jump destination: offset into immediate: offset -24, dest 1, pos 23
+ERR: invalid jump destination: offset into immediate: offset -4, dest 21, pos 23
 ERR: invalid jump destination: offset into immediate: offset -25, dest 1, pos 24
 ERR: invalid jump destination: offset into immediate: offset -4, dest 22, pos 24
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 22, dest 25, pos 1
+ERR: invalid jump destination: offset into immediate: offset 21, dest 24, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 15, dest 21, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH25, pos 26
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 21, dest 26, pos 3
+ERR: invalid jump destination: offset into immediate: offset 20, dest 25, pos 3
 ERR: invalid jump destination: offset into immediate: offset -25, dest 1, pos 24
 ERR: invalid jump destination: offset into immediate: offset -5, dest 21, pos 24
-ERR: invalid jump destination: offset into immediate: offset -26, dest 1, pos 25
-ERR: invalid jump destination: offset into immediate: offset -4, dest 23, pos 25
+ERR: invalid jump destination: offset into immediate: offset -25, dest 1, pos 24
+ERR: invalid jump destination: offset into immediate: offset -4, dest 22, pos 24
 ERR: invalid jump destination: offset into immediate: offset -26, dest 1, pos 25
 ERR: invalid jump destination: offset into immediate: offset -4, dest 23, pos 25
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 23, dest 26, pos 1
+ERR: invalid jump destination: offset into immediate: offset 22, dest 25, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 16, dest 22, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH26, pos 27
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 22, dest 27, pos 3
+ERR: invalid jump destination: offset into immediate: offset 21, dest 26, pos 3
 ERR: invalid jump destination: offset into immediate: offset -26, dest 1, pos 25
 ERR: invalid jump destination: offset into immediate: offset -5, dest 22, pos 25
-ERR: invalid jump destination: offset into immediate: offset -27, dest 1, pos 26
-ERR: invalid jump destination: offset into immediate: offset -4, dest 24, pos 26
+ERR: invalid jump destination: offset into immediate: offset -26, dest 1, pos 25
+ERR: invalid jump destination: offset into immediate: offset -4, dest 23, pos 25
 ERR: invalid jump destination: offset into immediate: offset -27, dest 1, pos 26
 ERR: invalid jump destination: offset into immediate: offset -4, dest 24, pos 26
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 24, dest 27, pos 1
+ERR: invalid jump destination: offset into immediate: offset 23, dest 26, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 17, dest 23, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH27, pos 28
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 23, dest 28, pos 3
+ERR: invalid jump destination: offset into immediate: offset 22, dest 27, pos 3
 ERR: invalid jump destination: offset into immediate: offset -27, dest 1, pos 26
 ERR: invalid jump destination: offset into immediate: offset -5, dest 23, pos 26
-ERR: invalid jump destination: offset into immediate: offset -28, dest 1, pos 27
-ERR: invalid jump destination: offset into immediate: offset -4, dest 25, pos 27
+ERR: invalid jump destination: offset into immediate: offset -27, dest 1, pos 26
+ERR: invalid jump destination: offset into immediate: offset -4, dest 24, pos 26
 ERR: invalid jump destination: offset into immediate: offset -28, dest 1, pos 27
 ERR: invalid jump destination: offset into immediate: offset -4, dest 25, pos 27
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 25, dest 28, pos 1
+ERR: invalid jump destination: offset into immediate: offset 24, dest 27, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 18, dest 24, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH28, pos 29
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 24, dest 29, pos 3
+ERR: invalid jump destination: offset into immediate: offset 23, dest 28, pos 3
 ERR: invalid jump destination: offset into immediate: offset -28, dest 1, pos 27
 ERR: invalid jump destination: offset into immediate: offset -5, dest 24, pos 27
-ERR: invalid jump destination: offset into immediate: offset -29, dest 1, pos 28
-ERR: invalid jump destination: offset into immediate: offset -4, dest 26, pos 28
+ERR: invalid jump destination: offset into immediate: offset -28, dest 1, pos 27
+ERR: invalid jump destination: offset into immediate: offset -4, dest 25, pos 27
 ERR: invalid jump destination: offset into immediate: offset -29, dest 1, pos 28
 ERR: invalid jump destination: offset into immediate: offset -4, dest 26, pos 28
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 26, dest 29, pos 1
+ERR: invalid jump destination: offset into immediate: offset 25, dest 28, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 19, dest 25, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH29, pos 30
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 25, dest 30, pos 3
+ERR: invalid jump destination: offset into immediate: offset 24, dest 29, pos 3
 ERR: invalid jump destination: offset into immediate: offset -29, dest 1, pos 28
 ERR: invalid jump destination: offset into immediate: offset -5, dest 25, pos 28
-ERR: invalid jump destination: offset into immediate: offset -30, dest 1, pos 29
-ERR: invalid jump destination: offset into immediate: offset -4, dest 27, pos 29
+ERR: invalid jump destination: offset into immediate: offset -29, dest 1, pos 28
+ERR: invalid jump destination: offset into immediate: offset -4, dest 26, pos 28
 ERR: invalid jump destination: offset into immediate: offset -30, dest 1, pos 29
 ERR: invalid jump destination: offset into immediate: offset -4, dest 27, pos 29
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 27, dest 30, pos 1
+ERR: invalid jump destination: offset into immediate: offset 26, dest 29, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 20, dest 26, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH30, pos 31
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 26, dest 31, pos 3
+ERR: invalid jump destination: offset into immediate: offset 25, dest 30, pos 3
 ERR: invalid jump destination: offset into immediate: offset -30, dest 1, pos 29
 ERR: invalid jump destination: offset into immediate: offset -5, dest 26, pos 29
-ERR: invalid jump destination: offset into immediate: offset -31, dest 1, pos 30
-ERR: invalid jump destination: offset into immediate: offset -4, dest 28, pos 30
+ERR: invalid jump destination: offset into immediate: offset -30, dest 1, pos 29
+ERR: invalid jump destination: offset into immediate: offset -4, dest 27, pos 29
 ERR: invalid jump destination: offset into immediate: offset -31, dest 1, pos 30
 ERR: invalid jump destination: offset into immediate: offset -4, dest 28, pos 30
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 28, dest 31, pos 1
+ERR: invalid jump destination: offset into immediate: offset 27, dest 30, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 21, dest 27, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH31, pos 32
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 27, dest 32, pos 3
+ERR: invalid jump destination: offset into immediate: offset 26, dest 31, pos 3
 ERR: invalid jump destination: offset into immediate: offset -31, dest 1, pos 30
 ERR: invalid jump destination: offset into immediate: offset -5, dest 27, pos 30
-ERR: invalid jump destination: offset into immediate: offset -32, dest 1, pos 31
-ERR: invalid jump destination: offset into immediate: offset -4, dest 29, pos 31
+ERR: invalid jump destination: offset into immediate: offset -31, dest 1, pos 30
+ERR: invalid jump destination: offset into immediate: offset -4, dest 28, pos 30
 ERR: invalid jump destination: offset into immediate: offset -32, dest 1, pos 31
 ERR: invalid jump destination: offset into immediate: offset -4, dest 29, pos 31
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 29, dest 32, pos 1
+ERR: invalid jump destination: offset into immediate: offset 28, dest 31, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 22, dest 28, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code termination: end with PUSH32, pos 33
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 28, dest 33, pos 3
+ERR: invalid jump destination: offset into immediate: offset 27, dest 32, pos 3
 ERR: invalid jump destination: offset into immediate: offset -32, dest 1, pos 31
 ERR: invalid jump destination: offset into immediate: offset -5, dest 28, pos 31
-ERR: invalid jump destination: offset into immediate: offset -33, dest 1, pos 32
-ERR: invalid jump destination: offset into immediate: offset -4, dest 30, pos 32
+ERR: invalid jump destination: offset into immediate: offset -32, dest 1, pos 31
+ERR: invalid jump destination: offset into immediate: offset -4, dest 29, pos 31
 ERR: invalid jump destination: offset into immediate: offset -33, dest 1, pos 32
 ERR: invalid jump destination: offset into immediate: offset -4, dest 30, pos 32
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 30, dest 33, pos 1
+ERR: invalid jump destination: offset into immediate: offset 29, dest 32, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 23, dest 29, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 29, dest 34, pos 3
+ERR: invalid jump destination: offset into immediate: offset 28, dest 33, pos 3
 ERR: invalid jump destination: offset into immediate: offset -33, dest 1, pos 32
 ERR: invalid jump destination: offset into immediate: offset -5, dest 29, pos 32
-ERR: invalid jump destination: offset into immediate: offset -34, dest 1, pos 33
-ERR: invalid jump destination: offset into immediate: offset -4, dest 31, pos 33
+ERR: invalid jump destination: offset into immediate: offset -33, dest 1, pos 32
+ERR: invalid jump destination: offset into immediate: offset -4, dest 30, pos 32
 ERR: invalid jump destination: offset into immediate: offset -34, dest 1, pos 33
 ERR: invalid jump destination: offset into immediate: offset -4, dest 31, pos 33
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
-ERR: invalid jump destination: offset into immediate: offset 31, dest 34, pos 1
+ERR: invalid jump destination: offset into immediate: offset 30, dest 33, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 24, dest 30, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 30, dest 35, pos 3
+ERR: invalid jump destination: offset into immediate: offset 29, dest 34, pos 3
 ERR: invalid jump destination: offset into immediate: offset -34, dest 1, pos 33
 ERR: invalid jump destination: offset into immediate: offset -5, dest 30, pos 33
+ERR: invalid jump destination: offset into immediate: offset -34, dest 1, pos 33
+ERR: invalid jump destination: offset into immediate: offset -4, dest 31, pos 33
 ERR: invalid jump destination: offset into immediate: offset -35, dest 1, pos 34
 ERR: invalid jump destination: offset into immediate: offset -4, dest 32, pos 34
+ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
+ERR: invalid jump destination: offset into immediate: offset 31, dest 34, pos 1
+ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
+ERR: invalid jump destination: offset into immediate: offset 25, dest 31, pos 4
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 30, dest 35, pos 3
+ERR: invalid jump destination: offset into immediate: offset -35, dest 1, pos 34
+ERR: invalid jump destination: offset into immediate: offset -5, dest 31, pos 34
 ERR: invalid jump destination: offset into immediate: offset -35, dest 1, pos 34
 ERR: invalid jump destination: offset into immediate: offset -4, dest 32, pos 34
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
 ERR: invalid jump destination: offset into immediate: offset 32, dest 35, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
-ERR: invalid jump destination: offset into immediate: offset 25, dest 31, pos 4
-ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 31, dest 36, pos 3
-ERR: invalid jump destination: offset into immediate: offset -35, dest 1, pos 34
-ERR: invalid jump destination: offset into immediate: offset -5, dest 31, pos 34
-ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 26, dest 32, pos 4
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
-ERR: invalid jump destination: offset into immediate: offset 32, dest 37, pos 3
+ERR: invalid jump destination: offset into immediate: offset 31, dest 36, pos 3
 ERR: invalid jump destination: offset into immediate: offset -36, dest 1, pos 35
 ERR: invalid jump destination: offset into immediate: offset -5, dest 32, pos 35
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 27, dest 33, pos 4
+ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
+ERR: invalid jump destination: offset into immediate: offset 32, dest 37, pos 3
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 28, dest 34, pos 4
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 29, dest 35, pos 4
+ERR: invalid container size: have 20, want 60
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 30, dest 36, pos 4
 ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
@@ -1136,7 +1236,9 @@ ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: invalid jump destination: offset into immediate: offset 33, dest 39, pos 4
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: invalid container size: have 25, want 122
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid container size: have 90, want 177
+ERR: invalid non-returning flag, bad RETF: at pos 128
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -1237,6 +1339,8 @@ ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 51
 ERR: invalid jump destination: offset into immediate: offset 5, dest 521, pos 514
 ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 4
 ERR: invalid jump destination: offset into immediate: offset 5, dest 521, pos 4
+ERR: invalid jump destination: offset into immediate: offset 1, dest 523, pos 520
+ERR: invalid jump destination: offset into immediate: offset 1, dest 523, pos 10
 ERR: invalid jump destination: offset into immediate: offset 9, dest 525, pos 514
 ERR: invalid jump destination: offset into immediate: offset 9, dest 525, pos 4
 ERR: invalid jump destination: offset into immediate: offset -525, dest 1, pos 524
@@ -1606,7 +1710,7 @@ ERR: invalid type content, max stack height exceeds limit for section 0: have 10
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
 ERR: unexpected EOF
-ERR: invalid container size: have 25, want 32790
+ERR: invalid container size: have 90, want 32845
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid type content, max stack height exceeds limit for section 0: have 1024
 ERR: initcode contains a RETURN or STOP opcode
@@ -1621,11 +1725,13 @@ ERR: max initcode size exceeded
 ERR: invalid container size: have 20, want 49171
 ERR: max initcode size exceeded
 ERR: unexpected EOF
-ERR: invalid container size: have 25, want 65557
+ERR: invalid container size: have 90, want 65612
 ERR: unexpected EOF
 ERR: max initcode size exceeded
 ERR: unexpected EOF
 ERR: max initcode size exceeded
+ERR: missing code header: found section kind 3 instead
+ERR: missing code header: found section kind 3 instead
 ERR: missing code header: found section kind 4 instead
 ERR: missing code header: found section kind 4 instead
 ERR: missing code header: found section kind 4 instead
@@ -1633,8 +1739,18 @@ ERR: missing code header: found section kind 4 instead
 ERR: missing code header: found section kind 4 instead
 ERR: missing code header: found section kind 4 instead
 ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 4 instead
+ERR: missing code header: found section kind 5 instead
+ERR: missing code header: found section kind 6 instead
 ERR: unexpected EOF
+ERR: missing code header: found section kind ff instead
 ERR: invalid type section size: type section size must be divisible by 4, have 5
+ERR: invalid type section size: type section size must be divisible by 4, have 5
+ERR: invalid type section size: type section size must be divisible by 4, have 6
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
+ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
 ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
 ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
 ERR: invalid code size: mismatch of code sections found and type signatures, types 2, code 1
@@ -1644,9 +1760,23 @@ ERR: missing header terminator: have 4
 ERR: invalid container size: have 27, want 49178
 ERR: invalid section 0 type, input and output should be zero and non-returning (0x80): have 1, 128
 ERR: invalid code termination: end with CALLF, pos 3
+ERR: invalid number of outputs: at pos 0
+ERR: invalid non-returning flag, bad RETF: at pos 0
+ERR: missing header terminator: have 4
 ERR: invalid code termination: end with CALLF, pos 3
+ERR: invalid non-returning flag, bad RETF: at pos 1
 ERR: invalid jump destination: out-of-bounds offset: offset -6, dest -3, pos 1
 ERR: truncated top level container
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid non-returning flag, bad RETF: at pos 128
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid section argument: arg 2, last 2, pos 0
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid number of outputs: at pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -1656,6 +1786,10 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid type content, too many inputs for section 1: have 129
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid jump destination: offset into immediate: offset 1, dest 4, pos 1
 ERR: invalid jump destination: offset into immediate: offset 2, dest 5, pos 1
 ERR: invalid jump destination: offset into immediate: offset 1, dest 6, pos 3
@@ -1665,7 +1799,9 @@ ERR: invalid jump destination: offset into immediate: offset 2, dest 8, pos 4
 ERR: section referenced by both EOFCreate and ReturnContract
 OK
 ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
 ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid type content, too many inputs for section 1: have 128
 ERR: invalid type content, too many inputs for section 1: have 128
 ERR: invalid jump destination: offset into immediate: offset 1, dest 517, pos 514
 ERR: invalid jump destination: offset into immediate: offset 2, dest 518, pos 514
@@ -1675,13 +1811,34 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid type section size: type section size must be divisible by 4, have 9
+ERR: invalid number of outputs: at pos 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: stack underflow (0 <=> 2): at pos 0
 ERR: stack underflow (0 <=> 4): at pos 0
+ERR: invalid number of outputs: at pos 1
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: stack underflow (2 <=> 4): at pos 2
 ERR: invalid jump destination: out-of-bounds offset: offset 3, dest 6, pos 1
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -1783,7 +1940,10 @@ ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
+ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid type section size: type section must not exceed 4*1024, have 4100
+ERR: invalid type section size: type section must not exceed 4*1024, have 4104
 ERR: invalid type section size: type section must not exceed 4*1024, have 32768
 ERR: invalid type section size: type section size must be divisible by 4, have 65535
 ERR: missing type header: found section kind 2 instead
@@ -1791,11 +1951,23 @@ ERR: missing type header: found section kind 2 instead
 ERR: missing type header: found section kind 2 instead
 ERR: missing type header: found section kind 2 instead
 ERR: missing type header: found section kind 2 instead
+ERR: missing type header: found section kind 2 instead
+ERR: missing type header: found section kind 3 instead
+ERR: missing type header: found section kind 3 instead
 ERR: missing type header: found section kind 4 instead
 ERR: missing type header: found section kind 4 instead
+ERR: missing type header: found section kind 4 instead
+ERR: missing type header: found section kind 5 instead
+ERR: missing type header: found section kind 6 instead
+ERR: missing type header: found section kind ff instead
+ERR: invalid version: have 2, want 1
 ERR: invalid version: have 2, want 1
 ERR: invalid version: have 254, want 1
 ERR: invalid version: have 255, want 1
+ERR: invalid version: have 255, want 1
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
+ERR: invalid magic: want ef00
 ERR: invalid magic: want ef00
 ERR: invalid magic: want ef00
 ERR: invalid magic: want ef00
@@ -1848,7 +2020,7 @@ ERR: invalid magic: want ef00 in sub container 0
 ERR: missing code header: found section kind 80 instead in sub container 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: invalid code size: mismatch of code sections found and type signatures, types 1, code 1025 in sub container 0
-ERR: invalid container size: have 32611, want 47459 in sub container 0
+ERR: invalid container size: have 47487, want 32639 in sub container 0
 ERR: invalid type section size: type section must not exceed 4*1024, have 6148 in sub container 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
@@ -1886,7 +2058,7 @@ ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12346, p
 ERR: missing type header: found section kind 30 instead in sub container 0
 ERR: initcode contains a RETURN or STOP opcode
 ERR: unreachable code
-ERR: Invalid non-returning flag, bad RETF: at pos 13
+ERR: invalid non-returning flag, bad RETF: at pos 13
 ERR: unreachable code
 ERR: invalid max stack height in code section 0: have 12, want 48
 ERR: stack underflow (5 <=> 6): at pos 8
@@ -1906,7 +2078,7 @@ ERR: unreachable code: arg 253, last 1, pos 13
 ERR: invalid magic: want ef00 in sub container 0
 ERR: missing data header: found section fe instead in sub container 0
 ERR: invalid type content, max stack height exceeds limit for section 0: have 65007 in sub container 0
-ERR: section already referenced, arg :0
+ERR: stack underflow (0 <=> 4): at pos 0
 ERR: subcontainer not referenced at all
 ERR: truncated immediate: op PUSH20, pos 6
 ERR: invalid jump destination: out-of-bounds offset: offset 12336, dest 12342, pos 4
@@ -2134,11 +2306,11 @@ ERR: callf into non-returning section: section 0
 ERR: unreachable code
 ERR: initcode contains a RETURN or STOP opcode
 ERR: initcode contains a RETURN or STOP opcode
-ERR: eofcreate with truncated section: container 0, have 4, claimed 0, pos 8
+ERR: invalid container size: have 24, want 20 in sub container 0
 ERR: stack limit reached 1087 (1024): at pos 1022
 ERR: invalid number of outputs: at pos 0
-ERR: Invalid non-returning flag, bad RETF no RETF or qualified JUMPF
-ERR: Invalid non-returning flag, bad RETF: at pos 9
+ERR: invalid non-returning flag, bad RETF no RETF or qualified JUMPF
+ERR: invalid non-returning flag, bad RETF: at pos 9
 ERR: initcode contains a RETURN or STOP opcode
 ERR: stack limit reached 1107 (1024): at pos 1106
 ERR: stack limit reached 1102 (1024)
