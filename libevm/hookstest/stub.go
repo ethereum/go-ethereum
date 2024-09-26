@@ -45,6 +45,7 @@ type Stub struct {
 	CheckConfigCompatibleFn func(*params.ChainConfig, *big.Int, uint64) *params.ConfigCompatError
 	DescriptionSuffix       string
 	PrecompileOverrides     map[common.Address]libevm.PrecompiledContract
+	ActivePrecompilesFn     func([]common.Address) []common.Address
 	CanExecuteTransactionFn func(common.Address, *common.Address, libevm.StateReader) error
 	CanCreateContractFn     func(*libevm.AddressContext, uint64, libevm.StateReader) (uint64, error)
 }
@@ -69,6 +70,15 @@ func (s Stub) PrecompileOverride(a common.Address) (libevm.PrecompiledContract, 
 	}
 	p, ok := s.PrecompileOverrides[a]
 	return p, ok
+}
+
+// ActivePrecompiles proxies arguments to the s.ActivePrecompilesFn function if
+// non-nil, otherwise it acts as a noop.
+func (s Stub) ActivePrecompiles(active []common.Address) []common.Address {
+	if f := s.ActivePrecompilesFn; f != nil {
+		return f(active)
+	}
+	return active
 }
 
 // CheckConfigForkOrder proxies arguments to the s.CheckConfigForkOrderFn

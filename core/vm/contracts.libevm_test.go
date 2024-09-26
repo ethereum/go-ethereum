@@ -423,3 +423,25 @@ func TestCanCreateContract(t *testing.T) {
 		})
 	}
 }
+
+func TestActivePrecompilesOverride(t *testing.T) {
+	newRules := func() params.Rules {
+		return new(params.ChainConfig).Rules(big.NewInt(0), false, 0)
+	}
+	defaultActive := vm.ActivePrecompiles(newRules())
+
+	rng := ethtest.NewPseudoRand(0xDecafC0ffeeBad)
+	precompiles := make([]common.Address, rng.Intn(10)+5)
+	for i := range precompiles {
+		precompiles[i] = rng.Address()
+	}
+	hooks := &hookstest.Stub{
+		ActivePrecompilesFn: func(active []common.Address) []common.Address {
+			assert.Equal(t, defaultActive, active, "ActivePrecompiles() hook receives default addresses")
+			return precompiles
+		},
+	}
+	hooks.Register(t)
+
+	require.Equal(t, precompiles, vm.ActivePrecompiles(newRules()), "vm.ActivePrecompiles() returns overridden addresses")
+}

@@ -48,6 +48,12 @@ type RulesHooks interface {
 	// [PrecompiledContract] is non-nil. If it returns `false` then the default
 	// precompile behaviour is honoured.
 	PrecompileOverride(common.Address) (_ libevm.PrecompiledContract, override bool)
+	// ActivePrecompiles receives the addresses that would usually be returned
+	// by a call to [vm.ActivePrecompiles] and MUST return the value to be
+	// returned by said function, which will be propagated. It MAY alter the
+	// received slice. The value it returns MUST be consistent with the
+	// behaviour of the PrecompileOverride hook.
+	ActivePrecompiles([]common.Address) []common.Address
 }
 
 // RulesAllowlistHooks are a subset of [RulesHooks] that gate actions, signalled
@@ -119,4 +125,9 @@ func (NOOPHooks) CanCreateContract(_ *libevm.AddressContext, gas uint64, _ libev
 // precompile behaviour.
 func (NOOPHooks) PrecompileOverride(common.Address) (libevm.PrecompiledContract, bool) {
 	return nil, false
+}
+
+// ActivePrecompiles echoes the active addresses unchanged.
+func (NOOPHooks) ActivePrecompiles(active []common.Address) []common.Address {
+	return active
 }
