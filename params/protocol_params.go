@@ -89,6 +89,8 @@ const (
 	CreateNGasEip4762     uint64 = 1000  // Once per CREATEn operations post-verkle
 	SelfdestructRefundGas uint64 = 24000 // Refunded following a selfdestruct operation.
 	MemoryGas             uint64 = 3     // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
+	ExtCallMinRetainedGas uint64 = 5000  // For EXT*CALL this is the minimum gas that the EIP158 1/64th rule must retain
+	ExtCallMinCalleeGas   uint64 = 2300  // For EXT*CALL this is the minimum gas that must be passed to the callee, ignoring 63/64
 
 	TxDataNonZeroGasFrontier  uint64 = 68   // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
 	TxDataNonZeroGasEIP2028   uint64 = 16   // Per byte of non zero data attached to a transaction after EIP 2028 (part in Istanbul)

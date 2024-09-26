@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -51,4 +52,33 @@ func callGas(isEip150 bool, availableGas, base uint64, callCost *uint256.Int) (u
 	}
 
 	return callCost.Uint64(), nil
+}
+
+// extCallGas returns the actual gas cost for ext*call operations.
+//
+// EOF v1 includes EIP-150 rules (all but 1/64) with a floor of MIN_RETAINED_GAS (5000)
+// and a minimum returned value of MIN_CALLE_GASS (2300).
+// There is also no call gas, so all available gas is used.
+//
+// If the minimum retained gas constraint is violated, zero gas and no error is returned
+func extCallGas(availableGas, base uint64) (uint64, error) {
+	if availableGas < base {
+		return 0, ErrOutOfGas
+	}
+	availableGas = availableGas - base
+	if availableGas < params.ExtCallMinRetainedGas {
+		return 0, nil
+	}
+
+	retainedGas := availableGas / 64
+	if retainedGas < params.ExtCallMinRetainedGas {
+		retainedGas = params.ExtCallMinRetainedGas
+	}
+	gas := availableGas - retainedGas
+
+	if gas < params.ExtCallMinCalleeGas {
+		return 0, nil
+	} else {
+		return gas, nil
+	}
 }
