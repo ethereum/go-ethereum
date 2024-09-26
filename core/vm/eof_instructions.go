@@ -78,17 +78,37 @@ func opDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 
 // opDupN implements the DUPN opcode
 func opDupN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		code  = scope.Contract.CodeAt(scope.CodeSection)
+		index = int(code[*pc+1]) + 1
+	)
+	scope.Stack.dup(index)
+	*pc += 1 // move past immediate
+	return nil, nil
 }
 
 // opSwapN implements the SWAPN opcode
 func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		code  = scope.Contract.CodeAt(scope.CodeSection)
+		index = int(code[*pc+1]) + 1
+	)
+	scope.Stack.swap(index + 1)
+	*pc += 1 // move past immediate
+	return nil, nil
 }
 
 // opExchange implements the EXCHANGE opcode
 func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		code  = scope.Contract.CodeAt(scope.CodeSection)
+		index = int(code[*pc+1])
+		n     = (index >> 4) + 1
+		m     = (index & 0x0F) + 1
+	)
+	scope.Stack.swapN(n+1, n+m+1)
+	*pc += 1 // move past immediate
+	return nil, nil
 }
 
 // opReturnDataLoad implements the RETURNDATALOAD opcode
