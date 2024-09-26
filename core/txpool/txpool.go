@@ -104,6 +104,7 @@ func New(gasTip uint64, chain BlockChain, subpools []SubPool) (*TxPool, error) {
 	return pool, nil
 }
 
+// FlushAllTransactions removes all transactions from all subpools
 func (p *TxPool) FlushAllTransactions() {
 	for _, subpool := range p.subpools {
 		subpool.FlushAllTransactions()
