@@ -311,7 +311,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
-func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64, fromEOF bool) (ret []byte, leftOverGas uint64, err error) {
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		// NOTE: caller must, at all times be a contract. It should never happen
@@ -334,12 +334,15 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Config.Tracer)
 	} else {
 		addrCopy := addr
+		code := evm.StateDB.GetCode(addrCopy)
+		if fromEOF && !hasEOFMagic(code) {
+			return nil, gas, errors.New("extDelegateCall to non-eof contract")
+		}
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
 		if witness := evm.StateDB.Witness(); witness != nil {
 			witness.AddCode(evm.StateDB.GetCode(addrCopy))
 		}
-		code := evm.StateDB.GetCode(addrCopy)
 		contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code, evm.parseContainer(code))
 		ret, err = evm.interpreter.Run(contract, input, false, false)
 		gas = contract.Gas
