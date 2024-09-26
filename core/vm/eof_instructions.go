@@ -18,6 +18,7 @@ package vm
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -175,7 +176,46 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 
 // opReturnContract implements the RETURNCONTRACT opcode
 func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	if !scope.InitCodeMode {
+		return nil, errors.New("returncontract in non-initcode mode")
+	}
+	var (
+		code   = scope.Contract.CodeAt(scope.CodeSection)
+		idx    = code[*pc+1]
+		offset = scope.Stack.pop()
+		size   = scope.Stack.pop()
+	)
+	if int(idx) >= len(scope.Contract.Container.subContainerCodes) {
+		return nil, fmt.Errorf("invalid subcontainer")
+	}
+	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
+	containerCode := scope.Contract.Container.subContainerCodes[idx]
+	if len(containerCode) == 0 {
+		return nil, errors.New("nonexistant subcontainer")
+	}
+	// Validate the subcontainer
+	var c Container
+	if err := c.UnmarshalSubContainer(containerCode, false); err != nil {
+		return nil, err
+	}
+
+	// append the auxdata
+	c.data = append(c.data, ret...)
+	if len(c.data) < c.dataSize {
+		return nil, errors.New("incomplete aux data")
+	}
+	c.dataSize = len(c.data)
+
+	// probably unneeded as subcontainers are deeply validated
+	if err := c.ValidateCode(interpreter.tableEOF, false); err != nil {
+		return nil, err
+	}
+
+	// Restore context
+	retCtx := scope.ReturnStack.Pop()
+	scope.CodeSection = retCtx.Section
+	*pc = retCtx.Pc - 1 // account for interpreter loop
+	return c.MarshalBinary(), errStopToken
 }
 
 // opDataLoad implements the DATALOAD opcode
