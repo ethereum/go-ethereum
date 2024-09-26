@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // opRjump implements the RJUMP opcode.
@@ -220,22 +221,52 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 // opDataLoad implements the DATALOAD opcode
 func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		stackItem        = scope.Stack.pop()
+		offset, overflow = stackItem.Uint64WithOverflow()
+	)
+	if overflow {
+		stackItem.Clear()
+		scope.Stack.push(&stackItem)
+	} else {
+		data := getData(scope.Contract.Container.data, offset, 32)
+		scope.Stack.push(stackItem.SetBytes(data))
+	}
+	return nil, nil
 }
 
 // opDataLoadN implements the DATALOADN opcode
 func opDataLoadN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		code   = scope.Contract.CodeAt(scope.CodeSection)
+		offset = uint64(binary.BigEndian.Uint16(code[*pc+1:]))
+	)
+	data := getData(scope.Contract.Container.data, offset, 32)
+	scope.Stack.push(new(uint256.Int).SetBytes(data))
+	*pc += 2 // move past 2 byte immediate
+	return nil, nil
 }
 
 // opDataSize implements the DATASIZE opcode
 func opDataSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	length := len(scope.Contract.Container.data)
+	item := uint256.NewInt(uint64(length))
+	scope.Stack.push(item)
+	return nil, nil
 }
 
 // opDataCopy implements the DATACOPY opcode
 func opDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		memOffset = scope.Stack.pop()
+		offset    = scope.Stack.pop()
+		size      = scope.Stack.pop()
+	)
+	// These values are checked for overflow during memory expansion calculation
+	// (the memorySize function on the opcode).
+	data := getData(scope.Contract.Container.data, offset.Uint64(), size.Uint64())
+	scope.Memory.Set(memOffset.Uint64(), size.Uint64(), data)
+	return nil, nil
 }
 
 // opDupN implements the DUPN opcode
