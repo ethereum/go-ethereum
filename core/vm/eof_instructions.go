@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
@@ -319,15 +320,139 @@ func opReturnDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 
 // opExtCall implements the EOFCREATE opcode
 func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	stack := scope.Stack
+	// Use all available gas
+	gas := interpreter.evm.callGasTemp
+	// Pop other call parameters.
+	addr, inOffset, inSize, value := stack.pop(), stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	if addr.ByteLen() > 20 {
+		return nil, errors.New("address space extension")
+	}
+	// safe a memory alloc
+	temp := addr
+	// Get the arguments from the memory.
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
+
+	if interpreter.readOnly && !value.IsZero() {
+		return nil, ErrWriteProtection
+	}
+
+	var (
+		ret       []byte
+		returnGas uint64
+		err       error
+	)
+	if interpreter.evm.callGasTemp == 0 {
+		// zero temp call gas indicates a min retained gas error
+		ret, returnGas, err = nil, 0, ErrExecutionReverted
+	} else {
+		ret, returnGas, err = interpreter.evm.Call(scope.Contract, toAddr, args, gas, &value)
+	}
+
+	if errors.Is(err, ErrExecutionReverted) || errors.Is(err, ErrInsufficientBalance) || errors.Is(err, ErrDepth) {
+		temp.SetOne()
+	} else if err != nil {
+		temp.SetUint64(2)
+	} else {
+		temp.Clear()
+	}
+	stack.push(&temp)
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	interpreter.returnData = ret
+	return ret, nil
 }
 
 // opExtDelegateCall implements the EXTDELEGATECALL opcode
 func opExtDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	stack := scope.Stack
+	// Use all available gas
+	gas := interpreter.evm.callGasTemp
+	// Pop other call parameters.
+	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	if addr.ByteLen() > 20 {
+		return nil, errors.New("address space extension")
+	}
+	// safe a memory alloc
+	temp := addr
+	// Get arguments from the memory.
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
+
+	// Check that we're only calling non-legacy contracts
+	var (
+		err       error
+		ret       []byte
+		returnGas uint64
+	)
+	code := interpreter.evm.StateDB.GetCode(toAddr)
+	if !hasEOFMagic(code) {
+		// Delegate-calling a non-eof contract should return 1
+		err = ErrExecutionReverted
+		ret = nil
+		returnGas = gas
+	} else if interpreter.evm.callGasTemp == 0 {
+		// zero temp call gas indicates a min retained gas error
+		ret, returnGas, err = nil, 0, ErrExecutionReverted
+	} else {
+		ret, returnGas, err = interpreter.evm.DelegateCall(scope.Contract, toAddr, args, gas, true)
+	}
+
+	if err == ErrExecutionReverted || err == ErrDepth {
+		temp.SetOne()
+	} else if err != nil {
+		temp.SetUint64(2)
+	} else {
+		temp.Clear()
+	}
+	stack.push(&temp)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	interpreter.returnData = ret
+	return ret, nil
 }
 
 // opExtStaticCall implements the EXTSTATICCALL opcode
 func opExtStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	stack := scope.Stack
+	// Use all available gas
+	gas := interpreter.evm.callGasTemp
+	// Pop other call parameters.
+	addr, inOffset, inSize := stack.pop(), stack.pop(), stack.pop()
+	toAddr := common.Address(addr.Bytes20())
+	if addr.ByteLen() > 20 {
+		return nil, errors.New("address space extension")
+	}
+	// safe a memory alloc
+	temp := addr
+	// Get arguments from the memory.
+	args := scope.Memory.GetPtr(inOffset.Uint64(), inSize.Uint64())
+
+	var (
+		ret       []byte
+		returnGas uint64
+		err       error
+	)
+	if interpreter.evm.callGasTemp == 0 {
+		// zero temp call gas indicates a min retained gas error
+		ret, returnGas, err = nil, 0, ErrExecutionReverted
+	} else {
+		ret, returnGas, err = interpreter.evm.StaticCall(scope.Contract, toAddr, args, gas)
+	}
+
+	if err == ErrExecutionReverted || err == ErrDepth {
+		temp.SetOne()
+	} else if err != nil {
+		temp.SetUint64(2)
+	} else {
+		temp.Clear()
+	}
+	stack.push(&temp)
+
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	interpreter.returnData = ret
+	return ret, nil
 }
