@@ -306,7 +306,15 @@ func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 
 // opReturnDataLoad implements the RETURNDATALOAD opcode
 func opReturnDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		offset = scope.Stack.pop()
+	)
+	offset64, overflow := offset.Uint64WithOverflow()
+	if overflow {
+		offset64 = math.MaxUint64
+	}
+	scope.Stack.push(offset.SetBytes(getData(interpreter.returnData, offset64, 32)))
+	return nil, nil
 }
 
 // opExtCall implements the EOFCREATE opcode
