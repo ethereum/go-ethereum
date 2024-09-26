@@ -21,6 +21,8 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // opRjump implements the RJUMP opcode.
@@ -120,7 +122,55 @@ func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 
 // opEOFCreate implements the EOFCREATE opcode
 func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
+	var (
+		code         = scope.Contract.CodeAt(scope.CodeSection)
+		idx          = code[*pc+1]
+		value        = scope.Stack.pop()
+		salt         = scope.Stack.pop()
+		offset, size = scope.Stack.pop(), scope.Stack.pop()
+		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
+	)
+	if int(idx) >= len(scope.Contract.Container.subContainerCodes) {
+		return nil, fmt.Errorf("invalid subcontainer")
+	}
+
+	// Deduct hashing charge
+	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
+	hashingCharge := (params.Keccak256WordGas) * ((uint64(len(scope.Contract.Container.subContainerCodes[idx])) + 31) / 32)
+	if ok := scope.Contract.UseGas(hashingCharge, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified); !ok {
+		return nil, ErrGasUintOverflow
+	}
+	if interpreter.evm.Config.Tracer != nil {
+		if interpreter.evm.Config.Tracer != nil {
+			interpreter.evm.Config.Tracer.OnOpcode(*pc, byte(EOFCREATE), 0, hashingCharge, scope, interpreter.returnData, interpreter.evm.depth, nil)
+		}
+	}
+	gas := scope.Contract.Gas
+	// Reuse last popped value from stack
+	stackvalue := size
+	// Apply EIP150
+	gas -= gas / 64
+	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
+	// Skip the immediate
+	*pc += 1
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, scope.Contract.Container.subContainerCodes[idx], gas, &value, &salt)
+	if suberr != nil {
+		stackvalue.Clear()
+	} else {
+		stackvalue.SetBytes(addr.Bytes())
+	}
+	scope.Stack.push(&stackvalue)
+	scope.Contract.RefundGas(returnGas, interpreter.evm.Config.Tracer, tracing.GasChangeCallLeftOverRefunded)
+
+	if suberr == ErrExecutionReverted {
+		interpreter.returnData = res // set REVERT data to return data buffer
+		return res, nil
+	}
+	interpreter.returnData = nil // clear dirty return data buffer
+	return nil, nil
 }
 
 // opReturnContract implements the RETURNCONTRACT opcode
