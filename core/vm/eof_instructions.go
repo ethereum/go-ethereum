@@ -18,17 +18,45 @@ package vm
 
 // opRjump implements the RJUMP opcode.
 func opRjump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		code   = scope.Contract.CodeAt(scope.CodeSection)
+		offset = parseInt16(code[*pc+1:])
+	)
+	// move pc past op and operand (+3), add relative offset, subtract 1 to
+	// account for interpreter loop.
+	*pc = uint64(int64(*pc+3) + int64(offset) - 1)
+	return nil, nil
 }
 
 // opRjumpi implements the RJUMPI opcode
 func opRjumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	condition := scope.Stack.pop()
+	if condition.BitLen() == 0 {
+		// Not branching, just skip over immediate argument.
+		*pc += 2
+		return nil, nil
+	}
+	return opRjump(pc, interpreter, scope)
 }
 
 // opRjumpv implements the RJUMPV opcode
 func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	panic("not implemented")
+	var (
+		code     = scope.Contract.CodeAt(scope.CodeSection)
+		maxIndex = uint64(code[*pc+1]) + 1
+		idx      = scope.Stack.pop()
+	)
+	if idx, overflow := idx.Uint64WithOverflow(); overflow || idx >= maxIndex {
+		// Index out-of-bounds, don't branch, just skip over immediate
+		// argument.
+		*pc += 1 + maxIndex*2
+		return nil, nil
+	}
+	offset := parseInt16(code[*pc+2+2*idx.Uint64():])
+	// move pc past op and count byte (2), move past count number of 16bit offsets (count*2), add relative offset, subtract 1 to
+	// account for interpreter loop.
+	*pc = uint64(int64(*pc+2+maxIndex*2) + int64(offset) - 1)
+	return nil, nil
 }
 
 // opCallf implements the CALLF opcode
