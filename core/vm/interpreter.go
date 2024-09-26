@@ -110,15 +110,17 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 			cfg.JumpTable = &frontierInstructionSet
 		}
 		var extraEips []int
+		if len(cfg.ExtraEips) > 0 {
+			// Deep-copy jumptable to prevent modification of opcodes in other tables
+			cfg.JumpTable = copyJumpTable(cfg.JumpTable)
+		}
 		for _, eip := range cfg.ExtraEips {
-			copy := *cfg.JumpTable
-			if err := EnableEIP(eip, &copy); err != nil {
+			if err := EnableEIP(eip, cfg.JumpTable); err != nil {
 				// Disable it, so caller can check if it's activated or not
 				log.Error("EIP activation failed", "eip", eip, "error", err)
 			} else {
 				extraEips = append(extraEips, eip)
 			}
-			cfg.JumpTable = &copy
 		}
 		cfg.ExtraEips = extraEips
 	}
