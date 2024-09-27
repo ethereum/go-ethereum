@@ -302,6 +302,10 @@ func ParseStateScheme(provided string, disk ethdb.Database) (string, error) {
 		log.Info("State scheme set to already existing", "scheme", stored)
 		return stored, nil // reuse scheme of persistent scheme
 	}
+	// If state scheme is specified, ensure it's valid.
+	if provided != HashScheme && provided != PathScheme {
+		return "", fmt.Errorf("invalid state scheme %s", provided)
+	}
 	// If state scheme is specified, ensure it's compatible with
 	// persistent state.
 	if stored == "" || provided == stored {

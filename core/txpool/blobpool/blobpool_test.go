@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
@@ -53,25 +52,14 @@ var (
 	emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
 )
 
-// Chain configuration with Cancun enabled.
-//
-// TODO(karalabe): replace with params.MainnetChainConfig after Cancun.
-var testChainConfig *params.ChainConfig
-
-func init() {
-	testChainConfig = new(params.ChainConfig)
-	*testChainConfig = *params.MainnetChainConfig
-
-	testChainConfig.CancunTime = new(uint64)
-	*testChainConfig.CancunTime = uint64(time.Now().Unix())
-}
-
 // testBlockChain is a mock of the live chain for testing the pool.
 type testBlockChain struct {
 	config  *params.ChainConfig
 	basefee *uint256.Int
 	blobfee *uint256.Int
 	statedb *state.StateDB
+
+	blocks map[uint64]*types.Block
 }
 
 func (bc *testBlockChain) Config() *params.ChainConfig {
@@ -79,7 +67,7 @@ func (bc *testBlockChain) Config() *params.ChainConfig {
 }
 
 func (bc *testBlockChain) CurrentBlock() *types.Header {
-	// Yolo, life is too short to invert mist.CalcBaseFee and misc.CalcBlobFee,
+	// Yolo, life is too short to invert misc.CalcBaseFee and misc.CalcBlobFee,
 	// just binary search it them.
 
 	// The base fee at 5714 ETH translates into the 21000 base gas higher than
@@ -142,7 +130,14 @@ func (bc *testBlockChain) CurrentFinalBlock() *types.Header {
 }
 
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return nil
+	// This is very yolo for the tests. If the number is the origin block we use
+	// to init the pool, return an empty block with the correct starting header.
+	//
+	// If it is something else, return some baked in mock data.
+	if number == bc.config.LondonBlock.Uint64()+1 {
+		return types.NewBlockWithHeader(bc.CurrentBlock())
+	}
+	return bc.blocks[number]
 }
 
 func (bc *testBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
@@ -181,14 +176,14 @@ func makeAddressReserver() txpool.AddressReserver {
 // the blob pool.
 func makeTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, key *ecdsa.PrivateKey) *types.Transaction {
 	blobtx := makeUnsignedTx(nonce, gasTipCap, gasFeeCap, blobFeeCap)
-	return types.MustSignNewTx(key, types.LatestSigner(testChainConfig), blobtx)
+	return types.MustSignNewTx(key, types.LatestSigner(params.MainnetChainConfig), blobtx)
 }
 
 // makeUnsignedTx is a utility method to construct a random blob transaction
 // without signing it.
 func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64) *types.BlobTx {
 	return &types.BlobTx{
-		ChainID:    uint256.MustFromBig(testChainConfig.ChainID),
+		ChainID:    uint256.MustFromBig(params.MainnetChainConfig.ChainID),
 		Nonce:      nonce,
 		GasTipCap:  uint256.NewInt(gasTipCap),
 		GasFeeCap:  uint256.NewInt(gasFeeCap),
@@ -229,12 +224,16 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	for hash := range seen {
 		t.Errorf("indexed transaction hash #%x missing from lookup table", hash)
 	}
-	// Verify that transactions are sorted per account and contain no nonce gaps
+	// Verify that transactions are sorted per account and contain no nonce gaps,
+	// and that the first nonce is the next expected one based on the state.
 	for addr, txs := range pool.index {
 		for i := 1; i < len(txs); i++ {
 			if txs[i].nonce != txs[i-1].nonce+1 {
 				t.Errorf("addr %v, tx %d nonce mismatch: have %d, want %d", addr, i, txs[i].nonce, txs[i-1].nonce+1)
 			}
+		}
+		if txs[0].nonce != pool.state.GetNonce(addr) {
+			t.Errorf("addr %v, first tx nonce mismatch: have %d, want %d", addr, txs[0].nonce, pool.state.GetNonce(addr))
 		}
 	}
 	// Verify that calculated evacuation thresholds are correct
@@ -331,7 +330,7 @@ func TestOpenDrops(t *testing.T) {
 	// Insert a transaction with a bad signature to verify that stale junk after
 	// potential hard-forks can get evicted (case 2)
 	tx := types.NewTx(&types.BlobTx{
-		ChainID:    uint256.MustFromBig(testChainConfig.ChainID),
+		ChainID:    uint256.MustFromBig(params.MainnetChainConfig.ChainID),
 		GasTipCap:  new(uint256.Int),
 		GasFeeCap:  new(uint256.Int),
 		Gas:        0,
@@ -560,7 +559,7 @@ func TestOpenDrops(t *testing.T) {
 	statedb.Commit(0, true)
 
 	chain := &testBlockChain{
-		config:  testChainConfig,
+		config:  params.MainnetChainConfig,
 		basefee: uint256.NewInt(params.InitialBaseFee),
 		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
 		statedb: statedb,
@@ -679,7 +678,7 @@ func TestOpenIndex(t *testing.T) {
 	statedb.Commit(0, true)
 
 	chain := &testBlockChain{
-		config:  testChainConfig,
+		config:  params.MainnetChainConfig,
 		basefee: uint256.NewInt(params.InitialBaseFee),
 		blobfee: uint256.NewInt(params.BlobTxMinBlobGasprice),
 		statedb: statedb,
@@ -781,7 +780,7 @@ func TestOpenHeap(t *testing.T) {
 	statedb.Commit(0, true)
 
 	chain := &testBlockChain{
-		config:  testChainConfig,
+		config:  params.MainnetChainConfig,
 		basefee: uint256.NewInt(1050),
 		blobfee: uint256.NewInt(105),
 		statedb: statedb,
@@ -861,7 +860,7 @@ func TestOpenCap(t *testing.T) {
 		statedb.Commit(0, true)
 
 		chain := &testBlockChain{
-			config:  testChainConfig,
+			config:  params.MainnetChainConfig,
 			basefee: uint256.NewInt(1050),
 			blobfee: uint256.NewInt(105),
 			statedb: statedb,
@@ -908,13 +907,12 @@ func TestOpenCap(t *testing.T) {
 func TestAdd(t *testing.T) {
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelTrace, true)))
 
-	// seed is a helper tumpe to seed an initial state db and pool
+	// seed is a helper tuple to seed an initial state db and pool
 	type seed struct {
 		balance uint64
 		nonce   uint64
 		txs     []*types.BlobTx
 	}
-
 	// addtx is a helper sender/tx tuple to represent a new tx addition
 	type addtx struct {
 		from string
@@ -925,6 +923,7 @@ func TestAdd(t *testing.T) {
 	tests := []struct {
 		seeds map[string]seed
 		adds  []addtx
+		block []addtx
 	}{
 		// Transactions from new accounts should be accepted if their initial
 		// nonce matches the expected one from the statedb. Higher or lower must
@@ -1250,6 +1249,25 @@ func TestAdd(t *testing.T) {
 				},
 			},
 		},
+		// Tests issue #30518 where a refactor broke internal state invariants,
+		// causing included transactions not to be properly accounted and thus
+		// account states going our of sync with the chain.
+		{
+			seeds: map[string]seed{
+				"alice": {
+					balance: 1000000,
+					txs: []*types.BlobTx{
+						makeUnsignedTx(0, 1, 1, 1),
+					},
+				},
+			},
+			block: []addtx{
+				{
+					from: "alice",
+					tx:   makeUnsignedTx(0, 1, 1, 1),
+				},
+			},
+		},
 	}
 	for i, tt := range tests {
 		// Create a temporary folder for the persistent backend
@@ -1276,7 +1294,7 @@ func TestAdd(t *testing.T) {
 
 			// Sign the seed transactions and store them in the data store
 			for _, tx := range seed.txs {
-				signed := types.MustSignNewTx(keys[acc], types.LatestSigner(testChainConfig), tx)
+				signed := types.MustSignNewTx(keys[acc], types.LatestSigner(params.MainnetChainConfig), tx)
 				blob, _ := rlp.EncodeToBytes(signed)
 				store.Put(blob)
 			}
@@ -1286,7 +1304,7 @@ func TestAdd(t *testing.T) {
 
 		// Create a blob pool out of the pre-seeded dats
 		chain := &testBlockChain{
-			config:  testChainConfig,
+			config:  params.MainnetChainConfig,
 			basefee: uint256.NewInt(1050),
 			blobfee: uint256.NewInt(105),
 			statedb: statedb,
@@ -1299,14 +1317,40 @@ func TestAdd(t *testing.T) {
 
 		// Add each transaction one by one, verifying the pool internals in between
 		for j, add := range tt.adds {
-			signed, _ := types.SignNewTx(keys[add.from], types.LatestSigner(testChainConfig), add.tx)
+			signed, _ := types.SignNewTx(keys[add.from], types.LatestSigner(params.MainnetChainConfig), add.tx)
 			if err := pool.add(signed); !errors.Is(err, add.err) {
 				t.Errorf("test %d, tx %d: adding transaction error mismatch: have %v, want %v", i, j, err, add.err)
 			}
 			verifyPoolInternals(t, pool)
 		}
-		// Verify the pool internals and close down the test
 		verifyPoolInternals(t, pool)
+
+		// If the test contains a chain head event, run that and gain verify the internals
+		if tt.block != nil {
+			// Fake a header for the new set of transactions
+			header := &types.Header{
+				Number:  big.NewInt(int64(chain.CurrentBlock().Number.Uint64() + 1)),
+				BaseFee: chain.CurrentBlock().BaseFee, // invalid, but nothing checks it, yolo
+			}
+			// Inject the fake block into the chain
+			txs := make([]*types.Transaction, len(tt.block))
+			for j, inc := range tt.block {
+				txs[j] = types.MustSignNewTx(keys[inc.from], types.LatestSigner(params.MainnetChainConfig), inc.tx)
+			}
+			chain.blocks = map[uint64]*types.Block{
+				header.Number.Uint64(): types.NewBlockWithHeader(header).WithBody(types.Body{
+					Transactions: txs,
+				}),
+			}
+			// Apply the nonce updates to the state db
+			for _, tx := range txs {
+				sender, _ := types.Sender(types.LatestSigner(params.MainnetChainConfig), tx)
+				chain.statedb.SetNonce(sender, tx.Nonce()+1)
+			}
+			pool.Reset(chain.CurrentBlock(), header)
+			verifyPoolInternals(t, pool)
+		}
+		// Close down the test
 		pool.Close()
 	}
 }
@@ -1325,10 +1369,10 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	var (
 		basefee    = uint64(1050)
 		blobfee    = uint64(105)
-		signer     = types.LatestSigner(testChainConfig)
+		signer     = types.LatestSigner(params.MainnetChainConfig)
 		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		chain      = &testBlockChain{
-			config:  testChainConfig,
+			config:  params.MainnetChainConfig,
 			basefee: uint256.NewInt(basefee),
 			blobfee: uint256.NewInt(blobfee),
 			statedb: statedb,

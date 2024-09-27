@@ -591,7 +591,7 @@ func DeveloperGenesisBlock(gasLimit uint64, faucet *common.Address) *Genesis {
 			// Pre-deploy EIP-4788 system contract
 			params.BeaconRootsAddress: {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
 			// Pre-deploy EIP-2935 history contract.
-			params.HistoryStorageAddress: {Nonce: 1, Code: params.HistoryStorageCode},
+			params.HistoryStorageAddress: {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
 		},
 	}
 	if faucet != nil {

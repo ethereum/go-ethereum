@@ -600,11 +600,6 @@ var (
 		Usage:    "Disables db compaction after import",
 		Category: flags.LoggingCategory,
 	}
-	CollectWitnessFlag = &cli.BoolFlag{
-		Name:     "collectwitness",
-		Usage:    "Enable state witness generation during block execution. Work in progress flag, don't use.",
-		Category: flags.MiscCategory,
-	}
 
 	// MISC settings
 	SyncTargetFlag = &cli.StringFlag{
@@ -1312,7 +1307,6 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.IsSet(MinerEtherbaseFlag.Name) {
 		log.Warn("Option --miner.etherbase is deprecated as the etherbase is set by the consensus client post-merge")
-		return
 	}
 	if !ctx.IsSet(MinerPendingFeeRecipientFlag.Name) {
 		return
@@ -1767,9 +1761,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.Bool(VMEnableDebugFlag.Name)
 	}
-	if ctx.IsSet(CollectWitnessFlag.Name) {
-		cfg.EnableWitnessCollection = ctx.Bool(CollectWitnessFlag.Name)
-	}
 
 	if ctx.IsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = ctx.Uint64(RPCGlobalGasCapFlag.Name)
@@ -2194,7 +2185,6 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	vmcfg := vm.Config{
 		EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name),
-		EnableWitnessCollection: ctx.Bool(CollectWitnessFlag.Name),
 	}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {

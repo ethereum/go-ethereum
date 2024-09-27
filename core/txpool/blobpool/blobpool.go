@@ -949,9 +949,7 @@ func (p *BlobPool) reorg(oldHead, newHead *types.Header) (map[common.Address][]*
 				lost = append(lost, tx)
 			}
 		}
-		if len(lost) > 0 {
-			reinject[addr] = lost
-		}
+		reinject[addr] = lost
 
 		// Update the set that was already reincluded to track the blocks in limbo
 		for _, tx := range types.TxDifference(included[addr], discarded[addr]) {
