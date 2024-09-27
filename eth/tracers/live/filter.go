@@ -34,27 +34,25 @@ const (
 )
 
 type traceResult struct {
-	TxHash common.Hash `json:"txHash,omitempty"` // transaction hash
-	Result interface{} `json:"result,omitempty"` // Trace results produced by the tracer
-	Error  string      `json:"error,omitempty"`  // Trace failure produced by the tracer
+	TxHash *common.Hash `json:"txHash,omitempty"` // Transaction hash generated from block
+	Result interface{}  `json:"result,omitempty"` // Trace results produced by the tracer
+	Error  string       `json:"error,omitempty"`  // Trace failure produced by the tracer
 }
 
 // EncodeRLP implments rlp.Encoder
 func (tr *traceResult) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{tr.TxHash, tr.Result, tr.Error})
+	return rlp.Encode(w, []interface{}{tr.Result, tr.Error})
 }
 
 // DecodeRLP implements rlp.Decoder
 func (tr *traceResult) DecodeRLP(s *rlp.Stream) error {
 	var temp struct {
-		TxHash common.Hash
 		Result []byte
 		Error  string
 	}
 	if err := s.Decode(&temp); err != nil {
 		return err
 	}
-	tr.TxHash = temp.TxHash
 	tr.Error = temp.Error
 	return json.Unmarshal(temp.Result, &tr.Result)
 }
@@ -250,7 +248,7 @@ func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 	f.tracer.OnTxEnd(receipt, err)
 
 	for name, tt := range f.tracer.Tracers() {
-		trace := &traceResult{TxHash: receipt.TxHash}
+		trace := &traceResult{}
 		result, err := tt.GetResult()
 		if err != nil {
 			log.Error("Failed to get tracer results", "number", f.latest.Load(), "error", err)

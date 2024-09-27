@@ -45,13 +45,35 @@ func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *t
 	if err != nil {
 		return nil, err
 	}
-	results := make([]interface{}, len(traces))
-	for i, trace := range traces {
-		if tracer == "parityTracer" {
-			results[i] = trace.Result
-		} else {
-			results[i] = trace
+
+	results := make([]interface{}, 0, len(traces))
+	if tracer == "parityTracer" {
+		// Convert from []interface{} to []traceResult
+		for _, trace := range traces {
+			if parityTraces, ok := trace.Result.([]interface{}); ok {
+				results = append(results, parityTraces...)
+			} else {
+				return nil, errors.New("unexpected trace result type")
+			}
 		}
+		return results, nil
+	}
+
+	txHashes := make([]common.Hash, 0)
+	block, err := api.backend.BlockByNumber(ctx, blockNr)
+	if err != nil {
+		return nil, err
+	}
+	for _, tx := range block.Transactions() {
+		txHashes = append(txHashes, tx.Hash())
+	}
+	if len(traces) != len(txHashes) {
+		return nil, errors.New("traces and transactions mismatch")
+	}
+
+	for i, trace := range traces {
+		trace.TxHash = &txHashes[i]
+		results = append(results, trace)
 	}
 
 	return results, nil
