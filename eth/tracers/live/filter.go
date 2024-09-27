@@ -60,7 +60,7 @@ func (tr *traceResult) DecodeRLP(s *rlp.Stream) error {
 }
 
 type filter struct {
-	backend    tracers.Backend
+	backend    tracing.Backend
 	kvdb       ethdb.Database
 	frdb       *rawdb.Freezer
 	blockCh    chan uint64
@@ -113,20 +113,20 @@ func toKVKey(name string, number uint64, hash common.Hash) []byte {
 	return key
 }
 
-func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []rpc.API, error) {
+func newFilter(cfg json.RawMessage, stack tracers.LiveApiRegister, backend tracing.Backend) (*tracing.Hooks, error) {
 	var config filterTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
-			return nil, nil, fmt.Errorf("failed to parse config: %v", err)
+			return nil, fmt.Errorf("failed to parse config: %v", err)
 		}
 	}
 	if config.Path == "" {
-		return nil, nil, errors.New("filter tracer output path is required")
+		return nil, errors.New("filter tracer output path is required")
 	}
 
 	t, err := native.NewMuxTracer(config.Config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	var (
@@ -136,7 +136,7 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 
 	kvdb, err := rawdb.NewPebbleDBDatabase(kvpath, 128, 1024, "trace", false, false)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	muxTracers := t.Tracers()
@@ -149,16 +149,16 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 
 	frdb, err := rawdb.NewFreezer(frpath, "trace", false, tableSize, tables)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create trace freezer db: %v", err)
+		return nil, fmt.Errorf("failed to create trace freezer db: %v", err)
 	}
 
 	tail, err := frdb.Tail()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read the tail block number from the freezer db: %v", err)
+		return nil, fmt.Errorf("failed to read the tail block number from the freezer db: %v", err)
 	}
 	frozen, err := frdb.Ancients()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read the frozen block numbers from the freezer db: %v", err)
+		return nil, fmt.Errorf("failed to read the frozen block numbers from the freezer db: %v", err)
 	}
 
 	f := &filter{
@@ -176,11 +176,11 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 	if _, err := os.Stat(f.offsetFile); err == nil || os.IsExist(err) {
 		data, err := os.ReadFile(f.offsetFile)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read the offset from the freezer db: %v", err)
+			return nil, fmt.Errorf("failed to read the offset from the freezer db: %v", err)
 		}
 		offset, err = strconv.Atoi(string(data))
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to convert offset: %v", err)
+			return nil, fmt.Errorf("failed to convert offset: %v", err)
 		}
 	}
 	log.Info("Open filter tracer", "path", config.Path, "offset", offset, "tables", tables)
@@ -211,10 +211,11 @@ func newFilter(cfg json.RawMessage, backend tracers.Backend) (*tracing.Hooks, []
 			Service:   &filterAPI{backend: backend, filter: f},
 		},
 	}
+	stack.RegisterAPIs(apis)
 
 	go f.freeze()
 
-	return hooks, apis, nil
+	return hooks, nil
 }
 
 func (f *filter) OnBlockStart(ev tracing.BlockEvent) {

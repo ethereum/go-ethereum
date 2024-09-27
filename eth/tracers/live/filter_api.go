@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -13,7 +13,7 @@ import (
 var errTxNotFound = errors.New("transaction not found")
 
 type filterAPI struct {
-	backend tracers.Backend
+	backend tracing.Backend
 	filter  *filter
 }
 
