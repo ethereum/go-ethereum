@@ -72,11 +72,14 @@ type live struct {
 	hash       common.Hash
 	once       sync.Once
 	offsetFile string
+
+	enableNonceTracer bool
 }
 
 type liveTracerConfig struct {
-	Path   string          `json:"path"` // Path to the directory where the tracer logs will be stored
-	Config json.RawMessage `json:"config"`
+	Path              string          `json:"path"` // Path to the directory where the tracer data will be stored
+	Config            json.RawMessage `json:"config"`
+	EnableNonceTracer bool            `json:"enableNonceTracer"`
 }
 
 func toTraceTable(name string) string {
@@ -169,6 +172,8 @@ func newLive(cfg json.RawMessage, stack tracers.LiveApiRegister, backend tracing
 		traces:     traces,
 		tracer:     t,
 		offsetFile: path.Join(frpath, "OFFSET"),
+
+		enableNonceTracer: config.EnableNonceTracer,
 	}
 	offset := 0
 	if _, err := os.Stat(l.offsetFile); err == nil || os.IsExist(err) {
@@ -203,15 +208,13 @@ func newLive(cfg json.RawMessage, stack tracers.LiveApiRegister, backend tracing
 		OnStorageChange: t.OnStorageChange,
 		OnLog:           t.OnLog,
 	}
-	apis := []rpc.API{
-		{
-			Namespace: "trace",
-			Service:   &traceAPI{backend: backend, live: l},
-		},
-		{
-			Namespace: "eth",
-			Service:   &ethAPI{backend: backend, live: l},
-		},
+
+	var apis []rpc.API
+	if len(muxTracers) > 0 {
+		apis = append(apis, rpc.API{Namespace: "trace", Service: &traceAPI{backend: backend, live: l}})
+	}
+	if config.EnableNonceTracer {
+		apis = append(apis, rpc.API{Namespace: "eth", Service: &ethAPI{backend: backend, live: l}})
 	}
 	stack.RegisterAPIs(apis)
 
@@ -245,10 +248,12 @@ func (f *live) OnBlockStart(ev tracing.BlockEvent) {
 }
 
 func (f *live) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
-	key := append(from.Bytes(), encodeNumber(tx.Nonce())...)
-	val := tx.Hash().Bytes()
-	if err := f.kvdb.Put(key, val); err != nil {
-		log.Warn("Failed to put nonce into kvdb", "err", err)
+	if f.enableNonceTracer {
+		key := append(from.Bytes(), encodeNumber(tx.Nonce())...)
+		val := tx.Hash().Bytes()
+		if err := f.kvdb.Put(key, val); err != nil {
+			log.Warn("Failed to put nonce into kvdb", "err", err)
+		}
 	}
 	f.tracer.OnTxStart(env, tx, from)
 }

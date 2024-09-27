@@ -23,9 +23,7 @@ type traceConfig struct {
 	Tracer string `json:"tracer"`
 }
 
-var defaultTraceConfig = &traceConfig{
-	Tracer: "callTracer",
-}
+var defaultTraceConfig = &traceConfig{Tracer: "callTracer"}
 
 func (api *traceAPI) isSupportedTracer(tracer string) bool {
 	_, ok := api.live.tracer.Tracers()[tracer]
