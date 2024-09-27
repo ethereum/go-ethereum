@@ -44,10 +44,13 @@ type blockchain interface {
 // without the tree hashing and consensus changes:
 // https://eips.ethereum.org/EIPS/eip-7745
 type FilterMaps struct {
-	lock    sync.RWMutex
-	db      ethdb.Database
-	closeCh chan struct{}
-	closeWg sync.WaitGroup
+	lock      sync.RWMutex
+	db        ethdb.Database
+	closeCh   chan struct{}
+	closeWg   sync.WaitGroup
+	history   uint64
+	noHistory bool
+
 	filterMapsRange
 	chain         blockchain
 	matcherSyncCh chan *FilterMapsMatcherBackend
@@ -87,24 +90,32 @@ var emptyRow = FilterRow{}
 
 // filterMapsRange describes the block range that has been indexed and the log
 // value index range it has been mapped to.
+// Note that tailBlockLvPointer points to the earliest log value index belonging
+// to the tail block while tailLvPointer points to the earliest log value index
+// added to the corresponding filter map. The latter might point to an earlier
+// index after tail blocks have been pruned because we do not remove tail values
+// one by one, rather delete entire maps when all blocks that had log values in
+// those maps are unindexed.
 type filterMapsRange struct {
-	initialized                      bool
-	headLvPointer, tailLvPointer     uint64
-	headBlockNumber, tailBlockNumber uint64
-	headBlockHash, tailParentHash    common.Hash
+	initialized                                      bool
+	headLvPointer, tailLvPointer, tailBlockLvPointer uint64
+	headBlockNumber, tailBlockNumber                 uint64
+	headBlockHash, tailParentHash                    common.Hash
 }
 
 // NewFilterMaps creates a new FilterMaps and starts the indexer in order to keep
 // the structure in sync with the given blockchain.
-func NewFilterMaps(db ethdb.Database, chain blockchain) *FilterMaps {
+func NewFilterMaps(db ethdb.Database, chain blockchain, history uint64, noHistory bool) *FilterMaps {
 	rs, err := rawdb.ReadFilterMapsRange(db)
 	if err != nil {
 		log.Error("Error reading log index range", "error", err)
 	}
 	fm := &FilterMaps{
-		db:      db,
-		chain:   chain,
-		closeCh: make(chan struct{}),
+		db:        db,
+		chain:     chain,
+		closeCh:   make(chan struct{}),
+		history:   history,
+		noHistory: noHistory,
 		filterMapsRange: filterMapsRange{
 			initialized:     rs.Initialized,
 			headLvPointer:   rs.HeadLvPointer,
@@ -120,6 +131,11 @@ func NewFilterMaps(db ethdb.Database, chain blockchain) *FilterMaps {
 		blockPtrCache:  lru.NewCache[uint32, uint64](1000),
 		lvPointerCache: lru.NewCache[uint64, uint64](1000),
 		revertPoints:   make(map[uint64]*revertPoint),
+	}
+	fm.tailBlockLvPointer, err = fm.getBlockLvPointer(fm.tailBlockNumber)
+	if err != nil {
+		log.Error("Error fetching tail block pointer, resetting log index", "error", err)
+		fm.filterMapsRange = filterMapsRange{} // updateLoop resets the database
 	}
 	fm.closeWg.Add(2)
 	go fm.removeBloomBits()
@@ -200,7 +216,7 @@ func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
 
 // setRange updates the covered range and also adds the changes to the given batch.
 // Note that this function assumes that the read/write lock is being held.
-func (f *FilterMaps) setRange(batch ethdb.Batch, newRange filterMapsRange) {
+func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newRange filterMapsRange) {
 	f.filterMapsRange = newRange
 	rs := rawdb.FilterMapsRange{
 		Initialized:     newRange.initialized,
@@ -227,7 +243,7 @@ func (f *FilterMaps) updateMapCache() {
 	defer f.filterMapLock.Unlock()
 
 	newFilterMapCache := make(map[uint32]*filterMap)
-	firstMap, afterLastMap := uint32(f.tailLvPointer>>logValuesPerMap), uint32((f.headLvPointer+valuesPerMap-1)>>logValuesPerMap)
+	firstMap, afterLastMap := uint32(f.tailBlockLvPointer>>logValuesPerMap), uint32((f.headLvPointer+valuesPerMap-1)>>logValuesPerMap)
 	headCacheFirst := firstMap + 1
 	if afterLastMap > headCacheFirst+headCacheSize {
 		headCacheFirst = afterLastMap - headCacheSize
@@ -255,7 +271,7 @@ func (f *FilterMaps) updateMapCache() {
 // If this is not the case then an invalid result or an error may be returned.
 // Note that this function assumes that the read lock is being held.
 func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
-	if lvIndex < f.tailLvPointer || lvIndex > f.headLvPointer {
+	if lvIndex < f.tailBlockLvPointer || lvIndex > f.headLvPointer {
 		return nil, nil
 	}
 	// find possible block range based on map to block pointers
@@ -263,6 +279,9 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 	firstBlockNumber, err := f.getMapBlockPtr(mapIndex)
 	if err != nil {
 		return nil, err
+	}
+	if firstBlockNumber < f.tailBlockNumber {
+		firstBlockNumber = f.tailBlockNumber
 	}
 	var lastBlockNumber uint64
 	if mapIndex+1 < uint32((f.headLvPointer+valuesPerMap-1)>>logValuesPerMap) {
