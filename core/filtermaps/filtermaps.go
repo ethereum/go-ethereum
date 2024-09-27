@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -45,7 +46,8 @@ type blockchain interface {
 type FilterMaps struct {
 	lock    sync.RWMutex
 	db      ethdb.Database
-	closeCh chan chan struct{}
+	closeCh chan struct{}
+	closeWg sync.WaitGroup
 	filterMapsRange
 	chain         blockchain
 	matcherSyncCh chan *FilterMapsMatcherBackend
@@ -102,7 +104,7 @@ func NewFilterMaps(db ethdb.Database, chain blockchain) *FilterMaps {
 	fm := &FilterMaps{
 		db:      db,
 		chain:   chain,
-		closeCh: make(chan chan struct{}),
+		closeCh: make(chan struct{}),
 		filterMapsRange: filterMapsRange{
 			initialized:     rs.Initialized,
 			headLvPointer:   rs.HeadLvPointer,
@@ -119,64 +121,81 @@ func NewFilterMaps(db ethdb.Database, chain blockchain) *FilterMaps {
 		lvPointerCache: lru.NewCache[uint64, uint64](1000),
 		revertPoints:   make(map[uint64]*revertPoint),
 	}
-	if !fm.initialized {
-		fm.resetDb()
-	}
-	fm.updateMapCache()
-	if rp, err := fm.newUpdateBatch().makeRevertPoint(); err == nil {
-		fm.revertPoints[rp.blockNumber] = rp
-	} else {
-		log.Error("Error creating head revert point", "error", err)
-	}
+	fm.closeWg.Add(2)
+	go fm.removeBloomBits()
 	go fm.updateLoop()
 	return fm
 }
 
 // Close ensures that the indexer is fully stopped before returning.
 func (f *FilterMaps) Close() {
-	ch := make(chan struct{})
-	f.closeCh <- ch
-	<-ch
+	close(f.closeCh)
+	f.closeWg.Wait()
 }
 
 // reset un-initializes the FilterMaps structure and removes all related data from
-// the database.
-// Note that this function assumes that the read/write lock is being held.
-func (f *FilterMaps) reset() {
-	// deleting the range first ensures that resetDb will be called again at next
-	// startup and any leftover data will be removed even if it cannot finish now.
-	rawdb.DeleteFilterMapsRange(f.db)
-	f.resetDb()
+// the database. The function returns true if everything was successfully removed.
+func (f *FilterMaps) reset() bool {
+	f.lock.Lock()
 	f.filterMapsRange = filterMapsRange{}
 	f.filterMapCache = make(map[uint32]*filterMap)
 	f.revertPoints = make(map[uint64]*revertPoint)
 	f.blockPtrCache.Purge()
 	f.lvPointerCache.Purge()
+	f.lock.Unlock()
+	// deleting the range first ensures that resetDb will be called again at next
+	// startup and any leftover data will be removed even if it cannot finish now.
+	rawdb.DeleteFilterMapsRange(f.db)
+	return f.removeDbWithPrefix(rawdb.FilterMapsPrefix, "Resetting log index database")
 }
 
-// resetDb removes all log index data from the database.
-func (f *FilterMaps) resetDb() {
-	var logged bool
+// removeBloomBits removes old bloom bits data from the database.
+func (f *FilterMaps) removeBloomBits() {
+	f.removeDbWithPrefix(rawdb.BloomBitsPrefix, "Removing old bloom bits database")
+	f.removeDbWithPrefix(rawdb.BloomBitsIndexPrefix, "Removing old bloom bits chain index")
+	f.closeWg.Done()
+}
+
+// removeDbWithPrefix removes data with the given prefix from the database and
+// returns true if everything was successfully removed.
+func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
+	var (
+		logged     bool
+		lastLogged time.Time
+		removed    uint64
+	)
 	for {
-		it := f.db.NewIterator(rawdb.FilterMapsPrefix, nil)
+		select {
+		case <-f.closeCh:
+			return false
+		default:
+		}
+		it := f.db.NewIterator(prefix, nil)
 		batch := f.db.NewBatch()
 		var count int
 		for ; count < 10000 && it.Next(); count++ {
 			batch.Delete(it.Key())
+			removed++
 		}
 		it.Release()
 		if count == 0 {
 			break
 		}
 		if !logged {
-			log.Info("Resetting log index database...")
+			log.Info(action + "...")
 			logged = true
+			lastLogged = time.Now()
+		}
+		if time.Since(lastLogged) >= time.Second*10 {
+			log.Info(action+" in progress", "removed keys", removed)
+			lastLogged = time.Now()
 		}
 		batch.Write()
 	}
 	if logged {
-		log.Info("Resetting log index database finished")
+		log.Info(action + " finished")
 	}
+	return true
 }
 
 // setRange updates the covered range and also adds the changes to the given batch.
