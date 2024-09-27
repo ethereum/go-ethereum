@@ -145,7 +145,7 @@ var (
 	FixedCommitteeRootKey = []byte("fixedRoot-") // bigEndian64(syncPeriod) -> committee root hash
 	SyncCommitteeKey      = []byte("committee-") // bigEndian64(syncPeriod) -> serialized committee
 
-	FilterMapsPrefix        = []byte("fT5-") //TODO fm-
+	FilterMapsPrefix        = []byte("fm-")
 	filterMapsRangeKey      = append(FilterMapsPrefix, byte('R'))
 	filterMapRowPrefix      = append(FilterMapsPrefix, byte('r')) // filterMapRowPrefix + mapRowIndex (uint64 big endian) -> filter row
 	filterMapBlockPtrPrefix = append(FilterMapsPrefix, byte('b')) // filterMapBlockPtrPrefix + mapIndex (uint32 big endian) -> block number (uint64 big endian)
