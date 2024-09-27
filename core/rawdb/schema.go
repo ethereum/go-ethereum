@@ -230,16 +230,6 @@ func storageSnapshotsKey(accountHash common.Hash) []byte {
 	return append(SnapshotStoragePrefix, accountHash.Bytes()...)
 }
 
-// bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
-func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
-	key := append(append(bloomBitsPrefix, make([]byte, 10)...), hash.Bytes()...)
-
-	binary.BigEndian.PutUint16(key[1:], uint16(bit))
-	binary.BigEndian.PutUint64(key[3:], section)
-
-	return key
-}
-
 // skeletonHeaderKey = skeletonHeaderPrefix + num (uint64 big endian)
 func skeletonHeaderKey(number uint64) []byte {
 	return append(skeletonHeaderPrefix, encodeBlockNumber(number)...)
