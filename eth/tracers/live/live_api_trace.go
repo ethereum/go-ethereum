@@ -14,9 +14,9 @@ import (
 
 var errTxNotFound = errors.New("transaction not found")
 
-type filterAPI struct {
+type traceAPI struct {
 	backend tracing.Backend
-	filter  *filter
+	live    *live
 }
 
 type traceConfig struct {
@@ -27,12 +27,12 @@ var defaultTraceConfig = &traceConfig{
 	Tracer: "callTracer",
 }
 
-func (api *filterAPI) isSupportedTracer(tracer string) bool {
-	_, ok := api.filter.tracer.Tracers()[tracer]
+func (api *traceAPI) isSupportedTracer(tracer string) bool {
+	_, ok := api.live.tracer.Tracers()[tracer]
 	return ok
 }
 
-func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *traceConfig) ([]interface{}, error) {
+func (api *traceAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *traceConfig) ([]interface{}, error) {
 	tracer, err := api.getTracerOrDefault(cfg)
 	if err != nil {
 		return nil, err
@@ -40,14 +40,14 @@ func (api *filterAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *t
 
 	blknum := uint64(blockNr.Int64())
 	if blockNr == rpc.LatestBlockNumber {
-		blknum = api.filter.latest.Load()
+		blknum = api.live.latest.Load()
 	}
 
 	return api.readBlockTraces(ctx, tracer, blknum, tracer == "parityTracer")
 }
 
-func (api *filterAPI) readBlockTraces(ctx context.Context, tracer string, blknum uint64, isParity bool) ([]interface{}, error) {
-	traces, err := api.filter.readBlockTraces(ctx, tracer, blknum)
+func (api *traceAPI) readBlockTraces(ctx context.Context, tracer string, blknum uint64, isParity bool) ([]interface{}, error) {
+	traces, err := api.live.readBlockTraces(ctx, tracer, blknum)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (api *filterAPI) readBlockTraces(ctx context.Context, tracer string, blknum
 	return results, nil
 }
 
-func (api *filterAPI) Transaction(ctx context.Context, hash common.Hash, cfg *traceConfig) (interface{}, error) {
+func (api *traceAPI) Transaction(ctx context.Context, hash common.Hash, cfg *traceConfig) (interface{}, error) {
 	tracer, err := api.getTracerOrDefault(cfg)
 	if err != nil {
 		return nil, err
@@ -98,7 +98,7 @@ func (api *filterAPI) Transaction(ctx context.Context, hash common.Hash, cfg *tr
 	if !found {
 		return nil, errTxNotFound
 	}
-	traces, err := api.filter.readBlockTraces(ctx, tracer, blknum)
+	traces, err := api.live.readBlockTraces(ctx, tracer, blknum)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ const (
 )
 
 // Filter returns traces for the given filter configuration.
-func (api *filterAPI) Filter(ctx context.Context, req traceFilterConfig, cfg *traceConfig) (interface{}, error) {
+func (api *traceAPI) Filter(ctx context.Context, req traceFilterConfig, cfg *traceConfig) (interface{}, error) {
 	tracer, err := api.getTracerOrDefault(cfg)
 	if err != nil {
 		return nil, err
@@ -158,7 +158,7 @@ func (api *filterAPI) Filter(ctx context.Context, req traceFilterConfig, cfg *tr
 	if req.ToBlock != nil {
 		toBlock = uint64(*req.ToBlock)
 	} else {
-		toBlock = api.filter.latest.Load()
+		toBlock = api.live.latest.Load()
 	}
 
 	if fromBlock > toBlock {
@@ -175,7 +175,7 @@ func (api *filterAPI) Filter(ctx context.Context, req traceFilterConfig, cfg *tr
 	return exportLimitedTraces(func(blknum uint64) ([]interface{}, error) { return api.readBlockTraces(ctx, tracer, blknum, isParity) }, fromBlock, toBlock, count, after)
 }
 
-func (api *filterAPI) getTracerOrDefault(cfg *traceConfig) (string, error) {
+func (api *traceAPI) getTracerOrDefault(cfg *traceConfig) (string, error) {
 	if cfg == nil {
 		return defaultTraceConfig.Tracer, nil
 	}
@@ -185,46 +185,4 @@ func (api *filterAPI) getTracerOrDefault(cfg *traceConfig) (string, error) {
 		return "", errors.New("tracer not found")
 	}
 	return tracer, nil
-}
-
-func extractAddres(addrs []*common.Address) map[common.Address]struct{} {
-	result := make(map[common.Address]struct{}, len(addrs))
-	for _, addr := range addrs {
-		if addr != nil {
-			result[*addr] = struct{}{}
-		}
-	}
-	return result
-}
-
-func exportLimitedTraces(gen func(blknum uint64) ([]interface{}, error), fromBlock, toBlock, count, after uint64) ([]interface{}, error) {
-	var (
-		nExported uint64                         // Number of traces exported
-		nSkipped  uint64                         // Number of traces skipped
-		results   = make([]interface{}, 0, 1024) // 1024 is the initial capacity
-	)
-
-	for blknum := fromBlock; blknum <= toBlock && nExported < count; blknum++ {
-		traces, err := gen(uint64(blknum))
-		if err != nil {
-			return nil, err
-		}
-
-		nTraces := uint64(len(traces))
-		if after > nSkipped {
-			skip := min(after-nSkipped, nTraces)
-			nSkipped += skip
-			if skip == nTraces {
-				// Skip if the whole block is skipped
-				continue
-			}
-			traces = traces[skip:]
-		}
-
-		// Export at most the remaining traces
-		maxExport := min(count-nExported, uint64(len(traces)))
-		results = append(results, traces[:maxExport]...)
-		nExported += maxExport
-	}
-	return results, nil
 }

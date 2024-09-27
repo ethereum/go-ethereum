@@ -15,7 +15,7 @@ const (
 	kvdbTailKey     = "FilterFreezerTail"
 )
 
-func (f *filter) freeze() {
+func (f *live) freeze() {
 	var lastFinalized uint64
 	for {
 		select {
@@ -52,7 +52,7 @@ func (f *filter) freeze() {
 	}
 }
 
-func (f *filter) getFreezerTail() (tail uint64) {
+func (f *live) getFreezerTail() (tail uint64) {
 	tailBytes, _ := f.kvdb.Get([]byte(kvdbTailKey))
 
 	if len(tailBytes) > 0 {
@@ -64,13 +64,13 @@ func (f *filter) getFreezerTail() (tail uint64) {
 	return
 }
 
-func (f *filter) updateFreezerTail(tail uint64) error {
+func (f *live) updateFreezerTail(tail uint64) error {
 	tailBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(tailBytes, tail)
 	return f.kvdb.Put([]byte(kvdbTailKey), tailBytes)
 }
 
-func (f *filter) moveBlockToFreezer(blknum uint64) error {
+func (f *live) moveBlockToFreezer(blknum uint64) error {
 	header, err := f.backend.HeaderByNumber(context.Background(), rpc.BlockNumber(blknum))
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (f *filter) moveBlockToFreezer(blknum uint64) error {
 	return nil
 }
 
-func (f *filter) deleteKVDBEntriesWithPrefix(blknum uint64) error {
+func (f *live) deleteKVDBEntriesWithPrefix(blknum uint64) error {
 	prefix := encodeNumber(blknum)
 	batch := f.kvdb.NewBatch()
 	it := f.kvdb.NewIterator(prefix, nil)

@@ -26,7 +26,7 @@ import (
 )
 
 func init() {
-	tracers.LiveDirectory.Register("filter", newFilter)
+	tracers.LiveDirectory.Register("live", newLive)
 }
 
 const (
@@ -57,7 +57,7 @@ func (tr *traceResult) DecodeRLP(s *rlp.Stream) error {
 	return json.Unmarshal(temp.Result, &tr.Result)
 }
 
-type filter struct {
+type live struct {
 	backend    tracing.Backend
 	kvdb       ethdb.Database
 	frdb       *rawdb.Freezer
@@ -74,7 +74,7 @@ type filter struct {
 	offsetFile string
 }
 
-type filterTracerConfig struct {
+type liveTracerConfig struct {
 	Path   string          `json:"path"` // Path to the directory where the tracer logs will be stored
 	Config json.RawMessage `json:"config"`
 }
@@ -111,15 +111,15 @@ func toKVKey(name string, number uint64, hash common.Hash) []byte {
 	return key
 }
 
-func newFilter(cfg json.RawMessage, stack tracers.LiveApiRegister, backend tracing.Backend) (*tracing.Hooks, error) {
-	var config filterTracerConfig
+func newLive(cfg json.RawMessage, stack tracers.LiveApiRegister, backend tracing.Backend) (*tracing.Hooks, error) {
+	var config liveTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
 			return nil, fmt.Errorf("failed to parse config: %v", err)
 		}
 	}
 	if config.Path == "" {
-		return nil, errors.New("filter tracer output path is required")
+		return nil, errors.New("live tracer output path is required")
 	}
 
 	t, err := native.NewMuxTracer(config.Config)
@@ -159,7 +159,7 @@ func newFilter(cfg json.RawMessage, stack tracers.LiveApiRegister, backend traci
 		return nil, fmt.Errorf("failed to read the frozen block numbers from the freezer db: %v", err)
 	}
 
-	f := &filter{
+	l := &live{
 		backend:    backend,
 		kvdb:       kvdb,
 		frdb:       frdb,
@@ -171,8 +171,8 @@ func newFilter(cfg json.RawMessage, stack tracers.LiveApiRegister, backend traci
 		offsetFile: path.Join(frpath, "OFFSET"),
 	}
 	offset := 0
-	if _, err := os.Stat(f.offsetFile); err == nil || os.IsExist(err) {
-		data, err := os.ReadFile(f.offsetFile)
+	if _, err := os.Stat(l.offsetFile); err == nil || os.IsExist(err) {
+		data, err := os.ReadFile(l.offsetFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read the offset from the freezer db: %v", err)
 		}
@@ -181,15 +181,15 @@ func newFilter(cfg json.RawMessage, stack tracers.LiveApiRegister, backend traci
 			return nil, fmt.Errorf("failed to convert offset: %v", err)
 		}
 	}
-	log.Info("Open filter tracer", "path", config.Path, "offset", offset, "tables", tables)
+	log.Info("Open live tracer", "path", config.Path, "offset", offset, "tables", tables)
 
-	f.latest.Store(tail + frozen + uint64(offset))
-	f.offset.Store(uint64(offset))
+	l.latest.Store(tail + frozen + uint64(offset))
+	l.offset.Store(uint64(offset))
 	hooks := &tracing.Hooks{
-		OnBlockStart: f.OnBlockStart,
-		OnBlockEnd:   f.OnBlockEnd,
-		OnTxStart:    f.OnTxStart,
-		OnTxEnd:      f.OnTxEnd,
+		OnBlockStart: l.OnBlockStart,
+		OnBlockEnd:   l.OnBlockEnd,
+		OnTxStart:    l.OnTxStart,
+		OnTxEnd:      l.OnTxEnd,
 
 		// reuse the mux's hooks
 		OnEnter:         t.OnEnter,
@@ -206,17 +206,21 @@ func newFilter(cfg json.RawMessage, stack tracers.LiveApiRegister, backend traci
 	apis := []rpc.API{
 		{
 			Namespace: "trace",
-			Service:   &filterAPI{backend: backend, filter: f},
+			Service:   &traceAPI{backend: backend, live: l},
+		},
+		{
+			Namespace: "eth",
+			Service:   &ethAPI{backend: backend, live: l},
 		},
 	}
 	stack.RegisterAPIs(apis)
 
-	go f.freeze()
+	go l.freeze()
 
 	return hooks, nil
 }
 
-func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
+func (f *live) OnBlockStart(ev tracing.BlockEvent) {
 	// track the latest block number
 	blknum := ev.Block.NumberU64()
 	f.latest.Store(blknum)
@@ -240,11 +244,16 @@ func (f *filter) OnBlockStart(ev tracing.BlockEvent) {
 	})
 }
 
-func (f *filter) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (f *live) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	key := append(from.Bytes(), encodeNumber(tx.Nonce())...)
+	val := tx.Hash().Bytes()
+	if err := f.kvdb.Put(key, val); err != nil {
+		log.Warn("Failed to put nonce into kvdb", "err", err)
+	}
 	f.tracer.OnTxStart(env, tx, from)
 }
 
-func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
+func (f *live) OnTxEnd(receipt *types.Receipt, err error) {
 	f.tracer.OnTxEnd(receipt, err)
 
 	for name, tt := range f.tracer.Tracers() {
@@ -260,7 +269,7 @@ func (f *filter) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 }
 
-func (f *filter) OnBlockEnd(err error) {
+func (f *live) OnBlockEnd(err error) {
 	if err != nil {
 		log.Warn("OnBlockEnd", "latest", f.latest.Load(), "error", err)
 	}
@@ -289,7 +298,7 @@ func (f *filter) OnBlockEnd(err error) {
 	}
 }
 
-func (f *filter) readBlockTraces(ctx context.Context, name string, blknum uint64) ([]*traceResult, error) {
+func (f *live) readBlockTraces(ctx context.Context, name string, blknum uint64) ([]*traceResult, error) {
 	if blknum > f.latest.Load() {
 		return nil, errors.New("notfound")
 	}
@@ -320,7 +329,7 @@ func (f *filter) readBlockTraces(ctx context.Context, name string, blknum uint64
 	return traces, err
 }
 
-func (f *filter) readFromKVDB(ctx context.Context, name string, blknum uint64) ([]byte, error) {
+func (f *live) readFromKVDB(ctx context.Context, name string, blknum uint64) ([]byte, error) {
 	header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(blknum))
 	if err != nil {
 		return nil, err
@@ -334,7 +343,7 @@ func (f *filter) readFromKVDB(ctx context.Context, name string, blknum uint64) (
 	return data, err
 }
 
-func (f *filter) readFromFRDB(name string, blknum uint64) ([]byte, error) {
+func (f *live) readFromFRDB(name string, blknum uint64) ([]byte, error) {
 	table := toTraceTable(name)
 	var data []byte
 	err := f.frdb.ReadAncients(func(reader ethdb.AncientReaderOp) error {
@@ -348,7 +357,7 @@ func (f *filter) readFromFRDB(name string, blknum uint64) ([]byte, error) {
 	return data, nil
 }
 
-func (f *filter) Close() {
+func (f *live) Close() {
 	close(f.stopCh)
 
 	if err := f.kvdb.Close(); err != nil {
