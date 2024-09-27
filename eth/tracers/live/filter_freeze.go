@@ -108,7 +108,7 @@ func (f *filter) moveBlockToFreezer(blknum uint64) error {
 }
 
 func (f *filter) deleteKVDBEntriesWithPrefix(blknum uint64) error {
-	prefix := encodeBlockNumber(blknum)
+	prefix := encodeNumber(blknum)
 	batch := f.kvdb.NewBatch()
 	it := f.kvdb.NewIterator(prefix, nil)
 	defer it.Release()

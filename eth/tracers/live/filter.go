@@ -83,8 +83,8 @@ func toTraceTable(name string) string {
 	return name + "_tracers"
 }
 
-// encodeBlockNumber encodes a block number as big endian uint64
-func encodeBlockNumber(number uint64) []byte {
+// encodeNumber encodes a number as big endian uint64
+func encodeNumber(number uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
 	return enc
@@ -105,7 +105,7 @@ func toKVKey(name string, number uint64, hash common.Hash) []byte {
 		panic("not supported yet")
 	}
 	// TODO: have some prefix?
-	key := append(encodeBlockNumber(number), hash.Bytes()...)
+	key := append(encodeNumber(number), hash.Bytes()...)
 	key = append(key, typo)
 
 	return key
