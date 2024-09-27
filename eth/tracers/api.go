@@ -654,9 +654,20 @@ func (api *API) traceBlockParallel(ctx context.Context, block *types.Block, stat
 		txs       = block.Transactions()
 		blockHash = block.Hash()
 		signer    = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
+		blockCtx  = core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 		results   = make([]*txTraceResult, len(txs))
 		pend      sync.WaitGroup
 	)
+
+	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
+		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
+		core.ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+	}
+	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
+		vmenv := vm.NewEVM(blockCtx, vm.TxContext{}, statedb, api.backend.ChainConfig(), vm.Config{})
+		core.ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+	}
+
 	threads := runtime.NumCPU()
 	if threads > len(txs) {
 		threads = len(txs)
