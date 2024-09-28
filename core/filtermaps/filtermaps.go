@@ -1,10 +1,7 @@
 package filtermaps
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
 	"errors"
-	"sort"
 	"sync"
 	"time"
 
@@ -18,16 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-const (
-	logMapHeight    = 12                   // log2(mapHeight)
-	mapHeight       = 1 << logMapHeight    // filter map height (number of rows)
-	logMapsPerEpoch = 6                    // log2(mmapsPerEpochapsPerEpoch)
-	mapsPerEpoch    = 1 << logMapsPerEpoch // number of maps in an epoch
-	logValuesPerMap = 16                   // log2(logValuesPerMap)
-	valuesPerMap    = 1 << logValuesPerMap // number of log values marked on each filter map
-
-	headCacheSize = 8 // maximum number of recent filter maps cached in memory
-)
+const headCacheSize = 8 // maximum number of recent filter maps cached in memory
 
 // blockchain defines functions required by the FilterMaps log indexer.
 type blockchain interface {
@@ -51,6 +39,7 @@ type FilterMaps struct {
 	history   uint64
 	noHistory bool
 
+	Params
 	filterMapsRange
 	chain         blockchain
 	matcherSyncCh chan *FilterMapsMatcherBackend
@@ -60,7 +49,7 @@ type FilterMaps struct {
 	// while updating the structure. Note that the set of cached maps depends
 	// only on filterMapsRange and rows of other maps are not cached here.
 	filterMapLock  sync.Mutex
-	filterMapCache map[uint32]*filterMap
+	filterMapCache map[uint32]filterMap
 	blockPtrCache  *lru.Cache[uint32, uint64]
 	lvPointerCache *lru.Cache[uint64, uint64]
 	revertPoints   map[uint64]*revertPoint
@@ -73,7 +62,7 @@ type FilterMaps struct {
 // It can be used as a memory cache or an overlay while preparing a batch of
 // changes to the structure. In either case a nil value should be interpreted
 // as transparent (uncached/unchanged).
-type filterMap [mapHeight]FilterRow
+type filterMap []FilterRow
 
 // FilterRow encodes a single row of a filter map as a list of column indices.
 // Note that the values are always stored in the same order as they were added
@@ -105,17 +94,19 @@ type filterMapsRange struct {
 
 // NewFilterMaps creates a new FilterMaps and starts the indexer in order to keep
 // the structure in sync with the given blockchain.
-func NewFilterMaps(db ethdb.Database, chain blockchain, history uint64, noHistory bool) *FilterMaps {
+func NewFilterMaps(db ethdb.Database, chain blockchain, params Params, history uint64, noHistory bool) *FilterMaps {
 	rs, err := rawdb.ReadFilterMapsRange(db)
 	if err != nil {
 		log.Error("Error reading log index range", "error", err)
 	}
+	params.deriveFields()
 	fm := &FilterMaps{
 		db:        db,
 		chain:     chain,
 		closeCh:   make(chan struct{}),
 		history:   history,
 		noHistory: noHistory,
+		Params:    params,
 		filterMapsRange: filterMapsRange{
 			initialized:     rs.Initialized,
 			headLvPointer:   rs.HeadLvPointer,
@@ -127,7 +118,7 @@ func NewFilterMaps(db ethdb.Database, chain blockchain, history uint64, noHistor
 		},
 		matcherSyncCh:  make(chan *FilterMapsMatcherBackend),
 		matchers:       make(map[*FilterMapsMatcherBackend]struct{}),
-		filterMapCache: make(map[uint32]*filterMap),
+		filterMapCache: make(map[uint32]filterMap),
 		blockPtrCache:  lru.NewCache[uint32, uint64](1000),
 		lvPointerCache: lru.NewCache[uint64, uint64](1000),
 		revertPoints:   make(map[uint64]*revertPoint),
@@ -154,7 +145,7 @@ func (f *FilterMaps) Close() {
 func (f *FilterMaps) reset() bool {
 	f.lock.Lock()
 	f.filterMapsRange = filterMapsRange{}
-	f.filterMapCache = make(map[uint32]*filterMap)
+	f.filterMapCache = make(map[uint32]filterMap)
 	f.revertPoints = make(map[uint64]*revertPoint)
 	f.blockPtrCache.Purge()
 	f.lvPointerCache.Purge()
@@ -242,21 +233,21 @@ func (f *FilterMaps) updateMapCache() {
 	f.filterMapLock.Lock()
 	defer f.filterMapLock.Unlock()
 
-	newFilterMapCache := make(map[uint32]*filterMap)
-	firstMap, afterLastMap := uint32(f.tailBlockLvPointer>>logValuesPerMap), uint32((f.headLvPointer+valuesPerMap-1)>>logValuesPerMap)
+	newFilterMapCache := make(map[uint32]filterMap)
+	firstMap, afterLastMap := uint32(f.tailBlockLvPointer>>f.logValuesPerMap), uint32((f.headLvPointer+f.valuesPerMap-1)>>f.logValuesPerMap)
 	headCacheFirst := firstMap + 1
 	if afterLastMap > headCacheFirst+headCacheSize {
 		headCacheFirst = afterLastMap - headCacheSize
 	}
 	fm := f.filterMapCache[firstMap]
 	if fm == nil {
-		fm = new(filterMap)
+		fm = make(filterMap, f.mapHeight)
 	}
 	newFilterMapCache[firstMap] = fm
 	for mapIndex := headCacheFirst; mapIndex < afterLastMap; mapIndex++ {
 		fm := f.filterMapCache[mapIndex]
 		if fm == nil {
-			fm = new(filterMap)
+			fm = make(filterMap, f.mapHeight)
 		}
 		newFilterMapCache[mapIndex] = fm
 	}
@@ -275,7 +266,7 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 		return nil, nil
 	}
 	// find possible block range based on map to block pointers
-	mapIndex := uint32(lvIndex >> logValuesPerMap)
+	mapIndex := uint32(lvIndex >> f.logValuesPerMap)
 	firstBlockNumber, err := f.getMapBlockPtr(mapIndex)
 	if err != nil {
 		return nil, err
@@ -284,7 +275,7 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 		firstBlockNumber = f.tailBlockNumber
 	}
 	var lastBlockNumber uint64
-	if mapIndex+1 < uint32((f.headLvPointer+valuesPerMap-1)>>logValuesPerMap) {
+	if mapIndex+1 < uint32((f.headLvPointer+f.valuesPerMap-1)>>f.logValuesPerMap) {
 		lastBlockNumber, err = f.getMapBlockPtr(mapIndex + 1)
 		if err != nil {
 			return nil, err
@@ -345,7 +336,7 @@ func (f *FilterMaps) getFilterMapRow(mapIndex, rowIndex uint32) (FilterRow, erro
 	if fm != nil && fm[rowIndex] != nil {
 		return fm[rowIndex], nil
 	}
-	row, err := rawdb.ReadFilterMapRow(f.db, mapRowIndex(mapIndex, rowIndex))
+	row, err := rawdb.ReadFilterMapRow(f.db, f.mapRowIndex(mapIndex, rowIndex))
 	if err != nil {
 		return nil, err
 	}
@@ -364,9 +355,9 @@ func (f *FilterMaps) storeFilterMapRow(batch ethdb.Batch, mapIndex, rowIndex uin
 	defer f.filterMapLock.Unlock()
 
 	if fm := f.filterMapCache[mapIndex]; fm != nil {
-		(*fm)[rowIndex] = row
+		fm[rowIndex] = row
 	}
-	rawdb.WriteFilterMapRow(batch, mapRowIndex(mapIndex, rowIndex), []uint32(row))
+	rawdb.WriteFilterMapRow(batch, f.mapRowIndex(mapIndex, rowIndex), []uint32(row))
 }
 
 // mapRowIndex calculates the unified storage index where the given row of the
@@ -375,9 +366,9 @@ func (f *FilterMaps) storeFilterMapRow(batch ethdb.Batch, mapIndex, rowIndex uin
 // same data proximity reasons it is also suitable for database representation.
 // See also:
 // https://eips.ethereum.org/EIPS/eip-7745#hash-tree-structure
-func mapRowIndex(mapIndex, rowIndex uint32) uint64 {
-	epochIndex, mapSubIndex := mapIndex>>logMapsPerEpoch, mapIndex%mapsPerEpoch
-	return (uint64(epochIndex)<<logMapHeight+uint64(rowIndex))<<logMapsPerEpoch + uint64(mapSubIndex)
+func (f *FilterMaps) mapRowIndex(mapIndex, rowIndex uint32) uint64 {
+	epochIndex, mapSubIndex := mapIndex>>f.logMapsPerEpoch, mapIndex&(f.mapsPerEpoch-1)
+	return (uint64(epochIndex)<<f.logMapHeight+uint64(rowIndex))<<f.logMapsPerEpoch + uint64(mapSubIndex)
 }
 
 // getBlockLvPointer returns the starting log value index where the log values
@@ -439,153 +430,4 @@ func (f *FilterMaps) storeMapBlockPtr(batch ethdb.Batch, mapIndex uint32, blockP
 func (f *FilterMaps) deleteMapBlockPtr(batch ethdb.Batch, mapIndex uint32) {
 	f.blockPtrCache.Remove(mapIndex)
 	rawdb.DeleteFilterMapBlockPtr(batch, mapIndex)
-}
-
-// addressValue returns the log value hash of a log emitting address.
-func addressValue(address common.Address) common.Hash {
-	var result common.Hash
-	hasher := sha256.New()
-	hasher.Write(address[:])
-	hasher.Sum(result[:0])
-	return result
-}
-
-// topicValue returns the log value hash of a log topic.
-func topicValue(topic common.Hash) common.Hash {
-	var result common.Hash
-	hasher := sha256.New()
-	hasher.Write(topic[:])
-	hasher.Sum(result[:0])
-	return result
-}
-
-// rowIndex returns the row index in which the given log value should be marked
-// during the given epoch. Note that row assignments are re-shuffled in every
-// epoch in order to ensure that even though there are always a few more heavily
-// used rows due to very popular addresses and topics, these will not make search
-// for other log values very expensive. Even if certain values are occasionally
-// sorted into these heavy rows, in most of the epochs they are placed in average
-// length rows.
-func rowIndex(epochIndex uint32, logValue common.Hash) uint32 {
-	hasher := sha256.New()
-	hasher.Write(logValue[:])
-	var indexEnc [4]byte
-	binary.LittleEndian.PutUint32(indexEnc[:], epochIndex)
-	hasher.Write(indexEnc[:])
-	var hash common.Hash
-	hasher.Sum(hash[:0])
-	return binary.LittleEndian.Uint32(hash[:4]) % mapHeight
-}
-
-// columnIndex returns the column index that should be added to the appropriate
-// row in order to place a mark for the next log value.
-func columnIndex(lvIndex uint64, logValue common.Hash) uint32 {
-	x := uint32(lvIndex % valuesPerMap) // log value sub-index
-	transformHash := transformHash(uint32(lvIndex/valuesPerMap), logValue)
-	// apply column index transformation function
-	x += binary.LittleEndian.Uint32(transformHash[0:4])
-	x *= binary.LittleEndian.Uint32(transformHash[4:8])*2 + 1
-	x ^= binary.LittleEndian.Uint32(transformHash[8:12])
-	x *= binary.LittleEndian.Uint32(transformHash[12:16])*2 + 1
-	x += binary.LittleEndian.Uint32(transformHash[16:20])
-	x *= binary.LittleEndian.Uint32(transformHash[20:24])*2 + 1
-	x ^= binary.LittleEndian.Uint32(transformHash[24:28])
-	x *= binary.LittleEndian.Uint32(transformHash[28:32])*2 + 1
-	return x
-}
-
-// transformHash calculates a hash specific to a given map and log value hash
-// that defines a bijective function on the uint32 range. This function is used
-// to transform the log value sub-index (distance from the first index of the map)
-// into a 32 bit column index, then applied in reverse when searching for potential
-// matches for a given log value.
-func transformHash(mapIndex uint32, logValue common.Hash) (result common.Hash) {
-	hasher := sha256.New()
-	hasher.Write(logValue[:])
-	var indexEnc [4]byte
-	binary.LittleEndian.PutUint32(indexEnc[:], mapIndex)
-	hasher.Write(indexEnc[:])
-	hasher.Sum(result[:0])
-	return
-}
-
-// potentialMatches returns the list of log value indices potentially matching
-// the given log value hash in the range of the filter map the row belongs to.
-// Note that the list of indices is always sorted and potential duplicates are
-// removed. Though the column indices are stored in the same order they were
-// added and therefore the true matches are automatically reverse transformed
-// in the right order, false positives can ruin this property. Since these can
-// only be separated from true matches after the combined pattern matching of the
-// outputs of individual log value matchers and this pattern matcher assumes a
-// sorted and duplicate-free list of indices, we should ensure these properties
-// here.
-func (row FilterRow) potentialMatches(mapIndex uint32, logValue common.Hash) potentialMatches {
-	results := make(potentialMatches, 0, 8)
-	transformHash := transformHash(mapIndex, logValue)
-	sub1 := binary.LittleEndian.Uint32(transformHash[0:4])
-	mul1 := uint32ModInverse(binary.LittleEndian.Uint32(transformHash[4:8])*2 + 1)
-	xor1 := binary.LittleEndian.Uint32(transformHash[8:12])
-	mul2 := uint32ModInverse(binary.LittleEndian.Uint32(transformHash[12:16])*2 + 1)
-	sub2 := binary.LittleEndian.Uint32(transformHash[16:20])
-	mul3 := uint32ModInverse(binary.LittleEndian.Uint32(transformHash[20:24])*2 + 1)
-	xor2 := binary.LittleEndian.Uint32(transformHash[24:28])
-	mul4 := uint32ModInverse(binary.LittleEndian.Uint32(transformHash[28:32])*2 + 1)
-	// perform reverse column index transformation on all column indices of the row.
-	// if a column index was added by the searched log value then the reverse
-	// transform will yield a valid log value sub-index of the given map.
-	// Column index is 32 bits long while there are 2**16 valid log value indices
-	// in the map's range, so this can also happen by accident with 1 in 2**16
-	// chance, in which case we have a false positive.
-	for _, columnIndex := range row {
-		if potentialSubIndex := (((((((columnIndex * mul4) ^ xor2) * mul3) - sub2) * mul2) ^ xor1) * mul1) - sub1; potentialSubIndex < valuesPerMap {
-			results = append(results, uint64(mapIndex)*valuesPerMap+uint64(potentialSubIndex))
-		}
-	}
-	sort.Sort(results)
-	// remove duplicates
-	j := 0
-	for i, match := range results {
-		if i == 0 || match != results[i-1] {
-			results[j] = results[i]
-			j++
-		}
-	}
-	return results[:j]
-}
-
-// potentialMatches is a strictly monotonically increasing list of log value
-// indices in the range of a filter map that are potential matches for certain
-// filter criteria.
-// Note that nil is used as a wildcard and therefore means that all log value
-// indices in the filter map range are potential matches. If there are no
-// potential matches in the given map's range then an empty slice should be used.
-type potentialMatches []uint64
-
-// noMatches means there are no potential matches in a given filter map's range.
-var noMatches = potentialMatches{}
-
-func (p potentialMatches) Len() int           { return len(p) }
-func (p potentialMatches) Less(i, j int) bool { return p[i] < p[j] }
-func (p potentialMatches) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-
-// uint32ModInverse takes an odd 32 bit number and returns its modular
-// multiplicative inverse (mod 2**32), meaning that for any uint32 x and odd y
-// x * y *  uint32ModInverse(y) == 1.
-func uint32ModInverse(v uint32) uint32 {
-	if v&1 == 0 {
-		panic("uint32ModInverse called with even argument")
-	}
-	m := int64(1) << 32
-	m0 := m
-	a := int64(v)
-	x, y := int64(1), int64(0)
-	for a > 1 {
-		q := a / m
-		m, a = a%m, m
-		x, y = y, x-q*y
-	}
-	if x < 0 {
-		x += m0
-	}
-	return uint32(x)
 }

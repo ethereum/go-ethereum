@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	startLvPointer       = valuesPerMap << 31 // log value index assigned to init block
-	removedPointer       = math.MaxUint64     // used in updateBatch to signal removed items
-	revertPointFrequency = 256                // frequency of revert points in database
-	cachedRevertPoints   = 64                 // revert points for most recent blocks in memory
+	startLvMap           = 1 << 31        // map index assigned to init block
+	removedPointer       = math.MaxUint64 // used in updateBatch to signal removed items
+	revertPointFrequency = 256            // frequency of revert points in database
+	cachedRevertPoints   = 64             // revert points for most recent blocks in memory
 )
 
 // updateLoop initializes and updates the log index structure according to the
@@ -36,7 +36,7 @@ func (f *FilterMaps) updateLoop() {
 	}
 
 	var (
-		headEventCh = make(chan core.ChainHeadEvent)
+		headEventCh = make(chan core.ChainHeadEvent, 10)
 		sub         = f.chain.SubscribeChainHeadEvent(headEventCh)
 		head        *types.Header
 		stop        bool
@@ -231,7 +231,7 @@ func (f *FilterMaps) tryUpdateHead(newHead *types.Header) bool {
 			log.Error("Error adding new block", "number", newHeader.Number, "hash", newHeader.Hash(), "error", err)
 			break
 		}
-		if update.updatedRangeLength() >= mapsPerEpoch {
+		if update.updatedRangeLength() >= f.mapsPerEpoch {
 			// limit the amount of data updated in a single batch
 			f.applyUpdateBatch(update)
 			update = f.newUpdateBatch()
@@ -336,12 +336,12 @@ func (f *FilterMaps) pruneTailPtr(tailTarget uint64) {
 // pointers from the database. This function also updates targetLvPointer.
 func (f *FilterMaps) tryPruneTailMaps(tailTarget uint64, stopFn func() bool) {
 	fmr := f.getRange()
-	tailMap := uint32(fmr.tailLvPointer >> logValuesPerMap)
-	targetMap := uint32(fmr.tailBlockLvPointer >> logValuesPerMap)
+	tailMap := uint32(fmr.tailLvPointer >> f.logValuesPerMap)
+	targetMap := uint32(fmr.tailBlockLvPointer >> f.logValuesPerMap)
 	if tailMap >= targetMap {
 		return
 	}
-	lastEpoch := (targetMap - 1) >> logMapsPerEpoch
+	lastEpoch := (targetMap - 1) >> f.logMapsPerEpoch
 	removeLvPtr, err := f.getMapBlockPtr(tailMap)
 	if err != nil {
 		log.Error("Error fetching tail map block pointer", "map index", tailMap, "error", err)
@@ -352,12 +352,12 @@ func (f *FilterMaps) tryPruneTailMaps(tailTarget uint64, stopFn func() bool) {
 		lastLogged time.Time
 	)
 	for tailMap < targetMap && !stopFn() {
-		tailEpoch := tailMap >> logMapsPerEpoch
+		tailEpoch := tailMap >> f.logMapsPerEpoch
 		if tailEpoch == lastEpoch {
 			f.pruneMaps(tailMap, targetMap, &removeLvPtr)
 			break
 		}
-		nextTailMap := (tailEpoch + 1) << logMapsPerEpoch
+		nextTailMap := (tailEpoch + 1) << f.logMapsPerEpoch
 		f.pruneMaps(tailMap, nextTailMap, &removeLvPtr)
 		tailMap = nextTailMap
 		if !logged || time.Since(lastLogged) >= time.Second*10 {
@@ -386,13 +386,13 @@ func (f *FilterMaps) pruneMaps(first, afterLast uint32, removeLvPtr *uint64) {
 	for mapIndex := first; mapIndex < afterLast; mapIndex++ {
 		f.deleteMapBlockPtr(batch, mapIndex)
 	}
-	for rowIndex := uint32(0); rowIndex < mapHeight; rowIndex++ {
+	for rowIndex := uint32(0); rowIndex < f.mapHeight; rowIndex++ {
 		for mapIndex := first; mapIndex < afterLast; mapIndex++ {
 			f.storeFilterMapRow(batch, mapIndex, rowIndex, emptyRow)
 		}
 	}
 	fmr := f.getRange()
-	fmr.tailLvPointer = uint64(afterLast) << logValuesPerMap
+	fmr.tailLvPointer = uint64(afterLast) << f.logValuesPerMap
 	if fmr.tailLvPointer > fmr.tailBlockLvPointer {
 		log.Error("Cannot prune filter maps beyond tail block log value pointer", "tailLvPointer", fmr.tailLvPointer, "tailBlockLvPointer", fmr.tailBlockLvPointer)
 		return
@@ -407,11 +407,11 @@ func (f *FilterMaps) pruneMaps(first, afterLast uint32, removeLvPtr *uint64) {
 // that can be written to the database in a single batch while the in-memory
 // representations in FilterMaps are also updated.
 type updateBatch struct {
+	f *FilterMaps
 	filterMapsRange
-	maps                   map[uint32]*filterMap // nil rows are unchanged
-	getFilterMapRow        func(mapIndex, rowIndex uint32) (FilterRow, error)
-	blockLvPointer         map[uint64]uint64 // removedPointer means delete
-	mapBlockPtr            map[uint32]uint64 // removedPointer means delete
+	maps                   map[uint32]filterMap // nil rows are unchanged
+	blockLvPointer         map[uint64]uint64    // removedPointer means delete
+	mapBlockPtr            map[uint32]uint64    // removedPointer means delete
 	revertPoints           map[uint64]*revertPoint
 	firstMap, afterLastMap uint32
 }
@@ -422,9 +422,9 @@ func (f *FilterMaps) newUpdateBatch() *updateBatch {
 	defer f.lock.RUnlock()
 
 	return &updateBatch{
+		f:               f,
 		filterMapsRange: f.filterMapsRange,
-		maps:            make(map[uint32]*filterMap),
-		getFilterMapRow: f.getFilterMapRow,
+		maps:            make(map[uint32]filterMap),
 		blockLvPointer:  make(map[uint64]uint64),
 		mapBlockPtr:     make(map[uint32]uint64),
 		revertPoints:    make(map[uint64]*revertPoint),
@@ -455,10 +455,10 @@ func (f *FilterMaps) applyUpdateBatch(u *updateBatch) {
 		}
 	}
 	// write filter map rows
-	for rowIndex := uint32(0); rowIndex < mapHeight; rowIndex++ {
+	for rowIndex := uint32(0); rowIndex < f.mapHeight; rowIndex++ {
 		for mapIndex := u.firstMap; mapIndex < u.afterLastMap; mapIndex++ {
 			if fm := u.maps[mapIndex]; fm != nil {
-				if row := (*fm)[rowIndex]; row != nil {
+				if row := fm[rowIndex]; row != nil {
 					f.storeFilterMapRow(batch, mapIndex, rowIndex, row)
 				}
 			}
@@ -488,7 +488,7 @@ func (f *FilterMaps) applyUpdateBatch(u *updateBatch) {
 			rawdb.WriteRevertPoint(batch, b, &rawdb.RevertPoint{
 				BlockHash: rp.blockHash,
 				MapIndex:  rp.mapIndex,
-				RowLength: rp.rowLength[:],
+				RowLength: rp.rowLength,
 			})
 		}
 	}
@@ -507,7 +507,7 @@ func (u *updateBatch) updatedRangeLength() uint32 {
 
 // tailEpoch returns the tail epoch index.
 func (u *updateBatch) tailEpoch() uint32 {
-	return uint32(u.tailBlockLvPointer >> (logValuesPerMap + logMapsPerEpoch))
+	return uint32(u.tailBlockLvPointer >> (u.f.logValuesPerMap + u.f.logMapsPerEpoch))
 }
 
 // getRowPtr returns a pointer to a FilterRow that can be modified. If the batch
@@ -517,7 +517,7 @@ func (u *updateBatch) tailEpoch() uint32 {
 func (u *updateBatch) getRowPtr(mapIndex, rowIndex uint32) (*FilterRow, error) {
 	fm := u.maps[mapIndex]
 	if fm == nil {
-		fm = new(filterMap)
+		fm = make(filterMap, u.f.mapHeight)
 		u.maps[mapIndex] = fm
 		if mapIndex < u.firstMap || u.afterLastMap == 0 {
 			u.firstMap = mapIndex
@@ -526,9 +526,9 @@ func (u *updateBatch) getRowPtr(mapIndex, rowIndex uint32) (*FilterRow, error) {
 			u.afterLastMap = mapIndex + 1
 		}
 	}
-	rowPtr := &(*fm)[rowIndex]
+	rowPtr := &fm[rowIndex]
 	if *rowPtr == nil {
-		if filterRow, err := u.getFilterMapRow(mapIndex, rowIndex); err == nil {
+		if filterRow, err := u.f.getFilterMapRow(mapIndex, rowIndex); err == nil {
 			// filterRow is read only, copy before write
 			*rowPtr = make(FilterRow, len(filterRow), len(filterRow)+8)
 			copy(*rowPtr, filterRow)
@@ -545,6 +545,7 @@ func (u *updateBatch) initWithBlock(header *types.Header, receipts types.Receipt
 		return errors.New("already initialized")
 	}
 	u.initialized = true
+	startLvPointer := uint64(startLvMap) << u.f.logValuesPerMap
 	u.headLvPointer, u.tailLvPointer, u.tailBlockLvPointer = startLvPointer, startLvPointer, startLvPointer
 	u.headBlockNumber, u.tailBlockNumber = header.Number.Uint64()-1, header.Number.Uint64()
 	u.headBlockHash, u.tailParentHash = header.ParentHash, header.ParentHash
@@ -554,12 +555,12 @@ func (u *updateBatch) initWithBlock(header *types.Header, receipts types.Receipt
 
 // addValueToHead adds a single log value to the head of the log index.
 func (u *updateBatch) addValueToHead(logValue common.Hash) error {
-	mapIndex := uint32(u.headLvPointer >> logValuesPerMap)
-	rowPtr, err := u.getRowPtr(mapIndex, rowIndex(mapIndex>>logMapsPerEpoch, logValue))
+	mapIndex := uint32(u.headLvPointer >> u.f.logValuesPerMap)
+	rowPtr, err := u.getRowPtr(mapIndex, u.f.rowIndex(mapIndex>>u.f.logMapsPerEpoch, logValue))
 	if err != nil {
 		return err
 	}
-	column := columnIndex(u.headLvPointer, logValue)
+	column := u.f.columnIndex(u.headLvPointer, logValue)
 	*rowPtr = append(*rowPtr, column)
 	u.headLvPointer++
 	return nil
@@ -577,11 +578,11 @@ func (u *updateBatch) addBlockToHead(header *types.Header, receipts types.Receip
 	}
 	number := header.Number.Uint64()
 	u.blockLvPointer[number] = u.headLvPointer
-	startMap := uint32((u.headLvPointer + valuesPerMap - 1) >> logValuesPerMap)
+	startMap := uint32((u.headLvPointer + u.f.valuesPerMap - 1) >> u.f.logValuesPerMap)
 	if err := iterateReceipts(receipts, u.addValueToHead); err != nil {
 		return err
 	}
-	stopMap := uint32((u.headLvPointer + valuesPerMap - 1) >> logValuesPerMap)
+	stopMap := uint32((u.headLvPointer + u.f.valuesPerMap - 1) >> u.f.logValuesPerMap)
 	for m := startMap; m < stopMap; m++ {
 		u.mapBlockPtr[m] = number
 	}
@@ -610,12 +611,12 @@ func (u *updateBatch) addValueToTail(logValue common.Hash) error {
 		return nil // already added to the map
 	}
 	u.tailLvPointer--
-	mapIndex := uint32(u.tailBlockLvPointer >> logValuesPerMap)
-	rowPtr, err := u.getRowPtr(mapIndex, rowIndex(mapIndex>>logMapsPerEpoch, logValue))
+	mapIndex := uint32(u.tailBlockLvPointer >> u.f.logValuesPerMap)
+	rowPtr, err := u.getRowPtr(mapIndex, u.f.rowIndex(mapIndex>>u.f.logMapsPerEpoch, logValue))
 	if err != nil {
 		return err
 	}
-	column := columnIndex(u.tailBlockLvPointer, logValue)
+	column := u.f.columnIndex(u.tailBlockLvPointer, logValue)
 	*rowPtr = append(*rowPtr, 0)
 	copy((*rowPtr)[1:], (*rowPtr)[:len(*rowPtr)-1])
 	(*rowPtr)[0] = column
@@ -632,7 +633,7 @@ func (u *updateBatch) addBlockToTail(header *types.Header, receipts types.Receip
 		return errors.New("addBlockToTail parent mismatch")
 	}
 	number := header.Number.Uint64()
-	stopMap := uint32((u.tailLvPointer + valuesPerMap - 1) >> logValuesPerMap)
+	stopMap := uint32((u.tailLvPointer + u.f.valuesPerMap - 1) >> u.f.logValuesPerMap)
 	var cnt int
 	if err := iterateReceiptsReverse(receipts, func(lv common.Hash) error {
 		cnt++
@@ -640,7 +641,7 @@ func (u *updateBatch) addBlockToTail(header *types.Header, receipts types.Receip
 	}); err != nil {
 		return err
 	}
-	startMap := uint32(u.tailLvPointer >> logValuesPerMap)
+	startMap := uint32(u.tailLvPointer >> u.f.logValuesPerMap)
 	for m := startMap; m < stopMap; m++ {
 		u.mapBlockPtr[m] = number
 	}
@@ -693,7 +694,7 @@ type revertPoint struct {
 	blockNumber uint64
 	blockHash   common.Hash
 	mapIndex    uint32
-	rowLength   [mapHeight]uint
+	rowLength   []uint
 }
 
 // makeRevertPoint creates a new revertPoint.
@@ -701,19 +702,20 @@ func (u *updateBatch) makeRevertPoint() (*revertPoint, error) {
 	rp := &revertPoint{
 		blockNumber: u.headBlockNumber,
 		blockHash:   u.headBlockHash,
-		mapIndex:    uint32(u.headLvPointer >> logValuesPerMap),
+		mapIndex:    uint32(u.headLvPointer >> u.f.logValuesPerMap),
+		rowLength:   make([]uint, u.f.mapHeight),
 	}
-	if u.tailLvPointer > uint64(rp.mapIndex)<<logValuesPerMap {
+	if u.tailLvPointer > uint64(rp.mapIndex)<<u.f.logValuesPerMap {
 		return nil, nil
 	}
-	for i := range rp.rowLength[:] {
+	for i := range rp.rowLength {
 		var row FilterRow
 		if m := u.maps[rp.mapIndex]; m != nil {
-			row = (*m)[i]
+			row = m[i]
 		}
 		if row == nil {
 			var err error
-			row, err = u.getFilterMapRow(rp.mapIndex, uint32(i))
+			row, err = u.f.getFilterMapRow(rp.mapIndex, uint32(i))
 			if err != nil {
 				return nil, err
 			}
@@ -744,16 +746,15 @@ func (f *FilterMaps) getRevertPoint(blockNumber uint64) (*revertPoint, error) {
 	if rps == nil {
 		return nil, nil
 	}
-	if len(rps.RowLength) != mapHeight {
+	if uint32(len(rps.RowLength)) != f.mapHeight {
 		return nil, errors.New("invalid number of rows in stored revert point")
 	}
-	rp := &revertPoint{
+	return &revertPoint{
 		blockNumber: blockNumber,
 		blockHash:   rps.BlockHash,
 		mapIndex:    rps.MapIndex,
-	}
-	copy(rp.rowLength[:], rps.RowLength)
-	return rp, nil
+		rowLength:   rps.RowLength,
+	}, nil
 }
 
 // revertTo reverts the log index to the given revert point.
@@ -762,12 +763,12 @@ func (f *FilterMaps) revertTo(rp *revertPoint) error {
 	defer f.lock.Unlock()
 
 	batch := f.db.NewBatch()
-	afterLastMap := uint32((f.headLvPointer + valuesPerMap - 1) >> logValuesPerMap)
+	afterLastMap := uint32((f.headLvPointer + f.valuesPerMap - 1) >> f.logValuesPerMap)
 	if rp.mapIndex >= afterLastMap {
 		return errors.New("cannot revert (head map behind revert point)")
 	}
-	lvPointer := uint64(rp.mapIndex) << logValuesPerMap
-	for rowIndex, rowLen := range rp.rowLength[:] {
+	lvPointer := uint64(rp.mapIndex) << f.logValuesPerMap
+	for rowIndex, rowLen := range rp.rowLength {
 		rowIndex := uint32(rowIndex)
 		row, err := f.getFilterMapRow(rp.mapIndex, rowIndex)
 		if err != nil {
