@@ -21,6 +21,7 @@ var ErrMatchAll = errors.New("match all patterns not supported")
 // once EIP-7745 is implemented and active, these functions can also be trustlessly
 // served by a remote prover.
 type MatcherBackend interface {
+	GetParams() *Params
 	GetBlockLvPointer(ctx context.Context, blockNumber uint64) (uint64, error)
 	GetFilterMapRow(ctx context.Context, mapIndex, rowIndex uint32) (FilterRow, error)
 	GetLogByLvIndex(ctx context.Context, lvIndex uint64) (*types.Log, error)
@@ -139,6 +140,7 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 // to that block range might be missing or incorrect.
 // Also note that the returned list may contain false positives.
 func getPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, error) {
+	params := backend.GetParams()
 	// find the log value index range to search
 	firstIndex, err := backend.GetBlockLvPointer(ctx, firstBlock)
 	if err != nil {
@@ -151,8 +153,8 @@ func getPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	if lastIndex > 0 {
 		lastIndex--
 	}
-	firstMap, lastMap := uint32(firstIndex>>logValuesPerMap), uint32(lastIndex>>logValuesPerMap)
-	firstEpoch, lastEpoch := firstMap>>logMapsPerEpoch, lastMap>>logMapsPerEpoch
+	firstMap, lastMap := uint32(firstIndex>>params.logValuesPerMap), uint32(lastIndex>>params.logValuesPerMap)
+	firstEpoch, lastEpoch := firstMap>>params.logMapsPerEpoch, lastMap>>params.logMapsPerEpoch
 
 	// build matcher according to the given filter criteria
 	matchers := make([]matcher, len(topics)+1)
@@ -178,13 +180,13 @@ func getPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	}
 	// matcher is the final sequence matcher that signals a match when all underlying
 	// matchers signal a match for consecutive log value indices.
-	matcher := newMatchSequence(matchers)
+	matcher := newMatchSequence(params, matchers)
 
 	// processEpoch returns the potentially matching logs from the given epoch.
 	processEpoch := func(epochIndex uint32) ([]*types.Log, error) {
 		var logs []*types.Log
 		// create a list of map indices to process
-		fm, lm := epochIndex<<logMapsPerEpoch, (epochIndex+1)<<logMapsPerEpoch-1
+		fm, lm := epochIndex<<params.logMapsPerEpoch, (epochIndex+1)<<params.logMapsPerEpoch-1
 		if fm < firstMap {
 			fm = firstMap
 		}
@@ -318,13 +320,14 @@ type singleMatcher struct {
 
 // getMatches implements matcher
 func (s *singleMatcher) getMatches(ctx context.Context, mapIndices []uint32) ([]potentialMatches, error) {
+	params := s.backend.GetParams()
 	results := make([]potentialMatches, len(mapIndices))
 	for i, mapIndex := range mapIndices {
-		filterRow, err := s.backend.GetFilterMapRow(ctx, mapIndex, rowIndex(mapIndex>>logMapsPerEpoch, s.value))
+		filterRow, err := s.backend.GetFilterMapRow(ctx, mapIndex, params.rowIndex(mapIndex>>params.logMapsPerEpoch, s.value))
 		if err != nil {
 			return nil, err
 		}
-		results[i] = filterRow.potentialMatches(mapIndex, s.value)
+		results[i] = params.potentialMatches(filterRow, mapIndex, s.value)
 	}
 	return results, nil
 }
@@ -403,6 +406,7 @@ func mergeResults(results []potentialMatches) potentialMatches {
 // gives a match at X+offset. Note that matchSequence can be used recursively to
 // detect any log value sequence.
 type matchSequence struct {
+	params     *Params
 	base, next matcher
 	offset     uint64
 	// *EmptyRate == totalCount << 32 + emptyCount (atomically accessed)
@@ -412,7 +416,7 @@ type matchSequence struct {
 // newMatchSequence creates a recursive sequence matcher from a list of underlying
 // matchers. The resulting matcher signals a match at log value index X when each
 // underlying matcher matchers[i] returns a match at X+i.
-func newMatchSequence(matchers []matcher) matcher {
+func newMatchSequence(params *Params, matchers []matcher) matcher {
 	if len(matchers) == 0 {
 		panic("zero length sequence matchers are not allowed")
 	}
@@ -420,7 +424,8 @@ func newMatchSequence(matchers []matcher) matcher {
 		return matchers[0]
 	}
 	return &matchSequence{
-		base:   newMatchSequence(matchers[:len(matchers)-1]),
+		params: params,
+		base:   newMatchSequence(params, matchers[:len(matchers)-1]),
 		next:   matchers[len(matchers)-1],
 		offset: uint64(len(matchers) - 1),
 	}
@@ -461,7 +466,7 @@ func (m *matchSequence) getMatches(ctx context.Context, mapIndices []uint32) ([]
 			nextIndices = append(nextIndices, mapIndex)
 			lastAdded = mapIndex
 		}
-		if !baseFirst || baseRes[i] == nil || baseRes[i][len(baseRes[i])-1] >= (uint64(mapIndex+1)<<logValuesPerMap)-m.offset {
+		if !baseFirst || baseRes[i] == nil || baseRes[i][len(baseRes[i])-1] >= (uint64(mapIndex+1)<<m.params.logValuesPerMap)-m.offset {
 			nextIndices = append(nextIndices, mapIndex+1)
 			lastAdded = mapIndex + 1
 		}
@@ -492,8 +497,8 @@ func (m *matchSequence) getMatches(ctx context.Context, mapIndices []uint32) ([]
 				panic("invalid nextIndices")
 			}
 			next1, next2 := nextRes[nextPtr], nextRes[nextPtr+1]
-			if next1 == nil || (len(next1) > 0 && next1[len(next1)-1] >= (uint64(mapIndex)<<logValuesPerMap)+m.offset) ||
-				next2 == nil || (len(next2) > 0 && next2[0] < (uint64(mapIndex+1)<<logValuesPerMap)+m.offset) {
+			if next1 == nil || (len(next1) > 0 && next1[len(next1)-1] >= (uint64(mapIndex)<<m.params.logValuesPerMap)+m.offset) ||
+				next2 == nil || (len(next2) > 0 && next2[0] < (uint64(mapIndex+1)<<m.params.logValuesPerMap)+m.offset) {
 				baseIndices = append(baseIndices, mapIndex)
 			}
 		}
@@ -548,17 +553,17 @@ func (m *matchSequence) getMatches(ctx context.Context, mapIndices []uint32) ([]
 	// match corresponding base and next matcher results
 	results := make([]potentialMatches, len(mapIndices))
 	for i, mapIndex := range mapIndices {
-		results[i] = matchSequenceResults(mapIndex, m.offset, baseResult(mapIndex), nextResult(mapIndex), nextResult(mapIndex+1))
+		results[i] = m.matchResults(mapIndex, m.offset, baseResult(mapIndex), nextResult(mapIndex), nextResult(mapIndex+1))
 	}
 	return results, nil
 }
 
-// matchSequenceResults returns a list of sequence matches for the given mapIndex
-// and offset based on the base matcher's results at mapIndex and the next matcher's
+// matchResults returns a list of sequence matches for the given mapIndex and
+// offset based on the base matcher's results at mapIndex and the next matcher's
 // results at mapIndex and mapIndex+1. Note that acquiring nextNextRes may be
 // skipped and it can be substituted with an empty list if baseRes has no potential
 // matches that could be sequence matched with anything that could be in nextNextRes.
-func matchSequenceResults(mapIndex uint32, offset uint64, baseRes, nextRes, nextNextRes potentialMatches) potentialMatches {
+func (m *matchSequence) matchResults(mapIndex uint32, offset uint64, baseRes, nextRes, nextNextRes potentialMatches) potentialMatches {
 	if nextRes == nil || (baseRes != nil && len(baseRes) == 0) {
 		// if nextRes is a wild card or baseRes is empty then the sequence matcher
 		// result equals baseRes.
@@ -568,7 +573,7 @@ func matchSequenceResults(mapIndex uint32, offset uint64, baseRes, nextRes, next
 		// discard items from nextRes whose corresponding base matcher results
 		// with the negative offset applied would be located at mapIndex-1.
 		start := 0
-		for start < len(nextRes) && nextRes[start] < uint64(mapIndex)<<logValuesPerMap+offset {
+		for start < len(nextRes) && nextRes[start] < uint64(mapIndex)<<m.params.logValuesPerMap+offset {
 			start++
 		}
 		nextRes = nextRes[start:]
@@ -577,7 +582,7 @@ func matchSequenceResults(mapIndex uint32, offset uint64, baseRes, nextRes, next
 		// discard items from nextNextRes whose corresponding base matcher results
 		// with the negative offset applied would still be located at mapIndex+1.
 		stop := 0
-		for stop < len(nextNextRes) && nextNextRes[stop] < uint64(mapIndex+1)<<logValuesPerMap+offset {
+		for stop < len(nextNextRes) && nextNextRes[stop] < uint64(mapIndex+1)<<m.params.logValuesPerMap+offset {
 			stop++
 		}
 		nextNextRes = nextNextRes[:stop]

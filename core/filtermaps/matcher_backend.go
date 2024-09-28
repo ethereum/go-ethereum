@@ -32,32 +32,15 @@ func (f *FilterMaps) NewMatcherBackend() *FilterMapsMatcherBackend {
 	return fm
 }
 
-// updateMatchersValidRange iterates through active matchers and limits their
-// valid range with the current indexed range. This function should be called
-// whenever a part of the log index has been removed, before adding new blocks
-// to it.
-func (f *FilterMaps) updateMatchersValidRange() {
-	for fm := range f.matchers {
-		if !f.initialized {
-			fm.valid = false
-		}
-		if !fm.valid {
-			continue
-		}
-		if fm.firstValid < f.tailBlockNumber {
-			fm.firstValid = f.tailBlockNumber
-		}
-		if fm.lastValid > f.headBlockNumber {
-			fm.lastValid = f.headBlockNumber
-		}
-		if fm.firstValid > fm.lastValid {
-			fm.valid = false
-		}
-	}
+// GetParams returns the filtermaps parameters.
+// GetParams implements MatcherBackend.
+func (fm *FilterMapsMatcherBackend) GetParams() *Params {
+	return &fm.f.Params
 }
 
 // Close removes the matcher from the set of active matchers and ensures that
 // any SyncLogIndex calls are cancelled.
+// Close implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) Close() {
 	fm.f.lock.Lock()
 	defer fm.f.lock.Unlock()
@@ -154,5 +137,29 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 		return vr, nil
 	case <-ctx.Done():
 		return SyncRange{}, ctx.Err()
+	}
+}
+
+// updateMatchersValidRange iterates through active matchers and limits their
+// valid range with the current indexed range. This function should be called
+// whenever a part of the log index has been removed, before adding new blocks
+// to it.
+func (f *FilterMaps) updateMatchersValidRange() {
+	for fm := range f.matchers {
+		if !f.initialized {
+			fm.valid = false
+		}
+		if !fm.valid {
+			continue
+		}
+		if fm.firstValid < f.tailBlockNumber {
+			fm.firstValid = f.tailBlockNumber
+		}
+		if fm.lastValid > f.headBlockNumber {
+			fm.lastValid = f.headBlockNumber
+		}
+		if fm.firstValid > fm.lastValid {
+			fm.valid = false
+		}
 	}
 }
