@@ -378,7 +378,7 @@ func (n *Node) startRPC() error {
 	// Filter out personal api
 	var apis []rpc.API
 	for _, api := range n.rpcAPIs {
-		if api.Namespace == "personal" {
+		if api.Namespace == rpc.NamespacePersonal {
 			if n.config.EnablePersonal {
 				log.Warn("Deprecated personal namespace activated")
 			} else {

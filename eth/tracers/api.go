@@ -1049,7 +1049,7 @@ func APIs(backend Backend) []rpc.API {
 	// Append all the local APIs and return
 	return []rpc.API{
 		{
-			Namespace: "debug",
+			Namespace: rpc.NamespaceDebug,
 			Service:   NewAPI(backend),
 		},
 	}

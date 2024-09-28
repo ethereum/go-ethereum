@@ -328,13 +328,6 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 }
 
 func setAccountManagerBackends(conf *node.Config, am *accounts.Manager, keydir string) error {
-	scryptN := keystore.StandardScryptN
-	scryptP := keystore.StandardScryptP
-	if conf.UseLightweightKDF {
-		scryptN = keystore.LightScryptN
-		scryptP = keystore.LightScryptP
-	}
-
 	// Assemble the supported backends
 	if len(conf.ExternalSigner) > 0 {
 		log.Info("Using external signer", "url", conf.ExternalSigner)
@@ -344,6 +337,13 @@ func setAccountManagerBackends(conf *node.Config, am *accounts.Manager, keydir s
 		} else {
 			return fmt.Errorf("error connecting to external signer: %v", err)
 		}
+	}
+
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	if conf.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
 	}
 
 	// For now, we're using EITHER external signer OR local signers.

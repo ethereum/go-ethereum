@@ -727,7 +727,7 @@ func signer(c *cli.Context) error {
 	)
 	rpcAPI := []rpc.API{
 		{
-			Namespace: "account",
+			Namespace: rpc.NamespaceAccount,
 			Service:   api,
 		},
 	}

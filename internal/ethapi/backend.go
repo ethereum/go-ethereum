@@ -103,25 +103,25 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 	nonceLock := new(AddrLocker)
 	return []rpc.API{
 		{
-			Namespace: "eth",
+			Namespace: rpc.NamespaceEth,
 			Service:   NewEthereumAPI(apiBackend),
 		}, {
-			Namespace: "eth",
+			Namespace: rpc.NamespaceEth,
 			Service:   NewBlockChainAPI(apiBackend),
 		}, {
-			Namespace: "eth",
+			Namespace: rpc.NamespaceEth,
 			Service:   NewTransactionAPI(apiBackend, nonceLock),
 		}, {
-			Namespace: "txpool",
+			Namespace: rpc.NamespaceTxpool,
 			Service:   NewTxPoolAPI(apiBackend),
 		}, {
-			Namespace: "debug",
+			Namespace: rpc.NamespaceDebug,
 			Service:   NewDebugAPI(apiBackend),
 		}, {
-			Namespace: "eth",
+			Namespace: rpc.NamespaceEth,
 			Service:   NewEthereumAccountAPI(apiBackend.AccountManager()),
 		}, {
-			Namespace: "personal",
+			Namespace: rpc.NamespacePersonal,
 			Service:   NewPersonalAccountAPI(apiBackend, nonceLock),
 		},
 	}

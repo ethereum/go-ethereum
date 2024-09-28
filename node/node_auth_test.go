@@ -122,14 +122,14 @@ func TestAuthEndpoints(t *testing.T) {
 	// register dummy apis so we can test the modules are available and reachable with authentication
 	node.RegisterAPIs([]rpc.API{
 		{
-			Namespace:     "engine",
+			Namespace:     rpc.NamespaceEngine,
 			Version:       "1.0",
 			Service:       helloRPC("hello engine"),
 			Public:        true,
 			Authenticated: true,
 		},
 		{
-			Namespace:     "eth",
+			Namespace:     rpc.NamespaceEth,
 			Version:       "1.0",
 			Service:       helloRPC("hello eth"),
 			Public:        true,

@@ -328,7 +328,7 @@ func RegisterSimulatedBeaconAPIs(stack *node.Node, sim *SimulatedBeacon) {
 	api := newSimulatedBeaconAPI(sim)
 	stack.RegisterAPIs([]rpc.API{
 		{
-			Namespace: "dev",
+			Namespace: rpc.NamespaceDev,
 			Service:   api,
 			Version:   "1.0",
 		},

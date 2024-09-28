@@ -28,6 +28,23 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+// These constants define the namespaces for the JSON-RPC APIs provided by Geth.
+// They categorize the RPC methods into logical groups for easier access and management.
+const (
+	NamespaceAdmin    = "admin"
+	NamespaceEth      = "eth"
+	NamespaceWeb3     = "web3"
+	NamespaceAccount  = "account"
+	NamespaceClique   = "clique"
+	NamespaceTxpool   = "txpool"
+	NamespaceMiner    = "miner"
+	NamespaceDebug    = "debug"
+	NamespaceDev      = "dev"
+	NamespaceNet      = "net"
+	NamespacePersonal = "personal"
+	NamespaceEngine   = "engine"
+)
+
 // API describes the set of methods offered over the RPC interface
 type API struct {
 	Namespace     string      // namespace under which the rpc methods of Service are exposed

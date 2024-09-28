@@ -48,7 +48,7 @@ func Register(stack *node.Node, backend *eth.Ethereum) error {
 	log.Warn("Engine API enabled", "protocol", "eth")
 	stack.RegisterAPIs([]rpc.API{
 		{
-			Namespace:     "engine",
+			Namespace:     rpc.NamespaceEngine,
 			Service:       NewConsensusAPI(backend),
 			Authenticated: true,
 		},

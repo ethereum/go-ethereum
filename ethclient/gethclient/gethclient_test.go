@@ -64,7 +64,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	}
 	filterSystem := filters.NewFilterSystem(ethservice.APIBackend, filters.Config{})
 	n.RegisterAPIs([]rpc.API{{
-		Namespace: "eth",
+		Namespace: rpc.NamespaceEth,
 		Service:   filters.NewFilterAPI(filterSystem),
 	}})
 
