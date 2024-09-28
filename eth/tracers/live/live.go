@@ -7,9 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path"
-	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -58,20 +56,19 @@ func (tr *traceResult) DecodeRLP(s *rlp.Stream) error {
 }
 
 type live struct {
-	backend    tracing.Backend
-	kvdb       ethdb.Database
-	frdb       *rawdb.Freezer
-	blockCh    chan uint64
-	stopCh     chan struct{}
-	tables     map[string]bool
-	traces     map[string][]*traceResult
-	tracer     *native.MuxTracer
-	latest     atomic.Uint64
-	offset     atomic.Uint64
-	finalized  atomic.Uint64
-	hash       common.Hash
-	once       sync.Once
-	offsetFile string
+	backend   tracing.Backend
+	kvdb      ethdb.Database
+	frdb      *rawdb.Freezer
+	freezeCh  chan uint64
+	stopCh    chan struct{}
+	tables    map[string]bool
+	traces    map[string][]*traceResult
+	tracer    *native.MuxTracer
+	latest    atomic.Uint64
+	offset    atomic.Uint64
+	finalized uint64
+	hash      common.Hash
+	once      sync.Once
 
 	enableNonceTracer bool
 }
@@ -80,10 +77,11 @@ type liveTracerConfig struct {
 	Path              string          `json:"path"` // Path to the directory where the tracer data will be stored
 	Config            json.RawMessage `json:"config"`
 	EnableNonceTracer bool            `json:"enableNonceTracer"`
+	MaxKeepBlocks     uint64          `json:"maxKeepBlocks"` // Maximum number of blocks to keep in the freezer db(the unconfirmaed blocks are not included), 0 means no limit
 }
 
 func toTraceTable(name string) string {
-	return name + "_tracers"
+	return name + "_traces"
 }
 
 // encodeNumber encodes a number as big endian uint64
@@ -131,8 +129,8 @@ func newLive(cfg json.RawMessage, stack tracers.LiveApiRegister, backend tracing
 	}
 
 	var (
-		kvpath = path.Join(config.Path, "trace")
-		frpath = path.Join(config.Path, "freeze")
+		kvpath = path.Join(config.Path, "kvdb")
+		frpath = path.Join(config.Path, "frdb")
 	)
 
 	kvdb, err := rawdb.NewPebbleDBDatabase(kvpath, 128, 1024, "trace", false, false)
@@ -159,37 +157,29 @@ func newLive(cfg json.RawMessage, stack tracers.LiveApiRegister, backend tracing
 	}
 	frozen, err := frdb.Ancients()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read the frozen block numbers from the freezer db: %v", err)
+		return nil, fmt.Errorf("failed to read the frozen blocks from the freezer db: %v", err)
 	}
 
 	l := &live{
-		backend:    backend,
-		kvdb:       kvdb,
-		frdb:       frdb,
-		blockCh:    make(chan uint64, 100),
-		stopCh:     make(chan struct{}),
-		tables:     tables,
-		traces:     traces,
-		tracer:     t,
-		offsetFile: path.Join(frpath, "OFFSET"),
+		backend:  backend,
+		kvdb:     kvdb,
+		frdb:     frdb,
+		freezeCh: make(chan uint64, 100),
+		stopCh:   make(chan struct{}),
+		tables:   tables,
+		traces:   traces,
+		tracer:   t,
 
 		enableNonceTracer: config.EnableNonceTracer,
 	}
-	offset := 0
-	if _, err := os.Stat(l.offsetFile); err == nil || os.IsExist(err) {
-		data, err := os.ReadFile(l.offsetFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read the offset from the freezer db: %v", err)
-		}
-		offset, err = strconv.Atoi(string(data))
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert offset: %v", err)
-		}
-	}
-	log.Info("Open live tracer", "path", config.Path, "offset", offset, "tables", tables)
 
-	l.latest.Store(tail + frozen + uint64(offset))
-	l.offset.Store(uint64(offset))
+	latest := l.getFreezerTail()
+	offset := latest - tail - frozen
+	log.Info("Open live tracer", "path", config.Path, "offset", offset, "tail", tail, "frozen", frozen, "latest", latest, "tables", tables)
+
+	// Initialize the latest block number as the sum of the tail, frozen, and offset
+	l.latest.Store(latest)
+	l.offset.Store(offset)
 	hooks := &tracing.Hooks{
 		OnBlockStart: l.OnBlockStart,
 		OnBlockEnd:   l.OnBlockEnd,
@@ -218,71 +208,68 @@ func newLive(cfg json.RawMessage, stack tracers.LiveApiRegister, backend tracing
 	}
 	stack.RegisterAPIs(apis)
 
-	go l.freeze()
+	go l.freeze(config.MaxKeepBlocks)
 
 	return hooks, nil
 }
 
-func (f *live) OnBlockStart(ev tracing.BlockEvent) {
+func (l *live) OnBlockStart(ev tracing.BlockEvent) {
 	// track the latest block number
 	blknum := ev.Block.NumberU64()
-	f.latest.Store(blknum)
-	f.hash = ev.Block.Hash()
+	l.latest.Store(blknum)
+	l.hash = ev.Block.Hash()
 	if ev.Finalized != nil {
-		f.finalized.Store(ev.Finalized.Number.Uint64())
+		l.finalized = ev.Finalized.Number.Uint64()
 	}
 
 	// reset local cache
 	txs := ev.Block.Transactions().Len()
-	for name := range f.traces {
-		f.traces[name] = make([]*traceResult, 0, txs)
+	for name := range l.traces {
+		l.traces[name] = make([]*traceResult, 0, txs)
 	}
 
-	// save the earliest arrived blknum as the offset
-	f.once.Do(func() {
-		if _, err := os.Stat(f.offsetFile); err != nil && os.IsNotExist(err) {
-			f.offset.Store(blknum)
-			os.WriteFile(f.offsetFile, []byte(fmt.Sprintf("%d", blknum)), 0666)
-		}
-	})
+	// Save the earliest arrived blknum as the offset only if offset was not set before
+	if swapped := l.offset.CompareAndSwap(0, blknum); swapped {
+		log.Info("Set live tracer offset to new head", "blknum", blknum)
+	}
 }
 
-func (f *live) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
-	if f.enableNonceTracer {
+func (l *live) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	if l.enableNonceTracer {
 		key := append(from.Bytes(), encodeNumber(tx.Nonce())...)
 		val := tx.Hash().Bytes()
-		if err := f.kvdb.Put(key, val); err != nil {
+		if err := l.kvdb.Put(key, val); err != nil {
 			log.Warn("Failed to put nonce into kvdb", "err", err)
 		}
 	}
-	f.tracer.OnTxStart(env, tx, from)
+	l.tracer.OnTxStart(env, tx, from)
 }
 
-func (f *live) OnTxEnd(receipt *types.Receipt, err error) {
-	f.tracer.OnTxEnd(receipt, err)
+func (l *live) OnTxEnd(receipt *types.Receipt, err error) {
+	l.tracer.OnTxEnd(receipt, err)
 
-	for name, tt := range f.tracer.Tracers() {
+	for name, tt := range l.tracer.Tracers() {
 		trace := &traceResult{}
 		result, err := tt.GetResult()
 		if err != nil {
-			log.Error("Failed to get tracer results", "number", f.latest.Load(), "error", err)
+			log.Error("Failed to get tracer results", "number", l.latest.Load(), "error", err)
 			trace.Error = err.Error()
 		} else {
 			trace.Result = result
 		}
-		f.traces[name] = append(f.traces[name], trace)
+		l.traces[name] = append(l.traces[name], trace)
 	}
 }
 
-func (f *live) OnBlockEnd(err error) {
+func (l *live) OnBlockEnd(err error) {
 	if err != nil {
-		log.Warn("OnBlockEnd", "latest", f.latest.Load(), "error", err)
+		log.Warn("OnBlockEnd", "latest", l.latest.Load(), "error", err)
 	}
-	batch := f.kvdb.NewBatch()
+	batch := l.kvdb.NewBatch()
 
-	number := f.latest.Load()
-	hash := f.hash
-	for name, traces := range f.traces {
+	number := l.latest.Load()
+	hash := l.hash
+	for name, traces := range l.traces {
 		data, err := rlp.EncodeToBytes(traces)
 		if err != nil {
 			log.Error("Failed to marshal traces", "error", err)
@@ -296,22 +283,22 @@ func (f *live) OnBlockEnd(err error) {
 	}
 
 	select {
-	case f.blockCh <- f.finalized.Load():
+	case l.freezeCh <- l.finalized:
 	default:
 		// Channel is full, log a warning
 		log.Warn("Block channel is full, skipping finalized block notification")
 	}
 }
 
-func (f *live) readBlockTraces(ctx context.Context, name string, blknum uint64) ([]*traceResult, error) {
-	if blknum > f.latest.Load() {
+func (l *live) readBlockTraces(ctx context.Context, name string, blknum uint64) ([]*traceResult, error) {
+	if blknum > l.latest.Load() {
 		return nil, errors.New("notfound")
 	}
-	if blknum < f.offset.Load() {
+	if blknum < l.offset.Load() {
 		return nil, errors.New("historical data not available")
 	}
 
-	tail := f.getFreezerTail()
+	tail := l.getFreezerTail()
 
 	// Determine whether to read from kvdb or frdb
 	var (
@@ -320,10 +307,10 @@ func (f *live) readBlockTraces(ctx context.Context, name string, blknum uint64) 
 	)
 	if blknum >= tail {
 		// Data is in kvdb
-		data, err = f.readFromKVDB(ctx, name, blknum)
+		data, err = l.readFromKVDB(ctx, name, blknum)
 	} else {
 		// Data is in frdb
-		data, err = f.readFromFRDB(name, blknum)
+		data, err = l.readFromFRDB(name, blknum)
 	}
 	if err != nil {
 		return nil, err
@@ -334,26 +321,26 @@ func (f *live) readBlockTraces(ctx context.Context, name string, blknum uint64) 
 	return traces, err
 }
 
-func (f *live) readFromKVDB(ctx context.Context, name string, blknum uint64) ([]byte, error) {
-	header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(blknum))
+func (l *live) readFromKVDB(ctx context.Context, name string, blknum uint64) ([]byte, error) {
+	header, err := l.backend.HeaderByNumber(ctx, rpc.BlockNumber(blknum))
 	if err != nil {
 		return nil, err
 	}
 
 	kvKey := toKVKey(name, blknum, header.Hash())
-	data, err := f.kvdb.Get(kvKey)
+	data, err := l.kvdb.Get(kvKey)
 	if err != nil {
 		return nil, fmt.Errorf("traces not found in kvdb for block %d: %w", blknum, err)
 	}
 	return data, err
 }
 
-func (f *live) readFromFRDB(name string, blknum uint64) ([]byte, error) {
+func (l *live) readFromFRDB(name string, blknum uint64) ([]byte, error) {
 	table := toTraceTable(name)
 	var data []byte
-	err := f.frdb.ReadAncients(func(reader ethdb.AncientReaderOp) error {
+	err := l.frdb.ReadAncients(func(reader ethdb.AncientReaderOp) error {
 		var err error
-		data, err = reader.Ancient(table, blknum-f.offset.Load())
+		data, err = reader.Ancient(table, blknum-l.offset.Load())
 		return err
 	})
 	if err != nil {
@@ -362,14 +349,16 @@ func (f *live) readFromFRDB(name string, blknum uint64) ([]byte, error) {
 	return data, nil
 }
 
-func (f *live) Close() {
-	close(f.stopCh)
+// Close the frdb and kvdb
+// TODO: when to close it?
+func (l *live) Close() {
+	close(l.stopCh)
 
-	if err := f.kvdb.Close(); err != nil {
+	if err := l.kvdb.Close(); err != nil {
 		log.Error("Close kvdb failed", "err", err)
 	}
 
-	if err := f.frdb.Close(); err != nil {
+	if err := l.frdb.Close(); err != nil {
 		log.Error("Close freeze db failed", "err", err)
 	}
 }

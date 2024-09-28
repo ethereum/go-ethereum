@@ -11,17 +11,17 @@ import (
 )
 
 const (
-	freezeThreshold = 64
+	freezeThreshold = 64 // the max number of blocks to freeze in one batch
 	kvdbTailKey     = "FilterFreezerTail"
 )
 
-func (f *live) freeze() {
+func (f *live) freeze(maxKeepBlocks uint64) {
 	var lastFinalized uint64
 	for {
 		select {
 		case <-f.stopCh:
 			return
-		case finalizedBlock := <-f.blockCh:
+		case finalizedBlock := <-f.freezeCh:
 			if finalizedBlock <= lastFinalized {
 				continue
 			}
@@ -30,8 +30,7 @@ func (f *live) freeze() {
 			tail := f.getFreezerTail()
 
 			// Freeze at most freezeThreshold blocks
-			freezeUpTo := finalizedBlock
-			freezeUpTo = min(freezeUpTo, tail+freezeThreshold)
+			freezeUpTo := min(finalizedBlock, tail+freezeThreshold)
 			if freezeUpTo <= tail {
 				continue
 			}
@@ -45,8 +44,25 @@ func (f *live) freeze() {
 			}
 
 			// Update the tail of the freezer
-			if err := f.updateFreezerTail(freezeUpTo); err != nil {
+			tail = freezeUpTo
+			if err := f.updateFreezerTail(tail); err != nil {
 				log.Error("Failed to update freezer tail", "error", err)
+			}
+
+			frozen, _ := f.frdb.Ancients()
+			offset := f.offset.Load()
+
+			// No pruning
+			if maxKeepBlocks == 0 || frozen <= maxKeepBlocks {
+				continue
+			}
+
+			// Prune old blocks if necessary
+			itemsToPrune := min(freezeThreshold, frozen-maxKeepBlocks)
+			head := offset + itemsToPrune - 1
+			log.Info("Prune old blocks", "pruned", itemsToPrune, "from", offset, "to", head)
+			if err := f.pruneBlocksFromFreezer(frozen-itemsToPrune, head); err != nil {
+				log.Error("Failed to prune blocks from freezer", "error", err)
 			}
 		}
 	}
@@ -138,5 +154,14 @@ func (f *live) deleteKVDBEntriesWithPrefix(blknum uint64) error {
 		}
 	}
 
+	return nil
+}
+
+func (f *live) pruneBlocksFromFreezer(items, head uint64) error {
+	if _, err := f.frdb.TruncateHead(items); err != nil {
+		return err
+	}
+	// Head should be in sync with the on-mem offset
+	f.offset.Store(head)
 	return nil
 }
