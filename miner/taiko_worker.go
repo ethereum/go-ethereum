@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
+	"golang.org/x/exp/maps"
 )
 
 // BuildTransactionsLists builds multiple transactions lists which satisfy all the given conditions
@@ -71,51 +72,35 @@ func (w *worker) BuildTransactionsLists(
 		localTxs, remoteTxs = w.getPendingTxs(localAccounts, baseFee)
 	)
 
-	commitTxs := func(firstTransaction *types.Transaction) (*types.Transaction, *PreBuiltTxList, error) {
+	commitTxs := func() (*PreBuiltTxList, error) {
 		env.tcount = 0
 		env.txs = []*types.Transaction{}
 		env.gasPool = new(core.GasPool).AddGas(blockMaxGasLimit)
 		env.header.GasLimit = blockMaxGasLimit
 
-		var (
-			locals  = make(map[common.Address][]*txpool.LazyTransaction)
-			remotes = make(map[common.Address][]*txpool.LazyTransaction)
-		)
-
-		for address, txs := range localTxs {
-			locals[address] = txs
-		}
-		for address, txs := range remoteTxs {
-			remotes[address] = txs
-		}
-
-		lastTransaction := w.commitL2Transactions(
+		w.commitL2Transactions(
 			env,
-			firstTransaction,
-			newTransactionsByPriceAndNonce(signer, locals, baseFee),
-			newTransactionsByPriceAndNonce(signer, remotes, baseFee),
+			newTransactionsByPriceAndNonce(signer, maps.Clone(localTxs), baseFee),
+			newTransactionsByPriceAndNonce(signer, maps.Clone(remoteTxs), baseFee),
 			maxBytesPerTxList,
 			minTip,
 		)
 
 		b, err := encodeAndCompressTxList(env.txs)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
-		return lastTransaction, &PreBuiltTxList{
+		return &PreBuiltTxList{
 			TxList:           env.txs,
 			EstimatedGasUsed: env.header.GasLimit - env.gasPool.Gas(),
 			BytesLength:      uint64(len(b)),
 		}, nil
 	}
 
-	var (
-		lastTx *types.Transaction
-		res    *PreBuiltTxList
-	)
 	for i := 0; i < int(maxTransactionsLists); i++ {
-		if lastTx, res, err = commitTxs(lastTx); err != nil {
+		res, err := commitTxs()
+		if err != nil {
 			return nil, err
 		}
 
@@ -238,21 +223,15 @@ func (w *worker) getPendingTxs(localAccounts []string, baseFee *big.Int) (
 // commitL2Transactions tries to commit the transactions into the given state.
 func (w *worker) commitL2Transactions(
 	env *environment,
-	firstTransaction *types.Transaction,
 	txsLocal *transactionsByPriceAndNonce,
 	txsRemote *transactionsByPriceAndNonce,
 	maxBytesPerTxList uint64,
 	minTip uint64,
-) *types.Transaction {
+) {
 	var (
-		txs             = txsLocal
-		isLocal         = true
-		lastTransaction *types.Transaction
+		txs     = txsLocal
+		isLocal = true
 	)
-
-	if firstTransaction != nil {
-		env.txs = append(env.txs, firstTransaction)
-	}
 
 loop:
 	for {
@@ -301,6 +280,8 @@ loop:
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
+		snap := env.state.RevisionId()
+		gasPool := env.gasPool.Gas()
 		_, err := w.commitTransaction(env, tx)
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
@@ -321,8 +302,9 @@ loop:
 				continue
 			}
 			if len(b) > int(maxBytesPerTxList) {
-				lastTransaction = env.txs[env.tcount-1]
 				env.txs = env.txs[0 : env.tcount-1]
+				env.state.RevertToSnapshot(snap)
+				env.gasPool.SetGas(gasPool)
 				break loop
 			}
 		default:
@@ -332,8 +314,6 @@ loop:
 			txs.Pop()
 		}
 	}
-
-	return lastTransaction
 }
 
 // encodeAndCompressTxList encodes and compresses the given transactions list.
