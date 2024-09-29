@@ -433,7 +433,7 @@ func setPrivateKey(ctx *cli.Context, config *Config) error {
 			}
 		}
 	}
-	log.Debug("Current client private key", "private key", privateKey)
+
 	config.PrivateKey = privateKey
 	err = writePrivateKey(privateKey, config, privateKeyFileName)
 	if err != nil {
