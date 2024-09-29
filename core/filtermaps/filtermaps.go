@@ -23,6 +23,7 @@ type blockchain interface {
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetCanonicalHash(number uint64) common.Hash
+	GetReceiptsByHash(hash common.Hash) types.Receipts
 }
 
 // FilterMaps is the in-memory representation of the log index structure that is
@@ -33,7 +34,7 @@ type blockchain interface {
 // https://eips.ethereum.org/EIPS/eip-7745
 type FilterMaps struct {
 	lock      sync.RWMutex
-	db        ethdb.Database
+	db        ethdb.KeyValueStore
 	closeCh   chan struct{}
 	closeWg   sync.WaitGroup
 	history   uint64
@@ -53,6 +54,8 @@ type FilterMaps struct {
 	blockPtrCache  *lru.Cache[uint32, uint64]
 	lvPointerCache *lru.Cache[uint64, uint64]
 	revertPoints   map[uint64]*revertPoint
+
+	testHook func(int)
 }
 
 // filterMap is a full or partial in-memory representation of a filter map where
@@ -94,7 +97,7 @@ type filterMapsRange struct {
 
 // NewFilterMaps creates a new FilterMaps and starts the indexer in order to keep
 // the structure in sync with the given blockchain.
-func NewFilterMaps(db ethdb.Database, chain blockchain, params Params, history uint64, noHistory bool) *FilterMaps {
+func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, history uint64, noHistory bool) *FilterMaps {
 	rs, err := rawdb.ReadFilterMapsRange(db)
 	if err != nil {
 		log.Error("Error reading log index range", "error", err)
@@ -128,14 +131,17 @@ func NewFilterMaps(db ethdb.Database, chain blockchain, params Params, history u
 		log.Error("Error fetching tail block pointer, resetting log index", "error", err)
 		fm.filterMapsRange = filterMapsRange{} // updateLoop resets the database
 	}
-	fm.closeWg.Add(2)
-	go fm.removeBloomBits()
-	go fm.updateLoop()
 	return fm
 }
 
+func (f *FilterMaps) Start() {
+	f.closeWg.Add(2)
+	go f.removeBloomBits()
+	go f.updateLoop()
+}
+
 // Close ensures that the indexer is fully stopped before returning.
-func (f *FilterMaps) Close() {
+func (f *FilterMaps) Stop() {
 	close(f.closeCh)
 	f.closeWg.Wait()
 }
@@ -297,8 +303,7 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 		}
 	}
 	// get block receipts
-	hash := f.chain.GetCanonicalHash(firstBlockNumber)
-	receipts := rawdb.ReadRawReceipts(f.db, hash, firstBlockNumber) //TODO small cache
+	receipts := f.chain.GetReceiptsByHash(f.chain.GetCanonicalHash(firstBlockNumber))
 	if receipts == nil {
 		return nil, errors.New("receipts not found")
 	}
