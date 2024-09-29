@@ -22,7 +22,12 @@ const (
 // updateLoop initializes and updates the log index structure according to the
 // canonical chain.
 func (f *FilterMaps) updateLoop() {
-	defer f.closeWg.Done()
+	defer func() {
+		f.closeWg.Done()
+		if f.testHook != nil {
+			f.testHook(testHookStop)
+		}
+	}()
 
 	if f.noHistory {
 		f.reset()
@@ -38,7 +43,7 @@ func (f *FilterMaps) updateLoop() {
 	var (
 		headEventCh = make(chan core.ChainHeadEvent, 10)
 		sub         = f.chain.SubscribeChainHeadEvent(headEventCh)
-		head        *types.Header
+		head        = f.chain.CurrentBlock()
 		stop        bool
 		syncMatcher *FilterMapsMatcherBackend
 	)
@@ -59,16 +64,21 @@ func (f *FilterMaps) updateLoop() {
 		if stop {
 			return
 		}
+		delay := time.Second * 20
+		if f.testHook != nil {
+			f.testHook(testHookWait)
+			delay = 0
+		}
 		select {
 		case ev := <-headEventCh:
 			head = ev.Block.Header()
 		case syncMatcher = <-f.matcherSyncCh:
 			head = f.chain.CurrentBlock()
-		case <-time.After(time.Second * 20):
-			// keep updating log index during syncing
-			head = f.chain.CurrentBlock()
 		case <-f.closeCh:
 			stop = true
+		case <-time.After(delay):
+			// keep updating log index during syncing
+			head = f.chain.CurrentBlock()
 		}
 	}
 	for head == nil {
@@ -151,7 +161,7 @@ func (f *FilterMaps) tryInit(head *types.Header) bool {
 	if !f.reset() {
 		return false
 	}
-	receipts := rawdb.ReadRawReceipts(f.db, head.Hash(), head.Number.Uint64())
+	receipts := f.chain.GetReceiptsByHash(head.Hash())
 	if receipts == nil {
 		log.Error("Could not retrieve block receipts for init block", "number", head.Number, "hash", head.Hash())
 		return true
@@ -161,6 +171,9 @@ func (f *FilterMaps) tryInit(head *types.Header) bool {
 		log.Error("Could not initialize log index", "error", err)
 	}
 	f.applyUpdateBatch(update)
+	if f.testHook != nil {
+		f.testHook(testHookInit)
+	}
 	return true
 }
 
@@ -222,7 +235,7 @@ func (f *FilterMaps) tryUpdateHead(newHead *types.Header) bool {
 	update := f.newUpdateBatch()
 	for i := len(newHeaders) - 1; i >= 0; i-- {
 		newHeader := newHeaders[i]
-		receipts := rawdb.ReadRawReceipts(f.db, newHeader.Hash(), newHeader.Number.Uint64())
+		receipts := f.chain.GetReceiptsByHash(newHeader.Hash())
 		if receipts == nil {
 			log.Error("Could not retrieve block receipts for new block", "number", newHeader.Number, "hash", newHeader.Hash())
 			break
@@ -234,10 +247,16 @@ func (f *FilterMaps) tryUpdateHead(newHead *types.Header) bool {
 		if update.updatedRangeLength() >= f.mapsPerEpoch {
 			// limit the amount of data updated in a single batch
 			f.applyUpdateBatch(update)
+			if f.testHook != nil {
+				f.testHook(testHookUpdateHeadEpoch)
+			}
 			update = f.newUpdateBatch()
 		}
 	}
 	f.applyUpdateBatch(update)
+	if f.testHook != nil {
+		f.testHook(testHookUpdateHead)
+	}
 	return true
 }
 
@@ -273,6 +292,9 @@ func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) {
 		if tailEpoch := update.tailEpoch(); tailEpoch < lastTailEpoch {
 			// limit the amount of data updated in a single batch
 			f.applyUpdateBatch(update)
+			if f.testHook != nil {
+				f.testHook(testHookExtendTailEpoch)
+			}
 			update = f.newUpdateBatch()
 			lastTailEpoch = tailEpoch
 		}
@@ -281,7 +303,7 @@ func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) {
 			log.Error("Tail header not found", "number", number-1, "hash", parentHash)
 			break
 		}
-		receipts := rawdb.ReadRawReceipts(f.db, newTail.Hash(), newTail.Number.Uint64())
+		receipts := f.chain.GetReceiptsByHash(newTail.Hash())
 		if receipts == nil {
 			log.Error("Could not retrieve block receipts for tail block", "number", newTail.Number, "hash", newTail.Hash())
 			break
@@ -293,6 +315,9 @@ func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) {
 		number, parentHash = newTail.Number.Uint64(), newTail.ParentHash
 	}
 	f.applyUpdateBatch(update)
+	if f.testHook != nil {
+		f.testHook(testHookExtendTail)
+	}
 }
 
 // pruneTailPtr updates the tail block number and hash and the corresponding
@@ -330,6 +355,9 @@ func (f *FilterMaps) pruneTailPtr(tailTarget uint64) {
 	fmr.tailBlockNumber, fmr.tailParentHash = tailTarget, tailParentHash
 	fmr.tailBlockLvPointer = targetLvPointer
 	f.setRange(f.db, fmr)
+	if f.testHook != nil {
+		f.testHook(testHookPruneTail)
+	}
 }
 
 // tryPruneTailMaps removes unused filter maps and corresponding log index
@@ -400,6 +428,9 @@ func (f *FilterMaps) pruneMaps(first, afterLast uint32, removeLvPtr *uint64) {
 	f.setRange(batch, fmr)
 	if err := batch.Write(); err != nil {
 		log.Crit("Could not write update batch", "error", err)
+	}
+	if f.testHook != nil {
+		f.testHook(testHookPruneTailMaps)
 	}
 }
 
@@ -798,6 +829,9 @@ func (f *FilterMaps) revertTo(rp *revertPoint) error {
 	f.setRange(batch, newRange)
 	if err := batch.Write(); err != nil {
 		log.Crit("Could not write update batch", "error", err)
+	}
+	if f.testHook != nil {
+		f.testHook(testHookRevert)
 	}
 	return nil
 }
