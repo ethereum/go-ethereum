@@ -497,42 +497,6 @@ Returns:
   }
 ```
 
-## State overrides {#state-overrides}
-
-It is possible to give temporary state modifications to Geth in order to simulate the effects of `eth_call` or `debug_traceCall`. For example, some new bytecode could be deployed to some address _temporarily just for the duration of the execution_ and then a transaction interacting with that address can be traced. This can be used for scenario testing or determining the outcome of some hypothetical transaction before executing for real.
-
-Available state overrides are:
-
-- `nonce`: `hexdecimal`. The nonce of the account.
-- `code`: `string`. The bytecode of the account.
-- `balance`: `hexdecimal`. The balance of the account in Wei.
-- `state`: `map[common.Hash]common.Hash`. Clear all storage slots of the account and insert the ones given in the dictionary.
-- `stateDiff`: `map[common.Hash]common.Hash`. Update the given storage slots with new values.
-
-Note, `state` and `stateDiff` can't be specified at the same time. If `state` is
-set, message execution will only use the data in the given state. Otherwise if `statDiff` is set, all diff will be applied first and then execute the call.
-
-To do this, the tracer is written as normal, but the parameter `stateOverrides` is passed an address and some bytecode.
-
-```js
-var code = //contract bytecode
-var tracer = //tracer name
-debug.traceCall({from: , to: , input: }, 'latest', {stateOverrides: {'0x...': {code: code}}, tracer: tracer})
-```
-
-## Block overrides {#block-overrides}
-
-Similar to [State overrides](#state-overrides), it is also possible to override some of the execution's block context to simulate the effects of `eth_call` or `debug_traceCall`, we support the following override options:
-
-- `number`: `hexdecimal`. The block number.
-- `difficulty`: `hexdecimal`. The block difficulty.
-- `time`: `hexdecimal`. The block timestamp.
-- `gasLimit`: `hexdecimal`. The block gas limit.
-- `coinbase`: `common.Address`. The block coinbase.
-- `random`: `common.Hash`. The block PREVRANDAO.
-- `baseFee`: `hexdecimal`. The block base fee.
-- `blobBaseFee`: `hexdecimal`. The block blob base fee.
-
 ## Summary {#summary}
 
 This page showed how to use the tracers that come bundled with Geth. There are a set written in Go and a set written in Javascript. They are invoked by passing their names when calling an API method. State overrides can be used in combination with tracers to examine precisely what the EVM will do in some hypothetical scenarios.

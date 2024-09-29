@@ -28,25 +28,7 @@ The `eth_simulate` payload structure:
    | `stateOverrides` | `StateOverrides`           | State overrides can be used to replace existing blockchain state with new state.                             |
    | `calls`          | `GenericCallTransaction[]` | An aray of transaction call objects. Please see [Transaction Call Object](/docs/interacting-with-geth/rpc/objects#transaction-call-object) for details. |
 
-The `BlockOverrides` object is as follows:
-   | Field           | Type          | Description |
-   | :-------------- | :------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `number`        | `uint64`      | Block number. When overriding multiple blocks, block numbers must increment. Skipping numbers is allowed and skipped blocks are included in the response. | 
-   | `prevRandao`    | `uint256`     | The previous value of randomness beacon                                                                                                                   |
-   | `time`          | `uint64`      | When overriding time across multiple blocks, time need to be increasing. If time is not specified, it's incremented by one for each block.                |
-   | `gasLimit`      | `uint64`      | Gas limit                                                                                                                                                 |
-   | `feeRecipient`  | `address`     | Fee recipient (also known as coinbase)                                                                                                                    |
-   | `withdrawals`   | `Withdrawals` | Withdrawals made by validators                                                                                                                            |
-   | `baseFeePerGas` | `uint256`     | Base fee per unit of gas                                                                                                                                  |
-   | `blobBaseFee`   | `uint64`      | Base fee per unit of blob gas                                                                                                                             |
-
-The object `withdrawals` is an array of withdrawal objects:
-   | Field            | Type      | Description     |
-   | :--------------- | :-------- | :-------------- |
-   | `index`          | `uint64`  | index           |
-   | `validatorIndex` | `uint64`  | validator index |
-   | `address`        | `address` | address         |
-   | `amount`         | `uint64`  | amount          |
+The optional `BlockOverrides` object modifies the context in which the transactions of that given block are executed. Refer to [Block overrides](/docs/interacting-with-geth/rpc/objects#block-overrides) for a list of modifiable fields. When overriding multiple blocks, block numbers must increment. Skipping numbers is allowed and skipped blocks are included in the response. When overriding time across multiple blocks, time need to be increasing. If time is not specified, it's incremented by one for each block.
 
 The StateOverrides is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing each block. Please see [State Override Set](/docs/interacting-with-geth/rpc/objects#state-override-set) for details.
 
@@ -234,22 +216,11 @@ The method takes 4 parameters: an unsigned transaction object to execute in read
 
 3. `Object` - State override set
 
-The _state override set_ is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing the call. Please see [State Override Set](/docs/interacting-with-geth/rpc/objects#state-override-set) for details.
+   The _state override set_ is an optional address-to-state mapping, where each entry specifies some state to be ephemerally overridden prior to executing the call. Please see [State Override Set](/docs/interacting-with-geth/rpc/objects#state-override-set) for details.
 
 4. `Object` - Block override set
 
-   The fields of this optional object customize the block as part of which the call is simulated. The object contains the following fields:
-
-   | Field         | Type     | Bytes | Optional | Description                                              |
-   |---------------|----------|-------|----------|----------------------------------------------------------|
-   | `number`      | Quantity | <32   | Yes      | Fake block number                                        |
-   | `difficulty`  | Quantity | <32   | Yes      | Fake difficulty. Note post-merge difficulty should be 0. |
-   | `time`        | Quantity | <8    | Yes      | Fake block timestamp                                     |
-   | `gasLimit`    | Quantity | <8    | Yes      | Block gas capacity                                       |
-   | `coinbase`    | String   | 20    | Yes      | Block fee recipient                                      |
-   | `random`      | Binary   | 32    | Yes      | Fake PrevRandao value                                    |
-   | `baseFee`     | Quantity | <32   | Yes      | Block base fee (see EIP-1559)                            |
-   | `blobBaseFee` | Quantity | <32   | Yes      | Block blob base fee (see EIP-4844)                       |
+   The _block override set_ is an optional object with the purpose of modifying the context in which the call is executed. Refer to [Block overrides](/docs/interacting-with-geth/rpc/objects#block-overrides) for a rundown of the fields.
 
 
 **Response:**

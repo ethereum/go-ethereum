@@ -111,3 +111,27 @@ The goal of the _state override set_ is manyfold:
  }
 }
 ```
+
+## Block overrides
+
+The fields of this object customize the block as part of which a call is simulated. This object can be passed to eth_call, eth_simulateV1 as well as debug_traceCall methods and contains the following fields:
+
+| Field           | Type          | Description |
+| :-------------- | :------------ | :----------------------------------------------------------------------------------------------------------------------------------------- |
+| `number`        | `uint64`      | Block number.                                                                                                                              | 
+| `prevRandao`    | `uint256`     | The previous value of randomness beacon.                                                                                                   |
+| `time`          | `uint64`      | Block timestamp.                                                                                                                           |
+| `gasLimit`      | `uint64`      | Gas limit.                                                                                                                                 |
+| `feeRecipient`  | `address`     | Fee recipient (also known as coinbase).                                                                                                    |
+| `withdrawals`   | `Withdrawals` | Withdrawals made by validators.                                                                                                            |
+| `baseFeePerGas` | `uint256`     | Base fee per unit of gas (see EIP-1559).                                                                                                   |
+| `blobBaseFee`   | `uint64`      | Base fee per unit of blob gas (see EIP-4844).                                                                                              |
+
+The object `withdrawals` is an array of withdrawal objects:
+
+| Field            | Type      | Description     |
+| :--------------- | :-------- | :-------------- |
+| `index`          | `uint64`  | index           |
+| `validatorIndex` | `uint64`  | validator index |
+| `address`        | `address` | address         |
+| `amount`         | `uint64`  | amount          |
