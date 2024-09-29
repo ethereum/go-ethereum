@@ -3,11 +3,13 @@ package main
 import (
 	"crypto/ecdsa"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -35,6 +37,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/urfave/cli/v2"
+)
+
+const (
+	privateKeyFileName = "clientKey"
 )
 
 type Config struct {
@@ -88,12 +94,12 @@ func main() {
 }
 
 func shisui(ctx *cli.Context) error {
+	setDefaultLogger(ctx.Int(utils.PortalLogLevelFlag.Name))
+
 	config, err := getPortalConfig(ctx)
 	if err != nil {
 		return nil
 	}
-
-	setDefaultLogger(*config)
 
 	clientChan := make(chan *Client, 1)
 	go handlerInterrupt(clientChan)
@@ -110,9 +116,9 @@ func shisui(ctx *cli.Context) error {
 	return startPortalRpcServer(*config, conn, config.RpcAddr, clientChan)
 }
 
-func setDefaultLogger(config Config) {
+func setDefaultLogger(logLevel int) {
 	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
-	slogVerbosity := log.FromLegacyLevel(config.LogLevel)
+	slogVerbosity := log.FromLegacyLevel(logLevel)
 	glogger.Verbosity(slogVerbosity)
 	defaultLogger := log.NewLogger(glogger)
 	log.SetDefault(defaultLogger)
@@ -366,10 +372,6 @@ func getPortalConfig(ctx *cli.Context) (*Config, error) {
 	config := &Config{
 		Protocol: discover.DefaultPortalProtocolConfig(),
 	}
-	err := setPrivateKey(ctx, config)
-	if err != nil {
-		return config, err
-	}
 
 	httpAddr := ctx.String(utils.PortalRPCListenAddrFlag.Name)
 	httpPort := ctx.String(utils.PortalRPCPortFlag.Name)
@@ -382,6 +384,11 @@ func getPortalConfig(ctx *cli.Context) (*Config, error) {
 		config.Protocol.ListenAddr = ":" + port
 	} else {
 		config.Protocol.ListenAddr = port
+	}
+
+	err := setPrivateKey(ctx, config)
+	if err != nil {
+		return config, err
 	}
 
 	natString := ctx.String(utils.PortalNATFlag.Name)
@@ -412,13 +419,62 @@ func setPrivateKey(ctx *cli.Context, config *Config) error {
 			return err
 		}
 	} else {
-		privateKey, err = crypto.GenerateKey()
-		if err != nil {
-			return err
+		if _, err := os.Stat(filepath.Join(config.DataDir, privateKeyFileName)); err == nil {
+			log.Info("Loading private key from file", "datadir", config.DataDir, "file", privateKeyFileName)
+			privateKey, err = readPrivateKey(config, privateKeyFileName)
+			if err != nil {
+				return err
+			}
+		} else {
+			log.Info("Creating new private key")
+			privateKey, err = crypto.GenerateKey()
+			if err != nil {
+				return err
+			}
 		}
 	}
+	log.Debug("Current client private key", "private key", privateKey)
 	config.PrivateKey = privateKey
+	err = writePrivateKey(privateKey, config, privateKeyFileName)
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+func writePrivateKey(privateKey *ecdsa.PrivateKey, config *Config, fileName string) error {
+	keyEnc := hex.EncodeToString(crypto.FromECDSA(privateKey))
+
+	fullPath := filepath.Join(config.DataDir, fileName)
+	file, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0700)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(keyEnc)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func readPrivateKey(config *Config, fileName string) (*ecdsa.PrivateKey, error) {
+	fullPath := filepath.Join(config.DataDir, fileName)
+
+	keyBytes, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, err
+	}
+
+	keyEnc := string(keyBytes)
+	key, err := crypto.HexToECDSA(keyEnc)
+	if err != nil {
+		return nil, err
+	}
+
+	return key, nil
 }
 
 // setPortalBootstrapNodes creates a list of bootstrap nodes from the command line
