@@ -360,6 +360,9 @@ func (s *Ethereum) Start() error {
 
 	// Start the networking layer
 	s.handler.Start(s.p2pServer.MaxPeers)
+
+	// start log indexer
+	s.filterMaps.Start()
 	return nil
 }
 
@@ -403,7 +406,7 @@ func (s *Ethereum) Stop() error {
 	s.handler.Stop()
 
 	// Then stop everything else.
-	s.filterMaps.Close()
+	s.filterMaps.Stop()
 	s.txPool.Close()
 	s.blockchain.Stop()
 	s.engine.Close()
