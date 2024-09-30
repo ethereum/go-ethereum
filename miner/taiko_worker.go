@@ -294,19 +294,29 @@ loop:
 			env.tcount++
 			txs.Shift()
 
-			// Encode and compress the txList, if the byte length is > maxBytesPerTxList, remove the latest tx and break.
-			b, err := encodeAndCompressTxList(env.txs)
+			data, err := rlp.EncodeToBytes(env.txs)
 			if err != nil {
-				log.Trace("Failed to rlp encode and compress the pending transaction %s: %w", tx.Hash(), err)
+				log.Trace("Failed to rlp encode the pending transaction %s: %w", tx.Hash(), err)
 				txs.Pop()
 				continue
 			}
-			if len(b) > int(maxBytesPerTxList) {
-				env.txs = env.txs[0 : env.tcount-1]
-				env.state.RevertToSnapshot(snap)
-				env.gasPool.SetGas(gasPool)
-				break loop
+
+			if len(data) >= int(maxBytesPerTxList) {
+				// Encode and compress the txList, if the byte length is > maxBytesPerTxList, remove the latest tx and break.
+				b, err := compress(data)
+				if err != nil {
+					log.Trace("Failed to rlp encode and compress the pending transaction %s: %w", tx.Hash(), err)
+					txs.Pop()
+					continue
+				}
+				if len(b) > int(maxBytesPerTxList) {
+					env.txs = env.txs[0 : env.tcount-1]
+					env.state.RevertToSnapshot(snap)
+					env.gasPool.SetGas(gasPool)
+					break loop
+				}
 			}
+
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
