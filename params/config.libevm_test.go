@@ -189,20 +189,38 @@ func TestModificationOfZeroExtras(t *testing.T) {
 		// The test of shallow copying is now guaranteed to fail.
 		return
 	}
-	t.Run("shallow copy", func(t *testing.T) {
+	t.Run("copy", func(t *testing.T) {
+		const (
+			// Arbitrary test values.
+			seqUp   = 123456789
+			seqDown = 987654321
+		)
+
 		ccCopy := *config
+		t.Run("ChainConfig", func(t *testing.T) {
+			assert.Equal(t, extras.FromChainConfig(&ccCopy), ccReplace, "extras copied")
+
+			extras.PointerFromChainConfig(&ccCopy).X = seqUp
+			assertChainConfigExtra(t, ccExtra{X: seqUp}, "original changed via copied.PointerFromChainConfig because copy only shallow")
+
+			ccReplace = ccExtra{X: seqDown}
+			extras.SetOnChainConfig(&ccCopy, ccReplace)
+			assert.Equal(t, extras.FromChainConfig(&ccCopy), ccReplace, "SetOnChainConfig effect")
+			assertChainConfigExtra(t, ccExtra{X: seqUp}, "original unchanged after copied.SetOnChainConfig")
+		})
+
 		rCopy := *rules
+		t.Run("Rules", func(t *testing.T) {
+			assert.Equal(t, extras.FromRules(&rCopy), rulesReplace, "extras copied")
 
-		assert.Equal(t, extras.FromChainConfig(&ccCopy), ccReplace, "ChainConfig extras copied")
-		assert.Equal(t, extras.FromRules(&rCopy), rulesReplace, "Rules extras copied")
+			extras.PointerFromRules(&rCopy).X = seqUp
+			assertRulesExtra(t, rulesExtra{X: seqUp}, "original changed via copied.PointerFromRuels because copy only shallow")
 
-		const seqUp = 123456789
-		extras.PointerFromChainConfig(&ccCopy).X = seqUp
-		assertChainConfigExtra(t, ccExtra{X: seqUp}, "original changed because copy only shallow")
-
-		const seqDown = 987654321
-		extras.PointerFromRules(&rCopy).X = seqDown
-		assertRulesExtra(t, rulesExtra{X: seqDown}, "original changed because copy only shallow")
+			rulesReplace = rulesExtra{X: seqDown}
+			extras.SetOnRules(&rCopy, rulesReplace)
+			assert.Equal(t, extras.FromRules(&rCopy), rulesReplace, "SetOnRules effect")
+			assertRulesExtra(t, rulesExtra{X: seqUp}, "original unchanged after copied.SetOnRules")
+		})
 	})
 }
 

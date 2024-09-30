@@ -169,14 +169,18 @@ func (ExtraPayloads[C, R]) FromChainConfig(c *ChainConfig) C {
 
 // PointerFromChainConfig returns a pointer to the ChainConfig's extra payload.
 // This is guaranteed to be non-nil.
+//
+// Note that copying a ChainConfig by dereferencing a pointer will result in a
+// shallow copy and that the *C returned here will therefore be shared by all
+// copies. If this is not the desired behaviour, use
+// [ExtraPayloads.SetOnChainConfig].
 func (ExtraPayloads[C, R]) PointerFromChainConfig(c *ChainConfig) *C {
 	return pseudo.MustPointerTo[C](c.extraPayload()).Value.Get()
 }
 
-// SetOnChainConfig sets the ChainConfig's extra payload. It is equivalent to
-// `*e.PointerFromChainConfig(cc) = val`.
+// SetOnChainConfig sets the ChainConfig's extra payload.
 func (e ExtraPayloads[C, R]) SetOnChainConfig(cc *ChainConfig, val C) {
-	*e.PointerFromChainConfig(cc) = val
+	cc.extra = pseudo.From(val).Type
 }
 
 // hooksFromChainConfig is equivalent to FromChainConfig(), but returns an
@@ -193,14 +197,17 @@ func (ExtraPayloads[C, R]) FromRules(r *Rules) R {
 
 // PointerFromRules returns a pointer to the Rules's extra payload. This is
 // guaranteed to be non-nil.
+//
+// Note that copying a Rules by dereferencing a pointer will result in a shallow
+// copy and that the *R returned here will therefore be shared by all copies. If
+// this is not the desired behaviour, use [ExtraPayloads.SetOnRules].
 func (ExtraPayloads[C, R]) PointerFromRules(r *Rules) *R {
 	return pseudo.MustPointerTo[R](r.extraPayload()).Value.Get()
 }
 
-// SetOnRules sets the Rules' extra payload. It is equivalent to
-// `*e.PointerFromRules(r) = val`.
+// SetOnRules sets the Rules' extra payload.
 func (e ExtraPayloads[C, R]) SetOnRules(r *Rules, val R) {
-	*e.PointerFromRules(r) = val
+	r.extra = pseudo.From(val).Type
 }
 
 // hooksFromRules is the [RulesHooks] equivalent of hooksFromChainConfig().
