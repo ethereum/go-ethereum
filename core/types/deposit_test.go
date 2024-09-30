@@ -71,7 +71,6 @@ func FuzzUnpackIntoDeposit(f *testing.F) {
 		copy(index[:], i)
 
 		var enc []byte
-		enc = append(enc, depositRequestType)
 		enc = append(enc, pubkey[:]...)
 		enc = append(enc, wxCred[:]...)
 		enc = append(enc, amount[:]...)
