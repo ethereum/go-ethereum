@@ -16,19 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-const (
-	testHookInit = iota
-	testHookUpdateHeadEpoch
-	testHookUpdateHead
-	testHookExtendTailEpoch
-	testHookExtendTail
-	testHookPruneTail
-	testHookPruneTailMaps
-	testHookRevert
-	testHookWait
-	testHookStop
-)
-
 var testParams = Params{
 	logMapHeight:    2,
 	logMapsPerEpoch: 4,
