@@ -161,6 +161,8 @@ func main() {
 		doArchive(os.Args[2:])
 	case "docker":
 		doDocker(os.Args[2:])
+	case "dockerx":
+		doDockerBuildx(os.Args[2:])
 	case "debsrc":
 		doDebianSource(os.Args[2:])
 	case "nsis":
@@ -884,6 +886,71 @@ func doDocker(cmdline []string) {
 			}
 			build.MustRunCommand("docker", append([]string{"manifest", "create", toolImage}, toolSubImages...)...)
 			build.MustRunCommand("docker", "manifest", "push", toolImage)
+		}
+	}
+}
+
+// Builds the docker images and optionally uploads them to Docker Hub.
+func doDockerBuildx(cmdline []string) {
+	var (
+		manifest = flag.String("manifest", "", `Push a multi-arch docker image for the specified architectures (usually "amd64,arm64")`)
+		upload   = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
+	)
+	flag.CommandLine.Parse(cmdline)
+
+	// Skip building and pushing docker images for PR builds
+	env := build.Env()
+	maybeSkipArchive(env)
+
+	// Retrieve the upload credentials and authenticate
+	user := getenvBase64("DOCKER_HUB_USERNAME")
+	pass := getenvBase64("DOCKER_HUB_PASSWORD")
+
+	if len(user) > 0 && len(pass) > 0 {
+		auther := exec.Command("docker", "login", "-u", string(user), "--password-stdin")
+		auther.Stdin = bytes.NewReader(pass)
+		build.MustRun(auther)
+	}
+	// Retrieve the version infos to build and push to the following paths:
+	//  - ethereum/client-go:latest                            - Pushes to the master branch, Geth only
+	//  - ethereum/client-go:stable                            - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-latest                   - Pushes to the master branch, Geth & tools
+	//  - ethereum/client-go:alltools-stable                   - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:release-<major>.<minor>           - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-release-<major>.<minor>  - Version tag publish on GitHub, Geth & tools
+	//  - ethereum/client-go:v<major>.<minor>.<patch>          - Version tag publish on GitHub, Geth only
+	//  - ethereum/client-go:alltools-v<major>.<minor>.<patch> - Version tag publish on GitHub, Geth & tools
+	var tags []string
+
+	switch {
+	case env.Branch == "master":
+		tags = []string{"latest"}
+	case strings.HasPrefix(env.Tag, "v1."):
+		tags = []string{"stable", fmt.Sprintf("release-1.%d", params.VersionMinor), "v" + params.Version}
+	}
+	type dockerSpec struct {
+		file string
+		base string
+	}
+	for _, spec := range []dockerSpec{
+		{file: "Dockerfile", base: fmt.Sprintf("%s:", *upload)},
+		{file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *upload)},
+	} {
+		var subImages []string
+		for _, tag := range tags { // latest, stable etc
+			gethImage :=  fmt.Sprintf("%s%s", spec.base, tag)
+			for _, arch := range strings.Split(*manifest, ",") { //amd64. arm64
+				subImage := fmt.Sprintf("%s-%s", gethImage, arch)
+				build.MustRunCommand("docker", "buildx",
+					"--build-arg", "COMMIT="+env.Commit,
+					"--build-arg", "VERSION="+params.VersionWithMeta,
+					"--build-arg", "BUILDNUM="+env.Buildnum,
+					"--tag", subImage,
+					"--platform", arch, "--load", "--push",
+					"--file", spec.file, ".")
+				subImages = append(subImages, subImage)
+			}
+			build.MustRunCommand("docker", append([]string{ "buildx", "imagetools", "create","--tag", gethImage}, subImages...)...)
 		}
 	}
 }
