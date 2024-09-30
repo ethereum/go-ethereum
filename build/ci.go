@@ -718,6 +718,10 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping archive creation because this is a PR build")
 		os.Exit(0)
 	}
+	if env.Branch == "buildx" {
+		// Temporarily allow this
+		return
+	}
 	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping archive creation because branch %q, tag %q is not on the inclusion list", env.Branch, env.Tag)
 		os.Exit(0)
@@ -923,7 +927,7 @@ func doDockerBuildx(cmdline []string) {
 	var tags []string
 
 	switch {
-	case env.Branch == "master":
+	case env.Branch == "master" || env.Branch == "buildx":
 		tags = []string{"latest"}
 	case strings.HasPrefix(env.Tag, "v1."):
 		tags = []string{"stable", fmt.Sprintf("release-1.%d", params.VersionMinor), "v" + params.Version}
@@ -938,7 +942,7 @@ func doDockerBuildx(cmdline []string) {
 	} {
 		var subImages []string
 		for _, tag := range tags { // latest, stable etc
-			gethImage :=  fmt.Sprintf("%s%s", spec.base, tag)
+			gethImage := fmt.Sprintf("%s%s", spec.base, tag)
 			for _, arch := range strings.Split(*manifest, ",") { //amd64. arm64
 				subImage := fmt.Sprintf("%s-%s", gethImage, arch)
 				build.MustRunCommand("docker", "buildx",
@@ -950,7 +954,7 @@ func doDockerBuildx(cmdline []string) {
 					"--file", spec.file, ".")
 				subImages = append(subImages, subImage)
 			}
-			build.MustRunCommand("docker", append([]string{ "buildx", "imagetools", "create","--tag", gethImage}, subImages...)...)
+			build.MustRunCommand("docker", append([]string{"buildx", "imagetools", "create", "--tag", gethImage}, subImages...)...)
 		}
 	}
 }
