@@ -21,8 +21,7 @@ import (
 )
 
 const (
-	depositRequestType = 0x00
-	depositRequestSize = 192 + 1
+	depositRequestSize = 192
 )
 
 // UnpackIntoDeposit unpacks a serialized DepositEvent.
@@ -31,10 +30,9 @@ func DepositLogToRequest(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("deposit wrong length: want 576, have %d", len(data))
 	}
 
-	var request = make([]byte, depositRequestSize)
-	request[0] = depositRequestType
+	request := make([]byte, depositRequestSize)
 	const (
-		pubkeyOffset         = 1
+		pubkeyOffset         = 0
 		withdrawalCredOffset = pubkeyOffset + 48
 		amountOffset         = withdrawalCredOffset + 32
 		signatureOffset      = amountOffset + 8
