@@ -62,15 +62,20 @@ func validateControlFlow(code []byte, section int, metadata []*functionMetadata,
 			currentStackMax += delta
 			currentStackMin += delta
 		case RETF:
+			/* From the spec:
+			> for RETF the following must hold: stack_height_max == stack_height_min == types[current_code_index].outputs,
+
+			In other words: RETF must unambiguously return all items remaining on the stack.
+			*/
 			if currentStackMax != currentStackMin {
 				return 0, fmt.Errorf("%w: max %d, min %d, at pos %d", errInvalidOutputs, currentStackMax, currentStackMin, pos)
 			}
-			have := int(metadata[section].outputs)
-			if have >= maxOutputItems {
+			numOutputs := int(metadata[section].outputs)
+			if numOutputs >= maxOutputItems {
 				return 0, fmt.Errorf("%w: at pos %d", errInvalidNonReturningFlag, pos)
 			}
-			if want := currentStackMin; have != want {
-				return 0, fmt.Errorf("%w: have %d, want %d, at pos %d", errInvalidOutputs, have, want, pos)
+			if numOutputs != currentStackMin {
+				return 0, fmt.Errorf("%w: have %d, want %d, at pos %d", errInvalidOutputs, numOutputs, currentStackMin, pos)
 			}
 			qualifiedExit = true
 		case JUMPF:
