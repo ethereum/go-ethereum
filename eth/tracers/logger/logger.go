@@ -268,7 +268,9 @@ func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
 		}
 		return
 	}
-	l.usedGas = receipt.GasUsed
+	if receipt != nil {
+		l.usedGas = receipt.GasUsed
+	}
 }
 
 // StructLogs returns the captured log entries.
@@ -388,7 +390,7 @@ func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
 func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	stack := scope.StackData()
-	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, op, cost)
+	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, vm.OpCode(op).String(), cost)
 
 	if !t.cfg.DisableStack {
 		// format stack

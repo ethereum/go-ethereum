@@ -237,6 +237,10 @@ func doInstall(cmdline []string) {
 // buildFlags returns the go tool flags for building.
 func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (flags []string) {
 	var ld []string
+	// See https://github.com/golang/go/issues/33772#issuecomment-528176001
+	// We need to set --buildid to the linker here, and also pass --build-id to the
+	// cgo-linker further down.
+	ld = append(ld, "--buildid=none")
 	if env.Commit != "" {
 		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitCommit="+env.Commit)
 		ld = append(ld, "-X", "github.com/ethereum/go-ethereum/internal/version.gitDate="+env.Date)
@@ -249,7 +253,11 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 	if runtime.GOOS == "linux" {
 		// Enforce the stacksize to 8M, which is the case on most platforms apart from
 		// alpine Linux.
-		extld := []string{"-Wl,-z,stack-size=0x800000"}
+		// See https://sourceware.org/binutils/docs-2.23.1/ld/Options.html#Options
+		// regarding the options --build-id=none and --strip-all. It is needed for
+		// reproducible builds; removing references to temporary files in C-land, and
+		// making build-id reproducably absent.
+		extld := []string{"-Wl,-z,stack-size=0x800000,--build-id=none,--strip-all"}
 		if staticLinking {
 			extld = append(extld, "-static")
 			// Under static linking, use of certain glibc features must be
@@ -296,7 +304,7 @@ func doTest(cmdline []string) {
 	gotest := tc.Go("test")
 
 	// CI needs a bit more time for the statetests (default 10m).
-	gotest.Args = append(gotest.Args, "-timeout=20m")
+	gotest.Args = append(gotest.Args, "-timeout=30m")
 
 	// Enable CKZG backend in CI.
 	gotest.Args = append(gotest.Args, "-tags=ckzg")

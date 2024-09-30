@@ -1,6 +1,8 @@
 module github.com/ethereum/go-ethereum
 
-go 1.21
+go 1.22
+
+toolchain go1.22.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.0
@@ -22,7 +24,7 @@ require (
 	github.com/donovanhide/eventsource v0.0.0-20210830082556-c59027999da0
 	github.com/dop251/goja v0.0.0-20230605162241-28ee0ee714f3
 	github.com/ethereum/c-kzg-4844 v1.0.0
-	github.com/ethereum/go-verkle v0.1.1-0.20240306133620-7d920df305f0
+	github.com/ethereum/go-verkle v0.1.1-0.20240829091221-dffa7562dbe9
 	github.com/fatih/color v1.16.0
 	github.com/ferranbt/fastssz v0.1.2
 	github.com/fjl/gencodec v0.0.0-20230517082657-f9840df7b83e
@@ -62,7 +64,7 @@ require (
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/status-im/keycard-go v0.2.0
 	github.com/stretchr/testify v1.9.0
-	github.com/supranational/blst v0.3.11
+	github.com/supranational/blst v0.3.13
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/tetratelabs/wabin v0.0.0-20230304001439-f6f874872834
 	github.com/tyler-smith/go-bip39 v1.1.0
@@ -97,7 +99,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.23.2 // indirect
 	github.com/aws/smithy-go v1.15.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.10.0 // indirect
+	github.com/bits-and-blooms/bitset v1.13.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/errors v1.11.3 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect

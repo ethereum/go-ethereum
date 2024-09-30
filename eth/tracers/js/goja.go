@@ -275,7 +275,9 @@ func (t *jsTracer) OnTxEnd(receipt *types.Receipt, err error) {
 		}
 		return
 	}
-	t.ctx["gasUsed"] = t.vm.ToValue(receipt.GasUsed)
+	if receipt != nil {
+		t.ctx["gasUsed"] = t.vm.ToValue(receipt.GasUsed)
+	}
 }
 
 // onStart implements the Tracer interface to initialize the tracing operation.

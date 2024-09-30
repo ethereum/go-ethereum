@@ -42,6 +42,8 @@ import (
 
 // TestSetFeeDefaults tests the logic for filling in default fee values works as expected.
 func TestSetFeeDefaults(t *testing.T) {
+	t.Parallel()
+
 	type test struct {
 		name string
 		fork string // options: legacy, london, cancun

@@ -104,7 +104,7 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 		Config: config,
 		Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(100_000_000_000_000_000)}},
 	}
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(db, nil, gspec, nil, engine, vm.Config{}, nil)
 
 	_, bs, _ := core.GenerateChainWithGenesis(gspec, engine, blocks, generator)
 	if _, err := chain.InsertChain(bs); err != nil {
