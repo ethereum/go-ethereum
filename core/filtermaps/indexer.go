@@ -664,7 +664,7 @@ func (u *updateBatch) addBlockToTail(header *types.Header, receipts types.Receip
 		return errors.New("addBlockToTail parent mismatch")
 	}
 	number := header.Number.Uint64()
-	stopMap := uint32((u.tailLvPointer + u.f.valuesPerMap - 1) >> u.f.logValuesPerMap)
+	stopMap := uint32((u.tailBlockLvPointer + u.f.valuesPerMap - 1) >> u.f.logValuesPerMap)
 	var cnt int
 	if err := iterateReceiptsReverse(receipts, func(lv common.Hash) error {
 		cnt++
@@ -672,11 +672,11 @@ func (u *updateBatch) addBlockToTail(header *types.Header, receipts types.Receip
 	}); err != nil {
 		return err
 	}
-	startMap := uint32(u.tailLvPointer >> u.f.logValuesPerMap)
+	startMap := uint32(u.tailBlockLvPointer >> u.f.logValuesPerMap)
 	for m := startMap; m < stopMap; m++ {
 		u.mapBlockPtr[m] = number
 	}
-	u.blockLvPointer[number] = u.tailLvPointer
+	u.blockLvPointer[number] = u.tailBlockLvPointer
 	u.tailBlockNumber, u.tailParentHash = number, header.ParentHash
 	return nil
 }
