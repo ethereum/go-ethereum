@@ -449,7 +449,6 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 	}
 	var (
 		withdrawals []*types.Withdrawal
-		requests    [][]byte
 	)
 	if conf := g.Config; conf != nil {
 		num := big.NewInt(int64(g.Number))
@@ -474,10 +473,9 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 		}
 		if conf.IsPrague(num, g.Timestamp) {
 			head.RequestsHash = &types.EmptyRequestsHash
-			requests = make([][]byte, 0)
 		}
 	}
-	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals, Requests: requests}, nil, trie.NewStackTrie(nil))
+	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))
 }
 
 // Commit writes the block and state of a genesis specification to the database.

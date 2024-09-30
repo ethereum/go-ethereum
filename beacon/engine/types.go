@@ -76,7 +76,7 @@ type ExecutableData struct {
 	Withdrawals      []*types.Withdrawal     `json:"withdrawals"`
 	BlobGasUsed      *uint64                 `json:"blobGasUsed"`
 	ExcessBlobGas    *uint64                 `json:"excessBlobGas"`
-	Requests         [][]byte                `json:"depositRequests"`
+	RequestsHash     *common.Hash            `json:"executionRequestsHash"`
 	ExecutionWitness *types.ExecutionWitness `json:"executionWitness,omitempty"`
 }
 
@@ -91,7 +91,6 @@ type executableDataMarshaling struct {
 	LogsBloom     hexutil.Bytes
 	Transactions  []hexutil.Bytes
 	BlobGasUsed   *hexutil.Uint64
-	Requests      []hexutil.Bytes
 	ExcessBlobGas *hexutil.Uint64
 }
 
@@ -109,6 +108,7 @@ type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
 	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
+	Requests         [][]byte        `json:"executionRequests"`
 	Override         bool            `json:"shouldOverrideBuilder"`
 	Witness          *hexutil.Bytes  `json:"witness"`
 }
@@ -122,6 +122,7 @@ type BlobsBundleV1 struct {
 // JSON type overrides for ExecutionPayloadEnvelope.
 type executionPayloadEnvelopeMarshaling struct {
 	BlockValue *hexutil.Big
+	Requests   []hexutil.Bytes
 }
 
 type PayloadStatusV1 struct {
@@ -208,8 +209,8 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // and that the blockhash of the constructed block matches the parameters. Nil
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in data.
-func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
-	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot)
+func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
+	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +223,7 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // ExecutableDataToBlockNoHash is analogous to ExecutableDataToBlock, but is used
 // for stateless execution, so it skips checking if the executable data hashes to
 // the requested hash (stateless has to *compute* the root hash, it's not given).
-func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash) (*types.Block, error) {
+func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
 	txs, err := decodeTransactions(data.Transactions)
 	if err != nil {
 		return nil, err
@@ -257,12 +258,13 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		h := types.DeriveSha(types.Withdrawals(data.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
-	// Compute requestsHash if any requests are non-nil.
+	// Compute requestsHash if any requests were passed.
 	var requestsHash *common.Hash
-	if data.Requests != nil {
-		h := types.CalcRequestsHash(data.Requests)
+	if requests != nil {
+		h := types.CalcRequestsHash(requests)
 		requestsHash = &h
 	}
+
 	header := &types.Header{
 		ParentHash:       data.ParentHash,
 		UncleHash:        types.EmptyUncleHash,
@@ -283,10 +285,10 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		ExcessBlobGas:    data.ExcessBlobGas,
 		BlobGasUsed:      data.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
-		RequestsHash:     requestsHash,
+		RequestsHash:     requestsHash, // note: need to use recomputed hash value here to ensure validation.
 	}
 	return types.NewBlockWithHeader(header).
-			WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals, Requests: data.Requests}).
+			WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}).
 			WithWitness(data.ExecutionWitness),
 		nil
 }
@@ -312,7 +314,6 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		Withdrawals:      block.Withdrawals(),
 		BlobGasUsed:      block.BlobGasUsed(),
 		ExcessBlobGas:    block.ExcessBlobGas(),
-		Requests:         block.Requests(),
 		ExecutionWitness: block.ExecutionWitness(),
 	}
 	bundle := BlobsBundleV1{
