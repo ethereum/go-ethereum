@@ -2061,8 +2061,6 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 			break
 		}
 		chainDb = remotedb.New(client)
-	case ctx.String(SyncModeFlag.Name) == "light":
-		chainDb, err = stack.OpenDatabase("lightchaindata", cache, handles, "", readonly)
 	default:
 		chainDb, err = stack.OpenDatabaseWithFreezer("chaindata", cache, handles, ctx.String(AncientFlag.Name), "", readonly)
 	}
