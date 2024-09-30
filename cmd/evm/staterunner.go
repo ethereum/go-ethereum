@@ -35,18 +35,18 @@ import (
 )
 
 var (
-	ForkFlag = &cli.StringFlag{
+	forkFlag = &cli.StringFlag{
 		Name:     "statetest.fork",
 		Usage:    "The hard-fork to run the test against",
 		Category: flags.VMCategory,
 	}
-	IdxFlag = &cli.IntFlag{
+	idxFlag = &cli.IntFlag{
 		Name:     "statetest.index",
 		Usage:    "The index of the subtest to run",
 		Category: flags.VMCategory,
 		Value:    -1, // default to select all subtest indices
 	}
-	TestNameFlag = &cli.StringFlag{
+	testNameFlag = &cli.StringFlag{
 		Name:     "statetest.name",
 		Usage:    "The name of the state test to run",
 		Category: flags.VMCategory,
@@ -58,9 +58,9 @@ var stateTestCommand = &cli.Command{
 	Usage:     "Executes the given state tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
 	ArgsUsage: "<file>",
 	Flags: []cli.Flag{
-		ForkFlag,
-		IdxFlag,
-		TestNameFlag,
+		forkFlag,
+		idxFlag,
+		testNameFlag,
 	},
 }
 
@@ -118,15 +118,15 @@ type stateTestCase struct {
 // collectMatchedSubtests returns test cases which match against provided filtering CLI parameters
 func collectMatchedSubtests(ctx *cli.Context, testsByName map[string]tests.StateTest) []stateTestCase {
 	var res []stateTestCase
-	subtestName := ctx.String(TestNameFlag.Name)
+	subtestName := ctx.String(testNameFlag.Name)
 	if subtestName != "" {
 		if subtest, ok := testsByName[subtestName]; ok {
 			testsByName := make(map[string]tests.StateTest)
 			testsByName[subtestName] = subtest
 		}
 	}
-	idx := ctx.Int(IdxFlag.Name)
-	fork := ctx.String(ForkFlag.Name)
+	idx := ctx.Int(idxFlag.Name)
+	fork := ctx.String(forkFlag.Name)
 
 	for key, test := range testsByName {
 		for _, st := range test.Subtests() {
