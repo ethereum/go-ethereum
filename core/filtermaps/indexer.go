@@ -17,6 +17,17 @@ const (
 	removedPointer       = math.MaxUint64 // used in updateBatch to signal removed items
 	revertPointFrequency = 256            // frequency of revert points in database
 	cachedRevertPoints   = 64             // revert points for most recent blocks in memory
+
+	testHookInit = iota
+	testHookUpdateHeadEpoch
+	testHookUpdateHead
+	testHookExtendTailEpoch
+	testHookExtendTail
+	testHookPruneTail
+	testHookPruneTailMaps
+	testHookRevert
+	testHookWait
+	testHookStop
 )
 
 // updateLoop initializes and updates the log index structure according to the
@@ -121,7 +132,7 @@ func (f *FilterMaps) updateLoop() {
 			syncMatcher = nil
 		}
 		// log index head is at latest chain head; process tail blocks if possible
-		f.tryUpdateTail(head, func() bool {
+		if f.tryUpdateTail(head, func() bool {
 			// return true if tail processing needs to be stopped
 			select {
 			case ev := <-headEventCh:
@@ -136,10 +147,9 @@ func (f *FilterMaps) updateLoop() {
 			}
 			// stop if there is a new chain head (always prioritize head updates)
 			return fmr.headBlockHash != head.Hash()
-		})
-		if fmr.headBlockHash == head.Hash() {
-			// if tail processing exited while there is no new head then no more
-			// tail blocks can be processed
+		}) && fmr.headBlockHash == head.Hash() {
+			// if tail processing reached its final state and there is no new
+			// head then wait for more events
 			wait()
 		}
 	}
@@ -264,7 +274,7 @@ func (f *FilterMaps) tryUpdateHead(newHead *types.Header) bool {
 // current head block number and the log history settings.
 // stopFn is called regularly during the process, and if it returns true, the
 // latest batch is written and the function returns.
-func (f *FilterMaps) tryUpdateTail(head *types.Header, stopFn func() bool) {
+func (f *FilterMaps) tryUpdateTail(head *types.Header, stopFn func() bool) bool {
 	var tailTarget uint64
 	if f.history > 0 {
 		if headNum := head.Number.Uint64(); headNum >= f.history {
@@ -273,17 +283,19 @@ func (f *FilterMaps) tryUpdateTail(head *types.Header, stopFn func() bool) {
 	}
 	tailNum := f.getRange().tailBlockNumber
 	if tailNum > tailTarget {
-		f.tryExtendTail(tailTarget, stopFn)
+		if !f.tryExtendTail(tailTarget, stopFn) {
+			return false
+		}
 	}
 	if tailNum < tailTarget {
 		f.pruneTailPtr(tailTarget)
-		f.tryPruneTailMaps(tailTarget, stopFn)
 	}
+	return f.tryPruneTailMaps(tailTarget, stopFn)
 }
 
 // tryExtendTail attempts to extend the log index backwards until it indexes the
 // tail target block or cannot find more block receipts.
-func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) {
+func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) bool {
 	fmr := f.getRange()
 	number, parentHash := fmr.tailBlockNumber, fmr.tailParentHash
 	update := f.newUpdateBatch()
@@ -318,6 +330,7 @@ func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) {
 	if f.testHook != nil {
 		f.testHook(testHookExtendTail)
 	}
+	return number <= tailTarget
 }
 
 // pruneTailPtr updates the tail block number and hash and the corresponding
@@ -362,12 +375,12 @@ func (f *FilterMaps) pruneTailPtr(tailTarget uint64) {
 
 // tryPruneTailMaps removes unused filter maps and corresponding log index
 // pointers from the database. This function also updates targetLvPointer.
-func (f *FilterMaps) tryPruneTailMaps(tailTarget uint64, stopFn func() bool) {
+func (f *FilterMaps) tryPruneTailMaps(tailTarget uint64, stopFn func() bool) bool {
 	fmr := f.getRange()
 	tailMap := uint32(fmr.tailLvPointer >> f.logValuesPerMap)
 	targetMap := uint32(fmr.tailBlockLvPointer >> f.logValuesPerMap)
 	if tailMap >= targetMap {
-		return
+		return true
 	}
 	lastEpoch := (targetMap - 1) >> f.logMapsPerEpoch
 	removeLvPtr, err := f.getMapBlockPtr(tailMap)
@@ -396,6 +409,7 @@ func (f *FilterMaps) tryPruneTailMaps(tailTarget uint64, stopFn func() bool) {
 	if logged {
 		log.Info("Finished pruning log index tail", "filter maps left", targetMap-tailMap)
 	}
+	return tailMap >= targetMap
 }
 
 // pruneMaps removes filter maps and corresponding log index pointers in the
