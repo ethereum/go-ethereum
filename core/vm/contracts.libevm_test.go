@@ -100,7 +100,7 @@ func TestPrecompileOverride(t *testing.T) {
 
 type statefulPrecompileOutput struct {
 	ChainID                 *big.Int
-	Caller, Self            common.Address
+	Addresses               *libevm.AddressContext
 	StateValue              common.Hash
 	ReadOnly                bool
 	BlockNumber, Difficulty *big.Int
@@ -116,17 +116,24 @@ func (o statefulPrecompileOutput) String() string {
 		fld := out.Field(i).Interface()
 
 		verb := "%v"
-		if _, ok := fld.([]byte); ok {
+		switch fld.(type) {
+		case []byte:
 			verb = "%#x"
+		case *libevm.AddressContext:
+			verb = "%+v"
 		}
 		lines = append(lines, fmt.Sprintf("%s: "+verb, name, fld))
 	}
 	return strings.Join(lines, "\n")
 }
 
+func (o statefulPrecompileOutput) Bytes() []byte {
+	return []byte(o.String())
+}
+
 func TestNewStatefulPrecompile(t *testing.T) {
+	precompile := common.HexToAddress("60C0DE") // GO CODE
 	rng := ethtest.NewPseudoRand(314159)
-	precompile := rng.Address()
 	slot := rng.Hash()
 
 	const gasLimit = 1e6
@@ -141,11 +148,9 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			return nil, 0, err
 		}
 
-		addrs := env.Addresses()
 		out := &statefulPrecompileOutput{
 			ChainID:     env.ChainConfig().ChainID,
-			Caller:      addrs.Caller,
-			Self:        addrs.Self,
+			Addresses:   env.Addresses(),
 			StateValue:  env.ReadOnlyState().GetState(precompile, slot),
 			ReadOnly:    env.ReadOnly(),
 			BlockNumber: env.BlockNumber(),
@@ -153,7 +158,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 			Difficulty:  hdr.Difficulty,
 			Input:       input,
 		}
-		return []byte(out.String()), suppliedGas - gasCost, nil
+		return out.Bytes(), suppliedGas - gasCost, nil
 	}
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
@@ -167,10 +172,13 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		Time:       rng.Uint64(),
 		Difficulty: rng.BigUint64(),
 	}
-	caller := rng.Address()
 	input := rng.Bytes(8)
 	value := rng.Hash()
 	chainID := rng.BigUint64()
+
+	caller := common.HexToAddress("CA11E12") // caller of the precompile
+	eoa := common.HexToAddress("E0A")        // caller of the precompile-caller
+	callerContract := vm.NewContract(vm.AccountRef(eoa), vm.AccountRef(caller), uint256.NewInt(0), 1e6)
 
 	state, evm := ethtest.NewZeroEVM(
 		t,
@@ -182,39 +190,61 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		),
 	)
 	state.SetState(precompile, slot, value)
+	evm.Origin = eoa
 
 	tests := []struct {
-		name string
-		call func() ([]byte, uint64, error)
-		// Note that this only covers evm.readWrite being set to forceReadOnly,
-		// via StaticCall(). See TestInheritReadOnly for alternate case.
+		name          string
+		call          func() ([]byte, uint64, error)
+		wantAddresses *libevm.AddressContext
+		// Note that this only covers evm.readOnly being true because of the
+		// precompile's call. See TestInheritReadOnly for alternate case.
 		wantReadOnly bool
 	}{
 		{
 			name: "EVM.Call()",
 			call: func() ([]byte, uint64, error) {
-				return evm.Call(vm.AccountRef(caller), precompile, input, gasLimit, uint256.NewInt(0))
+				return evm.Call(callerContract, precompile, input, gasLimit, uint256.NewInt(0))
+			},
+			wantAddresses: &libevm.AddressContext{
+				Origin: eoa,
+				Caller: caller,
+				Self:   precompile,
 			},
 			wantReadOnly: false,
 		},
 		{
 			name: "EVM.CallCode()",
 			call: func() ([]byte, uint64, error) {
-				return evm.CallCode(vm.AccountRef(caller), precompile, input, gasLimit, uint256.NewInt(0))
+				return evm.CallCode(callerContract, precompile, input, gasLimit, uint256.NewInt(0))
+			},
+			wantAddresses: &libevm.AddressContext{
+				Origin: eoa,
+				Caller: caller,
+				Self:   caller,
 			},
 			wantReadOnly: false,
 		},
 		{
 			name: "EVM.DelegateCall()",
 			call: func() ([]byte, uint64, error) {
-				return evm.DelegateCall(vm.AccountRef(caller), precompile, input, gasLimit)
+				return evm.DelegateCall(callerContract, precompile, input, gasLimit)
+			},
+			wantAddresses: &libevm.AddressContext{
+				Origin: eoa,
+				Caller: eoa, // inherited from caller
+				Self:   caller,
 			},
 			wantReadOnly: false,
 		},
 		{
 			name: "EVM.StaticCall()",
 			call: func() ([]byte, uint64, error) {
-				return evm.StaticCall(vm.AccountRef(caller), precompile, input, gasLimit)
+				return evm.StaticCall(callerContract, precompile, input, gasLimit)
+			},
+			wantAddresses: &libevm.AddressContext{
+				Origin: eoa,
+				Caller: caller,
+				Self:   precompile,
 			},
 			wantReadOnly: true,
 		},
@@ -222,22 +252,22 @@ func TestNewStatefulPrecompile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			wantReturnData := statefulPrecompileOutput{
+			wantOutput := statefulPrecompileOutput{
 				ChainID:     chainID,
-				Caller:      caller,
-				Self:        precompile,
+				Addresses:   tt.wantAddresses,
 				StateValue:  value,
 				ReadOnly:    tt.wantReadOnly,
 				BlockNumber: header.Number,
 				BlockTime:   header.Time,
 				Difficulty:  header.Difficulty,
 				Input:       input,
-			}.String()
+			}
+
 			wantGasLeft := gasLimit - gasCost
 
 			gotReturnData, gotGasLeft, err := tt.call()
 			require.NoError(t, err)
-			assert.Equal(t, wantReturnData, string(gotReturnData))
+			assert.Equal(t, wantOutput.String(), string(gotReturnData))
 			assert.Equal(t, wantGasLeft, gotGasLeft)
 		})
 	}
@@ -265,9 +295,7 @@ func TestInheritReadOnly(t *testing.T) {
 
 	// (1)
 
-	var precompile common.Address
-	const precompileAddr = 255
-	precompile[common.AddressLength-1] = precompileAddr
+	precompile := common.Address{255}
 
 	const (
 		ifReadOnly = iota + 1 // see contract bytecode for rationale
@@ -293,31 +321,13 @@ func TestInheritReadOnly(t *testing.T) {
 	})
 
 	// (2)
-
-	// See CALL signature: https://www.evm.codes/#f1?fork=cancun
-	const p0 = vm.PUSH0
-	contract := []vm.OpCode{
-		vm.PUSH1, 1, // retSize (bytes)
-		p0, // retOffset
-		p0, // argSize
-		p0, // argOffset
-		p0, // value
-		vm.PUSH1, precompileAddr,
-		p0, // gas
-		vm.CALL,
-		// It's ok to ignore the return status. If the CALL failed then we'll
-		// return []byte{0} next, and both non-failure return buffers are
-		// non-zero because of the `iota + 1`.
-		vm.PUSH1, 1, // size (byte)
-		p0,
-		vm.RETURN,
-	}
+	contract := makeReturnProxy(t, precompile, vm.CALL)
 
 	state, evm := ethtest.NewZeroEVM(t)
 	rng := ethtest.NewPseudoRand(42)
 	contractAddr := rng.Address()
 	state.CreateAccount(contractAddr)
-	state.SetCode(contractAddr, contractCode(contract))
+	state.SetCode(contractAddr, convertBytes[vm.OpCode, byte](contract))
 
 	// (3)
 
@@ -352,14 +362,54 @@ func TestInheritReadOnly(t *testing.T) {
 	}
 }
 
-// contractCode converts a slice of op codes into a byte buffer for storage as
-// contract code.
-func contractCode(ops []vm.OpCode) []byte {
-	ret := make([]byte, len(ops))
-	for i, o := range ops {
-		ret[i] = byte(o)
+// makeReturnProxy returns the bytecode of a contract that will call `dest` with
+// the specified call type and propagated the returned value.
+//
+// The contract does NOT check if the call reverted. In this case, the
+// propagated return value will always be an empty slice. Tests using these
+// proxies MUST use non-empty slices as test values.
+//
+// TODO(arr4n): convert this to arr4n/specops for clarity and to make it easier
+// to generate a revert check.
+func makeReturnProxy(t *testing.T, dest common.Address, call vm.OpCode) []vm.OpCode {
+	t.Helper()
+	const p0 = vm.PUSH0
+	contract := []vm.OpCode{
+		vm.PUSH1, 1, // retSize (bytes)
+		p0, // retOffset
+		p0, // argSize
+		p0, // argOffset
 	}
-	return ret
+
+	// See CALL signature: https://www.evm.codes/#f1?fork=cancun
+	switch call {
+	case vm.CALL, vm.CALLCODE:
+		contract = append(contract, p0) // value
+	case vm.DELEGATECALL, vm.STATICCALL:
+	default:
+		t.Fatalf("Bad test setup: invalid non-CALL-type opcode %s", call)
+	}
+
+	contract = append(contract, vm.PUSH20)
+	contract = append(contract, convertBytes[byte, vm.OpCode](dest[:])...)
+
+	contract = append(contract,
+		p0, // gas
+		call,
+
+		// See function comment re ignored reverts.
+		vm.RETURNDATASIZE, p0, p0, vm.RETURNDATACOPY,
+		vm.RETURNDATASIZE, p0, vm.RETURN,
+	)
+	return contract
+}
+
+func convertBytes[From ~byte, To ~byte](buf []From) []To {
+	out := make([]To, len(buf))
+	for i, b := range buf {
+		out[i] = To(b)
+	}
+	return out
 }
 
 func TestCanCreateContract(t *testing.T) {
@@ -444,4 +494,117 @@ func TestActivePrecompilesOverride(t *testing.T) {
 	hooks.Register(t)
 
 	require.Equal(t, precompiles, vm.ActivePrecompiles(newRules()), "vm.ActivePrecompiles() returns overridden addresses")
+}
+
+func TestPrecompileMakeCall(t *testing.T) {
+	// There is one test per *CALL* op code:
+	//
+	// 1. `eoa` makes a call to a bytecode contract, `caller`;
+	// 2. `caller` calls `sut`, the precompile under test, via the test's *CALL* op code;
+	// 3. `sut` makes a Call() to `dest`, which reflects env data for testing.
+	//
+	// This acts as a full integration test of a precompile being invoked before
+	// making an "outbound" call.
+	eoa := common.HexToAddress("E0A")
+	caller := common.HexToAddress("CA11E12")
+	sut := common.HexToAddress("7E57ED")
+	dest := common.HexToAddress("DE57")
+
+	rng := ethtest.NewPseudoRand(142857)
+	callData := rng.Bytes(8)
+
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			sut: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+				// We are ultimately testing env.Call(), hence why this is the SUT.
+				return env.Call(dest, callData, suppliedGas, uint256.NewInt(0))
+			}),
+			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+				out := &statefulPrecompileOutput{
+					Addresses: env.Addresses(),
+					ReadOnly:  env.ReadOnly(),
+					Input:     input, // expected to be callData
+				}
+				return out.Bytes(), suppliedGas, nil
+			}),
+		},
+	}
+	hookstest.Register(t, params.Extras[*hookstest.Stub, *hookstest.Stub]{
+		NewRules: func(_ *params.ChainConfig, r *params.Rules, _ *hookstest.Stub, blockNum *big.Int, isMerge bool, timestamp uint64) *hookstest.Stub {
+			r.IsCancun = true // enable PUSH0
+			return hooks
+		},
+	})
+
+	tests := []struct {
+		incomingCallType vm.OpCode
+		// Unlike TestNewStatefulPrecompile, which tests the AddressContext of
+		// the precompile itself, these test the AddressContext of a contract
+		// called by the precompile.
+		want statefulPrecompileOutput
+	}{
+		{
+			incomingCallType: vm.CALL,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: sut,
+					Self:   dest,
+				},
+				Input: callData,
+			},
+		},
+		{
+			incomingCallType: vm.CALLCODE,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: caller, // SUT runs as its own caller because of CALLCODE
+					Self:   dest,
+				},
+				Input: callData,
+			},
+		},
+		{
+			incomingCallType: vm.DELEGATECALL,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: caller, // as with CALLCODE
+					Self:   dest,
+				},
+				Input: callData,
+			},
+		},
+		{
+			incomingCallType: vm.STATICCALL,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: sut,
+					Self:   dest,
+				},
+				Input: callData,
+				// This demonstrates that even though the precompile makes a
+				// (non-static) CALL, the read-only state is inherited. Yes,
+				// this is _another_ way to get a read-only state, different to
+				// the other tests.
+				ReadOnly: true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("via %s", tt.incomingCallType), func(t *testing.T) {
+			state, evm := ethtest.NewZeroEVM(t)
+			evm.Origin = eoa
+			state.CreateAccount(caller)
+			proxy := makeReturnProxy(t, sut, tt.incomingCallType)
+			state.SetCode(caller, convertBytes[vm.OpCode, byte](proxy))
+
+			got, _, err := evm.Call(vm.AccountRef(eoa), caller, nil, 1e6, uint256.NewInt(0))
+			require.NoError(t, err)
+			require.Equal(t, tt.want.String(), string(got))
+		})
+	}
 }

@@ -30,18 +30,20 @@ import (
 
 // evmCallArgs mirrors the parameters of the [EVM] methods Call(), CallCode(),
 // DelegateCall() and StaticCall(). Its fields are identical to those of the
-// parameters, prepended with the receiver name and appended with additional
-// values. As {Delegate,Static}Call don't accept a value, they MUST set the
-// respective field to nil.
+// parameters, prepended with the receiver name and call type. As
+// {Delegate,Static}Call don't accept a value, they MAY set the respective field
+// to nil as it will be ignored.
 //
 // Instantiation can be achieved by merely copying the parameter names, in
 // order, which is trivially achieved with AST manipulation:
 //
-//	func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *uint256.Int) ... {
+//	func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) ... {
 //	    ...
-//	    args := &evmCallArgs{evm, caller, addr, input, gas, value, false}
+//	    args := &evmCallArgs{evm, staticCall, caller, addr, input, gas, nil /*value*/}
 type evmCallArgs struct {
-	evm *EVM
+	evm      *EVM
+	callType callType
+
 	// args:start
 	caller ContractRef
 	addr   common.Address
@@ -49,28 +51,22 @@ type evmCallArgs struct {
 	gas    uint64
 	value  *uint256.Int
 	// args:end
-
-	// evm.interpreter.readOnly is only set to true via a call to
-	// EVMInterpreter.Run() so, if a precompile is called directly with
-	// StaticCall(), then readOnly might not be set yet. StaticCall() MUST set
-	// this to forceReadOnly and all other methods MUST set it to
-	// inheritReadOnly; i.e. equivalent to the boolean they each pass to
-	// EVMInterpreter.Run().
-	readWrite rwInheritance
 }
 
-type rwInheritance uint8
+type callType uint8
 
 const (
-	inheritReadOnly rwInheritance = iota + 1
-	forceReadOnly
+	call callType = iota + 1
+	callCode
+	delegateCall
+	staticCall
 )
 
 // run runs the [PrecompiledContract], differentiating between stateful and
 // regular types.
 func (args *evmCallArgs) run(p PrecompiledContract, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 	if p, ok := p.(statefulPrecompile); ok {
-		return p(args, input, suppliedGas)
+		return p(args.env(), input, suppliedGas)
 	}
 	// Gas consumption for regular precompiles was already handled by the native
 	// RunPrecompiledContract(), which called this method.
@@ -107,8 +103,9 @@ func (p statefulPrecompile) Run([]byte) ([]byte, error) {
 	panic(fmt.Sprintf("BUG: call to %T.Run(); MUST call %T itself", p, p))
 }
 
-// A PrecompileEnvironment provides information about the context in which a
-// precompiled contract is being run.
+// A PrecompileEnvironment provides (a) information about the context in which a
+// precompiled contract is being run; and (b) a means of calling other
+// contracts.
 type PrecompileEnvironment interface {
 	ChainConfig() *params.ChainConfig
 	Rules() params.Rules
@@ -122,77 +119,61 @@ type PrecompileEnvironment interface {
 	BlockHeader() (types.Header, error)
 	BlockNumber() *big.Int
 	BlockTime() uint64
+
+	// Call is equivalent to [EVM.Call] except that the `caller` argument is
+	// removed and automatically determined according to the type of call that
+	// invoked the precompile.
+	Call(addr common.Address, input []byte, gas uint64, value *uint256.Int, _ ...CallOption) (ret []byte, gasRemaining uint64, _ error)
 }
 
-//
-// ****** SECURITY ******
-//
-// If you are updating PrecompileEnvironment to provide the ability to call back
-// into another contract, you MUST revisit the evmCallArgs.forceReadOnly flag.
-//
-// It is possible that forceReadOnly is true but evm.interpreter.readOnly is
-// false. This is safe for now, but may not be if recursive calling *from* a
-// precompile is enabled.
-//
-// ****** SECURITY ******
+func (args *evmCallArgs) env() *environment {
+	var (
+		self  common.Address
+		value = args.value
+	)
+	switch args.callType {
+	case staticCall:
+		value = new(uint256.Int)
+		fallthrough
+	case call:
+		self = args.addr
 
-var _ PrecompileEnvironment = (*evmCallArgs)(nil)
+	case delegateCall:
+		value = nil
+		fallthrough
+	case callCode:
+		self = args.caller.Address()
+	}
 
-func (args *evmCallArgs) ChainConfig() *params.ChainConfig { return args.evm.chainConfig }
-func (args *evmCallArgs) Rules() params.Rules              { return args.evm.chainRules }
+	// This is equivalent to the `contract` variables created by evm.*Call*()
+	// methods, for non precompiles, to pass to [EVMInterpreter.Run].
+	contract := NewContract(args.caller, AccountRef(self), value, args.gas)
+	if args.callType == delegateCall {
+		contract = contract.AsDelegate()
+	}
 
-func (args *evmCallArgs) ReadOnly() bool {
-	if args.readWrite == inheritReadOnly {
-		if args.evm.interpreter.readOnly { //nolint:gosimple // Clearer code coverage for difficult-to-test branch
-			return true
-		}
+	return &environment{
+		evm:           args.evm,
+		self:          contract,
+		forceReadOnly: args.readOnly(),
+	}
+}
+
+func (args *evmCallArgs) readOnly() bool {
+	// A switch statement provides clearer code coverage for difficult-to-test
+	// cases.
+	switch {
+	case args.callType == staticCall:
+		// evm.interpreter.readOnly is only set to true via a call to
+		// EVMInterpreter.Run() so, if a precompile is called directly with
+		// StaticCall(), then readOnly might not be set yet.
+		return true
+	case args.evm.interpreter.readOnly:
+		return true
+	default:
 		return false
 	}
-	// Even though args.readWrite may be some value other than forceReadOnly,
-	// that would be an invalid use of the API so we default to read-only as the
-	// safest failure mode.
-	return true
 }
-
-func (args *evmCallArgs) StateDB() StateDB {
-	if args.ReadOnly() {
-		return nil
-	}
-	return args.evm.StateDB
-}
-
-func (args *evmCallArgs) ReadOnlyState() libevm.StateReader {
-	// Even though we're actually returning a full state database, the user
-	// would have to actively circumvent the returned interface to use it. At
-	// that point they're off-piste and it's not our problem.
-	return args.evm.StateDB
-}
-
-func (args *evmCallArgs) Addresses() *libevm.AddressContext {
-	return &libevm.AddressContext{
-		Origin: args.evm.TxContext.Origin,
-		Caller: args.caller.Address(),
-		Self:   args.addr,
-	}
-}
-
-func (args *evmCallArgs) BlockHeader() (types.Header, error) {
-	hdr := args.evm.Context.Header
-	if hdr == nil {
-		// Although [core.NewEVMBlockContext] sets the field and is in the
-		// typical hot path (e.g. miner), there are other ways to create a
-		// [vm.BlockContext] (e.g. directly in tests) that may result in no
-		// available header.
-		return types.Header{}, fmt.Errorf("nil %T in current %T", hdr, args.evm.Context)
-	}
-	return *hdr, nil
-}
-
-func (args *evmCallArgs) BlockNumber() *big.Int {
-	return new(big.Int).Set(args.evm.Context.BlockNumber)
-}
-
-func (args *evmCallArgs) BlockTime() uint64 { return args.evm.Context.Time }
 
 var (
 	// These lock in the assumptions made when implementing [evmCallArgs]. If
