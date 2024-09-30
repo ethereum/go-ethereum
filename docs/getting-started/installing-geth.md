@@ -143,6 +143,22 @@ sudo pacman -Sy
 
 When the node is started again, Geth will automatically use all the data from the previous version and sync the blocks that were missed while the node was offline.
 
+### Gentoo via Portage {#gentoo-via-portage}
+
+Geth is included in the Gentoo repository as [`net-p2p/go-ethereum`](https://packages.gentoo.org/packages/net-p2p/go-ethereum). It can be installed by running:
+
+```sh
+emerge --ask net-p2p/go-ethereum
+```
+
+To install the additional developer tools (`abidump`, `abigen`, `blsync`, `bootnode`, `clef`, `devp2p`, `era`, `ethkey`, `evm`, and `rlpdump`), enable the `devtools` useflag:
+
+#### File: `/etc/portage/package.use/go-ethereum`
+
+```
+net-p2p/go-ethereum devtools
+```
+
 ## Standalone bundle {#standalone-bundle}
 
 Stable releases and development builds are provided as standalone bundles. These are useful for users who: a) wish to install a specific version of Geth (e.g., for reproducible environments); b) wish to install on machines without internet access (e.g. air-gapped computers); or c) wish to avoid automatic updates and instead prefer to manually install software.
