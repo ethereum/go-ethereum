@@ -1436,14 +1436,6 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 	if block.Withdrawals() != nil {
 		fields["withdrawals"] = block.Withdrawals()
 	}
-	if block.Requests() != nil {
-		// Convert requests to hex.
-		hexreq := make([]hexutil.Bytes, len(block.Requests()))
-		for i, req := range block.Requests() {
-			hexreq[i] = req
-		}
-		fields["requests"] = hexreq
-	}
 	return fields
 }
 
