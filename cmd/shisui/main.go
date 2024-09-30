@@ -446,7 +446,7 @@ func writePrivateKey(privateKey *ecdsa.PrivateKey, config *Config, fileName stri
 	keyEnc := hex.EncodeToString(crypto.FromECDSA(privateKey))
 
 	fullPath := filepath.Join(config.DataDir, fileName)
-	file, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0700)
+	file, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
