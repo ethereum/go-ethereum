@@ -692,8 +692,8 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV4(params engine.ExecutableData, v
 	if params.BlobGasUsed == nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil blobGasUsed post-cancun"))
 	}
-	if params.Deposits == nil {
-		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil deposits post-prague"))
+	if params.Requests == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil requests post-prague"))
 	}
 
 	if versionedHashes == nil {
@@ -780,8 +780,8 @@ func (api *ConsensusAPI) ExecuteStatelessPayloadV4(params engine.ExecutableData,
 	if params.BlobGasUsed == nil {
 		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil blobGasUsed post-cancun"))
 	}
-	if params.Deposits == nil {
-		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil deposits post-prague"))
+	if params.Requests == nil {
+		return engine.StatelessPayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil requests post-prague"))
 	}
 
 	if versionedHashes == nil {
@@ -957,7 +957,7 @@ func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, v
 			"params.ExcessBlobGas", ebg,
 			"len(params.Transactions)", len(params.Transactions),
 			"len(params.Withdrawals)", len(params.Withdrawals),
-			"len(params.Deposits)", len(params.Deposits),
+			"len(params.Requests)", len(params.Requests),
 			"beaconRoot", beaconRoot,
 			"error", err)
 		errorMsg := err.Error()

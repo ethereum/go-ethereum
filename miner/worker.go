@@ -116,13 +116,15 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 		allLogs = append(allLogs, r.Logs...)
 	}
 	// Read requests if Prague is enabled.
+	var requests [][]byte
 	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
-		requests, err := core.ParseDepositLogs(allLogs, miner.chainConfig)
+		depositRequests, err := core.ParseDepositLogs(allLogs, miner.chainConfig)
 		if err != nil {
 			return &newPayloadResult{err: err}
 		}
-		body.Requests = requests
+		requests = append(requests, depositRequests)
 	}
+	body.Requests = requests
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
 	if err != nil {
 		return &newPayloadResult{err: err}
