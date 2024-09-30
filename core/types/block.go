@@ -18,6 +18,7 @@
 package types
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -475,10 +476,11 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 }
 
 func CalcRequestsHash(requests [][]byte) common.Hash {
-	if len(requests) == 0 {
-		return EmptyRequestsHash
+	h := sha256.New()
+	for _, item := range requests {
+		h.Write(item)
 	}
-	return rlpHash(requests)
+	return common.Hash(h.Sum(nil))
 }
 
 // NewBlockWithHeader creates a block with the given header data. The
