@@ -40,6 +40,7 @@ func TestIndexerSetHistory(t *testing.T) {
 	ts.setHistory(0, false)
 	ts.chain.addBlocks(1000, 5, 2, 4, false) // 50 log values per block
 	ts.runUntilWait()
+	ts.checkLvRange(50)
 	ts.setHistory(100, false)
 	ts.runUntil(func() bool {
 		l := ts.lastRange.headLvPointer - ts.lastRange.tailLvPointer
@@ -47,11 +48,10 @@ func TestIndexerSetHistory(t *testing.T) {
 	})
 	ts.setHistory(200, false)
 	ts.runUntilWait()
+	ts.checkLvRange(50)
 	ts.setHistory(0, false)
 	ts.runUntilWait()
-	if ts.lastRange.headLvPointer-ts.lastRange.tailLvPointer != 50000 {
-		t.Fatalf("Invalid number of log values in the final state (expected %d, got %d)", 50000, ts.lastRange.headLvPointer-ts.lastRange.tailLvPointer)
-	}
+	ts.checkLvRange(50)
 }
 
 func TestIndexerRandomSetHistory(t *testing.T) {
@@ -63,12 +63,13 @@ func TestIndexerRandomSetHistory(t *testing.T) {
 		for rand.Intn(20) != 0 && ts.lastEvent != testHookWait {
 			ts.nextEvent()
 		}
+		if ts.lastEvent == testHookWait {
+			ts.checkLvRange(50)
+		}
 	}
 	ts.setHistory(0, false)
 	ts.runUntilWait()
-	if ts.lastRange.headLvPointer-ts.lastRange.tailLvPointer != 5000 {
-		t.Fatalf("Invalid number of log values in the final state (expected %d, got %d)", 5000, ts.lastRange.headLvPointer-ts.lastRange.tailLvPointer)
-	}
+	ts.checkLvRange(50)
 }
 
 type testSetup struct {
@@ -76,6 +77,7 @@ type testSetup struct {
 	fm        *FilterMaps
 	db        ethdb.Database
 	chain     *testChain
+	params    Params
 	eventCh   chan int
 	resumeCh  chan struct{}
 	lastEvent int
@@ -83,10 +85,13 @@ type testSetup struct {
 }
 
 func newTestSetup(t *testing.T) *testSetup {
+	params := testParams
+	params.deriveFields()
 	return &testSetup{
 		t:        t,
 		chain:    newTestChain(),
 		db:       rawdb.NewMemoryDatabase(),
+		params:   params,
 		eventCh:  make(chan int),
 		resumeCh: make(chan struct{}),
 	}
@@ -108,11 +113,24 @@ func (ts *testSetup) runUntilWait() {
 	}
 }
 
+func (ts *testSetup) checkLvRange(lvPerBlock uint64) {
+	expBlockCount := uint64(len(ts.chain.canonical) - 1)
+	if ts.fm.history != 0 && ts.fm.history < expBlockCount {
+		expBlockCount = ts.fm.history
+	}
+	if ts.lastRange.headLvPointer-ts.lastRange.tailBlockLvPointer != expBlockCount*lvPerBlock {
+		ts.t.Fatalf("Invalid number of log values (expected %d, got %d)", expBlockCount*lvPerBlock, ts.lastRange.headLvPointer-ts.lastRange.tailLvPointer)
+	}
+	if ts.lastRange.tailBlockLvPointer-ts.lastRange.tailLvPointer >= ts.params.valuesPerMap {
+		ts.t.Fatalf("Invalid number of leftover tail log values (expected < %d, got %d)", ts.params.valuesPerMap, ts.lastRange.tailBlockLvPointer-ts.lastRange.tailLvPointer)
+	}
+}
+
 func (ts *testSetup) setHistory(history uint64, noHistory bool) {
 	if ts.fm != nil {
 		ts.stopFm()
 	}
-	ts.fm = NewFilterMaps(ts.db, ts.chain, testParams, history, noHistory)
+	ts.fm = NewFilterMaps(ts.db, ts.chain, ts.params, history, noHistory)
 	ts.fm.testHook = ts.testHook
 	ts.fm.Start()
 	ts.lastEvent = <-ts.eventCh
