@@ -247,8 +247,10 @@ func (p *LegacyPool) DropAllTxs() {
 	p.pending = make(map[common.Address]*list)
 	p.queue = make(map[common.Address]*list)
 	if !p.config.NoLocals && p.config.Journal != "" {
-		// TODO: do we need to truncate the existing journal here?
 		p.journal = newTxJournal(p.config.Journal)
+		if err := p.journal.rotate(p.local()); err != nil {
+			log.Warn("Failed to rotate transaction journal", "err", err)
+		}
 	}
 }
 
