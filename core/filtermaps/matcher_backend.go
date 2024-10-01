@@ -111,8 +111,8 @@ func (fm *FilterMapsMatcherBackend) synced(head *types.Header) {
 }
 
 // SyncLogIndex ensures that the log index is consistent with the current state
-// of the chain (note that it may or may not be actually synced up to the head).
-// It blocks until this state is achieved.
+// of the chain and is synced up to the current head. It blocks until this state
+// is achieved or the context is cancelled.
 // If successful, it returns a SyncRange that contains the latest chain head,
 // the indexed range that is currently consistent with the chain and the valid
 // range that has not been changed and has been consistent with all states of the
