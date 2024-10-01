@@ -45,7 +45,7 @@ type VerkleTrie struct {
 }
 
 // NewVerkleTrie constructs a verkle tree based on the specified root hash.
-func NewVerkleTrie(root common.Hash, db database.Database, cache *utils.PointCache) (*VerkleTrie, error) {
+func NewVerkleTrie(root common.Hash, db database.NodeDatabase, cache *utils.PointCache) (*VerkleTrie, error) {
 	reader, err := newTrieReader(root, common.Hash{}, db)
 	if err != nil {
 		return nil, err
