@@ -53,9 +53,10 @@ type Config struct {
 	Unhandled   chan<- ReadPacket // unhandled packets are sent on this channel
 
 	// Node table configuration:
-	Bootnodes       []*enode.Node // list of bootstrap nodes
-	PingInterval    time.Duration // speed of node liveness check
-	RefreshInterval time.Duration // used in bucket refresh
+	Bootnodes               []*enode.Node // list of bootstrap nodes
+	PingInterval            time.Duration // speed of node liveness check
+	RefreshInterval         time.Duration // used in bucket refresh
+	NoFindnodeLivenessCheck bool          // turns off validation of table nodes in FINDNODE handler
 
 	// The options below are useful in very specific cases, like in unit tests.
 	V5ProtocolID *[6]byte
