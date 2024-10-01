@@ -314,17 +314,6 @@ func (db *Database) Journal(root common.Hash) error {
 	return pdb.Journal(root)
 }
 
-// SetBufferSize sets the node buffer size to the provided value(in bytes).
-// It's only supported by path-based database and will return an error for
-// others.
-func (db *Database) SetBufferSize(size int) error {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return errors.New("not supported")
-	}
-	return pdb.SetBufferSize(size)
-}
-
 // IsVerkle returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsVerkle() bool {
 	return db.config.IsVerkle

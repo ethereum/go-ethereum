@@ -224,6 +224,16 @@ func (t *testHelper) Commit() common.Hash {
 	}
 	t.triedb.Update(root, types.EmptyRootHash, 0, t.nodes, nil)
 	t.triedb.Commit(root, false)
+
+	// re-open the trie database to ensure the frozen buffer
+	// is not referenced
+	config := &triedb.Config{}
+	if t.triedb.Scheme() == rawdb.PathScheme {
+		config.PathDB = &pathdb.Config{} // disable caching
+	} else {
+		config.HashDB = &hashdb.Config{} // disable caching
+	}
+	t.triedb = triedb.NewDatabase(t.triedb.Disk(), config)
 	return root
 }
 

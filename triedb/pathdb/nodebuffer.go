@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"slices"
 	"time"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -39,6 +40,9 @@ type nodebuffer struct {
 	size   uint64                                    // The size of aggregated writes
 	limit  uint64                                    // The maximum memory allowance in bytes
 	nodes  map[common.Hash]map[string]*trienode.Node // The dirty node set, mapped by owner and path
+
+	done     chan struct{} // notifier whether the content in buffer has been flushed or not
+	flushErr error         // error if any exception occurs during flushing
 }
 
 // newNodeBuffer initializes the node buffer with the provided nodes.
@@ -192,11 +196,10 @@ func (b *nodebuffer) empty() bool {
 	return b.layers == 0
 }
 
-// setSize sets the buffer size to the provided number, and invokes a flush
-// operation if the current memory usage exceeds the new limit.
-func (b *nodebuffer) setSize(size int, db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64) error {
-	b.limit = uint64(size)
-	return b.flush(db, clean, id, false)
+// full returns an indicator if the size of accumulated data exceeds the configured
+// threshold.
+func (b *nodebuffer) full() bool {
+	return b.size > b.limit
 }
 
 // allocBatch returns a database batch with pre-allocated buffer.
@@ -212,42 +215,62 @@ func (b *nodebuffer) allocBatch(db ethdb.KeyValueStore) ethdb.Batch {
 	return db.NewBatchWithSize((metasize + int(b.size)) * 11 / 10) // extra 10% for potential pebble internal stuff
 }
 
-// flush persists the in-memory dirty trie node into the disk if the configured
-// memory threshold is reached. Note, all data must be written atomically.
-func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64, force bool) error {
-	if b.size <= b.limit && !force {
-		return nil
-	}
-	// Ensure the target state id is aligned with the internal counter.
-	head := rawdb.ReadPersistentStateID(db)
-	if head+b.layers != id {
-		return fmt.Errorf("buffer layers (%d) cannot be applied on top of persisted state id (%d) to reach requested state id (%d)", b.layers, head, id)
-	}
-	var (
-		start = time.Now()
-		batch = b.allocBatch(db)
-	)
-	nodes := writeNodes(batch, b.nodes, clean)
-	rawdb.WritePersistentStateID(batch, id)
+// flush persists the in-memory dirty trie node into the disk. Note, all data must be written atomically.
+func (b *nodebuffer) flush(db ethdb.KeyValueStore, clean *fastcache.Cache, id uint64) {
+	b.done = make(chan struct{})
 
-	// Flush all mutations in a single batch
-	size := batch.ValueSize()
-	if err := batch.Write(); err != nil {
-		return err
-	}
-	commitBytesMeter.Mark(int64(size))
-	commitNodesMeter.Mark(int64(nodes))
-	commitTimeTimer.UpdateSince(start)
-	log.Debug("Persisted pathdb nodes", "nodes", len(b.nodes), "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
-	b.reset()
-	return nil
+	go func() {
+		defer func() {
+			close(b.done)
+		}()
+		// Error out if the state id is aligned with the internal counter
+		head := rawdb.ReadPersistentStateID(db)
+		if head+b.layers != id {
+			b.flushErr = fmt.Errorf("buffer layers (%d) cannot be applied on top of persisted state id (%d) to reach requested state id (%d)", b.layers, head, id)
+			return
+		}
+		var (
+			start = time.Now()
+			batch = b.allocBatch(db)
+		)
+		nodes := writeNodes(batch, b.nodes, clean)
+		rawdb.WritePersistentStateID(batch, id)
+
+		// Flush all mutations in a single batch
+		size := batch.ValueSize()
+		if err := batch.Write(); err != nil {
+			b.flushErr = err
+			return
+		}
+		commitBytesMeter.Mark(int64(size))
+		commitNodesMeter.Mark(int64(nodes))
+		commitTimeTimer.UpdateSince(start)
+		log.Info("Persisted pathdb nodes", "nodes", nodes, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
+
+		// The content in the frozen buffer is kept for consequent state access
+	}()
+}
+
+// waitFlush blocks until the buffer has been fully flushed and returns any
+// stored errors that occurred during the process.
+func (b *nodebuffer) waitFlush() error {
+	<-b.done
+	return b.flushErr
 }
 
 // writeNodes writes the trie nodes into the provided database batch.
 // Note this function will also inject all the newly written nodes
 // into clean cache.
 func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.Node, clean *fastcache.Cache) (total int) {
-	for owner, subset := range nodes {
+	// Perform deletes in sorted order to make the touched trie nodes deterministic
+	var owners []common.Hash
+	for hash := range nodes {
+		owners = append(owners, hash)
+	}
+	slices.SortFunc(owners, func(a, b common.Hash) int { return a.Cmp(b) })
+
+	for _, owner := range owners {
+		subset := nodes[owner]
 		for path, n := range subset {
 			if n.IsDeleted() {
 				if owner == (common.Hash{}) {

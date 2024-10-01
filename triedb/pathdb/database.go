@@ -44,12 +44,12 @@ const (
 	// support is 4GB, node will panic if batch size exceeds this limit.
 	maxBufferSize = 256 * 1024 * 1024
 
-	// DefaultBufferSize is the default memory allowance of node buffer
+	// defaultBufferSize is the default memory allowance of node buffer
 	// that aggregates the writes from above until it's flushed into the
 	// disk. It's meant to be used once the initial sync is finished.
 	// Do not increase the buffer size arbitrarily, otherwise the system
 	// pause time will increase when the database writes happen.
-	DefaultBufferSize = 64 * 1024 * 1024
+	defaultBufferSize = 64 * 1024 * 1024
 )
 
 var (
@@ -111,7 +111,7 @@ func (c *Config) sanitize() *Config {
 var Defaults = &Config{
 	StateHistory:   params.FullImmutabilityThreshold,
 	CleanCacheSize: defaultCleanSize,
-	DirtyCacheSize: DefaultBufferSize,
+	DirtyCacheSize: defaultBufferSize,
 }
 
 // ReadOnly is the config in order to open database in read only mode.
@@ -341,7 +341,7 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Re-construct a new disk layer backed by persistent state
 	// with **empty clean cache and node buffer**.
-	db.tree.reset(newDiskLayer(root, 0, db, nil, newNodeBuffer(db.bufferSize, nil, 0)))
+	db.tree.reset(newDiskLayer(root, 0, db, nil, newNodeBuffer(db.bufferSize, nil, 0), nil))
 
 	// Re-enable the database as the final step.
 	db.waitSync = false
@@ -440,7 +440,13 @@ func (db *Database) Close() error {
 	db.readOnly = true
 
 	// Release the memory held by clean cache.
-	db.tree.bottom().resetCache()
+	disk := db.tree.bottom()
+	if disk.frozen != nil {
+		if err := disk.frozen.waitFlush(); err != nil {
+			return err
+		}
+	}
+	disk.resetCache()
 
 	// Close the attached state history freezer.
 	if db.freezer == nil {
@@ -476,19 +482,6 @@ func (db *Database) Initialized(genesisRoot common.Hash) bool {
 		inited = rawdb.ReadSnapSyncStatusFlag(db.diskdb) != rawdb.StateSyncUnknown
 	}
 	return inited
-}
-
-// SetBufferSize sets the node buffer size to the provided value(in bytes).
-func (db *Database) SetBufferSize(size int) error {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-
-	if size > maxBufferSize {
-		log.Info("Capped node buffer size", "provided", common.StorageSize(size), "adjusted", common.StorageSize(maxBufferSize))
-		size = maxBufferSize
-	}
-	db.bufferSize = size
-	return db.tree.bottom().setBufferSize(db.bufferSize)
 }
 
 // modifyAllowed returns the indicator if mutation is allowed. This function

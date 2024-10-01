@@ -976,19 +976,22 @@ func TestMissingTrieNodes(t *testing.T) {
 func testMissingTrieNodes(t *testing.T, scheme string) {
 	// Create an initial state with a few accounts
 	var (
-		tdb   *triedb.Database
-		memDb = rawdb.NewMemoryDatabase()
+		tdb    *triedb.Database
+		memDb  = rawdb.NewMemoryDatabase()
+		openDb = func() *triedb.Database {
+			if scheme == rawdb.PathScheme {
+				return triedb.NewDatabase(memDb, &triedb.Config{PathDB: &pathdb.Config{
+					CleanCacheSize: 0,
+					DirtyCacheSize: 0,
+				}}) // disable caching
+			} else {
+				return triedb.NewDatabase(memDb, &triedb.Config{HashDB: &hashdb.Config{
+					CleanCacheSize: 0,
+				}}) // disable caching
+			}
+		}
 	)
-	if scheme == rawdb.PathScheme {
-		tdb = triedb.NewDatabase(memDb, &triedb.Config{PathDB: &pathdb.Config{
-			CleanCacheSize: 0,
-			DirtyCacheSize: 0,
-		}}) // disable caching
-	} else {
-		tdb = triedb.NewDatabase(memDb, &triedb.Config{HashDB: &hashdb.Config{
-			CleanCacheSize: 0,
-		}}) // disable caching
-	}
+	tdb = openDb()
 	db := NewDatabase(tdb, nil)
 
 	var root common.Hash
@@ -1006,17 +1009,29 @@ func testMissingTrieNodes(t *testing.T, scheme string) {
 		tdb.Commit(root, false)
 	}
 	// Create a new state on the old root
-	state, _ = New(root, db)
 	// Now we clear out the memdb
 	it := memDb.NewIterator(nil, nil)
 	for it.Next() {
 		k := it.Key()
+
 		// Leave the root intact
-		if !bytes.Equal(k, root[:]) {
-			t.Logf("key: %x", k)
-			memDb.Delete(k)
+		if scheme == rawdb.HashScheme {
+			if !bytes.Equal(k, root[:]) {
+				t.Logf("key: %x", k)
+				memDb.Delete(k)
+			}
+		}
+		if scheme == rawdb.PathScheme {
+			rk := k[len(rawdb.TrieNodeAccountPrefix):]
+			if len(rk) != 0 {
+				t.Logf("key: %x", k)
+				memDb.Delete(k)
+			}
 		}
 	}
+	tdb = openDb()
+	db = NewDatabase(tdb, nil)
+	state, _ = New(root, db)
 	balance := state.GetBalance(addr)
 	// The removed elem should lead to it returning zero balance
 	if exp, got := uint64(0), balance.Uint64(); got != exp {

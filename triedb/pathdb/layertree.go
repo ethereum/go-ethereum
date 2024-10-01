@@ -131,6 +131,12 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		if err != nil {
 			return err
 		}
+		// Block until the frozen buffer is fully flushed
+		if base.frozen != nil {
+			if err := base.frozen.waitFlush(); err != nil {
+				return err
+			}
+		}
 		// Replace the entire layer tree with the flat base
 		tree.layers = map[common.Hash]layer{base.rootHash(): base}
 		return nil
