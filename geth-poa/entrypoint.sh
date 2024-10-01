@@ -7,6 +7,7 @@ GETH_VERBOSITY=${GETH_VERBOSITY:-3}
 GETH_LOG_FORMAT=${GETH_LOG_FORMAT:-terminal}
 GETH_LOG_TAGS=${GETH_LOG_TAGS:-}
 GETH_SYNC_MODE=${GETH_SYNC_MODE:-snap}
+GETH_STATE_SCHEME=${GETH_STATE_SCHEME:-path}
 GETH_DATA_DIR=${GETH_DATA_DIR:-/data}
 GETH_CHAINDATA_DIR="$GETH_DATA_DIR/geth/chaindata"
 GETH_KEYSTORE_DIR="$GETH_DATA_DIR/keystore"
@@ -61,7 +62,7 @@ if [ ! -d "$GETH_CHAINDATA_DIR" ]; then
 		--log.format="$GETH_LOG_FORMAT" \
 		$LOG_TAGS_OPTION \
 		--nousb \
-		--state.scheme=path \
+		--state.scheme="$GETH_STATE_SCHEME" \
 		--db.engine=pebble \
 		--datadir="$GETH_DATA_DIR" init \
 		"$GENESIS_L1_PATH"
@@ -108,7 +109,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--ws.api=debug,eth,txpool,net,engine \
 		--syncmode="${GETH_SYNC_MODE}" \
 		--gcmode=full \
-		--state.scheme=path \
+		--state.scheme="$GETH_STATE_SCHEME" \
 		--db.engine=pebble \
 		--networkid=$CHAIN_ID \
 		--nousb \
@@ -141,7 +142,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--port="$GETH_PORT" \
 		--syncmode="${GETH_SYNC_MODE}" \
 		--gcmode=full \
-		--state.scheme=path \
+		--state.scheme="$GETH_STATE_SCHEME" \
 		--db.engine=pebble \
 		--http \
 		--http.corsdomain="*" \
@@ -193,7 +194,7 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--port="$GETH_PORT" \
 		--syncmode="${GETH_SYNC_MODE}" \
 		--gcmode=full \
-		--state.scheme=path \
+		--state.scheme="$GETH_STATE_SCHEME" \
 		--db.engine=pebble \
 		--http \
 		--http.corsdomain="*" \
@@ -237,7 +238,9 @@ elif [ "$GETH_NODE_TYPE" = "archive" ]; then
 		--port="$GETH_PORT" \
 		--syncmode="${GETH_SYNC_MODE}" \
 		--gcmode=archive \
-		--state.scheme=path \
+		--history.state=0 \
+		--history.transactions=0 \
+		--state.scheme="$GETH_STATE_SCHEME" \
 		--db.engine=pebble \
 		--http \
 		--http.corsdomain="*" \
