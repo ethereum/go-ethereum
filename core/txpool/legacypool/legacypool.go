@@ -239,6 +239,19 @@ type txpoolResetRequest struct {
 	oldHead, newHead *types.Header
 }
 
+func (p *LegacyPool) DropAllTxs() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.all = newLookup()
+	p.priced = newPricedList(p.all)
+	p.pending = make(map[common.Address]*list)
+	p.queue = make(map[common.Address]*list)
+	if !p.config.NoLocals && p.config.Journal != "" {
+		// TODO: do we need to truncate the existing journal here?
+		p.journal = newTxJournal(p.config.Journal)
+	}
+}
+
 // New creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
 func New(config Config, chain BlockChain) *LegacyPool {
