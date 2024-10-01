@@ -20,6 +20,8 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -28,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
-	"os"
 )
 
 var (
