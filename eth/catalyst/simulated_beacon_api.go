@@ -18,44 +18,88 @@ package catalyst
 
 import (
 	"context"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 )
 
-type api struct {
+// simulatedBeaconAPI provides a RPC API for SimulatedBeacon.
+type simulatedBeaconAPI struct {
 	sim *SimulatedBeacon
 }
 
-func (a *api) loop() {
+// newSimulatedBeaconAPI returns an instance of simulatedBeaconAPI with a
+// buffered commit channel. If period is zero, it starts a goroutine to handle
+// new tx events.
+func newSimulatedBeaconAPI(sim *SimulatedBeacon) *simulatedBeaconAPI {
+	api := &simulatedBeaconAPI{sim: sim}
+	if sim.period == 0 {
+		// mine on demand if period is set to 0
+		go api.loop()
+	}
+	return api
+}
+
+// loop is the main loop for the API when it's running in period = 0 mode. It
+// ensures that block production is triggered as soon as a new withdrawal or
+// transaction is received.
+func (a *simulatedBeaconAPI) loop() {
 	var (
-		newTxs = make(chan core.NewTxsEvent)
-		sub    = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
+		newTxs    = make(chan core.NewTxsEvent)
+		newWxs    = make(chan newWithdrawalsEvent)
+		newTxsSub = a.sim.eth.TxPool().SubscribeTransactions(newTxs, true)
+		newWxsSub = a.sim.withdrawals.subscribe(newWxs)
+		doCommit  = make(chan struct{}, 1)
 	)
-	defer sub.Unsubscribe()
+	defer newTxsSub.Unsubscribe()
+	defer newWxsSub.Unsubscribe()
+
+	// A background thread which signals to the simulator when to commit
+	// based on messages over doCommit.
+	go func() {
+		for range doCommit {
+			a.sim.Commit()
+			a.sim.eth.TxPool().Sync()
+
+			// It's worth noting that in case a tx ends up in the pool listed as
+			// "executable", but for whatever reason the miner does not include it in
+			// a block -- maybe the miner is enforcing a higher tip than the pool --
+			// this code will spinloop.
+			for {
+				if executable, _ := a.sim.eth.TxPool().Stats(); executable == 0 {
+					break
+				}
+				a.sim.Commit()
+			}
+		}
+	}()
 
 	for {
 		select {
 		case <-a.sim.shutdownCh:
+			close(doCommit)
 			return
-		case w := <-a.sim.withdrawals.pending:
-			withdrawals := append(a.sim.withdrawals.gatherPending(9), w)
-			if err := a.sim.sealBlock(withdrawals, uint64(time.Now().Unix())); err != nil {
-				log.Warn("Error performing sealing work", "err", err)
+		case <-newWxs:
+			select {
+			case doCommit <- struct{}{}:
+			default:
 			}
 		case <-newTxs:
-			a.sim.Commit()
+			select {
+			case doCommit <- struct{}{}:
+			default:
+			}
 		}
 	}
 }
 
-func (a *api) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
+// AddWithdrawal adds a withdrawal to the pending queue.
+func (a *simulatedBeaconAPI) AddWithdrawal(ctx context.Context, withdrawal *types.Withdrawal) error {
 	return a.sim.withdrawals.add(withdrawal)
 }
 
-func (a *api) SetFeeRecipient(ctx context.Context, feeRecipient common.Address) {
+// SetFeeRecipient sets the fee recipient for block building purposes.
+func (a *simulatedBeaconAPI) SetFeeRecipient(ctx context.Context, feeRecipient common.Address) {
 	a.sim.setFeeRecipient(feeRecipient)
 }

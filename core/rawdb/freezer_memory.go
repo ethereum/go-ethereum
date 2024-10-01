@@ -394,13 +394,6 @@ func (f *MemoryFreezer) Sync() error {
 	return nil
 }
 
-// MigrateTable processes and migrates entries of a given table to a new format.
-// The second argument is a function that takes a raw entry and returns it
-// in the newest format.
-func (f *MemoryFreezer) MigrateTable(string, func([]byte) ([]byte, error)) error {
-	return errors.New("not implemented")
-}
-
 // Close releases all the sources held by the memory freezer. It will panic if
 // any following invocation is made to a closed freezer.
 func (f *MemoryFreezer) Close() error {

@@ -77,6 +77,16 @@ type UDP6 uint16
 
 func (v UDP6) ENRKey() string { return "udp6" }
 
+// QUIC is the "quic" key, which holds the QUIC port of the node.
+type QUIC uint16
+
+func (v QUIC) ENRKey() string { return "quic" }
+
+// QUIC6 is the "quic6" key, which holds the IPv6-specific quic6 port of the node.
+type QUIC6 uint16
+
+func (v QUIC6) ENRKey() string { return "quic6" }
+
 // ID is the "id" key, which holds the name of the identity scheme.
 type ID string
 
@@ -177,7 +187,7 @@ func (v IPv4Addr) ENRKey() string { return "ip" }
 func (v IPv4Addr) EncodeRLP(w io.Writer) error {
 	addr := netip.Addr(v)
 	if !addr.Is4() {
-		return fmt.Errorf("address is not IPv4")
+		return errors.New("address is not IPv4")
 	}
 	enc := rlp.NewEncoderBuffer(w)
 	bytes := addr.As4()
@@ -204,7 +214,7 @@ func (v IPv6Addr) ENRKey() string { return "ip6" }
 func (v IPv6Addr) EncodeRLP(w io.Writer) error {
 	addr := netip.Addr(v)
 	if !addr.Is6() {
-		return fmt.Errorf("address is not IPv6")
+		return errors.New("address is not IPv6")
 	}
 	enc := rlp.NewEncoderBuffer(w)
 	bytes := addr.As16()

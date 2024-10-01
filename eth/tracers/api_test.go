@@ -81,7 +81,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		SnapshotLimit:     0,
 		TrieDirtyDisabled: true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -843,7 +843,7 @@ func TestTracingWithOverrides(t *testing.T) {
 							byte(vm.PUSH1), 00,
 							byte(vm.RETURN),
 						}),
-						StateDiff: &map[common.Hash]common.Hash{
+						StateDiff: map[common.Hash]common.Hash{
 							common.HexToHash("0x03"): common.HexToHash("0x11"),
 						},
 					},
@@ -898,9 +898,9 @@ func newAccounts(n int) (accounts []Account) {
 	return accounts
 }
 
-func newRPCBalance(balance *big.Int) **hexutil.Big {
+func newRPCBalance(balance *big.Int) *hexutil.Big {
 	rpcBalance := (*hexutil.Big)(balance)
-	return &rpcBalance
+	return rpcBalance
 }
 
 func newRPCBytes(bytes []byte) *hexutil.Bytes {
@@ -908,7 +908,7 @@ func newRPCBytes(bytes []byte) *hexutil.Bytes {
 	return &rpcBytes
 }
 
-func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.Hash {
+func newStates(keys []common.Hash, vals []common.Hash) map[common.Hash]common.Hash {
 	if len(keys) != len(vals) {
 		panic("invalid input")
 	}
@@ -916,7 +916,7 @@ func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.H
 	for i := 0; i < len(keys); i++ {
 		m[keys[i]] = vals[i]
 	}
-	return &m
+	return m
 }
 
 func TestTraceChain(t *testing.T) {
@@ -1014,7 +1014,7 @@ func newTestMergedBackend(t *testing.T, n int, gspec *core.Genesis, generator fu
 		SnapshotLimit:     0,
 		TrieDirtyDisabled: true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
