@@ -38,7 +38,7 @@ func eofCodeBitmapInternal(code, bits bitvec) bitvec {
 		if op == RJUMPV {
 			// RJUMPV is unique as it has a variable sized operand.
 			// The total size is determined by the count byte which
-			// immediate proceeds RJUMPV. Truncation will be caught
+			// immediate follows RJUMPV. Truncation will be caught
 			// in other validation steps -- for now, just return a
 			// valid bitmap for as much of the code as is
 			// available.

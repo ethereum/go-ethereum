@@ -58,6 +58,13 @@ func init() {
 
 // Immediates returns the number bytes of immediates (argument not from
 // stack but from code) a given opcode has.
+// OBS:
+//   - This function assumes EOF instruction-set. It cannot be upon in
+//     a. pre-EOF code
+//     b. post-EOF but legacy code
+//   - RJUMPV is unique as it has a variable sized operand. The total size is
+//     determined by the count byte which immediately follows RJUMPV. This method
+//     will return '3' for RJUMPV, which is the minimum.
 func Immediates(op OpCode) int {
 	return int(immediates[op])
 }
