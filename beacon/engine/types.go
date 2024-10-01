@@ -209,8 +209,8 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // and that the blockhash of the constructed block matches the parameters. Nil
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in data.
-func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
-	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot, requests)
+func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot, requestsHash *common.Hash) (*types.Block, error) {
+	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot, requestsHash)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +223,7 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // ExecutableDataToBlockNoHash is analogous to ExecutableDataToBlock, but is used
 // for stateless execution, so it skips checking if the executable data hashes to
 // the requested hash (stateless has to *compute* the root hash, it's not given).
-func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
+func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot, requestsHash *common.Hash) (*types.Block, error) {
 	txs, err := decodeTransactions(data.Transactions)
 	if err != nil {
 		return nil, err
@@ -258,12 +258,6 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		h := types.DeriveSha(types.Withdrawals(data.Withdrawals), trie.NewStackTrie(nil))
 		withdrawalsRoot = &h
 	}
-	// Compute requestsHash if any requests were passed.
-	var requestsHash *common.Hash
-	if requests != nil {
-		h := types.CalcRequestsHash(requests)
-		requestsHash = &h
-	}
 
 	header := &types.Header{
 		ParentHash:       data.ParentHash,
@@ -285,7 +279,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 		ExcessBlobGas:    data.ExcessBlobGas,
 		BlobGasUsed:      data.BlobGasUsed,
 		ParentBeaconRoot: beaconRoot,
-		RequestsHash:     requestsHash, // note: need to use recomputed hash value here to ensure validation.
+		RequestsHash:     requestsHash,
 	}
 	return types.NewBlockWithHeader(header).
 			WithBody(types.Body{Transactions: txs, Uncles: nil, Withdrawals: data.Withdrawals}).

@@ -25,7 +25,6 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
-	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -326,7 +325,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data, block %d: %v", i, err)
 		}
-		block, err := engine.ExecutableDataToBlock(*execData, nil, nil)
+		block, err := engine.ExecutableDataToBlock(*execData, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -368,7 +367,7 @@ func TestEth2NewBlock(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create the executable data %v", err)
 		}
-		block, err := engine.ExecutableDataToBlock(*execData, nil, nil)
+		block, err := engine.ExecutableDataToBlock(*execData, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -509,7 +508,7 @@ func setupBlocks(t *testing.T, ethservice *eth.Ethereum, n int, parent *types.He
 		}
 
 		payload := getNewPayload(t, api, parent, w, h)
-		execResp, err := api.newPayload(*payload, []common.Hash{}, h, false)
+		execResp, err := api.newPayload(*payload, []common.Hash{}, h, nil, false)
 		if err != nil {
 			t.Fatalf("can't execute payload: %v", err)
 		}
@@ -1006,7 +1005,7 @@ func TestSimultaneousNewBlock(t *testing.T) {
 				t.Fatal(testErr)
 			}
 		}
-		block, err := engine.ExecutableDataToBlock(*execData, nil, nil)
+		block, err := engine.ExecutableDataToBlock(*execData, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Failed to convert executable data to block %v", err)
 		}
@@ -1569,13 +1568,6 @@ func checkEqualBody(a *types.Body, b *engine.ExecutionPayloadBody) error {
 	if !reflect.DeepEqual(a.Withdrawals, b.Withdrawals) {
 		return fmt.Errorf("withdrawals mismatch")
 	}
-
-	reqEqual := slices.EqualFunc(a.Requests, b.Requests, func(a []byte, b hexutil.Bytes) bool {
-		return bytes.Equal(a, b)
-	})
-	if !reqEqual {
-		return fmt.Errorf("requests mismatch")
-	}
 	return nil
 }
 
@@ -1611,7 +1603,7 @@ func TestBlockToPayloadWithBlobs(t *testing.T) {
 	if got := len(envelope.BlobsBundle.Blobs); got != want {
 		t.Fatalf("invalid number of blobs: got %v, want %v", got, want)
 	}
-	_, err := engine.ExecutableDataToBlock(*envelope.ExecutionPayload, make([]common.Hash, 1), nil)
+	_, err := engine.ExecutableDataToBlock(*envelope.ExecutionPayload, make([]common.Hash, 1), nil, nil)
 	if err != nil {
 		t.Error(err)
 	}
