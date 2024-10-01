@@ -654,7 +654,7 @@ func (x *XDPoS_v2) VoteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 		3. Broadcast(Not part of consensus)
 */
 func (x *XDPoS_v2) VerifyTimeoutMessage(chain consensus.ChainReader, timeoutMsg *types.Timeout) (bool, error) {
-	if timeoutMsg.Round <= x.currentRound {
+	if timeoutMsg.Round < x.currentRound {
 		log.Debug("[VerifyTimeoutMessage] Disqualified timeout message as the proposed round does not match currentRound", "timeoutHash", timeoutMsg.Hash(), "timeoutRound", timeoutMsg.Round, "currentRound", x.currentRound)
 		return false, nil
 	}
