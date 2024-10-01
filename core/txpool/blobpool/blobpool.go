@@ -325,6 +325,26 @@ type BlobPool struct {
 	lock sync.RWMutex // Mutex protecting the pool during reorg handling
 }
 
+func (p *BlobPool) DropAllTxs() {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	for _, entry := range p.lookup {
+		if err := p.store.Delete(entry); err != nil {
+			log.Warn("failed to delete blob tx from backing store", "err", err)
+		}
+	}
+	p.lookup = make(map[common.Hash]uint64)
+	p.index = make(map[common.Address][]*blobTxMeta)
+	p.spent = make(map[common.Address]*uint256.Int)
+
+	var (
+		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head))
+		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
+	)
+	p.evict = newPriceHeap(basefee, blobfee, p.index)
+}
+
 // New creates a new blob transaction pool to gather, sort and filter inbound
 // blob transactions from the network.
 func New(config Config, chain BlockChain) *BlobPool {
