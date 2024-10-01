@@ -57,21 +57,23 @@ func (f *FilterMaps) updateLoop() {
 		head        = f.chain.CurrentBlock()
 		stop        bool
 		syncMatcher *FilterMapsMatcherBackend
+		fmr         = f.getRange()
 	)
+
+	matcherSync := func() {
+		if syncMatcher != nil && fmr.headBlockHash == head.Hash() {
+			syncMatcher.synced(head)
+			syncMatcher = nil
+		}
+	}
 
 	defer func() {
 		sub.Unsubscribe()
-		if syncMatcher != nil {
-			syncMatcher.synced(head)
-			syncMatcher = nil
-		}
+		matcherSync()
 	}()
 
 	wait := func() {
-		if syncMatcher != nil {
-			syncMatcher.synced(head)
-			syncMatcher = nil
-		}
+		matcherSync()
 		if stop {
 			return
 		}
@@ -98,7 +100,7 @@ func (f *FilterMaps) updateLoop() {
 			return
 		}
 	}
-	fmr := f.getRange()
+	fmr = f.getRange()
 
 	for !stop {
 		if !fmr.initialized {
@@ -106,10 +108,6 @@ func (f *FilterMaps) updateLoop() {
 				return
 			}
 
-			if syncMatcher != nil {
-				syncMatcher.synced(head)
-				syncMatcher = nil
-			}
 			fmr = f.getRange()
 			if !fmr.initialized {
 				wait()
@@ -127,10 +125,7 @@ func (f *FilterMaps) updateLoop() {
 				continue
 			}
 		}
-		if syncMatcher != nil {
-			syncMatcher.synced(head)
-			syncMatcher = nil
-		}
+		matcherSync()
 		// log index head is at latest chain head; process tail blocks if possible
 		if f.tryUpdateTail(head, func() bool {
 			// return true if tail processing needs to be stopped

@@ -47,99 +47,11 @@ type SyncRange struct {
 }
 
 // GetPotentialMatches returns a list of logs that are potential matches for the
-// given filter criteria. If parts of the requested range are not indexed then
-// an error is returned. If parts of the requested range are changed during the
-// search process then potentially incorrect logs are discarded and searched
-// again, ensuring that the returned results are always consistent with the latest
-// state of the chain.
-// If firstBlock or lastBlock are bigger than the head block number then they are
-// substituted with the latest head of the chain, ensuring that a search until
-// the head block is still consistent with the latest canonical chain if a new
-// head has been added during the process.
-// Note that the returned list may still contain false positives.
-func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, *types.Header, uint64, uint64, error) {
-	if firstBlock > lastBlock {
-		return nil, nil, 0, 0, errors.New("invalid search range")
-	}
-	// enforce a consistent state before starting the search in order to be able
-	// to determine valid range later
-	syncRange, err := backend.SyncLogIndex(ctx)
-	if err != nil {
-		return nil, nil, 0, 0, err
-	}
-	headBlock := syncRange.Head.Number.Uint64() // Head is guaranteed != nil
-	// if haveMatches == true then matches correspond to the block number range
-	// between matchFirst and matchLast
-	var (
-		matches               []*types.Log
-		haveMatches           bool
-		matchFirst, matchLast uint64
-	)
-	for !haveMatches || (matchLast < lastBlock && matchLast < headBlock) {
-		// determine range to be searched; for simplicity we only extend the most
-		// recent end of the existing match set by matching between searchFirst
-		// and searchLast.
-		searchFirst, searchLast := firstBlock, lastBlock
-		if searchFirst > headBlock {
-			searchFirst = headBlock
-		}
-		if searchLast > headBlock {
-			searchLast = headBlock
-		}
-		if haveMatches && matchFirst != searchFirst {
-			// searchFirst might change if firstBlock > headBlock
-			matches, haveMatches = nil, false
-		}
-		if haveMatches && matchLast >= searchFirst {
-			searchFirst = matchLast + 1
-		}
-		// check if indexed range covers the requested range
-		if !syncRange.Indexed || syncRange.FirstIndexed > searchFirst || syncRange.LastIndexed < searchLast {
-			return nil, nil, 0, 0, errors.New("log index not available for requested range")
-		}
-		// search for matches in the required range
-		newMatches, err := getPotentialMatches(ctx, backend, searchFirst, searchLast, addresses, topics)
-		if err != nil {
-			return nil, nil, 0, 0, err
-		}
-		// enforce a consistent state again in order to determine the guaranteed
-		// valid range in which the log index has not been changed since the last
-		// sync.
-		syncRange, err = backend.SyncLogIndex(ctx)
-		if err != nil {
-			return nil, nil, 0, 0, err
-		}
-		headBlock = syncRange.Head.Number.Uint64()
-		// return with error if the beginning of the recently searched range might
-		// be invalid due to removed log index
-		if !syncRange.Valid || syncRange.FirstValid > searchFirst || syncRange.LastValid < searchFirst {
-			return nil, nil, 0, 0, errors.New("log index not available for requested range")
-		}
-		// roll back most recent matches if they are not covered by the guaranteed
-		// valid range
-		if syncRange.LastValid < searchLast {
-			for len(newMatches) > 0 && newMatches[len(newMatches)-1].BlockNumber > syncRange.LastValid {
-				newMatches = newMatches[:len(newMatches)-1]
-			}
-			searchLast = syncRange.LastValid
-		}
-		// append new matches to existing ones if the were any
-		if haveMatches {
-			matches = append(matches, newMatches...)
-		} else {
-			matches, haveMatches = newMatches, true
-		}
-		matchLast = searchLast
-	}
-	return matches, syncRange.Head, firstBlock, matchLast, nil
-}
-
-// getPotentialMatches returns a list of logs that are potential matches for the
 // given filter criteria. If parts of the log index in the searched range are
 // missing or changed during the search process then the resulting logs belonging
 // to that block range might be missing or incorrect.
 // Also note that the returned list may contain false positives.
-func getPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, error) {
+func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock, lastBlock uint64, addresses []common.Address, topics [][]common.Hash) ([]*types.Log, error) {
 	params := backend.GetParams()
 	// find the log value index range to search
 	firstIndex, err := backend.GetBlockLvPointer(ctx, firstBlock)
