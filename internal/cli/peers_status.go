@@ -41,27 +41,27 @@ func (p *PeersStatusCommand) Flags() *flagset.Flagset {
 }
 
 // Synopsis implements the cli.Command interface
-func (c *PeersStatusCommand) Synopsis() string {
+func (p *PeersStatusCommand) Synopsis() string {
 	return "Display the status of a peer"
 }
 
 // Run implements the cli.Command interface
-func (c *PeersStatusCommand) Run(args []string) int {
-	flags := c.Flags()
+func (p *PeersStatusCommand) Run(args []string) int {
+	flags := p.Flags()
 	if err := flags.Parse(args); err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
 	args = flags.Args()
 	if len(args) != 1 {
-		c.UI.Error("No enode address provided")
+		p.UI.Error("No enode address provided")
 		return 1
 	}
 
-	borClt, err := c.BorConn()
+	borClt, err := p.BorConn()
 	if err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
@@ -71,11 +71,11 @@ func (c *PeersStatusCommand) Run(args []string) int {
 	resp, err := borClt.PeersStatus(context.Background(), req)
 
 	if err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
-	c.UI.Output(formatPeer(resp.Peer))
+	p.UI.Output(formatPeer(resp.Peer))
 
 	return 0
 }

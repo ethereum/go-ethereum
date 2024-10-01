@@ -36,8 +36,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/hashicorp/go-bexpr"
-	"golang.org/x/exp/slog"
+	bexpr "github.com/hashicorp/go-bexpr"
 )
 
 // Handler is the global debugging handler.
@@ -57,7 +56,7 @@ type HandlerT struct {
 // Verbosity sets the log verbosity ceiling. The verbosity of individual packages
 // and source files can be raised using Vmodule.
 func (*HandlerT) Verbosity(level int) {
-	glogger.Verbosity(slog.Level(level))
+	glogger.Verbosity(log.FromLegacyLevel(level))
 }
 
 // Vmodule sets the log verbosity pattern. See package log for details on the

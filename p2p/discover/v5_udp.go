@@ -822,9 +822,8 @@ func (t *UDPv5) handle(p v5wire.Packet, fromID enode.ID, fromAddr netip.AddrPort
 		t.handlePing(p, fromID, fromAddr)
 	case *v5wire.Pong:
 		if t.handleCallResponse(fromID, fromAddr, p) {
-			fromUDPAddr := &net.UDPAddr{IP: fromAddr.Addr().AsSlice(), Port: int(fromAddr.Port())}
-			toUDPAddr := &net.UDPAddr{IP: p.ToIP, Port: int(p.ToPort)}
-			t.localNode.UDPEndpointStatement(fromUDPAddr, toUDPAddr)
+			toAddr := netip.AddrPortFrom(netutil.IPToAddr(p.ToIP), p.ToPort)
+			t.localNode.UDPEndpointStatement(fromAddr, toAddr)
 		}
 	case *v5wire.Findnode:
 		t.handleFindnode(p, fromID, fromAddr)

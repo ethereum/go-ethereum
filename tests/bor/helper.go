@@ -44,7 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests/bor/mocks"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 var (
@@ -124,18 +124,19 @@ func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
 	}
 
 	ethConf := &eth.Config{
-		Genesis: gen,
-		BorLogs: true,
+		Genesis:     gen,
+		BorLogs:     true,
+		StateScheme: "hash",
 	}
 
-	ethConf.Genesis.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
+	ethConf.Genesis.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 
 	ethereum := utils.CreateBorEthereum(ethConf)
 	if err != nil {
 		t.Fatalf("failed to register Ethereum protocol: %v", err)
 	}
 
-	ethConf.Genesis.MustCommit(ethereum.ChainDb(), trie.NewDatabase(ethereum.ChainDb(), trie.HashDefaults))
+	ethConf.Genesis.MustCommit(ethereum.ChainDb(), triedb.NewDatabase(ethereum.ChainDb(), triedb.HashDefaults))
 
 	ethereum.Engine().(*bor.Bor).Authorize(addr, func(account accounts.Account, s string, data []byte) ([]byte, error) {
 		return crypto.Sign(crypto.Keccak256(data), key)
@@ -221,7 +222,9 @@ func buildNextBlock(t *testing.T, _bor consensus.Engine, chain *core.BlockChain,
 	ctx := context.Background()
 
 	// Finalize and seal the block
-	block, err := _bor.FinalizeAndAssemble(ctx, chain, b.header, state, b.txs, nil, b.receipts, nil)
+	block, err := _bor.FinalizeAndAssemble(chain, b.header, state, &types.Body{
+		Transactions: b.txs,
+	}, b.receipts)
 
 	if err != nil {
 		panic(fmt.Sprintf("error finalizing block: %v", err))

@@ -340,7 +340,7 @@ func Fetch[T any](ctx context.Context, request *Request) (*T, error) {
 	isSuccessful := false
 
 	defer func() {
-		if metrics.EnabledExpensive {
+		if metrics.Enabled {
 			sendMetrics(ctx, request.start, isSuccessful)
 		}
 	}()

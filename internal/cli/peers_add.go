@@ -48,36 +48,36 @@ func (p *PeersAddCommand) Flags() *flagset.Flagset {
 }
 
 // Synopsis implements the cli.Command interface
-func (c *PeersAddCommand) Synopsis() string {
+func (p *PeersAddCommand) Synopsis() string {
 	return "Join the client to a remote peer"
 }
 
 // Run implements the cli.Command interface
-func (c *PeersAddCommand) Run(args []string) int {
-	flags := c.Flags()
+func (p *PeersAddCommand) Run(args []string) int {
+	flags := p.Flags()
 	if err := flags.Parse(args); err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
 	args = flags.Args()
 	if len(args) != 1 {
-		c.UI.Error("No enode address provided")
+		p.UI.Error("No enode address provided")
 		return 1
 	}
 
-	borClt, err := c.BorConn()
+	borClt, err := p.BorConn()
 	if err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
 	req := &proto.PeersAddRequest{
 		Enode:   args[0],
-		Trusted: c.trusted,
+		Trusted: p.trusted,
 	}
 	if _, err := borClt.PeersAdd(context.Background(), req); err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 

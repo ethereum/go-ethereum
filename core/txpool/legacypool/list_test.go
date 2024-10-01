@@ -17,6 +17,7 @@
 package legacypool
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -26,8 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 )
 
 // Tests that transactions can be added to strict lists and list contents and
@@ -59,6 +62,21 @@ func TestStrictListAdd(t *testing.T) {
 	}
 }
 
+// TestListAddVeryExpensive tests adding txs which exceed 256 bits in cost. It is
+// expected that the list does not panic.
+func TestListAddVeryExpensive(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	list := newList(true)
+	for i := 0; i < 3; i++ {
+		value := big.NewInt(100)
+		gasprice, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
+		gaslimit := uint64(i)
+		tx, _ := types.SignTx(types.NewTransaction(uint64(i), common.Address{}, value, gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
+		t.Logf("cost: %x bitlen: %d\n", tx.Cost(), tx.Cost().BitLen())
+		list.Add(tx, DefaultConfig.PriceBump)
+	}
+}
+
 func BenchmarkListAdd(b *testing.B) {
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()
@@ -68,7 +86,7 @@ func BenchmarkListAdd(b *testing.B) {
 		txs[i] = transaction(uint64(i), 0, key)
 	}
 	// Insert the transactions in a random order
-	priceLimit := big.NewInt(int64(DefaultConfig.PriceLimit))
+	priceLimit := uint256.NewInt(DefaultConfig.PriceLimit)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		list := newList(true)
@@ -117,7 +135,18 @@ func TestFilterTxConditional(t *testing.T) {
 		},
 	}
 
+	state.AddBalance(common.Address{19: 1}, uint256.NewInt(1000), tracing.BalanceChangeTransfer)
+
+	trie, _ := state.StorageTrie(common.Address{19: 1})
+	fmt.Println("before", trie)
+
 	state.SetState(common.Address{19: 1}, common.Hash{}, common.Hash{30: 1})
+
+	state.Finalise(true)
+
+	trie, _ = state.StorageTrie(common.Address{19: 1})
+	fmt.Println("after", trie.Hash())
+
 	tx2.PutOptions(&options)
 	list.Add(tx2, DefaultConfig.PriceBump)
 
@@ -130,6 +159,11 @@ func TestFilterTxConditional(t *testing.T) {
 	// Set state that conflicts with tx2's policy
 	state.SetState(common.Address{19: 1}, common.Hash{}, common.Hash{31: 1})
 
+	state.Finalise(true)
+
+	trie, _ = state.StorageTrie(common.Address{19: 1})
+	fmt.Println("after2", trie.Hash())
+
 	// tx2 should be the single transaction filtered out
 	drops = list.FilterTxConditional(state)
 
@@ -137,4 +171,26 @@ func TestFilterTxConditional(t *testing.T) {
 	require.Equal(t, 1, count, "got %d filtered by TxOptions when there should be a single one", count)
 
 	require.Equal(t, tx2, drops[0], "Got %x, expected %x", drops[0].Hash(), tx2.Hash())
+}
+
+func BenchmarkListCapOneTx(b *testing.B) {
+	// Generate a list of transactions to insert
+	key, _ := crypto.GenerateKey()
+
+	txs := make(types.Transactions, 32)
+	for i := 0; i < len(txs); i++ {
+		txs[i] = transaction(uint64(i), 0, key)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		list := newList(true)
+		// Insert the transactions in a random order
+		for _, v := range rand.Perm(len(txs)) {
+			list.Add(txs[v], DefaultConfig.PriceBump)
+		}
+		b.StartTimer()
+		list.Cap(list.Len() - 1)
+		b.StopTimer()
+	}
 }

@@ -30,7 +30,7 @@ func (c *StatusCommand) Flags() *flagset.Flagset {
 }
 
 // MarkDown implements cli.MarkDown interface
-func (p *StatusCommand) MarkDown() string {
+func (c *StatusCommand) MarkDown() string {
 	items := []string{
 		"# Status",
 		"The ```status``` command outputs the status of the client.",
@@ -40,7 +40,7 @@ func (p *StatusCommand) MarkDown() string {
 }
 
 // Help implements the cli.Command interface
-func (p *StatusCommand) Help() string {
+func (c *StatusCommand) Help() string {
 	return `Usage: bor status
 
   Output the status of the client`

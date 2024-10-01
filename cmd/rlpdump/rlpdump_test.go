@@ -35,7 +35,8 @@ func TestRoundtrip(t *testing.T) {
 	} {
 		var out strings.Builder
 
-		err := rlpToText(bytes.NewReader(common.FromHex(want)), &out)
+		in := newInStream(bytes.NewReader(common.FromHex(want)), 0)
+		err := rlpToText(in, &out)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -18,7 +18,6 @@
 package miner
 
 import (
-	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -59,10 +58,6 @@ func (m *mockBackend) TxPool() *txpool.TxPool {
 	return m.txPool
 }
 
-func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {
-	return nil, errors.New("not supported")
-}
-
 // nolint : unused
 type testBlockChain struct {
 	root          common.Hash
@@ -87,7 +82,7 @@ func (bc *testBlockChain) CurrentBlock() *types.Header {
 
 // nolint : unused
 func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
-	return types.NewBlock(bc.CurrentBlock(), nil, nil, nil, trie.NewStackTrie(nil))
+	return types.NewBlock(bc.CurrentBlock(), nil, nil, trie.NewStackTrie(nil))
 }
 
 // nolint : unused
@@ -345,6 +340,20 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 	t.Fatalf("Mining() == %t, want %t", state, mining)
 }
 
+// func TestBuildPendingBlocks(t *testing.T) {
+// 	miner := createMiner(t)
+// 	var wg sync.WaitGroup
+// 	wg.Add(1)
+// 	go func() {
+// 		defer wg.Done()
+// 		block, _, _ := miner.Pending()
+// 		if block == nil {
+// 			t.Error("Pending failed")
+// 		}
+// 	}()
+// 	wg.Wait()
+// }
+
 // func minerTestGenesisBlock(period uint64, gasLimit uint64, faucet common.Address) *core.Genesis {
 // 	config := *params.AllCliqueProtocolChanges
 // 	config.Clique = &params.CliqueConfig{
@@ -359,7 +368,7 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 // 		GasLimit:   gasLimit,
 // 		BaseFee:    big.NewInt(params.InitialBaseFee),
 // 		Difficulty: big.NewInt(1),
-// 		Alloc: map[common.Address]core.GenesisAccount{
+// 		Alloc: map[common.Address]types.Account{
 // 			common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
 // 			common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
 // 			common.BytesToAddress([]byte{3}): {Balance: big.NewInt(1)}, // RIPEMD
@@ -391,7 +400,7 @@ func waitForMiningState(t *testing.T, m *Miner, mining bool) {
 // 	// Create consensus engine
 // 	engine := clique.New(chainConfig.Clique, chainDB)
 // 	// Create Ethereum backend
-// 	bc, err := core.NewBlockChain(chainDB, nil, genesis, nil, engine, vm.Config{}, nil, nil, nil)
+// 	bc, err := core.NewBlockChain(chainDB, nil, genesis, nil, engine, vm.Config{}, nil, nil)
 // 	if err != nil {
 // 		t.Fatalf("can't create new chain %v", err)
 // 	}

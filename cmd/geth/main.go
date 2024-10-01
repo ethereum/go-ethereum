@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is the official command-line client for Ethereum.
+// geth is a command-line client for Ethereum.
 package main
 
 import (
@@ -46,6 +46,7 @@ import (
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/live"
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 
 	"github.com/maticnetwork/heimdall/cmd/heimdalld/service"
@@ -122,13 +123,13 @@ var (
 		utils.DiscoveryPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
-		utils.MiningEnabledFlag,
+		utils.MiningEnabledFlag, // deprecated
 		utils.MinerGasLimitFlag,
 		utils.MinerGasPriceFlag,
-		utils.MinerEtherbaseFlag,
+		utils.MinerEtherbaseFlag, // deprecated
 		utils.MinerExtraDataFlag,
 		utils.MinerRecommitIntervalFlag,
-		utils.MinerNewPayloadTimeout,
+		utils.MinerNewPayloadTimeoutFlag, // deprecated
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV4Flag,
@@ -140,13 +141,13 @@ var (
 		utils.DNSDiscoveryFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperGasLimitFlag,
-		utils.SepoliaFlag,
-		utils.GoerliFlag,
 		utils.MumbaiFlag,
 		utils.AmoyFlag,
 		utils.BorMainnetFlag,
 		utils.DeveloperPeriodFlag,
 		utils.VMEnableDebugFlag,
+		utils.VMTraceFlag,
+		utils.VMTraceJsonConfigFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
 		utils.NoCompactionFlag,
@@ -157,6 +158,15 @@ var (
 		configFileFlag,
 		utils.LogDebugFlag,
 		utils.LogBacktraceAtFlag,
+		utils.BeaconApiFlag,
+		utils.BeaconApiHeaderFlag,
+		utils.BeaconThresholdFlag,
+		utils.BeaconNoFilterFlag,
+		utils.BeaconConfigFlag,
+		utils.BeaconGenesisRootFlag,
+		utils.BeaconGenesisTimeFlag,
+		utils.BeaconCheckpointFlag,
+		utils.CollectWitnessFlag,
 	}, utils.NetworkFlags, utils.DatabaseFlags)
 
 	rpcFlags = []cli.Flag{
@@ -214,12 +224,13 @@ var app = flags.NewApp("the go-ethereum command line interface")
 func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
-	app.Copyright = "Copyright 2013-2023 The go-ethereum Authors"
 	app.Commands = []*cli.Command{
 		// See chaincmd.go:
 		initCommand,
 		importCommand,
 		exportCommand,
+		importHistoryCommand,
+		exportHistoryCommand,
 		importPreimagesCommand,
 		removedbCommand,
 		dumpCommand,
@@ -365,7 +376,6 @@ func geth(ctx *cli.Context) error {
 	}
 
 	prepare(ctx)
-
 	stack, backend := makeFullNode(ctx)
 	defer stack.Close()
 

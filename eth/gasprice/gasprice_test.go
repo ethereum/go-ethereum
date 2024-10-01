@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -109,13 +110,13 @@ func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.
 	return b.chain.GetReceiptsByHash(hash), nil
 }
 
-func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+func (b *testBackend) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	if b.pending {
 		block := b.chain.GetBlockByNumber(testHead + 1)
-		return block, b.chain.GetReceiptsByHash(block.Hash())
+		state, _ := b.chain.StateAt(block.Root())
+		return block, b.chain.GetReceiptsByHash(block.Hash()), state
 	}
-
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {
@@ -132,14 +133,17 @@ func (b *testBackend) teardown() {
 
 // newTestBackend creates a test backend. OBS: don't forget to invoke tearDown
 // after use, otherwise the blockchain instance will mem-leak via goroutines.
-func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBackend {
+func newTestBackend(t *testing.T, londonBlock *big.Int, cancunBlock *big.Int, pending bool) *testBackend {
+	if londonBlock != nil && cancunBlock != nil && londonBlock.Cmp(cancunBlock) == 1 {
+		panic("cannot define test backend with cancun before london")
+	}
 	var (
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr   = crypto.PubkeyToAddress(key.PublicKey)
 		config = *params.TestChainConfig // needs copy because it is modified below
 		gspec  = &core.Genesis{
 			Config: &config,
-			Alloc:  core.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
+			Alloc:  types.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
 		}
 		signer = types.LatestSigner(gspec.Config)
 	)
@@ -148,7 +152,16 @@ func newTestBackend(t *testing.T, londonBlock *big.Int, pending bool) *testBacke
 	config.ArrowGlacierBlock = londonBlock
 	config.GrayGlacierBlock = londonBlock
 	config.TerminalTotalDifficulty = common.Big0
+	// var engine consensus.Engine = beacon.New(ethash.NewFaker())
+	// td := params.GenesisDifficulty.Uint64()
 	engine := ethash.NewFaker()
+
+	// if cancunBlock != nil {
+	// 	ts := gspec.Timestamp + cancunBlock.Uint64()*10 // fixed 10 sec block time in blockgen
+	// 	config.ShanghaiTime = &ts
+	// 	config.CancunTime = &ts
+	// 	signer = types.LatestSigner(gspec.Config)
+	// }
 
 	// Generate testing blocks
 	_, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, testHead+1, func(i int, b *core.BlockGen) {
@@ -218,7 +231,7 @@ func TestSuggestTipCap(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		backend := newTestBackend(t, c.fork, false)
+		backend := newTestBackend(t, c.fork, nil, false)
 		oracle := NewOracle(backend, config)
 
 		// The gas price sampled is: 32G, 31G, 30G, 29G, 28G, 27G

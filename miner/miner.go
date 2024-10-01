@@ -48,7 +48,6 @@ type Backend interface {
 type Config struct {
 	Etherbase           common.Address `toml:",omitempty"` // Public address for block mining rewards
 	ExtraData           hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasFloor            uint64         // Target gas floor for mined blocks.
 	GasCeil             uint64         // Target gas ceiling for mined blocks.
 	GasPrice            *big.Int       // Minimum gas price for mining a transaction
 	Recommit            time.Duration  // The time interval for miner to re-create mining work.
@@ -59,8 +58,8 @@ type Config struct {
 
 // DefaultConfig contains default settings for miner.
 var DefaultConfig = Config{
-	GasCeil:  30000000,
-	GasPrice: big.NewInt(params.BorDefaultMinerGasPrice), // enforce min gas price to 25 gwei for bor
+	GasCeil:  30_000_000,
+	GasPrice: big.NewInt(params.BorDefaultMinerGasPrice), // enforces minimum gas price of 25 gwei in bor
 
 	// The default recommit time is chosen as two seconds since
 	// consensus-layer usually will wait a half slot of time(6s)
@@ -231,7 +230,7 @@ func (miner *Miner) SetRecommitInterval(interval time.Duration) {
 
 // Pending returns the currently pending block and associated state. The returned
 // values can be nil in case the pending block is not initialized
-func (miner *Miner) Pending() (*types.Block, *state.StateDB) {
+func (miner *Miner) Pending() (*types.Block, types.Receipts, *state.StateDB) {
 	return miner.worker.pending()
 }
 
@@ -243,12 +242,6 @@ func (miner *Miner) Pending() (*types.Block, *state.StateDB) {
 // change between multiple method calls
 func (miner *Miner) PendingBlock() *types.Block {
 	return miner.worker.pendingBlock()
-}
-
-// PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
-// The returned values can be nil in case the pending block is not initialized.
-func (miner *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	return miner.worker.pendingBlockAndReceipts()
 }
 
 func (miner *Miner) SetEtherbase(addr common.Address) {

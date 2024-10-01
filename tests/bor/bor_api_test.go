@@ -24,16 +24,13 @@ import (
 )
 
 var (
-	key1, _    = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	addrr      = crypto.PubkeyToAddress(key1.PublicKey)
-	stack, _   = node.New(&node.DefaultConfig)
-	backend, _ = eth.New(stack, &ethconfig.Defaults)
-	db         = backend.ChainDb()
-	hash1      = common.BytesToHash([]byte("topic1"))
-	hash2      = common.BytesToHash([]byte("topic2"))
-	hash3      = common.BytesToHash([]byte("topic3"))
-	hash4      = common.BytesToHash([]byte("topic4"))
-	hash5      = common.BytesToHash([]byte("topic5"))
+	key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addrr   = crypto.PubkeyToAddress(key1.PublicKey)
+	hash1   = common.BytesToHash([]byte("topic1"))
+	hash2   = common.BytesToHash([]byte("topic2"))
+	hash3   = common.BytesToHash([]byte("topic3"))
+	hash4   = common.BytesToHash([]byte("topic4"))
+	hash5   = common.BytesToHash([]byte("topic5"))
 )
 
 func duplicateInArray(arr []common.Hash) bool {
@@ -139,12 +136,9 @@ func testGetTransactionByBlockNumberAndIndex(t *testing.T, publicTransactionPool
 // This Testcase tests functions for RPC API calls.
 // NOTE : Changes to this function might affect the child testcases.
 func TestAPIs(t *testing.T) {
-
-	defer func() {
-		if err := stack.Close(); err != nil {
-			t.Error(err)
-		}
-	}()
+	stack, _ := node.New(&node.DefaultConfig)
+	backend, _ := eth.New(stack, &ethconfig.Defaults)
+	db := backend.ChainDb()
 
 	genesis := core.GenesisBlockForTesting(db, addrr, big.NewInt(1000000))
 	testBorConfig := params.TestChainConfig.Bor

@@ -7,6 +7,7 @@
 .PHONY: geth-linux-arm geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
 .PHONY: geth-windows geth-windows-386 geth-windows-amd64
+.PHONY: geth all test lint fmt clean devtools help
 
 GO ?= latest
 GOBIN = $(CURDIR)/build/bin
@@ -38,11 +39,13 @@ generate-mocks:
 	go generate mockgen -destination=./eth/filters/IBackend.go -package=filters ./eth/filters Backend
 	go generate mockgen -destination=../eth/filters/IDatabase.go -package=filters ./ethdb Database
 
+#? geth: Build geth.
 geth:
 	$(GORUN) build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
+#? all: Build all packages and executables.
 all:
 	$(GORUN) build/ci.go install
 
@@ -59,7 +62,7 @@ ios:
 	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test:
-	$(GOTEST) --timeout 15m -cover -short -coverprofile=cover.out -covermode=atomic $(TESTALL)
+	$(GOTEST) --timeout 30m -cover -short -coverprofile=cover.out -covermode=atomic $(TESTALL)
 
 test-txpool-race:
 	$(GOTEST) -run=TestPoolMiningDataRaces --timeout 600m -race -v ./core/
@@ -89,6 +92,11 @@ goimports:
 docs:
 	$(GORUN) cmd/clidoc/main.go -d ./docs/cli
 
+#? fmt: Ensure consistent code formatting.
+fmt:
+	gofmt -s -w $(shell find . -name "*.go")
+
+#? clean: Clean go cache, built executables, and the auto generated folder.
 clean:
 	go clean -cache
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
@@ -96,6 +104,7 @@ clean:
 # The devtools target installs tools required for 'go generate'.
 # You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
 
+#? devtools: Install recommended developer tools.
 devtools:
 	# Notice! If you adding new binary - add it also to tests/deps/fake.go file
 	$(GOBUILD) -o $(GOBIN)/stringer github.com/golang.org/x/tools/cmd/stringer

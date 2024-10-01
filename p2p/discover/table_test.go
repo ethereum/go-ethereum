@@ -137,7 +137,7 @@ func waitForRevalidationPing(t *testing.T, transport *pingRecorder, tab *Table, 
 		simclock.Run(tab.cfg.PingInterval * slowRevalidationFactor)
 		p := transport.waitPing(2 * time.Second)
 		if p == nil {
-			t.Fatal("Table did not send revalidation ping")
+			continue
 		}
 		if id == (enode.ID{}) || p.ID() == id {
 			return p
@@ -195,7 +195,7 @@ func checkIPLimitInvariant(t *testing.T, tab *Table) {
 
 	for _, b := range tab.buckets {
 		for _, n := range b.entries {
-			tabset.Add(n.IP())
+			tabset.AddAddr(n.IPAddr())
 		}
 	}
 
@@ -282,7 +282,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 
 	for _, id := range gen([]enode.ID{}, rand).([]enode.ID) {
 		r := new(enr.Record)
-		r.Set(enr.IP(genIP(rand)))
+		r.Set(enr.IPv4Addr(netutil.RandomAddr(rand, true)))
 		n := enode.SignNull(r, id)
 		t.All = append(t.All, n)
 	}
@@ -402,11 +402,11 @@ func checkBucketContent(t *testing.T, tab *Table, nodes []*enode.Node) {
 	}
 	t.Log("wrong bucket content. have nodes:")
 	for _, n := range b.entries {
-		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IP())
+		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IPAddr())
 	}
 	t.Log("want nodes:")
 	for _, n := range nodes {
-		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IP())
+		t.Logf("  %v (seq=%v, ip=%v)", n.ID(), n.Seq(), n.IPAddr())
 	}
 	t.FailNow()
 
@@ -442,7 +442,7 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 	transport.updateRecord(n2)
 
 	// Wait for revalidation. We wait for the node to be revalidated two times
-	// in order to synchronize with the update in the able.
+	// in order to synchronize with the update in the table.
 	waitForRevalidationPing(t, transport, tab, n2.ID())
 	waitForRevalidationPing(t, transport, tab, n2.ID())
 
@@ -504,13 +504,6 @@ func gen(typ interface{}, rand *rand.Rand) interface{} {
 	}
 
 	return v.Interface()
-}
-
-func genIP(rand *rand.Rand) net.IP {
-	ip := make(net.IP, 4)
-	rand.Read(ip)
-
-	return ip
 }
 
 func quickcfg() *quick.Config {

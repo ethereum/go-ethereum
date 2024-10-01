@@ -19,8 +19,8 @@ package eth
 import (
 	"bytes"
 	"fmt"
-	"math/big"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -28,10 +28,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/exp/slices"
+	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/holiman/uint256"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}
@@ -64,7 +65,7 @@ func TestAccountRange(t *testing.T) {
 	t.Parallel()
 
 	var (
-		statedb = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
+		statedb = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &triedb.Config{Preimages: true})
 		sdb, _  = state.New(types.EmptyRootHash, statedb, nil)
 		addrs   = [AccountRangeMaxResults * 2]common.Address{}
 		m       = map[common.Address]bool{}
@@ -74,7 +75,7 @@ func TestAccountRange(t *testing.T) {
 		hash := common.HexToHash(fmt.Sprintf("%x", i))
 		addr := common.BytesToAddress(crypto.Keccak256Hash(hash.Bytes()).Bytes())
 		addrs[i] = addr
-		sdb.SetBalance(addrs[i], big.NewInt(1))
+		sdb.SetBalance(addrs[i], uint256.NewInt(1), tracing.BalanceChangeUnspecified)
 		if _, ok := m[addr]; ok {
 			t.Fatalf("bad")
 		} else {
@@ -162,7 +163,7 @@ func TestStorageRangeAt(t *testing.T) {
 
 	// Create a state where account 0x010000... has a few storage entries.
 	var (
-		db     = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &trie.Config{Preimages: true})
+		db     = state.NewDatabaseWithConfig(rawdb.NewMemoryDatabase(), &triedb.Config{Preimages: true})
 		sdb, _ = state.New(types.EmptyRootHash, db, nil)
 		addr   = common.Address{0x01}
 		keys   = []common.Hash{ // hashes of Keys of storage

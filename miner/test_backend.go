@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -168,15 +167,15 @@ func (w *worker) mainLoopWithDelay(ctx context.Context, delay uint, opcodeDelay 
 						Hash:      tx.Hash(),
 						Tx:        nil, // Do *not* set this! We need to resolve it later to pull blobs in
 						Time:      tx.Time(),
-						GasFeeCap: tx.GasFeeCap(),
-						GasTipCap: tx.GasTipCap(),
+						GasFeeCap: uint256.NewInt(tx.GasFeeCap().Uint64()),
+						GasTipCap: uint256.NewInt(tx.GasTipCap().Uint64()),
 						Gas:       tx.Gas(),
 						BlobGas:   tx.BlobGas(),
 					})
 				}
 				txset := newTransactionsByPriceAndNonce(w.current.signer, txs, w.current.header.BaseFee)
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, txset, nil, new(big.Int), context.Background())
+				w.commitTransactions(w.current, txset, nil, nil, new(uint256.Int), context.Background())
 
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
@@ -322,7 +321,7 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *atomi
 
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
-	pending := w.eth.TxPool().Pending(true)
+	pending := w.eth.TxPool().Pending(txpool.PendingFilter{})
 	localTxs, remoteTxs := make(map[common.Address][]*txpool.LazyTransaction), pending
 
 	var (
@@ -394,7 +393,7 @@ func (w *worker) fillTransactionsWithDelay(ctx context.Context, interrupt *atomi
 	tracing.Exec(ctx, "", "worker.SplittingTransactions", func(ctx context.Context, span trace.Span) {
 		prePendingTime := time.Now()
 
-		pending := w.eth.TxPool().Pending(true)
+		pending := w.eth.TxPool().Pending(txpool.PendingFilter{})
 		remoteTxs = pending
 
 		postPendingTime := time.Now()

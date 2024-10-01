@@ -36,7 +36,7 @@ func TestChainIterator(t *testing.T) {
 	var txs []*types.Transaction
 
 	to := common.BytesToAddress([]byte{0x11})
-	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newTestHasher()) // Empty genesis block
+	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, newTestHasher()) // Empty genesis block
 	WriteBlock(chainDb, block)
 	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 
@@ -64,7 +64,7 @@ func TestChainIterator(t *testing.T) {
 		}
 
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newTestHasher())
+		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{Transactions: types.Transactions{tx}}, nil, newTestHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}
@@ -122,7 +122,7 @@ func TestIndexTransactions(t *testing.T) {
 	to := common.BytesToAddress([]byte{0x11})
 
 	// Write empty genesis block
-	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, nil, newTestHasher())
+	block = types.NewBlock(&types.Header{Number: big.NewInt(int64(0))}, nil, nil, newTestHasher())
 	WriteBlock(chainDb, block)
 	WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 
@@ -150,7 +150,7 @@ func TestIndexTransactions(t *testing.T) {
 		}
 
 		txs = append(txs, tx)
-		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, []*types.Transaction{tx}, nil, nil, newTestHasher())
+		block = types.NewBlock(&types.Header{Number: big.NewInt(int64(i))}, &types.Body{Transactions: types.Transactions{tx}}, nil, newTestHasher())
 		WriteBlock(chainDb, block)
 		WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 	}
@@ -177,19 +177,18 @@ func TestIndexTransactions(t *testing.T) {
 			t.Fatalf("Transaction tail mismatch")
 		}
 	}
-
-	IndexTransactions(chainDb, 5, 11, nil)
+	IndexTransactions(chainDb, 5, 11, nil, false)
 	verify(5, 11, true, 5)
 	verify(0, 5, false, 5)
 
-	IndexTransactions(chainDb, 0, 5, nil)
+	IndexTransactions(chainDb, 0, 5, nil, false)
 	verify(0, 11, true, 0)
 
-	UnindexTransactions(chainDb, 0, 5, nil)
+	UnindexTransactions(chainDb, 0, 5, nil, false)
 	verify(5, 11, true, 5)
 	verify(0, 5, false, 5)
 
-	UnindexTransactions(chainDb, 5, 11, nil)
+	UnindexTransactions(chainDb, 5, 11, nil, false)
 	verify(0, 11, false, 11)
 
 	// Testing corner cases
@@ -210,7 +209,7 @@ func TestIndexTransactions(t *testing.T) {
 	})
 	verify(9, 11, true, 9)
 	verify(0, 9, false, 9)
-	IndexTransactions(chainDb, 0, 9, nil)
+	IndexTransactions(chainDb, 0, 9, nil, false)
 
 	signal = make(chan struct{})
 

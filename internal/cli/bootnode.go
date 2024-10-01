@@ -48,10 +48,10 @@ func (b *BootnodeCommand) Help() string {
 }
 
 // MarkDown implements cli.MarkDown interface
-func (c *BootnodeCommand) MarkDown() string {
+func (b *BootnodeCommand) MarkDown() string {
 	items := []string{
 		"# Bootnode",
-		c.Flags().MarkDown(),
+		b.Flags().MarkDown(),
 	}
 
 	return strings.Join(items, "\n\n")

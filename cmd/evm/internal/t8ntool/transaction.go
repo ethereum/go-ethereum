@@ -94,7 +94,7 @@ func Transaction(ctx *cli.Context) error {
 	if txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
+			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
 		}
 		// Decode the body of already signed transactions
 		body = common.FromHex(inputData.TxRlp)

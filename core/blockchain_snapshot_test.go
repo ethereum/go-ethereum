@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -64,7 +64,7 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	t.Helper()
 	// Create a temporary persistent database
 	datadir := t.TempDir()
-	ancient := path.Join(datadir, "ancient")
+	ancient := filepath.Join(datadir, "ancient")
 
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory:         datadir,
@@ -530,6 +530,7 @@ func TestLowCommitCrashWithNewSnapshot(t *testing.T) {
 	// Expected head fast block: C8
 	// Expected head block     : C2
 	// Expected snapshot disk  : C4
+
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
 		test := &crashSnapshotTest{
 			snapshotTestBasic{
@@ -572,6 +573,7 @@ func TestHighCommitCrashWithNewSnapshot(t *testing.T) {
 	// Expected head fast block: C8
 	// Expected head block     : G
 	// Expected snapshot disk  : C4
+
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
 		expHead := uint64(0)
 		if scheme == rawdb.PathScheme {

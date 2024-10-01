@@ -19,6 +19,7 @@ package p2p
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
@@ -462,7 +463,7 @@ func (srv *Server) DiscoveryV4() *discover.UDPv4 {
 	return srv.discv4
 }
 
-// DiscoveryV4 returns the discovery v5 instance, if configured.
+// DiscoveryV5 returns the discovery v5 instance, if configured.
 func (srv *Server) DiscoveryV5() *discover.UDPv5 {
 	return srv.discv5
 }
@@ -864,8 +865,10 @@ running:
 				if p.Inbound() {
 					inboundCount++
 					serveSuccessMeter.Mark(1)
+					activeInboundPeerGauge.Inc(1)
 				} else {
 					dialSuccessMeter.Mark(1)
+					activeOutboundPeerGauge.Inc(1)
 				}
 				activePeerGauge.Inc(1)
 			}
@@ -879,6 +882,9 @@ running:
 			srv.dialsched.peerRemoved(pd.rw)
 			if pd.Inbound() {
 				inboundCount--
+				activeInboundPeerGauge.Dec(1)
+			} else {
+				activeOutboundPeerGauge.Dec(1)
 			}
 			activePeerGauge.Dec(1)
 		}
@@ -989,7 +995,7 @@ func (srv *Server) listenLoop() {
 			break
 		}
 
-		remoteIP := netutil.AddrIP(fd.RemoteAddr())
+		remoteIP := netutil.AddrAddr(fd.RemoteAddr())
 		if err := srv.checkInboundConn(remoteIP); err != nil {
 			srv.log.Debug("Rejected inbound connection", "addr", fd.RemoteAddr(), "err", err)
 			fd.Close()
@@ -997,8 +1003,7 @@ func (srv *Server) listenLoop() {
 
 			continue
 		}
-
-		if remoteIP != nil {
+		if remoteIP.IsValid() {
 			fd = newMeteredConn(fd)
 			serveMeter.Mark(1)
 			srv.log.Trace("Accepted connection", "addr", fd.RemoteAddr())
@@ -1011,20 +1016,20 @@ func (srv *Server) listenLoop() {
 	}
 }
 
-func (srv *Server) checkInboundConn(remoteIP net.IP) error {
-	if remoteIP == nil {
+func (srv *Server) checkInboundConn(remoteIP netip.Addr) error {
+	if !remoteIP.IsValid() {
+		// This case happens for internal test connections without remote address.
 		return nil
 	}
 	// Reject connections that do not match NetRestrict.
-	if srv.NetRestrict != nil && !srv.NetRestrict.Contains(remoteIP) {
-		return fmt.Errorf("not in netrestrict list")
+	if srv.NetRestrict != nil && !srv.NetRestrict.ContainsAddr(remoteIP) {
+		return errors.New("not in netrestrict list")
 	}
 	// Reject Internet peers that try too often.
 	now := srv.clock.Now()
 	srv.inboundHistory.expire(now, nil)
-
-	if !netutil.IsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
-		return fmt.Errorf("too many attempts")
+	if !netutil.AddrIsLAN(remoteIP) && srv.inboundHistory.contains(remoteIP.String()) {
+		return errors.New("too many attempts")
 	}
 
 	srv.inboundHistory.add(remoteIP.String(), now.Add(inboundThrottleTime))
@@ -1043,7 +1048,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		c.transport = srv.newTransport(fd, dialDest.Pubkey())
 	}
 
-	err := srv.setupConn(c, flags, dialDest)
+	err := srv.setupConn(c, dialDest)
 	if err != nil {
 		if !c.is(inboundConn) {
 			markDialError(err)
@@ -1054,7 +1059,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 	return err
 }
 
-func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) error {
+func (srv *Server) setupConn(c *conn, dialDest *enode.Node) error {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
 	running := srv.running
@@ -1214,7 +1219,7 @@ func (srv *Server) NodeInfo() *NodeInfo {
 		Name:       srv.Name,
 		Enode:      node.URLv4(),
 		ID:         node.ID().String(),
-		IP:         node.IP().String(),
+		IP:         node.IPAddr().String(),
 		ListenAddr: srv.ListenAddr,
 		Protocols:  make(map[string]interface{}),
 	}
@@ -1248,13 +1253,9 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	// Sort the result array alphabetically by node identifier
-	for i := 0; i < len(infos); i++ {
-		for j := i + 1; j < len(infos); j++ {
-			if infos[i].ID > infos[j].ID {
-				infos[i], infos[j] = infos[j], infos[i]
-			}
-		}
-	}
+	slices.SortFunc(infos, func(a, b *PeerInfo) int {
+		return cmp.Compare(a.ID, b.ID)
+	})
 
 	return infos
 }
