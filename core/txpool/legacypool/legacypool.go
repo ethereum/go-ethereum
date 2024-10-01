@@ -239,21 +239,6 @@ type txpoolResetRequest struct {
 	oldHead, newHead *types.Header
 }
 
-func (p *LegacyPool) DropAllTxs() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.all = newLookup()
-	p.priced = newPricedList(p.all)
-	p.pending = make(map[common.Address]*list)
-	p.queue = make(map[common.Address]*list)
-	if !p.config.NoLocals && p.config.Journal != "" {
-		p.journal = newTxJournal(p.config.Journal)
-		if err := p.journal.rotate(p.local()); err != nil {
-			log.Warn("Failed to rotate transaction journal", "err", err)
-		}
-	}
-}
-
 // New creates a new transaction pool to gather, sort and filter inbound
 // transactions from the network.
 func New(config Config, chain BlockChain) *LegacyPool {
@@ -1975,4 +1960,23 @@ func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 // numSlots calculates the number of slots needed for a single transaction.
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+}
+
+// DropAllTxs implements txpool.SubPool, removing all tracked txs from the pool
+// and rotating the journal.
+func (p *LegacyPool) DropAllTxs() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.all = newLookup()
+	p.priced = newPricedList(p.all)
+	p.pending = make(map[common.Address]*list)
+	p.queue = make(map[common.Address]*list)
+
+	if !p.config.NoLocals && p.config.Journal != "" {
+		p.journal = newTxJournal(p.config.Journal)
+		if err := p.journal.rotate(p.local()); err != nil {
+			log.Warn("Failed to rotate transaction journal", "err", err)
+		}
+	}
 }
