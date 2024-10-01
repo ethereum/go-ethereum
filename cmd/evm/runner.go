@@ -96,7 +96,6 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []by
 		stats.BytesAllocated = result.AllocedBytesPerOp()
 		stats.GasUsed = gasUsed
 	} else {
-		g
 		var memStatsBefore, memStatsAfter goruntime.MemStats
 		goruntime.ReadMemStats(&memStatsBefore)
 		startTime := time.Now()
