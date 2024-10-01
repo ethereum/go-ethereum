@@ -118,6 +118,13 @@ func (fm *FilterMapsMatcherBackend) synced(head *types.Header) {
 // range that has not been changed and has been consistent with all states of the
 // chain since the previous SyncLogIndex or the creation of the matcher backend.
 func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange, error) {
+	if fm.f.noHistory {
+		head := fm.f.chain.CurrentBlock()
+		if head == nil {
+			return SyncRange{}, errors.New("canonical chain head not available")
+		}
+		return SyncRange{Head: head}, nil
+	}
 	// add SyncRange return channel, ensuring that
 	syncCh := make(chan SyncRange, 1)
 	fm.f.lock.Lock()

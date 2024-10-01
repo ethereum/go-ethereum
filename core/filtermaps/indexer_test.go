@@ -1,6 +1,8 @@
 package filtermaps
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -59,6 +61,25 @@ func TestIndexerRandomSetHistory(t *testing.T) {
 	ts.checkLvRange(50)
 }
 
+func TestIndexerDbEquality(t *testing.T) {
+	ts := newTestSetup(t)
+	ts.setHistory(0, false)
+	for i := 0; i < 10; i++ {
+		ts.chain.addBlocks(100, 10, 3, 4, true)
+		ts.runUntilWait()
+	}
+	hash1 := ts.fmDbHash()
+	fmt.Println(hash1)
+	ts.setHistory(500, false)
+	ts.runUntilWait()
+	hash2 := ts.fmDbHash()
+	fmt.Println(hash2)
+	ts.setHistory(0, false)
+	ts.runUntilWait()
+	hash3 := ts.fmDbHash()
+	fmt.Println(hash3)
+}
+
 type testSetup struct {
 	t         *testing.T
 	fm        *FilterMaps
@@ -94,9 +115,14 @@ func (ts *testSetup) runUntil(stop func() bool) {
 }
 
 func (ts *testSetup) runUntilWait() {
-	ts.nextEvent()
-	for ts.lastEvent != testHookWait {
+	for {
 		ts.nextEvent()
+		for ts.lastEvent != testHookWait {
+			ts.nextEvent()
+		}
+		if ts.fm.getRange().headBlockHash == ts.chain.CurrentBlock().Hash() {
+			return
+		}
 	}
 }
 
@@ -146,6 +172,19 @@ func (ts *testSetup) stopFm() {
 	ts.fm.closeWg.Wait()
 }
 
+func (ts *testSetup) fmDbHash() common.Hash {
+	hasher := sha256.New()
+	it := ts.db.NewIterator(nil, nil)
+	for it.Next() {
+		hasher.Write(it.Key())
+		hasher.Write(it.Value())
+	}
+	it.Release()
+	var result common.Hash
+	hasher.Sum(result[:0])
+	return result
+}
+
 func (ts *testSetup) close() {
 	ts.stopFm()
 	ts.db.Close()
@@ -178,7 +217,7 @@ func (tc *testChain) CurrentBlock() *types.Header {
 	return tc.blocks[tc.canonical[len(tc.canonical)-1]].Header()
 }
 
-func (tc *testChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+func (tc *testChain) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return tc.chainHeadFeed.Subscribe(ch)
 }
 
@@ -281,5 +320,32 @@ func (tc *testChain) addBlocks(count, maxTxPerBlock, maxLogsPerReceipt, maxTopic
 			tc.receipts[hash] = types.Receipts{}
 		}
 	}
-	tc.chainHeadFeed.Send(core.ChainHeadEvent{Block: tc.blocks[tc.canonical[len(tc.canonical)-1]]})
+	tc.chainHeadFeed.Send(core.ChainEvent{Block: tc.blocks[tc.canonical[len(tc.canonical)-1]]})
+}
+
+func (tc *testChain) setHead(headNum int) {
+	tc.lock.Lock()
+	defer tc.lock.Unlock()
+
+	tc.canonical = tc.canonical[:headNum+1]
+	tc.chainHeadFeed.Send(core.ChainEvent{Block: tc.blocks[tc.canonical[len(tc.canonical)-1]]})
+}
+
+func (tc *testChain) getCanonicalChain() []common.Hash {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+
+	cc := make([]common.Hash, len(tc.canonical))
+	copy(cc, tc.canonical)
+	return cc
+}
+
+// restore an earlier state of the chain
+func (tc *testChain) setCanonicalChain(cc []common.Hash) {
+	tc.lock.Lock()
+	defer tc.lock.Unlock()
+
+	tc.canonical = make([]common.Hash, len(cc))
+	copy(tc.canonical, cc)
+	tc.chainHeadFeed.Send(core.ChainEvent{Block: tc.blocks[tc.canonical[len(tc.canonical)-1]]})
 }
