@@ -1360,11 +1360,24 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (api *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
+	return api.CallWithState(ctx, args, blockNrOrHash, nil, overrides, blockOverrides)
+}
+
+// CallWithState executes the given transaction on the given state for
+// the given block number. Note that as it does an EVM call, fields in
+// the underlying state will change. Make sure to handle it outside of
+// this function (ideally by sending a copy of state).
+//
+// Additionally, the caller can specify a batch of contract for fields overriding.
+//
+// Note, this function doesn't make and changes in the state/blockchain and is
+// useful to execute and retrieve values.
+func (api *BlockChainAPI) CallWithState(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, state *state.StateDB, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Bytes, error) {
 	if blockNrOrHash == nil {
 		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		blockNrOrHash = &latest
 	}
-	result, err := DoCall(ctx, api.b, args, *blockNrOrHash, nil, overrides, blockOverrides, api.b.RPCEVMTimeout(), api.b.RPCGasCap())
+	result, err := DoCall(ctx, api.b, args, *blockNrOrHash, state, overrides, blockOverrides, api.b.RPCEVMTimeout(), api.b.RPCGasCap())
 	if err != nil {
 		return nil, err
 	}
