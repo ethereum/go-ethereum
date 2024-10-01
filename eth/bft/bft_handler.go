@@ -11,7 +11,7 @@ import (
 
 const maxBlockDist = 7 // Maximum allowed backward distance from the chain head, 7 is just a magic number indicate very close block
 
-//Define Boradcast Group functions
+// Define Boradcast Group functions
 type broadcastVoteFn func(*types.Vote)
 type broadcastTimeoutFn func(*types.Timeout)
 type broadcastSyncInfoFn func(*types.SyncInfo)
@@ -126,8 +126,8 @@ func (b *Bfter) Timeout(peer string, timeout *types.Timeout) error {
 		return err
 	}
 
-	b.broadcastCh <- timeout
 	if verified {
+		b.broadcastCh <- timeout
 		err = b.consensus.timeoutHandler(b.blockChainReader, timeout)
 		if err != nil {
 			if _, ok := err.(*utils.ErrIncomingMessageRoundNotEqualCurrentRound); ok {
@@ -156,9 +156,9 @@ func (b *Bfter) SyncInfo(peer string, syncInfo *types.SyncInfo) error {
 		return err
 	}
 
-	b.broadcastCh <- syncInfo
 	// Process only if verified and qualified
 	if verified {
+		b.broadcastCh <- syncInfo
 		err = b.consensus.syncInfoHandler(b.blockChainReader, syncInfo)
 		if err != nil {
 			log.Error("handle BFT SyncInfo", "error", err)
