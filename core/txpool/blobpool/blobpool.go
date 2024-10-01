@@ -1721,6 +1721,9 @@ func (p *BlobPool) DropTransactions() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
+	// manually iterating and deleting every entry is super sub-optimal
+	// However, DropTransactions is not currently used in production so
+	// performance is not critical at the moment.
 	for _, entry := range p.lookup {
 		if err := p.store.Delete(entry); err != nil {
 			log.Warn("failed to delete blob tx from backing store", "err", err)
