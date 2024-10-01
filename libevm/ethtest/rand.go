@@ -13,11 +13,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
+
 package ethtest
 
 import (
 	"math/big"
 
+	"github.com/holiman/uint256"
 	"golang.org/x/exp/rand"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,9 +35,16 @@ func NewPseudoRand(seed uint64) *PseudoRand {
 	return &PseudoRand{rand.New(rand.NewSource(seed))}
 }
 
+// Read is equivalent to [rand.Rand.Read] except that it doesn't return an error
+// because it is guaranteed to be nil.
+func (r *PseudoRand) Read(p []byte) int {
+	n, _ := r.Rand.Read(p) // Guaranteed nil error
+	return n
+}
+
 // Address returns a pseudorandom address.
 func (r *PseudoRand) Address() (a common.Address) {
-	r.Read(a[:]) //nolint:gosec,errcheck // Guaranteed nil error
+	r.Read(a[:])
 	return a
 }
 
@@ -47,18 +56,35 @@ func (r *PseudoRand) AddressPtr() *common.Address {
 
 // Hash returns a pseudorandom hash.
 func (r *PseudoRand) Hash() (h common.Hash) {
-	r.Read(h[:]) //nolint:gosec,errcheck // Guaranteed nil error
+	r.Read(h[:])
 	return h
+}
+
+// HashPtr returns a pointer to a pseudorandom hash.
+func (r *PseudoRand) HashPtr() *common.Hash {
+	h := r.Hash()
+	return &h
 }
 
 // Bytes returns `n` pseudorandom bytes.
 func (r *PseudoRand) Bytes(n uint) []byte {
 	b := make([]byte, n)
-	r.Read(b) //nolint:gosec,errcheck // Guaranteed nil error
+	r.Read(b)
 	return b
 }
 
 // Big returns [rand.Rand.Uint64] as a [big.Int].
 func (r *PseudoRand) BigUint64() *big.Int {
 	return new(big.Int).SetUint64(r.Uint64())
+}
+
+// Uint64Ptr returns a pointer to a pseudorandom uint64.
+func (r *PseudoRand) Uint64Ptr() *uint64 {
+	u := r.Uint64()
+	return &u
+}
+
+// Uint256 returns a random 256-bit unsigned int.
+func (r *PseudoRand) Uint256() *uint256.Int {
+	return new(uint256.Int).SetBytes(r.Bytes(32))
 }

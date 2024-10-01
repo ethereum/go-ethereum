@@ -31,6 +31,9 @@ package pseudo
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // A Type wraps a strongly-typed value without exposing information about its
@@ -121,6 +124,21 @@ func MustNewValue[T any](t *Type) *Value[T] {
 	return v
 }
 
+// IsZero reports whether t carries the the zero value for its type.
+func (t *Type) IsZero() bool { return t.val.isZero() }
+
+// An EqualityChecker reports if it is equal to another value of the same type.
+type EqualityChecker[T any] interface {
+	Equal(T) bool
+}
+
+// Equal reports whether t carries a value equal to that carried by u. If t and
+// u carry different types then Equal returns false. If t and u carry the same
+// type and said type implements [EqualityChecker] then Equal propagates the
+// value returned by the checker. In all other cases, Equal returns
+// [reflect.DeepEqual] performed on the payloads carried by t and u.
+func (t *Type) Equal(u *Type) bool { return t.val.equal(u) }
+
 // Get returns the value.
 func (v *Value[T]) Get() T { return v.t.val.get().(T) } //nolint:forcetypeassert // invariant
 
@@ -139,6 +157,12 @@ func (v *Value[T]) MarshalJSON() ([]byte, error) { return v.t.MarshalJSON() }
 // UnmarshalJSON implements the [json.Unmarshaler] interface.
 func (v *Value[T]) UnmarshalJSON(b []byte) error { return v.t.UnmarshalJSON(b) }
 
+// EncodeRLP implements the [rlp.Encoder] interface.
+func (t *Type) EncodeRLP(w io.Writer) error { return t.val.EncodeRLP(w) }
+
+// DecodeRLP implements the [rlp.Decoder] interface.
+func (t *Type) DecodeRLP(s *rlp.Stream) error { return t.val.DecodeRLP(s) }
+
 var _ = []interface {
 	json.Marshaler
 	json.Unmarshaler
@@ -148,15 +172,27 @@ var _ = []interface {
 	(*concrete[struct{}])(nil),
 }
 
+var _ = []interface {
+	rlp.Encoder
+	rlp.Decoder
+}{
+	(*Type)(nil),
+	(*concrete[struct{}])(nil),
+}
+
 // A value is a non-generic wrapper around a [concrete] struct.
 type value interface {
 	get() any
+	isZero() bool
+	equal(*Type) bool
 	canSetTo(any) bool
 	set(any) error
 	mustSet(any)
 
 	json.Marshaler
 	json.Unmarshaler
+	rlp.Encoder
+	rlp.Decoder
 }
 
 type concrete[T any] struct {
@@ -210,3 +246,5 @@ func (c *concrete[T]) UnmarshalJSON(b []byte) error {
 	c.val = v
 	return nil
 }
+
+func (c *concrete[T]) EncodeRLP(w io.Writer) error { return rlp.Encode(w, c.val) }

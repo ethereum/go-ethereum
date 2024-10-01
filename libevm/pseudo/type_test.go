@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see
 // <http://www.gnu.org/licenses/>.
+
 package pseudo
 
 import (
@@ -115,4 +116,59 @@ func TestPointer(t *testing.T) {
 		ptr.payload = 314159
 		assert.Equal(t, 314159, val.Get().payload, "after setting via pointer")
 	})
+}
+
+func TestIsZero(t *testing.T) {
+	tests := []struct {
+		typ  *Type
+		want bool
+	}{
+		{From(0).Type, true},
+		{From(1).Type, false},
+		{From("").Type, true},
+		{From("x").Type, false},
+		{From((*testing.T)(nil)).Type, true},
+		{From(t).Type, false},
+		{From(false).Type, true},
+		{From(true).Type, false},
+	}
+
+	for _, tt := range tests {
+		assert.Equalf(t, tt.want, tt.typ.IsZero(), "%T(%[1]v) IsZero()", tt.typ.Interface())
+	}
+}
+
+type isEqualStub struct {
+	isEqual bool
+}
+
+var _ EqualityChecker[isEqualStub] = (*isEqualStub)(nil)
+
+func (s isEqualStub) Equal(isEqualStub) bool {
+	return s.isEqual
+}
+
+func TestEqual(t *testing.T) {
+	isEqual := isEqualStub{true}
+	notEqual := isEqualStub{false}
+
+	tests := []struct {
+		a, b *Type
+		want bool
+	}{
+		{From(42).Type, From(42).Type, true},
+		{From(99).Type, From("").Type, false},
+		{From(false).Type, From("").Type, false}, // sorry JavaScript, you're wrong
+		{From(isEqual).Type, From(isEqual).Type, true},
+		{From(notEqual).Type, From(notEqual).Type, false},
+	}
+
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			t.Logf("a = %+v", tt.a)
+			t.Logf("b = %+v", tt.b)
+			assert.Equal(t, tt.want, tt.a.Equal(tt.b), "a.Equals(b)")
+			assert.Equal(t, tt.want, tt.b.Equal(tt.a), "b.Equals(a)")
+		})
+	}
 }
