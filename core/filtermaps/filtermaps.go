@@ -20,7 +20,7 @@ const headCacheSize = 8 // maximum number of recent filter maps cached in memory
 // blockchain defines functions required by the FilterMaps log indexer.
 type blockchain interface {
 	CurrentBlock() *types.Header
-	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetCanonicalHash(number uint64) common.Hash
 	GetReceiptsByHash(hash common.Hash) types.Receipts
@@ -55,7 +55,8 @@ type FilterMaps struct {
 	lvPointerCache *lru.Cache[uint64, uint64]
 	revertPoints   map[uint64]*revertPoint
 
-	testHook func(int)
+	waitIdleCh chan chan bool
+	testHook   func(int)
 }
 
 // filterMap is a full or partial in-memory representation of a filter map where
@@ -104,12 +105,13 @@ func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, hist
 	}
 	params.deriveFields()
 	fm := &FilterMaps{
-		db:        db,
-		chain:     chain,
-		closeCh:   make(chan struct{}),
-		history:   history,
-		noHistory: noHistory,
-		Params:    params,
+		db:         db,
+		chain:      chain,
+		closeCh:    make(chan struct{}),
+		waitIdleCh: make(chan chan bool),
+		history:    history,
+		noHistory:  noHistory,
+		Params:     params,
 		filterMapsRange: filterMapsRange{
 			initialized:     rs.Initialized,
 			headLvPointer:   rs.HeadLvPointer,

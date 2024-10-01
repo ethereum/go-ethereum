@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -617,6 +618,9 @@ func (b testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) 
 	panic("implement me")
 }
 func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	panic("implement me")
+}
+func (b testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 	panic("implement me")
 }
 func TestEstimateGas(t *testing.T) {

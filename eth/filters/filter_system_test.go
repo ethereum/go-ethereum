@@ -40,6 +40,7 @@ import (
 
 type testBackend struct {
 	db              ethdb.Database
+	fm              *filtermaps.FilterMaps
 	sections        uint64
 	txFeed          event.Feed
 	logsFeed        event.Feed
@@ -58,8 +59,26 @@ func (b *testBackend) CurrentHeader() *types.Header {
 	return hdr
 }
 
+func (b *testBackend) CurrentBlock() *types.Header {
+	return b.CurrentHeader()
+}
+
 func (b *testBackend) ChainDb() ethdb.Database {
 	return b.db
+}
+
+func (b *testBackend) GetCanonicalHash(number uint64) common.Hash {
+	return rawdb.ReadCanonicalHash(b.db, number)
+}
+
+func (b *testBackend) GetHeader(hash common.Hash, number uint64) *types.Header {
+	hdr, _ := b.HeaderByHash(context.Background(), hash)
+	return hdr
+}
+
+func (b *testBackend) GetReceiptsByHash(hash common.Hash) types.Receipts {
+	r, _ := b.GetReceipts(context.Background(), hash)
+	return r
 }
 
 func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
@@ -137,9 +156,20 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 }
 
 func (b *testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
-	fm := filtermaps.NewFilterMaps(b.db, b, filtermaps.DefaultParams, 0, false)
-	fm.Start()
-	return fm.NewMatcherBackend()
+	return b.fm.NewMatcherBackend()
+}
+
+func (b *testBackend) startFilterMaps(history uint64, noHistory bool) {
+	b.fm = filtermaps.NewFilterMaps(b.db, b, filtermaps.DefaultParams, history, noHistory)
+	b.fm.Start()
+	if !noHistory {
+		b.fm.WaitIdle()
+	}
+}
+
+func (b *testBackend) stopFilterMaps() {
+	b.fm.Stop()
+	b.fm = nil
 }
 
 func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {

@@ -17,7 +17,9 @@ const (
 	removedPointer       = math.MaxUint64 // used in updateBatch to signal removed items
 	revertPointFrequency = 256            // frequency of revert points in database
 	cachedRevertPoints   = 64             // revert points for most recent blocks in memory
+)
 
+const (
 	testHookInit = iota
 	testHookUpdateHeadEpoch
 	testHookUpdateHead
@@ -52,8 +54,8 @@ func (f *FilterMaps) updateLoop() {
 	}
 
 	var (
-		headEventCh = make(chan core.ChainHeadEvent, 10)
-		sub         = f.chain.SubscribeChainHeadEvent(headEventCh)
+		headEventCh = make(chan core.ChainEvent, 10)
+		sub         = f.chain.SubscribeChainEvent(headEventCh)
 		head        = f.chain.CurrentBlock()
 		stop        bool
 		syncMatcher *FilterMapsMatcherBackend
@@ -61,7 +63,7 @@ func (f *FilterMaps) updateLoop() {
 	)
 
 	matcherSync := func() {
-		if syncMatcher != nil && fmr.headBlockHash == head.Hash() {
+		if syncMatcher != nil && fmr.initialized && fmr.headBlockHash == head.Hash() {
 			syncMatcher.synced(head)
 			syncMatcher = nil
 		}
@@ -79,19 +81,32 @@ func (f *FilterMaps) updateLoop() {
 		}
 		delay := time.Second * 20
 		if f.testHook != nil {
-			f.testHook(testHookWait)
 			delay = 0
 		}
-		select {
-		case ev := <-headEventCh:
-			head = ev.Block.Header()
-		case syncMatcher = <-f.matcherSyncCh:
-			head = f.chain.CurrentBlock()
-		case <-f.closeCh:
-			stop = true
-		case <-time.After(delay):
-			// keep updating log index during syncing
-			head = f.chain.CurrentBlock()
+	loop:
+		for {
+			select {
+			case ev := <-headEventCh:
+				head = ev.Block.Header()
+			case syncMatcher = <-f.matcherSyncCh:
+				head = f.chain.CurrentBlock()
+			case <-f.closeCh:
+				stop = true
+			case ch := <-f.waitIdleCh:
+				head = f.chain.CurrentBlock()
+				if head.Hash() == f.getRange().headBlockHash {
+					ch <- true
+					continue loop
+				}
+				ch <- false
+			case <-time.After(delay):
+				// keep updating log index during syncing
+				head = f.chain.CurrentBlock()
+				if f.testHook != nil {
+					f.testHook(testHookWait)
+				}
+			}
+			break
 		}
 	}
 	for head == nil {
@@ -146,6 +161,18 @@ func (f *FilterMaps) updateLoop() {
 			// if tail processing reached its final state and there is no new
 			// head then wait for more events
 			wait()
+		}
+	}
+}
+
+// WaitIdle blocks until the indexer is in an idle state while synced up to the
+// latest chain head.
+func (f *FilterMaps) WaitIdle() {
+	for {
+		ch := make(chan bool)
+		f.waitIdleCh <- ch
+		if <-ch {
+			return
 		}
 	}
 }
@@ -804,7 +831,7 @@ func (f *FilterMaps) revertTo(rp *revertPoint) error {
 
 	batch := f.db.NewBatch()
 	afterLastMap := uint32((f.headLvPointer + f.valuesPerMap - 1) >> f.logValuesPerMap)
-	if rp.mapIndex >= afterLastMap {
+	if rp.mapIndex > afterLastMap {
 		return errors.New("cannot revert (head map behind revert point)")
 	}
 	lvPointer := uint64(rp.mapIndex) << f.logValuesPerMap
