@@ -17,20 +17,40 @@
 // Package web3ext contains geth specific web3.js extensions.
 package web3ext
 
-var Modules = map[string]string{
-	"admin":    AdminJs,
-	"clique":   CliqueJs,
-	"ethash":   EthashJs,
-	"debug":    DebugJs,
-	"eth":      EthJs,
-	"miner":    MinerJs,
-	"net":      NetJs,
-	"personal": PersonalJs,
-	"rpc":      RpcJs,
-	"txpool":   TxpoolJs,
-	"les":      LESJs,
-	"vflux":    VfluxJs,
-	"dev":      DevJs,
+import "fmt"
+
+type ModuleDirectory struct {
+	modules map[string]string
+}
+
+var DefaultModules = &ModuleDirectory{
+	modules: map[string]string{
+		"admin":    AdminJs,
+		"clique":   CliqueJs,
+		"debug":    DebugJs,
+		"eth":      EthJs,
+		"miner":    MinerJs,
+		"net":      NetJs,
+		"personal": PersonalJs,
+		"rpc":      RpcJs,
+		"txpool":   TxpoolJs,
+		"dev":      DevJs,
+	},
+}
+
+func (d *ModuleDirectory) Add(name, code string) {
+	if code == "" {
+		return
+	}
+	prev := ""
+	if c, ok := d.modules[name]; ok {
+		prev = fmt.Sprintf("%s\n", c)
+	}
+	d.modules[name] = fmt.Sprintf("%s%s", prev, code)
+}
+
+func (d *ModuleDirectory) Get(name string) string {
+	return d.modules[name]
 }
 
 const CliqueJs = `
@@ -85,34 +105,6 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'proposals',
 			getter: 'clique_proposals'
-		}),
-	]
-});
-`
-
-const EthashJs = `
-web3._extend({
-	property: 'ethash',
-	methods: [
-		new web3._extend.Method({
-			name: 'getWork',
-			call: 'ethash_getWork',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'getHashrate',
-			call: 'ethash_getHashrate',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'submitWork',
-			call: 'ethash_submitWork',
-			params: 3,
-		}),
-		new web3._extend.Method({
-			name: 'submitHashrate',
-			call: 'ethash_submitHashrate',
-			params: 2,
 		}),
 	]
 });
@@ -785,91 +777,6 @@ web3._extend({
 			name: 'contentFrom',
 			call: 'txpool_contentFrom',
 			params: 1,
-		}),
-	]
-});
-`
-
-const LESJs = `
-web3._extend({
-	property: 'les',
-	methods:
-	[
-		new web3._extend.Method({
-			name: 'getCheckpoint',
-			call: 'les_getCheckpoint',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'clientInfo',
-			call: 'les_clientInfo',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'priorityClientInfo',
-			call: 'les_priorityClientInfo',
-			params: 3
-		}),
-		new web3._extend.Method({
-			name: 'setClientParams',
-			call: 'les_setClientParams',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'setDefaultParams',
-			call: 'les_setDefaultParams',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'addBalance',
-			call: 'les_addBalance',
-			params: 2
-		}),
-	],
-	properties:
-	[
-		new web3._extend.Property({
-			name: 'latestCheckpoint',
-			getter: 'les_latestCheckpoint'
-		}),
-		new web3._extend.Property({
-			name: 'checkpointContractAddress',
-			getter: 'les_getCheckpointContractAddress'
-		}),
-		new web3._extend.Property({
-			name: 'serverInfo',
-			getter: 'les_serverInfo'
-		}),
-	]
-});
-`
-
-const VfluxJs = `
-web3._extend({
-	property: 'vflux',
-	methods:
-	[
-		new web3._extend.Method({
-			name: 'distribution',
-			call: 'vflux_distribution',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'timeout',
-			call: 'vflux_timeout',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'value',
-			call: 'vflux_value',
-			params: 2
-		}),
-	],
-	properties:
-	[
-		new web3._extend.Property({
-			name: 'requestStats',
-			getter: 'vflux_requestStats'
 		}),
 	]
 });

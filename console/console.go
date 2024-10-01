@@ -221,7 +221,7 @@ func (c *Console) initExtensions() error {
 			continue
 		}
 		aliases[api] = struct{}{}
-		if file, ok := web3ext.Modules[api]; ok {
+		if file := web3ext.DefaultModules.Get(api); file != "" {
 			if err = c.jsre.Compile(api+".js", file); err != nil {
 				return fmt.Errorf("%s.js: %v", api, err)
 			}
