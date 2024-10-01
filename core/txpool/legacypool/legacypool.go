@@ -1962,9 +1962,9 @@ func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
 }
 
-// DropAllTxs implements txpool.SubPool, removing all tracked txs from the pool
+// DropTransactions implements txpool.SubPool, removing all tracked txs from the pool
 // and rotating the journal.
-func (p *LegacyPool) DropAllTxs() {
+func (p *LegacyPool) DropTransactions() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

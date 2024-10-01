@@ -169,6 +169,6 @@ type SubPool interface {
 	// identified by their hashes.
 	Status(hash common.Hash) TxStatus
 
-	// DropAllTxs removes all tracked transactions from the pool
-	DropAllTxs()
+	// DropTransactions removes all tracked transactions from the pool
+	DropTransactions()
 }

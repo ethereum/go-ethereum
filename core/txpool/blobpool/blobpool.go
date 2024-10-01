@@ -1715,9 +1715,9 @@ func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
 	return txpool.TxStatusUnknown
 }
 
-// DropAllTxs implements txpool.SubPool, removing all tracked transactions
+// DropTransactions implements txpool.SubPool, removing all tracked transactions
 // from the blob pool and persistent store.
-func (p *BlobPool) DropAllTxs() {
+func (p *BlobPool) DropTransactions() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 

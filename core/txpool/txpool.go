@@ -497,3 +497,10 @@ func (p *TxPool) Sync() error {
 		return errors.New("pool already terminated")
 	}
 }
+
+// DropTransactions removes all tracked txs from the subpools.
+func (p *TxPool) DropTransactions() {
+	for _, subpool := range p.subpools {
+		subpool.DropTransactions()
+	}
+}
