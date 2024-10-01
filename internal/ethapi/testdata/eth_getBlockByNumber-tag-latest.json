@@ -16,7 +16,6 @@
   "size": "0x26a",
   "stateRoot": "0x118f1433ae23c4d1c12f5bd652baddb72611c55ac1cd6af6620d209db222f9e6",
   "timestamp": "0x64",
-  "totalDifficulty": "0x1",
   "transactions": [
     "0x3ee4094ca1e0b07a66dd616a057e081e53144ca7e9685a126fd4dda9ca042644"
   ],

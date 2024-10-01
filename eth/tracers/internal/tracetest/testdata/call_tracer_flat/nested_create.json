@@ -10,7 +10,6 @@
     "number": "555461",
     "stateRoot": "0xba8272acd0dfeb5f04376328e8bfc5b276b177697000c204a060f6f7b629ae32",
     "timestamp": "1577423350",
-    "totalDifficulty": "462222992438",
     "alloc": {
       "0xcf5b3467dfa45cdc8e5358a7a1ba4deb02e5faed": {
         "balance": "0x0",

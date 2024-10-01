@@ -43,8 +43,7 @@
     "nonce": "0xd1bdb150f6fd170e",
     "number": "2294630",
     "stateRoot": "0x1ab1a534e84cc787cda1db21e0d5920ab06017948075b759166cfea7274657a1",
-    "timestamp": "1513675347",
-    "totalDifficulty": "7160543502214733"
+    "timestamp": "1513675347"
   },
   "tracerConfig": {
     "convertParityErrors": true
