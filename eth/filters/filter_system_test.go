@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"math/big"
-	"math/rand"
 	"reflect"
 	"runtime"
 	"testing"
@@ -29,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -134,6 +134,12 @@ func (b *testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 
 func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return b.chainFeed.Subscribe(ch)
+}
+
+func (b *testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
+	fm := filtermaps.NewFilterMaps(b.db, b, filtermaps.DefaultParams, 0, false)
+	fm.Start()
+	return fm.NewMatcherBackend()
 }
 
 func (b *testBackend) setPending(block *types.Block, receipts types.Receipts) {
