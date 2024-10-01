@@ -284,7 +284,7 @@ func (c *SimulatedBeacon) Commit() common.Hash {
 
 // Rollback un-sends previously added transactions.
 func (c *SimulatedBeacon) Rollback() {
-	c.eth.TxPool().DropTransactions()
+	c.eth.TxPool().Clear()
 }
 
 // Fork sets the head to the provided hash.
