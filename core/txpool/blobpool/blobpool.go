@@ -1715,14 +1715,14 @@ func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
 	return txpool.TxStatusUnknown
 }
 
-// DropTransactions implements txpool.SubPool, removing all tracked transactions
+// Clear implements txpool.SubPool, removing all tracked transactions
 // from the blob pool and persistent store.
-func (p *BlobPool) DropTransactions() {
+func (p *BlobPool) Clear() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	// manually iterating and deleting every entry is super sub-optimal
-	// However, DropTransactions is not currently used in production so
+	// However, Clear is not currently used in production so
 	// performance is not critical at the moment.
 	for _, entry := range p.lookup {
 		if err := p.store.Delete(entry); err != nil {

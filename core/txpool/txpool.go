@@ -498,9 +498,9 @@ func (p *TxPool) Sync() error {
 	}
 }
 
-// DropTransactions removes all tracked txs from the subpools.
-func (p *TxPool) DropTransactions() {
+// Clear removes all tracked txs from the subpools.
+func (p *TxPool) Clear() {
 	for _, subpool := range p.subpools {
-		subpool.DropTransactions()
+		subpool.Clear()
 	}
 }
