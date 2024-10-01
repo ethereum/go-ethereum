@@ -74,37 +74,41 @@ func readGenesis(genesisPath string) *core.Genesis {
 	return genesis
 }
 
-type execStats struct {
-	time           time.Duration // The execution time.
-	allocs         int64         // The number of heap allocations during execution.
-	bytesAllocated int64         // The cumulative number of bytes allocated during execution.
+type ExecStats struct {
+	Time           time.Duration `json:"time"`           // The execution Time.
+	Allocs         int64         `json:"allocs"`         // The number of heap allocations during execution.
+	BytesAllocated int64         `json:"bytesAllocated"` // The cumulative number of bytes allocated during execution.
+	GasUsed        uint64        `json:"gasUsed"`        // the amount of gas used during execution
 }
 
-func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, gasLeft uint64, stats execStats, err error) {
+func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, stats ExecStats, err error) {
+	var gasUsed uint64
 	if bench {
 		result := testing.Benchmark(func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				output, gasLeft, err = execFunc()
+				output, gasUsed, err = execFunc()
 			}
 		})
-
 		// Get the average execution time from the benchmarking result.
 		// There are other useful stats here that could be reported.
-		stats.time = time.Duration(result.NsPerOp())
-		stats.allocs = result.AllocsPerOp()
-		stats.bytesAllocated = result.AllocedBytesPerOp()
+		stats.Time = time.Duration(result.NsPerOp())
+		stats.Allocs = result.AllocsPerOp()
+		stats.BytesAllocated = result.AllocedBytesPerOp()
+		stats.GasUsed = gasUsed
 	} else {
+		g
 		var memStatsBefore, memStatsAfter goruntime.MemStats
 		goruntime.ReadMemStats(&memStatsBefore)
 		startTime := time.Now()
-		output, gasLeft, err = execFunc()
-		stats.time = time.Since(startTime)
+		output, gasUsed, err = execFunc()
+		stats.Time = time.Since(startTime)
 		goruntime.ReadMemStats(&memStatsAfter)
-		stats.allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
-		stats.bytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
+		stats.Allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
+		stats.BytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
+		stats.GasUsed = gasUsed
 	}
 
-	return output, gasLeft, stats, err
+	return output, stats, err
 }
 
 func runCmd(ctx *cli.Context) error {
@@ -264,12 +268,13 @@ func runCmd(ctx *cli.Context) error {
 			statedb.SetCode(receiver, code)
 		}
 		execFunc = func() ([]byte, uint64, error) {
-			return runtime.Call(receiver, input, &runtimeConfig)
+			output, gasLeft, err := runtime.Call(receiver, input, &runtimeConfig)
+			return output, initialGas - gasLeft, err
 		}
 	}
 
 	bench := ctx.Bool(BenchFlag.Name)
-	output, leftOverGas, stats, err := timedExec(bench, execFunc)
+	output, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
 		root, err := statedb.Commit(genesisConfig.Number, true)
@@ -299,7 +304,7 @@ func runCmd(ctx *cli.Context) error {
 execution time:  %v
 allocations:     %d
 allocated bytes: %d
-`, initialGas-leftOverGas, stats.time, stats.allocs, stats.bytesAllocated)
+`, stats.GasUsed, stats.Time, stats.Allocs, stats.BytesAllocated)
 	}
 	if tracer == nil {
 		fmt.Printf("%#x\n", output)

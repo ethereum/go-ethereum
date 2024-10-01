@@ -20,10 +20,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"os"
-	"testing"
-	"time"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -32,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
+	"os"
 )
 
 var (
@@ -67,12 +64,13 @@ var stateTestCommand = &cli.Command{
 // StatetestResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type StatetestResult struct {
-	Name  string       `json:"name"`
-	Pass  bool         `json:"pass"`
-	Root  *common.Hash `json:"stateRoot,omitempty"`
-	Fork  string       `json:"fork"`
-	Error string       `json:"error,omitempty"`
-	State *state.Dump  `json:"state,omitempty"`
+	Name       string       `json:"name"`
+	Pass       bool         `json:"pass"`
+	Root       *common.Hash `json:"stateRoot,omitempty"`
+	Fork       string       `json:"fork"`
+	Error      string       `json:"error,omitempty"`
+	State      *state.Dump  `json:"state,omitempty"`
+	BenchStats *ExecStats   `json:"benchStats,omitempty"`
 }
 
 func stateTestCmd(ctx *cli.Context) error {
@@ -177,6 +175,13 @@ func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, benc
 				result.Pass, result.Error = false, err.Error()
 			}
 		})
+		if bench {
+			_, stats, _ := timedExec(true, func() ([]byte, uint64, error) {
+				_, _, gasUsed, _ := test.test.RunNoVerify(test.st, cfg, false, rawdb.HashScheme)
+				return nil, gasUsed, nil
+			})
+			result.BenchStats = &stats
+		}
 		results = append(results, *result)
 	}
 	out, _ := json.MarshalIndent(results, "", "  ")
@@ -187,23 +192,6 @@ func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, benc
 	} else if len(matchingTests) != 1 {
 		return fmt.Errorf("can only benchmark single state test case (more than one matching params)")
 	}
-	var gasUsed uint64
-	result := testing.Benchmark(func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			test := matchingTests[0]
-			_, _, gasUsed, _ = test.test.RunNoVerify(test.st, cfg, false, rawdb.HashScheme)
-		}
-	})
-	var stats execStats
-	// Get the average execution time from the benchmarking result.
-	// There are other useful stats here that could be reported.
-	stats.time = time.Duration(result.NsPerOp())
-	stats.allocs = result.AllocsPerOp()
-	stats.bytesAllocated = result.AllocedBytesPerOp()
-	fmt.Fprintf(os.Stderr, `EVM gas used:    %d
-execution time:  %v
-allocations:     %d
-allocated bytes: %d
-`, gasUsed, stats.time, stats.allocs, stats.bytesAllocated)
+
 	return nil
 }
