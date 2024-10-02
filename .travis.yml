@@ -9,8 +9,7 @@ jobs:
         - azure-osx
 
   include:
-    # These builders create the Docker sub-images for multi-arch push and each
-    # will attempt to push the multi-arch image if they are the last builder
+    # This builder create and push the Docker images for all architectures
     - stage: build
       if: type = push
       os: linux
@@ -26,24 +25,7 @@ jobs:
       before_install:
         - export DOCKER_CLI_EXPERIMENTAL=enabled
       script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
-
-    - stage: build
-      if: type = push
-      os: linux
-      arch: arm64
-      dist: focal
-      go: 1.23.x
-      env:
-        - docker
-      services:
-        - docker
-      git:
-        submodules: false # avoid cloning ethereum/tests
-      before_install:
-        - export DOCKER_CLI_EXPERIMENTAL=enabled
-      script:
-        - go run build/ci.go docker -image -manifest amd64,arm64 -upload ethereum/client-go
+        - go run build/ci.go dockerx -platform "linux/amd64,linux/arm64" -upload ethereum/client-go
 
     # This builder does the Linux Azure uploads
     - stage: build
