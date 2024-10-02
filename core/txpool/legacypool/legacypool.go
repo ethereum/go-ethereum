@@ -1968,6 +1968,28 @@ func (p *LegacyPool) Clear() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// unreserve each tracked account.  Ideally, we could just clear the
+	// reservation map in the parent txpool context.  However, if we clear in
+	// parent context, to avoid exposing the subpool lock, we have to lock the
+	// reservations and then lock each subpool.
+	//
+	// This creates the potential for a deadlock situation:
+	//
+	// * TxPool.Clear locks the reservations
+	// * a new transaction is received which locks the subpool mutex
+	// * TxPool.Clear attempts to lock subpool mutex
+	//
+	// The transaction addition may attempt to reserve the sender addr which
+	// can't happen until Clear releases the reservation lock.  Clear cannot
+	// acquire the subpool lock until the transaction addition is completed.
+	for _, tx := range p.all.remotes {
+		senderAddr, _ := types.Sender(p.signer, tx)
+		p.reserve(senderAddr, false)
+	}
+	for localSender, _ := range p.locals.accounts {
+		p.reserve(localSender, false)
+	}
+
 	p.all = newLookup()
 	p.priced = newPricedList(p.all)
 	p.pending = make(map[common.Address]*list)
