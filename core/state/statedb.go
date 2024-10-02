@@ -579,6 +579,7 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				Balance:  acc.Balance,
 				CodeHash: acc.CodeHash,
 				Root:     common.BytesToHash(acc.Root),
+				Extra:    acc.Extra, // no need to deep-copy as `acc` is short-lived
 			}
 			if len(data.CodeHash) == 0 {
 				data.CodeHash = types.EmptyCodeHash.Bytes()

@@ -5,7 +5,7 @@ package types
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
-func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
+func (obj *SlimAccount) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
 	_tmp0 := w.List()
 	w.WriteUint64(obj.Nonce)
@@ -14,7 +14,7 @@ func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
 	} else {
 		w.WriteUint256(obj.Balance)
 	}
-	w.WriteBytes(obj.Root[:])
+	w.WriteBytes(obj.Root)
 	w.WriteBytes(obj.CodeHash)
 	if err := obj.Extra.EncodeRLP(w); err != nil {
 		return err

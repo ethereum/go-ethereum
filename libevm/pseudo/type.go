@@ -193,6 +193,7 @@ type value interface {
 	json.Unmarshaler
 	rlp.Encoder
 	rlp.Decoder
+	fmt.Formatter
 }
 
 type concrete[T any] struct {

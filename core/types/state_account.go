@@ -25,6 +25,7 @@ import (
 )
 
 //go:generate go run ../../rlp/rlpgen -type StateAccount -out gen_account_rlp.go
+//go:generate go run ../../rlp/rlpgen -type SlimAccount -out gen_slim_account_rlp.libevm.go
 
 // StateAccount is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
@@ -33,6 +34,8 @@ type StateAccount struct {
 	Balance  *uint256.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
+
+	Extra *StateAccountExtra
 }
 
 // NewEmptyStateAccount constructs an empty state account.
@@ -55,6 +58,7 @@ func (acct *StateAccount) Copy() *StateAccount {
 		Balance:  balance,
 		Root:     acct.Root,
 		CodeHash: common.CopyBytes(acct.CodeHash),
+		Extra:    acct.Extra.clone(),
 	}
 }
 
@@ -66,6 +70,8 @@ type SlimAccount struct {
 	Balance  *uint256.Int
 	Root     []byte // Nil if root equals to types.EmptyRootHash
 	CodeHash []byte // Nil if hash equals to types.EmptyCodeHash
+
+	Extra *StateAccountExtra
 }
 
 // SlimAccountRLP encodes the state account in 'slim RLP' format.
@@ -73,6 +79,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 	slim := SlimAccount{
 		Nonce:   account.Nonce,
 		Balance: account.Balance,
+		Extra:   account.Extra,
 	}
 	if account.Root != EmptyRootHash {
 		slim.Root = account.Root[:]
@@ -80,7 +87,7 @@ func SlimAccountRLP(account StateAccount) []byte {
 	if !bytes.Equal(account.CodeHash, EmptyCodeHash[:]) {
 		slim.CodeHash = account.CodeHash
 	}
-	data, err := rlp.EncodeToBytes(slim)
+	data, err := rlp.EncodeToBytes(&slim)
 	if err != nil {
 		panic(err)
 	}
@@ -96,6 +103,7 @@ func FullAccount(data []byte) (*StateAccount, error) {
 	}
 	var account StateAccount
 	account.Nonce, account.Balance = slim.Nonce, slim.Balance
+	account.Extra = slim.Extra
 
 	// Interpret the storage root and code hash in slim format.
 	if len(slim.Root) == 0 {
