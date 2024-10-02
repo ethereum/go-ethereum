@@ -1631,6 +1631,12 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if err := args.setDefaults(ctx, b, true); err != nil {
 		return nil, 0, nil, err
 	}
+
+	// Set dynamic fee fields to 0 to avoid validation checks during execution.
+	// These are irrelevant to calculation of access lists and gas cost.
+	args.MaxFeePerGas = new(hexutil.Big)
+	args.MaxPriorityFeePerGas = new(hexutil.Big)
+
 	var to common.Address
 	if args.To != nil {
 		to = *args.To
