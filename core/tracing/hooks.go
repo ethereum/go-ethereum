@@ -18,6 +18,7 @@ package tracing
 
 import (
 	"context"
+	"encoding/json"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -80,7 +81,16 @@ type Backend interface {
 	GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error)
 }
 
+// Node is the interface providing access to node-level
+// infra such as APIs and DBs.
+type Node interface {
+	RegisterAPIs(apis []rpc.API)
+}
+
 type (
+	// LiveConstructor is the constructor for a live tracer.
+	LiveConstructor = func(config json.RawMessage, stack Node, backend Backend) (*Hooks, error)
+
 	/*
 		- VM events -
 	*/
