@@ -21,6 +21,7 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/libevm/pseudo"
+	"github.com/ethereum/go-ethereum/libevm/testonly"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -49,6 +50,18 @@ func RegisterExtras[SA any]() ExtraPayloads[SA] {
 		cloneStateAccount: extra.cloneStateAccount,
 	}
 	return extra
+}
+
+// TestOnlyClearRegisteredExtras clears the [Extras] previously passed to
+// [RegisterExtras]. It panics if called from a non-testing call stack.
+//
+// In tests it SHOULD be called before every call to [RegisterExtras] and then
+// defer-called afterwards, either directly or via testing.TB.Cleanup(). This is
+// a workaround for the single-call limitation on [RegisterExtras].
+func TestOnlyClearRegisteredExtras() {
+	testonly.OrPanic(func() {
+		registeredExtras = nil
+	})
 }
 
 var registeredExtras *extraConstructors
@@ -124,6 +137,27 @@ func (e *StateAccountExtra) payload() *pseudo.Type {
 		e.t = registeredExtras.newStateAccount()
 	}
 	return e.t
+}
+
+// Equal reports whether `e` is semantically equivalent to `f` for the purpose
+// of tests.
+//
+// Equal MUST NOT be used in production. Instead, compare values returned by
+// [ExtraPayloads.FromStateAccount].
+func (e *StateAccountExtra) Equal(f *StateAccountExtra) bool {
+	if false {
+		// TODO(arr4n): calling this results in an error from cmp.Diff():
+		// "non-deterministic or non-symmetric function detected". Explore the
+		// issue and then enable the enforcement.
+		testonly.OrPanic(func() {})
+	}
+
+	eNil := e == nil || e.t == nil
+	fNil := f == nil || f.t == nil
+	if eNil && fNil || eNil && f.t.IsZero() || fNil && e.t.IsZero() {
+		return true
+	}
+	return e.t.Equal(f.t)
 }
 
 var _ interface {

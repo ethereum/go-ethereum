@@ -30,15 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-func (e *StateAccountExtra) Equal(f *StateAccountExtra) bool {
-	eNil := e == nil || e.t == nil
-	fNil := f == nil || f.t == nil
-	if eNil && fNil || eNil && f.t.IsZero() || fNil && e.t.IsZero() {
-		return true
-	}
-	return e.t.Equal(f.t)
-}
-
 func TestStateAccountRLP(t *testing.T) {
 	// RLP encodings that don't involve extra payloads were generated on raw
 	// geth StateAccounts *before* any libevm modifications, thus locking in
@@ -123,11 +114,9 @@ func TestStateAccountRLP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.register != nil {
-				registeredExtras = nil
+				TestOnlyClearRegisteredExtras()
 				tt.register()
-				t.Cleanup(func() {
-					registeredExtras = nil
-				})
+				t.Cleanup(TestOnlyClearRegisteredExtras)
 			}
 			assertRLPEncodingAndReturn(t, tt.acc, tt.wantHex)
 

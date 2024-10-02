@@ -19,10 +19,9 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
-	"runtime"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/libevm/pseudo"
+	"github.com/ethereum/go-ethereum/libevm/testonly"
 )
 
 // Extras are arbitrary payloads to be added as extra fields in [ChainConfig]
@@ -92,19 +91,9 @@ func RegisterExtras[C ChainConfigHooks, R RulesHooks](e Extras[C, R]) ExtraPaylo
 // defer-called afterwards, either directly or via testing.TB.Cleanup(). This is
 // a workaround for the single-call limitation on [RegisterExtras].
 func TestOnlyClearRegisteredExtras() {
-	pc := make([]uintptr, 10)
-	runtime.Callers(0, pc)
-	frames := runtime.CallersFrames(pc)
-	for {
-		f, more := frames.Next()
-		if strings.Contains(f.File, "/testing/") || strings.HasSuffix(f.File, "_test.go") {
-			registeredExtras = nil
-			return
-		}
-		if !more {
-			panic("no _test.go file in call stack")
-		}
-	}
+	testonly.OrPanic(func() {
+		registeredExtras = nil
+	})
 }
 
 // registeredExtras holds non-generic constructors for the [Extras] types
