@@ -1627,15 +1627,8 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		return nil, 0, nil, err
 	}
 
-	// Ensure any missing fields are filled, extract the recipient and input data
-	if err := args.setDefaults(ctx, b, true); err != nil {
-		return nil, 0, nil, err
-	}
-
-	// Set dynamic fee fields to 0 to avoid validation checks during execution.
-	// These are irrelevant to calculation of access lists and gas cost.
-	args.MaxFeePerGas = new(hexutil.Big)
-	args.MaxPriorityFeePerGas = new(hexutil.Big)
+	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	args.CallDefaults(b.RPCGasCap(), blockCtx.BaseFee, b.ChainConfig().ChainID)
 
 	var to common.Address
 	if args.To != nil {
