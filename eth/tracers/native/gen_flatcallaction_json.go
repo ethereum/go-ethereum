@@ -20,7 +20,6 @@ func (f flatCallAction) MarshalJSON() ([]byte, error) {
 		SelfDestructed *common.Address `json:"address,omitempty"`
 		Balance        *hexutil.Big    `json:"balance,omitempty"`
 		CallType       string          `json:"callType,omitempty"`
-		CreationMethod string          `json:"creationMethod,omitempty"`
 		From           *common.Address `json:"from,omitempty"`
 		Gas            *hexutil.Uint64 `json:"gas,omitempty"`
 		Init           *hexutil.Bytes  `json:"init,omitempty"`
@@ -35,7 +34,6 @@ func (f flatCallAction) MarshalJSON() ([]byte, error) {
 	enc.SelfDestructed = f.SelfDestructed
 	enc.Balance = (*hexutil.Big)(f.Balance)
 	enc.CallType = f.CallType
-	enc.CreationMethod = f.CreationMethod
 	enc.From = f.From
 	enc.Gas = (*hexutil.Uint64)(f.Gas)
 	enc.Init = (*hexutil.Bytes)(f.Init)
@@ -54,7 +52,6 @@ func (f *flatCallAction) UnmarshalJSON(input []byte) error {
 		SelfDestructed *common.Address `json:"address,omitempty"`
 		Balance        *hexutil.Big    `json:"balance,omitempty"`
 		CallType       *string         `json:"callType,omitempty"`
-		CreationMethod *string         `json:"creationMethod,omitempty"`
 		From           *common.Address `json:"from,omitempty"`
 		Gas            *hexutil.Uint64 `json:"gas,omitempty"`
 		Init           *hexutil.Bytes  `json:"init,omitempty"`
@@ -81,9 +78,6 @@ func (f *flatCallAction) UnmarshalJSON(input []byte) error {
 	}
 	if dec.CallType != nil {
 		f.CallType = *dec.CallType
-	}
-	if dec.CreationMethod != nil {
-		f.CreationMethod = *dec.CreationMethod
 	}
 	if dec.From != nil {
 		f.From = dec.From
