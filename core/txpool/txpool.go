@@ -311,8 +311,8 @@ func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 // retrieve blobs from the pools directly instead of the network.
 func (p *TxPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
 	for _, subpool := range p.subpools {
-		// It's a ugly to assume that only one pool will be capable of returning
-		// anthing meaningful for this call, but anythingh else requires merging
+		// It's an ugly to assume that only one pool will be capable of returning
+		// anything meaningful for this call, but anythingh else requires merging
 		// partial responses and that's too annoying to do until we get a second
 		// blobpool (probably never).
 		if blobs, proofs := subpool.GetBlobs(vhashes); blobs != nil {
