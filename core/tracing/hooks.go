@@ -189,6 +189,9 @@ type (
 
 	// StorageReadHook is called when EVM reads a storage slot of an account.
 	StorageReadHook = func(addr common.Address, slot, value common.Hash)
+
+	// BlockHashReadHook is called when EVM reads the blockhash of a block.
+	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
 )
 
 type Hooks struct {
@@ -223,6 +226,8 @@ type Hooks struct {
 	OnCodeSizeRead CodeSizeReadHook
 	OnCodeHashRead CodeHashReadHook
 	OnStorageRead  StorageReadHook
+	// Block hash read
+	OnBlockHashRead BlockHashReadHook
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
