@@ -167,6 +167,7 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 // valid range with the current indexed range. This function should be called
 // whenever a part of the log index has been removed, before adding new blocks
 // to it.
+// Note that this function assumes that the read lock is being held.
 func (f *FilterMaps) updateMatchersValidRange() {
 	for fm := range f.matchers {
 		if !f.initialized {

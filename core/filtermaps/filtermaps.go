@@ -49,18 +49,22 @@ type blockchain interface {
 // without the tree hashing and consensus changes:
 // https://eips.ethereum.org/EIPS/eip-7745
 type FilterMaps struct {
-	lock                  sync.RWMutex
-	db                    ethdb.KeyValueStore
 	closeCh               chan struct{}
 	closeWg               sync.WaitGroup
 	history, unindexLimit uint64
 	noHistory             bool
-
 	Params
-	filterMapsRange
 	chain         blockchain
 	matcherSyncCh chan *FilterMapsMatcherBackend
-	matchers      map[*FilterMapsMatcherBackend]struct{}
+
+	// db and range are only modified by indexer under write lock; indexer can
+	// read them without a lock while matchers can access them under read lock
+	lock sync.RWMutex
+	db   ethdb.KeyValueStore
+	filterMapsRange
+
+	matchers map[*FilterMapsMatcherBackend]struct{}
+
 	// filterMapCache caches certain filter maps (headCacheSize most recent maps
 	// and one tail map) that are expected to be frequently accessed and modified
 	// while updating the structure. Note that the set of cached maps depends
@@ -70,6 +74,11 @@ type FilterMaps struct {
 	blockPtrCache  *lru.Cache[uint32, uint64]
 	lvPointerCache *lru.Cache[uint64, uint64]
 	revertPoints   map[uint64]*revertPoint
+
+	startHeadUpdate, loggedHeadUpdate, loggedTailExtend, loggedTailUnindex bool
+	startedHeadUpdate, startedTailExtend, startedTailUnindex               time.Time
+	lastLogHeadUpdate, lastLogTailExtend, lastLogTailUnindex               time.Time
+	ptrHeadUpdate, ptrTailExtend, ptrTailUnindex                           uint64
 
 	waitIdleCh chan chan bool
 }
@@ -120,13 +129,14 @@ func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, hist
 	}
 	params.deriveFields()
 	fm := &FilterMaps{
-		db:         db,
-		chain:      chain,
-		closeCh:    make(chan struct{}),
-		waitIdleCh: make(chan chan bool),
-		history:    history,
-		noHistory:  noHistory,
-		Params:     params,
+		db:           db,
+		chain:        chain,
+		closeCh:      make(chan struct{}),
+		waitIdleCh:   make(chan chan bool),
+		history:      history,
+		noHistory:    noHistory,
+		unindexLimit: unindexLimit,
+		Params:       params,
 		filterMapsRange: filterMapsRange{
 			initialized:     rs.Initialized,
 			headLvPointer:   rs.HeadLvPointer,
@@ -151,13 +161,14 @@ func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, hist
 	return fm
 }
 
+// Start starts the indexer.
 func (f *FilterMaps) Start() {
 	f.closeWg.Add(2)
 	go f.removeBloomBits()
 	go f.updateLoop()
 }
 
-// Close ensures that the indexer is fully stopped before returning.
+// Stop ensures that the indexer is fully stopped before returning.
 func (f *FilterMaps) Stop() {
 	close(f.closeCh)
 	f.closeWg.Wait()
@@ -172,10 +183,10 @@ func (f *FilterMaps) reset() bool {
 	f.revertPoints = make(map[uint64]*revertPoint)
 	f.blockPtrCache.Purge()
 	f.lvPointerCache.Purge()
-	f.lock.Unlock()
 	// deleting the range first ensures that resetDb will be called again at next
 	// startup and any leftover data will be removed even if it cannot finish now.
 	rawdb.DeleteFilterMapsRange(f.db)
+	f.lock.Unlock()
 	return f.removeDbWithPrefix(rawdb.FilterMapsPrefix, "Resetting log index database")
 }
 
