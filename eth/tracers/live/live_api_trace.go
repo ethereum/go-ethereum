@@ -41,10 +41,10 @@ func (api *traceAPI) Block(ctx context.Context, blockNr rpc.BlockNumber, cfg *tr
 		blknum = api.live.latest.Load()
 	}
 
-	return api.readBlockTraces(ctx, tracer, blknum, tracer == "parityTracer")
+	return api.readBlockTraces(ctx, tracer, blknum, tracer == "parityTracer", nil)
 }
 
-func (api *traceAPI) readBlockTraces(ctx context.Context, tracer string, blknum uint64, isParity bool) ([]interface{}, error) {
+func (api *traceAPI) readBlockTraces(ctx context.Context, tracer string, blknum uint64, isParity bool, parityTraceMatcher func(interface{}) bool) ([]interface{}, error) {
 	traces, err := api.live.readBlockTraces(ctx, tracer, blknum)
 	if err != nil {
 		return nil, err
@@ -52,10 +52,17 @@ func (api *traceAPI) readBlockTraces(ctx context.Context, tracer string, blknum 
 
 	results := make([]interface{}, 0, len(traces))
 	if isParity {
-		// Convert from []interface{} to []traceResult
 		for i, trace := range traces {
 			if parityTraces, ok := trace.Result.([]interface{}); ok {
-				results = append(results, parityTraces...)
+				if parityTraceMatcher == nil {
+					results = append(results, parityTraces...)
+					continue
+				}
+				for _, parityTrace := range parityTraces {
+					if parityTraceMatcher(parityTrace) {
+						results = append(results, parityTrace)
+					}
+				}
 			} else {
 				return nil, fmt.Errorf("invalid trace result type at index: %d", i)
 			}
@@ -146,8 +153,8 @@ func (api *traceAPI) Filter(ctx context.Context, req traceFilterConfig, cfg *tra
 		toBlock   = uint64(0)
 		count     = uint64(^uint(0))
 		after     = uint64(0)
-		// fromAddrs = extractAddres(req.FromAddress)
-		// toAddrs   = extractAddres(req.ToAddress)
+		fromAddrs = extractAddres(req.FromAddress)
+		toAddrs   = extractAddres(req.ToAddress)
 	)
 
 	if req.FromBlock != nil {
@@ -170,7 +177,18 @@ func (api *traceAPI) Filter(ctx context.Context, req traceFilterConfig, cfg *tra
 		after = *req.After
 	}
 
-	return exportLimitedTraces(func(blknum uint64) ([]interface{}, error) { return api.readBlockTraces(ctx, tracer, blknum, isParity) }, fromBlock, toBlock, count, after)
+	var parityTraceMatcher func(interface{}) bool
+	if isParity && (len(fromAddrs) > 0 || len(toAddrs) > 0) {
+		parityTraceMatcher = func(trace interface{}) bool {
+			return filterParityTrace(trace, fromAddrs, toAddrs, req.Mode)
+		}
+	}
+
+	traceGen := func(blknum uint64) ([]interface{}, error) {
+		return api.readBlockTraces(ctx, tracer, blknum, isParity, parityTraceMatcher)
+	}
+
+	return exportLimitedTraces(traceGen, fromBlock, toBlock, count, after)
 }
 
 func (api *traceAPI) getTracerOrDefault(cfg *traceConfig) (string, error) {

@@ -59,6 +59,10 @@ var parityErrorMappingStartingWith = map[string]string{
 	"stack underflow": "Stack underflow",
 }
 
+// ParityTrace represents a single trace item in Parity format.
+// It is an alias for flatCallFrame, providing Parity-compatible naming.
+type ParityTrace flatCallFrame
+
 // flatCallFrame is a standalone callframe.
 type flatCallFrame struct {
 	Action              flatCallAction  `json:"action"`
