@@ -2019,7 +2019,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 	}
 
-	log.Info("flags", "genesis", cfg.Genesis)
 	// Set any dangling config values
 	if ctx.String(CryptoKZGFlag.Name) != "gokzg" && ctx.String(CryptoKZGFlag.Name) != "ckzg" {
 		Fatalf("--%s flag must be 'gokzg' or 'ckzg'", CryptoKZGFlag.Name)
@@ -2095,7 +2094,6 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	}})
 
 	// avoiding constructor changed by introducing new method to set genesis
-	log.Info("filterAPI", "genesis", ethcfg.Genesis)
 	filterAPI.SetChainConfig(ethcfg.Genesis.Config)
 
 	return filterSystem
