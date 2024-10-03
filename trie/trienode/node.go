@@ -102,6 +102,8 @@ func (set *NodeSet) AddNode(path []byte, n *Node) {
 	set.Nodes[string(path)] = n
 }
 
+// MergeSet mergest set with other. It assumes that the sets are disjunct, so
+// that it does not need to deduplicate data (count deletes, dedup leaves etc).
 func (set *NodeSet) MergeSet(other *NodeSet) error {
 	if set.Owner != other.Owner {
 		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, other.Owner)
@@ -109,22 +111,12 @@ func (set *NodeSet) MergeSet(other *NodeSet) error {
 	set.mu.Lock()
 	defer set.mu.Unlock()
 	for path, node := range other.Nodes {
-		prev, ok := set.Nodes[path]
-		if ok {
-			// overwrite happens, revoke the counter
-			if prev.IsDeleted() {
-				set.deletes -= 1
-			} else {
-				set.updates -= 1
-			}
-		}
-		if node.IsDeleted() {
-			set.deletes += 1
-		} else {
-			set.updates += 1
-		}
 		set.Nodes[path] = node
 	}
+	set.deletes += other.deletes
+	set.updates += other.updates
+	// Since we assume the sets are disjunct, we can safely append leaves
+	// like this without dedup.
 	set.Leaves = append(set.Leaves, other.Leaves...)
 	return nil
 }
