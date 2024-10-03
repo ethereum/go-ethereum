@@ -1208,6 +1208,26 @@ func (p *BlobPool) Get(hash common.Hash) *types.Transaction {
 	return item
 }
 
+// GetBySenderAndNonce returns a transaction of a sender and its corresponding nonce.
+func (p *BlobPool) GetBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	txs, ok := p.index[sender]
+	if !ok {
+		return nil
+	}
+
+	next := p.state.GetNonce(sender)
+	offset := int(nonce - next)
+
+	if offset < 0 || offset >= len(txs) {
+		return nil
+	}
+
+	return p.Get(txs[offset].hash)
+}
+
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
 func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
