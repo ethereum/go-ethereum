@@ -72,7 +72,6 @@ type FilterMaps struct {
 	revertPoints   map[uint64]*revertPoint
 
 	waitIdleCh chan chan bool
-	testHook   func(int)
 }
 
 // filterMap is a full or partial in-memory representation of a filter map where
