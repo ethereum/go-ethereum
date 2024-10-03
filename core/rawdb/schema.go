@@ -347,14 +347,14 @@ func IsStorageTrieNode(key []byte) bool {
 // filterMapRowKey = filterMapRowPrefix + mapRowIndex (uint64 big endian)
 func filterMapRowKey(mapRowIndex uint64) []byte {
 	key := append(filterMapRowPrefix, make([]byte, 8)...)
-	binary.BigEndian.PutUint64(key[1:], mapRowIndex)
+	binary.BigEndian.PutUint64(key[len(filterMapRowPrefix):], mapRowIndex)
 	return key
 }
 
 // filterMapBlockPtrKey = filterMapBlockPtrPrefix + mapIndex (uint32 big endian)
 func filterMapBlockPtrKey(mapIndex uint32) []byte {
 	key := append(filterMapBlockPtrPrefix, make([]byte, 4)...)
-	binary.BigEndian.PutUint32(key[1:], mapIndex)
+	binary.BigEndian.PutUint32(key[len(filterMapBlockPtrPrefix):], mapIndex)
 	return key
 }
 

@@ -18,7 +18,6 @@ package filtermaps
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -40,72 +39,156 @@ var testParams = Params{
 	logValuesPerMap: 4,
 }
 
-func TestIndexerSetHistory(t *testing.T) {
+func TestIndexerRandomRange(t *testing.T) {
 	ts := newTestSetup(t)
-	ts.setHistory(0, false)
+	defer ts.close()
+
+	forks := make([][]common.Hash, 10)
 	ts.chain.addBlocks(1000, 5, 2, 4, false) // 50 log values per block
-	ts.runUntilWait()
-	ts.checkLvRange(50)
-	ts.setHistory(100, false)
-	ts.runUntil(func() bool {
-		l := ts.lastRange.headLvPointer - ts.lastRange.tailLvPointer
-		return l > 44000 && l < 45000
-	})
-	ts.setHistory(200, false)
-	ts.runUntilWait()
-	ts.checkLvRange(50)
-	ts.setHistory(0, false)
-	ts.runUntilWait()
-	ts.checkLvRange(50)
-}
-
-func TestIndexerRandomSetHistory(t *testing.T) {
-	ts := newTestSetup(t)
-	ts.chain.addBlocks(100, 5, 2, 4, false) // 50 log values per block
-	for i := 0; i < 3000; i++ {
-		ts.setHistory(uint64(rand.Intn(1001)), false)
-		ts.nextEvent()
-		for rand.Intn(20) != 0 && ts.lastEvent != testHookWait {
-			ts.nextEvent()
+	for i := range forks {
+		if i != 0 {
+			forkBlock := rand.Intn(1000)
+			ts.chain.setHead(forkBlock)
+			ts.chain.addBlocks(1000-forkBlock, 5, 2, 4, false) // 50 log values per block
 		}
-		if ts.lastEvent == testHookWait {
-			ts.checkLvRange(50)
-		}
+		forks[i] = ts.chain.getCanonicalChain()
 	}
 	ts.setHistory(0, false)
-	ts.runUntilWait()
-	ts.checkLvRange(50)
+	var (
+		history    int
+		noHistory  bool
+		fork, head = len(forks) - 1, 1000
+	)
+	ts.fm.WaitIdle()
+	for i := 0; i < 200; i++ {
+		switch rand.Intn(2) {
+		case 0:
+			// change history settings
+			switch rand.Intn(10) {
+			case 0:
+				history, noHistory = 0, false
+			case 1:
+				history, noHistory = 0, true
+			default:
+				history, noHistory = rand.Intn(1000)+1, false
+			}
+			ts.setHistory(uint64(history), noHistory)
+		case 1:
+			// change head
+			fork, head = rand.Intn(len(forks)), rand.Intn(1001)
+			ts.chain.setCanonicalChain(forks[fork][:head+1])
+		}
+		ts.fm.WaitIdle()
+		fmr := ts.fm.getRange()
+		if noHistory {
+			if fmr.initialized {
+				t.Fatalf("filterMapsRange initialized while indexing is disabled")
+			}
+			continue
+		}
+		if !fmr.initialized {
+			t.Fatalf("filterMapsRange not initialized while indexing is enabled")
+		}
+		var (
+			tail   int
+			tpHash common.Hash
+		)
+		if history > 0 && history <= head {
+			tail = head + 1 - history
+		}
+		if tail > 0 {
+			tpHash = forks[fork][tail-1]
+		}
+		if fmr.headBlockNumber != uint64(head) || fmr.headBlockHash != forks[fork][head] {
+			ts.t.Fatalf("Invalid index head (expected #%d %v, got #%d %v)", head, forks[fork][head], fmr.headBlockNumber, fmr.headBlockHash)
+		}
+		if fmr.tailBlockNumber != uint64(tail) || fmr.tailParentHash != tpHash {
+			ts.t.Fatalf("Invalid index head (expected #%d %v, got #%d %v)", tail, tpHash, fmr.tailBlockNumber, fmr.tailParentHash)
+		}
+		expLvCount := uint64(head+1-tail) * 50
+		if tail == 0 {
+			expLvCount -= 50 // no logs in genesis block
+		}
+		if fmr.headLvPointer-fmr.tailBlockLvPointer != expLvCount {
+			ts.t.Fatalf("Invalid number of log values (expected %d, got %d)", expLvCount, fmr.headLvPointer-fmr.tailBlockLvPointer)
+		}
+		if fmr.tailBlockLvPointer-fmr.tailLvPointer >= ts.params.valuesPerMap {
+			ts.t.Fatalf("Invalid number of leftover tail log values (expected < %d, got %d)", ts.params.valuesPerMap, fmr.tailBlockLvPointer-fmr.tailLvPointer)
+		}
+	}
 }
 
-func TestIndexerDbEquality(t *testing.T) {
+func TestIndexerCompareDb(t *testing.T) {
 	ts := newTestSetup(t)
+	defer ts.close()
+
 	ts.setHistory(0, false)
-	for i := 0; i < 10; i++ {
-		ts.chain.addBlocks(100, 10, 3, 4, true)
-		ts.runUntilWait()
-	}
-	hash1 := ts.fmDbHash()
-	fmt.Println(hash1)
-	ts.setHistory(500, false)
-	ts.runUntilWait()
-	hash2 := ts.fmDbHash()
-	fmt.Println(hash2)
+	ts.chain.addBlocks(500, 10, 3, 4, true)
+	ts.fm.WaitIdle()
+	// revert points are stored after block 500
+	ts.chain.addBlocks(500, 10, 3, 4, true)
+	ts.fm.WaitIdle()
+	chain1 := ts.chain.getCanonicalChain()
+	ts.storeDbHash("chain 1 [0, 1000]")
+
+	ts.chain.setHead(600)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("chain 1/2 [0, 600]")
+
+	ts.chain.addBlocks(600, 10, 3, 4, true)
+	ts.fm.WaitIdle()
+	chain2 := ts.chain.getCanonicalChain()
+	ts.storeDbHash("chain 2 [0, 1200]")
+
+	ts.setHistory(800, false)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("chain 2 [401, 1200]")
+
+	ts.chain.setHead(600)
+	ts.fm.WaitIdle()
+	ts.checkDbHash("chain 1/2 [0, 600]")
+
+	ts.chain.setCanonicalChain(chain1)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("chain 1 [201, 1000]")
+
 	ts.setHistory(0, false)
-	ts.runUntilWait()
-	hash3 := ts.fmDbHash()
-	fmt.Println(hash3)
+	ts.fm.WaitIdle()
+	ts.checkDbHash("chain 1 [0, 1000]")
+
+	ts.setHistory(0, true)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("no index")
+
+	ts.chain.setCanonicalChain(chain2[:501])
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+	ts.chain.setCanonicalChain(chain2)
+	ts.fm.WaitIdle()
+	ts.checkDbHash("chain 2 [0, 1200]")
+
+	ts.chain.setCanonicalChain(chain1)
+	ts.fm.WaitIdle()
+	ts.setHistory(800, false)
+	ts.fm.WaitIdle()
+	ts.checkDbHash("chain 1 [201, 1000]")
+
+	ts.chain.setCanonicalChain(chain2)
+	ts.fm.WaitIdle()
+	ts.checkDbHash("chain 2 [401, 1200]")
+
+	ts.setHistory(0, true)
+	ts.fm.WaitIdle()
+	ts.checkDbHash("no index")
 }
 
 type testSetup struct {
-	t         *testing.T
-	fm        *FilterMaps
-	db        ethdb.Database
-	chain     *testChain
-	params    Params
-	eventCh   chan int
-	resumeCh  chan struct{}
-	lastEvent int
-	lastRange filterMapsRange
+	t        *testing.T
+	fm       *FilterMaps
+	db       ethdb.Database
+	chain    *testChain
+	params   Params
+	dbHashes map[string]common.Hash
 }
 
 func newTestSetup(t *testing.T) *testSetup {
@@ -116,76 +199,32 @@ func newTestSetup(t *testing.T) *testSetup {
 		chain:    newTestChain(),
 		db:       rawdb.NewMemoryDatabase(),
 		params:   params,
-		eventCh:  make(chan int),
-		resumeCh: make(chan struct{}),
-	}
-}
-
-func (ts *testSetup) runUntil(stop func() bool) {
-	for !stop() {
-		ts.nextEvent()
-		for ts.lastEvent == testHookWait {
-			ts.t.Fatalf("Indexer in waiting state before runUntil condition is met")
-		}
-	}
-}
-
-func (ts *testSetup) runUntilWait() {
-	for {
-		ts.nextEvent()
-		for ts.lastEvent != testHookWait {
-			ts.nextEvent()
-		}
-		if ts.fm.getRange().headBlockHash == ts.chain.CurrentBlock().Hash() {
-			return
-		}
-	}
-}
-
-func (ts *testSetup) checkLvRange(lvPerBlock uint64) {
-	expBlockCount := uint64(len(ts.chain.canonical) - 1)
-	if ts.fm.history != 0 && ts.fm.history < expBlockCount {
-		expBlockCount = ts.fm.history
-	}
-	if ts.lastRange.headLvPointer-ts.lastRange.tailBlockLvPointer != expBlockCount*lvPerBlock {
-		ts.t.Fatalf("Invalid number of log values (expected %d, got %d)", expBlockCount*lvPerBlock, ts.lastRange.headLvPointer-ts.lastRange.tailLvPointer)
-	}
-	if ts.lastRange.tailBlockLvPointer-ts.lastRange.tailLvPointer >= ts.params.valuesPerMap {
-		ts.t.Fatalf("Invalid number of leftover tail log values (expected < %d, got %d)", ts.params.valuesPerMap, ts.lastRange.tailBlockLvPointer-ts.lastRange.tailLvPointer)
+		dbHashes: make(map[string]common.Hash),
 	}
 }
 
 func (ts *testSetup) setHistory(history uint64, noHistory bool) {
 	if ts.fm != nil {
-		ts.stopFm()
+		ts.fm.Stop()
 	}
 	ts.fm = NewFilterMaps(ts.db, ts.chain, ts.params, history, noHistory)
-	ts.fm.testHook = ts.testHook
 	ts.fm.Start()
-	ts.lastEvent = <-ts.eventCh
 }
 
-func (ts *testSetup) testHook(event int) {
-	ts.eventCh <- event
-	<-ts.resumeCh
-}
-
-func (ts *testSetup) nextEvent() {
-	ts.resumeCh <- struct{}{}
-	ts.lastEvent = <-ts.eventCh
-	ts.lastRange = ts.fm.getRange()
-}
-
-func (ts *testSetup) stopFm() {
-	close(ts.fm.closeCh)
-	for {
-		ts.nextEvent()
-		if ts.lastEvent == testHookStop {
-			break
+func (ts *testSetup) storeDbHash(id string) {
+	dbHash := ts.fmDbHash()
+	for otherId, otherHash := range ts.dbHashes {
+		if otherHash == dbHash {
+			ts.t.Fatalf("Unexpected equal database hashes `%s` and `%s`", id, otherId)
 		}
 	}
-	ts.resumeCh <- struct{}{}
-	ts.fm.closeWg.Wait()
+	ts.dbHashes[id] = dbHash
+}
+
+func (ts *testSetup) checkDbHash(id string) {
+	if ts.fmDbHash() != ts.dbHashes[id] {
+		ts.t.Fatalf("Database `%s` hash mismatch", id)
+	}
 }
 
 func (ts *testSetup) fmDbHash() common.Hash {
@@ -202,7 +241,9 @@ func (ts *testSetup) fmDbHash() common.Hash {
 }
 
 func (ts *testSetup) close() {
-	ts.stopFm()
+	if ts.fm != nil {
+		ts.fm.Stop()
+	}
 	ts.db.Close()
 	ts.chain.db.Close()
 }
