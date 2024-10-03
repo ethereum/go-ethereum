@@ -162,9 +162,7 @@ func (b *testBackend) NewMatcherBackend() filtermaps.MatcherBackend {
 func (b *testBackend) startFilterMaps(history uint64, noHistory bool) {
 	b.fm = filtermaps.NewFilterMaps(b.db, b, filtermaps.DefaultParams, history, noHistory)
 	b.fm.Start()
-	if !noHistory {
-		b.fm.WaitIdle()
-	}
+	b.fm.WaitIdle()
 }
 
 func (b *testBackend) stopFilterMaps() {

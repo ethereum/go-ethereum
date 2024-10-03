@@ -35,28 +35,10 @@ const (
 	cachedRevertPoints   = 64             // revert points for most recent blocks in memory
 )
 
-const (
-	testHookInit = iota
-	testHookUpdateHeadEpoch
-	testHookUpdateHead
-	testHookExtendTailEpoch
-	testHookExtendTail
-	testHookPruneTail
-	testHookPruneTailMaps
-	testHookRevert
-	testHookWait
-	testHookStop
-)
-
 // updateLoop initializes and updates the log index structure according to the
 // canonical chain.
 func (f *FilterMaps) updateLoop() {
-	defer func() {
-		f.closeWg.Done()
-		if f.testHook != nil {
-			f.testHook(testHookStop)
-		}
-	}()
+	defer f.closeWg.Done()
 
 	if f.noHistory {
 		f.reset()
@@ -95,10 +77,6 @@ func (f *FilterMaps) updateLoop() {
 		if stop {
 			return
 		}
-		delay := time.Second * 20
-		if f.testHook != nil {
-			delay = 0
-		}
 	loop:
 		for {
 			select {
@@ -115,12 +93,9 @@ func (f *FilterMaps) updateLoop() {
 					continue loop
 				}
 				ch <- false
-			case <-time.After(delay):
+			case <-time.After(time.Second * 20):
 				// keep updating log index during syncing
 				head = f.chain.CurrentBlock()
-				if f.testHook != nil {
-					f.testHook(testHookWait)
-				}
 			}
 			break
 		}
@@ -184,6 +159,10 @@ func (f *FilterMaps) updateLoop() {
 // WaitIdle blocks until the indexer is in an idle state while synced up to the
 // latest chain head.
 func (f *FilterMaps) WaitIdle() {
+	if f.noHistory {
+		f.closeWg.Wait()
+		return
+	}
 	for {
 		ch := make(chan bool)
 		f.waitIdleCh <- ch
@@ -219,9 +198,6 @@ func (f *FilterMaps) tryInit(head *types.Header) bool {
 		log.Error("Could not initialize log index", "error", err)
 	}
 	f.applyUpdateBatch(update)
-	if f.testHook != nil {
-		f.testHook(testHookInit)
-	}
 	return true
 }
 
@@ -295,16 +271,10 @@ func (f *FilterMaps) tryUpdateHead(newHead *types.Header) bool {
 		if update.updatedRangeLength() >= f.mapsPerEpoch {
 			// limit the amount of data updated in a single batch
 			f.applyUpdateBatch(update)
-			if f.testHook != nil {
-				f.testHook(testHookUpdateHeadEpoch)
-			}
 			update = f.newUpdateBatch()
 		}
 	}
 	f.applyUpdateBatch(update)
-	if f.testHook != nil {
-		f.testHook(testHookUpdateHead)
-	}
 	return true
 }
 
@@ -342,9 +312,6 @@ func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) bool {
 		if tailEpoch := update.tailEpoch(); tailEpoch < lastTailEpoch {
 			// limit the amount of data updated in a single batch
 			f.applyUpdateBatch(update)
-			if f.testHook != nil {
-				f.testHook(testHookExtendTailEpoch)
-			}
 			update = f.newUpdateBatch()
 			lastTailEpoch = tailEpoch
 		}
@@ -365,9 +332,6 @@ func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) bool {
 		number, parentHash = newTail.Number.Uint64(), newTail.ParentHash
 	}
 	f.applyUpdateBatch(update)
-	if f.testHook != nil {
-		f.testHook(testHookExtendTail)
-	}
 	return number <= tailTarget
 }
 
@@ -406,9 +370,6 @@ func (f *FilterMaps) pruneTailPtr(tailTarget uint64) {
 	fmr.tailBlockNumber, fmr.tailParentHash = tailTarget, tailParentHash
 	fmr.tailBlockLvPointer = targetLvPointer
 	f.setRange(f.db, fmr)
-	if f.testHook != nil {
-		f.testHook(testHookPruneTail)
-	}
 }
 
 // tryPruneTailMaps removes unused filter maps and corresponding log index
@@ -461,6 +422,9 @@ func (f *FilterMaps) pruneMaps(first, afterLast uint32, removeLvPtr *uint64) {
 	batch := f.db.NewBatch()
 	for *removeLvPtr < nextBlockNumber {
 		f.deleteBlockLvPointer(batch, *removeLvPtr)
+		if (*removeLvPtr)%revertPointFrequency == 0 {
+			rawdb.DeleteRevertPoint(batch, *removeLvPtr)
+		}
 		(*removeLvPtr)++
 	}
 	for mapIndex := first; mapIndex < afterLast; mapIndex++ {
@@ -480,9 +444,6 @@ func (f *FilterMaps) pruneMaps(first, afterLast uint32, removeLvPtr *uint64) {
 	f.setRange(batch, fmr)
 	if err := batch.Write(); err != nil {
 		log.Crit("Could not write update batch", "error", err)
-	}
-	if f.testHook != nil {
-		f.testHook(testHookPruneTailMaps)
 	}
 }
 
@@ -873,6 +834,9 @@ func (f *FilterMaps) revertTo(rp *revertPoint) error {
 	}
 	for blockNumber := rp.blockNumber + 1; blockNumber <= f.headBlockNumber; blockNumber++ {
 		f.deleteBlockLvPointer(batch, blockNumber)
+		if blockNumber%revertPointFrequency == 0 {
+			rawdb.DeleteRevertPoint(batch, blockNumber)
+		}
 	}
 	newRange := f.filterMapsRange
 	newRange.headLvPointer = lvPointer
@@ -881,9 +845,6 @@ func (f *FilterMaps) revertTo(rp *revertPoint) error {
 	f.setRange(batch, newRange)
 	if err := batch.Write(); err != nil {
 		log.Crit("Could not write update batch", "error", err)
-	}
-	if f.testHook != nil {
-		f.testHook(testHookRevert)
 	}
 	return nil
 }
