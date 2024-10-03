@@ -49,12 +49,12 @@ type blockchain interface {
 // without the tree hashing and consensus changes:
 // https://eips.ethereum.org/EIPS/eip-7745
 type FilterMaps struct {
-	lock      sync.RWMutex
-	db        ethdb.KeyValueStore
-	closeCh   chan struct{}
-	closeWg   sync.WaitGroup
-	history   uint64
-	noHistory bool
+	lock                  sync.RWMutex
+	db                    ethdb.KeyValueStore
+	closeCh               chan struct{}
+	closeWg               sync.WaitGroup
+	history, unindexLimit uint64
+	noHistory             bool
 
 	Params
 	filterMapsRange
@@ -101,9 +101,9 @@ var emptyRow = FilterRow{}
 // Note that tailBlockLvPointer points to the earliest log value index belonging
 // to the tail block while tailLvPointer points to the earliest log value index
 // added to the corresponding filter map. The latter might point to an earlier
-// index after tail blocks have been pruned because we do not remove tail values
-// one by one, rather delete entire maps when all blocks that had log values in
-// those maps are unindexed.
+// index after tail blocks have been unindexed because we do not remove tail
+// values one by one, rather delete entire maps when all blocks that had log
+// values in those maps are unindexed.
 type filterMapsRange struct {
 	initialized                                      bool
 	headLvPointer, tailLvPointer, tailBlockLvPointer uint64
@@ -113,7 +113,7 @@ type filterMapsRange struct {
 
 // NewFilterMaps creates a new FilterMaps and starts the indexer in order to keep
 // the structure in sync with the given blockchain.
-func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, history uint64, noHistory bool) *FilterMaps {
+func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, history, unindexLimit uint64, noHistory bool) *FilterMaps {
 	rs, err := rawdb.ReadFilterMapsRange(db)
 	if err != nil {
 		log.Error("Error reading log index range", "error", err)

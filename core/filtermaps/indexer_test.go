@@ -207,7 +207,7 @@ func (ts *testSetup) setHistory(history uint64, noHistory bool) {
 	if ts.fm != nil {
 		ts.fm.Stop()
 	}
-	ts.fm = NewFilterMaps(ts.db, ts.chain, ts.params, history, noHistory)
+	ts.fm = NewFilterMaps(ts.db, ts.chain, ts.params, history, 1, noHistory)
 	ts.fm.Start()
 }
 
