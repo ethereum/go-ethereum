@@ -19,9 +19,9 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/exp/slices"
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
@@ -695,27 +694,6 @@ func (r *receiptLogs) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// DeriveLogFields fills the logs in receiptLogs with information such as block number, txhash, etc.
-func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, txs types.Transactions) error {
-	logIndex := uint(0)
-	if len(txs) != len(receipts) {
-		return errors.New("transaction and receipt count mismatch")
-	}
-	for i := 0; i < len(receipts); i++ {
-		txHash := txs[i].Hash()
-		// The derived log fields can simply be set from the block and transaction
-		for j := 0; j < len(receipts[i].Logs); j++ {
-			receipts[i].Logs[j].BlockNumber = number
-			receipts[i].Logs[j].BlockHash = hash
-			receipts[i].Logs[j].TxHash = txHash
-			receipts[i].Logs[j].TxIndex = uint(i)
-			receipts[i].Logs[j].Index = logIndex
-			logIndex++
-		}
-	}
-	return nil
-}
-
 // ReadLogs retrieves the logs for all transactions in a block. In case
 // receipts is not found, a nil is returned.
 // Note: ReadLogs does not derive unstored log fields.
@@ -753,7 +731,7 @@ func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	if body == nil {
 		return nil
 	}
-	return types.NewBlockWithHeader(header).WithBody(body.Transactions, body.Uncles).WithWithdrawals(body.Withdrawals)
+	return types.NewBlockWithHeader(header).WithBody(*body)
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
@@ -843,7 +821,11 @@ func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 	}
 	for _, bad := range badBlocks {
 		if bad.Header.Hash() == hash {
-			return types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles).WithWithdrawals(bad.Body.Withdrawals)
+			block := types.NewBlockWithHeader(bad.Header)
+			if bad.Body != nil {
+				block = block.WithBody(*bad.Body)
+			}
+			return block
 		}
 	}
 	return nil
@@ -862,7 +844,11 @@ func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 	}
 	var blocks []*types.Block
 	for _, bad := range badBlocks {
-		blocks = append(blocks, types.NewBlockWithHeader(bad.Header).WithBody(bad.Body.Transactions, bad.Body.Uncles).WithWithdrawals(bad.Body.Withdrawals))
+		block := types.NewBlockWithHeader(bad.Header)
+		if bad.Body != nil {
+			block = block.WithBody(*bad.Body)
+		}
+		blocks = append(blocks, block)
 	}
 	return blocks
 }

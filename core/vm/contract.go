@@ -18,6 +18,7 @@ package vm
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/holiman/uint256"
 )
 
@@ -55,6 +56,9 @@ type Contract struct {
 	CodeHash common.Hash
 	CodeAddr *common.Address
 	Input    []byte
+
+	// is the execution frame represented by this object a contract deployment
+	IsDeployment bool
 
 	Gas   uint64
 	value *uint256.Int
@@ -157,12 +161,26 @@ func (c *Contract) Caller() common.Address {
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64) (ok bool) {
+func (c *Contract) UseGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) (ok bool) {
 	if c.Gas < gas {
 		return false
 	}
+	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
+		logger.OnGasChange(c.Gas, c.Gas-gas, reason)
+	}
 	c.Gas -= gas
 	return true
+}
+
+// RefundGas refunds gas to the contract
+func (c *Contract) RefundGas(gas uint64, logger *tracing.Hooks, reason tracing.GasChangeReason) {
+	if gas == 0 {
+		return
+	}
+	if logger != nil && logger.OnGasChange != nil && reason != tracing.GasChangeIgnored {
+		logger.OnGasChange(c.Gas, c.Gas+gas, reason)
+	}
+	c.Gas += gas
 }
 
 // Address returns the contracts address

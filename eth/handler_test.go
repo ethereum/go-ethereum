@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -152,7 +151,7 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Config: params.TestChainConfig,
 		Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
 	}
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
 
 	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), blocks, nil)
 	if _, err := chain.InsertChain(bs); err != nil {
@@ -164,7 +163,6 @@ func newTestHandlerWithBlocks(blocks int) *testHandler {
 		Database:   db,
 		Chain:      chain,
 		TxPool:     txpool,
-		Merger:     consensus.NewMerger(rawdb.NewMemoryDatabase()),
 		Network:    1,
 		Sync:       downloader.SnapSync,
 		BloomCache: 1,

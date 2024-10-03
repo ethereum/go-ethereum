@@ -113,9 +113,16 @@ var (
 	skeletonHeaderPrefix  = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
 
 	// Path-based storage scheme of merkle patricia trie.
-	trieNodeAccountPrefix = []byte("A") // trieNodeAccountPrefix + hexPath -> trie node
-	trieNodeStoragePrefix = []byte("O") // trieNodeStoragePrefix + accountHash + hexPath -> trie node
+	TrieNodeAccountPrefix = []byte("A") // TrieNodeAccountPrefix + hexPath -> trie node
+	TrieNodeStoragePrefix = []byte("O") // TrieNodeStoragePrefix + accountHash + hexPath -> trie node
 	stateIDPrefix         = []byte("L") // stateIDPrefix + state root -> state id
+
+	// VerklePrefix is the database prefix for Verkle trie data, which includes:
+	// (a) Trie nodes
+	// (b) In-memory trie node journal
+	// (c) Persistent state ID
+	// (d) State ID lookups, etc.
+	VerklePrefix = []byte("v")
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
@@ -265,15 +272,15 @@ func stateIDKey(root common.Hash) []byte {
 	return append(stateIDPrefix, root.Bytes()...)
 }
 
-// accountTrieNodeKey = trieNodeAccountPrefix + nodePath.
+// accountTrieNodeKey = TrieNodeAccountPrefix + nodePath.
 func accountTrieNodeKey(path []byte) []byte {
-	return append(trieNodeAccountPrefix, path...)
+	return append(TrieNodeAccountPrefix, path...)
 }
 
-// storageTrieNodeKey = trieNodeStoragePrefix + accountHash + nodePath.
+// storageTrieNodeKey = TrieNodeStoragePrefix + accountHash + nodePath.
 func storageTrieNodeKey(accountHash common.Hash, path []byte) []byte {
-	buf := make([]byte, len(trieNodeStoragePrefix)+common.HashLength+len(path))
-	n := copy(buf, trieNodeStoragePrefix)
+	buf := make([]byte, len(TrieNodeStoragePrefix)+common.HashLength+len(path))
+	n := copy(buf, TrieNodeStoragePrefix)
 	n += copy(buf[n:], accountHash.Bytes())
 	copy(buf[n:], path)
 	return buf
@@ -294,16 +301,16 @@ func IsLegacyTrieNode(key []byte, val []byte) bool {
 // account trie node in path-based state scheme, and returns the resolved
 // node path if so.
 func ResolveAccountTrieNodeKey(key []byte) (bool, []byte) {
-	if !bytes.HasPrefix(key, trieNodeAccountPrefix) {
+	if !bytes.HasPrefix(key, TrieNodeAccountPrefix) {
 		return false, nil
 	}
 	// The remaining key should only consist a hex node path
 	// whose length is in the range 0 to 64 (64 is excluded
 	// since leaves are always wrapped with shortNode).
-	if len(key) >= len(trieNodeAccountPrefix)+common.HashLength*2 {
+	if len(key) >= len(TrieNodeAccountPrefix)+common.HashLength*2 {
 		return false, nil
 	}
-	return true, key[len(trieNodeAccountPrefix):]
+	return true, key[len(TrieNodeAccountPrefix):]
 }
 
 // IsAccountTrieNode reports whether a provided database entry is an account
@@ -317,20 +324,20 @@ func IsAccountTrieNode(key []byte) bool {
 // trie node in path-based state scheme, and returns the resolved account hash
 // and node path if so.
 func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
-	if !bytes.HasPrefix(key, trieNodeStoragePrefix) {
+	if !bytes.HasPrefix(key, TrieNodeStoragePrefix) {
 		return false, common.Hash{}, nil
 	}
 	// The remaining key consists of 2 parts:
 	// - 32 bytes account hash
 	// - hex node path whose length is in the range 0 to 64
-	if len(key) < len(trieNodeStoragePrefix)+common.HashLength {
+	if len(key) < len(TrieNodeStoragePrefix)+common.HashLength {
 		return false, common.Hash{}, nil
 	}
-	if len(key) >= len(trieNodeStoragePrefix)+common.HashLength+common.HashLength*2 {
+	if len(key) >= len(TrieNodeStoragePrefix)+common.HashLength+common.HashLength*2 {
 		return false, common.Hash{}, nil
 	}
-	accountHash := common.BytesToHash(key[len(trieNodeStoragePrefix) : len(trieNodeStoragePrefix)+common.HashLength])
-	return true, accountHash, key[len(trieNodeStoragePrefix)+common.HashLength:]
+	accountHash := common.BytesToHash(key[len(TrieNodeStoragePrefix) : len(TrieNodeStoragePrefix)+common.HashLength])
+	return true, accountHash, key[len(TrieNodeStoragePrefix)+common.HashLength:]
 }
 
 // IsStorageTrieNode reports whether a provided database entry is a storage

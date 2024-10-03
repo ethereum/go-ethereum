@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -38,16 +39,10 @@ func makeGasSStoreFunc(clearingRefund uint64) gasFunc {
 			cost    = uint64(0)
 		)
 		// Check slot presence in the access list
-		if addrPresent, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
+		if _, slotPresent := evm.StateDB.SlotInAccessList(contract.Address(), slot); !slotPresent {
 			cost = params.ColdSloadCostEIP2929
 			// If the caller cannot afford the cost, this change will be rolled back
 			evm.StateDB.AddSlotToAccessList(contract.Address(), slot)
-			if !addrPresent {
-				// Once we're done with YOLOv2 and schedule this for mainnet, might
-				// be good to remove this panic here, which is just really a
-				// canary to have during testing
-				panic("impossible case: address was not present in access list during sstore op")
-			}
 		}
 		value := common.Hash(y.Bytes32())
 
@@ -169,7 +164,7 @@ func makeCallVariantGasCallEIP2929(oldCalculator gasFunc) gasFunc {
 			evm.StateDB.AddAddressToAccessList(addr)
 			// Charge the remaining difference here already, to correctly calculate available
 			// gas for call
-			if !contract.UseGas(coldCost) {
+			if !contract.UseGas(coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
 				return 0, ErrOutOfGas
 			}
 		}

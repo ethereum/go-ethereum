@@ -19,12 +19,11 @@ package dbtest
 import (
 	"bytes"
 	"crypto/rand"
-	"reflect"
+	"slices"
 	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/ethdb"
-	"golang.org/x/exp/slices"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database
@@ -149,7 +148,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("Iterator: got: %s; want: %s", got, want)
 			}
 		}
@@ -160,7 +159,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("IteratorWith(1,nil): got: %s; want: %s", got, want)
 			}
 		}
@@ -171,7 +170,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("IteratorWith(5,nil): got: %s; want: %s", got, want)
 			}
 		}
@@ -182,7 +181,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("IteratorWith(nil,2): got: %s; want: %s", got, want)
 			}
 		}
@@ -193,7 +192,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 			if err := it.Error(); err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("IteratorWith(nil,5): got: %s; want: %s", got, want)
 			}
 		}
@@ -262,7 +261,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 
 		{
 			it := db.NewIterator(nil, nil)
-			if got, want := iterateKeys(it), []string{"1", "2", "3", "4"}; !reflect.DeepEqual(got, want) {
+			if got, want := iterateKeys(it), []string{"1", "2", "3", "4"}; !slices.Equal(got, want) {
 				t.Errorf("got: %s; want: %s", got, want)
 			}
 		}
@@ -286,7 +285,7 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 
 		{
 			it := db.NewIterator(nil, nil)
-			if got, want := iterateKeys(it), []string{"2", "3", "4", "5", "6"}; !reflect.DeepEqual(got, want) {
+			if got, want := iterateKeys(it), []string{"2", "3", "4", "5", "6"}; !slices.Equal(got, want) {
 				t.Errorf("got: %s; want: %s", got, want)
 			}
 		}
@@ -314,75 +313,12 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		}
 
 		it := db.NewIterator(nil, nil)
-		if got := iterateKeys(it); !reflect.DeepEqual(got, want) {
+		if got := iterateKeys(it); !slices.Equal(got, want) {
 			t.Errorf("got: %s; want: %s", got, want)
 		}
 	})
 
-	t.Run("Snapshot", func(t *testing.T) {
-		db := New()
-		defer db.Close()
-
-		initial := map[string]string{
-			"k1": "v1", "k2": "v2", "k3": "", "k4": "",
-		}
-		for k, v := range initial {
-			db.Put([]byte(k), []byte(v))
-		}
-		snapshot, err := db.NewSnapshot()
-		if err != nil {
-			t.Fatal(err)
-		}
-		for k, v := range initial {
-			got, err := snapshot.Get([]byte(k))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(got, []byte(v)) {
-				t.Fatalf("Unexpected value want: %v, got %v", v, got)
-			}
-		}
-
-		// Flush more modifications into the database, ensure the snapshot
-		// isn't affected.
-		var (
-			update = map[string]string{"k1": "v1-b", "k3": "v3-b"}
-			insert = map[string]string{"k5": "v5-b"}
-			delete = map[string]string{"k2": ""}
-		)
-		for k, v := range update {
-			db.Put([]byte(k), []byte(v))
-		}
-		for k, v := range insert {
-			db.Put([]byte(k), []byte(v))
-		}
-		for k := range delete {
-			db.Delete([]byte(k))
-		}
-		for k, v := range initial {
-			got, err := snapshot.Get([]byte(k))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(got, []byte(v)) {
-				t.Fatalf("Unexpected value want: %v, got %v", v, got)
-			}
-		}
-		for k := range insert {
-			got, err := snapshot.Get([]byte(k))
-			if err == nil || len(got) != 0 {
-				t.Fatal("Unexpected value")
-			}
-		}
-		for k := range delete {
-			got, err := snapshot.Get([]byte(k))
-			if err != nil || len(got) == 0 {
-				t.Fatal("Unexpected deletion")
-			}
-		}
-	})
-
-	t.Run("OperatonsAfterClose", func(t *testing.T) {
+	t.Run("OperationsAfterClose", func(t *testing.T) {
 		db := New()
 		db.Put([]byte("key"), []byte("value"))
 		db.Close()
@@ -514,7 +450,7 @@ func iterateKeys(it ethdb.Iterator) []string {
 	return keys
 }
 
-// randomHash generates a random blob of data and returns it as a hash.
+// randBytes generates a random blob of data.
 func randBytes(len int) []byte {
 	buf := make([]byte, len)
 	if n, err := rand.Read(buf); n != len || err != nil {
@@ -531,7 +467,7 @@ func makeDataset(size, ksize, vsize int, order bool) ([][]byte, [][]byte) {
 		vals = append(vals, randBytes(vsize))
 	}
 	if order {
-		slices.SortFunc(keys, func(a, b []byte) int { return bytes.Compare(a, b) })
+		slices.SortFunc(keys, bytes.Compare)
 	}
 	return keys, vals
 }

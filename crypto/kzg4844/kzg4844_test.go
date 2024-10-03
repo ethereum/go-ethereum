@@ -36,13 +36,13 @@ func randFieldElement() [32]byte {
 	return gokzg4844.SerializeScalar(r)
 }
 
-func randBlob() Blob {
+func randBlob() *Blob {
 	var blob Blob
 	for i := 0; i < len(blob); i += gokzg4844.SerializedScalarSize {
 		fieldElementBytes := randFieldElement()
 		copy(blob[i:i+gokzg4844.SerializedScalarSize], fieldElementBytes[:])
 	}
-	return blob
+	return &blob
 }
 
 func TestCKZGWithPoint(t *testing.T)  { testKZGWithPoint(t, true) }

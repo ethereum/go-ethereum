@@ -27,7 +27,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -582,7 +581,7 @@ func BenchmarkOpMstore(bench *testing.B) {
 
 func TestOpTstore(t *testing.T) {
 	var (
-		statedb, _     = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb, _     = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		env            = NewEVM(BlockContext{}, TxContext{}, statedb, params.TestChainConfig, Config{})
 		stack          = newstack()
 		mem            = NewMemory()
@@ -643,7 +642,7 @@ func BenchmarkOpKeccak256(bench *testing.B) {
 	}
 }
 
-func TestCreate2Addreses(t *testing.T) {
+func TestCreate2Addresses(t *testing.T) {
 	type testcase struct {
 		origin   string
 		salt     string

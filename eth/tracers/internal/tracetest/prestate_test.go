@@ -93,17 +93,8 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			// Configure a blockchain with the given prestate
 			var (
 				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
-				context = vm.BlockContext{
-					CanTransfer: core.CanTransfer,
-					Transfer:    core.Transfer,
-					Coinbase:    test.Context.Miner,
-					BlockNumber: new(big.Int).SetUint64(uint64(test.Context.Number)),
-					Time:        uint64(test.Context.Time),
-					Difficulty:  (*big.Int)(test.Context.Difficulty),
-					GasLimit:    uint64(test.Context.GasLimit),
-					BaseFee:     test.Genesis.BaseFee,
-				}
-				state = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+				context = test.Context.toBlockContext(test.Genesis)
+				state   = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
 			defer state.Close()
 
@@ -111,15 +102,19 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
+
+			state.StateDB.SetLogger(tracer.Hooks)
 			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer})
-			st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-			if _, err = st.TransitionDb(); err != nil {
+			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
+			tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
 			// Retrieve the trace result and compare against the expected
 			res, err := tracer.GetResult()
 			if err != nil {

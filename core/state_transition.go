@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -68,7 +69,7 @@ func (result *ExecutionResult) Revert() []byte {
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation bool, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead, isEIP2028, isEIP3860 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -142,10 +143,13 @@ type Message struct {
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
 
-	// When SkipAccountChecks is true, the message nonce is not checked against the
-	// account nonce in state. It also disables checking that the sender is an EOA.
+	// When SkipNonceChecks is true, the message nonce is not checked against the
+	// account nonce in state.
 	// This field will be set to true for operations like RPC eth_call.
-	SkipAccountChecks bool
+	SkipNonceChecks bool
+
+	// When SkipFromEOACheck is true, the message sender is not checked to be an EOA.
+	SkipFromEOACheck bool
 
 	// CHANGE(taiko): whether the current transaction is the first TaikoL2.anchor transaction in a block.
 	IsAnchor bool
@@ -157,19 +161,20 @@ type Message struct {
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
-		Nonce:             tx.Nonce(),
-		GasLimit:          tx.Gas(),
-		GasPrice:          new(big.Int).Set(tx.GasPrice()),
-		GasFeeCap:         new(big.Int).Set(tx.GasFeeCap()),
-		GasTipCap:         new(big.Int).Set(tx.GasTipCap()),
-		To:                tx.To(),
-		Value:             tx.Value(),
-		Data:              tx.Data(),
-		AccessList:        tx.AccessList(),
-		SkipAccountChecks: false,
-		BlobHashes:        tx.BlobHashes(),
-		BlobGasFeeCap:     tx.BlobGasFeeCap(),
-		IsAnchor:          tx.IsAnchor(),
+		Nonce:            tx.Nonce(),
+		GasLimit:         tx.Gas(),
+		GasPrice:         new(big.Int).Set(tx.GasPrice()),
+		GasFeeCap:        new(big.Int).Set(tx.GasFeeCap()),
+		GasTipCap:        new(big.Int).Set(tx.GasTipCap()),
+		To:               tx.To(),
+		Value:            tx.Value(),
+		Data:             tx.Data(),
+		AccessList:       tx.AccessList(),
+		SkipNonceChecks:  false,
+		SkipFromEOACheck: false,
+		BlobHashes:       tx.BlobHashes(),
+		BlobGasFeeCap:    tx.BlobGasFeeCap(),
+		IsAnchor:         tx.IsAnchor(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -242,13 +247,14 @@ func (st *StateTransition) to() common.Address {
 
 func (st *StateTransition) buyGas() error {
 	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
-	mgval = mgval.Mul(mgval, st.msg.GasPrice)
+	mgval.Mul(mgval, st.msg.GasPrice)
 	balanceCheck := new(big.Int).Set(mgval)
 	if st.msg.GasFeeCap != nil {
 		balanceCheck.SetUint64(st.msg.GasLimit)
 		balanceCheck = balanceCheck.Mul(balanceCheck, st.msg.GasFeeCap)
-		balanceCheck.Add(balanceCheck, st.msg.Value)
 	}
+	balanceCheck.Add(balanceCheck, st.msg.Value)
+
 	if st.evm.ChainConfig().IsCancun(st.evm.Context.BlockNumber, st.evm.Context.Time) {
 		if blobGas := st.blobGasUsed(); blobGas > 0 {
 			// Check that the user has enough funds to cover blobGasUsed * tx.BlobGasFeeCap
@@ -265,6 +271,7 @@ func (st *StateTransition) buyGas() error {
 	if overflow {
 		return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
 	}
+	// CHANGE(taiko): if the transaction is an anchor transaction, the balance check is skipped.
 	if st.msg.IsAnchor {
 		balanceCheckU256 = common.U2560
 		mgval = common.Big0
@@ -275,18 +282,22 @@ func (st *StateTransition) buyGas() error {
 	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
 		return err
 	}
-	st.gasRemaining += st.msg.GasLimit
+
+	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil {
+		st.evm.Config.Tracer.OnGasChange(0, st.msg.GasLimit, tracing.GasChangeTxInitialBalance)
+	}
+	st.gasRemaining = st.msg.GasLimit
 
 	st.initialGas = st.msg.GasLimit
 	mgvalU256, _ := uint256.FromBig(mgval)
-	st.state.SubBalance(st.msg.From, mgvalU256)
+	st.state.SubBalance(st.msg.From, mgvalU256, tracing.BalanceDecreaseGasBuy)
 	return nil
 }
 
 func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
 	msg := st.msg
-	if !msg.SkipAccountChecks {
+	if !msg.SkipNonceChecks {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(msg.From)
 		if msgNonce := msg.Nonce; stNonce < msgNonce {
@@ -299,6 +310,8 @@ func (st *StateTransition) preCheck() error {
 			return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
 				msg.From.Hex(), stNonce)
 		}
+	}
+	if !msg.SkipFromEOACheck {
 		// Make sure the sender is an EOA
 		codeHash := st.state.GetCodeHash(msg.From)
 		if codeHash != (common.Hash{}) && codeHash != types.EmptyCodeHash {
@@ -393,13 +406,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 
-	if tracer := st.evm.Config.Tracer; tracer != nil {
-		tracer.CaptureTxStart(st.initialGas)
-		defer func() {
-			tracer.CaptureTxEnd(st.gasRemaining)
-		}()
-	}
-
 	var (
 		msg              = st.msg
 		sender           = vm.AccountRef(msg.From)
@@ -415,7 +421,18 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if st.gasRemaining < gas {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
+	if t := st.evm.Config.Tracer; t != nil && t.OnGasChange != nil {
+		t.OnGasChange(st.gasRemaining, st.gasRemaining-gas, tracing.GasChangeTxIntrinsicGas)
+	}
 	st.gasRemaining -= gas
+
+	if rules.IsEIP4762 {
+		st.evm.AccessEvents.AddTxOrigin(msg.From)
+
+		if targetAddr := msg.To; targetAddr != nil {
+			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0)
+		}
+	}
 
 	// Check clause 6
 	value, overflow := uint256.FromBig(msg.Value)
@@ -469,7 +486,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	} else {
 		fee := new(uint256.Int).SetUint64(st.gasUsed())
 		fee.Mul(fee, effectiveTipU256)
-		st.state.AddBalance(st.evm.Context.Coinbase, fee)
+		st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
+
 		// CHANGE(taiko): basefee is not burnt, but sent to a treasury and block.coinbase instead.
 		if st.evm.ChainConfig().Taiko && st.evm.Context.BaseFee != nil && !st.msg.IsAnchor {
 			totalFee := new(big.Int).Mul(st.evm.Context.BaseFee, new(big.Int).SetUint64(st.gasUsed()))
@@ -478,8 +496,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 				new(big.Int).SetUint64(100),
 			)
 			feeTreasury := new(big.Int).Sub(totalFee, feeCoinbase)
-			st.state.AddBalance(st.getTreasuryAddress(), uint256.MustFromBig(feeTreasury))
-			st.state.AddBalance(st.evm.Context.Coinbase, uint256.MustFromBig(feeCoinbase))
+			st.state.AddBalance(st.getTreasuryAddress(), uint256.MustFromBig(feeTreasury), tracing.BalanceIncreaseTreasury)
+			st.state.AddBalance(st.evm.Context.Coinbase, uint256.MustFromBig(feeCoinbase), tracing.BalanceIncreaseBaseFeeSharing)
+		}
+		// add the coinbase to the witness iff the fee is greater than 0
+		if rules.IsEIP4762 && fee.Sign() != 0 {
+			st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true)
 		}
 	}
 
@@ -497,16 +519,23 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 	if refund > st.state.GetRefund() {
 		refund = st.state.GetRefund()
 	}
-	st.gasRemaining += refund
 
-	// Do not change the balance in anchor transactions.
+	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && refund > 0 {
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, st.gasRemaining+refund, tracing.GasChangeTxRefunds)
+	}
+
+	st.gasRemaining += refund
+	// CHANGE(taiko): do not change the balance in anchor transactions.
 	if !st.msg.IsAnchor {
 		// Return ETH for remaining gas, exchanged at the original rate.
 		remaining := uint256.NewInt(st.gasRemaining)
-		remaining = remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
-		st.state.AddBalance(st.msg.From, remaining)
-	}
+		remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
+		st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
 
+		if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining > 0 {
+			st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, tracing.GasChangeTxLeftOverReturned)
+		}
+	}
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.
 	st.gp.AddGas(st.gasRemaining)

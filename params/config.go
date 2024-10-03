@@ -29,7 +29,6 @@ var (
 	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	HoleskyGenesisHash = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
 	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
-	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 )
 
 func newUint64(val uint64) *uint64 { return &val }
@@ -59,6 +58,7 @@ var (
 		TerminalTotalDifficultyPassed: true,
 		ShanghaiTime:                  newUint64(1681338455),
 		CancunTime:                    newUint64(1710338135),
+		DepositContractAddress:        common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"),
 		Ethash:                        new(EthashConfig),
 	}
 	// HoleskyChainConfig contains the chain parameters to run a node on the Holesky test network.
@@ -111,32 +111,6 @@ var (
 		CancunTime:                    newUint64(1706655072),
 		Ethash:                        new(EthashConfig),
 	}
-	// GoerliChainConfig contains the chain parameters to run a node on the Görli test network.
-	GoerliChainConfig = &ChainConfig{
-		ChainID:                       big.NewInt(5),
-		HomesteadBlock:                big.NewInt(0),
-		DAOForkBlock:                  nil,
-		DAOForkSupport:                true,
-		EIP150Block:                   big.NewInt(0),
-		EIP155Block:                   big.NewInt(0),
-		EIP158Block:                   big.NewInt(0),
-		ByzantiumBlock:                big.NewInt(0),
-		ConstantinopleBlock:           big.NewInt(0),
-		PetersburgBlock:               big.NewInt(0),
-		IstanbulBlock:                 big.NewInt(1_561_651),
-		MuirGlacierBlock:              nil,
-		BerlinBlock:                   big.NewInt(4_460_644),
-		LondonBlock:                   big.NewInt(5_062_605),
-		ArrowGlacierBlock:             nil,
-		TerminalTotalDifficulty:       big.NewInt(10_790_000),
-		TerminalTotalDifficultyPassed: true,
-		ShanghaiTime:                  newUint64(1678832736),
-		CancunTime:                    newUint64(1705473120),
-		Clique: &CliqueConfig{
-			Period: 15,
-			Epoch:  30000,
-		},
-	}
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	AllEthashProtocolChanges = &ChainConfig{
@@ -183,6 +157,7 @@ var (
 		ArrowGlacierBlock:             big.NewInt(0),
 		GrayGlacierBlock:              big.NewInt(0),
 		ShanghaiTime:                  newUint64(0),
+		CancunTime:                    newUint64(0),
 		TerminalTotalDifficulty:       big.NewInt(0),
 		TerminalTotalDifficultyPassed: true,
 	}
@@ -312,7 +287,6 @@ var (
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
 	MainnetChainConfig.ChainID.String(): "mainnet",
-	GoerliChainConfig.ChainID.String():  "goerli",
 	SepoliaChainConfig.ChainID.String(): "sepolia",
 	HoleskyChainConfig.ChainID.String(): "holesky",
 	// CHANGE(taiko): add Taiko network name.
@@ -371,7 +345,11 @@ type ChainConfig struct {
 	// TerminalTotalDifficultyPassed is a flag specifying that the network already
 	// passed the terminal total difficulty. Its purpose is to disable legacy sync
 	// even without having seen the TTD locally (safer long term).
+	//
+	// TODO(karalabe): Drop this field eventually (always assuming PoS mode)
 	TerminalTotalDifficultyPassed bool `json:"terminalTotalDifficultyPassed,omitempty"`
+
+	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
@@ -386,7 +364,7 @@ type ChainConfig struct {
 type EthashConfig struct{}
 
 // String implements the stringer interface, returning the consensus engine details.
-func (c *EthashConfig) String() string {
+func (c EthashConfig) String() string {
 	return "ethash"
 }
 
@@ -397,8 +375,8 @@ type CliqueConfig struct {
 }
 
 // String implements the stringer interface, returning the consensus engine details.
-func (c *CliqueConfig) String() string {
-	return "clique"
+func (c CliqueConfig) String() string {
+	return fmt.Sprintf("clique(period: %d, epoch: %d)", c.Period, c.Epoch)
 }
 
 // Description returns a human-readable description of ChainConfig.
@@ -581,17 +559,17 @@ func (c *ChainConfig) IsShanghai(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.ShanghaiTime, time)
 }
 
-// IsCancun returns whether num is either equal to the Cancun fork time or greater.
+// IsCancun returns whether time is either equal to the Cancun fork time or greater.
 func (c *ChainConfig) IsCancun(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.CancunTime, time)
 }
 
-// IsPrague returns whether num is either equal to the Prague fork time or greater.
+// IsPrague returns whether time is either equal to the Prague fork time or greater.
 func (c *ChainConfig) IsPrague(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.PragueTime, time)
 }
 
-// IsVerkle returns whether num is either equal to the Verkle fork time or greater.
+// IsVerkle returns whether time is either equal to the Verkle fork time or greater.
 func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 	return c.IsLondon(num) && isTimestampForked(c.VerkleTime, time)
 }
@@ -599,6 +577,11 @@ func (c *ChainConfig) IsVerkle(num *big.Int, time uint64) bool {
 // CHANGE(taiko): IsOntake returns whether num is either equal to the Ontake fork block or greater.
 func (c *ChainConfig) IsOntake(num *big.Int) bool {
 	return isBlockForked(c.OntakeBlock, num)
+}
+
+// IsEIP4762 returns whether eip 4762 has been activated at given block.
+func (c *ChainConfig) IsEIP4762(num *big.Int, time uint64) bool {
+	return c.IsVerkle(num, time)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -900,7 +883,7 @@ func newTimestampCompatError(what string, storedtime, newtime *uint64) *ConfigCo
 		NewTime:      newtime,
 		RewindToTime: 0,
 	}
-	if rew != nil {
+	if rew != nil && *rew != 0 {
 		err.RewindToTime = *rew - 1
 	}
 	return err
@@ -910,7 +893,15 @@ func (err *ConfigCompatError) Error() string {
 	if err.StoredBlock != nil {
 		return fmt.Sprintf("mismatching %s in database (have block %d, want block %d, rewindto block %d)", err.What, err.StoredBlock, err.NewBlock, err.RewindToBlock)
 	}
-	return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp %d, rewindto timestamp %d)", err.What, err.StoredTime, err.NewTime, err.RewindToTime)
+
+	if err.StoredTime == nil && err.NewTime == nil {
+		return ""
+	} else if err.StoredTime == nil && err.NewTime != nil {
+		return fmt.Sprintf("mismatching %s in database (have timestamp nil, want timestamp %d, rewindto timestamp %d)", err.What, *err.NewTime, err.RewindToTime)
+	} else if err.StoredTime != nil && err.NewTime == nil {
+		return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp nil, rewindto timestamp %d)", err.What, *err.StoredTime, err.RewindToTime)
+	}
+	return fmt.Sprintf("mismatching %s in database (have timestamp %d, want timestamp %d, rewindto timestamp %d)", err.What, *err.StoredTime, *err.NewTime, err.RewindToTime)
 }
 
 // Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
@@ -921,6 +912,7 @@ func (err *ConfigCompatError) Error() string {
 type Rules struct {
 	ChainID                                                 *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsEIP2929, IsEIP4762                                    bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague                 bool
@@ -935,6 +927,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 	}
 	// disallow setting Merge out of order
 	isMerge = isMerge && c.IsLondon(num)
+	isVerkle := isMerge && c.IsVerkle(num, timestamp)
 	return Rules{
 		ChainID:          new(big.Int).Set(chainID),
 		IsHomestead:      c.IsHomestead(num),
@@ -946,11 +939,13 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsPetersburg:     c.IsPetersburg(num),
 		IsIstanbul:       c.IsIstanbul(num),
 		IsBerlin:         c.IsBerlin(num),
+		IsEIP2929:        c.IsBerlin(num) && !isVerkle,
 		IsLondon:         c.IsLondon(num),
 		IsMerge:          isMerge,
 		IsShanghai:       isMerge && c.IsShanghai(num, timestamp),
 		IsCancun:         isMerge && c.IsCancun(num, timestamp),
 		IsPrague:         isMerge && c.IsPrague(num, timestamp),
-		IsVerkle:         isMerge && c.IsVerkle(num, timestamp),
+		IsVerkle:         isVerkle,
+		IsEIP4762:        isVerkle,
 	}
 }

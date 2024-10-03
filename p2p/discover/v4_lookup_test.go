@@ -19,14 +19,15 @@ package discover
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"net"
+	"net/netip"
+	"slices"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"golang.org/x/exp/slices"
 )
 
 func TestUDPv4_Lookup(t *testing.T) {
@@ -34,13 +35,13 @@ func TestUDPv4_Lookup(t *testing.T) {
 	test := newUDPTest(t)
 
 	// Lookup on empty table returns no nodes.
-	targetKey, _ := decodePubkey(crypto.S256(), lookupTestnet.target[:])
+	targetKey, _ := v4wire.DecodePubkey(crypto.S256(), lookupTestnet.target)
 	if results := test.udp.LookupPubkey(targetKey); len(results) > 0 {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
 	}
 
 	// Seed table with initial node.
-	fillTable(test.table, []*node{wrapNode(lookupTestnet.node(256, 0))}, true)
+	fillTable(test.table, []*enode.Node{lookupTestnet.node(256, 0)}, true)
 
 	// Start the lookup.
 	resultC := make(chan []*enode.Node, 1)
@@ -56,7 +57,7 @@ func TestUDPv4_Lookup(t *testing.T) {
 	results := <-resultC
 	t.Logf("results:")
 	for _, e := range results {
-		t.Logf("  ld=%d, %x", enode.LogDist(lookupTestnet.target.id(), e.ID()), e.ID().Bytes())
+		t.Logf("  ld=%d, %x", enode.LogDist(lookupTestnet.target.ID(), e.ID()), e.ID().Bytes())
 	}
 	if len(results) != bucketSize {
 		t.Errorf("wrong number of results: got %d, want %d", len(results), bucketSize)
@@ -67,15 +68,23 @@ func TestUDPv4_Lookup(t *testing.T) {
 func TestUDPv4_LookupIterator(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.close()
+	var wg sync.WaitGroup
+	defer func() {
+		test.close()
+		wg.Wait()
+	}()
 
 	// Seed table with initial nodes.
-	bootnodes := make([]*node, len(lookupTestnet.dists[256]))
+	bootnodes := make([]*enode.Node, len(lookupTestnet.dists[256]))
 	for i := range lookupTestnet.dists[256] {
-		bootnodes[i] = wrapNode(lookupTestnet.node(256, i))
+		bootnodes[i] = lookupTestnet.node(256, i)
 	}
 	fillTable(test.table, bootnodes, true)
-	go serveTestnet(test, lookupTestnet)
+	wg.Add(1)
+	go func() {
+		serveTestnet(test, lookupTestnet)
+		wg.Done()
+	}()
 
 	// Create the iterator and collect the nodes it yields.
 	iter := test.udp.RandomNodes()
@@ -102,15 +111,24 @@ func TestUDPv4_LookupIterator(t *testing.T) {
 func TestUDPv4_LookupIteratorClose(t *testing.T) {
 	t.Parallel()
 	test := newUDPTest(t)
-	defer test.close()
+	var wg sync.WaitGroup
+	defer func() {
+		test.close()
+		wg.Wait()
+	}()
 
 	// Seed table with initial nodes.
-	bootnodes := make([]*node, len(lookupTestnet.dists[256]))
+	bootnodes := make([]*enode.Node, len(lookupTestnet.dists[256]))
 	for i := range lookupTestnet.dists[256] {
-		bootnodes[i] = wrapNode(lookupTestnet.node(256, i))
+		bootnodes[i] = lookupTestnet.node(256, i)
 	}
 	fillTable(test.table, bootnodes, true)
-	go serveTestnet(test, lookupTestnet)
+
+	wg.Add(1)
+	go func() {
+		serveTestnet(test, lookupTestnet)
+		wg.Done()
+	}()
 
 	it := test.udp.RandomNodes()
 	if ok := it.Next(); !ok || it.Node() == nil {
@@ -136,13 +154,13 @@ func TestUDPv4_LookupIteratorClose(t *testing.T) {
 
 func serveTestnet(test *udpTest, testnet *preminedTestnet) {
 	for done := false; !done; {
-		done = test.waitPacketOut(func(p v4wire.Packet, to *net.UDPAddr, hash []byte) {
+		done = test.waitPacketOut(func(p v4wire.Packet, to netip.AddrPort, hash []byte) {
 			n, key := testnet.nodeByAddr(to)
 			switch p.(type) {
 			case *v4wire.Ping:
 				test.packetInFrom(nil, key, to, &v4wire.Pong{Expiration: futureExp, ReplyTok: hash})
 			case *v4wire.Findnode:
-				dist := enode.LogDist(n.ID(), testnet.target.id())
+				dist := enode.LogDist(n.ID(), testnet.target.ID())
 				nodes := testnet.nodesAtDistance(dist - 1)
 				test.packetInFrom(nil, key, to, &v4wire.Neighbors{Expiration: futureExp, Nodes: nodes})
 			}
@@ -156,12 +174,12 @@ func checkLookupResults(t *testing.T, tn *preminedTestnet, results []*enode.Node
 	t.Helper()
 	t.Logf("results:")
 	for _, e := range results {
-		t.Logf("  ld=%d, %x", enode.LogDist(tn.target.id(), e.ID()), e.ID().Bytes())
+		t.Logf("  ld=%d, %x", enode.LogDist(tn.target.ID(), e.ID()), e.ID().Bytes())
 	}
-	if hasDuplicates(wrapNodes(results)) {
+	if hasDuplicates(results) {
 		t.Errorf("result set contains duplicate entries")
 	}
-	if !sortedByDistanceTo(tn.target.id(), wrapNodes(results)) {
+	if !sortedByDistanceTo(tn.target.ID(), results) {
 		t.Errorf("result set not sorted by distance to target")
 	}
 	wantNodes := tn.closest(len(results))
@@ -231,7 +249,7 @@ var lookupTestnet = &preminedTestnet{
 }
 
 type preminedTestnet struct {
-	target encPubkey
+	target v4wire.Pubkey
 	dists  [hashBits + 1][]*ecdsa.PrivateKey
 }
 
@@ -264,9 +282,10 @@ func (tn *preminedTestnet) node(dist, index int) *enode.Node {
 	return n
 }
 
-func (tn *preminedTestnet) nodeByAddr(addr *net.UDPAddr) (*enode.Node, *ecdsa.PrivateKey) {
-	dist := int(addr.IP[1])<<8 + int(addr.IP[2])
-	index := int(addr.IP[3])
+func (tn *preminedTestnet) nodeByAddr(addr netip.AddrPort) (*enode.Node, *ecdsa.PrivateKey) {
+	ip := addr.Addr().As4()
+	dist := int(ip[1])<<8 + int(ip[2])
+	index := int(ip[3])
 	key := tn.dists[dist][index]
 	return tn.node(dist, index), key
 }
@@ -274,7 +293,7 @@ func (tn *preminedTestnet) nodeByAddr(addr *net.UDPAddr) (*enode.Node, *ecdsa.Pr
 func (tn *preminedTestnet) nodesAtDistance(dist int) []v4wire.Node {
 	result := make([]v4wire.Node, len(tn.dists[dist]))
 	for i := range result {
-		result[i] = nodeToRPC(wrapNode(tn.node(dist, i)))
+		result[i] = nodeToRPC(tn.node(dist, i))
 	}
 	return result
 }
@@ -285,7 +304,7 @@ func (tn *preminedTestnet) neighborsAtDistances(base *enode.Node, distances []ui
 		for i := range lookupTestnet.dists[d] {
 			n := lookupTestnet.node(d, i)
 			d := enode.LogDist(base.ID(), n.ID())
-			if containsUint(uint(d), distances) {
+			if slices.Contains(distances, uint(d)) {
 				result = append(result, n)
 				if len(result) >= elems {
 					return result
@@ -303,7 +322,7 @@ func (tn *preminedTestnet) closest(n int) (nodes []*enode.Node) {
 		}
 	}
 	slices.SortFunc(nodes, func(a, b *enode.Node) int {
-		return enode.DistCmp(tn.target.id(), a.ID(), b.ID())
+		return enode.DistCmp(tn.target.ID(), a.ID(), b.ID())
 	})
 	return nodes[:n]
 }
@@ -318,11 +337,11 @@ func (tn *preminedTestnet) mine() {
 		tn.dists[i] = nil
 	}
 
-	targetSha := tn.target.id()
+	targetSha := tn.target.ID()
 	found, need := 0, 40
 	for found < need {
 		k := newkey()
-		ld := enode.LogDist(targetSha, encodePubkey(&k.PublicKey).id())
+		ld := enode.LogDist(targetSha, v4wire.EncodePubkey(&k.PublicKey).ID())
 		if len(tn.dists[ld]) < 8 {
 			tn.dists[ld] = append(tn.dists[ld], k)
 			found++

@@ -18,6 +18,7 @@ package vm
 
 import (
 	"bytes"
+	"errors"
 	"math"
 	"math/big"
 	"sort"
@@ -25,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -85,7 +85,7 @@ func TestEIP2200(t *testing.T) {
 	for i, tt := range eip2200Tests {
 		address := common.BytesToAddress([]byte("contract"))
 
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		statedb.CreateAccount(address)
 		statedb.SetCode(address, hexutil.MustDecode(tt.input))
 		statedb.SetState(address, common.Hash{}, common.BytesToHash([]byte{tt.original}))
@@ -98,7 +98,7 @@ func TestEIP2200(t *testing.T) {
 		vmenv := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
 
 		_, gas, err := vmenv.Call(AccountRef(common.Address{}), address, nil, tt.gaspool, new(uint256.Int))
-		if err != tt.failure {
+		if !errors.Is(err, tt.failure) {
 			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.failure)
 		}
 		if used := tt.gaspool - gas; used != tt.used {
@@ -137,7 +137,7 @@ func TestCreateGas(t *testing.T) {
 		var gasUsed = uint64(0)
 		doCheck := func(testGas int) bool {
 			address := common.BytesToAddress([]byte("contract"))
-			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 			statedb.CreateAccount(address)
 			statedb.SetCode(address, hexutil.MustDecode(tt.code))
 			statedb.Finalise(true)

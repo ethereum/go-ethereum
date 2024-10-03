@@ -18,7 +18,7 @@ package e2store
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 	"testing"
 
@@ -26,6 +26,8 @@ import (
 )
 
 func TestEncode(t *testing.T) {
+	t.Parallel()
+
 	for _, test := range []struct {
 		entries []Entry
 		want    string
@@ -53,6 +55,7 @@ func TestEncode(t *testing.T) {
 		tt := test
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			var (
 				b = bytes.NewBuffer(nil)
 				w = NewWriter(b)
@@ -83,6 +86,8 @@ func TestEncode(t *testing.T) {
 }
 
 func TestDecode(t *testing.T) {
+	t.Parallel()
+
 	for i, tt := range []struct {
 		have string
 		err  error
@@ -92,7 +97,7 @@ func TestDecode(t *testing.T) {
 		},
 		{ // basic invalid decoding
 			have: "ffff000000000001",
-			err:  fmt.Errorf("reserved bytes are non-zero"),
+			err:  errors.New("reserved bytes are non-zero"),
 		},
 		{ // no more entries to read, returns EOF
 			have: "",

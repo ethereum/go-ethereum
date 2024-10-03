@@ -383,7 +383,7 @@ func TestJWT(t *testing.T) {
 	expFail := []func() string{
 		// future
 		func() string {
-			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + int64(jwtExpiryTimeout.Seconds()) + 1}))
+			return fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + int64(jwtExpiryTimeout.Seconds()) + 60}))
 		},
 		// stale
 		func() string {

@@ -34,8 +34,10 @@ import (
 
 var (
 	// blobTxMinBlobGasPrice is the big.Int version of the configured protocol
-	// parameter to avoid constucting a new big integer for every transaction.
+	// parameter to avoid constructing a new big integer for every transaction.
 	blobTxMinBlobGasPrice = big.NewInt(params.BlobTxMinBlobGasprice)
+	// CHANGE(taiko): the miniumum baseFee defined in TaikoL2 (0.008847185 GWei).
+	minL2BaseFee = new(big.Int).SetUint64(8847185)
 )
 
 // ValidationOptions define certain differences between transaction validation
@@ -99,8 +101,12 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return core.ErrTipAboveFeeCap
 	}
 	// CHANGE(taiko): check gasFeeCap.
-	if os.Getenv("TAIKO_TEST") == "" && tx.GasFeeCap().Cmp(common.Big0) == 0 {
-		return errors.New("max fee per gas is 0")
+	if os.Getenv("TAIKO_TEST") == "" {
+		if opts.Config.IsOntake(head.Number) && tx.GasFeeCap().Cmp(minL2BaseFee) < 0 {
+			return errors.New("max fee per gas is less than the minimum base fee (0.008847185 GWei)")
+		} else if tx.GasFeeCap().Cmp(common.Big0) == 0 {
+			return errors.New("max fee per gas is zero")
+		}
 	}
 	// Make sure the transaction is signed properly
 	if _, err := types.Sender(signer, tx); err != nil {
@@ -126,13 +132,13 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		}
 		sidecar := tx.BlobTxSidecar()
 		if sidecar == nil {
-			return fmt.Errorf("missing sidecar in blob transaction")
+			return errors.New("missing sidecar in blob transaction")
 		}
 		// Ensure the number of items in the blob transaction and various side
 		// data match up before doing any expensive validations
 		hashes := tx.BlobHashes()
 		if len(hashes) == 0 {
-			return fmt.Errorf("blobless blob transaction")
+			return errors.New("blobless blob transaction")
 		}
 		if len(hashes) > params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob {
 			return fmt.Errorf("too many blobs in transaction: have %d, permitted %d", len(hashes), params.MaxBlobGasPerBlock/params.BlobTxBlobGasPerBlob)
@@ -167,7 +173,7 @@ func validateBlobSidecar(hashes []common.Hash, sidecar *types.BlobTxSidecar) err
 	// Blob commitments match with the hashes in the transaction, verify the
 	// blobs themselves via KZG
 	for i := range sidecar.Blobs {
-		if err := kzg4844.VerifyBlobProof(sidecar.Blobs[i], sidecar.Commitments[i], sidecar.Proofs[i]); err != nil {
+		if err := kzg4844.VerifyBlobProof(&sidecar.Blobs[i], sidecar.Commitments[i], sidecar.Proofs[i]); err != nil {
 			return fmt.Errorf("invalid blob %d: %v", i, err)
 		}
 	}
@@ -206,7 +212,7 @@ type ValidationOptionsWithState struct {
 // rules without duplicating code and running the risk of missed updates.
 func ValidateTransactionWithState(tx *types.Transaction, signer types.Signer, opts *ValidationOptionsWithState) error {
 	// Ensure the transaction adheres to nonce ordering
-	from, err := signer.Sender(tx) // already validated (and cached), but cleaner to check
+	from, err := types.Sender(signer, tx) // already validated (and cached), but cleaner to check
 	if err != nil {
 		log.Error("Transaction sender recovery failed", "err", err)
 		return err

@@ -26,7 +26,8 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -40,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/exp/slices"
 )
 
 // Chain is a lightweight blockchain-like store which can read a hivechain
@@ -56,21 +56,21 @@ type Chain struct {
 // NewChain takes the given chain.rlp file, and decodes and returns
 // the blocks from the file.
 func NewChain(dir string) (*Chain, error) {
-	gen, err := loadGenesis(path.Join(dir, "genesis.json"))
+	gen, err := loadGenesis(filepath.Join(dir, "genesis.json"))
 	if err != nil {
 		return nil, err
 	}
 	gblock := gen.ToBlock()
 
-	blocks, err := blocksFromFile(path.Join(dir, "chain.rlp"), gblock)
+	blocks, err := blocksFromFile(filepath.Join(dir, "chain.rlp"), gblock)
 	if err != nil {
 		return nil, err
 	}
-	state, err := readState(path.Join(dir, "headstate.json"))
+	state, err := readState(filepath.Join(dir, "headstate.json"))
 	if err != nil {
 		return nil, err
 	}
-	accounts, err := readAccounts(path.Join(dir, "accounts.json"))
+	accounts, err := readAccounts(filepath.Join(dir, "accounts.json"))
 	if err != nil {
 		return nil, err
 	}

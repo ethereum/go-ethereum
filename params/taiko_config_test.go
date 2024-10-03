@@ -72,11 +72,6 @@ func TestNetworkIDToChainConfigOrDefault(t *testing.T) {
 			SepoliaChainConfig,
 		},
 		{
-			"goerli",
-			GoerliChainConfig.ChainID,
-			GoerliChainConfig,
-		},
-		{
 			"doesntExist",
 			big.NewInt(89390218390),
 			AllEthashProtocolChanges,

@@ -18,10 +18,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -175,14 +176,14 @@ func open(ctx *cli.Context, epoch uint64) (*era.Era, error) {
 	if epoch >= uint64(len(entries)) {
 		return nil, fmt.Errorf("epoch out-of-bounds: last %d, want %d", len(entries)-1, epoch)
 	}
-	return era.Open(path.Join(dir, entries[epoch]))
+	return era.Open(filepath.Join(dir, entries[epoch]))
 }
 
 // verify checks each era1 file in a directory to ensure it is well-formed and
 // that the accumulator matches the expected value.
 func verify(ctx *cli.Context) error {
 	if ctx.Args().Len() != 1 {
-		return fmt.Errorf("missing accumulators file")
+		return errors.New("missing accumulators file")
 	}
 
 	roots, err := readHashes(ctx.Args().First())
@@ -203,7 +204,7 @@ func verify(ctx *cli.Context) error {
 	}
 
 	if len(entries) != len(roots) {
-		return fmt.Errorf("number of era1 files should match the number of accumulator hashes")
+		return errors.New("number of era1 files should match the number of accumulator hashes")
 	}
 
 	// Verify each epoch matches the expected root.
@@ -211,7 +212,7 @@ func verify(ctx *cli.Context) error {
 		// Wrap in function so defers don't stack.
 		err := func() error {
 			name := entries[i]
-			e, err := era.Open(path.Join(dir, name))
+			e, err := era.Open(filepath.Join(dir, name))
 			if err != nil {
 				return fmt.Errorf("error opening era1 file %s: %w", name, err)
 			}
@@ -308,7 +309,7 @@ func checkAccumulator(e *era.Era) error {
 func readHashes(f string) ([]common.Hash, error) {
 	b, err := os.ReadFile(f)
 	if err != nil {
-		return nil, fmt.Errorf("unable to open accumulators file")
+		return nil, errors.New("unable to open accumulators file")
 	}
 	s := strings.Split(string(b), "\n")
 	// Remove empty last element, if present.

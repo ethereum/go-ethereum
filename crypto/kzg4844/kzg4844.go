@@ -85,7 +85,7 @@ type Claim [32]byte
 var useCKZG atomic.Bool
 
 // UseCKZG can be called to switch the default Go implementation of KZG to the C
-// library if fo some reason the user wishes to do so (e.g. consensus bug in one
+// library if for some reason the user wishes to do so (e.g. consensus bug in one
 // or the other).
 func UseCKZG(use bool) error {
 	if use && !ckzgAvailable {
@@ -105,7 +105,7 @@ func UseCKZG(use bool) error {
 }
 
 // BlobToCommitment creates a small commitment out of a data blob.
-func BlobToCommitment(blob Blob) (Commitment, error) {
+func BlobToCommitment(blob *Blob) (Commitment, error) {
 	if useCKZG.Load() {
 		return ckzgBlobToCommitment(blob)
 	}
@@ -114,7 +114,7 @@ func BlobToCommitment(blob Blob) (Commitment, error) {
 
 // ComputeProof computes the KZG proof at the given point for the polynomial
 // represented by the blob.
-func ComputeProof(blob Blob, point Point) (Proof, Claim, error) {
+func ComputeProof(blob *Blob, point Point) (Proof, Claim, error) {
 	if useCKZG.Load() {
 		return ckzgComputeProof(blob, point)
 	}
@@ -134,7 +134,7 @@ func VerifyProof(commitment Commitment, point Point, claim Claim, proof Proof) e
 // the commitment.
 //
 // This method does not verify that the commitment is correct with respect to blob.
-func ComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
+func ComputeBlobProof(blob *Blob, commitment Commitment) (Proof, error) {
 	if useCKZG.Load() {
 		return ckzgComputeBlobProof(blob, commitment)
 	}
@@ -142,7 +142,7 @@ func ComputeBlobProof(blob Blob, commitment Commitment) (Proof, error) {
 }
 
 // VerifyBlobProof verifies that the blob data corresponds to the provided commitment.
-func VerifyBlobProof(blob Blob, commitment Commitment, proof Proof) error {
+func VerifyBlobProof(blob *Blob, commitment Commitment, proof Proof) error {
 	if useCKZG.Load() {
 		return ckzgVerifyBlobProof(blob, commitment, proof)
 	}

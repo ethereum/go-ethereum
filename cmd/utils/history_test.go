@@ -22,7 +22,7 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -78,12 +78,12 @@ func TestHistoryImportAndExport(t *testing.T) {
 	})
 
 	// Initialize BlockChain.
-	chain, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}
 	if _, err := chain.InsertChain(blocks); err != nil {
-		t.Fatalf("error insterting chain: %v", err)
+		t.Fatalf("error inserting chain: %v", err)
 	}
 
 	// Make temp directory for era files.
@@ -99,7 +99,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 
 	// Read checksums.
-	b, err := os.ReadFile(path.Join(dir, "checksums.txt"))
+	b, err := os.ReadFile(filepath.Join(dir, "checksums.txt"))
 	if err != nil {
 		t.Fatalf("failed to read checksums: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	entries, _ := era.ReadDir(dir, "mainnet")
 	for i, filename := range entries {
 		func() {
-			f, err := os.Open(path.Join(dir, filename))
+			f, err := os.Open(filepath.Join(dir, filename))
 			if err != nil {
 				t.Fatalf("error opening era file: %v", err)
 			}
@@ -162,8 +162,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 
 	// Now import Era.
-	freezer := t.TempDir()
-	db2, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), freezer, "", false)
+	db2, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
 	if err != nil {
 		panic(err)
 	}
@@ -172,7 +171,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	})
 
 	genesis.MustCommit(db2, triedb.NewDatabase(db, triedb.HashDefaults))
-	imported, err := core.NewBlockChain(db2, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	imported, err := core.NewBlockChain(db2, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}

@@ -35,7 +35,6 @@ var networkIDToChainConfig = map[*big.Int]*ChainConfig{
 	HeklaNetworkID:             TaikoChainConfig,
 	MainnetChainConfig.ChainID: MainnetChainConfig,
 	SepoliaChainConfig.ChainID: SepoliaChainConfig,
-	GoerliChainConfig.ChainID:  GoerliChainConfig,
 	TestChainConfig.ChainID:    TestChainConfig,
 	NonActivatedConfig.ChainID: NonActivatedConfig,
 }

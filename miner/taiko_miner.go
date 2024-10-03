@@ -24,7 +24,7 @@ func (miner *Miner) SealBlockWith(
 	baseFeePerGas *big.Int,
 	withdrawals types.Withdrawals,
 ) (*types.Block, error) {
-	return miner.worker.sealBlockWith(parent, timestamp, blkMeta, baseFeePerGas, withdrawals)
+	return miner.sealBlockWith(parent, timestamp, blkMeta, baseFeePerGas, withdrawals)
 }
 
 // BuildTransactionsLists builds multiple transactions lists which satisfy all the given limits.
@@ -36,7 +36,7 @@ func (miner *Miner) BuildTransactionsLists(
 	locals []string,
 	maxTransactionsLists uint64,
 ) ([]*PreBuiltTxList, error) {
-	return miner.BuildTransactionsListsWithMinTip(
+	return miner.buildTransactionsLists(
 		beneficiary,
 		baseFee,
 		blockMaxGasLimit,
@@ -58,7 +58,7 @@ func (miner *Miner) BuildTransactionsListsWithMinTip(
 	maxTransactionsLists uint64,
 	minTip uint64,
 ) ([]*PreBuiltTxList, error) {
-	return miner.worker.BuildTransactionsLists(
+	return miner.buildTransactionsLists(
 		beneficiary,
 		baseFee,
 		blockMaxGasLimit,

@@ -10,7 +10,6 @@
     "number": "24973",
     "stateRoot": "0x532a5c3f75453a696428db078e32ae283c85cb97e4d8560dbdf022adac6df369",
     "timestamp": "1479891145",
-    "totalDifficulty": "1892250259406",
     "alloc": {
       "0x6c06b16512b332e6cd8293a2974872674716ce18": {
         "balance": "0x0",
@@ -64,8 +63,22 @@
         "gasUsed": "0x72de",
         "output": "0x"
       },
-      "subtraces": 0,
+      "subtraces": 1,
       "traceAddress": [],
+      "type": "call"
+    },
+    {
+      "action": {
+        "callType": "call",
+        "from": "0x6c06b16512b332e6cd8293a2974872674716ce18",
+        "gas": "0x8fc",
+        "to": "0x66fdfd05e46126a07465ad24e40cc0597bc1ef31",
+        "value": "0x14d1120d7b160000"
+      },
+      "error": "insufficient balance for transfer",
+      "result": {},
+      "subtraces": 0,
+      "traceAddress": [0],
       "type": "call"
     }
   ]

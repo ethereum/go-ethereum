@@ -19,17 +19,18 @@ package gasprice
 import (
 	"context"
 	"math/big"
+	"slices"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/exp/slices"
 )
 
 const sampleNumber = 3 // Number of transactions sampled in a block
@@ -44,7 +45,6 @@ type Config struct {
 	Percentile       int
 	MaxHeaderHistory uint64
 	MaxBlockHistory  uint64
-	Default          *big.Int `toml:",omitempty"`
 	MaxPrice         *big.Int `toml:",omitempty"`
 	IgnorePrice      *big.Int `toml:",omitempty"`
 }
@@ -54,7 +54,7 @@ type OracleBackend interface {
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
-	PendingBlockAndReceipts() (*types.Block, types.Receipts)
+	Pending() (*types.Block, types.Receipts, *state.StateDB)
 	ChainConfig() *params.ChainConfig
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 }
@@ -78,7 +78,7 @@ type Oracle struct {
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
 // gasprice for newly created transaction.
-func NewOracle(backend OracleBackend, params Config) *Oracle {
+func NewOracle(backend OracleBackend, params Config, startPrice *big.Int) *Oracle {
 	blocks := params.Blocks
 	if blocks < 1 {
 		blocks = 1
@@ -114,6 +114,9 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		maxBlockHistory = 1
 		log.Warn("Sanitizing invalid gasprice oracle max block history", "provided", params.MaxBlockHistory, "updated", maxBlockHistory)
 	}
+	if startPrice == nil {
+		startPrice = new(big.Int)
+	}
 
 	cache := lru.NewCache[cacheKey, processedFees](2048)
 	headEvent := make(chan core.ChainHeadEvent, 1)
@@ -130,7 +133,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 
 	return &Oracle{
 		backend:          backend,
-		lastPrice:        params.Default,
+		lastPrice:        startPrice,
 		maxPrice:         maxPrice,
 		ignorePrice:      ignorePrice,
 		checkBlocks:      blocks,

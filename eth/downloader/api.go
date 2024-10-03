@@ -129,7 +129,7 @@ func (api *DownloaderAPI) eventLoop() {
 	}
 }
 
-// Syncing provides information when this nodes starts synchronising with the Ethereum network and when it's finished.
+// Syncing provides information when this node starts synchronising with the Ethereum network and when it's finished.
 func (api *DownloaderAPI) Syncing(ctx context.Context) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -148,8 +148,6 @@ func (api *DownloaderAPI) Syncing(ctx context.Context) (*rpc.Subscription, error
 			case status := <-statuses:
 				notifier.Notify(rpcSub.ID, status)
 			case <-rpcSub.Err():
-				return
-			case <-notifier.Closed():
 				return
 			}
 		}

@@ -26,8 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie/testutil"
 	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
@@ -38,20 +38,20 @@ func randomStateSet(n int) *triestate.Set {
 		storages = make(map[common.Address]map[common.Hash][]byte)
 	)
 	for i := 0; i < n; i++ {
-		addr := testutil.RandomAddress()
+		addr := testrand.Address()
 		storages[addr] = make(map[common.Hash][]byte)
 		for j := 0; j < 3; j++ {
-			v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testutil.RandBytes(32)))
-			storages[addr][testutil.RandomHash()] = v
+			v, _ := rlp.EncodeToBytes(common.TrimLeftZeroes(testrand.Bytes(32)))
+			storages[addr][testrand.Hash()] = v
 		}
 		account := generateAccount(types.EmptyRootHash)
 		accounts[addr] = types.SlimAccountRLP(account)
 	}
-	return triestate.New(accounts, storages, nil)
+	return triestate.New(accounts, storages)
 }
 
 func makeHistory() *history {
-	return newHistory(testutil.RandomHash(), types.EmptyRootHash, 0, randomStateSet(3))
+	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, randomStateSet(3))
 }
 
 func makeHistories(n int) []*history {
@@ -60,7 +60,7 @@ func makeHistories(n int) []*history {
 		result []*history
 	)
 	for i := 0; i < n; i++ {
-		root := testutil.RandomHash()
+		root := testrand.Hash()
 		h := newHistory(root, parent, uint64(i), randomStateSet(3))
 		parent = root
 		result = append(result, h)
@@ -102,7 +102,7 @@ func TestEncodeDecodeHistory(t *testing.T) {
 	}
 }
 
-func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer *rawdb.ResettableFreezer, id uint64, root common.Hash, exist bool) {
+func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, id uint64, root common.Hash, exist bool) {
 	blob := rawdb.ReadStateHistoryMeta(freezer, id)
 	if exist && len(blob) == 0 {
 		t.Fatalf("Failed to load trie history, %d", id)
@@ -118,7 +118,7 @@ func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer *rawdb.Resettab
 	}
 }
 
-func checkHistoriesInRange(t *testing.T, db ethdb.KeyValueReader, freezer *rawdb.ResettableFreezer, from, to uint64, roots []common.Hash, exist bool) {
+func checkHistoriesInRange(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, from, to uint64, roots []common.Hash, exist bool) {
 	for i, j := from, 0; i <= to; i, j = i+1, j+1 {
 		checkHistory(t, db, freezer, i, roots[j], exist)
 	}
@@ -129,7 +129,7 @@ func TestTruncateHeadHistory(t *testing.T) {
 		roots      []common.Hash
 		hs         = makeHistories(10)
 		db         = rawdb.NewMemoryDatabase()
-		freezer, _ = openFreezer(t.TempDir(), false)
+		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
 
@@ -157,7 +157,7 @@ func TestTruncateTailHistory(t *testing.T) {
 		roots      []common.Hash
 		hs         = makeHistories(10)
 		db         = rawdb.NewMemoryDatabase()
-		freezer, _ = openFreezer(t.TempDir(), false)
+		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
 
@@ -200,7 +200,7 @@ func TestTruncateTailHistories(t *testing.T) {
 			roots      []common.Hash
 			hs         = makeHistories(10)
 			db         = rawdb.NewMemoryDatabase()
-			freezer, _ = openFreezer(t.TempDir()+fmt.Sprintf("%d", i), false)
+			freezer, _ = rawdb.NewStateFreezer(t.TempDir()+fmt.Sprintf("%d", i), false, false)
 		)
 		defer freezer.Close()
 
@@ -228,7 +228,7 @@ func TestTruncateOutOfRange(t *testing.T) {
 	var (
 		hs         = makeHistories(10)
 		db         = rawdb.NewMemoryDatabase()
-		freezer, _ = openFreezer(t.TempDir(), false)
+		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
 
@@ -266,11 +266,6 @@ func TestTruncateOutOfRange(t *testing.T) {
 			t.Errorf("Unexpected error, want: %v, got: %v", c.expErr, gotErr)
 		}
 	}
-}
-
-// openFreezer initializes the freezer instance for storing state histories.
-func openFreezer(datadir string, readOnly bool) (*rawdb.ResettableFreezer, error) {
-	return rawdb.NewStateFreezer(datadir, readOnly)
 }
 
 func compareSet[k comparable](a, b map[k][]byte) bool {

@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -34,9 +35,6 @@ import (
 )
 
 const (
-	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
-	maxDiffLayers = 128
-
 	// defaultCleanSize is the default memory allowance of clean cache.
 	defaultCleanSize = 16 * 1024 * 1024
 
@@ -54,14 +52,20 @@ const (
 	DefaultBufferSize = 64 * 1024 * 1024
 )
 
+var (
+	// maxDiffLayers is the maximum diff layers allowed in the layer tree.
+	maxDiffLayers = 128
+)
+
 // layer is the interface implemented by all state layers which includes some
 // public methods and some additional methods for internal usage.
 type layer interface {
-	// Node retrieves the trie node with the node info. An error will be returned
-	// if the read operation exits abnormally. For example, if the layer is already
-	// stale, or the associated state is regarded as corrupted. Notably, no error
-	// will be returned if the requested node is not found in database.
-	Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error)
+	// node retrieves the trie node with the node info. An error will be returned
+	// if the read operation exits abnormally. Specifically, if the layer is
+	// already stale.
+	//
+	// Note, no error will be returned if the requested node is not found in database.
+	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error)
 
 	// rootHash returns the root hash for which this layer was made.
 	rootHash() common.Hash
@@ -128,27 +132,37 @@ type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
 	// the shutdown to reject all following unexpected mutations.
-	readOnly   bool                     // Flag if database is opened in read only mode
-	waitSync   bool                     // Flag if database is deactivated due to initial state sync
-	bufferSize int                      // Memory allowance (in bytes) for caching dirty nodes
-	config     *Config                  // Configuration for database
-	diskdb     ethdb.Database           // Persistent storage for matured trie nodes
-	tree       *layerTree               // The group for all known layers
-	freezer    *rawdb.ResettableFreezer // Freezer for storing trie histories, nil possible in tests
-	lock       sync.RWMutex             // Lock to prevent mutations from happening at the same time
+	readOnly   bool                         // Flag if database is opened in read only mode
+	waitSync   bool                         // Flag if database is deactivated due to initial state sync
+	isVerkle   bool                         // Flag if database is used for verkle tree
+	bufferSize int                          // Memory allowance (in bytes) for caching dirty nodes
+	config     *Config                      // Configuration for database
+	diskdb     ethdb.Database               // Persistent storage for matured trie nodes
+	tree       *layerTree                   // The group for all known layers
+	freezer    ethdb.ResettableAncientStore // Freezer for storing trie histories, nil possible in tests
+	lock       sync.RWMutex                 // Lock to prevent mutations from happening at the same time
 }
 
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
-func New(diskdb ethdb.Database, config *Config) *Database {
+func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 	if config == nil {
 		config = Defaults
 	}
 	config = config.sanitize()
 
+	// Establish a dedicated database namespace tailored for verkle-specific
+	// data, ensuring the isolation of both verkle and merkle tree data. It's
+	// important to note that the introduction of a prefix won't lead to
+	// substantial storage overhead, as the underlying database will efficiently
+	// compress the shared key prefix.
+	if isVerkle {
+		diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
+	}
 	db := &Database{
 		readOnly:   config.ReadOnly,
+		isVerkle:   isVerkle,
 		bufferSize: config.DirtyCacheSize,
 		config:     config,
 		diskdb:     diskdb,
@@ -157,45 +171,10 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 	// and in-memory layer journal.
 	db.tree = newLayerTree(db.loadLayers())
 
-	// Open the freezer for state history if the passed database contains an
-	// ancient store. Otherwise, all the relevant functionalities are disabled.
-	//
-	// Because the freezer can only be opened once at the same time, this
-	// mechanism also ensures that at most one **non-readOnly** database
-	// is opened at the same time to prevent accidental mutation.
-	if ancient, err := diskdb.AncientDatadir(); err == nil && ancient != "" && !db.readOnly {
-		freezer, err := rawdb.NewStateFreezer(ancient, false)
-		if err != nil {
-			log.Crit("Failed to open state history freezer", "err", err)
-		}
-		db.freezer = freezer
-
-		diskLayerID := db.tree.bottom().stateID()
-		if diskLayerID == 0 {
-			// Reset the entire state histories in case the trie database is
-			// not initialized yet, as these state histories are not expected.
-			frozen, err := db.freezer.Ancients()
-			if err != nil {
-				log.Crit("Failed to retrieve head of state history", "err", err)
-			}
-			if frozen != 0 {
-				err := db.freezer.Reset()
-				if err != nil {
-					log.Crit("Failed to reset state histories", "err", err)
-				}
-				log.Info("Truncated extraneous state history")
-			}
-		} else {
-			// Truncate the extra state histories above in freezer in case
-			// it's not aligned with the disk layer.
-			pruned, err := truncateFromHead(db.diskdb, freezer, diskLayerID)
-			if err != nil {
-				log.Crit("Failed to truncate extra state histories", "err", err)
-			}
-			if pruned != 0 {
-				log.Warn("Truncated extra state histories", "number", pruned)
-			}
-		}
+	// Repair the state history, which might not be aligned with the state
+	// in the key-value store due to an unclean shutdown.
+	if err := db.repairHistory(); err != nil {
+		log.Crit("Failed to repair pathdb", "err", err)
 	}
 	// Disable database in case node is still in the initial state sync stage.
 	if rawdb.ReadSnapSyncStatusFlag(diskdb) == rawdb.StateSyncRunning && !db.readOnly {
@@ -203,17 +182,56 @@ func New(diskdb ethdb.Database, config *Config) *Database {
 			log.Crit("Failed to disable database", "err", err) // impossible to happen
 		}
 	}
-	log.Warn("Path-based state scheme is an experimental feature")
 	return db
 }
 
-// Reader retrieves a layer belonging to the given state root.
-func (db *Database) Reader(root common.Hash) (layer, error) {
-	l := db.tree.get(root)
-	if l == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
+// repairHistory truncates leftover state history objects, which may occur due
+// to an unclean shutdown or other unexpected reasons.
+func (db *Database) repairHistory() error {
+	// Open the freezer for state history. This mechanism ensures that
+	// only one database instance can be opened at a time to prevent
+	// accidental mutation.
+	ancient, err := db.diskdb.AncientDatadir()
+	if err != nil {
+		// TODO error out if ancient store is disabled. A tons of unit tests
+		// disable the ancient store thus the error here will immediately fail
+		// all of them. Fix the tests first.
+		return nil
 	}
-	return l, nil
+	freezer, err := rawdb.NewStateFreezer(ancient, db.isVerkle, db.readOnly)
+	if err != nil {
+		log.Crit("Failed to open state history freezer", "err", err)
+	}
+	db.freezer = freezer
+
+	// Reset the entire state histories if the trie database is not initialized
+	// yet. This action is necessary because these state histories are not
+	// expected to exist without an initialized trie database.
+	id := db.tree.bottom().stateID()
+	if id == 0 {
+		frozen, err := db.freezer.Ancients()
+		if err != nil {
+			log.Crit("Failed to retrieve head of state history", "err", err)
+		}
+		if frozen != 0 {
+			err := db.freezer.Reset()
+			if err != nil {
+				log.Crit("Failed to reset state histories", "err", err)
+			}
+			log.Info("Truncated extraneous state history")
+		}
+		return nil
+	}
+	// Truncate the extra state histories above in freezer in case it's not
+	// aligned with the disk layer. It might happen after a unclean shutdown.
+	pruned, err := truncateFromHead(db.diskdb, db.freezer, id)
+	if err != nil {
+		log.Crit("Failed to truncate extra state histories", "err", err)
+	}
+	if pruned != 0 {
+		log.Warn("Truncated extra state histories", "number", pruned)
+	}
+	return nil
 }
 
 // Update adds a new layer into the tree, if that can be linked to an existing
@@ -297,7 +315,10 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Ensure the provided state root matches the stored one.
 	root = types.TrieRootHash(root)
-	_, stored := rawdb.ReadAccountTrieNode(db.diskdb, nil)
+	stored := types.EmptyRootHash
+	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
+		stored = crypto.Keccak256Hash(blob)
+	}
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}
@@ -332,7 +353,7 @@ func (db *Database) Enable(root common.Hash) error {
 // Recover rollbacks the database to a specified historical point.
 // The state is supported as the rollback destination only if it's
 // canonical state and the corresponding trie histories are existent.
-func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error {
+func (db *Database) Recover(root common.Hash) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
@@ -358,7 +379,7 @@ func (db *Database) Recover(root common.Hash, loader triestate.TrieLoader) error
 		if err != nil {
 			return err
 		}
-		dl, err = dl.revert(h, loader)
+		dl, err = dl.revert(h)
 		if err != nil {
 			return err
 		}
@@ -391,17 +412,20 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if *id >= dl.stateID() {
 		return false
 	}
+	// This is a temporary workaround for the unavailability of the freezer in
+	// dev mode. As a consequence, the Pathdb loses the ability for deep reorg
+	// in certain cases.
+	// TODO(rjl493456442): Implement the in-memory ancient store.
+	if db.freezer == nil {
+		return false
+	}
 	// Ensure the requested state is a canonical state and all state
 	// histories in range [id+1, disklayer.ID] are present and complete.
-	parent := root
 	return checkHistories(db.freezer, *id+1, dl.stateID()-*id, func(m *meta) error {
-		if m.parent != parent {
+		if m.parent != root {
 			return errors.New("unexpected state history")
 		}
-		if len(m.incomplete) > 0 {
-			return errors.New("incomplete state history")
-		}
-		parent = m.root
+		root = m.root
 		return nil
 	}) == nil
 }
@@ -467,11 +491,6 @@ func (db *Database) SetBufferSize(size int) error {
 	return db.tree.bottom().setBufferSize(db.bufferSize)
 }
 
-// Scheme returns the node scheme used in the database.
-func (db *Database) Scheme() string {
-	return rawdb.PathScheme
-}
-
 // modifyAllowed returns the indicator if mutation is allowed. This function
 // assumes the db.lock is already held.
 func (db *Database) modifyAllowed() error {
@@ -482,4 +501,34 @@ func (db *Database) modifyAllowed() error {
 		return errDatabaseWaitSync
 	}
 	return nil
+}
+
+// AccountHistory inspects the account history within the specified range.
+//
+// Start: State ID of the first history object for the query. 0 implies the first
+// available object is selected as the starting point.
+//
+// End: State ID of the last history for the query. 0 implies the last available
+// object is selected as the ending point. Note end is included in the query.
+func (db *Database) AccountHistory(address common.Address, start, end uint64) (*HistoryStats, error) {
+	return accountHistory(db.freezer, address, start, end)
+}
+
+// StorageHistory inspects the storage history within the specified range.
+//
+// Start: State ID of the first history object for the query. 0 implies the first
+// available object is selected as the starting point.
+//
+// End: State ID of the last history for the query. 0 implies the last available
+// object is selected as the ending point. Note end is included in the query.
+//
+// Note, slot refers to the hash of the raw slot key.
+func (db *Database) StorageHistory(address common.Address, slot common.Hash, start uint64, end uint64) (*HistoryStats, error) {
+	return storageHistory(db.freezer, address, slot, start, end)
+}
+
+// HistoryRange returns the block numbers associated with earliest and latest
+// state history in the local store.
+func (db *Database) HistoryRange() (uint64, uint64, error) {
+	return historyRange(db.freezer)
 }

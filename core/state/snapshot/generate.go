@@ -360,10 +360,7 @@ func (dl *diskLayer) generateRange(ctx *generatorContext, trieId *trie.ID, prefi
 		for i, key := range result.keys {
 			snapTrie.Update(key, result.vals[i])
 		}
-		root, nodes, err := snapTrie.Commit(false)
-		if err != nil {
-			return false, nil, err
-		}
+		root, nodes := snapTrie.Commit(false)
 		if nodes != nil {
 			tdb.Update(root, types.EmptyRootHash, 0, trienode.NewWithNodeSet(nodes), nil)
 			tdb.Commit(root, false)
@@ -634,16 +631,10 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 		accMarker = nil
 		return nil
 	}
-	// Always reset the initial account range as 1 whenever recover from the
-	// interruption. TODO(rjl493456442) can we remove it?
-	var accountRange = accountCheckRange
-	if len(accMarker) > 0 {
-		accountRange = 1
-	}
 	origin := common.CopyBytes(accMarker)
 	for {
 		id := trie.StateTrieID(dl.root)
-		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountRange, onAccount, types.FullAccountRLP)
+		exhausted, last, err := dl.generateRange(ctx, id, rawdb.SnapshotAccountPrefix, snapAccount, origin, accountCheckRange, onAccount, types.FullAccountRLP)
 		if err != nil {
 			return err // The procedure it aborted, either by external signal or internal error.
 		}
@@ -655,7 +646,6 @@ func generateAccounts(ctx *generatorContext, dl *diskLayer, accMarker []byte) er
 			ctx.removeStorageLeft()
 			break
 		}
-		accountRange = accountCheckRange
 	}
 	return nil
 }

@@ -57,7 +57,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 		t.Fatalf("can't create new node: %v", err)
 	}
 	// Create Ethereum Service
-	config := &ethconfig.Config{Genesis: genesis}
+	config := &ethconfig.Config{Genesis: genesis, RPCGasCap: 1000000}
 	ethservice, err := eth.New(n, config)
 	if err != nil {
 		t.Fatalf("can't create new ethereum service: %v", err)
@@ -65,7 +65,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 	filterSystem := filters.NewFilterSystem(ethservice.APIBackend, filters.Config{})
 	n.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, false),
+		Service:   filters.NewFilterAPI(filterSystem),
 	}})
 
 	// Import the test chain.
@@ -146,7 +146,7 @@ func TestGethClient(t *testing.T) {
 			func(t *testing.T) { testCallContractWithBlockOverrides(t, client) },
 		},
 		// The testaccesslist is a bit time-sensitive: the newTestBackend imports
-		// one block. The `testAcessList` fails if the miner has not yet created a
+		// one block. The `testAccessList` fails if the miner has not yet created a
 		// new pending-block after the import event.
 		// Hence: this test should be last, execute the tests serially.
 		{
@@ -299,7 +299,7 @@ func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
 		t.Fatalf("invalid nonce, want: %v got: %v", 0, result.Nonce)
 	}
 	// test balance
-	if result.Balance.Cmp(big.NewInt(0)) != 0 {
+	if result.Balance.Sign() != 0 {
 		t.Fatalf("invalid balance, want: %v got: %v", 0, result.Balance)
 	}
 	// test storage
@@ -510,7 +510,7 @@ func TestBlockOverridesMarshal(t *testing.T) {
 			bo: BlockOverrides{
 				Coinbase: common.HexToAddress("0x1111111111111111111111111111111111111111"),
 			},
-			want: `{"coinbase":"0x1111111111111111111111111111111111111111"}`,
+			want: `{"feeRecipient":"0x1111111111111111111111111111111111111111"}`,
 		},
 		{
 			bo: BlockOverrides{
@@ -520,7 +520,7 @@ func TestBlockOverridesMarshal(t *testing.T) {
 				GasLimit:   4,
 				BaseFee:    big.NewInt(5),
 			},
-			want: `{"number":"0x1","difficulty":"0x2","time":"0x3","gasLimit":"0x4","baseFee":"0x5"}`,
+			want: `{"number":"0x1","difficulty":"0x2","time":"0x3","gasLimit":"0x4","baseFeePerGas":"0x5"}`,
 		},
 	} {
 		marshalled, err := json.Marshal(&tt.bo)

@@ -19,6 +19,7 @@ package v5test
 import (
 	"bytes"
 	"net"
+	"slices"
 	"sync"
 	"time"
 
@@ -266,7 +267,7 @@ func (s *Suite) TestFindnodeResults(t *utesting.T) {
 		n := bn.conn.localNode.Node()
 		expect[n.ID()] = n
 		d := uint(enode.LogDist(n.ID(), s.Dest.ID()))
-		if !containsUint(dists, d) {
+		if !slices.Contains(dists, d) {
 			dists = append(dists, d)
 		}
 	}

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -35,11 +34,13 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-// freezerdb is a database wrapper that enables freezer data retrievals.
+// freezerdb is a database wrapper that enables ancient chain segment freezing.
 type freezerdb struct {
-	ancientRoot string
 	ethdb.KeyValueStore
-	ethdb.AncientStore
+	*chainFreezer
+
+	readOnly    bool
+	ancientRoot string
 }
 
 // AncientDatadir returns the path of root ancient directory.
@@ -51,7 +52,7 @@ func (frdb *freezerdb) AncientDatadir() (string, error) {
 // the slow ancient tables.
 func (frdb *freezerdb) Close() error {
 	var errs []error
-	if err := frdb.AncientStore.Close(); err != nil {
+	if err := frdb.chainFreezer.Close(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := frdb.KeyValueStore.Close(); err != nil {
@@ -66,19 +67,13 @@ func (frdb *freezerdb) Close() error {
 // Freeze is a helper method used for external testing to trigger and block until
 // a freeze cycle completes, without having to sleep for a minute to trigger the
 // automatic background run.
-func (frdb *freezerdb) Freeze(threshold uint64) error {
-	if frdb.AncientStore.(*chainFreezer).readonly {
+func (frdb *freezerdb) Freeze() error {
+	if frdb.readOnly {
 		return errReadOnly
 	}
-	// Set the freezer threshold to a temporary value
-	defer func(old uint64) {
-		frdb.AncientStore.(*chainFreezer).threshold.Store(old)
-	}(frdb.AncientStore.(*chainFreezer).threshold.Load())
-	frdb.AncientStore.(*chainFreezer).threshold.Store(threshold)
-
 	// Trigger a freeze cycle and block until it's done
 	trigger := make(chan struct{}, 1)
-	frdb.AncientStore.(*chainFreezer).trigger <- trigger
+	frdb.chainFreezer.trigger <- trigger
 	<-trigger
 	return nil
 }
@@ -154,12 +149,6 @@ func (db *nofreezedb) ReadAncients(fn func(reader ethdb.AncientReaderOp) error) 
 	return fn(db)
 }
 
-// MigrateTable processes the entries in a given table in sequence
-// converting them to a new format if they're of an old format.
-func (db *nofreezedb) MigrateTable(kind string, convert convertLegacyFn) error {
-	return errNotSupported
-}
-
 // AncientDatadir returns an error as we don't have a backing chain freezer.
 func (db *nofreezedb) AncientDatadir() (string, error) {
 	return "", errNotSupported
@@ -178,7 +167,7 @@ func resolveChainFreezerDir(ancient string) string {
 	// sub folder, if not then two possibilities:
 	// - chain freezer is not initialized
 	// - chain freezer exists in legacy location (root ancient folder)
-	freezer := path.Join(ancient, ChainFreezerName)
+	freezer := filepath.Join(ancient, ChainFreezerName)
 	if !common.FileExist(freezer) {
 		if !common.FileExist(ancient) {
 			// The entire ancient store is not initialized, still use the sub
@@ -199,8 +188,14 @@ func resolveChainFreezerDir(ancient string) string {
 // storage. The passed ancient indicates the path of root ancient directory
 // where the chain freezer can be opened.
 func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace string, readonly bool) (ethdb.Database, error) {
-	// Create the idle freezer instance
-	frdb, err := newChainFreezer(resolveChainFreezerDir(ancient), namespace, readonly)
+	// Create the idle freezer instance. If the given ancient directory is empty,
+	// in-memory chain freezer is used (e.g. dev mode); otherwise the regular
+	// file-based freezer is created.
+	chainFreezerDir := ancient
+	if chainFreezerDir != "" {
+		chainFreezerDir = resolveChainFreezerDir(chainFreezerDir)
+	}
+	frdb, err := newChainFreezer(chainFreezerDir, namespace, readonly)
 	if err != nil {
 		printChainMetadata(db)
 		return nil, err
@@ -284,7 +279,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
-	if !frdb.readonly {
+	if !readonly {
 		frdb.wg.Add(1)
 		go func() {
 			frdb.freeze(db)
@@ -294,7 +289,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 	return &freezerdb{
 		ancientRoot:   ancient,
 		KeyValueStore: db,
-		AncientStore:  frdb,
+		chainFreezer:  frdb,
 	}, nil
 }
 
@@ -480,6 +475,10 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		beaconHeaders   stat
 		cliqueSnaps     stat
 
+		// Verkle statistics
+		verkleTries        stat
+		verkleStateLookups stat
+
 		// Les statistic
 		chtTrieNodes   stat
 		bloomTrieNodes stat
@@ -549,6 +548,24 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bytes.HasPrefix(key, BloomTrieIndexPrefix) ||
 			bytes.HasPrefix(key, BloomTriePrefix): // Bloomtrie sub
 			bloomTrieNodes.Add(size)
+
+		// Verkle trie data is detected, determine the sub-category
+		case bytes.HasPrefix(key, VerklePrefix):
+			remain := key[len(VerklePrefix):]
+			switch {
+			case IsAccountTrieNode(remain):
+				verkleTries.Add(size)
+			case bytes.HasPrefix(remain, stateIDPrefix) && len(remain) == len(stateIDPrefix)+common.HashLength:
+				verkleStateLookups.Add(size)
+			case bytes.Equal(remain, persistentStateIDKey):
+				metadata.Add(size)
+			case bytes.Equal(remain, trieJournalKey):
+				metadata.Add(size)
+			case bytes.Equal(remain, snapSyncStatusFlagKey):
+				metadata.Add(size)
+			default:
+				unaccounted.Add(size)
+			}
 		default:
 			var accounted bool
 			for _, meta := range [][]byte{
@@ -589,6 +606,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Path trie state lookups", stateLookups.Size(), stateLookups.Count()},
 		{"Key-Value store", "Path trie account nodes", accountTries.Size(), accountTries.Count()},
 		{"Key-Value store", "Path trie storage nodes", storageTries.Size(), storageTries.Count()},
+		{"Key-Value store", "Verkle trie nodes", verkleTries.Size(), verkleTries.Count()},
+		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.Size(), verkleStateLookups.Count()},
 		{"Key-Value store", "Trie preimages", preimages.Size(), preimages.Count()},
 		{"Key-Value store", "Account snapshot", accountSnaps.Size(), accountSnaps.Count()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.Size(), storageSnaps.Count()},

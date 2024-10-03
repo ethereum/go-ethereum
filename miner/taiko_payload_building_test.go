@@ -18,7 +18,7 @@ func newTestBlock() *types.Block {
 	tx1 := types.NewTransaction(1, common.BytesToAddress([]byte{0x11}), big.NewInt(111), 1111, big.NewInt(11111), []byte{0x11, 0x11, 0x11})
 	txs := []*types.Transaction{tx1}
 
-	block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, txs, nil, nil, trie.NewStackTrie(nil))
+	block := types.NewBlock(&types.Header{Number: big.NewInt(314)}, &types.Body{Transactions: txs}, nil, trie.NewStackTrie(nil))
 	return block
 }
 
@@ -28,7 +28,6 @@ func TestSetFullBlock_AvoidPanic(t *testing.T) {
 		recipient = common.HexToAddress("0xdeadbeef")
 	)
 	w, b := newTestWorker(t, params.TestChainConfig, ethash.NewFaker(), db, 0)
-	defer w.close()
 
 	timestamp := uint64(time.Now().Unix())
 	args := &BuildPayloadArgs{
@@ -37,7 +36,7 @@ func TestSetFullBlock_AvoidPanic(t *testing.T) {
 		Random:       common.Hash{},
 		FeeRecipient: recipient,
 	}
-	payload, err := w.buildPayload(args)
+	payload, err := w.buildPayload(args, false)
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
@@ -59,7 +58,6 @@ func TestAfterSetFullBlock_Panic_DoneChannelNotSent(t *testing.T) {
 		recipient = common.HexToAddress("0xdeadbeef")
 	)
 	w, b := newTestWorker(t, params.TestChainConfig, ethash.NewFaker(), db, 0)
-	defer w.close()
 
 	timestamp := uint64(time.Now().Unix())
 	args := &BuildPayloadArgs{
@@ -68,7 +66,7 @@ func TestAfterSetFullBlock_Panic_DoneChannelNotSent(t *testing.T) {
 		Random:       common.Hash{},
 		FeeRecipient: recipient,
 	}
-	payload, err := w.buildPayload(args)
+	payload, err := w.buildPayload(args, false)
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
@@ -82,13 +80,12 @@ func TestAfterSetFullBlock_Panic_DoneChannelNotSent(t *testing.T) {
 	})
 }
 
-func TestAfterSetFullBlock_AvoidPanic_DoneChannelSent(t *testing.T) {
+func TestAfterSetFullBlockAvoidPanicDoneChannelSent(t *testing.T) {
 	var (
 		db        = rawdb.NewMemoryDatabase()
 		recipient = common.HexToAddress("0xdeadbeef")
 	)
 	w, b := newTestWorker(t, params.TestChainConfig, ethash.NewFaker(), db, 0)
-	defer w.close()
 
 	timestamp := uint64(time.Now().Unix())
 	args := &BuildPayloadArgs{
@@ -97,7 +94,7 @@ func TestAfterSetFullBlock_AvoidPanic_DoneChannelSent(t *testing.T) {
 		Random:       common.Hash{},
 		FeeRecipient: recipient,
 	}
-	payload, err := w.buildPayload(args)
+	payload, err := w.buildPayload(args, false)
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
@@ -116,7 +113,6 @@ func TestSetFullBlock(t *testing.T) {
 		recipient = common.HexToAddress("0xdeadbeef")
 	)
 	w, b := newTestWorker(t, params.TestChainConfig, ethash.NewFaker(), db, 0)
-	defer w.close()
 
 	timestamp := uint64(time.Now().Unix())
 	args := &BuildPayloadArgs{
@@ -125,7 +121,7 @@ func TestSetFullBlock(t *testing.T) {
 		Random:       common.Hash{},
 		FeeRecipient: recipient,
 	}
-	payload, err := w.buildPayload(args)
+	payload, err := w.buildPayload(args, false)
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
