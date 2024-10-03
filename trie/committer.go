@@ -44,31 +44,17 @@ func newCommitter(nodes *trienode.NodeSet, tracer *tracer, collectLeaf bool, par
 	}
 }
 
-type wrapNode struct {
-	node     *trienode.Node
-	path     string
-	leafHash common.Hash // optional, the parent hash of the related leaf
-	leafBlob []byte      // optional, the blob of the related leaf
-}
-
 // Commit collapses a node down into a hash node.
 func (c *committer) Commit(n node) hashNode {
-	hn, wnodes := c.commit(nil, n, true)
-	for _, wn := range wnodes {
-		c.nodes.AddNode(wn.path, wn.node)
-		if wn.leafHash != (common.Hash{}) {
-			c.nodes.AddLeaf(wn.leafHash, wn.leafBlob)
-		}
-	}
-	return hn.(hashNode)
+	return c.commit(nil, n, true).(hashNode)
 }
 
 // commit collapses a node down into a hash node and returns it.
-func (c *committer) commit(path []byte, n node, topmost bool) (node, []*wrapNode) {
+func (c *committer) commit(path []byte, n node, topmost bool) node {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
-		return hash, nil
+		return hash
 	}
 	// Commit children, then parent, and remove the dirty flag.
 	switch cn := n.(type) {
@@ -78,36 +64,29 @@ func (c *committer) commit(path []byte, n node, topmost bool) (node, []*wrapNode
 
 		// If the child is fullNode, recursively commit,
 		// otherwise it can only be hashNode or valueNode.
-		var nodes []*wrapNode
 		if _, ok := cn.Val.(*fullNode); ok {
-			collapsed.Val, nodes = c.commit(append(path, cn.Key...), cn.Val, false)
+			collapsed.Val = c.commit(append(path, cn.Key...), cn.Val, false)
 		}
 		// The key needs to be copied, since we're adding it to the
 		// modified nodeset.
 		collapsed.Key = hexToCompact(cn.Key)
-		hashedNode, wNode := c.store(path, collapsed)
-		if wNode != nil {
-			nodes = append(nodes, wNode)
-		}
+		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, nodes
+			return hn
 		}
-		return collapsed, nodes
+		return collapsed
 	case *fullNode:
-		hashedKids, nodes := c.commitChildren(path, cn, topmost && c.parallel)
+		hashedKids := c.commitChildren(path, cn, topmost && c.parallel)
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
-		hashedNode, wNode := c.store(path, collapsed)
-		if wNode != nil {
-			nodes = append(nodes, wNode)
-		}
+		hashedNode := c.store(path, collapsed)
 		if hn, ok := hashedNode.(hashNode); ok {
-			return hn, nodes
+			return hn
 		}
-		return collapsed, nodes
+		return collapsed
 	case hashNode:
-		return cn, nil
+		return cn
 	default:
 		// nil, valuenode shouldn't be committed
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
@@ -115,11 +94,10 @@ func (c *committer) commit(path []byte, n node, topmost bool) (node, []*wrapNode
 }
 
 // commitChildren commits the children of the given fullnode
-func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) ([17]node, []*wrapNode) {
+func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]node {
 	var (
 		wg       sync.WaitGroup
 		children [17]node
-		results  [16][]*wrapNode
 	)
 	for i := 0; i < 16; i++ {
 		child := n.Children[i]
@@ -137,34 +115,34 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) ([17
 		// Note the returned node can be some embedded nodes, so it's
 		// possible the type is not hashNode.
 		if !parallel {
-			children[i], results[i] = c.commit(append(path, byte(i)), child, false)
+			children[i] = c.commit(append(path, byte(i)), child, false)
 		} else {
 			wg.Add(1)
 			go func(index int) {
-				defer wg.Done()
-				children[index], results[index] = c.commit(append(path, byte(index)), child, false)
+				p := append(path, byte(i))
+				set := trienode.NewNodeSet(c.nodes.Owner)
+				childComitter := newCommitter(set, c.tracer, c.collectLeaf, false)
+				h := childComitter.commit(p, child, false)
+				children[index] = h
+				c.nodes.MergeSet(set)
+				wg.Done()
 			}(i)
 		}
 	}
 	if parallel {
 		wg.Wait()
+
 	}
 	// For the 17th child, it's possible the type is valuenode.
 	if n.Children[16] != nil {
 		children[16] = n.Children[16]
 	}
-	var wnodes []*wrapNode
-	for i := 0; i < 16; i++ {
-		if results[i] != nil {
-			wnodes = append(wnodes, results[i]...)
-		}
-	}
-	return children, wnodes
+	return children
 }
 
 // store hashes the node n and adds it to the modified nodeset. If leaf collection
 // is enabled, leaf nodes will be tracked in the modified nodeset as well.
-func (c *committer) store(path []byte, n node) (node, *wrapNode) {
+func (c *committer) store(path []byte, n node) node {
 	// Larger nodes are replaced by their hash and stored in the database.
 	var hash, _ = n.cache()
 
@@ -178,30 +156,24 @@ func (c *committer) store(path []byte, n node) (node, *wrapNode) {
 		// deleted only if the node was existent in database before.
 		_, ok := c.tracer.accessList[string(path)]
 		if ok {
-			return n, &wrapNode{
-				path: string(path),
-				node: trienode.NewDeleted(),
-			}
+			c.nodes.AddNode(path, trienode.NewDeleted()) // TODO
 		}
-		return n, nil
+		return n
 	}
 	nhash := common.BytesToHash(hash)
-	wNode := &wrapNode{
-		path: string(path),
-		node: trienode.New(nhash, nodeToBytes(n)),
-	}
+	c.nodes.AddNode(path, trienode.New(nhash, nodeToBytes(n))) // TODO
+
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
 	// length of leaves should be exactly same.
 	if c.collectLeaf {
 		if sn, ok := n.(*shortNode); ok {
 			if val, ok := sn.Val.(valueNode); ok {
-				wNode.leafHash = nhash
-				wNode.leafBlob = val
+				c.nodes.AddLeaf(nhash, val) // TODO
 			}
 		}
 	}
-	return hash, wNode
+	return hash
 }
 
 // ForGatherChildren decodes the provided node and traverses the children inside.

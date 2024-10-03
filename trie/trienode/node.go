@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"sync"
 )
 
 // Node is a wrapper which contains the encoded blob of the trie node and its
@@ -59,6 +60,8 @@ type leaf struct {
 // NodeSet contains a set of nodes collected during the commit operation.
 // Each node is keyed by path. It's not thread-safe to use.
 type NodeSet struct {
+	mu sync.Mutex
+
 	Owner   common.Hash
 	Leaves  []*leaf
 	Nodes   map[string]*Node
@@ -90,13 +93,40 @@ func (set *NodeSet) ForEachWithOrder(callback func(path string, n *Node)) {
 }
 
 // AddNode adds the provided node into set.
-func (set *NodeSet) AddNode(path string, n *Node) {
+func (set *NodeSet) AddNode(path []byte, n *Node) {
 	if n.IsDeleted() {
 		set.deletes += 1
 	} else {
 		set.updates += 1
 	}
-	set.Nodes[path] = n
+	set.Nodes[string(path)] = n
+}
+
+func (set *NodeSet) MergeSet(other *NodeSet) error {
+	if set.Owner != other.Owner {
+		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, other.Owner)
+	}
+	set.mu.Lock()
+	defer set.mu.Unlock()
+	for path, node := range other.Nodes {
+		prev, ok := set.Nodes[path]
+		if ok {
+			// overwrite happens, revoke the counter
+			if prev.IsDeleted() {
+				set.deletes -= 1
+			} else {
+				set.updates -= 1
+			}
+		}
+		if node.IsDeleted() {
+			set.deletes += 1
+		} else {
+			set.updates += 1
+		}
+		set.Nodes[path] = node
+	}
+	set.Leaves = append(set.Leaves, other.Leaves...)
+	return nil
 }
 
 // Merge adds a set of nodes into the set.
@@ -104,6 +134,8 @@ func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*Node) error {
 	if set.Owner != owner {
 		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, owner)
 	}
+	set.mu.Lock()
+	defer set.mu.Unlock()
 	for path, node := range nodes {
 		prev, ok := set.Nodes[path]
 		if ok {

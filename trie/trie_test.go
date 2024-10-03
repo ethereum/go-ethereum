@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
+	"strings"
 )
 
 func init() {
@@ -1236,11 +1237,11 @@ func FuzzTrie(f *testing.F) {
 // BenchmarkCommit/commit-5000nodes-parallel
 // BenchmarkCommit/commit-5000nodes-parallel-8      	     450	   2725071 ns/op	 6471357 B/op	   74938 allocs/op
 func BenchmarkCommit(b *testing.B) {
-	benchmarkCommit(b, 100)
-	benchmarkCommit(b, 200)
-	benchmarkCommit(b, 500)
-	benchmarkCommit(b, 1000)
-	benchmarkCommit(b, 2000)
+	//benchmarkCommit(b, 100)
+	//benchmarkCommit(b, 200)
+	//benchmarkCommit(b, 500)
+	//benchmarkCommit(b, 1000)
+	//benchmarkCommit(b, 2000)
 	benchmarkCommit(b, 5000)
 }
 
@@ -1269,8 +1270,73 @@ func testCommit(b *testing.B, n int, parallel bool) {
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
-
 	for i := 0; i < len(tries); i++ {
 		tries[i].Commit(true)
 	}
+}
+
+func TestCommitCorrect(t *testing.T) {
+	var paraTrie = NewEmpty(nil)
+	var refTrie = NewEmpty(nil)
+
+	for j := 0; j < 5000; j++ {
+		key := testrand.Bytes(32)
+		val := testrand.Bytes(32)
+		paraTrie.Update(key, val)
+		refTrie.Update(common.CopyBytes(key), common.CopyBytes(val))
+	}
+	paraTrie.Hash()
+	//paraTrie.mutate = 0
+	refTrie.Hash()
+	refTrie.mutate = 0
+
+	haveRoot, haveNodes := paraTrie.Commit(true)
+	wantRoot, wantNodes := refTrie.Commit(true)
+
+	if haveRoot != wantRoot {
+		t.Fatalf("have %x want %x", haveRoot, wantRoot)
+	}
+	have := printSet(haveNodes)
+	want := printSet(wantNodes)
+	if have != want {
+		i := 0
+		for i = 0; i < len(have); i++ {
+			if have[i] != want[i] {
+				break
+			}
+		}
+		if i > 100 {
+			i -= 100
+		}
+		t.Fatalf("have != want\nhave %q\nwant %q", have[i:], want[i:])
+	}
+}
+func printSet(set *trienode.NodeSet) string {
+	var out = new(strings.Builder)
+	fmt.Fprintf(out, "nodeset owner: %v\n", set.Owner)
+	var paths []string
+	for k, _ := range set.Nodes {
+		paths = append(paths, k)
+	}
+	sort.Strings(paths)
+
+	for _, path := range paths {
+		n := set.Nodes[path]
+		// Deletion
+		if n.IsDeleted() {
+			fmt.Fprintf(out, "  [-]: %x\n", path)
+			continue
+		}
+		// Insertion or update
+		fmt.Fprintf(out, "  [+/*]: %x -> %v \n", path, n.Hash)
+	}
+	sort.Slice(set.Leaves, func(i, j int) bool {
+		a := set.Leaves[i]
+		b := set.Leaves[j]
+		return bytes.Compare(a.Parent[:], b.Parent[:]) < 0
+	})
+	for _, n := range set.Leaves {
+		fmt.Fprintf(out, "[leaf]: %v\n", n)
+	}
+	return out.String()
 }
