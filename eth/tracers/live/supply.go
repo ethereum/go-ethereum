@@ -35,7 +35,7 @@ import (
 )
 
 func init() {
-	tracers.LiveDirectory.Register("supply", newSupply)
+	tracers.LiveDirectory.Register("supply", newSupplyTracer)
 }
 
 type supplyInfoIssuance struct {
@@ -79,7 +79,7 @@ type supplyTxCallstack struct {
 	burn  *big.Int
 }
 
-type supply struct {
+type supplyTracer struct {
 	delta       supplyInfo
 	txCallstack []supplyTxCallstack // Callstack for current transaction
 	logger      *lumberjack.Logger
@@ -90,7 +90,7 @@ type supplyTracerConfig struct {
 	MaxSize int    `json:"maxSize"` // MaxSize is the maximum size in megabytes of the tracer log file before it gets rotated. It defaults to 100 megabytes.
 }
 
-func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
+func newSupplyTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 	var config supplyTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {
@@ -109,19 +109,19 @@ func newSupply(cfg json.RawMessage) (*tracing.Hooks, error) {
 		logger.MaxSize = config.MaxSize
 	}
 
-	t := &supply{
+	t := &supplyTracer{
 		delta:  newSupplyInfo(),
 		logger: logger,
 	}
 	return &tracing.Hooks{
-		OnBlockStart:    t.OnBlockStart,
-		OnBlockEnd:      t.OnBlockEnd,
-		OnGenesisBlock:  t.OnGenesisBlock,
-		OnTxStart:       t.OnTxStart,
-		OnBalanceChange: t.OnBalanceChange,
-		OnEnter:         t.OnEnter,
-		OnExit:          t.OnExit,
-		OnClose:         t.OnClose,
+		OnBlockStart:    t.onBlockStart,
+		OnBlockEnd:      t.onBlockEnd,
+		OnGenesisBlock:  t.onGenesisBlock,
+		OnTxStart:       t.onTxStart,
+		OnBalanceChange: t.onBalanceChange,
+		OnEnter:         t.onEnter,
+		OnExit:          t.onExit,
+		OnClose:         t.onClose,
 	}, nil
 }
 
@@ -144,11 +144,11 @@ func newSupplyInfo() supplyInfo {
 	}
 }
 
-func (s *supply) resetDelta() {
+func (s *supplyTracer) resetDelta() {
 	s.delta = newSupplyInfo()
 }
 
-func (s *supply) OnBlockStart(ev tracing.BlockEvent) {
+func (s *supplyTracer) onBlockStart(ev tracing.BlockEvent) {
 	s.resetDelta()
 
 	s.delta.Number = ev.Block.NumberU64()
@@ -171,11 +171,11 @@ func (s *supply) OnBlockStart(ev tracing.BlockEvent) {
 	}
 }
 
-func (s *supply) OnBlockEnd(err error) {
+func (s *supplyTracer) onBlockEnd(err error) {
 	s.write(s.delta)
 }
 
-func (s *supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
+func (s *supplyTracer) onGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 	s.resetDelta()
 
 	s.delta.Number = b.NumberU64()
@@ -190,7 +190,7 @@ func (s *supply) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 	s.write(s.delta)
 }
 
-func (s *supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason tracing.BalanceChangeReason) {
+func (s *supplyTracer) onBalanceChange(a common.Address, prevBalance, newBalance *big.Int, reason tracing.BalanceChangeReason) {
 	diff := new(big.Int).Sub(newBalance, prevBalance)
 
 	// NOTE: don't handle "BalanceIncreaseGenesisBalance" because it is handled in OnGenesisBlock
@@ -209,12 +209,12 @@ func (s *supply) OnBalanceChange(a common.Address, prevBalance, newBalance *big.
 	}
 }
 
-func (s *supply) OnTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
+func (s *supplyTracer) onTxStart(vm *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	s.txCallstack = make([]supplyTxCallstack, 0, 1)
 }
 
 // internalTxsHandler handles internal transactions burned amount
-func (s *supply) internalTxsHandler(call *supplyTxCallstack) {
+func (s *supplyTracer) internalTxsHandler(call *supplyTxCallstack) {
 	// Handle Burned amount
 	if call.burn != nil {
 		s.delta.Burn.Misc.Add(s.delta.Burn.Misc, call.burn)
@@ -227,7 +227,7 @@ func (s *supply) internalTxsHandler(call *supplyTxCallstack) {
 	}
 }
 
-func (s *supply) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (s *supplyTracer) onEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	call := supplyTxCallstack{
 		calls: make([]supplyTxCallstack, 0),
 	}
@@ -242,7 +242,7 @@ func (s *supply) OnEnter(depth int, typ byte, from common.Address, to common.Add
 	s.txCallstack = append(s.txCallstack, call)
 }
 
-func (s *supply) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (s *supplyTracer) onExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth == 0 {
 		// No need to handle Burned amount if transaction is reverted
 		if !reverted {
@@ -268,13 +268,13 @@ func (s *supply) OnExit(depth int, output []byte, gasUsed uint64, err error, rev
 	s.txCallstack[size-1].calls = append(s.txCallstack[size-1].calls, call)
 }
 
-func (s *supply) OnClose() {
+func (s *supplyTracer) onClose() {
 	if err := s.logger.Close(); err != nil {
 		log.Warn("failed to close supply tracer log file", "error", err)
 	}
 }
 
-func (s *supply) write(data any) {
+func (s *supplyTracer) write(data any) {
 	supply, ok := data.(supplyInfo)
 	if !ok {
 		log.Warn("failed to cast supply tracer data on write to log file")
