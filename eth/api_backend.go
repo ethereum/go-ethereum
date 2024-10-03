@@ -304,6 +304,11 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 	return b.eth.txPool.Get(hash)
 }
 
+// GetPoolTransactionBySenderAndNonce retrieves the pool transaction by the sender and it's nonce
+func (b *EthAPIBackend) GetPoolTransactionBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction {
+	return b.eth.txPool.GetBySenderAndNonce(sender, nonce)
+}
+
 // GetTransaction retrieves the lookup along with the transaction itself associate
 // with the given transaction hash.
 //
