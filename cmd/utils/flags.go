@@ -2186,7 +2186,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	}
 	if ctx.IsSet(VMTraceFlag.Name) {
 		if name := ctx.String(VMTraceFlag.Name); name != "" {
-			var config json.RawMessage
+			config := json.RawMessage("{}")
 			if ctx.IsSet(VMTraceJsonConfigFlag.Name) {
 				config = json.RawMessage(ctx.String(VMTraceJsonConfigFlag.Name))
 			}

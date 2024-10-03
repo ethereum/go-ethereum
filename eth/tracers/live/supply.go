@@ -92,10 +92,8 @@ type supplyTracerConfig struct {
 
 func newSupplyTracer(cfg json.RawMessage) (*tracing.Hooks, error) {
 	var config supplyTracerConfig
-	if cfg != nil {
-		if err := json.Unmarshal(cfg, &config); err != nil {
-			return nil, fmt.Errorf("failed to parse config: %v", err)
-		}
+	if err := json.Unmarshal(cfg, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config: %v", err)
 	}
 	if config.Path == "" {
 		return nil, errors.New("supply tracer output path is required")
