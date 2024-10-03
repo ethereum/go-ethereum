@@ -18,7 +18,12 @@ type ethAPI struct {
 func (n *ethAPI) GetTransactionBySenderAndNonce(ctx context.Context, sender common.Address, nonce hexutil.Uint) (*ethapi.RPCTransaction, error) {
 	// TODO:
 	// 1. return nil if sender is a contract
-	// 2. check with txpool first
+
+	// Retrieve from txpool first
+	if tx := n.backend.GetPoolTransactionBySenderAndNonce(sender, uint64(nonce)); tx != nil {
+		return ethapi.NewRPCPendingTransaction(tx, n.backend.CurrentHeader(), n.backend.ChainConfig()), nil
+	}
+
 	txHash, err := n.live.kvdb.Get(append(sender.Bytes(), encodeNumber(uint64(nonce))...))
 	if err != nil {
 		return nil, nil
