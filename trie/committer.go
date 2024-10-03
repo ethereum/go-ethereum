@@ -35,9 +35,9 @@ type committer struct {
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(nodes *trienode.NodeSet, tracer *tracer, collectLeaf bool, parallel bool) *committer {
+func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool, parallel bool) *committer {
 	return &committer{
-		nodes:       nodes,
+		nodes:       nodeset,
 		tracer:      tracer,
 		collectLeaf: collectLeaf,
 		parallel:    parallel,
@@ -118,20 +118,22 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]
 			children[i] = c.commit(append(path, byte(i)), child, false)
 		} else {
 			wg.Add(1)
+			var nodesMu sync.Mutex
 			go func(index int) {
 				p := append(path, byte(i))
 				set := trienode.NewNodeSet(c.nodes.Owner)
 				childComitter := newCommitter(set, c.tracer, c.collectLeaf, false)
 				h := childComitter.commit(p, child, false)
 				children[index] = h
+				nodesMu.Lock()
 				c.nodes.MergeSet(set)
+				nodesMu.Unlock()
 				wg.Done()
 			}(i)
 		}
 	}
 	if parallel {
 		wg.Wait()
-
 	}
 	// For the 17th child, it's possible the type is valuenode.
 	if n.Children[16] != nil {
@@ -156,12 +158,13 @@ func (c *committer) store(path []byte, n node) node {
 		// deleted only if the node was existent in database before.
 		_, ok := c.tracer.accessList[string(path)]
 		if ok {
-			c.nodes.AddNode(path, trienode.NewDeleted()) // TODO
+			c.nodes.AddNode(path, trienode.NewDeleted())
 		}
 		return n
 	}
+	// Collect the dirty node to nodeset for return.
 	nhash := common.BytesToHash(hash)
-	c.nodes.AddNode(path, trienode.New(nhash, nodeToBytes(n))) // TODO
+	c.nodes.AddNode(path, trienode.New(nhash, nodeToBytes(n)))
 
 	// Collect the corresponding leaf node if it's required. We don't check
 	// full node since it's impossible to store value in fullNode. The key
@@ -169,7 +172,7 @@ func (c *committer) store(path []byte, n node) node {
 	if c.collectLeaf {
 		if sn, ok := n.(*shortNode); ok {
 			if val, ok := sn.Val.(valueNode); ok {
-				c.nodes.AddLeaf(nhash, val) // TODO
+				c.nodes.AddLeaf(nhash, val)
 			}
 		}
 	}

@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"testing/quick"
 
@@ -40,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
-	"strings"
 )
 
 func init() {
@@ -1240,8 +1240,8 @@ func BenchmarkCommit(b *testing.B) {
 	//benchmarkCommit(b, 100)
 	//benchmarkCommit(b, 200)
 	//benchmarkCommit(b, 500)
-	//benchmarkCommit(b, 1000)
-	//benchmarkCommit(b, 2000)
+	benchmarkCommit(b, 1000)
+	benchmarkCommit(b, 2000)
 	benchmarkCommit(b, 5000)
 }
 
@@ -1265,7 +1265,7 @@ func testCommit(b *testing.B, n int, parallel bool) {
 		}
 		tries[i].Hash()
 		if !parallel {
-			tries[i].mutate = 0
+			tries[i].uncommitted = 0
 		}
 	}
 	b.ResetTimer()
@@ -1286,9 +1286,8 @@ func TestCommitCorrect(t *testing.T) {
 		refTrie.Update(common.CopyBytes(key), common.CopyBytes(val))
 	}
 	paraTrie.Hash()
-	//paraTrie.mutate = 0
 	refTrie.Hash()
-	refTrie.mutate = 0
+	refTrie.uncommitted = 0
 
 	haveRoot, haveNodes := paraTrie.Commit(true)
 	wantRoot, wantNodes := refTrie.Commit(true)
@@ -1315,7 +1314,7 @@ func printSet(set *trienode.NodeSet) string {
 	var out = new(strings.Builder)
 	fmt.Fprintf(out, "nodeset owner: %v\n", set.Owner)
 	var paths []string
-	for k, _ := range set.Nodes {
+	for k := range set.Nodes {
 		paths = append(paths, k)
 	}
 	sort.Strings(paths)

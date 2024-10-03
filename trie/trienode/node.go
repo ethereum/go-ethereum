@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"sync"
+	"golang.org/x/exp/maps"
 )
 
 // Node is a wrapper which contains the encoded blob of the trie node and its
@@ -60,8 +60,6 @@ type leaf struct {
 // NodeSet contains a set of nodes collected during the commit operation.
 // Each node is keyed by path. It's not thread-safe to use.
 type NodeSet struct {
-	mu sync.Mutex
-
 	Owner   common.Hash
 	Leaves  []*leaf
 	Nodes   map[string]*Node
@@ -102,21 +100,18 @@ func (set *NodeSet) AddNode(path []byte, n *Node) {
 	set.Nodes[string(path)] = n
 }
 
-// MergeSet mergest set with other. It assumes that the sets are disjunct, so
-// that it does not need to deduplicate data (count deletes, dedup leaves etc).
+// MergeSet merges this 'set' with 'other'. It assumes that the sets are disjoint, and
+// thus does not deduplicate data (count deletes, dedup leaves etc).
 func (set *NodeSet) MergeSet(other *NodeSet) error {
 	if set.Owner != other.Owner {
 		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, other.Owner)
 	}
-	set.mu.Lock()
-	defer set.mu.Unlock()
-	for path, node := range other.Nodes {
-		set.Nodes[path] = node
-	}
+	maps.Copy(set.Nodes, other.Nodes)
+
 	set.deletes += other.deletes
 	set.updates += other.updates
-	// Since we assume the sets are disjunct, we can safely append leaves
-	// like this without dedup.
+	// Since we assume the sets are disjoint, we can safely append leaves
+	// like this without deduplication.
 	set.Leaves = append(set.Leaves, other.Leaves...)
 	return nil
 }
@@ -126,8 +121,6 @@ func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*Node) error {
 	if set.Owner != owner {
 		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, owner)
 	}
-	set.mu.Lock()
-	defer set.mu.Unlock()
 	for path, node := range nodes {
 		prev, ok := set.Nodes[path]
 		if ok {

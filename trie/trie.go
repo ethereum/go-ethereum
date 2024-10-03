@@ -37,13 +37,25 @@ import (
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	root      node
-	owner     common.Hash
-	committed bool        // The Flag whether the commit operation is already performed
-	reader    *trieReader // The handler trie can retrieve nodes from
-	tracer    *tracer     // The tool to track the trie changes
-	mutate    int         // The number of trie mutations that have been performed
-	hashed    int         // The number of mutations that have been hashed
+	root  node
+	owner common.Hash
+
+	// Flag whether the commit operation is already performed. If so the
+	// trie is not usable(latest states is invisible).
+	committed bool
+
+	// Keep track of the number leaves which have been inserted since the last
+	// hashing operation. This number will not directly map to the number of
+	// actually unhashed nodes.
+	unhashed int
+	// uncommitted is the number of updates since last commit.
+	uncommitted int
+
+	// reader is the handler trie can retrieve nodes from.
+	reader *trieReader
+
+	// tracer is the tool to track the trie changes.
+	tracer *tracer
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -54,13 +66,13 @@ func (t *Trie) newFlag() nodeFlag {
 // Copy returns a copy of Trie.
 func (t *Trie) Copy() *Trie {
 	return &Trie{
-		root:      t.root,
-		owner:     t.owner,
-		committed: t.committed,
-		reader:    t.reader,
-		tracer:    t.tracer.copy(),
-		mutate:    t.mutate,
-		hashed:    t.hashed,
+		root:        t.root,
+		owner:       t.owner,
+		committed:   t.committed,
+		reader:      t.reader,
+		tracer:      t.tracer.copy(),
+		uncommitted: t.uncommitted,
+		unhashed:    t.unhashed,
 	}
 }
 
@@ -295,11 +307,12 @@ func (t *Trie) Update(key, value []byte) error {
 	if t.committed {
 		return ErrCommitted
 	}
-	t.mutate++
 	return t.update(key, value)
 }
 
 func (t *Trie) update(key, value []byte) error {
+	t.unhashed++
+	t.uncommitted++
 	k := keybytesToHex(key)
 	if len(value) != 0 {
 		_, n, err := t.insert(t.root, nil, k, valueNode(value))
@@ -413,7 +426,8 @@ func (t *Trie) Delete(key []byte) error {
 	if t.committed {
 		return ErrCommitted
 	}
-	t.mutate++
+	t.uncommitted++
+	t.unhashed++
 	k := keybytesToHex(key)
 	_, n, err := t.delete(t.root, nil, k)
 	if err != nil {
@@ -633,9 +647,9 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	for _, path := range t.tracer.deletedNodes() {
 		nodes.AddNode([]byte(path), trienode.NewDeleted())
 	}
-	// If the number of changes is below 100, we let one thread handle it
-	t.root = newCommitter(nodes, t.tracer, collectLeaf, t.mutate > 100).Commit(t.root)
-	t.mutate = 0
+	// If the number of changes is below 400, we let one thread handle it
+	t.root = newCommitter(nodes, t.tracer, collectLeaf, t.uncommitted > 400).Commit(t.root)
+	t.uncommitted = 0
 	return rootHash, nodes
 }
 
@@ -645,10 +659,10 @@ func (t *Trie) hashRoot() (node, node) {
 		return hashNode(types.EmptyRootHash.Bytes()), nil
 	}
 	// If the number of changes is below 100, we let one thread handle it
-	h := newHasher(t.mutate-t.hashed >= 100)
+	h := newHasher(t.unhashed >= 100)
 	defer func() {
 		returnHasherToPool(h)
-		t.hashed = t.mutate
+		t.unhashed = 0
 	}()
 	hashed, cached := h.hash(t.root, true)
 	return hashed, cached
@@ -670,8 +684,8 @@ func (t *Trie) Witness() map[string]struct{} {
 func (t *Trie) Reset() {
 	t.root = nil
 	t.owner = common.Hash{}
+	t.unhashed = 0
+	t.uncommitted = 0
 	t.tracer.reset()
 	t.committed = false
-	t.hashed = 0
-	t.mutate = 0
 }
