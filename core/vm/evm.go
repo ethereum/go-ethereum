@@ -559,7 +559,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 func (evm *EVM) initNewContract(contract *Contract, address common.Address, value *uint256.Int, input []byte, isInitcodeEOF bool) ([]byte, error) {
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
-		if !contract.UseGas(evm.AccessEvents.ContractCreateInitGas(address, value.Sign() != 0), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
+		if !contract.UseGas(evm.AccessEvents.ContractCreateInitGas(address), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
 			return nil, ErrOutOfGas
 		}
 	}
