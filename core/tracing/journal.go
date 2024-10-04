@@ -168,14 +168,14 @@ func (j *journal) OnCodeChange(addr common.Address, prevCodeHash common.Hash, pr
 		newCode:      code,
 	})
 	if j.hooks != nil && j.hooks.OnCodeChange != nil {
-		j.hooks.OnCodeChange(addr, codeHash, code, prevCodeHash, prevCode)
+		j.hooks.OnCodeChange(addr, prevCodeHash, prevCode, codeHash, code)
 	}
 }
 
 func (j *journal) OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash) {
 	j.entries = append(j.entries, storageChange{addr: addr, slot: slot, prev: prev, new: new})
 	if j.hooks != nil && j.hooks.OnStorageChange != nil {
-		j.hooks.OnStorageChange(addr, slot, new, prev)
+		j.hooks.OnStorageChange(addr, slot, prev, new)
 	}
 }
 
