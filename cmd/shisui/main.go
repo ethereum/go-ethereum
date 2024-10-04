@@ -81,19 +81,19 @@ var (
 		utils.PortalLogLevelFlag,
 	}
 	metricsFlags = []cli.Flag{
-		utils.PortalMetricsEnabledFlag,
-		utils.PortalMetricsHTTPFlag,
-		utils.PortalMetricsPortFlag,
-		utils.PortalMetricsEnableInfluxDBFlag,
-		utils.PortalMetricsInfluxDBEndpointFlag,
-		utils.PortalMetricsInfluxDBDatabaseFlag,
-		utils.PortalMetricsInfluxDBUsernameFlag,
-		utils.PortalMetricsInfluxDBPasswordFlag,
-		utils.PortalMetricsInfluxDBTagsFlag,
-		utils.PortalMetricsEnableInfluxDBV2Flag,
-		utils.PortalMetricsInfluxDBTokenFlag,
-		utils.PortalMetricsInfluxDBBucketFlag,
-		utils.PortalMetricsInfluxDBOrganizationFlag,
+		utils.MetricsEnabledFlag,
+		utils.MetricsHTTPFlag,
+		utils.MetricsPortFlag,
+		utils.MetricsEnableInfluxDBFlag,
+		utils.MetricsInfluxDBEndpointFlag,
+		utils.MetricsInfluxDBDatabaseFlag,
+		utils.MetricsInfluxDBUsernameFlag,
+		utils.MetricsInfluxDBPasswordFlag,
+		utils.MetricsInfluxDBTagsFlag,
+		utils.MetricsEnableInfluxDBV2Flag,
+		utils.MetricsInfluxDBTokenFlag,
+		utils.MetricsInfluxDBBucketFlag,
+		utils.MetricsInfluxDBOrganizationFlag,
 	}
 )
 
@@ -114,7 +114,7 @@ func shisui(ctx *cli.Context) error {
 	setDefaultLogger(ctx.Int(utils.PortalLogLevelFlag.Name))
 
 	// Start metrics export if enabled
-	utils.PortalSetupMetrics(ctx)
+	utils.SetupMetrics(ctx)
 
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
