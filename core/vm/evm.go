@@ -557,13 +557,6 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 // initNewContract runs a new contract's creation code, performs checks on the
 // resulting code that is to be deployed, and consumes necessary gas.
 func (evm *EVM) initNewContract(contract *Contract, address common.Address, value *uint256.Int, input []byte, isInitcodeEOF bool) ([]byte, error) {
-	// Charge the contract creation init gas in verkle mode
-	if evm.chainRules.IsEIP4762 {
-		if !contract.UseGas(evm.AccessEvents.ContractCreateInitGas(address), evm.Config.Tracer, tracing.GasChangeWitnessContractInit) {
-			return nil, ErrOutOfGas
-		}
-	}
-
 	ret, err := evm.interpreter.Run(contract, input, false, contract.IsDeployment)
 	if err != nil {
 		return ret, err
