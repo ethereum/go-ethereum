@@ -221,22 +221,23 @@ func initGenesis(ctx *cli.Context) error {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		overrides.OverrideVerkle = &v
 	}
-	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
-		if err != nil {
-			utils.Fatalf("Failed to open database: %v", err)
-		}
-		defer chaindb.Close()
 
-		triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
-		defer triedb.Close()
-
-		_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
-		if err != nil {
-			utils.Fatalf("Failed to write genesis block: %v", err)
-		}
-		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
+	chaindb, err := stack.OpenDatabaseWithFreezer("chaindata", 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
+	if err != nil {
+		utils.Fatalf("Failed to open database: %v", err)
 	}
+	defer chaindb.Close()
+
+	triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
+	defer triedb.Close()
+
+	_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
+	if err != nil {
+		utils.Fatalf("Failed to write genesis block: %v", err)
+	}
+
+	log.Info("Successfully wrote genesis state", "database", "chaindata", "hash", hash)
+
 	return nil
 }
 
@@ -258,29 +259,22 @@ func dumpGenesis(ctx *cli.Context) error {
 
 	// dump whatever already exists in the datadir
 	stack, _ := makeConfigNode(ctx)
-	for _, name := range []string{"chaindata", "lightchaindata"} {
-		db, err := stack.OpenDatabase(name, 0, 0, "", true)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return err
-			}
-			continue
-		}
-		genesis, err := core.ReadGenesis(db)
-		if err != nil {
-			utils.Fatalf("failed to read genesis: %s", err)
-		}
-		db.Close()
 
-		if err := json.NewEncoder(os.Stdout).Encode(*genesis); err != nil {
-			utils.Fatalf("could not encode stored genesis: %s", err)
-		}
-		return nil
+	db, err := stack.OpenDatabase("chaindata", 0, 0, "", true)
+	if err != nil {
+		return err
 	}
-	if ctx.IsSet(utils.DataDirFlag.Name) {
-		utils.Fatalf("no existing datadir at %s", stack.Config().DataDir)
+	defer db.Close()
+
+	genesis, err = core.ReadGenesis(db)
+	if err != nil {
+		utils.Fatalf("failed to read genesis: %s", err)
 	}
-	utils.Fatalf("no network preset provided, and no genesis exists in the default datadir")
+
+	if err := json.NewEncoder(os.Stdout).Encode(*genesis); err != nil {
+		utils.Fatalf("could not encode stored genesis: %s", err)
+	}
+
 	return nil
 }
 
@@ -557,7 +551,7 @@ func parseDumpConfig(ctx *cli.Context, db ethdb.Database) (*state.DumpConfig, co
 	default:
 		return nil, common.Hash{}, fmt.Errorf("invalid start argument: %x. 20 or 32 hex-encoded bytes required", startArg)
 	}
-	var conf = &state.DumpConfig{
+	conf := &state.DumpConfig{
 		SkipCode:          ctx.Bool(utils.ExcludeCodeFlag.Name),
 		SkipStorage:       ctx.Bool(utils.ExcludeStorageFlag.Name),
 		OnlyWithAddresses: !ctx.Bool(utils.IncludeIncompletesFlag.Name),

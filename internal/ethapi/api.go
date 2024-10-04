@@ -807,7 +807,7 @@ func decodeHash(s string) (h common.Hash, inputLength int, err error) {
 func (api *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	header, err := api.b.HeaderByNumber(ctx, number)
 	if header != nil && err == nil {
-		response := api.rpcMarshalHeader(ctx, header)
+		response := RPCMarshalHeader(header)
 		if number == rpc.PendingBlockNumber {
 			// Pending header need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
@@ -823,7 +823,7 @@ func (api *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.Bloc
 func (api *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash) map[string]interface{} {
 	header, _ := api.b.HeaderByHash(ctx, hash)
 	if header != nil {
-		return api.rpcMarshalHeader(ctx, header)
+		return RPCMarshalHeader(header)
 	}
 	return nil
 }
@@ -838,14 +838,14 @@ func (api *BlockChainAPI) GetHeaderByHash(ctx context.Context, hash common.Hash)
 func (api *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := api.b.BlockByNumber(ctx, number)
 	if block != nil && err == nil {
-		response, err := api.rpcMarshalBlock(ctx, block, true, fullTx)
-		if err == nil && number == rpc.PendingBlockNumber {
+		response := RPCMarshalBlock(block, true, fullTx, api.b.ChainConfig())
+		if number == rpc.PendingBlockNumber {
 			// Pending blocks need to nil out a few fields
 			for _, field := range []string{"hash", "nonce", "miner"} {
 				response[field] = nil
 			}
 		}
-		return response, err
+		return response, nil
 	}
 	return nil, err
 }
@@ -855,7 +855,7 @@ func (api *BlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.Block
 func (api *BlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Hash, fullTx bool) (map[string]interface{}, error) {
 	block, err := api.b.BlockByHash(ctx, hash)
 	if block != nil {
-		return api.rpcMarshalBlock(ctx, block, true, fullTx)
+		return RPCMarshalBlock(block, true, fullTx, api.b.ChainConfig()), nil
 	}
 	return nil, err
 }
@@ -870,7 +870,7 @@ func (api *BlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context, blo
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return api.rpcMarshalBlock(ctx, block, false, false)
+		return RPCMarshalBlock(block, false, false, api.b.ChainConfig()), nil
 	}
 	return nil, err
 }
@@ -885,7 +885,7 @@ func (api *BlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, block
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
-		return api.rpcMarshalBlock(ctx, block, false, false)
+		return RPCMarshalBlock(block, false, false, api.b.ChainConfig()), nil
 	}
 	return nil, err
 }
@@ -1181,7 +1181,13 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	// Make sure the context is cancelled when the call has completed
 	// this makes sure resources are cleaned up.
 	defer cancel()
-	return applyMessage(ctx, b, args, state, header, timeout, new(core.GasPool).AddGas(globalGasCap), &blockCtx, &vm.Config{NoBaseFee: true}, precompiles, true)
+	gp := new(core.GasPool)
+	if globalGasCap == 0 {
+		gp.AddGas(math.MaxUint64)
+	} else {
+		gp.AddGas(globalGasCap)
+	}
+	return applyMessage(ctx, b, args, state, header, timeout, gp, &blockCtx, &vm.Config{NoBaseFee: true}, precompiles, true)
 }
 
 func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, timeout time.Duration, gp *core.GasPool, blockContext *vm.BlockContext, vmConfig *vm.Config, precompiles vm.PrecompiledContracts, skipChecks bool) (*core.ExecutionResult, error) {
@@ -1283,13 +1289,17 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 	if state == nil || err != nil {
 		return nil, err
 	}
+	gasCap := api.b.RPCGasCap()
+	if gasCap == 0 {
+		gasCap = math.MaxUint64
+	}
 	sim := &simulator{
 		b:           api.b,
 		state:       state,
 		base:        base,
 		chainConfig: api.b.ChainConfig(),
 		// Each tx and all the series of txes shouldn't consume more gas than cap
-		gp:             new(core.GasPool).AddGas(api.b.RPCGasCap()),
+		gp:             new(core.GasPool).AddGas(gasCap),
 		traceTransfers: opts.TraceTransfers,
 		validate:       opts.Validation,
 		fullTx:         opts.ReturnFullTransactions,
@@ -1430,24 +1440,6 @@ func RPCMarshalBlock(block *types.Block, inclTx bool, fullTx bool, config *param
 		fields["requests"] = block.Requests()
 	}
 	return fields
-}
-
-// rpcMarshalHeader uses the generalized output filler, then adds the total difficulty field, which requires
-// a `BlockchainAPI`.
-func (api *BlockChainAPI) rpcMarshalHeader(ctx context.Context, header *types.Header) map[string]interface{} {
-	fields := RPCMarshalHeader(header)
-	fields["totalDifficulty"] = (*hexutil.Big)(api.b.GetTd(ctx, header.Hash()))
-	return fields
-}
-
-// rpcMarshalBlock uses the generalized output filler, then adds the total difficulty field, which requires
-// a `BlockchainAPI`.
-func (api *BlockChainAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
-	fields := RPCMarshalBlock(b, inclTx, fullTx, api.b.ChainConfig())
-	if inclTx {
-		fields["totalDifficulty"] = (*hexutil.Big)(api.b.GetTd(ctx, b.Hash()))
-	}
-	return fields, nil
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction

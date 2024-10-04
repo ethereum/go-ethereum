@@ -84,6 +84,11 @@ func (ctx *ScopeContext) CallInput() []byte {
 	return ctx.Contract.Input
 }
 
+// ContractCode returns the code of the contract being executed.
+func (ctx *ScopeContext) ContractCode() []byte {
+	return ctx.Contract.Code
+}
+
 // EVMInterpreter represents an EVM interpreter
 type EVMInterpreter struct {
 	evm   *EVM
