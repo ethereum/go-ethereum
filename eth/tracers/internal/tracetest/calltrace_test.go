@@ -121,7 +121,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			)
 			state.Close()
 
-			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
+			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig, test.Genesis.Config)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
@@ -229,7 +229,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil)
+		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil, test.Genesis.Config)
 		if err != nil {
 			b.Fatalf("failed to create call tracer: %v", err)
 		}
@@ -266,7 +266,7 @@ func TestInternals(t *testing.T) {
 		}
 	)
 	mkTracer := func(name string, cfg json.RawMessage) *tracers.Tracer {
-		tr, err := tracers.DefaultDirectory.New(name, nil, cfg)
+		tr, err := tracers.DefaultDirectory.New(name, nil, cfg, config)
 		if err != nil {
 			t.Fatalf("failed to create call tracer: %v", err)
 		}

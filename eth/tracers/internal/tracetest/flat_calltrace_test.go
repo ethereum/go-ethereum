@@ -89,7 +89,7 @@ func flatCallTracerTestRunner(tracerName string, filename string, dirPath string
 	defer state.Close()
 
 	// Create the tracer, the EVM environment and run it
-	tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
+	tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig, test.Genesis.Config)
 	if err != nil {
 		return fmt.Errorf("failed to create call tracer: %v", err)
 	}
