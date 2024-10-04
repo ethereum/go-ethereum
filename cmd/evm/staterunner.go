@@ -71,7 +71,7 @@ type StatetestResult struct {
 	Fork       string       `json:"fork"`
 	Error      string       `json:"error,omitempty"`
 	State      *state.Dump  `json:"state,omitempty"`
-	BenchStats *ExecStats   `json:"benchStats,omitempty"`
+	BenchStats *execStats   `json:"benchStats,omitempty"`
 }
 
 func stateTestCmd(ctx *cli.Context) error {

@@ -74,14 +74,14 @@ func readGenesis(genesisPath string) *core.Genesis {
 	return genesis
 }
 
-type ExecStats struct {
+type execStats struct {
 	Time           time.Duration `json:"time"`           // The execution Time.
 	Allocs         int64         `json:"allocs"`         // The number of heap allocations during execution.
 	BytesAllocated int64         `json:"bytesAllocated"` // The cumulative number of bytes allocated during execution.
 	GasUsed        uint64        `json:"gasUsed"`        // the amount of gas used during execution
 }
 
-func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, stats ExecStats, err error) {
+func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, stats execStats, err error) {
 	var gasUsed uint64
 	if bench {
 		result := testing.Benchmark(func(b *testing.B) {
