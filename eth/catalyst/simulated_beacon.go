@@ -109,7 +109,7 @@ func NewSimulatedBeacon(period uint64, eth *eth.Ethereum) (*SimulatedBeacon, err
 
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if block.Number.Sign() == 0 {
-		if _, err := engineAPI.ForkchoiceUpdatedV2(current, nil); err != nil {
+		if _, err := engineAPI.ForkchoiceUpdatedV3(current, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -181,7 +181,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
-	}, engine.PayloadV3)
+	}, engine.PayloadV3, false)
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 	c.setCurrentState(payload.BlockHash, finalizedHash)
 
 	// Mark the block containing the payload as canonical
-	if _, err = c.engineAPI.ForkchoiceUpdatedV2(c.curForkchoiceState, nil); err != nil {
+	if _, err = c.engineAPI.ForkchoiceUpdatedV3(c.curForkchoiceState, nil); err != nil {
 		return err
 	}
 	c.lastBlockTime = payload.Timestamp
@@ -306,7 +306,8 @@ func (c *SimulatedBeacon) Fork(parentHash common.Hash) error {
 	if parent == nil {
 		return errors.New("parent not found")
 	}
-	return c.eth.BlockChain().SetHead(parent.NumberU64())
+	_, err := c.eth.BlockChain().SetCanonical(parent)
+	return err
 }
 
 // AdjustTime creates a new block with an adjusted timestamp.

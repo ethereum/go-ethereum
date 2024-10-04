@@ -15,6 +15,7 @@ The tracing interface has been extended with backwards-compatible changes to sup
 - `OnCodeSizeRead(addr common.Address, size int)`: This hook is called when an account code size is read.
 - `OnCodeHashRead(addr common.Address, codeHash common.Hash)`: This hook is called when an account code hash is read.
 - `OnStorageRead(addr common.Address, slot common.Hash, value common.Hash)`: This hook is called when an account storage slot is read.
+- `OnBlockHashRead(blockNum uint64, hash common.Hash)`: This hook is called when a block hash is read by EVM.
 
 ### Modified methods
 
@@ -47,6 +48,24 @@ The state changes that are covered by the journaling library are:
 - `OnNonceChange`
 - `OnCodeChange`
 - `OnStorageChange`
+
+## [v1.14.9](https://github.com/ethereum/go-ethereum/releases/tag/v1.14.9)
+
+### Modified types
+
+- `GasChangeReason` has been extended with the following reasons which will be enabled only post-Verkle. There shouldn't be any gas changes with those reasons prior to the fork.
+  - `GasChangeWitnessContractCollisionCheck` flags the event of adding to the witness when checking for contract address collision.
+
+## [v1.14.4]
+
+This release contained only minor extensions to the tracing interface.
+
+### Modified types
+
+- `GasChangeReason` has been extended with the following reasons that will only be active post-Verkle.
+  - `GasChangeWitnessContractInit` flags the event of adding to the witness during the contract creation initialization step.
+  - `GasChangeWitnessContractCreation` flags the event of adding to the witness during the contract creation finalization step.
+  - `GasChangeWitnessCodeChunk` flags the event of adding one or more contract code chunks to the witness.
 
 ## [v1.14.3]
 
@@ -124,3 +143,4 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 [unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.8...master
 [v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0
 [v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
+[v1.14.4]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.4

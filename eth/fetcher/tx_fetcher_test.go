@@ -701,7 +701,7 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 			},
 			// Deliver the middle transaction requested, the one before which
 			// should be dropped and the one after re-requested.
-			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true}, // This depends on the deterministic random
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[1]}, direct: true},
 			isScheduled{
 				tracking: map[string][]announce{
 					"A": {
@@ -1070,7 +1070,7 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 					"A": announces,
 				},
 				fetching: map[string][]common.Hash{
-					"A": hashes[1643 : 1643+maxTxRetrievals],
+					"A": hashes[:maxTxRetrievals],
 				},
 			},
 		},
@@ -1130,9 +1130,9 @@ func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 					},
 				},
 				fetching: map[string][]common.Hash{
-					"A": {{0x02}, {0x03}, {0x04}},
-					"B": {{0x06}},
-					"C": {{0x08}},
+					"A": {{0x01}, {0x02}, {0x03}},
+					"B": {{0x05}},
+					"C": {{0x07}},
 				},
 			},
 		},
@@ -1209,8 +1209,8 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 					"B": announceB[:maxTxAnnounces/2-1],
 				},
 				fetching: map[string][]common.Hash{
-					"A": hashesA[1643 : 1643+maxTxRetrievals],
-					"B": append(append([]common.Hash{}, hashesB[maxTxAnnounces/2-3:maxTxAnnounces/2-1]...), hashesB[:maxTxRetrievals-2]...),
+					"A": hashesA[:maxTxRetrievals],
+					"B": hashesB[:maxTxRetrievals],
 				},
 			},
 			// Ensure that adding even one more hash results in dropping the hash
@@ -1227,8 +1227,8 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 					"B": announceB[:maxTxAnnounces/2-1],
 				},
 				fetching: map[string][]common.Hash{
-					"A": hashesA[1643 : 1643+maxTxRetrievals],
-					"B": append(append([]common.Hash{}, hashesB[maxTxAnnounces/2-3:maxTxAnnounces/2-1]...), hashesB[:maxTxRetrievals-2]...),
+					"A": hashesA[:maxTxRetrievals],
+					"B": hashesB[:maxTxRetrievals],
 				},
 			},
 		},
@@ -1755,6 +1755,76 @@ func TestTransactionFetcherFuzzCrash04(t *testing.T) {
 			}),
 			doWait{time: 0, step: true},
 			doWait{time: txFetchTimeout, step: true},
+		},
+	})
+}
+
+// This test ensures the blob transactions will be scheduled for fetching
+// once they are announced in the network.
+func TestBlobTransactionAnnounce(t *testing.T) {
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			return NewTxFetcher(
+				func(common.Hash) bool { return false },
+				nil,
+				func(string, []common.Hash) error { return nil },
+				nil,
+			)
+		},
+		steps: []interface{}{
+			// Initial announcement to get something into the waitlist
+			doTxNotify{peer: "A", hashes: []common.Hash{{0x01}, {0x02}}, types: []byte{types.LegacyTxType, types.LegacyTxType}, sizes: []uint32{111, 222}},
+			isWaiting(map[string][]announce{
+				"A": {
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
+				},
+			}),
+			// Announce a blob transaction
+			doTxNotify{peer: "B", hashes: []common.Hash{{0x03}}, types: []byte{types.BlobTxType}, sizes: []uint32{333}},
+			isWaiting(map[string][]announce{
+				"A": {
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
+				},
+				"B": {
+					{common.Hash{0x03}, types.BlobTxType, 333},
+				},
+			}),
+			doWait{time: 0, step: true}, // zero time, but the blob fetching should be scheduled
+			isWaiting(map[string][]announce{
+				"A": {
+					{common.Hash{0x01}, types.LegacyTxType, 111},
+					{common.Hash{0x02}, types.LegacyTxType, 222},
+				},
+			}),
+			isScheduled{
+				tracking: map[string][]announce{
+					"B": {
+						{common.Hash{0x03}, types.BlobTxType, 333},
+					},
+				},
+				fetching: map[string][]common.Hash{ // Depends on deterministic test randomizer
+					"B": {{0x03}},
+				},
+			},
+			doWait{time: txArriveTimeout, step: true}, // zero time, but the blob fetching should be scheduled
+			isWaiting(nil),
+			isScheduled{
+				tracking: map[string][]announce{
+					"A": {
+						{common.Hash{0x01}, types.LegacyTxType, 111},
+						{common.Hash{0x02}, types.LegacyTxType, 222},
+					},
+					"B": {
+						{common.Hash{0x03}, types.BlobTxType, 333},
+					},
+				},
+				fetching: map[string][]common.Hash{ // Depends on deterministic test randomizer
+					"A": {{0x01}, {0x02}},
+					"B": {{0x03}},
+				},
+			},
 		},
 	})
 }

@@ -34,10 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 )
@@ -132,7 +132,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _  = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
+			blockchain, _  = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
 			tooBigInitCode = [params.MaxInitCodeSize + 1]byte{}
 		)
 
@@ -292,7 +292,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _ = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+			blockchain, _ = NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {
@@ -331,7 +331,7 @@ func TestStateProcessorErrors(t *testing.T) {
 					},
 				},
 			}
-			blockchain, _ = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
+			blockchain, _ = NewBlockChain(db, nil, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
 		)
 		defer blockchain.Stop()
 		for i, tt := range []struct {
@@ -480,18 +480,45 @@ func TestProcessVerkle(t *testing.T) {
 	// genesis := gspec.MustCommit(bcdb, triedb)
 	cacheConfig := DefaultCacheConfigWithScheme("path")
 	cacheConfig.SnapshotLimit = 0
-	blockchain, _ := NewBlockChain(bcdb, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil)
+	blockchain, _ := NewBlockChain(bcdb, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
 	defer blockchain.Stop()
 
 	txCost1 := params.TxGas
 	txCost2 := params.TxGas
-	contractCreationCost := intrinsicContractCreationGas + uint64(2039 /* execution costs */)
-	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas + uint64(57444 /* execution costs */)
+	contractCreationCost := intrinsicContractCreationGas +
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* creation with value */
+		739 /* execution costs */
+	codeWithExtCodeCopyGas := intrinsicCodeWithExtCodeCopyGas +
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (tx) */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (CREATE at pc=0x20) */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #0 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #1 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #2 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #3 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #4 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #5 */
+		params.WitnessChunkReadCost + /* SLOAD in constructor */
+		params.WitnessChunkWriteCost + /* SSTORE in constructor */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + params.WitnessBranchReadCost + params.WitnessBranchWriteCost + /* creation (CREATE at PC=0x121) */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #0 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #1 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #2 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #3 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #4 */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* code chunk #5 */
+		params.WitnessChunkReadCost + /* SLOAD in constructor */
+		params.WitnessChunkWriteCost + /* SSTORE in constructor */
+		params.WitnessChunkReadCost + params.WitnessChunkWriteCost + /* write code hash for tx creation */
+		15*(params.WitnessChunkReadCost+params.WitnessChunkWriteCost) + /* code chunks #0..#14 */
+		4844 /* execution costs */
 	blockGasUsagesExpected := []uint64{
 		txCost1*2 + txCost2,
 		txCost1*2 + txCost2 + contractCreationCost + codeWithExtCodeCopyGas,
 	}
-	_, chain, _, _, _ := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
+	_, chain, _, proofs, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 
 		// TODO need to check that the tx cost provided is the exact amount used (no remaining left-over)
@@ -512,7 +539,17 @@ func TestProcessVerkle(t *testing.T) {
 		}
 	})
 
-	t.Log("inserting blocks into the chain")
+	// Check proof for both blocks
+	err := verkle.Verify(proofs[0], gspec.ToBlock().Root().Bytes(), chain[0].Root().Bytes(), statediffs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = verkle.Verify(proofs[1], chain[0].Root().Bytes(), chain[1].Root().Bytes(), statediffs[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("verified verkle proof, inserting blocks into the chain")
 
 	endnum, err := blockchain.InsertChain(chain)
 	if err != nil {
@@ -564,7 +601,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		}
 	}
 	t.Run("MPT", func(t *testing.T) {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewDatabase(memorydb.New())), nil)
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 		test(statedb)
 	})
 	t.Run("Verkle", func(t *testing.T) {
@@ -572,7 +609,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
-		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabaseWithNodeDB(db, triedb), nil)
+		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))
 		test(statedb)
 	})
 }

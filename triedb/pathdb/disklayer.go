@@ -139,7 +139,6 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 		dl.cleans.Set(key, blob)
 		cleanWriteMeter.Mark(int64(len(blob)))
 	}
-
 	return blob, h.hash(blob), &nodeLoc{loc: locDiskLayer, depth: depth}, nil
 }
 
@@ -203,7 +202,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 	if !force && rawdb.ReadPersistentStateID(dl.db.diskdb) < oldest {
 		force = true
 	}
-	if err := ndl.buffer.flush(ndl.db.diskdb, ndl.cleans, ndl.id, force); err != nil {
+	if err := ndl.buffer.flush(ndl.db.diskdb, ndl.db.freezer, ndl.cleans, ndl.id, force); err != nil {
 		return nil, err
 	}
 	// To remove outdated history objects from the end, we set the 'tail' parameter
@@ -268,7 +267,7 @@ func (dl *diskLayer) setBufferSize(size int) error {
 	if dl.stale {
 		return errSnapshotStale
 	}
-	return dl.buffer.setSize(size, dl.db.diskdb, dl.cleans, dl.id)
+	return dl.buffer.setSize(size, dl.db.diskdb, dl.db.freezer, dl.cleans, dl.id)
 }
 
 // size returns the approximate size of cached nodes in the disk layer.

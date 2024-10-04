@@ -200,6 +200,20 @@ func (n *Node) TCPEndpoint() (netip.AddrPort, bool) {
 	return netip.AddrPortFrom(n.ip, n.tcp), true
 }
 
+// QUICEndpoint returns the announced QUIC endpoint.
+func (n *Node) QUICEndpoint() (netip.AddrPort, bool) {
+	var quic uint16
+	if n.ip.Is4() || n.ip.Is4In6() {
+		n.Load((*enr.QUIC)(&quic))
+	} else if n.ip.Is6() {
+		n.Load((*enr.QUIC6)(&quic))
+	}
+	if !n.ip.IsValid() || n.ip.IsUnspecified() || quic == 0 {
+		return netip.AddrPort{}, false
+	}
+	return netip.AddrPortFrom(n.ip, quic), true
+}
+
 // Pubkey returns the secp256k1 public key of the node, if present.
 func (n *Node) Pubkey() *ecdsa.PublicKey {
 	var key ecdsa.PublicKey

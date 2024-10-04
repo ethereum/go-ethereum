@@ -906,18 +906,6 @@ func (b *Block) LogsBloom(ctx context.Context) (hexutil.Bytes, error) {
 	return header.Bloom.Bytes(), nil
 }
 
-func (b *Block) TotalDifficulty(ctx context.Context) (hexutil.Big, error) {
-	hash, err := b.Hash(ctx)
-	if err != nil {
-		return hexutil.Big{}, err
-	}
-	td := b.r.backend.GetTd(ctx, hash)
-	if td == nil {
-		return hexutil.Big{}, fmt.Errorf("total difficulty not found %x", hash)
-	}
-	return hexutil.Big(*td), nil
-}
-
 func (b *Block) RawHeader(ctx context.Context) (hexutil.Bytes, error) {
 	header, err := b.resolveHeader(ctx)
 	if err != nil {

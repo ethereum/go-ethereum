@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -121,8 +122,8 @@ func NewBeaconLightApi(url string, customHeaders map[string]string) *BeaconLight
 	}
 }
 
-func (api *BeaconLightApi) httpGet(path string) ([]byte, error) {
-	uri, err := api.buildURL(path, nil)
+func (api *BeaconLightApi) httpGet(path string, params url.Values) ([]byte, error) {
+	uri, err := api.buildURL(path, params)
 	if err != nil {
 		return nil, err
 	}
@@ -150,17 +151,16 @@ func (api *BeaconLightApi) httpGet(path string) ([]byte, error) {
 	}
 }
 
-func (api *BeaconLightApi) httpGetf(format string, params ...any) ([]byte, error) {
-	return api.httpGet(fmt.Sprintf(format, params...))
-}
-
 // GetBestUpdatesAndCommittees fetches and validates LightClientUpdate for given
 // period and full serialized committee for the next period (committee root hash
 // equals update.NextSyncCommitteeRoot).
 // Note that the results are validated but the update signature should be verified
 // by the caller as its validity depends on the update chain.
 func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64) ([]*types.LightClientUpdate, []*types.SerializedSyncCommittee, error) {
-	resp, err := api.httpGetf("/eth/v1/beacon/light_client/updates?start_period=%d&count=%d", firstPeriod, count)
+	resp, err := api.httpGet("/eth/v1/beacon/light_client/updates", map[string][]string{
+		"start_period": {strconv.FormatUint(firstPeriod, 10)},
+		"count":        {strconv.FormatUint(count, 10)},
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -197,7 +197,7 @@ func (api *BeaconLightApi) GetBestUpdatesAndCommittees(firstPeriod, count uint64
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientoptimisticupdate
 func (api *BeaconLightApi) GetOptimisticUpdate() (types.OptimisticUpdate, error) {
-	resp, err := api.httpGet("/eth/v1/beacon/light_client/optimistic_update")
+	resp, err := api.httpGet("/eth/v1/beacon/light_client/optimistic_update", nil)
 	if err != nil {
 		return types.OptimisticUpdate{}, err
 	}
@@ -250,7 +250,7 @@ func decodeOptimisticUpdate(enc []byte) (types.OptimisticUpdate, error) {
 // See data structure definition here:
 // https://github.com/ethereum/consensus-specs/blob/dev/specs/altair/light-client/sync-protocol.md#lightclientfinalityupdate
 func (api *BeaconLightApi) GetFinalityUpdate() (types.FinalityUpdate, error) {
-	resp, err := api.httpGet("/eth/v1/beacon/light_client/finality_update")
+	resp, err := api.httpGet("/eth/v1/beacon/light_client/finality_update", nil)
 	if err != nil {
 		return types.FinalityUpdate{}, err
 	}
@@ -316,7 +316,7 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool,
 	} else {
 		blockId = blockRoot.Hex()
 	}
-	resp, err := api.httpGetf("/eth/v1/beacon/headers/%s", blockId)
+	resp, err := api.httpGet(fmt.Sprintf("/eth/v1/beacon/headers/%s", blockId), nil)
 	if err != nil {
 		return types.Header{}, false, false, err
 	}
@@ -347,7 +347,7 @@ func (api *BeaconLightApi) GetHeader(blockRoot common.Hash) (types.Header, bool,
 
 // GetCheckpointData fetches and validates bootstrap data belonging to the given checkpoint.
 func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types.BootstrapData, error) {
-	resp, err := api.httpGetf("/eth/v1/beacon/light_client/bootstrap/0x%x", checkpointHash[:])
+	resp, err := api.httpGet(fmt.Sprintf("/eth/v1/beacon/light_client/bootstrap/0x%x", checkpointHash[:]), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +389,7 @@ func (api *BeaconLightApi) GetCheckpointData(checkpointHash common.Hash) (*types
 }
 
 func (api *BeaconLightApi) GetBeaconBlock(blockRoot common.Hash) (*types.BeaconBlock, error) {
-	resp, err := api.httpGetf("/eth/v2/beacon/blocks/0x%x", blockRoot)
+	resp, err := api.httpGet(fmt.Sprintf("/eth/v2/beacon/blocks/0x%x", blockRoot), nil)
 	if err != nil {
 		return nil, err
 	}

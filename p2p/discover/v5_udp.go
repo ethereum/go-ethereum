@@ -862,7 +862,8 @@ func (t *UDPv5) collectTableNodes(rip netip.Addr, distances []uint, limit int) [
 		}
 		processed[dist] = struct{}{}
 
-		for _, n := range t.tab.appendLiveNodes(dist, bn[:0]) {
+		checkLive := !t.tab.cfg.NoFindnodeLivenessCheck
+		for _, n := range t.tab.appendBucketNodes(dist, bn[:0], checkLive) {
 			// Apply some pre-checks to avoid sending invalid nodes.
 			// Note liveness is checked by appendLiveNodes.
 			if netutil.CheckRelayAddr(rip, n.IPAddr()) != nil {
