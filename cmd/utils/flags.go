@@ -982,7 +982,7 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 
 	PortalNATFlag = &cli.StringFlag{
 		Name:     "nat",
-		Usage:    "NAT port mapping mechanism (any|none|upnp|pmp|pmp:<IP>|extip:<IP>)",
+		Usage:    "NAT port mapping mechanism (any|none|upnp|pmp|stun|pmp:<IP>|extip:<IP>|stun:<IP>)",
 		Value:    "any",
 		Category: flags.PortalNetworkCategory,
 	}
