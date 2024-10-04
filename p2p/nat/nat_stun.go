@@ -29,8 +29,8 @@ func (STUN) SupportsMapping() bool {
 	return false
 }
 
-func (STUN) AddMapping(string, int, int, string, time.Duration) (uint16, error) {
-	return 0, nil
+func (STUN) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) (uint16, error) {
+	return uint16(extport), nil
 }
 
 func (STUN) DeleteMapping(string, int, int) error {

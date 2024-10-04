@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	"os"
 
@@ -249,14 +250,70 @@ func initDiscV5(config Config, conn discover.UDPConn) (*discover.UDPv5, *enode.L
 	}
 
 	localNode := enode.NewLocalNode(nodeDB, config.PrivateKey)
-	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
+
 	localNode.Set(discover.Tag)
+	listenerAddr := conn.LocalAddr().(*net.UDPAddr)
+	nat := config.Protocol.NAT
+	if nat != nil && !listenerAddr.IP.IsLoopback() {
+		doPortMapping(nat, localNode, listenerAddr)
+	}
 
 	discV5, err := discover.ListenV5(conn, localNode, discCfg)
 	if err != nil {
 		return nil, nil, err
 	}
 	return discV5, localNode, nil
+}
+
+func doPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) {
+	const (
+		protocol = "udp"
+		name     = "ethereum discovery"
+	)
+
+	var (
+		intport    = addr.Port
+		extaddr    = &net.UDPAddr{IP: addr.IP, Port: addr.Port}
+		mapTimeout = nat.DefaultMapTimeout
+	)
+	addMapping := func() {
+		// Get the external address.
+		var err error
+		extaddr.IP, err = natm.ExternalIP()
+		if err != nil {
+			log.Debug("Couldn't get external IP", "err", err)
+			return
+		}
+		// Create the mapping.
+		p, err := natm.AddMapping(protocol, extaddr.Port, intport, name, mapTimeout)
+		if err != nil {
+			log.Debug("Couldn't add port mapping", "err", err)
+			return
+		}
+		if p != uint16(extaddr.Port) {
+			extaddr.Port = int(p)
+			log.Info("NAT mapped alternative port")
+		} else {
+			log.Info("NAT mapped port")
+		}
+		// Update IP/port information of the local node.
+		ln.SetStaticIP(extaddr.IP)
+		ln.SetFallbackUDP(extaddr.Port)
+	}
+
+	// Perform mapping once, synchronously.
+	log.Info("Attempting port mapping")
+	addMapping()
+
+	// Refresh the mapping periodically.
+	go func() {
+		refresh := time.NewTimer(mapTimeout)
+		defer refresh.Stop()
+		for range refresh.C {
+			addMapping()
+			refresh.Reset(mapTimeout)
+		}
+	}()
 }
 
 func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) (*history.HistoryNetwork, error) {
