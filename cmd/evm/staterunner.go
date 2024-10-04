@@ -187,12 +187,5 @@ func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, benc
 	}
 	out, _ := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))
-
-	if !bench {
-		return nil
-	} else if len(matchingTests) != 1 {
-		return fmt.Errorf("can only benchmark single state test case (more than one matching params)")
-	}
-
 	return nil
 }
