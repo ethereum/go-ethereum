@@ -97,6 +97,7 @@ func (c *committer) commit(path []byte, n node, topmost bool) node {
 func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]node {
 	var (
 		wg       sync.WaitGroup
+		nodesMu  sync.Mutex
 		children [17]node
 	)
 	for i := 0; i < 16; i++ {
@@ -118,15 +119,14 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]
 			children[i] = c.commit(append(path, byte(i)), child, false)
 		} else {
 			wg.Add(1)
-			var nodesMu sync.Mutex
 			go func(index int) {
 				p := append(path, byte(i))
-				set := trienode.NewNodeSet(c.nodes.Owner)
-				childComitter := newCommitter(set, c.tracer, c.collectLeaf, false)
+				childSet := trienode.NewNodeSet(c.nodes.Owner)
+				childComitter := newCommitter(childSet, c.tracer, c.collectLeaf, false)
 				h := childComitter.commit(p, child, false)
 				children[index] = h
 				nodesMu.Lock()
-				c.nodes.MergeSet(set)
+				c.nodes.MergeSet(childSet)
 				nodesMu.Unlock()
 				wg.Done()
 			}(i)
