@@ -127,6 +127,12 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks.OnCodeRead != nil {
 		wrapped.OnCodeRead = hooks.OnCodeRead
 	}
+	if hooks.OnCodeSizeRead != nil {
+		wrapped.OnCodeSizeRead = hooks.OnCodeSizeRead
+	}
+	if hooks.OnCodeHashRead != nil {
+		wrapped.OnCodeHashRead = hooks.OnCodeHashRead
+	}
 	if hooks.OnStorageRead != nil {
 		wrapped.OnStorageRead = hooks.OnStorageRead
 	}
