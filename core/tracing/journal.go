@@ -62,6 +62,7 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 			OnExit:  j.OnExit,
 		}
 	)
+	// State change hooks.
 	if hooks.OnBalanceChange != nil {
 		wrapped.OnBalanceChange = j.OnBalanceChange
 	}
@@ -73,6 +74,64 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	}
 	if hooks.OnStorageChange != nil {
 		wrapped.OnStorageChange = j.OnStorageChange
+	}
+	// Pass through the remaining hooks.
+	if hooks.OnTxStart != nil {
+		wrapped.OnTxStart = hooks.OnTxStart
+	}
+	if hooks.OnOpcode != nil {
+		wrapped.OnOpcode = hooks.OnOpcode
+	}
+	if hooks.OnFault != nil {
+		wrapped.OnFault = hooks.OnFault
+	}
+	if hooks.OnGasChange != nil {
+		wrapped.OnGasChange = hooks.OnGasChange
+	}
+	if hooks.OnBlockchainInit != nil {
+		wrapped.OnBlockchainInit = hooks.OnBlockchainInit
+	}
+	if hooks.OnClose != nil {
+		wrapped.OnClose = hooks.OnClose
+	}
+	if hooks.OnBlockStart != nil {
+		wrapped.OnBlockStart = hooks.OnBlockStart
+	}
+	if hooks.OnBlockEnd != nil {
+		wrapped.OnBlockEnd = hooks.OnBlockEnd
+	}
+	if hooks.OnSkippedBlock != nil {
+		wrapped.OnSkippedBlock = hooks.OnSkippedBlock
+	}
+	if hooks.OnGenesisBlock != nil {
+		wrapped.OnGenesisBlock = hooks.OnGenesisBlock
+	}
+	if hooks.OnReorg != nil {
+		wrapped.OnReorg = hooks.OnReorg
+	}
+	if hooks.OnSystemCallStart != nil {
+		wrapped.OnSystemCallStart = hooks.OnSystemCallStart
+	}
+	if hooks.OnSystemCallEnd != nil {
+		wrapped.OnSystemCallEnd = hooks.OnSystemCallEnd
+	}
+	if hooks.OnLog != nil {
+		wrapped.OnLog = hooks.OnLog
+	}
+	if hooks.OnBalanceRead != nil {
+		wrapped.OnBalanceRead = hooks.OnBalanceRead
+	}
+	if hooks.OnNonceRead != nil {
+		wrapped.OnNonceRead = hooks.OnNonceRead
+	}
+	if hooks.OnCodeRead != nil {
+		wrapped.OnCodeRead = hooks.OnCodeRead
+	}
+	if hooks.OnStorageRead != nil {
+		wrapped.OnStorageRead = hooks.OnStorageRead
+	}
+	if hooks.OnBlockHashRead != nil {
+		wrapped.OnBlockHashRead = hooks.OnBlockHashRead
 	}
 	return wrapped, nil
 }
