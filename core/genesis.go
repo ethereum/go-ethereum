@@ -472,10 +472,10 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 				head.BlobGasUsed = new(uint64)
 			}
 		}
-		if conf.IsPrague(num, g.Timestamp) {
-			//head.RequestsHash = &types.EmptyRequestsHash
-			//requests = make(types.Requests, 0)
-		}
+		//if conf.IsPrague(num, g.Timestamp) {
+		//head.RequestsHash = &types.EmptyRequestsHash
+		//requests = make(types.Requests, 0)
+		//}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals, Requests: requests}, nil, trie.NewStackTrie(nil))
 }
