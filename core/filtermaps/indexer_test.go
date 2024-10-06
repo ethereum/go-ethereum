@@ -79,14 +79,13 @@ func TestIndexerRandomRange(t *testing.T) {
 			ts.chain.setCanonicalChain(forks[fork][:head+1])
 		}
 		ts.fm.WaitIdle()
-		fmr := ts.fm.getRange()
 		if noHistory {
-			if fmr.initialized {
+			if ts.fm.initialized {
 				t.Fatalf("filterMapsRange initialized while indexing is disabled")
 			}
 			continue
 		}
-		if !fmr.initialized {
+		if !ts.fm.initialized {
 			t.Fatalf("filterMapsRange not initialized while indexing is enabled")
 		}
 		var (
@@ -99,21 +98,21 @@ func TestIndexerRandomRange(t *testing.T) {
 		if tail > 0 {
 			tpHash = forks[fork][tail-1]
 		}
-		if fmr.headBlockNumber != uint64(head) || fmr.headBlockHash != forks[fork][head] {
-			ts.t.Fatalf("Invalid index head (expected #%d %v, got #%d %v)", head, forks[fork][head], fmr.headBlockNumber, fmr.headBlockHash)
+		if ts.fm.headBlockNumber != uint64(head) || ts.fm.headBlockHash != forks[fork][head] {
+			ts.t.Fatalf("Invalid index head (expected #%d %v, got #%d %v)", head, forks[fork][head], ts.fm.headBlockNumber, ts.fm.headBlockHash)
 		}
-		if fmr.tailBlockNumber != uint64(tail) || fmr.tailParentHash != tpHash {
-			ts.t.Fatalf("Invalid index head (expected #%d %v, got #%d %v)", tail, tpHash, fmr.tailBlockNumber, fmr.tailParentHash)
+		if ts.fm.tailBlockNumber != uint64(tail) || ts.fm.tailParentHash != tpHash {
+			ts.t.Fatalf("Invalid index head (expected #%d %v, got #%d %v)", tail, tpHash, ts.fm.tailBlockNumber, ts.fm.tailParentHash)
 		}
 		expLvCount := uint64(head+1-tail) * 50
 		if tail == 0 {
 			expLvCount -= 50 // no logs in genesis block
 		}
-		if fmr.headLvPointer-fmr.tailBlockLvPointer != expLvCount {
-			ts.t.Fatalf("Invalid number of log values (expected %d, got %d)", expLvCount, fmr.headLvPointer-fmr.tailBlockLvPointer)
+		if ts.fm.headLvPointer-ts.fm.tailBlockLvPointer != expLvCount {
+			ts.t.Fatalf("Invalid number of log values (expected %d, got %d)", expLvCount, ts.fm.headLvPointer-ts.fm.tailBlockLvPointer)
 		}
-		if fmr.tailBlockLvPointer-fmr.tailLvPointer >= ts.params.valuesPerMap {
-			ts.t.Fatalf("Invalid number of leftover tail log values (expected < %d, got %d)", ts.params.valuesPerMap, fmr.tailBlockLvPointer-fmr.tailLvPointer)
+		if ts.fm.tailBlockLvPointer-ts.fm.tailLvPointer >= ts.params.valuesPerMap {
+			ts.t.Fatalf("Invalid number of leftover tail log values (expected < %d, got %d)", ts.params.valuesPerMap, ts.fm.tailBlockLvPointer-ts.fm.tailLvPointer)
 		}
 	}
 }

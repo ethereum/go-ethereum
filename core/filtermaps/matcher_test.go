@@ -28,11 +28,11 @@ func TestMatcher(t *testing.T) {
 	ts := newTestSetup(t)
 	defer ts.close()
 
-	ts.chain.addBlocks(1000, 10, 10, 4, true)
+	ts.chain.addBlocks(100, 10, 10, 4, true)
 	ts.setHistory(0, false)
 	ts.fm.WaitIdle()
 
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 5000; i++ {
 		bhash := ts.chain.canonical[rand.Intn(len(ts.chain.canonical))]
 		receipts := ts.chain.receipts[bhash]
 		if len(receipts) == 0 {

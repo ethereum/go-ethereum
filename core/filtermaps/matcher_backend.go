@@ -25,7 +25,8 @@ import (
 
 // FilterMapsMatcherBackend implements MatcherBackend.
 type FilterMapsMatcherBackend struct {
-	f                     *FilterMaps
+	f *FilterMaps
+	// these fields should be accessed under f.matchersLock mutex.
 	valid                 bool
 	firstValid, lastValid uint64
 	syncCh                chan SyncRange
@@ -35,8 +36,12 @@ type FilterMapsMatcherBackend struct {
 // the active matcher set.
 // Note that Close should always be called when the matcher is no longer used.
 func (f *FilterMaps) NewMatcherBackend() *FilterMapsMatcherBackend {
-	f.lock.Lock()
-	defer f.lock.Unlock()
+	f.indexLock.RLock()
+	f.matchersLock.Lock()
+	defer func() {
+		f.matchersLock.Unlock()
+		f.indexLock.RUnlock()
+	}()
 
 	fm := &FilterMapsMatcherBackend{
 		f:          f,
@@ -58,8 +63,8 @@ func (fm *FilterMapsMatcherBackend) GetParams() *Params {
 // any SyncLogIndex calls are cancelled.
 // Close implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) Close() {
-	fm.f.lock.Lock()
-	defer fm.f.lock.Unlock()
+	fm.f.matchersLock.Lock()
+	defer fm.f.matchersLock.Unlock()
 
 	delete(fm.f.matchers, fm)
 }
@@ -70,7 +75,7 @@ func (fm *FilterMapsMatcherBackend) Close() {
 // on write.
 // GetFilterMapRow implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) GetFilterMapRow(ctx context.Context, mapIndex, rowIndex uint32) (FilterRow, error) {
-	return fm.f.getFilterMapRow(mapIndex, rowIndex)
+	return fm.f.getFilterMapRowUncached(mapIndex, rowIndex)
 }
 
 // GetBlockLvPointer returns the starting log value index where the log values
@@ -78,8 +83,8 @@ func (fm *FilterMapsMatcherBackend) GetFilterMapRow(ctx context.Context, mapInde
 // head then the first unoccupied log value index is returned.
 // GetBlockLvPointer implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) GetBlockLvPointer(ctx context.Context, blockNumber uint64) (uint64, error) {
-	fm.f.lock.RLock()
-	defer fm.f.lock.RUnlock()
+	fm.f.indexLock.RLock()
+	defer fm.f.indexLock.RUnlock()
 
 	return fm.f.getBlockLvPointer(blockNumber)
 }
@@ -94,8 +99,8 @@ func (fm *FilterMapsMatcherBackend) GetBlockLvPointer(ctx context.Context, block
 // using SyncLogIndex and re-process certain blocks if necessary.
 // GetLogByLvIndex implements MatcherBackend.
 func (fm *FilterMapsMatcherBackend) GetLogByLvIndex(ctx context.Context, lvIndex uint64) (*types.Log, error) {
-	fm.f.lock.RLock()
-	defer fm.f.lock.RUnlock()
+	fm.f.indexLock.RLock()
+	defer fm.f.indexLock.RUnlock()
 
 	return fm.f.getLogByLvIndex(lvIndex)
 }
@@ -108,8 +113,12 @@ func (fm *FilterMapsMatcherBackend) GetLogByLvIndex(ctx context.Context, lvIndex
 // should be passed as a parameter and the existing log index should be consistent
 // with that chain.
 func (fm *FilterMapsMatcherBackend) synced(head *types.Header) {
-	fm.f.lock.Lock()
-	defer fm.f.lock.Unlock()
+	fm.f.indexLock.RLock()
+	fm.f.matchersLock.Lock()
+	defer func() {
+		fm.f.matchersLock.Unlock()
+		fm.f.indexLock.RUnlock()
+	}()
 
 	fm.syncCh <- SyncRange{
 		Head:         head,
@@ -143,9 +152,9 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 	}
 	// add SyncRange return channel, ensuring that
 	syncCh := make(chan SyncRange, 1)
-	fm.f.lock.Lock()
+	fm.f.matchersLock.Lock()
 	fm.syncCh = syncCh
-	fm.f.lock.Unlock()
+	fm.f.matchersLock.Unlock()
 
 	select {
 	case fm.f.matcherSyncCh <- fm:
@@ -167,8 +176,11 @@ func (fm *FilterMapsMatcherBackend) SyncLogIndex(ctx context.Context) (SyncRange
 // valid range with the current indexed range. This function should be called
 // whenever a part of the log index has been removed, before adding new blocks
 // to it.
-// Note that this function assumes that the read lock is being held.
+// Note that this function assumes that the index read lock is being held.
 func (f *FilterMaps) updateMatchersValidRange() {
+	f.matchersLock.Lock()
+	defer f.matchersLock.Unlock()
+
 	for fm := range f.matchers {
 		if !f.initialized {
 			fm.valid = false
