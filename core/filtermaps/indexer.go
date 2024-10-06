@@ -218,7 +218,6 @@ func (f *FilterMaps) tryUpdateHead(newHead *types.Header) bool {
 				f.lastLogHeadUpdate = time.Now()
 			}
 		}
-
 	}()
 
 	if !f.startHeadUpdate {
@@ -601,7 +600,7 @@ func (f *FilterMaps) applyUpdateBatch(u *updateBatch) {
 	}
 }
 
-// updatedRangeLength returns the lenght of the updated filter map range.
+// updatedRangeLength returns the length of the updated filter map range.
 func (u *updateBatch) updatedRangeLength() uint32 {
 	return u.afterLastMap - u.firstMap
 }

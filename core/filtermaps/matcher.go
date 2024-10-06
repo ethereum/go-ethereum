@@ -168,7 +168,6 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 			close(task.done)
 		}
 		wg.Done()
-		return
 	}
 
 	for i := 0; i < 4; i++ {

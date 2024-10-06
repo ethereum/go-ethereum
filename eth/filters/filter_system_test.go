@@ -41,7 +41,6 @@ import (
 type testBackend struct {
 	db              ethdb.Database
 	fm              *filtermaps.FilterMaps
-	sections        uint64
 	txFeed          event.Feed
 	logsFeed        event.Feed
 	rmLogsFeed      event.Feed
