@@ -17,6 +17,7 @@
 package filtermaps
 
 import (
+	crand "crypto/rand"
 	"crypto/sha256"
 	"math/big"
 	"math/rand"
@@ -324,7 +325,7 @@ func (tc *testChain) addBlocks(count, maxTxPerBlock, maxLogsPerReceipt, maxTopic
 			for i := range receipt.Logs {
 				log := &types.Log{}
 				receipt.Logs[i] = log
-				rand.Read(log.Address[:])
+				crand.Read(log.Address[:])
 				var topicCount int
 				if random {
 					topicCount = rand.Intn(maxTopicsPerLog + 1)
@@ -333,7 +334,7 @@ func (tc *testChain) addBlocks(count, maxTxPerBlock, maxLogsPerReceipt, maxTopic
 				}
 				log.Topics = make([]common.Hash, topicCount)
 				for j := range log.Topics {
-					rand.Read(log.Topics[j][:])
+					crand.Read(log.Topics[j][:])
 				}
 			}
 			gen.AddUncheckedReceipt(receipt)
