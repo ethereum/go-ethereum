@@ -45,6 +45,7 @@ import (
 	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 
 	"github.com/urfave/cli/v2"
+	"github.com/oxwa/hybrid-consensus" // Hibrit konsensüs paketini içe aktarın
 )
 
 const (
@@ -277,6 +278,25 @@ func init() {
 }
 
 func main() {
+	// Validator listesi (örnek)
+	validators := []hybridconsensus.Validator{
+		{Address: common.HexToAddress("0xValidator1"), Stake: 100},
+		{Address: common.HexToAddress("0xValidator2"), Stake: 200},
+	}
+
+	// Hibrit konsensüs algoritmasını başlat
+	hc := hybridconsensus.NewHybridConsensus(validators)
+
+	// İlk bloğu oluştur
+	block, err := hc.CreateBlock(validators[0].Address)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create block: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Created block: %+v\n", block)
+
+	// Uygulamanızı başlat
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
