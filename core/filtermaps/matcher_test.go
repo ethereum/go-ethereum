@@ -18,6 +18,7 @@ package filtermaps
 
 import (
 	"context"
+	crand "crypto/rand"
 	"math/rand"
 	"testing"
 
@@ -46,7 +47,7 @@ func TestMatcher(t *testing.T) {
 		var ok bool
 		addresses := make([]common.Address, rand.Intn(3))
 		for i := range addresses {
-			rand.Read(addresses[i][:])
+			crand.Read(addresses[i][:])
 		}
 		if len(addresses) > 0 {
 			addresses[rand.Intn(len(addresses))] = log.Address
@@ -56,7 +57,7 @@ func TestMatcher(t *testing.T) {
 		for j := range topics {
 			topics[j] = make([]common.Hash, rand.Intn(3))
 			for i := range topics[j] {
-				rand.Read(topics[j][i][:])
+				crand.Read(topics[j][i][:])
 			}
 			if len(topics[j]) > 0 {
 				topics[j][rand.Intn(len(topics[j]))] = log.Topics[j]

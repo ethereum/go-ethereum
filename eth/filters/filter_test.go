@@ -460,7 +460,7 @@ func TestRangeLogs(t *testing.T) {
 		go func(filter *Filter) {
 			filter.Logs(context.Background())
 			// ensure that filter will not be blocked if we exit early
-			for _ = range filter.rangeLogsTestHook {
+			for range filter.rangeLogsTestHook {
 			}
 		}(filter)
 	}

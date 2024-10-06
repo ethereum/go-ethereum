@@ -17,6 +17,7 @@
 package filtermaps
 
 import (
+	crand "crypto/rand"
 	"math/rand"
 	"testing"
 
@@ -32,7 +33,7 @@ func TestSingleMatch(t *testing.T) {
 		mapIndex := rand.Uint32()
 		lvIndex := uint64(mapIndex)<<params.logValuesPerMap + uint64(rand.Intn(int(params.valuesPerMap)))
 		var lvHash common.Hash
-		rand.Read(lvHash[:])
+		crand.Read(lvHash[:])
 		row := FilterRow{params.columnIndex(lvIndex, lvHash)}
 		matches := params.potentialMatches(row, mapIndex, lvHash)
 		// check if it has been reverse transformed correctly
@@ -66,11 +67,11 @@ func TestPotentialMatches(t *testing.T) {
 		for i := range lvIndices {
 			// add testPmLen single entries with different log value hashes at different indices
 			lvIndices[i] = lvStart + uint64(rand.Intn(int(params.valuesPerMap)))
-			rand.Read(lvHashes[i][:])
+			crand.Read(lvHashes[i][:])
 			row = append(row, params.columnIndex(lvIndices[i], lvHashes[i]))
 		}
 		// add the same log value hash at the first testPmLen log value indices of the map's range
-		rand.Read(lvHashes[testPmLen][:])
+		crand.Read(lvHashes[testPmLen][:])
 		for lvIndex := lvStart; lvIndex < lvStart+testPmLen; lvIndex++ {
 			row = append(row, params.columnIndex(lvIndex, lvHashes[testPmLen]))
 		}
