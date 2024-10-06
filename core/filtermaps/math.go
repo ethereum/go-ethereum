@@ -174,8 +174,8 @@ func (p potentialMatches) Less(i, j int) bool { return p[i] < p[j] }
 func (p potentialMatches) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // uint32ModInverse takes an odd 32 bit number and returns its modular
-// multiplicative inverse (mod 2**32), meaning that for any uint32 x and odd y
-// x * y *  uint32ModInverse(y) == 1.
+// multiplicative inverse (mod 2**32), meaning that for any odd uint32 value v
+// uint32(v *  uint32ModInverse(v)) == 1.
 func uint32ModInverse(v uint32) uint32 {
 	if v&1 == 0 {
 		panic("uint32ModInverse called with even argument")
