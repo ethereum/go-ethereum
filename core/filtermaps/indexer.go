@@ -46,9 +46,9 @@ func (f *FilterMaps) updateLoop() {
 		return
 	}
 
-	f.lock.Lock()
+	f.indexLock.Lock()
 	f.updateMapCache()
-	f.lock.Unlock()
+	f.indexLock.Unlock()
 	if rp, err := f.newUpdateBatch().makeRevertPoint(); err == nil {
 		f.revertPoints[rp.blockNumber] = rp
 	} else {
@@ -61,11 +61,10 @@ func (f *FilterMaps) updateLoop() {
 		head        = f.chain.CurrentBlock()
 		stop        bool
 		syncMatcher *FilterMapsMatcherBackend
-		fmr         = f.getRange()
 	)
 
 	matcherSync := func() {
-		if syncMatcher != nil && fmr.initialized && fmr.headBlockHash == head.Hash() {
+		if syncMatcher != nil && f.initialized && f.headBlockHash == head.Hash() {
 			syncMatcher.synced(head)
 			syncMatcher = nil
 		}
@@ -92,7 +91,7 @@ func (f *FilterMaps) updateLoop() {
 				stop = true
 			case ch := <-f.waitIdleCh:
 				head = f.chain.CurrentBlock()
-				if head.Hash() == f.getRange().headBlockHash {
+				if head.Hash() == f.headBlockHash {
 					ch <- true
 					continue loop
 				}
@@ -110,27 +109,24 @@ func (f *FilterMaps) updateLoop() {
 			return
 		}
 	}
-	fmr = f.getRange()
 
 	for !stop {
-		if !fmr.initialized {
+		if !f.initialized {
 			if !f.tryInit(head) {
 				return
 			}
 
-			fmr = f.getRange()
-			if !fmr.initialized {
+			if !f.initialized {
 				wait()
 				continue
 			}
 		}
 		// log index is initialized
-		if fmr.headBlockHash != head.Hash() {
+		if f.headBlockHash != head.Hash() {
 			if !f.tryUpdateHead(head) {
 				return
 			}
-			fmr = f.getRange()
-			if fmr.headBlockHash != head.Hash() {
+			if f.headBlockHash != head.Hash() {
 				wait()
 				continue
 			}
@@ -151,8 +147,8 @@ func (f *FilterMaps) updateLoop() {
 				head = f.chain.CurrentBlock()
 			}
 			// stop if there is a new chain head (always prioritize head updates)
-			return fmr.headBlockHash != head.Hash()
-		}) && fmr.headBlockHash == head.Hash() {
+			return f.headBlockHash != head.Hash() || syncMatcher != nil
+		}) && f.headBlockHash == head.Hash() {
 			// if tail processing reached its final state and there is no new
 			// head then wait for more events
 			wait()
@@ -174,14 +170,6 @@ func (f *FilterMaps) WaitIdle() {
 			return
 		}
 	}
-}
-
-// getRange returns the current filterMapsRange.
-func (f *FilterMaps) getRange() filterMapsRange {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
-	return f.filterMapsRange
 }
 
 // tryInit attempts to initialize the log index structure.
@@ -215,17 +203,16 @@ func (f *FilterMaps) tryInit(head *types.Header) bool {
 // at next startup.
 func (f *FilterMaps) tryUpdateHead(newHead *types.Header) bool {
 	defer func() {
-		fmr := f.getRange()
-		if newHead.Hash() == fmr.headBlockHash {
+		if newHead.Hash() == f.headBlockHash {
 			if f.loggedHeadUpdate {
-				log.Info("Forward log indexing finished", "processed", fmr.headBlockNumber-f.ptrHeadUpdate,
+				log.Info("Forward log indexing finished", "processed", f.headBlockNumber-f.ptrHeadUpdate,
 					"elapsed", common.PrettyDuration(time.Since(f.lastLogHeadUpdate)))
 				f.loggedHeadUpdate, f.startHeadUpdate = false, false
 			}
 		} else {
 			if time.Since(f.lastLogHeadUpdate) > logFrequency || !f.loggedHeadUpdate {
-				log.Info("Forward log indexing in progress", "processed", fmr.headBlockNumber-f.ptrHeadUpdate,
-					"remaining", newHead.Number.Uint64()-fmr.headBlockNumber,
+				log.Info("Forward log indexing in progress", "processed", f.headBlockNumber-f.ptrHeadUpdate,
+					"remaining", newHead.Number.Uint64()-f.headBlockNumber,
 					"elapsed", common.PrettyDuration(time.Since(f.startedHeadUpdate)))
 				f.loggedHeadUpdate = true
 				f.lastLogHeadUpdate = time.Now()
@@ -238,7 +225,7 @@ func (f *FilterMaps) tryUpdateHead(newHead *types.Header) bool {
 		f.lastLogHeadUpdate = time.Now()
 		f.startedHeadUpdate = f.lastLogHeadUpdate
 		f.startHeadUpdate = true
-		f.ptrHeadUpdate = f.getRange().headBlockNumber
+		f.ptrHeadUpdate = f.headBlockNumber
 	}
 	// iterate back from new head until the log index head or a revert point and
 	// collect headers of blocks to be added
@@ -321,7 +308,7 @@ func (f *FilterMaps) tryUpdateTail(head *types.Header, stopFn func() bool) bool 
 			tailTarget = headNum + 1 - f.history
 		}
 	}
-	tailNum := f.getRange().tailBlockNumber
+	tailNum := f.tailBlockNumber
 	if tailNum > tailTarget {
 		if !f.tryExtendTail(tailTarget, stopFn) {
 			return false
@@ -337,23 +324,21 @@ func (f *FilterMaps) tryUpdateTail(head *types.Header, stopFn func() bool) bool 
 // indexed history length is achieved. Returns true if finished.
 func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) bool {
 	defer func() {
-		fmr := f.getRange()
-		if fmr.tailBlockNumber <= tailTarget {
+		if f.tailBlockNumber <= tailTarget {
 			if f.loggedTailExtend {
-				log.Info("Reverse log indexing finished", "history", fmr.headBlockNumber+1-fmr.tailBlockNumber,
-					"processed", f.ptrTailExtend-fmr.tailBlockNumber, "elapsed", common.PrettyDuration(time.Since(f.lastLogTailExtend)))
+				log.Info("Reverse log indexing finished", "history", f.headBlockNumber+1-f.tailBlockNumber,
+					"processed", f.ptrTailExtend-f.tailBlockNumber, "elapsed", common.PrettyDuration(time.Since(f.lastLogTailExtend)))
 				f.loggedTailExtend = false
 			}
 		}
 	}()
 
-	fmr := f.getRange()
-	number, parentHash := fmr.tailBlockNumber, fmr.tailParentHash
+	number, parentHash := f.tailBlockNumber, f.tailParentHash
 
 	if !f.loggedTailExtend {
 		f.lastLogTailExtend = time.Now()
 		f.startedTailExtend = f.lastLogTailExtend
-		f.ptrTailExtend = fmr.tailBlockNumber
+		f.ptrTailExtend = f.tailBlockNumber
 	}
 
 	update := f.newUpdateBatch()
@@ -400,20 +385,18 @@ func (f *FilterMaps) tryUnindexTail(tailTarget uint64, stopFn func() bool) bool 
 	if !f.loggedTailUnindex {
 		f.lastLogTailUnindex = time.Now()
 		f.startedTailUnindex = f.lastLogTailUnindex
-		f.ptrTailUnindex = f.getRange().tailBlockNumber
+		f.ptrTailUnindex = f.tailBlockNumber
 	}
 	for {
 		if f.unindexTailEpoch(tailTarget) {
-			fmr := f.getRange()
-			log.Info("Log unindexing finished", "history", fmr.headBlockNumber+1-fmr.tailBlockNumber,
-				"removed", fmr.tailBlockNumber-f.ptrTailUnindex, "elapsed", common.PrettyDuration(time.Since(f.lastLogTailUnindex)))
+			log.Info("Log unindexing finished", "history", f.headBlockNumber+1-f.tailBlockNumber,
+				"removed", f.tailBlockNumber-f.ptrTailUnindex, "elapsed", common.PrettyDuration(time.Since(f.lastLogTailUnindex)))
 			f.loggedTailUnindex = false
 			return true
 		}
 		if time.Since(f.lastLogTailUnindex) > logFrequency || !f.loggedTailUnindex {
-			fmr := f.getRange()
-			log.Info("Log unindexing in progress", "history", fmr.headBlockNumber+1-fmr.tailBlockNumber,
-				"removed", fmr.tailBlockNumber-f.ptrTailUnindex, "remaining", tailTarget-fmr.tailBlockNumber,
+			log.Info("Log unindexing in progress", "history", f.headBlockNumber+1-f.tailBlockNumber,
+				"removed", f.tailBlockNumber-f.ptrTailUnindex, "remaining", tailTarget-f.tailBlockNumber,
 				"elapsed", common.PrettyDuration(time.Since(f.startedTailUnindex)))
 			f.loggedTailUnindex = true
 			f.lastLogTailUnindex = time.Now()
@@ -427,11 +410,9 @@ func (f *FilterMaps) tryUnindexTail(tailTarget uint64, stopFn func() bool) bool 
 // unindexTailEpoch unindexes at most an epoch of tail log index data until the
 // desired tail target is reached.
 func (f *FilterMaps) unindexTailEpoch(tailTarget uint64) (finished bool) {
-	f.lock.Lock()
 	oldRange := f.filterMapsRange
 	newTailMap, changed := f.unindexTailPtr(tailTarget)
 	newRange := f.filterMapsRange
-	f.lock.Unlock()
 
 	if !changed {
 		return true // nothing more to do
@@ -441,6 +422,7 @@ func (f *FilterMaps) unindexTailEpoch(tailTarget uint64) (finished bool) {
 	oldTailMap := uint32(oldRange.tailLvPointer >> f.logValuesPerMap)
 	// remove map data [oldTailMap, newTailMap) and block data
 	// [oldRange.tailBlockNumber, newRange.tailBlockNumber)
+	f.indexLock.Lock()
 	batch := f.db.NewBatch()
 	for blockNumber := oldRange.tailBlockNumber; blockNumber < newRange.tailBlockNumber; blockNumber++ {
 		f.deleteBlockLvPointer(batch, blockNumber)
@@ -459,14 +441,15 @@ func (f *FilterMaps) unindexTailEpoch(tailTarget uint64) (finished bool) {
 	newRange.tailLvPointer = uint64(newTailMap) << f.logValuesPerMap
 	if newRange.tailLvPointer > newRange.tailBlockLvPointer {
 		log.Error("Cannot unindex filter maps beyond tail block log value pointer", "tailLvPointer", newRange.tailLvPointer, "tailBlockLvPointer", newRange.tailBlockLvPointer)
+		f.indexLock.Unlock()
 		return
 	}
-	f.lock.Lock()
 	f.setRange(batch, newRange)
+	f.indexLock.Unlock()
+
 	if err := batch.Write(); err != nil {
 		log.Crit("Could not write update batch", "error", err)
 	}
-	f.lock.Unlock()
 	return
 }
 
@@ -539,9 +522,6 @@ type updateBatch struct {
 
 // newUpdateBatch creates a new updateBatch.
 func (f *FilterMaps) newUpdateBatch() *updateBatch {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
 	return &updateBatch{
 		f:               f,
 		filterMapsRange: f.filterMapsRange,
@@ -555,8 +535,7 @@ func (f *FilterMaps) newUpdateBatch() *updateBatch {
 // applyUpdateBatch writes creates a batch and writes all changes to the database
 // and also updates the in-memory representations of log index data.
 func (f *FilterMaps) applyUpdateBatch(u *updateBatch) {
-	f.lock.Lock()
-	defer f.lock.Unlock()
+	f.indexLock.Lock()
 
 	batch := f.db.NewBatch()
 	// write or remove block to log value index pointers
@@ -615,6 +594,8 @@ func (f *FilterMaps) applyUpdateBatch(u *updateBatch) {
 	}
 	// update filterMapsRange
 	f.setRange(batch, u.filterMapsRange)
+	f.indexLock.Unlock()
+
 	if err := batch.Write(); err != nil {
 		log.Crit("Could not write update batch", "error", err)
 	}
@@ -849,9 +830,6 @@ func (u *updateBatch) makeRevertPoint() (*revertPoint, error) {
 // number from memory cache or from the database if available. If no such revert
 // point is available then it returns no result and no error.
 func (f *FilterMaps) getRevertPoint(blockNumber uint64) (*revertPoint, error) {
-	f.lock.RLock()
-	defer f.lock.RUnlock()
-
 	if blockNumber > f.headBlockNumber {
 		blockNumber = f.headBlockNumber
 	}
@@ -879,9 +857,6 @@ func (f *FilterMaps) getRevertPoint(blockNumber uint64) (*revertPoint, error) {
 
 // revertTo reverts the log index to the given revert point.
 func (f *FilterMaps) revertTo(rp *revertPoint) error {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
 	batch := f.db.NewBatch()
 	afterLastMap := uint32((f.headLvPointer + f.valuesPerMap - 1) >> f.logValuesPerMap)
 	if rp.mapIndex > afterLastMap {
@@ -918,7 +893,10 @@ func (f *FilterMaps) revertTo(rp *revertPoint) error {
 	newRange.headLvPointer = lvPointer
 	newRange.headBlockNumber = rp.blockNumber
 	newRange.headBlockHash = rp.blockHash
+	f.indexLock.Lock()
 	f.setRange(batch, newRange)
+	f.indexLock.Unlock()
+
 	if err := batch.Write(); err != nil {
 		log.Crit("Could not write update batch", "error", err)
 	}
