@@ -334,11 +334,11 @@ func mergeResults(results []potentialMatches) potentialMatches {
 // gives a match at X+offset. Note that matchSequence can be used recursively to
 // detect any log value sequence.
 type matchSequence struct {
-	params     *Params
-	base, next matcher
-	offset     uint64
+	baseEmptyRate, nextEmptyRate uint64 // first in struct to ensure 8 byte alignment
+	params                       *Params
+	base, next                   matcher
+	offset                       uint64
 	// *EmptyRate == totalCount << 32 + emptyCount (atomically accessed)
-	baseEmptyRate, nextEmptyRate uint64
 }
 
 // newMatchSequence creates a recursive sequence matcher from a list of underlying
