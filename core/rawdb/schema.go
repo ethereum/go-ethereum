@@ -20,6 +20,8 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	// SYSCOIN
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -351,4 +353,25 @@ func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 func IsStorageTrieNode(key []byte) bool {
 	ok, _, _ := ResolveStorageTrieNode(key)
 	return ok
+}
+
+// SYSCOIN
+// nevmToSysKey = nevmToSysPrefix + hash
+func nevmToSysKey(hash common.Hash) []byte {
+    return append(nevmToSysPrefix, hash.Bytes()...)
+}
+
+// blockNumToSysKey = blockNumToSysKeyPrefix + blocknumber
+func blockNumToSysKey(n uint64) []byte {
+    return append(blockNumToSysKeyPrefix, []byte(new(big.Int).SetUint64(n).String())...)
+}
+// nevmAddressKey generates the key for storing NEVM addresses
+func nevmAddressKey() []byte {
+    return []byte("nevm-addresses")
+}
+func dataHashesKey(n uint64) []byte {
+    return append(dataHashesKeyPrefix, []byte(new(big.Int).SetUint64(n).String())...)
+}
+func dataHashKey(hash common.Hash) []byte {
+    return append(dataHashKeyPrefix, hash.Bytes()...)
 }
