@@ -164,7 +164,10 @@ const (
 	// up to half the consumed gas could be refunded. Redefined as 1/5th in EIP-3529
 	RefundQuotient        uint64 = 2
 	RefundQuotientEIP3529 uint64 = 5
-
+	// SYSCOIN
+	SYSDataHashGas uint64 = 1400 // The cost of data hash retrieval
+	NEVMAddressGas uint64 = 200 // The cost of retrieving NEVM Address information
+	SYSBlockHashGas uint64 = 200 // the cost of SYS block hash retrieval
 	BlobTxBytesPerFieldElement         = 32      // Size in bytes of a field element
 	BlobTxFieldElementsPerBlob         = 4096    // Number of field elements stored in a single data blob
 	BlobTxBlobGasPerBlob               = 1 << 17 // Gas consumption of a single data blob (== blob byte size)
