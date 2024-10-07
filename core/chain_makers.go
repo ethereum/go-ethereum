@@ -348,7 +348,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 		var requests [][]byte
 		if config.IsPrague(b.header.Number, b.header.Time) {
-			requests := [][]byte{}
 			for _, r := range b.receipts {
 				depositRequests, err := ParseDepositLogs(r.Logs, config)
 				if err != nil {
