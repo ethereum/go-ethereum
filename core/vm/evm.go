@@ -55,7 +55,10 @@ type BlockContext struct {
 	Transfer TransferFunc
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
-
+	// SYSCOIN
+	ReadSYSHash  ReadSYSHashFunc
+	ReadDataHash ReadDataHashFunc
+	GetNEVMAddress GetNEVMAddressFunc
 	// Block information
 	Coinbase    common.Address // Provides information for COINBASE
 	GasLimit    uint64         // Provides information for GASLIMIT
