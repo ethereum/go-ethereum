@@ -54,14 +54,14 @@ func sequentialIDGenerator() func() ID {
 
 type testService struct{}
 
-type echoArgs struct {
+type EchoArgs struct {
 	S string
 }
 
 type echoResult struct {
 	String string
 	Int    int
-	Args   *echoArgs
+	Args   *EchoArgs
 }
 
 type testError struct{}
@@ -82,11 +82,11 @@ func (s *testService) Null() any {
 	return nil
 }
 
-func (s *testService) Echo(str string, i int, args *echoArgs) echoResult {
+func (s *testService) Echo(str string, i int, args *EchoArgs) echoResult {
 	return echoResult{str, i, args}
 }
 
-func (s *testService) EchoWithCtx(ctx context.Context, str string, i int, args *echoArgs) echoResult {
+func (s *testService) EchoWithCtx(ctx context.Context, str string, i int, args *EchoArgs) echoResult {
 	return echoResult{str, i, args}
 }
 

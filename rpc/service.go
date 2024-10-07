@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -136,7 +137,9 @@ func newCallback(receiver, fn reflect.Value) *callback {
 	fntype := fn.Type()
 	c := &callback{fn: fn, rcvr: receiver, errPos: -1, isSubscribe: isPubSub(fntype)}
 	// Determine parameter types. They must all be exported or builtin types.
-	c.makeArgTypes()
+	if err := c.makeArgTypes(); err != nil {
+		return nil
+	}
 
 	// Verify return types. The function must return at most one error
 	// and/or one other non-error value.
@@ -161,7 +164,7 @@ func newCallback(receiver, fn reflect.Value) *callback {
 }
 
 // makeArgTypes composes the argTypes list.
-func (c *callback) makeArgTypes() {
+func (c *callback) makeArgTypes() error {
 	fntype := c.fn.Type()
 	// Skip receiver and context.Context parameter (if present).
 	firstArg := 0
@@ -175,8 +178,14 @@ func (c *callback) makeArgTypes() {
 	// Add all remaining parameters.
 	c.argTypes = make([]reflect.Type, fntype.NumIn()-firstArg)
 	for i := firstArg; i < fntype.NumIn(); i++ {
-		c.argTypes[i-firstArg] = fntype.In(i)
+		intype := fntype.In(i)
+		if isBuiltinType(intype) || isExportedType(intype) {
+			c.argTypes[i-firstArg] = fntype.In(i)
+		} else {
+			return fmt.Errorf("param %T is neither a builtin type nor exported type", intype)
+		}
 	}
+	return nil
 }
 
 // call invokes the callback.
@@ -212,6 +221,41 @@ func (c *callback) call(ctx context.Context, method string, args []reflect.Value
 		return reflect.Value{}, err
 	}
 	return results[0].Interface(), nil
+}
+
+// Is t a builtin type or nested builtin type?
+func isBuiltinType(t reflect.Type) bool {
+	if t.PkgPath() != "" {
+		return false
+	}
+
+	switch k := t.Kind(); k {
+	case reflect.Array, reflect.Chan, reflect.Pointer, reflect.Slice, reflect.UnsafePointer:
+		return isBuiltinType(t.Elem())
+	case reflect.Map:
+		return isBuiltinType(t.Key()) && isBuiltinType(t.Elem())
+	case reflect.Struct:
+		for i := 0; i < t.NumField(); i++ {
+			if isBuiltinType(t.Field(i).Type) {
+				return true
+			}
+		}
+	default:
+		if k >= reflect.Invalid && k <= reflect.UnsafePointer {
+			return true
+		}
+	}
+	return false
+}
+
+// Does t have an exported (upper case) name?
+func isExportedType(t reflect.Type) bool {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	// PkgPath will be non-empty even for an exported type (e.g, unnamed type).
+	rune, _ := utf8.DecodeRuneInString(t.Name())
+	return t.PkgPath() != "" && unicode.IsUpper(rune)
 }
 
 // Does t satisfy the error interface?

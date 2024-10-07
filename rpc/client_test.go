@@ -44,10 +44,10 @@ func TestClientRequest(t *testing.T) {
 	defer client.Close()
 
 	var resp echoResult
-	if err := client.Call(&resp, "test_echo", "hello", 10, &echoArgs{"world"}); err != nil {
+	if err := client.Call(&resp, "test_echo", "hello", 10, &EchoArgs{"world"}); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(resp, echoResult{"hello", 10, &echoArgs{"world"}}) {
+	if !reflect.DeepEqual(resp, echoResult{"hello", 10, &EchoArgs{"world"}}) {
 		t.Errorf("incorrect result %#v", resp)
 	}
 }
@@ -58,12 +58,12 @@ func TestClientResponseType(t *testing.T) {
 	client := DialInProc(server)
 	defer client.Close()
 
-	if err := client.Call(nil, "test_echo", "hello", 10, &echoArgs{"world"}); err != nil {
+	if err := client.Call(nil, "test_echo", "hello", 10, &EchoArgs{"world"}); err != nil {
 		t.Errorf("Passing nil as result should be fine, but got an error: %v", err)
 	}
 	var resultVar echoResult
 	// Note: passing the var, not a ref
-	err := client.Call(resultVar, "test_echo", "hello", 10, &echoArgs{"world"})
+	err := client.Call(resultVar, "test_echo", "hello", 10, &EchoArgs{"world"})
 	if err == nil {
 		t.Error("Passing a var as result should be an error")
 	}
@@ -129,12 +129,12 @@ func TestClientBatchRequest(t *testing.T) {
 	batch := []BatchElem{
 		{
 			Method: "test_echo",
-			Args:   []interface{}{"hello", 10, &echoArgs{"world"}},
+			Args:   []interface{}{"hello", 10, &EchoArgs{"world"}},
 			Result: new(echoResult),
 		},
 		{
 			Method: "test_echo",
-			Args:   []interface{}{"hello2", 11, &echoArgs{"world"}},
+			Args:   []interface{}{"hello2", 11, &EchoArgs{"world"}},
 			Result: new(echoResult),
 		},
 		{
@@ -149,13 +149,13 @@ func TestClientBatchRequest(t *testing.T) {
 	wantResult := []BatchElem{
 		{
 			Method: "test_echo",
-			Args:   []interface{}{"hello", 10, &echoArgs{"world"}},
-			Result: &echoResult{"hello", 10, &echoArgs{"world"}},
+			Args:   []interface{}{"hello", 10, &EchoArgs{"world"}},
+			Result: &echoResult{"hello", 10, &EchoArgs{"world"}},
 		},
 		{
 			Method: "test_echo",
-			Args:   []interface{}{"hello2", 11, &echoArgs{"world"}},
-			Result: &echoResult{"hello2", 11, &echoArgs{"world"}},
+			Args:   []interface{}{"hello2", 11, &EchoArgs{"world"}},
+			Result: &echoResult{"hello2", 11, &EchoArgs{"world"}},
 		},
 		{
 			Method: "no_such_method",
@@ -290,7 +290,7 @@ func TestClientNotify(t *testing.T) {
 	client := DialInProc(server)
 	defer client.Close()
 
-	if err := client.Notify(context.Background(), "test_echo", "hello", 10, &echoArgs{"world"}); err != nil {
+	if err := client.Notify(context.Background(), "test_echo", "hello", 10, &EchoArgs{"world"}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -773,7 +773,7 @@ func TestClientHTTP(t *testing.T) {
 	var (
 		results    = make([]echoResult, 100)
 		errc       = make(chan error, len(results))
-		wantResult = echoResult{"a", 1, new(echoArgs)}
+		wantResult = echoResult{"a", 1, new(EchoArgs)}
 	)
 	for i := range results {
 		i := i
