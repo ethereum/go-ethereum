@@ -339,6 +339,9 @@ var (
 // NetworkNames are user friendly names to use in the chain spec banner.
 var NetworkNames = map[string]string{
 	MainnetChainConfig.ChainID.String(): "mainnet",
+	// SYSCOIN
+	SyscoinChainConfig.ChainID.String(): "syscoin",
+	TanenbaumChainConfig.ChainID.String(): "tanenbaum",
 	SepoliaChainConfig.ChainID.String(): "sepolia",
 	HoleskyChainConfig.ChainID.String(): "holesky",
 }
@@ -430,6 +433,9 @@ func (c *ChainConfig) Description() string {
 	}
 	banner += fmt.Sprintf("Chain ID:  %v (%s)\n", c.ChainID, network)
 	switch {
+	// SYSCOIN
+	case c.SyscoinBlock != nil:
+		banner += "Consensus: Beacon (proof-of-work), merged with Bitcoin (AuxPoW)\n"
 	case c.Ethash != nil:
 		if c.TerminalTotalDifficulty == nil {
 			banner += "Consensus: Ethash (proof-of-work)\n"

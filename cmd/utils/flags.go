@@ -140,8 +140,7 @@ var (
 	}
 	MainnetFlag = &cli.BoolFlag{
 		Name:     "mainnet",
-		// SYSCOIN
-		Usage:    "Syscoin mainnet",
+		Usage:    "Ethereum mainnet",
 		Category: flags.EthCategory,
 	}
 	// SYSCOIN
@@ -152,10 +151,12 @@ var (
 	TanenbaumFlag = &cli.BoolFlag{
 		Name:  "tanenbaum",
 		Usage: "Tanenbaum network: pre-configured NEVM-based Tanenbaum test network.",
+		Category: flags.EthCategory,
 	}
 	SyscoinFlag = &cli.BoolFlag{
 		Name:  "syscoin",
-		Usage: "Syscoin network: pre-configured NEVM-based Syscoin network.",
+		Usage: "Syscoin network: pre-configured NEVM-based Syscoin mainnet.",
+		Category: flags.EthCategory,
 	}
 	SepoliaFlag = &cli.BoolFlag{
 		Name:     "sepolia",
@@ -971,10 +972,12 @@ var (
 	// TestnetFlags is the flag group of all built-in supported testnets.
 	TestnetFlags = []cli.Flag{
 		SepoliaFlag,
+		// SYSCOIN
+		TanenbaumFlag,
 		HoleskyFlag,
 	}
-	// NetworkFlags is the flag group of all built-in supported networks.
-	NetworkFlags = append([]cli.Flag{MainnetFlag}, TestnetFlags...)
+	// SYSCOIN NetworkFlags is the flag group of all built-in supported networks.
+	NetworkFlags = append([]cli.Flag{MainnetFlag, SyscoinFlag}, TestnetFlags...)
 
 	// DatabaseFlags is the flag group of all database flags.
 	DatabaseFlags = []cli.Flag{
@@ -1670,8 +1673,8 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
-	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, HoleskyFlag)
+	// SYSCOIN Avoid conflicting network flags
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, SepoliaFlag, TanenbaumFlag, SyscoinFlag, HoleskyFlag)
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 
 	// Set configurations from CLI flags

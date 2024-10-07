@@ -243,7 +243,8 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		blsyncer := blsync.NewClient(ctx)
 		blsyncer.SetEngineRPC(rpc.DialInProc(srv))
 		stack.RegisterLifecycle(blsyncer)
-	} else {
+	// SYSCOIN
+	} else if eth.BlockChain().GetChainConfig().SyscoinBlock == nil {
 		// Launch the engine API for interacting with external consensus client.
 		err := catalyst.Register(stack, eth)
 		if err != nil {

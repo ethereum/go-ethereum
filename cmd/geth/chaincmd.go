@@ -419,6 +419,11 @@ func importHistory(ctx *cli.Context) error {
 			network = "mainnet"
 		case ctx.Bool(utils.SepoliaFlag.Name):
 			network = "sepolia"
+		// SYSCOIN
+		case ctx.Bool(utils.SyscoinFlag.Name):
+			network = "syscoin"
+		case ctx.Bool(utils.TanenbaumFlag.Name):
+			network = "tanenbaum"
 		}
 	} else {
 		// No network flag set, try to determine network based on files

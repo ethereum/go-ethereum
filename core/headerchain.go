@@ -38,6 +38,8 @@ const (
 	headerCacheLimit = 512
 	tdCacheLimit     = 1024
 	numberCacheLimit = 2048
+	// SYSCOIN
+	SYSBlockCacheLimit = 50001
 )
 
 // HeaderChain implements the basic block header chain logic. It is not usable
@@ -85,6 +87,10 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		headerCache:   lru.NewCache[common.Hash, *types.Header](headerCacheLimit),
 		tdCache:       lru.NewCache[common.Hash, *big.Int](tdCacheLimit),
 		numberCache:   lru.NewCache[common.Hash, uint64](numberCacheLimit),
+		// SYSCOIN
+		SYSHashCache:  lru.NewCache[uint64, []byte](SYSBlockCacheLimit),
+		DataHashCache: lru.NewCache[common.Hash, []byte](SYSBlockCacheLimit),
+		NEVMCache:     lru.NewCache[common.Hash, []byte](headerCacheLimit),
 		procInterrupt: procInterrupt,
 		engine:        engine,
 	}
@@ -728,6 +734,10 @@ func (hc *HeaderChain) setHead(headBlock uint64, headTime uint64, updateFn Updat
 	hc.headerCache.Purge()
 	hc.tdCache.Purge()
 	hc.numberCache.Purge()
+	// SYSCOIN
+	hc.SYSHashCache.Purge()
+	hc.NEVMCache.Purge()
+	hc.DataHashCache.Purge()
 }
 
 // SetGenesis sets a new genesis block header for the chain
