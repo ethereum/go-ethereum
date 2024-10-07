@@ -114,7 +114,6 @@ type Ethereum struct {
 	// SYSCOIN
 	wgNEVM            sync.WaitGroup
 	zmqRep            *ZMQRep
-	node		  	  *node.Node
 	timeLastBlock     int64
 }
 
@@ -291,7 +290,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// Successful startup; push a marker and check previous unclean shutdowns.
 	eth.shutdownTracker.MarkStartup()
 	// SYSCOIN
-	eth.node = stack
 	createBlock := func(eth *Ethereum) *types.Block {
 		eth.wgNEVM.Add(1)
 		defer eth.wgNEVM.Done()

@@ -1327,8 +1327,6 @@ func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 		log.Warn("Option --miner.etherbase is deprecated")
 	}
 	if !ctx.IsSet(MinerPendingFeeRecipientFlag.Name) {
-		// SYSCOIN
-		log.Warn("Option --miner.pending.feeRecipient is missing")
 		return
 	}
 	addr := ctx.String(MinerPendingFeeRecipientFlag.Name)

@@ -38,7 +38,7 @@ import (
 
 // Proof-of-stake protocol constants.
 var (
-	beaconDifficulty = common.Big1          // The default block difficulty in the beacon consensus
+	beaconDifficulty = common.Big0          // The default block difficulty in the beacon consensus
 	beaconNonce      = types.EncodeNonce(0) // The default block nonce in the beacon consensus
 	// SYSCOIN
 	SyscoinBlockReward, _ = new(big.Int).SetString("10550000000000000000", 10) // 10.55 Block reward for successfully mining a block upward from Syscoin
@@ -253,17 +253,28 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 			return consensus.ErrFutureBlock
 		}
 		if !chain.HasNEVMMapping(header.Hash()) {
-			return errors.New("Block not found in NEVM mapping")
+			return errors.New("block not found in NEVM mapping")
+		}
+		// Verify the block's difficulty to ensure it's the default constant
+		if !chain.Config().IsNexus(header.Number) {
+			if beaconDifficulty.Cmp(new(big.Int).SetInt64(1)) != 0 {
+				return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, new(big.Int).SetInt64(1))
+			}
+		} else {
+			if beaconDifficulty.Cmp(header.Difficulty) != 0 {
+				return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, beaconDifficulty)
+			}
+		}
+	} else {
+		if beaconDifficulty.Cmp(header.Difficulty) != 0 {
+			return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, beaconDifficulty)
 		}
 	}
 	// Verify the timestamp
 	if header.Time <= parent.Time {
 		return errInvalidTimestamp
 	}
-	// Verify the block's difficulty to ensure it's the default constant
-	if beaconDifficulty.Cmp(header.Difficulty) != 0 {
-		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, beaconDifficulty)
-	}
+
 	// Verify that the gas limit is <= 2^63-1
 	if header.GasLimit > params.MaxGasLimit {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
