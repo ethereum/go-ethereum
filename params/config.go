@@ -26,8 +26,9 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
+	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	// SYSCOIN
-	MainnetGenesisHash = common.HexToHash("0x2112327cad6deec6ada8bd7e5d33d263b57742a8495f3b641faa326b55b1c666")
+	SyscoinGenesisHash = common.HexToHash("0x2112327cad6deec6ada8bd7e5d33d263b57742a8495f3b641faa326b55b1c666")
 	TanenbaumGenesisHash = common.HexToHash("0x5fb22cd4425cea75d2ddaf5fbafb247bb682f407575c599d954b811214c3617c")
 	HoleskyGenesisHash = common.HexToHash("0xb5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4")
 	SepoliaGenesisHash = common.HexToHash("0x25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9")
@@ -36,15 +37,41 @@ var (
 func newUint64(val uint64) *uint64 { return &val }
 
 var (
+	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_750_000_000_000_000_000_000", 0)
 	// SYSCOIN
-	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("0", 0)
+	SyscoinTerminalTotalDifficulty, _ = new(big.Int).SetString("0", 0)
 
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
+		ChainID:                       big.NewInt(1),
+		HomesteadBlock:                big.NewInt(1_150_000),
+		DAOForkBlock:                  big.NewInt(1_920_000),
+		DAOForkSupport:                true,
+		EIP150Block:                   big.NewInt(2_463_000),
+		EIP155Block:                   big.NewInt(2_675_000),
+		EIP158Block:                   big.NewInt(2_675_000),
+		ByzantiumBlock:                big.NewInt(4_370_000),
+		ConstantinopleBlock:           big.NewInt(7_280_000),
+		PetersburgBlock:               big.NewInt(7_280_000),
+		IstanbulBlock:                 big.NewInt(9_069_000),
+		MuirGlacierBlock:              big.NewInt(9_200_000),
+		BerlinBlock:                   big.NewInt(12_244_000),
+		LondonBlock:                   big.NewInt(12_965_000),
+		ArrowGlacierBlock:             big.NewInt(13_773_000),
+		GrayGlacierBlock:              big.NewInt(15_050_000),
+		TerminalTotalDifficulty:       MainnetTerminalTotalDifficulty, // 58_750_000_000_000_000_000_000
+		TerminalTotalDifficultyPassed: true,
+		ShanghaiTime:                  newUint64(1681338455),
+		CancunTime:                    newUint64(1710338135),
+		DepositContractAddress:        common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa"),
+		Ethash:                        new(EthashConfig),
+	}
+	// SYSCOIN
+	SyscoinChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(57),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
+		DAOForkSupport:      false,
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -58,18 +85,17 @@ var (
 		RolluxBlock:         big.NewInt(268500),
 		NexusBlock:          big.NewInt(600000),
 		LondonBlock:         big.NewInt(1),
-		TerminalTotalDifficulty:       MainnetTerminalTotalDifficulty,
+		TerminalTotalDifficulty:       SyscoinTerminalTotalDifficulty,
 		TerminalTotalDifficultyPassed: true,
 		ShanghaiTime:                  newUint64(1679618404),
 		CancunTime:                    newUint64(1679618404),
-		Ethash:                        new(EthashConfig),
+		Ethash:                        nil,
 	}
-	// SYSCOIN SyscoinChainConfig is the chain parameters to run a node on the syscoin network.
 	TanenbaumChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(5700),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
+		DAOForkSupport:      false,
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
@@ -85,8 +111,7 @@ var (
 		NexusBlock:          big.NewInt(600000),
 		LondonBlock:         big.NewInt(1),
 		CancunTime:          newUint64(1675118284),
-		ArrowGlacierBlock:   nil,
-		Ethash:              new(EthashConfig),
+		Ethash:              nil,
 	}
 	// HoleskyChainConfig contains the chain parameters to run a node on the Holesky test network.
 	HoleskyChainConfig = &ChainConfig{

@@ -28,6 +28,9 @@ var MainnetBootnodes = []string{
 	"enode://4aeb4ab6c14b23e2c4cfdce879c04b0748a20d8e9b59e25ded2a08143e265c6c25936e74cbc8e641e3312ca288673d91f2f93f8e277de3cfa444ecdaaf982052@157.90.35.166:30303", // bootnode-hetzner-fsn
 }
 // SYSCOIN
+var SyscoinBootnodes = []string{
+	"enode://6f417e6740e559818cedd1ae31ea339657f4580c06491ab9c9a7be9dc9136e858e5bc9a3c2e8d6ea49567af5102afced9d8a99c04410244b0c0880911720439a@54.203.37.244:30303",
+}
 var TanenbaumBootnodes = []string{
 	"enode://f0e3e91d3d28b808734ce08b10855b5e6b6bde8eb9e4bedaf8aababc2ceaa8f4134cec309a996765f183361f1e67bce341326c05b743ed5932a8e705149364e4@44.238.217.166:30303",
 }
@@ -83,6 +86,8 @@ func KnownDNSNetwork(genesis common.Hash, protocol string) string {
 	switch genesis {
 	case MainnetGenesisHash:
 		net = "mainnet"
+	case SyscoinGenesisHash:
+		net = "syscoin"
 	case TanenbaumGenesisHash:
 		net = "tanenbaum"
 	case SepoliaGenesisHash:

@@ -291,6 +291,8 @@ func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
 	// SYSCOIN
+	case ctx.IsSet(utils.SyscoinFlag.Name):
+		log.Info("Starting Geth on Syscoin mainnet...")
 	case ctx.IsSet(utils.TanenbaumFlag.Name):
 		log.Info("Starting Geth on Tanenbaum testnet...")
 	case ctx.IsSet(utils.SepoliaFlag.Name):
@@ -327,6 +329,7 @@ func prepare(ctx *cli.Context) {
 		if !ctx.IsSet(utils.HoleskyFlag.Name) &&
 			!ctx.IsSet(utils.SepoliaFlag.Name) &&
 			// SYSCOIN
+			!ctx.IsSet(utils.SyscoinFlag.Name) &&
 			!ctx.IsSet(utils.TanenbaumFlag.Name) &&
 			!ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!

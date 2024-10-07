@@ -201,6 +201,8 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.Gene
 	case params.HoleskyGenesisHash:
 		genesis = DefaultHoleskyGenesisBlock()
 	// SYSCOIN
+	case params.SyscoinGenesisHash:
+		genesis = DefaultSyscoinGenesisBlock()
 	case params.TanenbaumGenesisHash:
 		genesis = DefaultTanenbaumGenesisBlock()
 	}
@@ -402,6 +404,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	case ghash == params.SepoliaGenesisHash:
 		return params.SepoliaChainConfig
 	// SYSCOIN
+	case ghash == params.SyscoinGenesisHash:
+		return params.SyscoinChainConfig
 	case ghash == params.TanenbaumGenesisHash:
 		return params.TanenbaumChainConfig
 	default:
@@ -543,7 +547,17 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetChainConfig,
-		// SYSCOIN
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   5000,
+		Difficulty: big.NewInt(17179869184),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
+}
+// SYSCOIN
+func DefaultSyscoinGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.SyscoinChainConfig,
 		Timestamp:  0x60d7aef6,
 		ExtraData:  hexutil.MustDecode("0x00"),
 		GasLimit:   0x7A1200,
@@ -551,7 +565,6 @@ func DefaultGenesisBlock() *Genesis {
 		Alloc:      decodePrealloc(syscoinAllocData),
 	}
 }
-// SYSCOIN
 func DefaultTanenbaumGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.TanenbaumChainConfig,

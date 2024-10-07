@@ -153,6 +153,10 @@ var (
 		Name:  "tanenbaum",
 		Usage: "Tanenbaum network: pre-configured NEVM-based Tanenbaum test network.",
 	}
+	SyscoinFlag = &cli.BoolFlag{
+		Name:  "syscoin",
+		Usage: "Syscoin network: pre-configured NEVM-based Syscoin network.",
+	}
 	SepoliaFlag = &cli.BoolFlag{
 		Name:     "sepolia",
 		Usage:    "Sepolia network: pre-configured proof-of-work test network",
@@ -992,6 +996,9 @@ func MakeDataDir(ctx *cli.Context) string {
 			return filepath.Join(path, "sepolia")
 		}
 		// SYSCOIN
+		if ctx.Bool(SyscoinFlag.Name) {
+			return filepath.Join(path, "syscoin")
+		}
 		if ctx.Bool(TanenbaumFlag.Name) {
 			return filepath.Join(path, "tanenbaum")
 		}
@@ -1057,6 +1064,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		case ctx.Bool(HoleskyFlag.Name):
 			urls = params.HoleskyBootnodes
 		// SYSCOIN
+		case ctx.Bool(SyscoinFlag.Name):
+			urls = params.SyscoinBootnodes
 		case ctx.Bool(TanenbaumFlag.Name):
 			urls = params.TanenbaumBootnodes
 		case ctx.Bool(SepoliaFlag.Name):
@@ -1487,6 +1496,8 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.Bool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	// SYSCOIN
+	case ctx.Bool(SyscoinFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "syscoin")
 	case ctx.Bool(TanenbaumFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "tanenbaum")
 	case ctx.Bool(SepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
@@ -1814,8 +1825,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
-			// SYSCOIN
-			cfg.NetworkId = 57
+			cfg.NetworkId = 1
 		}
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
@@ -1832,6 +1842,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
 	// SYSCOIN
+	case ctx.Bool(SyscoinFlag.Name):
+		if !ctx.IsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 57
+		}
+		cfg.Genesis = core.DefaultSyscoinGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.SyscoinGenesisHash)
 	case ctx.Bool(TanenbaumFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 5700
@@ -2157,6 +2173,9 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultHoleskyGenesisBlock()
 	case ctx.Bool(SepoliaFlag.Name):
 		genesis = core.DefaultSepoliaGenesisBlock()
+	// SYSCOIN
+	case ctx.Bool(SyscoinFlag.Name):
+		genesis = core.DefaultSyscoinGenesisBlock()
 	case ctx.Bool(TanenbaumFlag.Name):
 		genesis = core.DefaultTanenbaumGenesisBlock()
 	case ctx.Bool(DeveloperFlag.Name):
