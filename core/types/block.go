@@ -457,12 +457,26 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 	return rlpHash(uncles)
 }
 
+// CalcRequestsHash creates the block requestsHash value for a list of requests.
 func CalcRequestsHash(requests [][]byte) common.Hash {
+	// compute intermediate hashes
+	hashes := make([][32]byte, len(requests))
 	h := sha256.New()
-	for _, item := range requests {
+	for i, item := range requests {
+		h.Reset()
 		h.Write(item)
+		var sum [32]byte
+		h.Sum(sum[:0])
+		hashes[i] = sum
 	}
-	return common.Hash(h.Sum(nil))
+	// final hash
+	h.Reset()
+	for _, hash := range hashes {
+		h.Write(hash[:])
+	}
+	var result common.Hash
+	h.Sum(result[:0])
+	return result
 }
 
 // NewBlockWithHeader creates a block with the given header data. The
