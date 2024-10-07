@@ -132,7 +132,22 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 		return common.Hash{}
 	}
 }
-
+// SYSCOIN returns if there is an NEVM mapping from this blockhash for canonical SYS chain detection
+func ReadSYSHashFn(chain ChainContext) func(n uint64) []byte {
+	return func(n uint64) []byte {
+		return chain.ReadSYSHash(n)
+	}
+}
+func ReadDataHashFn(chain ChainContext) func(hash common.Hash) []byte {
+	return func(hash common.Hash) []byte {
+		return chain.ReadDataHash(hash)
+	}
+}
+func GetNEVMAddressFn(chain ChainContext) func(address common.Address) []byte {
+	return func(address common.Address) []byte {
+		return chain.GetNEVMAddress(address)
+	}
+}
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.
 // This does not take the necessary gas in to account to make the transfer valid.
 func CanTransfer(db vm.StateDB, addr common.Address, amount *uint256.Int) bool {
