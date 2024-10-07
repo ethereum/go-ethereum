@@ -257,7 +257,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		}
 		// Verify the block's difficulty to ensure it's the default constant
 		if !chain.Config().IsNexus(header.Number) {
-			if beaconDifficulty.Cmp(new(big.Int).SetInt64(1)) != 0 {
+			if beaconDifficulty.Cmp(big.NewInt(1)) != 0 {
 				return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, new(big.Int).SetInt64(1))
 			}
 		} else {
@@ -515,7 +515,7 @@ func (beacon *Beacon) IsPoSHeader(header *types.Header) bool {
 		panic("IsPoSHeader called with invalid difficulty")
 	}
 	// SYSCOIN
-	return header.Difficulty.Cmp(beaconDifficulty) <= 1
+	return header.Difficulty.Cmp(big.NewInt(1)) <= 0
 }
 
 // InnerEngine returns the embedded eth1 consensus engine.
