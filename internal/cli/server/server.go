@@ -364,8 +364,8 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 		timeouts := rpc.DefaultHTTPTimeouts
 
 		promServer := &http.Server{
-			Addr:    config.PrometheusAddr,
-			Handler: prometheusMux,
+			Addr:              config.PrometheusAddr,
+			Handler:           prometheusMux,
 			ReadTimeout:       timeouts.ReadTimeout,
 			ReadHeaderTimeout: timeouts.ReadHeaderTimeout,
 			WriteTimeout:      timeouts.WriteTimeout,
