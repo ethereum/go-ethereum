@@ -16,6 +16,7 @@
 package vm_test
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -106,6 +107,7 @@ type statefulPrecompileOutput struct {
 	BlockNumber, Difficulty *big.Int
 	BlockTime               uint64
 	Input                   []byte
+	IncomingCallType        vm.CallType
 }
 
 func (o statefulPrecompileOutput) String() string {
@@ -121,6 +123,8 @@ func (o statefulPrecompileOutput) String() string {
 			verb = "%#x"
 		case *libevm.AddressContext:
 			verb = "%+v"
+		case vm.CallType:
+			verb = "%d (%[2]q)"
 		}
 		lines = append(lines, fmt.Sprintf("%s: "+verb, name, fld))
 	}
@@ -149,14 +153,15 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		}
 
 		out := &statefulPrecompileOutput{
-			ChainID:     env.ChainConfig().ChainID,
-			Addresses:   env.Addresses(),
-			StateValue:  env.ReadOnlyState().GetState(precompile, slot),
-			ReadOnly:    env.ReadOnly(),
-			BlockNumber: env.BlockNumber(),
-			BlockTime:   env.BlockTime(),
-			Difficulty:  hdr.Difficulty,
-			Input:       input,
+			ChainID:          env.ChainConfig().ChainID,
+			Addresses:        env.Addresses(),
+			StateValue:       env.ReadOnlyState().GetState(precompile, slot),
+			ReadOnly:         env.ReadOnly(),
+			BlockNumber:      env.BlockNumber(),
+			BlockTime:        env.BlockTime(),
+			Difficulty:       hdr.Difficulty,
+			Input:            input,
+			IncomingCallType: env.IncomingCallType(),
 		}
 		return out.Bytes(), suppliedGas - gasCost, nil
 	}
@@ -199,6 +204,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 		// Note that this only covers evm.readOnly being true because of the
 		// precompile's call. See TestInheritReadOnly for alternate case.
 		wantReadOnly bool
+		wantCallType vm.CallType
 	}{
 		{
 			name: "EVM.Call()",
@@ -211,6 +217,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Self:   precompile,
 			},
 			wantReadOnly: false,
+			wantCallType: vm.Call,
 		},
 		{
 			name: "EVM.CallCode()",
@@ -223,6 +230,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Self:   caller,
 			},
 			wantReadOnly: false,
+			wantCallType: vm.CallCode,
 		},
 		{
 			name: "EVM.DelegateCall()",
@@ -235,6 +243,7 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Self:   caller,
 			},
 			wantReadOnly: false,
+			wantCallType: vm.DelegateCall,
 		},
 		{
 			name: "EVM.StaticCall()",
@@ -247,20 +256,22 @@ func TestNewStatefulPrecompile(t *testing.T) {
 				Self:   precompile,
 			},
 			wantReadOnly: true,
+			wantCallType: vm.StaticCall,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			wantOutput := statefulPrecompileOutput{
-				ChainID:     chainID,
-				Addresses:   tt.wantAddresses,
-				StateValue:  value,
-				ReadOnly:    tt.wantReadOnly,
-				BlockNumber: header.Number,
-				BlockTime:   header.Time,
-				Difficulty:  header.Difficulty,
-				Input:       input,
+				ChainID:          chainID,
+				Addresses:        tt.wantAddresses,
+				StateValue:       value,
+				ReadOnly:         tt.wantReadOnly,
+				BlockNumber:      header.Number,
+				BlockTime:        header.Time,
+				Difficulty:       header.Difficulty,
+				Input:            input,
+				IncomingCallType: tt.wantCallType,
 			}
 
 			wantGasLeft := gasLimit - gasCost
@@ -375,10 +386,12 @@ func makeReturnProxy(t *testing.T, dest common.Address, call vm.OpCode) []vm.OpC
 	t.Helper()
 	const p0 = vm.PUSH0
 	contract := []vm.OpCode{
-		vm.PUSH1, 1, // retSize (bytes)
-		p0, // retOffset
-		p0, // argSize
-		p0, // argOffset
+		vm.CALLDATASIZE, p0, p0, vm.CALLDATACOPY,
+
+		p0,              // retSize
+		p0,              // retOffset
+		vm.CALLDATASIZE, // argSize
+		p0,              // argOffset
 	}
 
 	// See CALL signature: https://www.evm.codes/#f1?fork=cancun
@@ -511,13 +524,21 @@ func TestPrecompileMakeCall(t *testing.T) {
 	dest := common.HexToAddress("DE57")
 
 	rng := ethtest.NewPseudoRand(142857)
-	callData := rng.Bytes(8)
+	precompileCallData := rng.Bytes(8)
+
+	// If the SUT precompile receives this as its calldata then it will use the
+	// vm.WithUNSAFECallerAddressProxying() option.
+	unsafeCallerProxyOptSentinel := []byte("override-caller sentinel")
 
 	hooks := &hookstest.Stub{
 		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
 			sut: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+				var opts []vm.CallOption
+				if bytes.Equal(input, unsafeCallerProxyOptSentinel) {
+					opts = append(opts, vm.WithUNSAFECallerAddressProxying())
+				}
 				// We are ultimately testing env.Call(), hence why this is the SUT.
-				return env.Call(dest, callData, suppliedGas, uint256.NewInt(0))
+				return env.Call(dest, precompileCallData, suppliedGas, uint256.NewInt(0), opts...)
 			}),
 			dest: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
 				out := &statefulPrecompileOutput{
@@ -538,6 +559,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 
 	tests := []struct {
 		incomingCallType vm.OpCode
+		eoaTxCallData    []byte
 		// Unlike TestNewStatefulPrecompile, which tests the AddressContext of
 		// the precompile itself, these test the AddressContext of a contract
 		// called by the precompile.
@@ -551,7 +573,19 @@ func TestPrecompileMakeCall(t *testing.T) {
 					Caller: sut,
 					Self:   dest,
 				},
-				Input: callData,
+				Input: precompileCallData,
+			},
+		},
+		{
+			incomingCallType: vm.CALL,
+			eoaTxCallData:    unsafeCallerProxyOptSentinel,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: caller, // overridden by CallOption
+					Self:   dest,
+				},
+				Input: precompileCallData,
 			},
 		},
 		{
@@ -562,7 +596,19 @@ func TestPrecompileMakeCall(t *testing.T) {
 					Caller: caller, // SUT runs as its own caller because of CALLCODE
 					Self:   dest,
 				},
-				Input: callData,
+				Input: precompileCallData,
+			},
+		},
+		{
+			incomingCallType: vm.CALLCODE,
+			eoaTxCallData:    unsafeCallerProxyOptSentinel,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: caller, // CallOption is a NOOP
+					Self:   dest,
+				},
+				Input: precompileCallData,
 			},
 		},
 		{
@@ -573,7 +619,19 @@ func TestPrecompileMakeCall(t *testing.T) {
 					Caller: caller, // as with CALLCODE
 					Self:   dest,
 				},
-				Input: callData,
+				Input: precompileCallData,
+			},
+		},
+		{
+			incomingCallType: vm.DELEGATECALL,
+			eoaTxCallData:    unsafeCallerProxyOptSentinel,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: caller, // CallOption is a NOOP
+					Self:   dest,
+				},
+				Input: precompileCallData,
 			},
 		},
 		{
@@ -584,7 +642,7 @@ func TestPrecompileMakeCall(t *testing.T) {
 					Caller: sut,
 					Self:   dest,
 				},
-				Input: callData,
+				Input: precompileCallData,
 				// This demonstrates that even though the precompile makes a
 				// (non-static) CALL, the read-only state is inherited. Yes,
 				// this is _another_ way to get a read-only state, different to
@@ -592,19 +650,56 @@ func TestPrecompileMakeCall(t *testing.T) {
 				ReadOnly: true,
 			},
 		},
+		{
+			incomingCallType: vm.STATICCALL,
+			eoaTxCallData:    unsafeCallerProxyOptSentinel,
+			want: statefulPrecompileOutput{
+				Addresses: &libevm.AddressContext{
+					Origin: eoa,
+					Caller: caller, // overridden by CallOption
+					Self:   dest,
+				},
+				Input:    precompileCallData,
+				ReadOnly: true,
+			},
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("via %s", tt.incomingCallType), func(t *testing.T) {
+		t.Run(tt.incomingCallType.String(), func(t *testing.T) {
+			t.Logf("calldata = %q", tt.eoaTxCallData)
 			state, evm := ethtest.NewZeroEVM(t)
 			evm.Origin = eoa
 			state.CreateAccount(caller)
 			proxy := makeReturnProxy(t, sut, tt.incomingCallType)
 			state.SetCode(caller, convertBytes[vm.OpCode, byte](proxy))
 
-			got, _, err := evm.Call(vm.AccountRef(eoa), caller, nil, 1e6, uint256.NewInt(0))
+			got, _, err := evm.Call(vm.AccountRef(eoa), caller, tt.eoaTxCallData, 1e6, uint256.NewInt(0))
 			require.NoError(t, err)
 			require.Equal(t, tt.want.String(), string(got))
 		})
 	}
+}
+
+//nolint:testableexamples // Including output would only make the example more complicated and hide the true intent
+func ExamplePrecompileEnvironment() {
+	// To determine the actual caller of a precompile, as against the effective
+	// caller (under EVM rules, as exposed by `Addresses().Caller`):
+	actualCaller := func(env vm.PrecompileEnvironment) common.Address {
+		if env.IncomingCallType() == vm.DelegateCall {
+			// DelegateCall acts as if it were its own caller.
+			return env.Addresses().Self
+		}
+		// CallCode could return either `Self` or `Caller` as it acts as its
+		// caller but doesn't inherit the caller's caller as DelegateCall does.
+		// Having it handled here is arbitrary from a behavioural perspective
+		// and is done only to simplify the code.
+		//
+		// Call and StaticCall don't affect self/caller semantics in any way.
+		return env.Addresses().Caller
+	}
+
+	// actualCaller would typically be a top-level function. It's only a
+	// variable to include it in this example function.
+	_ = actualCaller
 }

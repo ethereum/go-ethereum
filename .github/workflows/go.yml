@@ -18,6 +18,6 @@ jobs:
           go-version: 1.21.4
       - name: Run tests
         run: | # Upstream flakes are race conditions exacerbated by concurrent tests
-          FLAKY_REGEX='go-ethereum/(eth|eth/tracers/logger|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$';
+          FLAKY_REGEX='go-ethereum/(eth|eth/tracers/js|eth/tracers/logger|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$';
           go list ./... | grep -P "${FLAKY_REGEX}" | xargs -n 1 go test -short;
           go test -short $(go list ./... | grep -Pv "${FLAKY_REGEX}");
