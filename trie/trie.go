@@ -647,8 +647,8 @@ func (t *Trie) Commit(collectLeaf bool) (common.Hash, *trienode.NodeSet) {
 	for _, path := range t.tracer.deletedNodes() {
 		nodes.AddNode([]byte(path), trienode.NewDeleted())
 	}
-	// If the number of changes is below 400, we let one thread handle it
-	t.root = newCommitter(nodes, t.tracer, collectLeaf, t.uncommitted > 400).Commit(t.root)
+	// If the number of changes is below 100, we let one thread handle it
+	t.root = newCommitter(nodes, t.tracer, collectLeaf, t.uncommitted > 100).Commit(t.root)
 	t.uncommitted = 0
 	return rootHash, nodes
 }
