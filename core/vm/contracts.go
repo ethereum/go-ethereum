@@ -762,6 +762,10 @@ var (
 	errBLS12381InvalidFieldElementTopBytes = errors.New("invalid field element top bytes")
 	errBLS12381G1PointSubgroup             = errors.New("g1 point is not on correct subgroup")
 	errBLS12381G2PointSubgroup             = errors.New("g2 point is not on correct subgroup")
+	// SYSCOIN
+	errDataHashInvalidInputLength          = errors.New("invalid version hash length")
+	errNEVMAddressInvalidInputLength          = errors.New("invalid version hash length")
+	errReadSYSHashInvalidInputLength          = errors.New("invalid input number")
 )
 
 // bls12381G1Add implements EIP-2537 G1Add precompile.
