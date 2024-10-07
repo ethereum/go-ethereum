@@ -509,6 +509,13 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
+		// SYSCOIN
+		SYSBLOCKHASH: {
+			execute:     opSYSBlockhash,
+			constantGas: GasExtStep,
+			minStack:    minStack(1, 1),
+			maxStack:    maxStack(1, 1),
+		},
 		COINBASE: {
 			execute:     opCoinbase,
 			constantGas: GasQuickStep,

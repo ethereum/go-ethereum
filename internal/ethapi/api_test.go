@@ -627,6 +627,16 @@ func (b testBackend) BloomStatus() (uint64, uint64) { panic("implement me") }
 func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	panic("implement me")
 }
+// SYSCOIN
+func (b testBackend) ReadSYSHash(ctx context.Context, number rpc.BlockNumber) ([]byte, error) {
+	return []byte{}, nil
+}
+func (b testBackend) ReadDataHash(ctx context.Context, hash common.Hash) ([]byte, error) {
+	return []byte{}, nil
+}
+func (b testBackend) GetNEVMAddress(ctx context.Context, address common.Address) ([]byte, error) {
+	return []byte{}, nil
+}
 
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
@@ -3292,8 +3302,8 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 type precompileContract struct{}
 
 func (p *precompileContract) RequiredGas(input []byte) uint64 { return 0 }
-
-func (p *precompileContract) Run(input []byte) ([]byte, error) { return nil, nil }
+// SYSCOIN
+func (p *precompileContract) Run(input []byte, interpreter* vm.EVMInterpreter) ([]byte, error) { return nil, nil }
 
 func TestStateOverrideMovePrecompile(t *testing.T) {
 	db := state.NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)

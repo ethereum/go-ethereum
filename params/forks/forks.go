@@ -39,8 +39,4 @@ const (
 	Shanghai
 	Cancun
 	Prague
-	// SYSCOIN
-	Syscoin
-	Rollux
-	Nexus
 )

@@ -382,7 +382,7 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 // accumulateRewards credits the coinbase of the given block with the mining
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
-func accumulateRewards(config *params.ChainConfig, stateDB *state.StateDB, header *types.Header) {
+func accumulateRewards(stateDB *state.StateDB, header *types.Header) {
 	stateDB.AddBalance(header.Coinbase, uint256.MustFromBig(SyscoinBlockReward), tracing.BalanceIncreaseRewardMineBlock)
 }
 
@@ -401,7 +401,7 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 	}
 	// SYSCOIN Accumulate any block
 	if(chain.Config().IsSyscoin(header.Number)) {
-		accumulateRewards(chain.Config(), state, header)
+		accumulateRewards(state, header)
 	}
 }
 

@@ -104,6 +104,8 @@ const (
 	BASEFEE     OpCode = 0x48
 	BLOBHASH    OpCode = 0x49
 	BLOBBASEFEE OpCode = 0x4a
+	// SYSCOIN
+	SYSBLOCKHASH OpCode = 0x4f
 )
 
 // 0x50 range - 'storage' and execution.
@@ -316,6 +318,8 @@ var opCodeToString = [256]string{
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",
 	BASEFEE:     "BASEFEE",
+	// SYSCOIN
+	SYSBLOCKHASH: "SYSBLOCKHASH",
 	BLOBHASH:    "BLOBHASH",
 	BLOBBASEFEE: "BLOBBASEFEE",
 
@@ -498,6 +502,8 @@ var stringToOp = map[string]OpCode{
 	"CHAINID":         CHAINID,
 	"BASEFEE":         BASEFEE,
 	"BLOBHASH":        BLOBHASH,
+	// SYSCOIN
+	"SYSBLOCKHASH":    SYSBLOCKHASH,
 	"BLOBBASEFEE":     BLOBBASEFEE,
 	"DELEGATECALL":    DELEGATECALL,
 	"STATICCALL":      STATICCALL,

@@ -230,7 +230,7 @@ func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 
 func applyShanghaiChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	// SYSCOIN
-	if !chainConfig.IsSyscoin(big.NewInt(int64(env.Number))) || !chainConfig.IsShanghai(big.NewInt(int64(env.Number)), env.Timestamp) {
+	if chainConfig.IsSyscoin(big.NewInt(int64(env.Number))) || !chainConfig.IsShanghai(big.NewInt(int64(env.Number)), env.Timestamp) {
 		return nil
 	}
 	if env.Withdrawals == nil {

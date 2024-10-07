@@ -405,3 +405,13 @@ func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 }
 
 func (b *backendMock) Engine() consensus.Engine { return nil }
+// SYSCOIN
+func (b *backendMock) ReadSYSHash(ctx context.Context, number rpc.BlockNumber) ([]byte, error) {
+	return []byte{}, nil
+}
+func (b *backendMock) ReadDataHash(ctx context.Context, hash common.Hash) ([]byte, error) {
+	return []byte{}, nil
+}
+func (b *backendMock) GetNEVMAddress(ctx context.Context, address common.Address) ([]byte, error) {
+	return []byte{}, nil
+}

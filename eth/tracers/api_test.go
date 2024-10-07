@@ -185,6 +185,16 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 	}
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
 }
+// SYSCOIN
+func (b *testBackend) ReadSYSHash(ctx context.Context, number rpc.BlockNumber) ([]byte, error) {
+	return []byte{}, nil
+}
+func (b *testBackend) ReadDataHash(ctx context.Context, hash common.Hash) ([]byte, error) {
+	return []byte{}, nil
+}
+func (b *testBackend) GetNEVMAddress(ctx context.Context, address common.Address) ([]byte, error) {
+	return []byte{}, nil
+}
 
 func TestTraceCall(t *testing.T) {
 	t.Parallel()

@@ -809,10 +809,6 @@ func (c *ChainConfig) ElasticityMultiplier() uint64 {
 func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	// Assume last non-time-based fork has passed.
 	london := c.LondonBlock
-	// SYSCOIN
-	if c.NexusBlock != nil {
-		london = c.NexusBlock
-	}
 	switch {
 	case c.IsPrague(london, time):
 		return forks.Prague

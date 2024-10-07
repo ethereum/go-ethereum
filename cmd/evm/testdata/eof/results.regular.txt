@@ -189,7 +189,7 @@ ERR: undefined instruction: op opcode 0x4b not defined, pos 0
 ERR: undefined instruction: op opcode 0x4c not defined, pos 0
 ERR: undefined instruction: op opcode 0x4d not defined, pos 0
 ERR: undefined instruction: op opcode 0x4e not defined, pos 0
-ERR: undefined instruction: op opcode 0x4f not defined, pos 0
+ERR: stack underflow (0 <=> 1): at pos 0
 OK
 ERR: undefined instruction: op opcode 0xa5 not defined, pos 0
 ERR: undefined instruction: op opcode 0xa6 not defined, pos 0

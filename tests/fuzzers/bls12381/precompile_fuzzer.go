@@ -82,7 +82,8 @@ func fuzz(id byte, data []byte) int {
 	}
 	cpy := make([]byte, len(data))
 	copy(cpy, data)
-	_, err := precompile.Run(cpy)
+	// SYSCOIN
+	_, err := precompile.Run(cpy, nil)
 	if !bytes.Equal(cpy, data) {
 		panic(fmt.Sprintf("input data modified, precompile %d: %x %x", id, data, cpy))
 	}

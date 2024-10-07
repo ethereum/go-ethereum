@@ -51,6 +51,10 @@ type Config struct {
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
+	// SYSCOIN
+	ReadSYSHashFn func(n uint64) []byte
+	ReadDataHashFn func(hash common.Hash) []byte
+	GetNEVMAddressFn func(address common.Address) []byte
 }
 
 // sets defaults on the config
@@ -76,9 +80,9 @@ func setDefaults(cfg *Config) {
 			BerlinBlock:                   new(big.Int),
 			LondonBlock:                   new(big.Int),
 			// SYSCOIN
-			SyscoinBlock: new(big.Int),
-			RolluxBlock:  new(big.Int),
-			NexusBlock:   new(big.Int),
+			SyscoinBlock: nil,
+			RolluxBlock:  nil,
+			NexusBlock:   nil,
 			ArrowGlacierBlock:             nil,
 			GrayGlacierBlock:              nil,
 			TerminalTotalDifficulty:       big.NewInt(0),
