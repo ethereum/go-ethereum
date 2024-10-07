@@ -1130,6 +1130,10 @@ func (o *BlockOverrides) MakeHeader(header *types.Header) *types.Header {
 // ChainContextBackend provides methods required to implement ChainContext.
 type ChainContextBackend interface {
 	Engine() consensus.Engine
+	// SYSCOIN
+	ReadSYSHash(ctx context.Context, number rpc.BlockNumber) ([]byte, error)
+	ReadDataHash(ctx context.Context, hash common.Hash) ([]byte, error)
+	GetNEVMAddress(ctx context.Context, address common.Address) ([]byte, error)
 	HeaderByNumber(context.Context, rpc.BlockNumber) (*types.Header, error)
 }
 
