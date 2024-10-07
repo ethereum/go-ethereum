@@ -80,7 +80,8 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 			}
 			available.Sub(available, call.Value)
 		}
-		if opts.Config.IsCancun(opts.Header.Number, opts.Header.Time) && len(call.BlobHashes) > 0 {
+		// SYSCOIN
+		if !opts.Config.IsSyscoin(opts.Header.Number) && opts.Config.IsCancun(opts.Header.Number, opts.Header.Time) && len(call.BlobHashes) > 0 {
 			blobGasPerBlob := new(big.Int).SetInt64(params.BlobTxBlobGasPerBlob)
 			blobBalanceUsage := new(big.Int).SetInt64(int64(len(call.BlobHashes)))
 			blobBalanceUsage.Mul(blobBalanceUsage, blobGasPerBlob)

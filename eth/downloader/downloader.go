@@ -379,7 +379,15 @@ func (d *Downloader) synchronise(mode SyncMode, beaconPing chan struct{}) error 
 func (d *Downloader) getMode() SyncMode {
 	return SyncMode(d.mode.Load())
 }
-
+// SYSCOIN
+func (s *Downloader) Peers() *peerSet { return s.peers }
+func (d *Downloader) DoneEvent() {
+	latest := d.blockchain.CurrentHeader()
+	d.mux.Post(DoneEvent{latest})
+}
+func (d *Downloader) StartNetworkEvent() {
+	d.mux.Post(StartNetworkEvent{})
+}
 // syncToHead starts a block synchronization based on the hash chain from
 // the specified head hash.
 func (d *Downloader) syncToHead() (err error) {

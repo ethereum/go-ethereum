@@ -499,6 +499,29 @@ func opPop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	scope.Stack.pop()
 	return nil, nil
 }
+// SYSCOIN
+func opSYSBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	num := scope.Stack.peek()
+	num64, overflow := num.Uint64WithOverflow()
+	if overflow {
+		num.Clear()
+		return nil, nil
+	}
+	var upper, lower uint64
+	upper = interpreter.evm.Context.BlockNumber.Uint64()
+	if upper < 50001 {
+		lower = 0
+	} else {
+		lower = upper - 50000
+	}
+	if num64 >= lower && num64 < upper {
+		num.SetBytes(interpreter.evm.Context.ReadSYSHash(num64))
+	} else {
+		num.Clear()
+	}
+	scope.Stack.pop()
+	return nil, nil
+}
 
 func opMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v := scope.Stack.peek()

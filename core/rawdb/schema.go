@@ -112,6 +112,12 @@ var (
 	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
 	skeletonHeaderPrefix  = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
 
+	// SYSCOIN
+	nevmToSysPrefix        = []byte("x") // nevmToSysPrefix + nevm block hash -> nevmBlock
+	blockNumToSysKeyPrefix = []byte("z") // blockNumToSysKeyPrefix + block number -> SYS block hash
+	dataHashesKeyPrefix    = []byte("y") // dataHashesKeyPrefix + block number -> versioned hashes
+	dataHashKeyPrefix      = []byte("w") // dataHashKeyPrefix + versioned hash -> versioned hash
+
 	// Path-based storage scheme of merkle patricia trie.
 	TrieNodeAccountPrefix = []byte("A") // TrieNodeAccountPrefix + hexPath -> trie node
 	TrieNodeStoragePrefix = []byte("O") // TrieNodeStoragePrefix + accountHash + hexPath -> trie node

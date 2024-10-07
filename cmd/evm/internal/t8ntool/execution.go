@@ -379,7 +379,8 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(&excessBlobGas)
 		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
 	}
-	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
+	// SYSCOIN
+	if !chainConfig.IsSyscoin(vmContext.BlockNumber) && chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
 		// Parse the requests from the logs
 		var allLogs []*types.Log
 		for _, receipt := range receipts {

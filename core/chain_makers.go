@@ -341,13 +341,17 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
+		// SYSCOIN
+		if config.NexusBlock != nil && config.NexusBlock.Cmp(b.header.Number) == 0 {
+			misc.ApplyNexusHardFork(statedb)
+		}
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)
 		}
 
 		var requests types.Requests
-		if config.IsPrague(b.header.Number, b.header.Time) {
+		if !config.IsSyscoin(b.header.Number) && config.IsPrague(b.header.Number, b.header.Time) {
 			for _, r := range b.receipts {
 				d, err := ParseDepositLogs(r.Logs, config)
 				if err != nil {
@@ -554,7 +558,8 @@ func (cm *chainMaker) makeHeader(parent *types.Block, state *state.StateDB, engi
 			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
 	}
-	if cm.config.IsCancun(header.Number, header.Time) {
+	// SYSCOIN
+	if !cm.config.IsSyscoin(header.Number) && cm.config.IsCancun(header.Number, header.Time) {
 		var (
 			parentExcessBlobGas uint64
 			parentBlobGasUsed   uint64
@@ -689,4 +694,15 @@ func (cm *chainMaker) GetBlock(hash common.Hash, number uint64) *types.Block {
 
 func (cm *chainMaker) GetTd(hash common.Hash, number uint64) *big.Int {
 	return nil // not supported
+}
+// SYSCOIN
+func (cm *chainMaker) HasNEVMMapping(hash common.Hash) bool           { return false }
+func (cm *chainMaker) ReadSYSHash(uint64) []byte {
+	return []byte{}
+}
+func (cm *chainMaker) ReadDataHash(common.Hash) []byte {
+	return []byte{}
+}
+func (cm *chainMaker) GetNEVMAddress(common.Address) []byte {
+	return []byte{}
 }

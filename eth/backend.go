@@ -23,6 +23,9 @@ import (
 	"math/big"
 	"runtime"
 	"sync"
+	// SYSCOIN
+	"errors"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -56,12 +59,24 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	// SYSCOIN
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // Config contains the configuration options of the ETH protocol.
 // Deprecated: use ethconfig.Config instead.
 type Config = ethconfig.Config
+// SYSCOIN
+type NEVMCreateBlockFn func(*Ethereum) *types.Block
+type NEVMAddBlockFn func(*types.NEVMBlockConnect, *Ethereum) error
+type NEVMDeleteBlockFn func(*types.NEVMBlockDisconnect, *Ethereum) error
 
+type NEVMIndex struct {
+	// Callbacks
+	CreateBlock NEVMCreateBlockFn // Mines a block locally
+	AddBlock    NEVMAddBlockFn    // Connects a new NEVM block
+	DeleteBlock NEVMDeleteBlockFn // Disconnects NEVM tip
+}
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	// core protocol objects
@@ -96,6 +111,11 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
 	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
+	// SYSCOIN
+	wgNEVM            sync.WaitGroup
+	zmqRep            *ZMQRep
+	node		  	  *node.Node
+	timeLastBlock     int64
 }
 
 // New creates a new Ethereum object (including the initialisation of the common Ethereum object),
@@ -270,7 +290,167 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Successful startup; push a marker and check previous unclean shutdowns.
 	eth.shutdownTracker.MarkStartup()
+	// SYSCOIN
+	eth.node = stack
+	createBlock := func(eth *Ethereum) *types.Block {
+		eth.wgNEVM.Add(1)
+		defer eth.wgNEVM.Done()
+		return eth.miner.GenerateWorkSyscoin(eth.blockchain.CurrentBlock().Hash(), eth.config.Miner.PendingFeeRecipient, crypto.Keccak256Hash([]byte{byte(123)}))
+	}
+	addBlock := func(nevmBlockConnect *types.NEVMBlockConnect, eth *Ethereum) error {
+		if nevmBlockConnect == nil {
+			return errors.New("addBlock: Empty block")
+		}
+		proposedBlockNumber := nevmBlockConnect.Block.NumberU64()
+		proposedBlockHash := nevmBlockConnect.Block.Hash()
+		proposedBlockParentHash := nevmBlockConnect.Block.ParentHash()
+		currentHash := common.Hash{}
+		currentNumber := uint64(0)
+		if nevmBlockConnect.Block == nil {
+			return errors.New("addBlock: empty block")
+		}
+		// because we set canonical head only after sync we can check for continuity via saved block connects
+		if eth.blockchain.NevmBlockConnect != nil {
+			currentBlock := eth.blockchain.NevmBlockConnect.Block
+			if currentBlock == nil {
+				return errors.New("addBlock: Current block is nil")
+			}
+			currentNumber = currentBlock.NumberU64()
+			currentHash = currentBlock.Hash()
+		} else {
+			currentBlock := eth.blockchain.CurrentBlock()
+			if currentBlock == nil {
+				return errors.New("addBlock: Current block is nil")
+			}
+			currentNumber = currentBlock.Number.Uint64()
+			currentHash = currentBlock.Hash()
+		}
+		if (proposedBlockNumber != (currentNumber + 1)) || (proposedBlockParentHash != currentHash) {
+			log.Error("Non contiguous block insert", "number", proposedBlockNumber, "hash", proposedBlockHash,
+				"parent", proposedBlockParentHash, "prevnumber", currentNumber, "prevhash", currentHash)
+			return errors.New("addBlock: Non contiguous block insert")
+		}
+		eth.blockchain.NevmBlockConnect = nevmBlockConnect
+		// special case where miner process includes validating block in pre-packaging stage on SYS node
+		// the validation of this hash is done in ConnectNEVMCommitment() in Syscoin using fJustCheck
+		sysBlockHash := common.BytesToHash([]byte(nevmBlockConnect.Sysblockhash))
+		if sysBlockHash == (common.Hash{}) {
+			err := eth.engine.VerifyHeader(eth.blockchain, nevmBlockConnect.Block.Header())
+			return err
+		}
+		if _, err := eth.blockchain.InsertBlockWithoutSetHead(nevmBlockConnect.Block, false); err != nil {
+			return err
+		}
 
+		if !eth.handler.inited {
+			eth.lock.Lock()
+			eth.timeLastBlock = time.Now().Unix()
+			eth.lock.Unlock()
+			if (nevmBlockConnect.Block.NumberU64() % 100) == 0 {
+				if _, err := eth.blockchain.SetCanonical(nevmBlockConnect.Block); err != nil {
+					return err
+				}
+			}
+		} else {
+			if _, err := eth.blockchain.SetCanonical(nevmBlockConnect.Block); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	// start networking sync once we start inserting chain meaning we are likely finished with IBD
+	go func(eth *Ethereum) {
+		sub := eth.eventMux.Subscribe(downloader.StartNetworkEvent{})
+		defer sub.Unsubscribe()
+		for {
+			event := <-sub.Chan()
+			if event == nil {
+				continue
+			}
+			switch event.Data.(type) {
+			case downloader.StartNetworkEvent:
+				eth.lock.Lock()
+				eth.timeLastBlock = time.Now().Unix()
+				eth.lock.Unlock()
+				log.Info("Attempt to start networking/peering...")
+				for {
+					time.Sleep(100 * time.Millisecond)
+					eth.lock.Lock()
+					if eth.handler.inited && eth.handler.peers.closed {
+						log.Info("Networking stopped, return without starting peering...")
+						eth.lock.Unlock()
+						return
+					}
+					// ensure 5 seconds has passed between blocks before we start peering so we are sure sync has finished
+					if time.Now().Unix()-eth.timeLastBlock >= 5 {
+						log.Info("Networking and peering start...")
+						eth.handler.Start(eth.handler.maxPeers)
+						eth.handler.peers.open()
+						eth.Downloader().Peers().Open()
+						eth.p2pServer.Start()
+						eth.Downloader().DoneEvent()
+						eth.handler.synced.Store(true)
+						eth.lock.Unlock()
+						return
+					}
+					eth.lock.Unlock()
+				}
+			}
+		}
+	}(eth)
+
+	deleteBlock := func(nevmBlockDisconnect *types.NEVMBlockDisconnect, eth *Ethereum) error {
+		current := eth.blockchain.CurrentBlock()
+		if current == nil {
+			return errors.New("deleteBlock: Current block is nil")
+		}
+		currentNumber := current.Number.Uint64()
+		if current.Number.Uint64() == 0 {
+			log.Warn("Trying to disconnect block 0")
+			return nil
+		}
+		parent := eth.blockchain.GetBlock(current.ParentHash, currentNumber-1)
+		if parent == nil {
+			return errors.New("deleteBlock: NEVM tip parent block not found")
+		}
+		err := eth.blockchain.WriteKnownBlock(parent)
+		if err != nil {
+			return err
+		}
+		if eth.blockchain.CurrentBlock().Number.Uint64() != (currentNumber - 1) {
+			return errors.New("deleteBlock: Block number post-write does not match")
+		}
+		batch := eth.ChainDb().NewBatch()
+		// Update the NEVM address mappings based on the block's diff
+		hasDiff := nevmBlockDisconnect.HasDiff()
+		if hasDiff {
+			// Retrieve the current NEVM address mappings from the database
+			mapping := eth.blockchain.ReadNEVMAddressMapping()
+			for _, entry := range nevmBlockDisconnect.Diff.AddedMNNEVM {
+				mapping.AddNEVMAddress(common.BytesToAddress(entry.Address), entry.CollateralHeight)
+			}
+			for _, entry := range nevmBlockDisconnect.Diff.UpdatedMNNEVM {
+				mapping.UpdateNEVMAddress(common.BytesToAddress(entry.OldAddress), common.BytesToAddress(entry.NewAddress))
+			}
+			for _, entry := range nevmBlockDisconnect.Diff.RemovedMNNEVM {
+				mapping.RemoveNEVMAddress(common.BytesToAddress(entry.Address))
+			}
+		
+			// Persist the updated NEVM address mappings to the database
+			eth.blockchain.WriteNEVMAddressMapping(batch, mapping)
+		}
+
+		eth.blockchain.DeleteNEVMMapping(batch, current.Hash())
+		eth.blockchain.DeleteSYSHash(batch, currentNumber)
+		eth.blockchain.DeleteDataHashes(batch, currentNumber)
+		if err := batch.Write(); err != nil {
+			log.Crit("Failed to delete NEVM index data", "err", err)
+		}
+		return nil
+	}
+	if eth.blockchain.GetChainConfig().SyscoinBlock != nil {
+		eth.zmqRep = NewZMQRep(stack, eth, config.NEVMPubEP, NEVMIndex{createBlock, addBlock, deleteBlock})
+	}
 	return eth, nil
 }
 
@@ -360,8 +540,18 @@ func (s *Ethereum) Start() error {
 	// Regularly update shutdown marker
 	s.shutdownTracker.Start()
 
-	// Start the networking layer
-	s.handler.Start(s.p2pServer.MaxPeers)
+	// SYSCOIN
+	if s.blockchain.GetChainConfig().SyscoinBlock != nil {
+		log.Info("Skip networking and peering...")
+		s.handler.maxPeers = s.p2pServer.MaxPeers
+		s.handler.peers.close()
+		s.p2pServer.Stop()
+	} else {
+		// Start the networking layer
+		s.handler.Start(s.p2pServer.MaxPeers)
+	}
+
+
 	return nil
 }
 
@@ -416,7 +606,11 @@ func (s *Ethereum) Stop() error {
 
 	s.chainDb.Close()
 	s.eventMux.Stop()
-
+	// SYSCOIN
+	s.wgNEVM.Wait()
+	if s.zmqRep != nil {
+		s.zmqRep.Close()
+	}
 	return nil
 }
 

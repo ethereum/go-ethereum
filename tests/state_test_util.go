@@ -290,7 +290,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		context.Random = &rnd
 		context.Difficulty = big.NewInt(0)
 	}
-	if config.IsCancun(new(big.Int), block.Time()) && t.json.Env.ExcessBlobGas != nil {
+	// SYSCOIN
+	if !config.IsSyscoin(new(big.Int)) && config.IsCancun(new(big.Int), block.Time()) && t.json.Env.ExcessBlobGas != nil {
 		context.BlobBaseFee = eip4844.CalcBlobFee(*t.json.Env.ExcessBlobGas)
 	}
 	evm := vm.NewEVM(context, txContext, st.StateDB, config, vmconfig)

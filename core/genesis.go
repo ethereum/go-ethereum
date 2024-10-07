@@ -200,6 +200,9 @@ func getGenesisState(db ethdb.Database, blockhash common.Hash) (alloc types.Gene
 		genesis = DefaultSepoliaGenesisBlock()
 	case params.HoleskyGenesisHash:
 		genesis = DefaultHoleskyGenesisBlock()
+	// SYSCOIN
+	case params.TanenbaumGenesisHash:
+		genesis = DefaultTanenbaumGenesisBlock()
 	}
 	if genesis != nil {
 		return genesis.Alloc, nil
@@ -398,6 +401,9 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.HoleskyChainConfig
 	case ghash == params.SepoliaGenesisHash:
 		return params.SepoliaChainConfig
+	// SYSCOIN
+	case ghash == params.TanenbaumGenesisHash:
+		return params.TanenbaumChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -453,11 +459,13 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 	)
 	if conf := g.Config; conf != nil {
 		num := big.NewInt(int64(g.Number))
-		if conf.IsShanghai(num, g.Timestamp) {
+		// SYSCOIN
+		if !conf.IsSyscoin(num) && conf.IsShanghai(num, g.Timestamp) {
 			head.WithdrawalsHash = &types.EmptyWithdrawalsHash
 			withdrawals = make([]*types.Withdrawal, 0)
 		}
-		if conf.IsCancun(num, g.Timestamp) {
+		// SYSCOIN
+		if !conf.IsSyscoin(num) && conf.IsCancun(num, g.Timestamp) {
 			// EIP-4788: The parentBeaconBlockRoot of the genesis block is always
 			// the zero hash. This is because the genesis block does not have a parent
 			// by definition.
@@ -472,7 +480,8 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 				head.BlobGasUsed = new(uint64)
 			}
 		}
-		if conf.IsPrague(num, g.Timestamp) {
+		// SYSCOIN
+		if !conf.IsSyscoin(num) && conf.IsPrague(num, g.Timestamp) {
 			head.RequestsHash = &types.EmptyRequestsHash
 			requests = make(types.Requests, 0)
 		}
@@ -534,14 +543,25 @@ func (g *Genesis) MustCommit(db ethdb.Database, triedb *triedb.Database) *types.
 func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetChainConfig,
-		Nonce:      66,
-		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   5000,
-		Difficulty: big.NewInt(17179869184),
-		Alloc:      decodePrealloc(mainnetAllocData),
+		// SYSCOIN
+		Timestamp:  0x60d7aef6,
+		ExtraData:  hexutil.MustDecode("0x00"),
+		GasLimit:   0x7A1200,
+		Difficulty: big.NewInt(1),
+		Alloc:      decodePrealloc(syscoinAllocData),
 	}
 }
-
+// SYSCOIN
+func DefaultTanenbaumGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.TanenbaumChainConfig,
+		Timestamp:  0x60d6aef5,
+		ExtraData:  hexutil.MustDecode("0x00"),
+		GasLimit:   0x7A1200,
+		Difficulty: big.NewInt(1),
+		Alloc:      decodePrealloc(syscoinAllocData),
+	}
+}
 // DefaultSepoliaGenesisBlock returns the Sepolia network genesis block.
 func DefaultSepoliaGenesisBlock() *Genesis {
 	return &Genesis{

@@ -385,7 +385,8 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	if config.IsLondon(header.Number) {
 		header.BaseFee = eip1559.CalcBaseFee(config, parent.Header())
 	}
-	if config.IsShanghai(header.Number, header.Time) {
+	// SYSCOIN
+	if !config.IsSyscoin(header.Number) && config.IsShanghai(header.Number, header.Time) {
 		header.WithdrawalsHash = &types.EmptyWithdrawalsHash
 	}
 	var receipts []*types.Receipt
@@ -406,7 +407,8 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		nBlobs += len(tx.BlobHashes())
 	}
 	header.Root = common.BytesToHash(hasher.Sum(nil))
-	if config.IsCancun(header.Number, header.Time) {
+	// SYSCOIN
+	if !config.IsSyscoin(header.Number) && config.IsCancun(header.Number, header.Time) {
 		var pExcess, pUsed = uint64(0), uint64(0)
 		if parent.ExcessBlobGas() != nil {
 			pExcess = *parent.ExcessBlobGas()

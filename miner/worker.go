@@ -90,6 +90,20 @@ type generateParams struct {
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
 }
+// SYSCOIN generates a sealing block based on the given parameters.
+func (miner *Miner) GenerateWorkSyscoin(parentHash common.Hash, coinbase common.Address, random common.Hash) *types.Block {
+	result := miner.generateWork(&generateParams{
+		timestamp:   uint64(time.Now().Unix()),
+		forceTime:   true,
+		parentHash:  parentHash,
+		coinbase:    coinbase,
+		random:      random,
+		withdrawals: nil,
+		beaconRoot:  nil,
+		noTxs:       false,
+	}, false)
+	return result.block
+}
 
 // generateWork generates a sealing block based on the given parameters.
 func (miner *Miner) generateWork(params *generateParams, witness bool) *newPayloadResult {
@@ -115,8 +129,8 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 	for _, r := range work.receipts {
 		allLogs = append(allLogs, r.Logs...)
 	}
-	// Read requests if Prague is enabled.
-	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
+	// SYSCOIN Read requests if Prague is enabled.
+	if !miner.chainConfig.IsSyscoin(work.header.Number) && miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
 		requests, err := core.ParseDepositLogs(allLogs, miner.chainConfig)
 		if err != nil {
 			return &newPayloadResult{err: err}
@@ -192,8 +206,8 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		log.Error("Failed to prepare header for sealing", "err", err)
 		return nil, err
 	}
-	// Apply EIP-4844, EIP-4788.
-	if miner.chainConfig.IsCancun(header.Number, header.Time) {
+	// SYSCOIN Apply EIP-4844, EIP-4788.
+	if !miner.chainConfig.IsSyscoin(header.Number) && miner.chainConfig.IsCancun(header.Number, header.Time) {
 		var excessBlobGas uint64
 		if miner.chainConfig.IsCancun(parent.Number, parent.Time) {
 			excessBlobGas = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)

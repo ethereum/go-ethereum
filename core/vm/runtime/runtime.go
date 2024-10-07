@@ -75,6 +75,10 @@ func setDefaults(cfg *Config) {
 			MuirGlacierBlock:              new(big.Int),
 			BerlinBlock:                   new(big.Int),
 			LondonBlock:                   new(big.Int),
+			// SYSCOIN
+			SyscoinBlock: new(big.Int),
+			RolluxBlock:  new(big.Int),
+			NexusBlock:   new(big.Int),
 			ArrowGlacierBlock:             nil,
 			GrayGlacierBlock:              nil,
 			TerminalTotalDifficulty:       big.NewInt(0),

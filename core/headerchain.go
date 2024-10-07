@@ -67,7 +67,11 @@ type HeaderChain struct {
 	headerCache *lru.Cache[common.Hash, *types.Header]
 	tdCache     *lru.Cache[common.Hash, *big.Int] // most recent total difficulties
 	numberCache *lru.Cache[common.Hash, uint64]   // most recent block numbers
-
+	// SYSCOIN
+	NEVMCache     *lru.Cache[common.Hash, []byte] // Cache for NEVM blocks existing
+	SYSHashCache  *lru.Cache[uint64, []byte] // Cache for SYS hash
+	DataHashCache *lru.Cache[common.Hash, []byte] // Cache for Data availability
+	NEVMAddressCache *rawdb.NEVMAddressMapping
 	procInterrupt func() bool
 	engine        consensus.Engine
 }
@@ -495,6 +499,97 @@ func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 
 func (hc *HeaderChain) GetCanonicalHash(number uint64) common.Hash {
 	return rawdb.ReadCanonicalHash(hc.chainDb, number)
+}
+
+
+func (hc *HeaderChain) WriteNEVMAddressMapping(db ethdb.KeyValueWriter, mapping *rawdb.NEVMAddressMapping) {
+	rawdb.WriteNEVMAddressMapping(db, mapping)
+	hc.NEVMAddressCache = mapping
+}
+
+// ReadNEVMAddressMapping retrieves the NEVM address mapping from the database
+func (hc *HeaderChain) ReadNEVMAddressMapping() *rawdb.NEVMAddressMapping {
+	if hc.NEVMAddressCache != nil {
+		return hc.NEVMAddressCache
+	}
+	// sanity in case it doesn't exist in cache
+	addressMapping := rawdb.ReadNEVMAddressMapping(hc.chainDb)
+	if len(addressMapping.AddressMappings) == 0 {
+		return nil
+	}
+	hc.NEVMAddressCache = addressMapping
+	return addressMapping
+}
+
+func (hc *HeaderChain) GetNEVMAddress(address common.Address) []byte {
+	mapping := hc.ReadNEVMAddressMapping()
+	return mapping.GetNEVMAddress(address)	
+}
+
+func (hc *HeaderChain) ReadSYSHash(n uint64) []byte {
+	// Should exist in cache because we store in LRU upon creating block and delete upon disconnecting we should only store latest 50k blocks (limits to querying in opcode)
+	if sysBlockhash, ok := hc.SYSHashCache.Get(n); ok {
+		return sysBlockhash
+	}
+	// sanity in case it doesn't exist in LRU cache
+	sysBlockhash := rawdb.ReadSYSHash(hc.chainDb, n)
+	if len(sysBlockhash) == 0 {
+		return []byte{}
+	}
+	hc.SYSHashCache.Add(n, sysBlockhash)
+	return sysBlockhash
+}
+func (hc *HeaderChain) ReadDataHash(hash common.Hash) []byte {
+	// Should exist in cache because we store in LRU upon creating block and delete upon disconnecting we should only store latest 50k blocks (limits to querying in opcode)
+	if hc.DataHashCache.Contains(hash) {
+		return hash.Bytes()
+	}
+	// sanity in case it doesn't exist in LRU cache
+	dataHash := rawdb.ReadDataHash(hc.chainDb, hash)
+	if len(dataHash) == 0 {
+		return []byte{}
+	}
+	hc.DataHashCache.Add(hash, []byte{0})
+	return hash.Bytes()
+}
+
+func (hc *HeaderChain) WriteSYSHash(db ethdb.KeyValueWriter, sysBlockhash string, n uint64) {
+	rawdb.WriteSYSHash(db, sysBlockhash, n)
+	hc.SYSHashCache.Add(n, []byte(sysBlockhash))
+}
+func (hc *HeaderChain) WriteDataHashes(db ethdb.KeyValueWriter, n uint64, dataHashes []*common.Hash) {
+	rawdb.WriteDataHashes(db, hc.chainDb, n, dataHashes)
+	for _, dataHash := range dataHashes {
+		hc.DataHashCache.Add(*dataHash, []byte{0})
+	}
+}
+func (hc *HeaderChain) DeleteDataHashes(db ethdb.KeyValueWriter, n uint64) {
+	dataHashes := rawdb.DeleteDataHashes(db, hc.chainDb, n)
+	for _, dataHash := range dataHashes {
+		hc.DataHashCache.Remove(*dataHash)
+	}
+}
+func (hc *HeaderChain) DeleteSYSHash(db ethdb.KeyValueWriter, n uint64) {
+	rawdb.DeleteSYSHash(db, n)
+	hc.SYSHashCache.Remove(n)
+}
+func (hc *HeaderChain) HasNEVMMapping(hash common.Hash) bool {
+	if hc.NEVMCache.Contains(hash) {
+		return true
+	}
+	hasMapping := rawdb.HasNEVMMapping(hc.chainDb, hash)
+	if hasMapping {
+		hc.NEVMCache.Add(hash, []byte{0})
+	}
+	return hasMapping
+}
+func (hc *HeaderChain) DeleteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
+	rawdb.DeleteNEVMMapping(db, hash)
+	hc.NEVMCache.Remove(hash)
+}
+func (hc *HeaderChain) WriteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
+	rawdb.WriteNEVMMapping(db, hash)
+	hc.NEVMCache.Add(hash, []byte{0})
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The

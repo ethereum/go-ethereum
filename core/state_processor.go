@@ -98,7 +98,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Read requests if Prague is enabled.
 	var requests types.Requests
-	if p.config.IsPrague(block.Number(), block.Time()) {
+	// SYSCOIN
+	if !p.config.IsSyscoin(block.Number()) && p.config.IsPrague(block.Number(), block.Time()) {
 		requests, err = ParseDepositLogs(allLogs, p.config)
 		if err != nil {
 			return nil, err

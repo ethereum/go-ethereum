@@ -66,6 +66,10 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
+		// SYSCOIN
+		ReadSYSHash:  ReadSYSHashFn(chain),
+		ReadDataHash: ReadDataHashFn(chain),
+		GetNEVMAddress: GetNEVMAddressFn(chain),
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        header.Time,

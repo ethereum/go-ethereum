@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/triedb"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
@@ -444,4 +445,49 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // block processing has started while false means it has stopped.
 func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscription {
 	return bc.scope.Track(bc.blockProcFeed.Subscribe(ch))
+}
+
+// SYSCOIN
+func (bc *BlockChain) ReadSYSHash(n uint64) []byte {
+	return bc.hc.ReadSYSHash(n)
+}
+func (bc *BlockChain) GetNEVMAddress(address common.Address) []byte {
+	return bc.hc.GetNEVMAddress(address)
+}
+func (bc *BlockChain) WriteNEVMAddressMapping(db ethdb.KeyValueWriter, mapping *rawdb.NEVMAddressMapping) {
+	bc.hc.WriteNEVMAddressMapping(db, mapping)
+}
+func (bc *BlockChain) ReadNEVMAddressMapping() *rawdb.NEVMAddressMapping {
+	return bc.hc.ReadNEVMAddressMapping()
+}
+func (bc *BlockChain) ReadDataHash(hash common.Hash) []byte {
+	return bc.hc.ReadDataHash(hash)
+}
+func (bc *BlockChain) WriteSYSHash(db ethdb.KeyValueWriter, sysBlockhash string, n uint64) {
+	bc.hc.WriteSYSHash(db, sysBlockhash, n)
+}
+func (bc *BlockChain) WriteDataHashes(db ethdb.KeyValueWriter, n uint64, dataHashes []*common.Hash) {
+	bc.hc.WriteDataHashes(db, n, dataHashes)
+}
+func (bc *BlockChain) DeleteDataHashes(db ethdb.KeyValueWriter, n uint64) {
+	bc.hc.DeleteDataHashes(db, n)
+}
+func (bc *BlockChain) DeleteSYSHash(db ethdb.KeyValueWriter, n uint64) {
+	bc.hc.DeleteSYSHash(db, n)
+}
+
+// HasNEVMMapping checks if a NEVM block is present in the database or not, caching
+// it if present.
+func (bc *BlockChain) HasNEVMMapping(hash common.Hash) bool {
+	if(bc.NevmBlockConnect != nil) {
+		return (bc.NevmBlockConnect.Block.Hash() == hash)
+	}
+	return bc.hc.HasNEVMMapping(hash)
+}
+func (bc *BlockChain) DeleteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
+	bc.hc.DeleteNEVMMapping(db, hash)
+}
+
+func (bc *BlockChain) WriteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
+	bc.hc.WriteNEVMMapping(db, hash)
 }

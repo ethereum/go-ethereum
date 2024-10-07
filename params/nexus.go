@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,33 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package forks
+package params
 
-// Fork is a numerical identifier of specific network upgrades (forks).
-type Fork int
-
-const (
-	Frontier = iota
-	FrontierThawing
-	Homestead
-	DAO
-	TangerineWhistle
-	SpuriousDragon
-	Byzantium
-	Constantinople
-	Petersburg
-	Istanbul
-	MuirGlacier
-	Berlin
-	London
-	ArrowGlacier
-	GrayGlacier
-	Paris
-	Shanghai
-	Cancun
-	Prague
-	// SYSCOIN
-	Syscoin
-	Rollux
-	Nexus
+import (
+	"github.com/ethereum/go-ethereum/common"
 )
+var VaultManager = common.HexToAddress("0xA738a563F9ecb55e0b2245D1e9E380f0fE455ea1")
+var VaultManagerOld = common.HexToAddress("0xA738a563F9ecb55e0b2245D1e9E380f0fE455ea1")

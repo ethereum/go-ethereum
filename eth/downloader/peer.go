@@ -39,6 +39,8 @@ const (
 var (
 	errAlreadyRegistered = errors.New("peer is already registered")
 	errNotRegistered     = errors.New("peer is not registered")
+	// SYSCOIN
+	errPeerSetClosed     = errors.New("peerset closed")
 )
 
 // peerConnection represents an active peer from which hashes and blocks are retrieved.
@@ -173,6 +175,8 @@ type peerSet struct {
 	events event.Feed        // Feed to publish peer lifecycle events on
 
 	lock sync.RWMutex
+	// SYSCOIN
+	closed bool
 }
 
 // newPeerSet creates a new peer set top track the active download sources.
@@ -223,7 +227,19 @@ func (ps *peerSet) Register(p *peerConnection) error {
 	ps.events.Send(&peeringEvent{peer: p, join: true})
 	return nil
 }
+// SYSCOIN
+func (ps *peerSet) Close() {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
 
+	ps.closed = true
+}
+func (ps *peerSet) Open() {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	ps.closed = false
+}
 // Unregister removes a remote peer from the active set, disabling any further
 // actions to/from that particular entity.
 func (ps *peerSet) Unregister(id string) error {

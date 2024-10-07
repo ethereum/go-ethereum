@@ -52,8 +52,9 @@ type Config struct {
 
 // DefaultConfig contains default settings for miner.
 var DefaultConfig = Config{
-	GasCeil:  30_000_000,
-	GasPrice: big.NewInt(params.GWei / 1000),
+	// SYSCOIN
+	GasCeil:  8_000_000,
+	GasPrice: big.NewInt(100 * params.Wei),
 
 	// The default recommit time is chosen as two seconds since
 	// consensus-layer usually will wait a half slot of time(6s)
@@ -144,7 +145,8 @@ func (miner *Miner) getPending() *newPayloadResult {
 		timestamp  = uint64(time.Now().Unix())
 		withdrawal types.Withdrawals
 	)
-	if miner.chainConfig.IsShanghai(new(big.Int).Add(header.Number, big.NewInt(1)), timestamp) {
+	// SYSCOIN
+	if !miner.chainConfig.IsSyscoin(new(big.Int).Add(header.Number, big.NewInt(1))) && miner.chainConfig.IsShanghai(new(big.Int).Add(header.Number, big.NewInt(1)), timestamp) {
 		withdrawal = []*types.Withdrawal{}
 	}
 	ret := miner.generateWork(&generateParams{

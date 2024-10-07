@@ -61,6 +61,16 @@ func TestDefaults(t *testing.T) {
 	if cfg.GetHashFn == nil {
 		t.Error("expected time to be non nil")
 	}
+	// SYSCOIN
+	if cfg.ReadSYSHashFn == nil {
+		t.Error("expected time to be non nil")
+	}
+	if cfg.ReadDataHashFn == nil {
+		t.Error("expected time to be non nil")
+	}
+	if cfg.GetNEVMAddressFn == nil {
+		t.Error("expected time to be non nil")
+	}
 	if cfg.BlockNumber == nil {
 		t.Error("expected block number to be non nil")
 	}
@@ -80,6 +90,8 @@ func TestEVM(t *testing.T) {
 		byte(vm.PUSH1),
 		byte(vm.ORIGIN),
 		byte(vm.BLOCKHASH),
+		// SYSCOIN
+		byte(vm.SYSBLOCKHASH),
 		byte(vm.COINBASE),
 	}, nil, nil)
 }
@@ -312,6 +324,17 @@ func (d *dummyChain) GetHeader(h common.Hash, n uint64) *types.Header {
 	return fakeHeader(n, parentHash)
 }
 
+// SYSCOIN
+func (d *dummyChain) ReadSYSHash(uint64) []byte {
+	return []byte{}
+}
+func (d *dummyChain) ReadDataHash(common.Hash) []byte {
+	return []byte{}
+}
+func (d *dummyChain) GetNEVMAddress(common.Address) []byte {
+	return []byte{}
+}
+
 // TestBlockhash tests the blockhash operation. It's a bit special, since it internally
 // requires access to a chain reader.
 func TestBlockhash(t *testing.T) {
@@ -362,6 +385,10 @@ func TestBlockhash(t *testing.T) {
 	ret, _, err := Execute(data, input, &Config{
 		GetHashFn:   core.GetHashFn(header, chain),
 		BlockNumber: new(big.Int).Set(header.Number),
+		// SYSCOIN
+		ReadSYSHashFn: core.ReadSYSHashFn(chain),
+		ReadDataHashFn: core.ReadDataHashFn(chain),
+		GetNEVMAddressFn: core.GetNEVMAddressFn(chain),
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

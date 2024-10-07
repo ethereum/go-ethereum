@@ -32,7 +32,10 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
+const (
+	// SYSCOIN
+	DataBlockLimit = 50001
+)
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
 	var data []byte
@@ -785,6 +788,132 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	return nil
 }
 
+// SYSCOIN
+// WriteNEVMAddressMapping stores the NEVM address mapping into the database
+func WriteNEVMAddressMapping(db ethdb.KeyValueWriter, mapping *NEVMAddressMapping) {
+	data, err := rlp.EncodeToBytes(mapping.AddressMappings)
+	if err != nil {
+		log.Crit("Failed to RLP encode NEVM address mappings", "err", err)
+	}
+	if err := db.Put(nevmAddressKey(), data); err != nil {
+		log.Crit("Failed to store NEVM address mappings", "err", err)
+	}
+}
+
+// ReadNEVMAddressMapping retrieves the NEVM address mapping from the database
+func ReadNEVMAddressMapping(db ethdb.Reader) *NEVMAddressMapping {
+	data, err := db.Get(nevmAddressKey())
+	if err != nil || len(data) == 0 {
+		return NewNEVMAddressMapping()
+	}
+	var mappings map[common.Address]uint32
+	if err := rlp.DecodeBytes(data, &mappings); err != nil {
+		log.Crit("Failed to decode NEVM address mappings", "err", err)
+	}
+	return &NEVMAddressMapping{AddressMappings: mappings}
+}
+
+
+func WriteSYSHash(db ethdb.KeyValueWriter, sysBlockhash string, n uint64) {
+	if err := db.Put(blockNumToSysKey(n), []byte(sysBlockhash)); err != nil {
+		log.Crit("Failed to store blockNumToSysKey", "err", err)
+	}
+}
+func DeleteSYSHash(db ethdb.KeyValueWriter, n uint64) {
+	if err := db.Delete(blockNumToSysKey(n)); err != nil {
+		log.Crit("Failed to delete blockNumToSysKey", "err", err)
+	}
+}
+func ReadDataHashesRLP(db ethdb.Reader, number uint64) rlp.RawValue {
+	var data []byte
+	data, _ = db.Get(dataHashesKey(number))
+	return data
+}
+
+// ReadRawDataHashes retrieves all the data hashes belonging to a block.
+func ReadRawDataHashes(db ethdb.Reader, number uint64) []*common.Hash {
+	// Retrieve the flattened datahash slice
+	data := ReadDataHashesRLP(db, number)
+	if len(data) == 0 {
+		return nil
+	}
+	dataHashes := []*common.Hash{}
+	if err := rlp.DecodeBytes(data, &dataHashes); err != nil {
+		log.Error("Invalid datahash array RLP", "number", number, "err", err)
+		return nil
+	}
+	return dataHashes
+}
+
+func WriteDataHashes(dbw ethdb.KeyValueWriter, dbr ethdb.Reader, n uint64, dataHashes []*common.Hash) {
+	// prune older data hashes after a safe amount of blocks
+	if n > DataBlockLimit {
+		DeleteDataHashes(dbw, dbr, n-DataBlockLimit)
+	}
+	if len(dataHashes) == 0 {
+		return
+	}
+	bytes, err := rlp.EncodeToBytes(dataHashes)
+	if err != nil {
+		log.Crit("Failed to encode block dataHashes", "err", err)
+	}
+	// Store the flattened datahash slice
+	if err := dbw.Put(dataHashesKey(n), bytes); err != nil {
+		log.Crit("Failed to store block dataHashes", "err", err)
+	}
+	for _, dataHash := range dataHashes {
+		if err := dbw.Put(dataHashKey(*dataHash), []byte{0}); err != nil {
+			log.Crit("Failed to write dataHash", "err", err)
+		}
+	}
+}
+func DeleteDataHashes(dbw ethdb.KeyValueWriter, dbr ethdb.Reader, n uint64) []*common.Hash {
+	dataHashes := ReadRawDataHashes(dbr, n)
+	if dataHashes == nil || len(dataHashes) == 0 {
+		return nil
+	}
+	for _, dataHash := range dataHashes {
+		if err := dbw.Delete(dataHashKey(*dataHash)); err != nil {
+			log.Crit("Failed to delete dataHashKey", "err", err)
+		}
+	}
+	if err := dbw.Delete(dataHashesKey(n)); err != nil {
+		log.Crit("Failed to delete dataHashesKey", "err", err)
+	}
+	return dataHashes
+}
+func ReadSYSHash(db ethdb.Reader, n uint64) []byte {
+	data, err := db.Get(blockNumToSysKey(n))
+	if data == nil || err != nil {
+		return []byte{}
+	}
+	return data
+}
+func ReadDataHash(db ethdb.Reader, hash common.Hash) []byte {
+	data, err := db.Get(dataHashKey(hash))
+	if data == nil || err != nil {
+		return []byte{}
+	}
+	return hash.Bytes()
+}
+
+// SYSCOIN HasNEVMMapping verifies the existence of a NEVM block corresponding to the hash.
+func HasNEVMMapping(db ethdb.Reader, hash common.Hash) bool {
+	if has, err := db.Has(nevmToSysKey(hash)); !has || err != nil {
+		return false
+	}
+	return true
+}
+func WriteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Put(nevmToSysKey(hash), []byte{0}); err != nil {
+		log.Crit("Failed to store nevmToSysKey", "err", err)
+	}
+}
+func DeleteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
+	if err := db.Delete(nevmToSysKey(hash)); err != nil {
+		log.Crit("Failed to delete nevmToSysKey", "err", err)
+	}
+}
 // DeleteBlock removes all block data associated with a hash.
 func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)

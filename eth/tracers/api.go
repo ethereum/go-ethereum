@@ -88,6 +88,10 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, readOnly bool, preferDisk bool) (*state.StateDB, StateReleaseFunc, error)
 	StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (*types.Transaction, vm.BlockContext, *state.StateDB, StateReleaseFunc, error)
+	// SYSCOIN
+	ReadSYSHash(ctx context.Context, number rpc.BlockNumber) ([]byte, error)
+	ReadDataHash(ctx context.Context, hash common.Hash) ([]byte, error)
+	GetNEVMAddress(ctx context.Context, address common.Address) ([]byte, error)
 }
 
 // API is the collection of tracing APIs exposed over the private debugging endpoint.
@@ -105,7 +109,28 @@ func NewAPI(backend Backend) *API {
 func (api *API) chainContext(ctx context.Context) core.ChainContext {
 	return ethapi.NewChainContext(ctx, api.backend)
 }
-
+// SYSCOIN
+func (api *API) ReadSYSHash(ctx context.Context, number rpc.BlockNumber) ([]byte, error) {
+	sysBlockHash, err := api.backend.ReadSYSHash(ctx, number)
+	if err != nil {
+		return nil, err
+	}
+	return sysBlockHash, nil
+}
+func (api *API) ReadDataHash(ctx context.Context, hash common.Hash) ([]byte, error) {
+	dataHash, err := api.backend.ReadDataHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	return dataHash, nil
+}
+func (api *API) GetNEVMAddress(ctx context.Context, address common.Address) ([]byte, error) {
+	collateralHeight, err := api.backend.GetNEVMAddress(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	return collateralHeight, nil
+}
 // blockByNumber is the wrapper of the chain access function offered by the backend.
 // It will return an error if the block is not found.
 func (api *API) blockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {

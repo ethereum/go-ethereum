@@ -63,6 +63,16 @@ func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.handler.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
 }
+// SYSCOIN
+func (b *EthAPIBackend) ReadSYSHash(ctx context.Context, number rpc.BlockNumber) ([]byte, error) {
+	return b.eth.blockchain.ReadSYSHash(uint64(number)), nil
+}
+func (b *EthAPIBackend) ReadDataHash(ctx context.Context, hash common.Hash) ([]byte, error) {
+	return b.eth.blockchain.ReadDataHash(hash), nil
+}
+func (b *EthAPIBackend) GetNEVMAddress(ctx context.Context, address common.Address) ([]byte, error) {
+	return b.eth.blockchain.GetNEVMAddress(address), nil
+}
 
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	// Pending block is only known by the miner

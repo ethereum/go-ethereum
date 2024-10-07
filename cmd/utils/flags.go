@@ -140,8 +140,18 @@ var (
 	}
 	MainnetFlag = &cli.BoolFlag{
 		Name:     "mainnet",
-		Usage:    "Ethereum mainnet",
+		// SYSCOIN
+		Usage:    "Syscoin mainnet",
 		Category: flags.EthCategory,
+	}
+	// SYSCOIN
+	NEVMPubFlag = &cli.StringFlag{
+		Name:  "nevmpub",
+		Usage: "NEVM ZMQ REP Endpoint",
+	}
+	TanenbaumFlag = &cli.BoolFlag{
+		Name:  "tanenbaum",
+		Usage: "Tanenbaum network: pre-configured NEVM-based Tanenbaum test network.",
 	}
 	SepoliaFlag = &cli.BoolFlag{
 		Name:     "sepolia",
@@ -981,6 +991,10 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.Bool(SepoliaFlag.Name) {
 			return filepath.Join(path, "sepolia")
 		}
+		// SYSCOIN
+		if ctx.Bool(TanenbaumFlag.Name) {
+			return filepath.Join(path, "tanenbaum")
+		}
 		if ctx.Bool(HoleskyFlag.Name) {
 			return filepath.Join(path, "holesky")
 		}
@@ -1042,6 +1056,9 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		switch {
 		case ctx.Bool(HoleskyFlag.Name):
 			urls = params.HoleskyBootnodes
+		// SYSCOIN
+		case ctx.Bool(TanenbaumFlag.Name):
+			urls = params.TanenbaumBootnodes
 		case ctx.Bool(SepoliaFlag.Name):
 			urls = params.SepoliaBootnodes
 		}
@@ -1306,9 +1323,12 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 // setEtherbase retrieves the etherbase from the directly specified command line flags.
 func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.IsSet(MinerEtherbaseFlag.Name) {
-		log.Warn("Option --miner.etherbase is deprecated as the etherbase is set by the consensus client post-merge")
+		// SYSCOIN
+		log.Warn("Option --miner.etherbase is deprecated")
 	}
 	if !ctx.IsSet(MinerPendingFeeRecipientFlag.Name) {
+		// SYSCOIN
+		log.Warn("Option --miner.pending.feeRecipient is missing")
 		return
 	}
 	addr := ctx.String(MinerPendingFeeRecipientFlag.Name)
@@ -1468,6 +1488,9 @@ func SetDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = ctx.String(DataDirFlag.Name)
 	case ctx.Bool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
+	// SYSCOIN
+	case ctx.Bool(TanenbaumFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "tanenbaum")
 	case ctx.Bool(SepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
 	case ctx.Bool(HoleskyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
@@ -1670,7 +1693,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
 	godebug.SetGCPercent(int(gogc))
-
+	// SYSCOIN
+	if ctx.IsSet(NEVMPubFlag.Name) {
+		cfg.NEVMPubEP = ctx.String(NEVMPubFlag.Name)
+	}
 	if ctx.IsSet(SyncTargetFlag.Name) {
 		cfg.SyncMode = downloader.FullSync // dev sync target forces full sync
 	} else if ctx.IsSet(SyncModeFlag.Name) {
@@ -1790,7 +1816,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 1
+			// SYSCOIN
+			cfg.NetworkId = 57
 		}
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
@@ -1806,6 +1833,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
+	// SYSCOIN
+	case ctx.Bool(TanenbaumFlag.Name):
+		if !ctx.IsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 5700
+		}
+		cfg.Genesis = core.DefaultTanenbaumGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, params.TanenbaumGenesisHash)
 	case ctx.Bool(DeveloperFlag.Name):
 		if !ctx.IsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -2125,6 +2159,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultHoleskyGenesisBlock()
 	case ctx.Bool(SepoliaFlag.Name):
 		genesis = core.DefaultSepoliaGenesisBlock()
+	case ctx.Bool(TanenbaumFlag.Name):
+		genesis = core.DefaultTanenbaumGenesisBlock()
 	case ctx.Bool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}

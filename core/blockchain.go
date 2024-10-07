@@ -258,6 +258,8 @@ type BlockChain struct {
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
 	vmConfig   vm.Config
+	// SYSCOIN
+	NevmBlockConnect *types.NEVMBlockConnect
 	logger     *tracing.Hooks
 }
 
@@ -1433,9 +1435,9 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (e
 	return nil
 }
 
-// writeKnownBlock updates the head block flag with a known block
+// SYSCOIN WriteKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
-func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
+func (bc *BlockChain) WriteKnownBlock(block *types.Block) error {
 	current := bc.CurrentBlock()
 	if block.ParentHash() != current.Hash() {
 		if err := bc.reorg(current, block); err != nil {
@@ -1466,6 +1468,32 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteBlock(blockBatch, block)
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
 	rawdb.WritePreimages(blockBatch, statedb.Preimages())
+	// SYSCOIN
+	nevmBlockConnect := bc.NevmBlockConnect
+	if nevmBlockConnect != nil {
+		// Update the NEVM address mappings based on the block's diff
+		hasDiff := nevmBlockConnect.HasDiff()
+		if hasDiff {
+			// Retrieve the current NEVM address mappings from the database
+			mapping := bc.ReadNEVMAddressMapping()
+			for _, entry := range nevmBlockConnect.Diff.AddedMNNEVM {
+				mapping.AddNEVMAddress(common.BytesToAddress(entry.Address), entry.CollateralHeight)
+			}
+			for _, entry := range nevmBlockConnect.Diff.UpdatedMNNEVM {
+				mapping.UpdateNEVMAddress(common.BytesToAddress(entry.OldAddress), common.BytesToAddress(entry.NewAddress))
+			}
+			for _, entry := range nevmBlockConnect.Diff.RemovedMNNEVM {
+				mapping.RemoveNEVMAddress(common.BytesToAddress(entry.Address))
+			}
+		
+			// Persist the updated NEVM address mappings to the database
+			bc.WriteNEVMAddressMapping(blockBatch, mapping)
+		}
+		proposedBlockNumber := nevmBlockConnect.Block.NumberU64()
+		bc.WriteNEVMMapping(blockBatch, nevmBlockConnect.Block.Hash())
+		bc.WriteDataHashes(blockBatch, proposedBlockNumber, nevmBlockConnect.VersionHashes)
+		bc.WriteSYSHash(blockBatch, nevmBlockConnect.Sysblockhash, proposedBlockNumber)
+	}
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
 	}
@@ -1669,7 +1697,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		// head full block(new pivot point).
 		for block != nil && bc.skipBlock(err, it) {
 			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
-			if err := bc.writeKnownBlock(block); err != nil {
+			// SYSCOIN
+			if err := bc.WriteKnownBlock(block); err != nil {
 				return nil, it.index, err
 			}
 			lastCanon = block
@@ -1749,7 +1778,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 				log.Error("Please file an issue, skip known block execution without receipt",
 					"hash", block.Hash(), "number", block.NumberU64())
 			}
-			if err := bc.writeKnownBlock(block); err != nil {
+			// SYSCOIN
+			if err := bc.WriteKnownBlock(block); err != nil {
 				return nil, it.index, err
 			}
 			stats.processed++
@@ -2536,4 +2566,8 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 // GetTrieFlushInterval gets the in-memory tries flushAlloc interval
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
+}
+// SYSCOIN
+func (bc *BlockChain) GetChainConfig() *params.ChainConfig {
+	return bc.chainConfig
 }

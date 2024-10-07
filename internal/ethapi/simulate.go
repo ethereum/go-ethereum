@@ -156,7 +156,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			}
 		}
 	}
-	if sim.chainConfig.IsCancun(header.Number, header.Time) {
+	// SYSCOIN
+	if !sim.chainConfig.IsSyscoin(header.Number) && sim.chainConfig.IsCancun(header.Number, header.Time) {
 		var excess uint64
 		if sim.chainConfig.IsCancun(parent.Number, parent.Time) {
 			excess = eip4844.CalcExcessBlobGas(*parent.ExcessBlobGas, *parent.BlobGasUsed)
@@ -239,11 +240,13 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	header.Root = sim.state.IntermediateRoot(true)
 	header.GasUsed = gasUsed
-	if sim.chainConfig.IsCancun(header.Number, header.Time) {
+	// SYSCOIN
+	if !sim.chainConfig.IsSyscoin(header.Number) && sim.chainConfig.IsCancun(header.Number, header.Time) {
 		header.BlobGasUsed = &blobGasUsed
 	}
 	var withdrawals types.Withdrawals
-	if sim.chainConfig.IsShanghai(header.Number, header.Time) {
+	// SYSCOIN
+	if !sim.chainConfig.IsSyscoin(header.Number) && sim.chainConfig.IsShanghai(header.Number, header.Time) {
 		withdrawals = make([]*types.Withdrawal, 0)
 	}
 	b := types.NewBlock(header, &types.Body{Transactions: txes, Withdrawals: withdrawals}, receipts, trie.NewStackTrie(nil))
@@ -361,11 +364,13 @@ func (sim *simulator) makeHeaders(blocks []simBlock) ([]*types.Header, error) {
 		overrides := block.BlockOverrides
 
 		var withdrawalsHash *common.Hash
-		if sim.chainConfig.IsShanghai(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
+		// SYSCOIN
+		if !sim.chainConfig.IsSyscoin(overrides.Number.ToInt()) && sim.chainConfig.IsShanghai(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
 			withdrawalsHash = &types.EmptyWithdrawalsHash
 		}
 		var parentBeaconRoot *common.Hash
-		if sim.chainConfig.IsCancun(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
+		// SYSCOIN
+		if !sim.chainConfig.IsSyscoin(overrides.Number.ToInt()) && sim.chainConfig.IsCancun(overrides.Number.ToInt(), (uint64)(*overrides.Time)) {
 			parentBeaconRoot = &common.Hash{}
 		}
 		header = overrides.MakeHeader(&types.Header{
@@ -412,4 +417,14 @@ func (b *simBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber)
 		}
 	}
 	return nil, errors.New("header not found")
+}
+// SYSCOIN
+func (b *simBackend) ReadSYSHash(ctx context.Context, number rpc.BlockNumber) ([]byte, error) {
+	return []byte{}, nil
+}
+func (b *simBackend) ReadDataHash(ctx context.Context, hash common.Hash) ([]byte, error) {
+	return []byte{}, nil
+}
+func (b *simBackend) GetNEVMAddress(ctx context.Context, address common.Address) ([]byte, error) {
+	return []byte{}, nil
 }

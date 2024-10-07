@@ -229,11 +229,12 @@ func applyLondonChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 }
 
 func applyShanghaiChecks(env *stEnv, chainConfig *params.ChainConfig) error {
-	if !chainConfig.IsShanghai(big.NewInt(int64(env.Number)), env.Timestamp) {
+	// SYSCOIN
+	if !chainConfig.IsSyscoin(big.NewInt(int64(env.Number))) || !chainConfig.IsShanghai(big.NewInt(int64(env.Number)), env.Timestamp) {
 		return nil
 	}
 	if env.Withdrawals == nil {
-		return NewError(ErrorConfig, errors.New("Shanghai config but missing 'withdrawals' in env section"))
+		return NewError(ErrorConfig, errors.New("shanghai config but missing 'withdrawals' in env section"))
 	}
 	return nil
 }
@@ -273,7 +274,8 @@ func applyMergeChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 }
 
 func applyCancunChecks(env *stEnv, chainConfig *params.ChainConfig) error {
-	if !chainConfig.IsCancun(big.NewInt(int64(env.Number)), env.Timestamp) {
+	// SYSCOIN
+	if chainConfig.IsSyscoin(big.NewInt(int64(env.Number))) || !chainConfig.IsCancun(big.NewInt(int64(env.Number)), env.Timestamp) {
 		env.ParentBeaconBlockRoot = nil // un-set it if it has been set too early
 		return nil
 	}

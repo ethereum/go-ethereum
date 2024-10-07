@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	// SYSCOIN
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -36,8 +38,12 @@ import (
 
 // Proof-of-stake protocol constants.
 var (
-	beaconDifficulty = common.Big0          // The default block difficulty in the beacon consensus
+	beaconDifficulty = common.Big1          // The default block difficulty in the beacon consensus
 	beaconNonce      = types.EncodeNonce(0) // The default block nonce in the beacon consensus
+	// SYSCOIN
+	SyscoinBlockReward, _ = new(big.Int).SetString("10550000000000000000", 10) // 10.55 Block reward for successfully mining a block upward from Syscoin
+	allowedFutureBlockTimeSeconds = int64(150)             // Max seconds from current time allowed for blocks, before they're considered future blocks
+
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -94,8 +100,8 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	// Sanity checks passed, do a proper verification
-	return beacon.verifyHeader(chain, header, parent)
+	// SYSCOIN Sanity checks passed, do a proper verification
+	return beacon.verifyHeader(chain, header, parent, time.Now().Unix())
 }
 
 // errOut constructs an error channel with prefilled errors inside.
@@ -227,7 +233,8 @@ func (beacon *Beacon) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 //
 // (b) we don't verify if a block is in the future anymore
 // (c) the extradata is limited to 32 bytes
-func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header) error {
+// SYSCOIN
+func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, parent *types.Header, unixNow int64) error {
 	// Ensure that the header's extra-data section is of a reasonable size
 	if len(header.Extra) > int(params.MaximumExtraDataSize) {
 		return fmt.Errorf("extra-data longer than 32 bytes (%d)", len(header.Extra))
@@ -238,6 +245,16 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	}
 	if header.UncleHash != types.EmptyUncleHash {
 		return errInvalidUncleHash
+	}
+	// SYSCOIN
+	syscoin := chain.Config().IsSyscoin(header.Number)
+	if syscoin {
+		if header.Time > uint64(unixNow+allowedFutureBlockTimeSeconds) {
+			return consensus.ErrFutureBlock
+		}
+		if !chain.HasNEVMMapping(header.Hash()) {
+			return errors.New("Block not found in NEVM mapping")
+		}
 	}
 	// Verify the timestamp
 	if header.Time <= parent.Time {
@@ -263,17 +280,17 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 	if err := eip1559.VerifyEIP1559Header(chain.Config(), parent, header); err != nil {
 		return err
 	}
-	// Verify existence / non-existence of withdrawalsHash.
+	// SYSCOIN Verify existence / non-existence of withdrawalsHash.
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
-	if shanghai && header.WithdrawalsHash == nil {
+	if (!syscoin && shanghai) && header.WithdrawalsHash == nil {
 		return errors.New("missing withdrawalsHash")
 	}
-	if !shanghai && header.WithdrawalsHash != nil {
+	if (syscoin || !shanghai) && header.WithdrawalsHash != nil {
 		return fmt.Errorf("invalid withdrawalsHash: have %x, expected nil", header.WithdrawalsHash)
 	}
 	// Verify the existence / non-existence of cancun-specific header fields
 	cancun := chain.Config().IsCancun(header.Number, header.Time)
-	if !cancun {
+	if !cancun || syscoin {
 		switch {
 		case header.ExcessBlobGas != nil:
 			return fmt.Errorf("invalid excessBlobGas: have %d, expected nil", header.ExcessBlobGas)
@@ -301,6 +318,8 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 	var (
 		abort   = make(chan struct{})
 		results = make(chan error, len(headers))
+		// SYSCOIN
+		unixNow = time.Now().Unix()
 	)
 	go func() {
 		for i, header := range headers {
@@ -322,7 +341,8 @@ func (beacon *Beacon) verifyHeaders(chain consensus.ChainHeaderReader, headers [
 				}
 				continue
 			}
-			err := beacon.verifyHeader(chain, header, parent)
+			// SYSCOIN
+			err := beacon.verifyHeader(chain, header, parent, unixNow)
 			select {
 			case <-abort:
 				return
@@ -348,6 +368,13 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 	return nil
 }
 
+// accumulateRewards credits the coinbase of the given block with the mining
+// reward. The total reward consists of the static block reward and rewards for
+// included uncles. The coinbase of each uncle block is also rewarded.
+func accumulateRewards(config *params.ChainConfig, stateDB *state.StateDB, header *types.Header) {
+	stateDB.AddBalance(header.Coinbase, uint256.MustFromBig(SyscoinBlockReward), tracing.BalanceIncreaseRewardMineBlock)
+}
+
 // Finalize implements consensus.Engine and processes withdrawals on top.
 func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body) {
 	if !beacon.IsPoSHeader(header) {
@@ -361,7 +388,10 @@ func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.
 		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
 		state.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
 	}
-	// No block reward which is issued by consensus layer instead.
+	// SYSCOIN Accumulate any block
+	if(chain.Config().IsSyscoin(header.Number)) {
+		accumulateRewards(chain.Config(), state, header)
+	}
 }
 
 // FinalizeAndAssemble implements consensus.Engine, setting the final state and
@@ -370,15 +400,17 @@ func (beacon *Beacon) FinalizeAndAssemble(chain consensus.ChainHeaderReader, hea
 	if !beacon.IsPoSHeader(header) {
 		return beacon.ethone.FinalizeAndAssemble(chain, header, state, body, receipts)
 	}
+	// SYSCOIN
+	syscoin := chain.Config().IsSyscoin(header.Number)
 	shanghai := chain.Config().IsShanghai(header.Number, header.Time)
-	if shanghai {
+	if shanghai && !syscoin {
 		// All blocks after Shanghai must include a withdrawals root.
 		if body.Withdrawals == nil {
 			body.Withdrawals = make([]*types.Withdrawal, 0)
 		}
 	} else {
 		if len(body.Withdrawals) > 0 {
-			return nil, errors.New("withdrawals set before Shanghai activation")
+			return nil, errors.New("withdrawals set")
 		}
 	}
 	// Finalize and assemble the block.
@@ -471,7 +503,8 @@ func (beacon *Beacon) IsPoSHeader(header *types.Header) bool {
 	if header.Difficulty == nil {
 		panic("IsPoSHeader called with invalid difficulty")
 	}
-	return header.Difficulty.Cmp(beaconDifficulty) == 0
+	// SYSCOIN
+	return header.Difficulty.Cmp(beaconDifficulty) <= 1
 }
 
 // InnerEngine returns the embedded eth1 consensus engine.
