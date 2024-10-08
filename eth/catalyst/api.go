@@ -1185,13 +1185,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV1(hashes []common.Hash) []*engin
 	bodies := make([]*engine.ExecutionPayloadBody, len(hashes))
 	for i, hash := range hashes {
 		block := api.eth.BlockChain().GetBlockByHash(hash)
-		body := getBody(block)
-		if body != nil {
-			// Nil out the V2 values, clients should know to not request V1 objects
-			// after Prague.
-			body.Requests = nil
-		}
-		bodies[i] = body
+		bodies[i] = getBody(block)
 	}
 	return bodies
 }
@@ -1210,18 +1204,7 @@ func (api *ConsensusAPI) GetPayloadBodiesByHashV2(hashes []common.Hash) []*engin
 // GetPayloadBodiesByRangeV1 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
 // of block bodies by the engine api.
 func (api *ConsensusAPI) GetPayloadBodiesByRangeV1(start, count hexutil.Uint64) ([]*engine.ExecutionPayloadBody, error) {
-	bodies, err := api.getBodiesByRange(start, count)
-	if err != nil {
-		return nil, err
-	}
-	// Nil out the V2 values, clients should know to not request V1 objects
-	// after Prague.
-	for i := range bodies {
-		if bodies[i] != nil {
-			bodies[i].Requests = nil
-		}
-	}
-	return bodies, nil
+	return api.getBodiesByRange(start, count)
 }
 
 // GetPayloadBodiesByRangeV2 implements engine_getPayloadBodiesByRangeV1 which allows for retrieval of a range
