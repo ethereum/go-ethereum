@@ -61,6 +61,16 @@ func TestDefaults(t *testing.T) {
 	if cfg.GetHashFn == nil {
 		t.Error("expected time to be non nil")
 	}
+	// SYSCOIN
+	if cfg.ReadSYSHashFn == nil {
+		t.Error("expected time to be non nil")
+	}
+	if cfg.ReadDataHashFn == nil {
+		t.Error("expected time to be non nil")
+	}
+	if cfg.GetNEVMAddressFn == nil {
+		t.Error("expected time to be non nil")
+	}	
 	if cfg.BlockNumber == nil {
 		t.Error("expected block number to be non nil")
 	}
