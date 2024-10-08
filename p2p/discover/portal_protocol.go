@@ -796,7 +796,7 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 		return nil, err
 	}
 
-	p.Log.Trace("<< PONG_RESPONSE"+p.protocolName, "id", target.ID(), "pong", pong)
+	p.Log.Trace("<< PONG_RESPONSE/"+p.protocolName, "id", target.ID(), "pong", pong)
 
 	customPayload := &portalwire.PingPongCustomData{}
 	err = customPayload.UnmarshalSSZ(pong.CustomPayload)
@@ -804,7 +804,7 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 		return nil, err
 	}
 
-	p.Log.Trace("<< PONG_RESPONSE"+p.protocolName, "id", target.ID(), "pong", pong, "customPayload", customPayload)
+	p.Log.Trace("<< PONG_RESPONSE/"+p.protocolName, "id", target.ID(), "pong", pong, "customPayload", customPayload)
 	p.table.addFoundNode(target, true)
 
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
@@ -1106,7 +1106,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			Id: idBuffer,
 		}
 
-		p.Log.Trace(">> CONTENT_CONNECTION_ID"+p.protocolName, "protocol", p.protocolName, "source", addr, "connId", connIdMsg)
+		p.Log.Trace(">> CONTENT_CONNECTION_ID/"+p.protocolName, "protocol", p.protocolName, "source", addr, "connId", connIdMsg)
 		var connIdMsgBytes []byte
 		connIdMsgBytes, err = connIdMsg.MarshalSSZ()
 		if err != nil {
@@ -1134,7 +1134,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 			ContentKeys:  contentKeyBitlist,
 		}
 
-		p.Log.Trace(">> ACCEPT"+p.protocolName, "protocol", p.protocolName, "source", addr, "accept", acceptMsg)
+		p.Log.Trace(">> ACCEPT/"+p.protocolName, "protocol", p.protocolName, "source", addr, "accept", acceptMsg)
 		var acceptMsgBytes []byte
 		acceptMsgBytes, err = acceptMsg.MarshalSSZ()
 		if err != nil {
@@ -1232,7 +1232,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 		ContentKeys:  []byte(contentKeyBitlist),
 	}
 
-	p.Log.Trace(">> ACCEPT"+p.protocolName, "protocol", p.protocolName, "source", addr, "accept", acceptMsg)
+	p.Log.Trace(">> ACCEPT/"+p.protocolName, "protocol", p.protocolName, "source", addr, "accept", acceptMsg)
 	var acceptMsgBytes []byte
 	acceptMsgBytes, err = acceptMsg.MarshalSSZ()
 	if err != nil {
