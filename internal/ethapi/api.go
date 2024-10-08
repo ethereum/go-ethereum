@@ -1627,6 +1627,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		return nil, 0, nil, err
 	}
 
+	// fill in missing fields based on the state at the specified block
 	if args.Nonce == nil {
 		nonce := hexutil.Uint64(db.GetNonce(args.from()))
 		args.Nonce = &nonce
@@ -1635,7 +1636,6 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	if err := args.CallDefaults(b.RPCGasCap(), blockCtx.BaseFee, b.ChainConfig().ChainID); err != nil {
 		return types.AccessList{}, 0, nil, err
 	}
-
 	var to common.Address
 	if args.To != nil {
 		to = *args.To
