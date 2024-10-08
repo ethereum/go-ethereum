@@ -556,10 +556,7 @@ func newPricedList(all *lookup) *pricedList {
 }
 
 // Put inserts a new transaction into the heap.
-func (l *pricedList) Put(tx *types.Transaction, local bool) {
-	if local {
-		return
-	}
+func (l *pricedList) Put(tx *types.Transaction) {
 	// Insert every new transaction to the urgent heap first; Discard will balance the heaps
 	heap.Push(&l.urgent, tx)
 }
@@ -612,9 +609,7 @@ func (l *pricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool {
 // Discard finds a number of most underpriced transactions, removes them from the
 // priced list and returns them for further removal from the entire pool.
 // If noPending is set to true, we will only consider the floating list
-//
-// Note local transaction won't be considered for eviction.
-func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
+func (l *pricedList) Discard(slots int) (types.Transactions, bool) {
 	drop := make(types.Transactions, 0, slots) // Remote underpriced transactions to drop
 	for slots > 0 {
 		if len(l.urgent.list)*floatingRatio > len(l.floating.list)*urgentRatio {
@@ -643,7 +638,7 @@ func (l *pricedList) Discard(slots int, force bool) (types.Transactions, bool) {
 		}
 	}
 	// If we still can't make enough room for the new transaction
-	if slots > 0 && !force {
+	if slots > 0 {
 		for _, tx := range drop {
 			heap.Push(&l.urgent, tx)
 		}
@@ -659,10 +654,10 @@ func (l *pricedList) Reheap() {
 	start := time.Now()
 	l.stales.Store(0)
 	l.urgent.list = make([]*types.Transaction, 0, l.all.RemoteCount())
-	l.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
+	l.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
 		l.urgent.list = append(l.urgent.list, tx)
 		return true
-	}, false, true) // Only iterate remotes
+	})
 	heap.Init(&l.urgent)
 
 	// balance out the two heaps by moving the worse half of transactions into the

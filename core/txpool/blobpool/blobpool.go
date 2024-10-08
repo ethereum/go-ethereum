@@ -1268,7 +1268,7 @@ func (p *BlobPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.
 
 // Add inserts a set of blob transactions into the pool if they pass validation (both
 // consensus validity and pool restrictions).
-func (p *BlobPool) Add(txs []*types.Transaction, local bool, sync bool) []error {
+func (p *BlobPool) Add(txs []*types.Transaction, sync bool) []error {
 	var (
 		adds = make([]*types.Transaction, 0, len(txs))
 		errs = make([]error, len(txs))

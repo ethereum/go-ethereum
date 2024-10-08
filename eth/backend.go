@@ -237,6 +237,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.txPool, err = txpool.New(config.TxPool.PriceLimit, eth.blockchain, []txpool.SubPool{legacyPool, blobPool})
 
 	if !config.TxPool.NoLocals {
+		// TODO!
+		// We also need to handle config.Locals, the accounts that are
+		// to be treated as locals, regardless of how they arrive to geth.
 		eth.localTxTracker = legacypool.NewTxTracker(config.TxPool.Journal,
 			config.TxPool.Rejournal,
 			eth.blockchain.Config(), eth.txPool)
