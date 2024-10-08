@@ -377,9 +377,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 					// ensure 5 seconds has passed between blocks before we start peering so we are sure sync has finished
 					if time.Now().Unix()-eth.timeLastBlock >= 5 {
 						log.Info("Networking and peering start...")
-						eth.handler.Start(eth.handler.maxPeers)
 						eth.handler.peers.open()
-						eth.Downloader().Peers().Open()
 						eth.p2pServer.Start()
 						eth.Downloader().DoneEvent()
 						eth.handler.synced.Store(true)
@@ -532,18 +530,14 @@ func (s *Ethereum) Start() error {
 
 	// Regularly update shutdown marker
 	s.shutdownTracker.Start()
-
+	// Start the networking layer
+	s.handler.Start(s.p2pServer.MaxPeers)
 	// SYSCOIN
 	if s.blockchain.GetChainConfig().SyscoinBlock != nil {
 		log.Info("Skip networking and peering...")
-		s.handler.maxPeers = s.p2pServer.MaxPeers
 		s.handler.peers.close()
 		s.p2pServer.Stop()
-	} else {
-		// Start the networking layer
-		s.handler.Start(s.p2pServer.MaxPeers)
 	}
-
 
 	return nil
 }

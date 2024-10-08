@@ -41,7 +41,7 @@ var (
 	beaconDifficulty = common.Big0          // The default block difficulty in the beacon consensus
 	beaconNonce      = types.EncodeNonce(0) // The default block nonce in the beacon consensus
 	// SYSCOIN
-	SyscoinBlockReward, _ = new(big.Int).SetString("10550000000000000000", 10) // 10.55 Block reward for successfully mining a block upward from Syscoin
+	SyscoinBlockReward  = uint256.NewInt(10550000000000000000) // 10.55 Block reward for successfully mining a block upward from Syscoin
 	allowedFutureBlockTimeSeconds = int64(150)             // Max seconds from current time allowed for blocks, before they're considered future blocks
 
 )
@@ -383,7 +383,7 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 // reward. The total reward consists of the static block reward and rewards for
 // included uncles. The coinbase of each uncle block is also rewarded.
 func accumulateRewards(stateDB *state.StateDB, header *types.Header) {
-	stateDB.AddBalance(header.Coinbase, uint256.MustFromBig(SyscoinBlockReward), tracing.BalanceIncreaseRewardMineBlock)
+	stateDB.AddBalance(header.Coinbase, SyscoinBlockReward, tracing.BalanceIncreaseRewardMineBlock)
 }
 
 // Finalize implements consensus.Engine and processes withdrawals on top.

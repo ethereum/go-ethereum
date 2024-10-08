@@ -38,8 +38,6 @@ func newUint64(val uint64) *uint64 { return &val }
 
 var (
 	MainnetTerminalTotalDifficulty, _ = new(big.Int).SetString("58_750_000_000_000_000_000_000", 0)
-	// SYSCOIN
-	SyscoinTerminalTotalDifficulty, _ = new(big.Int).SetString("0", 0)
 
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
@@ -85,11 +83,11 @@ var (
 		RolluxBlock:         big.NewInt(268500),
 		NexusBlock:          big.NewInt(600000),
 		LondonBlock:         big.NewInt(1),
-		TerminalTotalDifficulty:       SyscoinTerminalTotalDifficulty,
+		TerminalTotalDifficulty: big.NewInt(1),
 		TerminalTotalDifficultyPassed: true,
 		ShanghaiTime:                  newUint64(1679618404),
 		CancunTime:                    newUint64(1679618404),
-		Ethash:                        nil,
+		Ethash:              nil,
 	}
 	TanenbaumChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(5700),
