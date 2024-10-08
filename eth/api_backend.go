@@ -157,7 +157,11 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	if number == rpc.SafeBlockNumber {
 		header := b.eth.blockchain.CurrentSafeBlock()
 
-		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+		if header == nil {
+			return nil, errors.New("safe block not found")
+		} else {
+			return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
+		}
 	}
 
 	return b.eth.blockchain.GetBlockByNumber(uint64(number)), nil
