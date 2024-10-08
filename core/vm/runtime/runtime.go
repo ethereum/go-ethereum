@@ -111,6 +111,22 @@ func setDefaults(cfg *Config) {
 			return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 		}
 	}
+	// SYSCOIN
+	if cfg.ReadSYSHashFn == nil {
+		cfg.ReadSYSHashFn = func(n uint64) []byte {
+			return []byte(new(big.Int).SetUint64(n).String())
+		}
+	}
+	if cfg.ReadDataHashFn == nil {
+		cfg.ReadDataHashFn = func(hash common.Hash) []byte {
+			return hash.Bytes()
+		}
+	}
+	if cfg.GetNEVMAddressFn == nil {
+		cfg.GetNEVMAddressFn = func(address common.Address) []byte {
+			return address.Bytes()
+		}
+	}
 	if cfg.BaseFee == nil {
 		cfg.BaseFee = big.NewInt(params.InitialBaseFee)
 	}
