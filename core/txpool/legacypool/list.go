@@ -590,7 +590,7 @@ func (l *pricedList) underpricedFor(h *priceHeap, tx *types.Transaction) bool {
 	// Discard stale price points if found at the heap start
 	for len(h.list) > 0 {
 		head := h.list[0]
-		if l.all.GetRemote(head.Hash()) == nil { // Removed or migrated
+		if l.all.Get(head.Hash()) == nil { // Removed or migrated
 			l.stales.Add(-1)
 			heap.Pop(h)
 			continue
@@ -615,7 +615,7 @@ func (l *pricedList) Discard(slots int) (types.Transactions, bool) {
 		if len(l.urgent.list)*floatingRatio > len(l.floating.list)*urgentRatio {
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.urgent).(*types.Transaction)
-			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
+			if l.all.Get(tx.Hash()) == nil { // Removed or migrated
 				l.stales.Add(-1)
 				continue
 			}
@@ -628,7 +628,7 @@ func (l *pricedList) Discard(slots int) (types.Transactions, bool) {
 			}
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.floating).(*types.Transaction)
-			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
+			if l.all.Get(tx.Hash()) == nil { // Removed or migrated
 				l.stales.Add(-1)
 				continue
 			}
@@ -653,7 +653,7 @@ func (l *pricedList) Reheap() {
 	defer l.reheapMu.Unlock()
 	start := time.Now()
 	l.stales.Store(0)
-	l.urgent.list = make([]*types.Transaction, 0, l.all.RemoteCount())
+	l.urgent.list = make([]*types.Transaction, 0, l.all.Count())
 	l.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
 		l.urgent.list = append(l.urgent.list, tx)
 		return true

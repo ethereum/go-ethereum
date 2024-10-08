@@ -397,7 +397,7 @@ func (pool *LegacyPool) SetGasTip(tip *big.Int) {
 	// If the min miner fee increased, remove transactions below the new threshold
 	if newTip.Cmp(old) > 0 {
 		// pool.priced is sorted by GasFeeCap, so we have to iterate through pool.all instead
-		drop := pool.all.RemotesBelowTip(tip)
+		drop := pool.all.TxsBelowTip(tip)
 		for _, tx := range drop {
 			pool.removeTx(tx.Hash(), false, true)
 		}
@@ -1685,24 +1685,8 @@ func (t *lookup) Get(hash common.Hash) *types.Transaction {
 	return t.remotes[hash]
 }
 
-// GetRemote returns a transaction if it exists in the lookup, or nil if not found.
-func (t *lookup) GetRemote(hash common.Hash) *types.Transaction {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-
-	return t.remotes[hash]
-}
-
 // Count returns the current number of transactions in the lookup.
 func (t *lookup) Count() int {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-
-	return len(t.remotes)
-}
-
-// RemoteCount returns the current number of remote transactions in the lookup.
-func (t *lookup) RemoteCount() int {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -1744,8 +1728,8 @@ func (t *lookup) Remove(hash common.Hash) {
 	delete(t.remotes, hash)
 }
 
-// RemotesBelowTip finds all remote transactions below the given tip threshold.
-func (t *lookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
+// TxsBelowTip finds all remote transactions below the given tip threshold.
+func (t *lookup) TxsBelowTip(threshold *big.Int) types.Transactions {
 	found := make(types.Transactions, 0, 128)
 	t.Range(func(hash common.Hash, tx *types.Transaction) bool {
 		if tx.GasTipCapIntCmp(threshold) < 0 {
