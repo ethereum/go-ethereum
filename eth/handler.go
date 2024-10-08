@@ -120,8 +120,6 @@ type handler struct {
 
 	// channels for fetcher, syncer, txsyncLoop
 	quitSync chan struct{}
-	// SYSCOIN
-	inited bool
 	wg sync.WaitGroup
 
 	handlerStartCh chan struct{}
@@ -196,8 +194,6 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	addTxs := func(txs []*types.Transaction) []error {
 		return h.txpool.Add(txs, false, false)
 	}
-	// SYSCOIN
-	h.inited = false
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx, h.removePeer)
 	return h, nil
 }
@@ -433,8 +429,6 @@ func (h *handler) Start(maxPeers int) {
 	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
 	h.txsSub = h.txpool.SubscribeTransactions(h.txsCh, false)
 	go h.txBroadcastLoop()
-	// SYSCOIN
-	h.inited = true
 	// start sync handlers
 	h.txFetcher.Start()
 
@@ -444,10 +438,6 @@ func (h *handler) Start(maxPeers int) {
 }
 
 func (h *handler) Stop() {
-	// SYSCOIN
-	if !h.inited {
-		return
-	}
 	h.txsSub.Unsubscribe() // quits txBroadcastLoop
 	h.txFetcher.Stop()
 	h.downloader.Terminate()

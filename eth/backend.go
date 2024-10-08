@@ -340,7 +340,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			return err
 		}
 
-		if !eth.handler.inited {
+		if eth.handler.peers.closed {
 			eth.lock.Lock()
 			eth.timeLastBlock = time.Now().Unix()
 			eth.lock.Unlock()
@@ -374,11 +374,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 				for {
 					time.Sleep(100 * time.Millisecond)
 					eth.lock.Lock()
-					if eth.handler.inited && eth.handler.peers.closed {
-						log.Info("Networking stopped, return without starting peering...")
-						eth.lock.Unlock()
-						return
-					}
 					// ensure 5 seconds has passed between blocks before we start peering so we are sure sync has finished
 					if time.Now().Unix()-eth.timeLastBlock >= 5 {
 						log.Info("Networking and peering start...")
