@@ -54,8 +54,7 @@ func newPriceHeap(basefee *uint256.Int, blobfee *uint256.Int, index map[common.A
 	// Populate the heap in account sort order. Not really needed in practice,
 	// but it makes the heap initialization deterministic and less annoying to
 	// test in unit tests.
-	heap.addrs = slices.Collect(maps.Keys(index))
-	slices.SortFunc(heap.addrs, common.Address.Cmp)
+	heap.addrs = slices.SortedFunc(maps.Keys(index), common.Address.Cmp)
 	for i, addr := range heap.addrs {
 		heap.index[addr] = i
 	}

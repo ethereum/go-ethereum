@@ -250,15 +250,11 @@ type history struct {
 // newHistory constructs the state history object with provided state change set.
 func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte, rawStorageKey bool) *history {
 	var (
-		accountList = slices.Collect(maps.Keys(accounts))
+		accountList = slices.SortedFunc(maps.Keys(accounts), common.Address.Cmp)
 		storageList = make(map[common.Address][]common.Hash)
 	)
-	slices.SortFunc(accountList, common.Address.Cmp)
-
 	for addr, slots := range storages {
-		slist := slices.Collect(maps.Keys(slots))
-		slices.SortFunc(slist, common.Hash.Cmp)
-		storageList[addr] = slist
+		storageList[addr] = slices.SortedFunc(maps.Keys(slots), common.Hash.Cmp)
 	}
 	version := historyVersion
 	if !rawStorageKey {
