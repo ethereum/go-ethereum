@@ -181,8 +181,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return nil, errors.New("snap sync not supported with snapshots disabled")
 	}
 	// SYSCOIN Construct the downloader (long sync)
-	if h.chain.GetChainConfig().SyscoinBlock == nil {
-		h.downloader = downloader.New(config.Database, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures)
+	h.downloader = downloader.New(config.Database, h.eventMux, h.chain, h.removePeer, h.enableSyncedFeatures)
+	if h.chain.GetChainConfig().SyscoinBlock != nil {
+		h.downloader.Terminate()
 	}
 
 	fetchTx := func(peer string, hashes []common.Hash) error {
