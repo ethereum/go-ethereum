@@ -3,7 +3,7 @@ name: rpm_mainnet_profile
 on:
   push:
     branches:
-      - 'main'
+      - 'master'
     paths:
       - '**'
     tags:

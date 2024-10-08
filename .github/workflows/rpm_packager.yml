@@ -3,7 +3,7 @@ name: package_x86_rpm
 on:
   push:
     branches:
-      - 'main'
+      - 'master'
     paths:
       - '**'
     tags:

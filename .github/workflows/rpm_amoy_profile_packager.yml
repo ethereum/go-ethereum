@@ -3,7 +3,7 @@ name: rpm_amoy_profile
 on:
   push:
     branches:
-      - 'main'
+      - 'master'
     paths:
       - '**'
     tags:
