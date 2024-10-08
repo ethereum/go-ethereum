@@ -37,10 +37,10 @@ const (
 )
 
 var (
-	errAlreadyRegistered = errors.New("peer is already registered")
-	errNotRegistered     = errors.New("peer is not registered")
 	// SYSCOIN
 	errPeerSetClosed     = errors.New("peerset closed")
+	errAlreadyRegistered = errors.New("peer is already registered")
+	errNotRegistered     = errors.New("peer is not registered")
 )
 
 // peerConnection represents an active peer from which hashes and blocks are retrieved.
@@ -212,6 +212,11 @@ func (ps *peerSet) Reset() {
 func (ps *peerSet) Register(p *peerConnection) error {
 	// Register the new peer with some meaningful defaults
 	ps.lock.Lock()
+	// SYSCOIN
+	if ps.closed {
+		ps.lock.Unlock()
+		return errPeerSetClosed
+	}
 	if _, ok := ps.peers[p.id]; ok {
 		ps.lock.Unlock()
 		return errAlreadyRegistered
@@ -227,6 +232,7 @@ func (ps *peerSet) Register(p *peerConnection) error {
 	ps.events.Send(&peeringEvent{peer: p, join: true})
 	return nil
 }
+
 // SYSCOIN
 func (ps *peerSet) Close() {
 	ps.lock.Lock()
@@ -240,6 +246,7 @@ func (ps *peerSet) Open() {
 
 	ps.closed = false
 }
+
 // Unregister removes a remote peer from the active set, disabling any further
 // actions to/from that particular entity.
 func (ps *peerSet) Unregister(id string) error {
