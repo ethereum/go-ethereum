@@ -96,3 +96,31 @@ func TestJournalTopRevert(t *testing.T) {
 		t.Fatalf("unexpected nonce: %v", tr.nonce)
 	}
 }
+
+func TestJournalNestedCalls(t *testing.T) {
+	tr := &testTracer{}
+	wr, err := WrapWithJournal(&Hooks{OnBalanceChange: tr.OnBalanceChange, OnNonceChange: tr.OnNonceChange})
+	if err != nil {
+		t.Fatalf("failed to wrap test tracer: %v", err)
+	}
+	addr := common.HexToAddress("0x1234")
+	wr.OnEnter(0, 0, addr, addr, nil, 1000, big.NewInt(0))
+	wr.OnEnter(1, 0, addr, addr, nil, 1000, big.NewInt(0))
+	wr.OnBalanceChange(addr, big.NewInt(0), big.NewInt(100), BalanceChangeUnspecified)
+	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+	wr.OnExit(2, nil, 100, nil, false)
+	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+	wr.OnExit(2, nil, 100, nil, false)
+	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+	wr.OnBalanceChange(addr, big.NewInt(100), big.NewInt(200), BalanceChangeUnspecified)
+	wr.OnExit(2, nil, 100, nil, false)
+	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+	wr.OnExit(2, nil, 100, errors.New("revert"), true)
+	wr.OnEnter(2, 0, addr, addr, nil, 1000, big.NewInt(0))
+	wr.OnExit(2, nil, 100, errors.New("revert"), true)
+	wr.OnExit(1, nil, 100, errors.New("revert"), true)
+	wr.OnExit(0, nil, 150, nil, false)
+	if tr.bal.Cmp(big.NewInt(0)) != 0 {
+		t.Fatalf("unexpected balance: %v", tr.bal)
+	}
+}

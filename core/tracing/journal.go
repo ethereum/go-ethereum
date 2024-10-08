@@ -38,7 +38,7 @@ type journal struct {
 
 	validRevisions []revision
 	nextRevisionId int
-	curRevisionId  int
+	revIds         []int
 }
 
 type entry interface {
@@ -194,17 +194,18 @@ func (j *journal) OnTxEnd(receipt *types.Receipt, err error) {
 }
 
 func (j *journal) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	j.curRevisionId = j.snapshot()
+	j.revIds = append(j.revIds, j.snapshot())
 	if j.hooks != nil && j.hooks.OnEnter != nil {
 		j.hooks.OnEnter(depth, typ, from, to, input, gas, value)
 	}
 }
 
 func (j *journal) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	revId := j.revIds[len(j.revIds)-1]
+	j.revIds = j.revIds[:len(j.revIds)-1]
 	if reverted {
-		j.revertToSnapshot(j.curRevisionId, j.hooks)
+		j.revertToSnapshot(revId, j.hooks)
 	}
-	j.curRevisionId--
 	if j.hooks != nil && j.hooks.OnExit != nil {
 		j.hooks.OnExit(depth, output, gasUsed, err, reverted)
 	}
