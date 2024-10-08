@@ -120,7 +120,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]
 		} else {
 			wg.Add(1)
 			go func(index int) {
-				p := append(path, byte(i))
+				p := append(path, byte(index))
 				childSet := trienode.NewNodeSet(c.nodes.Owner)
 				childComitter := newCommitter(childSet, c.tracer, c.collectLeaf, false)
 				h := childComitter.commit(p, child, false)
