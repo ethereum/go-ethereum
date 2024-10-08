@@ -18,11 +18,11 @@ package trienode
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/exp/maps"
 )
 
 // Node is a wrapper which contains the encoded blob of the trie node and its
