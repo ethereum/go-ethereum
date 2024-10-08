@@ -3,7 +3,7 @@ name: mainnet_deb_profiles
 on:
   push:
     branches:
-      - 'main'
+      - 'master'
     paths:
       - '**'
     tags:
