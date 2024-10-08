@@ -31,26 +31,24 @@ type committer struct {
 	nodes       *trienode.NodeSet
 	tracer      *tracer
 	collectLeaf bool
-	parallel    bool
 }
 
 // newCommitter creates a new committer or picks one from the pool.
-func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool, parallel bool) *committer {
+func newCommitter(nodeset *trienode.NodeSet, tracer *tracer, collectLeaf bool) *committer {
 	return &committer{
 		nodes:       nodeset,
 		tracer:      tracer,
 		collectLeaf: collectLeaf,
-		parallel:    parallel,
 	}
 }
 
 // Commit collapses a node down into a hash node.
-func (c *committer) Commit(n node) hashNode {
-	return c.commit(nil, n, true).(hashNode)
+func (c *committer) Commit(n node, parallel bool) hashNode {
+	return c.commit(nil, n, parallel).(hashNode)
 }
 
 // commit collapses a node down into a hash node and returns it.
-func (c *committer) commit(path []byte, n node, topmost bool) node {
+func (c *committer) commit(path []byte, n node, parallel bool) node {
 	// if this path is clean, use available cached data
 	hash, dirty := n.cache()
 	if hash != nil && !dirty {
@@ -76,7 +74,7 @@ func (c *committer) commit(path []byte, n node, topmost bool) node {
 		}
 		return collapsed
 	case *fullNode:
-		hashedKids := c.commitChildren(path, cn, topmost && c.parallel)
+		hashedKids := c.commitChildren(path, cn, parallel)
 		collapsed := cn.copy()
 		collapsed.Children = hashedKids
 
@@ -122,7 +120,7 @@ func (c *committer) commitChildren(path []byte, n *fullNode, parallel bool) [17]
 			go func(index int) {
 				p := append(path, byte(index))
 				childSet := trienode.NewNodeSet(c.nodes.Owner)
-				childComitter := newCommitter(childSet, c.tracer, c.collectLeaf, false)
+				childComitter := newCommitter(childSet, c.tracer, c.collectLeaf)
 				h := childComitter.commit(p, child, false)
 				children[index] = h
 				nodesMu.Lock()
