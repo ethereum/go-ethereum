@@ -1209,44 +1209,15 @@ func FuzzTrie(f *testing.F) {
 	})
 }
 
-// goos: darwin
-// goarch: arm64
-// pkg: github.com/ethereum/go-ethereum/trie
-// BenchmarkCommit/commit-100nodes-single
-// BenchmarkCommit/commit-100nodes-single-8         	   13508	     90490 ns/op	  115151 B/op	    1461 allocs/op
-// BenchmarkCommit/commit-100nodes-parallel
-// BenchmarkCommit/commit-100nodes-parallel-8       	   13897	     87488 ns/op	  115208 B/op	    1462 allocs/op
-// BenchmarkCommit/commit-200nodes-single
-// BenchmarkCommit/commit-200nodes-single-8         	    5971	    182548 ns/op	  233411 B/op	    2935 allocs/op
-// BenchmarkCommit/commit-200nodes-parallel
-// BenchmarkCommit/commit-200nodes-parallel-8       	    5972	    194446 ns/op	  235053 B/op	    2967 allocs/op
-// BenchmarkCommit/commit-500nodes-single
-// BenchmarkCommit/commit-500nodes-single-8         	    2443	    444320 ns/op	  604342 B/op	    7604 allocs/op
-// BenchmarkCommit/commit-500nodes-parallel
-// BenchmarkCommit/commit-500nodes-parallel-8       	    2930	    360024 ns/op	  606174 B/op	    7638 allocs/op
-// BenchmarkCommit/commit-1000nodes-single
-// BenchmarkCommit/commit-1000nodes-single-8        	    1353	    911020 ns/op	 1174328 B/op	   14818 allocs/op
-// BenchmarkCommit/commit-1000nodes-parallel
-// BenchmarkCommit/commit-1000nodes-parallel-8      	    2217	    615980 ns/op	 1175860 B/op	   14849 allocs/op
-// BenchmarkCommit/commit-2000nodes-single
-// BenchmarkCommit/commit-2000nodes-single-8        	     684	   1765588 ns/op	 2305835 B/op	   28858 allocs/op
-// BenchmarkCommit/commit-2000nodes-parallel
-// BenchmarkCommit/commit-2000nodes-parallel-8      	    1153	   1025471 ns/op	 2307711 B/op	   28890 allocs/op
-// BenchmarkCommit/commit-5000nodes-single
-// BenchmarkCommit/commit-5000nodes-single-8        	     250	   4762405 ns/op	 6471036 B/op	   74907 allocs/op
-// BenchmarkCommit/commit-5000nodes-parallel
-// BenchmarkCommit/commit-5000nodes-parallel-8      	     450	   2725071 ns/op	 6471357 B/op	   74938 allocs/op
 func BenchmarkCommit(b *testing.B) {
-	//benchmarkCommit(b, 100)
-	//benchmarkCommit(b, 200)
-	//benchmarkCommit(b, 500)
-	benchmarkCommit(b, 1000)
+	benchmarkCommit(b, 100)
+	benchmarkCommit(b, 500)
 	benchmarkCommit(b, 2000)
 	benchmarkCommit(b, 5000)
 }
 
 func benchmarkCommit(b *testing.B, n int) {
-	b.Run(fmt.Sprintf("commit-%vnodes-single", n), func(b *testing.B) {
+	b.Run(fmt.Sprintf("commit-%vnodes-sequential", n), func(b *testing.B) {
 		testCommit(b, n, false)
 	})
 	b.Run(fmt.Sprintf("commit-%vnodes-parallel", n), func(b *testing.B) {
