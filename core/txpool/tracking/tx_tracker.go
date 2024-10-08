@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package legacypool implements the normal EVM execution transaction pool.
-package legacypool
+package tracking
 
 import (
 	"sync"
@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,8 +39,8 @@ var recheckInterval = time.Minute
 // This struct does not care about transaction validity, price-bumps or account limits,
 // but optimistically accepts transactions.
 type TxTracker struct {
-	all    map[common.Hash]*types.Transaction // All tracked transactions
-	byAddr map[common.Address]*sortedMap      // Transactions by address
+	all    map[common.Hash]*types.Transaction       // All tracked transactions
+	byAddr map[common.Address]*legacypool.SortedMap // Transactions by address
 
 	journal   *journal       // Journal of local transaction to back up to disk
 	rejournal time.Duration  // How often to rotate journal
@@ -55,7 +56,7 @@ func NewTxTracker(journalPath string, journalTime time.Duration, chainConfig *pa
 	signer := types.LatestSigner(chainConfig)
 	pool := &TxTracker{
 		all:        make(map[common.Hash]*types.Transaction),
-		byAddr:     make(map[common.Address]*sortedMap),
+		byAddr:     make(map[common.Address]*legacypool.SortedMap),
 		signer:     signer,
 		shutdownCh: make(chan struct{}),
 		pool:       next,
@@ -84,7 +85,7 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 		tracker.all[tx.Hash()] = tx
 		addr, _ := types.Sender(tracker.signer, tx)
 		if tracker.byAddr[addr] == nil {
-			tracker.byAddr[addr] = newSortedMap()
+			tracker.byAddr[addr] = legacypool.NewSortedMap()
 		}
 		tracker.byAddr[addr].Put(tx)
 		_ = tracker.journal.insert(tx)

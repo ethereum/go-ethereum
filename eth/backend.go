@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
+	"github.com/ethereum/go-ethereum/core/txpool/tracking"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -69,7 +70,7 @@ type Ethereum struct {
 	// core protocol objects
 	config         *ethconfig.Config
 	txPool         *txpool.TxPool
-	localTxTracker *legacypool.TxTracker
+	localTxTracker *tracking.TxTracker
 	blockchain     *core.BlockChain
 
 	handler *handler
@@ -240,7 +241,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		// TODO!
 		// We also need to handle config.Locals, the accounts that are
 		// to be treated as locals, regardless of how they arrive to geth.
-		eth.localTxTracker = legacypool.NewTxTracker(config.TxPool.Journal,
+		eth.localTxTracker = tracking.NewTxTracker(config.TxPool.Journal,
 			config.TxPool.Rejournal,
 			eth.blockchain.Config(), eth.txPool)
 		stack.RegisterLifecycle(eth.localTxTracker)
