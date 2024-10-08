@@ -504,18 +504,84 @@ func gasSelfdestruct(evm *EVM, contract *Contract, stack *Stack, mem *Memory, me
 }
 
 func gasExtCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
+	var (
+		gas            uint64
+		transfersValue = !stack.Back(3).IsZero()
+		address        = common.Address(stack.Back(0).Bytes20())
+		overflow       bool
+	)
+	if transfersValue {
+		if evm.StateDB.Empty(address) {
+			gas += params.CallNewAccountGas
+		}
+		if evm.chainRules.IsEIP4762 {
+			gas, overflow = math.SafeAdd(gas, evm.AccessEvents.ValueTransferGas(contract.Address(), address))
+			if overflow {
+				return 0, ErrGasUintOverflow
+			}
+		} else {
+			gas += params.CallValueTransferGas
+		}
+	}
+	memoryGas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	if gas, overflow = math.SafeAdd(gas, memoryGas); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	evm.callGasTemp, err = extCallGas(contract.Gas, gas)
+	if err != nil {
+		return 0, err
+	}
+
+	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+		return 0, ErrGasUintOverflow
+	}
+
+	return gas, nil
 }
 
 func gasExtDelegateCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	evm.callGasTemp, err = extCallGas(contract.Gas, gas)
+	if err != nil {
+		return 0, err
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
 }
+
 func gasExtStaticCall(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	evm.callGasTemp, err = extCallGas(contract.Gas, gas)
+	if err != nil {
+		return 0, err
+	}
+	var overflow bool
+	if gas, overflow = math.SafeAdd(gas, evm.callGasTemp); overflow {
+		return 0, ErrGasUintOverflow
+	}
+	return gas, nil
 }
 
 // gasEOFCreate returns the gas-cost for EOF-Create. Hashing charge needs to be
 // deducted in the opcode itself, since it depends on the immediate
 func gasEOFCreate(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	panic("not implemented")
+	gas, err := memoryGasCost(mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	// hashing charge needs to be deducted in the opcode itself, since it depends on the immediate
+	return gas, nil
 }

@@ -43,6 +43,10 @@ type ScopeContext struct {
 	Memory   *Memory
 	Stack    *Stack
 	Contract *Contract
+
+	CodeSection  uint64
+	ReturnStack  ReturnStack
+	InitCodeMode bool
 }
 
 // MemoryData returns the underlying memory slice. Callers must not modify the contents
@@ -89,10 +93,33 @@ func (ctx *ScopeContext) ContractCode() []byte {
 	return ctx.Contract.Code
 }
 
+type ReturnStack []*ReturnContext
+
+// Pop removes an element from the return stack
+// Panics if the return stack is empty, which should
+// never happen, since EOF code is verified for that.
+func (ctx *ReturnStack) Pop() *ReturnContext {
+	item := (*ctx)[ctx.Len()-1]
+	*ctx = (*ctx)[:ctx.Len()-1]
+	return item
+}
+
+// Len returns the length of the return stack
+func (ctx *ReturnStack) Len() int {
+	return len(*ctx)
+}
+
+type ReturnContext struct {
+	Section     uint64
+	Pc          uint64
+	StackHeight int
+}
+
 // EVMInterpreter represents an EVM interpreter
 type EVMInterpreter struct {
-	evm   *EVM
-	table *JumpTable
+	evm      *EVM
+	table    *JumpTable
+	tableEOF *JumpTable
 
 	hasher    crypto.KeccakState // Keccak256 hasher instance shared across opcodes
 	hasherBuf common.Hash        // Keccak256 hasher result array shared across opcodes
@@ -148,7 +175,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 		}
 	}
 	evm.Config.ExtraEips = extraEips
-	return &EVMInterpreter{evm: evm, table: table}
+	return &EVMInterpreter{evm: evm, table: table, tableEOF: &pragueEOFInstructionSet}
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
@@ -157,7 +184,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
 // ErrExecutionReverted which means revert-and-keep-gas-left.
-func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (ret []byte, err error) {
+func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool, isInitCode bool) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
@@ -179,13 +206,17 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	}
 
 	var (
+		jt          *JumpTable    // current jump table
 		op          OpCode        // current opcode
 		mem         = NewMemory() // bound memory
 		stack       = newstack()  // local stack
 		callContext = &ScopeContext{
-			Memory:   mem,
-			Stack:    stack,
-			Contract: contract,
+			Memory:       mem,
+			Stack:        stack,
+			Contract:     contract,
+			CodeSection:  0,
+			ReturnStack:  []*ReturnContext{{Section: 0, Pc: 0, StackHeight: 0}},
+			InitCodeMode: isInitCode,
 		}
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
@@ -207,6 +238,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		mem.Free()
 	}()
 	contract.Input = input
+
+	if contract.IsEOF() {
+		jt = in.tableEOF
+	} else {
+		jt = in.table
+	}
 
 	if debug {
 		defer func() { // this deferred method handles exit-with-error
@@ -240,8 +277,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
-		op = contract.GetOp(pc)
-		operation := in.table[op]
+		op = contract.GetOp(pc, callContext.CodeSection)
+		operation := jt[op]
 		cost = operation.constantGas // For tracing
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
