@@ -238,7 +238,7 @@ func TestSetFeeDefaults(t *testing.T) {
 			t.Fatalf("failed to set fork: %v", err)
 		}
 		got := test.in
-		err := got.setFeeDefaults(ctx, b)
+		err := got.setFeeDefaults(ctx, b, b.CurrentHeader())
 		if err != nil {
 			if test.err == nil {
 				t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
