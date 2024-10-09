@@ -76,7 +76,7 @@ func (arguments Arguments) isTuple() bool {
 	return len(arguments) > 1
 }
 
-// Unpack performs the operation hexdata -> Go format.
+// Unpack performs the operation bytesdata -> Go format.
 func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 	if len(data) == 0 {
 		if len(arguments.NonIndexed()) != 0 {
@@ -87,7 +87,7 @@ func (arguments Arguments) Unpack(data []byte) ([]interface{}, error) {
 	return arguments.UnpackValues(data)
 }
 
-// UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value.
+// UnpackIntoMap performs the operation bytesdata -> mapping of argument name to argument value.
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
 	// Make sure map is not nil
 	if v == nil {
@@ -178,7 +178,7 @@ func (arguments Arguments) copyTuple(v interface{}, marshalledValues []interface
 	return nil
 }
 
-// UnpackValues can be used to unpack ABI-encoded hexdata according to the ABI-specification,
+// UnpackValues can be used to unpack ABI-encoded bytesdata according to the ABI-specification,
 // without supplying a struct to unpack into. Instead, this method returns a list containing the
 // values. An atomic argument will be a list with one element.
 func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
@@ -212,13 +212,13 @@ func (arguments Arguments) UnpackValues(data []byte) ([]interface{}, error) {
 	return retval, nil
 }
 
-// PackValues performs the operation Go format -> Hexdata.
+// PackValues performs the operation Go format -> bytesdata.
 // It is the semantic opposite of UnpackValues.
 func (arguments Arguments) PackValues(args []interface{}) ([]byte, error) {
 	return arguments.Pack(args...)
 }
 
-// Pack performs the operation Go format -> Hexdata.
+// Pack performs the operation Go format -> bytesdata.
 func (arguments Arguments) Pack(args ...interface{}) ([]byte, error) {
 	// Make sure arguments match up and pack them
 	abiArgs := arguments
