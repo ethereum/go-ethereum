@@ -2006,19 +2006,12 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 
 	// Try to return an already finalized transaction
 	found, tx, blockHash, blockNumber, index, err := api.b.GetTransaction(ctx, hash)
-	if !found {
-		// No finalized transaction, try to retrieve it from the pool
-		if tx := api.b.GetPoolTransaction(hash); tx != nil {
-			return NewRPCPendingTransaction(tx, api.b.CurrentHeader(), api.b.ChainConfig()), nil
-		}
-		if err == nil {
-			return nil, nil
-		}
-		return nil, NewTxIndexingError()
+	if err != nil {
+		return nil, err
 	}
 
 	// fetch bor block tx if necessary
-	if tx == nil {
+	if !found {
 		if tx, blockHash, blockNumber, index, err = api.b.GetBorBlockTransaction(ctx, hash); err != nil {
 			return nil, err
 		}
