@@ -44,7 +44,7 @@ func init() {
 
 The state changes that are covered by the journaling library are:
 
-- `OnBalanceChange`
+- `OnBalanceChange`. Note that `OnBalanceChange` will carry the `BalanceChangeRevert` reason.
 - `OnNonceChange`
 - `OnCodeChange`
 - `OnStorageChange`
