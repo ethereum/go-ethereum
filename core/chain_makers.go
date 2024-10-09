@@ -348,13 +348,15 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 		var requests [][]byte
 		if config.IsPrague(b.header.Number, b.header.Time) {
+			var blockLogs []*types.Log
 			for _, r := range b.receipts {
-				depositRequests, err := ParseDepositLogs(r.Logs, config)
-				if err != nil {
-					panic(fmt.Sprintf("failed to parse deposit log: %v", err))
-				}
-				requests = append(requests, depositRequests)
+				blockLogs = append(blockLogs, r.Logs...)
 			}
+			depositRequests, err := ParseDepositLogs(blockLogs, config)
+			if err != nil {
+				panic(fmt.Sprintf("failed to parse deposit log: %v", err))
+			}
+			requests = append(requests, depositRequests)
 		}
 		if requests != nil {
 			reqHash := types.CalcRequestsHash(requests)
