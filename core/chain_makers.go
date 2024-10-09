@@ -346,18 +346,24 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 
-		var requests types.Requests
+		var requests [][]byte
 		if config.IsPrague(b.header.Number, b.header.Time) {
+			var blockLogs []*types.Log
 			for _, r := range b.receipts {
-				d, err := ParseDepositLogs(r.Logs, config)
-				if err != nil {
-					panic(fmt.Sprintf("failed to parse deposit log: %v", err))
-				}
-				requests = append(requests, d...)
+				blockLogs = append(blockLogs, r.Logs...)
 			}
+			depositRequests, err := ParseDepositLogs(blockLogs, config)
+			if err != nil {
+				panic(fmt.Sprintf("failed to parse deposit log: %v", err))
+			}
+			requests = append(requests, depositRequests)
+		}
+		if requests != nil {
+			reqHash := types.CalcRequestsHash(requests)
+			b.header.RequestsHash = &reqHash
 		}
 
-		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals, Requests: requests}
+		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals}
 		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, &body, b.receipts)
 		if err != nil {
 			panic(err)

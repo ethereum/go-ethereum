@@ -145,10 +145,12 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the parsed requests match the expected header value.
 	if header.RequestsHash != nil {
-		depositSha := types.DeriveSha(res.Requests, trie.NewStackTrie(nil))
-		if depositSha != *header.RequestsHash {
-			return fmt.Errorf("invalid deposit root hash (remote: %x local: %x)", *header.RequestsHash, depositSha)
+		reqhash := types.CalcRequestsHash(res.Requests)
+		if reqhash != *header.RequestsHash {
+			return fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
 		}
+	} else if res.Requests != nil {
+		return fmt.Errorf("block has requests before prague fork")
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
