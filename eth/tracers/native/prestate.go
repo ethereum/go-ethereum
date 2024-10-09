@@ -75,7 +75,7 @@ type prestateTracerConfig struct {
 	DiffMode bool `json:"diffMode"` // If true, this tracer will return state modifications
 }
 
-func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, _ *params.ChainConfig) (*tracers.Tracer, error) {
+func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	var config prestateTracerConfig
 	if cfg != nil {
 		if err := json.Unmarshal(cfg, &config); err != nil {

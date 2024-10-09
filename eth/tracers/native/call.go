@@ -126,7 +126,7 @@ type callTracerConfig struct {
 
 // newCallTracer returns a native go tracer which tracks
 // call frames of a tx, and implements vm.EVMLogger.
-func newCallTracer(ctx *tracers.Context, cfg json.RawMessage, _ *params.ChainConfig) (*tracers.Tracer, error) {
+func newCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	t, err := newCallTracerObject(ctx, cfg)
 	if err != nil {
 		return nil, err
