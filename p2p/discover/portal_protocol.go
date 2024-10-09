@@ -1477,7 +1477,8 @@ func (p *PortalProtocol) collectTableNodes(rip net.IP, distances []uint, limit i
 		}
 		processed[dist] = struct{}{}
 
-		for _, n := range p.table.appendLiveNodes(dist, bn[:0]) {
+		checkLive := !p.table.cfg.NoFindnodeLivenessCheck
+		for _, n := range p.table.appendBucketNodes(dist, bn[:0], checkLive) {
 			// Apply some pre-checks to avoid sending invalid nodes.
 			// Note liveness is checked by appendLiveNodes.
 			if netutil.CheckRelayIP(rip, n.IP()) != nil {

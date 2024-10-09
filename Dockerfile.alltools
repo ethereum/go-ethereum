@@ -4,7 +4,7 @@ ARG VERSION=""
 ARG BUILDNUM=""
 
 # Build Geth in a stock Go builder container
-FROM golang:1.23-alpine as builder
+FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache gcc musl-dev linux-headers git
 
@@ -14,6 +14,13 @@ COPY go.sum /go-ethereum/
 RUN cd /go-ethereum && go mod download
 
 ADD . /go-ethereum
+
+# This is not strictly necessary, but it matches the "Dockerfile" steps, thus
+# makes it so that under certain circumstances, the docker layer can be cached,
+# and the builder can jump to the next (build all) command, with the go cache fully loaded.
+#
+RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
+
 RUN cd /go-ethereum && go run build/ci.go install -static
 
 # Pull all binaries into a second stage deploy alpine container
