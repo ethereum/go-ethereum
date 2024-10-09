@@ -100,8 +100,8 @@ func (set *NodeSet) AddNode(path []byte, n *Node) {
 	set.Nodes[string(path)] = n
 }
 
-// MergeSet merges this 'set' with 'other'. It assumes that the sets are disjoint, and
-// thus does not deduplicate data (count deletes, dedup leaves etc).
+// MergeSet merges this 'set' with 'other'. It assumes that the sets are disjoint,
+// and thus does not deduplicate data (count deletes, dedup leaves etc).
 func (set *NodeSet) MergeSet(other *NodeSet) error {
 	if set.Owner != other.Owner {
 		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, other.Owner)
@@ -110,6 +110,7 @@ func (set *NodeSet) MergeSet(other *NodeSet) error {
 
 	set.deletes += other.deletes
 	set.updates += other.updates
+
 	// Since we assume the sets are disjoint, we can safely append leaves
 	// like this without deduplication.
 	set.Leaves = append(set.Leaves, other.Leaves...)

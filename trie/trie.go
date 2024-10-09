@@ -48,6 +48,7 @@ type Trie struct {
 	// hashing operation. This number will not directly map to the number of
 	// actually unhashed nodes.
 	unhashed int
+
 	// uncommitted is the number of updates since last commit.
 	uncommitted int
 
