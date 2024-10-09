@@ -137,6 +137,7 @@ var (
 
 	rpcFlags = []cli.Flag{
 		utils.RPCEnabledFlag,
+		utils.RPCGlobalGasCapFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
 		utils.RPCHttpWriteTimeoutFlag,
