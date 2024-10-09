@@ -67,7 +67,7 @@ type ExecutionResult struct {
 	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
 	RequestsHash         *common.Hash          `json:"requestsRoot,omitempty"`
-	DepositRequests      *types.Deposits       `json:"depositRequests,omitempty"`
+	Requests             [][]byte              `json:"requests,omitempty"`
 }
 
 type ommer struct {
@@ -385,21 +385,15 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		for _, receipt := range receipts {
 			allLogs = append(allLogs, receipt.Logs...)
 		}
-		requests, err := core.ParseDepositLogs(allLogs, chainConfig)
+		depositRequests, err := core.ParseDepositLogs(allLogs, chainConfig)
 		if err != nil {
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
+		requests := [][]byte{depositRequests}
 		// Calculate the requests root
-		h := types.DeriveSha(requests, trie.NewStackTrie(nil))
+		h := types.CalcRequestsHash(requests)
 		execRs.RequestsHash = &h
-		// Get the deposits from the requests
-		deposits := make(types.Deposits, 0)
-		for _, req := range requests {
-			if dep, ok := req.Inner().(*types.Deposit); ok {
-				deposits = append(deposits, dep)
-			}
-		}
-		execRs.DepositRequests = &deposits
+		execRs.Requests = requests
 	}
 	// Re-create statedb instance with new root upon the updated database
 	// for accessing latest states.

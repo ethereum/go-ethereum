@@ -75,6 +75,7 @@ type Payload struct {
 	full         *types.Block
 	fullWitness  *stateless.Witness
 	sidecars     []*types.BlobTxSidecar
+	requests     [][]byte
 	fullFees     *big.Int
 	stop         chan struct{}
 	lock         sync.Mutex
@@ -111,6 +112,7 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) {
 		payload.full = r.block
 		payload.fullFees = r.fees
 		payload.sidecars = r.sidecars
+		payload.requests = r.requests
 		payload.fullWitness = r.witness
 
 		feesInEther := new(big.Float).Quo(new(big.Float).SetInt(r.fees), big.NewFloat(params.Ether))
@@ -142,6 +144,7 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 	}
 	if payload.full != nil {
 		envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
+		envelope.Requests = payload.requests
 		if payload.fullWitness != nil {
 			envelope.Witness = new(hexutil.Bytes)
 			*envelope.Witness, _ = rlp.EncodeToBytes(payload.fullWitness) // cannot fail
@@ -149,6 +152,7 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 		return envelope
 	}
 	envelope := engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
+	envelope.Requests = payload.requests
 	if payload.emptyWitness != nil {
 		envelope.Witness = new(hexutil.Bytes)
 		*envelope.Witness, _ = rlp.EncodeToBytes(payload.emptyWitness) // cannot fail
@@ -163,6 +167,7 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 	defer payload.lock.Unlock()
 
 	envelope := engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil)
+	envelope.Requests = payload.requests
 	if payload.emptyWitness != nil {
 		envelope.Witness = new(hexutil.Bytes)
 		*envelope.Witness, _ = rlp.EncodeToBytes(payload.emptyWitness) // cannot fail
@@ -194,6 +199,7 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 		close(payload.stop)
 	}
 	envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars)
+	envelope.Requests = payload.requests
 	if payload.fullWitness != nil {
 		envelope.Witness = new(hexutil.Bytes)
 		*envelope.Witness, _ = rlp.EncodeToBytes(payload.fullWitness) // cannot fail
