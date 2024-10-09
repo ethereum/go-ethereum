@@ -17,10 +17,12 @@
 package vm
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"maps"
 	"math/big"
 
@@ -28,6 +30,9 @@ import (
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	"github.com/consensys/gnark/backend/groth16"
+	"github.com/consensys/gnark/backend/plonk"
+	"github.com/consensys/gnark/backend/witness"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
@@ -1250,4 +1255,108 @@ func kZGToVersionedHash(kzg kzg4844.Commitment) common.Hash {
 	h[0] = blobCommitmentVersionKZG
 
 	return h
+}
+
+type GnarkInputs struct {
+	CurveId   ecc.ID `json:"curve_id"`
+	Proof     []byte `json:"proof"`
+	VerifyKey []byte `json:"verify_key"`
+	Witness   []byte `json:"witness"`
+}
+
+func (g GnarkInputs) ToAbi() *abi.Arguments {
+
+	gi, _ := abi.NewType("tuple", "GnarkInputs", []abi.ArgumentMarshaling{
+		{Name: "curve_id", Type: "uint16"},
+		{Name: "proof", Type: "bytes"},
+		{Name: "verify_key", Type: "bytes"},
+		{Name: "witness", Type: "bytes"},
+	})
+
+	args := abi.Arguments{
+		{Type: gi, Name: "grank_inputs"},
+	}
+
+	return &args
+}
+
+type gnarkGroth16Verify struct{}
+
+func (b *gnarkGroth16Verify) RequiredGas(input []byte) uint64 {
+	return 7500
+}
+
+func (c *gnarkGroth16Verify) Run(input []byte) ([]byte, error) {
+	unpack, err := GnarkInputs{}.ToAbi().Unpack(input)
+	if err != nil {
+		return nil, err
+	}
+	gi := unpack[0].(struct {
+		CurveId   uint16 `json:"curve_id"`
+		Proof     []byte `json:"proof"`
+		VerifyKey []byte `json:"verify_key"`
+		Witness   []byte `json:"witness"`
+	})
+
+	id := ecc.ID(gi.CurveId)
+
+	proof := groth16.NewProof(id)
+	proof.ReadFrom(bytes.NewReader(gi.Proof))
+
+	vk := groth16.NewVerifyingKey(id)
+	vk.ReadFrom(bytes.NewReader(gi.VerifyKey))
+
+	witness, err := witness.New(id.ScalarField())
+	if nil != err {
+		return nil, err
+	}
+	witness.ReadFrom(bytes.NewReader(gi.Witness))
+
+	err = groth16.Verify(proof, vk, witness)
+	if nil == err {
+		return []byte("y"), nil
+	} else {
+		return []byte("n"), nil
+	}
+}
+
+type gnarkPlonkVerify struct{}
+
+func (b *gnarkPlonkVerify) RequiredGas(input []byte) uint64 {
+	return 7500
+}
+
+func (c *gnarkPlonkVerify) Run(input []byte) ([]byte, error) {
+	unpack, err := GnarkInputs{}.ToAbi().Unpack(input)
+	if err != nil {
+		return nil, err
+	}
+
+	gi := unpack[0].(struct {
+		CurveId   uint16 `json:"curve_id"`
+		Proof     []byte `json:"proof"`
+		VerifyKey []byte `json:"verify_key"`
+		Witness   []byte `json:"witness"`
+	})
+
+	id := ecc.ID(gi.CurveId)
+
+	proof := plonk.NewProof(id)
+	proof.ReadFrom(bytes.NewReader(gi.Proof))
+
+	vk := plonk.NewVerifyingKey(id)
+	vk.ReadFrom(bytes.NewReader(gi.VerifyKey))
+
+	witness, err := witness.New(id.ScalarField())
+	if nil != err {
+		return nil, err
+	}
+	witness.ReadFrom(bytes.NewReader(gi.Witness))
+
+	err = plonk.Verify(proof, vk, witness)
+	if nil == err {
+		return []byte("y"), nil
+	} else {
+		return []byte("n"), nil
+	}
 }

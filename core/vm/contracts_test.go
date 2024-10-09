@@ -18,13 +18,19 @@ package vm
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark/backend/plonk"
+	cs "github.com/consensys/gnark/constraint/bn254"
+	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/frontend/cs/scs"
+	"github.com/consensys/gnark/test/unsafekzg"
+	"github.com/ethereum/go-ethereum/common"
 	"os"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
@@ -396,4 +402,205 @@ func BenchmarkPrecompiledBLS12381G2MultiExpWorstCase(b *testing.B) {
 		NoBenchmark: false,
 	}
 	benchmarkPrecompiled("f0f", testcase, b)
+}
+
+type Circuit struct {
+	X frontend.Variable `gnark:",public"`
+	Y frontend.Variable `gnark:",public"`
+
+	E frontend.Variable
+}
+
+func (circuit *Circuit) Define(api frontend.API) error {
+	const bitSize = 4000
+
+	output := frontend.Variable(1)
+	bits := api.ToBinary(circuit.E, bitSize)
+
+	for i := 0; i < len(bits); i++ {
+		if i != 0 {
+			output = api.Mul(output, output)
+		}
+		multiply := api.Mul(output, circuit.X)
+		output = api.Select(bits[len(bits)-1-i], multiply, output)
+
+	}
+
+	api.AssertIsEqual(circuit.Y, output)
+
+	return nil
+}
+
+func TestGnarkPlonk(t *testing.T) {
+	var circuit Circuit
+
+	ccs, err := frontend.Compile(ecc.BN254.ScalarField(), scs.NewBuilder, &circuit)
+	if err != nil {
+		fmt.Println("circuit compilation error")
+	}
+
+	scs := ccs.(*cs.SparseR1CS)
+	srs, srsLagrange, err := unsafekzg.NewSRS(scs)
+	if err != nil {
+		panic(err)
+	}
+	// Correct data: the proof passes
+	{
+		// Witnesses instantiation. Witness is known only by the prover,
+		// while public w is a public data known by the verifier.
+		var w Circuit
+		w.X = 2
+		w.E = 2
+		w.Y = 4
+
+		witnessFull, err := frontend.NewWitness(&w, ecc.BN254.ScalarField())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		witnessPublic, err := frontend.NewWitness(&w, ecc.BN254.ScalarField(), frontend.PublicOnly())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// public data consists of the polynomials describing the constants involved
+		// in the constraints, the polynomial describing the permutation ("grand
+		// product argument"), and the FFT domains.
+		pk, vk, err := plonk.Setup(ccs, srs, srsLagrange)
+		//_, err := plonk.Setup(r1cs, kate, &publicWitness)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		proof, err := plonk.Prove(ccs, pk, witnessFull)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = plonk.Verify(proof, vk, witnessPublic)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var p_buf bytes.Buffer
+		_, err = proof.WriteTo(&p_buf)
+		if nil != err {
+			t.Fatal("Error: serialize failed")
+		}
+
+		var vk_buf bytes.Buffer
+		_, err = vk.WriteTo(&vk_buf)
+		if nil != err {
+			t.Fatal("Error: serialize failed")
+		}
+
+		var w_buf bytes.Buffer
+		_, err = witnessPublic.WriteTo(&w_buf)
+		if nil != err {
+			t.Fatal("Error: serialize failed")
+		}
+
+		inputs := GnarkInputs{
+			CurveId:   ecc.BN254,
+			Proof:     p_buf.Bytes(),
+			VerifyKey: vk_buf.Bytes(),
+			Witness:   w_buf.Bytes(),
+		}
+
+		encode, err := inputs.ToAbi().Pack(&inputs)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		println("encode:", hex.EncodeToString(encode))
+
+		var g gnarkPlonkVerify
+		result, err := g.Run(encode)
+		if nil != err {
+			t.Fatal("Error")
+		}
+
+		if "y" != string(result) {
+			t.Fatal("Error")
+		}
+	}
+
+	// Wrong data: the proof fails
+	{
+		// Witnesses instantiation. Witness is known only by the prover,
+		// while public w is a public data known by the verifier.
+		var w, pW Circuit
+		w.X = 2
+		w.E = 12
+		w.Y = 4096
+
+		pW.X = 3
+		pW.Y = 4096
+
+		witnessFull, err := frontend.NewWitness(&w, ecc.BN254.ScalarField())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		witnessPublic, err := frontend.NewWitness(&pW, ecc.BN254.ScalarField(), frontend.PublicOnly())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// public data consists of the polynomials describing the constants involved
+		// in the constraints, the polynomial describing the permutation ("grand
+		// product argument"), and the FFT domains.
+		pk, vk, err := plonk.Setup(ccs, srs, srsLagrange)
+		//_, err := plonk.Setup(r1cs, kate, &publicWitness)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		proof, err := plonk.Prove(ccs, pk, witnessFull)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = plonk.Verify(proof, vk, witnessPublic)
+		if err == nil {
+			t.Fatal("Error: wrong proof is accepted")
+		}
+
+		var p_buf bytes.Buffer
+		_, err = proof.WriteTo(&p_buf)
+		if nil != err {
+			t.Fatal("Error: serialize failed")
+		}
+
+		var vk_buf bytes.Buffer
+		_, err = vk.WriteTo(&vk_buf)
+		if nil != err {
+			t.Fatal("Error: serialize failed")
+		}
+
+		var w_buf bytes.Buffer
+		_, err = witnessPublic.WriteTo(&w_buf)
+		if nil != err {
+			t.Fatal("Error: serialize failed")
+		}
+
+		inputs := GnarkInputs{
+			CurveId:   ecc.BN254,
+			Proof:     p_buf.Bytes(),
+			VerifyKey: vk_buf.Bytes(),
+			Witness:   w_buf.Bytes(),
+		}
+		encode, err := inputs.ToAbi().Pack(&inputs)
+
+		var g gnarkPlonkVerify
+		result, err := g.Run(encode)
+		if nil != err {
+			t.Fatal("Error")
+		}
+
+		if "n" != string(result) {
+			t.Fatal("Error")
+		}
+	}
 }
