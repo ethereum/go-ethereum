@@ -18,6 +18,7 @@ package tracing
 
 import (
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -229,6 +230,21 @@ type Hooks struct {
 	OnStorageRead  StorageReadHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+}
+
+// Copy creates a new Hooks instance with all implemented hooks copied from the original.
+func (h *Hooks) Copy() *Hooks {
+	copied := &Hooks{}
+	srcValue := reflect.ValueOf(h).Elem()
+	dstValue := reflect.ValueOf(copied).Elem()
+
+	for i := 0; i < srcValue.NumField(); i++ {
+		field := srcValue.Field(i)
+		if !field.IsNil() {
+			dstValue.Field(i).Set(field)
+		}
+	}
+	return copied
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful

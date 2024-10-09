@@ -50,19 +50,20 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks == nil {
 		return nil, fmt.Errorf("wrapping nil tracer")
 	}
-	// No state change to journal.
+	// No state change to journal, return the wrapped hooks as is
 	if hooks.OnBalanceChange == nil && hooks.OnNonceChange == nil && hooks.OnCodeChange == nil && hooks.OnStorageChange == nil {
 		return hooks, nil
 	}
-	var (
-		j       = &journal{entries: make([]entry, 0), hooks: hooks}
-		wrapped = &Hooks{
-			OnTxEnd: j.OnTxEnd,
-			OnEnter: j.OnEnter,
-			OnExit:  j.OnExit,
-		}
-	)
-	// State change hooks.
+
+	// Create a new Hooks instance and copy all hooks
+	wrapped := hooks.Copy()
+	// Create journal
+	j := &journal{entries: make([]entry, 0), hooks: hooks}
+	// Scope hooks need to be re-implemented.
+	wrapped.OnTxEnd = j.OnTxEnd
+	wrapped.OnEnter = j.OnEnter
+	wrapped.OnExit = j.OnExit
+	// Wrap state change hooks.
 	if hooks.OnBalanceChange != nil {
 		wrapped.OnBalanceChange = j.OnBalanceChange
 	}
@@ -75,70 +76,7 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 	if hooks.OnStorageChange != nil {
 		wrapped.OnStorageChange = j.OnStorageChange
 	}
-	// Pass through the remaining hooks.
-	if hooks.OnTxStart != nil {
-		wrapped.OnTxStart = hooks.OnTxStart
-	}
-	if hooks.OnOpcode != nil {
-		wrapped.OnOpcode = hooks.OnOpcode
-	}
-	if hooks.OnFault != nil {
-		wrapped.OnFault = hooks.OnFault
-	}
-	if hooks.OnGasChange != nil {
-		wrapped.OnGasChange = hooks.OnGasChange
-	}
-	if hooks.OnBlockchainInit != nil {
-		wrapped.OnBlockchainInit = hooks.OnBlockchainInit
-	}
-	if hooks.OnClose != nil {
-		wrapped.OnClose = hooks.OnClose
-	}
-	if hooks.OnBlockStart != nil {
-		wrapped.OnBlockStart = hooks.OnBlockStart
-	}
-	if hooks.OnBlockEnd != nil {
-		wrapped.OnBlockEnd = hooks.OnBlockEnd
-	}
-	if hooks.OnSkippedBlock != nil {
-		wrapped.OnSkippedBlock = hooks.OnSkippedBlock
-	}
-	if hooks.OnGenesisBlock != nil {
-		wrapped.OnGenesisBlock = hooks.OnGenesisBlock
-	}
-	if hooks.OnReorg != nil {
-		wrapped.OnReorg = hooks.OnReorg
-	}
-	if hooks.OnSystemCallStart != nil {
-		wrapped.OnSystemCallStart = hooks.OnSystemCallStart
-	}
-	if hooks.OnSystemCallEnd != nil {
-		wrapped.OnSystemCallEnd = hooks.OnSystemCallEnd
-	}
-	if hooks.OnLog != nil {
-		wrapped.OnLog = hooks.OnLog
-	}
-	if hooks.OnBalanceRead != nil {
-		wrapped.OnBalanceRead = hooks.OnBalanceRead
-	}
-	if hooks.OnNonceRead != nil {
-		wrapped.OnNonceRead = hooks.OnNonceRead
-	}
-	if hooks.OnCodeRead != nil {
-		wrapped.OnCodeRead = hooks.OnCodeRead
-	}
-	if hooks.OnCodeSizeRead != nil {
-		wrapped.OnCodeSizeRead = hooks.OnCodeSizeRead
-	}
-	if hooks.OnCodeHashRead != nil {
-		wrapped.OnCodeHashRead = hooks.OnCodeHashRead
-	}
-	if hooks.OnStorageRead != nil {
-		wrapped.OnStorageRead = hooks.OnStorageRead
-	}
-	if hooks.OnBlockHashRead != nil {
-		wrapped.OnBlockHashRead = hooks.OnBlockHashRead
-	}
+
 	return wrapped, nil
 }
 
