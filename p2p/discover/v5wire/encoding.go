@@ -217,6 +217,10 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 
 	// Store sent WHOAREYOU challenges.
 	if challenge, ok := packet.(*Whoareyou); ok {
+		// check if we already sent a challenge to this node
+		if c.sc.getHandshake(id, addr) != nil {
+			return nil, Nonce{}, nil
+		}
 		challenge.ChallengeData = bytesCopy(&c.buf)
 		c.sc.storeSentHandshake(id, addr, challenge)
 	} else if msgData == nil {
