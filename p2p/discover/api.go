@@ -415,28 +415,31 @@ func (p *PortalProtocolAPI) FindContent(enr string, contentKey string) (interfac
 	}
 }
 
-func (p *PortalProtocolAPI) Offer(enr string, contentKey string, contentValue string) (string, error) {
+func (p *PortalProtocolAPI) Offer(enr string, contentItems [][2]string) (string, error) {
 	n, err := enode.Parse(enode.ValidSchemes, enr)
 	if err != nil {
 		return "", err
 	}
 
-	contentKeyBytes, err := hexutil.Decode(contentKey)
-	if err != nil {
-		return "", err
-	}
-	contentValueBytes, err := hexutil.Decode(contentValue)
-	if err != nil {
-		return "", err
-	}
-
-	contentEntry := &ContentEntry{
-		ContentKey: contentKeyBytes,
-		Content:    contentValueBytes,
+	entries := make([]*ContentEntry, 0, len(contentItems));
+	for _, contentItem := range contentItems {
+		contentKey, err := hexutil.Decode(contentItem[0])
+		if err != nil {
+			return "", err
+		}
+		contentValue, err := hexutil.Decode(contentItem[1])
+		if err != nil {
+			return "", err
+		}
+		contentEntry := &ContentEntry{
+			ContentKey: contentKey,
+			Content:    contentValue,
+		}
+		entries = append(entries, contentEntry)
 	}
 
 	transientOfferRequest := &TransientOfferRequest{
-		Contents: []*ContentEntry{contentEntry},
+		Contents: entries,
 	}
 
 	offerReq := &OfferRequest{

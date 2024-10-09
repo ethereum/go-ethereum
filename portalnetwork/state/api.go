@@ -40,8 +40,8 @@ func (p *API) StateFindContent(enr string, contentKey string) (interface{}, erro
 	return p.FindContent(enr, contentKey)
 }
 
-func (p *API) StateOffer(enr string, contentKey string, contentValue string) (string, error) {
-	return p.Offer(enr, contentKey, contentValue)
+func (p *API) StateOffer(enr string, contentItems [][2]string) (string, error) {
+	return p.Offer(enr, contentItems)
 }
 
 func (p *API) StateRecursiveFindNodes(nodeId string) ([]string, error) {

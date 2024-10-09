@@ -40,8 +40,8 @@ func (p *API) HistoryFindContent(enr string, contentKey string) (interface{}, er
 	return p.FindContent(enr, contentKey)
 }
 
-func (p *API) HistoryOffer(enr string, contentKey string, contentValue string) (string, error) {
-	return p.Offer(enr, contentKey, contentValue)
+func (p *API) HistoryOffer(enr string, contentItems [][2]string) (string, error) {
+	return p.Offer(enr, contentItems)
 }
 
 func (p *API) HistoryRecursiveFindNodes(nodeId string) ([]string, error) {

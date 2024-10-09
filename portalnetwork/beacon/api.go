@@ -40,8 +40,8 @@ func (p *API) BeaconFindContent(enr string, contentKey string) (interface{}, err
 	return p.FindContent(enr, contentKey)
 }
 
-func (p *API) BeaconOffer(enr string, contentKey string, contentValue string) (string, error) {
-	return p.Offer(enr, contentKey, contentValue)
+func (p *API) BeaconOffer(enr string, contentItems [][2]string) (string, error) {
+	return p.Offer(enr, contentItems)
 }
 
 func (p *API) BeaconRecursiveFindNodes(nodeId string) ([]string, error) {
