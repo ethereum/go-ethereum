@@ -1593,21 +1593,6 @@ func newAccountSet(signer types.Signer, addrs ...common.Address) *accountSet {
 	return as
 }
 
-// contains checks if a given address is contained within the set.
-func (as *accountSet) contains(addr common.Address) bool {
-	_, exist := as.accounts[addr]
-	return exist
-}
-
-// containsTx checks if the sender of a given tx is within the set. If the sender
-// cannot be derived, this method returns false.
-func (as *accountSet) containsTx(tx *types.Transaction) bool {
-	if addr, err := types.Sender(as.signer, tx); err == nil {
-		return as.contains(addr)
-	}
-	return false
-}
-
 // add inserts a new address into the set to track.
 func (as *accountSet) add(addr common.Address) {
 	as.accounts[addr] = struct{}{}

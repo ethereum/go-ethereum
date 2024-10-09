@@ -69,7 +69,7 @@ type txPool interface {
 	Get(hash common.Hash) *types.Transaction
 
 	// Add should add the given transactions to the pool.
-	Add(txs []*types.Transaction, local bool, sync bool) []error
+	Add(txs []*types.Transaction, sync bool) []error
 
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
@@ -190,7 +190,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		return p.RequestTxs(hashes)
 	}
 	addTxs := func(txs []*types.Transaction) []error {
-		return h.txpool.Add(txs, false, false)
+		return h.txpool.Add(txs, false)
 	}
 	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, addTxs, fetchTx, h.removePeer)
 	return h, nil

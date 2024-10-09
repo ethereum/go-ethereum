@@ -338,7 +338,8 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *Ethereum) Miner() *miner.Miner { return s.miner }
+func (s *Ethereum) Miner() *miner.Miner          { return s.miner }
+func (s *Ethereum) Tracker() *tracking.TxTracker { return s.localTxTracker }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }

@@ -287,7 +287,7 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	if locals := b.eth.localTxTracker; locals != nil {
 		locals.Track(signedTx)
 	}
-	return b.eth.txPool.Add([]*types.Transaction{signedTx}, true, false)[0]
+	return b.eth.txPool.Add([]*types.Transaction{signedTx}, false)[0]
 }
 
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {

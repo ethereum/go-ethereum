@@ -48,6 +48,7 @@ type TxTracker struct {
 	signer    types.Signer
 
 	shutdownCh chan struct{}
+	triggerCh  chan struct{}
 	mu         sync.Mutex
 	wg         sync.WaitGroup
 }
@@ -59,6 +60,7 @@ func NewTxTracker(journalPath string, journalTime time.Duration, chainConfig *pa
 		byAddr:     make(map[common.Address]*legacypool.SortedMap),
 		signer:     signer,
 		shutdownCh: make(chan struct{}),
+		triggerCh:  make(chan struct{}),
 		pool:       next,
 	}
 	if journalPath != "" {
@@ -153,6 +155,13 @@ func (tracker *TxTracker) Stop() error {
 	return nil
 }
 
+// TriggerRecheck triggers a recheck, whereby the tracker potentially resubmits
+// transactions to the tx pool. This method is mainly useful for test purposes,
+// in order to speed up the process.
+func (tracker *TxTracker) TriggerRecheck() {
+	tracker.triggerCh <- struct{}{}
+}
+
 func (tracker *TxTracker) loop() {
 	defer tracker.wg.Done()
 	if tracker.journal != nil {
@@ -169,11 +178,16 @@ func (tracker *TxTracker) loop() {
 		select {
 		case <-tracker.shutdownCh:
 			return
+		case <-tracker.triggerCh:
+			resubmits, _ := tracker.recheck(false)
+			if len(resubmits) > 0 {
+				tracker.pool.Add(resubmits, false)
+			}
 		case <-t.C:
 			checkJournal := tracker.journal != nil && time.Since(lastJournal) > tracker.rejournal
 			resubmits, rejournal := tracker.recheck(checkJournal)
 			if len(resubmits) > 0 {
-				tracker.pool.Add(resubmits, false, false)
+				tracker.pool.Add(resubmits, false)
 			}
 			if checkJournal {
 				// Lock to prevent journal.rotate <-> journal.insert (via TrackAll) conflicts
