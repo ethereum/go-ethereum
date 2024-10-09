@@ -144,6 +144,7 @@ var AppHelpFlagGroups = []flagGroup{
 		Name: "API AND CONSOLE",
 		Flags: []cli.Flag{
 			utils.RPCEnabledFlag,
+			utils.RPCGlobalGasCapFlag,
 			utils.RPCListenAddrFlag,
 			utils.RPCPortFlag,
 			utils.RPCHttpWriteTimeoutFlag,

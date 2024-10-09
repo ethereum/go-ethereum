@@ -77,7 +77,7 @@ type peer struct {
 
 	knownVote     mapset.Set // Set of BFT Vote known to be known by this peer
 	knownTimeout  mapset.Set // Set of BFT timeout known to be known by this peer
-	knownSyncInfo mapset.Set // Set of BFT Sync Info known to be known by this peer`
+	knownSyncInfo mapset.Set // Set of BFT Sync Info known to be known by this peer
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {

@@ -69,7 +69,7 @@ var Defaults = Config{
 	GasPrice:           big.NewInt(0.25 * params.Shannon),
 
 	TxPool:      core.DefaultTxPoolConfig,
-	RPCGasCap:   25000000,
+	RPCGasCap:   50000000,
 	GPO:         FullNodeGPO,
 	RPCTxFeeCap: 1, // 1 ether
 }
