@@ -427,7 +427,7 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 		CustomPayload: customPayloadBytes,
 	}
 
-	p.Log.Trace("Sending ping request", "protocol", p.protocolName, "ip", p.Self().IP().String(), "source", p.Self().ID(), "target", node.ID(), "ping", pingRequest)
+	p.Log.Trace(">> PING/"+p.protocolName, "protocol", p.protocolName, "ip", p.Self().IP().String(), "source", p.Self().ID(), "target", node.ID(), "ping", pingRequest)
 	pingRequestBytes, err := pingRequest.MarshalSSZ()
 	if err != nil {
 		return nil, err
@@ -443,7 +443,7 @@ func (p *PortalProtocol) pingInner(node *enode.Node) (*portalwire.Pong, error) {
 		return nil, err
 	}
 
-	p.Log.Trace("Received ping response", "source", p.Self().ID(), "target", node.ID(), "res", talkResp)
+	p.Log.Trace("<< PONG/"+p.protocolName, "source", p.Self().ID(), "target", node.ID(), "res", talkResp)
 
 	return p.processPong(node, talkResp)
 }
@@ -462,7 +462,7 @@ func (p *PortalProtocol) findNodes(node *enode.Node, distances []uint) ([]*enode
 		Distances: distancesBytes,
 	}
 
-	p.Log.Trace("Sending find nodes request", "id", node.ID(), "findNodes", findNodes)
+	p.Log.Trace(">> FIND_NODES/"+p.protocolName, "id", node.ID(), "findNodes", findNodes)
 	findNodesBytes, err := findNodes.MarshalSSZ()
 	if err != nil {
 		p.Log.Error("failed to marshal find nodes request", "err", err)
@@ -487,7 +487,7 @@ func (p *PortalProtocol) findContent(node *enode.Node, contentKey []byte) (byte,
 		ContentKey: contentKey,
 	}
 
-	p.Log.Trace("Sending find content request", "id", node.ID(), "findContent", findContent)
+	p.Log.Trace(">> FIND_CONTENT/"+p.protocolName, "id", node.ID(), "findContent", findContent)
 	findContentBytes, err := findContent.MarshalSSZ()
 	if err != nil {
 		p.Log.Error("failed to marshal find content request", "err", err)
@@ -514,7 +514,7 @@ func (p *PortalProtocol) offer(node *enode.Node, offerRequest *OfferRequest) ([]
 		ContentKeys: contentKeys,
 	}
 
-	p.Log.Trace("Sending offer request", "offer", offer)
+	p.Log.Trace(">> OFFER/"+p.protocolName, "offer", offer)
 	offerBytes, err := offer.MarshalSSZ()
 	if err != nil {
 		p.Log.Error("failed to marshal offer request", "err", err)
@@ -552,7 +552,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 		return nil, err
 	}
 
-	p.Log.Trace("Received accept response", "id", target.ID(), "accept", accept)
+	p.Log.Trace("<< ACCEPT/"+p.protocolName, "id", target.ID(), "accept", accept)
 	p.table.addFoundNode(target, true)
 
 	var contentKeyLen int
@@ -643,7 +643,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 					p.Log.Error("failed to write to utp connection", "err", err)
 					return
 				}
-				p.Log.Trace("Sent content response", "id", target.ID(), "contents", contents, "size", written)
+				p.Log.Trace(">> CONTENT/"+p.protocolName, "id", target.ID(), "contents", contents, "size", written)
 				return
 			}
 		}
@@ -672,7 +672,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			return 0xff, nil, err
 		}
 
-		p.Log.Trace("Received content response", "id", target.ID(), "content", content)
+		p.Log.Trace("<< CONTENT/"+p.protocolName, "id", target.ID(), "content", content)
 		p.table.addFoundNode(target, true)
 		return resp[1], content.Content, nil
 	case portalwire.ContentConnIdSelector:
@@ -682,7 +682,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			return 0xff, nil, err
 		}
 
-		p.Log.Trace("Received returned content response", "id", target.ID(), "resp", common.Bytes2Hex(resp), "connIdMsg", connIdMsg)
+		p.Log.Trace("<< CONTENT_CONNECTION_ID/"+p.protocolName, "id", target.ID(), "resp", common.Bytes2Hex(resp), "connIdMsg", connIdMsg)
 		p.table.addFoundNode(target, true)
 		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
 		laddr := p.utp.Addr().(*utp.Addr)
@@ -714,7 +714,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			p.Log.Error("failed to read from utp connection", "err", err)
 			return 0xff, nil, err
 		}
-		p.Log.Trace("Received content response", "id", target.ID(), "size", len(data), "data", data)
+		p.Log.Trace("<< CONTENT/"+p.protocolName, "id", target.ID(), "size", len(data), "data", data)
 		return resp[1], data, nil
 	case portalwire.ContentEnrsSelector:
 		enrs := &portalwire.Enrs{}
@@ -724,7 +724,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			return 0xff, nil, err
 		}
 
-		p.Log.Trace("Received content response", "id", target.ID(), "enrs", enrs)
+		p.Log.Trace("<< CONTENT_ENRS/"+p.protocolName, "id", target.ID(), "enrs", enrs)
 		p.table.addFoundNode(target, true)
 		nodes := p.filterNodes(target, enrs.Enrs, nil)
 		return resp[1], nodes, nil
@@ -779,7 +779,7 @@ func (p *PortalProtocol) filterNodes(target *enode.Node, enrs [][]byte, distance
 		nodes = append(nodes, n)
 	}
 
-	p.Log.Trace("Received nodes response", "id", target.ID(), "total", len(enrs), "verified", verified, "nodes", nodes)
+	p.Log.Trace("<< NODES/"+p.protocolName, "id", target.ID(), "total", len(enrs), "verified", verified, "nodes", nodes)
 	return nodes
 }
 
@@ -796,7 +796,7 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 		return nil, err
 	}
 
-	p.Log.Trace("Received pong response", "id", target.ID(), "pong", pong)
+	p.Log.Trace("<< PONG_RESPONSE/"+p.protocolName, "id", target.ID(), "pong", pong)
 
 	customPayload := &portalwire.PingPongCustomData{}
 	err = customPayload.UnmarshalSSZ(pong.CustomPayload)
@@ -804,7 +804,7 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 		return nil, err
 	}
 
-	p.Log.Trace("Received pong response", "id", target.ID(), "pong", pong, "customPayload", customPayload)
+	p.Log.Trace("<< PONG_RESPONSE/"+p.protocolName, "id", target.ID(), "pong", pong, "customPayload", customPayload)
 	p.table.addFoundNode(target, true)
 
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
@@ -839,7 +839,7 @@ func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg [
 			return nil
 		}
 
-		p.Log.Trace("received ping request", "protocol", p.protocolName, "source", id, "pingRequest", pingRequest)
+		p.Log.Trace("<< PING/"+p.protocolName, "protocol", p.protocolName, "source", id, "pingRequest", pingRequest)
 		resp, err := p.handlePing(id, pingRequest)
 		if err != nil {
 			p.Log.Error("failed to handle ping request", "err", err)
@@ -855,7 +855,7 @@ func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg [
 			return nil
 		}
 
-		p.Log.Trace("received find nodes request", "protocol", p.protocolName, "source", id, "findNodesRequest", findNodesRequest)
+		p.Log.Trace("<< FIND_NODES/"+p.protocolName, "protocol", p.protocolName, "source", id, "findNodesRequest", findNodesRequest)
 		resp, err := p.handleFindNodes(addr, findNodesRequest)
 		if err != nil {
 			p.Log.Error("failed to handle find nodes request", "err", err)
@@ -871,7 +871,7 @@ func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg [
 			return nil
 		}
 
-		p.Log.Trace("received find content request", "protocol", p.protocolName, "source", id, "findContentRequest", findContentRequest)
+		p.Log.Trace("<< FIND_NODES/"+p.protocolName, "protocol", p.protocolName, "source", id, "findContentRequest", findContentRequest)
 		resp, err := p.handleFindContent(id, addr, findContentRequest)
 		if err != nil {
 			p.Log.Error("failed to handle find content request", "err", err)
@@ -887,7 +887,7 @@ func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg [
 			return nil
 		}
 
-		p.Log.Trace("received offer request", "protocol", p.protocolName, "source", id, "offerRequest", offerRequest)
+		p.Log.Trace("<< OFFER/"+p.protocolName, "protocol", p.protocolName, "source", id, "offerRequest", offerRequest)
 		resp, err := p.handleOffer(id, addr, offerRequest)
 		if err != nil {
 			p.Log.Error("failed to handle offer request", "err", err)
@@ -928,7 +928,7 @@ func (p *PortalProtocol) handlePing(id enode.ID, ping *portalwire.Ping) ([]byte,
 		CustomPayload: pongCustomPayloadBytes,
 	}
 
-	p.Log.Trace("Sending pong response", "protocol", p.protocolName, "source", id, "pong", pong)
+	p.Log.Trace(">> PONG/"+p.protocolName, "protocol", p.protocolName, "source", id, "pong", pong)
 	pongBytes, err := pong.MarshalSSZ()
 
 	if err != nil {
@@ -961,7 +961,7 @@ func (p *PortalProtocol) handleFindNodes(fromAddr *net.UDPAddr, request *portalw
 		Enrs:  enrs,
 	}
 
-	p.Log.Trace("Sending nodes response", "protocol", p.protocolName, "source", fromAddr, "nodes", nodesMsg)
+	p.Log.Trace(">> NODES/"+p.protocolName, "protocol", p.protocolName, "source", fromAddr, "nodes", nodesMsg)
 	nodesMsgBytes, err := nodesMsg.MarshalSSZ()
 	if err != nil {
 		return nil, err
@@ -1012,7 +1012,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			Enrs: enrs,
 		}
 
-		p.Log.Trace("Sending enrs content response", "protocol", p.protocolName, "source", addr, "enrs", enrsMsg)
+		p.Log.Trace(">> CONTENT_ENRS/"+p.protocolName, "protocol", p.protocolName, "source", addr, "enrs", enrsMsg)
 		var enrsMsgBytes []byte
 		enrsMsgBytes, err = enrsMsg.MarshalSSZ()
 		if err != nil {
@@ -1033,7 +1033,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			Content: content,
 		}
 
-		p.Log.Trace("Sending raw content response", "protocol", p.protocolName, "source", addr, "content", rawContentMsg)
+		p.Log.Trace(">> CONTENT_RAW/"+p.protocolName, "protocol", p.protocolName, "source", addr, "content", rawContentMsg)
 
 		var rawContentMsgBytes []byte
 		rawContentMsgBytes, err = rawContentMsg.MarshalSSZ()
@@ -1106,7 +1106,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			Id: idBuffer,
 		}
 
-		p.Log.Trace("Sending connection id content response", "protocol", p.protocolName, "source", addr, "connId", connIdMsg)
+		p.Log.Trace(">> CONTENT_CONNECTION_ID/"+p.protocolName, "protocol", p.protocolName, "source", addr, "connId", connIdMsg)
 		var connIdMsgBytes []byte
 		connIdMsgBytes, err = connIdMsg.MarshalSSZ()
 		if err != nil {
@@ -1134,7 +1134,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 			ContentKeys:  contentKeyBitlist,
 		}
 
-		p.Log.Trace("Sending accept response", "protocol", p.protocolName, "source", addr, "accept", acceptMsg)
+		p.Log.Trace(">> ACCEPT/"+p.protocolName, "protocol", p.protocolName, "source", addr, "accept", acceptMsg)
 		var acceptMsgBytes []byte
 		acceptMsgBytes, err = acceptMsg.MarshalSSZ()
 		if err != nil {
@@ -1209,7 +1209,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 						p.Log.Error("failed to read from utp connection", "err", err)
 						return
 					}
-					p.Log.Trace("Received offer content response", "id", id, "size", len(data), "data", data)
+					p.Log.Trace("<< OFFER_CONTENT/"+p.protocolName, "id", id, "size", len(data), "data", data)
 
 					err = p.handleOfferedContents(id, contentKeys, data)
 					if err != nil {
@@ -1232,7 +1232,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 		ContentKeys:  []byte(contentKeyBitlist),
 	}
 
-	p.Log.Trace("Sending accept response", "protocol", p.protocolName, "source", addr, "accept", acceptMsg)
+	p.Log.Trace(">> ACCEPT/"+p.protocolName, "protocol", p.protocolName, "source", addr, "accept", acceptMsg)
 	var acceptMsgBytes []byte
 	acceptMsgBytes, err = acceptMsg.MarshalSSZ()
 	if err != nil {
