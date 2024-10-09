@@ -224,7 +224,6 @@ type BlockBody struct {
 	Transactions []*types.Transaction // Transactions contained within a block
 	Uncles       []*types.Header      // Uncles contained within a block
 	Withdrawals  []*types.Withdrawal  `rlp:"optional"` // Withdrawals contained within a block
-	Requests     [][]byte             `rlp:"optional"` // Requests contained within a block
 }
 
 // Unpack retrieves the transactions and uncles from the range packet and returns
