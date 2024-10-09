@@ -112,16 +112,6 @@ type ExecutionPayloadEnvelope struct {
 	Witness          *hexutil.Bytes  `json:"witness"`
 }
 
-// RequestsHash computes the hash of the requests contained in the envelope or
-// returns nil if the list of requests is also nil.
-func (e *ExecutionPayloadEnvelope) RequestsHash() *common.Hash {
-	if e.Requests != nil {
-		h := types.CalcRequestsHash(e.Requests)
-		return &h
-	}
-	return nil
-}
-
 type BlobsBundleV1 struct {
 	Commitments []hexutil.Bytes `json:"commitments"`
 	Proofs      []hexutil.Bytes `json:"proofs"`
