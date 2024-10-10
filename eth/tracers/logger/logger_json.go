@@ -127,7 +127,7 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracin
 	l.encoder.Encode(log)
 }
 
-func (l *jsonLogger) onSystemCallStart() {
+func (l *jsonLogger) onSystemCallStart(_ *tracing.VMContext) {
 	// Process no events while in system call.
 	hooks := *l.hooks
 	*l.hooks = tracing.Hooks{
