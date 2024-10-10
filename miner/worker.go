@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip7783"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -171,11 +172,18 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		}
 		timestamp = parent.Time + 1
 	}
+	useEip7783 := miner.config.GasCeil == nil
+	var gasLimit uint64
+	if useEip7783 {
+		gasLimit = eip7783.CalcGasLimitEIP7783(parent.Number, miner.config.EIP7783BlockNumStart, miner.config.EIP7783InitialGasLimit, miner.config.Eip7783IncreaseRate, miner.config.EIP7783GasLimitCap)
+	} else {
+		gasLimit = core.CalcGasLimit(parent.GasLimit, *miner.config.GasCeil)
+	}
 	// Construct the sealing block header.
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent.GasLimit, miner.config.GasCeil),
+		GasLimit:   gasLimit,
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 	}
@@ -192,7 +200,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		header.BaseFee = eip1559.CalcBaseFee(miner.chainConfig, parent)
 		if !miner.chainConfig.IsLondon(parent.Number) {
 			parentGasLimit := parent.GasLimit * miner.chainConfig.ElasticityMultiplier()
-			header.GasLimit = core.CalcGasLimit(parentGasLimit, miner.config.GasCeil)
+			header.GasLimit = core.CalcGasLimit(parentGasLimit, gasLimit)
 		}
 	}
 	// Run the consensus preparation with the default or customized consensus engine.

@@ -45,14 +45,20 @@ type Config struct {
 	Etherbase           common.Address `toml:"-"`          // Deprecated
 	PendingFeeRecipient common.Address `toml:"-"`          // Address for pending block rewards.
 	ExtraData           hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasCeil             uint64         // Target gas ceiling for mined blocks.
+	GasCeil             *uint64        // Target gas ceiling for mined blocks.
 	GasPrice            *big.Int       // Minimum gas price for mining a transaction
 	Recommit            time.Duration  // The time interval for miner to re-create mining work.
+
+	// EIP-7783 parameters
+	EIP7783BlockNumStart   *big.Int // The block number to start using EIP-7783 gas limit calculation
+	EIP7783InitialGasLimit uint64   // The initial gas limit to use before EIP-7783 calculation
+	Eip7783IncreaseRate    uint64   // The rate of gas limit increase per block
+	EIP7783GasLimitCap     uint64   // The maximum gas limit to use after EIP-7783 calculation
 }
 
 // DefaultConfig contains default settings for miner.
 var DefaultConfig = Config{
-	GasCeil:  30_000_000,
+	//GasCeil:  30_000_000,
 	GasPrice: big.NewInt(params.GWei / 1000),
 
 	// The default recommit time is chosen as two seconds since
@@ -113,7 +119,8 @@ func (miner *Miner) SetExtra(extra []byte) error {
 // For pre-1559 blocks, it sets the ceiling.
 func (miner *Miner) SetGasCeil(ceil uint64) {
 	miner.confMu.Lock()
-	miner.config.GasCeil = ceil
+	miner.config.GasCeil = new(uint64)
+	*miner.config.GasCeil = ceil
 	miner.confMu.Unlock()
 }
 

@@ -117,6 +117,10 @@ var (
 		utils.MaxPendingPeersFlag,
 		utils.MiningEnabledFlag, // deprecated
 		utils.MinerGasLimitFlag,
+		utils.MinerEIP7783BlockNumStartFlag,
+		utils.MinerEIP7783GasLimitCapFlag,
+		utils.MinerEIP7783IncreaseRateFlag,
+		utils.MinerEIP7783InitialGasLimitFlag,
 		utils.MinerGasPriceFlag,
 		utils.MinerEtherbaseFlag, // deprecated
 		utils.MinerExtraDataFlag,

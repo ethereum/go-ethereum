@@ -478,7 +478,30 @@ var (
 	MinerGasLimitFlag = &cli.Uint64Flag{
 		Name:     "miner.gaslimit",
 		Usage:    "Target gas ceiling for mined blocks",
-		Value:    ethconfig.Defaults.Miner.GasCeil,
+		Category: flags.MinerCategory,
+	}
+	MinerEIP7783BlockNumStartFlag = &flags.BigFlag{
+		Name:     "miner.eip7783.blocknumstart",
+		Usage:    "The block number to start using EIP-7783 gas limit calculation",
+		Value:    ethconfig.Defaults.Miner.EIP7783BlockNumStart,
+		Category: flags.MinerCategory,
+	}
+	MinerEIP7783InitialGasLimitFlag = &cli.Uint64Flag{
+		Name:     "miner.eip7783.initialgaslimit",
+		Usage:    "The initial gas limit to use before EIP-7783 calculation",
+		Value:    ethconfig.Defaults.Miner.EIP7783InitialGasLimit,
+		Category: flags.MinerCategory,
+	}
+	MinerEIP7783IncreaseRateFlag = &cli.Uint64Flag{
+		Name:     "miner.eip7783.increaserate",
+		Usage:    "The rate of gas limit increase per block",
+		Value:    ethconfig.Defaults.Miner.Eip7783IncreaseRate,
+		Category: flags.MinerCategory,
+	}
+	MinerEIP7783GasLimitCapFlag = &cli.Uint64Flag{
+		Name:     "miner.eip7783.gaslimitcap",
+		Usage:    "The maximum gas limit to use after EIP-7783 calculation",
+		Value:    ethconfig.Defaults.Miner.EIP7783GasLimitCap,
 		Category: flags.MinerCategory,
 	}
 	MinerGasPriceFlag = &flags.BigFlag{
@@ -1553,8 +1576,22 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 		cfg.ExtraData = []byte(ctx.String(MinerExtraDataFlag.Name))
 	}
 	if ctx.IsSet(MinerGasLimitFlag.Name) {
-		cfg.GasCeil = ctx.Uint64(MinerGasLimitFlag.Name)
+		cfg.GasCeil = new(uint64)
+		*cfg.GasCeil = ctx.Uint64(MinerGasLimitFlag.Name)
 	}
+	if ctx.IsSet(MinerEIP7783BlockNumStartFlag.Name) {
+		cfg.EIP7783BlockNumStart = flags.GlobalBig(ctx, MinerEIP7783BlockNumStartFlag.Name)
+	}
+	if ctx.IsSet(MinerEIP7783GasLimitCapFlag.Name) {
+		cfg.EIP7783GasLimitCap = ctx.Uint64(MinerEIP7783GasLimitCapFlag.Name)
+	}
+	if ctx.IsSet(MinerEIP7783IncreaseRateFlag.Name) {
+		cfg.Eip7783IncreaseRate = ctx.Uint64(MinerEIP7783IncreaseRateFlag.Name)
+	}
+	if ctx.IsSet(MinerEIP7783InitialGasLimitFlag.Name) {
+		cfg.EIP7783InitialGasLimit = ctx.Uint64(MinerEIP7783InitialGasLimitFlag.Name)
+	}
+
 	if ctx.IsSet(MinerGasPriceFlag.Name) {
 		cfg.GasPrice = flags.GlobalBig(ctx, MinerGasPriceFlag.Name)
 	}
