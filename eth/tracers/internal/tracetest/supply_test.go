@@ -597,6 +597,7 @@ func testSupplyTracer(t *testing.T, genesis *core.Genesis, gen func(*core.BlockG
 }
 
 func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
+	t.Helper()
 	want, err := json.Marshal(expected)
 	if err != nil {
 		t.Fatalf("failed to marshal expected value to JSON: %v", err)
@@ -608,6 +609,6 @@ func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
 	}
 
 	if !bytes.Equal(want, have) {
-		t.Fatalf("incorrect supply info: expected %s, got %s", string(want), string(have))
+		t.Fatalf("incorrect supply info:\nwant %s\nhave %s", string(want), string(have))
 	}
 }
