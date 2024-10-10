@@ -421,7 +421,7 @@ func (p *PortalProtocolAPI) Offer(enr string, contentItems [][2]string) (string,
 		return "", err
 	}
 
-	entries := make([]*ContentEntry, 0, len(contentItems));
+	entries := make([]*ContentEntry, 0, len(contentItems))
 	for _, contentItem := range contentItems {
 		contentKey, err := hexutil.Decode(contentItem[0])
 		if err != nil {
