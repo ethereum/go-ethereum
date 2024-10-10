@@ -65,9 +65,10 @@ type Config = ethconfig.Config
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
 	// core protocol objects
-	config     *ethconfig.Config
-	txPool     *txpool.TxPool
-	blockchain *core.BlockChain
+	config         *ethconfig.Config
+	txPool         *txpool.TxPool
+	localTxTracker *legacypool.TxTracker
+	blockchain     *core.BlockChain
 
 	handler *handler
 	discmix *enode.FairMix
@@ -232,6 +233,14 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	legacyPool := legacypool.New(config.TxPool, eth.blockchain)
 
 	eth.txPool, err = txpool.New(config.TxPool.PriceLimit, eth.blockchain, []txpool.SubPool{legacyPool, blobPool})
+
+	if !config.TxPool.NoLocals {
+		eth.localTxTracker = legacypool.NewTxTracker(config.TxPool.Journal,
+			config.TxPool.Rejournal,
+			eth.blockchain.Config(), eth.txPool)
+		stack.RegisterLifecycle(eth.localTxTracker)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -253,6 +262,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	eth.miner = miner.New(eth, config.Miner, eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
+	eth.miner.SetPrioAddresses(config.TxPool.Locals)
 
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
