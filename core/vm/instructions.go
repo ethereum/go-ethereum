@@ -507,6 +507,7 @@ func opSYSBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 		num.Clear()
 		return nil, nil
 	}
+
 	var upper, lower uint64
 	upper = interpreter.evm.Context.BlockNumber.Uint64()
 	if upper < 50001 {
@@ -519,7 +520,6 @@ func opSYSBlockhash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	} else {
 		num.Clear()
 	}
-	scope.Stack.pop()
 	return nil, nil
 }
 
