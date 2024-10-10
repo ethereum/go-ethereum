@@ -64,7 +64,7 @@ func newChainFreezer(datadir string, namespace string, readonly bool) (*chainFre
 	if datadir == "" {
 		freezer = NewMemoryFreezer(readonly, chainFreezerNoSnappy)
 	} else {
-		freezer, err = NewFreezer(datadir, namespace, readonly, freezerTableSize, chainFreezerNoSnappy)
+		freezer, err = NewFreezer(datadir, namespace, readonly, chainFreezerSize, chainFreezerNoSnappy)
 	}
 	if err != nil {
 		return nil, err

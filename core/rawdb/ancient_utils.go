@@ -120,12 +120,13 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 	var (
 		path   string
 		tables map[string]bool
+		sizes  map[string]uint32
 	)
 	switch freezerName {
 	case ChainFreezerName:
-		path, tables = resolveChainFreezerDir(ancient), chainFreezerNoSnappy
+		path, tables, sizes = resolveChainFreezerDir(ancient), chainFreezerNoSnappy, chainFreezerSize
 	case MerkleStateFreezerName, VerkleStateFreezerName:
-		path, tables = filepath.Join(ancient, freezerName), stateFreezerNoSnappy
+		path, tables, sizes = filepath.Join(ancient, freezerName), stateFreezerNoSnappy, stateFreezerSize
 	default:
 		return fmt.Errorf("unknown freezer, supported ones: %v", freezers)
 	}
@@ -137,7 +138,7 @@ func InspectFreezerTable(ancient string, freezerName string, tableName string, s
 		}
 		return fmt.Errorf("unknown table, supported ones: %v", names)
 	}
-	table, err := newFreezerTable(path, tableName, noSnappy, true)
+	table, err := newFreezerTable(path, tableName, noSnappy, true, sizes[tableName])
 	if err != nil {
 		return err
 	}
