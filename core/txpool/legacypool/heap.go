@@ -2,7 +2,6 @@ package legacypool
 
 import (
 	"container/heap"
-	"fmt"
 	"sync"
 	"time"
 
@@ -80,7 +79,6 @@ func NewTxOverflowPoolHeap(estimatedMaxSize uint64) *TxOverflowPoolHeap {
 func (tp *TxOverflowPoolHeap) Add(tx *types.Transaction) {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	fmt.Println("heap.Add() called")
 
 	if _, exists := tp.index[tx.Hash()]; exists {
 		// Transaction already in pool, ignore
@@ -95,7 +93,6 @@ func (tp *TxOverflowPoolHeap) Add(tx *types.Transaction) {
 		}
 		delete(tp.index, oldestItem.tx.Hash())
 		tp.totalSize -= numSlots(oldestItem.tx)
-		fmt.Println("about to decrease OverflowPool gauge")
 	}
 
 	item := &txHeapItem{
@@ -105,7 +102,6 @@ func (tp *TxOverflowPoolHeap) Add(tx *types.Transaction) {
 	heap.Push(&tp.txHeap, item)
 	tp.index[tx.Hash()] = item
 	tp.totalSize += numSlots(tx)
-	fmt.Println("about to increase OverflowPool gauge")
 }
 
 func (tp *TxOverflowPoolHeap) Get(hash common.Hash) (*types.Transaction, bool) {
@@ -124,7 +120,6 @@ func (tp *TxOverflowPoolHeap) Remove(hash common.Hash) {
 		heap.Remove(&tp.txHeap, item.index)
 		delete(tp.index, hash)
 		tp.totalSize -= numSlots(item.tx)
-		fmt.Println("about to decrease OverflowPool gauge")
 	}
 }
 
@@ -144,8 +139,7 @@ func (tp *TxOverflowPoolHeap) Flush(n int) []*types.Transaction {
 		delete(tp.index, item.tx.Hash())
 		tp.totalSize -= numSlots(item.tx)
 	}
-	fmt.Println("flushing transactions", n)
-	fmt.Println("about to decrease OverflowPool gauge by n", n)
+
 	return txs
 }
 
@@ -159,14 +153,4 @@ func (tp *TxOverflowPoolHeap) Size() int {
 	tp.mu.RLock()
 	defer tp.mu.RUnlock()
 	return tp.totalSize
-}
-
-func (tp *TxOverflowPoolHeap) PrintTxStats() {
-	tp.mu.RLock()
-	defer tp.mu.RUnlock()
-	for _, item := range tp.txHeap {
-		tx := item.tx
-		fmt.Printf("Hash: %s, Timestamp: %d, GasFeeCap: %s, GasTipCap: %s\n",
-			tx.Hash().String(), item.timestamp, tx.GasFeeCap().String(), tx.GasTipCap().String())
-	}
 }
