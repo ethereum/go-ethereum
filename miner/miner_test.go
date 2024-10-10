@@ -164,6 +164,7 @@ func createMiner(t *testing.T) *Miner {
 
 	// Create Miner
 	backend := NewMockBackend(bc, txpool)
+	config.GasCeil = new(uint64)
 	miner := New(backend, config, engine)
 	return miner
 }

@@ -173,21 +173,23 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		timestamp = parent.Time + 1
 	}
 	useEip7783 := miner.config.GasCeil == nil
-	var gasLimit uint64
+	var gasCeil uint64
+
 	if useEip7783 {
 		parentNumber := parent.Number
 		if parentNumber == nil {
 			parentNumber = common.Big0
 		}
-		gasLimit = eip7783.CalcGasLimitEIP7783(parentNumber, miner.config.EIP7783BlockNumStart, miner.config.EIP7783InitialGasLimit, miner.config.Eip7783IncreaseRate, miner.config.EIP7783GasLimitCap)
+		gasCeil = eip7783.CalcGasLimitEIP7783(new(big.Int).Add(parentNumber, common.Big1), miner.config.EIP7783BlockNumStart, miner.config.EIP7783InitialGasLimit, miner.config.Eip7783IncreaseRate, miner.config.EIP7783GasLimitCap)
 	} else {
-		gasLimit = core.CalcGasLimit(parent.GasLimit, *miner.config.GasCeil)
+		gasCeil = *miner.config.GasCeil
 	}
+
 	// Construct the sealing block header.
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
-		GasLimit:   gasLimit,
+		GasLimit:   core.CalcGasLimit(parent.GasLimit, gasCeil),
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 	}
@@ -204,7 +206,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 		header.BaseFee = eip1559.CalcBaseFee(miner.chainConfig, parent)
 		if !miner.chainConfig.IsLondon(parent.Number) {
 			parentGasLimit := parent.GasLimit * miner.chainConfig.ElasticityMultiplier()
-			header.GasLimit = core.CalcGasLimit(parentGasLimit, gasLimit)
+			header.GasLimit = core.CalcGasLimit(parentGasLimit, gasCeil)
 		}
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
