@@ -130,10 +130,11 @@ type Config struct {
 	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
 	PriceBump  uint64 // Minimum price bump percentage to replace an already existing transaction (nonce)
 
-	AccountSlots uint64 // Number of executable transaction slots guaranteed per account
-	GlobalSlots  uint64 // Maximum number of executable transaction slots for all accounts
-	AccountQueue uint64 // Maximum number of non-executable transaction slots permitted per account
-	GlobalQueue  uint64 // Maximum number of non-executable transaction slots for all accounts
+	AccountSlots      uint64 // Number of executable transaction slots guaranteed per account
+	GlobalSlots       uint64 // Maximum number of executable transaction slots for all accounts
+	AccountQueue      uint64 // Maximum number of non-executable transaction slots permitted per account
+	GlobalQueue       uint64 // Maximum number of non-executable transaction slots for all accounts
+	OverflowPoolSlots uint64 // Maximum number of transaction slots in overflow pool
 
 	Lifetime time.Duration // Maximum amount of time non-executable transaction are queued
 }
@@ -146,10 +147,11 @@ var DefaultConfig = Config{
 	PriceLimit: 1,
 	PriceBump:  10,
 
-	AccountSlots: 16,
-	GlobalSlots:  4096 + 1024, // urgent + floating queue capacity with 4:1 ratio
-	AccountQueue: 64,
-	GlobalQueue:  1024,
+	AccountSlots:      16,
+	GlobalSlots:       4096 + 1024, // urgent + floating queue capacity with 4:1 ratio
+	AccountQueue:      64,
+	GlobalQueue:       1024,
+	OverflowPoolSlots: 1024,
 
 	Lifetime: 3 * time.Hour,
 }
@@ -223,6 +225,8 @@ type LegacyPool struct {
 	all     *lookup                      // All transactions to allow lookups
 	priced  *pricedList                  // All transactions sorted by price
 
+	localBufferPool *TxOverflowPoolHeap // Local buffer transactions
+
 	reqResetCh      chan *txpoolResetRequest
 	reqPromoteCh    chan *accountSet
 	queueTxEventCh  chan *types.Transaction
@@ -260,6 +264,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		initDoneCh:      make(chan struct{}),
+		localBufferPool: NewTxOverflowPoolHeap(config.OverflowPoolSlots),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -761,6 +766,8 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 			}
 		}
 
+		pool.addToOverflowPool(drop, isLocal)
+
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
 			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash(), "gasTipCap", tx.GasTipCap(), "gasFeeCap", tx.GasFeeCap())
@@ -815,6 +822,39 @@ func (pool *LegacyPool) add(tx *types.Transaction, local bool) (replaced bool, e
 
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
 	return replaced, nil
+}
+
+func (pool *LegacyPool) addToOverflowPool(drop types.Transactions, isLocal bool) {
+	// calculate total number of slots in drop. Accordingly add them to OverflowPool (if there is space)
+	availableSlotsOverflowPool := pool.availableSlotsOverflowPool()
+	if availableSlotsOverflowPool > 0 {
+		// transfer availableSlotsOverflowPool number of transactions slots from drop to OverflowPool
+		currentSlotsUsed := 0
+		for i, tx := range drop {
+			txSlots := numSlots(tx)
+			if currentSlotsUsed+txSlots <= availableSlotsOverflowPool {
+				from, _ := types.Sender(pool.signer, tx)
+				pool.localBufferPool.Add(tx)
+				//OverflowPoolGauge.Inc(1)
+				log.Debug("adding to OverflowPool", "transaction", tx.Hash().String(), "from", from.String())
+				currentSlotsUsed += txSlots
+			} else {
+				log.Debug("not all got added to OverflowPool", "totalAdded", i+1)
+				return
+			}
+		}
+	} else {
+		log.Debug("adding to OverflowPool unsuccessful", "availableSlotsOverflowPool", availableSlotsOverflowPool)
+	}
+}
+
+func (pool *LegacyPool) availableSlotsOverflowPool() int {
+	maxOverflowPoolSize := int(pool.config.OverflowPoolSlots)
+	availableSlots := maxOverflowPoolSize - pool.localBufferPool.Size()
+	if availableSlots > 0 {
+		return availableSlots
+	}
+	return 0
 }
 
 // isGapped reports whether the given transaction is immediately executable.
@@ -1321,6 +1361,9 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	pool.changesSinceReorg = 0 // Reset change counter
 	pool.mu.Unlock()
 
+	// Transfer transactions from OverflowPool to MainPool for new block import
+	pool.transferTransactions()
+
 	// Notify subsystems for newly added transactions
 	for _, tx := range promoted {
 		addr, _ := types.Sender(pool.signer, tx)
@@ -1699,6 +1742,36 @@ func (pool *LegacyPool) demoteUnexecutables() {
 			}
 		}
 	}
+}
+
+// transferTransactions mainly moves from OverflowPool to MainPool
+func (pool *LegacyPool) transferTransactions() {
+	maxMainPoolSize := int(pool.config.GlobalSlots + pool.config.GlobalQueue)
+	extraSizeMainPool := maxMainPoolSize - int(uint64(len(pool.pending))+uint64(len(pool.queue)))
+	if extraSizeMainPool <= 0 {
+		return
+	}
+
+	currentMainPoolSize := pool.all.Slots()
+	canTransferOverflowPoolToMainPool := maxMainPoolSize > currentMainPoolSize
+	if !canTransferOverflowPoolToMainPool {
+		return
+	}
+	extraSlots := maxMainPoolSize - currentMainPoolSize
+	extraTransactions := (extraSlots + 3) / 4 // Since maximum slots per transaction is 4
+	// So now we can  take out extraTransactions number of transactions from OverflowPool and put in MainPool
+	if extraTransactions < 1 {
+		return
+	}
+
+	log.Debug("Will attempt to transfer from OverflowPool to MainPool", "transactions", extraTransactions)
+
+	tx := pool.localBufferPool.Flush(extraTransactions)
+	if len(tx) == 0 {
+		return
+	}
+
+	pool.Add(tx, true, false)
 }
 
 // addressByHeartbeat is an account address tagged with its last activity timestamp.
