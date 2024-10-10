@@ -305,6 +305,16 @@ func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 	return nil
 }
 
+// GetBySenderAndNonce returns a transaction of a sender and it's corresponding nonce.
+func (p *TxPool) GetBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction {
+	for _, subpool := range p.subpools {
+		if tx := subpool.GetBySenderAndNonce(sender, nonce); tx != nil {
+			return tx
+		}
+	}
+	return nil
+}
+
 // Add enqueues a batch of transactions into the pool if they are valid. Due
 // to the large transaction churn, add may postpone fully integrating the tx
 // to a later point to batch multiple ones together.

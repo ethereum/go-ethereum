@@ -38,6 +38,7 @@ import (
 
 func init() {
 	tracers.DefaultDirectory.Register("flatCallTracer", newFlatCallTracer, false)
+	tracers.DefaultDirectory.Register("parityTracer", newParityTracer, false)
 }
 
 var parityErrorMapping = map[string]string{
@@ -57,6 +58,10 @@ var parityErrorMappingStartingWith = map[string]string{
 	"invalid opcode:": "Bad instruction",
 	"stack underflow": "Stack underflow",
 }
+
+// ParityTrace represents a single trace item in Parity format.
+// It is an alias for flatCallFrame, providing Parity-compatible naming.
+type ParityTrace flatCallFrame
 
 // flatCallFrame is a standalone callframe.
 type flatCallFrame struct {
@@ -153,6 +158,11 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Trac
 	}, nil
 }
 
+// newParityTracer returns a new flatCallTracer with parity style.
+func newParityTracer(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer, error) {
+	return newFlatCallTracer(ctx, []byte(`{"includePrecompiles": true, "convertParityErrors": true}`))
+}
+
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	if t.interrupt.Load() {
@@ -213,6 +223,13 @@ func (t *flatCallTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if t.interrupt.Load() {
 		return
+	}
+	// Always set context with receipt data.
+	t.ctx = &tracers.Context{
+		BlockHash:   receipt.BlockHash,
+		BlockNumber: receipt.BlockNumber,
+		TxHash:      receipt.TxHash,
+		TxIndex:     int(receipt.TransactionIndex),
 	}
 	t.tracer.OnTxEnd(receipt, err)
 }

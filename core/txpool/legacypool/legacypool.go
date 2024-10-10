@@ -1072,6 +1072,25 @@ func (pool *LegacyPool) Get(hash common.Hash) *types.Transaction {
 	return tx
 }
 
+// GetBySenderAndNonce returns a transaction of a sender and it's corresponding nonce.
+func (pool *LegacyPool) GetBySenderAndNonce(sender common.Address, nonce uint64) *types.Transaction {
+	// Check if the transaction is in the pending pool
+	if txList := pool.pending[sender]; txList != nil {
+		if tx := txList.txs.items[nonce]; tx != nil {
+			return tx
+		}
+	}
+
+	// Check if the transaction is in the queue pool
+	if txList := pool.queue[sender]; txList != nil {
+		if tx := txList.txs.items[nonce]; tx != nil {
+			return tx
+		}
+	}
+
+	return nil
+}
+
 // get returns a transaction if it is contained in the pool and nil otherwise.
 func (pool *LegacyPool) get(hash common.Hash) *types.Transaction {
 	return pool.all.Get(hash)
