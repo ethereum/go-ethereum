@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -303,6 +304,22 @@ func (p *TxPool) Get(hash common.Hash) *types.Transaction {
 		}
 	}
 	return nil
+}
+
+// GetBlobs returns a number of blobs are proofs for the given versioned hashes.
+// This is a utility method for the engine API, enabling consensus clients to
+// retrieve blobs from the pools directly instead of the network.
+func (p *TxPool) GetBlobs(vhashes []common.Hash) ([]*kzg4844.Blob, []*kzg4844.Proof) {
+	for _, subpool := range p.subpools {
+		// It's an ugly to assume that only one pool will be capable of returning
+		// anything meaningful for this call, but anythingh else requires merging
+		// partial responses and that's too annoying to do until we get a second
+		// blobpool (probably never).
+		if blobs, proofs := subpool.GetBlobs(vhashes); blobs != nil {
+			return blobs, proofs
+		}
+	}
+	return nil, nil
 }
 
 // Add enqueues a batch of transactions into the pool if they are valid. Due
