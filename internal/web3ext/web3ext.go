@@ -17,17 +17,40 @@
 // Package web3ext contains geth specific web3.js extensions.
 package web3ext
 
-var Modules = map[string]string{
-	"admin":    AdminJs,
-	"clique":   CliqueJs,
-	"debug":    DebugJs,
-	"eth":      EthJs,
-	"miner":    MinerJs,
-	"net":      NetJs,
-	"personal": PersonalJs,
-	"rpc":      RpcJs,
-	"txpool":   TxpoolJs,
-	"dev":      DevJs,
+import "fmt"
+
+type ModuleDirectory struct {
+	modules map[string]string
+}
+
+var DefaultModules = &ModuleDirectory{
+	modules: map[string]string{
+		"admin":    AdminJs,
+		"clique":   CliqueJs,
+		"debug":    DebugJs,
+		"eth":      EthJs,
+		"miner":    MinerJs,
+		"net":      NetJs,
+		"personal": PersonalJs,
+		"rpc":      RpcJs,
+		"txpool":   TxpoolJs,
+		"dev":      DevJs,
+	},
+}
+
+func (d *ModuleDirectory) Add(name, code string) {
+	if code == "" {
+		return
+	}
+	prev := ""
+	if c, ok := d.modules[name]; ok {
+		prev = fmt.Sprintf("%s\n", c)
+	}
+	d.modules[name] = fmt.Sprintf("%s%s", prev, code)
+}
+
+func (d *ModuleDirectory) Get(name string) string {
+	return d.modules[name]
 }
 
 const CliqueJs = `

@@ -180,6 +180,12 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
 	}
+
+	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
+	if eth.APIBackend.allowUnprotectedTxs {
+		log.Info("Unprotected transactions allowed")
+	}
+
 	var (
 		vmConfig = vm.Config{
 			EnablePreimageRecording: config.EnablePreimageRecording,
@@ -201,7 +207,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		if config.VMTraceJsonConfig != "" {
 			traceConfig = json.RawMessage(config.VMTraceJsonConfig)
 		}
-		t, err := tracers.LiveDirectory.New(config.VMTrace, traceConfig)
+		t, err := tracers.LiveDirectory.New(config.VMTrace, traceConfig, stack, eth.APIBackend)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tracer %s: %v", config.VMTrace, err)
 		}
@@ -254,10 +260,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.miner = miner.New(eth, config.Miner, eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
-	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
-	if eth.APIBackend.allowUnprotectedTxs {
-		log.Info("Unprotected transactions allowed")
-	}
+	// Start the gas price oracle after blockchain is fully loaded
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, config.GPO, config.Miner.GasPrice)
 
 	// Start the RPC service

@@ -258,7 +258,6 @@ type BlockChain struct {
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
 	vmConfig   vm.Config
-	logger     *tracing.Hooks
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -301,7 +300,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		txLookupCache: lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
 		engine:        engine,
 		vmConfig:      vmConfig,
-		logger:        vmConfig.Tracer,
 	}
 	var err error
 	bc.hc, err = NewHeaderChain(db, chainConfig, engine, bc.insertStopped)
@@ -411,10 +409,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// it in advance.
 	bc.engine.VerifyHeader(bc, bc.CurrentHeader())
 
-	if bc.logger != nil && bc.logger.OnBlockchainInit != nil {
-		bc.logger.OnBlockchainInit(chainConfig)
+	logger := bc.logger()
+	if logger != nil && logger.OnBlockchainInit != nil {
+		logger.OnBlockchainInit(chainConfig)
 	}
-	if bc.logger != nil && bc.logger.OnGenesisBlock != nil {
+	if logger != nil && logger.OnGenesisBlock != nil {
 		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
 			alloc, err := getGenesisState(bc.db, block.Hash())
 			if err != nil {
@@ -423,7 +422,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			if alloc == nil {
 				return nil, errors.New("live blockchain tracer requires genesis alloc to be set")
 			}
-			bc.logger.OnGenesisBlock(bc.genesisBlock, alloc)
+			logger.OnGenesisBlock(bc.genesisBlock, alloc)
 		}
 	}
 
@@ -1156,8 +1155,8 @@ func (bc *BlockChain) Stop() {
 		}
 	}
 	// Allow tracers to clean-up and release resources.
-	if bc.logger != nil && bc.logger.OnClose != nil {
-		bc.logger.OnClose()
+	if logger := bc.logger(); logger != nil && logger.OnClose != nil {
+		logger.OnClose()
 	}
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
@@ -1714,6 +1713,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 	// Track the singleton witness from this chain insertion (if any)
 	var witness *stateless.Witness
 
+	bclogger := bc.logger()
 	for ; block != nil && err == nil || errors.Is(err, ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if bc.insertStopped() {
@@ -1753,8 +1753,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 				return nil, it.index, err
 			}
 			stats.processed++
-			if bc.logger != nil && bc.logger.OnSkippedBlock != nil {
-				bc.logger.OnSkippedBlock(tracing.BlockEvent{
+			if bclogger != nil && bclogger.OnSkippedBlock != nil {
+				bclogger.OnSkippedBlock(tracing.BlockEvent{
 					Block:     block,
 					TD:        bc.GetTd(block.ParentHash(), block.NumberU64()-1),
 					Finalized: bc.CurrentFinalBlock(),
@@ -1776,7 +1776,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		if err != nil {
 			return nil, it.index, err
 		}
-		statedb.SetLogger(bc.logger)
+		statedb.SetLogger(bclogger)
 
 		// If we are past Byzantium, enable prefetching to pull in trie node paths
 		// while processing transactions. Before Byzantium the prefetcher is mostly
@@ -1881,19 +1881,21 @@ type blockProcessingResult struct {
 // processBlock executes and validates the given block. If there was no error
 // it writes the block and associated state to database.
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
-	if bc.logger != nil && bc.logger.OnBlockStart != nil {
-		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		bc.logger.OnBlockStart(tracing.BlockEvent{
-			Block:     block,
-			TD:        td,
-			Finalized: bc.CurrentFinalBlock(),
-			Safe:      bc.CurrentSafeBlock(),
-		})
-	}
-	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
-		defer func() {
-			bc.logger.OnBlockEnd(blockEndErr)
-		}()
+	if logger := bc.logger(); logger != nil {
+		if logger.OnBlockStart != nil {
+			td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+			logger.OnBlockStart(tracing.BlockEvent{
+				Block:     block,
+				TD:        td,
+				Finalized: bc.CurrentFinalBlock(),
+				Safe:      bc.CurrentSafeBlock(),
+			})
+		}
+		if logger.OnBlockEnd != nil {
+			defer func() {
+				logger.OnBlockEnd(blockEndErr)
+			}()
+		}
 	}
 
 	// Process block using the parent state as reference point
@@ -2536,4 +2538,9 @@ func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 // GetTrieFlushInterval gets the in-memory tries flushAlloc interval
 func (bc *BlockChain) GetTrieFlushInterval() time.Duration {
 	return time.Duration(bc.flushInterval.Load())
+}
+
+// logger returns the tracing logger
+func (bc *BlockChain) logger() *tracing.Hooks {
+	return bc.vmConfig.Tracer
 }

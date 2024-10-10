@@ -30,11 +30,12 @@ import (
 
 // API describes the set of methods offered over the RPC interface
 type API struct {
-	Namespace     string      // namespace under which the rpc methods of Service are exposed
-	Version       string      // deprecated - this field is no longer used, but retained for compatibility
-	Service       interface{} // receiver instance which holds the methods
-	Public        bool        // deprecated - this field is no longer used, but retained for compatibility
-	Authenticated bool        // whether the api should only be available behind authentication.
+	Namespace        string      // namespace under which the rpc methods of Service are exposed
+	Version          string      // deprecated - this field is no longer used, but retained for compatibility
+	Service          interface{} // receiver instance which holds the methods
+	Public           bool        // deprecated - this field is no longer used, but retained for compatibility
+	Authenticated    bool        // whether the api should only be available behind authentication.
+	ConsoleExtension string      // web3.js instructions to add methods for console auto-completion.
 }
 
 // ServerCodec implements reading, parsing and writing RPC messages for the server side of
