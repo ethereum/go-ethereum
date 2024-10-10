@@ -331,7 +331,6 @@ func TestEventTupleUnpack(t *testing.T) {
 
 	for _, tc := range testCases {
 		assert := assert.New(t)
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			err := unpackTestEventData(tc.dest, tc.data, tc.jsonLog, assert)
 			if tc.error == "" {
