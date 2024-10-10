@@ -298,6 +298,7 @@ const (
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
 
 	// BalanceChangeRevert is emitted when the balance is reverted back to a previous value due to call failure.
+	// It is only emitted when the tracer has opted in to use the journaling wrapper.
 	BalanceChangeRevert BalanceChangeReason = 15
 )
 
