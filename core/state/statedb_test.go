@@ -246,7 +246,10 @@ func TestCopyWithDirtyJournal(t *testing.T) {
 	// modify all in memory without finalizing
 	for i := byte(0); i < 255; i++ {
 		obj := orig.getOrNewStateObject(common.BytesToAddress([]byte{i}))
-		obj.SubBalance(uint256.NewInt(uint64(i)), tracing.BalanceChangeUnspecified)
+		amount := uint256.NewInt(uint64(i))
+		reason := tracing.BalanceChangeUnspecified
+		obj.SetBalance(new(uint256.Int).Sub(obj.Balance(), amount), reason)
+
 		orig.updateStateObject(obj)
 	}
 	cpy := orig.Copy()
