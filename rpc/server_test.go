@@ -29,6 +29,8 @@ import (
 )
 
 func TestServerRegisterName(t *testing.T) {
+	t.Parallel()
+
 	server := NewServer()
 	service := new(testService)
 
@@ -53,6 +55,8 @@ func TestServerRegisterName(t *testing.T) {
 }
 
 func TestServer(t *testing.T) {
+	t.Parallel()
+
 	files, err := os.ReadDir("testdata")
 	if err != nil {
 		t.Fatal("where'd my testdata go?")
@@ -64,6 +68,8 @@ func TestServer(t *testing.T) {
 		path := filepath.Join("testdata", f.Name())
 		name := strings.TrimSuffix(f.Name(), filepath.Ext(f.Name()))
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			runTestScript(t, path)
 		})
 	}
@@ -116,6 +122,8 @@ func runTestScript(t *testing.T, file string) {
 // This test checks that responses are delivered for very short-lived connections that
 // only carry a single request.
 func TestServerShortLivedConn(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 
@@ -156,6 +164,8 @@ func TestServerShortLivedConn(t *testing.T) {
 }
 
 func TestServerBatchResponseSizeLimit(t *testing.T) {
+	t.Parallel()
+
 	server := newTestServer()
 	defer server.Stop()
 	server.SetBatchLimits(100, 60)

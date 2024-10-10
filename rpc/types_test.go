@@ -26,6 +26,8 @@ import (
 )
 
 func TestBlockNumberJSONUnmarshal(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input    string
 		mustFail bool
@@ -70,6 +72,8 @@ func TestBlockNumberJSONUnmarshal(t *testing.T) {
 }
 
 func TestBlockNumberOrHash_UnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		input    string
 		mustFail bool
@@ -131,6 +135,8 @@ func TestBlockNumberOrHash_UnmarshalJSON(t *testing.T) {
 }
 
 func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		number int64
@@ -145,6 +151,8 @@ func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
 			bnh := BlockNumberOrHashWithNumber(BlockNumber(test.number))
 			marshalled, err := json.Marshal(bnh)
 			if err != nil {
@@ -163,6 +171,8 @@ func TestBlockNumberOrHash_WithNumber_MarshalAndUnmarshal(t *testing.T) {
 }
 
 func TestBlockNumberOrHash_StringAndUnmarshal(t *testing.T) {
+	t.Parallel()
+
 	tests := []BlockNumberOrHash{
 		BlockNumberOrHashWithNumber(math.MaxInt64),
 		BlockNumberOrHashWithNumber(PendingBlockNumber),
