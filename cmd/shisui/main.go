@@ -498,13 +498,25 @@ func setPrivateKey(ctx *cli.Context, config *Config) error {
 			return err
 		}
 	} else {
-		if _, err := os.Stat(filepath.Join(config.DataDir, privateKeyFileName)); err == nil {
+		fullPath := filepath.Join(config.DataDir, privateKeyFileName)
+		if _, err := os.Stat(fullPath); err == nil {
 			log.Info("Loading private key from file", "datadir", config.DataDir, "file", privateKeyFileName)
 			privateKey, err = readPrivateKey(config, privateKeyFileName)
 			if err != nil {
 				return err
 			}
 		} else {
+			if os.IsNotExist(err) {
+				err := os.MkdirAll(config.DataDir, os.ModePerm)
+				if err != nil {
+					log.Error("Failed to create directory:", "err", err)
+				}
+				file, err := os.Create(fullPath)
+				if err != nil {
+					log.Error("Failed to create file:", "err", err)
+				}
+				defer file.Close()
+			}
 			log.Info("Creating new private key")
 			privateKey, err = crypto.GenerateKey()
 			if err != nil {
