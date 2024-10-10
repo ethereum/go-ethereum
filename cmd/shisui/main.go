@@ -507,9 +507,13 @@ func setPrivateKey(ctx *cli.Context, config *Config) error {
 			}
 		} else {
 			if os.IsNotExist(err) {
+				err := os.MkdirAll(config.DataDir, os.ModePerm)
+				if err != nil {
+					log.Error("Failed to create directory:", "err", err)
+				}
 				file, err := os.Create(fullPath)
 				if err != nil {
-					log.Error("Failed to create file: %v", err)
+					log.Error("Failed to create file:", "err", err)
 				}
 				defer file.Close()
 			}
