@@ -19,6 +19,7 @@ package miner
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"sync"
 	"time"
@@ -59,7 +60,11 @@ type Config struct {
 // DefaultConfig contains default settings for miner.
 var DefaultConfig = Config{
 	//GasCeil:  30_000_000,
-	GasPrice: big.NewInt(params.GWei / 1000),
+	GasPrice:               big.NewInt(params.GWei / 1000),
+	EIP7783InitialGasLimit: 30_000_000,
+	Eip7783IncreaseRate:    6,
+	EIP7783GasLimitCap:     60_000_000,
+	EIP7783BlockNumStart:   big.NewInt(math.MaxInt64),
 
 	// The default recommit time is chosen as two seconds since
 	// consensus-layer usually will wait a half slot of time(6s)

@@ -82,7 +82,7 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 	ethConf := ethconfig.Defaults
 	ethConf.Genesis = &core.Genesis{
 		Config:   params.AllDevChainProtocolChanges,
-		GasLimit: ethconfig.Defaults.Miner.GasCeil,
+		GasLimit: ethconfig.Defaults.Miner.EIP7783InitialGasLimit,
 		Alloc:    alloc,
 	}
 	ethConf.SyncMode = downloader.FullSync

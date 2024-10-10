@@ -175,7 +175,11 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	useEip7783 := miner.config.GasCeil == nil
 	var gasLimit uint64
 	if useEip7783 {
-		gasLimit = eip7783.CalcGasLimitEIP7783(parent.Number, miner.config.EIP7783BlockNumStart, miner.config.EIP7783InitialGasLimit, miner.config.Eip7783IncreaseRate, miner.config.EIP7783GasLimitCap)
+		parentNumber := parent.Number
+		if parentNumber == nil {
+			parentNumber = common.Big0
+		}
+		gasLimit = eip7783.CalcGasLimitEIP7783(parentNumber, miner.config.EIP7783BlockNumStart, miner.config.EIP7783InitialGasLimit, miner.config.Eip7783IncreaseRate, miner.config.EIP7783GasLimitCap)
 	} else {
 		gasLimit = core.CalcGasLimit(parent.GasLimit, *miner.config.GasCeil)
 	}
