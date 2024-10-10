@@ -17,6 +17,8 @@ import (
 )
 
 func TestProcessQcShallSetForensicsCommittedQc(t *testing.T) {
+	t.Skip("Skipping this test for now as we disable forensics")
+
 	blockchain, _, currentBlock, signer, signFn, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
@@ -92,6 +94,8 @@ func TestProcessQcShallSetForensicsCommittedQc(t *testing.T) {
 }
 
 func TestSetCommittedQCsInOrder(t *testing.T) {
+	t.Skip("Skipping this test for now as we disable forensics")
+
 	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	forensics := blockchain.Engine().(*XDPoS.XDPoS).EngineV2.GetForensicsFaker()
 
@@ -118,6 +122,8 @@ func TestSetCommittedQCsInOrder(t *testing.T) {
 
 // Happty path
 func TestForensicsMonitoring(t *testing.T) {
+	t.Skip("Skipping this test for now as we disable forensics")
+
 	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 915, params.TestXDPoSMockChainConfig, nil)
 	forensics := blockchain.Engine().(*XDPoS.XDPoS).EngineV2.GetForensicsFaker()
 	var decodedCurrentblockExtraField types.ExtraFields_v2
@@ -140,6 +146,7 @@ func TestForensicsMonitoring(t *testing.T) {
 }
 
 func TestForensicsMonitoringNotOnSameChainButHaveSameRoundQC(t *testing.T) {
+	t.Skip("Skipping this test for now as we disable forensics")
 	var numOfForks = new(int)
 	*numOfForks = 10
 	var forkRoundDifference = new(int)
@@ -199,6 +206,8 @@ func TestForensicsMonitoringNotOnSameChainButHaveSameRoundQC(t *testing.T) {
 }
 
 func TestForensicsMonitoringNotOnSameChainDoNotHaveSameRoundQC(t *testing.T) {
+	t.Skip("Skipping this test for now as we disable forensics")
+
 	var numOfForks = new(int)
 	*numOfForks = 10
 	var forkRoundDifference = new(int)
@@ -260,6 +269,8 @@ func TestForensicsMonitoringNotOnSameChainDoNotHaveSameRoundQC(t *testing.T) {
 
 // "prone to attack" test where the "across epoch" field is true
 func TestForensicsAcrossEpoch(t *testing.T) {
+	t.Skip("Skipping this test for now as we disable forensics")
+
 	var numOfForks = new(int)
 	*numOfForks = 10
 	var forkRoundDifference = new(int)
@@ -322,6 +333,8 @@ func TestForensicsAcrossEpoch(t *testing.T) {
 }
 
 func TestVoteEquivocationSameRound(t *testing.T) {
+	t.Skip("Skipping this test for now as we disable forensics")
+
 	var numOfForks = new(int)
 	*numOfForks = 1
 	blockchain, _, currentBlock, signer, signFn, currentForkBlock := PrepareXDCTestBlockChainForV2Engine(t, 901, params.TestXDPoSMockChainConfig, &ForkedBlockOptions{numOfForkedBlocks: numOfForks})
@@ -388,6 +401,8 @@ func TestVoteEquivocationSameRound(t *testing.T) {
 }
 
 func TestVoteEquivocationDifferentRound(t *testing.T) {
+	t.Skip("Skipping this test for now as we disable forensics")
+
 	var numOfForks = new(int)
 	*numOfForks = 10
 	var forkRoundDifference = new(int)

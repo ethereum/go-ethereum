@@ -93,9 +93,8 @@ func (b *Bfter) Vote(peer string, vote *types.Vote) error {
 		return err
 	}
 
-	b.broadcastCh <- vote
-
 	if verified {
+		b.broadcastCh <- vote
 		err = b.consensus.voteHandler(b.blockChainReader, vote)
 		if err != nil {
 			if _, ok := err.(*utils.ErrIncomingMessageRoundTooFarFromCurrentRound); ok {

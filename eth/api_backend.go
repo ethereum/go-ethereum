@@ -427,11 +427,11 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 	// calculate for 2 epochs ago
 	currentCheckpointNumber, _, err := engine.GetCurrentEpochSwitchBlock(chain, block.Number())
 	if err != nil {
-		log.Error("[GetVotersRewards] Fail to get GetCurrentEpochSwitchBlock for current checkpoint block", "block", block)
+		log.Error("[GetVotersRewards] Fail to get GetCurrentEpochSwitchBlock for current checkpoint block", "block", block.Number(), "err", err)
 	}
 	lastCheckpointNumber, _, err := engine.GetCurrentEpochSwitchBlock(chain, big.NewInt(int64(currentCheckpointNumber-1)))
 	if err != nil {
-		log.Error("[GetVotersRewards] Fail to get GetCurrentEpochSwitchBlock for last checkpoint block", "block", block)
+		log.Error("[GetVotersRewards] Fail to get GetCurrentEpochSwitchBlock for last checkpoint block", "block", block.Number(), "err", err)
 	}
 
 	lastCheckpointBlock := chain.GetBlockByNumber(lastCheckpointNumber)

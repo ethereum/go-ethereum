@@ -144,7 +144,7 @@ func TestBoardcastButNotProcessDisqualifiedVotes(t *testing.T) {
 	tester.bfter.Vote(peerID, &vote)
 
 	time.Sleep(50 * time.Millisecond)
-	if int(handlerCounter) != targetVotes || int(broadcastCounter) != 1 {
+	if int(handlerCounter) != targetVotes || int(broadcastCounter) != 0 {
 		t.Fatalf("count mismatch: have %v on handler, %v on broadcast, want %v", handlerCounter, broadcastCounter, targetVotes)
 	}
 }
@@ -171,7 +171,7 @@ func TestBoardcastButNotProcessDisqualifiedTimeout(t *testing.T) {
 	tester.bfter.Timeout(peerID, &timeout)
 
 	time.Sleep(50 * time.Millisecond)
-	if int(handlerCounter) != targetTimeout || int(broadcastCounter) != 1 {
+	if int(handlerCounter) != targetTimeout || int(broadcastCounter) != 0 {
 		t.Fatalf("count mismatch: have %v on handler, %v on broadcast, want %v", handlerCounter, broadcastCounter, targetTimeout)
 	}
 }
@@ -198,7 +198,7 @@ func TestBoardcastButNotProcessDisqualifiedSyncInfo(t *testing.T) {
 	tester.bfter.SyncInfo(peerID, &syncInfo)
 
 	time.Sleep(50 * time.Millisecond)
-	if int(handlerCounter) != targetSyncInfo || int(broadcastCounter) != 1 {
+	if int(handlerCounter) != targetSyncInfo || int(broadcastCounter) != 0 {
 		t.Fatalf("count mismatch: have %v on handler, %v on broadcast, want %v", handlerCounter, broadcastCounter, targetSyncInfo)
 	}
 }
