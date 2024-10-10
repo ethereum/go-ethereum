@@ -86,6 +86,9 @@ type layer interface {
 	// This is meant to be used during shutdown to persist the layer without
 	// flattening everything down (bad for reorgs).
 	journal(w io.Writer) error
+
+	// isStale returns whether this layer has become stale or if it's still live.
+	isStale() bool
 }
 
 // Config contains the settings for database.
