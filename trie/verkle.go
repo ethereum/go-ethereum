@@ -258,7 +258,7 @@ func (t *VerkleTrie) Commit(_ bool) (common.Hash, *trienode.NodeSet) {
 	nodeset := trienode.NewNodeSet(common.Hash{})
 	for _, node := range nodes {
 		// Hash parameter is not used in pathdb
-		nodeset.AddNode(node.Path, trienode.New(common.Hash{}, node.SerializedBytes))
+		nodeset.AddNode(string(node.Path), trienode.New(common.Hash{}, node.SerializedBytes))
 	}
 	// Serialize root commitment form
 	return t.Hash(), nodeset
