@@ -1893,10 +1893,13 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()
 	}
-
+	var wStateDb = vm.StateDB(statedb)
+	if w := statedb.Wrapped(); w != nil {
+		wStateDb = w
+	}
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	res, err := bc.processor.Process(block, statedb, bc.vmConfig)
+	res, err := bc.processor.Process(block, wStateDb, bc.vmConfig)
 	if err != nil {
 		bc.reportBlock(block, res, err)
 		return nil, err

@@ -126,11 +126,15 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			}
 
 			state.StateDB.SetLogger(tracer.Hooks)
+			logState := vm.StateDB(state.StateDB.Wrapped())
+			if logState == nil {
+				logState = state.StateDB
+			}
 			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
@@ -360,6 +364,12 @@ func TestInternals(t *testing.T) {
 				}, false, rawdb.HashScheme)
 			defer state.Close()
 			state.StateDB.SetLogger(tc.tracer.Hooks)
+
+			logState := vm.StateDB(state.StateDB.Wrapped())
+			if logState == nil {
+				logState = state.StateDB
+			}
+
 			tx, err := types.SignNewTx(key, signer, &types.LegacyTx{
 				To:       &to,
 				Value:    big.NewInt(0),
@@ -373,7 +383,7 @@ func TestInternals(t *testing.T) {
 				Origin:   origin,
 				GasPrice: tx.GasPrice(),
 			}
-			evm := vm.NewEVM(context, txContext, state.StateDB, config, vm.Config{Tracer: tc.tracer.Hooks})
+			evm := vm.NewEVM(context, txContext, logState, config, vm.Config{Tracer: tc.tracer.Hooks})
 			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0))
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)
