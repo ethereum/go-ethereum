@@ -104,18 +104,19 @@ var DefaultProtocolID = [6]byte{'d', 'i', 's', 'c', 'v', '5'}
 
 // Errors.
 var (
-	errTooShort            = errors.New("packet too short")
-	errInvalidHeader       = errors.New("invalid packet header")
-	errInvalidFlag         = errors.New("invalid flag value in header")
-	errMinVersion          = errors.New("version of packet header below minimum")
-	errMsgTooShort         = errors.New("message/handshake packet below minimum size")
-	errAuthSize            = errors.New("declared auth size is beyond packet length")
-	errUnexpectedHandshake = errors.New("unexpected auth response, not in handshake")
-	errInvalidAuthKey      = errors.New("invalid ephemeral pubkey")
-	errNoRecord            = errors.New("expected ENR in handshake but none sent")
-	errInvalidNonceSig     = errors.New("invalid ID nonce signature")
-	errMessageTooShort     = errors.New("message contains no data")
-	errMessageDecrypt      = errors.New("cannot decrypt message")
+	errTooShort             = errors.New("packet too short")
+	errInvalidHeader        = errors.New("invalid packet header")
+	errInvalidFlag          = errors.New("invalid flag value in header")
+	errMinVersion           = errors.New("version of packet header below minimum")
+	errMsgTooShort          = errors.New("message/handshake packet below minimum size")
+	errAuthSize             = errors.New("declared auth size is beyond packet length")
+	errUnexpectedHandshake  = errors.New("unexpected auth response, not in handshake")
+	errInvalidAuthKey       = errors.New("invalid ephemeral pubkey")
+	errNoRecord             = errors.New("expected ENR in handshake but none sent")
+	errInvalidNonceSig      = errors.New("invalid ID nonce signature")
+	errMessageTooShort      = errors.New("message contains no data")
+	errMessageDecrypt       = errors.New("cannot decrypt message")
+	errChallengeAlreadySent = errors.New("challenge already sent to this node")
 )
 
 // Public errors.
@@ -219,7 +220,7 @@ func (c *Codec) Encode(id enode.ID, addr string, packet Packet, challenge *Whoar
 	if challenge, ok := packet.(*Whoareyou); ok {
 		// check if we already sent a challenge to this node
 		if c.sc.getHandshake(id, addr) != nil {
-			return nil, Nonce{}, nil
+			return nil, Nonce{}, errChallengeAlreadySent
 		}
 		challenge.ChallengeData = bytesCopy(&c.buf)
 		c.sc.storeSentHandshake(id, addr, challenge)
