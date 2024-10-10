@@ -126,7 +126,7 @@ func Transition(ctx *cli.Context) error {
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), config)
 			if err != nil {
 				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
 			}
