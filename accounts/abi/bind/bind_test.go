@@ -1818,7 +1818,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.EIP7783InitialGasLimit)
 			)
 			defer sim.Close()
 
@@ -1889,7 +1889,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.EIP7783InitialGasLimit)
 			)
 			defer sim.Close()
 	
@@ -1942,7 +1942,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.EIP7783InitialGasLimit)
 			)
 			defer sim.Close()
 
@@ -1991,7 +1991,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.EIP7783InitialGasLimit)
 			)
 			defer sim.Close()
 
@@ -2032,7 +2032,7 @@ var bindTests = []struct {
 			var (
 				key, _  = crypto.GenerateKey()
 				user, _ = bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
-				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.GasCeil)
+				sim     = backends.NewSimulatedBackend(types.GenesisAlloc{user.From: {Balance: big.NewInt(1000000000000000000)}}, ethconfig.Defaults.Miner.EIP7783InitialGasLimit)
 			)
 			_, tx, _, err := DeployRangeKeyword(user, sim)
 			if err != nil {

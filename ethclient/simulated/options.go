@@ -28,7 +28,8 @@ import (
 func WithBlockGasLimit(gaslimit uint64) func(nodeConf *node.Config, ethConf *ethconfig.Config) {
 	return func(nodeConf *node.Config, ethConf *ethconfig.Config) {
 		ethConf.Genesis.GasLimit = gaslimit
-		ethConf.Miner.GasCeil = gaslimit
+		ethConf.Miner.GasCeil = new(uint64)
+		*ethConf.Miner.GasCeil = gaslimit
 	}
 }
 
