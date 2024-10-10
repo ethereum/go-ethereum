@@ -86,7 +86,7 @@ var (
 		TerminalTotalDifficulty: big.NewInt(1),
 		TerminalTotalDifficultyPassed: true,
 		ShanghaiTime:                  newUint64(1679618404),
-		CancunTime:                    newUint64(1679618404),
+		//CancunTime:                    newUint64(1679618404),
 		Ethash:              nil,
 	}
 	TanenbaumChainConfig = &ChainConfig{

@@ -816,8 +816,8 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 			p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
 		}
 	}
-	// Flush out any blobs from limbo that are older than the latest finality
-	if p.chain.Config().IsCancun(p.head.Number, p.head.Time) {
+	// SYSCOIN Flush out any blobs from limbo that are older than the latest finality
+	if !p.chain.Config().IsSyscoin(p.head.Number) && p.chain.Config().IsCancun(p.head.Number, p.head.Time) {
 		p.limbo.finalize(p.chain.CurrentFinalBlock())
 	}
 	// Reset the price heap for the new set of basefee/blobfee pairs
