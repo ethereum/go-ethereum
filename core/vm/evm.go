@@ -613,7 +613,6 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		Time:        evm.Context.Time,
 		Random:      evm.Context.Random,
 		GasPrice:    evm.TxContext.GasPrice,
-		ChainConfig: evm.ChainConfig(),
 		StateDB:     evm.StateDB,
 	}
 }

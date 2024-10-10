@@ -31,7 +31,7 @@ import (
 )
 
 func TestCallFlatStop(t *testing.T) {
-	tracer, err := tracers.DefaultDirectory.New("flatCallTracer", &tracers.Context{}, nil)
+	tracer, err := tracers.DefaultDirectory.New("flatCallTracer", &tracers.Context{}, nil, params.MainnetChainConfig)
 	require.NoError(t, err)
 
 	// this error should be returned by GetResult
@@ -47,9 +47,7 @@ func TestCallFlatStop(t *testing.T) {
 		Data:     nil,
 	})
 
-	tracer.OnTxStart(&tracing.VMContext{
-		ChainConfig: params.MainnetChainConfig,
-	}, tx, common.Address{})
+	tracer.OnTxStart(&tracing.VMContext{}, tx, common.Address{})
 
 	tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, nil, 0, big.NewInt(0))
 

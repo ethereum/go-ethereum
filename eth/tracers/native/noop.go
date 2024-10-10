@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func init() {
@@ -35,7 +36,7 @@ func init() {
 type noopTracer struct{}
 
 // newNoopTracer returns a new noop tracer.
-func newNoopTracer(ctx *tracers.Context, _ json.RawMessage) (*tracers.Tracer, error) {
+func newNoopTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	t := &noopTracer{}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
