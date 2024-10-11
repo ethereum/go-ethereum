@@ -366,7 +366,7 @@ func (db *Database) Recover(root common.Hash) error {
 	}
 	// Short circuit if the target state is not recoverable.
 	root = types.TrieRootHash(root)
-	if !db.Recoverable(root) {
+	if !db.recoverable(root) {
 		return errStateUnrecoverable
 	}
 	// Apply the state histories upon the disk layer in order.
@@ -397,8 +397,15 @@ func (db *Database) Recover(root common.Hash) error {
 	return nil
 }
 
-// Recoverable returns the indicator if the specified state is recoverable.
-func (db *Database) Recoverable(root common.Hash) bool {
+// Recoverable returns the indicator if the specified state is recoverable. It
+// always returns a nil error.
+func (db *Database) Recoverable(root common.Hash) (bool, error) {
+	return db.recoverable(root), nil
+}
+
+// recoverable is the internal implementation of [Database.Recoverable], which
+// has to return an error for conformity with the triedb.backend interface.
+func (db *Database) recoverable(root common.Hash) bool {
 	// Ensure the requested state is a known state.
 	root = types.TrieRootHash(root)
 	id := rawdb.ReadStateID(db.diskdb, root)

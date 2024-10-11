@@ -17,8 +17,6 @@
 package triedb
 
 import (
-	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
@@ -33,11 +31,7 @@ import (
 //
 // This function is only supported by path mode database.
 func (db *Database) AccountHistory(address common.Address, start, end uint64) (*pathdb.HistoryStats, error) {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return nil, errors.New("not supported")
-	}
-	return pdb.AccountHistory(address, start, end)
+	return db.backend.AccountHistory(address, start, end)
 }
 
 // StorageHistory inspects the storage history within the specified range.
@@ -52,11 +46,7 @@ func (db *Database) AccountHistory(address common.Address, start, end uint64) (*
 //
 // This function is only supported by path mode database.
 func (db *Database) StorageHistory(address common.Address, slot common.Hash, start uint64, end uint64) (*pathdb.HistoryStats, error) {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return nil, errors.New("not supported")
-	}
-	return pdb.StorageHistory(address, slot, start, end)
+	return db.backend.StorageHistory(address, slot, start, end)
 }
 
 // HistoryRange returns the block numbers associated with earliest and latest
@@ -64,9 +54,5 @@ func (db *Database) StorageHistory(address common.Address, slot common.Hash, sta
 //
 // This function is only supported by path mode database.
 func (db *Database) HistoryRange() (uint64, uint64, error) {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return 0, 0, errors.New("not supported")
-	}
-	return pdb.HistoryRange()
+	return db.backend.HistoryRange()
 }

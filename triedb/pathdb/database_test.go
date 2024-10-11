@@ -469,7 +469,13 @@ func TestDatabaseRecoverable(t *testing.T) {
 		{tester.roots[index+1], false},
 	}
 	for i, c := range cases {
-		result := tester.db.Recoverable(c.root)
+		result, err := tester.db.Recoverable(c.root)
+		if err != nil {
+			// Recoverable() always returns nil so this should never happen. The
+			// signature only includes a returned error to conform with a
+			// triedb-internal interface.
+			t.Fatalf("case: %d, %T.Recoverable() got error %v", i, tester.db, err)
+		}
 		if result != c.expect {
 			t.Fatalf("case: %d, unexpected result, want %t, got %t", i, c.expect, result)
 		}

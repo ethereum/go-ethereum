@@ -217,12 +217,13 @@ func (db *Database) node(hash common.Hash) ([]byte, error) {
 // Reference adds a new reference from a parent node to a child node.
 // This function is used to add reference between internal trie node
 // and external node(e.g. storage trie root), all internal trie nodes
-// are referenced together by database itself.
-func (db *Database) Reference(child common.Hash, parent common.Hash) {
+// are referenced together by database itself. It always returns a nil error.
+func (db *Database) Reference(child common.Hash, parent common.Hash) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
 	db.reference(child, parent)
+	return nil
 }
 
 // reference is the private locked version of Reference.
@@ -250,12 +251,13 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 	db.childrenSize += common.HashLength
 }
 
-// Dereference removes an existing reference from a root node.
-func (db *Database) Dereference(root common.Hash) {
+// Dereference removes an existing reference from a root node. It always returns
+// a nil error.
+func (db *Database) Dereference(root common.Hash) error {
 	// Sanity check to ensure that the meta-root is not removed
 	if root == (common.Hash{}) {
 		log.Error("Attempted to dereference the trie cache meta root")
-		return
+		return nil
 	}
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -273,6 +275,7 @@ func (db *Database) Dereference(root common.Hash) {
 
 	log.Debug("Dereferenced trie from memory database", "nodes", nodes-len(db.dirties), "size", storage-db.dirtiesSize, "time", time.Since(start),
 		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
+	return nil
 }
 
 // dereference is the private locked version of Dereference.
