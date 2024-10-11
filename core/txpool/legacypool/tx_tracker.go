@@ -87,7 +87,9 @@ func (tracker *TxTracker) TrackAll(txs []*types.Transaction) {
 			tracker.byAddr[addr] = newSortedMap()
 		}
 		tracker.byAddr[addr].Put(tx)
-		_ = tracker.journal.insert(tx)
+		if tracker.journal != nil {
+			_ = tracker.journal.insert(tx)
+		}
 	}
 }
 
