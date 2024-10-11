@@ -2744,7 +2744,6 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory:         datadir,
 		AncientsDirectory: ancient,
-		Ephemeral:         true,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
