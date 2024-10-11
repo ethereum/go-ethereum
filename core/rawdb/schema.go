@@ -115,7 +115,6 @@ var (
 	skeletonHeaderPrefix  = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
 
 	// SYSCOIN
-	nevmToSysPrefix        = []byte("x") // nevmToSysPrefix + nevm block hash -> nevmBlock
 	blockNumToSysKeyPrefix = []byte("z") // blockNumToSysKeyPrefix + block number -> SYS block hash
 	dataHashesKeyPrefix    = []byte("y") // dataHashesKeyPrefix + block number -> versioned hashes
 	dataHashKeyPrefix      = []byte("w") // dataHashKeyPrefix + versioned hash -> versioned hash
@@ -356,11 +355,6 @@ func IsStorageTrieNode(key []byte) bool {
 }
 
 // SYSCOIN
-// nevmToSysKey = nevmToSysPrefix + hash
-func nevmToSysKey(hash common.Hash) []byte {
-    return append(nevmToSysPrefix, hash.Bytes()...)
-}
-
 // blockNumToSysKey = blockNumToSysKeyPrefix + blocknumber
 func blockNumToSysKey(n uint64) []byte {
     return append(blockNumToSysKeyPrefix, []byte(new(big.Int).SetUint64(n).String())...)
