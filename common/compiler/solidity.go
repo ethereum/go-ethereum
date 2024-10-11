@@ -33,7 +33,7 @@ type solcOutput struct {
 	Version string
 }
 
-// solidity v.0.8 changes the way ABI, Devdoc and Userdoc are serialized
+// solcOutputV8 outputs combined format under solidity v.0.8
 type solcOutputV8 struct {
 	Contracts map[string]struct {
 		BinRuntime            string `json:"bin-runtime"`

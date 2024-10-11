@@ -186,10 +186,12 @@ func EncodeBig(bigint *big.Int) string {
 	}
 }
 
+// has0xPrefix checks if a string has the "0x" prefix.
 func has0xPrefix(input string) bool {
 	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
 }
 
+// checkNumber validates a hex string and removes the "0x" prefix.
 func checkNumber(input string) (raw string, err error) {
 	if len(input) == 0 {
 		return "", ErrEmptyString
@@ -209,6 +211,7 @@ func checkNumber(input string) (raw string, err error) {
 
 const badNibble = ^uint64(0)
 
+// decodeNibble converts a hex digit into its numeric value.
 func decodeNibble(in byte) uint64 {
 	switch {
 	case in >= '0' && in <= '9':
@@ -222,6 +225,7 @@ func decodeNibble(in byte) uint64 {
 	}
 }
 
+// mapError converts decoding errors from the standard library to package-specific errors.
 func mapError(err error) error {
 	if err, ok := err.(*strconv.NumError); ok {
 		switch err.Err {
