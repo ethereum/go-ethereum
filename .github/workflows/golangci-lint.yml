@@ -2,9 +2,9 @@ name: golangci-lint
 
 on:
   push:
-    branches: [ libevm ]
+    branches: [ main ]
   pull_request:
-    branches: [ libevm ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:

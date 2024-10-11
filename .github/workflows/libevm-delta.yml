@@ -2,9 +2,9 @@ name: libevm delta
 
 on:
   push:
-    branches: [ libevm ]
+    branches: [ main ]
   pull_request:
-    branches: [ libevm ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -26,13 +26,14 @@ jobs:
           git diff --diff-filter=a --word-diff --unified=0 --color=always \
             libevm-base \
             ':(exclude).golangci.yml' \
-            ':(exclude).github/**';
+            ':(exclude).github/**' \
+            ':(exclude)README.md';
       
-      - name: git diff libevm-base..libevm
+      - name: git diff libevm-base..main
         run: |
-          git checkout libevm --;
+          git checkout main --;
           git diff --diff-filter=a --word-diff --unified=0 --color=always \
             libevm-base \
             ':(exclude).golangci.yml' \
-            ':(exclude).github/**';
-
+            ':(exclude).github/**' \
+            ':(exclude)README.md';
