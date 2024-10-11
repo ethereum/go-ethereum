@@ -66,7 +66,7 @@ type ExecutionResult struct {
 	WithdrawalsRoot      *common.Hash          `json:"withdrawalsRoot,omitempty"`
 	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
-	RequestsHash         *common.Hash          `json:"requestsRoot,omitempty"`
+	RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
 	Requests             [][]byte              `json:"requests,omitempty"`
 }
 
@@ -379,8 +379,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		execRs.CurrentExcessBlobGas = (*math.HexOrDecimal64)(&excessBlobGas)
 		execRs.CurrentBlobGasUsed = (*math.HexOrDecimal64)(&blobGasUsed)
 	}
+
+	var requests [][]byte
 	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
-		// Parse the requests from the logs
+		// EIP-6110 deposits
 		var allLogs []*types.Log
 		for _, receipt := range receipts {
 			allLogs = append(allLogs, receipt.Logs...)
@@ -389,12 +391,23 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		if err != nil {
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
-		requests := [][]byte{depositRequests}
-		// Calculate the requests root
+		requests = append(requests, depositRequests)
+		// create EVM for system calls
+		vmenv := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
+		// EIP-7002 withdrawals
+		withdrawalRequests := core.ProcessWithdrawalQueue(vmenv, statedb)
+		requests = append(requests, withdrawalRequests)
+		// EIP-7251 consolidations
+		consolidationRequests := core.ProcessConsolidationQueue(vmenv, statedb)
+		requests = append(requests, consolidationRequests)
+	}
+	if requests != nil {
+		// Set requestsHash on block.
 		h := types.CalcRequestsHash(requests)
 		execRs.RequestsHash = &h
 		execRs.Requests = requests
 	}
+
 	// Re-create statedb instance with new root upon the updated database
 	// for accessing latest states.
 	statedb, err = state.New(root, statedb.Database())
