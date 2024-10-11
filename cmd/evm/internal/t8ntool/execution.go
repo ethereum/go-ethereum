@@ -66,7 +66,7 @@ type ExecutionResult struct {
 	WithdrawalsRoot      *common.Hash          `json:"withdrawalsRoot,omitempty"`
 	CurrentExcessBlobGas *math.HexOrDecimal64  `json:"currentExcessBlobGas,omitempty"`
 	CurrentBlobGasUsed   *math.HexOrDecimal64  `json:"blobGasUsed,omitempty"`
-	RequestsHash         *common.Hash          `json:"requestsRoot,omitempty"`
+	RequestsHash         *common.Hash          `json:"requestsHash,omitempty"`
 	Requests             [][]byte              `json:"requests,omitempty"`
 }
 
