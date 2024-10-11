@@ -696,7 +696,6 @@ func (cm *chainMaker) GetTd(hash common.Hash, number uint64) *big.Int {
 	return nil // not supported
 }
 // SYSCOIN
-func (cm *chainMaker) HasNEVMMapping(hash common.Hash) bool           { return false }
 func (cm *chainMaker) ReadSYSHash(uint64) []byte {
 	return []byte{}
 }

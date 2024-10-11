@@ -230,6 +230,8 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
+		// SYSCOIN
+	NevmBlockConnect *NEVMBlockConnect
 }
 
 // "external" block encoding. used for eth protocol, etc.

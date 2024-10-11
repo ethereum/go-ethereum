@@ -476,18 +476,3 @@ func (bc *BlockChain) DeleteSYSHash(db ethdb.KeyValueWriter, n uint64) {
 	bc.hc.DeleteSYSHash(db, n)
 }
 
-// HasNEVMMapping checks if a NEVM block is present in the database or not, caching
-// it if present.
-func (bc *BlockChain) HasNEVMMapping(hash common.Hash) bool {
-	if(bc.NevmBlockConnect != nil) {
-		return (bc.NevmBlockConnect.Block.Hash() == hash)
-	}
-	return bc.hc.HasNEVMMapping(hash)
-}
-func (bc *BlockChain) DeleteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
-	bc.hc.DeleteNEVMMapping(db, hash)
-}
-
-func (bc *BlockChain) WriteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
-	bc.hc.WriteNEVMMapping(db, hash)
-}

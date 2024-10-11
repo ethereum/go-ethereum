@@ -295,67 +295,55 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		defer eth.wgNEVM.Done()
 		return eth.miner.GenerateWorkSyscoin(eth.blockchain.CurrentBlock().Hash(), eth.config.Miner.PendingFeeRecipient, crypto.Keccak256Hash([]byte{byte(123)}))
 	}
-	addBlock := func(nevmBlockConnect *types.NEVMBlockConnect, eth *Ethereum) error {
-		if nevmBlockConnect == nil {
+	var (
+		batchSize         = 100 // Number of blocks to batch before processing
+		blockConnectBuffer = make([]*types.NEVMBlockConnect, 0, batchSize)
+	)
+	
+	addBlock := func(nevmBlockConnectIn *types.NEVMBlockConnect, eth *Ethereum) error {
+		if nevmBlockConnectIn == nil || nevmBlockConnectIn.Block == nil {
 			return errors.New("addBlock: Empty block")
 		}
-		proposedBlockNumber := nevmBlockConnect.Block.NumberU64()
-		proposedBlockHash := nevmBlockConnect.Block.Hash()
-		proposedBlockParentHash := nevmBlockConnect.Block.ParentHash()
-		currentHash := common.Hash{}
-		currentNumber := uint64(0)
-		if nevmBlockConnect.Block == nil {
-			return errors.New("addBlock: empty block")
-		}
-		// because we set canonical head only after sync we can check for continuity via saved block connects
-		if eth.blockchain.NevmBlockConnect != nil {
-			currentBlock := eth.blockchain.NevmBlockConnect.Block
-			if currentBlock == nil {
-				return errors.New("addBlock: Current block is nil")
-			}
-			currentNumber = currentBlock.NumberU64()
-			currentHash = currentBlock.Hash()
-		} else {
-			currentBlock := eth.blockchain.CurrentBlock()
-			if currentBlock == nil {
-				return errors.New("addBlock: Current block is nil")
-			}
-			currentNumber = currentBlock.Number.Uint64()
-			currentHash = currentBlock.Hash()
-		}
-		if (proposedBlockNumber != (currentNumber + 1)) || (proposedBlockParentHash != currentHash) {
-			log.Error("Non contiguous block insert", "number", proposedBlockNumber, "hash", proposedBlockHash,
-				"parent", proposedBlockParentHash, "prevnumber", currentNumber, "prevhash", currentHash)
-			return errors.New("addBlock: Non contiguous block insert")
-		}
-		eth.blockchain.NevmBlockConnect = nevmBlockConnect
-		// special case where miner process includes validating block in pre-packaging stage on SYS node
-		// the validation of this hash is done in ConnectNEVMCommitment() in Syscoin using fJustCheck
-		sysBlockHash := common.BytesToHash([]byte(nevmBlockConnect.Sysblockhash))
+	
+		// Special case where miner process includes validating block in pre-packaging stage on SYS node
+		sysBlockHash := common.BytesToHash([]byte(nevmBlockConnectIn.Sysblockhash))
 		if sysBlockHash == (common.Hash{}) {
-			err := eth.engine.VerifyHeader(eth.blockchain, nevmBlockConnect.Block.Header())
-			return err
-		}
-		if _, err := eth.blockchain.InsertBlockWithoutSetHead(nevmBlockConnect.Block, false); err != nil {
-			return err
-		}
-
-		if eth.handler.peers.closed {
-			eth.lock.Lock()
-			eth.timeLastBlock = time.Now().Unix()
-			eth.lock.Unlock()
-			if (nevmBlockConnect.Block.NumberU64() % 100) == 0 {
-				if _, err := eth.blockchain.SetCanonical(nevmBlockConnect.Block); err != nil {
-					return err
-				}
-			}
-		} else {
-			if _, err := eth.blockchain.SetCanonical(nevmBlockConnect.Block); err != nil {
+			if err := eth.engine.VerifyHeader(eth.blockchain, nevmBlockConnectIn.Block.Header()); err != nil {
 				return err
 			}
+			return nil
 		}
+	
+		// Add block to the buffer
+		blockConnectBuffer = append(blockConnectBuffer, nevmBlockConnectIn)
+		// Check if we should process the buffer (batch size reached or sync finished)
+		if eth.handler.peers.closed && len(blockConnectBuffer) < batchSize {
+			return nil
+		}
+	
+		// Process the buffer
+		batch := blockConnectBuffer
+		blockConnectBuffer = make([]*types.NEVMBlockConnect, 0, batchSize) // Clear the buffer for next batch
+	
+		// Prepare the blocks for insertion
+		blockBuffer := make([]*types.Block, 0, len(batch))
+		for _, nevmBlockConnect := range batch {
+			nevmBlockConnect.Block.NevmBlockConnect = nevmBlockConnect
+			blockBuffer = append(blockBuffer, nevmBlockConnect.Block)
+		}
+		// Insert the batch of blocks into the blockchain
+		if _, err := eth.blockchain.InsertChain(blockBuffer); err != nil {
+			return err
+		}
+	
+		// Update the last block time
+		eth.lock.Lock()
+		eth.timeLastBlock = time.Now().Unix()
+		eth.lock.Unlock()
+	
 		return nil
 	}
+	
 	// start networking sync once we start inserting chain meaning we are likely finished with IBD
 	go func(eth *Ethereum) {
 		sub := eth.eventMux.Subscribe(downloader.StartNetworkEvent{})
@@ -431,7 +419,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			eth.blockchain.WriteNEVMAddressMapping(batch, mapping)
 		}
 
-		eth.blockchain.DeleteNEVMMapping(batch, current.Hash())
 		eth.blockchain.DeleteSYSHash(batch, currentNumber)
 		eth.blockchain.DeleteDataHashes(batch, currentNumber)
 		if err := batch.Write(); err != nil {

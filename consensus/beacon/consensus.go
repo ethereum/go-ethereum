@@ -252,9 +252,6 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		if header.Time > uint64(unixNow+allowedFutureBlockTimeSeconds) {
 			return consensus.ErrFutureBlock
 		}
-		if !chain.HasNEVMMapping(header.Hash()) {
-			return errors.New("block not found in NEVM mapping")
-		}
 		// Verify the block's difficulty to ensure it's the default constant
 		if !chain.Config().IsNexus(header.Number) {
 			if header.Difficulty.Cmp(big.NewInt(1)) != 0 {

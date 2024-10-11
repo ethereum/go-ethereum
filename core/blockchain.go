@@ -258,8 +258,6 @@ type BlockChain struct {
 	prefetcher Prefetcher
 	processor  Processor // Block transaction processor interface
 	vmConfig   vm.Config
-	// SYSCOIN
-	NevmBlockConnect *types.NEVMBlockConnect
 	logger     *tracing.Hooks
 }
 
@@ -1108,12 +1106,6 @@ func (bc *BlockChain) stopWithoutSaving() {
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
-	// SYSCOIN we set canonical chain if we are stopping or we have synced
-	if bc.NevmBlockConnect != nil {
-		if _, err := bc.SetCanonical(bc.NevmBlockConnect.Block); err != nil {
-			log.Error("Failed setting canonical chain from NEVM block connect", "err", err)
-		}
-	}
 	bc.stopWithoutSaving()
 
 	// Ensure that the entirety of the state snapshot is journaled to disk.
@@ -1475,7 +1467,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteReceipts(blockBatch, block.Hash(), block.NumberU64(), receipts)
 	rawdb.WritePreimages(blockBatch, statedb.Preimages())
 	// SYSCOIN
-	nevmBlockConnect := bc.NevmBlockConnect
+	nevmBlockConnect := block.NevmBlockConnect
 	if nevmBlockConnect != nil {
 		// Update the NEVM address mappings based on the block's diff
 		hasDiff := nevmBlockConnect.HasDiff()
@@ -1496,9 +1488,10 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			bc.WriteNEVMAddressMapping(blockBatch, mapping)
 		}
 		proposedBlockNumber := nevmBlockConnect.Block.NumberU64()
-		bc.WriteNEVMMapping(blockBatch, nevmBlockConnect.Block.Hash())
 		bc.WriteDataHashes(blockBatch, proposedBlockNumber, nevmBlockConnect.VersionHashes)
 		bc.WriteSYSHash(blockBatch, nevmBlockConnect.Sysblockhash, proposedBlockNumber)
+	} else if bc.GetChainConfig().SyscoinBlock != nil {
+		return errors.New("No SYS block connect provided")
 	}
 	if err := blockBatch.Write(); err != nil {
 		log.Crit("Failed to write block into disk", "err", err)
@@ -1633,7 +1626,6 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		return 0, errChainStopped
 	}
 	defer bc.chainmu.Unlock()
-
 	_, n, err := bc.insertChain(chain, true, false) // No witness collection for mass inserts (would get super large)
 	return n, err
 }

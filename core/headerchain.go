@@ -579,24 +579,6 @@ func (hc *HeaderChain) DeleteSYSHash(db ethdb.KeyValueWriter, n uint64) {
 	rawdb.DeleteSYSHash(db, n)
 	hc.SYSHashCache.Remove(n)
 }
-func (hc *HeaderChain) HasNEVMMapping(hash common.Hash) bool {
-	if hc.NEVMCache.Contains(hash) {
-		return true
-	}
-	hasMapping := rawdb.HasNEVMMapping(hc.chainDb, hash)
-	if hasMapping {
-		hc.NEVMCache.Add(hash, []byte{0})
-	}
-	return hasMapping
-}
-func (hc *HeaderChain) DeleteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
-	rawdb.DeleteNEVMMapping(db, hash)
-	hc.NEVMCache.Remove(hash)
-}
-func (hc *HeaderChain) WriteNEVMMapping(db ethdb.KeyValueWriter, hash common.Hash) {
-	rawdb.WriteNEVMMapping(db, hash)
-	hc.NEVMCache.Add(hash, []byte{0})
-}
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
 // header is retrieved from the HeaderChain's internal cache.
