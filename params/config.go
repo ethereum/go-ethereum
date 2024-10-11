@@ -718,6 +718,11 @@ func (s ScrollConfig) IsValidBlockSize(size common.StorageSize) bool {
 	return s.MaxTxPayloadBytesPerBlock == nil || size <= common.StorageSize(*s.MaxTxPayloadBytesPerBlock)
 }
 
+// IsValidBlockSizeForMining is similar to IsValidBlockSize, but it accounts for the confidence factor in Rust CCC
+func (s ScrollConfig) IsValidBlockSizeForMining(size common.StorageSize) bool {
+	return s.IsValidBlockSize(size * (1.0 / 0.95))
+}
+
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
 type EthashConfig struct{}
 

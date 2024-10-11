@@ -706,7 +706,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrOversizedData
 	}
 	// Reject transactions that cannot fit into a block even as a single transaction
-	if !pool.chainconfig.Scroll.IsValidBlockSize(tx.Size()) {
+	if !pool.chainconfig.Scroll.IsValidBlockSizeForMining(tx.Size()) {
 		return ErrOversizedData
 	}
 	// Check whether the init code size has been exceeded.

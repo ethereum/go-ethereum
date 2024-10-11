@@ -742,7 +742,7 @@ func (w *worker) processTxn(tx *types.Transaction) (bool, error) {
 		return false, ErrUnexpectedL1MessageIndex
 	}
 
-	if !tx.IsL1MessageTx() && !w.chain.Config().Scroll.IsValidBlockSize(w.current.blockSize+tx.Size()) {
+	if !tx.IsL1MessageTx() && !w.chain.Config().Scroll.IsValidBlockSizeForMining(w.current.blockSize+tx.Size()) {
 		// can't fit this txn in this block, silently ignore and continue looking for more txns
 		return false, errors.New("tx too big")
 	}
