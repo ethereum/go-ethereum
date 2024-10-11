@@ -288,23 +288,24 @@ func applyCancunChecks(env *stEnv, chainConfig *params.ChainConfig) error {
 	return nil
 }
 
+// applyEOFChecks does a sanity check of the prestate EOF code validity, to avoid panic during state transition.
 func applyEOFChecks(prestate *Prestate, chainConfig *params.ChainConfig) error {
-	// Sanity check pre-allocated EOF code to not panic in state transition.
-	if chainConfig.IsShanghai(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp) {
-		for addr, acc := range prestate.Pre {
-			if vm.HasEOFByte(acc.Code) {
-				var (
-					c   vm.Container
-					err error
-				)
-				err = c.UnmarshalBinary(acc.Code, false)
-				if err == nil {
-					jt := vm.NewPragueEOFInstructionSetForTesting()
-					err = c.ValidateCode(&jt, false)
-				}
-				if err != nil {
-					return NewError(ErrorConfig, fmt.Errorf("code at %s considered invalid: %v", addr, err))
-				}
+	if !chainConfig.IsShanghai(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp) {
+		return nil
+	}
+	for addr, acc := range prestate.Pre {
+		if vm.HasEOFByte(acc.Code) {
+			var (
+				c   vm.Container
+				err error
+			)
+			err = c.UnmarshalBinary(acc.Code, false)
+			if err == nil {
+				jt := vm.NewPragueEOFInstructionSetForTesting()
+				err = c.ValidateCode(&jt, false)
+			}
+			if err != nil {
+				return NewError(ErrorConfig, fmt.Errorf("code at %s considered invalid: %v", addr, err))
 			}
 		}
 	}

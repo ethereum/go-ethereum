@@ -17,7 +17,6 @@
 package core
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -303,9 +302,9 @@ func (st *StateTransition) preCheck() error {
 	if !msg.SkipFromEOACheck {
 		// Make sure the sender is an EOA
 		code := st.state.GetCode(msg.From)
-		if 0 < len(code) && !bytes.HasPrefix(code, []byte{0xef, 0x01, 0x00}) {
-			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
-				msg.From.Hex(), st.state.GetCodeHash(msg.From))
+		if len(code) > 0 {
+			return fmt.Errorf("%w: address %v, codeLen: %d", ErrSenderNoEOA,
+				msg.From.Hex(), len(code))
 		}
 	}
 	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
@@ -441,11 +440,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	// - reset transient storage(eip 1153)
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
-	if !contractCreation {
-		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
-	}
-
 	var (
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
@@ -460,6 +454,8 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
 		}
 	} else {
+		// Increment the nonce for the next transaction
+		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
 	}
 
