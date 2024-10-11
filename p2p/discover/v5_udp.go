@@ -686,11 +686,6 @@ func (t *UDPv5) sendFromAnotherThread(toID enode.ID, toAddr netip.AddrPort, pack
 	}
 }
 
-func (t *UDPv5) sendFromAnotherThreadWithCall(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet) {
-	resp := t.callToID(toID, toAddr, v5wire.TalkRequestMsg, packet)
-	defer t.callDone(resp)
-}
-
 // send sends a packet to the given node.
 func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet, c *v5wire.Whoareyou) (v5wire.Nonce, error) {
 	addr := toAddr.String()

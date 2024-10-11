@@ -326,7 +326,7 @@ func (p *PortalProtocol) setupUDPListening() error {
 			if id, ok := p.cachedIds[addr.String()]; ok {
 				//_, err := p.DiscV5.TalkRequestToID(id, addr, string(portalwire.UTPNetwork), buf)
 				req := &v5wire.TalkRequest{Protocol: string(portalwire.Utp), Message: buf}
-				p.DiscV5.sendFromAnotherThreadWithCall(id, netip.AddrPortFrom(netutil.IPToAddr(addr.IP), uint16(addr.Port)), req)
+				p.DiscV5.sendFromAnotherThread(id, netip.AddrPortFrom(netutil.IPToAddr(addr.IP), uint16(addr.Port)), req)
 
 				return len(buf), err
 			} else {
