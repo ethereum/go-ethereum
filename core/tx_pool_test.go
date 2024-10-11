@@ -2685,7 +2685,7 @@ func TestValidateTxBlockSize(t *testing.T) {
 	account := crypto.PubkeyToAddress(key.PublicKey)
 	testAddBalance(pool, account, big.NewInt(1000000000000000000))
 
-	validTx := pricedDataTransaction(1, 2100000, big.NewInt(1), key, uint64(*pool.chainconfig.Scroll.MaxTxPayloadBytesPerBlock)-128)
+	validTx := pricedDataTransaction(1, 2100000, big.NewInt(1), key, uint64(float64(*pool.chainconfig.Scroll.MaxTxPayloadBytesPerBlock)*float64(0.9)))
 	oversizedTx := pricedDataTransaction(2, 2100000, big.NewInt(1), key, uint64(*pool.chainconfig.Scroll.MaxTxPayloadBytesPerBlock))
 
 	tests := []struct {
