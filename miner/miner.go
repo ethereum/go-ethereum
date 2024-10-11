@@ -124,8 +124,7 @@ func (miner *Miner) SetExtra(extra []byte) error {
 // For pre-1559 blocks, it sets the ceiling.
 func (miner *Miner) SetGasCeil(ceil uint64) {
 	miner.confMu.Lock()
-	miner.config.GasCeil = new(uint64)
-	*miner.config.GasCeil = ceil
+	miner.config.GasCeil = &ceil
 	miner.confMu.Unlock()
 }
 
