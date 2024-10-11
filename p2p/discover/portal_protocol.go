@@ -553,8 +553,10 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 	}
 
 	p.Log.Trace("<< ACCEPT/"+p.protocolName, "id", target.ID(), "accept", accept)
-	p.table.addFoundNode(target, true)
-
+	isAdded := p.table.addFoundNode(target, true)
+	if isAdded {
+		log.Info("Node added to bucket", "protocol", p.protocolName, "node", target.IP(), "port", target.UDP())
+	}
 	var contentKeyLen int
 	if request.Kind == TransientOfferRequestKind {
 		contentKeyLen = len(request.Request.(*TransientOfferRequest).Contents)
@@ -673,7 +675,10 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.Log.Trace("<< CONTENT/"+p.protocolName, "id", target.ID(), "content", content)
-		p.table.addFoundNode(target, true)
+		isAdded := p.table.addFoundNode(target, true)
+		if isAdded {
+			log.Info("Node added to bucket", "protocol", p.protocolName, "node", target.IP(), "port", target.UDP())
+		}
 		return resp[1], content.Content, nil
 	case portalwire.ContentConnIdSelector:
 		connIdMsg := &portalwire.ConnectionId{}
@@ -683,7 +688,10 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.Log.Trace("<< CONTENT_CONNECTION_ID/"+p.protocolName, "id", target.ID(), "resp", common.Bytes2Hex(resp), "connIdMsg", connIdMsg)
-		p.table.addFoundNode(target, true)
+		isAdded := p.table.addFoundNode(target, true)
+		if isAdded {
+			log.Info("Node added to bucket", "protocol", p.protocolName, "node", target.IP(), "port", target.UDP())
+		}
 		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
 		laddr := p.utp.Addr().(*utp.Addr)
 		raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
@@ -725,7 +733,10 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 
 		p.Log.Trace("<< CONTENT_ENRS/"+p.protocolName, "id", target.ID(), "enrs", enrs)
-		p.table.addFoundNode(target, true)
+		isAdded := p.table.addFoundNode(target, true)
+		if isAdded {
+			log.Info("Node added to bucket", "protocol", p.protocolName, "node", target.IP(), "port", target.UDP())
+		}
 		nodes := p.filterNodes(target, enrs.Enrs, nil)
 		return resp[1], nodes, nil
 	default:
@@ -748,7 +759,11 @@ func (p *PortalProtocol) processNodes(target *enode.Node, resp []byte, distances
 		return nil, err
 	}
 
-	p.table.addFoundNode(target, true)
+	isAdded := p.table.addFoundNode(target, true)
+	if isAdded {
+		log.Info("Node added to bucket", "protocol", p.protocolName, "node", target.IP(), "port", target.UDP())
+	}
+	log.Info("Node added to bucket", "protocol", p.protocolName, "node", target.IP(), "port", target.UDP())
 	nodes := p.filterNodes(target, nodesResp.Enrs, distances)
 
 	return nodes, nil
@@ -805,7 +820,10 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 	}
 
 	p.Log.Trace("<< PONG_RESPONSE/"+p.protocolName, "id", target.ID(), "pong", pong, "customPayload", customPayload)
-	p.table.addFoundNode(target, true)
+	isAdded := p.table.addFoundNode(target, true)
+	if isAdded {
+		log.Info("Node added to bucket", "protocol", p.protocolName, "node", target.IP(), "port", target.UDP())
+	}
 
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
 	return pong, nil
@@ -1350,7 +1368,10 @@ func (p *PortalProtocol) lookupWorker(destNode *enode.Node, target enode.ID) ([]
 	}
 	for _, n := range r {
 		if n.ID() != p.Self().ID() {
-			p.table.addFoundNode(n, false)
+			isAdded := p.table.addFoundNode(n, false)
+			if isAdded {
+				log.Info("Node added to bucket", "protocol", p.protocolName, "node", n.IP(), "port", n.UDP())
+			}
 			nodes.push(n, portalFindnodesResultLimit)
 		}
 	}
