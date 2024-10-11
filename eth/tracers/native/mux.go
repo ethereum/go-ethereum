@@ -41,10 +41,8 @@ type muxTracer struct {
 // newMuxTracer returns a new mux tracer.
 func newMuxTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	var config map[string]json.RawMessage
-	if cfg != nil {
-		if err := json.Unmarshal(cfg, &config); err != nil {
-			return nil, err
-		}
+	if err := json.Unmarshal(cfg, &config); err != nil {
+		return nil, err
 	}
 	objects := make([]*tracers.Tracer, 0, len(config))
 	names := make([]string, 0, len(config))

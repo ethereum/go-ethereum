@@ -40,6 +40,9 @@ func (d *liveDirectory) Register(name string, f ctorFunc) {
 
 // New instantiates a tracer by name.
 func (d *liveDirectory) New(name string, config json.RawMessage) (*tracing.Hooks, error) {
+	if len(config) == 0 {
+		config = json.RawMessage("{}")
+	}
 	if f, ok := d.elems[name]; ok {
 		return f(config)
 	}
