@@ -239,9 +239,19 @@ func (ps *peerSet) close() {
 }
 
 // SYSCOIN
-func (ps *peerSet) open() {
+func (ps *peerSet) SetOpen() {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
 	ps.closed = false
+}
+func (ps *peerSet) SetClosed() {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	for _, p := range ps.peers {
+		p.Disconnect(p2p.DiscQuitting)
+	}
+
+	ps.closed = true
 }
