@@ -213,6 +213,9 @@ func init() {
 	for k := range PrecompiledContractsPrague {
 		PrecompiledAddressesPrague = append(PrecompiledAddressesPrague, k)
 	}
+	for k := range PrecompiledContractsRollux {
+		PrecompiledAddressesRollux = append(PrecompiledAddressesRollux, k)
+	}
 	for k := range PrecompiledContractsNexus {
 		PrecompiledAddressesNexus = append(PrecompiledAddressesNexus, k)
 	}
