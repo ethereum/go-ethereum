@@ -120,11 +120,12 @@ var (
 
 	// Distros for which packages are created
 	debDistros = []string{
-		"xenial", // 16.04, EOL: 04/2026
-		"bionic", // 18.04, EOL: 04/2028
-		"focal",  // 20.04, EOL: 04/2030
-		"jammy",  // 22.04, EOL: 04/2032
-		"noble",  // 24.04, EOL: 04/2034
+		"xenial",   // 16.04, EOL: 04/2026
+		"bionic",   // 18.04, EOL: 04/2028
+		"focal",    // 20.04, EOL: 04/2030
+		"jammy",    // 22.04, EOL: 04/2032
+		"noble",    // 24.04, EOL: 04/2034
+		"oracular", // 24.10, EOL: 07/2025 
 	}
 
 	// This is where the tests should be unpacked.
