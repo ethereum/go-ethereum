@@ -19,8 +19,17 @@ func PairingCheck(a_ []*G1, b_ []*G2) bool {
 	a := getInnerG1s(a_)
 	b := getInnerG2s(b_)
 
-	// Check if input is empty
-	if len(a) == 0 {
+	// Assume that len(a) == len(b)
+	//
+	// The pairing function will return
+	// false, if this is not the case.
+	size := len(a)
+
+	// Check if input is empty -- gnark will
+	// return false on an empty input, however
+	// the ossified behavior is to return true
+	// on an empty input, so we add this if statement.
+	if size == 0 {
 		return true
 	}
 
