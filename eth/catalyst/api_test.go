@@ -590,10 +590,10 @@ We expect
 (3) If the parent is unavailable, the LVH should not be set.
 
 	CommonAncestor◄─▲── P1 ◄── P2  ◄─ P3  ◄─ ... ◄─ Pn
-					│
-					└── P1' ◄─ P2' ◄─ P3' ◄─ ... ◄─ Pn'
-					│
-					└── P1''
+	                │
+	                └── P1' ◄─ P2' ◄─ P3' ◄─ ... ◄─ Pn'
+	                │
+	                └── P1''
 */
 func TestNewPayloadOnInvalidChain(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)
