@@ -21,7 +21,7 @@ linters:
     - staticcheck
     - bidichk
     - durationcheck
-    - exportloopref
+    - copyloopvar
     - whitespace
     - revive # only certain checks enabled
 
