@@ -319,6 +319,9 @@ func Pair(g1 *G1, g2 *G2) *GT {
 }
 
 // PairingCheck calculates the Optimal Ate pairing for a set of points.
+//
+// Note: It is the callers responsibility to ensure that the length of
+// `a` and `b` are the same.
 func PairingCheck(a []*G1, b []*G2) bool {
 	acc := new(gfP12)
 	acc.SetOne()
