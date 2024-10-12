@@ -86,6 +86,9 @@ type Hub struct {
 	stateLock sync.RWMutex // Protects the internals of the hub from racey access
 }
 
+// readPairings reads smartcard pairings from a JSON file and populates the
+// hub's pairing map. The method attempts to open the "smartcards.json" file
+// located in the hub's data directory. 
 func (hub *Hub) readPairings() error {
 	hub.pairings = make(map[string]smartcardPairing)
 	pairingFile, err := os.Open(filepath.Join(hub.datadir, "smartcards.json"))
@@ -112,6 +115,9 @@ func (hub *Hub) readPairings() error {
 	return nil
 }
 
+// writePairings writes the current smartcard pairings to a JSON file.
+// The method opens (or creates) the "smartcards.json" file located in the
+// hub's data directory in read/write mode.
 func (hub *Hub) writePairings() error {
 	pairingFile, err := os.OpenFile(filepath.Join(hub.datadir, "smartcards.json"), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
@@ -136,6 +142,7 @@ func (hub *Hub) writePairings() error {
 	return nil
 }
 
+// pairing retrieves the smartcard pairing associated with the given wallet.
 func (hub *Hub) pairing(wallet *Wallet) *smartcardPairing {
 	if pairing, ok := hub.pairings[string(wallet.PublicKey)]; ok {
 		return &pairing
@@ -143,6 +150,9 @@ func (hub *Hub) pairing(wallet *Wallet) *smartcardPairing {
 	return nil
 }
 
+// setPairing sets or removes the smartcard pairing for the given wallet.
+// If the pairing parameter is nil, it deletes the pairing entry from the
+// hub's pairings map.
 func (hub *Hub) setPairing(wallet *Wallet, pairing *smartcardPairing) error {
 	if pairing == nil {
 		delete(hub.pairings, string(wallet.PublicKey))

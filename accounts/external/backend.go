@@ -37,10 +37,13 @@ type ExternalBackend struct {
 	signers []accounts.Wallet
 }
 
+// Wallets returns a list of wallets associated with the external backend.
 func (eb *ExternalBackend) Wallets() []accounts.Wallet {
 	return eb.signers
 }
 
+// NewExternalBackend creates a new instance of ExternalBackend by initializing
+// an external signer with the provided endpoint. 
 func NewExternalBackend(endpoint string) (*ExternalBackend, error) {
 	signer, err := NewExternalSigner(endpoint)
 	if err != nil {
@@ -51,6 +54,8 @@ func NewExternalBackend(endpoint string) (*ExternalBackend, error) {
 	}, nil
 }
 
+// Subscribe sets up a subscription for wallet events, which is essentially
+// a no-op in this implementation.
 func (eb *ExternalBackend) Subscribe(sink chan<- accounts.WalletEvent) event.Subscription {
 	return event.NewSubscription(func(quit <-chan struct{}) error {
 		<-quit
@@ -69,6 +74,8 @@ type ExternalSigner struct {
 	cache    []accounts.Account
 }
 
+// NewExternalSigner creates a new instance of ExternalSigner by establishing
+// a connection to the specified endpoint.
 func NewExternalSigner(endpoint string) (*ExternalSigner, error) {
 	client, err := rpc.Dial(endpoint)
 	if err != nil {
@@ -87,6 +94,7 @@ func NewExternalSigner(endpoint string) (*ExternalSigner, error) {
 	return extsigner, nil
 }
 
+// URL returns the accounts.URL representation of the ExternalSigner.
 func (api *ExternalSigner) URL() accounts.URL {
 	return accounts.URL{
 		Scheme: "extapi",
@@ -106,6 +114,7 @@ func (api *ExternalSigner) Close() error {
 	return errors.New("operation not supported on external signers")
 }
 
+// Accounts retrieves the list of accounts from the external signer service.
 func (api *ExternalSigner) Accounts() []accounts.Account {
 	var accnts []accounts.Account
 	res, err := api.listAccounts()
@@ -128,6 +137,7 @@ func (api *ExternalSigner) Accounts() []accounts.Account {
 	return accnts
 }
 
+// Contains checks if the specified account exists in the external signer's cached accounts.
 func (api *ExternalSigner) Contains(account accounts.Account) bool {
 	api.cacheMu.RLock()
 	defer api.cacheMu.RUnlock()
@@ -170,6 +180,7 @@ func (api *ExternalSigner) SignData(account accounts.Account, mimeType string, d
 	return res, nil
 }
 
+// SignText signs a plain text message using the specified account.
 func (api *ExternalSigner) SignText(account accounts.Account, text []byte) ([]byte, error) {
 	var signature hexutil.Bytes
 	var signAddress = common.NewMixedcaseAddress(account.Address)
