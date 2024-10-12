@@ -9,6 +9,9 @@ on:
 
 jobs:
   diffs:
+    env:
+      # Last commit on `renamed-go-module` branch to be merged into `main`
+      LIBEVM_BASE: a7f08d0e757d5a69d3e269c69dcea7e45bab97e3
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,19 +24,19 @@ jobs:
           git config color.diff.old "#DC3220";
           git config color.diff.new "#005AB5";
 
-      - name: git diff libevm-base
+      - name: git diff {LIBEVM_BASE}
         run: |
           git diff --diff-filter=a --word-diff --unified=0 --color=always \
-            libevm-base \
+            "${LIBEVM_BASE}" \
             ':(exclude).golangci.yml' \
             ':(exclude).github/**' \
             ':(exclude)README.md';
       
-      - name: git diff libevm-base..main
+      - name: git diff {LIBEVM_BASE}..main
         run: |
           git checkout main --;
           git diff --diff-filter=a --word-diff --unified=0 --color=always \
-            libevm-base \
+            "${LIBEVM_BASE}" \
             ':(exclude).golangci.yml' \
             ':(exclude).github/**' \
             ':(exclude)README.md';

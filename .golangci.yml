@@ -61,13 +61,14 @@ linters-settings:
   gomodguard:
     blocked:
       modules:
+        - github.com/ethereum/go-ethereum:
         - github.com/ava-labs/avalanchego:
         - github.com/ava-labs/coreth:
         - github.com/ava-labs/subnet-evm:
   revive:
     rules:
       - name: unused-parameter
-        # Method parameters may be equired by interfaces and forcing them to be
+        # Method parameters may be required by interfaces and forcing them to be
         # named _ is of questionable benefit.
         disabled: true
 
@@ -84,6 +85,7 @@ issues:
         - gci
         - gofmt
         - goheader
+        - goimports
         - gosec
         - gosimple
         - govet
