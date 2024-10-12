@@ -24,7 +24,9 @@ linters:
     - copyloopvar
     - whitespace
     - revive # only certain checks enabled
-
+    - durationcheck
+    - gocheckcompilerdirectives
+    - reassign
     ### linters we tried and will not be using:
     ###
     # - structcheck # lots of false positives
