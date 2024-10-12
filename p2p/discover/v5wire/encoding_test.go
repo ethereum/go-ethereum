@@ -395,7 +395,6 @@ func TestTestVectorsV5(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			net := newHandshakeTest()
 			defer net.close()
