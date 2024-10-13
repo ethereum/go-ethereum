@@ -102,6 +102,7 @@ type UDPv5 struct {
 
 type sendRequest struct {
 	destID   enode.ID
+	destNode *enode.Node
 	destAddr netip.AddrPort
 	msg      v5wire.Packet
 }
@@ -596,7 +597,19 @@ func (t *UDPv5) dispatch() {
 			t.sendNextCall(c.id)
 
 		case r := <-t.sendCh:
-			t.send(r.destID, r.destAddr, r.msg, nil)
+			c := &callV5{id: r.destID, addr: r.destAddr}
+			c.node = r.destNode
+			c.packet = r.msg
+			c.reqid = make([]byte, 8)
+			c.ch = make(chan v5wire.Packet, 1)
+			c.err = make(chan error, 1)
+			// Assign request ID.
+			crand.Read(c.reqid)
+			c.packet.SetRequestID(c.reqid)
+			newNonce, _ := t.send(c.id, c.addr, c.packet, nil)
+			c.nonce = newNonce
+			t.activeCallByAuth[newNonce] = c
+			t.startResponseTimeout(c)
 
 		case p := <-t.packetInCh:
 			t.handlePacket(p.Data, p.Addr)
@@ -681,7 +694,14 @@ func (t *UDPv5) sendResponse(toID enode.ID, toAddr netip.AddrPort, packet v5wire
 
 func (t *UDPv5) sendFromAnotherThread(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet) {
 	select {
-	case t.sendCh <- sendRequest{toID, toAddr, packet}:
+	case t.sendCh <- sendRequest{toID, nil, toAddr, packet}:
+	case <-t.closeCtx.Done():
+	}
+}
+
+func (t *UDPv5) sendFromAnotherThreadWithNode(node *enode.Node, toAddr netip.AddrPort, packet v5wire.Packet) {
+	select {
+	case t.sendCh <- sendRequest{node.ID(), node, toAddr, packet}:
 	case <-t.closeCtx.Done():
 	}
 }
