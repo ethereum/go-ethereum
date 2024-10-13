@@ -462,16 +462,15 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		// Save pre state for proof generation
 		// preState := statedb.Copy()
 
-		// TODO uncomment when the 2935 PR is merged
-		// if config.IsPrague(b.header.Number, b.header.Time) {
-		// if !config.IsPrague(b.parent.Number(), b.parent.Time()) {
-		// Transition case: insert all 256 ancestors
-		// 		InsertBlockHashHistoryAtEip2935Fork(statedb, b.header.Number.Uint64()-1, b.header.ParentHash, chainreader)
-		// 	} else {
-		// 		ProcessParentBlockHash(statedb, b.header.Number.Uint64()-1, b.header.ParentHash)
-		// 	}
-		// }
-		// Execute any user modifications to the block
+		// Pre-execution system calls.
+		if config.IsPrague(b.header.Number, b.header.Time) {
+			// EIP-2935
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
+			ProcessParentBlockHash(b.header.ParentHash, vmenv, statedb)
+		}
+
+		// Execute any user modifications to the block.
 		if gen != nil {
 			gen(i, b)
 		}
@@ -485,7 +484,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			panic(err)
 		}
 
-		// Write state changes to db
+		// Write state changes to DB.
 		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number))
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
