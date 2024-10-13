@@ -713,6 +713,7 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 	t.logcontext = packet.AppendLogInfo(t.logcontext)
 
 	enc, nonce, err := t.codec.Encode(toID, addr, packet, c)
+	t.logcontext = append(t.logcontext, "nonce", fmt.Sprintf("%x", nonce[:]))
 	if err != nil {
 		t.logcontext = append(t.logcontext, "err", err)
 		t.log.Warn(">> "+packet.Name(), t.logcontext...)
@@ -866,7 +867,7 @@ var (
 func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr netip.AddrPort) {
 	c, err := t.matchWithCall(fromID, p.Nonce)
 	if err != nil {
-		t.log.Debug("Invalid "+p.Name(), "addr", fromAddr, "err", err)
+		t.log.Debug("Invalid "+p.Name(), "addr", fromAddr, "nonce", fmt.Sprintf("%x", p.Nonce[:]), "err", err)
 		return
 	}
 
@@ -877,7 +878,7 @@ func (t *UDPv5) handleWhoareyou(p *v5wire.Whoareyou, fromID enode.ID, fromAddr n
 		return
 	}
 	// Resend the call that was answered by WHOAREYOU.
-	t.log.Trace("<< "+p.Name(), "id", c.node.ID(), "addr", fromAddr)
+	t.log.Trace("<< "+p.Name(), "id", c.node.ID(), "addr", fromAddr, "nonce", fmt.Sprintf("%x", p.Nonce[:]))
 	c.handshakeCount++
 	c.challenge = p
 	p.Node = c.node
