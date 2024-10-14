@@ -44,11 +44,11 @@ func PairingCheck(a_ []*G1, b_ []*G2) bool {
 //
 // These methods are used for two reasons:
 //
-// - We use a new type `G1`, so we need to convert from
-// []*G1 to []*bn254.G1Affine
-// - The gnark API accepts slices of values and not slices of
-// pointers to values, so we need to return []bn254.G1Affine
-// instead of []*bn254.G1Affine.
+//   - We use a new type `G1`, so we need to convert from
+//     []*G1 to []*bn254.G1Affine
+//   - The gnark API accepts slices of values and not slices of
+//     pointers to values, so we need to return []bn254.G1Affine
+//     instead of []*bn254.G1Affine.
 func getInnerG1s(pointerSlice []*G1) []bn254.G1Affine {
 	gnarkValues := make([]bn254.G1Affine, 0, len(pointerSlice))
 	for _, ptr := range pointerSlice {
@@ -61,7 +61,7 @@ func getInnerG1s(pointerSlice []*G1) []bn254.G1Affine {
 
 // getInnerG2s gets the inner gnark G2 elements.
 //
-// The rationale for this method is the same as getInnerG1s.
+// The rationale for this method is the same as `getInnerG1s`.
 func getInnerG2s(pointerSlice []*G2) []bn254.G2Affine {
 	gnarkValues := make([]bn254.G2Affine, 0, len(pointerSlice))
 	for _, ptr := range pointerSlice {

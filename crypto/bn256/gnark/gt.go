@@ -56,7 +56,7 @@ func (g *GT) Marshal() []byte {
 	return bytes[:]
 }
 
-// Exp exponentiates `base` to the power of `exponent`
+// Exp raises `base` to the power of `exponent`
 //
 // Note: This method is not explicitly used in mainline code.
 // It is needed for fuzzing.
