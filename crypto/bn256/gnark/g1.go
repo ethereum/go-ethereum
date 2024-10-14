@@ -29,11 +29,6 @@ func (g *G1) ScalarMult(a *G1, scalar *big.Int) {
 	g.inner.ScalarMultiplication(&a.inner, scalar)
 }
 
-// Double adds `a` to itself, storing the result in `g`
-func (g *G1) Double(a *G1) {
-	g.inner.Double(&a.inner)
-}
-
 // Unmarshal deserializes `buf` into `g`
 //
 // Note: whether the serialization is of a compressed

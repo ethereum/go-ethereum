@@ -21,11 +21,6 @@ func (g *G2) Add(a, b *G2) {
 	g.inner.Add(&a.inner, &b.inner)
 }
 
-// Double adds `a` to itself, storing the result in `g`
-func (g *G2) Double(a *G2) {
-	g.inner.Double(&a.inner)
-}
-
 // Unmarshal deserializes `buf` into `g`
 //
 // Note: whether the serialization is of a compressed
