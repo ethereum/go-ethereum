@@ -20,25 +20,7 @@ type G1 struct {
 
 // Add adds `a` and `b` together storing the result in `g`
 func (g *G1) Add(a, b *G1) {
-	// TODO(Decision to be made): There are three ways to
-	// TODO do this addition. Each with different performance
-	// TODO: characteristics.
-	//
-	// Option 1: This just calls a method in gnark
-	// g.inner.Add(&a.inner, &b.inner)
-
-	// Option 2: This calls multiple methods in gnark
-	// but is faster.
-	//
-	// var res bn254.G1Jac
-	// res.FromAffine(&a.inner)
-	// res.AddMixed(&b.inner)
-	// g.inner.FromJacobian(&res)
-
-	// Option 3: This calls a method that I created that
-	// we can upstream to gnark.
-	// This should be the fastest, I can write the same for G2
-	g.addAffine(a, b)
+	g.inner.Add(&a.inner, &b.inner)
 }
 
 // ScalarMult computes the scalar multiplication between `a` and
