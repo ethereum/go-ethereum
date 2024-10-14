@@ -166,7 +166,6 @@ func fuzzPair(data []byte) int {
 //
 // For the definition of `s` see 3.5 in https://eprint.iacr.org/2015/192.pdf
 func normalizeGTToGnark(cloudflareOrGoogleGT []byte) *gnark.GT {
-
 	// Compute s = 2*u(6*u^2 + 3*u + 1)
 	u, _ := new(big.Int).SetString("0x44e992b44a6909f1", 0)
 	u_exp2 := new(big.Int).Exp(u, big.NewInt(2), nil)   // u^2

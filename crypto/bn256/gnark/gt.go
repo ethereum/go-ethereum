@@ -22,7 +22,6 @@ type GT struct {
 // It is needed for fuzzing. It should also be noted,
 // that the output of this function may not match other
 func Pair(a_ *G1, b_ *G2) *GT {
-
 	a := a_.inner
 	b := b_.inner
 
