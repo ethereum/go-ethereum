@@ -100,7 +100,6 @@ func (c *Chain) AccountsInHashOrder() []state.DumpAccount {
 	list := make([]state.DumpAccount, len(c.state))
 	i := 0
 	for addr, acc := range c.state {
-		addr := addr
 		list[i] = acc
 		list[i].Address = &addr
 		if len(acc.AddressHash) != 32 {

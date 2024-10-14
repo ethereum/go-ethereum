@@ -390,8 +390,6 @@ func testTransactionPropagation(t *testing.T, protocol uint) {
 	}
 	// Interconnect all the sink handlers with the source handler
 	for i, sink := range sinks {
-		sink := sink // Closure for goroutine below
-
 		sourcePipe, sinkPipe := p2p.MsgPipe()
 		defer sourcePipe.Close()
 		defer sinkPipe.Close()
