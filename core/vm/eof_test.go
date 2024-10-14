@@ -24,6 +24,52 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+func MakeTestContainer(
+	types []*functionMetadata,
+	codeSections [][]byte,
+	subContainers []*Container,
+	data []byte,
+	dataSize int) Container {
+
+	testBytes := make([]byte, 0, 16*1024)
+
+	codeSectionOffsets := make([]int, 0, len(codeSections))
+	idx := 0
+	for _, code := range codeSections {
+		codeSectionOffsets = append(codeSectionOffsets, idx)
+		idx += len(code)
+		testBytes = append(testBytes, code...)
+	}
+	codeSectionEnd := idx
+
+	var subContainerOffsets []int
+	subContainerEnd := 0
+	if len(subContainers) > 0 {
+		subContainerOffsets = make([]int, len(subContainers))
+		for _, subContainer := range subContainers {
+			containerBytes := subContainer.MarshalBinary()
+			subContainerOffsets = append(subContainerOffsets, idx)
+			idx += len(containerBytes)
+			testBytes = append(testBytes, containerBytes...)
+		}
+		subContainerEnd = idx
+	}
+
+	testBytes = append(testBytes, data...)
+
+	return Container{
+		types:               types,
+		codeSectionOffsets:  codeSectionOffsets,
+		codeSectionEnd:      codeSectionEnd,
+		subContainers:       subContainers,
+		subContainerOffsets: subContainerOffsets,
+		subContainerEnd:     subContainerEnd,
+		dataOffest:          subContainerEnd,
+		dataSize:            dataSize,
+		rawContainer:        testBytes,
+	}
+}
+
 func TestEOFMarshaling(t *testing.T) {
 	for i, test := range []struct {
 		want Container
@@ -31,18 +77,12 @@ func TestEOFMarshaling(t *testing.T) {
 	}{
 		{
 			want: Container{
-				types:        []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-				codeSections: [][]byte{common.Hex2Bytes("604200")},
-				data:         []byte{0x01, 0x02, 0x03},
-				dataSize:     3,
-			},
-		},
-		{
-			want: Container{
-				types:        []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-				codeSections: [][]byte{common.Hex2Bytes("604200")},
-				data:         []byte{0x01, 0x02, 0x03},
-				dataSize:     3,
+				types:              []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
+				codeSectionOffsets: []int{19}, // 604200
+				codeSectionEnd:     22,
+				dataOffest:         22,
+				dataSize:           3,
+				rawContainer:       common.Hex2Bytes("ef000101000402000100030400030000800001604200010203"),
 			},
 		},
 		{
@@ -52,12 +92,10 @@ func TestEOFMarshaling(t *testing.T) {
 					{inputs: 2, outputs: 3, maxStackHeight: 4},
 					{inputs: 1, outputs: 1, maxStackHeight: 1},
 				},
-				codeSections: [][]byte{
-					common.Hex2Bytes("604200"),
-					common.Hex2Bytes("6042604200"),
-					common.Hex2Bytes("00"),
-				},
-				data: []byte{},
+				codeSectionOffsets: []int{31, 34, 39}, // 604200, 6042604200, 00
+				codeSectionEnd:     40,
+				dataOffest:         40,
+				rawContainer:       common.Hex2Bytes("ef000101000c02000300030005000104000000008000010203000401010001604200604260420000"),
 			},
 		},
 	} {
@@ -80,13 +118,13 @@ func TestEOFSubcontainer(t *testing.T) {
 	if err := subcontainer.UnmarshalBinary(common.Hex2Bytes("ef000101000402000100010400000000800000fe"), true); err != nil {
 		t.Fatal(err)
 	}
-	container := Container{
-		types:         []*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
-		codeSections:  [][]byte{common.Hex2Bytes("604200")},
-		subContainers: []*Container{subcontainer},
-		data:          []byte{0x01, 0x02, 0x03},
-		dataSize:      3,
-	}
+	container := MakeTestContainer(
+		[]*functionMetadata{{inputs: 0, outputs: 0x80, maxStackHeight: 1}},
+		[][]byte{common.Hex2Bytes("604200")},
+		[]*Container{subcontainer},
+		[]byte{0x01, 0x02, 0x03},
+		3,
+	)
 	var (
 		b   = container.MarshalBinary()
 		got Container

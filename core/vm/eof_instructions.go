@@ -31,8 +31,7 @@ import (
 // opRjump implements the RJUMP opcode.
 func opRjump(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code   = scope.Contract.CodeAt(scope.CodeSection)
-		offset = parseInt16(code[*pc+1:])
+		offset = parseInt16(scope.Contract.Code[*pc+1:])
 	)
 	// move pc past op and operand (+3), add relative offset, subtract 1 to
 	// account for interpreter loop.
@@ -54,8 +53,7 @@ func opRjumpi(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 // opRjumpv implements the RJUMPV opcode
 func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code     = scope.Contract.CodeAt(scope.CodeSection)
-		maxIndex = uint64(code[*pc+1]) + 1
+		maxIndex = uint64(scope.Contract.Code[*pc+1]) + 1
 		idx      = scope.Stack.pop()
 	)
 	if idx, overflow := idx.Uint64WithOverflow(); overflow || idx >= maxIndex {
@@ -64,7 +62,7 @@ func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 		*pc += 1 + maxIndex*2
 		return nil, nil
 	}
-	offset := parseInt16(code[*pc+2+2*idx.Uint64():])
+	offset := parseInt16(scope.Contract.Code[*pc+2+2*idx.Uint64():])
 	// move pc past op and count byte (2), move past count number of 16bit offsets (count*2), add relative offset, subtract 1 to
 	// account for interpreter loop.
 	*pc = uint64(int64(*pc+2+maxIndex*2) + int64(offset) - 1)
@@ -74,9 +72,8 @@ func opRjumpv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 // opCallf implements the CALLF opcode
 func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code = scope.Contract.CodeAt(scope.CodeSection)
-		idx  = binary.BigEndian.Uint16(code[*pc+1:])
-		typ  = scope.Contract.Container.types[idx]
+		idx = binary.BigEndian.Uint16(scope.Contract.Code[*pc+1:])
+		typ = scope.Contract.Container.types[idx]
 	)
 	if scope.Stack.len()+int(typ.maxStackHeight)-int(typ.inputs) > 1024 {
 		return nil, fmt.Errorf("stack overflow")
@@ -91,7 +88,7 @@ func opCallf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	}
 	scope.ReturnStack = append(scope.ReturnStack, retCtx)
 	scope.CodeSection = uint64(idx)
-	*pc = uint64(math.MaxUint64)
+	*pc = uint64(scope.Contract.Container.codeSectionOffsets[idx]) - 1
 	return nil, nil
 }
 
@@ -111,15 +108,14 @@ func opRetf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 // opJumpf implements the JUMPF opcode
 func opJumpf(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code = scope.Contract.CodeAt(scope.CodeSection)
-		idx  = binary.BigEndian.Uint16(code[*pc+1:])
-		typ  = scope.Contract.Container.types[idx]
+		idx = binary.BigEndian.Uint16(scope.Contract.Code[*pc+1:])
+		typ = scope.Contract.Container.types[idx]
 	)
 	if scope.Stack.len()+int(typ.maxStackHeight)-int(typ.inputs) > 1024 {
 		return nil, fmt.Errorf("stack overflow")
 	}
 	scope.CodeSection = uint64(idx)
-	*pc = uint64(math.MaxUint64)
+	*pc = uint64(scope.Contract.Container.codeSectionOffsets[idx]) - 1
 	return nil, nil
 }
 
@@ -129,20 +125,19 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 		return nil, ErrWriteProtection
 	}
 	var (
-		code         = scope.Contract.CodeAt(scope.CodeSection)
-		idx          = code[*pc+1]
+		idx          = scope.Contract.Code[*pc+1]
 		value        = scope.Stack.pop()
 		salt         = scope.Stack.pop()
 		offset, size = scope.Stack.pop(), scope.Stack.pop()
 		input        = scope.Memory.GetCopy(offset.Uint64(), size.Uint64())
 	)
-	if int(idx) >= len(scope.Contract.Container.subContainerCodes) {
+	if int(idx) >= len(scope.Contract.Container.subContainerOffsets) {
 		return nil, fmt.Errorf("invalid subcontainer")
 	}
 
 	// Deduct hashing charge
 	// Since size <= params.MaxInitCodeSize, these multiplication cannot overflow
-	hashingCharge := (params.Keccak256WordGas) * ((uint64(len(scope.Contract.Container.subContainerCodes[idx])) + 31) / 32)
+	hashingCharge := (params.Keccak256WordGas) * ((uint64(scope.Contract.Container.subContainerSize(int(idx))) + 31) / 32)
 	if ok := scope.Contract.UseGas(hashingCharge, interpreter.evm.Config.Tracer, tracing.GasChangeUnspecified); !ok {
 		return nil, ErrGasUintOverflow
 	}
@@ -159,7 +154,7 @@ func opEOFCreate(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	scope.Contract.UseGas(gas, interpreter.evm.Config.Tracer, tracing.GasChangeCallContractCreation2)
 	// Skip the immediate
 	*pc += 1
-	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, scope.Contract.Container.subContainerCodes[idx], gas, &value, &salt)
+	res, addr, returnGas, suberr := interpreter.evm.EOFCreate(scope.Contract, input, scope.Contract.Container.subContainerBytes(int(idx)), gas, &value, &salt)
 	if suberr != nil {
 		stackvalue.Clear()
 	} else {
@@ -182,16 +177,15 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 		return nil, errors.New("returncontract in non-initcode mode")
 	}
 	var (
-		code   = scope.Contract.CodeAt(scope.CodeSection)
-		idx    = code[*pc+1]
+		idx    = scope.Contract.Code[*pc+1]
 		offset = scope.Stack.pop()
 		size   = scope.Stack.pop()
 	)
-	if int(idx) >= len(scope.Contract.Container.subContainerCodes) {
+	if int(idx) >= len(scope.Contract.Container.subContainerOffsets) {
 		return nil, fmt.Errorf("invalid subcontainer")
 	}
 	ret := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
-	containerCode := scope.Contract.Container.subContainerCodes[idx]
+	containerCode := scope.Contract.Container.subContainerBytes(int(idx))
 	if len(containerCode) == 0 {
 		return nil, errors.New("nonexistant subcontainer")
 	}
@@ -202,11 +196,12 @@ func opReturnContract(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	}
 
 	// append the auxdata
-	c.data = append(c.data, ret...)
-	if len(c.data) < c.dataSize {
+	c.rawContainer = append(c.rawContainer, ret...)
+	newDataSize := c.dataLen()
+	if newDataSize < c.dataSize {
 		return nil, errors.New("incomplete aux data")
 	}
-	c.dataSize = len(c.data)
+	c.dataSize = newDataSize
 
 	// probably unneeded as subcontainers are deeply validated
 	if err := c.ValidateCode(interpreter.tableEOF, false); err != nil {
@@ -230,7 +225,7 @@ func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 		stackItem.Clear()
 		scope.Stack.push(&stackItem)
 	} else {
-		data := getData(scope.Contract.Container.data, offset, 32)
+		data := getData(scope.Contract.Container.rawContainer, uint64(scope.Contract.Container.dataOffest)+offset, 32)
 		scope.Stack.push(stackItem.SetBytes(data))
 	}
 	return nil, nil
@@ -239,10 +234,9 @@ func opDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 // opDataLoadN implements the DATALOADN opcode
 func opDataLoadN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code   = scope.Contract.CodeAt(scope.CodeSection)
-		offset = uint64(binary.BigEndian.Uint16(code[*pc+1:]))
+		offset = uint64(binary.BigEndian.Uint16(scope.Contract.Code[*pc+1:]))
 	)
-	data := getData(scope.Contract.Container.data, offset, 32)
+	data := getData(scope.Contract.Container.rawContainer, uint64(scope.Contract.Container.dataOffest)+offset, 32)
 	scope.Stack.push(new(uint256.Int).SetBytes(data))
 	*pc += 2 // move past 2 byte immediate
 	return nil, nil
@@ -250,8 +244,7 @@ func opDataLoadN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 
 // opDataSize implements the DATASIZE opcode
 func opDataSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	length := len(scope.Contract.Container.data)
-	item := uint256.NewInt(uint64(length))
+	item := uint256.NewInt(uint64(scope.Contract.Container.dataLen()))
 	scope.Stack.push(item)
 	return nil, nil
 }
@@ -265,7 +258,7 @@ func opDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	)
 	// These values are checked for overflow during memory expansion calculation
 	// (the memorySize function on the opcode).
-	data := getData(scope.Contract.Container.data, offset.Uint64(), size.Uint64())
+	data := getData(scope.Contract.Container.rawContainer, uint64(scope.Contract.Container.dataOffest)+offset.Uint64(), size.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), size.Uint64(), data)
 	return nil, nil
 }
@@ -273,8 +266,7 @@ func opDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 // opDupN implements the DUPN opcode
 func opDupN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code  = scope.Contract.CodeAt(scope.CodeSection)
-		index = int(code[*pc+1]) + 1
+		index = int(scope.Contract.Code[*pc+1]) + 1
 	)
 	scope.Stack.dup(index)
 	*pc += 1 // move past immediate
@@ -284,8 +276,7 @@ func opDupN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 // opSwapN implements the SWAPN opcode
 func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code  = scope.Contract.CodeAt(scope.CodeSection)
-		index = int(code[*pc+1]) + 1
+		index = int(scope.Contract.Code[*pc+1]) + 1
 	)
 	scope.Stack.swap(index + 1)
 	*pc += 1 // move past immediate
@@ -295,8 +286,7 @@ func opSwapN(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 // opExchange implements the EXCHANGE opcode
 func opExchange(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
-		code  = scope.Contract.CodeAt(scope.CodeSection)
-		index = int(code[*pc+1])
+		index = int(scope.Contract.Code[*pc+1])
 		n     = (index >> 4) + 1
 		m     = (index & 0x0F) + 1
 	)

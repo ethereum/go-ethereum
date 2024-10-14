@@ -148,8 +148,8 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable,
 		case DATALOADN:
 			arg, _ := parseUint16(code[i+1:])
 			// TODO why are we checking this? We should just pad
-			if arg+32 > len(container.data) {
-				return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", errInvalidDataloadNArgument, arg, len(container.data), i)
+			if arg+32 > container.dataLen() {
+				return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", errInvalidDataloadNArgument, arg, container.dataLen(), i)
 			}
 		case RETURNCONTRACT:
 			if !isInitCode {
@@ -176,8 +176,8 @@ func validateCode(code []byte, section int, container *Container, jt *JumpTable,
 			if arg >= len(container.subContainers) {
 				return nil, fmt.Errorf("%w: arg %d, last %d, pos %d", errUnreachableCode, arg, len(container.subContainers), i)
 			}
-			if ct := container.subContainers[arg]; len(ct.data) != ct.dataSize {
-				return nil, fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", errEOFCreateWithTruncatedSection, arg, len(ct.data), ct.dataSize, i)
+			if ct := container.subContainers[arg]; ct.dataLen() != ct.dataSize {
+				return nil, fmt.Errorf("%w: container %d, have %d, claimed %d, pos %d", errEOFCreateWithTruncatedSection, arg, ct.dataLen(), ct.dataSize, i)
 			}
 			if visitedSubcontainers == nil {
 				visitedSubcontainers = make(map[int]int)

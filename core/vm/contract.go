@@ -146,10 +146,8 @@ func (c *Contract) AsDelegate() *Contract {
 }
 
 // GetOp returns the n'th element in the contract's byte array
-func (c *Contract) GetOp(n uint64, s uint64) OpCode {
-	if c.IsEOF() && n < uint64(len(c.Container.codeSections[s])) {
-		return OpCode(c.Container.codeSections[s][n])
-	} else if n < uint64(len(c.Code)) {
+func (c *Contract) GetOp(n uint64) OpCode {
+	if n < uint64(len(c.Code)) {
 		return OpCode(c.Code[n])
 	}
 	return STOP
@@ -199,13 +197,6 @@ func (c *Contract) Value() *uint256.Int {
 // IsEOF returns whether the contract is EOF.
 func (c *Contract) IsEOF() bool {
 	return c.Container != nil
-}
-
-func (c *Contract) CodeAt(section uint64) []byte {
-	if c.Container == nil {
-		return c.Code
-	}
-	return c.Container.codeSections[section]
 }
 
 // SetCallCode sets the code of the contract and address of the backing data

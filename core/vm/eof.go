@@ -66,12 +66,15 @@ func isEOFVersion1(code []byte) bool {
 
 // Container is an EOF container object.
 type Container struct {
-	types             []*functionMetadata
-	codeSections      [][]byte
-	subContainers     []*Container
-	subContainerCodes [][]byte
-	data              []byte
-	dataSize          int // might be more than len(data)
+	types               []*functionMetadata
+	codeSectionOffsets  []int
+	codeSectionEnd      int
+	subContainers       []*Container
+	subContainerOffsets []int
+	subContainerEnd     int
+	dataOffest          int
+	dataSize            int // might be more than len(data)
+	rawContainer        []byte
 }
 
 // functionMetadata is an EOF function signature.
@@ -105,6 +108,46 @@ func (meta *functionMetadata) checkStackMax(stackMax int) error {
 	return nil
 }
 
+func (c *Container) codeSectionSize(s int) int {
+	if s >= len(c.codeSectionOffsets) || s < 0 {
+		return 0
+	} else if s == len(c.codeSectionOffsets)-1 {
+		return c.codeSectionEnd - c.codeSectionOffsets[s]
+	}
+	return c.codeSectionOffsets[s+1] - c.codeSectionOffsets[s]
+}
+
+func (c *Container) codeSectionBytes(s int) []byte {
+	if s >= len(c.codeSectionOffsets) || s < 0 {
+		return c.rawContainer[0:0]
+	} else if s == len(c.codeSectionOffsets)-1 {
+		return c.rawContainer[c.codeSectionOffsets[s]:c.codeSectionEnd]
+	}
+	return c.rawContainer[c.codeSectionOffsets[s]:c.codeSectionOffsets[s+1]]
+}
+
+func (c *Container) subContainerSize(s int) int {
+	if s >= len(c.subContainerOffsets) || s < 0 {
+		return 0
+	} else if s == len(c.subContainerOffsets)-1 {
+		return c.subContainerEnd - c.subContainerOffsets[s]
+	}
+	return c.subContainerOffsets[s+1] - c.subContainerOffsets[s]
+}
+
+func (c *Container) subContainerBytes(s int) []byte {
+	if s >= len(c.subContainerOffsets) || s < 0 {
+		return c.rawContainer[0:0]
+	} else if s == len(c.subContainerOffsets)-1 {
+		return c.rawContainer[c.subContainerOffsets[s]:c.subContainerEnd]
+	}
+	return c.rawContainer[c.subContainerOffsets[s]:c.subContainerOffsets[s+1]]
+}
+
+func (c *Container) dataLen() int {
+	return len(c.rawContainer) - c.dataOffest
+}
+
 // MarshalBinary encodes an EOF container into binary format.
 func (c *Container) MarshalBinary() []byte {
 	// Build EOF prefix.
@@ -116,9 +159,9 @@ func (c *Container) MarshalBinary() []byte {
 	b = append(b, kindTypes)
 	b = binary.BigEndian.AppendUint16(b, uint16(len(c.types)*4))
 	b = append(b, kindCode)
-	b = binary.BigEndian.AppendUint16(b, uint16(len(c.codeSections)))
-	for _, codeSection := range c.codeSections {
-		b = binary.BigEndian.AppendUint16(b, uint16(len(codeSection)))
+	b = binary.BigEndian.AppendUint16(b, uint16(len(c.codeSectionOffsets)))
+	for s := range c.codeSectionOffsets {
+		b = binary.BigEndian.AppendUint16(b, uint16(c.codeSectionSize(s)))
 	}
 	var encodedContainer [][]byte
 	if len(c.subContainers) != 0 {
@@ -138,13 +181,13 @@ func (c *Container) MarshalBinary() []byte {
 	for _, ty := range c.types {
 		b = append(b, []byte{ty.inputs, ty.outputs, byte(ty.maxStackHeight >> 8), byte(ty.maxStackHeight & 0x00ff)}...)
 	}
-	for _, code := range c.codeSections {
-		b = append(b, code...)
+	for s := range c.codeSectionOffsets {
+		b = append(b, c.codeSectionBytes(s)...)
 	}
 	for _, section := range encodedContainer {
 		b = append(b, section...)
 	}
-	b = append(b, c.data...)
+	b = append(b, c.rawContainer[c.dataOffest:]...)
 
 	return b
 }
@@ -282,21 +325,22 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 
 	// Parse code sections.
 	idx += typesSize
-	codeSections := make([][]byte, len(codeSizes))
+	codeSectionOffsets := make([]int, len(codeSizes))
 	for i, size := range codeSizes {
 		if size == 0 {
 			return fmt.Errorf("%w for section %d: size must not be 0", errInvalidCodeSize, i)
 		}
-		codeSections[i] = b[idx : idx+size]
+		codeSectionOffsets[i] = idx
 		idx += size
 	}
-	c.codeSections = codeSections
+	c.codeSectionOffsets = codeSectionOffsets
+	c.codeSectionEnd = idx
 	// Parse the optional container sizes.
 	if len(containerSizes) != 0 {
 		if len(containerSizes) > maxContainerSections {
 			return fmt.Errorf("%w number of container section exceed: %v: have %v", errInvalidContainerSectionSize, maxContainerSections, len(containerSizes))
 		}
-		subContainerCodes := make([][]byte, 0, len(containerSizes))
+		subContainerOffsets := make([]int, 0, len(containerSizes))
 		subContainers := make([]*Container, 0, len(containerSizes))
 		for i, size := range containerSizes {
 			if size == 0 || idx+size > len(b) {
@@ -311,23 +355,22 @@ func (c *Container) unmarshalContainer(b []byte, isInitcode bool, topLevel bool)
 				return err
 			}
 			subContainers = append(subContainers, subC)
-			subContainerCodes = append(subContainerCodes, b[idx:end])
+			subContainerOffsets = append(subContainerOffsets, idx)
 
 			idx += size
 		}
 		c.subContainers = subContainers
-		c.subContainerCodes = subContainerCodes
+		c.subContainerEnd = idx
+		c.subContainerOffsets = subContainerOffsets
 	}
 
 	//Parse data section.
-	end := len(b)
-	if !isInitcode {
-		end = min(idx+dataSize, len(b))
-	}
 	if topLevel && len(b) != idx+dataSize {
 		return errTruncatedTopLevelContainer
 	}
-	c.data = b[idx:end]
+	c.dataOffest = idx
+
+	c.rawContainer = b
 
 	return nil
 }
@@ -355,7 +398,7 @@ func (c *Container) validateSubContainer(jt *JumpTable, refBy int) error {
 		// should not mean 2 and 3 should be visited twice
 		var (
 			index = toVisit[0]
-			code  = c.codeSections[index]
+			code  = c.codeSectionBytes(index)
 		)
 		if _, ok := visited[index]; !ok {
 			res, err := validateCode(code, index, c, jt, refBy == refByEOFCreate)
@@ -387,7 +430,7 @@ func (c *Container) validateSubContainer(jt *JumpTable, refBy int) error {
 		toVisit = toVisit[1:]
 	}
 	// Make sure every code section is visited at least once.
-	if len(visited) != len(c.codeSections) {
+	if len(visited) != len(c.codeSectionOffsets) {
 		return errUnreachableCode
 	}
 	for idx, container := range c.subContainers {
@@ -472,11 +515,11 @@ func (c *Container) String() string {
 		fmt.Sprintf("  - TypesSize: %04x", len(c.types)*4),
 		fmt.Sprintf("  - KindCode: %02x", kindCode),
 		fmt.Sprintf("  - KindData: %02x", kindData),
-		fmt.Sprintf("  - DataSize: %04x", len(c.data)),
-		fmt.Sprintf("  - Number of code sections: %d", len(c.codeSections)),
+		fmt.Sprintf("  - DataSize: %04x", c.dataLen()),
+		fmt.Sprintf("  - Number of code sections: %d", len(c.codeSectionOffsets)),
 	}
-	for i, code := range c.codeSections {
-		output = append(output, fmt.Sprintf("    - Code section %d length: %04x", i, len(code)))
+	for i := range c.codeSectionOffsets {
+		output = append(output, fmt.Sprintf("    - Code section %d length: %04x", i, c.codeSectionSize(i)))
 	}
 
 	output = append(output, fmt.Sprintf("  - Number of subcontainers: %d", len(c.subContainers)))
@@ -490,12 +533,12 @@ func (c *Container) String() string {
 		output = append(output, fmt.Sprintf("  - Type %v: %x", i,
 			[]byte{typ.inputs, typ.outputs, byte(typ.maxStackHeight >> 8), byte(typ.maxStackHeight & 0x00ff)}))
 	}
-	for i, code := range c.codeSections {
-		output = append(output, fmt.Sprintf("  - Code section %d: %#x", i, code))
+	for i := range c.codeSectionOffsets {
+		output = append(output, fmt.Sprintf("  - Code section %d: %#x", i, c.codeSectionBytes(i)))
 	}
 	for i, section := range c.subContainers {
 		output = append(output, fmt.Sprintf("  - Subcontainer %d: %x", i, section.MarshalBinary()))
 	}
-	output = append(output, fmt.Sprintf("  - Data: %#x", c.data))
+	output = append(output, fmt.Sprintf("  - Data: %#x", c.rawContainer[c.dataOffest:]))
 	return strings.Join(output, "\n")
 }
