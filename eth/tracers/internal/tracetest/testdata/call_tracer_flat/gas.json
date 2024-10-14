@@ -51,6 +51,7 @@
     {
       "type": "create",
       "action": {
+        "creationMethod": "create",
         "from": "0x877bd459c9b7d8576b44e59e09d076c25946f443",
         "value": "0x0",
         "gas": "0x1a9c8",
