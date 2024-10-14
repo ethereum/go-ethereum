@@ -181,7 +181,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Withdrawals:           withdrawals,
 		Random:                random,
 		BeaconRoot:            &common.Hash{},
-	}, engine.PayloadV3)
+	}, engine.PayloadV3, false)
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		}
 	}
 	// Mark the payload as canon
-	if _, err = c.engineAPI.NewPayloadV3(*payload, blobHashes, &common.Hash{}); err != nil {
+	if _, err = c.engineAPI.NewPayloadV4(*payload, blobHashes, &common.Hash{}, envelope.Requests); err != nil {
 		return err
 	}
 	c.setCurrentState(payload.BlockHash, finalizedHash)
@@ -306,7 +306,8 @@ func (c *SimulatedBeacon) Fork(parentHash common.Hash) error {
 	if parent == nil {
 		return errors.New("parent not found")
 	}
-	return c.eth.BlockChain().SetHead(parent.NumberU64())
+	_, err := c.eth.BlockChain().SetCanonical(parent)
+	return err
 }
 
 // AdjustTime creates a new block with an adjusted timestamp.

@@ -34,6 +34,8 @@ type testchain struct {
 }
 
 func TestEra1Builder(t *testing.T) {
+	t.Parallel()
+
 	// Get temp directory.
 	f, err := os.CreateTemp("", "era1-test")
 	if err != nil {
@@ -125,6 +127,8 @@ func TestEra1Builder(t *testing.T) {
 }
 
 func TestEraFilename(t *testing.T) {
+	t.Parallel()
+
 	for i, tt := range []struct {
 		network  string
 		epoch    int

@@ -42,6 +42,9 @@ type operation struct {
 
 	// memorySize returns the memory size required for the operation
 	memorySize memorySizeFunc
+
+	// undefined denotes if the instruction is not officially defined in the jump table
+	undefined bool
 }
 
 var (
@@ -58,6 +61,7 @@ var (
 	shanghaiInstructionSet         = newShanghaiInstructionSet()
 	cancunInstructionSet           = newCancunInstructionSet()
 	verkleInstructionSet           = newVerkleInstructionSet()
+	pragueEOFInstructionSet        = newPragueEOFInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -84,6 +88,16 @@ func validate(jt JumpTable) JumpTable {
 func newVerkleInstructionSet() JumpTable {
 	instructionSet := newCancunInstructionSet()
 	enable4762(&instructionSet)
+	return validate(instructionSet)
+}
+
+func NewPragueEOFInstructionSetForTesting() JumpTable {
+	return newPragueEOFInstructionSet()
+}
+
+func newPragueEOFInstructionSet() JumpTable {
+	instructionSet := newCancunInstructionSet()
+	enableEOF(&instructionSet)
 	return validate(instructionSet)
 }
 
@@ -1059,12 +1073,17 @@ func newFrontierInstructionSet() JumpTable {
 			minStack:   minStack(1, 0),
 			maxStack:   maxStack(1, 0),
 		},
+		INVALID: {
+			execute:  opUndefined,
+			minStack: minStack(0, 0),
+			maxStack: maxStack(0, 0),
+		},
 	}
 
 	// Fill all unassigned slots with opUndefined.
 	for i, entry := range tbl {
 		if entry == nil {
-			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0)}
+			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0), undefined: true}
 		}
 	}
 

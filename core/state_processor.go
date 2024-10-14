@@ -71,8 +71,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	var (
 		context vm.BlockContext
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
-		err     error
 	)
+
+	// Apply pre-execution system calls.
 	context = NewEVMBlockContext(header, p.chain, nil)
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
@@ -81,6 +82,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.IsPrague(block.Number(), block.Time()) {
 		ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
 	}
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
@@ -96,13 +98,22 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
+
 	// Read requests if Prague is enabled.
-	var requests types.Requests
+	var requests [][]byte
 	if p.config.IsPrague(block.Number(), block.Time()) {
-		requests, err = ParseDepositLogs(allLogs, p.config)
+		// EIP-6110 deposits
+		depositRequests, err := ParseDepositLogs(allLogs, p.config)
 		if err != nil {
 			return nil, err
 		}
+		requests = append(requests, depositRequests)
+		// EIP-7002 withdrawals
+		withdrawalRequests := ProcessWithdrawalQueue(vmenv, statedb)
+		requests = append(requests, withdrawalRequests)
+		// EIP-7251 consolidations
+		consolidationRequests := ProcessConsolidationQueue(vmenv, statedb)
+		requests = append(requests, consolidationRequests)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -215,9 +226,6 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 			defer tracer.OnSystemCallEnd()
 		}
 	}
-
-	// If EIP-4788 is enabled, we need to invoke the beaconroot storage contract with
-	// the new root
 	msg := &Message{
 		From:      params.SystemAddress,
 		GasLimit:  30_000_000,
@@ -244,7 +252,6 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.
 			defer tracer.OnSystemCallEnd()
 		}
 	}
-
 	msg := &Message{
 		From:      params.SystemAddress,
 		GasLimit:  30_000_000,
@@ -260,17 +267,59 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.
 	statedb.Finalise(true)
 }
 
+// ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
+// It returns the opaque request data returned by the contract.
+func ProcessWithdrawalQueue(vmenv *vm.EVM, statedb *state.StateDB) []byte {
+	return processRequestsSystemCall(vmenv, statedb, 0x01, params.WithdrawalQueueAddress)
+}
+
+// ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
+// It returns the opaque request data returned by the contract.
+func ProcessConsolidationQueue(vmenv *vm.EVM, statedb *state.StateDB) []byte {
+	return processRequestsSystemCall(vmenv, statedb, 0x02, params.ConsolidationQueueAddress)
+}
+
+func processRequestsSystemCall(vmenv *vm.EVM, statedb *state.StateDB, requestType byte, addr common.Address) []byte {
+	if tracer := vmenv.Config.Tracer; tracer != nil {
+		if tracer.OnSystemCallStart != nil {
+			tracer.OnSystemCallStart()
+		}
+		if tracer.OnSystemCallEnd != nil {
+			defer tracer.OnSystemCallEnd()
+		}
+	}
+
+	msg := &Message{
+		From:      params.SystemAddress,
+		GasLimit:  30_000_000,
+		GasPrice:  common.Big0,
+		GasFeeCap: common.Big0,
+		GasTipCap: common.Big0,
+		To:        &addr,
+	}
+	vmenv.Reset(NewEVMTxContext(msg), statedb)
+	statedb.AddAddressToAccessList(addr)
+	ret, _, _ := vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
+	statedb.Finalise(true)
+
+	// Create withdrawals requestsData with prefix 0x01
+	requestsData := make([]byte, len(ret)+1)
+	requestsData[0] = requestType
+	copy(requestsData[1:], ret)
+	return requestsData
+}
+
 // ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
 // BeaconDepositContract.
-func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) (types.Requests, error) {
-	deposits := make(types.Requests, 0)
+func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) ([]byte, error) {
+	deposits := make([]byte, 1) // note: first byte is 0x00 (== deposit request type)
 	for _, log := range logs {
 		if log.Address == config.DepositContractAddress {
-			d, err := types.UnpackIntoDeposit(log.Data)
+			request, err := types.DepositLogToRequest(log.Data)
 			if err != nil {
 				return nil, fmt.Errorf("unable to parse deposit data: %v", err)
 			}
-			deposits = append(deposits, types.NewRequest(d))
+			deposits = append(deposits, request...)
 		}
 	}
 	return deposits, nil
