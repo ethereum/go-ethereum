@@ -96,7 +96,7 @@ func opReturnDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 	panic("not implemented")
 }
 
-// opExtCall implements the EOFCREATE opcode
+// opExtCall implements the EXTCALL opcode
 func opExtCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	panic("not implemented")
 }
