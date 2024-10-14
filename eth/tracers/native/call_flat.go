@@ -79,6 +79,7 @@ type flatCallAction struct {
 	SelfDestructed *common.Address `json:"address,omitempty"`
 	Balance        *big.Int        `json:"balance,omitempty"`
 	CallType       string          `json:"callType,omitempty"`
+	CreationMethod string          `json:"creationMethod,omitempty"`
 	From           *common.Address `json:"from,omitempty"`
 	Gas            *uint64         `json:"gas,omitempty"`
 	Init           *[]byte         `json:"init,omitempty"`
