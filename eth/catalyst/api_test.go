@@ -1600,7 +1600,7 @@ func TestBlockToPayloadWithBlobs(t *testing.T) {
 	}
 
 	block := types.NewBlock(&header, &types.Body{Transactions: txs}, nil, trie.NewStackTrie(nil))
-	envelope := engine.BlockToExecutableData(block, nil, sidecars)
+	envelope := engine.BlockToExecutableData(block, nil, sidecars, nil)
 	var want int
 	for _, tx := range txs {
 		want += len(tx.BlobHashes())
