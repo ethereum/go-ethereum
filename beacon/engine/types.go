@@ -260,7 +260,15 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 
 	var requestsHash *common.Hash
 	if requests != nil {
-		h := types.CalcRequestsHash(requests)
+		// Put back request type byte.
+		typedRequests := make([][]byte, len(requests))
+		for i, reqdata := range requests {
+			typedReqdata := make([]byte, len(reqdata)+1)
+			typedReqdata[0] = byte(i)
+			copy(typedReqdata[1:], reqdata)
+			typedRequests[i] = typedReqdata
+		}
+		h := types.CalcRequestsHash(typedRequests)
 		requestsHash = &h
 	}
 
@@ -294,7 +302,7 @@ func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.H
 
 // BlockToExecutableData constructs the ExecutableData structure by filling the
 // fields from the given block. It assumes the given block is post-merge block.
-func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar) *ExecutionPayloadEnvelope {
+func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.BlobTxSidecar, requests [][]byte) *ExecutionPayloadEnvelope {
 	data := &ExecutableData{
 		BlockHash:        block.Hash(),
 		ParentHash:       block.ParentHash(),
@@ -315,6 +323,8 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 		ExcessBlobGas:    block.ExcessBlobGas(),
 		ExecutionWitness: block.ExecutionWitness(),
 	}
+
+	// Add blobs.
 	bundle := BlobsBundleV1{
 		Commitments: make([]hexutil.Bytes, 0),
 		Blobs:       make([]hexutil.Bytes, 0),
@@ -327,7 +337,23 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 			bundle.Proofs = append(bundle.Proofs, hexutil.Bytes(sidecar.Proofs[j][:]))
 		}
 	}
-	return &ExecutionPayloadEnvelope{ExecutionPayload: data, BlockValue: fees, BlobsBundle: &bundle, Override: false}
+
+	// Remove type byte in requests.
+	var plainRequests [][]byte
+	if requests != nil {
+		plainRequests = make([][]byte, len(requests))
+		for i, reqdata := range requests {
+			plainRequests[i] = reqdata[1:]
+		}
+	}
+
+	return &ExecutionPayloadEnvelope{
+		ExecutionPayload: data,
+		BlockValue:       fees,
+		BlobsBundle:      &bundle,
+		Requests:         plainRequests,
+		Override:         false,
+	}
 }
 
 // ExecutionPayloadBody is used in the response to GetPayloadBodiesByHash and GetPayloadBodiesByRange
