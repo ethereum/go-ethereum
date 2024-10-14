@@ -18,27 +18,27 @@ type G1 struct {
 	inner bn254.G1Affine
 }
 
-// Add adds `a` and `b` together storing the result in `g`
+// Add adds `a` and `b` together, storing the result in `g`
 func (g *G1) Add(a, b *G1) {
 	g.inner.Add(&a.inner, &b.inner)
 }
 
 // ScalarMult computes the scalar multiplication between `a` and
-// `scalar` storing the result in `g`
+// `scalar`, storing the result in `g`
 func (g *G1) ScalarMult(a *G1, scalar *big.Int) {
 	g.inner.ScalarMultiplication(&a.inner, scalar)
 }
 
 // Unmarshal deserializes `buf` into `g`
 //
-// Note: whether the serialization is of a compressed
-// or an uncompressed point, is encoding in the bytes.
+// Note: whether the deserialization is of a compressed
+// or an uncompressed point, is encoded in the bytes.
 //
-// For our purpose, the point will always be serialized as uncompressed
-// ie 64 bytes.
+// For our purpose, the point will always be serialized
+// as uncompressed, ie 64 bytes.
 //
-// This method checks whether the point is on the curve and
-// in the subgroup.
+// This method also checks whether the point is on the
+// curve and in the prime order subgroup.
 func (g *G1) Unmarshal(buf []byte) (int, error) {
 	return g.inner.SetBytes(buf)
 }
