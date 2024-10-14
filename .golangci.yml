@@ -27,6 +27,8 @@ linters:
     - durationcheck
     - gocheckcompilerdirectives
     - reassign
+    - mirror
+    - tenv
     ### linters we tried and will not be using:
     ###
     # - structcheck # lots of false positives
