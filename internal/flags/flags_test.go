@@ -23,7 +23,6 @@ import (
 )
 
 func TestPathExpansion(t *testing.T) {
-
 	user, _ := user.Current()
 	var tests map[string]string
 
