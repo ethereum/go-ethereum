@@ -458,7 +458,7 @@ func formatLogs(logs []StructLog) []StructLogRes {
 			}
 			formatted[index].Stack = &stack
 		}
-		if trace.ReturnData != nil && len(trace.ReturnData) > 0 {
+		if len(trace.ReturnData) > 0 {
 			formatted[index].ReturnData = hexutil.Bytes(trace.ReturnData).String()
 		}
 		if trace.Memory != nil {
