@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 	"slices"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
@@ -315,15 +316,17 @@ func (f *Filter) rangeLogs(ctx context.Context, firstBlock, lastBlock uint64) ([
 }
 
 func (f *Filter) indexedLogs(ctx context.Context, mb filtermaps.MatcherBackend, begin, end uint64) ([]*types.Log, error) {
+	start := time.Now()
 	potentialMatches, err := filtermaps.GetPotentialMatches(ctx, mb, begin, end, f.addresses, f.topics)
 	matches := filterLogs(potentialMatches, nil, nil, f.addresses, f.topics)
-	log.Trace("Performed indexed log search", "begin", begin, "end", end, "true matches", len(matches), "false positives", len(potentialMatches)-len(matches))
+	log.Trace("Performed indexed log search", "begin", begin, "end", end, "true matches", len(matches), "false positives", len(potentialMatches)-len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
 	return matches, err
 }
 
 // unindexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
 func (f *Filter) unindexedLogs(ctx context.Context, begin, end uint64) ([]*types.Log, error) {
+	start := time.Now()
 	log.Warn("Performing unindexed log search", "begin", begin, "end", end)
 	var matches []*types.Log
 	for blockNumber := begin; blockNumber <= end; blockNumber++ {
@@ -342,7 +345,7 @@ func (f *Filter) unindexedLogs(ctx context.Context, begin, end uint64) ([]*types
 		}
 		matches = append(matches, found...)
 	}
-	log.Trace("Performed unindexed log search", "begin", begin, "end", end, "matches", len(matches))
+	log.Trace("Performed unindexed log search", "begin", begin, "end", end, "matches", len(matches), "elapsed", common.PrettyDuration(time.Since(start)))
 	return matches, nil
 }
 
