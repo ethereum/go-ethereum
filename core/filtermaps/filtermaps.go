@@ -128,6 +128,14 @@ type filterMapsRange struct {
 	headBlockHash, tailParentHash                    common.Hash
 }
 
+// mapCount returns the number of maps fully or partially included in the range.
+func (fmr *filterMapsRange) mapCount(logValuesPerMap uint) uint32 {
+	if !fmr.initialized {
+		return 0
+	}
+	return uint32(fmr.headLvPointer>>logValuesPerMap) + 1 - uint32(fmr.tailLvPointer>>logValuesPerMap)
+}
+
 // NewFilterMaps creates a new FilterMaps and starts the indexer in order to keep
 // the structure in sync with the given blockchain.
 func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, history, unindexLimit uint64, noHistory bool) *FilterMaps {
@@ -222,7 +230,7 @@ func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
 		it := f.db.NewIterator(prefix, nil)
 		batch := f.db.NewBatch()
 		var count int
-		for ; count < 10000 && it.Next(); count++ {
+		for ; count < 250000 && it.Next(); count++ {
 			batch.Delete(it.Key())
 			removed++
 		}

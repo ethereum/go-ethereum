@@ -325,8 +325,8 @@ func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) bool {
 	defer func() {
 		if f.tailBlockNumber <= tailTarget {
 			if f.loggedTailExtend {
-				log.Info("Reverse log indexing finished", "history", f.headBlockNumber+1-f.tailBlockNumber,
-					"processed", f.ptrTailExtend-f.tailBlockNumber, "elapsed", common.PrettyDuration(time.Since(f.lastLogTailExtend)))
+				log.Info("Reverse log indexing finished", "maps", f.mapCount(f.logValuesPerMap), "history", f.headBlockNumber+1-f.tailBlockNumber,
+					"processed", f.ptrTailExtend-f.tailBlockNumber, "elapsed", common.PrettyDuration(time.Since(f.startedTailExtend)))
 				f.loggedTailExtend = false
 			}
 		}
@@ -348,7 +348,7 @@ func (f *FilterMaps) tryExtendTail(tailTarget uint64, stopFn func() bool) bool {
 			f.applyUpdateBatch(update)
 
 			if time.Since(f.lastLogTailExtend) > logFrequency || !f.loggedTailExtend {
-				log.Info("Reverse log indexing in progress", "history", update.headBlockNumber+1-update.tailBlockNumber,
+				log.Info("Reverse log indexing in progress", "maps", update.mapCount(f.logValuesPerMap), "history", update.headBlockNumber+1-update.tailBlockNumber,
 					"processed", f.ptrTailExtend-update.tailBlockNumber, "remaining", update.tailBlockNumber-tailTarget,
 					"elapsed", common.PrettyDuration(time.Since(f.startedTailExtend)))
 				f.loggedTailExtend = true
@@ -388,13 +388,13 @@ func (f *FilterMaps) tryUnindexTail(tailTarget uint64, stopFn func() bool) bool 
 	}
 	for {
 		if f.unindexTailEpoch(tailTarget) {
-			log.Info("Log unindexing finished", "history", f.headBlockNumber+1-f.tailBlockNumber,
-				"removed", f.tailBlockNumber-f.ptrTailUnindex, "elapsed", common.PrettyDuration(time.Since(f.lastLogTailUnindex)))
+			log.Info("Log unindexing finished", "maps", f.mapCount(f.logValuesPerMap), "history", f.headBlockNumber+1-f.tailBlockNumber,
+				"removed", f.tailBlockNumber-f.ptrTailUnindex, "elapsed", common.PrettyDuration(time.Since(f.startedTailUnindex)))
 			f.loggedTailUnindex = false
 			return true
 		}
 		if time.Since(f.lastLogTailUnindex) > logFrequency || !f.loggedTailUnindex {
-			log.Info("Log unindexing in progress", "history", f.headBlockNumber+1-f.tailBlockNumber,
+			log.Info("Log unindexing in progress", "maps", f.mapCount(f.logValuesPerMap), "history", f.headBlockNumber+1-f.tailBlockNumber,
 				"removed", f.tailBlockNumber-f.ptrTailUnindex, "remaining", tailTarget-f.tailBlockNumber,
 				"elapsed", common.PrettyDuration(time.Since(f.startedTailUnindex)))
 			f.loggedTailUnindex = true
