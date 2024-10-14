@@ -28,6 +28,7 @@ ADD . /go-ethereum
 
 ARG SCROLL_LIB_PATH
 
+RUN apt update && apt install vim netcat-openbsd net-tools curl -y
 RUN mkdir -p $SCROLL_LIB_PATH
 
 COPY --from=zkp-builder /app/target/release/libzkp.so $SCROLL_LIB_PATH
