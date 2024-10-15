@@ -2273,9 +2273,9 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// reads should be blocked until the mutation is complete.
 	bc.txLookupLock.Lock()
 
-	var stats runtime.MemStats
-	runtime.ReadMemStats(&stats)
-	panic(stats.HeapInuse)
+	//var stats runtime.MemStats
+	//runtime.ReadMemStats(&stats)
+	//panic(stats.HeapInuse)
 
 	// Insert the new chain segment in incremental order, from the old
 	// to the new. The new chain head (newChain[0]) is not inserted here,

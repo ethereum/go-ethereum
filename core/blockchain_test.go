@@ -4249,8 +4249,8 @@ func BenchmarkReorg(b *testing.B) {
 	defer blockchain.Stop()
 
 	// Insert an easy and a difficult chain afterwards
-	easyBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(500))
-	diffBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(500))
+	easyBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(50000))
+	diffBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(50000))
 
 	if _, err := blockchain.InsertChain(easyBlocks); err != nil {
 		b.Fatalf("failed to insert easy chain: %v", err)
@@ -4261,5 +4261,5 @@ func BenchmarkReorg(b *testing.B) {
 	}
 }
 
-// BenchmarkReorg-8   	   10000	    362204 ns/op	  271290 B/op	    1256 allocs/op 	151412736 bytes of heap used
-// BenchmarkReorg-8   	   10000	    381835 ns/op	  276959 B/op	    1324 allocs/op 	152895488 bytes of heap used
+// Master: 			BenchmarkReorg-8   	   10000	    899591 ns/op	  820154 B/op	    1440 allocs/op 	1549443072 bytes of heap used
+// WithoutOldChain: BenchmarkReorg-8   	   10000	    1147281 ns/op	  943163 B/op	    1564 allocs/op 	1163870208 bytes of heap used
