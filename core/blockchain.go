@@ -2326,9 +2326,6 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// Deleted logs + blocks:
 	var deletedLogs []*types.Log
 	for i := len(oldChain) - 1; i >= 0; i-- {
-		// Also send event for blocks removed from the canon chain.
-		bc.chainSideFeed.Send(ChainSideEvent{Header: oldChain[i].Header()})
-
 		// Collect deleted logs for notification
 		if logs := bc.collectLogs(oldChain[i], true); len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs...)

@@ -33,10 +33,6 @@ type ChainEvent struct {
 	Header *types.Header
 }
 
-type ChainSideEvent struct {
-	Header *types.Header
-}
-
 type ChainHeadEvent struct {
 	Header *types.Header
 }
