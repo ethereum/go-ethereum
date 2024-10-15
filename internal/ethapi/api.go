@@ -2070,10 +2070,8 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	if err != nil {
 		return nil, NewTxIndexingError() // transaction is not fully indexed
 	}
+
 	if !found {
-		return nil, nil // transaction is not existent or reachable
-	}
-	if tx == nil {
 		tx, blockHash, blockNumber, index = rawdb.ReadBorTransaction(api.b.ChainDb(), hash)
 		borTx = true
 	}
