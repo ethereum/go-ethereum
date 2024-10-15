@@ -4231,3 +4231,35 @@ func TestPragueRequests(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 }
+
+func BenchmarkReorg(b *testing.B) {
+	chainLength := b.N
+
+	dir := b.TempDir()
+	db, err := rawdb.NewLevelDBDatabase(dir, 128, 128, "", false)
+	if err != nil {
+		b.Fatalf("cannot create temporary database: %v", err)
+	}
+	defer db.Close()
+	gspec := &Genesis{
+		Config: params.TestChainConfig,
+		Alloc:  types.GenesisAlloc{benchRootAddr: {Balance: math.BigPow(2, 254)}},
+	}
+	blockchain, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+	defer blockchain.Stop()
+
+	// Insert an easy and a difficult chain afterwards
+	easyBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(500))
+	diffBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(500))
+
+	if _, err := blockchain.InsertChain(easyBlocks); err != nil {
+		b.Fatalf("failed to insert easy chain: %v", err)
+	}
+	b.ResetTimer()
+	if _, err := blockchain.InsertChain(diffBlocks); err != nil {
+		b.Fatalf("failed to insert difficult chain: %v", err)
+	}
+}
+
+// BenchmarkReorg-8   	   10000	    362204 ns/op	  271290 B/op	    1256 allocs/op 	151412736 bytes of heap used
+// BenchmarkReorg-8   	   10000	    381835 ns/op	  276959 B/op	    1324 allocs/op 	152895488 bytes of heap used

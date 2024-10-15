@@ -2186,7 +2186,7 @@ func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	var (
 		newChain    types.Blocks
-		oldChain    types.Blocks
+		oldChain    []*types.Header
 		commonBlock *types.Block
 
 		deletedTxs []common.Hash
@@ -2202,7 +2202,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// Old chain is longer, gather all transactions and logs as deleted ones
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
-			oldChain = append(oldChain, oldBlock)
+			oldChain = append(oldChain, oldBlock.Header())
 			for _, tx := range oldBlock.Transactions() {
 				deletedTxs = append(deletedTxs, tx.Hash())
 			}
@@ -2228,7 +2228,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 			break
 		}
 		// Remove an old block as well as stash away a new block
-		oldChain = append(oldChain, oldBlock)
+		oldChain = append(oldChain, oldBlock.Header())
 		for _, tx := range oldBlock.Transactions() {
 			deletedTxs = append(deletedTxs, tx.Hash())
 		}
@@ -2261,7 +2261,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	} else if len(newChain) > 0 {
 		// Special case happens in the post merge stage that current head is
 		// the ancestor of new head while these two blocks are not consecutive
-		log.Info("Extend chain", "add", len(newChain), "number", newChain[0].Number(), "hash", newChain[0].Hash())
+		log.Info("Extend chain", "add", len(newChain), "number", newChain[0].Number, "hash", newChain[0].Hash())
 		blockReorgAddMeter.Mark(int64(len(newChain)))
 	} else {
 		// len(newChain) == 0 && len(oldChain) > 0
@@ -2272,6 +2272,10 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// as the txlookups should be changed atomically, and all subsequent
 	// reads should be blocked until the mutation is complete.
 	bc.txLookupLock.Lock()
+
+	var stats runtime.MemStats
+	runtime.ReadMemStats(&stats)
+	panic(stats.HeapInuse)
 
 	// Insert the new chain segment in incremental order, from the old
 	// to the new. The new chain head (newChain[0]) is not inserted here,
@@ -2325,8 +2329,9 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// Deleted logs + blocks:
 	var deletedLogs []*types.Log
 	for i := len(oldChain) - 1; i >= 0; i-- {
+		oldBlock = bc.GetBlock(oldChain[i].Hash(), oldChain[i].Number.Uint64())
 		// Collect deleted logs for notification
-		if logs := bc.collectLogs(oldChain[i], true); len(logs) > 0 {
+		if logs := bc.collectLogs(oldBlock, true); len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs...)
 		}
 		if len(deletedLogs) > 512 {
