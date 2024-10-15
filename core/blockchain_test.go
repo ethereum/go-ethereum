@@ -1385,9 +1385,8 @@ done:
 	for {
 		select {
 		case ev := <-chainSideCh:
-			block := ev.Block
-			if _, ok := expectedSideHashes[block.Hash()]; !ok {
-				t.Errorf("%d: didn't expect %x to be in side chain", i, block.Hash())
+			if _, ok := expectedSideHashes[ev.Header.Hash()]; !ok {
+				t.Errorf("%d: didn't expect %x to be in side chain", i, ev.Header.Hash())
 			}
 			i++
 
