@@ -249,6 +249,7 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.
 		}
 	}
 
+	oldContext := vmenv.TxContext
 	msg := &Message{
 		From:      params.SystemAddress,
 		GasLimit:  30_000_000,
@@ -262,6 +263,7 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.
 	statedb.AddAddressToAccessList(params.HistoryStorageAddress)
 	_, _, _ = vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	statedb.Finalise(true)
+	vmenv.Reset(oldContext, statedb)
 }
 
 // ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
