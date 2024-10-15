@@ -73,7 +73,6 @@ var (
 		utils.PortalBootNodesFlag,
 		utils.PortalPrivateKeyFlag,
 		utils.PortalNetworksFlag,
-		utils.LogFormatFlag,
 	}
 	historyRpcFlags = []cli.Flag{
 		utils.PortalRPCListenAddrFlag,
@@ -81,6 +80,7 @@ var (
 		utils.PortalDataDirFlag,
 		utils.PortalDataCapacityFlag,
 		utils.PortalLogLevelFlag,
+		utils.PortalLogFormatFlag,
 	}
 	metricsFlags = []cli.Flag{
 		utils.MetricsEnabledFlag,
@@ -113,7 +113,7 @@ func main() {
 }
 
 func shisui(ctx *cli.Context) error {
-	err := setDefaultLogger(ctx.Int(utils.PortalLogLevelFlag.Name), ctx.String(utils.LogFormatFlag.Name))
+	err := setDefaultLogger(ctx.Int(utils.PortalLogLevelFlag.Name), ctx.String(utils.PortalLogFormatFlag.Name))
 	if err != nil {
 		return err
 	}
