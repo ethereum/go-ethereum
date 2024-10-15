@@ -73,6 +73,7 @@ var (
 		utils.PortalBootNodesFlag,
 		utils.PortalPrivateKeyFlag,
 		utils.PortalNetworksFlag,
+		utils.LogFormatFlag,
 	}
 	historyRpcFlags = []cli.Flag{
 		utils.PortalRPCListenAddrFlag,
@@ -96,14 +97,11 @@ var (
 		utils.MetricsInfluxDBBucketFlag,
 		utils.MetricsInfluxDBOrganizationFlag,
 	}
-	logsFlags = []cli.Flag{
-		utils.LogFormatFlag,
-	}
 )
 
 func init() {
 	app.Action = shisui
-	app.Flags = flags.Merge(portalProtocolFlags, historyRpcFlags, metricsFlags, logsFlags)
+	app.Flags = flags.Merge(portalProtocolFlags, historyRpcFlags, metricsFlags)
 	flags.AutoEnvVars(app.Flags, "SHISUI")
 }
 

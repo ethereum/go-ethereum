@@ -1027,9 +1027,9 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Value:    cli.NewStringSlice(portalwire.History.Name()),
 	}
 	LogFormatFlag = &cli.StringFlag{
-		Name:     "log.format",
+		Name:     "logformat",
 		Usage:    "Log format to use (json|logfmt|terminal)",
-		Category: flags.LoggingCategory,
+		Category: flags.PortalNetworkCategory,
 	}
 )
 
