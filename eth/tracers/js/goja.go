@@ -46,10 +46,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	type ctorFn = func(*tracers.Context, json.RawMessage) (*tracers.Tracer, error)
+	type ctorFn = func(json.RawMessage) (*tracers.Tracer, error)
 	lookup := func(code string) ctorFn {
-		return func(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
-			return newJsTracer(code, ctx, cfg)
+		return func(cfg json.RawMessage) (*tracers.Tracer, error) {
+			return newJsTracer(code, cfg)
 		}
 	}
 	for name, code := range assetTracers {
@@ -138,7 +138,7 @@ type jsTracer struct {
 // The methods `result` and `fault` are required to be present.
 // The methods `step`, `enter`, and `exit` are optional, but note that
 // `enter` and `exit` always go together.
-func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
+func newJsTracer(code string, cfg json.RawMessage) (*tracers.Tracer, error) {
 	vm := goja.New()
 	// By default field names are exported to JS as is, i.e. capitalized.
 	vm.SetFieldNameMapper(goja.UncapFieldNameMapper())
@@ -149,25 +149,6 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (*trace
 
 	t.setTypeConverters()
 	t.setBuiltinFunctions()
-
-	if ctx == nil {
-		ctx = new(tracers.Context)
-	}
-	if ctx.BlockHash != (common.Hash{}) {
-		blockHash, err := t.toBuf(vm, ctx.BlockHash.Bytes())
-		if err != nil {
-			return nil, err
-		}
-		t.ctx["blockHash"] = blockHash
-		if ctx.TxHash != (common.Hash{}) {
-			t.ctx["txIndex"] = vm.ToValue(ctx.TxIndex)
-			txHash, err := t.toBuf(vm, ctx.TxHash.Bytes())
-			if err != nil {
-				return nil, err
-			}
-			t.ctx["txHash"] = txHash
-		}
-	}
 
 	ret, err := vm.RunString("(" + code + ")")
 	if err != nil {
@@ -224,16 +205,31 @@ func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (*trace
 
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.OnTxStart,
-			OnTxEnd:   t.OnTxEnd,
-			OnEnter:   t.OnEnter,
-			OnExit:    t.OnExit,
-			OnOpcode:  t.OnOpcode,
-			OnFault:   t.OnFault,
+			OnBlockStart: t.OnBlockStart,
+			OnTxStart:    t.OnTxStart,
+			OnTxEnd:      t.OnTxEnd,
+			OnEnter:      t.OnEnter,
+			OnExit:       t.OnExit,
+			OnOpcode:     t.OnOpcode,
+			OnFault:      t.OnFault,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
 	}, nil
+}
+
+// OnBlockStart implements the Tracer interface and is invoked at the
+// beginning of block processing.
+func (t *jsTracer) OnBlockStart(evt tracing.BlockEvent) {
+	block := evt.Block
+	t.ctx["block"] = t.vm.ToValue(block.NumberU64())
+
+	blockHash, err := t.toBuf(t.vm, block.Hash().Bytes())
+	if err != nil {
+		t.err = err
+		return
+	}
+	t.ctx["blockHash"] = t.vm.ToValue(blockHash)
 }
 
 // OnTxStart implements the Tracer interface and is invoked at the beginning of
@@ -246,7 +242,6 @@ func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from
 	// Update list of precompiles based on current block
 	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
-	t.ctx["block"] = t.vm.ToValue(t.env.BlockNumber.Uint64())
 	t.ctx["gas"] = t.vm.ToValue(tx.Gas())
 	gasPriceBig, err := t.toBig(t.vm, env.GasPrice.String())
 	if err != nil {
@@ -260,6 +255,12 @@ func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from
 		return
 	}
 	t.ctx["coinbase"] = t.vm.ToValue(coinbase)
+	txHash, err := t.toBuf(t.vm, tx.Hash().Bytes())
+	if err != nil {
+		t.err = err
+		return
+	}
+	t.ctx["txHash"] = txHash
 }
 
 // OnTxEnd implements the Tracer interface and is invoked at the end of
@@ -277,6 +278,7 @@ func (t *jsTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 	if receipt != nil {
 		t.ctx["gasUsed"] = t.vm.ToValue(receipt.GasUsed)
+		t.ctx["txIndex"] = t.vm.ToValue(receipt.TransactionIndex)
 	}
 }
 
