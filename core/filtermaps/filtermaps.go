@@ -169,10 +169,12 @@ func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, hist
 		lvPointerCache: lru.NewCache[uint64, uint64](1000),
 		revertPoints:   make(map[uint64]*revertPoint),
 	}
-	fm.tailBlockLvPointer, err = fm.getBlockLvPointer(fm.tailBlockNumber)
-	if err != nil {
-		log.Error("Error fetching tail block pointer, resetting log index", "error", err)
-		fm.filterMapsRange = filterMapsRange{} // updateLoop resets the database
+	if fm.initialized {
+		fm.tailBlockLvPointer, err = fm.getBlockLvPointer(fm.tailBlockNumber)
+		if err != nil {
+			log.Error("Error fetching tail block pointer, resetting log index", "error", err)
+			fm.filterMapsRange = filterMapsRange{} // updateLoop resets the database
+		}
 	}
 	return fm
 }
