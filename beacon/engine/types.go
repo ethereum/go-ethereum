@@ -109,7 +109,7 @@ type ExecutionPayloadEnvelope struct {
 	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
 	Requests         [][]byte        `json:"executionRequests"`
 	Override         bool            `json:"shouldOverrideBuilder"`
-	Witness          *hexutil.Bytes  `json:"witness"`
+	Witness          *hexutil.Bytes  `json:"witness,omitempty"`
 }
 
 type BlobsBundleV1 struct {
