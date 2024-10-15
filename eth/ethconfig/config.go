@@ -52,6 +52,7 @@ var Defaults = Config{
 	NetworkId:          0, // enable auto configuration of networkID == chainID
 	TxLookupLimit:      2350000,
 	TransactionHistory: 2350000,
+	LogHistory:         2350000,
 	StateHistory:       params.FullImmutabilityThreshold,
 	DatabaseCache:      512,
 	TrieCleanCache:     154,
@@ -94,6 +95,8 @@ type Config struct {
 	TxLookupLimit uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
 
 	TransactionHistory uint64 `toml:",omitempty"` // The maximum number of blocks from head whose tx indices are reserved.
+	LogHistory         uint64 `toml:",omitempty"` // The maximum number of blocks from head where a log search index is maintained.
+	LogNoHistory       bool   `toml:",omitempty"` // No log search index is maintained.
 	StateHistory       uint64 `toml:",omitempty"` // The maximum number of blocks from head whose state histories are reserved.
 
 	// State scheme represents the scheme used to store ethereum states and trie
