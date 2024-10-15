@@ -2185,7 +2185,7 @@ func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
 // externally.
 func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	var (
-		newChain    types.Blocks
+		newChain    []*types.Header
 		oldChain    []*types.Header
 		commonBlock *types.Block
 
@@ -2210,7 +2210,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	} else {
 		// New chain is longer, stash all blocks away for subsequent insertion
 		for ; newBlock != nil && newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1) {
-			newChain = append(newChain, newBlock)
+			newChain = append(newChain, newBlock.Header())
 		}
 	}
 	if oldBlock == nil {
@@ -2232,7 +2232,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		for _, tx := range oldBlock.Transactions() {
 			deletedTxs = append(deletedTxs, tx.Hash())
 		}
-		newChain = append(newChain, newBlock)
+		newChain = append(newChain, newBlock.Header())
 
 		// Step back with both chains
 		oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1)
@@ -2282,10 +2282,11 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// as it will be handled separately outside of this function
 	for i := len(newChain) - 1; i >= 1; i-- {
 		// Insert the block in the canonical way, re-writing history
-		bc.writeHeadBlock(newChain[i])
+		newBlock = bc.GetBlock(newChain[i].Hash(), newChain[i].Number.Uint64())
+		bc.writeHeadBlock(newBlock)
 
 		// Collect the new added transactions.
-		for _, tx := range newChain[i].Transactions() {
+		for _, tx := range newBlock.Transactions() {
 			addedTxs = append(addedTxs, tx.Hash())
 		}
 	}
@@ -2304,7 +2305,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// markers greater than or equal to new chain head should be deleted.
 	number := commonBlock.NumberU64()
 	if len(newChain) > 1 {
-		number = newChain[1].NumberU64()
+		number = newChain[1].Number.Uint64()
 	}
 	for i := number + 1; ; i++ {
 		hash := rawdb.ReadCanonicalHash(bc.db, i)
@@ -2346,7 +2347,8 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// New logs:
 	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
-		if logs := bc.collectLogs(newChain[i], false); len(logs) > 0 {
+		newBlock = bc.GetBlock(newChain[i].Hash(), newChain[i].Number.Uint64())
+		if logs := bc.collectLogs(newBlock, false); len(logs) > 0 {
 			rebirthLogs = append(rebirthLogs, logs...)
 		}
 		if len(rebirthLogs) > 512 {

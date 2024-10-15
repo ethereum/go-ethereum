@@ -4263,3 +4263,4 @@ func BenchmarkReorg(b *testing.B) {
 
 // Master: 			BenchmarkReorg-8   	   10000	    899591 ns/op	  820154 B/op	    1440 allocs/op 	1549443072 bytes of heap used
 // WithoutOldChain: BenchmarkReorg-8   	   10000	    1147281 ns/op	  943163 B/op	    1564 allocs/op 	1163870208 bytes of heap used
+// WithoutNewChain: BenchmarkReorg-8   	   10000	   1018922 ns/op	  943580 B/op	    1564 allocs/op  1171890176 bytes of heap used
