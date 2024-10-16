@@ -613,6 +613,7 @@ func (bc *BlockChain) SetFinalized(header *types.Header) {
 	if header != nil {
 		rawdb.WriteFinalizedBlockHash(bc.db, header.Hash())
 		headFinalizedBlockGauge.Update(int64(header.Number.Uint64()))
+		exex.TriggerFinalHook(header)
 	} else {
 		rawdb.WriteFinalizedBlockHash(bc.db, common.Hash{})
 		headFinalizedBlockGauge.Update(0)

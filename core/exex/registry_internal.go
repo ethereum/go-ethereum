@@ -87,3 +87,12 @@ func (reg *registry) TriggerReorgHook(headers []*types.Header, revert bool) {
 		}
 	}
 }
+
+// TriggerFinalHook triggers the OnFinal hook in exex plugins.
+func (reg *registry) TriggerFinalHook(header *types.Header) {
+	for _, plugin := range globalRegistry.pluginsV1 {
+		if plugin.OnFinal != nil {
+			plugin.OnFinal(header)
+		}
+	}
+}

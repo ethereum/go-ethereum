@@ -48,4 +48,5 @@ type PluginV1 struct {
 	OnClose CloseHook // Called when the chain gets torn down within Geth
 	OnHead  HeadHook  // Called when the chain head block is updated in Geth
 	OnReorg ReorgHook // Called wnen the chain reorgs to a sidechain within Geth
+	OnFinal FinalHook // Called when the chain finalizes a block within Geth
 }

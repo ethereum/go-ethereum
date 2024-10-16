@@ -51,3 +51,6 @@ type HeadHook = func(head *types.Header)
 // to pass in both the reverted and applied headers at the same time, but that
 // would require chain accessorts to support sidechains, which complicate APIs.
 type ReorgHook = func(headers []*types.Header, revert bool)
+
+// FinalHook is called when the chain finalizes a past block.
+type FinalHook = func(header *types.Header)

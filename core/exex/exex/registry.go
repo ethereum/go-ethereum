@@ -39,6 +39,7 @@ type registry interface {
 	TriggerCloseHook()
 	TriggerHeadHook(head *types.Header)
 	TriggerReorgHook(headers []*types.Header, revert bool)
+	TriggerFinalHook(header *types.Header)
 }
 
 // Plugins returns a list of all registered plugins to generate CLI flags.
@@ -69,4 +70,9 @@ func TriggerHeadHook(head *types.Header) {
 // TriggerReorgHook triggers the OnReorg hook in exex plugins.
 func TriggerReorgHook(headers []*types.Header, revert bool) {
 	globalRegistry.TriggerReorgHook(headers, revert)
+}
+
+// TriggerFinalHook triggers the OnFinal hook in exex plugins.
+func TriggerFinalHook(header *types.Header) {
+	globalRegistry.TriggerFinalHook(header)
 }
