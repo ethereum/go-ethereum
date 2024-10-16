@@ -224,7 +224,6 @@ type BlockChain struct {
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
 	chainFeed     event.Feed
-	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
