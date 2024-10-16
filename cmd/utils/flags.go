@@ -1932,8 +1932,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	for _, flag := range ExExPluginFlags() {
 		if flag, ok := flag.(*cli.BoolFlag); ok {
 			if ctx.IsSet(flag.Name) {
-				plugin := strings.TrimLeft(flag.Name, "exex.") // TODO(karalabe): Custom flag
-				config := ctx.String(flag.Name + ".config")    // TODO(karalabe): Custom flag
+				plugin, _ := strings.CutPrefix(flag.Name, "exex.") // TODO(karalabe): Custom flag
+				config := ctx.String(flag.Name + ".config")        // TODO(karalabe): Custom flag
 
 				if err := exex.Instantiate(plugin, config); err != nil {
 					Fatalf("Failed to instantiate ExEx plugin %s: %v", plugin, err)
@@ -2234,8 +2234,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	for _, flag := range ExExPluginFlags() {
 		if flag, ok := flag.(*cli.BoolFlag); ok {
 			if ctx.IsSet(flag.Name) {
-				plugin := strings.TrimLeft(flag.Name, "exex.") // TODO(karalabe): Custom flag
-				config := ctx.String(flag.Name + ".config")    // TODO(karalabe): Custom flag
+				plugin, _ := strings.CutPrefix(flag.Name, "exex.") // TODO(karalabe): Custom flag
+				config := ctx.String(flag.Name + ".config")        // TODO(karalabe): Custom flag
 
 				if err := exex.Instantiate(plugin, config); err != nil {
 					Fatalf("Failed to instantiate ExEx plugin %s: %v", plugin, err)
