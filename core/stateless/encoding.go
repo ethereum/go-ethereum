@@ -77,9 +77,9 @@ type extWitness struct {
 	State   [][]byte
 }
 
-// ExecutionWitness is a witness json encoding for transferring across clients
-// in the future, we'll probably consider using the extWitness format instead for less overhead.
-// currently we're using this format for compatibility with reth and also for simplicity in terms of parsing.
+// ExecutionWitness is a witness json encoding for transferring across the network.
+// In the future, we'll probably consider using the extWitness format instead for less overhead if performance becomes an issue.
+// Currently using this format for ease of reading, parsing and compatibility across clients.
 type ExecutionWitness struct {
 	Headers []*types.Header   `json:"headers"`
 	Codes   map[string]string `json:"codes"`
