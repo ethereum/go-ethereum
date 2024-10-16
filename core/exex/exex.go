@@ -27,7 +27,15 @@ func RegisterV1(name string, constructor NewPluginV1) {
 }
 
 // NewPluginV1 is the constructor signature for making a new plugin.
-type NewPluginV1 func(logger log.Logger) (*PluginV1, error)
+type NewPluginV1 func(config *ConfigV1) (*PluginV1, error)
+
+// ConfigV1 contains some configurations for initializing exex plugins. Some of
+// the fields originate from Geth, other fields from user configs.
+type ConfigV1 struct {
+	Logger log.Logger // Geth's logger with the plugin name injected
+
+	User string // Opaque flag provided by the user on the CLI
+}
 
 // PluginV1 is an Execution Extension module that can be injected into Geth's
 // processing pipeline to subscribe to different node, chain and EVM lifecycle

@@ -35,10 +35,13 @@ func (reg *registry) Plugins() []string {
 }
 
 // Instantiate constructs an execution extension plugin from a unique name.
-func (reg *registry) Instantiate(name string) error {
+func (reg *registry) Instantiate(name string, userconf string) error {
 	// Try instantiating a V1 plugin
 	if constructor, ok := globalRegistry.pluginsMakersV1[name]; ok {
-		plugin, err := constructor(log.New("exex", name))
+		plugin, err := constructor(&ConfigV1{
+			Logger: log.New("exex", name),
+			User:   userconf,
+		})
 		if err != nil {
 			return err
 		}

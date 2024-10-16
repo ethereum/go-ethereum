@@ -981,7 +981,12 @@ func ExExPluginFlags() []cli.Flag {
 	for _, name := range exex.Plugins() {
 		flagset = append(flagset, &cli.BoolFlag{
 			Name:     fmt.Sprintf("exex.%s", name),
-			Usage:    fmt.Sprintf("Enables the %s execution extension plugin", name),
+			Usage:    fmt.Sprintf("Enables the '%s' execution extension plugin", name),
+			Category: flags.ExExCategory,
+		})
+		flagset = append(flagset, &cli.StringFlag{
+			Name:     fmt.Sprintf("exex.%s.config", name),
+			Usage:    fmt.Sprintf("Opaque config to pass to the '%s' execution extension plugin", name),
 			Category: flags.ExExCategory,
 		})
 	}
@@ -1925,12 +1930,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	}
 	// Execution extension plugins
 	for _, flag := range ExExPluginFlags() {
-		if ctx.IsSet(flag.(*cli.BoolFlag).Name) {
-			plugin := strings.TrimLeft(flag.(*cli.BoolFlag).Name, "exex.") // TODO(karalabe): Custom flag
-			if err := exex.Instantiate(plugin); err != nil {
-				Fatalf("Failed to instantiate ExEx plugin %s: %v", plugin, err)
+		if flag, ok := flag.(*cli.BoolFlag); ok {
+			if ctx.IsSet(flag.Name) {
+				plugin := strings.TrimLeft(flag.Name, "exex.") // TODO(karalabe): Custom flag
+				config := ctx.String(flag.Name + ".config")    // TODO(karalabe): Custom flag
+
+				if err := exex.Instantiate(plugin, config); err != nil {
+					Fatalf("Failed to instantiate ExEx plugin %s: %v", plugin, err)
+				}
+				log.Info("Instantiated ExEx plugin", "name", plugin)
 			}
-			log.Info("Instantiated ExEx plugin", "name", plugin)
 		}
 	}
 }
@@ -2223,12 +2232,16 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		}
 	}
 	for _, flag := range ExExPluginFlags() {
-		if ctx.IsSet(flag.(*cli.BoolFlag).Name) {
-			plugin := strings.TrimLeft(flag.(*cli.BoolFlag).Name, "exex.") // TODO(karalabe): Custom flag
-			if err := exex.Instantiate(plugin); err != nil {
-				Fatalf("Failed to instantiate ExEx plugin %s: %v", plugin, err)
+		if flag, ok := flag.(*cli.BoolFlag); ok {
+			if ctx.IsSet(flag.Name) {
+				plugin := strings.TrimLeft(flag.Name, "exex.") // TODO(karalabe): Custom flag
+				config := ctx.String(flag.Name + ".config")    // TODO(karalabe): Custom flag
+
+				if err := exex.Instantiate(plugin, config); err != nil {
+					Fatalf("Failed to instantiate ExEx plugin %s: %v", plugin, err)
+				}
+				log.Info("Instantiated ExEx plugin", "name", plugin)
 			}
-			log.Info("Instantiated ExEx plugin", "name", plugin)
 		}
 	}
 	// Disable transaction indexing/unindexing by default.

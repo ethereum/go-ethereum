@@ -19,7 +19,6 @@ package plugins
 import (
 	"github.com/ethereum/go-ethereum/core/exex"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // Register the minimal ExEx plugin into Geth.
@@ -29,10 +28,10 @@ func init() {
 
 // newMinimalPlugin creates a minimal Execution Extension plugin to react to some
 // chain events.
-func newMinimalPlugin(logger log.Logger) (*exex.PluginV1, error) {
+func newMinimalPlugin(config *exex.ConfigV1) (*exex.PluginV1, error) {
 	return &exex.PluginV1{
 		OnHead: func(head *types.Header) {
-			logger.Info("Chain head updated", "number", head.Number, "hash", head.Hash())
+			config.Logger.Info("Chain head updated", "number", head.Number, "hash", head.Hash())
 		},
 	}, nil
 }

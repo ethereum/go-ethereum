@@ -33,7 +33,7 @@ func init() {
 // triggers to be invoked.
 type registry interface {
 	Plugins() []string
-	Instantiate(name string) error
+	Instantiate(name string, userconf string) error
 
 	TriggerInitHook(chain exex.Chain)
 	TriggerCloseHook()
@@ -46,8 +46,8 @@ func Plugins() []string {
 }
 
 // Instantiate constructs an execution extension plugin from a unique name.
-func Instantiate(name string) error {
-	return globalRegistry.Instantiate(name)
+func Instantiate(name string, userconf string) error {
+	return globalRegistry.Instantiate(name, userconf)
 }
 
 // TriggerInitHook triggers the OnInit hook in exex plugins.
