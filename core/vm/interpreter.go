@@ -175,7 +175,7 @@ func NewEVMInterpreter(evm *EVM) *EVMInterpreter {
 		}
 	}
 	evm.Config.ExtraEips = extraEips
-	return &EVMInterpreter{evm: evm, table: table, tableEOF: &pragueEOFInstructionSet}
+	return &EVMInterpreter{evm: evm, table: table, tableEOF: &osakaEOFInstructionSet}
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns

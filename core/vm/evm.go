@@ -578,8 +578,8 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address, valu
 
 	// Reject code starting with 0xEF if EIP-3541 is enabled.
 	if len(ret) >= 1 && HasEOFByte(ret) {
-		if evm.chainRules.IsPrague && isInitcodeEOF {
-			// Don't reject EOF contracts after Prague
+		if evm.chainRules.IsOsaka && isInitcodeEOF {
+			// Don't reject EOF contracts after Osaka
 		} else if evm.chainRules.IsLondon {
 			return ret, ErrInvalidCode
 		}
@@ -669,7 +669,7 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 
 // parseContainer tries to parse an EOF container if the Shanghai fork is active. It expects the code to already be validated.
 func (evm *EVM) parseContainer(b []byte) *Container {
-	if evm.chainRules.IsPrague {
+	if evm.chainRules.IsOsaka {
 		var c Container
 		if err := c.UnmarshalBinary(b, false); err != nil && strings.HasPrefix(err.Error(), "invalid magic") {
 			return nil

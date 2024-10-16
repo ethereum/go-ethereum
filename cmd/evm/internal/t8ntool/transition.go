@@ -301,7 +301,7 @@ func applyEOFChecks(prestate *Prestate, chainConfig *params.ChainConfig) error {
 			)
 			err = c.UnmarshalBinary(acc.Code, false)
 			if err == nil {
-				jt := vm.NewPragueEOFInstructionSetForTesting()
+				jt := vm.NewOsakaEOFInstructionSetForTesting()
 				err = c.ValidateCode(&jt, false)
 			}
 			if err != nil {
