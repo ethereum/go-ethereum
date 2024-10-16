@@ -151,9 +151,9 @@ func (indexer *txIndexer) loop(chain *BlockChain) {
 			if done == nil {
 				stop = make(chan struct{})
 				done = make(chan struct{})
-				go indexer.run(rawdb.ReadTxIndexTail(indexer.db), head.Block.NumberU64(), stop, done)
+				go indexer.run(rawdb.ReadTxIndexTail(indexer.db), head.Header.Number.Uint64(), stop, done)
 			}
-			lastHead = head.Block.NumberU64()
+			lastHead = head.Header.Number.Uint64()
 		case <-done:
 			stop = nil
 			done = nil

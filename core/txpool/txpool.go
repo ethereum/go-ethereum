@@ -243,7 +243,7 @@ func (p *TxPool) loop(head *types.Header, chain BlockChain) {
 		select {
 		case event := <-newHeadCh:
 			// Chain moved forward, store the head for later consumption
-			newHead = event.Block.Header()
+			newHead = event.Header
 
 		case head := <-resetDone:
 			// Previous reset finished, update the old head and allow a new reset
