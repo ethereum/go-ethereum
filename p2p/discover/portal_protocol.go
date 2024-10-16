@@ -401,7 +401,9 @@ func (p *PortalProtocol) cacheNodeById(id enode.ID, addr *net.UDPAddr) {
 	go func() {
 		if _, ok := p.cachedIds[addr.String()]; !ok {
 			n := p.ResolveNodeId(id)
-			p.cacheNode(n)
+			if n != nil {
+				p.cacheNode(n)
+			}
 		}
 	}()
 }
