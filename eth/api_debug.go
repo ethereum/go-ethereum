@@ -24,8 +24,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -442,4 +444,44 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 		return "", errors.New("trie flush interval is undefined for path-based scheme")
 	}
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
+}
+
+func (api *DebugAPI) ExecutionWitness(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*stateless.ExecutionWitness, error) {
+	block, err := api.eth.APIBackend.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve block: %w", err)
+	}
+	if block == nil {
+		return nil, fmt.Errorf("block not found: %s", blockNrOrHash.String())
+	}
+
+	witness, err := generateWitness(api.eth.blockchain, block)
+	return witness.ToExecutionWitness(), err
+}
+
+func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateless.Witness, error) {
+	witness, err := stateless.NewWitness(block.Header(), blockchain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create witness: %w", err)
+	}
+
+	parentHeader := witness.Headers[0]
+	statedb, err := blockchain.StateAt(parentHeader.Root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve parent state: %w", err)
+	}
+
+	statedb.StartPrefetcher("debug_execution_witness", witness)
+	defer statedb.StopPrefetcher()
+
+	res, err := blockchain.Processor().Process(block, statedb, *blockchain.GetVMConfig())
+	if err != nil {
+		return nil, fmt.Errorf("failed to process block %d: %w", block.Number(), err)
+	}
+
+	if err := blockchain.Validator().ValidateState(block, statedb, res, false); err != nil {
+		return nil, fmt.Errorf("failed to validate block %d: %w", block.Number(), err)
+	}
+
+	return witness, nil
 }
