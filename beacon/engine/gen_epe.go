@@ -26,7 +26,12 @@ func (e ExecutionPayloadEnvelope) MarshalJSON() ([]byte, error) {
 	enc.ExecutionPayload = e.ExecutionPayload
 	enc.BlockValue = (*hexutil.Big)(e.BlockValue)
 	enc.BlobsBundle = e.BlobsBundle
-	enc.Requests = e.Requests
+	if e.Requests != nil {
+		enc.Requests = make([]hexutil.Bytes, len(e.Requests))
+		for k, v := range e.Requests {
+			enc.Requests[k] = v
+		}
+	}
 	enc.Override = e.Override
 	enc.Witness = e.Witness
 	return json.Marshal(&enc)
@@ -58,7 +63,10 @@ func (e *ExecutionPayloadEnvelope) UnmarshalJSON(input []byte) error {
 		e.BlobsBundle = dec.BlobsBundle
 	}
 	if dec.Requests != nil {
-		e.Requests = dec.Requests
+		e.Requests = make([][]byte, len(dec.Requests))
+		for k, v := range dec.Requests {
+			e.Requests[k] = v
+		}
 	}
 	if dec.Override != nil {
 		e.Override = *dec.Override

@@ -107,7 +107,7 @@ type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
 	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
-	Requests         []hexutil.Bytes `json:"executionRequests"`
+	Requests         [][]byte        `json:"executionRequests"`
 	Override         bool            `json:"shouldOverrideBuilder"`
 	Witness          *hexutil.Bytes  `json:"witness,omitempty"`
 }
@@ -121,6 +121,7 @@ type BlobsBundleV1 struct {
 // JSON type overrides for ExecutionPayloadEnvelope.
 type executionPayloadEnvelopeMarshaling struct {
 	BlockValue *hexutil.Big
+	Requests   []hexutil.Bytes
 }
 
 type PayloadStatusV1 struct {
@@ -207,7 +208,7 @@ func decodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // and that the blockhash of the constructed block matches the parameters. Nil
 // Withdrawals value will propagate through the returned block. Empty
 // Withdrawals value must be passed via non-nil, length 0 value in data.
-func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests []hexutil.Bytes) (*types.Block, error) {
+func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
 	block, err := ExecutableDataToBlockNoHash(data, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		return nil, err
@@ -221,7 +222,7 @@ func ExecutableDataToBlock(data ExecutableData, versionedHashes []common.Hash, b
 // ExecutableDataToBlockNoHash is analogous to ExecutableDataToBlock, but is used
 // for stateless execution, so it skips checking if the executable data hashes to
 // the requested hash (stateless has to *compute* the root hash, it's not given).
-func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests []hexutil.Bytes) (*types.Block, error) {
+func ExecutableDataToBlockNoHash(data ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
 	txs, err := decodeTransactions(data.Transactions)
 	if err != nil {
 		return nil, err
@@ -338,9 +339,9 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 	}
 
 	// Remove type byte in requests.
-	var plainRequests []hexutil.Bytes
+	var plainRequests [][]byte
 	if requests != nil {
-		plainRequests = make([]hexutil.Bytes, len(requests))
+		plainRequests = make([][]byte, len(requests))
 		for i, reqdata := range requests {
 			plainRequests[i] = reqdata[1:]
 		}
