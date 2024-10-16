@@ -17,6 +17,7 @@ package XDPoS
 
 import (
 	"encoding/base64"
+	"errors"
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -319,4 +320,43 @@ func calculateSigners(message map[string]SignerTypes, pool map[string]map[common
 			MissingSigners: missingSigners,
 		}
 	}
+}
+
+func (api *API) GetEpochNumbersBetween(begin, end *rpc.BlockNumber) ([]uint64, error) {
+	beginHeader := api.getHeaderFromApiBlockNum(begin)
+	if beginHeader == nil {
+		return nil, errors.New("illegal begin block number")
+	}
+	endHeader := api.getHeaderFromApiBlockNum(end)
+	if endHeader == nil {
+		return nil, errors.New("illegal end block number")
+	}
+	if beginHeader.Number.Cmp(endHeader.Number) > 0 {
+		return nil, errors.New("illegal begin and end block number, begin > end")
+	}
+	epochSwitchInfos, err := api.XDPoS.GetEpochSwitchInfoBetween(api.chain, beginHeader, endHeader)
+	if err != nil {
+		return nil, err
+	}
+	epochSwitchNumbers := make([]uint64, len(epochSwitchInfos))
+	for i, info := range epochSwitchInfos {
+		epochSwitchNumbers[i] = info.EpochSwitchBlockInfo.Number.Uint64()
+	}
+	return epochSwitchNumbers, nil
+}
+
+/*
+An API exclusively for V2 consensus, designed to assist in getting rewards of the epoch number.
+Given the epoch number, search the epoch switch block.
+*/
+func (api *API) GetBlockInfoByEpochNum(epochNumber uint64) (*utils.EpochNumInfo, error) {
+	result, err := api.XDPoS.EngineV2.GetBlockByEpochNumber(api.chain, epochNumber)
+	if err != nil {
+		return nil, err
+	}
+	return &utils.EpochNumInfo{
+		EpochBlockHash:   result.Hash,
+		EpochRound:       result.Round,
+		EpochBlockNumber: result.Number,
+	}, nil
 }
