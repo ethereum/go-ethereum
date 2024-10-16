@@ -1,6 +1,7 @@
 package engine_v2
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
