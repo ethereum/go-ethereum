@@ -1008,6 +1008,12 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Category: flags.PortalNetworkCategory,
 	}
 
+	PortalLogFormatFlag = &cli.StringFlag{
+		Name:     "logformat",
+		Usage:    "Log format to use (json|logfmt|terminal)",
+		Category: flags.PortalNetworkCategory,
+	}
+
 	PortalPrivateKeyFlag = &cli.StringFlag{
 		Name:     "private.key",
 		Usage:    "Private key of p2p node, hex format without 0x prifix",

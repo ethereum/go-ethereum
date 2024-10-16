@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/ethereum/go-ethereum/portalnetwork/web3"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/mattn/go-isatty"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/protolambda/zrnt/eth2/configs"
 	"github.com/urfave/cli/v2"
@@ -79,6 +80,7 @@ var (
 		utils.PortalDataDirFlag,
 		utils.PortalDataCapacityFlag,
 		utils.PortalLogLevelFlag,
+		utils.PortalLogFormatFlag,
 	}
 	metricsFlags = []cli.Flag{
 		utils.MetricsEnabledFlag,
@@ -111,7 +113,10 @@ func main() {
 }
 
 func shisui(ctx *cli.Context) error {
-	setDefaultLogger(ctx.Int(utils.PortalLogLevelFlag.Name))
+	err := setDefaultLogger(ctx.Int(utils.PortalLogLevelFlag.Name), ctx.String(utils.PortalLogFormatFlag.Name))
+	if err != nil {
+		return err
+	}
 
 	// Start metrics export if enabled
 	utils.SetupMetrics(ctx)
@@ -139,12 +144,26 @@ func shisui(ctx *cli.Context) error {
 	return startPortalRpcServer(*config, conn, config.RpcAddr, clientChan)
 }
 
-func setDefaultLogger(logLevel int) {
-	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
+func setDefaultLogger(logLevel int, logFormat string) error {
+	var glogger *log.GlogHandler
+	switch {
+	case logFormat == "json":
+		glogger = log.NewGlogHandler(log.JSONHandler(os.Stderr))
+	case logFormat == "logfmt":
+		glogger = log.NewGlogHandler(log.LogfmtHandler(os.Stderr))
+	case logFormat == "", logFormat == "terminal":
+		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		glogger = log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, useColor))
+	default:
+		// Unknown log format specified
+		return fmt.Errorf("unknown log format: %v", logFormat)
+	}
 	slogVerbosity := log.FromLegacyLevel(logLevel)
 	glogger.Verbosity(slogVerbosity)
 	defaultLogger := log.NewLogger(glogger)
 	log.SetDefault(defaultLogger)
+
+	return nil
 }
 
 func handlerInterrupt(clientChan <-chan *Client) {
