@@ -57,10 +57,6 @@ func (b *buffer) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 }
 
 // commit merges the provided states and trie nodes into the buffer.
-//
-// This operation does not take ownership of the passed maps, which belong to
-// the bottom-most diff layer. Instead, it holds references to the given maps,
-// which are safe to copy.
 func (b *buffer) commit(nodes *nodeSet) *buffer {
 	b.layers++
 	b.nodes.merge(nodes)
@@ -133,7 +129,7 @@ func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, node
 			return err
 		}
 	}
-	nodes := b.nodes.write(batch, b.nodes.nodes, nodesCache)
+	nodes := b.nodes.write(batch, nodesCache)
 	rawdb.WritePersistentStateID(batch, id)
 
 	// Flush all mutations in a single batch
@@ -145,6 +141,6 @@ func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, node
 	commitNodesMeter.Mark(int64(nodes))
 	commitTimeTimer.UpdateSince(start)
 	b.reset()
-	log.Info("Persisted buffer content", "nodes", nodes, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Persisted buffer content", "nodes", nodes, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }

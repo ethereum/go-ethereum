@@ -66,6 +66,17 @@ func (s *nodeSet) computeSize() {
 	s.size = size
 }
 
+// updateSize updates the total cache size by the given delta.
+func (s *nodeSet) updateSize(delta int64) {
+	size := int64(s.size) + delta
+	if size >= 0 {
+		s.size = uint64(size)
+		return
+	}
+	log.Error("Nodeset size underflow", "prev", common.StorageSize(s.size), "delta", common.StorageSize(delta))
+	s.size = 0
+}
+
 // node retrieves the trie node with node path and its trie identifier.
 func (s *nodeSet) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 	subset, ok := s.nodes[owner]
@@ -211,24 +222,13 @@ func (s *nodeSet) decode(r *rlp.Stream) error {
 }
 
 // write flushes nodes into the provided database batch as a whole.
-func (s *nodeSet) write(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.Node, clean *fastcache.Cache) int {
-	return writeNodes(batch, nodes, clean)
+func (s *nodeSet) write(batch ethdb.Batch, clean *fastcache.Cache) int {
+	return writeNodes(batch, s.nodes, clean)
 }
 
 // reset clears all cached trie node data.
 func (s *nodeSet) reset() {
 	s.nodes = make(map[common.Hash]map[string]*trienode.Node)
-	s.size = 0
-}
-
-// updateSize updates the total cache size by the given delta.
-func (s *nodeSet) updateSize(delta int64) {
-	size := int64(s.size) + delta
-	if size >= 0 {
-		s.size = uint64(size)
-		return
-	}
-	log.Error("Nodeset size underflow", "prev", common.StorageSize(s.size), "delta", common.StorageSize(delta))
 	s.size = 0
 }
 

@@ -155,7 +155,7 @@ func (set *NodeSet) Size() (int, int) {
 
 // HashSet returns a set of trie nodes keyed by node hash.
 func (set *NodeSet) HashSet() map[common.Hash][]byte {
-	ret := make(map[common.Hash][]byte)
+	ret := make(map[common.Hash][]byte, len(set.Nodes))
 	for _, n := range set.Nodes {
 		ret[n.Hash] = n.Blob
 	}
