@@ -18,6 +18,7 @@ package params
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -127,12 +128,12 @@ var (
 		LondonBlock:             big.NewInt(0),
 		ArrowGlacierBlock:       big.NewInt(0),
 		GrayGlacierBlock:        big.NewInt(0),
+		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		MergeNetsplitBlock:      nil,
 		ShanghaiTime:            nil,
 		CancunTime:              nil,
 		PragueTime:              nil,
 		VerkleTime:              nil,
-		TerminalTotalDifficulty: nil,
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
 	}
@@ -181,7 +182,7 @@ var (
 		CancunTime:              nil,
 		PragueTime:              nil,
 		VerkleTime:              nil,
-		TerminalTotalDifficulty: nil,
+		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		Ethash:                  nil,
 		Clique:                  &CliqueConfig{Period: 0, Epoch: 30000},
 	}
@@ -210,7 +211,7 @@ var (
 		CancunTime:              nil,
 		PragueTime:              nil,
 		VerkleTime:              nil,
-		TerminalTotalDifficulty: nil,
+		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
 	}
