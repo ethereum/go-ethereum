@@ -107,7 +107,7 @@ type ExecutionPayloadEnvelope struct {
 	ExecutionPayload *ExecutableData `json:"executionPayload"  gencodec:"required"`
 	BlockValue       *big.Int        `json:"blockValue"  gencodec:"required"`
 	BlobsBundle      *BlobsBundleV1  `json:"blobsBundle"`
-	Requests         [][]byte        `json:"executionRequests"`
+	Requests         []hexutil.Bytes `json:"executionRequests"`
 	Override         bool            `json:"shouldOverrideBuilder"`
 	Witness          *hexutil.Bytes  `json:"witness,omitempty"`
 }
@@ -121,7 +121,6 @@ type BlobsBundleV1 struct {
 // JSON type overrides for ExecutionPayloadEnvelope.
 type executionPayloadEnvelopeMarshaling struct {
 	BlockValue *hexutil.Big
-	Requests   []hexutil.Bytes
 }
 
 type PayloadStatusV1 struct {
@@ -339,9 +338,9 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 	}
 
 	// Remove type byte in requests.
-	var plainRequests [][]byte
+	var plainRequests []hexutil.Bytes
 	if requests != nil {
-		plainRequests = make([][]byte, len(requests))
+		plainRequests = make([]hexutil.Bytes, len(requests))
 		for i, reqdata := range requests {
 			plainRequests[i] = reqdata[1:]
 		}
