@@ -104,11 +104,6 @@ func (b *buffer) size() uint64 {
 	return b.nodes.size
 }
 
-// allocBatch returns a database batch with pre-allocated buffer.
-func (b *buffer) allocBatch(db ethdb.KeyValueStore) ethdb.Batch {
-	return db.NewBatchWithSize(b.nodes.dbsize() * 11 / 10) // extra 10% for potential pebble internal stuff
-}
-
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
 func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, nodesCache *fastcache.Cache, id uint64) error {
@@ -120,7 +115,7 @@ func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, node
 	// Terminate the state snapshot generation if it's active
 	var (
 		start = time.Now()
-		batch = b.allocBatch(db)
+		batch = db.NewBatchWithSize(b.nodes.dbsize() * 11 / 10) // extra 10% for potential pebble internal stuff
 	)
 	// Explicitly sync the state freezer, ensuring that all written
 	// data is transferred to disk before updating the key-value store.

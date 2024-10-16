@@ -55,6 +55,9 @@ func newEmptyReader() *trieReader {
 // node retrieves the rlp-encoded trie node with the provided trie node
 // information. An MissingNodeError will be returned in case the node is
 // not found or any error is encountered.
+//
+// Don't modify the returned byte slice since it's not deep-copied and
+// still be referenced by database.
 func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
 	// Perform the logics in tests for preventing trie node access.
 	if r.banned != nil {

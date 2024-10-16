@@ -24,7 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
-// nodeCacheKey constructs the unique key of clean cache.
+// nodeCacheKey constructs the unique key of clean cache. The assumption is held
+// that zero address does not have any associated storage slots.
 func nodeCacheKey(owner common.Hash, path []byte) []byte {
 	if owner == (common.Hash{}) {
 		return path
