@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/exex"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -32,6 +33,7 @@ type gethChain interface {
 	GetHeaderByNumber(number uint64) *types.Header
 	GetBlockByNumber(number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
+	Snapshots() *snapshot.Tree
 	GetReceiptsByNumber(number uint64) types.Receipts
 }
 
@@ -75,7 +77,7 @@ func (a *chainAdapter) State(root common.Hash) exex.State {
 	if err != nil {
 		return nil
 	}
-	return wrapState(state)
+	return wrapState(root, state, a.chain.Snapshots())
 }
 
 // Receipts retrieves a set of receits belonging to all transactions within

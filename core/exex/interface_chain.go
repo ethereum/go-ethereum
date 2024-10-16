@@ -37,7 +37,8 @@ type Chain interface {
 	// chain. Blocks on side-chains are not exposed by the Chain interface.
 	Block(number uint64) *types.Block
 
-	// State retrieves a state accessor at a given root hash.
+	// State retrieves a state accessor at a given root hash, or nil if the state
+	// associated with the given block has already been pruned.
 	State(root common.Hash) State
 
 	// Receipts retrieves a set of receipts belonging to all transactions within

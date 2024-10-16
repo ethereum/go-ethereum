@@ -19,6 +19,7 @@ package exex
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/exex"
+	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/holiman/uint256"
 )
@@ -26,12 +27,18 @@ import (
 // stateAdapter is an adapter to convert Geth's internal state db (unstable
 // and legacy API) into the exex state interface (stable API).
 type stateAdapter struct {
-	state vm.StateDB
+	root  common.Hash    // Root hash of the state being accessed
+	state vm.StateDB     // State database backed by a trie
+	snaps *snapshot.Tree // State database backed by a snapshot
 }
 
 // wrapState wraps a Geth internal state object into an exex stable API.
-func wrapState(state vm.StateDB) exex.State {
-	return &stateAdapter{state: state}
+func wrapState(root common.Hash, state vm.StateDB, snaps *snapshot.Tree) exex.State {
+	return &stateAdapter{
+		root:  root,
+		state: state,
+		snaps: snaps,
+	}
 }
 
 // Balance retrieves the balance of the given account, or 0 if the account is
@@ -56,4 +63,35 @@ func (a *stateAdapter) Code(addr common.Address) []byte {
 // a specific account.
 func (a *stateAdapter) Storage(addr common.Address, slot common.Hash) common.Hash {
 	return a.state.GetState(addr, slot)
+}
+
+// AccountIterator retrieves an iterator to walk across all the known accounts in
+// the Ethereum state trie from a starting position.
+func (a *stateAdapter) AccountIterator(seek common.Hash) snapshot.AccountIterator {
+	if a.snaps == nil {
+		return nil
+	}
+	it, err := a.snaps.AccountIterator(a.root, seek)
+	if err != nil {
+		return nil
+	}
+	return it
+}
+
+// StorageIterator retrieves an iterator to walk across all the known storage slots
+// the Ethereum state trie of a given account, from a starting position.
+//
+// The iteration order is the Merkle-Patricia order (storage slot hash alphabetically).
+//
+// Note, the account is the hash of the address. This is due to the AccountIterator
+// also walking the state in hash order, not address order.
+func (a *stateAdapter) StorageIterator(account common.Hash, seek common.Hash) snapshot.StorageIterator {
+	if a.snaps == nil {
+		return nil
+	}
+	it, err := a.snaps.StorageIterator(a.root, account, seek)
+	if err != nil {
+		return nil
+	}
+	return it
 }
