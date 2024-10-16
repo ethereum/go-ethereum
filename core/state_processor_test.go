@@ -360,9 +360,9 @@ func TestStateProcessorErrors(t *testing.T) {
 // valid, and no proper post-state can be made. But from the perspective of the blockchain, the block is sufficiently
 // valid to be considered for import:
 // - valid pow (fake), ancestry, difficulty, gaslimit etc
-func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig, powMode bool) *types.Block {
+func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Transactions, config *params.ChainConfig, isPOW bool) *types.Block {
 	difficulty := big.NewInt(0)
-	if powMode {
+	if isPOW {
 		fakeChainReader := newChainMaker(nil, config, engine)
 		difficulty = engine.CalcDifficulty(fakeChainReader, parent.Time()+10, &types.Header{
 			Number:     parent.Number(),
@@ -456,8 +456,6 @@ func TestProcessVerkle(t *testing.T) {
 			ShanghaiTime:            u64(0),
 			VerkleTime:              u64(0),
 			TerminalTotalDifficulty: common.Big0,
-			// TODO uncomment when proof generation is merged
-			// ProofInBlocks:                 true,
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
