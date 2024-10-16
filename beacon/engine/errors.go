@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -30,7 +31,7 @@ type EngineAPIError struct {
 }
 
 func (e *EngineAPIError) ErrorCode() int { return e.code }
-func (e *EngineAPIError) Error() string  { return e.msg }
+func (e *EngineAPIError) Error() string  { return fmt.Sprintf("msg: \"%s\". err: \"%w\"", e.msg, e.err) }
 func (e *EngineAPIError) ErrorData() interface{} {
 	if e.err == nil {
 		return nil
