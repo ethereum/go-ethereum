@@ -38,6 +38,7 @@ type registry interface {
 	TriggerInitHook(chain exex.Chain)
 	TriggerCloseHook()
 	TriggerHeadHook(head *types.Header)
+	TriggerReorgHook(headers []*types.Header, revert bool)
 }
 
 // Plugins returns a list of all registered plugins to generate CLI flags.
@@ -63,4 +64,9 @@ func TriggerCloseHook() {
 // TriggerHeadHook triggers the OnHead hook in exex plugins.
 func TriggerHeadHook(head *types.Header) {
 	globalRegistry.TriggerHeadHook(head)
+}
+
+// TriggerReorgHook triggers the OnReorg hook in exex plugins.
+func TriggerReorgHook(headers []*types.Header, revert bool) {
+	globalRegistry.TriggerReorgHook(headers, revert)
 }

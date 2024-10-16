@@ -47,4 +47,5 @@ type PluginV1 struct {
 	OnInit  InitHook  // Called when the chain gets initialized within Geth
 	OnClose CloseHook // Called when the chain gets torn down within Geth
 	OnHead  HeadHook  // Called when the chain head block is updated in Geth
+	OnReorg ReorgHook // Called wnen the chain reorgs to a sidechain within Geth
 }

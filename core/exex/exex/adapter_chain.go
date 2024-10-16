@@ -32,6 +32,7 @@ type gethChain interface {
 	GetHeaderByNumber(number uint64) *types.Header
 	GetBlockByNumber(number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
+	GetReceiptsByNumber(number uint64) types.Receipts
 }
 
 // chainAdapter is an adapter to convert Geth's internal blockchain (unstable
@@ -75,4 +76,18 @@ func (a *chainAdapter) State(root common.Hash) exex.State {
 		return nil
 	}
 	return wrapState(state)
+}
+
+// Receipts retrieves a set of receits belonging to all transactions within
+// a block from the canonical chain. Receipts on side-chains are not exposed
+// by the Chain interface.
+func (a *chainAdapter) Receipts(number uint64) []*types.Receipt {
+	// Receipts have public fields, copy to prevent modification
+	receipts := a.chain.GetReceiptsByNumber(number)
+
+	copies := make([]*types.Receipt, 0, len(receipts))
+	for _, receipt := range receipts {
+		copies = append(copies, types.CopyReceipt(receipt))
+	}
+	return copies
 }

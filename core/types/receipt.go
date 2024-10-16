@@ -117,6 +117,31 @@ func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
 	return r
 }
 
+// CopyReceipt creates a deep copy of a receipt.
+func CopyReceipt(r *Receipt) *Receipt {
+	cpy := *r
+	if len(r.PostState) > 0 {
+		cpy.PostState = make([]byte, len(r.PostState))
+		copy(cpy.PostState, r.PostState)
+	}
+	if len(r.Logs) > 0 {
+		cpy.Logs = make([]*Log, len(r.Logs))
+		for i, log := range r.Logs {
+			cpy.Logs[i] = CopyLog(log)
+		}
+	}
+	if r.EffectiveGasPrice != nil {
+		cpy.EffectiveGasPrice = new(big.Int).Set(r.EffectiveGasPrice)
+	}
+	if r.BlobGasPrice != nil {
+		cpy.BlobGasPrice = new(big.Int).Set(r.BlobGasPrice)
+	}
+	if r.BlockNumber != nil {
+		cpy.BlockNumber = new(big.Int).Set(r.BlockNumber)
+	}
+	return &cpy
+}
+
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt
 // into an RLP stream. If no post state is present, byzantium fork is assumed.
 func (r *Receipt) EncodeRLP(w io.Writer) error {

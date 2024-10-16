@@ -209,6 +209,27 @@ func (bc *BlockChain) GetBlocksFromHash(hash common.Hash, n int) (blocks []*type
 	return
 }
 
+// GetReceiptsByNumber retrieves the receipts for all transactions in a given block.
+func (bc *BlockChain) GetReceiptsByNumber(number uint64) types.Receipts {
+	hash := rawdb.ReadCanonicalHash(bc.db, number)
+	if hash == (common.Hash{}) {
+		return nil
+	}
+	if receipts, ok := bc.receiptsCache.Get(hash); ok {
+		return receipts
+	}
+	header := bc.GetHeader(hash, number)
+	if header == nil {
+		return nil
+	}
+	receipts := rawdb.ReadReceipts(bc.db, hash, number, header.Time, bc.chainConfig)
+	if receipts == nil {
+		return nil
+	}
+	bc.receiptsCache.Add(hash, receipts)
+	return receipts
+}
+
 // GetReceiptsByHash retrieves the receipts for all transactions in a given block.
 func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if receipts, ok := bc.receiptsCache.Get(hash); ok {

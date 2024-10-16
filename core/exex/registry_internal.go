@@ -78,3 +78,12 @@ func (reg *registry) TriggerHeadHook(head *types.Header) {
 		}
 	}
 }
+
+// TriggerReorgHook triggers the OnReorg hook in exex plugins.
+func (reg *registry) TriggerReorgHook(headers []*types.Header, revert bool) {
+	for _, plugin := range globalRegistry.pluginsV1 {
+		if plugin.OnReorg != nil {
+			plugin.OnReorg(headers, revert)
+		}
+	}
+}

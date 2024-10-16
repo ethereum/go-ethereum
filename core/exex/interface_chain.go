@@ -39,4 +39,9 @@ type Chain interface {
 
 	// State retrieves a state accessor at a given root hash.
 	State(root common.Hash) State
+
+	// Receipts retrieves a set of receipts belonging to all transactions within
+	// a block from the canonical chain. Receipts on side-chains are not exposed
+	// by the Chain interface.
+	Receipts(number uint64) []*types.Receipt
 }

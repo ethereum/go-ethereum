@@ -1565,8 +1565,8 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	// canonical blocks. Avoid firing too many ChainHeadEvents,
 	// we will fire an accumulated ChainHeadEvent and disable fire
 	// event here.
+	exex.TriggerHeadHook(block.Header())
 	if emitHeadEvent {
-		exex.TriggerHeadHook(block.Header())
 		bc.chainHeadFeed.Send(ChainHeadEvent{Header: block.Header()})
 	}
 	return CanonStatTy, nil
@@ -1632,7 +1632,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 	// Fire a single chain head event if we've progressed the chain
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
-			exex.TriggerHeadHook(lastCanon.Header())
 			bc.chainHeadFeed.Send(ChainHeadEvent{Header: lastCanon.Header()})
 		}
 	}()
@@ -2262,6 +2261,10 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 		// rewind the canonical chain to a lower point.
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldHead.Number, "oldhash", oldHead.Hash(), "oldblocks", len(oldChain), "newnum", newHead.Number, "newhash", newHead.Hash(), "newblocks", len(newChain))
 	}
+	// Trigger revertal reorgs
+	if len(oldChain) > 0 {
+		exex.TriggerReorgHook(oldChain, true)
+	}
 	// Acquire the tx-lookup lock before mutation. This step is essential
 	// as the txlookups should be changed atomically, and all subsequent
 	// reads should be blocked until the mutation is complete.
@@ -2369,6 +2372,12 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 	// Release the tx-lookup lock after mutation.
 	bc.txLookupLock.Unlock()
 
+	// Trigger application reorgs
+	if len(newChain) > 1 {
+		slices.Reverse(newChain)
+		exex.TriggerReorgHook(newChain[:len(newChain)-1], false)
+		slices.Reverse(newChain)
+	}
 	return nil
 }
 

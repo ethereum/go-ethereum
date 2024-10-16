@@ -31,8 +31,23 @@ type CloseHook = func()
 //   - In sync, this will be called on fork-choice updates
 type HeadHook = func(head *types.Header)
 
-// TODO(karalabe): This is interesting. We need to keep events in sync with the
-// user's chain access capabilities. We either need to provide side-chain access,
-// which gets nasty fast; or we need to reorg in lockstep; or we need two events
-// one to start a reorg (going back) and one having finished (going forward).
-// type ReorgHook = func(old, new *types.Header) error
+// ReorgHook is called when the chain head is updated to a different parent than
+// the previous head. In this case previously applied state changes need to be
+// rolled back, and state changes from a sidechain need to be applied.
+//
+// This method is called with a set of header being operated on and the direction
+// of the operation, usually both directions being called one after the other:
+//
+//   - If revert == true, the given headers are being rolled back, they are in
+//     reverse order, headers[0] being the previous chain head, and the last item
+//     being the olders block getting undone.
+//   - If revert == false, the given headers are being applied after the rollback,
+//     they are in forward order, headers[0] being the oldest block being applied
+//     and the last item being the newest getting applied. Note, the chain head
+//     that triggered the reorg will arrive in the HeadHook.
+//
+// The reason the reorg event it "emitted" in two parts is for both operations to
+// have access to a unified singletone view of the chain. An alternative would be
+// to pass in both the reverted and applied headers at the same time, but that
+// would require chain accessorts to support sidechains, which complicate APIs.
+type ReorgHook = func(headers []*types.Header, revert bool)

@@ -33,5 +33,12 @@ func newMinimalPlugin(config *exex.ConfigV1) (*exex.PluginV1, error) {
 		OnHead: func(head *types.Header) {
 			config.Logger.Info("Chain head updated", "number", head.Number, "hash", head.Hash())
 		},
+		OnReorg: func(headers []*types.Header, revert bool) {
+			if revert {
+				config.Logger.Warn("Reorging blocks out", "count", len(headers))
+			} else {
+				config.Logger.Warn("Reorging blocks in", "count", len(headers))
+			}
+		},
 	}, nil
 }

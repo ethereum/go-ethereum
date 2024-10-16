@@ -53,6 +53,20 @@ type Log struct {
 	Removed bool `json:"removed" rlp:"-"`
 }
 
+// CopyLog creates a deep copy of a log.
+func CopyLog(l *Log) *Log {
+	cpy := *l
+	if len(l.Topics) > 0 {
+		cpy.Topics = make([]common.Hash, len(l.Topics))
+		copy(cpy.Topics, l.Topics)
+	}
+	if len(l.Data) > 0 {
+		cpy.Data = make([]byte, len(l.Data))
+		copy(cpy.Data, l.Data)
+	}
+	return &cpy
+}
+
 type logMarshaling struct {
 	Data        hexutil.Bytes
 	BlockNumber hexutil.Uint64
