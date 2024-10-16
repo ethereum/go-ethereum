@@ -2191,11 +2191,6 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 		oldChain    []*types.Header
 		commonBlock *types.Header
 	)
-	// Skip handling the newHead as it's handled outside
-	newHead = bc.GetHeader(newHead.ParentHash, newHead.Number.Uint64()-1)
-	if newHead == nil {
-		return errInvalidNewChain
-	}
 	// Reduce the longer chain to the same number as the shorter one
 	if oldHead.Number.Uint64() > newHead.Number.Uint64() {
 		// Old chain is longer, gather all transactions and logs as deleted ones
@@ -2273,6 +2268,28 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 		deletedLogs []*types.Log
 		rebirthLogs []*types.Log
 	)
+	// Deleted log emission on the API uses forward order, which is borked, but
+	// we'll leave it in for legacy reasons.
+	//
+	// TODO(karalabe): This should be nuked out, no idea how, deprecate some APIs?
+	{
+		for i := len(oldChain) - 1; i >= 0; i-- {
+			block := bc.GetBlock(oldChain[i].Hash(), oldChain[i].Number.Uint64())
+			if block == nil {
+				return errInvalidOldChain // Corrupt database, mostly here to avoid weird panics
+			}
+			if logs := bc.collectLogs(block, true); len(logs) > 0 {
+				deletedLogs = append(deletedLogs, logs...)
+			}
+			if len(deletedLogs) > 512 {
+				bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
+				deletedLogs = nil
+			}
+		}
+		if len(deletedLogs) > 0 {
+			bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
+		}
+	}
 	// Undo old blocks in reverse order
 	for i := 0; i < len(oldChain); i++ {
 		// Collect all the deleted transactions
@@ -2283,21 +2300,16 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 		for _, tx := range block.Transactions() {
 			deletedTxs = append(deletedTxs, tx.Hash())
 		}
-		// Collect deleted logs and emit them
+		// Collect deleted logs and emit them for new integrations
 		if logs := bc.collectLogs(block, true); len(logs) > 0 {
-			slices.Reverse(logs) // Emit revertals latest first, older then
-			deletedLogs = append(deletedLogs, logs...)
+			// Emit revertals latest first, older then
+			slices.Reverse(logs)
+
+			// TODO(karalabe): Hook into the reverse emission part
 		}
-		if len(deletedLogs) > 512 {
-			bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
-			deletedLogs = nil
-		}
-	}
-	if len(deletedLogs) > 0 {
-		bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
 	}
 	// Apply new blocks in forward order
-	for i := len(newChain) - 1; i > 0; i-- {
+	for i := len(newChain) - 1; i >= 1; i-- {
 		// Collect all the included transactions
 		block := bc.GetBlock(newChain[i].Hash(), newChain[i].Number.Uint64())
 		if block == nil {
@@ -2330,8 +2342,8 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 	// Because the reorg function does not handle new chain head, all hash
 	// markers greater than or equal to new chain head should be deleted.
 	number := commonBlock.Number
-	if len(newChain) > 0 {
-		number = newChain[0].Number
+	if len(newChain) > 1 {
+		number = newChain[1].Number
 	}
 	for i := number.Uint64() + 1; ; i++ {
 		hash := rawdb.ReadCanonicalHash(bc.db, i)
