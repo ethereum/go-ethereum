@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
@@ -1262,5 +1261,9 @@ func convertRequests(hex []hexutil.Bytes) [][]byte {
 	if hex == nil {
 		return nil
 	}
-	return unsafe.Slice((*[]byte)(unsafe.SliceData(hex)), len(hex))
+	req := make([][]byte, len(hex))
+	for i := range hex {
+		req[i] = hex[i]
+	}
+	return req
 }
