@@ -2268,15 +2268,14 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		// rewind the canonical chain to a lower point.
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "oldblocks", len(oldChain), "newnum", newBlock.Number(), "newhash", newBlock.Hash(), "newblocks", len(newChain))
 	}
-
-	//var stats runtime.MemStats
-	//runtime.ReadMemStats(&stats)
-	//panic(stats.HeapInuse)
+	// Acquire the tx-lookup lock before mutation. This step is essential
+	// as the txlookups should be changed atomically, and all subsequent
+	// reads should be blocked until the mutation is complete.
+	bc.txLookupLock.Lock()
 
 	// Insert the new chain segment in incremental order, from the old
 	// to the new. The new chain head (newChain[0]) is not inserted here,
 	// as it will be handled separately outside of this function
-	var rebirthLogs []*types.Log
 	for i := len(newChain) - 1; i >= 1; i-- {
 		// Insert the block in the canonical way, re-writing history
 		newBlock = bc.GetBlock(newChain[i].Hash(), newChain[i].Number.Uint64())
@@ -2286,24 +2285,7 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 		for _, tx := range newBlock.Transactions() {
 			addedTxs = append(addedTxs, tx.Hash())
 		}
-		// Collect the logs and send them in batches of 512.
-		if logs := bc.collectLogs(newBlock, false); len(logs) > 0 {
-			rebirthLogs = append(rebirthLogs, logs...)
-		}
-		if len(rebirthLogs) > 512 {
-			bc.logsFeed.Send(rebirthLogs)
-			rebirthLogs = nil
-		}
 	}
-	if len(rebirthLogs) > 0 {
-		bc.logsFeed.Send(rebirthLogs)
-	}
-
-	// Acquire the tx-lookup lock before mutation. This step is essential
-	// as the txlookups should be changed atomically, and all subsequent
-	// reads should be blocked until the mutation is complete.
-	bc.txLookupLock.Lock()
-
 	// Delete useless indexes right now which includes the non-canonical
 	// transaction indexes, canonical chain indexes which above the head.
 	var (
@@ -2336,9 +2318,9 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// Release the tx-lookup lock after mutation.
 	bc.txLookupLock.Unlock()
 
-	// Send out events for logs from the old canon chain.
-	// The number of logs can be very high,
-	// so the events are sent in batches of size around 512.
+	// Send out events for logs from the old canon chain, and 'reborn'
+	// logs from the new canon chain. The number of logs can be very
+	// high, so the events are sent in batches of size around 512.
 
 	// Deleted logs + blocks:
 	var deletedLogs []*types.Log
@@ -2355,6 +2337,21 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	}
 	if len(deletedLogs) > 0 {
 		bc.rmLogsFeed.Send(RemovedLogsEvent{deletedLogs})
+	}
+	// New logs:
+	var rebirthLogs []*types.Log
+	for i := len(newChain) - 1; i >= 1; i-- {
+		newBlock = bc.GetBlock(newChain[i].Hash(), newChain[i].Number.Uint64())
+		if logs := bc.collectLogs(newBlock, false); len(logs) > 0 {
+			rebirthLogs = append(rebirthLogs, logs...)
+		}
+		if len(rebirthLogs) > 512 {
+			bc.logsFeed.Send(rebirthLogs)
+			rebirthLogs = nil
+		}
+	}
+	if len(rebirthLogs) > 0 {
+		bc.logsFeed.Send(rebirthLogs)
 	}
 	return nil
 }
