@@ -299,11 +299,13 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		tracer.OnTxStart(evm.GetVMContext(), nil, msg.From)
 	}
 
+	oldContext := evm.TxContext
 	if config.IsPrague(new(big.Int), 0) {
 		for i := int(block.Number().Uint64() - 1); i >= 0; i-- {
 			core.ProcessParentBlockHash(vmTestBlockHash(uint64(i)), evm, st.StateDB)
 		}
 	}
+	evm.Reset(oldContext, st.StateDB)
 
 	// Execute the message.
 	snapshot := st.StateDB.Snapshot()
