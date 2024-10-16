@@ -29,6 +29,11 @@ type Chain interface {
 	// Head retrieves the current head block's header from the canonical chain.
 	Head() *types.Header
 
+	// Final retrieves the last finalized block from the chain. If no finality
+	// is known yet (not synced, not past merge, etc.) or Geth crashed and is
+	// recovering, the returns header will be nil.
+	Final() *types.Header
+
 	// Header retrieves a block header with the given number from the canonical
 	// chain. Headers on side-chains are not exposed by the Chain interface.
 	Header(number uint64) *types.Header

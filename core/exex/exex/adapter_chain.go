@@ -30,6 +30,7 @@ import (
 // rather it's a dynamic cast to break cross-package dependencies.
 type gethChain interface {
 	CurrentBlock() *types.Header
+	CurrentFinalBlock() *types.Header
 	GetHeaderByNumber(number uint64) *types.Header
 	GetBlockByNumber(number uint64) *types.Block
 	StateAt(root common.Hash) (*state.StateDB, error)
@@ -52,6 +53,14 @@ func wrapChain(chain gethChain) exex.Chain {
 func (a *chainAdapter) Head() *types.Header {
 	// Headers have public fields, copy to prevent modification
 	return types.CopyHeader(a.chain.CurrentBlock())
+}
+
+// Final retrieves the last finalized block from the chain. If no finality
+// is known yet (not synced, not past merge, etc.) or Geth crashed and is
+// recovering, the returns header will be nil.
+func (a *chainAdapter) Final() *types.Header {
+	// Headers have public fields, copy to prevent modification
+	return types.CopyHeader(a.chain.CurrentFinalBlock())
 }
 
 // Header retrieves a block header with the given number from the canonical
