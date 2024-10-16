@@ -224,7 +224,6 @@ type BlockChain struct {
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
 	chainFeed     event.Feed
-	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
@@ -571,15 +570,14 @@ func (bc *BlockChain) SetHead(head uint64) error {
 	}
 	// Send chain head event to update the transaction pool
 	header := bc.CurrentBlock()
-	block := bc.GetBlock(header.Hash(), header.Number.Uint64())
-	if block == nil {
+	if block := bc.GetBlock(header.Hash(), header.Number.Uint64()); block == nil {
 		// This should never happen. In practice, previously currentBlock
 		// contained the entire block whereas now only a "marker", so there
 		// is an ever so slight chance for a race we should handle.
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
 		return fmt.Errorf("current block missing: #%d [%x..]", header.Number, header.Hash().Bytes()[:4])
 	}
-	bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+	bc.chainHeadFeed.Send(ChainHeadEvent{Header: header})
 	return nil
 }
 
@@ -593,15 +591,14 @@ func (bc *BlockChain) SetHeadWithTimestamp(timestamp uint64) error {
 	}
 	// Send chain head event to update the transaction pool
 	header := bc.CurrentBlock()
-	block := bc.GetBlock(header.Hash(), header.Number.Uint64())
-	if block == nil {
+	if block := bc.GetBlock(header.Hash(), header.Number.Uint64()); block == nil {
 		// This should never happen. In practice, previously currentBlock
 		// contained the entire block whereas now only a "marker", so there
 		// is an ever so slight chance for a race we should handle.
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
 		return fmt.Errorf("current block missing: #%d [%x..]", header.Number, header.Hash().Bytes()[:4])
 	}
-	bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+	bc.chainHeadFeed.Send(ChainHeadEvent{Header: header})
 	return nil
 }
 
@@ -1552,7 +1549,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	// Set new head.
 	bc.writeHeadBlock(block)
 
-	bc.chainFeed.Send(ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
+	bc.chainFeed.Send(ChainEvent{Header: block.Header()})
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
 	}
@@ -1562,7 +1559,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	// we will fire an accumulated ChainHeadEvent and disable fire
 	// event here.
 	if emitHeadEvent {
-		bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
+		bc.chainHeadFeed.Send(ChainHeadEvent{Header: block.Header()})
 	}
 	return CanonStatTy, nil
 }
@@ -1627,7 +1624,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 	// Fire a single chain head event if we've progressed the chain
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
-			bc.chainHeadFeed.Send(ChainHeadEvent{lastCanon})
+			bc.chainHeadFeed.Send(ChainHeadEvent{Header: lastCanon.Header()})
 		}
 	}()
 	// Start the parallel header verifier
@@ -2328,9 +2325,6 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	// Deleted logs + blocks:
 	var deletedLogs []*types.Log
 	for i := len(oldChain) - 1; i >= 0; i-- {
-		// Also send event for blocks removed from the canon chain.
-		bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
-
 		// Collect deleted logs for notification
 		if logs := bc.collectLogs(oldChain[i], true); len(logs) > 0 {
 			deletedLogs = append(deletedLogs, logs...)
@@ -2403,11 +2397,11 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 
 	// Emit events
 	logs := bc.collectLogs(head, false)
-	bc.chainFeed.Send(ChainEvent{Block: head, Hash: head.Hash(), Logs: logs})
+	bc.chainFeed.Send(ChainEvent{Header: head.Header()})
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
 	}
-	bc.chainHeadFeed.Send(ChainHeadEvent{Block: head})
+	bc.chainHeadFeed.Send(ChainHeadEvent{Header: head.Header()})
 
 	context := []interface{}{
 		"number", head.Number(),
