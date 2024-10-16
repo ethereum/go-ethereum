@@ -36,14 +36,17 @@ type Tracer interface {
 }
 
 var (
-	nativeTracers map[string]func() Tracer = make(map[string]func() Tracer)
-	jsTracers                              = make(map[string]string)
+	nativeTracers map[string]ctorFn = make(map[string]ctorFn)
+	jsTracers                       = make(map[string]string)
 )
+
+// ctorFn is the constructor signature of a native tracer.
+type ctorFn = func(json.RawMessage) (Tracer, error)
 
 // RegisterNativeTracer makes native tracers which adhere
 // to the `Tracer` interface available to the rest of the codebase.
 // It is typically invoked in the `init()` function, e.g. see the `native/call.go`.
-func RegisterNativeTracer(name string, ctor func() Tracer) {
+func RegisterNativeTracer(name string, ctor ctorFn) {
 	nativeTracers[name] = ctor
 }
 
@@ -54,10 +57,10 @@ func RegisterNativeTracer(name string, ctor func() Tracer) {
 //     instantiated and returned
 //  3. Otherwise, the code is interpreted as the js code of a js-tracer, and
 //     is evaluated and returned.
-func New(code string, ctx *Context) (Tracer, error) {
+func New(code string, ctx *Context, cfg json.RawMessage) (Tracer, error) {
 	// Resolve native tracer
 	if fn, ok := nativeTracers[code]; ok {
-		return fn(), nil
+		return fn(cfg)
 	}
 	// Resolve js-tracers by name and assemble the tracer object
 	if tracer, ok := jsTracers[code]; ok {

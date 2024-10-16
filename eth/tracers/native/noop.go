@@ -16,8 +16,8 @@ func init() {
 
 type noopTracer struct{}
 
-func NewNoopTracer() tracers.Tracer {
-	return &noopTracer{}
+func NewNoopTracer(_ json.RawMessage) (tracers.Tracer, error) {
+	return &noopTracer{}, nil
 }
 
 func (t *noopTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {

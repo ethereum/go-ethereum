@@ -19,6 +19,7 @@ package eth
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -59,6 +60,9 @@ type TraceConfig struct {
 	Tracer  *string
 	Timeout *string
 	Reexec  *uint64
+	// Config specific to given tracer. Note struct logger
+	// config are historically embedded in main object.
+	TracerConfig json.RawMessage
 }
 
 // TraceCallConfig is the config for traceCall API. It holds one more
@@ -726,7 +730,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, t
 				return nil, err
 			}
 		}
-		if t, err := tracers.New(*config.Tracer, txctx); err != nil {
+		if t, err := tracers.New(*config.Tracer, txctx, config.TracerConfig); err != nil {
 			return nil, err
 		} else {
 			deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
