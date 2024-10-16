@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/core/exex/exex"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -467,6 +468,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if txLookupLimit != nil {
 		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
 	}
+	exex.TriggerInitHook(bc)
 	return bc, nil
 }
 
@@ -578,6 +580,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
 		return fmt.Errorf("current block missing: #%d [%x..]", header.Number, header.Hash().Bytes()[:4])
 	}
+	exex.TriggerHeadHook(header)
 	bc.chainHeadFeed.Send(ChainHeadEvent{Header: header})
 	return nil
 }
@@ -599,6 +602,7 @@ func (bc *BlockChain) SetHeadWithTimestamp(timestamp uint64) error {
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
 		return fmt.Errorf("current block missing: #%d [%x..]", header.Number, header.Hash().Bytes()[:4])
 	}
+	exex.TriggerHeadHook(header)
 	bc.chainHeadFeed.Send(ChainHeadEvent{Header: header})
 	return nil
 }
@@ -1157,6 +1161,8 @@ func (bc *BlockChain) Stop() {
 	if bc.logger != nil && bc.logger.OnClose != nil {
 		bc.logger.OnClose()
 	}
+	exex.TriggerCloseHook()
+
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
 		log.Error("Failed to close trie database", "err", err)
@@ -1560,6 +1566,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	// we will fire an accumulated ChainHeadEvent and disable fire
 	// event here.
 	if emitHeadEvent {
+		exex.TriggerHeadHook(block.Header())
 		bc.chainHeadFeed.Send(ChainHeadEvent{Header: block.Header()})
 	}
 	return CanonStatTy, nil
@@ -1625,6 +1632,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 	// Fire a single chain head event if we've progressed the chain
 	defer func() {
 		if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
+			exex.TriggerHeadHook(lastCanon.Header())
 			bc.chainHeadFeed.Send(ChainHeadEvent{Header: lastCanon.Header()})
 		}
 	}()
@@ -2410,6 +2418,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
 	}
+	exex.TriggerHeadHook(head.Header())
 	bc.chainHeadFeed.Send(ChainHeadEvent{Header: head.Header()})
 
 	context := []interface{}{

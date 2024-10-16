@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/exex/exex"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
@@ -71,6 +72,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
+	_ "github.com/ethereum/go-ethereum/plugins" // Load all ExEx plugins
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
@@ -972,6 +974,19 @@ var (
 		HttpHeaderFlag,
 	}
 )
+
+// ExExPluginFlags constructs a live set of CLI flags from the registered plugins.
+func ExExPluginFlags() []cli.Flag {
+	var flagset []cli.Flag
+	for _, name := range exex.Plugins() {
+		flagset = append(flagset, &cli.BoolFlag{
+			Name:     fmt.Sprintf("exex.%s", name),
+			Usage:    fmt.Sprintf("Enables the %s execution extension plugin", name),
+			Category: flags.ExExCategory,
+		})
+	}
+	return flagset
+}
 
 // MakeDataDir retrieves the currently requested data directory, terminating
 // if none (or the empty string) is specified. If the node is starting a testnet,
@@ -1908,6 +1923,16 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.VMTraceJsonConfig = config
 		}
 	}
+	// Execution extension plugins
+	for _, flag := range ExExPluginFlags() {
+		if ctx.IsSet(flag.(*cli.BoolFlag).Name) {
+			plugin := strings.TrimLeft(flag.(*cli.BoolFlag).Name, "exex.") // TODO(karalabe): Custom flag
+			if err := exex.Instantiate(plugin); err != nil {
+				Fatalf("Failed to instantiate ExEx plugin %s: %v", plugin, err)
+			}
+			log.Info("Instantiated ExEx plugin", "name", plugin)
+		}
+	}
 }
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
@@ -2195,6 +2220,15 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 				Fatalf("Failed to create tracer %q: %v", name, err)
 			}
 			vmcfg.Tracer = t
+		}
+	}
+	for _, flag := range ExExPluginFlags() {
+		if ctx.IsSet(flag.(*cli.BoolFlag).Name) {
+			plugin := strings.TrimLeft(flag.(*cli.BoolFlag).Name, "exex.") // TODO(karalabe): Custom flag
+			if err := exex.Instantiate(plugin); err != nil {
+				Fatalf("Failed to instantiate ExEx plugin %s: %v", plugin, err)
+			}
+			log.Info("Instantiated ExEx plugin", "name", plugin)
 		}
 	}
 	// Disable transaction indexing/unindexing by default.
