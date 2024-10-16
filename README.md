@@ -32,13 +32,29 @@ make shisui-image
 After building `shisui`, you can start the client by running
 
 ```shell
+# supported options are list below
 ./build/bin/shisui
 ```
 
 Alternatively, you can run the docker image by running
 
 ```shell
-docker run -d -p 8545:8545 -p 9009:9009/udp ghcr.io/optimism-java/shisui:latest
+docker run -d -p 8545:8545 -p 9009:9009/udp -e SHISUI_NAT=stun ghcr.io/optimism-java/shisui:latest
+
+# if you know your exiIp, replace by -e SHISUI_NAT=extip:${your ip}
+```
+
+You can use the script below to check if the node has started correctly.
+
+```shell
+curl -X POST http://127.0.0.1:8545 \
+     -H "Content-Type: application/json" \
+     -d '{
+           "jsonrpc": "2.0",
+           "method": "discv5_nodeInfo",
+           "params": [],
+           "id": 0
+         }'
 ```
 
 ### supported options
@@ -54,6 +70,7 @@ docker run -d -p 8545:8545 -p 9009:9009/udp ghcr.io/optimism-java/shisui:latest
     * `upnp`               uses the Universal Plug and Play protocol
     * `pmp`                uses NAT-PMP with an auto-detected gateway address
     * `pmp:192.168.0.1`    uses NAT-PMP with the given gateway address
+    * `stun`    uses stun server to find extip
 * `--udp.addr` protocol UDP server listening port(default: `9009`)
 * `--loglevel` loglevel of portal network, `1` to `5`, from `error` to `trace`(default: `1`)
 * `--private.key` private key of p2p node, hex format without `0x` prifix
