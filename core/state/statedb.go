@@ -142,13 +142,15 @@ type StateDB struct {
 	witness *stateless.Witness
 
 	// Measurements gathered during execution for debugging purposes
-	AccountReads    time.Duration
-	AccountHashes   time.Duration
-	AccountUpdates  time.Duration
-	AccountCommits  time.Duration
-	StorageReads    time.Duration
-	StorageUpdates  time.Duration
-	StorageCommits  time.Duration
+	AccountReads   time.Duration
+	AccountHashes  time.Duration
+	AccountUpdates time.Duration
+	AccountCommits time.Duration
+	StorageReads   time.Duration
+	StorageUpdates time.Duration
+	StorageCommits time.Duration
+
+	PrefetcherWait  time.Duration
 	SnapshotCommits time.Duration
 	TrieDBCommits   time.Duration
 
@@ -866,6 +868,7 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 		} else {
 			s.trie = trie
 		}
+		s.PrefetcherWait = time.Since(start)
 	}
 	// Perform updates before deletions.  This prevents resolution of unnecessary trie nodes
 	// in circumstances similar to the following:

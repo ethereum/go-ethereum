@@ -33,8 +33,11 @@ import (
 // thread-safe to use. However, callers need to ensure the thread-safety
 // of the referenced layer by themselves.
 type layerTree struct {
-	lock   sync.RWMutex
-	layers map[common.Hash]layer
+	lock        sync.RWMutex
+	base        *diskLayer
+	layers      map[common.Hash]layer
+	descendants map[common.Hash]map[common.Hash]struct{}
+	lookup      *lookup
 }
 
 // newLayerTree constructs the layerTree with the given head layer.
@@ -45,17 +48,56 @@ func newLayerTree(head layer) *layerTree {
 }
 
 // reset initializes the layerTree by the given head layer.
-// All the ancestors will be iterated out and linked in the tree.
 func (tree *layerTree) reset(head layer) {
 	tree.lock.Lock()
 	defer tree.lock.Unlock()
 
-	var layers = make(map[common.Hash]layer)
-	for head != nil {
-		layers[head.rootHash()] = head
-		head = head.parentLayer()
+	var (
+		current     = head
+		layers      = make(map[common.Hash]layer)
+		descendants = make(map[common.Hash]map[common.Hash]struct{})
+	)
+	for {
+		hash := current.rootHash()
+		layers[hash] = current
+
+		// Traverse the ancestors (diff only) of the current layer and link them
+		for h := range diffAncestors(current) {
+			subset := descendants[h]
+			if subset == nil {
+				subset = make(map[common.Hash]struct{})
+				descendants[h] = subset
+			}
+			subset[hash] = struct{}{}
+		}
+		parent := current.parentLayer()
+		if parent == nil {
+			break
+		}
+		current = parent
 	}
+	tree.base = current.(*diskLayer) // panic if it's a diff layer
 	tree.layers = layers
+	tree.descendants = descendants
+	tree.lookup = newLookup(head, tree.isDescendant)
+}
+
+// diffAncestors returns all the ancestors of the specific layer (disk layer
+// is not included).
+func diffAncestors(layer layer) map[common.Hash]struct{} {
+	set := make(map[common.Hash]struct{})
+	for {
+		parent := layer.parentLayer()
+		if parent == nil {
+			break
+		}
+		if _, ok := parent.(*diskLayer); ok {
+			break
+		}
+		set[parent.rootHash()] = struct{}{}
+		layer = parent
+	}
+	return set
 }
 
 // get retrieves a layer belonging to the given state root.
@@ -64,6 +106,17 @@ func (tree *layerTree) get(root common.Hash) layer {
 	defer tree.lock.RUnlock()
 
 	return tree.layers[types.TrieRootHash(root)]
+}
+
+// isDescendant returns whether the specified layer with given root is a
+// descendant of a specific ancestor.
+func (tree *layerTree) isDescendant(root common.Hash, ancestor common.Hash) bool {
+	subset := tree.descendants[ancestor]
+	if subset == nil {
+		return false
+	}
+	_, ok := subset[root]
+	return ok
 }
 
 // forEach iterates the stored layers inside and applies the
@@ -104,8 +157,20 @@ func (tree *layerTree) add(root common.Hash, parentRoot common.Hash, block uint6
 	l := parent.update(root, parent.stateID()+1, block, nodes.Flatten(), states)
 
 	tree.lock.Lock()
+	defer tree.lock.Unlock()
+
 	tree.layers[l.rootHash()] = l
-	tree.lock.Unlock()
+
+	// Link the new layer into the descendents set
+	for h := range diffAncestors(l) {
+		subset := tree.descendants[h]
+		if subset == nil {
+			subset = make(map[common.Hash]struct{})
+			tree.descendants[h] = subset
+		}
+		subset[l.rootHash()] = struct{}{}
+	}
+	tree.lookup.addLayer(l)
 	return nil
 }
 
@@ -131,8 +196,19 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		if err != nil {
 			return err
 		}
-		// Replace the entire layer tree with the flat base
+		tree.base = base
+
+		// Mark all diff layers are stale, note the original disk layer
+		// has already been marked as stale previously.
+		for _, l := range tree.layers {
+			if dl, ok := l.(*diffLayer); ok {
+				dl.markStale()
+			}
+		}
+		// Reset the layer tree with the single new disk layer
 		tree.layers = map[common.Hash]layer{base.rootHash(): base}
+		tree.descendants = make(map[common.Hash]map[common.Hash]struct{})
+		tree.lookup = newLookup(base, tree.isDescendant)
 		return nil
 	}
 	// Dive until we run out of layers or reach the persistent database
@@ -147,6 +223,11 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 	}
 	// We're out of layers, flatten anything below, stopping if it's the disk or if
 	// the memory limit is not yet exceeded.
+	var (
+		err      error
+		replaced layer
+		newBase  *diskLayer
+	)
 	switch parent := diff.parentLayer().(type) {
 	case *diskLayer:
 		return nil
@@ -156,14 +237,24 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 		// parent is linked correctly.
 		diff.lock.Lock()
 
-		base, err := parent.persist(false)
+		// Hold the reference of the original layer being replaced
+		replaced = parent
+
+		// Replace the original parent layer with new disk layer. The procedure
+		// can be illustrated as below:
+		//
+		// Before change: base <- C1 <- C2 <- C3 (diff)
+		// After change:  base(stale) <- C1 (C2 is replaced by newBase)
+		//                newBase <- C3 (diff)
+		newBase, err = parent.persist(false)
 		if err != nil {
 			diff.lock.Unlock()
 			return err
 		}
-		tree.layers[base.rootHash()] = base
-		diff.parent = base
+		tree.layers[newBase.rootHash()] = newBase
 
+		// Link the new parent and release the lock
+		diff.parent = newBase
 		diff.lock.Unlock()
 
 	default:
@@ -177,19 +268,31 @@ func (tree *layerTree) cap(root common.Hash, layers int) error {
 			children[parent] = append(children[parent], root)
 		}
 	}
+	// clearDiff removes the indexes of the specific layer if it's a
+	// diff layer (disk layer has no index).
+	clearDiff := func(layer layer) {
+		diff, ok := layer.(*diffLayer)
+		if !ok {
+			return
+		}
+		diff.markStale()
+		delete(tree.descendants, diff.rootHash())
+		tree.lookup.removeLayer(diff)
+	}
 	var remove func(root common.Hash)
 	remove = func(root common.Hash) {
+		clearDiff(tree.layers[root])
+
+		// Unlink the layer from the layer tree and cascade to its children
 		delete(tree.layers, root)
 		for _, child := range children[root] {
 			remove(child)
 		}
 		delete(children, root)
 	}
-	for root, layer := range tree.layers {
-		if dl, ok := layer.(*diskLayer); ok && dl.isStale() {
-			remove(root)
-		}
-	}
+	remove(tree.base.rootHash()) // remove the old/stale disk layer
+	clearDiff(replaced)          // remove the lookup data of the stale parent being replaced
+	tree.base = newBase          // update the base layer with newly constructed one
 	return nil
 }
 
@@ -198,17 +301,18 @@ func (tree *layerTree) bottom() *diskLayer {
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
 
-	if len(tree.layers) == 0 {
-		return nil // Shouldn't happen, empty tree
+	return tree.base
+}
+
+// lookupNode returns the layer that is confirmed to contain the node being
+// searched for.
+func (tree *layerTree) lookupNode(accountHash common.Hash, path []byte, state common.Hash) layer {
+	tree.lock.RLock()
+	defer tree.lock.RUnlock()
+
+	tip := tree.lookup.nodeTip(accountHash, path, state)
+	if tip == (common.Hash{}) {
+		return tree.base
 	}
-	// pick a random one as the entry point
-	var current layer
-	for _, layer := range tree.layers {
-		current = layer
-		break
-	}
-	for current.parentLayer() != nil {
-		current = current.parentLayer()
-	}
-	return current.(*diskLayer)
+	return tree.layers[tip]
 }
