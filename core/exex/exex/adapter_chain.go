@@ -89,7 +89,7 @@ func (a *chainAdapter) State(root common.Hash) exex.State {
 	return wrapState(root, state, a.chain.Snapshots())
 }
 
-// Receipts retrieves a set of receits belonging to all transactions within
+// Receipts retrieves a set of receipts belonging to all transactions within
 // a block from the canonical chain. Receipts on side-chains are not exposed
 // by the Chain interface.
 func (a *chainAdapter) Receipts(number uint64) []*types.Receipt {
