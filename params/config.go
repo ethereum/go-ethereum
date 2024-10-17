@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/libevm/pseudo"
-	"github.com/ethereum/go-ethereum/params/forks"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/params/forks"
 )
 
 // Genesis hashes to enforce below configs on.

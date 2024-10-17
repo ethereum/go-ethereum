@@ -29,12 +29,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/testlog"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/internal/testlog"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/p2p/enode"
+	"github.com/ava-labs/libevm/p2p/enr"
+	"github.com/ava-labs/libevm/p2p/rlpx"
 )
 
 type testTransport struct {

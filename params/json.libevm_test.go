@@ -23,7 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm/pseudo"
 )
 
 type nestedChainConfigExtra struct {

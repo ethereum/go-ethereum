@@ -33,7 +33,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 // A Type wraps a strongly-typed value without exposing information about its

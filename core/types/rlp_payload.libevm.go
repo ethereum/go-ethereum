@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ethereum/go-ethereum/libevm/pseudo"
-	"github.com/ethereum/go-ethereum/libevm/testonly"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm/testonly"
+	"github.com/ava-labs/libevm/rlp"
 )
 
 // RegisterExtras registers the type `SA` to be carried as an extra payload in

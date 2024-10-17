@@ -20,8 +20,8 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/libevm/pseudo"
-	"github.com/ethereum/go-ethereum/libevm/testonly"
+	"github.com/ava-labs/libevm/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm/testonly"
 )
 
 // Extras are arbitrary payloads to be added as extra fields in [ChainConfig]

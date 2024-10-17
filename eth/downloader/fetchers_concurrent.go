@@ -21,10 +21,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/prque"
+	"github.com/ava-labs/libevm/eth/protocols/eth"
+	"github.com/ava-labs/libevm/log"
 )
 
 // timeoutGracePeriod is the amount of time to allow for a peer to deliver a

@@ -22,7 +22,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ava-labs/libevm/common"
 )
 
 func TestEncode(t *testing.T) {

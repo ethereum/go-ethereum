@@ -19,10 +19,10 @@ package main
 import (
 	"os"
 
-	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/internal/utesting"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/cmd/devp2p/internal/v4test"
+	"github.com/ava-labs/libevm/internal/flags"
+	"github.com/ava-labs/libevm/internal/utesting"
+	"github.com/ava-labs/libevm/log"
 	"github.com/urfave/cli/v2"
 )
 

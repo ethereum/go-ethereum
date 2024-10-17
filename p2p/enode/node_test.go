@@ -24,8 +24,8 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ava-labs/libevm/p2p/enr"
+	"github.com/ava-labs/libevm/rlp"
 	"github.com/stretchr/testify/assert"
 )
 

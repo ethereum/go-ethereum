@@ -23,17 +23,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/consensus"
+	"github.com/ava-labs/libevm/core"
+	"github.com/ava-labs/libevm/core/state"
+	"github.com/ava-labs/libevm/core/txpool"
+	"github.com/ava-labs/libevm/core/types"
+	"github.com/ava-labs/libevm/eth/downloader"
+	"github.com/ava-labs/libevm/event"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/params"
 )
 
 // Backend wraps all methods required for mining. Only full node is capable

@@ -16,8 +16,8 @@
 package libevm_test
 
 import (
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/libevm"
+	"github.com/ava-labs/libevm/core/vm"
+	"github.com/ava-labs/libevm/libevm"
 )
 
 // IMPORTANT: if any of these break then the libevm copy MUST be updated.

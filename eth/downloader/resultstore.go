@@ -21,7 +21,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ava-labs/libevm/core/types"
 )
 
 // resultStore implements a structure for maintaining fetchResults, tracking their

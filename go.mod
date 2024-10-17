@@ -1,4 +1,4 @@
-module github.com/ethereum/go-ethereum
+module github.com/ava-labs/libevm
 
 go 1.20
 

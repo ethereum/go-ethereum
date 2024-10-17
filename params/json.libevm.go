@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/libevm/pseudo"
+	"github.com/ava-labs/libevm/libevm/pseudo"
 )
 
 var _ interface {

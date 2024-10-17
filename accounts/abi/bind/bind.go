@@ -29,8 +29,8 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ava-labs/libevm/accounts/abi"
+	"github.com/ava-labs/libevm/log"
 )
 
 // Lang is a target programming language selector to generate bindings for.
