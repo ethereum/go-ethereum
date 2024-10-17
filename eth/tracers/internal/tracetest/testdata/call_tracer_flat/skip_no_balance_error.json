@@ -62,8 +62,7 @@
       "transactionPosition": 16,
       "transactionHash": "0x384487e5ae8d2997aece8e28403d393cb9752425e6de358891bed981c5af1c05",
       "blockNumber": 1555285,
-      "blockHash": "0x93231d8e9662adb4c5c703583a92c7b3112cd5448f43ab4fa1f0f00a0183ed3f",
-      "time": "665.278µs"
+      "blockHash": "0x93231d8e9662adb4c5c703583a92c7b3112cd5448f43ab4fa1f0f00a0183ed3f"
     },
     {
       "action": {

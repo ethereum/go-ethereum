@@ -10,6 +10,7 @@
     "number": "1555169",
     "stateRoot": "0xc4b9703de3e59ff795baae2c3afa010cf039c37244a7a6af7f3f491a10601348",
     "timestamp": "1590794111",
+    "totalDifficulty": "2242105342155",
     "alloc": {
       "0x5ac5599fc9df172c89ee7ec55ad9104ccbfed40d": {
         "balance": "0x0",
@@ -47,6 +48,9 @@
     "miner": "0x877bd459c9b7d8576b44e59e09d076c25946f443"
   },
   "input": "0xf8658303fb0b843b9aca0083019ee48080915a600055600060006000f0505a6001550081a2a01a7deb3a16d967b766459ef486b00656c6581e5ad58968184a33701e27e0eb8aa07162ccdfe2018d64360a605310a62c399dd586c7282dd42a88c54f02f51d451f",
+  "tracerConfig": {
+    "convertParityErrors": true
+  },
   "result": [
     {
       "type": "create",
@@ -56,7 +60,7 @@
         "gas": "0x19ee4",
         "init": "0x5a600055600060006000f0505a60015500"
       },
-      "error": "out of gas: not enough gas for reentrancy sentry",
+      "error": "Out of gas",
       "traceAddress": [],
       "subtraces": 1,
       "transactionPosition": 63,
