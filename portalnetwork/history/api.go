@@ -48,7 +48,7 @@ func (p *API) HistoryRecursiveFindNodes(nodeId string) ([]string, error) {
 	return p.RecursiveFindNodes(nodeId)
 }
 
-func (p *API) HistoryRecursiveFindContent(contentKeyHex string) (*discover.ContentInfo, error) {
+func (p *API) HistoryGetContent(contentKeyHex string) (*discover.ContentInfo, error) {
 	return p.RecursiveFindContent(contentKeyHex)
 }
 
@@ -64,7 +64,7 @@ func (p *API) HistoryGossip(contentKeyHex, contentHex string) (int, error) {
 	return p.Gossip(contentKeyHex, contentHex)
 }
 
-func (p *API) HistoryTraceRecursiveFindContent(contentKeyHex string) (*discover.TraceContentResult, error) {
+func (p *API) HistoryTraceGetContent(contentKeyHex string) (*discover.TraceContentResult, error) {
 	return p.TraceRecursiveFindContent(contentKeyHex)
 }
 

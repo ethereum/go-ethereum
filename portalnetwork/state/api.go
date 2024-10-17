@@ -48,7 +48,7 @@ func (p *API) StateRecursiveFindNodes(nodeId string) ([]string, error) {
 	return p.RecursiveFindNodes(nodeId)
 }
 
-func (p *API) StateRecursiveFindContent(contentKeyHex string) (*discover.ContentInfo, error) {
+func (p *API) StateGetContent(contentKeyHex string) (*discover.ContentInfo, error) {
 	return p.RecursiveFindContent(contentKeyHex)
 }
 
@@ -64,7 +64,7 @@ func (p *API) StateGossip(contentKeyHex, contentHex string) (int, error) {
 	return p.Gossip(contentKeyHex, contentHex)
 }
 
-func (p *API) StateTraceRecursiveFindContent(contentKeyHex string) (*discover.TraceContentResult, error) {
+func (p *API) StateTraceGetContent(contentKeyHex string) (*discover.TraceContentResult, error) {
 	return p.TraceRecursiveFindContent(contentKeyHex)
 }
 
