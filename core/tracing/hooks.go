@@ -216,7 +216,6 @@ type Hooks struct {
 	OnBlockEnd          BlockEndHook
 	OnSkippedBlock      SkippedBlockHook
 	OnGenesisBlock      GenesisBlockHook
-	OnReorg             ReorgHook
 	OnSystemCallStart   OnSystemCallStartHook
 	OnSystemCallStartV2 OnSystemCallStartHookV2
 	OnSystemCallEnd     OnSystemCallEndHook

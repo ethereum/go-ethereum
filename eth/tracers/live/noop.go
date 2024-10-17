@@ -36,7 +36,6 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 		OnBlockEnd:       t.OnBlockEnd,
 		OnSkippedBlock:   t.OnSkippedBlock,
 		OnGenesisBlock:   t.OnGenesisBlock,
-		OnReorg:          t.OnReorg,
 		OnBalanceChange:  t.OnBalanceChange,
 		OnNonceChange:    t.OnNonceChange,
 		OnCodeChange:     t.OnCodeChange,
@@ -83,8 +82,6 @@ func (t *noop) OnBlockchainInit(chainConfig *params.ChainConfig) {
 
 func (t *noop) OnGenesisBlock(b *types.Block, alloc types.GenesisAlloc) {
 }
-
-func (t *noop) OnReorg(reverted []*types.Block) {}
 
 func (t *noop) OnBalanceChange(a common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 }
