@@ -4,6 +4,25 @@ All notable changes to the tracing interface will be documented in this file.
 
 ## [Unreleased]
 
+This release gives live tracers the ability to register JSON-RPC APIs in existing or new namespaces.
+
+### Modified methods
+
+- The signature for constructing a live tracer has changed from `func(config json.RawMessage) (*Hooks, error)` to `func(config json.RawMessage, node tracing.Node, backend tracing.Backend) (*Hooks, error)`. The signature of the constructor for live tracers has been updated was previously not documented as part of the tracing interface. We have decided to include it now as changes to the constructor can break tracers.
+
+### New types
+
+- `tracing.Node`: A new interface which allows live tracers to register APIs.
+- `tracing.Backend`: A new interface allowing the tracers to query the database for chain info, i.e. blocks, headers, and transactions.
+
+## [v1.14.10]
+
+### Modified types
+
+- `OpContext`: Added `ContractCode()` method to retrieve the code of the current contract being executed. This change affects the `OpContext` interface which is an argument to the `OpcodeHook` and `FaultHook` hooks.
+
+## [v1.14.9]
+
 ### Modified types
 
 - `GasChangeReason` has been extended with the following reasons which will be enabled only post-Verkle. There shouldn't be any gas changes with those reasons prior to the fork.
@@ -93,7 +112,9 @@ The hooks `CaptureStart` and `CaptureEnd` have been removed. These hooks signale
 - `CaptureState` -> `OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error)`. `op` is of type `byte` which can be cast to `vm.OpCode` when necessary. A `*vm.ScopeContext` is not passed anymore. It is replaced by `tracing.OpContext` which offers access to the memory, stack and current contract.
 - `CaptureFault` -> `OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error)`. Similar to above.
 
-[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.8...master
-[v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0
-[v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
+[unreleased]: https://github.com/ethereum/go-ethereum/compare/v1.14.10...master
+[v1.14.10]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.10
+[v1.14.9]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.9
 [v1.14.4]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.4
+[v1.14.3]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.3
+[v1.14.0]: https://github.com/ethereum/go-ethereum/releases/tag/v1.14.0

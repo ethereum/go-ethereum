@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/web3ext"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -386,6 +387,8 @@ func (n *Node) startRPC() error {
 			}
 		}
 		apis = append(apis, api)
+		// Register console extension.
+		web3ext.DefaultModules.Add(api.Namespace, api.ConsoleExtension)
 	}
 	if err := n.startInProc(apis); err != nil {
 		return err
