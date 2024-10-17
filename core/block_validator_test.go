@@ -115,6 +115,8 @@ func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
 
 		td := 0
 		genDb, blocks, _ := GenerateChainWithGenesis(gspec, engine, 8, nil)
+		gspec.Config.TerminalTotalDifficulty = big.NewInt(1000)
+
 		for i, block := range blocks {
 			header := block.Header()
 			if i > 0 {
