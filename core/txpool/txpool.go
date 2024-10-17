@@ -480,3 +480,10 @@ func (p *TxPool) Sync() error {
 		return errors.New("pool already terminated")
 	}
 }
+
+// Clear removes all tracked txs from the subpools.
+func (p *TxPool) Clear() {
+	for _, subpool := range p.subpools {
+		subpool.Clear()
+	}
+}
