@@ -19,16 +19,16 @@ package pathdb
 import "github.com/ethereum/go-ethereum/metrics"
 
 var (
-	cleanHitMeter   = metrics.NewRegisteredMeter("pathdb/clean/hit", nil)
-	cleanMissMeter  = metrics.NewRegisteredMeter("pathdb/clean/miss", nil)
-	cleanReadMeter  = metrics.NewRegisteredMeter("pathdb/clean/read", nil)
-	cleanWriteMeter = metrics.NewRegisteredMeter("pathdb/clean/write", nil)
+	cleanNodeHitMeter   = metrics.NewRegisteredMeter("pathdb/clean/node/hit", nil)
+	cleanNodeMissMeter  = metrics.NewRegisteredMeter("pathdb/clean/node/miss", nil)
+	cleanNodeReadMeter  = metrics.NewRegisteredMeter("pathdb/clean/node/read", nil)
+	cleanNodeWriteMeter = metrics.NewRegisteredMeter("pathdb/clean/node/write", nil)
 
-	dirtyHitMeter         = metrics.NewRegisteredMeter("pathdb/dirty/hit", nil)
-	dirtyMissMeter        = metrics.NewRegisteredMeter("pathdb/dirty/miss", nil)
-	dirtyReadMeter        = metrics.NewRegisteredMeter("pathdb/dirty/read", nil)
-	dirtyWriteMeter       = metrics.NewRegisteredMeter("pathdb/dirty/write", nil)
-	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
+	dirtyNodeHitMeter     = metrics.NewRegisteredMeter("pathdb/dirty/node/hit", nil)
+	dirtyNodeMissMeter    = metrics.NewRegisteredMeter("pathdb/dirty/node/miss", nil)
+	dirtyNodeReadMeter    = metrics.NewRegisteredMeter("pathdb/dirty/node/read", nil)
+	dirtyNodeWriteMeter   = metrics.NewRegisteredMeter("pathdb/dirty/node/write", nil)
+	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/node/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
 
 	cleanFalseMeter = metrics.NewRegisteredMeter("pathdb/clean/false", nil)
 	dirtyFalseMeter = metrics.NewRegisteredMeter("pathdb/dirty/false", nil)
@@ -39,11 +39,8 @@ var (
 	commitNodesMeter = metrics.NewRegisteredMeter("pathdb/commit/nodes", nil)
 	commitBytesMeter = metrics.NewRegisteredMeter("pathdb/commit/bytes", nil)
 
-	gcNodesMeter = metrics.NewRegisteredMeter("pathdb/gc/nodes", nil)
-	gcBytesMeter = metrics.NewRegisteredMeter("pathdb/gc/bytes", nil)
-
-	diffLayerBytesMeter = metrics.NewRegisteredMeter("pathdb/diff/bytes", nil)
-	diffLayerNodesMeter = metrics.NewRegisteredMeter("pathdb/diff/nodes", nil)
+	gcTrieNodeMeter      = metrics.NewRegisteredMeter("pathdb/gc/node/count", nil)
+	gcTrieNodeBytesMeter = metrics.NewRegisteredMeter("pathdb/gc/node/bytes", nil)
 
 	historyBuildTimeMeter  = metrics.NewRegisteredTimer("pathdb/history/time", nil)
 	historyDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/bytes/data", nil)
