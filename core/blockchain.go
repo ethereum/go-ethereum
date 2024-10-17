@@ -2358,7 +2358,6 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Block) error {
 	if len(rebirthLogs) > 0 {
 		bc.logsFeed.Send(rebirthLogs)
 	}
-
 	return nil
 }
 
