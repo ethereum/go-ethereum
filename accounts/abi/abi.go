@@ -309,3 +309,13 @@ func UnpackRevert(data []byte) (string, error) {
 		return "", errors.New("invalid data for unpacking")
 	}
 }
+
+func PackRevert(revertMessage string) []byte {
+	stringType, _ := NewType("string", "", nil)
+	args := Arguments{
+		{Type: stringType},
+	}
+	encodedMessage, _ := args.Pack(revertMessage)
+
+	return append(revertSelector, encodedMessage...)
+}

@@ -973,20 +973,28 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 // successfully at block `blockNrOrHash`. It returns error if the transaction would revert, or if
 // there are unexpected failures. The gas limit is capped by both `args.Gas` (if non-nil &
 // non-zero) and `gasCap` (if non-zero).
-func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, gasCap uint64) (hexutil.Uint64, error) {
+func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides, gasCap uint64) (hexutil.Uint64, error) {
 	// Retrieve the base state and mutate it with any overrides
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return 0, err
 	}
-	if err := overrides.Apply(state, nil); err != nil {
+	chainContext := NewChainContext(ctx, b)
+	blockCtx := core.NewEVMBlockContext(header, chainContext, nil)
+	if blockOverrides != nil {
+		blockOverrides.Apply(&blockCtx)
+	}
+
+	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
+	precompiles := maps.Clone(vm.ActivePrecompiledContracts(rules))
+	if err := overrides.Apply(state, precompiles); err != nil {
 		return 0, err
 	}
 	// Construct the gas estimator option from the user input
 	opts := &gasestimator.Options{
 		Config:     b.ChainConfig(),
-		Chain:      NewChainContext(ctx, b),
-		Header:     header,
+		Chain:      chainContext,
+		Header:     blockOverrides.MakeHeader(header),
 		State:      state,
 		ErrorRatio: estimateGasErrorRatio,
 	}
@@ -1017,12 +1025,12 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 // value is capped by both `args.Gas` (if non-nil & non-zero) and the backend's RPCGasCap
 // configuration (if non-zero).
 // Note: Required blob gas is not computed in this method.
-func (api *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *StateOverride) (hexutil.Uint64, error) {
+func (api *BlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, overrides *StateOverride, blockOverrides *BlockOverrides) (hexutil.Uint64, error) {
 	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
-	return DoEstimateGas(ctx, api.b, args, bNrOrHash, overrides, api.b.RPCGasCap())
+	return DoEstimateGas(ctx, api.b, args, bNrOrHash, overrides, blockOverrides, api.b.RPCGasCap())
 }
 
 // RPCMarshalHeader converts the given header to the RPC output .
