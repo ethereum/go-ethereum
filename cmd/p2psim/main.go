@@ -44,13 +44,13 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/internal/flags"
+	"github.com/ava-labs/libevm/p2p"
+	"github.com/ava-labs/libevm/p2p/enode"
+	"github.com/ava-labs/libevm/p2p/simulations"
+	"github.com/ava-labs/libevm/p2p/simulations/adapters"
+	"github.com/ava-labs/libevm/rpc"
 	"github.com/urfave/cli/v2"
 )
 

@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ava-labs/libevm/p2p"
+	"github.com/ava-labs/libevm/p2p/nat"
+	"github.com/ava-labs/libevm/rpc"
 )
 
 const (

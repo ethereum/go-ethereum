@@ -23,8 +23,8 @@ import (
 	"strings"
 
 	"github.com/cloudflare/cloudflare-go"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
+	"github.com/ava-labs/libevm/log"
+	"github.com/ava-labs/libevm/p2p/dnsdisc"
 	"github.com/urfave/cli/v2"
 )
 

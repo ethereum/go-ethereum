@@ -25,14 +25,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
+	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/console/prompt"
+	"github.com/ava-labs/libevm/core"
+	"github.com/ava-labs/libevm/eth"
+	"github.com/ava-labs/libevm/eth/ethconfig"
+	"github.com/ava-labs/libevm/internal/jsre"
+	"github.com/ava-labs/libevm/miner"
+	"github.com/ava-labs/libevm/node"
 )
 
 const (

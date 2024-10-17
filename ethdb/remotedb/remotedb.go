@@ -22,9 +22,9 @@
 package remotedb
 
 import (
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ava-labs/libevm/common/hexutil"
+	"github.com/ava-labs/libevm/ethdb"
+	"github.com/ava-labs/libevm/rpc"
 )
 
 // Database is a key-value lookup for a remote database via debug_dbGet.

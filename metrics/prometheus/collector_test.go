@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/internal"
+	"github.com/ava-labs/libevm/metrics"
+	"github.com/ava-labs/libevm/metrics/internal"
 )
 
 func TestMain(m *testing.M) {
