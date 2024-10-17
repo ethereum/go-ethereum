@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -33,8 +34,8 @@ type StateDB interface {
 	CreateAccount(common.Address)
 	CreateContract(common.Address)
 
-	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
-	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason)
+	SubBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason) uint256.Int
+	AddBalance(common.Address, *uint256.Int, tracing.BalanceChangeReason) uint256.Int
 	GetBalance(common.Address) *uint256.Int
 
 	GetNonce(common.Address) uint64
@@ -51,16 +52,16 @@ type StateDB interface {
 
 	GetCommittedState(common.Address, common.Hash) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash)
+	SetState(common.Address, common.Hash, common.Hash) common.Hash
 	GetStorageRoot(addr common.Address) common.Hash
 
 	GetTransientState(addr common.Address, key common.Hash) common.Hash
 	SetTransientState(addr common.Address, key, value common.Hash)
 
-	SelfDestruct(common.Address)
+	SelfDestruct(common.Address) uint256.Int
 	HasSelfDestructed(common.Address) bool
 
-	Selfdestruct6780(common.Address)
+	Selfdestruct6780(common.Address) uint256.Int
 
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for self-destructed accounts.
@@ -90,6 +91,32 @@ type StateDB interface {
 	AddPreimage(common.Hash, []byte)
 
 	Witness() *stateless.Witness
+	Finalise(bool)
+	// IntermediateRoot computes the current root hash of the state trie.
+	// It is called in
+	// - between transactions (pre-byzantium)
+	// - nowadays only after all transactions,
+	// in order to obtain the state root hash .
+	IntermediateRoot(deleteEmptyObjects bool) common.Hash
+
+	// GetLogs returns the logs matching the specified transaction hash, and annotates
+	// them with the given blockNumber and blockHash.
+	GetLogs(txHash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log
+	// TxIndex returns the current transaction index set by SetTxContext.
+	TxIndex() int
+
+	// SetTxContext sets the current transaction hash and index which are
+	// used when the EVM emits new state logs. It should be invoked before
+	// transaction execution.
+	SetTxContext(txHash common.Hash, txIndex int)
+
+	// GetTrie returns the account trie. Verkle-related
+	GetTrie() state.Trie
+	// AccessEvents returns the access-events collected for verkle-witness processing.
+	AccessEvents() *state.AccessEvents
+
+	// Error returns any memorized database failure occurred previously.
+	Error() error
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM

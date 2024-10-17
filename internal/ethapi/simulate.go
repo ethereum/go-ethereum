@@ -188,6 +188,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, sim.state, sim.chainConfig, *vmConfig)
 	)
 	sim.state.SetLogger(tracer.Hooks())
+	logState := vm.StateDB(sim.state.Wrapped())
+	if logState == nil {
+		logState = vm.StateDB(sim.state)
+	}
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
 	if precompiles != nil {
@@ -205,8 +209,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracer.reset(tx.Hash(), uint(i))
 		// EoA check is always skipped, even in validation mode.
 		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
-		evm.Reset(core.NewEVMTxContext(msg), sim.state)
-		result, err := applyMessageWithEVM(ctx, evm, msg, sim.state, timeout, sim.gp)
+		evm.Reset(core.NewEVMTxContext(msg), logState)
+		result, err := applyMessageWithEVM(ctx, evm, msg, logState, timeout, sim.gp)
 		if err != nil {
 			txErr := txValidationError(err)
 			return nil, nil, txErr
