@@ -118,6 +118,11 @@ type BlobsBundleV1 struct {
 	Blobs       []hexutil.Bytes `json:"blobs"`
 }
 
+type BlobAndProofV1 struct {
+	Blob  hexutil.Bytes `json:"blob"`
+	Proof hexutil.Bytes `json:"proof"`
+}
+
 // JSON type overrides for ExecutionPayloadEnvelope.
 type executionPayloadEnvelopeMarshaling struct {
 	BlockValue *hexutil.Big
