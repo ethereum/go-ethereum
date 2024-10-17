@@ -92,13 +92,14 @@ func NewStateSetWithOrigin(accountOrigin map[common.Address][]byte, storageOrigi
 // encode serializes the content of state set into the provided writer.
 func (s *StateSetWithOrigin) encode(w io.Writer) error {
 	// Encode accounts
-	type Account struct {
-		Address common.Address
-		Blob    []byte
+	type Accounts struct {
+		Addresses []common.Address
+		Accounts  [][]byte
 	}
-	accounts := make([]Account, 0, len(s.accountOrigin))
+	var accounts Accounts
 	for address, blob := range s.accountOrigin {
-		accounts = append(accounts, Account{Address: address, Blob: blob})
+		accounts.Addresses = append(accounts.Addresses, address)
+		accounts.Accounts = append(accounts.Accounts, blob)
 	}
 	if err := rlp.Encode(w, accounts); err != nil {
 		return err
@@ -125,19 +126,19 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 // decode deserializes the content from the rlp stream into the state set.
 func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	// Decode account origin
-	type Account struct {
-		Address common.Address
-		Blob    []byte
+	type Accounts struct {
+		Addresses []common.Address
+		Accounts  [][]byte
 	}
 	var (
-		accounts   []Account
+		accounts   Accounts
 		accountSet = make(map[common.Address][]byte)
 	)
 	if err := r.Decode(&accounts); err != nil {
 		return fmt.Errorf("load diff account origin set: %v", err)
 	}
-	for _, account := range accounts {
-		accountSet[account.Address] = account.Blob
+	for i := 0; i < len(accounts.Accounts); i++ {
+		accountSet[accounts.Addresses[i]] = accounts.Accounts[i]
 	}
 	s.accountOrigin = accountSet
 
