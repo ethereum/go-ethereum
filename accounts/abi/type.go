@@ -17,6 +17,7 @@
 package abi
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -61,7 +62,7 @@ var (
 func NewType(t string) (typ Type, err error) {
 	// check that array brackets are equal if they exist
 	if strings.Count(t, "[") != strings.Count(t, "]") {
-		return Type{}, fmt.Errorf("invalid arg type in abi")
+		return Type{}, errors.New("invalid arg type in abi")
 	}
 
 	typ.stringKind = t
@@ -98,7 +99,7 @@ func NewType(t string) (typ Type, err error) {
 			}
 			typ.Type = reflect.ArrayOf(typ.Size, embeddedType.Type)
 		} else {
-			return Type{}, fmt.Errorf("invalid formatting of array type")
+			return Type{}, errors.New("invalid formatting of array type")
 		}
 		return typ, err
 	}

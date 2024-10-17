@@ -36,7 +36,7 @@ var (
 
 // SignerFn is a signer function callback when a contract requires a method to
 // sign the transaction before submission.
-type SignerFn func(types.Signer, common.Address, *types.Transaction) (*types.Transaction, error)
+type SignerFn func(common.Address, *types.Transaction) (*types.Transaction, error)
 
 // CallOpts is the collection of options to fine tune a contract call request.
 type CallOpts struct {
@@ -238,7 +238,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")
 	}
-	signedTx, err := opts.Signer(types.HomesteadSigner{}, opts.From, rawTx)
+	signedTx, err := opts.Signer(opts.From, rawTx)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +335,7 @@ func (c *BoundContract) UnpackLog(out interface{}, event string, log types.Log) 
 		return errNoEventSignature
 	}
 	if log.Topics[0] != c.abi.Events[event].Id() {
-		return fmt.Errorf("event signature mismatch")
+		return errors.New("event signature mismatch")
 	}
 	if len(log.Data) > 0 {
 		if err := c.abi.Unpack(out, event, log.Data); err != nil {

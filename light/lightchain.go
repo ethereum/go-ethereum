@@ -27,6 +27,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
@@ -34,7 +35,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -192,9 +193,7 @@ func (bc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 	if err := core.WriteTd(bc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty()); err != nil {
 		log.Crit("Failed to write genesis block TD", "err", err)
 	}
-	if err := core.WriteBlock(bc.chainDb, genesis); err != nil {
-		log.Crit("Failed to write genesis block", "err", err)
-	}
+	rawdb.WriteBlock(bc.chainDb, genesis)
 	bc.genesisBlock = genesis
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())

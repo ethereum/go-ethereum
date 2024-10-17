@@ -22,13 +22,13 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-
-	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
@@ -69,7 +69,7 @@ func (bc *testBlockChain) Config() *params.ChainConfig {
 
 func (bc *testBlockChain) CurrentBlock() *types.Block {
 	return types.NewBlock(&types.Header{
-		GasLimit: bc.gasLimit,
+		GasLimit: atomic.LoadUint64(&bc.gasLimit),
 	}, nil, nil, nil)
 }
 
@@ -110,6 +110,8 @@ func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	key, _ := crypto.GenerateKey()
 	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
 
+	// wait for the pool to initialize
+	<-pool.initDoneCh
 	return pool, key
 }
 
@@ -572,7 +574,7 @@ func TestTransactionDropping(t *testing.T) {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 4)
 	}
 	// Reduce the block gas limit, check that invalidated transactions are dropped
-	pool.chain.(*testBlockChain).gasLimit = 100
+	atomic.StoreUint64(&pool.chain.(*testBlockChain).gasLimit, 100)
 	<-pool.requestReset(nil, nil)
 
 	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {

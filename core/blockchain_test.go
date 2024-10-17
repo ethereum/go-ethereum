@@ -130,7 +130,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		}
 		blockchain.mu.Lock()
 		WriteTd(blockchain.db, block.Hash(), block.NumberU64(), new(big.Int).Add(block.Difficulty(), blockchain.GetTdByHash(block.ParentHash())))
-		WriteBlock(blockchain.db, block)
+		rawdb.WriteBlock(blockchain.db, block)
 		statedb.Commit(true)
 		blockchain.mu.Unlock()
 	}
@@ -148,7 +148,7 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 		// Manually insert the header into the database, but don't reorganise (allows subsequent testing)
 		blockchain.mu.Lock()
 		WriteTd(blockchain.db, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, blockchain.GetTdByHash(header.ParentHash)))
-		WriteHeader(blockchain.db, header)
+		rawdb.WriteHeader(blockchain.db, header)
 		blockchain.mu.Unlock()
 	}
 	return nil
@@ -1367,7 +1367,7 @@ func TestBlocksHashCacheUpdate(t *testing.T) {
 		}
 		cachedAt, _ := chain.blocksHashCache.Get(uint64(3))
 
-		if len(cachedAt.([]common.Hash)) != 2 {
+		if len(cachedAt) != 2 {
 			t.Error("BlocksHashCache doesn't add new cache after concating new fork ")
 		}
 	})

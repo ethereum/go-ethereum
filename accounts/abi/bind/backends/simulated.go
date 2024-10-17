@@ -61,11 +61,13 @@ type SimulatedBackend struct {
 	database   ethdb.Database   // In memory database to store our testing data
 	blockchain *core.BlockChain // Ethereum blockchain to handle the consensus
 
-	mu           sync.Mutex
-	pendingBlock *types.Block   // Currently pending block that will be imported on request
-	pendingState *state.StateDB // Currently pending state that will be the active on on request
+	mu              sync.Mutex
+	pendingBlock    *types.Block   // Currently pending block that will be imported on request
+	pendingState    *state.StateDB // Currently pending state that will be the active on request
+	pendingReceipts types.Receipts // Currently receipts for the pending block
 
-	events *filters.EventSystem // Event system for filtering log events live
+	events       *filters.EventSystem  // for filtering log events live
+	filterSystem *filters.FilterSystem // for filtering database logs
 
 	config *params.ChainConfig
 }
@@ -94,9 +96,7 @@ func SimulateWalletAddressAndSignFn() (common.Address, func(account accounts.Acc
 
 // XDC simulated backend for testing purpose.
 func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfig *params.ChainConfig) *SimulatedBackend {
-	// database := ethdb.NewMemDatabase()
 	database := rawdb.NewMemoryDatabase()
-
 	genesis := core.Genesis{
 		GasLimit:  gasLimit, // need this big, support initial smart contract
 		Config:    chainConfig,
@@ -126,8 +126,12 @@ func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfi
 		database:   database,
 		blockchain: blockchain,
 		config:     genesis.Config,
-		events:     filters.NewEventSystem(new(event.TypeMux), &filterBackend{database, blockchain}, false),
 	}
+
+	filterBackend := &filterBackend{database, blockchain, backend}
+	backend.filterSystem = filters.NewFilterSystem(filterBackend, filters.Config{})
+	backend.events = filters.NewEventSystem(backend.filterSystem, false)
+
 	blockchain.Client = backend
 	backend.rollback()
 	return backend
@@ -135,6 +139,7 @@ func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfi
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
+// A simulated backend always uses chainID 1337.
 func NewSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
 	database := rawdb.NewMemoryDatabase()
 	genesis := core.Genesis{Config: params.AllEthashProtocolChanges, Alloc: alloc, GasLimit: 42000000}
@@ -145,8 +150,12 @@ func NewSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
 		database:   database,
 		blockchain: blockchain,
 		config:     genesis.Config,
-		events:     filters.NewEventSystem(new(event.TypeMux), &filterBackend{database, blockchain}, false),
 	}
+
+	filterBackend := &filterBackend{database, blockchain, backend}
+	backend.filterSystem = filters.NewFilterSystem(filterBackend, filters.Config{})
+	backend.events = filters.NewEventSystem(backend.filterSystem, false)
+
 	backend.rollback()
 	return backend
 }
@@ -399,7 +408,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	}
 
 	// Include tx in chain.
-	blocks, _ := core.GenerateChain(b.config, block, b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(b.config, block, b.blockchain.Engine(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTxWithChain(b.blockchain, tx)
 		}
@@ -409,6 +418,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), statedb.Database())
+	b.pendingReceipts = receipts[0]
 	return nil
 }
 
@@ -420,7 +430,7 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query XDPoSChain.Filt
 	var filter *filters.Filter
 	if query.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
-		filter = filters.NewBlockFilter(&filterBackend{b.database, b.blockchain}, *query.BlockHash, query.Addresses, query.Topics)
+		filter = b.filterSystem.NewBlockFilter(*query.BlockHash, query.Addresses, query.Topics)
 	} else {
 		// Initialize unset filter boundaried to run from genesis to chain head
 		from := int64(0)
@@ -432,7 +442,7 @@ func (b *SimulatedBackend) FilterLogs(ctx context.Context, query XDPoSChain.Filt
 			to = query.ToBlock.Int64()
 		}
 		// Construct the range filter
-		filter = filters.NewRangeFilter(&filterBackend{b.database, b.blockchain}, from, to, query.Addresses, query.Topics)
+		filter = b.filterSystem.NewRangeFilter(from, to, query.Addresses, query.Topics)
 	}
 	// Run the filter and return all the logs
 	logs, err := filter.Logs(ctx)
@@ -522,8 +532,9 @@ func (m callMsg) AccessList() types.AccessList { return m.CallMsg.AccessList }
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.
 type filterBackend struct {
-	db ethdb.Database
-	bc *core.BlockChain
+	db      ethdb.Database
+	bc      *core.BlockChain
+	backend *SimulatedBackend
 }
 
 func (fb *filterBackend) ChainDb() ethdb.Database  { return fb.db }
@@ -544,35 +555,51 @@ func (fb *filterBackend) GetReceipts(ctx context.Context, hash common.Hash) (typ
 	return core.GetBlockReceipts(fb.db, hash, core.GetBlockNumber(fb.db, hash)), nil
 }
 
-func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
-	receipts := core.GetBlockReceipts(fb.db, hash, core.GetBlockNumber(fb.db, hash))
-	if receipts == nil {
-		return nil, nil
+func (fb *filterBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	if body := fb.bc.GetBody(hash); body != nil {
+		return body, nil
 	}
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
+	return nil, errors.New("block body not found")
+}
+
+func (fb *filterBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return fb.backend.pendingBlock, fb.backend.pendingReceipts
+}
+
+func (fb *filterBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
+	logs := rawdb.ReadLogs(fb.db, hash, number)
 	return logs, nil
 }
 
 func (fb *filterBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
-	return event.NewSubscription(func(quit <-chan struct{}) error {
-		<-quit
-		return nil
-	})
+	return nullSubscription()
 }
+
 func (fb *filterBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return fb.bc.SubscribeChainEvent(ch)
 }
+
 func (fb *filterBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return fb.bc.SubscribeRemovedLogsEvent(ch)
 }
+
 func (fb *filterBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return fb.bc.SubscribeLogsEvent(ch)
 }
 
+func (fb *filterBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	return nullSubscription()
+}
+
 func (fb *filterBackend) BloomStatus() (uint64, uint64) { return 4096, 0 }
+
 func (fb *filterBackend) ServiceFilter(ctx context.Context, ms *bloombits.MatcherSession) {
 	panic("not supported")
+}
+
+func nullSubscription() event.Subscription {
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		return nil
+	})
 }

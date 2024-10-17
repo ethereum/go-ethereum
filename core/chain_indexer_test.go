@@ -18,11 +18,12 @@ package core
 
 import (
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -94,8 +95,8 @@ func testChainIndexer(t *testing.T, count int) {
 		if number > 0 {
 			header.ParentHash = GetCanonicalHash(db, number-1)
 		}
-		WriteHeader(db, header)
-		WriteCanonicalHash(db, header.Hash(), number)
+		rawdb.WriteHeader(db, header)
+		rawdb.WriteCanonicalHash(db, header.Hash(), number)
 	}
 	// Start indexer with an already existing chain
 	for i := uint64(0); i <= 100; i++ {

@@ -17,6 +17,7 @@
 package node
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -70,7 +71,7 @@ func TestContextServices(t *testing.T) {
 	verifier := func(ctx *ServiceContext) (Service, error) {
 		var objA *NoopServiceA
 		if ctx.Service(&objA) != nil {
-			return nil, fmt.Errorf("former service not found")
+			return nil, errors.New("former service not found")
 		}
 		var objB *NoopServiceB
 		if err := ctx.Service(&objB); err != ErrServiceUnknown {

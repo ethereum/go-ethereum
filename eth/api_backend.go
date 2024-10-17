@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -40,6 +39,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	stateDatabase "github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
@@ -159,6 +159,17 @@ func (b *EthApiBackend) BlockByHash(ctx context.Context, hash common.Hash) (*typ
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }
 
+// GetBody returns body of a block. It does not resolve special block numbers.
+func (b *EthApiBackend) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	if number < 0 || hash == (common.Hash{}) {
+		return nil, errors.New("invalid arguments; expect hash and no special block numbers")
+	}
+	if body := b.eth.blockchain.GetBody(hash); body != nil {
+		return body, nil
+	}
+	return nil, errors.New("block body not found")
+}
+
 func (b *EthApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	if blockNr, ok := blockNrOrHash.Number(); ok {
 		return b.BlockByNumber(ctx, blockNr)
@@ -178,6 +189,10 @@ func (b *EthApiBackend) BlockByNumberOrHash(ctx context.Context, blockNrOrHash r
 		return block, nil
 	}
 	return nil, errors.New("invalid arguments; neither block nor hash specified")
+}
+
+func (b *EthApiBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
+	return b.eth.miner.PendingBlockAndReceipts()
 }
 
 func (b *EthApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
@@ -229,16 +244,8 @@ func (b *EthApiBackend) GetReceipts(ctx context.Context, blockHash common.Hash) 
 	return core.GetBlockReceipts(b.eth.chainDb, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash)), nil
 }
 
-func (b *EthApiBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	receipts := core.GetBlockReceipts(b.eth.chainDb, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash))
-	if receipts == nil {
-		return nil, nil
-	}
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
-	return logs, nil
+func (b *EthApiBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
+	return rawdb.ReadLogs(b.eth.chainDb, hash, number), nil
 }
 
 func (b *EthApiBackend) GetTd(blockHash common.Hash) *big.Int {
@@ -257,6 +264,10 @@ func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state *sta
 
 func (b *EthApiBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return b.eth.BlockChain().SubscribeRemovedLogsEvent(ch)
+}
+
+func (b *EthApiBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	return b.eth.miner.SubscribePendingLogs(ch)
 }
 
 func (b *EthApiBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
@@ -356,6 +367,10 @@ func (b *EthApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.AccountManager()
 }
 
+func (b *EthApiBackend) RPCTxFeeCap() float64 {
+	return b.eth.config.RPCTxFeeCap
+}
+
 func (b *EthApiBackend) BloomStatus() (uint64, uint64) {
 	sections, _, _ := b.eth.bloomIndexer.Sections()
 	return params.BloomBitsBlocks, sections
@@ -439,7 +454,11 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 
 	state, err := chain.StateAt(lastCheckpointBlock.Root())
 	if err != nil {
-		fmt.Println("ERROR Trying to getting state at", lastCheckpointNumber, " Error ", err)
+		log.Error("fail to get state in GetVotersRewards", "lastCheckpointNumber", lastCheckpointNumber, "err", err)
+		return nil
+	}
+	if state == nil {
+		log.Error("fail to get state in GetVotersRewards", "lastCheckpointNumber", lastCheckpointNumber)
 		return nil
 	}
 
@@ -499,7 +518,11 @@ func (b *EthApiBackend) GetVotersCap(checkpoint *big.Int, masterAddr common.Addr
 	state, err := chain.StateAt(checkpointBlock.Root())
 
 	if err != nil {
-		fmt.Println("ERROR Trying to getting state at", checkpoint, " Error ", err)
+		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint, "err", err)
+		return nil
+	}
+	if state != nil {
+		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint)
 		return nil
 	}
 
@@ -529,9 +552,12 @@ func (b *EthApiBackend) GetEpochDuration() *big.Int {
 func (b *EthApiBackend) GetMasternodesCap(checkpoint uint64) map[common.Address]*big.Int {
 	checkpointBlock := b.eth.blockchain.GetBlockByNumber(checkpoint)
 	state, err := b.eth.blockchain.StateAt(checkpointBlock.Root())
-
 	if err != nil {
-		fmt.Println("ERROR Trying to getting state at", checkpoint, " Error ", err)
+		log.Error("fail to get state in GetMasternodesCap", "checkpoint", checkpoint, "err", err)
+		return nil
+	}
+	if state == nil {
+		log.Error("fail to get state in GetMasternodesCap", "checkpoint", checkpoint)
 		return nil
 	}
 

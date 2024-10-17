@@ -76,7 +76,7 @@ XDC --ethstats ${netstats} --gcmode archive \
 --datadir /work/xdcchain --networkid 50 \
 -port $port --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 \
 --rpcport $rpc_port \
---rpcapi admin,db,eth,debug,net,shh,txpool,personal,web3,XDPoS \
+--rpcapi db,eth,debug,net,shh,txpool,personal,web3,XDPoS \
 --rpcvhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
 --gasprice "1" --targetgaslimit "420000000" --verbosity ${log_level} \
 --debugdatadir /work/xdcchain \

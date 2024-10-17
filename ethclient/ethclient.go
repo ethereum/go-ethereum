@@ -105,16 +105,16 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	}
 	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
 	if head.UncleHash == types.EmptyUncleHash && len(body.UncleHashes) > 0 {
-		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
+		return nil, errors.New("server returned non-empty uncle list but block header indicates no uncles")
 	}
 	if head.UncleHash != types.EmptyUncleHash && len(body.UncleHashes) == 0 {
-		return nil, fmt.Errorf("server returned empty uncle list but block header indicates uncles")
+		return nil, errors.New("server returned empty uncle list but block header indicates uncles")
 	}
 	if head.TxHash == types.EmptyRootHash && len(body.Transactions) > 0 {
-		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
+		return nil, errors.New("server returned non-empty transaction list but block header indicates no transactions")
 	}
 	if head.TxHash != types.EmptyRootHash && len(body.Transactions) == 0 {
-		return nil, fmt.Errorf("server returned empty transaction list but block header indicates transactions")
+		return nil, errors.New("server returned empty transaction list but block header indicates transactions")
 	}
 	// Load uncles because they are not included in the block response.
 	var uncles []*types.Header
@@ -197,7 +197,7 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 	} else if json == nil {
 		return nil, false, ethereum.NotFound
 	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
-		return nil, false, fmt.Errorf("server returned transaction without signature")
+		return nil, false, errors.New("server returned transaction without signature")
 	}
 	setSenderFromServer(json.tx, json.From, json.BlockHash)
 	return json.tx, json.BlockNumber == nil, nil
@@ -243,7 +243,7 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 		if json == nil {
 			return nil, ethereum.NotFound
 		} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
-			return nil, fmt.Errorf("server returned transaction without signature")
+			return nil, errors.New("server returned transaction without signature")
 		}
 	}
 	setSenderFromServer(json.tx, json.From, json.BlockHash)
@@ -273,9 +273,14 @@ func (ec *Client) GetTransactionReceiptResult(ctx context.Context, txHash common
 	}
 	return r, result, err
 }
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
+	}
+	pending := big.NewInt(-1)
+	if number.Cmp(pending) == 0 {
+		return "pending"
 	}
 	return hexutil.EncodeBig(number)
 }

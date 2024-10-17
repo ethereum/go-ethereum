@@ -2,7 +2,6 @@ package hooks
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -41,7 +40,7 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 
 			if timeout > 30 { // wait over 30s
 				log.Error("[V2 Hook Penalty] parentHeader is nil, wait too long not writen in to disk", "parentNumber", parentNumber)
-				return []common.Address{}, fmt.Errorf("parentHeader is nil")
+				return []common.Address{}, errors.New("parentHeader is nil")
 			}
 		}
 

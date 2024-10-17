@@ -37,6 +37,10 @@ var (
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
 
+	// ErrNonceMax is returned if the nonce of a transaction sender account has
+	// maximum allowed value and would become invalid if incremented.
+	ErrNonceMax = errors.New("nonce has max value")
+
 	ErrNotXDPoS = errors.New("XDPoS not found in config")
 
 	ErrNotFoundM1 = errors.New("list M1 not found ")
@@ -46,4 +50,7 @@ var (
 	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
 	// current network configuration.
 	ErrTxTypeNotSupported = types.ErrTxTypeNotSupported
+
+	// ErrGasUintOverflow is returned when calculating gas usage.
+	ErrGasUintOverflow = errors.New("gas uint64 overflow")
 )

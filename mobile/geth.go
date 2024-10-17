@@ -25,8 +25,8 @@ import (
 	"path/filepath"
 
 	"github.com/XinFinOrg/XDPoSChain/core"
-	"github.com/XinFinOrg/XDPoSChain/eth"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/ethclient"
 	"github.com/XinFinOrg/XDPoSChain/ethstats"
 	"github.com/XinFinOrg/XDPoSChain/les"
@@ -144,7 +144,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
-		ethConf := eth.DefaultConfig
+		ethConf := ethconfig.Defaults
 		ethConf.Genesis = genesis
 		ethConf.SyncMode = downloader.LightSync
 		ethConf.NetworkId = uint64(config.EthereumNetworkID)

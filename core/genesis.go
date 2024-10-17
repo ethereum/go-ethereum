@@ -141,10 +141,10 @@ func (e *GenesisMismatchError) Error() string {
 // SetupGenesisBlock writes or updates the genesis block in db.
 // The block that will be used is:
 //
-//                          genesis == nil       genesis != nil
-//                       +------------------------------------------
-//     db has no genesis |  main-net default  |  genesis
-//     db has genesis    |  from DB           |  genesis (if compatible)
+//	                     genesis == nil       genesis != nil
+//	                  +------------------------------------------
+//	db has no genesis |  main-net default  |  genesis
+//	db has genesis    |  from DB           |  genesis (if compatible)
 //
 // The stored chain configuration will be updated if it is compatible (i.e. does not
 // specify a fork block below the local head block). In case of a conflict, the
@@ -200,7 +200,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	// are returned to the caller unless we're already at block zero.
 	height := GetBlockNumber(db, GetHeadHeaderHash(db))
 	if height == missingNumber {
-		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
+		return newcfg, stored, errors.New("missing block number for head header hash")
 	}
 	compatErr := storedcfg.CheckCompatible(newcfg, height)
 	if compatErr != nil && height != 0 && compatErr.RewindTo != 0 {
@@ -275,23 +275,17 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	block := g.ToBlock(db)
 	if block.Number().Sign() != 0 {
-		return nil, fmt.Errorf("can't commit genesis block with number > 0")
+		return nil, errors.New("can't commit genesis block with number > 0")
 	}
 	if err := WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty); err != nil {
 		return nil, err
 	}
-	if err := WriteBlock(db, block); err != nil {
-		return nil, err
-	}
+	rawdb.WriteBlock(db, block)
 	if err := WriteBlockReceipts(db, block.Hash(), block.NumberU64(), nil); err != nil {
 		return nil, err
 	}
-	if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
-		return nil, err
-	}
-	if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
-		return nil, err
-	}
+	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+	rawdb.WriteHeadBlockHash(db, block.Hash())
 	if err := WriteHeadHeaderHash(db, block.Hash()); err != nil {
 		return nil, err
 	}

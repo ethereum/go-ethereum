@@ -18,6 +18,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -169,7 +170,7 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 	defer api.node.lock.Unlock()
 
 	if api.node.httpHandler == nil {
-		return false, fmt.Errorf("HTTP RPC not running")
+		return false, errors.New("HTTP RPC not running")
 	}
 	api.node.stopHTTP()
 	return true, nil
@@ -223,7 +224,7 @@ func (api *PrivateAdminAPI) StopWS() (bool, error) {
 	defer api.node.lock.Unlock()
 
 	if api.node.wsHandler == nil {
-		return false, fmt.Errorf("WebSocket RPC not running")
+		return false, errors.New("WebSocket RPC not running")
 	}
 	api.node.stopWS()
 	return true, nil

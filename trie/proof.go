@@ -395,11 +395,11 @@ func hasRightElement(node Node, key []byte) bool {
 // Expect the normal case, this function can also be used to verify the following
 // range proofs(note this function doesn't accept zero element proof):
 //
-// - All elements proof. In this case the left and right proof can be nil, but the
-//   range should be all the leaves in the trie.
+//   - All elements proof. In this case the left and right proof can be nil, but the
+//     range should be all the leaves in the trie.
 //
-// - One element proof. In this case no matter the left edge proof is a non-existent
-//   proof or not, we can always verify the correctness of the proof.
+//   - One element proof. In this case no matter the left edge proof is a non-existent
+//     proof or not, we can always verify the correctness of the proof.
 //
 // Except returning the error to indicate the proof is valid or not, the function will
 // also return a flag to indicate whether there exists more accounts/slots in the trie.
@@ -439,7 +439,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, keys [][]byte, valu
 			return err, false
 		}
 		if !bytes.Equal(val, values[0]) {
-			return fmt.Errorf("correct proof but invalid data"), false
+			return errors.New("correct proof but invalid data"), false
 		}
 		return nil, hasRightElement(root, keys[0])
 	}

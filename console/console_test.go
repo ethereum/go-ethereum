@@ -31,6 +31,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/consensus/ethash"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/eth"
+	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/internal/jsre"
 	"github.com/XinFinOrg/XDPoSChain/node"
 )
@@ -84,7 +85,7 @@ type tester struct {
 
 // newTester creates a test environment based on which the console can operate.
 // Please ensure you call Close() on the returned tester to avoid leaks.
-func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
+func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	// Create a temporary storage for the node keys and initialize it
 	workspace, err := os.MkdirTemp("", "console-tester-")
 	if err != nil {
@@ -96,7 +97,7 @@ func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
-	ethConf := &eth.Config{
+	ethConf := &ethconfig.Config{
 		Genesis:   core.DeveloperGenesisBlock(15, common.Address{}),
 		Etherbase: common.HexToAddress(testAddress),
 		Ethash: ethash.Config{

@@ -236,11 +236,11 @@ func (XDCx *XDCX) processOrderList(coinbase common.Address, chain consensus.Chai
 			maxTradedQuantity = tradingstate.CloneBigInt(amount)
 		}
 		var quotePrice *big.Int
-		if oldestOrder.QuoteToken.String() != common.XDCNativeAddress {
-			quotePrice = tradingStateDB.GetLastPrice(tradingstate.GetTradingOrderBookHash(oldestOrder.QuoteToken, common.HexToAddress(common.XDCNativeAddress)))
+		if oldestOrder.QuoteToken != common.XDCNativeAddressBinary {
+			quotePrice = tradingStateDB.GetLastPrice(tradingstate.GetTradingOrderBookHash(oldestOrder.QuoteToken, common.XDCNativeAddressBinary))
 			log.Debug("TryGet quotePrice QuoteToken/XDC", "quotePrice", quotePrice)
 			if quotePrice == nil || quotePrice.Sign() == 0 {
-				inversePrice := tradingStateDB.GetLastPrice(tradingstate.GetTradingOrderBookHash(common.HexToAddress(common.XDCNativeAddress), oldestOrder.QuoteToken))
+				inversePrice := tradingStateDB.GetLastPrice(tradingstate.GetTradingOrderBookHash(common.XDCNativeAddressBinary, oldestOrder.QuoteToken))
 				quoteTokenDecimal, err := XDCx.GetTokenDecimal(chain, statedb, oldestOrder.QuoteToken)
 				if err != nil || quoteTokenDecimal.Sign() == 0 {
 					return nil, nil, nil, fmt.Errorf("Fail to get tokenDecimal. Token: %v . Err: %v", oldestOrder.QuoteToken.String(), err)
@@ -374,10 +374,10 @@ func (XDCx *XDCX) getTradeQuantity(quotePrice *big.Int, coinbase common.Address,
 	if err != nil || quoteTokenDecimal.Sign() == 0 {
 		return tradingstate.Zero, false, nil, fmt.Errorf("Fail to get tokenDecimal. Token: %v . Err: %v", makerOrder.QuoteToken.String(), err)
 	}
-	if makerOrder.QuoteToken.String() == common.XDCNativeAddress {
+	if makerOrder.QuoteToken == common.XDCNativeAddressBinary {
 		quotePrice = quoteTokenDecimal
 	}
-	if takerOrder.ExchangeAddress.String() == makerOrder.ExchangeAddress.String() {
+	if takerOrder.ExchangeAddress == makerOrder.ExchangeAddress {
 		if err := tradingstate.CheckRelayerFee(takerOrder.ExchangeAddress, new(big.Int).Mul(common.RelayerFee, big.NewInt(2)), statedb); err != nil {
 			log.Debug("Reject order Taker Exchnage = Maker Exchange , relayer not enough fee ", "err", err)
 			return tradingstate.Zero, false, nil, nil

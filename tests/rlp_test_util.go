@@ -46,7 +46,7 @@ type RLPTest struct {
 func (t *RLPTest) Run() error {
 	outb, err := hex.DecodeString(t.Out)
 	if err != nil {
-		return fmt.Errorf("invalid hex in Out")
+		return errors.New("invalid hex in Out")
 	}
 
 	// Handle simple decoding tests with no actual In value.
@@ -74,7 +74,7 @@ func checkDecodeInterface(b []byte, isValid bool) error {
 	case isValid && err != nil:
 		return fmt.Errorf("decoding failed: %v", err)
 	case !isValid && err == nil:
-		return fmt.Errorf("decoding of invalid value succeeded")
+		return errors.New("decoding of invalid value succeeded")
 	}
 	return nil
 }

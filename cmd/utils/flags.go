@@ -20,10 +20,12 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
+	godebug "runtime/debug"
 	"strconv"
 	"strings"
 
@@ -38,10 +40,12 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
-	"github.com/XinFinOrg/XDPoSChain/eth"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
+	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
+	"github.com/XinFinOrg/XDPoSChain/eth/filters"
 	"github.com/XinFinOrg/XDPoSChain/eth/gasprice"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/internal/ethapi"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/metrics/exp"
@@ -52,7 +56,9 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/p2p/nat"
 	"github.com/XinFinOrg/XDPoSChain/p2p/netutil"
 	"github.com/XinFinOrg/XDPoSChain/params"
+	"github.com/XinFinOrg/XDPoSChain/rpc"
 	whisper "github.com/XinFinOrg/XDPoSChain/whisper/whisperv6"
+	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -148,7 +154,7 @@ var (
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 89=XDPoSChain)",
-		Value: eth.DefaultConfig.NetworkId,
+		Value: ethconfig.Defaults.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
 		Name:  "testnet",
@@ -187,7 +193,7 @@ var (
 		Name:  "light",
 		Usage: "Enable light client mode",
 	}
-	defaultSyncMode = eth.DefaultConfig.SyncMode
+	defaultSyncMode = ethconfig.Defaults.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
 		Name:  "syncmode",
 		Usage: `Blockchain sync mode ("fast", "full", or "light")`,
@@ -206,7 +212,7 @@ var (
 	LightPeersFlag = cli.IntFlag{
 		Name:  "lightpeers",
 		Usage: "Maximum number of LES client peers",
-		Value: eth.DefaultConfig.LightPeers,
+		Value: ethconfig.Defaults.LightPeers,
 	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
@@ -225,27 +231,27 @@ var (
 	EthashCachesInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.cachesinmem",
 		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
-		Value: eth.DefaultConfig.Ethash.CachesInMem,
+		Value: ethconfig.Defaults.Ethash.CachesInMem,
 	}
 	EthashCachesOnDiskFlag = cli.IntFlag{
 		Name:  "ethash.cachesondisk",
 		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
-		Value: eth.DefaultConfig.Ethash.CachesOnDisk,
+		Value: ethconfig.Defaults.Ethash.CachesOnDisk,
 	}
 	EthashDatasetDirFlag = DirectoryFlag{
 		Name:  "ethash.dagdir",
 		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
-		Value: DirectoryString{eth.DefaultConfig.Ethash.DatasetDir},
+		Value: DirectoryString{ethconfig.Defaults.Ethash.DatasetDir},
 	}
 	EthashDatasetsInMemoryFlag = cli.IntFlag{
 		Name:  "ethash.dagsinmem",
 		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
-		Value: eth.DefaultConfig.Ethash.DatasetsInMem,
+		Value: ethconfig.Defaults.Ethash.DatasetsInMem,
 	}
 	EthashDatasetsOnDiskFlag = cli.IntFlag{
 		Name:  "ethash.dagsondisk",
 		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
-		Value: eth.DefaultConfig.Ethash.DatasetsOnDisk,
+		Value: ethconfig.Defaults.Ethash.DatasetsOnDisk,
 	}
 	// Transaction pool settings
 	TxPoolNoLocalsFlag = cli.BoolFlag{
@@ -265,37 +271,37 @@ var (
 	TxPoolPriceLimitFlag = cli.Uint64Flag{
 		Name:  "txpool.pricelimit",
 		Usage: "Minimum gas price limit to enforce for acceptance into the pool",
-		Value: eth.DefaultConfig.TxPool.PriceLimit,
+		Value: ethconfig.Defaults.TxPool.PriceLimit,
 	}
 	TxPoolPriceBumpFlag = cli.Uint64Flag{
 		Name:  "txpool.pricebump",
 		Usage: "Price bump percentage to replace an already existing transaction",
-		Value: eth.DefaultConfig.TxPool.PriceBump,
+		Value: ethconfig.Defaults.TxPool.PriceBump,
 	}
 	TxPoolAccountSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.accountslots",
 		Usage: "Minimum number of executable transaction slots guaranteed per account",
-		Value: eth.DefaultConfig.TxPool.AccountSlots,
+		Value: ethconfig.Defaults.TxPool.AccountSlots,
 	}
 	TxPoolGlobalSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.globalslots",
 		Usage: "Maximum number of executable transaction slots for all accounts",
-		Value: eth.DefaultConfig.TxPool.GlobalSlots,
+		Value: ethconfig.Defaults.TxPool.GlobalSlots,
 	}
 	TxPoolAccountQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.accountqueue",
 		Usage: "Maximum number of non-executable transaction slots permitted per account",
-		Value: eth.DefaultConfig.TxPool.AccountQueue,
+		Value: ethconfig.Defaults.TxPool.AccountQueue,
 	}
 	TxPoolGlobalQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.globalqueue",
 		Usage: "Maximum number of non-executable transaction slots for all accounts",
-		Value: eth.DefaultConfig.TxPool.GlobalQueue,
+		Value: ethconfig.Defaults.TxPool.GlobalQueue,
 	}
 	TxPoolLifetimeFlag = cli.DurationFlag{
 		Name:  "txpool.lifetime",
 		Usage: "Maximum amount of time non-executable transaction are queued",
-		Value: eth.DefaultConfig.TxPool.Lifetime,
+		Value: ethconfig.Defaults.TxPool.Lifetime,
 	}
 	// Performance tuning settings
 	CacheFlag = cli.IntFlag{
@@ -312,6 +318,15 @@ var (
 		Name:  "cache.gc",
 		Usage: "Percentage of cache memory allowance to use for trie pruning",
 		Value: 25,
+	}
+	CacheLogSizeFlag = &cli.IntFlag{
+		Name:  "cache.blocklogs",
+		Usage: "Size (in number of blocks) of the log cache for filtering",
+		Value: ethconfig.Defaults.FilterLogCacheSize,
+	}
+	FDLimitFlag = cli.IntFlag{
+		Name:  "fdlimit",
+		Usage: "Raise the open file descriptor resource limit (default = system fd limit)",
 	}
 	// Miner settings
 	StakingEnabledFlag = cli.BoolFlag{
@@ -336,7 +351,7 @@ var (
 	GasPriceFlag = BigFlag{
 		Name:  "gasprice",
 		Usage: "Minimal gas price to accept for mining a transactions",
-		Value: eth.DefaultConfig.GasPrice,
+		Value: ethconfig.Defaults.GasPrice,
 	}
 	ExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
@@ -361,7 +376,12 @@ var (
 	RPCGlobalGasCapFlag = cli.Uint64Flag{
 		Name:  "rpc-gascap",
 		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
-		Value: eth.DefaultConfig.RPCGasCap,
+		Value: ethconfig.Defaults.RPCGasCap,
+	}
+	RPCGlobalTxFeeCap = cli.Float64Flag{
+		Name:  "rpc.txfeecap",
+		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
+		Value: ethconfig.Defaults.RPCTxFeeCap,
 	}
 	// Logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
@@ -543,12 +563,22 @@ var (
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpoblocks",
 		Usage: "Number of recent blocks to check for gas prices",
-		Value: eth.DefaultConfig.GPO.Blocks,
+		Value: ethconfig.Defaults.GPO.Blocks,
 	}
 	GpoPercentileFlag = cli.IntFlag{
 		Name:  "gpopercentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
-		Value: eth.DefaultConfig.GPO.Percentile,
+		Value: ethconfig.Defaults.GPO.Percentile,
+	}
+	GpoMaxGasPriceFlag = cli.Int64Flag{
+		Name:  "gpo.maxprice",
+		Usage: "Maximum gas price will be recommended by gpo",
+		Value: ethconfig.Defaults.GPO.MaxPrice.Int64(),
+	}
+	GpoIgnoreGasPriceFlag = cli.Int64Flag{
+		Name:  "gpo.ignoreprice",
+		Usage: "Gas price below which gpo will ignore transactions",
+		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
 	}
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
@@ -801,20 +831,29 @@ func setPrefix(ctx *cli.Context, cfg *node.Config) {
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
 // for XDC and returns half of the allowance to assign to the database.
-func MakeDatabaseHandles() int {
-	limit, err := fdlimit.Current()
+func MakeDatabaseHandles(max int) int {
+	limit, err := fdlimit.Maximum()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
-	if limit < 2048 {
-		if err := fdlimit.Raise(2048); err != nil {
-			Fatalf("Failed to raise file descriptor allowance: %v", err)
-		}
+	switch {
+	case max == 0:
+		// User didn't specify a meaningful value, use system limits
+	case max < 128:
+		// User specified something unhealthy, just use system defaults
+		log.Error("File descriptor limit invalid (<128)", "had", max, "updated", limit)
+	case max > limit:
+		// User requested more than the OS allows, notify that we can't allocate it
+		log.Warn("Requested file descriptors denied by OS", "req", max, "limit", limit)
+	default:
+		// User limit is meaningful and within allowed range, use that
+		limit = max
 	}
-	if limit > 2048 { // cap database file descriptors even if more is available
-		limit = 2048
+	raised, err := fdlimit.Raise(uint64(limit))
+	if err != nil {
+		Fatalf("Failed to raise file descriptor allowance: %v", err)
 	}
-	return limit / 2 // Leave half for networking and other stuff
+	return int(raised / 2) // Leave half for networking and other stuff
 }
 
 // MakeAddress converts an account specified directly as a hex encoded string or
@@ -844,7 +883,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 
 // setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
-func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
+func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(EtherbaseFlag.Name) {
 		account, err := MakeAddress(ks, ctx.GlobalString(EtherbaseFlag.Name))
 		if err != nil {
@@ -973,12 +1012,24 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
+func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
+	// If we are running the light client, apply another group
+	// settings for gas oracle.
+	if light {
+		cfg.Blocks = ethconfig.LightClientGPO.Blocks
+		cfg.Percentile = ethconfig.LightClientGPO.Percentile
+	}
 	if ctx.GlobalIsSet(GpoBlocksFlag.Name) {
 		cfg.Blocks = ctx.GlobalInt(GpoBlocksFlag.Name)
 	}
 	if ctx.GlobalIsSet(GpoPercentileFlag.Name) {
 		cfg.Percentile = ctx.GlobalInt(GpoPercentileFlag.Name)
+	}
+	if ctx.GlobalIsSet(GpoMaxGasPriceFlag.Name) {
+		cfg.MaxPrice = big.NewInt(ctx.GlobalInt64(GpoMaxGasPriceFlag.Name))
+	}
+	if ctx.GlobalIsSet(GpoIgnoreGasPriceFlag.Name) {
+		cfg.IgnorePrice = big.NewInt(ctx.GlobalInt64(GpoIgnoreGasPriceFlag.Name))
 	}
 }
 
@@ -1015,7 +1066,7 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 }
 
-func setEthash(ctx *cli.Context, cfg *eth.Config) {
+func setEthash(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(EthashCacheDirFlag.Name) {
 		cfg.Ethash.CacheDir = ctx.GlobalString(EthashCacheDirFlag.Name)
 	}
@@ -1121,7 +1172,7 @@ func SetXDCXConfig(ctx *cli.Context, cfg *XDCx.Config, XDCDataDir string) {
 }
 
 // SetEthConfig applies eth-related command line flags to the config.
-func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
+func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
 	checkExclusive(ctx, DeveloperFlag, TestnetFlag, RinkebyFlag)
 	checkExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
@@ -1130,9 +1181,29 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
-	setGPO(ctx, &cfg.GPO)
+	setGPO(ctx, &cfg.GPO, ctx.GlobalString(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
+
+	// Cap the cache allowance and tune the garbage collector
+	mem, err := gopsutil.VirtualMemory()
+	if err == nil {
+		if 32<<(^uintptr(0)>>63) == 32 && mem.Total > 2*1024*1024*1024 {
+			log.Warn("Lowering memory allowance on 32bit arch", "available", mem.Total/1024/1024, "addressable", 2*1024)
+			mem.Total = 2 * 1024 * 1024 * 1024
+		}
+		allowance := int(mem.Total / 1024 / 1024 / 3)
+		if cache := ctx.Int(CacheFlag.Name); cache > allowance {
+			log.Warn("Sanitizing cache to Go's GC limits", "provided", cache, "updated", allowance)
+			ctx.Set(CacheFlag.Name, strconv.Itoa(allowance))
+		}
+	}
+	// Ensure Go's GC ignores the database cache for trigger percentage
+	cache := ctx.Int(CacheFlag.Name)
+	gogc := math.Max(20, math.Min(100, 100/(float64(cache)/1024)))
+
+	log.Debug("Sanitizing Go's GC trigger", "percent", int(gogc))
+	godebug.SetGCPercent(int(gogc))
 
 	switch {
 	case ctx.GlobalIsSet(SyncModeFlag.Name):
@@ -1155,7 +1226,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 	}
-	cfg.DatabaseHandles = MakeDatabaseHandles()
+	cfg.DatabaseHandles = MakeDatabaseHandles(ctx.GlobalInt(FDLimitFlag.Name))
 
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
@@ -1174,11 +1245,17 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = ctx.GlobalUint64(RPCGlobalGasCapFlag.Name)
 	}
+	if ctx.GlobalIsSet(RPCGlobalTxFeeCap.Name) {
+		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCap.Name)
+	}
 	if ctx.GlobalIsSet(ExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.GlobalString(ExtraDataFlag.Name))
 	}
 	if ctx.GlobalIsSet(GasPriceFlag.Name) {
 		cfg.GasPrice = GlobalBig(ctx, GasPriceFlag.Name)
+	}
+	if ctx.IsSet(CacheLogSizeFlag.Name) {
+		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
 	}
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
@@ -1244,7 +1321,7 @@ func SetupNetwork(ctx *cli.Context) {
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
-		handles = MakeDatabaseHandles()
+		handles = MakeDatabaseHandles(ctx.GlobalInt(FDLimitFlag.Name))
 	)
 	name := "chaindata"
 	if ctx.GlobalBool(LightModeFlag.Name) {
@@ -1286,12 +1363,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
 			engine = ethash.New(ethash.Config{
-				CacheDir:       stack.ResolvePath(eth.DefaultConfig.Ethash.CacheDir),
-				CachesInMem:    eth.DefaultConfig.Ethash.CachesInMem,
-				CachesOnDisk:   eth.DefaultConfig.Ethash.CachesOnDisk,
-				DatasetDir:     stack.ResolvePath(eth.DefaultConfig.Ethash.DatasetDir),
-				DatasetsInMem:  eth.DefaultConfig.Ethash.DatasetsInMem,
-				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
+				CacheDir:       stack.ResolvePath(ethconfig.Defaults.Ethash.CacheDir),
+				CachesInMem:    ethconfig.Defaults.Ethash.CachesInMem,
+				CachesOnDisk:   ethconfig.Defaults.Ethash.CachesOnDisk,
+				DatasetDir:     stack.ResolvePath(ethconfig.Defaults.Ethash.DatasetDir),
+				DatasetsInMem:  ethconfig.Defaults.Ethash.DatasetsInMem,
+				DatasetsOnDisk: ethconfig.Defaults.Ethash.DatasetsOnDisk,
 			})
 		}
 		Fatalf("Only support XDPoS consensus")
@@ -1301,8 +1378,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	}
 	cache := &core.CacheConfig{
 		Disabled:      ctx.GlobalString(GCModeFlag.Name) == "archive",
-		TrieNodeLimit: eth.DefaultConfig.TrieCache,
-		TrieTimeLimit: eth.DefaultConfig.TrieTimeout,
+		TrieNodeLimit: ethconfig.Defaults.TrieCache,
+		TrieTimeLimit: ethconfig.Defaults.TrieTimeout,
 	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cache.TrieNodeLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
@@ -1377,6 +1454,19 @@ func WalkMatch(root, pattern string) ([]string, error) {
 		return nil, err
 	}
 	return matches, nil
+}
+
+// RegisterFilterAPI adds the eth log filtering RPC API to the node.
+func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconfig.Config) *filters.FilterSystem {
+	isLightClient := ethcfg.SyncMode == downloader.LightSync
+	filterSystem := filters.NewFilterSystem(backend, filters.Config{
+		LogCacheSize: ethcfg.FilterLogCacheSize,
+	})
+	stack.RegisterAPIs([]rpc.API{{
+		Namespace: "eth",
+		Service:   filters.NewFilterAPI(filterSystem, isLightClient),
+	}})
+	return filterSystem
 }
 
 func SetupMetrics(ctx *cli.Context) {

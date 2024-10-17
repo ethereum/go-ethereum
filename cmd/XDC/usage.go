@@ -123,15 +123,16 @@ var AppHelpFlagGroups = []flagGroup{
 	//		utils.TxPoolLifetimeFlag,
 	//	},
 	//},
-	//{
-	//	Name: "PERFORMANCE TUNING",
-	//	Flags: []cli.Flag{
-	//		utils.CacheFlag,
-	//		utils.CacheDatabaseFlag,
-	//		utils.CacheGCFlag,
-	//		utils.TrieCacheGenFlag,
-	//	},
-	//},
+	{
+		Name: "PERFORMANCE TUNING",
+		Flags: []cli.Flag{
+			utils.CacheFlag,
+			utils.CacheDatabaseFlag,
+			// utils.CacheGCFlag,
+			// utils.TrieCacheGenFlag,
+			utils.FDLimitFlag,
+		},
+	},
 	{
 		Name: "ACCOUNT",
 		Flags: []cli.Flag{
@@ -157,6 +158,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.IPCPathFlag,
 			utils.RPCCORSDomainFlag,
 			utils.RPCVirtualHostsFlag,
+			utils.RPCGlobalTxFeeCap,
 			utils.JSpathFlag,
 			utils.ExecFlag,
 			utils.PreloadJSFlag,
@@ -195,6 +197,8 @@ var AppHelpFlagGroups = []flagGroup{
 	//	Flags: []cli.Flag{
 	//		utils.GpoBlocksFlag,
 	//		utils.GpoPercentileFlag,
+	//		utils.GpoMaxGasPriceFlag,
+	//		utils.GpoIgnoreGasPriceFlag,
 	//	},
 	//},
 	//{

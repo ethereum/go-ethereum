@@ -1,7 +1,7 @@
 package lendingstate
 
 import (
-	"fmt"
+	"errors"
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
@@ -273,10 +273,10 @@ func GetAllLendingBooks(statedb *state.StateDB) (mapLendingBook map[common.Hash]
 	baseTokens := GetSupportedBaseToken(statedb)
 	terms := GetSupportedTerms(statedb)
 	if len(baseTokens) == 0 {
-		return nil, fmt.Errorf("GetAllLendingBooks: empty baseToken list")
+		return nil, errors.New("GetAllLendingBooks: empty baseToken list")
 	}
 	if len(terms) == 0 {
-		return nil, fmt.Errorf("GetAllLendingPairs: empty term list")
+		return nil, errors.New("GetAllLendingPairs: empty term list")
 	}
 	for _, baseToken := range baseTokens {
 		for _, term := range terms {
@@ -295,10 +295,10 @@ func GetAllLendingPairs(statedb *state.StateDB) (allPairs []LendingPair, err err
 	baseTokens := GetSupportedBaseToken(statedb)
 	collaterals := GetAllCollateral(statedb)
 	if len(baseTokens) == 0 {
-		return allPairs, fmt.Errorf("GetAllLendingPairs: empty baseToken list")
+		return allPairs, errors.New("GetAllLendingPairs: empty baseToken list")
 	}
 	if len(collaterals) == 0 {
-		return allPairs, fmt.Errorf("GetAllLendingPairs: empty collateral list")
+		return allPairs, errors.New("GetAllLendingPairs: empty collateral list")
 	}
 	for _, baseToken := range baseTokens {
 		for _, collateral := range collaterals {

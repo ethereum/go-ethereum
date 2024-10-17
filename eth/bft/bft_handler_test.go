@@ -1,7 +1,7 @@
 package bft
 
 import (
-	"fmt"
+	"errors"
 	"math/big"
 	"sync/atomic"
 	"testing"
@@ -102,7 +102,7 @@ func TestNotBoardcastInvalidVote(t *testing.T) {
 	targetVotes := 0
 
 	tester.bfter.consensus.verifyVote = func(chain consensus.ChainReader, vote *types.Vote) (bool, error) {
-		return false, fmt.Errorf("This is invalid vote")
+		return false, errors.New("This is invalid vote")
 	}
 
 	tester.bfter.consensus.voteHandler = func(chain consensus.ChainReader, vote *types.Vote) error {

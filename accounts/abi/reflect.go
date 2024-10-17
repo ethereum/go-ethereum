@@ -17,6 +17,7 @@
 package abi
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 )
@@ -117,7 +118,7 @@ func requireUniqueStructFieldNames(args Arguments) error {
 	for _, arg := range args {
 		field := capitalise(arg.Name)
 		if field == "" {
-			return fmt.Errorf("abi: purely underscored output cannot unpack to struct")
+			return errors.New("abi: purely underscored output cannot unpack to struct")
 		}
 		if exists[field] {
 			return fmt.Errorf("abi: multiple outputs mapping to the same struct field '%s'", field)

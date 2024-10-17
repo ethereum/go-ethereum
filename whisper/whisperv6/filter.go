@@ -18,6 +18,7 @@ package whisperv6
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -65,7 +66,7 @@ func NewFilters(w *Whisper) *Filters {
 // Install will add a new filter to the filter collection
 func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.KeySym != nil && watcher.KeyAsym != nil {
-		return "", fmt.Errorf("filters must choose between symmetric and asymmetric keys")
+		return "", errors.New("filters must choose between symmetric and asymmetric keys")
 	}
 
 	if watcher.Messages == nil {
@@ -81,7 +82,7 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	defer fs.mutex.Unlock()
 
 	if fs.watchers[id] != nil {
-		return "", fmt.Errorf("failed to generate unique ID")
+		return "", errors.New("failed to generate unique ID")
 	}
 
 	if watcher.expectsSymmetricEncryption() {

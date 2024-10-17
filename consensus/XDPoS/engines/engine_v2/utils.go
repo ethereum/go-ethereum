@@ -107,7 +107,7 @@ func (x *XDPoS_v2) signSignature(signingHash common.Hash) (types.Signature, erro
 func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signature types.Signature, masternodes []common.Address) (bool, common.Address, error) {
 	var signerAddress common.Address
 	if len(masternodes) == 0 {
-		return false, signerAddress, fmt.Errorf("Empty masternode list detected when verifying message signatures")
+		return false, signerAddress, errors.New("Empty masternode list detected when verifying message signatures")
 	}
 	// Recover the public key and the Ethereum address
 	pubkey, err := crypto.Ecrecover(signedHashToBeVerified.Bytes(), signature)

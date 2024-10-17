@@ -124,7 +124,7 @@ func testHeaderChainImport(chain []*types.Header, lightchain *LightChain) error 
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
 		lightchain.mu.Lock()
 		core.WriteTd(lightchain.chainDb, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, lightchain.GetTdByHash(header.ParentHash)))
-		core.WriteHeader(lightchain.chainDb, header)
+		rawdb.WriteHeader(lightchain.chainDb, header)
 		lightchain.mu.Unlock()
 	}
 	return nil

@@ -439,7 +439,7 @@ func (x *XDPoS) CalculateMissingRounds(chain consensus.ChainReader, header *type
 	case params.ConsensusEngineVersion2:
 		return x.EngineV2.CalculateMissingRounds(chain, header)
 	default: // Default "v1"
-		return nil, fmt.Errorf("Not supported in the v1 consensus")
+		return nil, errors.New("Not supported in the v1 consensus")
 	}
 }
 
@@ -508,7 +508,7 @@ func (x *XDPoS) CacheNoneTIPSigningTxs(header *types.Header, txs []*types.Transa
 	signTxs := []*types.Transaction{}
 	for _, tx := range txs {
 		if tx.IsSigningTransaction() {
-			var b uint
+			var b uint64
 			for _, r := range receipts {
 				if r.TxHash == tx.Hash() {
 					if len(r.PostState) > 0 {
