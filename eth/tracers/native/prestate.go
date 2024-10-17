@@ -147,7 +147,15 @@ func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scop
 }
 
 func (t *prestateTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	// Reset for each tx
+	t.pre = stateMap{}
+	t.post = stateMap{}
 	t.env = env
+	t.interrupt.Store(false)
+	t.reason = nil
+	t.created = make(map[common.Address]bool)
+	t.deleted = make(map[common.Address]bool)
+
 	if tx.To() == nil {
 		t.to = crypto.CreateAddress(from, env.StateDB.GetNonce(from))
 		t.created[t.to] = true
@@ -276,6 +284,10 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 // it to the prestate of the given contract. It assumes `lookupAccount`
 // has been performed on the contract before.
 func (t *prestateTracer) lookupStorage(addr common.Address, key common.Hash) {
+	// For the system calls, such as core.ProcessBeaconBlockRoot doesn't need to lookup accounts before storage access, ignore them.
+	if _, ok := t.pre[addr]; !ok {
+		return
+	}
 	if _, ok := t.pre[addr].Storage[key]; ok {
 		return
 	}
