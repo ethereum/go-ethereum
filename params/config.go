@@ -18,8 +18,9 @@ package params
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/math"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params/forks"
