@@ -97,7 +97,7 @@ func testPrestateDiffTracer(tracerName string, dirPath string, t *testing.T) {
 			)
 			defer state.Close()
 
-			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig)
+			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig, test.Genesis.Config)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
