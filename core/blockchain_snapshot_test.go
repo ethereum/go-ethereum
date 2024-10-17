@@ -68,7 +68,6 @@ func (basic *snapshotTestBasic) prepare(t *testing.T) (*BlockChain, []*types.Blo
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory:         datadir,
 		AncientsDirectory: ancient,
-		Ephemeral:         true,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
@@ -259,7 +258,6 @@ func (snaptest *crashSnapshotTest) test(t *testing.T) {
 	newdb, err := rawdb.Open(rawdb.OpenOptions{
 		Directory:         snaptest.datadir,
 		AncientsDirectory: snaptest.ancient,
-		Ephemeral:         true,
 	})
 	if err != nil {
 		t.Fatalf("Failed to reopen persistent database: %v", err)

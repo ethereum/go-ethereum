@@ -282,7 +282,6 @@ func (sf *subfetcher) schedule(keys [][]byte, read bool) error {
 	// Append the tasks to the current queue
 	sf.lock.Lock()
 	for _, key := range keys {
-		key := key // closure for the append below
 		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, key: key})
 	}
 	sf.lock.Unlock()
