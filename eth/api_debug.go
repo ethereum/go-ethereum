@@ -446,7 +446,7 @@ func (api *DebugAPI) GetTrieFlushInterval() (string, error) {
 	return api.eth.blockchain.GetTrieFlushInterval().String(), nil
 }
 
-func (api *DebugAPI) ExecutionWitness(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*stateless.ExecutionWitness, error) {
+func (api *DebugAPI) ExecutionWitness(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*ExecutionWitness, error) {
 	block, err := api.eth.APIBackend.BlockByNumberOrHash(ctx, blockNrOrHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve block: %w", err)
@@ -456,7 +456,7 @@ func (api *DebugAPI) ExecutionWitness(ctx context.Context, blockNrOrHash rpc.Blo
 	}
 
 	witness, err := generateWitness(api.eth.blockchain, block)
-	return witness.ToExecutionWitness(), err
+	return ToExecutionWitness(witness), err
 }
 
 func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateless.Witness, error) {
@@ -484,4 +484,34 @@ func generateWitness(blockchain *core.BlockChain, block *types.Block) (*stateles
 	}
 
 	return witness, nil
+}
+
+// ExecutionWitness is a witness json encoding for transferring across the network.
+// In the future, we'll probably consider using the extWitness format instead for less overhead if performance becomes an issue.
+// Currently using this format for ease of reading, parsing and compatibility across clients.
+type ExecutionWitness struct {
+	Headers []*types.Header   `json:"headers"`
+	Codes   map[string]string `json:"codes"`
+	State   map[string]string `json:"state"`
+}
+
+func transformMap(in map[string]struct{}) map[string]string {
+	out := make(map[string]string, len(in))
+	for item := range in {
+		bytes := []byte(item)
+		key := crypto.Keccak256Hash(bytes).Hex()
+		out[key] = hexutil.Encode(bytes)
+	}
+	return out
+}
+
+// ToExecutionWitness converts a witness to an execution witness format that is compatible with reth.
+// keccak(node) => node
+// keccak(bytecodes) => bytecodes
+func ToExecutionWitness(w *stateless.Witness) *ExecutionWitness {
+	return &ExecutionWitness{
+		Headers: w.Headers,
+		Codes:   transformMap(w.Codes),
+		State:   transformMap(w.State),
+	}
 }

@@ -19,9 +19,7 @@ package stateless
 import (
 	"io"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -75,34 +73,4 @@ type extWitness struct {
 	Headers []*types.Header
 	Codes   [][]byte
 	State   [][]byte
-}
-
-// ExecutionWitness is a witness json encoding for transferring across the network.
-// In the future, we'll probably consider using the extWitness format instead for less overhead if performance becomes an issue.
-// Currently using this format for ease of reading, parsing and compatibility across clients.
-type ExecutionWitness struct {
-	Headers []*types.Header   `json:"headers"`
-	Codes   map[string]string `json:"codes"`
-	State   map[string]string `json:"state"`
-}
-
-func transformMap(in map[string]struct{}) map[string]string {
-	out := make(map[string]string, len(in))
-	for item := range in {
-		bytes := []byte(item)
-		key := crypto.Keccak256Hash(bytes).Hex()
-		out[key] = hexutil.Encode(bytes)
-	}
-	return out
-}
-
-// ToExecutionWitness converts a witness to an execution witness format that is compatible with reth.
-// keccak(node) => node
-// keccak(bytecodes) => bytecodes
-func (w *Witness) ToExecutionWitness() *ExecutionWitness {
-	return &ExecutionWitness{
-		Headers: w.Headers,
-		Codes:   transformMap(w.Codes),
-		State:   transformMap(w.State),
-	}
 }
