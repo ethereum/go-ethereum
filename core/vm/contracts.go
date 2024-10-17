@@ -29,7 +29,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto/blake2b"
 	"github.com/XinFinOrg/XDPoSChain/crypto/bn256"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	big2 "github.com/holiman/big"
 
 	//lint:ignore SA1019 Needed for precompile
 	"golang.org/x/crypto/ripemd160"
@@ -402,9 +401,9 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	}
 	// Retrieve the operands and execute the exponentiation
 	var (
-		base = new(big2.Int).SetBytes(getData(input, 0, baseLen))
-		exp  = new(big2.Int).SetBytes(getData(input, baseLen, expLen))
-		mod  = new(big2.Int).SetBytes(getData(input, baseLen+expLen, modLen))
+		base = new(big.Int).SetBytes(getData(input, 0, baseLen))
+		exp  = new(big.Int).SetBytes(getData(input, baseLen, expLen))
+		mod  = new(big.Int).SetBytes(getData(input, baseLen+expLen, modLen))
 		v    []byte
 	)
 	switch {
