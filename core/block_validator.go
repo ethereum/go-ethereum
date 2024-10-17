@@ -121,7 +121,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // such as amount of used gas, the receipt roots and the state root itself.
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, res *ProcessResult, stateless bool) error {
 	if res == nil {
-		return fmt.Errorf("nil ProcessResult value")
+		return errors.New("nil ProcessResult value")
 	}
 	header := block.Header()
 	if block.GasUsed() != res.GasUsed {
@@ -150,7 +150,7 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 			return fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
 		}
 	} else if res.Requests != nil {
-		return fmt.Errorf("block has requests before prague fork")
+		return errors.New("block has requests before prague fork")
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.

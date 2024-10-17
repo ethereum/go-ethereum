@@ -1332,85 +1332,6 @@ func checkLogEvents(t *testing.T, logsCh <-chan []*types.Log, rmLogsCh <-chan Re
 	}
 }
 
-func TestReorgSideEvent(t *testing.T) {
-	testReorgSideEvent(t, rawdb.HashScheme)
-	testReorgSideEvent(t, rawdb.PathScheme)
-}
-
-func testReorgSideEvent(t *testing.T, scheme string) {
-	var (
-		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
-		gspec   = &Genesis{
-			Config: params.TestChainConfig,
-			Alloc:  types.GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000000)}},
-		}
-		signer = types.LatestSigner(gspec.Config)
-	)
-	blockchain, _ := NewBlockChain(rawdb.NewMemoryDatabase(), DefaultCacheConfigWithScheme(scheme), gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
-	defer blockchain.Stop()
-
-	_, chain, _ := GenerateChainWithGenesis(gspec, ethash.NewFaker(), 3, func(i int, gen *BlockGen) {})
-	if _, err := blockchain.InsertChain(chain); err != nil {
-		t.Fatalf("failed to insert chain: %v", err)
-	}
-
-	_, replacementBlocks, _ := GenerateChainWithGenesis(gspec, ethash.NewFaker(), 4, func(i int, gen *BlockGen) {
-		tx, err := types.SignTx(types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), 1000000, gen.header.BaseFee, nil), signer, key1)
-		if i == 2 {
-			gen.OffsetTime(-9)
-		}
-		if err != nil {
-			t.Fatalf("failed to create tx: %v", err)
-		}
-		gen.AddTx(tx)
-	})
-	chainSideCh := make(chan ChainSideEvent, 64)
-	blockchain.SubscribeChainSideEvent(chainSideCh)
-	if _, err := blockchain.InsertChain(replacementBlocks); err != nil {
-		t.Fatalf("failed to insert chain: %v", err)
-	}
-
-	expectedSideHashes := map[common.Hash]bool{
-		chain[0].Hash(): true,
-		chain[1].Hash(): true,
-		chain[2].Hash(): true,
-	}
-
-	i := 0
-
-	const timeoutDura = 10 * time.Second
-	timeout := time.NewTimer(timeoutDura)
-done:
-	for {
-		select {
-		case ev := <-chainSideCh:
-			block := ev.Block
-			if _, ok := expectedSideHashes[block.Hash()]; !ok {
-				t.Errorf("%d: didn't expect %x to be in side chain", i, block.Hash())
-			}
-			i++
-
-			if i == len(expectedSideHashes) {
-				timeout.Stop()
-
-				break done
-			}
-			timeout.Reset(timeoutDura)
-
-		case <-timeout.C:
-			t.Fatalf("Timeout. Possibly not all blocks were triggered for sideevent: %v", i)
-		}
-	}
-
-	// make sure no more events are fired
-	select {
-	case e := <-chainSideCh:
-		t.Errorf("unexpected event fired: %v", e)
-	case <-time.After(250 * time.Millisecond):
-	}
-}
-
 // Tests if the canonical block can be fetched from the database during chain insertion.
 func TestCanonicalBlockRetrieval(t *testing.T) {
 	testCanonicalBlockRetrieval(t, rawdb.HashScheme)
@@ -2744,7 +2665,6 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	db, err := rawdb.Open(rawdb.OpenOptions{
 		Directory:         datadir,
 		AncientsDirectory: ancient,
-		Ephemeral:         true,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create persistent database: %v", err)
@@ -4311,3 +4231,36 @@ func TestPragueRequests(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 }
+
+func BenchmarkReorg(b *testing.B) {
+	chainLength := b.N
+
+	dir := b.TempDir()
+	db, err := rawdb.NewLevelDBDatabase(dir, 128, 128, "", false)
+	if err != nil {
+		b.Fatalf("cannot create temporary database: %v", err)
+	}
+	defer db.Close()
+	gspec := &Genesis{
+		Config: params.TestChainConfig,
+		Alloc:  types.GenesisAlloc{benchRootAddr: {Balance: math.BigPow(2, 254)}},
+	}
+	blockchain, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+	defer blockchain.Stop()
+
+	// Insert an easy and a difficult chain afterwards
+	easyBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(50000))
+	diffBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(50000))
+
+	if _, err := blockchain.InsertChain(easyBlocks); err != nil {
+		b.Fatalf("failed to insert easy chain: %v", err)
+	}
+	b.ResetTimer()
+	if _, err := blockchain.InsertChain(diffBlocks); err != nil {
+		b.Fatalf("failed to insert difficult chain: %v", err)
+	}
+}
+
+// Master: 			BenchmarkReorg-8   	   10000	    899591 ns/op	  820154 B/op	    1440 allocs/op 	1549443072 bytes of heap used
+// WithoutOldChain: BenchmarkReorg-8   	   10000	    1147281 ns/op	  943163 B/op	    1564 allocs/op 	1163870208 bytes of heap used
+// WithoutNewChain: BenchmarkReorg-8   	   10000	   1018922 ns/op	  943580 B/op	    1564 allocs/op  1171890176 bytes of heap used

@@ -56,7 +56,7 @@ func (e ErrStackUnderflow) Error() string {
 }
 
 func (e ErrStackUnderflow) Unwrap() error {
-	return fmt.Errorf("stack underflow")
+	return errors.New("stack underflow")
 }
 
 // ErrStackOverflow wraps an evm error when the items on the stack exceeds
@@ -71,7 +71,7 @@ func (e ErrStackOverflow) Error() string {
 }
 
 func (e ErrStackOverflow) Unwrap() error {
-	return fmt.Errorf("stack overflow")
+	return errors.New("stack overflow")
 }
 
 // ErrInvalidOpCode wraps an evm error when an invalid opcode is encountered.
