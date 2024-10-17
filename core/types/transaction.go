@@ -539,7 +539,7 @@ func (tx *Transaction) String() string {
 	GasPrice: %#x
 	GasLimit  %#x
 	Value:    %#x
-	Data:     0x%x
+	Data:     %#x
 	V:        %#x
 	R:        %#x
 	S:        %#x

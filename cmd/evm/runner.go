@@ -76,7 +76,7 @@ func runCmd(ctx *cli.Context) error {
 	log.Root().SetHandler(glogger)
 	logconfig := &vm.LogConfig{
 		EnableMemory: !ctx.GlobalBool(DisableMemoryFlag.Name),
-		DisableStack:  ctx.GlobalBool(DisableStackFlag.Name),
+		DisableStack: ctx.GlobalBool(DisableStackFlag.Name),
 	}
 
 	var (
@@ -238,7 +238,7 @@ Gas used:           %d
 	if tracer != nil {
 		tracer.CaptureEnd(ret, initialGas-leftOverGas, execTime, err)
 	} else {
-		fmt.Printf("0x%x\n", ret)
+		fmt.Printf("%#x\n", ret)
 		if err != nil {
 			fmt.Printf(" error: %v\n", err)
 		}
