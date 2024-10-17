@@ -604,12 +604,17 @@ func (t *UDPv5) dispatch() {
 			c.ch = make(chan v5wire.Packet, 1)
 			c.err = make(chan error, 1)
 			// Assign request ID.
-			crand.Read(c.reqid)
-			c.packet.SetRequestID(c.reqid)
-			newNonce, _ := t.send(c.id, c.addr, c.packet, nil)
-			c.nonce = newNonce
-			t.activeCallByAuth[newNonce] = c
+			if tq, ok := r.msg.(*v5wire.TalkRequest); ok {
+				if len(tq.ReqID) == 0 {
+					crand.Read(c.reqid)
+					c.packet.SetRequestID(c.reqid)
+				}
+			}
+			nonce, _ := t.send(c.id, c.addr, c.packet, nil)
+			c.nonce = nonce
+			t.activeCallByAuth[nonce] = c
 			t.startResponseTimeout(c)
+			//t.send(r.destID, r.destAddr, r.msg, nil)
 
 		case p := <-t.packetInCh:
 			t.handlePacket(p.Data, p.Addr)

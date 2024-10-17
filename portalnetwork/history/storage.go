@@ -452,7 +452,7 @@ func (p *ContentStorage) deleteContentOutOfRadius(radius *uint256.Int) error {
 		return err
 	}
 	count, _ := res.RowsAffected()
-	p.log.Trace("delete %d items", count)
+	p.log.Trace("delete items", "count", count)
 	return err
 }
 

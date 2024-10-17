@@ -140,6 +140,11 @@ func TestGetContentByKey(t *testing.T) {
 	contentId := historyNetwork1.portalProtocol.ToContentId(headerEntry.key)
 	err = historyNetwork1.portalProtocol.Put(headerEntry.key, contentId, headerEntry.value)
 	require.NoError(t, err)
+
+	header, err = historyNetwork1.GetBlockHeader(headerEntry.key[1:])
+	require.NoError(t, err)
+	require.NotNil(t, header)
+
 	// get content from historyNetwork1
 	header, err = historyNetwork2.GetBlockHeader(headerEntry.key[1:])
 	require.NoError(t, err)
