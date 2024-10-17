@@ -184,6 +184,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		input,
 		cfg.GasLimit,
 		uint256.MustFromBig(cfg.Value),
+		rules.IsPrague,
 	)
 	return code, address, leftOverGas, err
 }
