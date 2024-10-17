@@ -319,3 +319,5 @@ jobs:
           files: |
             packaging/rpm_build/RPMS/noarch/bor-mainnet-**.rpm
             packaging/rpm_build/RPMS/noarch/bor-mainnet-**.rpm.checksum
+            packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-**.rpm
+            packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-**.rpm.checksum

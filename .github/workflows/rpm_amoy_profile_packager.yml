@@ -321,3 +321,5 @@ jobs:
           files: |
             packaging/rpm_build/RPMS/noarch/bor-amoy-**.rpm
             packaging/rpm_build/RPMS/noarch/bor-amoy-**.rpm.checksum
+            packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-**.rpm
+            packaging/rpm_build/RPMS/noarch/bor-pbss-amoy-**.rpm.checksum
