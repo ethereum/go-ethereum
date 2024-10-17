@@ -1,9 +1,13 @@
 ---
 title: Resources
-description: Read, watch and listen more about Geth and Ethereum
+description: Code, read and watch more about Geth and Ethereum
 ---
 
 Here are more resources for a deeper understanding of Geth and related topics.
+
+## Code {#code}
+
+[Dapp example built in Go with Geth and Gin](https://github.com/tr1sm0s1n/go-dapp-example)
 
 ## Read {#read}
 
