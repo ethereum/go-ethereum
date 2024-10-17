@@ -29,7 +29,7 @@ var customGenesisTests = []struct {
 	query   string
 	result  string
 }{
-	// Genesis file with an empty chain configuration (ensure missing fields work)
+	// Genesis file with a mostly-empty chain configuration (ensure missing fields work)
 	{
 		genesis: `{
 			"alloc"      : {},
@@ -41,7 +41,9 @@ var customGenesisTests = []struct {
 			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
-			"config": {}
+			"config": {
+				"terminalTotalDifficulty": "0xffffffffffffffff"
+			}
 		}`,
 		query:  "eth.getBlock(0).nonce",
 		result: "0x0000000000001338",
@@ -61,7 +63,8 @@ var customGenesisTests = []struct {
 			"config"     : {
 				"homesteadBlock"                : 42,
 				"daoForkBlock"                  : 141,
-				"daoForkSupport"                : true
+				"daoForkSupport"                : true,
+				"terminalTotalDifficulty": "0xffffffffffffffff"
 			}
 		}`,
 		query:  "eth.getBlock(0).nonce",
@@ -111,7 +114,9 @@ func TestCustomBackend(t *testing.T) {
 			"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 			"timestamp"  : "0x00",
-			"config": {}
+			"config": {
+				"terminalTotalDifficulty": "0xffffffffffffffff"
+			}
 		}`
 	type backendTest struct {
 		initArgs   []string
