@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -116,19 +117,17 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			var (
 				signer  = types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)), uint64(test.Context.Time))
 				context = test.Context.toBlockContext(test.Genesis)
-				state   = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
+				st      = tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc, false, rawdb.HashScheme)
 			)
-			state.Close()
+			st.Close()
 
 			tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), test.TracerConfig, test.Genesis.Config)
 			if err != nil {
 				t.Fatalf("failed to create call tracer: %v", err)
 			}
-
-			state.StateDB.SetLogger(tracer.Hooks)
-			logState := vm.StateDB(state.StateDB.Wrapped())
-			if logState == nil {
-				logState = state.StateDB
+			logState := vm.StateDB(st.StateDB)
+			if tracer.Hooks != nil {
+				logState = state.NewHookedState(st.StateDB, tracer.Hooks)
 			}
 			msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 			if err != nil {
@@ -353,7 +352,7 @@ func TestInternals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			state := tests.MakePreState(rawdb.NewMemoryDatabase(),
+			st := tests.MakePreState(rawdb.NewMemoryDatabase(),
 				types.GenesisAlloc{
 					to: types.Account{
 						Code: tc.code,
@@ -362,12 +361,11 @@ func TestInternals(t *testing.T) {
 						Balance: big.NewInt(500000000000000),
 					},
 				}, false, rawdb.HashScheme)
-			defer state.Close()
-			state.StateDB.SetLogger(tc.tracer.Hooks)
+			defer st.Close()
 
-			logState := vm.StateDB(state.StateDB.Wrapped())
-			if logState == nil {
-				logState = state.StateDB
+			logState := vm.StateDB(st.StateDB)
+			if hooks := tc.tracer.Hooks; hooks != nil {
+				logState = state.NewHookedState(st.StateDB, hooks)
 			}
 
 			tx, err := types.SignNewTx(key, signer, &types.LegacyTx{

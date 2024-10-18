@@ -1774,7 +1774,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		if err != nil {
 			return nil, it.index, err
 		}
-		statedb.SetLogger(bc.logger)
 
 		// If we are past Byzantium, enable prefetching to pull in trie node paths
 		// while processing transactions. Before Byzantium the prefetcher is mostly
@@ -1893,13 +1892,10 @@ func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, s
 			bc.logger.OnBlockEnd(blockEndErr)
 		}()
 	}
-	var wStateDb = vm.StateDB(statedb)
-	if w := statedb.Wrapped(); w != nil {
-		wStateDb = w
-	}
+
 	// Process block using the parent state as reference point
 	pstart := time.Now()
-	res, err := bc.processor.Process(block, wStateDb, bc.vmConfig)
+	res, err := bc.processor.Process(block, statedb, bc.vmConfig)
 	if err != nil {
 		bc.reportBlock(block, res, err)
 		return nil, err

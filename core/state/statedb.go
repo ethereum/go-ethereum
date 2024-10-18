@@ -81,11 +81,7 @@ type StateDB struct {
 	db         Database
 	prefetcher *triePrefetcher
 	trie       Trie
-
-	onSelfDestructBurn func(common.Address, *uint256.Int)
-	shim               *stateDBLogger
-
-	reader Reader
+	reader     Reader
 
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
@@ -190,19 +186,6 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		sdb.accessEvents = NewAccessEvents(db.PointCache())
 	}
 	return sdb, nil
-}
-
-func (s *StateDB) SetBurnCallback(fn func(common.Address, *uint256.Int)) {
-	s.onSelfDestructBurn = fn
-}
-
-// SetLogger sets the logger for account update hooks.
-func (s *StateDB) SetLogger(l *tracing.Hooks) {
-	s.shim = newStateDBLogger(s, l)
-}
-
-func (s *StateDB) Wrapped() *stateDBLogger {
-	return s.shim
 }
 
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
@@ -754,11 +737,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		if obj.selfDestructed || (deleteEmptyObjects && obj.empty()) {
 			delete(s.stateObjects, obj.address)
 			s.markDelete(addr)
-
-			// If ether was sent to account post-selfdestruct it is burnt.
-			if bal := obj.Balance(); bal.Sign() != 0 && obj.selfDestructed && s.onSelfDestructBurn != nil {
-				s.onSelfDestructBurn(obj.address, bal)
-			}
 			// We need to maintain account deletions explicitly (will remain
 			// set indefinitely). Note only the first occurred self-destruct
 			// event is tracked.

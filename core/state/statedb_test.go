@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"math/big"
 	"math/rand"
 	"reflect"
 	"slices"
@@ -1377,54 +1376,4 @@ func TestStorageDirtiness(t *testing.T) {
 	// the storage change is reverted, dirty value should be set back
 	state.RevertToSnapshot(snap)
 	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
-}
-
-// This method tests that the 'burn' from sending-to-selfdestructed accounts
-// is accounted for.
-// (There is also a higher-level test in eth/tracers: TestSupplySelfDestruct )
-func TestBurn(t *testing.T) {
-	// Note: burn can happen even after EIP-6780, if within one single transaction,
-	// the following occur:
-	// 1. contract B creates contract A
-	// 2. contract A is destructed
-	// 3. constract B sends ether to A
-
-	var burned = new(uint256.Int)
-	s, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
-	sdblog := newStateDBLogger(s, &tracing.Hooks{
-		OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
-			if reason == tracing.BalanceDecreaseSelfdestructBurn {
-				burned.Add(burned, uint256.MustFromBig(prev))
-			}
-		},
-	})
-	createAndDestroy := func(addr common.Address) {
-		sdblog.AddBalance(addr, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
-		sdblog.CreateContract(addr)
-		sdblog.SelfDestruct(addr)
-		// sanity-check that balance is now 0
-		if have, want := sdblog.GetBalance(addr), new(uint256.Int); !have.Eq(want) {
-			t.Fatalf("post-destruct balance wrong: have %v want %v", have, want)
-		}
-	}
-	addA := common.Address{0xaa}
-	addB := common.Address{0xbb}
-	addC := common.Address{0xcc}
-
-	// Tx 1: create and destroy address A and B in one tx
-	createAndDestroy(addA)
-	createAndDestroy(addB)
-	sdblog.AddBalance(addA, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
-	sdblog.AddBalance(addB, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
-	sdblog.Finalise(true)
-
-	// Tx 2: create and destroy address C, then commit
-	createAndDestroy(addC)
-	sdblog.AddBalance(addC, uint256.NewInt(200), tracing.BalanceChangeUnspecified)
-	sdblog.Finalise(true)
-
-	s.Commit(0, false)
-	if have, want := burned, uint256.NewInt(600); !have.Eq(want) {
-		t.Fatalf("burn-count wrong, have %v want %v", have, want)
-	}
 }
