@@ -125,7 +125,7 @@ var (
 		"focal",    // 20.04, EOL: 04/2030
 		"jammy",    // 22.04, EOL: 04/2032
 		"noble",    // 24.04, EOL: 04/2034
-		"oracular", // 24.10, EOL: 07/2025 
+		"oracular", // 24.10, EOL: 07/2025
 	}
 
 	// This is where the tests should be unpacked.
@@ -205,12 +205,6 @@ func doInstall(cmdline []string) {
 	// Configure the build.
 	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
 
-	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
-	// better disable it. This check isn't the best, it should probably
-	// check for something in env instead.
-	if env.CI && runtime.GOARCH == "arm64" {
-		gobuild.Args = append(gobuild.Args, "-p", "1")
-	}
 	// We use -trimpath to avoid leaking local paths into the built executables.
 	gobuild.Args = append(gobuild.Args, "-trimpath")
 
