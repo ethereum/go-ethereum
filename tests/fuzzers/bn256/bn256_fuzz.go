@@ -22,12 +22,12 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/consensys/gnark-crypto/ecc/bn254"
 	cloudflare "github.com/ethereum/go-ethereum/crypto/bn256/cloudflare"
+	gnark "github.com/ethereum/go-ethereum/crypto/bn256/gnark"
 	google "github.com/ethereum/go-ethereum/crypto/bn256/google"
 )
 
-func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1, *bn254.G1Affine) {
+func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1, *gnark.G1) {
 	_, xc, err := cloudflare.RandomG1(input)
 	if err != nil {
 		// insufficient input
@@ -37,14 +37,14 @@ func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1, *bn254.G1Affine) 
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
 		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
 	}
-	xs := new(bn254.G1Affine)
-	if err := xs.Unmarshal(xc.Marshal()); err != nil {
+	xs := new(gnark.G1)
+	if _, err := xs.Unmarshal(xc.Marshal()); err != nil {
 		panic(fmt.Sprintf("Could not marshal cloudflare -> gnark: %v", err))
 	}
 	return xc, xg, xs
 }
 
-func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2, *bn254.G2Affine) {
+func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2, *gnark.G2) {
 	_, xc, err := cloudflare.RandomG2(input)
 	if err != nil {
 		// insufficient input
@@ -54,14 +54,14 @@ func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2, *bn254.G2Affine) 
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
 		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
 	}
-	xs := new(bn254.G2Affine)
-	if err := xs.Unmarshal(xc.Marshal()); err != nil {
+	xs := new(gnark.G2)
+	if _, err := xs.Unmarshal(xc.Marshal()); err != nil {
 		panic(fmt.Sprintf("Could not marshal cloudflare -> gnark: %v", err))
 	}
 	return xc, xg, xs
 }
 
-// fuzzAdd fuzzez bn256 addition between the Google and Cloudflare libraries.
+// fuzzAdd fuzzes bn256 addition between the Google, Cloudflare and Gnark libraries.
 func fuzzAdd(data []byte) int {
 	input := bytes.NewReader(data)
 	xc, xg, xs := getG1Points(input)
@@ -72,7 +72,7 @@ func fuzzAdd(data []byte) int {
 	if yc == nil {
 		return 0
 	}
-	// Ensure both libs can parse the second curve point
+	// Ensure libs can parse the second curve point
 	// Add the two points and ensure they result in the same output
 	rc := new(cloudflare.G1)
 	rc.Add(xc, yc)
@@ -80,9 +80,8 @@ func fuzzAdd(data []byte) int {
 	rg := new(google.G1)
 	rg.Add(xg, yg)
 
-	tmpX := new(bn254.G1Jac).FromAffine(xs)
-	tmpY := new(bn254.G1Jac).FromAffine(ys)
-	rs := new(bn254.G1Affine).FromJacobian(tmpX.AddAssign(tmpY))
+	rs := new(gnark.G1)
+	rs.Add(xs, ys)
 
 	if !bytes.Equal(rc.Marshal(), rg.Marshal()) {
 		panic("add mismatch: cloudflare/google")
@@ -94,8 +93,8 @@ func fuzzAdd(data []byte) int {
 	return 1
 }
 
-// fuzzMul fuzzez bn256 scalar multiplication between the Google and Cloudflare
-// libraries.
+// fuzzMul fuzzes bn256 scalar multiplication between the Google, Cloudflare
+// and Gnark libraries.
 func fuzzMul(data []byte) int {
 	input := bytes.NewReader(data)
 	pc, pg, ps := getG1Points(input)
@@ -122,15 +121,13 @@ func fuzzMul(data []byte) int {
 	rg := new(google.G1)
 	rg.ScalarMult(pg, new(big.Int).SetBytes(buf))
 
-	rs := new(bn254.G1Jac)
-	psJac := new(bn254.G1Jac).FromAffine(ps)
-	rs.ScalarMultiplication(psJac, new(big.Int).SetBytes(buf))
-	rsAffine := new(bn254.G1Affine).FromJacobian(rs)
+	rs := new(gnark.G1)
+	rs.ScalarMult(ps, new(big.Int).SetBytes(buf))
 
 	if !bytes.Equal(rc.Marshal(), rg.Marshal()) {
 		panic("scalar mul mismatch: cloudflare/google")
 	}
-	if !bytes.Equal(rc.Marshal(), rsAffine.Marshal()) {
+	if !bytes.Equal(rc.Marshal(), rs.Marshal()) {
 		panic("scalar mul mismatch: cloudflare/gnark")
 	}
 	return 1
@@ -150,17 +147,26 @@ func fuzzPair(data []byte) int {
 	// Pair the two points and ensure they result in the same output
 	clPair := cloudflare.Pair(pc, tc).Marshal()
 	gPair := google.Pair(pg, tg).Marshal()
+	sPair := gnark.Pair(ps, ts).Marshal()
+
 	if !bytes.Equal(clPair, gPair) {
 		panic("pairing mismatch: cloudflare/google")
 	}
-	cPair, err := bn254.Pair([]bn254.G1Affine{*ps}, []bn254.G2Affine{*ts})
-	if err != nil {
-		panic(fmt.Sprintf("gnark/bn254 encountered error: %v", err))
+
+	normalizedClPair := normalizeGTToGnark(clPair).Marshal()
+	if !bytes.Equal(normalizedClPair, sPair) {
+		panic("pairing mismatch: cloudflare/gnark")
 	}
 
-	// gnark uses a different pairing algorithm which might produce
-	// different but also correct outputs, we need to scale the output by s
+	return 1
+}
 
+// normalizeGTToGnark scales a Cloudflare/Google GT element by `s`
+// so that it can be compared with a gnark GT point.
+//
+// For the definition of `s` see 3.5 in https://eprint.iacr.org/2015/192.pdf
+func normalizeGTToGnark(cloudflareOrGoogleGT []byte) *gnark.GT {
+	// Compute s = 2*u(6*u^2 + 3*u + 1)
 	u, _ := new(big.Int).SetString("0x44e992b44a6909f1", 0)
 	u_exp2 := new(big.Int).Exp(u, big.NewInt(2), nil)   // u^2
 	u_6_exp2 := new(big.Int).Mul(big.NewInt(6), u_exp2) // 6*u^2
@@ -170,14 +176,12 @@ func fuzzPair(data []byte) int {
 	u_2 := new(big.Int).Mul(big.NewInt(2), u)           // 2*u
 	s := u_2.Mul(u_2, inner)                            // 2*u(6*u^2 + 3*u + 1)
 
-	gRes := new(bn254.GT)
-	if err := gRes.SetBytes(clPair); err != nil {
+	// Scale the Cloudflare/Google GT element by `s`
+	gRes := new(gnark.GT)
+	if err := gRes.Unmarshal(cloudflareOrGoogleGT); err != nil {
 		panic(err)
 	}
 	gRes = gRes.Exp(*gRes, s)
-	if !bytes.Equal(cPair.Marshal(), gRes.Marshal()) {
-		panic("pairing mismatch: cloudflare/gnark")
-	}
 
-	return 1
+	return gRes
 }
