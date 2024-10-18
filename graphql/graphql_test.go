@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/math"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
@@ -459,13 +461,14 @@ func newGQLService(t *testing.T, stack *node.Node, shanghai bool, gspec *core.Ge
 	var engine consensus.Engine = ethash.NewFaker()
 	if shanghai {
 		engine = beacon.NewFaker()
-		chainCfg := gspec.Config
-		chainCfg.TerminalTotalDifficultyPassed = true
-		chainCfg.TerminalTotalDifficulty = common.Big0
+		gspec.Config.TerminalTotalDifficulty = common.Big0
 		// GenerateChain will increment timestamps by 10.
 		// Shanghai upgrade at block 1.
 		shanghaiTime := uint64(5)
-		chainCfg.ShanghaiTime = &shanghaiTime
+		gspec.Config.ShanghaiTime = &shanghaiTime
+	} else {
+		// set an arbitrary large ttd as chains are required to be known to be merged
+		gspec.Config.TerminalTotalDifficulty = big.NewInt(math.MaxInt64)
 	}
 	ethBackend, err := eth.New(stack, ethConf)
 	if err != nil {
