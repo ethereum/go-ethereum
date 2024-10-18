@@ -75,6 +75,20 @@ type BatchElem struct {
 	Error error
 }
 
+// ClientInterface is the interface that an EVM rpc client must implement.
+type ClientInterface interface {
+	Call(result interface{}, method string, args ...interface{}) error
+	CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error
+	BatchCall(b []BatchElem) error
+	BatchCallContext(ctx context.Context, b []BatchElem) error
+	Notify(ctx context.Context, method string, args ...interface{}) error
+	EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error)
+	ShhSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error)
+	Subscribe(ctx context.Context, namespace string, channel interface{}, args ...interface{}) (*ClientSubscription, error)
+	SupportsSubscriptions() bool
+	Close()
+}
+
 // Client represents a connection to an RPC server.
 type Client struct {
 	idgen    func() ID // for subscriptions

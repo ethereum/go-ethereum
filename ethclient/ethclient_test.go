@@ -302,7 +302,7 @@ func TestEthClient(t *testing.T) {
 	}
 }
 
-func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
+func testHeader(t *testing.T, chain []*types.Block, client rpc.ClientInterface) {
 	tests := map[string]struct {
 		block   *big.Int
 		want    *types.Header
@@ -342,7 +342,7 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 	}
 }
 
-func testBalanceAt(t *testing.T, client *rpc.Client) {
+func testBalanceAt(t *testing.T, client rpc.ClientInterface) {
 	tests := map[string]struct {
 		account common.Address
 		block   *big.Int
@@ -388,7 +388,7 @@ func testBalanceAt(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testTransactionInBlock(t *testing.T, client *rpc.Client) {
+func testTransactionInBlock(t *testing.T, client rpc.ClientInterface) {
 	ec := NewClient(client)
 
 	// Get current block by number.
@@ -420,7 +420,7 @@ func testTransactionInBlock(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testChainID(t *testing.T, client *rpc.Client) {
+func testChainID(t *testing.T, client rpc.ClientInterface) {
 	ec := NewClient(client)
 	id, err := ec.ChainID(context.Background())
 	if err != nil {
@@ -431,7 +431,7 @@ func testChainID(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testGetBlock(t *testing.T, client *rpc.Client) {
+func testGetBlock(t *testing.T, client rpc.ClientInterface) {
 	ec := NewClient(client)
 
 	// Get current block number
@@ -476,7 +476,7 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testStatusFunctions(t *testing.T, client *rpc.Client) {
+func testStatusFunctions(t *testing.T, client rpc.ClientInterface) {
 	ec := NewClient(client)
 
 	// Sync progress
@@ -539,7 +539,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testCallContractAtHash(t *testing.T, client *rpc.Client) {
+func testCallContractAtHash(t *testing.T, client rpc.ClientInterface) {
 	ec := NewClient(client)
 
 	// EstimateGas
@@ -566,7 +566,7 @@ func testCallContractAtHash(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testCallContract(t *testing.T, client *rpc.Client) {
+func testCallContract(t *testing.T, client rpc.ClientInterface) {
 	ec := NewClient(client)
 
 	// EstimateGas
@@ -593,7 +593,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testAtFunctions(t *testing.T, client *rpc.Client) {
+func testAtFunctions(t *testing.T, client rpc.ClientInterface) {
 	ec := NewClient(client)
 
 	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
@@ -696,7 +696,7 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testTransactionSender(t *testing.T, client *rpc.Client) {
+func testTransactionSender(t *testing.T, client rpc.ClientInterface) {
 	ec := NewClient(client)
 	ctx := context.Background()
 

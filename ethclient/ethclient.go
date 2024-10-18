@@ -33,7 +33,7 @@ import (
 
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
-	c *rpc.Client
+	c rpc.ClientInterface
 }
 
 // Dial connects a client to the given URL.
@@ -51,7 +51,7 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 }
 
 // NewClient creates a client that uses the given RPC client.
-func NewClient(c *rpc.Client) *Client {
+func NewClient(c rpc.ClientInterface) *Client {
 	return &Client{c}
 }
 
@@ -61,7 +61,7 @@ func (ec *Client) Close() {
 }
 
 // Client gets the underlying RPC client.
-func (ec *Client) Client() *rpc.Client {
+func (ec *Client) Client() rpc.ClientInterface {
 	return ec.c
 }
 
