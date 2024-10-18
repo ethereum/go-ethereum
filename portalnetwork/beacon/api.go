@@ -48,7 +48,7 @@ func (p *API) BeaconRecursiveFindNodes(nodeId string) ([]string, error) {
 	return p.RecursiveFindNodes(nodeId)
 }
 
-func (p *API) BeaconRecursiveFindContent(contentKeyHex string) (*discover.ContentInfo, error) {
+func (p *API) BeaconGetContent(contentKeyHex string) (*discover.ContentInfo, error) {
 	return p.RecursiveFindContent(contentKeyHex)
 }
 
@@ -64,7 +64,7 @@ func (p *API) BeaconGossip(contentKeyHex, contentHex string) (int, error) {
 	return p.Gossip(contentKeyHex, contentHex)
 }
 
-func (p *API) BeaconTraceRecursiveFindContent(contentKeyHex string) (*discover.TraceContentResult, error) {
+func (p *API) BeaconTraceGetContent(contentKeyHex string) (*discover.TraceContentResult, error) {
 	return p.TraceRecursiveFindContent(contentKeyHex)
 }
 

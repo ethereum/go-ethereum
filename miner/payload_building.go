@@ -145,7 +145,7 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 		close(payload.stop)
 	}
 	if payload.full != nil {
-		envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars, payload.emptyRequests)
+		envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars, payload.requests)
 		if payload.fullWitness != nil {
 			envelope.Witness = new(hexutil.Bytes)
 			*envelope.Witness, _ = rlp.EncodeToBytes(payload.fullWitness) // cannot fail
