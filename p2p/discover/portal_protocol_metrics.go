@@ -30,6 +30,9 @@ type portalMetrics struct {
 	utpOutFailTx       metrics.Counter
 	utpOutFailShutdown metrics.Counter
 	utpOutSuccess      metrics.Counter
+
+	contentValidated   metrics.Counter
+	contentInvalidated metrics.Counter
 }
 
 func newPortalMetrics(protocolName string) *portalMetrics {
@@ -58,5 +61,7 @@ func newPortalMetrics(protocolName string) *portalMetrics {
 		utpOutFailTx:                metrics.NewRegisteredCounter("portal/"+protocolName+"/utp/outbound/fail_tx", nil),
 		utpOutFailShutdown:          metrics.NewRegisteredCounter("portal/"+protocolName+"/utp/outbound/fail_shutdown", nil),
 		utpOutSuccess:               metrics.NewRegisteredCounter("portal/"+protocolName+"/utp/outbound/success", nil),
+		contentValidated:            metrics.NewRegisteredCounter("portal/"+protocolName+"/content/validated", nil),
+		contentInvalidated:          metrics.NewRegisteredCounter("portal/"+protocolName+"/content/invalidated", nil),
 	}
 }

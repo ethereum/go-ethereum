@@ -1410,12 +1410,18 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 func (p *PortalProtocol) handleOfferedContents(id enode.ID, keys [][]byte, payload []byte) error {
 	contents, err := decodeContents(payload)
 	if err != nil {
+		if metrics.Enabled {
+			p.portalMetrics.contentInvalidated.Inc(1)
+		}
 		return err
 	}
 
 	keyLen := len(keys)
 	contentLen := len(contents)
 	if keyLen != contentLen {
+		if metrics.Enabled {
+			p.portalMetrics.contentInvalidated.Inc(1)
+		}
 		return fmt.Errorf("content keys len %d doesn't match content values len %d", keyLen, contentLen)
 	}
 
@@ -1427,6 +1433,9 @@ func (p *PortalProtocol) handleOfferedContents(id enode.ID, keys [][]byte, paylo
 
 	p.contentQueue <- contentElement
 
+	if metrics.Enabled {
+		p.portalMetrics.contentValidated.Inc(1)
+	}
 	return nil
 }
 
