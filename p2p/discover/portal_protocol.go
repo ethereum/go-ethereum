@@ -666,7 +666,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
 				if err != nil {
 					if metrics.Enabled {
-						p.portalMetrics.utpOutFailShutdown.Inc(1)
+						p.portalMetrics.utpOutFailDeadline.Inc(1)
 					}
 					p.Log.Error("failed to set write deadline", "err", err)
 					return
@@ -676,7 +676,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				written, err = conn.Write(contentsPayload)
 				if err != nil {
 					if metrics.Enabled {
-						p.portalMetrics.utpOutFailTx.Inc(1)
+						p.portalMetrics.utpOutFailWrite.Inc(1)
 					}
 					p.Log.Error("failed to write to utp connection", "err", err)
 					return
@@ -768,7 +768,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
 		if err != nil {
 			if metrics.Enabled {
-				p.portalMetrics.utpInFailShutdown.Inc(1)
+				p.portalMetrics.utpInFailDeadline.Inc(1)
 			}
 			return 0xff, nil, err
 		}
@@ -776,7 +776,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		data, err := io.ReadAll(conn)
 		if err != nil {
 			if metrics.Enabled {
-				p.portalMetrics.utpInFailTx.Inc(1)
+				p.portalMetrics.utpInFailRead.Inc(1)
 			}
 			p.Log.Error("failed to read from utp connection", "err", err)
 			return 0xff, nil, err
@@ -1209,7 +1209,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 					err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
 					if err != nil {
 						if metrics.Enabled {
-							p.portalMetrics.utpOutFailShutdown.Inc(1)
+							p.portalMetrics.utpOutFailDeadline.Inc(1)
 						}
 						p.Log.Error("failed to set write deadline", "err", err)
 						return
@@ -1219,7 +1219,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 					n, err = conn.Write(content)
 					if err != nil {
 						if metrics.Enabled {
-							p.portalMetrics.utpOutFailTx.Inc(1)
+							p.portalMetrics.utpOutFailWrite.Inc(1)
 						}
 						p.Log.Error("failed to write content to utp connection", "err", err)
 						return
@@ -1343,7 +1343,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 					err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
 					if err != nil {
 						if metrics.Enabled {
-							p.portalMetrics.utpInFailShutdown.Inc(1)
+							p.portalMetrics.utpInFailDeadline.Inc(1)
 						}
 						p.Log.Error("failed to set read deadline", "err", err)
 						return
@@ -1353,7 +1353,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 					data, err = io.ReadAll(conn)
 					if err != nil {
 						if metrics.Enabled {
-							p.portalMetrics.utpInFailTx.Inc(1)
+							p.portalMetrics.utpInFailRead.Inc(1)
 						}
 						p.Log.Error("failed to read from utp connection", "err", err)
 						return
@@ -1365,9 +1365,6 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 
 					err = p.handleOfferedContents(id, contentKeys, data)
 					if err != nil {
-						if metrics.Enabled {
-							p.portalMetrics.utpInFailTx.Inc(1)
-						}
 						p.Log.Error("failed to handle offered Contents", "err", err)
 						return
 					}
@@ -1411,7 +1408,7 @@ func (p *PortalProtocol) handleOfferedContents(id enode.ID, keys [][]byte, paylo
 	contents, err := decodeContents(payload)
 	if err != nil {
 		if metrics.Enabled {
-			p.portalMetrics.contentInvalidated.Inc(1)
+			p.portalMetrics.contentDecodedFalse.Inc(1)
 		}
 		return err
 	}
@@ -1420,7 +1417,7 @@ func (p *PortalProtocol) handleOfferedContents(id enode.ID, keys [][]byte, paylo
 	contentLen := len(contents)
 	if keyLen != contentLen {
 		if metrics.Enabled {
-			p.portalMetrics.contentInvalidated.Inc(1)
+			p.portalMetrics.contentDecodedFalse.Inc(1)
 		}
 		return fmt.Errorf("content keys len %d doesn't match content values len %d", keyLen, contentLen)
 	}
@@ -1434,7 +1431,7 @@ func (p *PortalProtocol) handleOfferedContents(id enode.ID, keys [][]byte, paylo
 	p.contentQueue <- contentElement
 
 	if metrics.Enabled {
-		p.portalMetrics.contentValidated.Inc(1)
+		p.portalMetrics.contentDecodedTrue.Inc(1)
 	}
 	return nil
 }
