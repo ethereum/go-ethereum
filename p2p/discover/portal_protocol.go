@@ -656,12 +656,18 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				conn, err = utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(connctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
 				conncancel()
 				if err != nil {
+					if metrics.Enabled {
+						p.portalMetrics.utpOutFailConn.Inc(1)
+					}
 					p.Log.Error("failed to dial utp connection", "err", err)
 					return
 				}
 
 				err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
 				if err != nil {
+					if metrics.Enabled {
+						p.portalMetrics.utpOutFailShutdown.Inc(1)
+					}
 					p.Log.Error("failed to set write deadline", "err", err)
 					return
 				}
@@ -669,12 +675,16 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				var written int
 				written, err = conn.Write(contentsPayload)
 				if err != nil {
+					if metrics.Enabled {
+						p.portalMetrics.utpOutFailTx.Inc(1)
+					}
 					p.Log.Error("failed to write to utp connection", "err", err)
 					return
 				}
 				p.Log.Trace(">> CONTENT/"+p.protocolName, "id", target.ID(), "contents", contents, "size", written)
 				if metrics.Enabled {
 					p.portalMetrics.messagesSentContent.Mark(1)
+					p.portalMetrics.utpOutSuccess.Inc(1)
 				}
 				return
 			}
@@ -740,6 +750,9 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		conn, err := utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(connctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
 		defer func() {
 			if conn == nil {
+				if metrics.Enabled {
+					p.portalMetrics.utpInFailConn.Inc(1)
+				}
 				return
 			}
 			err := conn.Close()
@@ -754,17 +767,24 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 
 		err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
 		if err != nil {
+			if metrics.Enabled {
+				p.portalMetrics.utpInFailShutdown.Inc(1)
+			}
 			return 0xff, nil, err
 		}
 		// Read ALL the data from the connection until EOF and return it
 		data, err := io.ReadAll(conn)
 		if err != nil {
+			if metrics.Enabled {
+				p.portalMetrics.utpInFailTx.Inc(1)
+			}
 			p.Log.Error("failed to read from utp connection", "err", err)
 			return 0xff, nil, err
 		}
 		p.Log.Trace("<< CONTENT/"+p.protocolName, "id", target.ID(), "size", len(data), "data", data)
 		if metrics.Enabled {
 			p.portalMetrics.messagesReceivedContent.Mark(1)
+			p.portalMetrics.utpInSuccess.Inc(1)
 		}
 		return resp[1], data, nil
 	case portalwire.ContentEnrsSelector:
@@ -1179,12 +1199,18 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
 					cancel()
 					if err != nil {
+						if metrics.Enabled {
+							p.portalMetrics.utpOutFailConn.Inc(1)
+						}
 						p.Log.Error("failed to accept utp connection for handle find content", "connId", connIdSend, "err", err)
 						return
 					}
 
 					err = conn.SetWriteDeadline(time.Now().Add(defaultUTPWriteTimeout))
 					if err != nil {
+						if metrics.Enabled {
+							p.portalMetrics.utpOutFailShutdown.Inc(1)
+						}
 						p.Log.Error("failed to set write deadline", "err", err)
 						return
 					}
@@ -1192,10 +1218,16 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 					var n int
 					n, err = conn.Write(content)
 					if err != nil {
+						if metrics.Enabled {
+							p.portalMetrics.utpOutFailTx.Inc(1)
+						}
 						p.Log.Error("failed to write content to utp connection", "err", err)
 						return
 					}
 
+					if metrics.Enabled {
+						p.portalMetrics.utpOutSuccess.Inc(1)
+					}
 					p.Log.Trace("wrote content size to utp connection", "n", n)
 					return
 				}
@@ -1301,12 +1333,18 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
 					cancel()
 					if err != nil {
+						if metrics.Enabled {
+							p.portalMetrics.utpInFailConn.Inc(1)
+						}
 						p.Log.Error("failed to accept utp connection for handle offer", "connId", connIdSend, "err", err)
 						return
 					}
 
 					err = conn.SetReadDeadline(time.Now().Add(defaultUTPReadTimeout))
 					if err != nil {
+						if metrics.Enabled {
+							p.portalMetrics.utpInFailShutdown.Inc(1)
+						}
 						p.Log.Error("failed to set read deadline", "err", err)
 						return
 					}
@@ -1314,6 +1352,9 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 					var data []byte
 					data, err = io.ReadAll(conn)
 					if err != nil {
+						if metrics.Enabled {
+							p.portalMetrics.utpInFailTx.Inc(1)
+						}
 						p.Log.Error("failed to read from utp connection", "err", err)
 						return
 					}
@@ -1324,10 +1365,16 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 
 					err = p.handleOfferedContents(id, contentKeys, data)
 					if err != nil {
+						if metrics.Enabled {
+							p.portalMetrics.utpInFailTx.Inc(1)
+						}
 						p.Log.Error("failed to handle offered Contents", "err", err)
 						return
 					}
 
+					if metrics.Enabled {
+						p.portalMetrics.utpInSuccess.Inc(1)
+					}
 					return
 				}
 			}
