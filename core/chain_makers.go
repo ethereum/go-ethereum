@@ -100,7 +100,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	feeCapacity := state.GetTRC21FeeCapacityFromState(b.statedb)
-	b.statedb.Prepare(tx.Hash(), common.Hash{}, len(b.txs))
+	b.statedb.Prepare(tx.Hash(), len(b.txs))
 	receipt, gas, err, tokenFeeUsed := ApplyTransaction(b.config, feeCapacity, bc, &b.header.Coinbase, b.gasPool, b.statedb, nil, b.header, tx, &b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)

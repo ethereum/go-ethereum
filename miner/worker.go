@@ -911,7 +911,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 			}
 		}
 		// Start executing the transaction
-		env.state.Prepare(hash, common.Hash{}, env.tcount)
+		env.state.Prepare(hash, env.tcount)
 
 		nonce := env.state.GetNonce(from)
 		if nonce != tx.Nonce() && !tx.IsSkipNonceTransaction() {
@@ -1012,7 +1012,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Ad
 			continue
 		}
 		// Start executing the transaction
-		env.state.Prepare(hash, common.Hash{}, env.tcount)
+		env.state.Prepare(hash, env.tcount)
 		nonce := env.state.GetNonce(from)
 		if nonce > tx.Nonce() {
 			// New head notification data race between the transaction pool and miner, shift
