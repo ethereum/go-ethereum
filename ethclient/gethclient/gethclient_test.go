@@ -162,7 +162,7 @@ func TestGethClient(t *testing.T) {
 	}
 }
 
-func testAccessList(t *testing.T, client *rpc.Client) {
+func testAccessList(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 	// Test transfer
 	msg := ethereum.CallMsg{
@@ -216,7 +216,7 @@ func testAccessList(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testGetProof(t *testing.T, client *rpc.Client, addr common.Address) {
+func testGetProof(t *testing.T, client rpc.ClientInterface, addr common.Address) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
 	result, err := ec.GetProof(context.Background(), addr, []string{testSlot.String()}, nil)
@@ -254,7 +254,7 @@ func testGetProof(t *testing.T, client *rpc.Client, addr common.Address) {
 	}
 }
 
-func testGetProofCanonicalizeKeys(t *testing.T, client *rpc.Client) {
+func testGetProofCanonicalizeKeys(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 
 	// Tests with non-canon input for storage keys.
@@ -284,7 +284,7 @@ func testGetProofCanonicalizeKeys(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
+func testGetProofNonExistent(t *testing.T, client rpc.ClientInterface) {
 	addr := common.HexToAddress("0x0001")
 	ec := New(client)
 	result, err := ec.GetProof(context.Background(), addr, nil, nil)
@@ -316,7 +316,7 @@ func testGetProofNonExistent(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testGCStats(t *testing.T, client *rpc.Client) {
+func testGCStats(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 	_, err := ec.GCStats(context.Background())
 	if err != nil {
@@ -324,7 +324,7 @@ func testGCStats(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testMemStats(t *testing.T, client *rpc.Client) {
+func testMemStats(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 	stats, err := ec.MemStats(context.Background())
 	if err != nil {
@@ -335,7 +335,7 @@ func testMemStats(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testGetNodeInfo(t *testing.T, client *rpc.Client) {
+func testGetNodeInfo(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 	info, err := ec.GetNodeInfo(context.Background())
 	if err != nil {
@@ -347,7 +347,7 @@ func testGetNodeInfo(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testSetHead(t *testing.T, client *rpc.Client) {
+func testSetHead(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 	err := ec.SetHead(context.Background(), big.NewInt(0))
 	if err != nil {
@@ -355,7 +355,7 @@ func testSetHead(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
+func testSubscribePendingTransactions(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
@@ -389,7 +389,7 @@ func testSubscribePendingTransactions(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
+func testSubscribeFullPendingTransactions(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 	ethcl := ethclient.NewClient(client)
 	// Subscribe to Transactions
@@ -423,7 +423,7 @@ func testSubscribeFullPendingTransactions(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func testCallContract(t *testing.T, client *rpc.Client) {
+func testCallContract(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 	msg := ethereum.CallMsg{
 		From:     testAddr,
@@ -533,7 +533,7 @@ func TestBlockOverridesMarshal(t *testing.T) {
 	}
 }
 
-func testCallContractWithBlockOverrides(t *testing.T, client *rpc.Client) {
+func testCallContractWithBlockOverrides(t *testing.T, client rpc.ClientInterface) {
 	ec := New(client)
 	msg := ethereum.CallMsg{
 		From:     testAddr,
