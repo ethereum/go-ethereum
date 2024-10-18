@@ -81,7 +81,7 @@ const (
 )
 
 // All methods provided over the engine endpoint.
-var caps = []string{
+var Caps = []string{
 	"engine_forkchoiceUpdatedV1",
 	"engine_forkchoiceUpdatedV2",
 	"engine_forkchoiceUpdatedV3",
@@ -1180,7 +1180,7 @@ func (api *ConsensusAPI) heartbeat() {
 
 // ExchangeCapabilities returns the current methods provided by this node.
 func (api *ConsensusAPI) ExchangeCapabilities([]string) []string {
-	return caps
+	return Caps
 }
 
 // GetClientVersionV1 exchanges client version data of this node.
