@@ -83,7 +83,7 @@ func (t *Trie) Copy() *Trie {
 // zero hash or the sha3 hash of an empty string, then trie is initially
 // empty, otherwise, the root node must be present in database or returns
 // a MissingNodeError if not.
-func New(id *ID, db database.Database) (*Trie, error) {
+func New(id *ID, db database.NodeDatabase) (*Trie, error) {
 	reader, err := newTrieReader(id.StateRoot, id.Owner, db)
 	if err != nil {
 		return nil, err
@@ -104,7 +104,7 @@ func New(id *ID, db database.Database) (*Trie, error) {
 }
 
 // NewEmpty is a shortcut to create empty tree. It's mostly used in tests.
-func NewEmpty(db database.Database) *Trie {
+func NewEmpty(db database.NodeDatabase) *Trie {
 	tr, _ := New(TrieID(types.EmptyRootHash), db)
 	return tr
 }

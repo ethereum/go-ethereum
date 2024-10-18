@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
 const (
@@ -176,7 +175,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 	}
 	// If snap sync is requested but snapshots are disabled, fail loudly
-	if h.snapSync.Load() && config.Chain.Snapshots() == nil {
+	if h.snapSync.Load() && (config.Chain.Snapshots() == nil && config.Chain.TrieDB().Scheme() == rawdb.HashScheme) {
 		return nil, errors.New("snap sync not supported with snapshots disabled")
 	}
 	// Construct the downloader (long sync)
@@ -557,8 +556,5 @@ func (h *handler) enableSyncedFeatures() {
 	if h.snapSync.Load() {
 		log.Info("Snap sync complete, auto disabling")
 		h.snapSync.Store(false)
-	}
-	if h.chain.TrieDB().Scheme() == rawdb.PathScheme {
-		h.chain.TrieDB().SetBufferSize(pathdb.DefaultBufferSize)
 	}
 }
