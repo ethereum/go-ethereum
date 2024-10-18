@@ -45,11 +45,27 @@ import (
 )
 
 var (
-	emptyBlob          = new(kzg4844.Blob)
-	emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
-	emptyBlobProof, _  = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
-	emptyBlobVHash     = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
+	testBlobs       []*kzg4844.Blob
+	testBlobCommits []kzg4844.Commitment
+	testBlobProofs  []kzg4844.Proof
+	testBlobVHashes [][32]byte
 )
+
+func init() {
+	for i := 0; i < 10; i++ {
+		testBlob := &kzg4844.Blob{byte(i)}
+		testBlobs = append(testBlobs, testBlob)
+
+		testBlobCommit, _ := kzg4844.BlobToCommitment(testBlob)
+		testBlobCommits = append(testBlobCommits, testBlobCommit)
+
+		testBlobProof, _ := kzg4844.ComputeBlobProof(testBlob, testBlobCommit)
+		testBlobProofs = append(testBlobProofs, testBlobProof)
+
+		testBlobVHash := kzg4844.CalcBlobHashV1(sha256.New(), &testBlobCommit)
+		testBlobVHashes = append(testBlobVHashes, testBlobVHash)
+	}
+}
 
 // testBlockChain is a mock of the live chain for testing the pool.
 type testBlockChain struct {
@@ -181,6 +197,12 @@ func makeTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64,
 // makeUnsignedTx is a utility method to construct a random blob transaction
 // without signing it.
 func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64) *types.BlobTx {
+	return makeUnsignedTxWithTestBlob(nonce, gasTipCap, gasFeeCap, blobFeeCap, rand.Intn(len(testBlobs)))
+}
+
+// makeUnsignedTx is a utility method to construct a random blob transaction
+// without signing it.
+func makeUnsignedTxWithTestBlob(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap uint64, blobIdx int) *types.BlobTx {
 	return &types.BlobTx{
 		ChainID:    uint256.MustFromBig(params.MainnetChainConfig.ChainID),
 		Nonce:      nonce,
@@ -188,12 +210,12 @@ func makeUnsignedTx(nonce uint64, gasTipCap uint64, gasFeeCap uint64, blobFeeCap
 		GasFeeCap:  uint256.NewInt(gasFeeCap),
 		Gas:        21000,
 		BlobFeeCap: uint256.NewInt(blobFeeCap),
-		BlobHashes: []common.Hash{emptyBlobVHash},
+		BlobHashes: []common.Hash{testBlobVHashes[blobIdx]},
 		Value:      uint256.NewInt(100),
 		Sidecar: &types.BlobTxSidecar{
-			Blobs:       []kzg4844.Blob{*emptyBlob},
-			Commitments: []kzg4844.Commitment{emptyBlobCommit},
-			Proofs:      []kzg4844.Proof{emptyBlobProof},
+			Blobs:       []kzg4844.Blob{*testBlobs[blobIdx]},
+			Commitments: []kzg4844.Commitment{testBlobCommits[blobIdx]},
+			Proofs:      []kzg4844.Proof{testBlobProofs[blobIdx]},
 		},
 	}
 }
@@ -204,7 +226,7 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	// Mark this method as a helper to remove from stack traces
 	t.Helper()
 
-	// Verify that all items in the index are present in the lookup and nothing more
+	// Verify that all items in the index are present in the tx lookup and nothing more
 	seen := make(map[common.Hash]struct{})
 	for addr, txs := range pool.index {
 		for _, tx := range txs {
@@ -214,14 +236,40 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 			seen[tx.hash] = struct{}{}
 		}
 	}
-	for hash, id := range pool.lookup {
+	for hash, id := range pool.lookup.txIndex {
 		if _, ok := seen[hash]; !ok {
-			t.Errorf("lookup entry missing from transaction index: hash #%x, id %d", hash, id)
+			t.Errorf("tx lookup entry missing from transaction index: hash #%x, id %d", hash, id)
 		}
 		delete(seen, hash)
 	}
 	for hash := range seen {
-		t.Errorf("indexed transaction hash #%x missing from lookup table", hash)
+		t.Errorf("indexed transaction hash #%x missing from tx lookup table", hash)
+	}
+	// Verify that all blobs in the index are present in the blob lookup and nothing more
+	blobs := make(map[common.Hash]map[common.Hash]struct{})
+	for _, txs := range pool.index {
+		for _, tx := range txs {
+			for _, vhash := range tx.vhashes {
+				if blobs[vhash] == nil {
+					blobs[vhash] = make(map[common.Hash]struct{})
+				}
+				blobs[vhash][tx.hash] = struct{}{}
+			}
+		}
+	}
+	for vhash, txs := range pool.lookup.blobIndex {
+		for txhash := range txs {
+			if _, ok := blobs[vhash][txhash]; !ok {
+				t.Errorf("blob lookup entry missing from transaction index: blob hash #%x, tx hash #%x", vhash, txhash)
+			}
+			delete(blobs[vhash], txhash)
+			if len(blobs[vhash]) == 0 {
+				delete(blobs, vhash)
+			}
+		}
+	}
+	for vhash := range blobs {
+		t.Errorf("indexed transaction blob hash #%x missing from blob lookup table", vhash)
 	}
 	// Verify that transactions are sorted per account and contain no nonce gaps,
 	// and that the first nonce is the next expected one based on the state.
@@ -294,6 +342,53 @@ func verifyPoolInternals(t *testing.T, pool *BlobPool) {
 	}
 	// Verify the price heap internals
 	verifyHeapInternals(t, pool.evict)
+
+	// Verify that all the blobs can be retrieved
+	verifyBlobRetrievals(t, pool)
+}
+
+// verifyBlobRetrievals attempts to retrieve all testing blobs and checks that
+// whatever is in the pool, it can be retrieved correctly.
+func verifyBlobRetrievals(t *testing.T, pool *BlobPool) {
+	// Collect all the blobs tracked by the pool
+	known := make(map[common.Hash]struct{})
+	for _, txs := range pool.index {
+		for _, tx := range txs {
+			for _, vhash := range tx.vhashes {
+				known[vhash] = struct{}{}
+			}
+		}
+	}
+	// Attempt to retrieve all test blobs
+	hashes := make([]common.Hash, len(testBlobVHashes))
+	for i := range testBlobVHashes {
+		copy(hashes[i][:], testBlobVHashes[i][:])
+	}
+	blobs, proofs := pool.GetBlobs(hashes)
+
+	// Cross validate what we received vs what we wanted
+	if len(blobs) != len(hashes) || len(proofs) != len(hashes) {
+		t.Errorf("retrieved blobs/proofs size mismatch: have %d/%d, want %d", len(blobs), len(proofs), len(hashes))
+		return
+	}
+	for i, hash := range hashes {
+		// If an item is missing, but shouldn't, error
+		if blobs[i] == nil || proofs[i] == nil {
+			if _, ok := known[hash]; ok {
+				t.Errorf("tracked blob retrieval failed: item %d, hash %x", i, hash)
+			}
+			continue
+		}
+		// Item retrieved, make sure it matches the expectation
+		if *blobs[i] != *testBlobs[i] || *proofs[i] != testBlobProofs[i] {
+			t.Errorf("retrieved blob or proof mismatch: item %d, hash %x", i, hash)
+			continue
+		}
+		delete(known, hash)
+	}
+	for hash := range known {
+		t.Errorf("indexed blob #%x missing from retrieval", hash)
+	}
 }
 
 // Tests that transactions can be loaded from disk on startup and that they are
@@ -969,21 +1064,21 @@ func TestAdd(t *testing.T) {
 				"alice": {
 					balance: 1000000,
 					txs: []*types.BlobTx{
-						makeUnsignedTx(0, 1, 1, 1),
+						makeUnsignedTxWithTestBlob(0, 1, 1, 1, 0),
 					},
 				},
 				"bob": {
 					balance: 1000000,
 					nonce:   1,
 					txs: []*types.BlobTx{
-						makeUnsignedTx(1, 1, 1, 1),
+						makeUnsignedTxWithTestBlob(1, 1, 1, 1, 1),
 					},
 				},
 			},
 			adds: []addtx{
 				{ // New account, 1 tx pending: reject duplicate nonce 0
 					from: "alice",
-					tx:   makeUnsignedTx(0, 1, 1, 1),
+					tx:   makeUnsignedTxWithTestBlob(0, 1, 1, 1, 0),
 					err:  txpool.ErrAlreadyKnown,
 				},
 				{ // New account, 1 tx pending: reject replacement nonce 0 (ignore price for now)
@@ -1013,7 +1108,7 @@ func TestAdd(t *testing.T) {
 				},
 				{ // Old account, 1 tx in chain, 1 tx pending: reject duplicate nonce 1
 					from: "bob",
-					tx:   makeUnsignedTx(1, 1, 1, 1),
+					tx:   makeUnsignedTxWithTestBlob(1, 1, 1, 1, 1),
 					err:  txpool.ErrAlreadyKnown,
 				},
 				{ // Old account, 1 tx in chain, 1 tx pending: accept nonce 2 (ignore price for now)
