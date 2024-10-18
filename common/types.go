@@ -335,7 +335,7 @@ func (a *Address) UnmarshalText(input []byte) error {
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (a *Address) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalFixedJSON(addressT, input, a[:])
+	return []byte(a.checksumHex()), nil
 }
 
 // Scan implements Scanner for database/sql.
