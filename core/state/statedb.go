@@ -67,10 +67,10 @@ type StateDB struct {
 	// The refund counter, also used by state transitioning.
 	refund uint64
 
-	thash, bhash common.Hash
-	txIndex      int
-	logs         map[common.Hash][]*types.Log
-	logSize      uint
+	thash   common.Hash
+	txIndex int
+	logs    map[common.Hash][]*types.Log
+	logSize uint
 
 	preimages map[common.Hash][]byte
 
@@ -150,7 +150,6 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.stateObjects = make(map[common.Address]*stateObject)
 	self.stateObjectsDirty = make(map[common.Address]struct{})
 	self.thash = common.Hash{}
-	self.bhash = common.Hash{}
 	self.txIndex = 0
 	self.logs = make(map[common.Hash][]*types.Log)
 	self.logSize = 0
@@ -164,15 +163,18 @@ func (self *StateDB) AddLog(log *types.Log) {
 	self.journal = append(self.journal, addLogChange{txhash: self.thash})
 
 	log.TxHash = self.thash
-	log.BlockHash = self.bhash
 	log.TxIndex = uint(self.txIndex)
 	log.Index = self.logSize
 	self.logs[self.thash] = append(self.logs[self.thash], log)
 	self.logSize++
 }
 
-func (self *StateDB) GetLogs(hash common.Hash) []*types.Log {
-	return self.logs[hash]
+func (s *StateDB) GetLogs(hash common.Hash, blockHash common.Hash) []*types.Log {
+	logs := s.logs[hash]
+	for _, l := range logs {
+		l.BlockHash = blockHash
+	}
+	return logs
 }
 
 func (self *StateDB) Logs() []*types.Log {
@@ -247,11 +249,6 @@ func (self *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 // TxIndex returns the current transaction index set by Prepare.
 func (self *StateDB) TxIndex() int {
 	return self.txIndex
-}
-
-// BlockHash returns the current block hash set by Prepare.
-func (self *StateDB) BlockHash() common.Hash {
-	return self.bhash
 }
 
 func (self *StateDB) GetCode(addr common.Address) []byte {
@@ -651,11 +648,10 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 
 // Prepare sets the current transaction hash and index and block hash which is
 // used when the EVM emits new state logs.
-func (self *StateDB) Prepare(thash, bhash common.Hash, ti int) {
-	self.thash = thash
-	self.bhash = bhash
-	self.txIndex = ti
-	self.accessList = newAccessList()
+func (s *StateDB) Prepare(thash common.Hash, ti int) {
+	s.thash = thash
+	s.txIndex = ti
+	s.accessList = newAccessList()
 }
 
 // DeleteSuicides flags the suicided objects for deletion so that it
