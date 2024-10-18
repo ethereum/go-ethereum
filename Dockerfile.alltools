@@ -13,6 +13,17 @@ COPY go.mod /go-ethereum/
 COPY go.sum /go-ethereum/
 RUN cd /go-ethereum && go mod download
 
+# Build all the dependencies in a pre-step to cache them in a docker layer
+ADD build /go-ethereum/build
+ADD internal/build /go-ethereum/internal/build
+
+ADD common /go-ethereum/common
+ADD crypto/signify /go-ethereum/crypto/signify
+ADD params /go-ethereum/params
+
+COPY go.dep /go-ethereum/
+RUN cd /go-ethereum && go run build/ci.go prebuild --deps go.dep --static
+
 ADD . /go-ethereum
 
 # This is not strictly necessary, but it matches the "Dockerfile" steps, thus

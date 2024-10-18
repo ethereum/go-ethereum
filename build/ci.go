@@ -24,6 +24,7 @@ Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
+	prebuild                                                                                    -- pre-builds all dependencies for caching
 	install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
 	test       [ -coverage ] [ packages... ]                                                    -- runs the tests
 	lint                                                                                        -- runs certain pre-selected linters
@@ -38,6 +39,7 @@ For all commands, -n prevents execution of external programs (dry run mode).
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
@@ -54,7 +56,6 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
 	"github.com/ethereum/go-ethereum/params"
@@ -144,13 +145,15 @@ func executablePath(name string) string {
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	if !common.FileExist(filepath.Join("build", "ci.go")) {
+	if !build.FileExist(filepath.Join("build", "ci.go")) {
 		log.Fatal("this script must be run from the root of the repository")
 	}
 	if len(os.Args) < 2 {
 		log.Fatal("need subcommand as first argument")
 	}
 	switch os.Args[1] {
+	case "prebuild":
+		doPreBuild(os.Args[2:])
 	case "install":
 		doInstall(os.Args[2:])
 	case "test":
@@ -178,6 +181,51 @@ func main() {
 
 // Compiling
 
+func doPreBuild(cmdline []string) {
+	var (
+		depsfile   = flag.String("deps", "", "Dependency list to pre-build")
+		staticlink = flag.Bool("static", false, "Pre-build statically-linked dependencies")
+	)
+	flag.CommandLine.Parse(cmdline)
+	env := build.Env()
+
+	// Disable CLI markdown doc generation in release builds.
+	buildTags := []string{"urfave_cli_no_docs"}
+
+	// Enable linking the CKZG library since we can make it work with additional flags.
+	if env.UbuntuVersion != "trusty" {
+		buildTags = append(buildTags, "ckzg")
+	}
+	// Configure the build.
+	gobuild := new(build.GoToolchain).Go("build", buildFlags(env, *staticlink, buildTags)...)
+
+	// We use -trimpath to avoid leaking local paths into the built executables.
+	gobuild.Args = append(gobuild.Args, "-trimpath")
+
+	// Show packages during build.
+	gobuild.Args = append(gobuild.Args, "-v")
+
+	// Now we choose what we're even building.
+	blob, err := os.ReadFile(*depsfile)
+	if err != nil {
+		log.Fatalf("Failed to read go.dep file: %v", err)
+	}
+	deps := bufio.NewReader(bytes.NewReader(blob))
+
+	var packages []string
+	for {
+		pkg, _, err := deps.ReadLine()
+		if err != nil {
+			break
+		}
+		packages = append(packages, string(pkg))
+	}
+	args := make([]string, len(gobuild.Args))
+	copy(args, gobuild.Args)
+	args = append(args, packages...)
+	build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
+}
+
 func doInstall(cmdline []string) {
 	var (
 		dlgo       = flag.Bool("dlgo", false, "Download Go and build with it")
@@ -201,7 +249,6 @@ func doInstall(cmdline []string) {
 	if env.UbuntuVersion != "trusty" {
 		buildTags = append(buildTags, "ckzg")
 	}
-
 	// Configure the build.
 	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
 
@@ -352,8 +399,8 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 // hashAllSourceFiles iterates all files under the top-level project directory
 // computing the hash of each file (excluding files within the tests
 // subrepo)
-func hashAllSourceFiles() (map[string]common.Hash, error) {
-	res := make(map[string]common.Hash)
+func hashAllSourceFiles() (map[string][32]byte, error) {
+	res := make(map[string][32]byte)
 	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if strings.HasPrefix(path, filepath.FromSlash("tests/testdata")) {
 			return filepath.SkipDir
@@ -370,7 +417,7 @@ func hashAllSourceFiles() (map[string]common.Hash, error) {
 		if _, err := io.Copy(hasher, f); err != nil {
 			return err
 		}
-		res[path] = common.Hash(hasher.Sum(nil))
+		res[path] = [32]byte(hasher.Sum(nil))
 		return nil
 	})
 	if err != nil {
@@ -381,8 +428,8 @@ func hashAllSourceFiles() (map[string]common.Hash, error) {
 
 // hashSourceFiles iterates the provided set of filepaths (relative to the top-level geth project directory)
 // computing the hash of each file.
-func hashSourceFiles(files []string) (map[string]common.Hash, error) {
-	res := make(map[string]common.Hash)
+func hashSourceFiles(files []string) (map[string][32]byte, error) {
+	res := make(map[string][32]byte)
 	for _, filePath := range files {
 		f, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
 		if err != nil {
@@ -392,14 +439,14 @@ func hashSourceFiles(files []string) (map[string]common.Hash, error) {
 		if _, err := io.Copy(hasher, f); err != nil {
 			return nil, err
 		}
-		res[filePath] = common.Hash(hasher.Sum(nil))
+		res[filePath] = [32]byte(hasher.Sum(nil))
 	}
 	return res, nil
 }
 
 // compareHashedFilesets compares two maps (key is relative file path to top-level geth directory, value is its hash)
 // and returns the list of file paths whose hashes differed.
-func compareHashedFilesets(preHashes map[string]common.Hash, postHashes map[string]common.Hash) []string {
+func compareHashedFilesets(preHashes map[string][32]byte, postHashes map[string][32]byte) []string {
 	updates := []string{}
 	for path, postHash := range postHashes {
 		preHash, ok := preHashes[path]
@@ -442,7 +489,7 @@ func doGenerate() {
 	protocPath := downloadProtoc(*cachedir)
 	protocGenGoPath := downloadProtocGenGo(*cachedir)
 
-	var preHashes map[string]common.Hash
+	var preHashes map[string][32]byte
 	if *verify {
 		var err error
 		preHashes, err = hashAllSourceFiles()
@@ -915,7 +962,7 @@ func ppaUpload(workdir, ppa, sshUser string, files []string) {
 	var idfile string
 	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
 		idfile = filepath.Join(workdir, "sshkey")
-		if !common.FileExist(idfile) {
+		if !build.FileExist(idfile) {
 			os.WriteFile(idfile, sshkey, 0600)
 		}
 	}

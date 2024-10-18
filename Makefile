@@ -47,6 +47,10 @@ devtools:
 	@type "solc" 2> /dev/null || echo 'Please install solc'
 	@type "protoc" 2> /dev/null || echo 'Please install protoc'
 
+#? deplist: Generate a dependent package list for docker
+deplist:
+	go list -f "{{if and (not .Standard) .DepOnly}}{{.ImportPath}}{{end}}" -deps github.com/ethereum/go-ethereum/... | sort > build/docker.go.dep
+
 #? help: Get more info on make commands.
 help: Makefile
 	@echo ''
