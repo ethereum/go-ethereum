@@ -66,8 +66,7 @@
       "transactionPosition": 18,
       "transactionHash": "0xc1c42a325856d513523aec464811923b2e2926f54015c7ba37877064cf889803",
       "blockNumber": 1555275,
-      "blockHash": "0x80945caaff2fc67253cbb0217d2e5a307afde943929e97d8b36e58b88cbb02fd",
-      "time": "453.925µs"
+      "blockHash": "0x80945caaff2fc67253cbb0217d2e5a307afde943929e97d8b36e58b88cbb02fd"
     },
     {
       "type": "call",
