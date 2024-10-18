@@ -90,7 +90,7 @@ func benchmarkSearch(b *testing.B, depth int, total int) {
 		err  error
 	)
 	for i := 0; i < b.N; i++ {
-		have, _, _, err = layer.node(common.Hash{}, npath, 0)
+		have, _, _, err = layer.node(common.Hash{}, npath, common.Hash{}, 0)
 		if err != nil {
 			b.Fatal(err)
 		}
