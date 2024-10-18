@@ -37,11 +37,11 @@ import (
 //
 // If you want to use the standardized Ethereum RPC functionality, use ethclient.Client instead.
 type Client struct {
-	c *rpc.Client
+	c rpc.ClientInterface
 }
 
 // New creates a client that uses the given RPC client.
-func New(c *rpc.Client) *Client {
+func New(c rpc.ClientInterface) *Client {
 	return &Client{c}
 }
 

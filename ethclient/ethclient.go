@@ -33,7 +33,7 @@ import (
 
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
-	c *rpc.Client
+	c rpc.ClientInterface
 }
 
 // Dial connects a client to the given URL.
@@ -51,7 +51,7 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 }
 
 // NewClient creates a client that uses the given RPC client.
-func NewClient(c *rpc.Client) *Client {
+func NewClient(c rpc.ClientInterface) *Client {
 	return &Client{c}
 }
 
@@ -61,7 +61,7 @@ func (ec *Client) Close() {
 }
 
 // Client gets the underlying RPC client.
-func (ec *Client) Client() *rpc.Client {
+func (ec *Client) Client() rpc.ClientInterface {
 	return ec.c
 }
 
@@ -197,7 +197,8 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 			Transactions: txs,
 			Uncles:       uncles,
 			Withdrawals:  body.Withdrawals,
-		}), nil
+		},
+	), nil
 }
 
 // HeaderByHash returns the block header with the given hash.
@@ -240,7 +241,10 @@ func (tx *rpcTransaction) UnmarshalJSON(msg []byte) error {
 }
 
 // TransactionByHash returns the transaction with the given hash.
-func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
+func (ec *Client) TransactionByHash(
+	ctx context.Context,
+	hash common.Hash,
+) (tx *types.Transaction, isPending bool, err error) {
 	var json *rpcTransaction
 	err = ec.c.CallContext(ctx, &json, "eth_getTransactionByHash", hash)
 	if err != nil {
@@ -262,7 +266,12 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 //
 // There is a fast-path for transactions retrieved by TransactionByHash and
 // TransactionInBlock. Getting their sender address can be done without an RPC interaction.
-func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction, block common.Hash, index uint) (common.Address, error) {
+func (ec *Client) TransactionSender(
+	ctx context.Context,
+	tx *types.Transaction,
+	block common.Hash,
+	index uint,
+) (common.Address, error) {
 	// Try to load the address from the cache.
 	sender, err := types.Sender(&senderFromServer{blockhash: block}, tx)
 	if err == nil {
@@ -274,7 +283,13 @@ func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction, 
 		Hash common.Hash
 		From common.Address
 	}
-	if err = ec.c.CallContext(ctx, &meta, "eth_getTransactionByBlockHashAndIndex", block, hexutil.Uint64(index)); err != nil {
+	if err = ec.c.CallContext(
+		ctx,
+		&meta,
+		"eth_getTransactionByBlockHashAndIndex",
+		block,
+		hexutil.Uint64(index),
+	); err != nil {
 		return common.Address{}, err
 	}
 	if meta.Hash == (common.Hash{}) || meta.Hash != tx.Hash() {
@@ -291,7 +306,11 @@ func (ec *Client) TransactionCount(ctx context.Context, blockHash common.Hash) (
 }
 
 // TransactionInBlock returns a single transaction at index in the given block.
-func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error) {
+func (ec *Client) TransactionInBlock(
+	ctx context.Context,
+	blockHash common.Hash,
+	index uint,
+) (*types.Transaction, error) {
 	var json *rpcTransaction
 	err := ec.c.CallContext(ctx, &json, "eth_getTransactionByBlockHashAndIndex", blockHash, hexutil.Uint64(index))
 	if err != nil {
@@ -383,16 +402,33 @@ func (ec *Client) BalanceAtHash(ctx context.Context, account common.Address, blo
 
 // StorageAt returns the value of key in the contract storage of the given account.
 // The block number can be nil, in which case the value is taken from the latest known block.
-func (ec *Client) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
+func (ec *Client) StorageAt(
+	ctx context.Context,
+	account common.Address,
+	key common.Hash,
+	blockNumber *big.Int,
+) ([]byte, error) {
 	var result hexutil.Bytes
 	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, toBlockNumArg(blockNumber))
 	return result, err
 }
 
 // StorageAtHash returns the value of key in the contract storage of the given account.
-func (ec *Client) StorageAtHash(ctx context.Context, account common.Address, key common.Hash, blockHash common.Hash) ([]byte, error) {
+func (ec *Client) StorageAtHash(
+	ctx context.Context,
+	account common.Address,
+	key common.Hash,
+	blockHash common.Hash,
+) ([]byte, error) {
 	var result hexutil.Bytes
-	err := ec.c.CallContext(ctx, &result, "eth_getStorageAt", account, key, rpc.BlockNumberOrHashWithHash(blockHash, false))
+	err := ec.c.CallContext(
+		ctx,
+		&result,
+		"eth_getStorageAt",
+		account,
+		key,
+		rpc.BlockNumberOrHashWithHash(blockHash, false),
+	)
 	return result, err
 }
 
@@ -422,7 +458,13 @@ func (ec *Client) NonceAt(ctx context.Context, account common.Address, blockNumb
 // NonceAtHash returns the account nonce of the given account.
 func (ec *Client) NonceAtHash(ctx context.Context, account common.Address, blockHash common.Hash) (uint64, error) {
 	var result hexutil.Uint64
-	err := ec.c.CallContext(ctx, &result, "eth_getTransactionCount", account, rpc.BlockNumberOrHashWithHash(blockHash, false))
+	err := ec.c.CallContext(
+		ctx,
+		&result,
+		"eth_getTransactionCount",
+		account,
+		rpc.BlockNumberOrHashWithHash(blockHash, false),
+	)
 	return uint64(result), err
 }
 
@@ -440,7 +482,11 @@ func (ec *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]typ
 }
 
 // SubscribeFilterLogs subscribes to the results of a streaming filter query.
-func (ec *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
+func (ec *Client) SubscribeFilterLogs(
+	ctx context.Context,
+	q ethereum.FilterQuery,
+	ch chan<- types.Log,
+) (ethereum.Subscription, error) {
 	arg, err := toFilterArg(q)
 	if err != nil {
 		return nil, err
@@ -581,9 +627,21 @@ type feeHistoryResultMarshaling struct {
 }
 
 // FeeHistory retrieves the fee market history.
-func (ec *Client) FeeHistory(ctx context.Context, blockCount uint64, lastBlock *big.Int, rewardPercentiles []float64) (*ethereum.FeeHistory, error) {
+func (ec *Client) FeeHistory(
+	ctx context.Context,
+	blockCount uint64,
+	lastBlock *big.Int,
+	rewardPercentiles []float64,
+) (*ethereum.FeeHistory, error) {
 	var res feeHistoryResultMarshaling
-	if err := ec.c.CallContext(ctx, &res, "eth_feeHistory", hexutil.Uint(blockCount), toBlockNumArg(lastBlock), rewardPercentiles); err != nil {
+	if err := ec.c.CallContext(
+		ctx,
+		&res,
+		"eth_feeHistory",
+		hexutil.Uint(blockCount),
+		toBlockNumArg(lastBlock),
+		rewardPercentiles,
+	); err != nil {
 		return nil, err
 	}
 	reward := make([][]*big.Int, len(res.Reward))
