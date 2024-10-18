@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -188,9 +189,6 @@ func (batch *freezerTableBatch) commit() error {
 	if err != nil {
 		return err
 	}
-	if err := batch.t.head.Sync(); err != nil {
-		return err
-	}
 	dataSize := int64(len(batch.dataBuffer))
 	batch.dataBuffer = batch.dataBuffer[:0]
 
@@ -208,6 +206,12 @@ func (batch *freezerTableBatch) commit() error {
 	// Update metrics.
 	batch.t.sizeGauge.Inc(dataSize + indexSize)
 	batch.t.writeMeter.Mark(dataSize + indexSize)
+
+	// Periodically sync the table
+	if time.Since(batch.t.lastSync) > 30*time.Second {
+		batch.t.lastSync = time.Now()
+		return batch.t.syncWithNoLock()
+	}
 	return nil
 }
 
