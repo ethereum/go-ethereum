@@ -219,7 +219,9 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 // contract. This method is exported to be used in tests.
 func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *state.StateDB) {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
-		if tracer.OnSystemCallStart != nil {
+		if tracer.OnSystemCallStartV2 != nil {
+			tracer.OnSystemCallStartV2(vmenv.GetVMContext())
+		} else if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
 		}
 		if tracer.OnSystemCallEnd != nil {
@@ -245,7 +247,9 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 // as per EIP-2935.
 func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.StateDB) {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
-		if tracer.OnSystemCallStart != nil {
+		if tracer.OnSystemCallStartV2 != nil {
+			tracer.OnSystemCallStartV2(vmenv.GetVMContext())
+		} else if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
 		}
 		if tracer.OnSystemCallEnd != nil {

@@ -18,6 +18,7 @@ package tracing
 
 import (
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -42,6 +43,7 @@ type StateDB interface {
 	GetBalance(common.Address) *uint256.Int
 	GetNonce(common.Address) uint64
 	GetCode(common.Address) []byte
+	GetCodeHash(common.Address) common.Hash
 	GetState(common.Address, common.Hash) common.Hash
 	GetTransientState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
@@ -134,6 +136,9 @@ type (
 	// GenesisBlockHook is called when the genesis block is being processed.
 	GenesisBlockHook = func(genesis *types.Block, alloc types.GenesisAlloc)
 
+	// ReorgHook is called when a segment of the chain is reverted.
+	ReorgHook = func(reverted []*types.Block)
+
 	// OnSystemCallStartHook is called when a system call is about to be executed. Today,
 	// this hook is invoked when the EIP-4788 system call is about to be executed to set the
 	// beacon block root.
@@ -144,6 +149,10 @@ type (
 	// Note that system call happens outside normal transaction execution, so the `OnTxStart/OnTxEnd` hooks
 	// will not be invoked.
 	OnSystemCallStartHook = func()
+
+	// OnSystemCallStartHookV2 is called when a system call is about to be executed. Refer
+	// to `OnSystemCallStartHook` for more information.
+	OnSystemCallStartHookV2 = func(vm *VMContext)
 
 	// OnSystemCallEndHook is called when a system call has finished executing. Today,
 	// this hook is invoked when the EIP-4788 system call is about to be executed to set the
@@ -168,6 +177,27 @@ type (
 
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
+
+	// BalanceReadHook is called when EVM reads the balance of an account.
+	BalanceReadHook = func(addr common.Address, bal *big.Int)
+
+	// NonceReadHook is called when EVM reads the nonce of an account.
+	NonceReadHook = func(addr common.Address, nonce uint64)
+
+	// CodeReadHook is called when EVM reads the code of an account.
+	CodeReadHook = func(addr common.Address, code []byte)
+
+	// CodeSizeReadHook is called when EVM reads the code size of an account.
+	CodeSizeReadHook = func(addr common.Address, size int)
+
+	// CodeHashReadHook is called when EVM reads the code hash of an account.
+	CodeHashReadHook = func(addr common.Address, hash common.Hash)
+
+	// StorageReadHook is called when EVM reads a storage slot of an account.
+	StorageReadHook = func(addr common.Address, slot, value common.Hash)
+
+	// BlockHashReadHook is called when EVM reads the blockhash of a block.
+	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
 )
 
 type Hooks struct {
@@ -180,20 +210,45 @@ type Hooks struct {
 	OnFault     FaultHook
 	OnGasChange GasChangeHook
 	// Chain events
-	OnBlockchainInit  BlockchainInitHook
-	OnClose           CloseHook
-	OnBlockStart      BlockStartHook
-	OnBlockEnd        BlockEndHook
-	OnSkippedBlock    SkippedBlockHook
-	OnGenesisBlock    GenesisBlockHook
-	OnSystemCallStart OnSystemCallStartHook
-	OnSystemCallEnd   OnSystemCallEndHook
+	OnBlockchainInit    BlockchainInitHook
+	OnClose             CloseHook
+	OnBlockStart        BlockStartHook
+	OnBlockEnd          BlockEndHook
+	OnSkippedBlock      SkippedBlockHook
+	OnGenesisBlock      GenesisBlockHook
+	OnSystemCallStart   OnSystemCallStartHook
+	OnSystemCallStartV2 OnSystemCallStartHookV2
+	OnSystemCallEnd     OnSystemCallEndHook
 	// State events
 	OnBalanceChange BalanceChangeHook
 	OnNonceChange   NonceChangeHook
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
+	// State reads
+	OnBalanceRead  BalanceReadHook
+	OnNonceRead    NonceReadHook
+	OnCodeRead     CodeReadHook
+	OnCodeSizeRead CodeSizeReadHook
+	OnCodeHashRead CodeHashReadHook
+	OnStorageRead  StorageReadHook
+	// Block hash read
+	OnBlockHashRead BlockHashReadHook
+}
+
+// Copy creates a new Hooks instance with all implemented hooks copied from the original.
+func (h *Hooks) Copy() *Hooks {
+	copied := &Hooks{}
+	srcValue := reflect.ValueOf(h).Elem()
+	dstValue := reflect.ValueOf(copied).Elem()
+
+	for i := 0; i < srcValue.NumField(); i++ {
+		field := srcValue.Field(i)
+		if !field.IsNil() {
+			dstValue.Field(i).Set(field)
+		}
+	}
+	return copied
 }
 
 // BalanceChangeReason is used to indicate the reason for a balance change, useful
@@ -245,6 +300,10 @@ const (
 	// account within the same tx (captured at end of tx).
 	// Note it doesn't account for a self-destruct which appoints itself as recipient.
 	BalanceDecreaseSelfdestructBurn BalanceChangeReason = 14
+
+	// BalanceChangeRevert is emitted when the balance is reverted back to a previous value due to call failure.
+	// It is only emitted when the tracer has opted in to use the journaling wrapper.
+	BalanceChangeRevert BalanceChangeReason = 15
 )
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
