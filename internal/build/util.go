@@ -36,6 +36,15 @@ import (
 
 var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
 
+// FileExist checks if a file exists at filePath.
+func FileExist(filePath string) bool {
+	_, err := os.Stat(filePath)
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
 // MustRun executes the given command and exits the host process for
 // any error.
 func MustRun(cmd *exec.Cmd) {
