@@ -303,7 +303,7 @@ func validateBlockBody(body *types.Body, header *types.Header) error {
 
 // EncodeBlockBody encode types.Body to ssz bytes
 func EncodeBlockBody(body *types.Body) ([]byte, error) {
-	if body.Withdrawals != nil && len(body.Withdrawals) > 0 {
+	if len(body.Withdrawals) > 0 {
 		blockShanghai, err := toPortalBlockBodyShanghai(body)
 		if err != nil {
 			return nil, err
