@@ -18,12 +18,18 @@ package apitypes
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBytesPadding(t *testing.T) {
@@ -244,45 +250,45 @@ func TestConvertAddressDataToSlice(t *testing.T) {
 func TestTypedDataArrayValidate(t *testing.T) {
 	t.Parallel()
 
-	typedData := TypedData{
-		Types: Types{
-			"BulkOrder": []Type{
-				// Should be able to accept fixed size arrays
-				{Name: "tree", Type: "OrderComponents[2][2]"},
-			},
-			"OrderComponents": []Type{
-				{Name: "offerer", Type: "address"},
-				{Name: "amount", Type: "uint8"},
-			},
-			"EIP712Domain": []Type{
-				{Name: "name", Type: "string"},
-				{Name: "version", Type: "string"},
-				{Name: "chainId", Type: "uint8"},
-				{Name: "verifyingContract", Type: "address"},
-			},
-		},
-		PrimaryType: "BulkOrder",
-		Domain: TypedDataDomain{
-			VerifyingContract: "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
-		},
-		Message: TypedDataMessage{},
+	type TestDataInput struct {
+		Name        string           `json:"name"`
+		Domain      TypedDataDomain  `json:"domain"`
+		PrimaryType string           `json:"primaryType"`
+		Types       Types            `json:"types"`
+		Message     TypedDataMessage `json:"data"`
+		Digest      string           `json:"digest"`
 	}
 
-	if err := typedData.validate(); err != nil {
-		t.Errorf("expected typed data to pass validation, got: %v", err)
-	}
+	fc, err := os.ReadFile("./testdata/typed-data.json")
+	require.NoError(t, err, "error reading test data file")
 
-	// Should be able to accept dynamic arrays
-	typedData.Types["BulkOrder"][0].Type = "OrderComponents[]"
+	var tests []TestDataInput
+	err = json.Unmarshal(fc, &tests)
+	require.NoError(t, err, "error unmarshalling test data file contents")
 
-	if err := typedData.validate(); err != nil {
-		t.Errorf("expected typed data to pass validation, got: %v", err)
-	}
+	for _, tt := range tests {
+		tc := tt
 
-	// Should be able to accept standard types
-	typedData.Types["BulkOrder"][0].Type = "OrderComponents"
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
 
-	if err := typedData.validate(); err != nil {
-		t.Errorf("expected typed data to pass validation, got: %v", err)
+			td := TypedData{
+				Types:       tc.Types,
+				PrimaryType: tc.PrimaryType,
+				Domain:      tc.Domain,
+				Message:     tc.Message,
+			}
+
+			domainSeparator, tErr := td.HashStruct("EIP712Domain", td.Domain.Map())
+			assert.NoError(t, tErr, "failed to hash domain separator: %v", tErr)
+
+			messageHash, tErr := td.HashStruct(td.PrimaryType, td.Message)
+			assert.NoError(t, tErr, "failed to hash message: %v", tErr)
+
+			digest := crypto.Keccak256Hash([]byte(fmt.Sprintf("%s%s%s", "\x19\x01", string(domainSeparator), string(messageHash))))
+			assert.Equal(t, tc.Digest, digest.String(), "digest doesn't not match")
+
+			assert.NoError(t, td.validate(), "validation failed", tErr)
+		})
 	}
 }
