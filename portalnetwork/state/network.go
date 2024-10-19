@@ -197,7 +197,7 @@ func (h *StateNetwork) getStateRoot(blockHash common.Bytes32) (common.Bytes32, e
 
 	arg := hexutil.Encode(contentKey)
 	res := &discover.ContentInfo{}
-	err := h.client.CallContext(ctx, res, "portal_historyRecursiveFindContent", arg)
+	err := h.client.CallContext(ctx, res, "portal_historyGetContent", arg)
 	if err != nil {
 		return common.Bytes32{}, err
 	}
