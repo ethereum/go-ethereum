@@ -268,7 +268,7 @@ func runCmd(ctx *cli.Context) error {
 		fmt.Printf("Invalid input length for hex data (%d)\n", len(hexcode))
 		os.Exit(1)
 	}
-	code = common.FromHex(string(hexcode))
+	code = common.FromHex(hexcode)
 
 	runtimeConfig := runtime.Config{
 		Origin:      sender,
