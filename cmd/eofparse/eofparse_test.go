@@ -16,7 +16,7 @@ import (
 func FuzzEofParsing(f *testing.F) {
 	// Seed with corpus from execution-spec-tests
 	for i := 0; ; i++ {
-		fname := fmt.Sprintf("testdata/eof/eof_corpus_%d.txt", i)
+		fname := fmt.Sprintf("testdata/eof_corpus_%d.txt", i)
 		corpus, err := os.Open(fname)
 		if err != nil {
 			break
@@ -66,11 +66,11 @@ func FuzzEofParsing(f *testing.F) {
 }
 
 func TestEofParseInitcode(t *testing.T) {
-	testEofParse(t, true, "testdata/eof/results.initcode.txt")
+	testEofParse(t, true, "testdata/results.initcode.txt")
 }
 
 func TestEofParseRegular(t *testing.T) {
-	testEofParse(t, false, "testdata/eof/results.regular.txt")
+	testEofParse(t, false, "testdata/results.regular.txt")
 }
 
 func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
@@ -93,7 +93,7 @@ func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 	}
 
 	for i := 0; ; i++ {
-		fname := fmt.Sprintf("testdata/eof/eof_corpus_%d.txt", i)
+		fname := fmt.Sprintf("testdata/eof_corpus_%d.txt", i)
 		corpus, err := os.Open(fname)
 		if err != nil {
 			break
@@ -137,7 +137,7 @@ func testEofParse(t *testing.T, isInitCode bool, wantFile string) {
 }
 
 func BenchmarkEofParse(b *testing.B) {
-	corpus, err := os.Open("testdata/eof/eof_benches.txt")
+	corpus, err := os.Open("testdata/eof_benches.txt")
 	if err != nil {
 		b.Fatal(err)
 	}

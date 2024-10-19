@@ -1,4 +1,4 @@
-// Copyright 2023 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -31,16 +31,54 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var (
+	parseCommand = &cli.Command{
+		Name:    "eofparse",
+		Aliases: []string{"eof"},
+		Usage:   "Parses hex eof container and returns validation errors (if any)",
+		Action:  parseAction,
+		Flags: []cli.Flag{
+			hexFlag,
+			refTestFlag,
+		},
+	}
+)
+
+var (
+	hexFlag = &cli.StringFlag{
+		Name:  "hex",
+		Usage: "Single container data parse and validation",
+	}
+	refTestFlag = &cli.StringFlag{
+		Name:  "test",
+		Usage: "Path to EOF validation reference test.",
+	}
+)
+
+var jt vm.JumpTable
+
+const initcode = "INITCODE"
+
 func init() {
 	jt = vm.NewPragueEOFInstructionSetForTesting()
 }
 
-var (
-	jt       vm.JumpTable
-	initcode = "INITCODE"
-)
+type refTests struct {
+	Vectors map[string]eOFTest `json:"vectors"`
+}
 
-func eofParseAction(ctx *cli.Context) error {
+type eOFTest struct {
+	Code          string              `json:"code"`
+	Results       map[string]etResult `json:"results"`
+	ContainerKind string              `json:"containerKind"`
+}
+
+type etResult struct {
+	Result    bool   `json:"result"`
+	Exception string `json:"exception,omitempty"`
+}
+
+func parseAction(ctx *cli.Context) error {
 	// If `--test` is set, parse and validate the reference test at the provided path.
 	if ctx.IsSet(refTestFlag.Name) {
 		var (
@@ -95,21 +133,6 @@ func eofParseAction(ctx *cli.Context) error {
 	return nil
 }
 
-type refTests struct {
-	Vectors map[string]eOFTest `json:"vectors"`
-}
-
-type eOFTest struct {
-	Code          string              `json:"code"`
-	Results       map[string]etResult `json:"results"`
-	ContainerKind string              `json:"containerKind"`
-}
-
-type etResult struct {
-	Result    bool   `json:"result"`
-	Exception string `json:"exception,omitempty"`
-}
-
 func executeTest(path string) (int, int, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -160,41 +183,4 @@ func parse(b []byte, isInitCode bool) (*vm.Container, error) {
 		return nil, err
 	}
 	return &c, nil
-}
-
-func eofDumpAction(ctx *cli.Context) error {
-	// If `--hex` is set, parse and validate the hex string argument.
-	if ctx.IsSet(hexFlag.Name) {
-		return eofDump(ctx.String(hexFlag.Name))
-	}
-	// Otherwise read from stdin
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 1024*1024), 10*1024*1024)
-	for scanner.Scan() {
-		l := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(l, "#") || l == "" {
-			continue
-		}
-		if err := eofDump(l); err != nil {
-			return err
-		}
-		fmt.Println("")
-	}
-	return scanner.Err()
-}
-
-func eofDump(hexdata string) error {
-	if len(hexdata) >= 2 && strings.HasPrefix(hexdata, "0x") {
-		hexdata = hexdata[2:]
-	}
-	b, err := hex.DecodeString(hexdata)
-	if err != nil {
-		return fmt.Errorf("unable to decode data: %w", err)
-	}
-	var c vm.Container
-	if err := c.UnmarshalBinary(b, false); err != nil {
-		return err
-	}
-	fmt.Println(c.String())
-	return nil
 }
