@@ -24,12 +24,9 @@ import (
 
 // Various big integer limit values.
 var (
-	tt255     = BigPow(2, 255)
 	tt256     = BigPow(2, 256)
 	tt256m1   = new(big.Int).Sub(tt256, big.NewInt(1))
-	tt63      = BigPow(2, 63)
 	MaxBig256 = new(big.Int).Set(tt256m1)
-	MaxBig63  = new(big.Int).Sub(tt63, big.NewInt(1))
 )
 
 const (
@@ -162,16 +159,6 @@ func BigMin(x, y *big.Int) *big.Int {
 	return x
 }
 
-// FirstBitSet returns the index of the first 1 bit in v, counting from LSB.
-func FirstBitSet(v *big.Int) int {
-	for i := 0; i < v.BitLen(); i++ {
-		if v.Bit(i) > 0 {
-			return i
-		}
-	}
-	return v.BitLen()
-}
-
 // PaddedBigBytes encodes a big integer as a big-endian byte slice. The length
 // of the slice is at least n bytes.
 func PaddedBigBytes(bigint *big.Int, n int) []byte {
@@ -181,34 +168,6 @@ func PaddedBigBytes(bigint *big.Int, n int) []byte {
 	ret := make([]byte, n)
 	ReadBits(bigint, ret)
 	return ret
-}
-
-// bigEndianByteAt returns the byte at position n,
-// in Big-Endian encoding
-// So n==0 returns the least significant byte
-func bigEndianByteAt(bigint *big.Int, n int) byte {
-	words := bigint.Bits()
-	// Check word-bucket the byte will reside in
-	i := n / wordBytes
-	if i >= len(words) {
-		return byte(0)
-	}
-	word := words[i]
-	// Offset of the byte
-	shift := 8 * uint(n%wordBytes)
-
-	return byte(word >> shift)
-}
-
-// Byte returns the byte at position n,
-// with the supplied padlength in Little-Endian encoding.
-// n==0 returns the MSB
-// Example: bigint '5', padlength 32, n=31 => 5
-func Byte(bigint *big.Int, padlength, n int) byte {
-	if n >= padlength {
-		return byte(0)
-	}
-	return bigEndianByteAt(bigint, padlength-1-n)
 }
 
 // ReadBits encodes the absolute value of bigint as big-endian bytes. Callers must ensure
