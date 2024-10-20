@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -1823,7 +1824,7 @@ func TestGetClientVersion(t *testing.T) {
 		t.Fatalf("expected only one returned client version, got %d", len(infos))
 	}
 	info = infos[0]
-	if info.Code != engine.ClientCode || info.Name != engine.ClientName || info.Version != params.VersionWithMeta {
+	if info.Code != engine.ClientCode || info.Name != engine.ClientName || info.Version != version.WithMeta {
 		t.Fatalf("client info does match expected, got %s", info.String())
 	}
 }
