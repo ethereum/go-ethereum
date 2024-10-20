@@ -51,7 +51,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
-	"github.com/tyler-smith/go-bip39"
 )
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas is
@@ -365,100 +364,12 @@ func (api *PersonalAccountAPI) OpenWallet(url string, passphrase *string) error 
 	return wallet.Open(pass)
 }
 
-// DeriveAccount requests an HD wallet to derive a new account, optionally pinning
-// it for later reuse.
-func (api *PersonalAccountAPI) DeriveAccount(url string, path string, pin *bool) (accounts.Account, error) {
-	wallet, err := api.am.Wallet(url)
-	if err != nil {
-		return accounts.Account{}, err
-	}
-	derivPath, err := accounts.ParseDerivationPath(path)
-	if err != nil {
-		return accounts.Account{}, err
-	}
-	if pin == nil {
-		pin = new(bool)
-	}
-	return wallet.Derive(derivPath, *pin)
-}
-
-// NewAccount will create a new account and returns the address for the new account.
-func (api *PersonalAccountAPI) NewAccount(password string) (common.AddressEIP55, error) {
-	ks, err := fetchKeystore(api.am)
-	if err != nil {
-		return common.AddressEIP55{}, err
-	}
-	acc, err := ks.NewAccount(password)
-	if err == nil {
-		addrEIP55 := common.AddressEIP55(acc.Address)
-		log.Info("Your new key was generated", "address", addrEIP55.String())
-		log.Warn("Please backup your key file!", "path", acc.URL.Path)
-		log.Warn("Please remember your password!")
-		return addrEIP55, nil
-	}
-	return common.AddressEIP55{}, err
-}
-
 // fetchKeystore retrieves the encrypted keystore from the account manager.
 func fetchKeystore(am *accounts.Manager) (*keystore.KeyStore, error) {
 	if ks := am.Backends(keystore.KeyStoreType); len(ks) > 0 {
 		return ks[0].(*keystore.KeyStore), nil
 	}
 	return nil, errors.New("local keystore not used")
-}
-
-// ImportRawKey stores the given hex encoded ECDSA key into the key directory,
-// encrypting it with the passphrase.
-func (api *PersonalAccountAPI) ImportRawKey(privkey string, password string) (common.Address, error) {
-	key, err := crypto.HexToECDSA(privkey)
-	if err != nil {
-		return common.Address{}, err
-	}
-	ks, err := fetchKeystore(api.am)
-	if err != nil {
-		return common.Address{}, err
-	}
-	acc, err := ks.ImportECDSA(key, password)
-	return acc.Address, err
-}
-
-// UnlockAccount will unlock the account associated with the given address with
-// the given password for duration seconds. If duration is nil it will use a
-// default of 300 seconds. It returns an indication if the account was unlocked.
-func (api *PersonalAccountAPI) UnlockAccount(ctx context.Context, addr common.Address, password string, duration *uint64) (bool, error) {
-	// When the API is exposed by external RPC(http, ws etc), unless the user
-	// explicitly specifies to allow the insecure account unlocking, otherwise
-	// it is disabled.
-	if api.b.ExtRPCEnabled() && !api.b.AccountManager().Config().InsecureUnlockAllowed {
-		return false, errors.New("account unlock with HTTP access is forbidden")
-	}
-
-	const max = uint64(time.Duration(gomath.MaxInt64) / time.Second)
-	var d time.Duration
-	if duration == nil {
-		d = 300 * time.Second
-	} else if *duration > max {
-		return false, errors.New("unlock duration too large")
-	} else {
-		d = time.Duration(*duration) * time.Second
-	}
-	ks, err := fetchKeystore(api.am)
-	if err != nil {
-		return false, err
-	}
-	err = ks.TimedUnlock(accounts.Account{Address: addr}, password, d)
-	if err != nil {
-		log.Warn("Failed account unlock attempt", "address", addr, "err", err)
-	}
-	return err == nil, err
-}
-
-// LockAccount will lock the account associated with the given address when it's unlocked.
-func (api *PersonalAccountAPI) LockAccount(addr common.Address) bool {
-	if ks, err := fetchKeystore(api.am); err == nil {
-		return ks.Lock(addr) == nil
-	}
-	return false
 }
 
 // signTransaction sets defaults and signs the given transaction
@@ -592,33 +503,6 @@ func (api *PersonalAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.
 		return common.Address{}, err
 	}
 	return crypto.PubkeyToAddress(*rpk), nil
-}
-
-// InitializeWallet initializes a new wallet at the provided URL, by generating and returning a new private key.
-func (api *PersonalAccountAPI) InitializeWallet(ctx context.Context, url string) (string, error) {
-	wallet, err := api.am.Wallet(url)
-	if err != nil {
-		return "", err
-	}
-
-	entropy, err := bip39.NewEntropy(256)
-	if err != nil {
-		return "", err
-	}
-
-	mnemonic, err := bip39.NewMnemonic(entropy)
-	if err != nil {
-		return "", err
-	}
-
-	seed := bip39.NewSeed(mnemonic, "")
-
-	switch wallet := wallet.(type) {
-	case *scwallet.Wallet:
-		return mnemonic, wallet.Initialize(seed)
-	default:
-		return "", errors.New("specified wallet does not support initialization")
-	}
 }
 
 // Unpair deletes a pairing between wallet and geth.
