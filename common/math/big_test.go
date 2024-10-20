@@ -137,20 +137,6 @@ func BenchmarkPaddedBigBytesSmallOnePadding(b *testing.B) {
 	}
 }
 
-func BenchmarkByteAtBrandNew(b *testing.B) {
-	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
-	for i := 0; i < b.N; i++ {
-		bigEndianByteAt(bigint, 15)
-	}
-}
-
-func BenchmarkByteAt(b *testing.B) {
-	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
-	for i := 0; i < b.N; i++ {
-		bigEndianByteAt(bigint, 15)
-	}
-}
-
 func BenchmarkByteAtOld(b *testing.B) {
 	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
 	for i := 0; i < b.N; i++ {
