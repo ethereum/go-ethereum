@@ -23,7 +23,7 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/version"
 )
 
 const ourPath = "github.com/ethereum/go-ethereum" // Path to our module
@@ -59,7 +59,7 @@ func ClientName(clientIdentifier string) string {
 	git, _ := VCS()
 	return fmt.Sprintf("%s/v%v/%v-%v/%v",
 		strings.Title(clientIdentifier),
-		params.VersionWithCommit(git.Commit, git.Date),
+		version.WithCommit(git.Commit, git.Date),
 		runtime.GOOS, runtime.GOARCH,
 		runtime.Version(),
 	)
@@ -71,13 +71,13 @@ func ClientName(clientIdentifier string) string {
 // module path, it will print out commit and date VCS information. Otherwise,
 // it will assume it's imported by a third-party and will return the imported
 // version and whether it was replaced by another module.
-func Info() (version, vcs string) {
-	version = params.VersionWithMeta
+func Info() (ver, vcs string) {
+	ver = version.WithMeta
 	buildInfo, ok := debug.ReadBuildInfo()
 	if !ok {
-		return version, ""
+		return ver, ""
 	}
-	version = versionInfo(buildInfo)
+	ver = versionInfo(buildInfo)
 	if status, ok := VCS(); ok {
 		modified := ""
 		if status.Dirty {
@@ -89,7 +89,7 @@ func Info() (version, vcs string) {
 		}
 		vcs = commit + "-" + status.Date + modified
 	}
-	return version, vcs
+	return ver, vcs
 }
 
 // versionInfo returns version information for the currently executing
@@ -105,26 +105,26 @@ func versionInfo(info *debug.BuildInfo) string {
 	}
 	// Not our main package, so explicitly print out the module path and
 	// version.
-	var version string
+	var ver string
 	if info.Main.Path != "" && info.Main.Version != "" {
 		// These can be empty when invoked with "go run".
-		version = fmt.Sprintf("%s@%s ", info.Main.Path, info.Main.Version)
+		ver = fmt.Sprintf("%s@%s ", info.Main.Path, info.Main.Version)
 	}
 	mod := findModule(info, ourPath)
 	if mod == nil {
 		// If our module path wasn't imported, it's unclear which
 		// version of our code they are running. Fallback to hardcoded
 		// version.
-		return version + fmt.Sprintf("geth %s", params.VersionWithMeta)
+		return ver + fmt.Sprintf("geth %s", version.WithMeta)
 	}
 	// Our package is a dependency for the main module. Return path and
 	// version data for both.
-	version += fmt.Sprintf("%s@%s", mod.Path, mod.Version)
+	ver += fmt.Sprintf("%s@%s", mod.Path, mod.Version)
 	if mod.Replace != nil {
 		// If our package was replaced by something else, also note that.
-		version += fmt.Sprintf(" (replaced by %s@%s)", mod.Replace.Path, mod.Replace.Version)
+		ver += fmt.Sprintf(" (replaced by %s@%s)", mod.Replace.Path, mod.Replace.Version)
 	}
-	return version
+	return ver
 }
 
 // findModule returns the module at path.
