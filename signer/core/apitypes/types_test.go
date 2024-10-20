@@ -31,8 +31,9 @@ func TestIsPrimitive(t *testing.T) {
 	t.Parallel()
 	// Expected positives
 	for i, tc := range []string{
-		"int24", "int24[]", "uint88", "uint88[]", "uint", "uint[]", "int256", "int256[]",
-		"uint96", "uint96[]", "int96", "int96[]", "bytes17[]", "bytes17",
+		"int24", "int24[]", "int[]", "int[2]", "uint88", "uint88[]", "uint", "uint[]", "uint[2]", "int256", "int256[]",
+		"uint96", "uint96[]", "int96", "int96[]", "bytes17[]", "bytes17", "address[2]", "bool[4]", "string[5]", "bytes[2]",
+		"bytes32", "bytes32[]", "bytes32[4]",
 	} {
 		if !isPrimitiveTypeValid(tc) {
 			t.Errorf("test %d: expected '%v' to be a valid primitive", i, tc)
@@ -140,4 +141,95 @@ func TestBlobTxs(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("tx %v", string(data))
+}
+
+func TestType_IsArray(t *testing.T) {
+	t.Parallel()
+	// Expected positives
+	for i, tc := range []Type{
+		{
+			Name: "type1",
+			Type: "int24[]",
+		},
+		{
+			Name: "type2",
+			Type: "int24[2]",
+		},
+		{
+			Name: "type3",
+			Type: "int24[2][2][2]",
+		},
+	} {
+		if !tc.isArray() {
+			t.Errorf("test %d: expected '%v' to be an array", i, tc)
+		}
+	}
+	// Expected negatives
+	for i, tc := range []Type{
+		{
+			Name: "type1",
+			Type: "int24",
+		},
+		{
+			Name: "type2",
+			Type: "uint88",
+		},
+		{
+			Name: "type3",
+			Type: "bytes32",
+		},
+	} {
+		if tc.isArray() {
+			t.Errorf("test %d: expected '%v' to not be an array", i, tc)
+		}
+	}
+}
+
+func TestType_TypeName(t *testing.T) {
+	t.Parallel()
+
+	for i, tc := range []struct {
+		Input    Type
+		Expected string
+	}{
+		{
+			Input: Type{
+				Name: "type1",
+				Type: "int24[]",
+			},
+			Expected: "int24",
+		},
+		{
+			Input: Type{
+				Name: "type2",
+				Type: "int26[2][2][2]",
+			},
+			Expected: "int26",
+		},
+		{
+			Input: Type{
+				Name: "type3",
+				Type: "int24",
+			},
+			Expected: "int24",
+		},
+		{
+			Input: Type{
+				Name: "type4",
+				Type: "uint88",
+			},
+			Expected: "uint88",
+		},
+		{
+			Input: Type{
+				Name: "type5",
+				Type: "bytes32[2]",
+			},
+			Expected: "bytes32",
+		},
+	} {
+		if tc.Input.typeName() != tc.Expected {
+			t.Errorf("test %d: expected typeName value of '%v' but got '%v'", i, tc.Expected, tc.Input)
+		}
+	}
 }
