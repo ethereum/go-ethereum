@@ -27,7 +27,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/lru"
@@ -50,8 +49,6 @@ const (
 	checkpointInterval = 1024 // Number of blocks after which to save the vote snapshot to the database
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
-
-	wiggleTime = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 )
 
 // Clique proof-of-authority protocol constants.
@@ -140,9 +137,6 @@ var (
 	errRecentlySigned = errors.New("recently signed")
 )
 
-// SignerFn hashes and signs the data to be signed by a backing account.
-type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
-
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(header *types.Header, sigcache *sigLRU) (common.Address, error) {
 	// If the signature's already cached, return that
@@ -180,7 +174,6 @@ type Clique struct {
 	proposals map[common.Address]bool // Current list of proposals we are pushing
 
 	signer common.Address // Ethereum address of the signing key
-	signFn SignerFn       // Signer function to authorize hashes with
 	lock   sync.RWMutex   // Protects the signer and proposals fields
 
 	// The fields below are for testing only
@@ -602,82 +595,17 @@ func (c *Clique) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
-func (c *Clique) Authorize(signer common.Address, signFn SignerFn) {
+func (c *Clique) Authorize(signer common.Address) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	c.signer = signer
-	c.signFn = signFn
 }
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	header := block.Header()
-
-	// Sealing the genesis block is not supported
-	number := header.Number.Uint64()
-	if number == 0 {
-		return errUnknownBlock
-	}
-	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
-	if c.config.Period == 0 && len(block.Transactions()) == 0 {
-		return errors.New("sealing paused while waiting for transactions")
-	}
-	// Don't hold the signer fields for the entire sealing procedure
-	c.lock.RLock()
-	signer, signFn := c.signer, c.signFn
-	c.lock.RUnlock()
-
-	// Bail out if we're unauthorized to sign a block
-	snap, err := c.snapshot(chain, number-1, header.ParentHash, nil)
-	if err != nil {
-		return err
-	}
-	if _, authorized := snap.Signers[signer]; !authorized {
-		return errUnauthorizedSigner
-	}
-	// If we're amongst the recent signers, wait for the next block
-	for seen, recent := range snap.Recents {
-		if recent == signer {
-			// Signer is among recents, only wait if the current block doesn't shift it out
-			if limit := uint64(len(snap.Signers)/2 + 1); number < limit || seen > number-limit {
-				return errors.New("signed recently, must wait for others")
-			}
-		}
-	}
-	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now()) // nolint: gosimple
-	if header.Difficulty.Cmp(diffNoTurn) == 0 {
-		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(len(snap.Signers)/2+1) * wiggleTime
-		delay += time.Duration(rand.Int63n(int64(wiggle)))
-
-		log.Trace("Out-of-turn signing requested", "wiggle", common.PrettyDuration(wiggle))
-	}
-	// Sign all the things!
-	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, CliqueRLP(header))
-	if err != nil {
-		return err
-	}
-	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
-	// Wait until sealing is terminated or delay timeout.
-	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
-	go func() {
-		select {
-		case <-stop:
-			return
-		case <-time.After(delay):
-		}
-
-		select {
-		case results <- block.WithSeal(header):
-		default:
-			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header))
-		}
-	}()
-
-	return nil
+	panic("clique (poa) sealing not supported any more")
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
