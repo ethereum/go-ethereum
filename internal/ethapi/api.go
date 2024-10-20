@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	gomath "math"
 	"math/big"
 	"strings"
 	"time"
@@ -432,7 +433,7 @@ func (api *PersonalAccountAPI) UnlockAccount(ctx context.Context, addr common.Ad
 		return false, errors.New("account unlock with HTTP access is forbidden")
 	}
 
-	const max = uint64(time.Duration(math.MaxInt64) / time.Second)
+	const max = uint64(time.Duration(gomath.MaxInt64) / time.Second)
 	var d time.Duration
 	if duration == nil {
 		d = 300 * time.Second
@@ -1183,7 +1184,7 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	defer cancel()
 	gp := new(core.GasPool)
 	if globalGasCap == 0 {
-		gp.AddGas(math.MaxUint64)
+		gp.AddGas(gomath.MaxUint64)
 	} else {
 		gp.AddGas(globalGasCap)
 	}
@@ -1291,7 +1292,7 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 	}
 	gasCap := api.b.RPCGasCap()
 	if gasCap == 0 {
-		gasCap = math.MaxUint64
+		gasCap = gomath.MaxUint64
 	}
 	sim := &simulator{
 		b:           api.b,

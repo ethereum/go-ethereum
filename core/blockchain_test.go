@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	gomath "math"
 	"math/big"
 	"math/rand"
 	"os"
@@ -1949,11 +1950,11 @@ func testSideImport(t *testing.T, numCanonBlocksInSidechain, blocksBetweenCommon
 
 		gspec = &Genesis{
 			Config:  &chainConfig,
-			Alloc:   types.GenesisAlloc{addr: {Balance: big.NewInt(math.MaxInt64)}},
+			Alloc:   types.GenesisAlloc{addr: {Balance: big.NewInt(gomath.MaxInt64)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
 		signer     = types.LatestSigner(gspec.Config)
-		mergeBlock = math.MaxInt32
+		mergeBlock = gomath.MaxInt32
 	)
 	// Generate and import the canonical chain
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), nil, gspec, nil, engine, vm.Config{}, nil)
@@ -2236,7 +2237,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 			Config:  &chainConfig,
 		}
 		engine     = beacon.New(ethash.NewFaker())
-		mergeBlock = uint64(math.MaxUint64)
+		mergeBlock = uint64(gomath.MaxUint64)
 	)
 	// Apply merging since genesis
 	if mergeHeight == 0 {
