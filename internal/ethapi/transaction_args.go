@@ -101,7 +101,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	if err := args.setBlobTxSidecar(ctx); err != nil {
 		return err
 	}
-	if err := args.setFeeDefaults(ctx, b); err != nil {
+	if err := args.setFeeDefaults(ctx, b, b.CurrentHeader()); err != nil {
 		return err
 	}
 
@@ -184,8 +184,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 }
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
-func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
-	head := b.CurrentHeader()
+func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head *types.Header) error {
 	// Sanity check the EIP-4844 fee parameters.
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
 		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
