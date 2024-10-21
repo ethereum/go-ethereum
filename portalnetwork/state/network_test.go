@@ -37,7 +37,7 @@ type MockAPI struct {
 	header string
 }
 
-func (p *MockAPI) HistoryRecursiveFindContent(contentKeyHex string) (*discover.ContentInfo, error) {
+func (p *MockAPI) HistoryGetContent(contentKeyHex string) (*discover.ContentInfo, error) {
 	headerWithProof := &history.BlockHeaderWithProof{
 		Header: hexutil.MustDecode(p.header),
 		Proof: &history.BlockHeaderProof{
