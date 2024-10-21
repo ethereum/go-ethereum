@@ -22,12 +22,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	gomath "math"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -141,7 +140,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 		if skipGasEstimation { // Skip gas usage estimation if a precise gas limit is not critical, e.g., in non-transaction calls.
 			gas := hexutil.Uint64(b.RPCGasCap())
 			if gas == 0 {
-				gas = hexutil.Uint64(gomath.MaxUint64 / 2)
+				gas = hexutil.Uint64(math.MaxUint64 / 2)
 			}
 			args.Gas = &gas
 		} else { // Estimate the gas usage otherwise.
@@ -379,7 +378,7 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 	if args.Gas == nil {
 		gas := globalGasCap
 		if gas == 0 {
-			gas = uint64(gomath.MaxUint64 / 2)
+			gas = uint64(math.MaxUint64 / 2)
 		}
 		args.Gas = (*hexutil.Uint64)(&gas)
 	} else {
@@ -441,7 +440,10 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			gasPrice = new(big.Int)
 			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
+				gasPrice = gasPrice.Add(gasTipCap, baseFee)
+				if gasPrice.Cmp(gasFeeCap) > 0 {
+					gasPrice = gasFeeCap
+				}
 			}
 		}
 	}
