@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -17,39 +17,41 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
-	"strings"
 
-	"github.com/ethereum/go-ethereum/core/asm"
+	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/urfave/cli/v2"
 )
 
-var disasmCommand = &cli.Command{
-	Action:    disasmCmd,
-	Name:      "disasm",
-	Usage:     "Disassembles evm binary",
-	ArgsUsage: "<file>",
-}
+var app = flags.NewApp("go-ethereum eofparse tool")
 
-func disasmCmd(ctx *cli.Context) error {
-	var in string
-	switch {
-	case len(ctx.Args().First()) > 0:
-		fn := ctx.Args().First()
-		input, err := os.ReadFile(fn)
-		if err != nil {
-			return err
-		}
-		in = string(input)
-	case ctx.IsSet(InputFlag.Name):
-		in = ctx.String(InputFlag.Name)
-	default:
-		return errors.New("missing filename or --input value")
+func init() {
+	app.Flags = append(app.Flags, debug.Flags...)
+	app.Before = func(ctx *cli.Context) error {
+		flags.MigrateGlobalFlags(ctx)
+		return debug.Setup(ctx)
+	}
+	app.After = func(ctx *cli.Context) error {
+		debug.Exit()
+		return nil
+	}
+	app.CommandNotFound = func(ctx *cli.Context, cmd string) {
+		fmt.Fprintf(os.Stderr, "No such command: %s\n", cmd)
+		os.Exit(1)
 	}
 
-	code := strings.TrimSpace(in)
-	fmt.Printf("%v\n", code)
-	return asm.PrintDisassembled(code)
+	// Add subcommands.
+	app.Commands = []*cli.Command{
+		parseCommand,
+		dumpCommand,
+	}
+}
+
+func main() {
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
