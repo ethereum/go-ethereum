@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/mattn/go-isatty"
 	"github.com/urfave/cli/v2"
 )
@@ -39,7 +38,7 @@ func NewApp(usage string) *cli.App {
 	git, _ := version.VCS()
 	app := cli.NewApp()
 	app.EnableBashCompletion = true
-	app.Version = params.VersionWithCommit(git.Commit, git.Date)
+	app.Version = version.WithCommit(git.Commit, git.Date)
 	app.Usage = usage
 	app.Copyright = "Copyright 2013-2024 The go-ethereum Authors"
 	app.Before = func(ctx *cli.Context) error {

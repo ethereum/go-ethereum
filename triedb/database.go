@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie/trienode"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
@@ -57,6 +56,10 @@ var VerkleDefaults = &Config{
 // backend defines the methods needed to access/update trie nodes in different
 // state scheme.
 type backend interface {
+	// NodeReader returns a reader for accessing trie nodes within the specified state.
+	// An error will be returned if the specified state is not available.
+	NodeReader(root common.Hash) (database.NodeReader, error)
+
 	// Initialized returns an indicator if the state data is already initialized
 	// according to the state scheme.
 	Initialized(genesisRoot common.Hash) bool
@@ -68,24 +71,12 @@ type backend interface {
 	// and dirty disk layer nodes, so both are merged into the second return.
 	Size() (common.StorageSize, common.StorageSize)
 
-	// Update performs a state transition by committing dirty nodes contained
-	// in the given set in order to update state from the specified parent to
-	// the specified root.
-	//
-	// The passed in maps(nodes, states) will be retained to avoid copying
-	// everything. Therefore, these maps must not be changed afterwards.
-	Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error
-
 	// Commit writes all relevant trie nodes belonging to the specified state
 	// to disk. Report specifies whether logs will be displayed in info level.
 	Commit(root common.Hash, report bool) error
 
 	// Close closes the trie database backend and releases all held resources.
 	Close() error
-
-	// Reader returns a reader for accessing all trie nodes with provided state
-	// root. An error will be returned if the requested state is not available.
-	Reader(root common.Hash) (database.Reader, error)
 }
 
 // Database is the wrapper of the underlying backend which is shared by different
@@ -125,10 +116,10 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	return db
 }
 
-// Reader returns a reader for accessing all trie nodes with provided state root.
-// An error will be returned if the requested state is not available.
-func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
-	return db.backend.Reader(blockRoot)
+// NodeReader returns a reader for accessing trie nodes within the specified state.
+// An error will be returned if the specified state is not available.
+func (db *Database) NodeReader(blockRoot common.Hash) (database.NodeReader, error) {
+	return db.backend.NodeReader(blockRoot)
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
@@ -138,11 +129,17 @@ func (db *Database) Reader(blockRoot common.Hash) (database.Reader, error) {
 //
 // The passed in maps(nodes, states) will be retained to avoid copying everything.
 // Therefore, these maps must not be changed afterwards.
-func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
+func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *StateSet) error {
 	if db.preimages != nil {
 		db.preimages.commit(false)
 	}
-	return db.backend.Update(root, parent, block, nodes, states)
+	switch b := db.backend.(type) {
+	case *hashdb.Database:
+		return b.Update(root, parent, block, nodes)
+	case *pathdb.Database:
+		return b.Update(root, parent, block, nodes, states.internal())
+	}
+	return errors.New("unknown backend")
 }
 
 // Commit iterates over all the children of a particular node, writes them out
@@ -312,17 +309,6 @@ func (db *Database) Journal(root common.Hash) error {
 		return errors.New("not supported")
 	}
 	return pdb.Journal(root)
-}
-
-// SetBufferSize sets the node buffer size to the provided value(in bytes).
-// It's only supported by path-based database and will return an error for
-// others.
-func (db *Database) SetBufferSize(size int) error {
-	pdb, ok := db.backend.(*pathdb.Database)
-	if !ok {
-		return errors.New("not supported")
-	}
-	return pdb.SetBufferSize(size)
 }
 
 // IsVerkle returns the indicator if the database is holding a verkle tree.

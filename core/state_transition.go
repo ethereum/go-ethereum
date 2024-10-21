@@ -22,7 +22,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -170,7 +169,10 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
-		msg.GasPrice = cmath.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
+		msg.GasPrice = msg.GasPrice.Add(msg.GasTipCap, baseFee)
+		if msg.GasPrice.Cmp(msg.GasFeeCap) > 0 {
+			msg.GasPrice = msg.GasFeeCap
+		}
 	}
 	var err error
 	msg.From, err = types.Sender(s, tx)
@@ -461,7 +463,10 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	effectiveTip := msg.GasPrice
 	if rules.IsLondon {
-		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
+		effectiveTip = new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee)
+		if effectiveTip.Cmp(msg.GasTipCap) > 0 {
+			effectiveTip = msg.GasTipCap
+		}
 	}
 	effectiveTipU256, _ := uint256.FromBig(effectiveTip)
 
