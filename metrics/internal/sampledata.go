@@ -50,7 +50,7 @@ func ExampleMetrics() metrics.Registry {
 		//metrics.NewRegisteredHistogram("test/histogram", registry, metrics.NewSampleSnapshot(3, []int64{1, 2, 3}))
 		metrics.NewRegisteredHistogram("test/histogram", registry, s)
 	}
-	registry.Register("test/meter", metrics.NewInactiveMeter())
+	registry.Register("test/meter", metrics.NewMeter())
 	{
 		timer := metrics.NewRegisteredResettingTimer("test/resetting_timer", registry)
 		timer.Update(10 * time.Millisecond)
@@ -68,7 +68,6 @@ func ExampleMetrics() metrics.Registry {
 		timer.Update(120 * time.Millisecond)
 		timer.Update(23 * time.Millisecond)
 		timer.Update(24 * time.Millisecond)
-		timer.Stop()
 	}
 	registry.Register("test/empty_resetting_timer", metrics.NewResettingTimer().Snapshot())
 
