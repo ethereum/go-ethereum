@@ -459,7 +459,7 @@ func (s *stateObject) AddBalance(amount *uint256.Int) uint256.Int {
 	return s.SetBalance(new(uint256.Int).Add(s.Balance(), amount))
 }
 
-// SetBalance sets the balance for the object, and returns the prevous balance
+// SetBalance sets the balance for the object, and returns the previous balance.
 func (s *stateObject) SetBalance(amount *uint256.Int) uint256.Int {
 	prev := *s.data.Balance
 	s.db.journal.balanceChange(s.address, s.data.Balance)

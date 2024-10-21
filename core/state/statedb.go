@@ -402,24 +402,22 @@ func (s *StateDB) HasSelfDestructed(addr common.Address) bool {
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
 	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		return stateObject.AddBalance(amount)
+	if stateObject == nil {
+		return uint256.Int{}
 	}
-	return uint256.Int{}
+	return stateObject.AddBalance(amount)
 }
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
 	stateObject := s.getOrNewStateObject(addr)
-	var prev uint256.Int
+	if stateObject == nil {
+		return uint256.Int{}
+	}
 	if amount.IsZero() {
-		return prev
+		return *(stateObject.Balance())
 	}
-	if stateObject != nil {
-		prev = *(stateObject.Balance())
-		stateObject.SetBalance(new(uint256.Int).Sub(stateObject.Balance(), amount))
-	}
-	return prev
+	return stateObject.SetBalance(new(uint256.Int).Sub(stateObject.Balance(), amount))
 }
 
 func (s *StateDB) SetBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) {
@@ -505,15 +503,15 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 	return prevBalance
 }
 
-func (s *StateDB) Selfdestruct6780(addr common.Address) uint256.Int {
+func (s *StateDB) Selfdestruct6780(addr common.Address) (uint256.Int, bool) {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
-		return uint256.Int{}
+		return uint256.Int{}, false
 	}
 	if stateObject.newContract {
-		return s.SelfDestruct(addr)
+		return s.SelfDestruct(addr), true
 	}
-	return *(stateObject.Balance())
+	return *(stateObject.Balance()), false
 }
 
 // SetTransientState sets transient storage for a given account. It

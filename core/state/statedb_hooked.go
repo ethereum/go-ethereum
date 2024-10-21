@@ -159,7 +159,7 @@ func (s *hookedStateDB) Witness() *stateless.Witness {
 
 func (s *hookedStateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
 	prev := s.inner.SubBalance(addr, amount, reason)
-	if s.hooks.OnBalanceChange != nil {
+	if s.hooks.OnBalanceChange != nil && !amount.IsZero() {
 		newBalance := new(uint256.Int).Sub(&prev, amount)
 		s.hooks.OnBalanceChange(addr, prev.ToBig(), newBalance.ToBig(), reason)
 	}
@@ -168,7 +168,7 @@ func (s *hookedStateDB) SubBalance(addr common.Address, amount *uint256.Int, rea
 
 func (s *hookedStateDB) AddBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {
 	prev := s.inner.AddBalance(addr, amount, reason)
-	if s.hooks.OnBalanceChange != nil {
+	if s.hooks.OnBalanceChange != nil && !amount.IsZero() {
 		newBalance := new(uint256.Int).Add(&prev, amount)
 		s.hooks.OnBalanceChange(addr, prev.ToBig(), newBalance.ToBig(), reason)
 	}
@@ -207,14 +207,14 @@ func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
 	return prev
 }
 
-func (s *hookedStateDB) Selfdestruct6780(address common.Address) uint256.Int {
-	prev := s.inner.Selfdestruct6780(address)
-	if !prev.IsZero() {
+func (s *hookedStateDB) Selfdestruct6780(address common.Address) (uint256.Int, bool) {
+	prev, changed := s.inner.Selfdestruct6780(address)
+	if !prev.IsZero() && changed {
 		if s.hooks.OnBalanceChange != nil {
 			s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
 		}
 	}
-	return prev
+	return prev, changed
 }
 
 func (s *hookedStateDB) AddLog(log *types.Log) {
