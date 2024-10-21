@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -208,19 +207,18 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 }
 
 // SetState updates a value in account storage.
-func (s *stateObject) SetState(key, value common.Hash) {
+// It returns the previous value
+func (s *stateObject) SetState(key, value common.Hash) common.Hash {
 	// If the new value is the same as old, don't set. Otherwise, track only the
 	// dirty changes, supporting reverting all of it back to no change.
 	prev, origin := s.getState(key)
 	if prev == value {
-		return
+		return prev
 	}
 	// New value is different, update and journal the change
 	s.db.journal.storageChange(s.address, key, prev, origin)
 	s.setState(key, value, origin)
-	if s.db.logger != nil && s.db.logger.OnStorageChange != nil {
-		s.db.logger.OnStorageChange(s.address, key, prev, value)
-	}
+	return prev
 }
 
 // setState updates a value in account dirty storage. The dirtiness will be
@@ -448,33 +446,25 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
-func (s *stateObject) AddBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
+// returns the previous balance
+func (s *stateObject) AddBalance(amount *uint256.Int) uint256.Int {
 	// EIP161: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
 	if amount.IsZero() {
 		if s.empty() {
 			s.touch()
 		}
-		return
+		return *(s.Balance())
 	}
-	s.SetBalance(new(uint256.Int).Add(s.Balance(), amount), reason)
+	return s.SetBalance(new(uint256.Int).Add(s.Balance(), amount))
 }
 
-// SubBalance removes amount from s's balance.
-// It is used to remove funds from the origin account of a transfer.
-func (s *stateObject) SubBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
-	if amount.IsZero() {
-		return
-	}
-	s.SetBalance(new(uint256.Int).Sub(s.Balance(), amount), reason)
-}
-
-func (s *stateObject) SetBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
+// SetBalance sets the balance for the object, and returns the previous balance.
+func (s *stateObject) SetBalance(amount *uint256.Int) uint256.Int {
+	prev := *s.data.Balance
 	s.db.journal.balanceChange(s.address, s.data.Balance)
-	if s.db.logger != nil && s.db.logger.OnBalanceChange != nil {
-		s.db.logger.OnBalanceChange(s.address, s.Balance().ToBig(), amount.ToBig(), reason)
-	}
 	s.setBalance(amount)
+	return prev
 }
 
 func (s *stateObject) setBalance(amount *uint256.Int) {
@@ -547,10 +537,6 @@ func (s *stateObject) CodeSize() int {
 
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
 	s.db.journal.setCode(s.address)
-	if s.db.logger != nil && s.db.logger.OnCodeChange != nil {
-		// TODO remove prevcode from this callback
-		s.db.logger.OnCodeChange(s.address, common.BytesToHash(s.CodeHash()), nil, codeHash, code)
-	}
 	s.setCode(codeHash, code)
 }
 
@@ -562,9 +548,6 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 
 func (s *stateObject) SetNonce(nonce uint64) {
 	s.db.journal.nonceChange(s.address, s.data.Nonce)
-	if s.db.logger != nil && s.db.logger.OnNonceChange != nil {
-		s.db.logger.OnNonceChange(s.address, s.data.Nonce, nonce)
-	}
 	s.setNonce(nonce)
 }
 

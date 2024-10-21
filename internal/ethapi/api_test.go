@@ -2192,6 +2192,7 @@ func TestSimulateV1(t *testing.T) {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
 			if !reflect.DeepEqual(have, tc.want) {
+				t.Log(string(resBytes))
 				t.Errorf("test %s, result mismatch, have\n%v\n, want\n%v\n", tc.name, have, tc.want)
 			}
 		})
