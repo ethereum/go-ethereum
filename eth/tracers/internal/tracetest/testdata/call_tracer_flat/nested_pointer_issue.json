@@ -61,7 +61,6 @@
       "berlinBlock": 4460644,
       "londonBlock": 5062605,
       "terminalTotalDifficulty": 10790000,
-      "terminalTotalDifficultyPassed": true,
       "clique": {
         "period": 15,
         "epoch": 30000
