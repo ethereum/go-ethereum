@@ -234,16 +234,43 @@ func TestStorageRangeAt(t *testing.T) {
 func TestExecutionWitness(t *testing.T) {
 	t.Parallel()
 
+	var (
+		db    = rawdb.NewMemoryDatabase()
+		gspec = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000000000000)}},
+		}
+		chain, _ = core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
+		signer   = types.LatestSigner(gspec.Config)
+	)
 	// Create a database pre-initialize with a genesis block
-	db := rawdb.NewMemoryDatabase()
-	gspec := &core.Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  types.GenesisAlloc{testAddr: {Balance: big.NewInt(1000000)}},
-	}
-	chain, _ := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
 
 	blockNum := 10
-	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), blockNum, nil)
+	_, bs, _ := core.GenerateChainWithGenesis(gspec, ethash.NewFaker(), blockNum, func(i int, g *core.BlockGen) {
+		if i == 0 {
+			return
+		}
+
+		// add more transactions to the block
+		for j := 0; j < 10; j++ {
+			tx, err := types.SignNewTx(testKey, signer, &types.DynamicFeeTx{
+				ChainID:    gspec.Config.ChainID,
+				Nonce:      uint64((i-1)*10 + j),
+				GasTipCap:  common.Big0,
+				GasFeeCap:  g.PrevBlock(0).BaseFee(),
+				Gas:        50000,
+				To:         &common.Address{0xaa},
+				Value:      big.NewInt(int64(i)),
+				Data:       nil,
+				AccessList: nil,
+			})
+			if err != nil {
+				t.Fatalf("error creating tx: %v", err)
+			}
+			g.AddTx(tx)
+		}
+	})
+
 	if _, err := chain.InsertChain(bs); err != nil {
 		panic(err)
 	}
