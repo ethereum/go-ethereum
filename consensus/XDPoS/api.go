@@ -344,3 +344,23 @@ func (api *API) GetEpochNumbersBetween(begin, end *rpc.BlockNumber) ([]uint64, e
 	}
 	return epochSwitchNumbers, nil
 }
+
+/*
+An API exclusively for V2 consensus, designed to assist in getting rewards of the epoch number.
+Given the epoch number, search the epoch switch block.
+*/
+func (api *API) GetBlockInfoByEpochNum(epochNumber uint64) (*utils.EpochNumInfo, error) {
+	thisEpoch, nextEpoch, err := api.XDPoS.EngineV2.GetBlockByEpochNumber(api.chain, epochNumber)
+	if err != nil {
+		return nil, err
+	}
+	info := &utils.EpochNumInfo{
+		EpochBlockHash:        thisEpoch.Hash,
+		EpochRound:            thisEpoch.Round,
+		EpochFirstBlockNumber: thisEpoch.Number,
+	}
+	if nextEpoch != nil {
+		info.EpochLastBlockNumber = new(big.Int).Sub(nextEpoch.Number, big.NewInt(1))
+	}
+	return info, nil
+}

@@ -175,6 +175,10 @@ func (x *XDPoS_v2) GetEpochSwitchInfoBetween(chain consensus.ChainReader, begin,
 			return nil, err
 		}
 		iteratorHeader = nil
+		// V2 switch epoch switch info has nil parent
+		if epochSwitchInfo.EpochSwitchParentBlockInfo == nil {
+			break
+		}
 		iteratorHash = epochSwitchInfo.EpochSwitchParentBlockInfo.Hash
 		iteratorNum = epochSwitchInfo.EpochSwitchBlockInfo.Number
 		if iteratorNum.Cmp(begin.Number) >= 0 {

@@ -37,13 +37,13 @@ var (
 )
 
 const (
-	maxKnownTxs        = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownOrderTxs   = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownLendingTxs = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownBlocks     = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
-	maxKnownVote       = 1024  // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownTimeout    = 1024  // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownSyncInfo   = 1024  // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownTxs        = 32768  // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownOrderTxs   = 32768  // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownLendingTxs = 32768  // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownBlocks     = 1024   // Maximum block hashes to keep in the known list (prevent DOS)
+	maxKnownVote       = 131072 // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownTimeout    = 131072 // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownSyncInfo   = 131072 // Maximum transactions hashes to keep in the known list (prevent DOS)
 	handshakeTimeout   = 5 * time.Second
 )
 
