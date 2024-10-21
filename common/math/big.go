@@ -143,22 +143,6 @@ func BigPow(a, b int64) *big.Int {
 	return r.Exp(r, big.NewInt(b), nil)
 }
 
-// BigMax returns the larger of x or y.
-func BigMax(x, y *big.Int) *big.Int {
-	if x.Cmp(y) < 0 {
-		return y
-	}
-	return x
-}
-
-// BigMin returns the smaller of x or y.
-func BigMin(x, y *big.Int) *big.Int {
-	if x.Cmp(y) > 0 {
-		return y
-	}
-	return x
-}
-
 // PaddedBigBytes encodes a big integer as a big-endian byte slice. The length
 // of the slice is at least n bytes.
 func PaddedBigBytes(bigint *big.Int, n int) []byte {
