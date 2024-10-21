@@ -311,7 +311,7 @@ var opCodeToString = [256]string{
 	COINBASE:    "COINBASE",
 	TIMESTAMP:   "TIMESTAMP",
 	NUMBER:      "NUMBER",
-	DIFFICULTY:  "DIFFICULTY", // TODO (MariusVanDerWijden) rename to PREVRANDAO post merge
+	PREVRANDAO:  "PREVRANDAO",
 	GASLIMIT:    "GASLIMIT",
 	CHAINID:     "CHAINID",
 	SELFBALANCE: "SELFBALANCE",
@@ -514,6 +514,7 @@ var stringToOp = map[string]OpCode{
 	"TIMESTAMP":       TIMESTAMP,
 	"NUMBER":          NUMBER,
 	"DIFFICULTY":      DIFFICULTY,
+	"PREVRANDAO":      PREVRANDAO,
 	"GASLIMIT":        GASLIMIT,
 	"SELFBALANCE":     SELFBALANCE,
 	"POP":             POP,
