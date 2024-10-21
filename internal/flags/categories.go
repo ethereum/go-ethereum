@@ -32,6 +32,7 @@ const (
 	MinerCategory      = "MINER"
 	GasPriceCategory   = "GAS PRICE ORACLE"
 	VMCategory         = "VIRTUAL MACHINE"
+	ExExCategory       = "EXECUTION EXTENSIONS"
 	LoggingCategory    = "LOGGING AND DEBUGGING"
 	MetricsCategory    = "METRICS AND STATS"
 	MiscCategory       = "MISC"

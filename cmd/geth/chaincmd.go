@@ -102,7 +102,7 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.VMTraceJsonConfigFlag,
 			utils.TransactionHistoryFlag,
 			utils.StateHistoryFlag,
-		}, utils.DatabaseFlags),
+		}, utils.DatabaseFlags, utils.ExExPluginFlags()),
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
 with several RLP-encoded blocks, or several files can be used.

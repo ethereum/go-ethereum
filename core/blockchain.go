@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/core/exex/exex"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -467,6 +468,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	if txLookupLimit != nil {
 		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
 	}
+	exex.TriggerInitHook(bc)
 	return bc, nil
 }
 
@@ -578,6 +580,7 @@ func (bc *BlockChain) SetHead(head uint64) error {
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
 		return fmt.Errorf("current block missing: #%d [%x..]", header.Number, header.Hash().Bytes()[:4])
 	}
+	exex.TriggerHeadHook(header)
 	bc.chainHeadFeed.Send(ChainHeadEvent{Header: header})
 	return nil
 }
@@ -599,6 +602,7 @@ func (bc *BlockChain) SetHeadWithTimestamp(timestamp uint64) error {
 		log.Error("Current block not found in database", "block", header.Number, "hash", header.Hash())
 		return fmt.Errorf("current block missing: #%d [%x..]", header.Number, header.Hash().Bytes()[:4])
 	}
+	exex.TriggerHeadHook(header)
 	bc.chainHeadFeed.Send(ChainHeadEvent{Header: header})
 	return nil
 }
@@ -609,6 +613,7 @@ func (bc *BlockChain) SetFinalized(header *types.Header) {
 	if header != nil {
 		rawdb.WriteFinalizedBlockHash(bc.db, header.Hash())
 		headFinalizedBlockGauge.Update(int64(header.Number.Uint64()))
+		exex.TriggerFinalHook(header)
 	} else {
 		rawdb.WriteFinalizedBlockHash(bc.db, common.Hash{})
 		headFinalizedBlockGauge.Update(0)
@@ -1157,6 +1162,8 @@ func (bc *BlockChain) Stop() {
 	if bc.logger != nil && bc.logger.OnClose != nil {
 		bc.logger.OnClose()
 	}
+	exex.TriggerCloseHook()
+
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
 		log.Error("Failed to close trie database", "err", err)
@@ -1559,6 +1566,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 	// canonical blocks. Avoid firing too many ChainHeadEvents,
 	// we will fire an accumulated ChainHeadEvent and disable fire
 	// event here.
+	exex.TriggerHeadHook(block.Header())
 	if emitHeadEvent {
 		bc.chainHeadFeed.Send(ChainHeadEvent{Header: block.Header()})
 	}
@@ -2254,6 +2262,10 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 		// rewind the canonical chain to a lower point.
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldHead.Number, "oldhash", oldHead.Hash(), "oldblocks", len(oldChain), "newnum", newHead.Number, "newhash", newHead.Hash(), "newblocks", len(newChain))
 	}
+	// Trigger revertal reorgs
+	if len(oldChain) > 0 {
+		exex.TriggerReorgHook(oldChain, true)
+	}
 	// Acquire the tx-lookup lock before mutation. This step is essential
 	// as the txlookups should be changed atomically, and all subsequent
 	// reads should be blocked until the mutation is complete.
@@ -2361,6 +2373,12 @@ func (bc *BlockChain) reorg(oldHead *types.Header, newHead *types.Header) error 
 	// Release the tx-lookup lock after mutation.
 	bc.txLookupLock.Unlock()
 
+	// Trigger application reorgs
+	if len(newChain) > 1 {
+		slices.Reverse(newChain)
+		exex.TriggerReorgHook(newChain[:len(newChain)-1], false)
+		slices.Reverse(newChain)
+	}
 	return nil
 }
 
@@ -2410,6 +2428,7 @@ func (bc *BlockChain) SetCanonical(head *types.Block) (common.Hash, error) {
 	if len(logs) > 0 {
 		bc.logsFeed.Send(logs)
 	}
+	exex.TriggerHeadHook(head.Header())
 	bc.chainHeadFeed.Send(ChainHeadEvent{Header: head.Header()})
 
 	context := []interface{}{
