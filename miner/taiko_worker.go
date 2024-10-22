@@ -5,6 +5,7 @@ import (
 	"compress/zlib"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"time"
 
@@ -17,8 +18,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/holiman/uint256"
-	"golang.org/x/exp/maps"
 )
 
 // BuildTransactionsLists builds multiple transactions lists which satisfy all the given conditions
@@ -71,14 +72,15 @@ func (w *Miner) buildTransactionsLists(
 		localTxs, remoteTxs = w.getPendingTxs(localAccounts, baseFee)
 	)
 
-	commitTxs := func() (*PreBuiltTxList, error) {
+	commitTxs := func(firstTransaction *types.Transaction) (*types.Transaction, *PreBuiltTxList, error) {
 		env.tcount = 0
 		env.txs = []*types.Transaction{}
 		env.gasPool = new(core.GasPool).AddGas(blockMaxGasLimit)
 		env.header.GasLimit = blockMaxGasLimit
 
-		w.commitL2Transactions(
+		lastTransaction := w.commitL2Transactions(
 			env,
+			firstTransaction,
 			newTransactionsByPriceAndNonce(signer, maps.Clone(localTxs), baseFee),
 			newTransactionsByPriceAndNonce(signer, maps.Clone(remoteTxs), baseFee),
 			maxBytesPerTxList,
@@ -87,19 +89,22 @@ func (w *Miner) buildTransactionsLists(
 
 		b, err := encodeAndCompressTxList(env.txs)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		return &PreBuiltTxList{
+		return lastTransaction, &PreBuiltTxList{
 			TxList:           env.txs,
 			EstimatedGasUsed: env.header.GasLimit - env.gasPool.Gas(),
 			BytesLength:      uint64(len(b)),
 		}, nil
 	}
 
+	var (
+		lastTx *types.Transaction
+		res    *PreBuiltTxList
+	)
 	for i := 0; i < int(maxTransactionsLists); i++ {
-		res, err := commitTxs()
-		if err != nil {
+		if lastTx, res, err = commitTxs(lastTx); err != nil {
 			return nil, err
 		}
 
@@ -227,15 +232,21 @@ func (w *Miner) getPendingTxs(localAccounts []string, baseFee *big.Int) (
 // commitL2Transactions tries to commit the transactions into the given state.
 func (w *Miner) commitL2Transactions(
 	env *environment,
+	firstTransaction *types.Transaction,
 	txsLocal *transactionsByPriceAndNonce,
 	txsRemote *transactionsByPriceAndNonce,
 	maxBytesPerTxList uint64,
 	minTip uint64,
-) {
+) *types.Transaction {
 	var (
-		txs     = txsLocal
-		isLocal = true
+		txs             = txsLocal
+		isLocal         = true
+		lastTransaction *types.Transaction
 	)
+
+	if firstTransaction != nil {
+		env.txs = append(env.txs, firstTransaction)
+	}
 
 loop:
 	for {
@@ -284,8 +295,6 @@ loop:
 		// Start executing the transaction
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 
-		snap := env.state.RevisionId()
-		gasPool := env.gasPool.Gas()
 		err := w.commitTransaction(env, tx)
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
@@ -303,7 +312,6 @@ loop:
 				txs.Pop()
 				continue
 			}
-
 			if len(data) >= int(maxBytesPerTxList) {
 				// Encode and compress the txList, if the byte length is > maxBytesPerTxList, remove the latest tx and break.
 				b, err := compress(data)
@@ -313,14 +321,11 @@ loop:
 					continue
 				}
 				if len(b) > int(maxBytesPerTxList) {
+					lastTransaction = env.txs[env.tcount-1]
 					env.txs = env.txs[0 : env.tcount-1]
-					env.state.RevertToSnapshot(snap)
-					env.gasPool.SetGas(gasPool)
 					break loop
 				}
 			}
-
-			env.tcount++
 
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
@@ -329,6 +334,8 @@ loop:
 			txs.Pop()
 		}
 	}
+
+	return lastTransaction
 }
 
 // encodeAndCompressTxList encodes and compresses the given transactions list.
