@@ -56,7 +56,7 @@ func TestNodeLifeCycle(t *testing.T) {
 		t.Fatalf("failed to start node: %v", err)
 	}
 	if err := stack.Start(); err != ErrNodeRunning {
-		t.Fatalf("start failure mismatch: have %v, want %v ", err, ErrNodeRunning)
+		t.Fatalf("start failure mismatch: have %v, want %v", err, ErrNodeRunning)
 	}
 	// Ensure that a node can be restarted arbitrarily many times
 	for i := 0; i < 3; i++ {
@@ -69,7 +69,7 @@ func TestNodeLifeCycle(t *testing.T) {
 		t.Fatalf("failed to stop node: %v", err)
 	}
 	if err := stack.Stop(); err != ErrNodeStopped {
-		t.Fatalf("stop failure mismatch: have %v, want %v ", err, ErrNodeStopped)
+		t.Fatalf("stop failure mismatch: have %v, want %v", err, ErrNodeStopped)
 	}
 }
 

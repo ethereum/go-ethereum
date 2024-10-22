@@ -394,7 +394,7 @@ func (x *XDPoS_v1) GetPeriod() uint64 { return x.config.Period }
 
 func (x *XDPoS_v1) whoIsCreator(snap *SnapshotV1, header *types.Header) (common.Address, error) {
 	if header.Number.Uint64() == 0 {
-		return common.Address{}, errors.New("Don't take block 0")
+		return common.Address{}, errors.New("don't take block 0")
 	}
 	m, err := ecrecover(header, snap.sigcache)
 	if err != nil {
@@ -444,7 +444,7 @@ func (x *XDPoS_v1) yourTurn(chain consensus.ChainReader, parent *types.Header, s
 		return 0, -1, -1, false, err
 	}
 	if len(masternodes) == 0 {
-		return 0, -1, -1, false, errors.New("Masternodes not found")
+		return 0, -1, -1, false, errors.New("masternodes not found")
 	}
 	pre := common.Address{}
 	// masternode[0] has chance to create block 1
@@ -1029,7 +1029,7 @@ func (x *XDPoS_v1) getSignersFromContract(chain consensus.ChainReader, checkpoin
 	}
 	signers, err := x.HookGetSignersFromContract(startGapBlockHeader.Hash())
 	if err != nil {
-		return []common.Address{}, fmt.Errorf("Can't get signers from Smart Contract . Err: %v", err)
+		return []common.Address{}, fmt.Errorf("can't get signers from Smart Contract . Err: %v", err)
 	}
 	return signers, nil
 }

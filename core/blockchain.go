@@ -1650,7 +1650,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 						finalizedTrades := map[common.Hash]*lendingstate.LendingTrade{}
 						finalizedTrades, _, _, _, _, err = lendingService.ProcessLiquidationData(block.Header(), bc, statedb, tradingState, lendingState)
 						if err != nil {
-							return i, events, coalescedLogs, fmt.Errorf("failed to ProcessLiquidationData. Err: %v ", err)
+							return i, events, coalescedLogs, fmt.Errorf("failed to ProcessLiquidationData. Err: %v", err)
 						}
 						if isSDKNode {
 							finalizedTx := lendingstate.FinalizedResult{}
@@ -1678,7 +1678,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 					expectRoot, _ := lendingService.GetLendingStateRoot(block, author)
 					parentRoot, _ := lendingService.GetLendingStateRoot(parent, parentAuthor)
 					if gotRoot != expectRoot {
-						err = fmt.Errorf("invalid lending state merke trie got : %s , expect : %s , parent :%s ", gotRoot.Hex(), expectRoot.Hex(), parentRoot.Hex())
+						err = fmt.Errorf("invalid lending state merke trie got: %s, expect: %s, parent: %s", gotRoot.Hex(), expectRoot.Hex(), parentRoot.Hex())
 						bc.reportBlock(block, nil, err)
 						return i, events, coalescedLogs, err
 					}
@@ -1930,7 +1930,7 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 				if block.Number().Uint64()%bc.chainConfig.XDPoS.Epoch == common.LiquidateLendingTradeBlock {
 					finalizedTrades, _, _, _, _, err := lendingService.ProcessLiquidationData(block.Header(), bc, statedb, tradingState, lendingState)
 					if err != nil {
-						return nil, fmt.Errorf("failed to ProcessLiquidationData. Err: %v ", err)
+						return nil, fmt.Errorf("failed to ProcessLiquidationData. Err: %v", err)
 					}
 					if isSDKNode {
 						finalizedTx := lendingstate.FinalizedResult{}
@@ -1957,7 +1957,7 @@ func (bc *BlockChain) getResultBlock(block *types.Block, verifiedM2 bool) (*Resu
 				expectRoot, _ := lendingService.GetLendingStateRoot(block, author)
 				parentRoot, _ := lendingService.GetLendingStateRoot(parent, parentAuthor)
 				if gotRoot != expectRoot {
-					err = fmt.Errorf("invalid lending state merke trie got : %s , expect : %s , parent : %s ", gotRoot.Hex(), expectRoot.Hex(), parentRoot.Hex())
+					err = fmt.Errorf("invalid lending state merke trie got: %s , expect : %s , parent : %s", gotRoot.Hex(), expectRoot.Hex(), parentRoot.Hex())
 					bc.reportBlock(block, nil, err)
 					return nil, err
 				}
@@ -2177,10 +2177,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 	if oldBlock == nil {
-		return errors.New("Invalid old chain")
+		return errors.New("invalid old chain")
 	}
 	if newBlock == nil {
-		return errors.New("Invalid new chain")
+		return errors.New("invalid new chain")
 	}
 
 	for {
@@ -2196,10 +2196,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 		oldBlock, newBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1), bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if oldBlock == nil {
-			return errors.New("Invalid old chain")
+			return errors.New("invalid old chain")
 		}
 		if newBlock == nil {
-			return errors.New("Invalid new chain")
+			return errors.New("invalid new chain")
 		}
 	}
 	// Ensure XDPoS engine committed block will be not reverted

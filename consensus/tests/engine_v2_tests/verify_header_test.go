@@ -119,7 +119,7 @@ func TestShouldVerifyBlock(t *testing.T) {
 	// Genrate QC
 	signedHash, err := signFn(accounts.Account{Address: signer}, types.VoteSigHash(voteForSign).Bytes())
 	if err != nil {
-		panic(fmt.Errorf("Error generate QC by creating signedHash: %v", err))
+		panic(fmt.Errorf("error generate QC by creating signedHash: %v", err))
 	}
 	// Sign from acc 1, 2, 3
 	acc1SignedHash := SignHashByPK(acc1Key, types.VoteSigHash(voteForSign).Bytes())
@@ -139,7 +139,7 @@ func TestShouldVerifyBlock(t *testing.T) {
 	}
 	extraInBytes, err := extra.EncodeToBytes()
 	if err != nil {
-		panic(fmt.Errorf("Error encode extra into bytes: %v", err))
+		panic(fmt.Errorf("error encode extra into bytes: %v", err))
 	}
 
 	invalidRoundBlock := blockchain.GetBlockByNumber(902).Header()
@@ -398,7 +398,7 @@ func TestShouldFailIfNotEnoughQCSignatures(t *testing.T) {
 	}
 	extraInBytes, err := extra.EncodeToBytes()
 	if err != nil {
-		panic(fmt.Errorf("Error encode extra into bytes: %v", err))
+		panic(fmt.Errorf("error encode extra into bytes: %v", err))
 	}
 	headerWithDuplicatedSignatures := currentBlock.Header()
 	headerWithDuplicatedSignatures.Extra = extraInBytes

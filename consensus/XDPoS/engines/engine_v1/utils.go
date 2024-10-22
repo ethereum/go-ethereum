@@ -26,7 +26,7 @@ func decodeMasternodesFromHeaderExtra(checkpointHeader *types.Header) []common.A
 // Get m2 list from checkpoint block.
 func getM1M2FromCheckpointHeader(checkpointHeader *types.Header, currentHeader *types.Header, config *params.ChainConfig) (map[common.Address]common.Address, error) {
 	if checkpointHeader.Number.Uint64()%common.EpocBlockRandomize != 0 {
-		return nil, errors.New("This block is not checkpoint block epoc.")
+		return nil, errors.New("this block is not checkpoint block")
 	}
 	// Get signers from this block.
 	masternodes := decodeMasternodesFromHeaderExtra(checkpointHeader)

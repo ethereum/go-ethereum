@@ -161,7 +161,7 @@ func (a *announceData) checkSignature(pubKey *ecdsa.PublicKey) error {
 	if bytes.Equal(pbytes, recPubkey) {
 		return nil
 	} else {
-		return errors.New("Wrong signature")
+		return errors.New("wrong signature")
 	}
 }
 

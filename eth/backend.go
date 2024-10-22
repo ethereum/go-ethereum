@@ -154,7 +154,7 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 	if !config.SkipBcVersionCheck {
 		bcVersion := core.GetBlockChainVersion(chainDb)
 		if bcVersion != core.BlockChainVersion && bcVersion != 0 {
-			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, core.BlockChainVersion)
+			return nil, fmt.Errorf("blockchain DB version mismatch (%d / %d). Run geth upgradedb", bcVersion, core.BlockChainVersion)
 		}
 		core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
 	}
@@ -247,7 +247,7 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 			}
 			if block.NumberU64()%common.MergeSignRange == 0 || !eth.chainConfig.IsTIP2019(block.Number()) {
 				if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb, eb); err != nil {
-					return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
+					return fmt.Errorf("fail to create tx sign for importing block: %v", err)
 				}
 			}
 			return nil
@@ -478,7 +478,7 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 			return false, nil
 		}
 	} else {
-		return false, errors.New("Only verify masternode permission in XDPoS protocol")
+		return false, errors.New("only verify masternode permission in XDPoS protocol")
 	}
 	return true, nil
 }

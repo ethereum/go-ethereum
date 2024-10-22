@@ -19,9 +19,10 @@ package light
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"math/big"
 	"time"
+
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/bitutil"
@@ -81,9 +82,9 @@ var trustedCheckpoints = map[common.Hash]trustedCheckpoint{
 }
 
 var (
-	ErrNoTrustedCht       = errors.New("No trusted canonical hash trie")
-	ErrNoTrustedBloomTrie = errors.New("No trusted bloom trie")
-	ErrNoHeader           = errors.New("Header not found")
+	ErrNoTrustedCht       = errors.New("no trusted canonical hash trie")
+	ErrNoTrustedBloomTrie = errors.New("no trusted bloom trie")
+	ErrNoHeader           = errors.New("header not found")
 	chtPrefix             = []byte("chtRoot-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
 	ChtTablePrefix        = "cht-"
 )

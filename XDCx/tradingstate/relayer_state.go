@@ -106,7 +106,7 @@ func GetAllTradingPairs(statedb *state.StateDB) (map[common.Hash]bool, error) {
 		toTokenSlot := new(big.Int).Add(locBig, RelayerStructMappingSlot["_toTokens"])
 		toTokenLength := statedb.GetState(common.HexToAddress(common.RelayerRegistrationSMC), common.BigToHash(toTokenSlot)).Big().Uint64()
 		if toTokenLength != fromTokenLength {
-			return map[common.Hash]bool{}, fmt.Errorf("Invalid length from token & to toke : from :%d , to :%d ", fromTokenLength, toTokenLength)
+			return map[common.Hash]bool{}, fmt.Errorf("invalid length from token & to token: from :%d , to :%d ", fromTokenLength, toTokenLength)
 		}
 		fromTokens := []common.Address{}
 		fromTokenSlotHash := common.BytesToHash(fromTokenSlot.Bytes())
@@ -279,7 +279,7 @@ func CheckAddTokenBalance(addr common.Address, value *big.Int, token common.Addr
 		newBalance := new(big.Int).Add(balance, value)
 		log.Debug("CheckAddTokenBalance settle balance: ADD TOKEN BALANCE ", "token", token.String(), "address", addr.String(), "balance", balance, "value", value, "newBalance", newBalance)
 		if common.BigToHash(newBalance).Big().Cmp(newBalance) != 0 {
-			return nil, fmt.Errorf("Overflow when try add token balance , max is 2^256 , balance : %v , value:%v ", balance, value)
+			return nil, fmt.Errorf("overflow when try add token balance , max is 2^256 , balance : %v , value : %v", balance, value)
 		} else {
 			return newBalance, nil
 		}

@@ -353,11 +353,11 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 
 	// check if sender is in black list
 	if tx.From() != nil && common.Blacklist[*tx.From()] {
-		return fmt.Errorf("Reject transaction with sender in black-list: %v", tx.From().Hex())
+		return fmt.Errorf("reject transaction with sender in black-list: %v", tx.From().Hex())
 	}
 	// check if receiver is in black list
 	if tx.To() != nil && common.Blacklist[*tx.To()] {
-		return fmt.Errorf("Reject transaction with receiver in black-list: %v", tx.To().Hex())
+		return fmt.Errorf("reject transaction with receiver in black-list: %v", tx.To().Hex())
 	}
 
 	// validate minFee slot for XDCZ
@@ -423,7 +423,7 @@ func (self *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 	hash := tx.Hash()
 
 	if self.pending[hash] != nil {
-		return fmt.Errorf("Known transaction (%x)", hash[:4])
+		return fmt.Errorf("known transaction (%x)", hash[:4])
 	}
 	err := self.validateTx(ctx, tx)
 	if err != nil {

@@ -241,7 +241,7 @@ func (self *LendingStateDB) SubAmountLendingItem(orderBook common.Hash, orderId 
 	priceHash := common.BigToHash(price)
 	lendingExchange := self.GetOrNewLendingExchangeObject(orderBook)
 	if lendingExchange == nil {
-		return fmt.Errorf("Order book not found : %s ", orderBook.Hex())
+		return fmt.Errorf("not found order book: %s", orderBook.Hex())
 	}
 	var orderList *itemListState
 	switch side {
@@ -250,18 +250,18 @@ func (self *LendingStateDB) SubAmountLendingItem(orderBook common.Hash, orderId 
 	case Borrowing:
 		orderList = lendingExchange.getBorrowingOrderList(self.db, priceHash)
 	default:
-		return fmt.Errorf("Order type not found : %s ", side)
+		return fmt.Errorf("not found order type: %s", side)
 	}
 	if orderList == nil || orderList.empty() {
-		return fmt.Errorf("Order list empty  order book : %s , order id  : %s , key  : %s ", orderBook, orderId.Hex(), priceHash.Hex())
+		return fmt.Errorf("empty orderList: order book : %s , order id : %s , key : %s", orderBook, orderId.Hex(), priceHash.Hex())
 	}
 	lendingItem := lendingExchange.getLendingItem(self.db, orderId)
 	if lendingItem == nil || lendingItem.empty() {
-		return fmt.Errorf("Order item empty  order book : %s , order id  : %s , key  : %s ", orderBook, orderId.Hex(), priceHash.Hex())
+		return fmt.Errorf("empty order item: order book : %s , order id : %s , key : %s", orderBook, orderId.Hex(), priceHash.Hex())
 	}
 	currentAmount := new(big.Int).SetBytes(orderList.GetOrderAmount(self.db, orderId).Bytes()[:])
 	if currentAmount.Cmp(amount) < 0 {
-		return fmt.Errorf("Order amount not enough : %s , have : %d , want : %d ", orderId.Hex(), currentAmount, amount)
+		return fmt.Errorf("not enough order amount %s: have : %d , want : %d", orderId.Hex(), currentAmount, amount)
 	}
 	self.journal = append(self.journal, subAmountOrder{
 		orderBook: orderBook,
@@ -295,7 +295,7 @@ func (self *LendingStateDB) CancelLendingOrder(orderBook common.Hash, order *Len
 	orderIdHash := common.BigToHash(new(big.Int).SetUint64(order.LendingId))
 	stateObject := self.GetOrNewLendingExchangeObject(orderBook)
 	if stateObject == nil {
-		return fmt.Errorf("Order book not found : %s ", orderBook.Hex())
+		return fmt.Errorf("not found order book: %s", orderBook.Hex())
 	}
 	lendingItem := stateObject.getLendingItem(self.db, orderIdHash)
 	var orderList *itemListState
@@ -305,16 +305,16 @@ func (self *LendingStateDB) CancelLendingOrder(orderBook common.Hash, order *Len
 	case Borrowing:
 		orderList = stateObject.getBorrowingOrderList(self.db, interestHash)
 	default:
-		return fmt.Errorf("Order side not found : %s ", order.Side)
+		return fmt.Errorf("not found order side: %s", order.Side)
 	}
 	if orderList == nil || orderList.empty() {
-		return fmt.Errorf("Order list empty  order book : %s , order id  : %s , key  : %s ", orderBook, orderIdHash.Hex(), interestHash.Hex())
+		return fmt.Errorf("empty OrderList: order book : %s , order id : %s , key : %s", orderBook, orderIdHash.Hex(), interestHash.Hex())
 	}
 	if lendingItem == nil || lendingItem.empty() {
-		return fmt.Errorf("Order item empty  order book : %s , order id  : %s , key  : %s ", orderBook, orderIdHash.Hex(), interestHash.Hex())
+		return fmt.Errorf("empty order item: order book : %s , order id : %s , key : %s", orderBook, orderIdHash.Hex(), interestHash.Hex())
 	}
 	if lendingItem.data.UserAddress != order.UserAddress {
-		return fmt.Errorf("Error Order User Address mismatch when cancel order book : %s , order id  : %s , got : %s , expect : %s ", orderBook, orderIdHash.Hex(), lendingItem.data.UserAddress.Hex(), order.UserAddress.Hex())
+		return fmt.Errorf("error Order UserAddress mismatch when cancel order book: %s , order id : %s , got : %s , expect : %s", orderBook, orderIdHash.Hex(), lendingItem.data.UserAddress.Hex(), order.UserAddress.Hex())
 	}
 	self.journal = append(self.journal, cancelOrder{
 		orderBook: orderBook,
@@ -381,7 +381,7 @@ func (self *LendingStateDB) GetBestLendingIdAndAmount(orderBook common.Hash, pri
 		case Borrowing:
 			stateOrderList = stateObject.getBorrowingOrderList(self.db, common.BigToHash(price))
 		default:
-			return EmptyHash, Zero, fmt.Errorf("not found side :%s ", side)
+			return EmptyHash, Zero, fmt.Errorf("not found side: %s", side)
 		}
 		if stateOrderList != nil {
 			key, _, err := stateOrderList.getTrie(self.db).TryGetBestLeftKeyAndValue()
@@ -392,9 +392,9 @@ func (self *LendingStateDB) GetBestLendingIdAndAmount(orderBook common.Hash, pri
 			amount := stateOrderList.GetOrderAmount(self.db, orderId)
 			return orderId, new(big.Int).SetBytes(amount.Bytes()), nil
 		}
-		return EmptyHash, Zero, fmt.Errorf("not found order list with orderBook : %s , key : %d , side :%s ", orderBook.Hex(), price, side)
+		return EmptyHash, Zero, fmt.Errorf("not found order list with orderBook: %s , key : %d , side : %s", orderBook.Hex(), price, side)
 	}
-	return EmptyHash, Zero, fmt.Errorf("not found orderBook : %s ", orderBook.Hex())
+	return EmptyHash, Zero, fmt.Errorf("not found orderBook: %s", orderBook.Hex())
 }
 
 // updateLendingExchange writes the given object to the trie.
@@ -621,14 +621,14 @@ func (self *LendingStateDB) RemoveLiquidationTime(lendingBook common.Hash, trade
 	tradeIdHash := common.Uint64ToHash(tradeId)
 	lendingExchangeState := self.getLendingExchange(lendingBook)
 	if lendingExchangeState == nil {
-		return fmt.Errorf("lending book not found : %s ", lendingBook.Hex())
+		return fmt.Errorf("lending book not found: %s", lendingBook.Hex())
 	}
 	liquidationTime := lendingExchangeState.getLiquidationTimeOrderList(self.db, timeHash)
 	if liquidationTime == nil {
-		return fmt.Errorf("liquidation time not found : %s , %d ", lendingBook.Hex(), time)
+		return fmt.Errorf("not found liquidation time: %s , %d", lendingBook.Hex(), time)
 	}
 	if !liquidationTime.Exist(self.db, tradeIdHash) {
-		return fmt.Errorf("tradeId not exist : %s , %d , %d ", lendingBook.Hex(), time, tradeId)
+		return fmt.Errorf("not exist tradeId: %s , %d , %d", lendingBook.Hex(), time, tradeId)
 	}
 	liquidationTime.removeTradeId(self.db, tradeIdHash)
 	liquidationTime.subVolume(One)
@@ -659,11 +659,11 @@ func (self *LendingStateDB) CancelLendingTrade(orderBook common.Hash, tradeId ui
 	tradeIdHash := common.Uint64ToHash(tradeId)
 	stateObject := self.GetOrNewLendingExchangeObject(orderBook)
 	if stateObject == nil {
-		return fmt.Errorf("Order book not found : %s ", orderBook.Hex())
+		return fmt.Errorf("not found order book: %s", orderBook.Hex())
 	}
 	lendingTrade := stateObject.getLendingTrade(self.db, tradeIdHash)
 	if lendingTrade == nil || lendingTrade.empty() {
-		return fmt.Errorf("lending trade empty  order book : %s , trade id  : %s , trade id hash  : %s ", orderBook, tradeIdHash.Hex(), tradeIdHash.Hex())
+		return fmt.Errorf("lending trade empty order book: %s , trade id : %s , trade id hash : %s", orderBook, tradeIdHash.Hex(), tradeIdHash.Hex())
 	}
 	self.journal = append(self.journal, cancelTrading{
 		orderBook: orderBook,

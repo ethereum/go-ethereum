@@ -102,7 +102,7 @@ func TestTypeRegexp(t *testing.T) {
 			t.Errorf("type %q: failed to parse type string: %v", tt.blob, err)
 		}
 		if !reflect.DeepEqual(typ, tt.kind) {
-			t.Errorf("type %q: parsed type mismatch:\nGOT %s\nWANT %s ", tt.blob, spew.Sdump(typeWithoutStringer(typ)), spew.Sdump(typeWithoutStringer(tt.kind)))
+			t.Errorf("type %q: parsed type mismatch:\nGOT %s\nWANT %s", tt.blob, spew.Sdump(typeWithoutStringer(typ)), spew.Sdump(typeWithoutStringer(tt.kind)))
 		}
 	}
 }

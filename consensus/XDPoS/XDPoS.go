@@ -439,7 +439,7 @@ func (x *XDPoS) CalculateMissingRounds(chain consensus.ChainReader, header *type
 	case params.ConsensusEngineVersion2:
 		return x.EngineV2.CalculateMissingRounds(chain, header)
 	default: // Default "v1"
-		return nil, errors.New("Not supported in the v1 consensus")
+		return nil, errors.New("not supported in the v1 consensus")
 	}
 }
 

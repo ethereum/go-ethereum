@@ -623,7 +623,7 @@ func (pool *LendingPool) validateTx(tx *types.LendingTransaction, local bool) er
 
 	// check if sender is in black list
 	if tx.From() != nil && common.Blacklist[*tx.From()] {
-		return fmt.Errorf("Reject transaction with sender in black-list: %v", tx.From().Hex())
+		return fmt.Errorf("reject transaction with sender in black-list: %v", tx.From().Hex())
 	}
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
 	if tx.Size() > 32*1024 {

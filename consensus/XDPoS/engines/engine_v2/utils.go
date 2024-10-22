@@ -98,7 +98,7 @@ func (x *XDPoS_v2) signSignature(signingHash common.Hash) (types.Signature, erro
 
 	signedHash, err := signFn(accounts.Account{Address: signer}, signingHash.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("Error %v while signing hash", err)
+		return nil, fmt.Errorf("error %v while signing hash", err)
 	}
 	return signedHash, nil
 }
@@ -106,12 +106,12 @@ func (x *XDPoS_v2) signSignature(signingHash common.Hash) (types.Signature, erro
 func (x *XDPoS_v2) verifyMsgSignature(signedHashToBeVerified common.Hash, signature types.Signature, masternodes []common.Address) (bool, common.Address, error) {
 	var signerAddress common.Address
 	if len(masternodes) == 0 {
-		return false, signerAddress, errors.New("Empty masternode list detected when verifying message signatures")
+		return false, signerAddress, errors.New("empty masternode list detected when verifying message signatures")
 	}
 	// Recover the public key and the Ethereum address
 	pubkey, err := crypto.Ecrecover(signedHashToBeVerified.Bytes(), signature)
 	if err != nil {
-		return false, signerAddress, fmt.Errorf("Error while verifying message: %v", err)
+		return false, signerAddress, fmt.Errorf("error while verifying message: %v", err)
 	}
 
 	copy(signerAddress[:], crypto.Keccak256(pubkey[1:])[12:])

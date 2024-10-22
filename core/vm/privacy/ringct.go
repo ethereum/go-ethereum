@@ -171,7 +171,7 @@ func (r *RingSignature) Serialize() ([]byte, error) {
 	}
 
 	if len(sig) != 8+8+32+32+(32+33)*r.NumRing*r.Size+33*r.NumRing {
-		return []byte{}, errors.New("Could not serialize ring signature")
+		return []byte{}, errors.New("could not serialize ring signature")
 	}
 
 	return sig, nil
@@ -198,7 +198,7 @@ func computeSignatureSize(numRing int, ringSize int) int {
 // deserializes the byteified signature into a RingSignature struct
 func Deserialize(r []byte) (*RingSignature, error) {
 	if len(r) < 16 {
-		return nil, errors.New("Failed to deserialize ring signature")
+		return nil, errors.New("failed to deserialize ring signature")
 	}
 	offset := 0
 	sig := new(RingSignature)
@@ -455,7 +455,7 @@ func Sign(m [32]byte, rings []Ring, privkeys []*ecdsa.PrivateKey, s int) (*RingS
 			px, py := curve.ScalarMult(rings[j][idx].X, rings[j][idx].Y, PadTo32Bytes(C[idx].Bytes())) // px, py = c_i*P_i
 			sx, sy := curve.ScalarBaseMult(PadTo32Bytes(S[j][idx].Bytes()))                            // sx, sy = s[n-1]*G
 			if px == nil || py == nil || sx == nil || sy == nil {
-				return nil, errors.New("Could not create ring signature")
+				return nil, errors.New("could not create ring signature")
 			}
 			l_x, l_y := curve.Add(sx, sy, px, py)
 			L[j][idx] = &ecdsa.PublicKey{curve, l_x, l_y}
@@ -467,7 +467,7 @@ func Sign(m [32]byte, rings []Ring, privkeys []*ecdsa.PrivateKey, s int) (*RingS
 			hx, hy := HashPoint(rings[j][idx])
 			sx, sy = curve.ScalarMult(hx, hy, S[j][idx].Bytes()) // sx, sy = s[n-1]*H_p(P_i)
 			if px == nil || py == nil || sx == nil || sy == nil {
-				return nil, errors.New("Could not create ring signature")
+				return nil, errors.New("could not create ring signature")
 			}
 			r_x, r_y := curve.Add(sx, sy, px, py)
 			R[j][idx] = &ecdsa.PublicKey{curve, r_x, r_y}

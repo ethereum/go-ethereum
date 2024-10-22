@@ -665,7 +665,7 @@ func (l *Lending) GetLendingState(block *types.Block, author common.Address) (*l
 		return nil, err
 	}
 	if l.StateCache == nil {
-		return nil, errors.New("Not initialized XDCx")
+		return nil, errors.New("not initialized XDCx")
 	}
 	state, err := lendingstate.New(root, l.StateCache)
 	if err != nil {

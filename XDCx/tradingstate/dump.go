@@ -50,7 +50,7 @@ type DumpOrderBookInfo struct {
 func (self *TradingStateDB) DumpAskTrie(orderBook common.Hash) (map[*big.Int]DumpOrderList, error) {
 	exhangeObject := self.getStateExchangeObject(orderBook)
 	if exhangeObject == nil {
-		return nil, fmt.Errorf("Order book not found orderBook : %v ", orderBook.Hex())
+		return nil, fmt.Errorf("not found orderBook: %v", orderBook.Hex())
 	}
 	mapResult := map[*big.Int]DumpOrderList{}
 	it := trie.NewIterator(exhangeObject.getAsksTrie(self.db).NodeIterator(nil))
@@ -65,7 +65,7 @@ func (self *TradingStateDB) DumpAskTrie(orderBook common.Hash) (map[*big.Int]Dum
 		} else {
 			var data orderList
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
-				return nil, fmt.Errorf("Fail when decode order iist orderBook : %v ,price :%v ", orderBook.Hex(), price)
+				return nil, fmt.Errorf("fail when decode order iist orderBook: %v , price :%v", orderBook.Hex(), price)
 			}
 			stateOrderList := newStateOrderList(self, Ask, orderBook, priceHash, data, nil)
 			mapResult[price] = stateOrderList.DumpOrderList(self.db)
@@ -93,7 +93,7 @@ func (self *TradingStateDB) DumpAskTrie(orderBook common.Hash) (map[*big.Int]Dum
 func (self *TradingStateDB) DumpBidTrie(orderBook common.Hash) (map[*big.Int]DumpOrderList, error) {
 	exhangeObject := self.getStateExchangeObject(orderBook)
 	if exhangeObject == nil {
-		return nil, fmt.Errorf("Order book not found orderBook : %v ", orderBook.Hex())
+		return nil, fmt.Errorf("not found orderBook: %v", orderBook.Hex())
 	}
 	mapResult := map[*big.Int]DumpOrderList{}
 	it := trie.NewIterator(exhangeObject.getBidsTrie(self.db).NodeIterator(nil))
@@ -108,7 +108,7 @@ func (self *TradingStateDB) DumpBidTrie(orderBook common.Hash) (map[*big.Int]Dum
 		} else {
 			var data orderList
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
-				return nil, fmt.Errorf("Fail when decode order iist orderBook : %v ,price :%v ", orderBook.Hex(), price)
+				return nil, fmt.Errorf("fail when decode order iist orderBook: %v , price :%v", orderBook.Hex(), price)
 			}
 			stateOrderList := newStateOrderList(self, Bid, orderBook, priceHash, data, nil)
 			mapResult[price] = stateOrderList.DumpOrderList(self.db)
@@ -136,7 +136,7 @@ func (self *TradingStateDB) DumpBidTrie(orderBook common.Hash) (map[*big.Int]Dum
 func (self *TradingStateDB) GetBids(orderBook common.Hash) (map[*big.Int]*big.Int, error) {
 	exhangeObject := self.getStateExchangeObject(orderBook)
 	if exhangeObject == nil {
-		return nil, fmt.Errorf("Order book not found orderBook : %v ", orderBook.Hex())
+		return nil, fmt.Errorf("not found orderBook: %v", orderBook.Hex())
 	}
 	mapResult := map[*big.Int]*big.Int{}
 	it := trie.NewIterator(exhangeObject.getBidsTrie(self.db).NodeIterator(nil))
@@ -151,7 +151,7 @@ func (self *TradingStateDB) GetBids(orderBook common.Hash) (map[*big.Int]*big.In
 		} else {
 			var data orderList
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
-				return nil, fmt.Errorf("Fail when decode order iist orderBook : %v ,price :%v ", orderBook.Hex(), price)
+				return nil, fmt.Errorf("fail when decode order iist orderBook: %v , price :%v", orderBook.Hex(), price)
 			}
 			stateOrderList := newStateOrderList(self, Bid, orderBook, priceHash, data, nil)
 			mapResult[price] = stateOrderList.data.Volume
@@ -179,7 +179,7 @@ func (self *TradingStateDB) GetBids(orderBook common.Hash) (map[*big.Int]*big.In
 func (self *TradingStateDB) GetAsks(orderBook common.Hash) (map[*big.Int]*big.Int, error) {
 	exhangeObject := self.getStateExchangeObject(orderBook)
 	if exhangeObject == nil {
-		return nil, fmt.Errorf("Order book not found orderBook : %v ", orderBook.Hex())
+		return nil, fmt.Errorf("not found orderBook: %v", orderBook.Hex())
 	}
 	mapResult := map[*big.Int]*big.Int{}
 	it := trie.NewIterator(exhangeObject.getAsksTrie(self.db).NodeIterator(nil))
@@ -194,7 +194,7 @@ func (self *TradingStateDB) GetAsks(orderBook common.Hash) (map[*big.Int]*big.In
 		} else {
 			var data orderList
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
-				return nil, fmt.Errorf("Fail when decode order iist orderBook : %v ,price :%v ", orderBook.Hex(), price)
+				return nil, fmt.Errorf("fail when decode order iist orderBook: %v , price : %v", orderBook.Hex(), price)
 			}
 			stateOrderList := newStateOrderList(self, Ask, orderBook, priceHash, data, nil)
 			mapResult[price] = stateOrderList.data.Volume
@@ -255,7 +255,7 @@ func (self *stateOrderList) DumpOrderList(db Database) DumpOrderList {
 func (self *TradingStateDB) DumpOrderBookInfo(orderBook common.Hash) (*DumpOrderBookInfo, error) {
 	exhangeObject := self.getStateExchangeObject(orderBook)
 	if exhangeObject == nil {
-		return nil, fmt.Errorf("Order book not found orderBook : %v ", orderBook.Hex())
+		return nil, fmt.Errorf("not found orderBook: %v", orderBook.Hex())
 	}
 	result := &DumpOrderBookInfo{}
 	result.LastPrice = exhangeObject.data.LastPrice
@@ -318,7 +318,7 @@ func (self *liquidationPriceState) DumpLendingBook(db Database) (DumpLendingBook
 		} else {
 			var data orderList
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
-				return result, fmt.Errorf("Failed to decode state lending book orderbook : %s ,liquidation price :%s , lendingBook : %s ,err : %v", self.orderBook, self.liquidationPrice, lendingBook, err)
+				return result, fmt.Errorf("failed to decode state lending book orderbook: %s , liquidation price : %s , lendingBook : %s , err : %v", self.orderBook, self.liquidationPrice, lendingBook, err)
 			}
 			stateLendingBook := newStateLendingBook(self.orderBook, self.liquidationPrice, lendingBook, data, nil)
 			result.LendingBooks[lendingBook] = stateLendingBook.DumpOrderList(db)
@@ -335,7 +335,7 @@ func (self *liquidationPriceState) DumpLendingBook(db Database) (DumpLendingBook
 func (self *TradingStateDB) DumpLiquidationPriceTrie(orderBook common.Hash) (map[*big.Int]DumpLendingBook, error) {
 	exhangeObject := self.getStateExchangeObject(orderBook)
 	if exhangeObject == nil {
-		return nil, fmt.Errorf("Order book not found orderBook : %v ", orderBook.Hex())
+		return nil, fmt.Errorf("not found orderBook: %v", orderBook.Hex())
 	}
 	mapResult := map[*big.Int]DumpLendingBook{}
 	it := trie.NewIterator(exhangeObject.getLiquidationPriceTrie(self.db).NodeIterator(nil))
@@ -350,7 +350,7 @@ func (self *TradingStateDB) DumpLiquidationPriceTrie(orderBook common.Hash) (map
 		} else {
 			var data orderList
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
-				return nil, fmt.Errorf("Fail when decode order iist orderBook : %v ,price :%v ", orderBook.Hex(), price)
+				return nil, fmt.Errorf("fail when decode order iist orderBook: %v , price : %v", orderBook.Hex(), price)
 			}
 			liquidationPriceState := newLiquidationPriceState(self, orderBook, priceHash, data, nil)
 			dumpLendingBook, err := liquidationPriceState.DumpLendingBook(self.db)
