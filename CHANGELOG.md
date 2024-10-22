@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/taikoxyz/taiko-geth/compare/v1.10.0...v1.11.0) (2024-10-16)
+
+
+### Features
+
+* **core:** update `MainnetOntakeBlock` ([#330](https://github.com/taikoxyz/taiko-geth/issues/330)) ([cd72c5b](https://github.com/taikoxyz/taiko-geth/commit/cd72c5bf056cce5870b685226ae70e0d2620dc5e))
+
 ## [1.10.0](https://github.com/taikoxyz/taiko-geth/compare/v1.9.0...v1.10.0) (2024-10-03)
 
 
