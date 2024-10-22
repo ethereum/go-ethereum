@@ -62,15 +62,17 @@ type codecV5 interface {
 // UDPv5 is the implementation of protocol version 5.
 type UDPv5 struct {
 	// static fields
-	conn         UDPConn
-	tab          *Table
-	netrestrict  *netutil.Netlist
-	priv         *ecdsa.PrivateKey
-	localNode    *enode.LocalNode
-	db           *enode.DB
-	log          log.Logger
-	clock        mclock.Clock
-	validSchemes enr.IdentityScheme
+	conn           UDPConn
+	tab            *Table
+	cachedIds      map[enode.ID]*enode.Node
+	cachedAddrNode map[string]*enode.Node
+	netrestrict    *netutil.Netlist
+	priv           *ecdsa.PrivateKey
+	localNode      *enode.LocalNode
+	db             *enode.DB
+	log            log.Logger
+	clock          mclock.Clock
+	validSchemes   enr.IdentityScheme
 
 	// misc buffers used during message handling
 	logcontext []interface{}
@@ -151,14 +153,16 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	cfg = cfg.withDefaults()
 	t := &UDPv5{
 		// static fields
-		conn:         newMeteredConn(conn),
-		localNode:    ln,
-		db:           ln.Database(),
-		netrestrict:  cfg.NetRestrict,
-		priv:         cfg.PrivateKey,
-		log:          cfg.Log,
-		validSchemes: cfg.ValidSchemes,
-		clock:        cfg.Clock,
+		conn:           newMeteredConn(conn),
+		cachedAddrNode: make(map[string]*enode.Node),
+		cachedIds:      make(map[enode.ID]*enode.Node),
+		localNode:      ln,
+		db:             ln.Database(),
+		netrestrict:    cfg.NetRestrict,
+		priv:           cfg.PrivateKey,
+		log:            cfg.Log,
+		validSchemes:   cfg.ValidSchemes,
+		clock:          cfg.Clock,
 		// channels into dispatch
 		packetInCh:    make(chan ReadPacket, 1),
 		readNextCh:    make(chan struct{}, 1),
@@ -724,6 +728,10 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 		t.log.Warn(">> "+packet.Name(), t.logcontext...)
 		return nonce, err
 	}
+	if c != nil && c.Node != nil {
+		t.cachedIds[toID] = c.Node
+		t.cachedAddrNode[toAddr.String()] = c.Node
+	}
 
 	_, err = t.conn.WriteToUDPAddrPort(enc, toAddr)
 	t.log.Trace(">> "+packet.Name(), t.logcontext...)
@@ -785,6 +793,8 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
 		t.tab.addInboundNode(fromNode)
+		t.cachedIds[fromID] = fromNode
+		t.cachedAddrNode[fromAddr.String()] = fromNode
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.
