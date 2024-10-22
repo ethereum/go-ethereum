@@ -503,7 +503,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 	return prevBalance
 }
 
-func (s *StateDB) Selfdestruct6780(addr common.Address) (uint256.Int, bool) {
+func (s *StateDB) SelfDestruct6780(addr common.Address) (uint256.Int, bool) {
 	stateObject := s.getStateObject(addr)
 	if stateObject == nil {
 		return uint256.Int{}, false
