@@ -48,7 +48,6 @@ var (
 type environment struct {
 	signer   types.Signer
 	state    *state.StateDB // apply state changes here
-	tcount   int            // tx count in cycle
 	gasPool  *core.GasPool  // available gas used to pack transactions
 	coinbase common.Address
 
@@ -279,7 +278,6 @@ func (miner *Miner) commitTransaction(env *environment, tx *types.Transaction) e
 	}
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
-	env.tcount++
 	return nil
 }
 
@@ -304,7 +302,6 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	env.sidecars = append(env.sidecars, sc)
 	env.blobs += len(sc.Blobs)
 	*env.header.BlobGasUsed += receipt.BlobGasUsed
-	env.tcount++
 	return nil
 }
 
@@ -399,7 +396,7 @@ func (miner *Miner) commitTransactions(env *environment, plainTxs, blobTxs *tran
 			continue
 		}
 		// Start executing the transaction
-		env.state.SetTxContext(tx.Hash(), env.tcount)
+		env.state.SetTxContext(tx.Hash(), len(env.txs))
 
 		err := miner.commitTransaction(env, tx)
 		switch {
