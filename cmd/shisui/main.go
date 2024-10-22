@@ -42,6 +42,10 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var (
+	storageCapacity metrics.Gauge
+)
+
 const (
 	privateKeyFileName = "clientKey"
 )
@@ -123,6 +127,11 @@ func shisui(ctx *cli.Context) error {
 
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
+
+	if metrics.Enabled {
+		storageCapacity = metrics.NewRegisteredGauge("portal/storage_capacity", nil)
+		storageCapacity.Update(ctx.Int64(utils.PortalDataCapacityFlag.Name))
+	}
 
 	config, err := getPortalConfig(ctx)
 	if err != nil {

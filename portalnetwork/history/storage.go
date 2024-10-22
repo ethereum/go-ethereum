@@ -14,10 +14,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
 	"github.com/mattn/go-sqlite3"
+)
+
+var (
+	radiusRatio metrics.GaugeFloat64
 )
 
 const (
@@ -107,6 +112,10 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 		log:                    log.New("storage", config.NetworkName),
 	}
 	hs.radius.Store(storage.MaxDistance)
+	if metrics.Enabled {
+		radiusRatio = metrics.NewRegisteredGaugeFloat64("portal/radius_ratio", nil)
+		radiusRatio.Update(1)
+	}
 	err := hs.createTable()
 	if err != nil {
 		return nil, err
@@ -332,6 +341,12 @@ func (p *ContentStorage) EstimateNewRadius(currentRadius *uint256.Int) (*uint256
 	sizeRatio := currrentSize / p.storageCapacityInBytes
 	if sizeRatio > 0 {
 		bigFormat := new(big.Int).SetUint64(sizeRatio)
+		if metrics.Enabled {
+			newRadius := new(uint256.Int).Div(currentRadius, uint256.MustFromBig(bigFormat))
+			newRadius.Mul(newRadius, uint256.NewInt(100))
+			newRadius.Mod(newRadius, storage.MaxDistance)
+			radiusRatio.Update(newRadius.Float64() / 100)
+		}
 		return new(uint256.Int).Div(currentRadius, uint256.MustFromBig(bigFormat)), nil
 	}
 	return currentRadius, nil
@@ -391,6 +406,11 @@ func (p *ContentStorage) deleteContentFraction(fraction float64) (deleteCount in
 			return 0, err
 		}
 		p.radius.Store(dis)
+		if metrics.Enabled {
+			dis.Mul(dis, uint256.NewInt(100))
+			dis.Mod(dis, storage.MaxDistance)
+			radiusRatio.Update(dis.Float64() / 100)
+		}
 	}
 	// row must close first, or database is locked
 	// rows.Close() can call multi times
