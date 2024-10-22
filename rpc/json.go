@@ -146,6 +146,9 @@ func (err *jsonError) Error() string {
 	if err.Message == "" {
 		return fmt.Sprintf("json-rpc error %d", err.Code)
 	}
+	if err.Message == "execution reverted" && err.Data != "" {
+		return fmt.Sprintf("%s: %s", err.Message, err.Data)
+	}
 	return err.Message
 }
 
