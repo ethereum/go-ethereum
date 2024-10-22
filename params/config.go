@@ -270,7 +270,7 @@ var (
 		CancunTime:              nil,
 		PragueTime:              nil,
 		VerkleTime:              nil,
-		TerminalTotalDifficulty: nil,
+		TerminalTotalDifficulty: big.NewInt(math.MaxInt64),
 		Ethash:                  new(EthashConfig),
 		Clique:                  nil,
 	}
