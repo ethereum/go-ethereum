@@ -60,6 +60,11 @@ type StateDB interface {
 	SelfDestruct(common.Address) uint256.Int
 	HasSelfDestructed(common.Address) bool
 
+	// SelfDestruct6780 is post-EIP6780 selfdestruct, which means that it's a
+	// send-all-to-beneficiary, unless the contract was created in this same
+	// transaction, in which case it will be destructed.
+	// This method returns the prior balance, along with a boolean which is
+	// true iff the object was indeed destructed.
 	SelfDestruct6780(common.Address) (uint256.Int, bool)
 
 	// Exist reports whether the given account exists in state.
