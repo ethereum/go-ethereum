@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.11.1](https://github.com/taikoxyz/taiko-geth/compare/v1.11.0...v1.11.1) (2024-10-22)
+
+
+### Bug Fixes
+
+* **taiko-geth:** fix a mempool fetch issue ([#333](https://github.com/taikoxyz/taiko-geth/issues/333)) ([1340ded](https://github.com/taikoxyz/taiko-geth/commit/1340ded3811193b46d18241e5810c5b47083821f))
+* **taiko-geth:** revert a `tx.Shift()` change ([#335](https://github.com/taikoxyz/taiko-geth/issues/335)) ([46576d2](https://github.com/taikoxyz/taiko-geth/commit/46576d27209194db9e02ba38b9ab6b919679fcbd))
+* **taiko-geth:** stop using `RevertToSnapshot` when fetching mempool ([#336](https://github.com/taikoxyz/taiko-geth/issues/336)) ([1216d8d](https://github.com/taikoxyz/taiko-geth/commit/1216d8d6051ba6f73ee42b395e973dccf1d90cf9))
+
 ## [1.11.0](https://github.com/taikoxyz/taiko-geth/compare/v1.10.0...v1.11.0) (2024-10-16)
 
 
