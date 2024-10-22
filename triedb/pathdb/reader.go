@@ -86,6 +86,17 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 	return blob, nil
 }
 
+// AccountRLP directly retrieves the account associated with a particular hash.
+// An error will be returned if the read operation exits abnormally. Specifically,
+// if the layer is already stale.
+//
+// Note:
+// - the returned account data is not a copy, please don't modify it
+// - no error will be returned if the requested account is not found in database
+func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
+	return r.layer.account(hash, 0)
+}
+
 // Account directly retrieves the account associated with a particular hash in
 // the slim data format. An error will be returned if the read operation exits
 // abnormally. Specifically, if the layer is already stale.
