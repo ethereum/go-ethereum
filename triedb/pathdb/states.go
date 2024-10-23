@@ -268,9 +268,9 @@ func (s *stateSet) clearCache() {
 // merge integrates the accounts and storages from the external set into the
 // local set, ensuring the combined set reflects the combined state of both.
 //
-// The provided state set will remain unchanged, as it may still be referenced
-// by other layers.
-func (s *stateSet) merge(set *stateSet) {
+// The stateSet supplied as parameter set will not be mutated by this operation,
+// as it may still be referenced by other layers.
+func (s *stateSet) merge(other *stateSet) {
 	var (
 		delta             int
 		accountOverwrites counter
@@ -278,7 +278,7 @@ func (s *stateSet) merge(set *stateSet) {
 		destructs         []destruct
 	)
 	// Apply account deletion markers and discard any previously cached data if exists
-	for accountHash := range set.destructSet {
+	for accountHash := range other.destructSet {
 		if origin, ok := s.accountData[accountHash]; ok {
 			delta -= common.HashLength + len(origin)
 			accountOverwrites.add(common.HashLength + len(origin))
@@ -310,7 +310,7 @@ func (s *stateSet) merge(set *stateSet) {
 	s.journal.add(destructs)
 
 	// Apply the updated account data
-	for accountHash, data := range set.accountData {
+	for accountHash, data := range other.accountData {
 		if origin, ok := s.accountData[accountHash]; ok {
 			delta += len(data) - len(origin)
 			accountOverwrites.add(common.HashLength + len(origin))
@@ -320,7 +320,7 @@ func (s *stateSet) merge(set *stateSet) {
 		s.accountData[accountHash] = data
 	}
 	// Apply all the updated storage slots (individually)
-	for accountHash, storage := range set.storageData {
+	for accountHash, storage := range other.storageData {
 		// If storage didn't exist (or was deleted) in the set, overwrite blindly
 		if _, ok := s.storageData[accountHash]; !ok {
 			// To prevent potential concurrent map read/write issues, allocate a
@@ -328,7 +328,7 @@ func (s *stateSet) merge(set *stateSet) {
 			// passed external set. Even after merging, the slots belonging to the
 			// external state set remain accessible, so ownership of the map should
 			// not be taken, and any mutation on it should be avoided.
-			slots := make(map[common.Hash][]byte)
+			slots := make(map[common.Hash][]byte, len(storage))
 			for storageHash, data := range storage {
 				slots[storageHash] = data
 				delta += 2*common.HashLength + len(data)
@@ -446,13 +446,13 @@ func (s *stateSet) encode(w io.Writer) error {
 		return err
 	}
 	// Encode accounts
-	type Account struct {
+	type account struct {
 		Hash common.Hash
 		Blob []byte
 	}
-	accounts := make([]Account, 0, len(s.accountData))
+	accounts := make([]account, 0, len(s.accountData))
 	for hash, blob := range s.accountData {
-		accounts = append(accounts, Account{Hash: hash, Blob: blob})
+		accounts = append(accounts, account{Hash: hash, Blob: blob})
 	}
 	if err := rlp.Encode(w, accounts); err != nil {
 		return err
@@ -496,12 +496,12 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	s.destructSet = destructSet
 
 	// Decode accounts
-	type Account struct {
+	type account struct {
 		Hash common.Hash
 		Blob []byte
 	}
 	var (
-		accounts   []Account
+		accounts   []account
 		accountSet = make(map[common.Hash][]byte)
 	)
 	if err := r.Decode(&accounts); err != nil {
@@ -513,13 +513,13 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 	s.accountData = accountSet
 
 	// Decode storages
-	type Storage struct {
+	type storage struct {
 		AccountHash common.Hash
 		Keys        []common.Hash
 		Vals        [][]byte
 	}
 	var (
-		storages   []Storage
+		storages   []storage
 		storageSet = make(map[common.Hash]map[common.Hash][]byte)
 	)
 	if err := r.Decode(&storages); err != nil {
