@@ -75,6 +75,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// Apply pre-execution system calls.
 	context = NewEVMBlockContext(header, p.chain, nil)
+
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
 		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
@@ -98,7 +99,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
-
+	var tracingStateDB = vm.StateDB(statedb)
+	if hooks := cfg.Tracer; hooks != nil {
+		tracingStateDB = state.NewHookedState(statedb, hooks)
+	}
 	// Read requests if Prague is enabled.
 	var requests [][]byte
 	if p.config.IsPrague(block.Number(), block.Time()) {
@@ -109,15 +113,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		requests = append(requests, depositRequests)
 		// EIP-7002 withdrawals
-		withdrawalRequests := ProcessWithdrawalQueue(vmenv, statedb)
+		withdrawalRequests := ProcessWithdrawalQueue(vmenv, tracingStateDB)
 		requests = append(requests, withdrawalRequests)
 		// EIP-7251 consolidations
-		consolidationRequests := ProcessConsolidationQueue(vmenv, statedb)
+		consolidationRequests := ProcessConsolidationQueue(vmenv, tracingStateDB)
 		requests = append(requests, consolidationRequests)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.chain.engine.Finalize(p.chain, header, statedb, block.Body())
+	p.chain.engine.Finalize(p.chain, header, tracingStateDB, block.Body())
 
 	return &ProcessResult{
 		Receipts: receipts,
@@ -131,17 +135,20 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // and uses the input parameters for its environment similar to ApplyTransaction. However,
 // this method takes an already created EVM instance as input.
 func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (receipt *types.Receipt, err error) {
-	if evm.Config.Tracer != nil && evm.Config.Tracer.OnTxStart != nil {
-		evm.Config.Tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-		if evm.Config.Tracer.OnTxEnd != nil {
-			defer func() {
-				evm.Config.Tracer.OnTxEnd(receipt, err)
-			}()
+	var tracingStateDB = vm.StateDB(statedb)
+	if hooks := evm.Config.Tracer; hooks != nil {
+		tracingStateDB = state.NewHookedState(statedb, hooks)
+		if hooks.OnTxStart != nil {
+			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		}
+		if hooks.OnTxEnd != nil {
+			defer func() { hooks.OnTxEnd(receipt, err) }()
 		}
 	}
+
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
-	evm.Reset(txContext, statedb)
+	evm.Reset(txContext, tracingStateDB)
 
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
@@ -152,7 +159,7 @@ func ApplyTransactionWithEVM(msg *Message, config *params.ChainConfig, gp *GasPo
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(blockNumber) {
-		statedb.Finalise(true)
+		tracingStateDB.Finalise(true)
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
 	}
@@ -217,7 +224,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
 // contract. This method is exported to be used in tests.
-func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *state.StateDB) {
+func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb vm.StateDB) {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
 		if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
@@ -243,7 +250,7 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb *stat
 
 // ProcessParentBlockHash stores the parent block hash in the history storage contract
 // as per EIP-2935.
-func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.StateDB) {
+func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb vm.StateDB) {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
 		if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
@@ -269,17 +276,17 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb *state.
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessWithdrawalQueue(vmenv *vm.EVM, statedb *state.StateDB) []byte {
+func ProcessWithdrawalQueue(vmenv *vm.EVM, statedb vm.StateDB) []byte {
 	return processRequestsSystemCall(vmenv, statedb, 0x01, params.WithdrawalQueueAddress)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessConsolidationQueue(vmenv *vm.EVM, statedb *state.StateDB) []byte {
+func ProcessConsolidationQueue(vmenv *vm.EVM, statedb vm.StateDB) []byte {
 	return processRequestsSystemCall(vmenv, statedb, 0x02, params.ConsolidationQueueAddress)
 }
 
-func processRequestsSystemCall(vmenv *vm.EVM, statedb *state.StateDB, requestType byte, addr common.Address) []byte {
+func processRequestsSystemCall(vmenv *vm.EVM, statedb vm.StateDB, requestType byte, addr common.Address) []byte {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
 		if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -115,9 +116,6 @@ func errOut(n int, err error) chan error {
 func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) ([]*types.Header, []*types.Header, error) {
 	// TTD is not defined yet, all headers should be in legacy format.
 	ttd := chain.Config().TerminalTotalDifficulty
-	if ttd == nil {
-		return headers, nil, nil
-	}
 	ptd := chain.GetTd(headers[0].ParentHash, headers[0].Number.Uint64()-1)
 	if ptd == nil {
 		return nil, nil, consensus.ErrUnknownAncestor
@@ -349,7 +347,7 @@ func (beacon *Beacon) Prepare(chain consensus.ChainHeaderReader, header *types.H
 }
 
 // Finalize implements consensus.Engine and processes withdrawals on top.
-func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body) {
+func (beacon *Beacon) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
 	if !beacon.IsPoSHeader(header) {
 		beacon.ethone.Finalize(chain, header, state, body)
 		return
@@ -494,9 +492,6 @@ func (beacon *Beacon) SetThreads(threads int) {
 // It depends on the parentHash already being stored in the database.
 // If the parentHash is not stored in the database a UnknownAncestor error is returned.
 func IsTTDReached(chain consensus.ChainHeaderReader, parentHash common.Hash, parentNumber uint64) (bool, error) {
-	if chain.Config().TerminalTotalDifficulty == nil {
-		return false, nil
-	}
 	td := chain.GetTd(parentHash, parentNumber)
 	if td == nil {
 		return false, consensus.ErrUnknownAncestor
