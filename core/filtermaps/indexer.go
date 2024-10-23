@@ -203,18 +203,37 @@ func (f *FilterMaps) tryInit(head *types.Header) bool {
 	if !f.reset() {
 		return false
 	}
-	head = f.chain.GetHeader(f.chain.GetCanonicalHash(0), 0)
-	receipts := f.chain.GetReceiptsByHash(head.Hash())
+
+	hc := newHeaderChain(f.chain, head.Number.Uint64(), head.Hash())
+	var (
+		initHeader *types.Header
+		nextLvPtr  uint64
+	)
+	for _, cp := range checkpoints {
+		if initHeader == nil || cp.blockNumber >= initHeader.Number.Uint64() {
+			if h := f.chain.GetHeader(hc.getBlockHash(cp.blockNumber+1), cp.blockNumber+1); h != nil && h.ParentHash == cp.blockHash {
+				initHeader, nextLvPtr = h, cp.nextLvIndex
+			}
+		}
+	}
+	if initHeader == nil {
+		initHeader = f.chain.GetHeader(f.chain.GetCanonicalHash(0), 0)
+	}
+	if initHeader == nil {
+		log.Error("Could not retrieve init header")
+		return true
+	}
+	receipts := f.chain.GetReceiptsByHash(initHeader.Hash())
 	if receipts == nil {
-		log.Error("Could not retrieve block receipts for init block", "number", head.Number, "hash", head.Hash())
+		log.Error("Could not retrieve block receipts for init block", "number", initHeader.Number, "hash", initHeader.Hash())
 		return true
 	}
 	update := f.newUpdateBatch()
-	if err := update.initWithBlock(head, receipts, 0); err != nil {
+	if err := update.initWithBlock(initHeader, receipts, nextLvPtr); err != nil {
 		log.Error("Could not initialize log index", "error", err)
 	}
 	f.applyUpdateBatch(update)
-	log.Info("Initialized log index", "head", head.Number.Uint64())
+	log.Info("Initialized log index", "head", initHeader.Number.Uint64(), "log value pointer", nextLvPtr)
 	return true
 }
 
