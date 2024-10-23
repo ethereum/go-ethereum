@@ -49,9 +49,11 @@ type dummyStatedb struct {
 	state.StateDB
 }
 
-func (*dummyStatedb) GetRefund() uint64                                       { return 1337 }
-func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash    { return common.Hash{} }
-func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
+func (*dummyStatedb) GetRefund() uint64                                    { return 1337 }
+func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash { return common.Hash{} }
+func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) common.Hash {
+	return common.Hash{}
+}
 
 func TestStoreCapture(t *testing.T) {
 	var (
