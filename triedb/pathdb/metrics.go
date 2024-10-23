@@ -24,11 +24,22 @@ var (
 	cleanNodeReadMeter  = metrics.NewRegisteredMeter("pathdb/clean/node/read", nil)
 	cleanNodeWriteMeter = metrics.NewRegisteredMeter("pathdb/clean/node/write", nil)
 
+	stateAccountMissMeter = metrics.NewRegisteredMeter("pathdb/state/account/miss/total", nil)
+	stateAccountHitMeter  = metrics.NewRegisteredMeter("pathdb/state/account/hit/total", nil)
+	stateStorageMissMeter = metrics.NewRegisteredMeter("pathdb/state/storage/miss/total", nil)
+	stateStorageHitMeter  = metrics.NewRegisteredMeter("pathdb/state/storage/hit/total", nil)
+
 	dirtyNodeHitMeter     = metrics.NewRegisteredMeter("pathdb/dirty/node/hit", nil)
 	dirtyNodeMissMeter    = metrics.NewRegisteredMeter("pathdb/dirty/node/miss", nil)
 	dirtyNodeReadMeter    = metrics.NewRegisteredMeter("pathdb/dirty/node/read", nil)
 	dirtyNodeWriteMeter   = metrics.NewRegisteredMeter("pathdb/dirty/node/write", nil)
 	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/node/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
+
+	dirtyStateHitMeter     = metrics.NewRegisteredMeter("pathdb/dirty/state/hit", nil)
+	dirtyStateMissMeter    = metrics.NewRegisteredMeter("pathdb/dirty/state/miss", nil)
+	dirtyStateReadMeter    = metrics.NewRegisteredMeter("pathdb/dirty/state/read", nil)
+	dirtyStateWriteMeter   = metrics.NewRegisteredMeter("pathdb/dirty/state/write", nil)
+	dirtyStateHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/state/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
 
 	cleanFalseMeter = metrics.NewRegisteredMeter("pathdb/clean/false", nil)
 	dirtyFalseMeter = metrics.NewRegisteredMeter("pathdb/dirty/false", nil)
@@ -41,6 +52,10 @@ var (
 
 	gcTrieNodeMeter      = metrics.NewRegisteredMeter("pathdb/gc/node/count", nil)
 	gcTrieNodeBytesMeter = metrics.NewRegisteredMeter("pathdb/gc/node/bytes", nil)
+	gcAccountMeter       = metrics.NewRegisteredMeter("pathdb/gc/account/count", nil)
+	gcAccountBytesMeter  = metrics.NewRegisteredMeter("pathdb/gc/account/bytes", nil)
+	gcStorageMeter       = metrics.NewRegisteredMeter("pathdb/gc/storage/count", nil)
+	gcStorageBytesMeter  = metrics.NewRegisteredMeter("pathdb/gc/storage/bytes", nil)
 
 	historyBuildTimeMeter  = metrics.NewRegisteredTimer("pathdb/history/time", nil)
 	historyDataBytesMeter  = metrics.NewRegisteredMeter("pathdb/history/bytes/data", nil)
