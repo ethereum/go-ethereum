@@ -309,7 +309,18 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 			delete(t.storages, addrHash)
 		}
 	}
-	return root, ctx.nodes, NewStateSetWithOrigin(ctx.accountOrigin, ctx.storageOrigin)
+	var (
+		accounts  = make(map[common.Hash][]byte)
+		destructs = make(map[common.Hash]struct{})
+	)
+	for addrHash, data := range ctx.accounts {
+		if len(data) == 0 {
+			destructs[addrHash] = struct{}{}
+		} else {
+			accounts[addrHash] = data
+		}
+	}
+	return root, ctx.nodes, NewStateSetWithOrigin(destructs, accounts, ctx.storages, ctx.accountOrigin, ctx.storageOrigin)
 }
 
 // lastHash returns the latest root hash, or empty if nothing is cached.
