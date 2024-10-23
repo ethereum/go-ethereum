@@ -51,12 +51,24 @@ func newRevertError(revert []byte) *revertError {
 	if errUnpack == nil {
 		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, reason)
 	} else {
-		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, hexutil.Encode(revert))
+		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, formatRevertError(revert))
 	}
 	return &revertError{
 		error:  err,
 		reason: hexutil.Encode(revert),
 	}
+}
+
+// formatRevertError formats the revert data into a custom error message
+func formatRevertError(revert []byte) string {
+	if len(revert) >= 4 {
+		selector := revert[:4]
+		params := revert[4:]
+		return fmt.Sprintf("custom error %s: %s",
+			hexutil.Encode(selector),
+			hexutil.Encode(params))
+	}
+	return hexutil.Encode(revert)
 }
 
 // TxIndexingError is an API error that indicates the transaction indexing is not
