@@ -1860,11 +1860,13 @@ func (p *PortalProtocol) Gossip(srcNodeId *enode.ID, contentKeys [][]byte, conte
 	maxClosestNodes := 4
 	maxFartherNodes := 4
 	closestLocalNodes := p.findNodesCloseToContent(contentId, 32)
+	p.Log.Debug("closest local nodes", "count", len(closestLocalNodes))
 
 	gossipNodes := make([]*enode.Node, 0)
 	for _, n := range closestLocalNodes {
 		radius, found := p.radiusCache.HasGet(nil, []byte(n.ID().String()))
 		if found {
+			p.Log.Debug("found closest local nodes", "nodeId", n.ID(), "addr", n.IPAddr().String())
 			nodeRadius := new(uint256.Int)
 			err := nodeRadius.UnmarshalSSZ(radius)
 			if err != nil {
