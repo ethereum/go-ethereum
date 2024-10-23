@@ -30,16 +30,17 @@ const tmpSuffix = ".tmp"
 // freezerOpenFunc is the function used to open/create a freezer.
 type freezerOpenFunc = func() (*Freezer, error)
 
-// ResettableFreezer is a wrapper of the freezer which makes the
+// resettableFreezer is a wrapper of the freezer which makes the
 // freezer resettable.
-type ResettableFreezer struct {
-	freezer *Freezer
-	opener  freezerOpenFunc
-	datadir string
-	lock    sync.RWMutex
+type resettableFreezer struct {
+	readOnly bool
+	freezer  *Freezer
+	opener   freezerOpenFunc
+	datadir  string
+	lock     sync.RWMutex
 }
 
-// NewResettableFreezer creates a resettable freezer, note freezer is
+// newResettableFreezer creates a resettable freezer, note freezer is
 // only resettable if the passed file directory is exclusively occupied
 // by the freezer. And also the user-configurable ancient root directory
 // is **not** supported for reset since it might be a mount and rename
@@ -48,7 +49,7 @@ type ResettableFreezer struct {
 //
 // The reset function will delete directory atomically and re-create the
 // freezer from scratch.
-func NewResettableFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*ResettableFreezer, error) {
+func newResettableFreezer(datadir string, namespace string, readonly bool, maxTableSize uint32, tables map[string]bool) (*resettableFreezer, error) {
 	if err := cleanup(datadir); err != nil {
 		return nil, err
 	}
@@ -61,11 +62,11 @@ func NewResettableFreezer(datadir string, namespace string, readonly bool, maxTa
 	if err != nil {
 		return nil, err
 	}
-
-	return &ResettableFreezer{
-		freezer: freezer,
-		opener:  opener,
-		datadir: datadir,
+	return &resettableFreezer{
+		readOnly: readonly,
+		freezer:  freezer,
+		opener:   opener,
+		datadir:  datadir,
 	}, nil
 }
 
@@ -73,10 +74,13 @@ func NewResettableFreezer(datadir string, namespace string, readonly bool, maxTa
 // recreate the freezer from scratch. The atomicity of directory deletion
 // is guaranteed by the rename operation, the leftover directory will be
 // cleaned up in next startup in case crash happens after rename.
-func (f *ResettableFreezer) Reset() error {
+func (f *resettableFreezer) Reset() error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	if f.readOnly {
+		return errReadOnly
+	}
 	if err := f.freezer.Close(); err != nil {
 		return err
 	}
@@ -101,7 +105,7 @@ func (f *ResettableFreezer) Reset() error {
 }
 
 // Close terminates the chain freezer, unmapping all the data files.
-func (f *ResettableFreezer) Close() error {
+func (f *resettableFreezer) Close() error {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -110,7 +114,7 @@ func (f *ResettableFreezer) Close() error {
 
 // HasAncient returns an indicator whether the specified ancient data exists
 // in the freezer
-func (f *ResettableFreezer) HasAncient(kind string, number uint64) (bool, error) {
+func (f *resettableFreezer) HasAncient(kind string, number uint64) (bool, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -118,7 +122,7 @@ func (f *ResettableFreezer) HasAncient(kind string, number uint64) (bool, error)
 }
 
 // Ancient retrieves an ancient binary blob from the append-only immutable files.
-func (f *ResettableFreezer) Ancient(kind string, number uint64) ([]byte, error) {
+func (f *resettableFreezer) Ancient(kind string, number uint64) ([]byte, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -131,7 +135,7 @@ func (f *ResettableFreezer) Ancient(kind string, number uint64) ([]byte, error) 
 //   - if maxBytes is specified: at least 1 item (even if exceeding the maxByteSize),
 //     but will otherwise return as many items as fit into maxByteSize.
 //   - if maxBytes is not specified, 'count' items will be returned if they are present.
-func (f *ResettableFreezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
+func (f *resettableFreezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -139,7 +143,7 @@ func (f *ResettableFreezer) AncientRange(kind string, start, count, maxBytes uin
 }
 
 // Ancients returns the length of the frozen items.
-func (f *ResettableFreezer) Ancients() (uint64, error) {
+func (f *resettableFreezer) Ancients() (uint64, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -147,17 +151,17 @@ func (f *ResettableFreezer) Ancients() (uint64, error) {
 }
 
 // AncientOffSet returns the offset of current ancientDB.
-func (f *ResettableFreezer) AncientOffSet() uint64 {
+func (f *resettableFreezer) AncientOffSet() uint64 {
 	return f.freezer.offset.Load()
 }
 
 // ItemAmountInAncient returns the actual length of current ancientDB.
-func (f *ResettableFreezer) ItemAmountInAncient() (uint64, error) {
+func (f *resettableFreezer) ItemAmountInAncient() (uint64, error) {
 	return f.freezer.frozen.Load() - f.freezer.offset.Load(), nil
 }
 
 // Tail returns the number of first stored item in the freezer.
-func (f *ResettableFreezer) Tail() (uint64, error) {
+func (f *resettableFreezer) Tail() (uint64, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -165,7 +169,7 @@ func (f *ResettableFreezer) Tail() (uint64, error) {
 }
 
 // AncientSize returns the ancient size of the specified category.
-func (f *ResettableFreezer) AncientSize(kind string) (uint64, error) {
+func (f *resettableFreezer) AncientSize(kind string) (uint64, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -174,7 +178,7 @@ func (f *ResettableFreezer) AncientSize(kind string) (uint64, error) {
 
 // ReadAncients runs the given read operation while ensuring that no writes take place
 // on the underlying freezer.
-func (f *ResettableFreezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
+func (f *resettableFreezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (err error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -182,7 +186,7 @@ func (f *ResettableFreezer) ReadAncients(fn func(ethdb.AncientReaderOp) error) (
 }
 
 // ModifyAncients runs the given write operation.
-func (f *ResettableFreezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize int64, err error) {
+func (f *resettableFreezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize int64, err error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -191,7 +195,7 @@ func (f *ResettableFreezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) 
 
 // TruncateHead discards any recent data above the provided threshold number.
 // It returns the previous head number.
-func (f *ResettableFreezer) TruncateHead(items uint64) (uint64, error) {
+func (f *resettableFreezer) TruncateHead(items uint64) (uint64, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -200,7 +204,7 @@ func (f *ResettableFreezer) TruncateHead(items uint64) (uint64, error) {
 
 // TruncateTail discards any recent data below the provided threshold number.
 // It returns the previous value
-func (f *ResettableFreezer) TruncateTail(tail uint64) (uint64, error) {
+func (f *resettableFreezer) TruncateTail(tail uint64) (uint64, error) {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -208,7 +212,7 @@ func (f *ResettableFreezer) TruncateTail(tail uint64) (uint64, error) {
 }
 
 // Sync flushes all data tables to disk.
-func (f *ResettableFreezer) Sync() error {
+func (f *resettableFreezer) Sync() error {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 
@@ -217,7 +221,7 @@ func (f *ResettableFreezer) Sync() error {
 
 // MigrateTable processes the entries in a given table in sequence
 // converting them to a new format if they're of an old format.
-func (f *ResettableFreezer) MigrateTable(kind string, convert convertLegacyFn) error {
+func (f *resettableFreezer) MigrateTable(kind string, convert convertLegacyFn) error {
 	f.lock.RLock()
 	defer f.lock.RUnlock()
 

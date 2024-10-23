@@ -26,7 +26,7 @@ import (
 )
 
 func newTestServer() *Server {
-	server := NewServer("test", 0, 0)
+	server := NewServer("", 0, 0)
 	server.idgen = sequentialIDGenerator()
 
 	if err := server.RegisterName("test", new(testService)); err != nil {
@@ -208,11 +208,7 @@ func (s *notificationTestService) SomeSubscription(ctx context.Context, n, val i
 				return
 			}
 		}
-		select {
-		case <-notifier.Closed():
-		case <-subscription.Err():
-		}
-
+		<-subscription.Err()
 		if s.unsubscribed != nil {
 			s.unsubscribed <- string(subscription.ID)
 		}

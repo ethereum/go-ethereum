@@ -17,6 +17,7 @@
 package legacypool
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -26,8 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/holiman/uint256"
 )
 
 // Tests that transactions can be added to strict lists and list contents and
@@ -59,6 +62,21 @@ func TestStrictListAdd(t *testing.T) {
 	}
 }
 
+// TestListAddVeryExpensive tests adding txs which exceed 256 bits in cost. It is
+// expected that the list does not panic.
+func TestListAddVeryExpensive(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	list := newList(true)
+	for i := 0; i < 3; i++ {
+		value := big.NewInt(100)
+		gasprice, _ := new(big.Int).SetString("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0)
+		gaslimit := uint64(i)
+		tx, _ := types.SignTx(types.NewTransaction(uint64(i), common.Address{}, value, gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
+		t.Logf("cost: %x bitlen: %d\n", tx.Cost(), tx.Cost().BitLen())
+		list.Add(tx, DefaultConfig.PriceBump)
+	}
+}
+
 func BenchmarkListAdd(b *testing.B) {
 	// Generate a list of transactions to insert
 	key, _ := crypto.GenerateKey()
@@ -68,7 +86,7 @@ func BenchmarkListAdd(b *testing.B) {
 		txs[i] = transaction(uint64(i), 0, key)
 	}
 	// Insert the transactions in a random order
-	priceLimit := big.NewInt(int64(DefaultConfig.PriceLimit))
+	priceLimit := uint256.NewInt(DefaultConfig.PriceLimit)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		list := newList(true)
@@ -79,13 +97,17 @@ func BenchmarkListAdd(b *testing.B) {
 	}
 }
 
-func TestFilterTxConditional(t *testing.T) {
+func TestFilterTxConditionalKnownAccounts(t *testing.T) {
 	t.Parallel()
 
 	// Create an in memory state db to test against.
 	memDb := rawdb.NewMemoryDatabase()
 	db := state.NewDatabase(memDb)
 	state, _ := state.New(common.Hash{}, db, nil)
+
+	header := &types.Header{
+		Number: big.NewInt(0),
+	}
 
 	// Create a private key to sign transactions.
 	key, _ := crypto.GenerateKey()
@@ -100,7 +122,7 @@ func TestFilterTxConditional(t *testing.T) {
 
 	// There should be no drops at this point.
 	// No state has been modified.
-	drops := list.FilterTxConditional(state)
+	drops := list.FilterTxConditional(state, header)
 
 	count := len(drops)
 	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
@@ -117,12 +139,23 @@ func TestFilterTxConditional(t *testing.T) {
 		},
 	}
 
+	state.AddBalance(common.Address{19: 1}, uint256.NewInt(1000), tracing.BalanceChangeTransfer)
+
+	trie, _ := state.StorageTrie(common.Address{19: 1})
+	fmt.Println("before", trie)
+
 	state.SetState(common.Address{19: 1}, common.Hash{}, common.Hash{30: 1})
+
+	state.Finalise(true)
+
+	trie, _ = state.StorageTrie(common.Address{19: 1})
+	fmt.Println("after", trie.Hash())
+
 	tx2.PutOptions(&options)
 	list.Add(tx2, DefaultConfig.PriceBump)
 
 	// There should still be no drops as no state has been modified.
-	drops = list.FilterTxConditional(state)
+	drops = list.FilterTxConditional(state, header)
 
 	count = len(drops)
 	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
@@ -130,11 +163,160 @@ func TestFilterTxConditional(t *testing.T) {
 	// Set state that conflicts with tx2's policy
 	state.SetState(common.Address{19: 1}, common.Hash{}, common.Hash{31: 1})
 
+	state.Finalise(true)
+
+	trie, _ = state.StorageTrie(common.Address{19: 1})
+	fmt.Println("after2", trie.Hash())
+
 	// tx2 should be the single transaction filtered out
-	drops = list.FilterTxConditional(state)
+	drops = list.FilterTxConditional(state, header)
 
 	count = len(drops)
 	require.Equal(t, 1, count, "got %d filtered by TxOptions when there should be a single one", count)
 
 	require.Equal(t, tx2, drops[0], "Got %x, expected %x", drops[0].Hash(), tx2.Hash())
+}
+
+func TestFilterTxConditionalBlockNumber(t *testing.T) {
+	t.Parallel()
+
+	// Create an in memory state db to test against.
+	memDb := rawdb.NewMemoryDatabase()
+	db := state.NewDatabase(memDb)
+	state, _ := state.New(common.Hash{}, db, nil)
+
+	header := &types.Header{
+		Number: big.NewInt(100),
+	}
+
+	// Create a private key to sign transactions.
+	key, _ := crypto.GenerateKey()
+
+	// Create a list.
+	list := newList(true)
+
+	// Create a transaction with no defined tx options
+	// and add to the list.
+	tx := transaction(0, 1000, key)
+	list.Add(tx, DefaultConfig.PriceBump)
+
+	// There should be no drops at this point.
+	// No state has been modified.
+	drops := list.FilterTxConditional(state, header)
+
+	count := len(drops)
+	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
+
+	// Create another transaction with a block number option and add to the list.
+	tx2 := transaction(1, 1000, key)
+
+	var options types.OptionsPIP15
+
+	options.BlockNumberMin = big.NewInt(90)
+	options.BlockNumberMax = big.NewInt(110)
+
+	tx2.PutOptions(&options)
+	list.Add(tx2, DefaultConfig.PriceBump)
+
+	// There should still be no drops as no state has been modified.
+	drops = list.FilterTxConditional(state, header)
+
+	count = len(drops)
+	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
+
+	// Set block number that conflicts with tx2's policy
+	header.Number = big.NewInt(120)
+
+	// tx2 should be the single transaction filtered out
+	drops = list.FilterTxConditional(state, header)
+
+	count = len(drops)
+	require.Equal(t, 1, count, "got %d filtered by TxOptions when there should be a single one", count)
+
+	require.Equal(t, tx2, drops[0], "Got %x, expected %x", drops[0].Hash(), tx2.Hash())
+}
+
+func TestFilterTxConditionalTimestamp(t *testing.T) {
+	t.Parallel()
+
+	// Create an in memory state db to test against.
+	memDb := rawdb.NewMemoryDatabase()
+	db := state.NewDatabase(memDb)
+	state, _ := state.New(common.Hash{}, db, nil)
+
+	header := &types.Header{
+		Number: big.NewInt(0),
+		Time:   100,
+	}
+
+	// Create a private key to sign transactions.
+	key, _ := crypto.GenerateKey()
+
+	// Create a list.
+	list := newList(true)
+
+	// Create a transaction with no defined tx options
+	// and add to the list.
+	tx := transaction(0, 1000, key)
+	list.Add(tx, DefaultConfig.PriceBump)
+
+	// There should be no drops at this point.
+	// No state has been modified.
+	drops := list.FilterTxConditional(state, header)
+
+	count := len(drops)
+	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
+
+	// Create another transaction with a timestamp option and add to the list.
+	tx2 := transaction(1, 1000, key)
+
+	var options types.OptionsPIP15
+
+	minTimestamp := uint64(90)
+	maxTimestamp := uint64(110)
+
+	options.TimestampMin = &minTimestamp
+	options.TimestampMax = &maxTimestamp
+
+	tx2.PutOptions(&options)
+	list.Add(tx2, DefaultConfig.PriceBump)
+
+	// There should still be no drops as no state has been modified.
+	drops = list.FilterTxConditional(state, header)
+
+	count = len(drops)
+	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
+
+	// Set timestamp that conflicts with tx2's policy
+	header.Time = 120
+
+	// tx2 should be the single transaction filtered out
+	drops = list.FilterTxConditional(state, header)
+
+	count = len(drops)
+	require.Equal(t, 1, count, "got %d filtered by TxOptions when there should be a single one", count)
+
+	require.Equal(t, tx2, drops[0], "Got %x, expected %x", drops[0].Hash(), tx2.Hash())
+}
+
+func BenchmarkListCapOneTx(b *testing.B) {
+	// Generate a list of transactions to insert
+	key, _ := crypto.GenerateKey()
+
+	txs := make(types.Transactions, 32)
+	for i := 0; i < len(txs); i++ {
+		txs[i] = transaction(uint64(i), 0, key)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		list := newList(true)
+		// Insert the transactions in a random order
+		for _, v := range rand.Perm(len(txs)) {
+			list.Add(txs[v], DefaultConfig.PriceBump)
+		}
+		b.StartTimer()
+		list.Cap(list.Len() - 1)
+		b.StopTimer()
+	}
 }

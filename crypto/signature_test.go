@@ -79,7 +79,7 @@ func TestVerifySignature(t *testing.T) {
 	wrongkey[10]++
 
 	if VerifySignature(wrongkey, testmsg, sig) {
-		t.Errorf("signature valid with with wrong public key")
+		t.Errorf("signature valid with wrong public key")
 	}
 }
 

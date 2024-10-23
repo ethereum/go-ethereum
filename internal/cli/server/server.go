@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/metrics/prometheus"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
@@ -310,19 +311,17 @@ func (s *Server) Stop() {
 
 func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error {
 	// Check the global metrics if they're matching with the provided config
-	if metrics.Enabled != config.Enabled || metrics.EnabledExpensive != config.Expensive {
+	if metrics.Enabled != config.Enabled {
 		log.Warn(
 			"Metric misconfiguration, some of them might not be visible",
 			"metrics", metrics.Enabled,
 			"config.metrics", config.Enabled,
-			"expensive", metrics.EnabledExpensive,
 			"config.expensive", config.Expensive,
 		)
 	}
 
 	// Update the values anyways (for services which don't need immediate attention)
 	metrics.Enabled = config.Enabled
-	metrics.EnabledExpensive = config.Expensive
 
 	if !metrics.Enabled {
 		// metrics are disabled, do not set up any sink
@@ -330,10 +329,6 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 	}
 
 	log.Info("Enabling metrics collection")
-
-	if metrics.EnabledExpensive {
-		log.Info("Enabling expensive metrics collection")
-	}
 
 	// influxdb
 	if v1Enabled, v2Enabled := config.InfluxDB.V1Enabled, config.InfluxDB.V2Enabled; v1Enabled || v2Enabled {
@@ -366,9 +361,15 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 
 		prometheusMux.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
 
+		timeouts := rpc.DefaultHTTPTimeouts
+
 		promServer := &http.Server{
-			Addr:    config.PrometheusAddr,
-			Handler: prometheusMux,
+			Addr:              config.PrometheusAddr,
+			Handler:           prometheusMux,
+			ReadTimeout:       timeouts.ReadTimeout,
+			ReadHeaderTimeout: timeouts.ReadHeaderTimeout,
+			WriteTimeout:      timeouts.WriteTimeout,
+			IdleTimeout:       timeouts.IdleTimeout,
 		}
 
 		go func() {

@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +33,7 @@ var (
 	key, _                      = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	address                     = crypto.PubkeyToAddress(key.PublicKey)
 	balance                     = big.NewInt(1_000000000000000000)
-	gspec                       = &core.Genesis{Config: params.TestChainConfig, Alloc: core.GenesisAlloc{address: {Balance: balance}}}
+	gspec                       = &core.Genesis{Config: params.TestChainConfig, Alloc: types.GenesisAlloc{address: {Balance: balance}}}
 	signer                      = types.LatestSigner(gspec.Config)
 	config                      = &core.CacheConfig{
 		TrieCleanLimit: 256,
@@ -46,6 +46,7 @@ var (
 )
 
 func TestOfflineBlockPrune(t *testing.T) {
+	t.Skip("PBSS does not support ancient block pruning")
 	t.Parallel()
 
 	// Corner case for 0 remain in ancinetStore.
@@ -158,7 +159,7 @@ func BlockchainCreator(t *testing.T, chaindbPath, AncientPath string, blockRemai
 
 	defer db.Close()
 
-	genesis := gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
+	genesis := gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 	// Initialize a fresh chain with only a genesis block
 	blockchain, err := core.NewBlockChain(db, config, gspec, nil, engine, vm.Config{}, nil, nil, nil)
 	require.NoError(t, err, "failed to create chain")
@@ -179,11 +180,11 @@ func BlockchainCreator(t *testing.T, chaindbPath, AncientPath string, blockRemai
 
 	// Force run a freeze cycle
 	type freezer interface {
-		Freeze(threshold uint64) error
+		Freeze() error
 		Ancients() (uint64, error)
 	}
 
-	err = db.(freezer).Freeze(10)
+	err = db.(freezer).Freeze()
 	require.NoError(t, err, "failed to perform freeze operation")
 
 	// make sure there're frozen items

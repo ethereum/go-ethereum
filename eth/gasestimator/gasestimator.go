@@ -71,14 +71,24 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	}
 	// Recap the highest gas limit with account's available balance.
 	if feeCap.BitLen() != 0 {
-		balance := opts.State.GetBalance(call.From)
+		balance := opts.State.GetBalance(call.From).ToBig()
 
-		available := new(big.Int).Set(balance)
+		available := balance
 		if call.Value != nil {
 			if call.Value.Cmp(available) >= 0 {
 				return 0, nil, core.ErrInsufficientFundsForTransfer
 			}
 			available.Sub(available, call.Value)
+		}
+		if opts.Config.IsCancun(opts.Header.Number) && len(call.BlobHashes) > 0 {
+			blobGasPerBlob := new(big.Int).SetInt64(params.BlobTxBlobGasPerBlob)
+			blobBalanceUsage := new(big.Int).SetInt64(int64(len(call.BlobHashes)))
+			blobBalanceUsage.Mul(blobBalanceUsage, blobGasPerBlob)
+			blobBalanceUsage.Mul(blobBalanceUsage, call.BlobGasFeeCap)
+			if blobBalanceUsage.Cmp(available) >= 0 {
+				return 0, nil, core.ErrInsufficientFunds
+			}
+			available.Sub(available, blobBalanceUsage)
 		}
 		allowance := new(big.Int).Div(available, feeCap)
 

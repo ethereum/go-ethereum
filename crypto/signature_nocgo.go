@@ -167,7 +167,7 @@ type btCurve struct {
 	*btcec.KoblitzCurve
 }
 
-// Marshall converts a point given as (x, y) into a byte slice.
+// Marshal converts a point given as (x, y) into a byte slice.
 func (curve btCurve) Marshal(x, y *big.Int) []byte {
 	byteLen := (curve.Params().BitSize + 7) / 8
 

@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -121,7 +122,7 @@ func TestLifecycleRegistry_Successful(t *testing.T) {
 	noop := NewNoop()
 	stack.RegisterLifecycle(noop)
 
-	if !containsLifecycle(stack.lifecycles, noop) {
+	if !slices.Contains(stack.lifecycles, Lifecycle(noop)) {
 		t.Fatalf("lifecycle was not properly registered on the node, %v", err)
 	}
 }
@@ -434,21 +435,6 @@ func TestRegisterHandler_Successful(t *testing.T) {
 	}
 
 	assert.Equal(t, "success", string(buf))
-}
-
-// Tests that the given handler will not be successfully mounted since no HTTP server
-// is enabled for RPC
-func TestRegisterHandler_Unsuccessful(t *testing.T) {
-	node, err := New(&DefaultConfig)
-	if err != nil {
-		t.Fatalf("could not create new node: %v", err)
-	}
-
-	// create and mount handler
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("success"))
-	})
-	node.RegisterHandler("test", "/test", handler)
 }
 
 // Tests whether websocket requests can be handled on the same port as a regular http server.

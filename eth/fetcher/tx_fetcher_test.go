@@ -20,6 +20,7 @@ import (
 	"errors"
 	"math/big"
 	"math/rand"
+	"slices"
 	"testing"
 	"time"
 
@@ -101,7 +102,6 @@ func TestTransactionFetcherWaiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -197,7 +197,6 @@ func TestTransactionFetcherWaitingWithMeta(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -400,7 +399,6 @@ func TestTransactionFetcherSkipWaiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -465,7 +463,6 @@ func TestTransactionFetcherSingletonRequesting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -547,7 +544,6 @@ func TestTransactionFetcherFailedRescheduling(t *testing.T) {
 					<-proceed
 					return errors.New("peer disconnected")
 				},
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -618,7 +614,6 @@ func TestTransactionFetcherCleanup(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -659,7 +654,6 @@ func TestTransactionFetcherCleanupEmpty(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -699,7 +693,6 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -747,7 +740,6 @@ func TestTransactionFetcherMissingCleanup(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -787,7 +779,6 @@ func TestTransactionFetcherBroadcasts(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -837,7 +828,6 @@ func TestTransactionFetcherWaitTimerResets(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -896,7 +886,6 @@ func TestTransactionFetcherTimeoutRescheduling(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -963,7 +952,6 @@ func TestTransactionFetcherTimeoutTimerResets(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1023,7 +1011,6 @@ func TestTransactionFetcherRateLimiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1054,7 +1041,6 @@ func TestTransactionFetcherBandwidthLimiting(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1127,7 +1113,6 @@ func TestTransactionFetcherDoSProtection(t *testing.T) {
 				func(common.Hash) bool { return false },
 				nil,
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1196,7 +1181,6 @@ func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 					return errs
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1268,7 +1252,6 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 					return errs
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1292,7 +1275,6 @@ func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1347,7 +1329,6 @@ func TestTransactionFetcherDrop(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1415,7 +1396,6 @@ func TestTransactionFetcherDropRescheduling(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1462,7 +1442,6 @@ func TestInvalidAnnounceMetadata(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				func(peer string) { drop <- peer },
 			)
 		},
@@ -1531,7 +1510,6 @@ func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1560,7 +1538,6 @@ func TestTransactionFetcherFuzzCrash02(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1591,7 +1568,6 @@ func TestTransactionFetcherFuzzCrash03(t *testing.T) {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1629,7 +1605,6 @@ func TestTransactionFetcherFuzzCrash04(t *testing.T) {
 					<-proceed
 					return errors.New("peer disconnected")
 				},
-				testTxArrivalWait,
 				nil,
 			)
 		},
@@ -1864,13 +1839,13 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 				}
 
 				for _, hash := range hashes {
-					if !containsHash(request.hashes, hash) {
+					if !slices.Contains(request.hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x missing from requests", i, peer, hash)
 					}
 				}
 
 				for _, hash := range request.hashes {
-					if !containsHash(hashes, hash) {
+					if !slices.Contains(hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x extra in requests", i, peer, hash)
 					}
 				}
@@ -1896,7 +1871,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 				var found bool
 
 				for _, req := range fetcher.requests {
-					if containsHash(req.hashes, hash) {
+					if slices.Contains(req.hashes, hash) {
 						found = true
 						break
 					}
@@ -1944,13 +1919,13 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 				}
 
 				for _, hash := range hashes {
-					if !containsHash(request.hashes, hash) {
+					if !slices.Contains(request.hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x missing from requests", i, peer, hash)
 					}
 				}
 
 				for _, hash := range request.hashes {
-					if !containsHash(hashes, hash) {
+					if !slices.Contains(hashes, hash) {
 						t.Errorf("step %d, peer %s: hash %x extra in requests", i, peer, hash)
 					}
 				}
@@ -1964,7 +1939,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 					var found bool
 
 					for _, hs := range step.fetching {
-						if containsHash(hs, ann.hash) {
+						if slices.Contains(hs, ann.hash) {
 							found = true
 							break
 						}
@@ -1983,7 +1958,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			}
 
 			for hash := range fetcher.announced {
-				if !containsHash(queued, hash) {
+				if !slices.Contains(queued, hash) {
 					t.Errorf("step %d: hash %x extra in announced", i, hash)
 				}
 			}
@@ -2042,17 +2017,6 @@ func containsHashInAnnounces(slice []announce, hash common.Hash) bool {
 	return false
 }
 
-// containsHash returns whether a hash is contained within a hash slice.
-func containsHash(slice []common.Hash, hash common.Hash) bool {
-	for _, have := range slice {
-		if have == hash {
-			return true
-		}
-	}
-
-	return false
-}
-
 // Tests that a transaction is forgotten after the timeout.
 func TestTransactionForgotten(t *testing.T) {
 	fetcher := NewTxFetcher(
@@ -2065,7 +2029,6 @@ func TestTransactionForgotten(t *testing.T) {
 			return errs
 		},
 		func(string, []common.Hash) error { return nil },
-		testTxArrivalWait,
 		func(string) {},
 	)
 	fetcher.Start()

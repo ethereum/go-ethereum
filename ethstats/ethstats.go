@@ -39,7 +39,6 @@ import (
 	ethproto "github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -98,13 +97,6 @@ func (e *EthstatsDataType) AddKV(key, val string) {
 // Arbitrary Data that can be included
 var EthstatsData = &EthstatsDataType{
 	kv: make(map[string]string),
-}
-
-// miningNodeBackend encompasses the functionality necessary for a mining node
-// reporting to ethstats
-type miningNodeBackend interface {
-	fullNodeBackend
-	Miner() *miner.Miner
 }
 
 // Service implements an Ethereum netstats reporting daemon that pushes local
@@ -627,10 +619,13 @@ func (s *Service) reportLatency(conn *connWrapper) error {
 		return err
 	}
 	// Wait for the pong request to arrive back
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
 	select {
 	case <-s.pongCh:
 		// Pong delivered, report the latency
-	case <-time.After(5 * time.Second):
+	case <-timer.C:
 		// Ping timeout, abort
 		return errors.New("ping timed out")
 	}
@@ -732,12 +727,6 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 				log.Error("Failed to retrieve block by number", "err", err)
 				return nil
 			}
-		}
-
-		// It's weird, but it's possible that the block is nil here.
-		// even though the check for error is done above.
-		if block == nil {
-			return nil
 		}
 
 		header = block.Header()
@@ -924,30 +913,21 @@ func (s *Service) reportChain2Head(conn *connWrapper, chain2HeadData *core.Chain
 type nodeStats struct {
 	Active   bool `json:"active"`
 	Syncing  bool `json:"syncing"`
-	Mining   bool `json:"mining"`
-	Hashrate int  `json:"hashrate"`
 	Peers    int  `json:"peers"`
 	GasPrice int  `json:"gasPrice"`
 	Uptime   int  `json:"uptime"`
 }
 
-// reportStats retrieves various stats about the node at the networking and
-// mining layer and reports it to the stats server.
+// reportStats retrieves various stats about the node at the networking layer
+// and reports it to the stats server.
 func (s *Service) reportStats(conn *connWrapper) error {
-	// Gather the syncing and mining infos from the local miner instance
+	// Gather the syncing infos from the local miner instance
 	var (
-		mining   bool
-		hashrate int
 		syncing  bool
 		gasprice int
 	)
 	// check if backend is a full node
 	if fullBackend, ok := s.backend.(fullNodeBackend); ok {
-		if miningBackend, ok := s.backend.(miningNodeBackend); ok {
-			mining = miningBackend.Miner().Mining()
-			hashrate = int(miningBackend.Miner().Hashrate())
-		}
-
 		sync := fullBackend.SyncProgress()
 		syncing = fullBackend.CurrentHeader().Number.Uint64() >= sync.HighestBlock
 
@@ -968,8 +948,6 @@ func (s *Service) reportStats(conn *connWrapper) error {
 		"id": s.node,
 		"stats": &nodeStats{
 			Active:   true,
-			Mining:   mining,
-			Hashrate: hashrate,
 			Peers:    s.server.PeerCount(),
 			GasPrice: gasprice,
 			Syncing:  syncing,

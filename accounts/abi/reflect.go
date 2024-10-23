@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-// ConvertType converts an interface of a runtime type into a interface of the
+// ConvertType converts an interface of a runtime type into an interface of the
 // given type, e.g. turn this code:
 //
 //	var fields []reflect.StructField
@@ -33,7 +33,7 @@ import (
 //			Name: "X",
 //			Type: reflect.TypeOf(new(big.Int)),
 //			Tag:  reflect.StructTag("json:\"" + "x" + "\""),
-//	}
+//	})
 //
 // into:
 //

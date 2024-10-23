@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -29,7 +30,7 @@ func GetDeveloperChain(period uint64, gasLimitt uint64, faucet common.Address) *
 			GasLimit:   gasLimitt,
 			BaseFee:    big.NewInt(params.InitialBaseFee),
 			Difficulty: big.NewInt(1),
-			Alloc: map[common.Address]core.GenesisAccount{
+			Alloc: map[common.Address]types.Account{
 				common.BytesToAddress([]byte{1}): {Balance: big.NewInt(1)}, // ECRecover
 				common.BytesToAddress([]byte{2}): {Balance: big.NewInt(1)}, // SHA256
 				common.BytesToAddress([]byte{3}): {Balance: big.NewInt(1)}, // RIPEMD

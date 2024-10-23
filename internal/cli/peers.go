@@ -12,7 +12,7 @@ type PeersCommand struct {
 }
 
 // MarkDown implements cli.MarkDown interface
-func (a *PeersCommand) MarkDown() string {
+func (c *PeersCommand) MarkDown() string {
 	items := []string{
 		"# Peers",
 		"The ```peers``` command groups actions to interact with peers:",

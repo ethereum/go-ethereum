@@ -28,7 +28,7 @@ type DebugCommand struct {
 }
 
 // MarkDown implements cli.MarkDown interface
-func (d *DebugCommand) MarkDown() string {
+func (c *DebugCommand) MarkDown() string {
 	examples := []string{
 		"## Examples",
 		"By default it creates a tar.gz file with the output:",

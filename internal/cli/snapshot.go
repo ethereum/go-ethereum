@@ -17,7 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/cli/server"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 
 	"github.com/prometheus/tsdb/fileutil"
 
@@ -32,7 +32,7 @@ type SnapshotCommand struct {
 }
 
 // MarkDown implements cli.MarkDown interface
-func (a *SnapshotCommand) MarkDown() string {
+func (c *SnapshotCommand) MarkDown() string {
 	items := []string{
 		"# snapshot",
 		"The ```snapshot``` command groups snapshot related actions:",
@@ -373,7 +373,7 @@ func (c *PruneBlockCommand) validateAgainstSnapshot(stack *node.Node, dbHandles 
 	}
 
 	// Make sure the MPT and snapshot matches before pruning, otherwise the node can not start.
-	snaptree, err := snapshot.New(snapconfig, chaindb, trie.NewDatabase(chaindb, trie.HashDefaults), headBlock.Root())
+	snaptree, err := snapshot.New(snapconfig, chaindb, triedb.NewDatabase(chaindb, triedb.HashDefaults), headBlock.Root())
 	if err != nil {
 		log.Error("Unable to load snapshot", "err", err)
 		return err // The relevant snapshot(s) might not exist

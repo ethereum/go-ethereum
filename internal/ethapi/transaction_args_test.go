@@ -45,15 +45,16 @@ func TestSetFeeDefaults(t *testing.T) {
 	t.Parallel()
 
 	type test struct {
-		name     string
-		isLondon bool
-		in       *TransactionArgs
-		want     *TransactionArgs
-		err      error
+		name string
+		fork string // options: legacy, london, cancun
+		in   *TransactionArgs
+		want *TransactionArgs
+		err  error
 	}
 
 	var (
 		b        = newBackendMock()
+		zero     = (*hexutil.Big)(big.NewInt(0))
 		fortytwo = (*hexutil.Big)(big.NewInt(42))
 		maxFee   = (*hexutil.Big)(new(big.Int).Add(new(big.Int).Mul(b.current.BaseFee, big.NewInt(2)), fortytwo.ToInt()))
 		al       = &types.AccessList{types.AccessTuple{Address: common.Address{0xaa}, StorageKeys: []common.Hash{{0x01}}}}
@@ -63,51 +64,65 @@ func TestSetFeeDefaults(t *testing.T) {
 		// Legacy txs
 		{
 			"legacy tx pre-London",
-			false,
+			"legacy",
 			&TransactionArgs{},
 			&TransactionArgs{GasPrice: fortytwo},
 			nil,
 		},
 		{
+			"legacy tx pre-London with zero price",
+			"legacy",
+			&TransactionArgs{GasPrice: zero},
+			&TransactionArgs{GasPrice: zero},
+			nil,
+		},
+		{
 			"legacy tx post-London, explicit gas price",
-			true,
+			"london",
 			&TransactionArgs{GasPrice: fortytwo},
 			&TransactionArgs{GasPrice: fortytwo},
 			nil,
+		},
+		{
+			"legacy tx post-London with zero price",
+			"london",
+			&TransactionArgs{GasPrice: zero},
+			nil,
+			errors.New("gasPrice must be non-zero after london fork"),
 		},
 
 		// Access list txs
 		{
 			"access list tx pre-London",
-			false,
+			"legacy",
 			&TransactionArgs{AccessList: al},
 			&TransactionArgs{AccessList: al, GasPrice: fortytwo},
 			nil,
 		},
 		{
 			"access list tx post-London, explicit gas price",
-			false,
+			"legacy",
 			&TransactionArgs{AccessList: al, GasPrice: fortytwo},
 			&TransactionArgs{AccessList: al, GasPrice: fortytwo},
 			nil,
 		},
 		{
 			"access list tx post-London",
-			true,
+			"london",
 			&TransactionArgs{AccessList: al},
 			&TransactionArgs{AccessList: al, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
 		},
 		{
 			"access list tx post-London, only max fee",
-			true,
+			"london",
 			&TransactionArgs{AccessList: al, MaxFeePerGas: maxFee},
 			&TransactionArgs{AccessList: al, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
 		},
 		{
 			"access list tx post-London, only priority fee",
-			true,
+			"london",
 			&TransactionArgs{AccessList: al, MaxFeePerGas: maxFee},
 			&TransactionArgs{AccessList: al, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
@@ -116,95 +131,127 @@ func TestSetFeeDefaults(t *testing.T) {
 		// Dynamic fee txs
 		{
 			"dynamic tx post-London",
-			true,
+			"london",
 			&TransactionArgs{},
 			&TransactionArgs{MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
 		},
 		{
 			"dynamic tx post-London, only max fee",
-			true,
+			"london",
 			&TransactionArgs{MaxFeePerGas: maxFee},
 			&TransactionArgs{MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
 		},
 		{
 			"dynamic tx post-London, only priority fee",
-			true,
+			"london",
 			&TransactionArgs{MaxFeePerGas: maxFee},
 			&TransactionArgs{MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
 		},
 		{
 			"dynamic fee tx pre-London, maxFee set",
-			false,
+			"legacy",
 			&TransactionArgs{MaxFeePerGas: maxFee},
 			nil,
 			errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
 		},
 		{
 			"dynamic fee tx pre-London, priorityFee set",
-			false,
+			"legacy",
 			&TransactionArgs{MaxPriorityFeePerGas: fortytwo},
 			nil,
 			errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
 		},
 		{
 			"dynamic fee tx, maxFee < priorityFee",
-			true,
+			"london",
 			&TransactionArgs{MaxFeePerGas: maxFee, MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(1000))},
 			nil,
 			errors.New("maxFeePerGas (0x3e) < maxPriorityFeePerGas (0x3e8)"),
 		},
 		{
 			"dynamic fee tx, maxFee < priorityFee while setting default",
-			true,
+			"london",
 			&TransactionArgs{MaxFeePerGas: (*hexutil.Big)(big.NewInt(7))},
 			nil,
 			errors.New("maxFeePerGas (0x7) < maxPriorityFeePerGas (0x2a)"),
+		},
+		{
+			"dynamic fee tx post-London, explicit gas price",
+			"london",
+			&TransactionArgs{MaxFeePerGas: zero, MaxPriorityFeePerGas: zero},
+			nil,
+			errors.New("maxFeePerGas must be non-zero"),
 		},
 
 		// Misc
 		{
 			"set all fee parameters",
-			false,
+			"legacy",
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
 			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
 		{
 			"set gas price and maxPriorityFee",
-			false,
+			"legacy",
 			&TransactionArgs{GasPrice: fortytwo, MaxPriorityFeePerGas: fortytwo},
 			nil,
 			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
 		{
 			"set gas price and maxFee",
-			true,
+			"london",
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee},
 			nil,
 			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+		},
+		// EIP-4844
+		{
+			"set gas price and maxFee for blob transaction",
+			"cancun",
+			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee, BlobHashes: []common.Hash{}},
+			nil,
+			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+		},
+		{
+			"fill maxFeePerBlobGas",
+			"cancun",
+			&TransactionArgs{BlobHashes: []common.Hash{}},
+			&TransactionArgs{BlobHashes: []common.Hash{}, BlobFeeCap: (*hexutil.Big)(big.NewInt(4)), MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
+			nil,
+		},
+		{
+			"fill maxFeePerBlobGas when dynamic fees are set",
+			"cancun",
+			&TransactionArgs{BlobHashes: []common.Hash{}, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
+			&TransactionArgs{BlobHashes: []common.Hash{}, BlobFeeCap: (*hexutil.Big)(big.NewInt(4)), MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
+			nil,
 		},
 	}
 
 	ctx := context.Background()
 
 	for i, test := range tests {
-		if test.isLondon {
-			b.activateLondon()
-		} else {
-			b.deactivateLondon()
+		if err := b.setFork(test.fork); err != nil {
+			t.Fatalf("failed to set fork: %v", err)
 		}
 
 		got := test.in
 
 		err := got.setFeeDefaults(ctx, b)
-		if err != nil && err.Error() == test.err.Error() {
-			// Test threw expected error.
+		if err != nil {
+			if test.err == nil {
+				t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
+			} else if err.Error() != test.err.Error() {
+				t.Fatalf("test %d (%s): unexpected error: (got: %s, want: %s)", i, test.name, err, test.err)
+			}
+			// Matching error.
 			continue
-		} else if err != nil {
-			t.Fatalf("test %d (%s): unexpected error: %s", i, test.name, err)
+		} else if test.err != nil {
+			t.Fatalf("test %d (%s): expected error: %s", i, test.name, test.err)
 		}
 
 		if !reflect.DeepEqual(got, test.want) {
@@ -250,23 +297,37 @@ func newBackendMock() *backendMock {
 	}
 }
 
-func (b *backendMock) activateLondon() {
-	b.current.Number = big.NewInt(1100)
+func (b *backendMock) setFork(fork string) error {
+	if fork == "legacy" {
+		b.current.Number = big.NewInt(900)
+		b.current.Time = 555
+	} else if fork == "london" {
+		b.current.Number = big.NewInt(1100)
+		b.current.Time = 555
+	} else if fork == "cancun" {
+		b.current.Number = big.NewInt(1100)
+		b.current.Time = 700
+		// Blob base fee will be 2
+		excess := uint64(2314058)
+		b.current.ExcessBlobGas = &excess
+	} else {
+		return errors.New("invalid fork")
+	}
+	return nil
 }
 
-func (b *backendMock) deactivateLondon() {
-	b.current.Number = big.NewInt(900)
-}
 func (b *backendMock) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(42), nil
 }
+func (b *backendMock) BlobBaseFee(ctx context.Context) *big.Int { return big.NewInt(42) }
+
 func (b *backendMock) CurrentHeader() *types.Header     { return b.current }
 func (b *backendMock) ChainConfig() *params.ChainConfig { return b.config }
 
 // Other methods needed to implement Backend interface.
 func (b *backendMock) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
-func (b *backendMock) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
-	return nil, nil, nil, nil, nil
+func (b *backendMock) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
+	return nil, nil, nil, nil, nil, nil, nil
 }
 func (b *backendMock) ChainDb() ethdb.Database           { return nil }
 func (b *backendMock) AccountManager() *accounts.Manager { return nil }
@@ -311,10 +372,7 @@ func (b *backendMock) StateAndHeaderByNumber(ctx context.Context, number rpc.Blo
 func (b *backendMock) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	return nil, nil, nil
 }
-func (b *backendMock) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	//nolint:nilnil
-	return nil, nil
-}
+func (b *backendMock) Pending() (*types.Block, types.Receipts, *state.StateDB) { return nil, nil, nil }
 func (b *backendMock) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	//nolint:nilnil
 	return nil, nil
@@ -335,8 +393,8 @@ func (b *backendMock) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) eve
 	return nil
 }
 func (b *backendMock) SendTx(ctx context.Context, signedTx *types.Transaction) error { return nil }
-func (b *backendMock) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	return nil, [32]byte{}, 0, 0, nil
+func (b *backendMock) GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error) {
+	return false, nil, [32]byte{}, 0, 0, nil
 }
 func (b *backendMock) GetPoolTransactions() (types.Transactions, error)         { return nil, nil }
 func (b *backendMock) GetPoolTransaction(txHash common.Hash) *types.Transaction { return nil }

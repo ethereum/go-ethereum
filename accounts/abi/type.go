@@ -64,6 +64,9 @@ type Type struct {
 var (
 	// typeRegex parses the abi sub types
 	typeRegex = regexp.MustCompile("([a-zA-Z]+)(([0-9]+)(x([0-9]+))?)?")
+
+	// sliceSizeRegex grab the slice size
+	sliceSizeRegex = regexp.MustCompile("[0-9]+")
 )
 
 // NewType creates a new reflection type of abi type given in t.
@@ -93,8 +96,7 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		// grab the last cell and create a type from there
 		sliced := t[i:]
 		// grab the slice size with regexp
-		re := regexp.MustCompile("[0-9]+")
-		intz := re.FindAllString(sliced, -1)
+		intz := sliceSizeRegex.FindAllString(sliced, -1)
 
 		if len(intz) == 0 {
 			// is a slice
@@ -193,11 +195,6 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 			}
 
 			fieldName := ResolveNameConflict(name, func(s string) bool { return used[s] })
-
-			if err != nil {
-				return Type{}, err
-			}
-
 			used[fieldName] = true
 
 			if !isValidFieldName(fieldName) {

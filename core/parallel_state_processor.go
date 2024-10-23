@@ -23,10 +23,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/blockstm"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -186,10 +188,10 @@ func (task *ExecutionTask) Settle() {
 
 	if *task.shouldDelayFeeCal {
 		if task.config.IsLondon(task.blockNumber) {
-			task.finalStateDB.AddBalance(task.result.BurntContractAddress, task.result.FeeBurnt)
+			task.finalStateDB.AddBalance(task.result.BurntContractAddress, cmath.BigIntToUint256Int(task.result.FeeBurnt), tracing.BalanceChangeTransfer)
 		}
 
-		task.finalStateDB.AddBalance(task.coinbase, task.result.FeeTipped)
+		task.finalStateDB.AddBalance(task.coinbase, cmath.BigIntToUint256Int(task.result.FeeTipped), tracing.BalanceChangeTransfer)
 		output1 := new(big.Int).SetBytes(task.result.SenderInitBalance.Bytes())
 		output2 := new(big.Int).SetBytes(coinbaseBalance.Bytes())
 
@@ -203,7 +205,7 @@ func (task *ExecutionTask) Settle() {
 
 			task.result.FeeTipped,
 			task.result.SenderInitBalance,
-			coinbaseBalance,
+			coinbaseBalance.ToBig(),
 			output1.Sub(output1, task.result.FeeTipped),
 			output2.Add(output2, task.result.FeeTipped),
 		)
@@ -361,7 +363,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 		if task.shouldRerunWithoutFeeDelay {
 			shouldDelayFeeCal = false
 
-			statedb.StopPrefetcher()
+			// nolint
 			*statedb = *backupStateDB
 
 			allLogs = []*types.Log{}
@@ -387,7 +389,7 @@ func (p *ParallelStateProcessor) Process(block *types.Block, statedb *state.Stat
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), nil)
+	p.engine.Finalize(p.bc, header, statedb, block.Body())
 
 	return receipts, allLogs, *usedGas, nil
 }
