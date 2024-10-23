@@ -18,7 +18,6 @@ package vm
 
 import (
 	"encoding/hex"
-	"fmt"
 	"reflect"
 	"testing"
 
