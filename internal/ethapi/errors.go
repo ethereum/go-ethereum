@@ -46,11 +46,12 @@ func (e *revertError) ErrorData() interface{} {
 
 // newRevertError creates a revertError instance with the provided revert data.
 func newRevertError(revert []byte) *revertError {
-	err := vm.ErrExecutionReverted
-
+	var err error
 	reason, errUnpack := abi.UnpackRevert(revert)
 	if errUnpack == nil {
 		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, reason)
+	} else {
+		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, hexutil.Encode(revert))
 	}
 	return &revertError{
 		error:  err,
