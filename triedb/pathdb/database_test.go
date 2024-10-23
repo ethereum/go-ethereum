@@ -126,7 +126,8 @@ func newTester(t *testing.T, historyLimit uint64, isVerkle bool, layers int) *te
 		disk, _ = rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), t.TempDir(), "", false)
 		db      = New(disk, &Config{
 			StateHistory:    historyLimit,
-			CleanCacheSize:  256 * 1024,
+			TrieCleanSize:   256 * 1024,
+			StateCleanSize:  256 * 1024,
 			WriteBufferSize: 256 * 1024,
 		}, isVerkle)
 
