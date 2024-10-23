@@ -83,7 +83,7 @@ func (f *FilterMaps) updateLoop() {
 		for {
 			select {
 			case ev := <-headEventCh:
-				head = ev.Block.Header()
+				head = ev.Header
 			case syncMatcher = <-f.matcherSyncCh:
 				head = f.chain.CurrentBlock()
 			case <-f.closeCh:
@@ -126,7 +126,7 @@ func (f *FilterMaps) updateLoop() {
 				// return nil if head processing needs to be stopped
 				select {
 				case ev := <-headEventCh:
-					head = ev.Block.Header()
+					head = ev.Header
 				case syncMatcher = <-f.matcherSyncCh:
 					head = f.chain.CurrentBlock()
 				case <-f.closeCh:
@@ -160,7 +160,7 @@ func (f *FilterMaps) updateLoop() {
 			// return true if tail processing needs to be stopped
 			select {
 			case ev := <-headEventCh:
-				head = ev.Block.Header()
+				head = ev.Header
 			case syncMatcher = <-f.matcherSyncCh:
 				head = f.chain.CurrentBlock()
 			case <-f.closeCh:
