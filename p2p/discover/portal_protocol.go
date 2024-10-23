@@ -261,7 +261,8 @@ func (p *PortalProtocol) Start() error {
 		go p.offerWorker()
 	}
 
-	// wait for the routing table to be initialized
+	// wait for both initialization processes to complete
+	<-p.DiscV5.tab.initDone
 	<-p.table.initDone
 	return nil
 }
