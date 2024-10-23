@@ -17,6 +17,7 @@
 package filtermaps
 
 import (
+	"bytes"
 	"errors"
 	"sync"
 	"time"
@@ -27,9 +28,36 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/leveldb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 )
+
+// checkpoint allows the log indexer to start indexing from the given block
+// instead of genesis at the correct absolute log value index.
+type checkpoint struct {
+	blockNumber uint64
+	blockHash   common.Hash
+	nextLvIndex uint64 // next log value index after the given block
+}
+
+var checkpoints = []checkpoint{
+	{ // Mainnet
+		blockNumber: 21019982,
+		blockHash:   common.HexToHash("0xc684e4db692fe347e740082665acf91e27c0d9ad2a118822abdd7bb06c2a9250"),
+		nextLvIndex: 15878969230,
+	},
+	{ // Sepolia
+		blockNumber: 6939193,
+		blockHash:   common.HexToHash("0x659b6e8a711efe8184368ac286f1f4aee74be50d38bb7fe4b24f53e73dfa58b8"),
+		nextLvIndex: 3392298216,
+	},
+	{ // Holesky
+		blockNumber: 2607449,
+		blockHash:   common.HexToHash("0xa48c4e1ff3857ba44346bc25346d9947cd12c08f5ce8c10e8acaf40e2d6c7dc4"),
+		nextLvIndex: 966700355,
+	},
+}
 
 const headCacheSize = 8 // maximum number of recent filter maps cached in memory
 
@@ -175,6 +203,9 @@ func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, hist
 			log.Error("Error fetching tail block pointer, resetting log index", "error", err)
 			fm.filterMapsRange = filterMapsRange{} // updateLoop resets the database
 		}
+		headBlockPtr, _ := fm.getBlockLvPointer(fm.headBlockNumber)
+		log.Trace("Log index head", "number", fm.headBlockNumber, "hash", fm.headBlockHash.String(), "log value pointer", fm.headLvPointer)
+		log.Trace("Log index tail", "number", fm.tailBlockNumber, "parentHash", fm.tailParentHash.String(), "log value pointer", fm.tailBlockLvPointer)
 	}
 	return fm
 }
@@ -218,43 +249,37 @@ func (f *FilterMaps) removeBloomBits() {
 // removeDbWithPrefix removes data with the given prefix from the database and
 // returns true if everything was successfully removed.
 func (f *FilterMaps) removeDbWithPrefix(prefix []byte, action string) bool {
-	var (
-		logged     bool
-		lastLogged time.Time
-		removed    uint64
-	)
+	it := f.db.NewIterator(prefix, nil)
+	hasData := it.Next()
+	it.Release()
+	if !hasData {
+		return true
+	}
+
+	end := bytes.Clone(prefix)
+	end[len(end)-1]++
+	start := time.Now()
+	var retry bool
 	for {
+		err := f.db.DeleteRange(prefix, end)
+		if err == nil {
+			log.Info(action+" finished", "elapsed", time.Since(start))
+			return true
+		}
+		if err != leveldb.ErrTooManyKeys {
+			log.Error(action+" failed", "error", err)
+			return false
+		}
 		select {
 		case <-f.closeCh:
 			return false
 		default:
 		}
-		it := f.db.NewIterator(prefix, nil)
-		batch := f.db.NewBatch()
-		var count int
-		for ; count < 250000 && it.Next(); count++ {
-			batch.Delete(it.Key())
-			removed++
+		if !retry {
+			log.Info(action + " in progress...")
+			retry = true
 		}
-		it.Release()
-		if count == 0 {
-			break
-		}
-		if !logged {
-			log.Info(action + "...")
-			logged = true
-			lastLogged = time.Now()
-		}
-		if time.Since(lastLogged) >= time.Second*10 {
-			log.Info(action+" in progress", "removed keys", removed)
-			lastLogged = time.Now()
-		}
-		batch.Write()
 	}
-	if logged {
-		log.Info(action + " finished")
-	}
-	return true
 }
 
 // setRange updates the covered range and also adds the changes to the given batch.
