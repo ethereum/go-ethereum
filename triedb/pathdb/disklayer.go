@@ -297,14 +297,21 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	}
 	var (
 		buff     = crypto.NewKeccakState()
+		hashes   = make(map[common.Address]common.Hash)
 		accounts = make(map[common.Hash][]byte)
 		storages = make(map[common.Hash]map[common.Hash][]byte)
 	)
 	for addr, blob := range h.accounts {
-		accounts[crypto.HashData(buff, addr.Bytes())] = blob
+		hash := crypto.HashData(buff, addr.Bytes())
+		hashes[addr] = hash
+		accounts[hash] = blob
 	}
 	for addr, storage := range h.storages {
-		storages[crypto.HashData(buff, addr.Bytes())] = storage
+		hash, ok := hashes[addr]
+		if !ok {
+			panic(fmt.Errorf("storage history with no account %x", addr))
+		}
+		storages[hash] = storage
 	}
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
