@@ -218,7 +218,7 @@ var AppHelpFlagGroups = []flagGroup{
 		}, debug.Flags...),
 	},
 	//{
-	//	Name:  "WHISPER (EXPERIMENTAL)",
+	//	Name:  "WHISPER (deprecated)",
 	//	Flags: whisperFlags,
 	//},
 	{
