@@ -124,7 +124,7 @@ func (b *buffer) size() uint64 {
 
 // flush persists the in-memory dirty trie node into the disk if the configured
 // memory threshold is reached. Note, all data must be written atomically.
-func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, nodesCache *fastcache.Cache, id uint64) error {
+func (b *buffer) flush(root common.Hash, db ethdb.KeyValueStore, freezer ethdb.AncientWriter, progress []byte, nodesCache, statesCache *fastcache.Cache, id uint64) error {
 	// Ensure the target state id is aligned with the internal counter.
 	head := rawdb.ReadPersistentStateID(db)
 	if head+b.layers != id {
@@ -133,7 +133,7 @@ func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, node
 	// Terminate the state snapshot generation if it's active
 	var (
 		start = time.Now()
-		batch = db.NewBatchWithSize(b.nodes.dbsize() * 11 / 10) // extra 10% for potential pebble internal stuff
+		batch = db.NewBatchWithSize((b.nodes.dbsize() + b.states.dbsize()) * 11 / 10) // extra 10% for potential pebble internal stuff
 	)
 	// Explicitly sync the state freezer to ensure all written data is persisted to disk
 	// before updating the key-value store.
@@ -146,7 +146,9 @@ func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, node
 		}
 	}
 	nodes := b.nodes.write(batch, nodesCache)
+	accounts, slots := b.states.write(batch, progress, statesCache)
 	rawdb.WritePersistentStateID(batch, id)
+	rawdb.WriteSnapshotRoot(batch, root)
 
 	// Flush all mutations in a single batch
 	size := batch.ValueSize()
@@ -155,8 +157,10 @@ func (b *buffer) flush(db ethdb.KeyValueStore, freezer ethdb.AncientWriter, node
 	}
 	commitBytesMeter.Mark(int64(size))
 	commitNodesMeter.Mark(int64(nodes))
+	commitAccountsMeter.Mark(int64(accounts))
+	commitStoragesMeter.Mark(int64(slots))
 	commitTimeTimer.UpdateSince(start)
 	b.reset()
-	log.Debug("Persisted buffer content", "nodes", nodes, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Persisted buffer content", "nodes", nodes, "accounts", accounts, "slots", slots, "bytes", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
 	return nil
 }

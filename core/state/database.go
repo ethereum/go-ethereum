@@ -186,8 +186,9 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 			readers = append(readers, newFlatReader(snap))
 		}
 	} else {
-		// If standalone state snapshot is not available, try to construct
-		// the state reader with database.
+		// If standalone state snapshot is not available (path scheme
+		// or the state snapshot is explicitly disabled in hash mode),
+		// try to construct the state reader with database.
 		reader, err := db.triedb.StateReader(stateRoot)
 		if err == nil {
 			readers = append(readers, newFlatReader(reader)) // state reader is optional
