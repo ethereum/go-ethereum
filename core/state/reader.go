@@ -41,12 +41,13 @@ type Reader interface {
 	Account(addr common.Address) (*types.StateAccount, error)
 
 	// Storage retrieves the storage slot associated with a particular account
-	// address and slot key.
+	// address and slot key along with a flag indicating whether the slot is
+	// existent or not.
 	//
 	// - Returns an empty slot if it does not exist
 	// - Returns an error only if an unexpected issue occurs
 	// - The returned storage slot is safe to modify after the call
-	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
+	Storage(addr common.Address, slot common.Hash) (bool, common.Hash, error)
 
 	// Copy returns a deep-copied state reader.
 	Copy() Reader
@@ -101,31 +102,32 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 }
 
 // Storage implements Reader, retrieving the storage slot specified by the
-// address and slot key.
+// address and slot key along with a flag whether the requested storage slot
+// is existent or not.
 //
 // An error will be returned if the associated snapshot is already stale or
 // the requested storage slot is not yet covered by the snapshot.
 //
 // The returned storage slot might be empty if it's not existent.
-func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
+func (r *stateReader) Storage(addr common.Address, key common.Hash) (bool, common.Hash, error) {
 	addrHash := crypto.HashData(r.buff, addr.Bytes())
 	slotHash := crypto.HashData(r.buff, key.Bytes())
 	ret, err := r.snap.Storage(addrHash, slotHash)
 	if err != nil {
-		return common.Hash{}, err
+		return false, common.Hash{}, err
 	}
 	if len(ret) == 0 {
-		return common.Hash{}, nil
+		return false, common.Hash{}, nil
 	}
 	// Perform the rlp-decode as the slot value is RLP-encoded in the state
 	// snapshot.
 	_, content, _, err := rlp.Split(ret)
 	if err != nil {
-		return common.Hash{}, err
+		return false, common.Hash{}, err
 	}
 	var value common.Hash
 	value.SetBytes(content)
-	return value, nil
+	return true, value, nil
 }
 
 // Copy implements Reader, returning a deep-copied snap reader.
@@ -194,7 +196,7 @@ func (r *trieReader) Account(addr common.Address) (*types.StateAccount, error) {
 //
 // An error will be returned if the trie state is corrupted. An empty storage
 // slot will be returned if it's not existent in the trie.
-func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
+func (r *trieReader) Storage(addr common.Address, key common.Hash) (bool, common.Hash, error) {
 	var (
 		tr    Trie
 		found bool
@@ -212,24 +214,24 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 			if !ok {
 				_, err := r.Account(addr)
 				if err != nil {
-					return common.Hash{}, err
+					return false, common.Hash{}, err
 				}
 				root = r.subRoots[addr]
 			}
 			var err error
 			tr, err = trie.NewStateTrie(trie.StorageTrieID(r.root, crypto.HashData(r.buff, addr.Bytes()), root), r.db)
 			if err != nil {
-				return common.Hash{}, err
+				return false, common.Hash{}, err
 			}
 			r.subTries[addr] = tr
 		}
 	}
-	ret, err := tr.GetStorage(addr, key.Bytes())
+	exist, ret, err := tr.GetStorage(addr, key.Bytes())
 	if err != nil {
-		return common.Hash{}, err
+		return false, common.Hash{}, err
 	}
 	value.SetBytes(ret)
-	return value, nil
+	return exist, value, nil
 }
 
 // Copy implements Reader, returning a deep-copied trie reader.
@@ -291,16 +293,16 @@ func (r *multiReader) Account(addr common.Address) (*types.StateAccount, error) 
 // - Returns an empty slot if it does not exist
 // - Returns an error only if an unexpected issue occurs
 // - The returned storage slot is safe to modify after the call
-func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+func (r *multiReader) Storage(addr common.Address, slot common.Hash) (bool, common.Hash, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		slot, err := reader.Storage(addr, slot)
+		exist, slot, err := reader.Storage(addr, slot)
 		if err == nil {
-			return slot, nil
+			return exist, slot, nil
 		}
 		errs = append(errs, err)
 	}
-	return common.Hash{}, errors.Join(errs...)
+	return false, common.Hash{}, errors.Join(errs...)
 }
 
 // Copy implementing Reader interface, returning a deep-copied state reader.
