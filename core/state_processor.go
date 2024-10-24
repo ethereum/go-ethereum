@@ -77,11 +77,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	context = NewEVMBlockContext(header, p.chain, nil)
 
 	vmenv := vm.NewEVM(context, vm.TxContext{}, statedb, p.config, cfg)
+	var tracingStateDB = vm.StateDB(statedb)
+	if hooks := cfg.Tracer; hooks != nil {
+		tracingStateDB = state.NewHookedState(statedb, hooks)
+	}
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		ProcessBeaconBlockRoot(*beaconRoot, vmenv, statedb)
+		ProcessBeaconBlockRoot(*beaconRoot, vmenv, tracingStateDB)
 	}
 	if p.config.IsPrague(block.Number(), block.Time()) {
-		ProcessParentBlockHash(block.ParentHash(), vmenv, statedb)
+		ProcessParentBlockHash(block.ParentHash(), vmenv, tracingStateDB)
 	}
 
 	// Iterate over and process the individual transactions
@@ -98,10 +102,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
-	}
-	var tracingStateDB = vm.StateDB(statedb)
-	if hooks := cfg.Tracer; hooks != nil {
-		tracingStateDB = state.NewHookedState(statedb, hooks)
 	}
 	// Read requests if Prague is enabled.
 	var requests [][]byte
