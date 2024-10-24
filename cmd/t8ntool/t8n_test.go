@@ -27,7 +27,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
 	"github.com/ethereum/go-ethereum/internal/reexec"
 )
@@ -506,7 +505,7 @@ func TestT9n(t *testing.T) {
 				inTxs:  "invalid.rlp",
 				stFork: "London",
 			},
-			expExitCode: t8ntool.ErrorIO,
+			expExitCode: ErrorIO,
 		},
 	} {
 		args := []string{"t9n"}
