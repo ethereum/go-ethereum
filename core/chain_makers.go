@@ -348,25 +348,22 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 		var requests [][]byte
 		if config.IsPrague(b.header.Number, b.header.Time) {
+			requests = [][]byte{}
 			// EIP-6110 deposits
 			var blockLogs []*types.Log
 			for _, r := range b.receipts {
 				blockLogs = append(blockLogs, r.Logs...)
 			}
-			depositRequests, err := ParseDepositLogs(blockLogs, config)
-			if err != nil {
+			if err := ParseDepositLogs(&requests, blockLogs, config); err != nil {
 				panic(fmt.Sprintf("failed to parse deposit log: %v", err))
 			}
-			requests = append(requests, depositRequests)
 			// create EVM for system calls
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
-			// EIP-7002 withdrawals
-			withdrawalRequests := ProcessWithdrawalQueue(vmenv, statedb)
-			requests = append(requests, withdrawalRequests)
-			// EIP-7251 consolidations
-			consolidationRequests := ProcessConsolidationQueue(vmenv, statedb)
-			requests = append(requests, consolidationRequests)
+			// EIP-7002
+			ProcessWithdrawalQueue(&requests, vmenv, statedb)
+			// EIP-7251
+			ProcessConsolidationQueue(&requests, vmenv, statedb)
 		}
 		if requests != nil {
 			reqHash := types.CalcRequestsHash(requests)

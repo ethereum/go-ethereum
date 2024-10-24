@@ -365,22 +365,21 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	// Gather the execution-layer triggered requests.
 	var requests [][]byte
 	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
-		// EIP-6110 deposits
+		requests = [][]byte{}
+		// EIP-6110
 		var allLogs []*types.Log
 		for _, receipt := range receipts {
 			allLogs = append(allLogs, receipt.Logs...)
 		}
-		depositRequests, err := core.ParseDepositLogs(allLogs, chainConfig)
-		if err != nil {
+		if err := ParseDepositLogs(&requests, allLogs, p.config); err != nil {
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
-		requests = append(requests, depositRequests)
 		// create EVM for system calls
 		vmenv := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
-		// EIP-7002 withdrawals
-		requests = append(requests, core.ProcessWithdrawalQueue(vmenv, statedb))
-		// EIP-7251 consolidations
-		requests = append(requests, core.ProcessConsolidationQueue(vmenv, statedb))
+		// EIP-7002
+		core.ProcessWithdrawalQueue(&requests, vmenv, statedb)
+		// EIP-7251
+		core.ProcessConsolidationQueue(&requests, vmenv, statedb)
 	}
 
 	// Commit block

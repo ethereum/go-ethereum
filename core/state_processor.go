@@ -106,18 +106,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Read requests if Prague is enabled.
 	var requests [][]byte
 	if p.config.IsPrague(block.Number(), block.Time()) {
-		// EIP-6110 deposits
-		depositRequests, err := ParseDepositLogs(allLogs, p.config)
-		if err != nil {
+		requests = [][]byte{}
+		// EIP-6110
+		if err := ParseDepositLogs(&requests, allLogs, p.config); err != nil {
 			return nil, err
 		}
-		requests = append(requests, depositRequests)
-		// EIP-7002 withdrawals
-		withdrawalRequests := ProcessWithdrawalQueue(vmenv, tracingStateDB)
-		requests = append(requests, withdrawalRequests)
-		// EIP-7251 consolidations
-		consolidationRequests := ProcessConsolidationQueue(vmenv, tracingStateDB)
-		requests = append(requests, consolidationRequests)
+		// EIP-7002
+		ProcessWithdrawalQueue(&requests, vmenv, tracingStateDB)
+		// EIP-7251
+		ProcessConsolidationQueue(&requests, vmenv, tracingStateDB)
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
@@ -276,17 +273,17 @@ func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb vm.Stat
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessWithdrawalQueue(vmenv *vm.EVM, statedb vm.StateDB) []byte {
-	return processRequestsSystemCall(vmenv, statedb, 0x01, params.WithdrawalQueueAddress)
+func ProcessWithdrawalQueue(requests *[][]byte, vmenv *vm.EVM, statedb vm.StateDB) {
+	processRequestsSystemCall(requests, vmenv, statedb, 0x01, params.WithdrawalQueueAddress)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessConsolidationQueue(vmenv *vm.EVM, statedb vm.StateDB) []byte {
-	return processRequestsSystemCall(vmenv, statedb, 0x02, params.ConsolidationQueueAddress)
+func ProcessConsolidationQueue(requests *[][]byte, vmenv *vm.EVM, statedb vm.StateDB) {
+	processRequestsSystemCall(requests, vmenv, statedb, 0x02, params.ConsolidationQueueAddress)
 }
 
-func processRequestsSystemCall(vmenv *vm.EVM, statedb vm.StateDB, requestType byte, addr common.Address) []byte {
+func processRequestsSystemCall(requests *[][]byte, vmenv *vm.EVM, statedb vm.StateDB, requestType byte, addr common.Address) {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
 		if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
@@ -308,26 +305,32 @@ func processRequestsSystemCall(vmenv *vm.EVM, statedb vm.StateDB, requestType by
 	statedb.AddAddressToAccessList(addr)
 	ret, _, _ := vmenv.Call(vm.AccountRef(msg.From), *msg.To, msg.Data, 30_000_000, common.U2560)
 	statedb.Finalise(true)
+	if len(ret) == 0 {
+		return // skip empty output
+	}
 
-	// Create withdrawals requestsData with prefix 0x01
+	// Append prefixed requestsData to the requests list.
 	requestsData := make([]byte, len(ret)+1)
 	requestsData[0] = requestType
 	copy(requestsData[1:], ret)
-	return requestsData
+	*requests = append(*requests, requestsData)
 }
 
 // ParseDepositLogs extracts the EIP-6110 deposit values from logs emitted by
 // BeaconDepositContract.
-func ParseDepositLogs(logs []*types.Log, config *params.ChainConfig) ([]byte, error) {
+func ParseDepositLogs(requests *[][]byte, logs []*types.Log, config *params.ChainConfig) error {
 	deposits := make([]byte, 1) // note: first byte is 0x00 (== deposit request type)
 	for _, log := range logs {
 		if log.Address == config.DepositContractAddress {
 			request, err := types.DepositLogToRequest(log.Data)
 			if err != nil {
-				return nil, fmt.Errorf("unable to parse deposit data: %v", err)
+				return fmt.Errorf("unable to parse deposit data: %v", err)
 			}
 			deposits = append(deposits, request...)
 		}
 	}
-	return deposits, nil
+	if len(deposits) > 1 {
+		*requests = append(*requests, deposits)
+	}
+	return nil
 }
