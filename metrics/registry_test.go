@@ -19,20 +19,20 @@ func TestRegistry(t *testing.T) {
 	i := 0
 	r.Each(func(name string, iface interface{}) {
 		i++
-		if "foo" != name {
+		if name != "foo" {
 			t.Fatal(name)
 		}
 		if _, ok := iface.(Counter); !ok {
 			t.Fatal(iface)
 		}
 	})
-	if 1 != i {
+	if i != 1 {
 		t.Fatal(i)
 	}
 	r.Unregister("foo")
 	i = 0
 	r.Each(func(string, interface{}) { i++ })
-	if 0 != i {
+	if i != 0 {
 		t.Fatal(i)
 	}
 }
@@ -52,7 +52,7 @@ func TestRegistryDuplicate(t *testing.T) {
 			t.Fatal(iface)
 		}
 	})
-	if 1 != i {
+	if i != 1 {
 		t.Fatal(i)
 	}
 }
@@ -60,11 +60,11 @@ func TestRegistryDuplicate(t *testing.T) {
 func TestRegistryGet(t *testing.T) {
 	r := NewRegistry()
 	r.Register("foo", NewCounter())
-	if count := r.Get("foo").(Counter).Count(); 0 != count {
+	if count := r.Get("foo").(Counter).Count(); count != 0 {
 		t.Fatal(count)
 	}
 	r.Get("foo").(Counter).Inc(1)
-	if count := r.Get("foo").(Counter).Count(); 1 != count {
+	if count := r.Get("foo").(Counter).Count(); count != 1 {
 		t.Fatal(count)
 	}
 }
@@ -298,7 +298,7 @@ func TestWalkRegistries(t *testing.T) {
 	Register("bars", c)
 
 	_, prefix := findPrefix(r2, "")
-	if "prefix.prefix2." != prefix {
+	if prefix != "prefix.prefix2." {
 		t.Fatal(prefix)
 	}
 
