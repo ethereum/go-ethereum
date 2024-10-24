@@ -249,7 +249,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		} else if sLen > operation.maxStack {
 			return nil, &ErrStackOverflow{stackLen: sLen, limit: operation.maxStack}
 		}
-		// for tracing: this gas consumption is ignored, so can be done in-line
+		// for tracing: this gas consumption event is emitted below in the debug section.
 		if contract.Gas < cost {
 			return nil, ErrOutOfGas
 		} else {
@@ -282,7 +282,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			if err != nil {
 				return nil, fmt.Errorf("%w: %v", ErrOutOfGas, err)
 			}
-			// for tracing: this gas consumption is ignored, so can be done in-line
+			// for tracing: this gas consumption event is emitted below in the debug section.
 			if contract.Gas < dynamicCost {
 				return nil, ErrOutOfGas
 			} else {
