@@ -35,6 +35,9 @@ type KeyValueWriter interface {
 
 	// Delete removes the key from the key-value data store.
 	Delete(key []byte) error
+
+	// DeleteRange removes all keys in the range [start,end) from the key-value store.
+	DeleteRange(start, end []byte) error
 }
 
 // KeyValueStater wraps the Stat method of a backing data store.

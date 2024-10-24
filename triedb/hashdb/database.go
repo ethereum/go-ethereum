@@ -532,6 +532,10 @@ func (c *cleaner) Delete(key []byte) error {
 	panic("not implemented")
 }
 
+func (c *cleaner) DeleteRange(start, end []byte) error {
+	panic("not supported")
+}
+
 // Initialized returns an indicator if state data is already initialized
 // in hash-based scheme by checking the presence of genesis state.
 func (db *Database) Initialized(genesisRoot common.Hash) bool {

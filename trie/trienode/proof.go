@@ -69,6 +69,10 @@ func (db *ProofSet) Delete(key []byte) error {
 	return nil
 }
 
+func (db *ProofSet) DeleteRange(start, end []byte) error {
+	panic("not supported")
+}
+
 // Get returns a stored node
 func (db *ProofSet) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
@@ -149,6 +153,10 @@ func (n *ProofList) Put(key []byte, value []byte) error {
 
 // Delete panics as there's no reason to remove a node from the list.
 func (n *ProofList) Delete(key []byte) error {
+	panic("not supported")
+}
+
+func (n *ProofList) DeleteRange(start, end []byte) error {
 	panic("not supported")
 }
 

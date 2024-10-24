@@ -918,6 +918,10 @@ func (w *hookWriter) Delete(key []byte) error {
 	return w.db.Delete(key)
 }
 
+func (w *hookWriter) DeleteRange(start, end []byte) error {
+	panic("not supported")
+}
+
 func testSyncAbort(t *testing.T, scheme string) {
 	var (
 		srcDisk    = rawdb.NewMemoryDatabase()

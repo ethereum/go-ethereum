@@ -121,6 +121,11 @@ func (db *Database) Delete(key []byte) error {
 	return nil
 }
 
+// DeleteRange removes all keys in the range [start,end) from the key-value store.
+func (db *Database) DeleteRange(start, end []byte) error {
+	return ethdb.DeleteRangeWithIterator(db, start, end)
+}
+
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
 func (db *Database) NewBatch() ethdb.Batch {
@@ -221,6 +226,12 @@ func (b *batch) Delete(key []byte) error {
 	b.writes = append(b.writes, keyvalue{string(key), nil, true})
 	b.size += len(key)
 	return nil
+}
+
+// DeleteRange inserts the removal all of the keys in the range [start,end) into
+// the batch for later committing.
+func (b *batch) DeleteRange(start, end []byte) error {
+	return ethdb.DeleteRangeFromBatch(b, b.db, start, end)
 }
 
 // ValueSize retrieves the amount of data queued up for writing.

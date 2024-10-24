@@ -97,6 +97,10 @@ func (r *replayer) Delete(key []byte) error {
 	return nil
 }
 
+func (r *replayer) DeleteRange(start, end []byte) error {
+	panic("not implemented")
+}
+
 func byteToHex(str []byte) []byte {
 	l := len(str) * 2
 	var nibbles = make([]byte, l)

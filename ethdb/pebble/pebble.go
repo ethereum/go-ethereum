@@ -338,6 +338,16 @@ func (d *Database) Delete(key []byte) error {
 	return d.db.Delete(key, nil)
 }
 
+// DeleteRange removes all keys in the range [start,end) from the key-value store.
+func (d *Database) DeleteRange(start, end []byte) error {
+	d.quitLock.RLock()
+	defer d.quitLock.RUnlock()
+	if d.closed {
+		return pebble.ErrClosed
+	}
+	return d.db.DeleteRange(start, end, nil)
+}
+
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
 func (d *Database) NewBatch() ethdb.Batch {
@@ -536,6 +546,16 @@ func (b *batch) Delete(key []byte) error {
 		return err
 	}
 	b.size += len(key)
+	return nil
+}
+
+// DeleteRange inserts the removal all of the keys in the range [start,end) into
+// the batch for later committing.
+func (b *batch) DeleteRange(start, end []byte) error {
+	if err := b.b.DeleteRange(start, end, nil); err != nil {
+		return err
+	}
+	b.size += len(start) + len(end)
 	return nil
 }
 

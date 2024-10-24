@@ -206,20 +206,27 @@ func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
+// DeleteRange removes all keys in the range [start,end) from the key-value store.
+func (db *Database) DeleteRange(start, end []byte) error {
+	return ethdb.DeleteRangeWithIterator(db, start, end)
+}
+
 // NewBatch creates a write-only key-value store that buffers changes to its host
 // database until a final write is called.
 func (db *Database) NewBatch() ethdb.Batch {
 	return &batch{
-		db: db.db,
-		b:  new(leveldb.Batch),
+		db:        db.db,
+		wrappedDb: db,
+		b:         new(leveldb.Batch),
 	}
 }
 
 // NewBatchWithSize creates a write-only database batch with pre-allocated buffer.
 func (db *Database) NewBatchWithSize(size int) ethdb.Batch {
 	return &batch{
-		db: db.db,
-		b:  leveldb.MakeBatch(size),
+		db:        db.db,
+		wrappedDb: db,
+		b:         leveldb.MakeBatch(size),
 	}
 }
 
@@ -413,9 +420,10 @@ func (db *Database) meter(refresh time.Duration, namespace string) {
 // batch is a write-only leveldb batch that commits changes to its host database
 // when Write is called. A batch cannot be used concurrently.
 type batch struct {
-	db   *leveldb.DB
-	b    *leveldb.Batch
-	size int
+	db        *leveldb.DB
+	wrappedDb *Database
+	b         *leveldb.Batch
+	size      int
 }
 
 // Put inserts the given value into the batch for later committing.
@@ -430,6 +438,12 @@ func (b *batch) Delete(key []byte) error {
 	b.b.Delete(key)
 	b.size += len(key)
 	return nil
+}
+
+// DeleteRange inserts the removal all of the keys in the range [start,end) into
+// the batch for later committing.
+func (b *batch) DeleteRange(start, end []byte) error {
+	return ethdb.DeleteRangeFromBatch(b, b.wrappedDb, start, end)
 }
 
 // ValueSize retrieves the amount of data queued up for writing.
