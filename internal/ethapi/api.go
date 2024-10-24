@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	gomath "math"
 	"math/big"
 	"strings"
 	"time"
@@ -432,7 +433,7 @@ func (api *PersonalAccountAPI) UnlockAccount(ctx context.Context, addr common.Ad
 		return false, errors.New("account unlock with HTTP access is forbidden")
 	}
 
-	const max = uint64(time.Duration(math.MaxInt64) / time.Second)
+	const max = uint64(time.Duration(gomath.MaxInt64) / time.Second)
 	var d time.Duration
 	if duration == nil {
 		d = 300 * time.Second
@@ -1183,7 +1184,7 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 	defer cancel()
 	gp := new(core.GasPool)
 	if globalGasCap == 0 {
-		gp.AddGas(math.MaxUint64)
+		gp.AddGas(gomath.MaxUint64)
 	} else {
 		gp.AddGas(globalGasCap)
 	}
@@ -1208,11 +1209,16 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-
-	return applyMessageWithEVM(ctx, evm, msg, state, timeout, gp)
+	res, err := applyMessageWithEVM(ctx, evm, msg, timeout, gp)
+	// If an internal state error occurred, let that have precedence. Otherwise,
+	// a "trie root missing" type of error will masquerade as e.g. "insufficient gas"
+	if err := state.Error(); err != nil {
+		return nil, err
+	}
+	return res, err
 }
 
-func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, state *state.StateDB, timeout time.Duration, gp *core.GasPool) (*core.ExecutionResult, error) {
+func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, timeout time.Duration, gp *core.GasPool) (*core.ExecutionResult, error) {
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
 	go func() {
@@ -1222,9 +1228,6 @@ func applyMessageWithEVM(ctx context.Context, evm *vm.EVM, msg *core.Message, st
 
 	// Execute the message.
 	result, err := core.ApplyMessage(evm, msg, gp)
-	if err := state.Error(); err != nil {
-		return nil, err
-	}
 
 	// If the timer caused an abort, return an appropriate error message
 	if evm.Cancelled() {
@@ -1291,7 +1294,7 @@ func (api *BlockChainAPI) SimulateV1(ctx context.Context, opts simOpts, blockNrO
 	}
 	gasCap := api.b.RPCGasCap()
 	if gasCap == 0 {
-		gasCap = math.MaxUint64
+		gasCap = gomath.MaxUint64
 	}
 	sim := &simulator{
 		b:           api.b,

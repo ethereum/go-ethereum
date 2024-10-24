@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/naoina/toml"
 	"github.com/urfave/cli/v2"
@@ -130,7 +129,7 @@ func defaultNodeConfig() node.Config {
 	git, _ := version.VCS()
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
-	cfg.Version = params.VersionWithCommit(git.Commit, git.Date)
+	cfg.Version = version.WithCommit(git.Commit, git.Date)
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
 	cfg.WSModules = append(cfg.WSModules, "eth")
 	cfg.IPCPath = "geth.ipc"

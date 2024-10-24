@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -93,6 +92,7 @@ var caps = []string{
 	"engine_getPayloadV2",
 	"engine_getPayloadV3",
 	"engine_getPayloadV4",
+	"engine_getBlobsV1",
 	"engine_newPayloadV1",
 	"engine_newPayloadV2",
 	"engine_newPayloadV3",
@@ -534,6 +534,25 @@ func (api *ConsensusAPI) getPayload(payloadID engine.PayloadID, full bool) (*eng
 		return nil, engine.UnknownPayload
 	}
 	return data, nil
+}
+
+// GetBlobsV1 returns a blob from the transaction pool.
+func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProofV1, error) {
+	if len(hashes) > 128 {
+		return nil, engine.TooLargeRequest.With(fmt.Errorf("requested blob count too large: %v", len(hashes)))
+	}
+	res := make([]*engine.BlobAndProofV1, len(hashes))
+
+	blobs, proofs := api.eth.TxPool().GetBlobs(hashes)
+	for i := 0; i < len(blobs); i++ {
+		if blobs[i] != nil {
+			res[i] = &engine.BlobAndProofV1{
+				Blob:  (*blobs[i])[:],
+				Proof: (*proofs[i])[:],
+			}
+		}
+	}
+	return res, nil
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -1174,7 +1193,7 @@ func (api *ConsensusAPI) GetClientVersionV1(info engine.ClientVersionV1) []engin
 		{
 			Code:    engine.ClientCode,
 			Name:    engine.ClientName,
-			Version: params.VersionWithMeta,
+			Version: version.WithMeta,
 			Commit:  hexutil.Encode(commit),
 		},
 	}
