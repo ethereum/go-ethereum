@@ -129,11 +129,14 @@ func (j *journal) length() int {
 
 func (j *journal) OnTxEnd(receipt *types.Receipt, err error) {
 	j.reset()
+	if j.hooks.OnTxEnd != nil {
+		j.hooks.OnTxEnd(receipt, err)
+	}
 }
 
 func (j *journal) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	j.revIds = append(j.revIds, j.snapshot())
-	if j.hooks != nil && j.hooks.OnEnter != nil {
+	if j.hooks.OnEnter != nil {
 		j.hooks.OnEnter(depth, typ, from, to, input, gas, value)
 	}
 }
@@ -144,21 +147,21 @@ func (j *journal) OnExit(depth int, output []byte, gasUsed uint64, err error, re
 	if reverted {
 		j.revertToSnapshot(revId, j.hooks)
 	}
-	if j.hooks != nil && j.hooks.OnExit != nil {
+	if j.hooks.OnExit != nil {
 		j.hooks.OnExit(depth, output, gasUsed, err, reverted)
 	}
 }
 
 func (j *journal) OnBalanceChange(addr common.Address, prev, new *big.Int, reason BalanceChangeReason) {
 	j.entries = append(j.entries, balanceChange{addr: addr, prev: prev, new: new})
-	if j.hooks != nil && j.hooks.OnBalanceChange != nil {
+	if j.hooks.OnBalanceChange != nil {
 		j.hooks.OnBalanceChange(addr, prev, new, reason)
 	}
 }
 
 func (j *journal) OnNonceChange(addr common.Address, prev, new uint64) {
 	j.entries = append(j.entries, nonceChange{addr: addr, prev: prev, new: new})
-	if j.hooks != nil && j.hooks.OnNonceChange != nil {
+	if j.hooks.OnNonceChange != nil {
 		j.hooks.OnNonceChange(addr, prev, new)
 	}
 }
@@ -171,14 +174,14 @@ func (j *journal) OnCodeChange(addr common.Address, prevCodeHash common.Hash, pr
 		newCodeHash:  codeHash,
 		newCode:      code,
 	})
-	if j.hooks != nil && j.hooks.OnCodeChange != nil {
+	if j.hooks.OnCodeChange != nil {
 		j.hooks.OnCodeChange(addr, prevCodeHash, prevCode, codeHash, code)
 	}
 }
 
 func (j *journal) OnStorageChange(addr common.Address, slot common.Hash, prev, new common.Hash) {
 	j.entries = append(j.entries, storageChange{addr: addr, slot: slot, prev: prev, new: new})
-	if j.hooks != nil && j.hooks.OnStorageChange != nil {
+	if j.hooks.OnStorageChange != nil {
 		j.hooks.OnStorageChange(addr, slot, prev, new)
 	}
 }
