@@ -1,4 +1,4 @@
-// Copyright 2020 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,35 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package console
+package jsrepl
 
 import (
-	"testing"
-
-	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/internal/jsre"
+	_ "embed"
 )
 
-// TestUndefinedAsParam ensures that personal functions can receive
-// `undefined` as a parameter.
-func TestUndefinedAsParam(t *testing.T) {
-	b := bridge{}
-	call := jsre.Call{}
-	call.Arguments = []goja.Value{goja.Undefined()}
+//go:generate yarn install
+//go:generate npx esbuild jsrepl.js --bundle --platform=node --minify --keep-names --outfile=bundle.js
 
-	b.UnlockAccount(call)
-	b.Sign(call)
-	b.Sleep(call)
-}
-
-// TestNullAsParam ensures that personal functions can receive
-// `null` as a parameter.
-func TestNullAsParam(t *testing.T) {
-	b := bridge{}
-	call := jsre.Call{}
-	call.Arguments = []goja.Value{goja.Null()}
-
-	b.UnlockAccount(call)
-	b.Sign(call)
-	b.Sleep(call)
-}
+// Bundle is the compiled together NodeJS module containing Ethers.js, a pretty
+// printed JavaScript REPL interpreter and some Geth bridge code.
+//
+//go:embed bundle.js
+var Bundle string
