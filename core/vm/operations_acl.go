@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -241,4 +242,105 @@ func makeSelfdestructGasFn(refundsEnabled bool) gasFunc {
 		return gas, nil
 	}
 	return gasFunc
+}
+
+var (
+	gasCallEIP7702         = makeCallVariantGasCallEIP7702(gasCall)
+	gasDelegateCallEIP7702 = makeCallVariantGasCallEIP7702(gasDelegateCall)
+	gasStaticCallEIP7702   = makeCallVariantGasCallEIP7702(gasStaticCall)
+	gasCallCodeEIP7702     = makeCallVariantGasCallEIP7702(gasCallCode)
+)
+
+func makeCallVariantGasCallEIP7702(oldCalculator gasFunc) gasFunc {
+	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+		addr := common.Address(stack.Back(1).Bytes20())
+		// Check slot presence in the access list
+		warmAccess := evm.StateDB.AddressInAccessList(addr)
+		// The WarmStorageReadCostEIP2929 (100) is already deducted in the form of a constant cost, so
+		// the cost to charge for cold access, if any, is Cold - Warm
+		coldCost := params.ColdAccountAccessCostEIP2929 - params.WarmStorageReadCostEIP2929
+		if !warmAccess {
+			evm.StateDB.AddAddressToAccessList(addr)
+			// Charge the remaining difference here already, to correctly calculate available
+			// gas for call
+			if !contract.UseGas(coldCost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+				return 0, ErrOutOfGas
+			}
+		}
+
+		// Check if code is a delegation and if so, charge for resolution.
+		if addr, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
+			var cost uint64
+			if evm.StateDB.AddressInAccessList(addr) {
+				cost += params.WarmStorageReadCostEIP2929
+			} else {
+				evm.StateDB.AddAddressToAccessList(addr)
+				cost += params.ColdAccountAccessCostEIP2929
+			}
+			if !contract.UseGas(cost, evm.Config.Tracer, tracing.GasChangeCallStorageColdAccess) {
+				return 0, ErrOutOfGas
+			}
+			coldCost += cost
+		}
+		// Now call the old calculator, which takes into account
+		// - create new account
+		// - transfer value
+		// - memory expansion
+		// - 63/64ths rule
+		gas, err := oldCalculator(evm, contract, stack, mem, memorySize)
+		if warmAccess || err != nil {
+			return gas, err
+		}
+		// In case of a cold access, we temporarily add the cold charge back, and also
+		// add it to the returned gas. By adding it to the return, it will be charged
+		// outside of this function, as part of the dynamic gas, and that will make it
+		// also become correctly reported to tracers.
+		contract.Gas += coldCost
+
+		var overflow bool
+		if gas, overflow = math.SafeAdd(gas, coldCost); overflow {
+			return 0, ErrGasUintOverflow
+		}
+		return gas, nil
+	}
+}
+
+func gasEip7702CodeCheck(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	cost, _ := gasEip2929AccountCheck(evm, contract, stack, mem, memorySize)
+	// Check if code is a delegation and if so, charge for resolution
+	addr := common.Address(stack.peek().Bytes20())
+	if addr, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
+		if evm.StateDB.AddressInAccessList(addr) {
+			cost += params.WarmStorageReadCostEIP2929
+		} else {
+			// fmt.Println("adding ", addr, "to acl")
+			evm.StateDB.AddAddressToAccessList(addr)
+			cost += params.ColdAccountAccessCostEIP2929
+		}
+	}
+	// fmt.Println("cost is", cost)
+	return cost, nil
+}
+
+func gasExtCodeCopyEIP7702(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	gas, err := gasExtCodeCopyEIP2929(evm, contract, stack, mem, memorySize)
+	if err != nil {
+		return 0, err
+	}
+	// Check if code is a delegation and if so, charge for resolution
+	addr := common.Address(stack.peek().Bytes20())
+	if addr, ok := types.ParseDelegation(evm.StateDB.GetCode(addr)); ok {
+		var overflow bool
+		if evm.StateDB.AddressInAccessList(addr) {
+			if gas, overflow = math.SafeAdd(gas, params.WarmStorageReadCostEIP2929); overflow {
+				return 0, ErrGasUintOverflow
+			}
+		} else {
+			evm.StateDB.AddAddressToAccessList(addr)
+			if gas, overflow = math.SafeAdd(gas, params.ColdAccountAccessCostEIP2929); overflow {
+				return 0, ErrGasUintOverflow
+			}
+		}
+	}
+	return gas, nil
 }
