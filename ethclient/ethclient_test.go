@@ -801,6 +801,9 @@ func ExampleRevertErrorData() {
 
 	// Parse the revert data to obtain the error message.
 	message, err := abi.UnpackRevert(revertData)
+	if err != nil {
+		panic("parsing ABI error failed: " + err.Error())
+	}
 	fmt.Println("message:", message)
 
 	// Output:
