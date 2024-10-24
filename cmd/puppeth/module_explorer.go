@@ -197,7 +197,7 @@ func checkExplorer(client *sshClient, network string) (*explorerInfos, error) {
 	// Run a sanity check to see if the devp2p is reachable
 	nodePort := infos.portmap[infos.envvars["NODE_PORT"]]
 	if err = checkPort(client.server, nodePort); err != nil {
-		log.Warn(fmt.Sprintf("Explorer devp2p port seems unreachable"), "server", client.server, "port", nodePort, "err", err)
+		log.Warn("Explorer devp2p port seems unreachable", "server", client.server, "port", nodePort, "err", err)
 	}
 	// Assemble and return the useful infos
 	stats := &explorerInfos{
