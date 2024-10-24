@@ -55,7 +55,7 @@ func TestUpdateLeaks(t *testing.T) {
 		sdb = NewDatabase(tdb, nil)
 	)
 	state, _ := New(types.EmptyRootHash, sdb)
-
+	state.Snapshot()
 	// Update it with some accounts
 	for i := byte(0); i < 255; i++ {
 		addr := common.BytesToAddress([]byte{i})
@@ -111,7 +111,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 	// Write modifications to trie.
 	transState.IntermediateRoot(false)
-
+	transState.journal.snapshot()
 	// Overwrite all the data with new values in the transient database.
 	for i := byte(0); i < 255; i++ {
 		modify(transState, common.Address{i}, i, 99)
@@ -228,7 +228,7 @@ func TestCopy(t *testing.T) {
 }
 
 // TestCopyWithDirtyJournal tests if Copy can correct create a equal copied
-// stateDB with dirty journal present.
+// stateDB with dirty linearJournal present.
 func TestCopyWithDirtyJournal(t *testing.T) {
 	db := NewDatabaseForTesting()
 	orig, _ := New(types.EmptyRootHash, db)
@@ -364,6 +364,12 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SetStorage",
 			fn: func(a testAction, s *StateDB) {
+				contractHash := s.GetCodeHash(addr)
+				emptyCode := contractHash == (common.Hash{}) || contractHash == types.EmptyCodeHash
+				if emptyCode {
+					// no-op
+					return
+				}
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))
 				binary.BigEndian.PutUint16(val[:], uint16(a.args[1]))
@@ -374,11 +380,25 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SetCode",
 			fn: func(a testAction, s *StateDB) {
-				// SetCode can only be performed in case the addr does
-				// not already hold code
+				// SetCode cannot be performed if the addr already has code
 				if c := s.GetCode(addr); len(c) > 0 {
 					// no-op
 					return
+				}
+				// SetCode cannot be performed if the addr has just selfdestructed
+				if obj := s.getStateObject(addr); obj != nil {
+					if obj.selfDestructed {
+						// If it's selfdestructed, we cannot create into it
+						return
+					}
+				}
+				// SetCode requires the contract to be account + contract to be created first
+				if obj := s.getStateObject(addr); obj == nil {
+					s.createObject(addr)
+				}
+				obj := s.getStateObject(addr)
+				if !obj.newContract {
+					s.CreateContract(addr)
 				}
 				code := make([]byte, 16)
 				binary.BigEndian.PutUint64(code, uint64(a.args[0]))
@@ -405,13 +425,20 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 				emptyCode := contractHash == (common.Hash{}) || contractHash == types.EmptyCodeHash
 				storageRoot := s.GetStorageRoot(addr)
 				emptyStorage := storageRoot == (common.Hash{}) || storageRoot == types.EmptyRootHash
+
+				if obj := s.getStateObject(addr); obj != nil {
+					if obj.selfDestructed {
+						// If it's selfdestructed, we cannot create into it
+						return
+					}
+				}
 				if s.GetNonce(addr) == 0 && emptyCode && emptyStorage {
 					s.CreateContract(addr)
 					// We also set some code here, to prevent the
 					// CreateContract action from being performed twice in a row,
 					// which would cause a difference in state when unrolling
-					// the journal. (CreateContact assumes created was false prior to
-					// invocation, and the journal rollback sets it to false).
+					// the linearJournal. (CreateContact assumes created was false prior to
+					// invocation, and the linearJournal rollback sets it to false).
 					s.SetCode(addr, []byte{1})
 				}
 			},
@@ -419,6 +446,15 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SelfDestruct",
 			fn: func(a testAction, s *StateDB) {
+				obj := s.getStateObject(addr)
+				// SelfDestruct requires the object to first exist
+				if obj == nil {
+					s.createObject(addr)
+				}
+				obj = s.getStateObject(addr)
+				if !obj.newContract {
+					s.CreateContract(addr)
+				}
 				s.SelfDestruct(addr)
 			},
 		},
@@ -440,15 +476,6 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			args: make([]int64, 1),
 		},
 		{
-			name: "AddPreimage",
-			fn: func(a testAction, s *StateDB) {
-				preimage := []byte{1}
-				hash := common.BytesToHash(preimage)
-				s.AddPreimage(hash, preimage)
-			},
-			args: make([]int64, 1),
-		},
-		{
 			name: "AddAddressToAccessList",
 			fn: func(a testAction, s *StateDB) {
 				s.AddAddressToAccessList(addr)
@@ -465,6 +492,13 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 		{
 			name: "SetTransientState",
 			fn: func(a testAction, s *StateDB) {
+				contractHash := s.GetCodeHash(addr)
+				emptyCode := contractHash == (common.Hash{}) || contractHash == types.EmptyCodeHash
+				if emptyCode {
+					// no-op
+					return
+				}
+
 				var key, val common.Hash
 				binary.BigEndian.PutUint16(key[:], uint16(a.args[0]))
 				binary.BigEndian.PutUint16(val[:], uint16(a.args[1]))
@@ -677,22 +711,23 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		return fmt.Errorf("got GetLogs(common.Hash{}) == %v, want GetLogs(common.Hash{}) == %v",
 			state.GetLogs(common.Hash{}, 0, common.Hash{}), checkstate.GetLogs(common.Hash{}, 0, common.Hash{}))
 	}
-	if !maps.Equal(state.journal.dirties, checkstate.journal.dirties) {
-		getKeys := func(dirty map[common.Address]int) string {
-			var keys []common.Address
-			out := new(strings.Builder)
-			for key := range dirty {
-				keys = append(keys, key)
+	{ // Check the dirty-accounts
+		have := state.journal.dirtyAccounts()
+		want := checkstate.journal.dirtyAccounts()
+		slices.SortFunc(have, common.Address.Cmp)
+		slices.SortFunc(want, common.Address.Cmp)
+		if !slices.Equal(have, want) {
+			getKeys := func(keys []common.Address) string {
+				out := new(strings.Builder)
+				for i, key := range keys {
+					fmt.Fprintf(out, "  %d. %v\n", i, key)
+				}
+				return out.String()
 			}
-			slices.SortFunc(keys, common.Address.Cmp)
-			for i, key := range keys {
-				fmt.Fprintf(out, "  %d. %v\n", i, key)
-			}
-			return out.String()
+			haveK := getKeys(have)
+			wantK := getKeys(want)
+			return fmt.Errorf("dirty-journal set mismatch.\nhave:\n%v\nwant:\n%v\n", haveK, wantK)
 		}
-		have := getKeys(state.journal.dirties)
-		want := getKeys(checkstate.journal.dirties)
-		return fmt.Errorf("dirty-journal set mismatch.\nhave:\n%v\nwant:\n%v\n", have, want)
 	}
 	return nil
 }
@@ -706,11 +741,11 @@ func TestTouchDelete(t *testing.T) {
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(uint256.Int), tracing.BalanceChangeUnspecified)
 
-	if len(s.state.journal.dirties) != 1 {
+	if len(s.state.journal.dirtyAccounts()) != 1 {
 		t.Fatal("expected one dirty state object")
 	}
 	s.state.RevertToSnapshot(snapshot)
-	if len(s.state.journal.dirties) != 0 {
+	if len(s.state.journal.dirtyAccounts()) != 0 {
 		t.Fatal("expected no dirty state object")
 	}
 }
@@ -1099,33 +1134,44 @@ func TestStateDBAccessList(t *testing.T) {
 		}
 	}
 
+	var ids []int
+	push := func(id int) {
+		ids = append(ids, id)
+	}
+	pop := func() int {
+		id := ids[len(ids)-1]
+		ids = ids[:len(ids)-1]
+		return id
+	}
+
+	push(state.journal.snapshot())                    // journal id 0
 	state.AddAddressToAccessList(addr("aa"))          // 1
-	state.AddSlotToAccessList(addr("bb"), slot("01")) // 2,3
+	push(state.journal.snapshot())                    // journal id 1
+	state.AddAddressToAccessList(addr("bb"))          // 2
+	push(state.journal.snapshot())                    // journal id 2
+	state.AddSlotToAccessList(addr("bb"), slot("01")) // 3
+	push(state.journal.snapshot())                    // journal id 3
 	state.AddSlotToAccessList(addr("bb"), slot("02")) // 4
+	push(state.journal.snapshot())                    // journal id 4
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 
 	// Make a copy
 	stateCopy1 := state.Copy()
-	if exp, got := 4, state.journal.length(); exp != got {
-		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
-	}
 
-	// same again, should cause no journal entries
+	// same again, should cause no linearJournal entries
 	state.AddSlotToAccessList(addr("bb"), slot("01"))
 	state.AddSlotToAccessList(addr("bb"), slot("02"))
 	state.AddAddressToAccessList(addr("aa"))
-	if exp, got := 4, state.journal.length(); exp != got {
-		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
-	}
+
 	// some new ones
 	state.AddSlotToAccessList(addr("bb"), slot("03")) // 5
+	push(state.journal.snapshot())                    // journal id 5
 	state.AddSlotToAccessList(addr("aa"), slot("01")) // 6
-	state.AddSlotToAccessList(addr("cc"), slot("01")) // 7,8
-	state.AddAddressToAccessList(addr("cc"))
-	if exp, got := 8, state.journal.length(); exp != got {
-		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
-	}
+	push(state.journal.snapshot())                    // journal id 6
+	state.AddAddressToAccessList(addr("cc"))          // 7
+	push(state.journal.snapshot())                    // journal id 7
+	state.AddSlotToAccessList(addr("cc"), slot("01")) // 8
 
 	verifyAddrs("aa", "bb", "cc")
 	verifySlots("aa", "01")
@@ -1133,7 +1179,7 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("cc", "01")
 
 	// now start rolling back changes
-	state.journal.revert(state, 7)
+	state.journal.revertToSnapshot(pop(), state) // revert to 6
 	if _, ok := state.SlotInAccessList(addr("cc"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
@@ -1141,7 +1187,7 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("aa", "01")
 	verifySlots("bb", "01", "02", "03")
 
-	state.journal.revert(state, 6)
+	state.journal.revertToSnapshot(pop(), state) // revert to 5
 	if state.AddressInAccessList(addr("cc")) {
 		t.Fatalf("addr present, expected missing")
 	}
@@ -1149,40 +1195,40 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("aa", "01")
 	verifySlots("bb", "01", "02", "03")
 
-	state.journal.revert(state, 5)
+	state.journal.revertToSnapshot(pop(), state) // revert to 4
 	if _, ok := state.SlotInAccessList(addr("aa"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02", "03")
 
-	state.journal.revert(state, 4)
+	state.journal.revertToSnapshot(pop(), state) // revert to 3
 	if _, ok := state.SlotInAccessList(addr("bb"), slot("03")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 
-	state.journal.revert(state, 3)
+	state.journal.revertToSnapshot(pop(), state) // revert to 2
 	if _, ok := state.SlotInAccessList(addr("bb"), slot("02")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01")
 
-	state.journal.revert(state, 2)
+	state.journal.revertToSnapshot(pop(), state) // revert to 1
 	if _, ok := state.SlotInAccessList(addr("bb"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 
-	state.journal.revert(state, 1)
+	state.journal.revertToSnapshot(pop(), state) // revert to 0
 	if state.AddressInAccessList(addr("bb")) {
 		t.Fatalf("addr present, expected missing")
 	}
 	verifyAddrs("aa")
 
-	state.journal.revert(state, 0)
+	state.journal.revertToSnapshot(0, state)
 	if state.AddressInAccessList(addr("aa")) {
 		t.Fatalf("addr present, expected missing")
 	}
@@ -1253,11 +1299,9 @@ func TestStateDBTransientStorage(t *testing.T) {
 	key := common.Hash{0x01}
 	value := common.Hash{0x02}
 	addr := common.Address{}
-
+	revision := state.journal.snapshot()
 	state.SetTransientState(addr, key, value)
-	if exp, got := 1, state.journal.length(); exp != got {
-		t.Fatalf("journal length mismatch: have %d, want %d", got, exp)
-	}
+
 	// the retrieved value should equal what was set
 	if got := state.GetTransientState(addr, key); got != value {
 		t.Fatalf("transient storage mismatch: have %x, want %x", got, value)
@@ -1265,7 +1309,7 @@ func TestStateDBTransientStorage(t *testing.T) {
 
 	// revert the transient state being set and then check that the
 	// value is now the empty hash
-	state.journal.revert(state, 0)
+	state.journal.revertToSnapshot(revision, state)
 	if got, exp := state.GetTransientState(addr, key), (common.Hash{}); exp != got {
 		t.Fatalf("transient storage mismatch: have %x, want %x", got, exp)
 	}
@@ -1376,4 +1420,54 @@ func TestStorageDirtiness(t *testing.T) {
 	// the storage change is reverted, dirty value should be set back
 	state.RevertToSnapshot(snap)
 	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
+}
+
+func TestStorageDirtiness2(t *testing.T) {
+	var (
+		disk       = rawdb.NewMemoryDatabase()
+		tdb        = triedb.NewDatabase(disk, nil)
+		db         = NewDatabase(tdb, nil)
+		state, _   = New(types.EmptyRootHash, db)
+		addr       = common.HexToAddress("0x1")
+		checkDirty = func(key common.Hash, value common.Hash, dirty bool) {
+			t.Helper()
+			obj := state.getStateObject(addr)
+			v, exist := obj.dirtyStorage[key]
+			if exist != dirty {
+				t.Fatalf("unexpected dirty marker, want: %v, have: %v", dirty, exist)
+			}
+			if !exist {
+				return
+			}
+			if v != value {
+				t.Fatalf("unexpected storage slot, want: %x, have: %x", value, v)
+			}
+		}
+	)
+
+	{ // Initiate a state, where an account has SLOT(1) = 0xA, +nonzero balance
+		state.CreateAccount(addr)
+		state.SetBalance(addr, uint256.NewInt(1), tracing.BalanceChangeUnspecified) // Prevent empty-delete
+		state.SetState(addr, common.Hash{0x1}, common.Hash{0xa})
+		root, err := state.Commit(0, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Init phase done, load it again
+		if state, err = New(root, NewDatabase(tdb, nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A no-op storage change, no dirty marker
+	state.SetState(addr, common.Hash{0x1}, common.Hash{0xa})
+	checkDirty(common.Hash{0x1}, common.Hash{0xa}, false)
+
+	// Enter new scope
+	snap := state.Snapshot()
+	state.SetState(addr, common.Hash{0x1}, common.Hash{0xb}) // SLOT(1) = 0xB
+	checkDirty(common.Hash{0x1}, common.Hash{0xb}, true)     // Should be flagged dirty
+	state.RevertToSnapshot(snap)                             // Revert scope
+
+	// the storage change has been set back to original, dirtiness should be revoked
+	checkDirty(common.Hash{0x1}, common.Hash{0x1}, false)
 }

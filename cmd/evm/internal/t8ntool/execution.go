@@ -278,6 +278,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			}
 			continue
 		}
+		statedb.DiscardSnapshot(snapshot)
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
 			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)

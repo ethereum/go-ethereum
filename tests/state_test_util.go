@@ -308,6 +308,8 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
 			evm.Config.Tracer.OnTxEnd(nil, err)
 		}
+	} else {
+		st.StateDB.DiscardSnapshot(snapshot)
 	}
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where

@@ -113,7 +113,7 @@ func (s *stateObject) markSelfdestructed() {
 }
 
 func (s *stateObject) touch() {
-	s.db.journal.touchChange(s.address)
+	s.db.journal.touchChange(s.address, &s.data, s.selfDestructed, s.newContract)
 }
 
 // getTrie returns the associated storage trie. The trie will be opened if it's
@@ -462,7 +462,7 @@ func (s *stateObject) AddBalance(amount *uint256.Int) uint256.Int {
 // SetBalance sets the balance for the object, and returns the previous balance.
 func (s *stateObject) SetBalance(amount *uint256.Int) uint256.Int {
 	prev := *s.data.Balance
-	s.db.journal.balanceChange(s.address, s.data.Balance)
+	s.db.journal.balanceChange(s.address, &s.data, s.selfDestructed, s.newContract)
 	s.setBalance(amount)
 	return prev
 }
@@ -536,7 +536,7 @@ func (s *stateObject) CodeSize() int {
 }
 
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) {
-	s.db.journal.setCode(s.address)
+	s.db.journal.setCode(s.address, &s.data)
 	s.setCode(codeHash, code)
 }
 
@@ -547,7 +547,7 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 }
 
 func (s *stateObject) SetNonce(nonce uint64) {
-	s.db.journal.nonceChange(s.address, s.data.Nonce)
+	s.db.journal.nonceChange(s.address, &s.data, s.selfDestructed, s.newContract)
 	s.setNonce(nonce)
 }
 
