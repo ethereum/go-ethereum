@@ -60,6 +60,10 @@ type backend interface {
 	// An error will be returned if the specified state is not available.
 	NodeReader(root common.Hash) (database.NodeReader, error)
 
+	// StateReader returns a reader for accessing flat states within the specified
+	// state. An error will be returned if the specified state is not available.
+	StateReader(root common.Hash) (database.StateReader, error)
+
 	// Initialized returns an indicator if the state data is already initialized
 	// according to the state scheme.
 	Initialized(genesisRoot common.Hash) bool
@@ -120,6 +124,13 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 // An error will be returned if the specified state is not available.
 func (db *Database) NodeReader(blockRoot common.Hash) (database.NodeReader, error) {
 	return db.backend.NodeReader(blockRoot)
+}
+
+// StateReader returns a reader that allows access to the state data associated
+// with the specified state. An error will be returned if the specified state is
+// not available.
+func (db *Database) StateReader(blockRoot common.Hash) (database.StateReader, error) {
+	return db.backend.StateReader(blockRoot)
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
@@ -309,6 +320,37 @@ func (db *Database) Journal(root common.Hash) error {
 		return errors.New("not supported")
 	}
 	return pdb.Journal(root)
+}
+
+// WaitGeneration waits until the background generation is finished. It assumes
+// that the generation is permitted; otherwise, it will block indefinitely.
+func (db *Database) WaitGeneration() error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	pdb.WaitGeneration()
+	return nil
+}
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (pathdb.AccountIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.AccountIterator(root, seek)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be move to the specific start position.
+func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (pathdb.StorageIterator, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return nil, errors.New("not supported")
+	}
+	return pdb.StorageIterator(root, account, seek)
 }
 
 // IsVerkle returns the indicator if the database is holding a verkle tree.

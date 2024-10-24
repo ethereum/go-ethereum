@@ -635,3 +635,9 @@ func (reader *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]
 	blob, _ := reader.db.node(hash)
 	return blob, nil
 }
+
+// StateReader returns a reader that allows access to the state data associated
+// with the specified state.
+func (db *Database) StateReader(root common.Hash) (database.StateReader, error) {
+	return nil, errors.New("not implemented")
+}

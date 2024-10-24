@@ -52,6 +52,7 @@ func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes
 		states: states,
 	}
 	dirtyNodeWriteMeter.Mark(int64(nodes.size))
+	dirtyStateWriteMeter.Mark(int64(states.size))
 	log.Debug("Created new diff layer", "id", id, "block", block, "nodesize", common.StorageSize(nodes.size), "statesize", common.StorageSize(states.size))
 	return dl
 }
@@ -94,6 +95,58 @@ func (dl *diffLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	}
 	// Trie node unknown to this layer, resolve from parent
 	return dl.parent.node(owner, path, depth+1)
+}
+
+// account directly retrieves the account RLP associated with a particular
+// hash in the slim data format.
+//
+// Note the returned account is not a copy, please don't modify it.
+func (dl *diffLayer) account(hash common.Hash, depth int) ([]byte, error) {
+	// Hold the lock, ensure the parent won't be changed during the
+	// state accessing.
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if blob, found := dl.states.account(hash); found {
+		dirtyStateHitMeter.Mark(1)
+		dirtyStateHitDepthHist.Update(int64(depth))
+		dirtyStateReadMeter.Mark(int64(len(blob)))
+
+		if len(blob) == 0 {
+			stateAccountMissMeter.Mark(1)
+		} else {
+			stateAccountHitMeter.Mark(1)
+		}
+		return blob, nil
+	}
+	// Account is unknown to this layer, resolve from parent
+	return dl.parent.account(hash, depth+1)
+}
+
+// storage directly retrieves the storage data associated with a particular hash,
+// within a particular account.
+//
+// Note the returned account is not a copy, please don't modify it.
+func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([]byte, error) {
+	// Hold the lock, ensure the parent won't be changed during the
+	// state accessing.
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
+	if blob, found := dl.states.storage(accountHash, storageHash); found {
+		dirtyStateHitMeter.Mark(1)
+		dirtyStateHitDepthHist.Update(int64(depth))
+		dirtyStateReadMeter.Mark(int64(len(blob)))
+
+		if len(blob) == 0 {
+			stateStorageMissMeter.Mark(1)
+		} else {
+			stateStorageHitMeter.Mark(1)
+		}
+		return blob, nil
+	}
+	// storage slot is unknown to this layer, resolve from parent
+	return dl.parent.storage(accountHash, storageHash, depth+1)
 }
 
 // update implements the layer interface, creating a new layer on top of the
