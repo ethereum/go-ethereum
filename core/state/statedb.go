@@ -306,28 +306,20 @@ func (s *StateDB) Empty(addr common.Address) bool {
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
-	bal := common.U2560
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		bal = stateObject.Balance()
+		return stateObject.Balance()
 	}
-	if s.logger != nil && s.logger.OnBalanceRead != nil {
-		s.logger.OnBalanceRead(addr, bal.ToBig())
-	}
-	return bal
+	return common.U2560
 }
 
 // GetNonce retrieves the nonce from the given address or 0 if object not found
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
-	var nonce uint64
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		nonce = stateObject.Nonce()
+		return stateObject.Nonce()
 	}
-	if s.logger != nil && s.logger.OnNonceRead != nil {
-		s.logger.OnNonceRead(addr, nonce)
-	}
-	return nonce
+	return 0
 }
 
 // GetStorageRoot retrieves the storage root from the given address or empty
@@ -346,52 +338,36 @@ func (s *StateDB) TxIndex() int {
 }
 
 func (s *StateDB) GetCode(addr common.Address) []byte {
-	var code []byte
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		code = stateObject.Code()
+		return stateObject.Code()
 	}
-	if s.logger != nil && s.logger.OnCodeRead != nil {
-		s.logger.OnCodeRead(addr, code)
-	}
-	return code
+	return nil
 }
 
 func (s *StateDB) GetCodeSize(addr common.Address) int {
-	var size int
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		size = stateObject.CodeSize()
+		return stateObject.CodeSize()
 	}
-	if s.logger != nil && s.logger.OnCodeSizeRead != nil {
-		s.logger.OnCodeSizeRead(addr, size)
-	}
-	return size
+	return 0
 }
 
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
-	hash := common.Hash{}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		hash = common.BytesToHash(stateObject.CodeHash())
+		return common.BytesToHash(stateObject.CodeHash())
 	}
-	if s.logger != nil && s.logger.OnCodeHashRead != nil {
-		s.logger.OnCodeHashRead(addr, hash)
-	}
-	return hash
+	return common.Hash{}
 }
 
 // GetState retrieves the value associated with the specific key.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
-	val := common.Hash{}
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		val = stateObject.GetState(hash)
+		return stateObject.GetState(hash)
 	}
-	if s.logger != nil && s.logger.OnStorageRead != nil {
-		s.logger.OnStorageRead(addr, hash, val)
-	}
-	return val
+	return common.Hash{}
 }
 
 // GetCommittedState retrieves the value associated with the specific key

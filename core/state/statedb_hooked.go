@@ -54,23 +54,43 @@ func (s *hookedStateDB) CreateContract(addr common.Address) {
 }
 
 func (s *hookedStateDB) GetBalance(addr common.Address) *uint256.Int {
-	return s.inner.GetBalance(addr)
+	bal := s.inner.GetBalance(addr)
+	if s.hooks.OnBalanceRead != nil {
+		s.hooks.OnBalanceRead(addr, bal.ToBig())
+	}
+	return bal
 }
 
 func (s *hookedStateDB) GetNonce(addr common.Address) uint64 {
-	return s.inner.GetNonce(addr)
+	nonce := s.inner.GetNonce(addr)
+	if s.hooks.OnNonceRead != nil {
+		s.hooks.OnNonceRead(addr, nonce)
+	}
+	return nonce
 }
 
 func (s *hookedStateDB) GetCodeHash(addr common.Address) common.Hash {
-	return s.inner.GetCodeHash(addr)
+	codeHash := s.inner.GetCodeHash(addr)
+	if s.hooks.OnCodeHashRead != nil {
+		s.hooks.OnCodeHashRead(addr, codeHash)
+	}
+	return codeHash
 }
 
 func (s *hookedStateDB) GetCode(addr common.Address) []byte {
-	return s.inner.GetCode(addr)
+	code := s.inner.GetCode(addr)
+	if s.hooks.OnCodeRead != nil {
+		s.hooks.OnCodeRead(addr, code)
+	}
+	return code
 }
 
 func (s *hookedStateDB) GetCodeSize(addr common.Address) int {
-	return s.inner.GetCodeSize(addr)
+	size := s.inner.GetCodeSize(addr)
+	if s.hooks.OnCodeSizeRead != nil {
+		s.hooks.OnCodeSizeRead(addr, size)
+	}
+	return size
 }
 
 func (s *hookedStateDB) AddRefund(u uint64) {
@@ -90,7 +110,11 @@ func (s *hookedStateDB) GetCommittedState(addr common.Address, hash common.Hash)
 }
 
 func (s *hookedStateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
-	return s.inner.GetState(addr, hash)
+	val := s.inner.GetState(addr, hash)
+	if s.hooks.OnStorageRead != nil {
+		s.hooks.OnStorageRead(addr, hash, val)
+	}
+	return val
 }
 
 func (s *hookedStateDB) GetStorageRoot(addr common.Address) common.Hash {
