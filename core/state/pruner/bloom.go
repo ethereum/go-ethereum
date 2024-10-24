@@ -116,6 +116,8 @@ func (bloom *stateBloom) Put(key []byte, value []byte) error {
 // Delete removes the key from the key-value data store.
 func (bloom *stateBloom) Delete(key []byte) error { panic("not supported") }
 
+func (bloom *stateBloom) DeleteRange(start, end []byte) error { panic("not supported") }
+
 // Contain is the wrapper of the underlying contains function which
 // reports whether the key is contained.
 // - If it says yes, the key may be contained

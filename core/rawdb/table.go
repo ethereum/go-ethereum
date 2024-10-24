@@ -129,6 +129,12 @@ func (t *table) Delete(key []byte) error {
 	return t.db.Delete(append([]byte(t.prefix), key...))
 }
 
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
+func (t *table) DeleteRange(start, end []byte) error {
+	return t.db.DeleteRange(append([]byte(t.prefix), start...), append([]byte(t.prefix), end...))
+}
+
 // NewIterator creates a binary-alphabetical iterator over a subset
 // of database content with a particular key prefix, starting at a particular
 // initial key (or after, if it does not exist).
@@ -211,6 +217,11 @@ func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
 }
 
+// DeleteRange implements KeyValueWriter (not supported on batches).
+func (b *tableBatch) DeleteRange(start, end []byte) error {
+	panic("DeleteRange is not supported on batches")
+}
+
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *tableBatch) ValueSize() int {
 	return b.batch.ValueSize()
@@ -243,6 +254,12 @@ func (r *tableReplayer) Put(key []byte, value []byte) error {
 func (r *tableReplayer) Delete(key []byte) error {
 	trimmed := key[len(r.prefix):]
 	return r.w.Delete(trimmed)
+}
+
+// DeleteRange implements the interface KeyValueWriter.
+func (r *tableReplayer) DeleteRange(start, end []byte) error {
+	trimmedStart, trimmedEnd := start[len(r.prefix):], end[len(r.prefix):]
+	return r.w.DeleteRange(trimmedStart, trimmedEnd)
 }
 
 // Replay replays the batch contents.
