@@ -29,8 +29,14 @@ import (
 // revertError is an API error that encompasses an EVM revert with JSON error
 // code and a binary data blob.
 type revertError struct {
-	error
 	reason string // revert reason hex encoded
+}
+
+func (e *revertError) Error() string {
+	if e.reason != "" {
+		return fmt.Sprintf("%s: %v", vm.ErrExecutionReverted, e.reason)
+	}
+	return vm.ErrExecutionReverted.Error()
 }
 
 // ErrorCode returns the JSON error code for a revert.
@@ -46,16 +52,12 @@ func (e *revertError) ErrorData() interface{} {
 
 // newRevertError creates a revertError instance with the provided revert data.
 func newRevertError(revert []byte) *revertError {
-	var err error
-	reason, errUnpack := abi.UnpackRevert(revert)
-	if errUnpack == nil {
-		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, reason)
-	} else {
-		err = fmt.Errorf("%w: %v", vm.ErrExecutionReverted, hexutil.Encode(revert))
+	reason := hexutil.Encode(revert)
+	if r, errUnpack := abi.UnpackRevert(revert); errUnpack == nil {
+		reason = r
 	}
 	return &revertError{
-		error:  err,
-		reason: hexutil.Encode(revert),
+		reason: reason,
 	}
 }
 
