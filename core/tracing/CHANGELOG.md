@@ -4,6 +4,53 @@ All notable changes to the tracing interface will be documented in this file.
 
 ## [Unreleased]
 
+The tracing interface has been extended with backwards-compatible changes to support more use-cases and simplify tracer code. The most notable changes are state read hooks as well a state journaling library which emits events when a call is reverted.
+
+### Deprecated methods
+
+- `OnSystemCallStart()`: This hook is deprecated in favor of `OnSystemCallStartV2(vm *VMContext)`.
+
+### New methods
+
+- `OnBalanceRead(addr common.Address, balance *big.Int)`: This hook is called when an account balance is read.
+- `OnNonceRead(addr common.Address, nonce uint64)`: This hook is called when an account nonce is read.
+- `OnCodeRead(addr common.Address, code []byte)`: This hook is called when an account code is read.
+- `OnCodeSizeRead(addr common.Address, size int)`: This hook is called when an account code size is read.
+- `OnCodeHashRead(addr common.Address, codeHash common.Hash)`: This hook is called when an account code hash is read.
+- `OnStorageRead(addr common.Address, slot common.Hash, value common.Hash)`: This hook is called when an account storage slot is read.
+- `OnBlockHashRead(blockNum uint64, hash common.Hash)`: This hook is called when a block hash is read by EVM.
+- `OnSystemCallStartV2(vm *VMContext)`. This allows access to EVM context during system calls. It is a successor to `OnSystemCallStart`.
+
+### Modified types
+
+- `VMContext.StateDB` has been extended with `GetCodeHash(addr common.Address) common.Hash` method used to retrieve the code hash an account.
+- `BalanceChangeReason` has been extended with the `BalanceChangeRevert` reason. More on that below.
+
+### State journaling
+
+Tracers receive state changes events from the node. The tracer was so far expected to keep track of modified accounts and slots and revert those changes when a call frame failed. Now a utility tracer wrapper is provided which will emit "reverse change" events when a call frame fails. To use this feature the hooks have to be wrapped prior to registering the tracer. The following example demonstrates how to use the state journaling library:
+
+```go
+func init() {
+    tracers.LiveDirectory.Register("test", func (cfg json.RawMessage) (*tracing.Hooks, error) {
+        hooks, err := newTestTracer(cfg)
+        if err != nil {
+            return nil, err
+        }
+        return tracing.WrapWithJournal(hooks)
+    })
+}
+```
+
+The state changes that are covered by the journaling library are:
+
+- `OnBalanceChange`. Note that `OnBalanceChange` will carry the `BalanceChangeRevert` reason.
+- `OnNonceChange`
+- `OnCodeChange`
+- `OnStorageChange`
+
+## [v1.14.9](https://github.com/ethereum/go-ethereum/releases/tag/v1.14.9)
+
 ### Modified types
 
 - `GasChangeReason` has been extended with the following reasons which will be enabled only post-Verkle. There shouldn't be any gas changes with those reasons prior to the fork.

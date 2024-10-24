@@ -226,7 +226,9 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 // contract. This method is exported to be used in tests.
 func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb vm.StateDB) {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
-		if tracer.OnSystemCallStart != nil {
+		if tracer.OnSystemCallStartV2 != nil {
+			tracer.OnSystemCallStartV2(vmenv.GetVMContext())
+		} else if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
 		}
 		if tracer.OnSystemCallEnd != nil {
@@ -252,7 +254,9 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, vmenv *vm.EVM, statedb vm.St
 // as per EIP-2935.
 func ProcessParentBlockHash(prevHash common.Hash, vmenv *vm.EVM, statedb vm.StateDB) {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
-		if tracer.OnSystemCallStart != nil {
+		if tracer.OnSystemCallStartV2 != nil {
+			tracer.OnSystemCallStartV2(vmenv.GetVMContext())
+		} else if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
 		}
 		if tracer.OnSystemCallEnd != nil {
@@ -288,14 +292,15 @@ func ProcessConsolidationQueue(vmenv *vm.EVM, statedb vm.StateDB) []byte {
 
 func processRequestsSystemCall(vmenv *vm.EVM, statedb vm.StateDB, requestType byte, addr common.Address) []byte {
 	if tracer := vmenv.Config.Tracer; tracer != nil {
-		if tracer.OnSystemCallStart != nil {
+		if tracer.OnSystemCallStartV2 != nil {
+			tracer.OnSystemCallStartV2(vmenv.GetVMContext())
+		} else if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
 		}
 		if tracer.OnSystemCallEnd != nil {
 			defer tracer.OnSystemCallEnd()
 		}
 	}
-
 	msg := &Message{
 		From:      params.SystemAddress,
 		GasLimit:  30_000_000,
