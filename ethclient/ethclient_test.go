@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
@@ -180,14 +181,19 @@ func TestToFilterArg(t *testing.T) {
 }
 
 var (
-	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
-	testBalance = big.NewInt(2e15)
+	testKey, _         = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr           = crypto.PubkeyToAddress(testKey.PublicKey)
+	testBalance        = big.NewInt(2e15)
+	revertContractAddr = common.HexToAddress("290f1b36649a61e369c6276f6d29463335b4400c")
+	revertCode         = common.FromHex("7f08c379a0000000000000000000000000000000000000000000000000000000006000526020600452600a6024527f75736572206572726f7200000000000000000000000000000000000000000000604452604e6000fd")
 )
 
 var genesis = &core.Genesis{
-	Config:    params.AllEthashProtocolChanges,
-	Alloc:     types.GenesisAlloc{testAddr: {Balance: testBalance}},
+	Config: params.AllEthashProtocolChanges,
+	Alloc: types.GenesisAlloc{
+		testAddr:           {Balance: testBalance},
+		revertContractAddr: {Code: revertCode},
+	},
 	ExtraData: []byte("test genesis"),
 	Timestamp: 9000,
 	BaseFee:   big.NewInt(params.InitialBaseFee),
@@ -209,27 +215,30 @@ var testTx2 = types.MustSignNewTx(testKey, types.LatestSigner(genesis.Config), &
 	To:       &common.Address{2},
 })
 
-func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
+func newTestBackend(config *node.Config) (*node.Node, []*types.Block, error) {
 	// Generate test chain.
 	blocks := generateTestChain()
 
 	// Create node
-	n, err := node.New(&node.Config{})
+	if config == nil {
+		config = new(node.Config)
+	}
+	n, err := node.New(config)
 	if err != nil {
-		t.Fatalf("can't create new node: %v", err)
+		return nil, nil, fmt.Errorf("can't create new node: %v", err)
 	}
 	// Create Ethereum Service
-	config := &ethconfig.Config{Genesis: genesis, RPCGasCap: 1000000}
-	ethservice, err := eth.New(n, config)
+	ecfg := &ethconfig.Config{Genesis: genesis, RPCGasCap: 1000000}
+	ethservice, err := eth.New(n, ecfg)
 	if err != nil {
-		t.Fatalf("can't create new ethereum service: %v", err)
+		return nil, nil, fmt.Errorf("can't create new ethereum service: %v", err)
 	}
 	// Import the test chain.
 	if err := n.Start(); err != nil {
-		t.Fatalf("can't start test node: %v", err)
+		return nil, nil, fmt.Errorf("can't start test node: %v", err)
 	}
 	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
-		t.Fatalf("can't import test blocks: %v", err)
+		return nil, nil, fmt.Errorf("can't import test blocks: %v", err)
 	}
 	// Ensure the tx indexing is fully generated
 	for ; ; time.Sleep(time.Millisecond * 100) {
@@ -238,7 +247,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 			break
 		}
 	}
-	return n, blocks
+	return n, blocks, nil
 }
 
 func generateTestChain() []*types.Block {
@@ -256,7 +265,10 @@ func generateTestChain() []*types.Block {
 }
 
 func TestEthClient(t *testing.T) {
-	backend, chain := newTestBackend(t)
+	backend, chain, err := newTestBackend(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
