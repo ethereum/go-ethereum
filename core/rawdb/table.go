@@ -129,7 +129,8 @@ func (t *table) Delete(key []byte) error {
 	return t.db.Delete(append([]byte(t.prefix), key...))
 }
 
-// DeleteRange removes all keys in the range [start,end) from the database.
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
 func (t *table) DeleteRange(start, end []byte) error {
 	return t.db.DeleteRange(append([]byte(t.prefix), start...), append([]byte(t.prefix), end...))
 }
@@ -216,10 +217,9 @@ func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
 }
 
-// DeleteRange inserts the removal all of the keys in the range [start,end) into
-// the batch for later committing.
+// DeleteRange implements KeyValueWriter (not supported on batches).
 func (b *tableBatch) DeleteRange(start, end []byte) error {
-	return b.batch.DeleteRange(append([]byte(b.prefix), start...), append([]byte(b.prefix), end...))
+	panic("DeleteRange is not supported on batches")
 }
 
 // ValueSize retrieves the amount of data queued up for writing.

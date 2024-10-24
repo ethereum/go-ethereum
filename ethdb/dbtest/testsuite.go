@@ -349,89 +349,58 @@ func TestDatabaseSuite(t *testing.T, New func() ethdb.KeyValueStore) {
 		db := New()
 		defer db.Close()
 
-		test := func(addToBatch, deleteFromBatch bool) {
-			var batch ethdb.Batch
-			addRange := func(start, stop int) {
-				if addToBatch {
-					batch = db.NewBatch()
-				}
-				for i := start; i <= stop; i++ {
-					if addToBatch {
-						batch.Put([]byte(strconv.Itoa(i)), nil)
-					} else {
-						db.Put([]byte(strconv.Itoa(i)), nil)
-					}
-				}
-				if addToBatch && !deleteFromBatch {
-					batch.Write()
-					batch = nil
-				}
+		addRange := func(start, stop int) {
+			for i := start; i <= stop; i++ {
+				db.Put([]byte(strconv.Itoa(i)), nil)
 			}
-
-			deleteRange := func(start, end []byte) {
-				if deleteFromBatch {
-					if batch == nil {
-						batch = db.NewBatch()
-					}
-					batch.DeleteRange(start, end)
-					batch.Write()
-					batch = nil
-				} else {
-					db.DeleteRange(start, end)
-				}
-			}
-
-			checkRange := func(start, stop int, exp bool) {
-				for i := start; i <= stop; i++ {
-					has, _ := db.Has([]byte(strconv.Itoa(i)))
-					if has && !exp {
-						t.Fatalf("unexpected key %d", i)
-					}
-					if !has && exp {
-						t.Fatalf("missing expected key %d", i)
-					}
-				}
-			}
-
-			addRange(1, 9)
-			deleteRange([]byte("9"), []byte("1"))
-			checkRange(1, 9, true)
-			deleteRange([]byte("5"), []byte("5"))
-			checkRange(1, 9, true)
-			deleteRange([]byte("5"), []byte("50"))
-			checkRange(1, 4, true)
-			checkRange(5, 5, false)
-			checkRange(6, 9, true)
-			deleteRange([]byte(""), []byte("a"))
-			checkRange(1, 9, false)
-
-			addRange(1, 999)
-			deleteRange([]byte("12345"), []byte("54321"))
-			checkRange(1, 1, true)
-			checkRange(2, 5, false)
-			checkRange(6, 12, true)
-			checkRange(13, 54, false)
-			checkRange(55, 123, true)
-			checkRange(124, 543, false)
-			checkRange(544, 999, true)
-
-			addRange(1, 999)
-			deleteRange([]byte("3"), []byte("7"))
-			checkRange(1, 2, true)
-			checkRange(3, 6, false)
-			checkRange(7, 29, true)
-			checkRange(30, 69, false)
-			checkRange(70, 299, true)
-			checkRange(300, 699, false)
-			checkRange(700, 999, true)
-
-			deleteRange([]byte(""), []byte("a"))
-			checkRange(1, 999, false)
 		}
 
-		test(false, false)
-		test(false, true)
-		test(true, true)
+		checkRange := func(start, stop int, exp bool) {
+			for i := start; i <= stop; i++ {
+				has, _ := db.Has([]byte(strconv.Itoa(i)))
+				if has && !exp {
+					t.Fatalf("unexpected key %d", i)
+				}
+				if !has && exp {
+					t.Fatalf("missing expected key %d", i)
+				}
+			}
+		}
+
+		addRange(1, 9)
+		db.DeleteRange([]byte("9"), []byte("1"))
+		checkRange(1, 9, true)
+		db.DeleteRange([]byte("5"), []byte("5"))
+		checkRange(1, 9, true)
+		db.DeleteRange([]byte("5"), []byte("50"))
+		checkRange(1, 4, true)
+		checkRange(5, 5, false)
+		checkRange(6, 9, true)
+		db.DeleteRange([]byte(""), []byte("a"))
+		checkRange(1, 9, false)
+
+		addRange(1, 999)
+		db.DeleteRange([]byte("12345"), []byte("54321"))
+		checkRange(1, 1, true)
+		checkRange(2, 5, false)
+		checkRange(6, 12, true)
+		checkRange(13, 54, false)
+		checkRange(55, 123, true)
+		checkRange(124, 543, false)
+		checkRange(544, 999, true)
+
+		addRange(1, 999)
+		db.DeleteRange([]byte("3"), []byte("7"))
+		checkRange(1, 2, true)
+		checkRange(3, 6, false)
+		checkRange(7, 29, true)
+		checkRange(30, 69, false)
+		checkRange(70, 299, true)
+		checkRange(300, 699, false)
+		checkRange(700, 999, true)
+
+		db.DeleteRange([]byte(""), []byte("a"))
+		checkRange(1, 999, false)
 	})
 }
 

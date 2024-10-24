@@ -206,7 +206,8 @@ func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
-// DeleteRange removes all keys in the range [start,end) from the key-value store.
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
 func (db *Database) DeleteRange(start, end []byte) error {
 	return ethdb.DeleteRangeWithIterator(db, start, end)
 }
@@ -440,10 +441,9 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
-// DeleteRange inserts the removal all of the keys in the range [start,end) into
-// the batch for later committing.
+// DeleteRange implements KeyValueWriter (not supported on batches).
 func (b *batch) DeleteRange(start, end []byte) error {
-	return ethdb.DeleteRangeFromBatch(b, b.wrappedDb, start, end)
+	panic("DeleteRange is not supported on batches")
 }
 
 // ValueSize retrieves the amount of data queued up for writing.

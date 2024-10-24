@@ -32,46 +32,21 @@ var ErrTooManyKeys = errors.New("too many keys in deleted range")
 // finally succeeds.
 func DeleteRangeWithIterator(db KeyValueStore, start, end []byte) error {
 	batch := db.NewBatch()
-	if err := deleteRangeWithIterator(batch, db, start, end); err != nil {
-		return err
-	}
-	return batch.Write()
-}
+	it := db.NewIterator(nil, start)
+	defer it.Release()
 
-// DeleteRangeFromBatch is a fallback method for deleting a key range in a batch
-// from a database that does not natively support range deletion.
-func DeleteRangeFromBatch(target Batch, source Iteratee, start, end []byte) error {
-	deleteRangeWithIterator(target, source, start, end)
-	var keys [][]byte
-	writer := HookedBatch{
-		Batch: target,
-		OnPut: func(key []byte, value []byte) {
-			if bytes.Compare(start, key) <= 0 && bytes.Compare(end, key) > 0 {
-				keys = append(keys, key)
-			}
-		},
-	}
-	target.Replay(writer)
-	for _, key := range keys {
-		if err := target.Delete(key); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func deleteRangeWithIterator(target KeyValueWriter, source Iteratee, start, end []byte) error {
-	it := source.NewIterator(nil, start)
 	var count int
 	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
 		count++
 		if count > 10000 { // should not block for more than a second
+			if err := batch.Write(); err != nil {
+				return err
+			}
 			return ErrTooManyKeys
 		}
-		if err := target.Delete(it.Key()); err != nil {
+		if err := batch.Delete(it.Key()); err != nil {
 			return err
 		}
 	}
-	it.Release()
-	return nil
+	return batch.Write()
 }
