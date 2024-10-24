@@ -49,7 +49,6 @@ var (
 	EOSAddress = common.HexToAddress("0xd9bb01454c85247B2ef35BB5BE57384cC275a8cf")
 	USDAddress = common.HexToAddress("0x45c25041b8e6CBD5c963E7943007187C3673C7c9")
 	_1E18      = new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(100))
-	_1E17      = new(big.Int).Mul(big.NewInt(10000000000000000), big.NewInt(10))
 	_1E8       = big.NewInt(100000000)
 	_1E7       = big.NewInt(10000000)
 )
@@ -72,7 +71,7 @@ func getNonce(t *testing.T, userAddress common.Address) (uint64, error) {
 	s := result.(string)
 	s = strings.TrimPrefix(s, "0x")
 	n, err := strconv.ParseUint(s, 16, 32)
-	return uint64(n), nil
+	return uint64(n), err
 }
 func testSendOrder(t *testing.T, amount, price *big.Int, side string, status string, orderID uint64) {
 

@@ -394,7 +394,7 @@ func (self *Hasher) ReadFrom(r io.Reader) (m int64, err error) {
 		if err != nil {
 			break
 		}
-		n, err = self.Write(buf[:n])
+		_, err = self.Write(buf[:n])
 		if err != nil {
 			break
 		}

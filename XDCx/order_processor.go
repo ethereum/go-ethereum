@@ -656,9 +656,10 @@ func (XDCx *XDCX) ProcessCancelOrder(header *types.Header, tradingStateDB *tradi
 	}
 	log.Debug("ProcessCancelOrder", "baseToken", originOrder.BaseToken, "quoteToken", originOrder.QuoteToken)
 	feeRate := tradingstate.GetExRelayerFee(originOrder.ExchangeAddress, statedb)
-	tokenCancelFee, tokenPriceInXDC := common.Big0, common.Big0
+	var tokenCancelFee, tokenPriceInXDC *big.Int
 	if !chain.Config().IsTIPXDCXCancellationFee(header.Number) {
 		tokenCancelFee = getCancelFeeV1(baseTokenDecimal, feeRate, &originOrder)
+		tokenPriceInXDC = common.Big0
 	} else {
 		tokenCancelFee, tokenPriceInXDC = XDCx.getCancelFee(chain, statedb, tradingStateDB, &originOrder, feeRate)
 	}
@@ -721,7 +722,7 @@ func (XDCx *XDCX) ProcessCancelOrder(header *types.Header, tradingStateDB *tradi
 // cancellation fee = 1/10 trading fee
 // deprecated after hardfork at TIPXDCXCancellationFee
 func getCancelFeeV1(baseTokenDecimal *big.Int, feeRate *big.Int, order *tradingstate.OrderItem) *big.Int {
-	cancelFee := big.NewInt(0)
+	var cancelFee *big.Int
 	if order.Side == tradingstate.Ask {
 		// SELL 1 BTC => XDC ,,
 		// order.Quantity =1 && fee rate =2
@@ -748,8 +749,7 @@ func (XDCx *XDCX) getCancelFee(chain consensus.ChainContext, statedb *state.Stat
 	if feeRate == nil || feeRate.Sign() == 0 {
 		return common.Big0, common.Big0
 	}
-	cancelFee := big.NewInt(0)
-	tokenPriceInXDC := big.NewInt(0)
+	var cancelFee, tokenPriceInXDC *big.Int
 	var err error
 	if order.Side == tradingstate.Ask {
 		cancelFee, tokenPriceInXDC, err = XDCx.ConvertXDCToToken(chain, statedb, tradingStateDb, order.BaseToken, common.RelayerCancelFee)

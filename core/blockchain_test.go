@@ -527,7 +527,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 
 		blockchain.engine = ethash.NewFakeFailer(failNum)
 		blockchain.hc.engine = blockchain.engine
-		failRes, err = blockchain.InsertHeaderChain(headers, 1)
+		failRes, _ = blockchain.InsertHeaderChain(headers, 1)
 		// Check that the returned error indicates the failure.
 		if failRes != failAt {
 			t.Errorf("test %d: failure index mismatch: have %d, want %d", i, failRes, failAt)
