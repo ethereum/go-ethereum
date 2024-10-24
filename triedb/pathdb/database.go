@@ -68,6 +68,24 @@ type layer interface {
 	// - no error will be returned if the requested node is not found in database.
 	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error)
 
+	// account directly retrieves the account RLP associated with a particular
+	// hash in the slim data format. An error will be returned if the read
+	// operation exits abnormally. Specifically, if the layer is already stale.
+	//
+	// Note:
+	// - the returned account is not a copy, please don't modify it.
+	// - no error will be returned if the requested account is not found in database.
+	account(hash common.Hash, depth int) ([]byte, error)
+
+	// storage directly retrieves the storage data associated with a particular hash,
+	// within a particular account. An error will be returned if the read operation
+	// exits abnormally. Specifically, if the layer is already stale.
+	//
+	// Note:
+	// - the returned storage data is not a copy, please don't modify it.
+	// - no error will be returned if the requested slot is not found in database.
+	storage(accountHash, storageHash common.Hash, depth int) ([]byte, error)
+
 	// rootHash returns the root hash for which this layer was made.
 	rootHash() common.Hash
 
@@ -130,17 +148,18 @@ var Defaults = &Config{
 // ReadOnly is the config in order to open database in read only mode.
 var ReadOnly = &Config{ReadOnly: true}
 
-// Database is a multiple-layered structure for maintaining in-memory trie nodes.
-// It consists of one persistent base layer backed by a key-value store, on top
-// of which arbitrarily many in-memory diff layers are stacked. The memory diffs
-// can form a tree with branching, but the disk layer is singleton and common to
-// all. If a reorg goes deeper than the disk layer, a batch of reverse diffs can
-// be applied to rollback. The deepest reorg that can be handled depends on the
-// amount of state histories tracked in the disk.
+// Database is a multiple-layered structure for maintaining in-memory states
+// along with its dirty trie nodes. It consists of one persistent base layer
+// backed by a key-value store, on top of which arbitrarily many in-memory diff
+// layers are stacked. The memory diffs can form a tree with branching, but the
+// disk layer is singleton and common to all. If a reorg goes deeper than the
+// disk layer, a batch of reverse diffs can be applied to rollback. The deepest
+// reorg that can be handled depends on the amount of state histories tracked
+// in the disk.
 //
 // At most one readable and writable database can be opened at the same time in
-// the whole system which ensures that only one database writer can operate disk
-// state. Unexpected open operations can cause the system to panic.
+// the whole system which ensures that only one database writer can operate the
+// persistent state. Unexpected open operations can cause the system to panic.
 type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
@@ -358,7 +377,7 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Re-construct a new disk layer backed by persistent state
 	// with **empty clean cache and node buffer**.
-	db.tree.reset(newDiskLayer(root, 0, db, nil, newBuffer(db.config.WriteBufferSize, nil, 0)))
+	db.tree.reset(newDiskLayer(root, 0, db, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0)))
 
 	// Re-enable the database as the final step.
 	db.waitSync = false

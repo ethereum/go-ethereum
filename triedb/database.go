@@ -60,6 +60,10 @@ type backend interface {
 	// An error will be returned if the specified state is not available.
 	NodeReader(root common.Hash) (database.NodeReader, error)
 
+	// StateReader returns a reader for accessing flat states within the specified
+	// state. An error will be returned if the specified state is not available.
+	StateReader(root common.Hash) (database.StateReader, error)
+
 	// Initialized returns an indicator if the state data is already initialized
 	// according to the state scheme.
 	Initialized(genesisRoot common.Hash) bool
@@ -120,6 +124,13 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 // An error will be returned if the specified state is not available.
 func (db *Database) NodeReader(blockRoot common.Hash) (database.NodeReader, error) {
 	return db.backend.NodeReader(blockRoot)
+}
+
+// StateReader returns a reader that allows access to the state data associated
+// with the specified state. An error will be returned if the specified state is
+// not available.
+func (db *Database) StateReader(blockRoot common.Hash) (database.StateReader, error) {
+	return db.backend.StateReader(blockRoot)
 }
 
 // Update performs a state transition by committing dirty nodes contained in the
