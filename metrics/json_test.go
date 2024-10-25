@@ -12,7 +12,7 @@ func TestRegistryMarshallJSON(t *testing.T) {
 	r := NewRegistry()
 	r.Register("counter", NewCounter())
 	enc.Encode(r)
-	if s := b.String(); "{\"counter\":{\"count\":0}}\n" != s {
+	if s := b.String(); s != "{\"counter\":{\"count\":0}}\n" {
 		t.Fatalf(s)
 	}
 }

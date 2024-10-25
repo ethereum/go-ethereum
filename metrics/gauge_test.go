@@ -16,7 +16,7 @@ func BenchmarkGuage(b *testing.B) {
 func TestGauge(t *testing.T) {
 	g := NewGauge()
 	g.Update(int64(47))
-	if v := g.Value(); 47 != v {
+	if v := g.Value(); v != 47 {
 		t.Errorf("g.Value(): 47 != %v\n", v)
 	}
 }
@@ -26,7 +26,7 @@ func TestGaugeSnapshot(t *testing.T) {
 	g.Update(int64(47))
 	snapshot := g.Snapshot()
 	g.Update(int64(0))
-	if v := snapshot.Value(); 47 != v {
+	if v := snapshot.Value(); v != 47 {
 		t.Errorf("g.Value(): 47 != %v\n", v)
 	}
 }
@@ -34,7 +34,7 @@ func TestGaugeSnapshot(t *testing.T) {
 func TestGetOrRegisterGauge(t *testing.T) {
 	r := NewRegistry()
 	NewRegisteredGauge("foo", r).Update(47)
-	if g := GetOrRegisterGauge("foo", r); 47 != g.Value() {
+	if g := GetOrRegisterGauge("foo", r); g.Value() != 47 {
 		t.Fatal(g)
 	}
 }
@@ -55,7 +55,7 @@ func TestFunctionalGauge(t *testing.T) {
 func TestGetOrRegisterFunctionalGauge(t *testing.T) {
 	r := NewRegistry()
 	NewRegisteredFunctionalGauge("foo", r, func() int64 { return 47 })
-	if g := GetOrRegisterGauge("foo", r); 47 != g.Value() {
+	if g := GetOrRegisterGauge("foo", r); g.Value() != 47 {
 		t.Fatal(g)
 	}
 }
