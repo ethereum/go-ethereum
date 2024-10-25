@@ -17,10 +17,11 @@
 package lendingstate
 
 import (
-	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"io"
 	"math/big"
+
+	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
 type lendingTradeState struct {
@@ -30,8 +31,8 @@ type lendingTradeState struct {
 	onDirty   func(orderId common.Hash) // Callback method to mark a state object newly dirty
 }
 
-func (s *lendingTradeState) empty() bool {
-	return s.data.Amount.Sign() == 0
+func (lt *lendingTradeState) empty() bool {
+	return lt.data.Amount.Sign() == 0
 }
 
 func newLendingTradeState(orderBook common.Hash, tradeId common.Hash, data LendingTrade, onDirty func(orderId common.Hash)) *lendingTradeState {
@@ -44,35 +45,35 @@ func newLendingTradeState(orderBook common.Hash, tradeId common.Hash, data Lendi
 }
 
 // EncodeRLP implements rlp.Encoder.
-func (c *lendingTradeState) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, c.data)
+func (lt *lendingTradeState) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, lt.data)
 }
 
-func (self *lendingTradeState) deepCopy(onDirty func(orderId common.Hash)) *lendingTradeState {
-	stateOrderList := newLendingTradeState(self.orderBook, self.tradeId, self.data, onDirty)
+func (lt *lendingTradeState) deepCopy(onDirty func(orderId common.Hash)) *lendingTradeState {
+	stateOrderList := newLendingTradeState(lt.orderBook, lt.tradeId, lt.data, onDirty)
 	return stateOrderList
 }
 
-func (self *lendingTradeState) SetCollateralLockedAmount(amount *big.Int) {
-	self.data.CollateralLockedAmount = amount
-	if self.onDirty != nil {
-		self.onDirty(self.tradeId)
-		self.onDirty = nil
+func (lt *lendingTradeState) SetCollateralLockedAmount(amount *big.Int) {
+	lt.data.CollateralLockedAmount = amount
+	if lt.onDirty != nil {
+		lt.onDirty(lt.tradeId)
+		lt.onDirty = nil
 	}
 }
 
-func (self *lendingTradeState) SetLiquidationPrice(price *big.Int) {
-	self.data.LiquidationPrice = price
-	if self.onDirty != nil {
-		self.onDirty(self.tradeId)
-		self.onDirty = nil
+func (lt *lendingTradeState) SetLiquidationPrice(price *big.Int) {
+	lt.data.LiquidationPrice = price
+	if lt.onDirty != nil {
+		lt.onDirty(lt.tradeId)
+		lt.onDirty = nil
 	}
 }
 
-func (self *lendingTradeState) SetAmount(amount *big.Int) {
-	self.data.Amount = amount
-	if self.onDirty != nil {
-		self.onDirty(self.tradeId)
-		self.onDirty = nil
+func (lt *lendingTradeState) SetAmount(amount *big.Int) {
+	lt.data.Amount = amount
+	if lt.onDirty != nil {
+		lt.onDirty(lt.tradeId)
+		lt.onDirty = nil
 	}
 }

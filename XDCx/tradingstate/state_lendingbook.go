@@ -65,59 +65,59 @@ func newStateLendingBook(orderBook common.Hash, price common.Hash, lendingBook c
 	}
 }
 
-func (self *stateLendingBook) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, self.data)
+func (s *stateLendingBook) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, s.data)
 }
 
-func (self *stateLendingBook) setError(err error) {
-	if self.dbErr == nil {
-		self.dbErr = err
+func (s *stateLendingBook) setError(err error) {
+	if s.dbErr == nil {
+		s.dbErr = err
 	}
 }
 
-func (self *stateLendingBook) getTrie(db Database) Trie {
-	if self.trie == nil {
+func (s *stateLendingBook) getTrie(db Database) Trie {
+	if s.trie == nil {
 		var err error
-		self.trie, err = db.OpenStorageTrie(self.lendingBook, self.data.Root)
+		s.trie, err = db.OpenStorageTrie(s.lendingBook, s.data.Root)
 		if err != nil {
-			self.trie, _ = db.OpenStorageTrie(self.price, EmptyHash)
-			self.setError(fmt.Errorf("can't create storage trie: %v", err))
+			s.trie, _ = db.OpenStorageTrie(s.price, EmptyHash)
+			s.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}
-	return self.trie
+	return s.trie
 }
 
-func (self *stateLendingBook) Exist(db Database, lendingId common.Hash) bool {
-	amount, exists := self.cachedStorage[lendingId]
+func (s *stateLendingBook) Exist(db Database, lendingId common.Hash) bool {
+	amount, exists := s.cachedStorage[lendingId]
 	if exists {
 		return true
 	}
 	// Load from DB in case it is missing.
-	enc, err := self.getTrie(db).TryGet(lendingId[:])
+	enc, err := s.getTrie(db).TryGet(lendingId[:])
 	if err != nil {
-		self.setError(err)
+		s.setError(err)
 		return false
 	}
 	if len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
 		if err != nil {
-			self.setError(err)
+			s.setError(err)
 		}
 		amount.SetBytes(content)
 	}
 	if (amount != common.Hash{}) {
-		self.cachedStorage[lendingId] = amount
+		s.cachedStorage[lendingId] = amount
 	}
 	return true
 }
 
-func (self *stateLendingBook) getAllTradeIds(db Database) []common.Hash {
+func (s *stateLendingBook) getAllTradeIds(db Database) []common.Hash {
 	tradeIds := []common.Hash{}
-	lendingBookTrie := self.getTrie(db)
+	lendingBookTrie := s.getTrie(db)
 	if lendingBookTrie == nil {
 		return tradeIds
 	}
-	for id, value := range self.cachedStorage {
+	for id, value := range s.cachedStorage {
 		if !common.EmptyHash(value) {
 			tradeIds = append(tradeIds, id)
 		}
@@ -125,7 +125,7 @@ func (self *stateLendingBook) getAllTradeIds(db Database) []common.Hash {
 	orderListIt := trie.NewIterator(lendingBookTrie.NodeIterator(nil))
 	for orderListIt.Next() {
 		id := common.BytesToHash(orderListIt.Key)
-		if _, exist := self.cachedStorage[id]; exist {
+		if _, exist := s.cachedStorage[id]; exist {
 			continue
 		}
 		tradeIds = append(tradeIds, id)
@@ -133,83 +133,83 @@ func (self *stateLendingBook) getAllTradeIds(db Database) []common.Hash {
 	return tradeIds
 }
 
-func (self *stateLendingBook) insertTradingId(db Database, tradeId common.Hash) {
-	self.setTradingId(tradeId, tradeId)
-	self.setError(self.getTrie(db).TryUpdate(tradeId[:], tradeId[:]))
+func (s *stateLendingBook) insertTradingId(db Database, tradeId common.Hash) {
+	s.setTradingId(tradeId, tradeId)
+	s.setError(s.getTrie(db).TryUpdate(tradeId[:], tradeId[:]))
 }
 
-func (self *stateLendingBook) removeTradingId(db Database, tradeId common.Hash) {
-	tr := self.getTrie(db)
-	self.setError(tr.TryDelete(tradeId[:]))
-	self.setTradingId(tradeId, EmptyHash)
+func (s *stateLendingBook) removeTradingId(db Database, tradeId common.Hash) {
+	tr := s.getTrie(db)
+	s.setError(tr.TryDelete(tradeId[:]))
+	s.setTradingId(tradeId, EmptyHash)
 }
 
-func (self *stateLendingBook) setTradingId(tradeId common.Hash, value common.Hash) {
-	self.cachedStorage[tradeId] = value
-	self.dirtyStorage[tradeId] = value
+func (s *stateLendingBook) setTradingId(tradeId common.Hash, value common.Hash) {
+	s.cachedStorage[tradeId] = value
+	s.dirtyStorage[tradeId] = value
 
-	if self.onDirty != nil {
-		self.onDirty(self.lendingBook)
-		self.onDirty = nil
+	if s.onDirty != nil {
+		s.onDirty(s.lendingBook)
+		s.onDirty = nil
 	}
 }
 
-func (self *stateLendingBook) updateTrie(db Database) Trie {
-	tr := self.getTrie(db)
-	for key, value := range self.dirtyStorage {
-		delete(self.dirtyStorage, key)
+func (s *stateLendingBook) updateTrie(db Database) Trie {
+	tr := s.getTrie(db)
+	for key, value := range s.dirtyStorage {
+		delete(s.dirtyStorage, key)
 		if value == EmptyHash {
-			self.setError(tr.TryDelete(key[:]))
+			s.setError(tr.TryDelete(key[:]))
 			continue
 		}
 		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
-		self.setError(tr.TryUpdate(key[:], v))
+		s.setError(tr.TryUpdate(key[:], v))
 	}
 	return tr
 }
 
-func (self *stateLendingBook) updateRoot(db Database) error {
-	self.updateTrie(db)
-	if self.dbErr != nil {
-		return self.dbErr
+func (s *stateLendingBook) updateRoot(db Database) error {
+	s.updateTrie(db)
+	if s.dbErr != nil {
+		return s.dbErr
 	}
-	root, err := self.trie.Commit(nil)
+	root, err := s.trie.Commit(nil)
 	if err == nil {
-		self.data.Root = root
+		s.data.Root = root
 	}
 	return err
 }
 
-func (self *stateLendingBook) deepCopy(db *TradingStateDB, onDirty func(price common.Hash)) *stateLendingBook {
-	stateLendingBook := newStateLendingBook(self.lendingBook, self.orderBook, self.price, self.data, onDirty)
-	if self.trie != nil {
-		stateLendingBook.trie = db.db.CopyTrie(self.trie)
+func (s *stateLendingBook) deepCopy(db *TradingStateDB, onDirty func(price common.Hash)) *stateLendingBook {
+	stateLendingBook := newStateLendingBook(s.lendingBook, s.orderBook, s.price, s.data, onDirty)
+	if s.trie != nil {
+		stateLendingBook.trie = db.db.CopyTrie(s.trie)
 	}
-	for key, value := range self.dirtyStorage {
+	for key, value := range s.dirtyStorage {
 		stateLendingBook.dirtyStorage[key] = value
 	}
-	for key, value := range self.cachedStorage {
+	for key, value := range s.cachedStorage {
 		stateLendingBook.cachedStorage[key] = value
 	}
 	return stateLendingBook
 }
 
-func (c *stateLendingBook) AddVolume(amount *big.Int) {
-	c.setVolume(new(big.Int).Add(c.data.Volume, amount))
+func (s *stateLendingBook) AddVolume(amount *big.Int) {
+	s.setVolume(new(big.Int).Add(s.data.Volume, amount))
 }
 
-func (c *stateLendingBook) subVolume(amount *big.Int) {
-	c.setVolume(new(big.Int).Sub(c.data.Volume, amount))
+func (s *stateLendingBook) subVolume(amount *big.Int) {
+	s.setVolume(new(big.Int).Sub(s.data.Volume, amount))
 }
 
-func (self *stateLendingBook) setVolume(volume *big.Int) {
-	self.data.Volume = volume
-	if self.onDirty != nil {
-		self.onDirty(self.lendingBook)
-		self.onDirty = nil
+func (s *stateLendingBook) setVolume(volume *big.Int) {
+	s.data.Volume = volume
+	if s.onDirty != nil {
+		s.onDirty(s.lendingBook)
+		s.onDirty = nil
 	}
 }
 
-func (self *stateLendingBook) Volume() *big.Int {
-	return self.data.Volume
+func (s *stateLendingBook) Volume() *big.Int {
+	return s.data.Volume
 }

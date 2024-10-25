@@ -49,70 +49,70 @@ func NewCpuAgent(chain consensus.ChainReader, engine consensus.Engine) *CpuAgent
 	return miner
 }
 
-func (self *CpuAgent) Work() chan<- *Work            { return self.workCh }
-func (self *CpuAgent) SetReturnCh(ch chan<- *Result) { self.returnCh = ch }
+func (ca *CpuAgent) Work() chan<- *Work            { return ca.workCh }
+func (ca *CpuAgent) SetReturnCh(ch chan<- *Result) { ca.returnCh = ch }
 
-func (self *CpuAgent) Stop() {
-	if !atomic.CompareAndSwapInt32(&self.isMining, 1, 0) {
+func (ca *CpuAgent) Stop() {
+	if !atomic.CompareAndSwapInt32(&ca.isMining, 1, 0) {
 		return // agent already stopped
 	}
-	self.stop <- struct{}{}
+	ca.stop <- struct{}{}
 done:
 	// Empty work channel
 	for {
 		select {
-		case <-self.workCh:
+		case <-ca.workCh:
 		default:
 			break done
 		}
 	}
 }
 
-func (self *CpuAgent) Start() {
-	if !atomic.CompareAndSwapInt32(&self.isMining, 0, 1) {
+func (ca *CpuAgent) Start() {
+	if !atomic.CompareAndSwapInt32(&ca.isMining, 0, 1) {
 		return // agent already started
 	}
-	go self.update()
+	go ca.update()
 }
 
-func (self *CpuAgent) update() {
+func (ca *CpuAgent) update() {
 out:
 	for {
 		select {
-		case work := <-self.workCh:
-			self.mu.Lock()
-			if self.quitCurrentOp != nil {
-				close(self.quitCurrentOp)
+		case work := <-ca.workCh:
+			ca.mu.Lock()
+			if ca.quitCurrentOp != nil {
+				close(ca.quitCurrentOp)
 			}
-			self.quitCurrentOp = make(chan struct{})
-			go self.mine(work, self.quitCurrentOp)
-			self.mu.Unlock()
-		case <-self.stop:
-			self.mu.Lock()
-			if self.quitCurrentOp != nil {
-				close(self.quitCurrentOp)
-				self.quitCurrentOp = nil
+			ca.quitCurrentOp = make(chan struct{})
+			go ca.mine(work, ca.quitCurrentOp)
+			ca.mu.Unlock()
+		case <-ca.stop:
+			ca.mu.Lock()
+			if ca.quitCurrentOp != nil {
+				close(ca.quitCurrentOp)
+				ca.quitCurrentOp = nil
 			}
-			self.mu.Unlock()
+			ca.mu.Unlock()
 			break out
 		}
 	}
 }
 
-func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
-	if result, err := self.engine.Seal(self.chain, work.Block, stop); result != nil {
+func (ca *CpuAgent) mine(work *Work, stop <-chan struct{}) {
+	if result, err := ca.engine.Seal(ca.chain, work.Block, stop); result != nil {
 		log.Info("Successfully sealed new block", "number", result.Number(), "hash", result.Hash())
-		self.returnCh <- &Result{work, result}
+		ca.returnCh <- &Result{work, result}
 	} else {
 		if err != nil {
 			log.Warn("Block sealing failed", "err", err)
 		}
-		self.returnCh <- nil
+		ca.returnCh <- nil
 	}
 }
 
-func (self *CpuAgent) GetHashRate() int64 {
-	if pow, ok := self.engine.(consensus.PoW); ok {
+func (ca *CpuAgent) GetHashRate() int64 {
+	if pow, ok := ca.engine.(consensus.PoW); ok {
 		return int64(pow.Hashrate())
 	}
 	return 0
