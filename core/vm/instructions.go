@@ -395,6 +395,7 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		codeOffset = stack.pop()
 		length     = stack.pop()
 		lengthU64  = length.Uint64()
+		codeCopy   []byte
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
@@ -406,9 +407,10 @@ func opExtCodeCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 		witness.AddCode(code)
 	}
 	if isEOFVersion1(code) {
-		lengthU64 = 2
+		codeCopy = getData(eofMagic, uint64CodeOffset, lengthU64)
+	} else {
+		codeCopy = getData(code, uint64CodeOffset, lengthU64)
 	}
-	codeCopy := getData(code, uint64CodeOffset, lengthU64)
 	scope.Memory.Set(memOffset.Uint64(), lengthU64, codeCopy)
 
 	return nil, nil
