@@ -174,22 +174,6 @@ func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) er
 // trie. If the account was not existent in the trie, no error will be returned.
 // If the trie is corrupted, an error will be returned.
 func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
-	var (
-		err    error
-		values = make([][]byte, verkle.NodeWidth)
-	)
-	for i := 0; i < verkle.NodeWidth; i++ {
-		values[i] = zero[:]
-	}
-	switch n := t.root.(type) {
-	case *verkle.InternalNode:
-		err = n.InsertValuesAtStem(t.cache.GetStem(addr.Bytes()), values, t.nodeResolver)
-		if err != nil {
-			return fmt.Errorf("DeleteAccount (%x) error: %v", addr, err)
-		}
-	default:
-		return errInvalidRootType
-	}
 	return nil
 }
 
