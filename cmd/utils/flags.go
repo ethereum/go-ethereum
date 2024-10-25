@@ -2090,7 +2090,7 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 	filterAPI := filters.NewFilterAPI(filterSystem, ethcfg.BorLogs)
 	stack.RegisterAPIs([]rpc.API{{
 		Namespace: "eth",
-		Service:   filters.NewFilterAPI(filterSystem, false),
+		Service:   filters.NewFilterAPI(filterSystem, ethcfg.BorLogs),
 	}})
 
 	// avoiding constructor changed by introducing new method to set genesis
