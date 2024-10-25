@@ -30,9 +30,9 @@ const (
 	frontierDurationLimit = 13
 	// minimumDifficulty The minimum that the difficulty may ever be.
 	minimumDifficulty = 131072
-	// expDiffPeriod is the exponential difficulty period
+	// expDiffPeriodUint is the exponential difficulty period
 	expDiffPeriodUint = 100000
-	// difficultyBoundDivisorBitShift is the bound divisor of the difficulty (2048),
+	// difficultyBoundDivisor is the bound divisor of the difficulty (2048),
 	// This constant is the right-shifts to use for the division.
 	difficultyBoundDivisor = 11
 )
