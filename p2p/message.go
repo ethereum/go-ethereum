@@ -47,21 +47,21 @@ type Msg struct {
 // the given value, which must be a pointer.
 //
 // For the decoding rules, please see package rlp.
-func (msg Msg) Decode(val interface{}) error {
-	s := rlp.NewStream(msg.Payload, uint64(msg.Size))
+func (m Msg) Decode(val interface{}) error {
+	s := rlp.NewStream(m.Payload, uint64(m.Size))
 	if err := s.Decode(val); err != nil {
-		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", msg.Code, msg.Size, err)
+		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", m.Code, m.Size, err)
 	}
 	return nil
 }
 
-func (msg Msg) String() string {
-	return fmt.Sprintf("msg #%v (%v bytes)", msg.Code, msg.Size)
+func (m Msg) String() string {
+	return fmt.Sprintf("msg #%v (%v bytes)", m.Code, m.Size)
 }
 
 // Discard reads any remaining payload data into a black hole.
-func (msg Msg) Discard() error {
-	_, err := io.Copy(io.Discard, msg.Payload)
+func (m Msg) Discard() error {
+	_, err := io.Copy(io.Discard, m.Payload)
 	return err
 }
 
@@ -119,24 +119,24 @@ type eofSignal struct {
 
 // note: when using eofSignal to detect whether a message payload
 // has been read, Read might not be called for zero sized messages.
-func (r *eofSignal) Read(buf []byte) (int, error) {
-	if r.count == 0 {
-		if r.eof != nil {
-			r.eof <- struct{}{}
-			r.eof = nil
+func (s *eofSignal) Read(buf []byte) (int, error) {
+	if s.count == 0 {
+		if s.eof != nil {
+			s.eof <- struct{}{}
+			s.eof = nil
 		}
 		return 0, io.EOF
 	}
 
 	max := len(buf)
-	if int(r.count) < len(buf) {
-		max = int(r.count)
+	if int(s.count) < len(buf) {
+		max = int(s.count)
 	}
-	n, err := r.wrapped.Read(buf[:max])
-	r.count -= uint32(n)
-	if (err != nil || r.count == 0) && r.eof != nil {
-		r.eof <- struct{}{} // tell Peer that msg has been consumed
-		r.eof = nil
+	n, err := s.wrapped.Read(buf[:max])
+	s.count -= uint32(n)
+	if (err != nil || s.count == 0) && s.eof != nil {
+		s.eof <- struct{}{} // tell Peer that msg has been consumed
+		s.eof = nil
 	}
 	return n, err
 }
@@ -269,15 +269,15 @@ func newMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID, p
 
 // ReadMsg reads a message from the underlying MsgReadWriter and emits a
 // "message received" event
-func (self *msgEventer) ReadMsg() (Msg, error) {
-	msg, err := self.MsgReadWriter.ReadMsg()
+func (e *msgEventer) ReadMsg() (Msg, error) {
+	msg, err := e.MsgReadWriter.ReadMsg()
 	if err != nil {
 		return msg, err
 	}
-	self.feed.Send(&PeerEvent{
+	e.feed.Send(&PeerEvent{
 		Type:     PeerEventTypeMsgRecv,
-		Peer:     self.peerID,
-		Protocol: self.Protocol,
+		Peer:     e.peerID,
+		Protocol: e.Protocol,
 		MsgCode:  &msg.Code,
 		MsgSize:  &msg.Size,
 	})
@@ -286,15 +286,15 @@ func (self *msgEventer) ReadMsg() (Msg, error) {
 
 // WriteMsg writes a message to the underlying MsgReadWriter and emits a
 // "message sent" event
-func (self *msgEventer) WriteMsg(msg Msg) error {
-	err := self.MsgReadWriter.WriteMsg(msg)
+func (e *msgEventer) WriteMsg(msg Msg) error {
+	err := e.MsgReadWriter.WriteMsg(msg)
 	if err != nil {
 		return err
 	}
-	self.feed.Send(&PeerEvent{
+	e.feed.Send(&PeerEvent{
 		Type:     PeerEventTypeMsgSend,
-		Peer:     self.peerID,
-		Protocol: self.Protocol,
+		Peer:     e.peerID,
+		Protocol: e.Protocol,
 		MsgCode:  &msg.Code,
 		MsgSize:  &msg.Size,
 	})
@@ -303,8 +303,8 @@ func (self *msgEventer) WriteMsg(msg Msg) error {
 
 // Close closes the underlying MsgReadWriter if it implements the io.Closer
 // interface
-func (self *msgEventer) Close() error {
-	if v, ok := self.MsgReadWriter.(io.Closer); ok {
+func (e *msgEventer) Close() error {
+	if v, ok := e.MsgReadWriter.(io.Closer); ok {
 		return v.Close()
 	}
 	return nil

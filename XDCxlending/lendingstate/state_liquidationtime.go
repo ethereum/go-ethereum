@@ -19,11 +19,12 @@ package lendingstate
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"math/big"
+
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
-	"io"
-	"math/big"
 )
 
 type liquidationTimeState struct {
@@ -47,8 +48,8 @@ type liquidationTimeState struct {
 	onDirty func(time common.Hash) // Callback method to mark a state object newly dirty
 }
 
-func (s *liquidationTimeState) empty() bool {
-	return s.data.Volume == nil || s.data.Volume.Sign() == 0
+func (lt *liquidationTimeState) empty() bool {
+	return lt.data.Volume == nil || lt.data.Volume.Sign() == 0
 }
 
 func newLiquidationTimeState(time common.Hash, lendingBook common.Hash, data itemList, onDirty func(time common.Hash)) *liquidationTimeState {
@@ -62,59 +63,59 @@ func newLiquidationTimeState(time common.Hash, lendingBook common.Hash, data ite
 	}
 }
 
-func (self *liquidationTimeState) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, self.data)
+func (lt *liquidationTimeState) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, lt.data)
 }
 
-func (self *liquidationTimeState) setError(err error) {
-	if self.dbErr == nil {
-		self.dbErr = err
+func (lt *liquidationTimeState) setError(err error) {
+	if lt.dbErr == nil {
+		lt.dbErr = err
 	}
 }
 
-func (self *liquidationTimeState) getTrie(db Database) Trie {
-	if self.trie == nil {
+func (lt *liquidationTimeState) getTrie(db Database) Trie {
+	if lt.trie == nil {
 		var err error
-		self.trie, err = db.OpenStorageTrie(self.lendingBook, self.data.Root)
+		lt.trie, err = db.OpenStorageTrie(lt.lendingBook, lt.data.Root)
 		if err != nil {
-			self.trie, _ = db.OpenStorageTrie(self.time, EmptyHash)
-			self.setError(fmt.Errorf("can't create storage trie: %v", err))
+			lt.trie, _ = db.OpenStorageTrie(lt.time, EmptyHash)
+			lt.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}
-	return self.trie
+	return lt.trie
 }
 
-func (self *liquidationTimeState) Exist(db Database, tradeId common.Hash) bool {
-	amount, exists := self.cachedStorage[tradeId]
+func (lt *liquidationTimeState) Exist(db Database, tradeId common.Hash) bool {
+	amount, exists := lt.cachedStorage[tradeId]
 	if exists {
 		return true
 	}
 	// Load from DB in case it is missing.
-	enc, err := self.getTrie(db).TryGet(tradeId[:])
+	enc, err := lt.getTrie(db).TryGet(tradeId[:])
 	if err != nil {
-		self.setError(err)
+		lt.setError(err)
 		return false
 	}
 	if len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
 		if err != nil {
-			self.setError(err)
+			lt.setError(err)
 		}
 		amount.SetBytes(content)
 	}
 	if (amount != common.Hash{}) {
-		self.cachedStorage[tradeId] = amount
+		lt.cachedStorage[tradeId] = amount
 	}
 	return true
 }
 
-func (self *liquidationTimeState) getAllTradeIds(db Database) []common.Hash {
+func (lt *liquidationTimeState) getAllTradeIds(db Database) []common.Hash {
 	tradeIds := []common.Hash{}
-	lendingBookTrie := self.getTrie(db)
+	lendingBookTrie := lt.getTrie(db)
 	if lendingBookTrie == nil {
 		return tradeIds
 	}
-	for id, value := range self.cachedStorage {
+	for id, value := range lt.cachedStorage {
 		if !common.EmptyHash(value) {
 			tradeIds = append(tradeIds, id)
 		}
@@ -122,7 +123,7 @@ func (self *liquidationTimeState) getAllTradeIds(db Database) []common.Hash {
 	orderListIt := trie.NewIterator(lendingBookTrie.NodeIterator(nil))
 	for orderListIt.Next() {
 		id := common.BytesToHash(orderListIt.Key)
-		if _, exist := self.cachedStorage[id]; exist {
+		if _, exist := lt.cachedStorage[id]; exist {
 			continue
 		}
 		tradeIds = append(tradeIds, id)
@@ -130,83 +131,83 @@ func (self *liquidationTimeState) getAllTradeIds(db Database) []common.Hash {
 	return tradeIds
 }
 
-func (self *liquidationTimeState) insertTradeId(db Database, tradeId common.Hash) {
-	self.setTradeId(tradeId, tradeId)
-	self.setError(self.getTrie(db).TryUpdate(tradeId[:], tradeId[:]))
+func (lt *liquidationTimeState) insertTradeId(db Database, tradeId common.Hash) {
+	lt.setTradeId(tradeId, tradeId)
+	lt.setError(lt.getTrie(db).TryUpdate(tradeId[:], tradeId[:]))
 }
 
-func (self *liquidationTimeState) removeTradeId(db Database, tradeId common.Hash) {
-	tr := self.getTrie(db)
-	self.setError(tr.TryDelete(tradeId[:]))
-	self.setTradeId(tradeId, EmptyHash)
+func (lt *liquidationTimeState) removeTradeId(db Database, tradeId common.Hash) {
+	tr := lt.getTrie(db)
+	lt.setError(tr.TryDelete(tradeId[:]))
+	lt.setTradeId(tradeId, EmptyHash)
 }
 
-func (self *liquidationTimeState) setTradeId(tradeId common.Hash, value common.Hash) {
-	self.cachedStorage[tradeId] = value
-	self.dirtyStorage[tradeId] = value
+func (lt *liquidationTimeState) setTradeId(tradeId common.Hash, value common.Hash) {
+	lt.cachedStorage[tradeId] = value
+	lt.dirtyStorage[tradeId] = value
 
-	if self.onDirty != nil {
-		self.onDirty(self.lendingBook)
-		self.onDirty = nil
+	if lt.onDirty != nil {
+		lt.onDirty(lt.lendingBook)
+		lt.onDirty = nil
 	}
 }
 
-func (self *liquidationTimeState) updateTrie(db Database) Trie {
-	tr := self.getTrie(db)
-	for key, value := range self.dirtyStorage {
-		delete(self.dirtyStorage, key)
+func (lt *liquidationTimeState) updateTrie(db Database) Trie {
+	tr := lt.getTrie(db)
+	for key, value := range lt.dirtyStorage {
+		delete(lt.dirtyStorage, key)
 		if value == EmptyHash {
-			self.setError(tr.TryDelete(key[:]))
+			lt.setError(tr.TryDelete(key[:]))
 			continue
 		}
 		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
-		self.setError(tr.TryUpdate(key[:], v))
+		lt.setError(tr.TryUpdate(key[:], v))
 	}
 	return tr
 }
 
-func (self *liquidationTimeState) updateRoot(db Database) error {
-	self.updateTrie(db)
-	if self.dbErr != nil {
-		return self.dbErr
+func (lt *liquidationTimeState) updateRoot(db Database) error {
+	lt.updateTrie(db)
+	if lt.dbErr != nil {
+		return lt.dbErr
 	}
-	root, err := self.trie.Commit(nil)
+	root, err := lt.trie.Commit(nil)
 	if err == nil {
-		self.data.Root = root
+		lt.data.Root = root
 	}
 	return err
 }
 
-func (self *liquidationTimeState) deepCopy(db *LendingStateDB, onDirty func(time common.Hash)) *liquidationTimeState {
-	stateLendingBook := newLiquidationTimeState(self.lendingBook, self.time, self.data, onDirty)
-	if self.trie != nil {
-		stateLendingBook.trie = db.db.CopyTrie(self.trie)
+func (lt *liquidationTimeState) deepCopy(db *LendingStateDB, onDirty func(time common.Hash)) *liquidationTimeState {
+	stateLendingBook := newLiquidationTimeState(lt.lendingBook, lt.time, lt.data, onDirty)
+	if lt.trie != nil {
+		stateLendingBook.trie = db.db.CopyTrie(lt.trie)
 	}
-	for key, value := range self.dirtyStorage {
+	for key, value := range lt.dirtyStorage {
 		stateLendingBook.dirtyStorage[key] = value
 	}
-	for key, value := range self.cachedStorage {
+	for key, value := range lt.cachedStorage {
 		stateLendingBook.cachedStorage[key] = value
 	}
 	return stateLendingBook
 }
 
-func (c *liquidationTimeState) AddVolume(amount *big.Int) {
-	c.setVolume(new(big.Int).Add(c.data.Volume, amount))
+func (lt *liquidationTimeState) AddVolume(amount *big.Int) {
+	lt.setVolume(new(big.Int).Add(lt.data.Volume, amount))
 }
 
-func (c *liquidationTimeState) subVolume(amount *big.Int) {
-	c.setVolume(new(big.Int).Sub(c.data.Volume, amount))
+func (lt *liquidationTimeState) subVolume(amount *big.Int) {
+	lt.setVolume(new(big.Int).Sub(lt.data.Volume, amount))
 }
 
-func (self *liquidationTimeState) setVolume(volume *big.Int) {
-	self.data.Volume = volume
-	if self.onDirty != nil {
-		self.onDirty(self.lendingBook)
-		self.onDirty = nil
+func (lt *liquidationTimeState) setVolume(volume *big.Int) {
+	lt.data.Volume = volume
+	if lt.onDirty != nil {
+		lt.onDirty(lt.lendingBook)
+		lt.onDirty = nil
 	}
 }
 
-func (self *liquidationTimeState) Volume() *big.Int {
-	return self.data.Volume
+func (lt *liquidationTimeState) Volume() *big.Int {
+	return lt.data.Volume
 }

@@ -103,9 +103,9 @@ type Ethereum struct {
 	Lending *XDCxlending.Lending
 }
 
-func (s *Ethereum) AddLesServer(ls LesServer) {
-	s.lesServer = ls
-	ls.SetBloomBitsIndexer(s.bloomIndexer)
+func (e *Ethereum) AddLesServer(ls LesServer) {
+	e.lesServer = ls
+	ls.SetBloomBitsIndexer(e.bloomIndexer)
 }
 
 // New creates a new Ethereum object (including the
@@ -371,80 +371,80 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chai
 
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *Ethereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.ApiBackend, s.BlockChain())
+func (e *Ethereum) APIs() []rpc.API {
+	apis := ethapi.GetAPIs(e.ApiBackend, e.BlockChain())
 
 	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+	apis = append(apis, e.engine.APIs(e.BlockChain())...)
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(s),
+			Service:   NewPublicEthereumAPI(e),
 			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicMinerAPI(s),
+			Service:   NewPublicMinerAPI(e),
 			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+			Service:   downloader.NewPublicDownloaderAPI(e.protocolManager.downloader, e.eventMux),
 			Public:    true,
 		}, {
 			Namespace: "miner",
 			Version:   "1.0",
-			Service:   NewPrivateMinerAPI(s),
+			Service:   NewPrivateMinerAPI(e),
 			Public:    false,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewFilterAPI(filters.NewFilterSystem(s.ApiBackend, filters.Config{LogCacheSize: s.config.FilterLogCacheSize}), false),
+			Service:   filters.NewFilterAPI(filters.NewFilterSystem(e.ApiBackend, filters.Config{LogCacheSize: e.config.FilterLogCacheSize}), false),
 			Public:    true,
 		}, {
 			Namespace: "admin",
 			Version:   "1.0",
-			Service:   NewPrivateAdminAPI(s),
+			Service:   NewPrivateAdminAPI(e),
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPublicDebugAPI(s),
+			Service:   NewPublicDebugAPI(e),
 			Public:    true,
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(s.chainConfig, s),
+			Service:   NewPrivateDebugAPI(e.chainConfig, e),
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
-			Service:   s.netRPCService,
+			Service:   e.netRPCService,
 			Public:    true,
 		},
 	}...)
 }
 
-func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
-	s.blockchain.ResetWithGenesisBlock(gb)
+func (e *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
+	e.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *Ethereum) Etherbase() (eb common.Address, err error) {
-	s.lock.RLock()
-	etherbase := s.etherbase
-	s.lock.RUnlock()
+func (e *Ethereum) Etherbase() (eb common.Address, err error) {
+	e.lock.RLock()
+	etherbase := e.etherbase
+	e.lock.RUnlock()
 
 	if etherbase != (common.Address{}) {
 		return etherbase, nil
 	}
-	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
+	if wallets := e.AccountManager().Wallets(); len(wallets) > 0 {
 		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
 			etherbase := accounts[0].Address
 
-			s.lock.Lock()
-			s.etherbase = etherbase
-			s.lock.Unlock()
+			e.lock.Lock()
+			e.etherbase = etherbase
+			e.lock.Unlock()
 
 			log.Info("Etherbase automatically configured", "address", etherbase)
 			return etherbase, nil
@@ -454,25 +454,25 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 }
 
 // set in js console via admin interface or wrapper from cli flags
-func (self *Ethereum) SetEtherbase(etherbase common.Address) {
-	self.lock.Lock()
-	self.etherbase = etherbase
-	self.lock.Unlock()
+func (e *Ethereum) SetEtherbase(etherbase common.Address) {
+	e.lock.Lock()
+	e.etherbase = etherbase
+	e.lock.Unlock()
 
-	self.miner.SetEtherbase(etherbase)
+	e.miner.SetEtherbase(etherbase)
 }
 
 // ValidateMasternode checks if node's address is in set of masternodes
-func (s *Ethereum) ValidateMasternode() (bool, error) {
-	eb, err := s.Etherbase()
+func (e *Ethereum) ValidateMasternode() (bool, error) {
+	eb, err := e.Etherbase()
 	if err != nil {
 		return false, err
 	}
-	if s.chainConfig.XDPoS != nil {
+	if e.chainConfig.XDPoS != nil {
 		//check if miner's wallet is in set of validators
-		c := s.engine.(*XDPoS.XDPoS)
+		c := e.engine.(*XDPoS.XDPoS)
 
-		authorized := c.IsAuthorisedAddress(s.blockchain, s.blockchain.CurrentHeader(), eb)
+		authorized := c.IsAuthorisedAddress(e.blockchain, e.blockchain.CurrentHeader(), eb)
 		if !authorized {
 			//This miner doesn't belong to set of validators
 			return false, nil
@@ -483,14 +483,14 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 	return true, nil
 }
 
-func (s *Ethereum) StartStaking(local bool) error {
-	eb, err := s.Etherbase()
+func (e *Ethereum) StartStaking(local bool) error {
+	eb, err := e.Etherbase()
 	if err != nil {
 		log.Error("Cannot start mining without etherbase", "err", err)
 		return fmt.Errorf("etherbase missing: %v", err)
 	}
-	if XDPoS, ok := s.engine.(*XDPoS.XDPoS); ok {
-		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+	if XDPoS, ok := e.engine.(*XDPoS.XDPoS); ok {
+		wallet, err := e.accountManager.Find(accounts.Account{Address: eb})
 		if wallet == nil || err != nil {
 			log.Error("Etherbase account unavailable locally", "address", eb, "err", err)
 			return fmt.Errorf("signer missing: %v", err)
@@ -502,102 +502,104 @@ func (s *Ethereum) StartStaking(local bool) error {
 		// mechanism introduced to speed sync times. CPU mining on mainnet is ludicrous
 		// so noone will ever hit this path, whereas marking sync done on CPU mining
 		// will ensure that private networks work in single miner mode too.
-		atomic.StoreUint32(&s.protocolManager.acceptTxs, 1)
+		atomic.StoreUint32(&e.protocolManager.acceptTxs, 1)
 	}
-	go s.miner.Start(eb)
+	go e.miner.Start(eb)
 	return nil
 }
 
-func (s *Ethereum) StopStaking() {
-	s.miner.Stop()
+func (e *Ethereum) StopStaking() {
+	e.miner.Stop()
 }
-func (s *Ethereum) IsStaking() bool     { return s.miner.Mining() }
-func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
-func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
-func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
-func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
-func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
-func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
-func (s *Ethereum) IsListening() bool                  { return true } // Always listening
-func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *Ethereum) NetVersion() uint64                 { return s.networkId }
-func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+func (e *Ethereum) IsStaking() bool     { return e.miner.Mining() }
+func (e *Ethereum) Miner() *miner.Miner { return e.miner }
+
+func (e *Ethereum) AccountManager() *accounts.Manager  { return e.accountManager }
+func (e *Ethereum) BlockChain() *core.BlockChain       { return e.blockchain }
+func (e *Ethereum) TxPool() *core.TxPool               { return e.txPool }
+func (e *Ethereum) EventMux() *event.TypeMux           { return e.eventMux }
+func (e *Ethereum) Engine() consensus.Engine           { return e.engine }
+func (e *Ethereum) ChainDb() ethdb.Database            { return e.chainDb }
+func (e *Ethereum) IsListening() bool                  { return true } // Always listening
+func (e *Ethereum) EthVersion() int                    { return int(e.protocolManager.SubProtocols[0].Version) }
+func (e *Ethereum) NetVersion() uint64                 { return e.networkId }
+func (e *Ethereum) Downloader() *downloader.Downloader { return e.protocolManager.downloader }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
-func (s *Ethereum) Protocols() []p2p.Protocol {
-	if s.lesServer == nil {
-		return s.protocolManager.SubProtocols
+func (e *Ethereum) Protocols() []p2p.Protocol {
+	if e.lesServer == nil {
+		return e.protocolManager.SubProtocols
 	}
-	return append(s.protocolManager.SubProtocols, s.lesServer.Protocols()...)
+	return append(e.protocolManager.SubProtocols, e.lesServer.Protocols()...)
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
-func (s *Ethereum) Start(srvr *p2p.Server) error {
+func (e *Ethereum) Start(srvr *p2p.Server) error {
 	// Start the bloom bits servicing goroutines
-	s.startBloomHandlers()
+	e.startBloomHandlers()
 
 	// Start the RPC service
-	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.NetVersion())
+	e.netRPCService = ethapi.NewPublicNetAPI(srvr, e.NetVersion())
 
 	// Figure out a max peers count based on the server limits
 	maxPeers := srvr.MaxPeers
-	if s.config.LightServ > 0 {
-		if s.config.LightPeers >= srvr.MaxPeers {
-			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, srvr.MaxPeers)
+	if e.config.LightServ > 0 {
+		if e.config.LightPeers >= srvr.MaxPeers {
+			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", e.config.LightPeers, srvr.MaxPeers)
 		}
-		maxPeers -= s.config.LightPeers
+		maxPeers -= e.config.LightPeers
 	}
 	// Start the networking layer and the light server if requested
-	s.protocolManager.Start(maxPeers)
-	if s.lesServer != nil {
-		s.lesServer.Start(srvr)
+	e.protocolManager.Start(maxPeers)
+	if e.lesServer != nil {
+		e.lesServer.Start(srvr)
 	}
 	return nil
 }
-func (s *Ethereum) SaveData() {
-	s.blockchain.SaveData()
+
+func (e *Ethereum) SaveData() {
+	e.blockchain.SaveData()
 }
 
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
-func (s *Ethereum) Stop() error {
-	s.bloomIndexer.Close()
-	s.blockchain.Stop()
-	s.protocolManager.Stop()
-	if s.lesServer != nil {
-		s.lesServer.Stop()
+func (e *Ethereum) Stop() error {
+	e.bloomIndexer.Close()
+	e.blockchain.Stop()
+	e.protocolManager.Stop()
+	if e.lesServer != nil {
+		e.lesServer.Stop()
 	}
-	s.txPool.Stop()
-	s.miner.Stop()
-	s.eventMux.Stop()
+	e.txPool.Stop()
+	e.miner.Stop()
+	e.eventMux.Stop()
 
-	s.chainDb.Close()
-	close(s.shutdownChan)
+	e.chainDb.Close()
+	close(e.shutdownChan)
 
 	return nil
 }
 
-func (s *Ethereum) GetPeer() int {
-	return len(s.protocolManager.peers.peers)
+func (e *Ethereum) GetPeer() int {
+	return len(e.protocolManager.peers.peers)
 }
 
-func (s *Ethereum) GetXDCX() *XDCx.XDCX {
-	return s.XDCX
+func (e *Ethereum) GetXDCX() *XDCx.XDCX {
+	return e.XDCX
 }
 
-func (s *Ethereum) OrderPool() *core.OrderPool {
-	return s.orderPool
+func (e *Ethereum) OrderPool() *core.OrderPool {
+	return e.orderPool
 }
 
-func (s *Ethereum) GetXDCXLending() *XDCxlending.Lending {
-	return s.Lending
+func (e *Ethereum) GetXDCXLending() *XDCxlending.Lending {
+	return e.Lending
 }
 
 // LendingPool geth eth lending pool
-func (s *Ethereum) LendingPool() *core.LendingPool {
-	return s.lendingPool
+func (e *Ethereum) LendingPool() *core.LendingPool {
+	return e.lendingPool
 }

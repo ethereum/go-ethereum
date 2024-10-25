@@ -38,12 +38,12 @@ type DirectoryString struct {
 	Value string
 }
 
-func (self *DirectoryString) String() string {
-	return self.Value
+func (ds *DirectoryString) String() string {
+	return ds.Value
 }
 
-func (self *DirectoryString) Set(value string) error {
-	self.Value = expandPath(value)
+func (ds *DirectoryString) Set(value string) error {
+	ds.Value = expandPath(value)
 	return nil
 }
 
@@ -55,12 +55,12 @@ type DirectoryFlag struct {
 	Usage string
 }
 
-func (self DirectoryFlag) String() string {
+func (df DirectoryFlag) String() string {
 	fmtString := "%s %v\t%v"
-	if len(self.Value.Value) > 0 {
+	if len(df.Value.Value) > 0 {
 		fmtString = "%s \"%v\"\t%v"
 	}
-	return fmt.Sprintf(fmtString, prefixedNames(self.Name), self.Value.Value, self.Usage)
+	return fmt.Sprintf(fmtString, prefixedNames(df.Name), df.Value.Value, df.Usage)
 }
 
 func eachName(longName string, fn func(string)) {
@@ -73,9 +73,9 @@ func eachName(longName string, fn func(string)) {
 
 // called by cli library, grabs variable from environment (if in env)
 // and adds variable to flag set for parsing.
-func (self DirectoryFlag) Apply(set *flag.FlagSet) {
-	eachName(self.Name, func(name string) {
-		set.Var(&self.Value, self.Name, self.Usage)
+func (df DirectoryFlag) Apply(set *flag.FlagSet) {
+	eachName(df.Name, func(name string) {
+		set.Var(&df.Value, df.Name, df.Usage)
 	})
 }
 
@@ -89,16 +89,16 @@ type textMarshalerVal struct {
 	v TextMarshaler
 }
 
-func (v textMarshalerVal) String() string {
-	if v.v == nil {
+func (t textMarshalerVal) String() string {
+	if t.v == nil {
 		return ""
 	}
-	text, _ := v.v.MarshalText()
+	text, _ := t.v.MarshalText()
 	return string(text)
 }
 
-func (v textMarshalerVal) Set(s string) error {
-	return v.v.UnmarshalText([]byte(s))
+func (t textMarshalerVal) Set(s string) error {
+	return t.v.UnmarshalText([]byte(s))
 }
 
 // TextMarshalerFlag wraps a TextMarshaler value.
@@ -108,17 +108,17 @@ type TextMarshalerFlag struct {
 	Usage string
 }
 
-func (f TextMarshalerFlag) GetName() string {
-	return f.Name
+func (t TextMarshalerFlag) GetName() string {
+	return t.Name
 }
 
-func (f TextMarshalerFlag) String() string {
-	return fmt.Sprintf("%s \"%v\"\t%v", prefixedNames(f.Name), f.Value, f.Usage)
+func (t TextMarshalerFlag) String() string {
+	return fmt.Sprintf("%s \"%v\"\t%v", prefixedNames(t.Name), t.Value, t.Usage)
 }
 
-func (f TextMarshalerFlag) Apply(set *flag.FlagSet) {
-	eachName(f.Name, func(name string) {
-		set.Var(textMarshalerVal{f.Value}, f.Name, f.Usage)
+func (t TextMarshalerFlag) Apply(set *flag.FlagSet) {
+	eachName(t.Name, func(name string) {
+		set.Var(textMarshalerVal{t.Value}, t.Name, t.Usage)
 	})
 }
 
@@ -142,37 +142,37 @@ type BigFlag struct {
 // bigValue turns *big.Int into a flag.Value
 type bigValue big.Int
 
-func (b *bigValue) String() string {
-	if b == nil {
+func (bv *bigValue) String() string {
+	if bv == nil {
 		return ""
 	}
-	return (*big.Int)(b).String()
+	return (*big.Int)(bv).String()
 }
 
-func (b *bigValue) Set(s string) error {
+func (bv *bigValue) Set(s string) error {
 	int, ok := math.ParseBig256(s)
 	if !ok {
 		return errors.New("invalid integer syntax")
 	}
-	*b = (bigValue)(*int)
+	*bv = (bigValue)(*int)
 	return nil
 }
 
-func (f BigFlag) GetName() string {
-	return f.Name
+func (bf BigFlag) GetName() string {
+	return bf.Name
 }
 
-func (f BigFlag) String() string {
+func (bf BigFlag) String() string {
 	fmtString := "%s %v\t%v"
-	if f.Value != nil {
+	if bf.Value != nil {
 		fmtString = "%s \"%v\"\t%v"
 	}
-	return fmt.Sprintf(fmtString, prefixedNames(f.Name), f.Value, f.Usage)
+	return fmt.Sprintf(fmtString, prefixedNames(bf.Name), bf.Value, bf.Usage)
 }
 
-func (f BigFlag) Apply(set *flag.FlagSet) {
-	eachName(f.Name, func(name string) {
-		set.Var((*bigValue)(f.Value), f.Name, f.Usage)
+func (bf BigFlag) Apply(set *flag.FlagSet) {
+	eachName(bf.Name, func(name string) {
+		set.Var((*bigValue)(bf.Value), bf.Name, bf.Usage)
 	})
 }
 
@@ -207,12 +207,12 @@ func prefixedNames(fullName string) (prefixed string) {
 	return
 }
 
-func (self DirectoryFlag) GetName() string {
-	return self.Name
+func (df DirectoryFlag) GetName() string {
+	return df.Name
 }
 
-func (self *DirectoryFlag) Set(value string) {
-	self.Value.Value = value
+func (df *DirectoryFlag) Set(value string) {
+	df.Value.Value = value
 }
 
 // Expands a file path

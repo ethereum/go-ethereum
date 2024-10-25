@@ -31,8 +31,8 @@ type lendingItemState struct {
 	onDirty   func(orderId common.Hash) // Callback method to mark a state object newly dirty
 }
 
-func (s *lendingItemState) empty() bool {
-	return s.data.Quantity == nil || s.data.Quantity.Cmp(Zero) == 0
+func (li *lendingItemState) empty() bool {
+	return li.data.Quantity == nil || li.data.Quantity.Cmp(Zero) == 0
 }
 
 func newLendinItemState(orderBook common.Hash, orderId common.Hash, data LendingItem, onDirty func(orderId common.Hash)) *lendingItemState {
@@ -45,23 +45,23 @@ func newLendinItemState(orderBook common.Hash, orderId common.Hash, data Lending
 }
 
 // EncodeRLP implements rlp.Encoder.
-func (c *lendingItemState) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, c.data)
+func (li *lendingItemState) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, li.data)
 }
 
-func (self *lendingItemState) deepCopy(onDirty func(orderId common.Hash)) *lendingItemState {
-	stateOrderList := newLendinItemState(self.orderBook, self.orderId, self.data, onDirty)
+func (li *lendingItemState) deepCopy(onDirty func(orderId common.Hash)) *lendingItemState {
+	stateOrderList := newLendinItemState(li.orderBook, li.orderId, li.data, onDirty)
 	return stateOrderList
 }
 
-func (self *lendingItemState) setVolume(volume *big.Int) {
-	self.data.Quantity = volume
-	if self.onDirty != nil {
-		self.onDirty(self.orderId)
-		self.onDirty = nil
+func (li *lendingItemState) setVolume(volume *big.Int) {
+	li.data.Quantity = volume
+	if li.onDirty != nil {
+		li.onDirty(li.orderId)
+		li.onDirty = nil
 	}
 }
 
-func (self *lendingItemState) Quantity() *big.Int {
-	return self.data.Quantity
+func (li *lendingItemState) Quantity() *big.Int {
+	return li.data.Quantity
 }

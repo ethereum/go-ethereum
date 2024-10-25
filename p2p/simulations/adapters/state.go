@@ -20,12 +20,12 @@ type SimStateStore struct {
 	m map[string][]byte
 }
 
-func (self *SimStateStore) Load(s string) ([]byte, error) {
-	return self.m[s], nil
+func (sss *SimStateStore) Load(s string) ([]byte, error) {
+	return sss.m[s], nil
 }
 
-func (self *SimStateStore) Save(s string, data []byte) error {
-	self.m[s] = data
+func (sss *SimStateStore) Save(s string, data []byte) error {
+	sss.m[s] = data
 	return nil
 }
 

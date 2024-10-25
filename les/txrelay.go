@@ -50,47 +50,47 @@ func NewLesTxRelay(ps *peerSet, reqDist *requestDistributor) *LesTxRelay {
 	return r
 }
 
-func (self *LesTxRelay) registerPeer(p *peer) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (l *LesTxRelay) registerPeer(p *peer) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
-	self.peerList = self.ps.AllPeers()
+	l.peerList = l.ps.AllPeers()
 }
 
-func (self *LesTxRelay) unregisterPeer(p *peer) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (l *LesTxRelay) unregisterPeer(p *peer) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
-	self.peerList = self.ps.AllPeers()
+	l.peerList = l.ps.AllPeers()
 }
 
 // send sends a list of transactions to at most a given number of peers at
 // once, never resending any particular transaction to the same peer twice
-func (self *LesTxRelay) send(txs types.Transactions, count int) {
+func (l *LesTxRelay) send(txs types.Transactions, count int) {
 	sendTo := make(map[*peer]types.Transactions)
 
-	self.peerStartPos++ // rotate the starting position of the peer list
-	if self.peerStartPos >= len(self.peerList) {
-		self.peerStartPos = 0
+	l.peerStartPos++ // rotate the starting position of the peer list
+	if l.peerStartPos >= len(l.peerList) {
+		l.peerStartPos = 0
 	}
 
 	for _, tx := range txs {
 		hash := tx.Hash()
-		ltr, ok := self.txSent[hash]
+		ltr, ok := l.txSent[hash]
 		if !ok {
 			ltr = &ltrInfo{
 				tx:     tx,
 				sentTo: make(map[*peer]struct{}),
 			}
-			self.txSent[hash] = ltr
-			self.txPending[hash] = struct{}{}
+			l.txSent[hash] = ltr
+			l.txPending[hash] = struct{}{}
 		}
 
-		if len(self.peerList) > 0 {
+		if len(l.peerList) > 0 {
 			cnt := count
-			pos := self.peerStartPos
+			pos := l.peerStartPos
 			for {
-				peer := self.peerList[pos]
+				peer := l.peerList[pos]
 				if _, ok := ltr.sentTo[peer]; !ok {
 					sendTo[peer] = append(sendTo[peer], tx)
 					ltr.sentTo[peer] = struct{}{}
@@ -100,10 +100,10 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 					break // sent it to the desired number of peers
 				}
 				pos++
-				if pos == len(self.peerList) {
+				if pos == len(l.peerList) {
 					pos = 0
 				}
-				if pos == self.peerStartPos {
+				if pos == l.peerStartPos {
 					break // tried all available peers
 				}
 			}
@@ -130,46 +130,46 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 				return func() { peer.SendTxs(reqID, cost, ll) }
 			},
 		}
-		self.reqDist.queue(rq)
+		l.reqDist.queue(rq)
 	}
 }
 
-func (self *LesTxRelay) Send(txs types.Transactions) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (l *LesTxRelay) Send(txs types.Transactions) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
-	self.send(txs, 3)
+	l.send(txs, 3)
 }
 
-func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (l *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
 	for _, hash := range mined {
-		delete(self.txPending, hash)
+		delete(l.txPending, hash)
 	}
 
 	for _, hash := range rollback {
-		self.txPending[hash] = struct{}{}
+		l.txPending[hash] = struct{}{}
 	}
 
-	if len(self.txPending) > 0 {
-		txs := make(types.Transactions, len(self.txPending))
+	if len(l.txPending) > 0 {
+		txs := make(types.Transactions, len(l.txPending))
 		i := 0
-		for hash := range self.txPending {
-			txs[i] = self.txSent[hash].tx
+		for hash := range l.txPending {
+			txs[i] = l.txSent[hash].tx
 			i++
 		}
-		self.send(txs, 1)
+		l.send(txs, 1)
 	}
 }
 
-func (self *LesTxRelay) Discard(hashes []common.Hash) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (l *LesTxRelay) Discard(hashes []common.Hash) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
 	for _, hash := range hashes {
-		delete(self.txSent, hash)
-		delete(self.txPending, hash)
+		delete(l.txSent, hash)
+		delete(l.txPending, hash)
 	}
 }

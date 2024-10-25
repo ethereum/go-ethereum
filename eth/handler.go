@@ -266,9 +266,11 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 func (pm *ProtocolManager) addOrderPoolProtocol(orderpool orderPool) {
 	pm.orderpool = orderpool
 }
+
 func (pm *ProtocolManager) addLendingPoolProtocol(lendingpool lendingPool) {
 	pm.lendingpool = lendingpool
 }
+
 func (pm *ProtocolManager) removePeer(id string) {
 	// Short circuit if the peer was already removed
 	peer := pm.peers.Peer(id)
@@ -1037,12 +1039,12 @@ func (pm *ProtocolManager) LendingBroadcastTx(hash common.Hash, tx *types.Lendin
 }
 
 // minedBroadcastLoop broadcast loop
-func (self *ProtocolManager) minedBroadcastLoop() {
+func (pm *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
-	for obj := range self.minedBlockSub.Chan() {
+	for obj := range pm.minedBlockSub.Chan() {
 		switch ev := obj.Data.(type) {
 		case core.NewMinedBlockEvent:
-			self.BroadcastBlock(ev.Block, true) // First propagate block to peers
+			pm.BroadcastBlock(ev.Block, true) // First propagate block to peers
 			//self.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}
 	}
@@ -1062,34 +1064,34 @@ func (pm *ProtocolManager) txBroadcastLoop() {
 }
 
 // orderTxBroadcastLoop broadcast order
-func (self *ProtocolManager) orderTxBroadcastLoop() {
-	if self.orderTxSub == nil {
+func (pm *ProtocolManager) orderTxBroadcastLoop() {
+	if pm.orderTxSub == nil {
 		return
 	}
 	for {
 		select {
-		case event := <-self.orderTxCh:
-			self.OrderBroadcastTx(event.Tx.Hash(), event.Tx)
+		case event := <-pm.orderTxCh:
+			pm.OrderBroadcastTx(event.Tx.Hash(), event.Tx)
 
 			// Err() channel will be closed when unsubscribing.
-		case <-self.orderTxSub.Err():
+		case <-pm.orderTxSub.Err():
 			return
 		}
 	}
 }
 
 // lendingTxBroadcastLoop broadcast order
-func (self *ProtocolManager) lendingTxBroadcastLoop() {
-	if self.lendingTxSub == nil {
+func (pm *ProtocolManager) lendingTxBroadcastLoop() {
+	if pm.lendingTxSub == nil {
 		return
 	}
 	for {
 		select {
-		case event := <-self.lendingTxCh:
-			self.LendingBroadcastTx(event.Tx.Hash(), event.Tx)
+		case event := <-pm.lendingTxCh:
+			pm.LendingBroadcastTx(event.Tx.Hash(), event.Tx)
 
 			// Err() channel will be closed when unsubscribing.
-		case <-self.lendingTxSub.Err():
+		case <-pm.lendingTxSub.Err():
 			return
 		}
 	}
@@ -1106,13 +1108,13 @@ type NodeInfo struct {
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.
-func (self *ProtocolManager) NodeInfo() *NodeInfo {
-	currentBlock := self.blockchain.CurrentBlock()
+func (pm *ProtocolManager) NodeInfo() *NodeInfo {
+	currentBlock := pm.blockchain.CurrentBlock()
 	return &NodeInfo{
-		Network:    self.networkId,
-		Difficulty: self.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64()),
-		Genesis:    self.blockchain.Genesis().Hash(),
-		Config:     self.blockchain.Config(),
+		Network:    pm.networkId,
+		Difficulty: pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64()),
+		Genesis:    pm.blockchain.Genesis().Hash(),
+		Config:     pm.blockchain.Config(),
 		Head:       currentBlock.Hash(),
 	}
 }
