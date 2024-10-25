@@ -727,9 +727,10 @@ func (l *Lending) ProcessCancelOrder(header *types.Header, lendingStateDB *lendi
 		}
 	}
 	feeRate := lendingstate.GetFee(statedb, originOrder.Relayer)
-	tokenCancelFee, tokenPriceInXDC := common.Big0, common.Big0
+	var tokenCancelFee, tokenPriceInXDC *big.Int
 	if !chain.Config().IsTIPXDCXCancellationFee(header.Number) {
 		tokenCancelFee = getCancelFeeV1(collateralTokenDecimal, collateralPrice, feeRate, &originOrder)
+		tokenPriceInXDC = common.Big0
 	} else {
 		tokenCancelFee, tokenPriceInXDC = l.getCancelFee(chain, statedb, tradingStateDb, &originOrder, feeRate)
 	}
@@ -927,7 +928,7 @@ func (l *Lending) LiquidationTrade(lendingStateDB *lendingstate.LendingStateDB, 
 // cancellation fee = 1/10 borrowing fee
 // deprecated after hardfork at TIPXDCXCancellationFee
 func getCancelFeeV1(collateralTokenDecimal *big.Int, collateralPrice, borrowFee *big.Int, order *lendingstate.LendingItem) *big.Int {
-	cancelFee := big.NewInt(0)
+	var cancelFee *big.Int
 	if order.Side == lendingstate.Investing {
 		// cancel fee = quantityToLend*borrowFee/LendingCancelFee
 		cancelFee = new(big.Int).Mul(order.Quantity, borrowFee)
@@ -947,7 +948,7 @@ func (l *Lending) getCancelFee(chain consensus.ChainContext, statedb *state.Stat
 	if feeRate == nil || feeRate.Sign() == 0 {
 		return common.Big0, common.Big0
 	}
-	cancelFee, tokenPriceInXDC := common.Big0, common.Big0
+	var cancelFee, tokenPriceInXDC *big.Int
 	var err error
 	if order.Side == lendingstate.Investing {
 		cancelFee, tokenPriceInXDC, err = l.XDCx.ConvertXDCToToken(chain, statedb, tradingStateDb, order.LendingToken, common.RelayerLendingCancelFee)

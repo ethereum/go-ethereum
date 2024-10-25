@@ -311,7 +311,7 @@ func (l *Lending) SyncDataToSDKNode(chain consensus.ChainContext, statedb *state
 		}
 		// maker dirty order
 		makerFilledAmount := big.NewInt(0)
-		makerOrderHash := common.Hash{}
+		var makerOrderHash common.Hash
 		if updatedTakerLendingItem.Side == lendingstate.Borrowing {
 			makerOrderHash = tradeRecord.InvestingOrderHash
 		} else {

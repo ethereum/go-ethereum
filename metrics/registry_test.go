@@ -270,7 +270,7 @@ func TestChildPrefixedRegistryOfChildRegister(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	err = r2.Register("baz", NewCounter())
+	r2.Register("baz", NewCounter())
 	c := NewCounter()
 	Register("bars", c)
 
@@ -293,7 +293,7 @@ func TestWalkRegistries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	err = r2.Register("baz", NewCounter())
+	r2.Register("baz", NewCounter())
 	c := NewCounter()
 	Register("bars", c)
 

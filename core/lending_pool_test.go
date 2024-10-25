@@ -58,7 +58,7 @@ func getLendingNonce(userAddress common.Address) (uint64, error) {
 	s := result.(string)
 	s = strings.TrimPrefix(s, "0x")
 	n, err := strconv.ParseUint(s, 16, 32)
-	return uint64(n), nil
+	return uint64(n), err
 }
 
 func (l *LendingMsg) computeHash() common.Hash {

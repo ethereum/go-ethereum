@@ -1271,8 +1271,6 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		if current := block.NumberU64(); current > triesInMemory {
 			// Find the next state trie we need to commit
 			chosen := current - triesInMemory
-			oldTradingRoot := common.Hash{}
-			oldLendingRoot := common.Hash{}
 			// Only write to disk if we exceeded our memory allowance *and* also have at
 			// least a given number of tries gapped.
 			//
@@ -1308,8 +1306,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 					if tradingTrieDb != nil && lendingTrieDb != nil {
 						b := bc.GetBlock(header.Hash(), current-triesInMemory)
 						author, _ := bc.Engine().Author(b.Header())
-						oldTradingRoot, _ = tradingService.GetTradingStateRoot(b, author)
-						oldLendingRoot, _ = lendingService.GetLendingStateRoot(b, author)
+						oldTradingRoot, _ := tradingService.GetTradingStateRoot(b, author)
+						oldLendingRoot, _ := lendingService.GetLendingStateRoot(b, author)
 						tradingTrieDb.Commit(oldTradingRoot, true)
 						lendingTrieDb.Commit(oldLendingRoot, true)
 					}
@@ -1647,8 +1645,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 					}
 					// liquidate / finalize open lendingTrades
 					if block.Number().Uint64()%bc.chainConfig.XDPoS.Epoch == common.LiquidateLendingTradeBlock {
-						finalizedTrades := map[common.Hash]*lendingstate.LendingTrade{}
-						finalizedTrades, _, _, _, _, err = lendingService.ProcessLiquidationData(block.Header(), bc, statedb, tradingState, lendingState)
+						finalizedTrades, _, _, _, _, err := lendingService.ProcessLiquidationData(block.Header(), bc, statedb, tradingState, lendingState)
 						if err != nil {
 							return i, events, coalescedLogs, fmt.Errorf("failed to ProcessLiquidationData. Err: %v ", err)
 						}

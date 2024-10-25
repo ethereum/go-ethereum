@@ -21,7 +21,7 @@ func TestSign(t *testing.T) {
 	ringSize := 10
 	s := 9
 	fmt.Println("Generate random ring parameter ")
-	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+	rings, privkeys, m, _ := GenerateMultiRingParams(numRing, ringSize, s)
 
 	fmt.Println("numRing  ", numRing)
 	fmt.Println("ringSize  ", ringSize)
@@ -57,7 +57,7 @@ func TestDeserialize(t *testing.T) {
 	numRing := 5
 	ringSize := 10
 	s := 5
-	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+	rings, privkeys, m, _ := GenerateMultiRingParams(numRing, ringSize, s)
 
 	ringSignature, err := Sign(m, rings, privkeys, s)
 	if err != nil {
@@ -235,7 +235,7 @@ func TestOnCurveVerify(t *testing.T) {
 	numRing := 5
 	ringSize := 10
 	s := 5
-	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+	rings, privkeys, m, _ := GenerateMultiRingParams(numRing, ringSize, s)
 	ringSignature, err := Sign(m, rings, privkeys, s)
 	if err != nil {
 		t.Error("Failed to create Ring signature")
@@ -259,7 +259,7 @@ func TestOnCurveDeserialize(t *testing.T) {
 	numRing := 5
 	ringSize := 10
 	s := 5
-	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+	rings, privkeys, m, _ := GenerateMultiRingParams(numRing, ringSize, s)
 	ringSignature, err := Sign(m, rings, privkeys, s)
 	if err != nil {
 		t.Error("Failed to create Ring signature")
@@ -304,7 +304,7 @@ func TestNilPointerDereferencePanic(t *testing.T) {
 	numRing := 5
 	ringSize := 10
 	s := 7
-	rings, privkeys, m, err := GenerateMultiRingParams(numRing, ringSize, s)
+	rings, privkeys, m, _ := GenerateMultiRingParams(numRing, ringSize, s)
 
 	ringSig, err := Sign(m, rings, privkeys, s)
 	if err != nil {
@@ -318,7 +318,7 @@ func TestNilPointerDereferencePanic(t *testing.T) {
 		t.Error("Failed to Serialize input Ring signature")
 	}
 
-	_ , err = Deserialize(sig)
+	_, err = Deserialize(sig)
 	// Should failed to verify Ring signature as the signature is invalid
 	assert.EqualError(t, err, "failed to deserialize, invalid ring signature")
 }
