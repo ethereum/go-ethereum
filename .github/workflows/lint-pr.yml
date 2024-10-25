@@ -7,7 +7,7 @@ on:
 jobs:
   main:
     name: Validate PR title
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-set
     steps:
       - uses: amannn/action-semantic-pull-request@v5
         env:
