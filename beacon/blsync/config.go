@@ -41,7 +41,7 @@ var (
 			AddFork("BELLATRIX", 144896, []byte{2, 0, 0, 0}).
 			AddFork("CAPELLA", 194048, []byte{3, 0, 0, 0}).
 			AddFork("DENEB", 269568, []byte{4, 0, 0, 0}),
-		Checkpoint: common.HexToHash("0x388be41594ec7d6a6894f18c73f3469f07e2c19a803de4755d335817ed8e2e5a"),
+		Checkpoint: common.HexToHash("0x6509b691f4de4f7b083f2784938fd52f0e131675432b3fd85ea549af9aebd3d0"),
 	}
 
 	SepoliaConfig = lightClientConfig{
@@ -54,19 +54,34 @@ var (
 			AddFork("BELLATRIX", 100, []byte{144, 0, 0, 113}).
 			AddFork("CAPELLA", 56832, []byte{144, 0, 0, 114}).
 			AddFork("DENEB", 132608, []byte{144, 0, 0, 115}),
-		Checkpoint: common.HexToHash("0x1005a6d9175e96bfbce4d35b80f468e9bff0b674e1e861d16e09e10005a58e81"),
+		Checkpoint: common.HexToHash("0x456e85f5608afab3465a0580bff8572255f6d97af0c5f939e3f7536b5edb2d3f"),
+	}
+
+	HoleskyConfig = lightClientConfig{
+		ChainConfig: (&types.ChainConfig{
+			GenesisValidatorsRoot: common.HexToHash("0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"),
+			GenesisTime:           1695902400,
+		}).
+			AddFork("GENESIS", 0, []byte{1, 1, 112, 0}).
+			AddFork("ALTAIR", 0, []byte{2, 1, 112, 0}).
+			AddFork("BELLATRIX", 0, []byte{3, 1, 112, 0}).
+			AddFork("CAPELLA", 256, []byte{4, 1, 112, 0}).
+			AddFork("DENEB", 29696, []byte{5, 1, 112, 0}),
+		Checkpoint: common.HexToHash("0x6456a1317f54d4b4f2cb5bc9d153b5af0988fe767ef0609f0236cf29030bcff7"),
 	}
 )
 
 func makeChainConfig(ctx *cli.Context) lightClientConfig {
 	var config lightClientConfig
 	customConfig := ctx.IsSet(utils.BeaconConfigFlag.Name)
-	utils.CheckExclusive(ctx, utils.MainnetFlag, utils.SepoliaFlag, utils.BeaconConfigFlag)
+	utils.CheckExclusive(ctx, utils.MainnetFlag, utils.SepoliaFlag, utils.HoleskyFlag, utils.BeaconConfigFlag)
 	switch {
 	case ctx.Bool(utils.MainnetFlag.Name):
 		config = MainnetConfig
 	case ctx.Bool(utils.SepoliaFlag.Name):
 		config = SepoliaConfig
+	case ctx.Bool(utils.HoleskyFlag.Name):
+		config = HoleskyConfig
 	default:
 		if !customConfig {
 			config = MainnetConfig
