@@ -47,6 +47,11 @@ type ValidationOptions struct {
 	MinTip  *big.Int // Minimum gas tip needed to allow a transaction into the caller pool
 }
 
+// ValidationFunction is an method type which the pools use to perform the tx-validations which do not
+// require state access. Production code typically uses ValidateTransaction, whereas testing-code
+// might choose to instead use something else, e.g. to always fail or avoid heavy cpu usage.
+type ValidationFunction func(tx *types.Transaction, head *types.Header, signer types.Signer, opts *ValidationOptions) error
+
 // ValidateTransaction is a helper method to check whether a transaction is valid
 // according to the consensus rules, but does not check state-dependent validation
 // (balance, nonce, etc).
