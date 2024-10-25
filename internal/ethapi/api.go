@@ -3442,14 +3442,14 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 			limitNumber = currentNumber
 		}
 		for i := blockNumber + 1; i <= limitNumber; i++ {
-			header, err := b.HeaderByNumber(nil, rpc.BlockNumber(i))
+			header, err := b.HeaderByNumber(context.TODO(), rpc.BlockNumber(i))
 			if err != nil {
 				return addrs, err
 			}
 			if header == nil {
 				return addrs, errors.New("nil header in GetSignersFromBlocks")
 			}
-			blockData, err := b.BlockByNumber(nil, rpc.BlockNumber(i))
+			blockData, err := b.BlockByNumber(context.TODO(), rpc.BlockNumber(i))
 			if err != nil {
 				return addrs, err
 			}
