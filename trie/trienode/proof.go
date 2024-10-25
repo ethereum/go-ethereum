@@ -156,10 +156,6 @@ func (n *ProofList) Delete(key []byte) error {
 	panic("not supported")
 }
 
-func (n *ProofList) DeleteRange(start, end []byte) error {
-	panic("not supported")
-}
-
 // DataSize returns the aggregated data size of nodes in the list
 func (n ProofList) DataSize() int {
 	var size int

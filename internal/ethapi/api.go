@@ -704,10 +704,6 @@ func (n *proofList) Delete(key []byte) error {
 	panic("not supported")
 }
 
-func (n *proofList) DeleteRange(start, end []byte) error {
-	panic("not supported")
-}
-
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, storageKeys []string, blockNrOrHash rpc.BlockNumberOrHash) (*AccountResult, error) {
 	var (

@@ -217,11 +217,6 @@ func (b *tableBatch) Delete(key []byte) error {
 	return b.batch.Delete(append([]byte(b.prefix), key...))
 }
 
-// DeleteRange implements KeyValueWriter (not supported on batches).
-func (b *tableBatch) DeleteRange(start, end []byte) error {
-	panic("DeleteRange is not supported on batches")
-}
-
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *tableBatch) ValueSize() int {
 	return b.batch.ValueSize()
@@ -254,12 +249,6 @@ func (r *tableReplayer) Put(key []byte, value []byte) error {
 func (r *tableReplayer) Delete(key []byte) error {
 	trimmed := key[len(r.prefix):]
 	return r.w.Delete(trimmed)
-}
-
-// DeleteRange implements the interface KeyValueWriter.
-func (r *tableReplayer) DeleteRange(start, end []byte) error {
-	trimmedStart, trimmedEnd := start[len(r.prefix):], end[len(r.prefix):]
-	return r.w.DeleteRange(trimmedStart, trimmedEnd)
 }
 
 // Replay replays the batch contents.

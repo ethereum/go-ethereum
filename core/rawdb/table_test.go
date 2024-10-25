@@ -41,10 +41,6 @@ func (r *testReplayer) Delete(key []byte) error {
 	return nil
 }
 
-func (r *testReplayer) DeleteRange(start, end []byte) error {
-	panic("not implemented")
-}
-
 func testTableDatabase(t *testing.T, prefix string) {
 	db := NewTable(NewMemoryDatabase(), prefix)
 

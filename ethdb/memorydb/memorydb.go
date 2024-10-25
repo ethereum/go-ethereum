@@ -229,11 +229,6 @@ func (b *batch) Delete(key []byte) error {
 	return nil
 }
 
-// DeleteRange implements KeyValueWriter (not supported on batches).
-func (b *batch) DeleteRange(start, end []byte) error {
-	panic("DeleteRange is not supported on batches")
-}
-
 // ValueSize retrieves the amount of data queued up for writing.
 func (b *batch) ValueSize() int {
 	return b.size

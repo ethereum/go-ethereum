@@ -35,7 +35,10 @@ type KeyValueWriter interface {
 
 	// Delete removes the key from the key-value data store.
 	Delete(key []byte) error
+}
 
+// RangeDeleter wraps the DeleteRange method of a backing data store.
+type RangeDeleter interface {
 	// DeleteRange deletes all of the keys (and values) in the range [start,end)
 	// (inclusive on start, exclusive on end).
 	DeleteRange(start, end []byte) error
@@ -65,6 +68,7 @@ type KeyValueStore interface {
 	KeyValueReader
 	KeyValueWriter
 	KeyValueStater
+	RangeDeleter
 	Batcher
 	Iteratee
 	Compacter
@@ -193,6 +197,7 @@ type ResettableAncientStore interface {
 type Database interface {
 	Reader
 	Writer
+	RangeDeleter
 	Batcher
 	Iteratee
 	Stater
