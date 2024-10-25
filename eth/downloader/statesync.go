@@ -18,7 +18,6 @@ package downloader
 
 import (
 	"fmt"
-	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 	"hash"
 	"sync"
 	"time"
@@ -28,6 +27,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
+	"github.com/XinFinOrg/XDPoSChain/ethdb/memorydb"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/trie"
 )
@@ -327,7 +327,7 @@ func (s *stateSync) commit(force bool) error {
 	b := s.d.stateDB.NewBatch()
 	s.sched.Commit(b)
 	if err := b.Write(); err != nil {
-		return fmt.Errorf("DB write error: %v", err)
+		return fmt.Errorf("write DB error: %v", err)
 	}
 	s.updateStats(s.numUncommitted, 0, 0, time.Since(start))
 	s.numUncommitted = 0

@@ -164,7 +164,7 @@ func (f *Forensics) SendForensicProof(chain consensus.ChainReader, engine *XDPoS
 
 	if ancestorBlock == nil {
 		log.Error("[SendForensicProof] Unable to find the ancestor block by its hash", "Hash", ancestorHash)
-		return errors.New("Can't find ancestor block via hash")
+		return errors.New("can't find ancestor block via hash")
 	}
 
 	content, err := json.Marshal(&types.ForensicsContent{
@@ -455,7 +455,7 @@ func (f *Forensics) isExtendingFromAncestor(blockChainReader consensus.ChainRead
 	for i := 0; i < blockNumDiff; i++ {
 		parentBlock := blockChainReader.GetHeaderByHash(nextBlockHash)
 		if parentBlock == nil {
-			return false, fmt.Errorf("Could not find its parent block when checking whether currentBlock %v with hash %v is extending from the ancestorBlock %v", currentBlock.Number, currentBlock.Hash, ancestorBlock.Number)
+			return false, fmt.Errorf("could not find its parent block when checking whether currentBlock %v with hash %v is extending from the ancestorBlock %v", currentBlock.Number, currentBlock.Hash, ancestorBlock.Number)
 		} else {
 			nextBlockHash = parentBlock.ParentHash
 		}

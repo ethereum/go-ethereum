@@ -190,7 +190,7 @@ func TestBinaryAddressToString(t *testing.T) {
 		have := tt.bin.String()
 		want := tt.str
 		if have != want {
-			t.Errorf("fail to convert binary address to string address\nwant:%s\nhave:%s", have, want)
+			t.Errorf("fail to convert binary address to string address\nwant: %s\nhave: %s", have, want)
 		}
 	}
 }
@@ -199,7 +199,7 @@ func TestStringToBinaryAddress(t *testing.T) {
 		want := tt.bin
 		have := HexToAddress(tt.str)
 		if have != want {
-			t.Errorf("fail to convert string address to binary address\nwant:%s\nhave:%s", have, want)
+			t.Errorf("fail to convert string address to binary address\nwant: %s\nhave: %s", have, want)
 		}
 	}
 }

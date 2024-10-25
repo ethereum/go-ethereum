@@ -959,7 +959,7 @@ func MRPProve(values []*big.Int) (MultiRangeProof, error) {
 	}
 
 	if !acceptedInputNumber {
-		return MultiRangeProof{}, errors.New("Value number is not supported - just 1, 2, 4, 8")
+		return MultiRangeProof{}, errors.New("value number is not supported - just 1, 2, 4, 8")
 	}
 
 	EC = genECPrimeGroupKey(m * bitsPerValue)
@@ -976,15 +976,15 @@ func MRPProve(values []*big.Int) (MultiRangeProof, error) {
 	for j := range values {
 		v := values[j]
 		if v.Cmp(big.NewInt(0)) == -1 {
-			return MultiRangeProof{}, errors.New("Value is below range! Not proving")
+			return MultiRangeProof{}, errors.New("value is below range! Not proving")
 		}
 
 		if v.Cmp(MAX_64_BITS) == 1 {
-			return MultiRangeProof{}, errors.New("Value is above range! Not proving")
+			return MultiRangeProof{}, errors.New("value is above range! Not proving")
 		}
 
 		if v.Cmp(new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(bitsPerValue)), EC.N)) == 1 {
-			return MultiRangeProof{}, errors.New("Value is above range! Not proving")
+			return MultiRangeProof{}, errors.New("value is above range! Not proving")
 		}
 
 		gamma, err := rand.Int(rand.Reader, EC.N)

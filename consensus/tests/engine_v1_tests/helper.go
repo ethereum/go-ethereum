@@ -249,7 +249,7 @@ func PrepareXDCTestBlockChain(t *testing.T, numOfBlocks int, chainConfig *params
 	blockchain.Client = backend
 
 	if err != nil {
-		panic(fmt.Errorf("Error while creating simulated wallet for generating singer address and signer fn: %v", err))
+		panic(fmt.Errorf("error while creating simulated wallet for generating singer address and signer fn: %v", err))
 	}
 	blockchain.Engine().(*XDPoS.XDPoS).Authorize(signer, signFn)
 
@@ -322,13 +322,13 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 		// Sign all the things for v1 block use v1 sigHash function
 		sighash, err := signFn(accounts.Account{Address: signer}, blockchain.Engine().(*XDPoS.XDPoS).SigHash(header).Bytes())
 		if err != nil {
-			panic(errors.New("Error when sign last v1 block hash during test block creation"))
+			panic(errors.New("error when sign last v1 block hash during test block creation"))
 		}
 		copy(header.Extra[len(header.Extra)-utils.ExtraSeal:], sighash)
 	}
 	block, err := createBlockFromHeader(blockchain, header, nil, signer, signFn, chainConfig)
 	if err != nil {
-		panic(fmt.Errorf("Fail to create block in test helper, %v", err))
+		panic(fmt.Errorf("fail to create block in test helper, %v", err))
 	}
 	return block
 }

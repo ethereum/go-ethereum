@@ -128,7 +128,7 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 		a.work[block.HashNoNonce()] = a.currentWork
 		return res, nil
 	}
-	return res, errors.New("No work available yet, don't panic.")
+	return res, errors.New("no work available yet, don't panic")
 }
 
 // SubmitWork tries to inject a pow solution into the remote agent, returning

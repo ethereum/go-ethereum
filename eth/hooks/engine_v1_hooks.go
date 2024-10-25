@@ -264,7 +264,7 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 		foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
 		if foundationWalletAddr == (common.Address{}) {
 			log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
-			return errors.New("Foundation Wallet Address is empty"), nil
+			return errors.New("foundation Wallet Address is empty"), nil
 		}
 		rewards := make(map[string]interface{})
 		if number > 0 && number-rCheckpoint > 0 && foundationWalletAddr != (common.Address{}) {

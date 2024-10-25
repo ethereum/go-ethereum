@@ -661,7 +661,7 @@ func (x *XDPoS_v2) VerifyTimeoutMessage(chain consensus.ChainReader, timeoutMsg 
 	}
 	if len(snap.NextEpochCandidates) == 0 {
 		log.Error("[VerifyTimeoutMessage] cannot find NextEpochCandidates from snapshot", "messageGapNumber", timeoutMsg.GapNumber)
-		return false, errors.New("Empty master node lists from snapshot")
+		return false, errors.New("empty master node lists from snapshot")
 	}
 
 	verified, signer, err := x.verifyMsgSignature(types.TimeoutSigHash(&types.TimeoutForSign{
@@ -789,7 +789,7 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 	epochInfo, err := x.getEpochSwitchInfo(blockChainReader, parentHeader, quorumCert.ProposedBlockInfo.Hash)
 	if err != nil {
 		log.Error("[verifyQC] Error when getting epoch switch Info to verify QC", "Error", err)
-		return errors.New("Fail to verify QC due to failure in getting epoch switch info")
+		return errors.New("fail to verify QC due to failure in getting epoch switch info")
 	}
 
 	signatures, duplicates := UniqueSignatures(quorumCert.Signatures)
@@ -821,12 +821,12 @@ func (x *XDPoS_v2) verifyQC(blockChainReader consensus.ChainReader, quorumCert *
 			}), sig, epochInfo.Masternodes)
 			if err != nil {
 				log.Error("[verifyQC] Error while verfying QC message signatures", "Error", err)
-				haveError = errors.New("Error while verfying QC message signatures")
+				haveError = errors.New("error while verfying QC message signatures")
 				return
 			}
 			if !verified {
 				log.Warn("[verifyQC] Signature not verified doing QC verification", "QC", quorumCert)
-				haveError = errors.New("Fail to verify QC due to signature mis-match")
+				haveError = errors.New("fail to verify QC due to signature mis-match")
 				return
 			}
 		}(signature)

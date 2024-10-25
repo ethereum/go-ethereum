@@ -2207,7 +2207,7 @@ func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transacti
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
 	if tx.To() != nil && tx.IsSpecialTransaction() {
-		return common.Hash{}, errors.New("Dont allow transaction sent to BlockSigners & RandomizeSMC smart contract via API")
+		return common.Hash{}, errors.New("don't allow transaction sent to BlockSigners & RandomizeSMC smart contract via API")
 	}
 
 	// If the transaction fee cap is already specified, ensure the
@@ -2524,11 +2524,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBid(ctx context.Context, baseToken
 	result := PriceVolume{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return result, errors.New("Current block not found")
+		return result, errors.New("current block not found")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return result, errors.New("XDCX service not found")
+		return result, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2540,7 +2540,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBid(ctx context.Context, baseToken
 	}
 	result.Price, result.Volume = XDCxState.GetBestBidPrice(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if result.Price.Sign() == 0 {
-		return result, errors.New("Bid tree not found")
+		return result, errors.New("not found bid tree")
 	}
 	return result, nil
 }
@@ -2549,11 +2549,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestAsk(ctx context.Context, baseToken
 	result := PriceVolume{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return result, errors.New("Current block not found")
+		return result, errors.New("not found current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return result, errors.New("XDCX service not found")
+		return result, errors.New("not found XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2565,7 +2565,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestAsk(ctx context.Context, baseToken
 	}
 	result.Price, result.Volume = XDCxState.GetBestAskPrice(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if result.Price.Sign() == 0 {
-		return result, errors.New("Ask tree not found")
+		return result, errors.New("not find ask tree")
 	}
 	return result, nil
 }
@@ -2573,11 +2573,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestAsk(ctx context.Context, baseToken
 func (s *PublicXDCXTransactionPoolAPI) GetBidTree(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]tradingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2597,11 +2597,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBidTree(ctx context.Context, baseToken
 func (s *PublicXDCXTransactionPoolAPI) GetPrice(ctx context.Context, baseToken, quoteToken common.Address) (*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2613,7 +2613,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetPrice(ctx context.Context, baseToken, 
 	}
 	price := XDCxState.GetLastPrice(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if price == nil || price.Sign() == 0 {
-		return common.Big0, errors.New("Order book's price not found")
+		return common.Big0, errors.New("not find order book's price")
 	}
 	return price, nil
 }
@@ -2621,11 +2621,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetPrice(ctx context.Context, baseToken, 
 func (s *PublicXDCXTransactionPoolAPI) GetLastEpochPrice(ctx context.Context, baseToken, quoteToken common.Address) (*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2637,7 +2637,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLastEpochPrice(ctx context.Context, ba
 	}
 	price := XDCxState.GetMediumPriceBeforeEpoch(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if price == nil || price.Sign() == 0 {
-		return common.Big0, errors.New("Order book's price not found")
+		return common.Big0, errors.New("not find order book's price")
 	}
 	return price, nil
 }
@@ -2645,11 +2645,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLastEpochPrice(ctx context.Context, ba
 func (s *PublicXDCXTransactionPoolAPI) GetCurrentEpochPrice(ctx context.Context, baseToken, quoteToken common.Address) (*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2661,7 +2661,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetCurrentEpochPrice(ctx context.Context,
 	}
 	price, _ := XDCxState.GetMediumPriceAndTotalAmount(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken))
 	if price == nil || price.Sign() == 0 {
-		return common.Big0, errors.New("Order book's price not found")
+		return common.Big0, errors.New("not find order book's price")
 	}
 	return price, nil
 }
@@ -2669,11 +2669,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetCurrentEpochPrice(ctx context.Context,
 func (s *PublicXDCXTransactionPoolAPI) GetAskTree(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]tradingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2693,11 +2693,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetAskTree(ctx context.Context, baseToken
 func (s *PublicXDCXTransactionPoolAPI) GetOrderById(ctx context.Context, baseToken, quoteToken common.Address, orderId uint64) (interface{}, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2710,7 +2710,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetOrderById(ctx context.Context, baseTok
 	orderIdHash := common.BigToHash(new(big.Int).SetUint64(orderId))
 	orderitem := XDCxState.GetOrder(tradingstate.GetTradingOrderBookHash(baseToken, quoteToken), orderIdHash)
 	if orderitem.Quantity == nil || orderitem.Quantity.Sign() == 0 {
-		return nil, errors.New("Order not found")
+		return nil, errors.New("not found order")
 	}
 	return orderitem, nil
 }
@@ -2718,11 +2718,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetOrderById(ctx context.Context, baseTok
 func (s *PublicXDCXTransactionPoolAPI) GetTradingOrderBookInfo(ctx context.Context, baseToken, quoteToken common.Address) (*tradingstate.DumpOrderBookInfo, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2742,11 +2742,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetTradingOrderBookInfo(ctx context.Conte
 func (s *PublicXDCXTransactionPoolAPI) GetLiquidationPriceTree(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]tradingstate.DumpLendingBook, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2766,7 +2766,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLiquidationPriceTree(ctx context.Conte
 func (s *PublicXDCXTransactionPoolAPI) GetInvestingTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -2790,7 +2790,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetInvestingTree(ctx context.Context, len
 func (s *PublicXDCXTransactionPoolAPI) GetBorrowingTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -2814,7 +2814,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetBorrowingTree(ctx context.Context, len
 func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderBookInfo(tx context.Context, lendingToken common.Address, term uint64) (*lendingstate.DumpOrderBookInfo, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -2838,11 +2838,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderBookInfo(tx context.Contex
 func (s *PublicXDCXTransactionPoolAPI) getLendingOrderTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.LendingItem, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return nil, errors.New("XDCX Lending service not found")
+		return nil, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2862,11 +2862,11 @@ func (s *PublicXDCXTransactionPoolAPI) getLendingOrderTree(ctx context.Context, 
 func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.LendingTrade, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return nil, errors.New("XDCX Lending service not found")
+		return nil, errors.New("not find XDCX lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2886,11 +2886,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeTree(ctx context.Context, 
 func (s *PublicXDCXTransactionPoolAPI) GetLiquidationTimeTree(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]lendingstate.DumpOrderList, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return nil, errors.New("XDCX Lending service not found")
+		return nil, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2910,11 +2910,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLiquidationTimeTree(ctx context.Contex
 func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderCount(ctx context.Context, addr common.Address) (*hexutil.Uint64, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return nil, errors.New("XDCX Lending service not found")
+		return nil, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2932,11 +2932,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestInvesting(ctx context.Context, len
 	result := InterestVolume{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return result, errors.New("Current block not found")
+		return result, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return result, errors.New("XDCX Lending service not found")
+		return result, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2954,11 +2954,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBorrowing(ctx context.Context, len
 	result := InterestVolume{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return result, errors.New("Current block not found")
+		return result, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return result, errors.New("XDCX Lending service not found")
+		return result, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2975,11 +2975,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBestBorrowing(ctx context.Context, len
 func (s *PublicXDCXTransactionPoolAPI) GetBids(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -2999,11 +2999,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetBids(ctx context.Context, baseToken, q
 func (s *PublicXDCXTransactionPoolAPI) GetAsks(ctx context.Context, baseToken, quoteToken common.Address) (map[*big.Int]*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	XDCxService := s.b.XDCxService()
 	if XDCxService == nil {
-		return nil, errors.New("XDCX service not found")
+		return nil, errors.New("not find XDCX service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -3023,7 +3023,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetAsks(ctx context.Context, baseToken, q
 func (s *PublicXDCXTransactionPoolAPI) GetInvests(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -3047,7 +3047,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetInvests(ctx context.Context, lendingTo
 func (s *PublicXDCXTransactionPoolAPI) GetBorrows(ctx context.Context, lendingToken common.Address, term uint64) (map[*big.Int]*big.Int, error) {
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return nil, errors.New("Current block not found")
+		return nil, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
@@ -3105,11 +3105,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderById(ctx context.Context, 
 	lendingItem := lendingstate.LendingItem{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return lendingItem, errors.New("Current block not found")
+		return lendingItem, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return lendingItem, errors.New("XDCX Lending service not found")
+		return lendingItem, errors.New("not find XDCX lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -3123,7 +3123,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingOrderById(ctx context.Context, 
 	orderIdHash := common.BigToHash(new(big.Int).SetUint64(orderId))
 	lendingItem = lendingState.GetLendingOrder(lendingOrderBook, orderIdHash)
 	if lendingItem.LendingId != orderId {
-		return lendingItem, errors.New("Lending Item not found")
+		return lendingItem, errors.New("not find lending item")
 	}
 	return lendingItem, nil
 }
@@ -3132,11 +3132,11 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeById(ctx context.Context, 
 	lendingItem := lendingstate.LendingTrade{}
 	block := s.b.CurrentBlock()
 	if block == nil {
-		return lendingItem, errors.New("Current block not found")
+		return lendingItem, errors.New("not find current block")
 	}
 	lendingService := s.b.LendingService()
 	if lendingService == nil {
-		return lendingItem, errors.New("XDCX Lending service not found")
+		return lendingItem, errors.New("not find XDCX Lending service")
 	}
 	author, err := s.b.GetEngine().Author(block.Header())
 	if err != nil {
@@ -3150,7 +3150,7 @@ func (s *PublicXDCXTransactionPoolAPI) GetLendingTradeById(ctx context.Context, 
 	tradeIdHash := common.BigToHash(new(big.Int).SetUint64(tradeId))
 	lendingItem = lendingState.GetLendingTrade(lendingOrderBook, tradeIdHash)
 	if lendingItem.TradeId != tradeId {
-		return lendingItem, errors.New("Lending Item not found")
+		return lendingItem, errors.New("not find lending item")
 	}
 	return lendingItem, nil
 }
@@ -3191,13 +3191,13 @@ type SignTransactionResult struct {
 // the given from address and it needs to be unlocked.
 func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args TransactionArgs) (*SignTransactionResult, error) {
 	if args.Gas == nil {
-		return nil, errors.New("gas not specified")
+		return nil, errors.New("not specify Gas")
 	}
 	if args.GasPrice == nil {
-		return nil, errors.New("gasPrice not specified")
+		return nil, errors.New("not specify GasPrice")
 	}
 	if args.Nonce == nil {
-		return nil, errors.New("nonce not specified")
+		return nil, errors.New("not specify Nonce")
 	}
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err

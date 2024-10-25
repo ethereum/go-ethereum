@@ -229,7 +229,7 @@ func (self *TradingStateDB) SubAmountOrderItem(orderBook common.Hash, orderId co
 	priceHash := common.BigToHash(price)
 	stateObject := self.GetOrNewStateExchangeObject(orderBook)
 	if stateObject == nil {
-		return fmt.Errorf("Order book not found : %s ", orderBook.Hex())
+		return fmt.Errorf("not found orderBook: %s", orderBook.Hex())
 	}
 	var stateOrderList *stateOrderList
 	switch side {
@@ -238,18 +238,18 @@ func (self *TradingStateDB) SubAmountOrderItem(orderBook common.Hash, orderId co
 	case Bid:
 		stateOrderList = stateObject.getStateBidOrderListObject(self.db, priceHash)
 	default:
-		return fmt.Errorf("Order type not found : %s ", side)
+		return fmt.Errorf("not found order type: %s", side)
 	}
 	if stateOrderList == nil || stateOrderList.empty() {
-		return fmt.Errorf("Order list empty  order book : %s , order id  : %s , price  : %s ", orderBook, orderId.Hex(), priceHash.Hex())
+		return fmt.Errorf("empty Orderlist: order book: %s , order id : %s , price : %s", orderBook, orderId.Hex(), priceHash.Hex())
 	}
 	stateOrderItem := stateObject.getStateOrderObject(self.db, orderId)
 	if stateOrderItem == nil || stateOrderItem.empty() {
-		return fmt.Errorf("Order item empty  order book : %s , order id  : %s , price  : %s ", orderBook, orderId.Hex(), priceHash.Hex())
+		return fmt.Errorf("empty OrderItem: order book: %s , order id : %s , price : %s", orderBook, orderId.Hex(), priceHash.Hex())
 	}
 	currentAmount := new(big.Int).SetBytes(stateOrderList.GetOrderAmount(self.db, orderId).Bytes()[:])
 	if currentAmount.Cmp(amount) < 0 {
-		return fmt.Errorf("Order amount not enough : %s , have : %d , want : %d ", orderId.Hex(), currentAmount, amount)
+		return fmt.Errorf("not enough order amount: %s , have : %d , want : %d ", orderId.Hex(), currentAmount, amount)
 	}
 	self.journal = append(self.journal, subAmountOrder{
 		orderBook: orderBook,
@@ -282,11 +282,11 @@ func (self *TradingStateDB) CancelOrder(orderBook common.Hash, order *OrderItem)
 	orderIdHash := common.BigToHash(new(big.Int).SetUint64(order.OrderID))
 	stateObject := self.GetOrNewStateExchangeObject(orderBook)
 	if stateObject == nil {
-		return fmt.Errorf("Order book not found : %s ", orderBook.Hex())
+		return fmt.Errorf("not found orderBook: %s", orderBook.Hex())
 	}
 	stateOrderItem := stateObject.getStateOrderObject(self.db, orderIdHash)
 	if stateOrderItem == nil || stateOrderItem.empty() {
-		return fmt.Errorf("Order item empty  order book : %s , order id  : %s ", orderBook, orderIdHash.Hex())
+		return fmt.Errorf("empty OrderItem: order book: %s , order id : %s", orderBook, orderIdHash.Hex())
 	}
 	priceHash := common.BigToHash(stateOrderItem.data.Price)
 	var stateOrderList *stateOrderList
@@ -296,20 +296,20 @@ func (self *TradingStateDB) CancelOrder(orderBook common.Hash, order *OrderItem)
 	case Bid:
 		stateOrderList = stateObject.getStateBidOrderListObject(self.db, priceHash)
 	default:
-		return fmt.Errorf("Order side not found : %s ", order.Side)
+		return fmt.Errorf("not found order.Side: %s", order.Side)
 	}
 	if stateOrderList == nil || stateOrderList.empty() {
-		return fmt.Errorf("Order list empty  order book : %s , order id  : %s , price  : %s ", orderBook, orderIdHash.Hex(), priceHash.Hex())
+		return fmt.Errorf("empty OrderList: order book: %s , order id : %s , price : %s", orderBook, orderIdHash.Hex(), priceHash.Hex())
 	}
 
 	if stateOrderItem.data.UserAddress != order.UserAddress {
-		return fmt.Errorf("Error Order User Address mismatch when cancel order book : %s , order id  : %s , got : %s , expect : %s ", orderBook, orderIdHash.Hex(), stateOrderItem.data.UserAddress.Hex(), order.UserAddress.Hex())
+		return fmt.Errorf("error Order UserAddress mismatch when cancel: order book: %s , order id : %s , got : %s , expect : %s", orderBook, orderIdHash.Hex(), stateOrderItem.data.UserAddress.Hex(), order.UserAddress.Hex())
 	}
 	if stateOrderItem.data.Hash != order.Hash {
-		return fmt.Errorf("Invalid order hash :  got : %s , expect : %s ", order.Hash.Hex(), stateOrderItem.data.Hash.Hex())
+		return fmt.Errorf("invalid order hash: got : %s , expect : %s", order.Hash.Hex(), stateOrderItem.data.Hash.Hex())
 	}
 	if stateOrderItem.data.ExchangeAddress != order.ExchangeAddress {
-		return fmt.Errorf("Exchange Address mismatch when cancel. order book : %s , order id  : %s , got : %s , expect : %s ", orderBook, orderIdHash.Hex(), order.ExchangeAddress.Hex(), stateOrderItem.data.ExchangeAddress.Hex())
+		return fmt.Errorf("mismatch ExchangeAddress when cancel: order book : %s , order id : %s , got : %s , expect : %s", orderBook, orderIdHash.Hex(), order.ExchangeAddress.Hex(), stateOrderItem.data.ExchangeAddress.Hex())
 	}
 	self.journal = append(self.journal, cancelOrder{
 		orderBook: orderBook,
@@ -396,7 +396,7 @@ func (self *TradingStateDB) GetBestOrderIdAndAmount(orderBook common.Hash, price
 		case Bid:
 			stateOrderList = stateObject.getStateBidOrderListObject(self.db, common.BigToHash(price))
 		default:
-			return EmptyHash, Zero, fmt.Errorf("not found side :%s ", side)
+			return EmptyHash, Zero, fmt.Errorf("not found side: %s", side)
 		}
 		if stateOrderList != nil {
 			key, _, err := stateOrderList.getTrie(self.db).TryGetBestLeftKeyAndValue()
@@ -407,9 +407,9 @@ func (self *TradingStateDB) GetBestOrderIdAndAmount(orderBook common.Hash, price
 			amount := stateOrderList.GetOrderAmount(self.db, orderId)
 			return orderId, new(big.Int).SetBytes(amount.Bytes()), nil
 		}
-		return EmptyHash, Zero, fmt.Errorf("not found order list with orderBook : %s , price : %d , side :%s ", orderBook.Hex(), price, side)
+		return EmptyHash, Zero, fmt.Errorf("not found order list with orderBook: %s , price : %d , side : %s", orderBook.Hex(), price, side)
 	}
-	return EmptyHash, Zero, fmt.Errorf("not found orderBook : %s ", orderBook.Hex())
+	return EmptyHash, Zero, fmt.Errorf("not found orderBook: %s", orderBook.Hex())
 }
 
 // updateStateExchangeObject writes the given object to the trie.
@@ -699,18 +699,18 @@ func (self *TradingStateDB) RemoveLiquidationPrice(orderBook common.Hash, price 
 	priceHash := common.BigToHash(price)
 	orderbookState := self.getStateExchangeObject(orderBook)
 	if orderbookState == nil {
-		return fmt.Errorf("order book not found : %s ", orderBook.Hex())
+		return fmt.Errorf("not found order book: %s", orderBook.Hex())
 	}
 	liquidationPriceState := orderbookState.getStateLiquidationPrice(self.db, priceHash)
 	if liquidationPriceState == nil {
-		return fmt.Errorf("liquidation price not found : %s , %s ", orderBook.Hex(), priceHash.Hex())
+		return fmt.Errorf("not found liquidation price: %s , %s", orderBook.Hex(), priceHash.Hex())
 	}
 	lendingBookState := liquidationPriceState.getStateLendingBook(self.db, lendingBook)
 	if lendingBookState == nil {
-		return fmt.Errorf("lending book not found : %s , %s ,%s ", orderBook.Hex(), priceHash.Hex(), lendingBook.Hex())
+		return fmt.Errorf("not found lending book: %s , %s ,%s", orderBook.Hex(), priceHash.Hex(), lendingBook.Hex())
 	}
 	if !lendingBookState.Exist(self.db, tradeIdHash) {
-		return fmt.Errorf("trade id not found : %s , %s ,%s , %d ", orderBook.Hex(), priceHash.Hex(), lendingBook.Hex(), tradeId)
+		return fmt.Errorf("not found trade id: %s , %s ,%s , %d ", orderBook.Hex(), priceHash.Hex(), lendingBook.Hex(), tradeId)
 	}
 	lendingBookState.removeTradingId(self.db, tradeIdHash)
 	lendingBookState.subVolume(One)

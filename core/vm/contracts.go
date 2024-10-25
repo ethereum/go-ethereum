@@ -575,10 +575,10 @@ func (c *ringSignatureVerifier) RequiredGas(input []byte) uint64 {
 func (c *ringSignatureVerifier) Run(proof []byte) ([]byte, error) {
 	der, err := privacy.Deserialize(proof)
 	if err != nil {
-		return []byte{}, errors.New("Fail to deserialize proof")
+		return []byte{}, errors.New("fail to deserialize proof")
 	}
 	if !privacy.Verify(der, false) {
-		return []byte{}, errors.New("Fail to verify ring signature")
+		return []byte{}, errors.New("fail to verify ring signature")
 	}
 	return []byte{}, nil
 }

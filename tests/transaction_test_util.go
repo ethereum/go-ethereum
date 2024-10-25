@@ -83,7 +83,7 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 		return err
 	}
 	if sender != common.BytesToAddress(tt.json.Sender) {
-		return fmt.Errorf("Sender mismatch: got %x, want %x", sender, tt.json.Sender)
+		return fmt.Errorf("mismatch Sender: got %x, want %x", sender, tt.json.Sender)
 	}
 	// Check decoded fields.
 	err = tt.json.Transaction.verify(signer, tx)
@@ -98,36 +98,36 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 
 func (tt *ttTransaction) verify(signer types.Signer, tx *types.Transaction) error {
 	if !bytes.Equal(tx.Data(), tt.Data) {
-		return fmt.Errorf("Tx input data mismatch: got %x want %x", tx.Data(), tt.Data)
+		return fmt.Errorf("mismatch tx input data: got %x want %x", tx.Data(), tt.Data)
 	}
 	if tx.Gas() != tt.GasLimit {
-		return fmt.Errorf("GasLimit mismatch: got %d, want %d", tx.Gas(), tt.GasLimit)
+		return fmt.Errorf("mismatch GasLimit: got %d, want %d", tx.Gas(), tt.GasLimit)
 	}
 	if tx.GasPrice().Cmp(tt.GasPrice) != 0 {
-		return fmt.Errorf("GasPrice mismatch: got %v, want %v", tx.GasPrice(), tt.GasPrice)
+		return fmt.Errorf("mismatch GasPrice: got %v, want %v", tx.GasPrice(), tt.GasPrice)
 	}
 	if tx.Nonce() != tt.Nonce {
-		return fmt.Errorf("Nonce mismatch: got %v, want %v", tx.Nonce(), tt.Nonce)
+		return fmt.Errorf("mismatch Nonce: got %v, want %v", tx.Nonce(), tt.Nonce)
 	}
 	v, r, s := tx.RawSignatureValues()
 	if r.Cmp(tt.R) != 0 {
-		return fmt.Errorf("R mismatch: got %v, want %v", r, tt.R)
+		return fmt.Errorf("mismatch R: got %v, want %v", r, tt.R)
 	}
 	if s.Cmp(tt.S) != 0 {
-		return fmt.Errorf("S mismatch: got %v, want %v", s, tt.S)
+		return fmt.Errorf("mismatch S: got %v, want %v", s, tt.S)
 	}
 	if v.Cmp(tt.V) != 0 {
-		return fmt.Errorf("V mismatch: got %v, want %v", v, tt.V)
+		return fmt.Errorf("mismatch V: got %v, want %v", v, tt.V)
 	}
 	if tx.To() == nil {
 		if tt.To != (common.Address{}) {
-			return fmt.Errorf("To mismatch when recipient is nil (contract creation): %x", tt.To)
+			return fmt.Errorf("mismatch To when recipient is nil (contract creation): %x", tt.To)
 		}
 	} else if *tx.To() != tt.To {
-		return fmt.Errorf("To mismatch: got %x, want %x", *tx.To(), tt.To)
+		return fmt.Errorf("mismatch To: got %x, want %x", *tx.To(), tt.To)
 	}
 	if tx.Value().Cmp(tt.Value) != 0 {
-		return fmt.Errorf("Value mismatch: got %x, want %x", tx.Value(), tt.Value)
+		return fmt.Errorf("mismatch Value: got %x, want %x", tx.Value(), tt.Value)
 	}
 	return nil
 }

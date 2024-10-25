@@ -20,7 +20,7 @@ func TestGetMissedRoundsInEpochByBlockNumOnlyForV2Consensus(t *testing.T) {
 
 	data, err := engine.APIs(bc.GetBlockChain())[0].Service.(*XDPoS.API).GetMissedRoundsInEpochByBlockNum(&blockNum)
 
-	assert.EqualError(t, err, "Not supported in the v1 consensus")
+	assert.EqualError(t, err, "not supported in the v1 consensus")
 	assert.Nil(t, data)
 }
 
