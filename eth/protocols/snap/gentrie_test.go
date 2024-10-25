@@ -241,7 +241,7 @@ func TestPartialGentree(t *testing.T) {
 			{2, len(entries) - 2},                // no left and right
 			{2, len(entries) - 2},                // no left and right
 			{len(entries) / 2, len(entries) / 2}, // single
-			{0, 0}, // single first
+			{0, 0},                               // single first
 			{len(entries) - 1, len(entries) - 1}, // single last
 		}
 		for _, c := range cases {
@@ -350,7 +350,7 @@ func TestGentreeDanglingClearing(t *testing.T) {
 			{2, len(entries) - 2},                // no left and right
 			{2, len(entries) - 2},                // no left and right
 			{len(entries) / 2, len(entries) / 2}, // single
-			{0, 0}, // single first
+			{0, 0},                               // single first
 			{len(entries) - 1, len(entries) - 1}, // single last
 		}
 		for _, c := range cases {
@@ -390,13 +390,13 @@ func TestFlushPartialTree(t *testing.T) {
 		first int
 		last  int
 	}{
-		{0, len(entries) - 1},   // full
-		{1, len(entries) - 1},   // no left
-		{10, len(entries) - 1},  // no left
-		{10, len(entries) - 2},  // no left and right
-		{10, len(entries) - 10}, // no left and right
-		{11, 11},                // single
-		{0, 0},                  // single first
+		{0, len(entries) - 1},                // full
+		{1, len(entries) - 1},                // no left
+		{10, len(entries) - 1},               // no left
+		{10, len(entries) - 2},               // no left and right
+		{10, len(entries) - 10},              // no left and right
+		{11, 11},                             // single
+		{0, 0},                               // single first
 		{len(entries) - 1, len(entries) - 1}, // single last
 	}
 	for _, c := range cases {

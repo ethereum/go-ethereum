@@ -335,7 +335,7 @@ func (d *Database) Delete(key []byte) error {
 	if d.closed {
 		return pebble.ErrClosed
 	}
-	return d.db.Delete(key, nil)
+	return d.db.Delete(key, d.writeOptions)
 }
 
 // DeleteRange deletes all of the keys (and values) in the range [start,end)
@@ -346,7 +346,7 @@ func (d *Database) DeleteRange(start, end []byte) error {
 	if d.closed {
 		return pebble.ErrClosed
 	}
-	return d.db.DeleteRange(start, end, nil)
+	return d.db.DeleteRange(start, end, d.writeOptions)
 }
 
 // NewBatch creates a write-only key-value store that buffers changes to its host
