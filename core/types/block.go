@@ -32,11 +32,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
 
-var (
-	EmptyRootHash  = DeriveSha(Transactions{})
-	EmptyUncleHash = CalcUncleHash(nil)
-)
-
 // A BlockNonce is a 64-bit hash which proves (combined with the
 // mix-hash) that a sufficient amount of computation has been carried
 // out on a block.
@@ -222,7 +217,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
-		b.header.TxHash = EmptyRootHash
+		b.header.TxHash = EmptyTxsHash
 	} else {
 		b.header.TxHash = DeriveSha(Transactions(txs))
 		b.transactions = make(Transactions, len(txs))
@@ -230,7 +225,7 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	}
 
 	if len(receipts) == 0 {
-		b.header.ReceiptHash = EmptyRootHash
+		b.header.ReceiptHash = EmptyReceiptsHash
 	} else {
 		b.header.ReceiptHash = DeriveSha(Receipts(receipts))
 		b.header.Bloom = CreateBloom(receipts)

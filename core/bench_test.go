@@ -231,13 +231,15 @@ func makeChainForBench(db ethdb.Database, full bool, count uint64) {
 			ParentHash:  hash,
 			Difficulty:  big.NewInt(1),
 			UncleHash:   types.EmptyUncleHash,
-			TxHash:      types.EmptyRootHash,
-			ReceiptHash: types.EmptyRootHash,
+			TxHash:      types.EmptyTxsHash,
+			ReceiptHash: types.EmptyReceiptsHash,
 		}
 		hash = header.Hash()
+
 		rawdb.WriteHeader(db, header)
 		rawdb.WriteCanonicalHash(db, hash, n)
 		WriteTd(db, hash, n, big.NewInt(int64(n+1)))
+
 		if full || n == 0 {
 			block := types.NewBlockWithHeader(header)
 			rawdb.WriteBody(db, hash, n, block.Body())

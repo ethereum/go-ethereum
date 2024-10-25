@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
 )
@@ -116,7 +117,7 @@ func (it *NodeIterator) step() error {
 	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}
-	if !bytes.Equal(account.CodeHash, emptyCodeHash) {
+	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
 		it.codeHash = common.BytesToHash(account.CodeHash)
 		addrHash := common.BytesToHash(it.stateIt.LeafKey())
 		it.code, err = it.state.db.ContractCode(addrHash, common.BytesToHash(account.CodeHash))

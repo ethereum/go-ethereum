@@ -23,11 +23,10 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 )
-
-var emptyCodeHash = crypto.Keccak256(nil)
 
 type Code []byte
 
@@ -93,7 +92,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
+	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
 }
 
 // Account is the Ethereum consensus representation of accounts.
@@ -111,7 +110,7 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 		data.Balance = new(big.Int)
 	}
 	if data.CodeHash == nil {
-		data.CodeHash = emptyCodeHash
+		data.CodeHash = types.EmptyCodeHash.Bytes()
 	}
 	return &stateObject{
 		db:            db,
@@ -372,7 +371,7 @@ func (s *stateObject) Code(db Database) []byte {
 	if s.code != nil {
 		return s.code
 	}
-	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
+	if bytes.Equal(s.CodeHash(), types.EmptyCodeHash.Bytes()) {
 		return nil
 	}
 	code, err := db.ContractCode(s.addrHash, common.BytesToHash(s.CodeHash()))
