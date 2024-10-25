@@ -458,6 +458,8 @@ func TestProcessVerkle(t *testing.T) {
 			ShanghaiTime:            u64(0),
 			VerkleTime:              u64(0),
 			TerminalTotalDifficulty: common.Big0,
+			// TODO uncomment when proof generation is merged
+			// ProofInBlocks:                 true,
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -638,7 +640,6 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 			ShanghaiTime:                  u64(0),
 			VerkleTime:                    u64(0),
 			TerminalTotalDifficulty:       common.Big0,
-			TerminalTotalDifficultyPassed: true,
 		}
 		coinbase = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
 		account1 = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
@@ -794,7 +795,6 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 			ShanghaiTime:                  u64(0),
 			VerkleTime:                    u64(0),
 			TerminalTotalDifficulty:       common.Big0,
-			TerminalTotalDifficultyPassed: true,
 		}
 		coinbase = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
 		account1 = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
@@ -881,7 +881,6 @@ func TestProcessVerklExtCodeHashOpcode(t *testing.T) {
 			ShanghaiTime:                  u64(0),
 			VerkleTime:                    u64(0),
 			TerminalTotalDifficulty:       common.Big0,
-			TerminalTotalDifficultyPassed: true,
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1006,7 +1005,6 @@ func TestProcessVerkleBalanceOpcode(t *testing.T) {
 			ShanghaiTime:                  u64(0),
 			VerkleTime:                    u64(0),
 			TerminalTotalDifficulty:       common.Big0,
-			TerminalTotalDifficultyPassed: true,
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1095,7 +1093,6 @@ func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
 			ShanghaiTime:                  u64(0),
 			VerkleTime:                    u64(0),
 			TerminalTotalDifficulty:       common.Big0,
-			TerminalTotalDifficultyPassed: true,
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1241,7 +1238,6 @@ func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 			ShanghaiTime:                  u64(0),
 			VerkleTime:                    u64(0),
 			TerminalTotalDifficulty:       common.Big0,
-			TerminalTotalDifficultyPassed: true,
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1364,7 +1360,6 @@ func TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary(t *testing.T) 
 			ShanghaiTime:                  u64(0),
 			VerkleTime:                    u64(0),
 			TerminalTotalDifficulty:       common.Big0,
-			TerminalTotalDifficultyPassed: true,
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -1484,7 +1479,6 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 			ShanghaiTime:                  u64(0),
 			VerkleTime:                    u64(0),
 			TerminalTotalDifficulty:       common.Big0,
-			TerminalTotalDifficultyPassed: true,
 		}
 		signer     = types.LatestSigner(config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
