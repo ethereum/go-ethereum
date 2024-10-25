@@ -1,6 +1,7 @@
 package trc21issuer
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -60,7 +61,7 @@ func TestFeeTxWithTRC21Token(t *testing.T) {
 	contractBackend.Commit()
 
 	//check trc21 SMC balance
-	balance, err := contractBackend.BalanceAt(nil, trc21IssuerAddr, nil)
+	balance, err := contractBackend.BalanceAt(context.TODO(), trc21IssuerAddr, nil)
 	if err != nil || balance.Cmp(minApply) != 0 {
 		t.Fatal("can't get balance  in trc21Issuer SMC: ", err, "got", balance, "wanted", minApply)
 	}
@@ -78,7 +79,7 @@ func TestFeeTxWithTRC21Token(t *testing.T) {
 		t.Fatal("can't execute transfer in tr20: ", err)
 	}
 	contractBackend.Commit()
-	receipt, err := contractBackend.TransactionReceipt(nil, tx.Hash())
+	receipt, err := contractBackend.TransactionReceipt(context.TODO(), tx.Hash())
 	if err != nil {
 		t.Fatal("can't transaction's receipt ", err, "hash", tx.Hash())
 	}
@@ -100,7 +101,7 @@ func TestFeeTxWithTRC21Token(t *testing.T) {
 		t.Fatal("check balance token fee in smart contract: got", balanceIssuerFee, "wanted", remainFee)
 	}
 	//check trc21 SMC balance
-	balance, err = contractBackend.BalanceAt(nil, trc21IssuerAddr, nil)
+	balance, err = contractBackend.BalanceAt(context.TODO(), trc21IssuerAddr, nil)
 	if err != nil || balance.Cmp(remainFee) != 0 {
 		t.Fatal("can't get balance token fee in  smart contract: ", err, "got", balanceIssuerFee, "wanted", remainFee)
 	}
@@ -130,7 +131,7 @@ func TestFeeTxWithTRC21Token(t *testing.T) {
 		t.Fatal("check balance after fail transfer in tr20: ", err, "get", balance, "wanted", remainAirDrop)
 	}
 
-	receipt, err = contractBackend.TransactionReceipt(nil, tx.Hash())
+	receipt, err = contractBackend.TransactionReceipt(context.TODO(), tx.Hash())
 	if err != nil {
 		t.Fatal("can't transaction's receipt ", err, "hash", tx.Hash())
 	}
@@ -142,7 +143,7 @@ func TestFeeTxWithTRC21Token(t *testing.T) {
 		t.Fatal("can't get balance token fee in  smart contract: ", err, "got", balanceIssuerFee, "wanted", remainFee)
 	}
 	//check trc21 SMC balance
-	balance, err = contractBackend.BalanceAt(nil, trc21IssuerAddr, nil)
+	balance, err = contractBackend.BalanceAt(context.TODO(), trc21IssuerAddr, nil)
 	if err != nil || balance.Cmp(remainFee) != 0 {
 		t.Fatal("can't get balance token fee in  smart contract: ", err, "got", balanceIssuerFee, "wanted", remainFee)
 	}
