@@ -80,6 +80,10 @@ func (s *testService) EchoWithCtx(ctx context.Context, str string, i int, args *
 	return echoResult{str, i, args}
 }
 
+func (s *testService) PeerInfo(ctx context.Context) PeerInfo {
+	return PeerInfoFromContext(ctx)
+}
+
 func (s *testService) Sleep(ctx context.Context, duration time.Duration) {
 	time.Sleep(duration)
 }

@@ -721,6 +721,7 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 				http.NotFound(w, req)
 				return
 			}
+			//lint:ignore SA1029 This file will be removed later, reference: #30250
 			ctx = context.WithValue(ctx, "node", node)
 		}
 
@@ -735,6 +736,7 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 				http.NotFound(w, req)
 				return
 			}
+			//lint:ignore SA1029 This file will be removed later, reference: #30250
 			ctx = context.WithValue(ctx, "peer", peer)
 		}
 
