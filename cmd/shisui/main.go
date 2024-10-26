@@ -127,6 +127,7 @@ func shisui(ctx *cli.Context) error {
 
 	// Start system runtime metrics collection
 	go metrics.CollectProcessMetrics(3 * time.Second)
+	go metrics.CollectPortalMetrics(5*time.Second, ctx.StringSlice(utils.PortalNetworksFlag.Name), ctx.String(utils.PortalDataDirFlag.Name))
 
 	if metrics.Enabled {
 		storageCapacity = metrics.NewRegisteredGauge("portal/storage_capacity", nil)
@@ -456,7 +457,7 @@ func initState(config Config, server *rpc.Server, conn discover.UDPConn, localNo
 	if err != nil {
 		return nil, err
 	}
-	stateStore := state.NewStateStorage(contentStorage)
+	stateStore := state.NewStateStorage(contentStorage, db)
 	contentQueue := make(chan *discover.ContentElement, 50)
 
 	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.State, config.PrivateKey, conn, localNode, discV5, stateStore, contentQueue)

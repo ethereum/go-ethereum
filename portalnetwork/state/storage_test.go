@@ -10,7 +10,7 @@ import (
 
 func TestStorage(t *testing.T) {
 	storage := storage.NewMockStorage()
-	stateStorage := NewStateStorage(storage)
+	stateStorage := NewStateStorage(storage, nil)
 	testfiles := []string{"account_trie_node.yaml", "contract_storage_trie_node.yaml", "contract_bytecode.yaml"}
 	for _, file := range testfiles {
 		cases, err := getTestCases(file)

@@ -22,7 +22,9 @@ import (
 )
 
 var (
-	radiusRatio metrics.GaugeFloat64
+	radiusRatio         metrics.GaugeFloat64
+	entriesCount        metrics.Gauge
+	contentStorageUsage metrics.Gauge
 )
 
 const (
@@ -112,10 +114,7 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 		log:                    log.New("storage", config.NetworkName),
 	}
 	hs.radius.Store(storage.MaxDistance)
-	if metrics.Enabled {
-		radiusRatio = metrics.NewRegisteredGaugeFloat64("portal/radius_ratio", nil)
-		radiusRatio.Update(1)
-	}
+
 	err := hs.createTable()
 	if err != nil {
 		return nil, err
@@ -124,6 +123,28 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 	err = hs.initStmts()
 
 	// Check whether we already have data, and use it to set radius
+
+	// necessary to test NetworkName==history because state also initialize HistoryStorage
+	if metrics.Enabled && strings.ToLower(config.NetworkName) == "history" {
+		radiusRatio = metrics.NewRegisteredGaugeFloat64("portal/history/radius_ratio", nil)
+		radiusRatio.Update(1)
+
+		entriesCount = metrics.NewRegisteredGauge("portal/history/entry_count", nil)
+		log.Info("Counting entities in history storage for metrics")
+		count, err := hs.ContentCount()
+		if err != nil {
+			log.Debug("Querry execution error", "network", config.NetworkName, "metric", "entry_count", "err", err)
+		}
+		entriesCount.Update(int64(count))
+
+		contentStorageUsage = metrics.NewRegisteredGauge("portal/history/content_storage", nil)
+		log.Info("Counting storage usage (bytes) in history for metrics")
+		str, err := hs.ContentSize()
+		if err != nil {
+			log.Debug("Querry execution error", "network", config.NetworkName, "metric", "content_storage", "err", err)
+		}
+		contentStorageUsage.Update(int64(str))
+	}
 
 	return hs, err
 }
@@ -195,6 +216,10 @@ func (p *ContentStorage) put(contentId []byte, content []byte) PutResult {
 		return PutResult{pruned: true, count: count}
 	}
 
+	if metrics.Enabled {
+		entriesCount.Inc(1)
+		contentStorageUsage.Inc(int64(len(content)))
+	}
 	return PutResult{}
 }
 
@@ -287,6 +312,23 @@ func (p *ContentStorage) ContentCount() (uint64, error) {
 func (p *ContentStorage) ContentSize() (uint64, error) {
 	sql := "SELECT SUM(length(value)) FROM kvstore"
 	return p.queryRowUint64(sql)
+}
+
+func (p *ContentStorage) SizeByKey(contentId []byte) (uint64, error) {
+	sql := "SELECT SUM( length(value) ) FROM kvstore WHERE key = " + string(contentId) + ";"
+	return p.queryRowUint64(sql)
+}
+
+func (p *ContentStorage) SizeByKeys(ids [][]byte) (uint64, error) {
+	sql := "SELECT SUM( length(value) ) FROM kvstore WHERE key IN (?" + strings.Repeat(", ?", len(ids)-1) + ");"
+	return p.queryRowUint64(sql)
+}
+
+func (p *ContentStorage) SizeOutRadius(radius *uint256.Int) (uint64, error) {
+	sql := "SELECT SUM( length(value) ) FROM kvstore WHERE greater(xor(key, (?1)), (?2)) = 1;"
+	var size uint64
+	err := p.sqliteDB.QueryRow(sql, p.nodeId[:], radius.Bytes()).Scan(&size)
+	return size, err
 }
 
 func (p *ContentStorage) queryRowUint64(sqlStr string) (uint64, error) {
@@ -423,11 +465,31 @@ func (p *ContentStorage) deleteContentFraction(fraction float64) (deleteCount in
 }
 
 func (p *ContentStorage) del(contentId []byte) error {
-	_, err := p.delStmt.Exec(contentId)
+	var sizeDel uint64
+	var err error
+	if metrics.Enabled {
+		sizeDel, err = p.SizeByKey(contentId)
+		if err != nil {
+			return err
+		}
+	}
+	_, err = p.delStmt.Exec(contentId)
+	if metrics.Enabled && err != nil {
+		entriesCount.Dec(1)
+		contentStorageUsage.Dec(int64(sizeDel))
+	}
 	return err
 }
 
 func (p *ContentStorage) batchDel(ids [][]byte) error {
+	var sizeDel uint64
+	var err error
+	if metrics.Enabled {
+		sizeDel, err = p.SizeByKeys(ids)
+		if err != nil {
+			return err
+		}
+	}
 	query := "DELETE FROM kvstore WHERE key IN (?" + strings.Repeat(", ?", len(ids)-1) + ")"
 	args := make([]interface{}, len(ids))
 	for i, id := range ids {
@@ -435,7 +497,11 @@ func (p *ContentStorage) batchDel(ids [][]byte) error {
 	}
 
 	// delete items
-	_, err := p.sqliteDB.Exec(query, args...)
+	_, err = p.sqliteDB.Exec(query, args...)
+	if metrics.Enabled && err != nil {
+		entriesCount.Dec(int64(len(args)))
+		contentStorageUsage.Dec(int64(sizeDel))
+	}
 	return err
 }
 
@@ -447,12 +513,24 @@ func (p *ContentStorage) ReclaimSpace() error {
 }
 
 func (p *ContentStorage) deleteContentOutOfRadius(radius *uint256.Int) error {
+	var sizeDel uint64
+	var err error
+	if metrics.Enabled {
+		sizeDel, err = p.SizeOutRadius(radius)
+		if err != nil {
+			return err
+		}
+	}
 	res, err := p.sqliteDB.Exec(deleteOutOfRadiusStmt, p.nodeId[:], radius.Bytes())
 	if err != nil {
 		return err
 	}
-	count, _ := res.RowsAffected()
+	count, err := res.RowsAffected()
 	p.log.Trace("delete items", "count", count)
+	if metrics.Enabled && err != nil {
+		entriesCount.Dec(count)
+		contentStorageUsage.Dec(int64(sizeDel))
+	}
 	return err
 }
 
