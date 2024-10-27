@@ -64,7 +64,7 @@ type UDPv5 struct {
 	// static fields
 	conn           UDPConn
 	tab            *Table
-	cachedIds      map[enode.ID]*enode.Node
+	nodeMu         sync.Mutex
 	cachedAddrNode map[string]*enode.Node
 	netrestrict    *netutil.Netlist
 	priv           *ecdsa.PrivateKey
@@ -155,7 +155,6 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 		// static fields
 		conn:           newMeteredConn(conn),
 		cachedAddrNode: make(map[string]*enode.Node),
-		cachedIds:      make(map[enode.ID]*enode.Node),
 		localNode:      ln,
 		db:             ln.Database(),
 		netrestrict:    cfg.NetRestrict,
@@ -729,8 +728,7 @@ func (t *UDPv5) send(toID enode.ID, toAddr netip.AddrPort, packet v5wire.Packet,
 		return nonce, err
 	}
 	if c != nil && c.Node != nil {
-		t.cachedIds[toID] = c.Node
-		t.cachedAddrNode[toAddr.String()] = c.Node
+		t.putCache(toAddr.String(), c.Node)
 	}
 
 	_, err = t.conn.WriteToUDPAddrPort(enc, toAddr)
@@ -793,8 +791,7 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
 		t.tab.addInboundNode(fromNode)
-		t.cachedIds[fromID] = fromNode
-		t.cachedAddrNode[fromAddr.String()] = fromNode
+		t.putCache(fromAddr.String(), fromNode)
 	}
 	if packet.Kind() != v5wire.WhoareyouPacket {
 		// WHOAREYOU logged separately to report errors.
@@ -998,4 +995,20 @@ func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
 		msg.RespCount = uint8(len(resp))
 	}
 	return resp
+}
+
+func (t *UDPv5) putCache(addr string, node *enode.Node) {
+	t.nodeMu.Lock()
+	defer t.nodeMu.Unlock()
+	if n, ok := t.cachedAddrNode[addr]; ok {
+		t.log.Debug("Update cached node", "old", n.ID(), "new", node.ID())
+	}
+	t.cachedAddrNode[addr] = node
+}
+
+func (t *UDPv5) GetCachedNode(addr string) (*enode.Node, bool) {
+	t.nodeMu.Lock()
+	defer t.nodeMu.Unlock()
+	n, ok := t.cachedAddrNode[addr]
+	return n, ok
 }

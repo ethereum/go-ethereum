@@ -326,7 +326,7 @@ func (p *PortalProtocol) setupUDPListening() error {
 		func(buf []byte, addr *net.UDPAddr) (int, error) {
 			p.Log.Info("will send to target data", "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
 
-			if n, ok := p.DiscV5.cachedAddrNode[addr.String()]; ok {
+			if n, ok := p.DiscV5.GetCachedNode(addr.String()); ok {
 				//_, err := p.DiscV5.TalkRequestToID(id, addr, string(portalwire.UTPNetwork), buf)
 				req := &v5wire.TalkRequest{Protocol: string(portalwire.Utp), Message: buf}
 				p.DiscV5.sendFromAnotherThreadWithNode(n, netip.AddrPortFrom(netutil.IPToAddr(addr.IP), uint16(addr.Port)), req)

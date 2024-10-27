@@ -34,6 +34,7 @@ const (
 	deleteSql                  = "DELETE FROM kvstore WHERE key = (?1);"
 	containSql                 = "SELECT 1 FROM kvstore WHERE key = (?1);"
 	getAllOrderedByDistanceSql = "SELECT key, length(value), xor(key, (?1)) as distance FROM kvstore ORDER BY distance DESC;"
+	getFarthestDistanceSql     = "SELECT key, xor(key, (?1)) as distance FROM kvstore ORDER BY distance DESC Limit 1;"
 	deleteOutOfRadiusStmt      = "DELETE FROM kvstore WHERE greater(xor(key, (?1)), (?2)) = 1"
 	XorFindFarthestQuery       = `SELECT
 		xor(key, (?1)) as distance
@@ -117,8 +118,8 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 	}
 
 	err = hs.initStmts()
-
 	// Check whether we already have data, and use it to set radius
+	hs.setRadiusToFarthestDistance()
 
 	// necessary to test NetworkName==history because state also initialize HistoryStorage
 	if strings.ToLower(config.NetworkName) == "history" {
@@ -374,6 +375,38 @@ func (p *ContentStorage) EstimateNewRadius(currentRadius *uint256.Int) (*uint256
 		return new(uint256.Int).Div(currentRadius, uint256.MustFromBig(bigFormat)), nil
 	}
 	return currentRadius, nil
+}
+
+func (p *ContentStorage) setRadiusToFarthestDistance() {
+	rows, err := p.sqliteDB.Query(getFarthestDistanceSql, p.nodeId[:])
+	if err != nil {
+		p.log.Error("failed to query farthest distance ", "err", err)
+		return
+	}
+	defer func(rows *sql.Rows) {
+		if rows != nil {
+			return
+		}
+		err = rows.Close()
+		if err != nil {
+			p.log.Error("failed to close rows", "err", err)
+		}
+	}(rows)
+
+	if rows.Next() {
+		var contentId []byte
+		var distance []byte
+		err = rows.Scan(&contentId, &distance)
+		if err != nil {
+			p.log.Error("failed to scan rows for farthest distance", "err", err)
+		}
+		dis := uint256.NewInt(0)
+		err = dis.UnmarshalSSZ(distance)
+		if err != nil {
+			p.log.Error("failed to unmarshal ssz for farthest distance", "err", err)
+		}
+		p.radius.Store(dis)
+	}
 }
 
 func (p *ContentStorage) deleteContentFraction(fraction float64) (deleteCount int, err error) {
