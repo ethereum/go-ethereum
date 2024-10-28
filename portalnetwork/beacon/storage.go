@@ -89,7 +89,7 @@ func NewBeaconStorage(config storage.PortalStorageConfig) (storage.ContentStorag
 		} else {
 			q.Scan(resStr)
 		}
-		contentStorageUsage.Update(int64(*resStr))
+		contentStorageUsage.Update(*resStr)
 	}
 	return bs, nil
 }

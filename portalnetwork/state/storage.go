@@ -81,7 +81,7 @@ func NewStateStorage(store storage.ContentStorage, db *sql.DB) *StateStorage {
 		} else {
 			q.Scan(resStr)
 		}
-		contentStorageUsage.Update(int64(*resStr))
+		contentStorageUsage.Update(*resStr)
 	}
 
 	return storage
