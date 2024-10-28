@@ -86,10 +86,10 @@ func SimulateWalletAddressAndSignFn() (common.Address, func(account accounts.Acc
 	pass := "" // not used but required by API
 	a1, err := ks.NewAccount(pass)
 	if err != nil {
-		return common.Address{}, nil, fmt.Errorf(err.Error())
+		return common.Address{}, nil, err
 	}
 	if err := ks.Unlock(a1, ""); err != nil {
-		return a1.Address, nil, fmt.Errorf(err.Error())
+		return a1.Address, nil, err
 	}
 	return a1.Address, ks.SignHash, nil
 }
