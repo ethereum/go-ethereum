@@ -885,33 +885,33 @@ func TestProcessVerklExtCodeHashOpcode(t *testing.T) {
 	config.ChainID.SetUint64(69421)
 
 	dummyContract := []byte{
-		0x60, 2, // PUSH1 2
-		0x60, 12, // PUSH1 12
-		0x60, 0x00, // PUSH1 0
-		0x39, // CODECOPY
+		byte(vm.PUSH1), 2,
+		byte(vm.PUSH1), 12,
+		byte(vm.PUSH1), 0x00,
+		byte(vm.CODECOPY),
 
-		0x60, 2, // PUSH1 2
-		0x60, 0x00, // PUSH1 0
-		0xF3, // RETURN
+		byte(vm.PUSH1), 2, // PUSH1 2
+		byte(vm.PUSH1), 0x00, // PUSH1 0
+		byte(vm.RETURN),
 
 		// Contract that auto-calls EXTCODEHASH
-		0x60, 42, // PUSH1 42
+		byte(vm.PUSH1), 42, // PUSH1 42
 	}
 	dummyContractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
 	extCodeHashContract := []byte{
-		0x60, 22, // PUSH1 22
-		0x60, 12, // PUSH1 12
-		0x60, 0x00, // PUSH1 0
-		0x39, // CODECOPY
+		byte(vm.PUSH1), 22, // PUSH1 22
+		byte(vm.PUSH1), 12, // PUSH1 12
+		byte(vm.PUSH1), 0x00, // PUSH1 0
+		byte(vm.CODECOPY),
 
-		0x60, 22, // PUSH1 22
-		0x60, 0x00, // PUSH1 0
-		0xF3, // RETURN
+		byte(vm.PUSH1), 22, // PUSH1 22
+		byte(vm.PUSH1), 0x00, // PUSH1 0
+		byte(vm.RETURN),
 
 		// Contract that auto-calls EXTCODEHASH
-		0x73, // PUSH20
+		byte(vm.PUSH20),
 		0x3a, 0x22, 0x0f, 0x35, 0x12, 0x52, 0x08, 0x9d, 0x38, 0x5b, 0x29, 0xbe, 0xca, 0x14, 0xe2, 0x7f, 0x20, 0x4c, 0x29, 0x6a,
-		0x3F, // EXTCODEHASH
+		byte(vm.EXTCODEHASH),
 	}
 	extCodeHashContractAddr := common.HexToAddress("db7d6ab1f17c6b31909ae466702703daef9269cf")
 	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
@@ -997,9 +997,9 @@ func TestProcessVerkleBalanceOpcode(t *testing.T) {
 	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 		txData := []byte{
-			0x73,                                                                                                                   // PUSH20
+			byte(vm.PUSH20),
 			0x61, 0x77, 0x84, 0x3d, 0xb3, 0x13, 0x8a, 0xe6, 0x96, 0x79, 0xA5, 0x4b, 0x95, 0xcf, 0x34, 0x5E, 0xD7, 0x59, 0x45, 0x0d, // 0x6177843db3138ae69679A54b95cf345ED759450d
-			0x31, // BALANCE
+			byte(vm.BALANCE),
 		}
 		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(0), 100_000, big.NewInt(875000000), txData), signer, testKey)
 		gen.AddTx(tx)
@@ -1072,19 +1072,19 @@ func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
 	// in a previous transaction.
 
 	selfDestructContract := []byte{
-		0x60, 22, // PUSH1 22
-		0x60, 12, // PUSH1 12
-		0x60, 0x00, // PUSH1 0
-		0x39, // CODECOPY
+		byte(vm.PUSH1), 22,
+		byte(vm.PUSH1), 12,
+		byte(vm.PUSH1), 0x00,
+		byte(vm.CODECOPY),
 
-		0x60, 22, // PUSH1 22
-		0x60, 0x00, // PUSH1 0
-		0xF3, // RETURN
+		byte(vm.PUSH1), 22,
+		byte(vm.PUSH1), 0x00,
+		byte(vm.RETURN),
 
 		// Deployed code
-		0x73,                                                                                                                   // PUSH20
+		byte(vm.PUSH20),
 		0x61, 0x77, 0x84, 0x3d, 0xb3, 0x13, 0x8a, 0xe6, 0x96, 0x79, 0xA5, 0x4b, 0x95, 0xcf, 0x34, 0x5E, 0xD7, 0x59, 0x45, 0x0d, // 0x6177843db3138ae69679A54b95cf345ED759450d
-		0xFF, // SELFDESTRUCT
+		byte(vm.SELFDESTRUCT),
 	}
 	selfDestructContractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
 	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
@@ -1203,9 +1203,9 @@ func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 	// in **the same** transaction sending the remaining balance to an external (i.e: not itself) account.
 
 	selfDestructContract := []byte{
-		0x73,                                                                                                                   // PUSH20
+		byte(vm.PUSH20),
 		0x61, 0x77, 0x84, 0x3d, 0xb3, 0x13, 0x8a, 0xe6, 0x96, 0x79, 0xA5, 0x4b, 0x95, 0xcf, 0x34, 0x5E, 0xD7, 0x59, 0x45, 0x0d, // 0x6177843db3138ae69679A54b95cf345ED759450d
-		0xFF, // SELFDESTRUCT
+		byte(vm.SELFDESTRUCT),
 	}
 	selfDestructContractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
 	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
@@ -1311,19 +1311,19 @@ func TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary(t *testing.T) 
 	// in a *previous* transaction sending the remaining balance to itself.
 
 	selfDestructContract := []byte{
-		0x60, 22, // PUSH1 22
-		0x60, 12, // PUSH1 12
-		0x60, 0x00, // PUSH1 0
-		0x39, // CODECOPY
+		byte(vm.PUSH1), 22, // PUSH1 22
+		byte(vm.PUSH1), 12, // PUSH1 12
+		byte(vm.PUSH1), 0x00, // PUSH1 0
+		byte(vm.CODECOPY),
 
-		0x60, 22, // PUSH1 22
-		0x60, 0x00, // PUSH1 0
-		0xF3, // RETURN
+		byte(vm.PUSH1), 22, // PUSH1 22
+		byte(vm.PUSH1), 0x00, // PUSH1 0
+		byte(vm.RETURN),
 
 		// Deployed code
-		0x73,                                                                                                                   // PUSH20
+		byte(vm.PUSH20),                                                                                                        // PUSH20
 		0x3a, 0x22, 0x0f, 0x35, 0x12, 0x52, 0x08, 0x9d, 0x38, 0x5b, 0x29, 0xbe, 0xca, 0x14, 0xe2, 0x7f, 0x20, 0x4c, 0x29, 0x6a, // 0x3a220f351252089d385b29beca14e27f204c296a
-		0xFF, // SELFDESTRUCT
+		byte(vm.SELFDESTRUCT),
 	}
 	selfDestructContractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
 	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
@@ -1416,9 +1416,9 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 	// in **the same** transaction sending the remaining balance to itself.
 
 	selfDestructContract := []byte{
-		0x73,                                                                                                                   // PUSH20
+		byte(vm.PUSH20),
 		0x3a, 0x22, 0x0f, 0x35, 0x12, 0x52, 0x08, 0x9d, 0x38, 0x5b, 0x29, 0xbe, 0xca, 0x14, 0xe2, 0x7f, 0x20, 0x4c, 0x29, 0x6a, // 0x3a220f351252089d385b29beca14e27f204c296a
-		0xFF, // SELFDESTRUCT
+		byte(vm.SELFDESTRUCT),
 	}
 	selfDestructContractAddr := common.HexToAddress("3a220f351252089d385b29beca14e27f204c296a")
 	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
