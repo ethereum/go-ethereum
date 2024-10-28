@@ -17,12 +17,14 @@
 package walletevent
 
 import (
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 )
 
 type (
 	Listener struct {
-		logger logger
+		logger    logger
+		ethClient ethereum.ChainStateReader
 	}
 
 	logger interface {
@@ -32,9 +34,10 @@ type (
 )
 
 // NewListener creates a new wallet event listener.
-func NewListener(logger logger) *Listener {
-	return Listener{
-		logger: logger,
+func NewListener(logger logger, ethClient ethereum.ChainStateReader) *Listener {
+	return &Listener{
+		logger:    logger,
+		ethClient: ethClient,
 	}
 }
 
@@ -63,7 +66,7 @@ func (l *Listener) Listen(wallets []accounts.Wallet, events chan accounts.Wallet
 			}
 			derivationPaths = append(derivationPaths, accounts.DefaultBaseDerivationPath)
 
-			event.Wallet.SelfDerive(derivationPaths, ethClient)
+			event.Wallet.SelfDerive(derivationPaths, l.ethClient)
 
 		case accounts.WalletDropped:
 			l.logger.Info("Old wallet dropped", "url", event.Wallet.URL())

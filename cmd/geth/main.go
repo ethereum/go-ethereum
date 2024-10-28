@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/internal/walletevent"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
@@ -368,7 +369,8 @@ func startNode(ctx *cli.Context, stack *node.Node, isConsole bool) {
 	// Create a client to interact with local geth node.
 	rpcClient := stack.Attach()
 	ethClient := ethclient.NewClient(rpcClient)
-	walletEventListener := walletevent.NewListener(&log)
+	logger := log.New(ctx)
+	walletEventListener := walletevent.NewListener(logger, ethClient)
 
 	go walletEventListener.Listen(stack.AccountManager().Wallets(), events)
 
