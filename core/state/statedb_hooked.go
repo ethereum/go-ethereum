@@ -198,40 +198,44 @@ func (s *hookedStateDB) SetState(address common.Address, key common.Hash, value 
 }
 
 func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
-	prevCode := s.inner.GetCode(address)
-	prevCodeHash := s.inner.GetCodeHash(address)
-	prev := s.inner.SelfDestruct(address)
+	var prevCode []byte
+	var prevCodeHash common.Hash
 
-	if !prev.IsZero() {
-		if s.hooks.OnBalanceChange != nil {
-			s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-		}
+	if s.hooks.OnCodeChange != nil {
+		prevCode = s.inner.GetCode(address)
+		prevCodeHash = s.inner.GetCodeHash(address)
 	}
 
-	if len(prevCode) > 0 {
-		if s.hooks.OnCodeChange != nil {
-			s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
-		}
+	prev := s.inner.SelfDestruct(address)
+
+	if !prev.IsZero() && s.hooks.OnBalanceChange != nil {
+		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
+	}
+
+	if len(prevCode) > 0 && s.hooks.OnCodeChange != nil {
+		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
 	}
 
 	return prev
 }
 
 func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, bool) {
-	prevCodeHash := s.inner.GetCodeHash(address)
-	prevCode := s.inner.GetCode(address)
-	prev, changed := s.inner.SelfDestruct6780(address)
+	var prevCode []byte
+	var prevCodeHash common.Hash
 
-	if !prev.IsZero() && changed {
-		if s.hooks.OnBalanceChange != nil {
-			s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-		}
+	if s.hooks.OnCodeChange != nil {
+		prevCodeHash = s.inner.GetCodeHash(address)
+		prevCode = s.inner.GetCode(address)
 	}
 
-	if len(prevCode) > 0 && changed {
-		if s.hooks.OnCodeChange != nil {
-			s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
-		}
+	prev, changed := s.inner.SelfDestruct6780(address)
+
+	if !prev.IsZero() && changed && s.hooks.OnBalanceChange != nil {
+		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
+	}
+
+	if len(prevCode) > 0 && changed && s.hooks.OnCodeChange != nil {
+		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
 	}
 
 	return prev, changed
