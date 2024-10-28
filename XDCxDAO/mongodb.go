@@ -101,7 +101,7 @@ func (db *MongoDatabase) HasObject(hash common.Hash, val interface{}) (bool, err
 		err   error
 	)
 	query := bson.M{"hash": hash.Hex()}
-	switch val.(type) {
+	switch item := val.(type) {
 	case *tradingstate.OrderItem:
 		// Find key in ordersCollection collection
 		count, err = sc.DB(db.dbName).C(ordersCollection).Find(query).Limit(1).Count()
@@ -126,7 +126,6 @@ func (db *MongoDatabase) HasObject(hash common.Hash, val interface{}) (bool, err
 		}
 	case *lendingstate.LendingItem:
 		// Find key in lendingItemsCollection collection
-		item := val.(*lendingstate.LendingItem)
 		switch item.Type {
 		case lendingstate.Repay:
 			count, err = sc.DB(db.dbName).C(lendingRepayCollection).Find(query).Limit(1).Count()
@@ -176,7 +175,7 @@ func (db *MongoDatabase) GetObject(hash common.Hash, val interface{}) (interface
 
 		query := bson.M{"hash": hash.Hex()}
 
-		switch val.(type) {
+		switch item := val.(type) {
 		case *tradingstate.OrderItem:
 			var oi *tradingstate.OrderItem
 			err := sc.DB(db.dbName).C(ordersCollection).Find(query).One(&oi)
@@ -196,7 +195,6 @@ func (db *MongoDatabase) GetObject(hash common.Hash, val interface{}) (interface
 		case *lendingstate.LendingItem:
 			var li *lendingstate.LendingItem
 			var err error
-			item := val.(*lendingstate.LendingItem)
 			switch item.Type {
 			case lendingstate.Repay:
 				err = sc.DB(db.dbName).C(lendingRepayCollection).Find(query).One(&li)
@@ -230,62 +228,58 @@ func (db *MongoDatabase) PutObject(hash common.Hash, val interface{}) error {
 	cacheKey := db.getCacheKey(hash.Bytes())
 	db.cacheItems.Add(cacheKey, val)
 
-	switch val.(type) {
+	switch item := val.(type) {
 	case *tradingstate.Trade:
 		// PutObject trade into tradesCollection collection
-		db.tradeBulk.Insert(val.(*tradingstate.Trade))
+		db.tradeBulk.Insert(item)
 	case *tradingstate.OrderItem:
 		// PutObject order into ordersCollection collection
-		o := val.(*tradingstate.OrderItem)
-		if o.Status == tradingstate.OrderStatusOpen {
-			db.orderBulk.Insert(o)
+		if item.Status == tradingstate.OrderStatusOpen {
+			db.orderBulk.Insert(item)
 		} else {
-			query := bson.M{"hash": o.Hash.Hex()}
-			db.orderBulk.Upsert(query, o)
+			query := bson.M{"hash": item.Hash.Hex()}
+			db.orderBulk.Upsert(query, item)
 		}
 		return nil
 	case *tradingstate.EpochPriceItem:
-		item := val.(*tradingstate.EpochPriceItem)
 		query := bson.M{"hash": item.Hash.Hex()}
 		db.epochPriceBulk.Upsert(query, item)
 		return nil
 	case *lendingstate.LendingTrade:
-		lt := val.(*lendingstate.LendingTrade)
 		// PutObject LendingTrade into tradesCollection collection
 		if existed, err := db.HasObject(hash, val); err == nil && existed {
-			query := bson.M{"hash": lt.Hash.Hex()}
-			db.lendingTradeBulk.Upsert(query, lt)
+			query := bson.M{"hash": item.Hash.Hex()}
+			db.lendingTradeBulk.Upsert(query, item)
 		} else {
-			db.lendingTradeBulk.Insert(lt)
+			db.lendingTradeBulk.Insert(item)
 		}
 	case *lendingstate.LendingItem:
 		// PutObject order into ordersCollection collection
-		li := val.(*lendingstate.LendingItem)
-		switch li.Type {
+		switch item.Type {
 		case lendingstate.Repay:
-			if li.Status != lendingstate.LendingStatusReject {
-				li.Status = lendingstate.Repay
+			if item.Status != lendingstate.LendingStatusReject {
+				item.Status = lendingstate.Repay
 			}
-			db.repayBulk.Insert(li)
+			db.repayBulk.Insert(item)
 			return nil
 		case lendingstate.TopUp:
-			if li.Status != lendingstate.LendingStatusReject {
-				li.Status = lendingstate.TopUp
+			if item.Status != lendingstate.LendingStatusReject {
+				item.Status = lendingstate.TopUp
 			}
-			db.topUpBulk.Insert(li)
+			db.topUpBulk.Insert(item)
 			return nil
 		case lendingstate.Recall:
-			if li.Status != lendingstate.LendingStatusReject {
-				li.Status = lendingstate.Recall
+			if item.Status != lendingstate.LendingStatusReject {
+				item.Status = lendingstate.Recall
 			}
-			db.recallBulk.Insert(li)
+			db.recallBulk.Insert(item)
 			return nil
 		default:
-			if li.Status == lendingstate.LendingStatusOpen {
-				db.lendingItemBulk.Insert(li)
+			if item.Status == lendingstate.LendingStatusOpen {
+				db.lendingItemBulk.Insert(item)
 			} else {
-				query := bson.M{"hash": li.Hash.Hex()}
-				db.lendingItemBulk.Upsert(query, li)
+				query := bson.M{"hash": item.Hash.Hex()}
+				db.lendingItemBulk.Upsert(query, item)
 			}
 			return nil
 		}
@@ -313,7 +307,7 @@ func (db *MongoDatabase) DeleteObject(hash common.Hash, val interface{}) error {
 
 	if found {
 		var err error
-		switch val.(type) {
+		switch item := val.(type) {
 		case *tradingstate.OrderItem:
 			err = sc.DB(db.dbName).C(ordersCollection).Remove(query)
 			if err != nil && err != mgo.ErrNotFound {
@@ -325,7 +319,6 @@ func (db *MongoDatabase) DeleteObject(hash common.Hash, val interface{}) error {
 				return fmt.Errorf("failed to delete XDCx trade. Err: %v", err)
 			}
 		case *lendingstate.LendingItem:
-			item := val.(*lendingstate.LendingItem)
 			switch item.Type {
 			case lendingstate.Repay:
 				err = sc.DB(db.dbName).C(lendingRepayCollection).Remove(query)
@@ -424,7 +417,7 @@ func (db *MongoDatabase) DeleteItemByTxHash(txhash common.Hash, val interface{})
 	defer sc.Close()
 
 	query := bson.M{"txHash": txhash.Hex()}
-	switch val.(type) {
+	switch item := val.(type) {
 	case *tradingstate.OrderItem:
 		if err := sc.DB(db.dbName).C(ordersCollection).Remove(query); err != nil && err != mgo.ErrNotFound {
 			log.Error("DeleteItemByTxHash: failed to delete order", "txhash", txhash, "err", err)
@@ -434,7 +427,6 @@ func (db *MongoDatabase) DeleteItemByTxHash(txhash common.Hash, val interface{})
 			log.Error("DeleteItemByTxHash: failed to delete trade", "txhash", txhash, "err", err)
 		}
 	case *lendingstate.LendingItem:
-		item := val.(*lendingstate.LendingItem)
 		switch item.Type {
 		case lendingstate.Repay:
 			if err := sc.DB(db.dbName).C(lendingRepayCollection).Remove(query); err != nil && err != mgo.ErrNotFound {
@@ -473,7 +465,7 @@ func (db *MongoDatabase) GetListItemByTxHash(txhash common.Hash, val interface{}
 	defer sc.Close()
 
 	query := bson.M{"txHash": txhash.Hex()}
-	switch val.(type) {
+	switch item := val.(type) {
 	case *tradingstate.OrderItem:
 		result := []*tradingstate.OrderItem{}
 		if err := sc.DB(db.dbName).C(ordersCollection).Find(query).All(&result); err != nil && err != mgo.ErrNotFound {
@@ -487,7 +479,6 @@ func (db *MongoDatabase) GetListItemByTxHash(txhash common.Hash, val interface{}
 		}
 		return result
 	case *lendingstate.LendingItem:
-		item := val.(*lendingstate.LendingItem)
 		result := []*lendingstate.LendingItem{}
 		switch item.Type {
 		case lendingstate.Repay:
@@ -529,7 +520,7 @@ func (db *MongoDatabase) GetListItemByHashes(hashes []string, val interface{}) i
 
 	query := bson.M{"hash": bson.M{"$in": hashes}}
 
-	switch val.(type) {
+	switch item := val.(type) {
 	case *tradingstate.OrderItem:
 		result := []*tradingstate.OrderItem{}
 		if err := sc.DB(db.dbName).C(ordersCollection).Find(query).All(&result); err != nil && err != mgo.ErrNotFound {
@@ -543,7 +534,6 @@ func (db *MongoDatabase) GetListItemByHashes(hashes []string, val interface{}) i
 		}
 		return result
 	case *lendingstate.LendingItem:
-		item := val.(*lendingstate.LendingItem)
 		result := []*lendingstate.LendingItem{}
 		switch item.Type {
 		case lendingstate.Repay:
