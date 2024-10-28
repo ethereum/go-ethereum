@@ -23,7 +23,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	contractValidator "github.com/XinFinOrg/XDPoSChain/contracts/validator/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
-	. "github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/crypto"
@@ -314,12 +313,12 @@ func signingTxWithSignerFn(header *types.Header, nonce uint64, signer common.Add
 	return signedTx, nil
 }
 
-func UpdateSigner(bc *BlockChain) error {
+func UpdateSigner(bc *core.BlockChain) error {
 	err := bc.UpdateM1()
 	return err
 }
 
-func GetSnapshotSigner(bc *BlockChain, header *types.Header) (signersList, error) {
+func GetSnapshotSigner(bc *core.BlockChain, header *types.Header) (signersList, error) {
 	engine := bc.Engine().(*XDPoS.XDPoS)
 	snap, err := engine.GetSnapshot(bc, header)
 	if err != nil {
@@ -366,7 +365,7 @@ type ForkedBlockOptions struct {
 }
 
 // V2 concensus engine
-func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig, forkedBlockOptions *ForkedBlockOptions) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error), *types.Block) {
+func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig, forkedBlockOptions *ForkedBlockOptions) (*core.BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error), *types.Block) {
 	// Preparation
 	var err error
 	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
@@ -456,7 +455,7 @@ func PrepareXDCTestBlockChainForV2Engine(t *testing.T, numOfBlocks int, chainCon
 }
 
 // V2 concensus engine, compared to PrepareXDCTestBlockChainForV2Engine: (1) no forking (2) add penalty
-func PrepareXDCTestBlockChainWithPenaltyForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error)) {
+func PrepareXDCTestBlockChainWithPenaltyForV2Engine(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*core.BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error)) {
 	// Preparation
 	var err error
 	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
@@ -507,7 +506,7 @@ func PrepareXDCTestBlockChainWithPenaltyForV2Engine(t *testing.T, numOfBlocks in
 }
 
 // V2 concensus engine, compared to PrepareXDCTestBlockChainForV2Engine: (1) no forking (2) 128 masternode candidates
-func PrepareXDCTestBlockChainWith128Candidates(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error)) {
+func PrepareXDCTestBlockChainWith128Candidates(t *testing.T, numOfBlocks int, chainConfig *params.ChainConfig) (*core.BlockChain, *backends.SimulatedBackend, *types.Block, common.Address, func(account accounts.Account, hash []byte) ([]byte, error)) {
 	// Preparation
 	var err error
 	signer, signFn, err := backends.SimulateWalletAddressAndSignFn()
@@ -569,7 +568,7 @@ func PrepareXDCTestBlockChainWith128Candidates(t *testing.T, numOfBlocks int, ch
 	return blockchain, backend, currentBlock, signer, signFn
 }
 
-func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, startingBlock *types.Block, blockNumber int, roundNumber int64, blockCoinBase string, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), penalties []byte, signersKey []*ecdsa.PrivateKey, merkleRoot string) *types.Block {
+func CreateBlock(blockchain *core.BlockChain, chainConfig *params.ChainConfig, startingBlock *types.Block, blockNumber int, roundNumber int64, blockCoinBase string, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), penalties []byte, signersKey []*ecdsa.PrivateKey, merkleRoot string) *types.Block {
 	currentBlock := startingBlock
 	if len(merkleRoot) == 0 {
 		merkleRoot = "35999dded35e8db12de7e6c1471eb9670c162eec616ecebbaf4fddd4676fb930"
@@ -646,7 +645,7 @@ func CreateBlock(blockchain *BlockChain, chainConfig *params.ChainConfig, starti
 	return block
 }
 
-func createBlockFromHeader(bc *BlockChain, customHeader *types.Header, txs []*types.Transaction, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), config *params.ChainConfig) (*types.Block, error) {
+func createBlockFromHeader(bc *core.BlockChain, customHeader *types.Header, txs []*types.Transaction, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), config *params.ChainConfig) (*types.Block, error) {
 	if customHeader.Extra == nil {
 		extraSubstring := "d7830100018358444388676f312e31342e31856c696e75780000000000000000b185dc0d0e917d18e5dbf0746be6597d3331dd27ea0554e6db433feb2e81730b20b2807d33a1527bf43cd3bc057aa7f641609c2551ebe2fd575f4db704fbf38101" // Grabbed from existing mainnet block, it does not have any meaning except for the length validation
 		customHeader.Extra, _ = hex.DecodeString(extraSubstring)
@@ -694,13 +693,13 @@ func createBlockFromHeader(bc *BlockChain, customHeader *types.Header, txs []*ty
 		if err != nil {
 			return nil, fmt.Errorf("%v when get state", err)
 		}
-		gp := new(GasPool).AddGas(header.GasLimit)
+		gp := new(core.GasPool).AddGas(header.GasLimit)
 
 		var gasUsed = new(uint64)
 		var receipts types.Receipts
 		for i, tx := range txs {
 			statedb.Prepare(tx.Hash(), i)
-			receipt, _, err, _ := ApplyTransaction(bc.Config(), nil, bc, &header.Coinbase, gp, statedb, nil, &header, tx, gasUsed, vm.Config{})
+			receipt, _, err, _ := core.ApplyTransaction(bc.Config(), nil, bc, &header.Coinbase, gp, statedb, nil, &header, tx, gasUsed, vm.Config{})
 			if err != nil {
 				return nil, fmt.Errorf("%v when applying transaction", err)
 			}
@@ -729,7 +728,7 @@ func decodeMasternodesFromHeaderExtra(checkpointHeader *types.Header) []common.A
 	return masternodes
 }
 
-func findSignerAndSignFn(bc *BlockChain, header *types.Header, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), config *params.ChainConfig) (common.Address, func(account accounts.Account, hash []byte) ([]byte, error)) {
+func findSignerAndSignFn(bc *core.BlockChain, header *types.Header, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error), config *params.ChainConfig) (common.Address, func(account accounts.Account, hash []byte) ([]byte, error)) {
 	addressToSign := signer
 	addressedSignFn := signFn
 
@@ -765,7 +764,7 @@ func findSignerAndSignFn(bc *BlockChain, header *types.Header, signer common.Add
 	return addressToSign, addressedSignFn
 }
 
-func sealHeader(bc *BlockChain, header *types.Header, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) {
+func sealHeader(bc *core.BlockChain, header *types.Header, signer common.Address, signFn func(account accounts.Account, hash []byte) ([]byte, error)) {
 	// Sign all the things and seal it
 	signedBlockHeader := bc.Engine().(*XDPoS.XDPoS).SigHash(header)
 

@@ -24,24 +24,20 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/XDCx/tradingstate"
 	"github.com/XinFinOrg/XDPoSChain/XDCxlending"
-	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
-
-	"github.com/XinFinOrg/XDPoSChain/XDCx"
-
-	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
-
 	"github.com/XinFinOrg/XDPoSChain/accounts"
+	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
+	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
-	stateDatabase "github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
@@ -516,20 +512,20 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 func (b *EthApiBackend) GetVotersCap(checkpoint *big.Int, masterAddr common.Address, voters []common.Address) map[common.Address]*big.Int {
 	chain := b.eth.blockchain
 	checkpointBlock := chain.GetBlockByNumber(checkpoint.Uint64())
-	state, err := chain.StateAt(checkpointBlock.Root())
+	statedb, err := chain.StateAt(checkpointBlock.Root())
 
 	if err != nil {
 		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint, "err", err)
 		return nil
 	}
-	if state != nil {
+	if statedb != nil {
 		log.Error("fail to get state in GetVotersCap", "checkpoint", checkpoint)
 		return nil
 	}
 
 	voterCaps := make(map[common.Address]*big.Int)
 	for _, voteAddr := range voters {
-		voterCap := stateDatabase.GetVoterCap(state, masterAddr, voteAddr)
+		voterCap := state.GetVoterCap(statedb, masterAddr, voteAddr)
 		voterCaps[voteAddr] = voterCap
 	}
 	return voterCaps
@@ -552,21 +548,21 @@ func (b *EthApiBackend) GetEpochDuration() *big.Int {
 // GetMasternodesCap return a cap of all masternode at a checkpoint
 func (b *EthApiBackend) GetMasternodesCap(checkpoint uint64) map[common.Address]*big.Int {
 	checkpointBlock := b.eth.blockchain.GetBlockByNumber(checkpoint)
-	state, err := b.eth.blockchain.StateAt(checkpointBlock.Root())
+	statedb, err := b.eth.blockchain.StateAt(checkpointBlock.Root())
 	if err != nil {
 		log.Error("fail to get state in GetMasternodesCap", "checkpoint", checkpoint, "err", err)
 		return nil
 	}
-	if state == nil {
+	if statedb == nil {
 		log.Error("fail to get state in GetMasternodesCap", "checkpoint", checkpoint)
 		return nil
 	}
 
-	candicates := stateDatabase.GetCandidates(state)
+	candicates := state.GetCandidates(statedb)
 
 	masternodesCap := map[common.Address]*big.Int{}
 	for _, candicate := range candicates {
-		masternodesCap[candicate] = stateDatabase.GetCandidateCap(state, candicate)
+		masternodesCap[candicate] = state.GetCandidateCap(statedb, candicate)
 	}
 
 	return masternodesCap
