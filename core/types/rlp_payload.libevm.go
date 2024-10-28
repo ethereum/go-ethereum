@@ -160,6 +160,13 @@ func (e *StateAccountExtra) Equal(f *StateAccountExtra) bool {
 	return e.t.Equal(f.t)
 }
 
+// IsZero reports whether e carries the the zero value for its type, as
+// registered via [RegisterExtras]. It returns true if no type was registered or
+// if `e == nil`.
+func (e *StateAccountExtra) IsZero() bool {
+	return e == nil || e.t == nil || e.t.IsZero()
+}
+
 var _ interface {
 	rlp.Encoder
 	rlp.Decoder

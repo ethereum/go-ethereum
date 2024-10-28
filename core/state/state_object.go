@@ -93,7 +93,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.IsZero() && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
+	return s.data.Nonce == 0 && s.data.Balance.IsZero() && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes()) && s.data.Extra.IsZero()
 }
 
 // newObject creates a state object.
