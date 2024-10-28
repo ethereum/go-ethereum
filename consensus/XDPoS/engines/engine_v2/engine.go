@@ -37,6 +37,10 @@ type XDPoS_v2 struct {
 	epochSwitches   *lru.ARCCache // infos of epoch: master nodes, epoch switch block info, parent of that info
 	verifiedHeaders *lru.ARCCache
 
+	// only contains epoch switch block info
+	// input: round, output: infos of epoch switch block and next epoch switch block info
+	round2epochBlockInfo *lru.ARCCache
+
 	signer   common.Address  // Ethereum address of the signing key
 	signFn   clique.SignerFn // Signer function to authorize hashes with
 	lock     sync.RWMutex    // Protects the signer fields
@@ -77,6 +81,7 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database, minePeriodCh chan i
 	signatures, _ := lru.NewARC(utils.InmemorySnapshots)
 	epochSwitches, _ := lru.NewARC(int(utils.InmemoryEpochs))
 	verifiedHeaders, _ := lru.NewARC(utils.InmemorySnapshots)
+	round2epochBlockInfo, _ := lru.NewARC(utils.InmemoryRound2Epochs)
 
 	timeoutPool := utils.NewPool()
 	votePool := utils.NewPool()
@@ -95,6 +100,8 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database, minePeriodCh chan i
 		timeoutWorker:   timeoutTimer,
 		BroadcastCh:     make(chan interface{}),
 		minePeriodCh:    minePeriodCh,
+
+		round2epochBlockInfo: round2epochBlockInfo,
 
 		timeoutPool: timeoutPool,
 		votePool:    votePool,

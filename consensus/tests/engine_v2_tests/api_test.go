@@ -168,3 +168,62 @@ func TestGetEpochNumbersBetween(t *testing.T) {
 	assert.Nil(t, numbers)
 	assert.EqualError(t, err, "illegal begin block number")
 }
+func TestGetBlockByEpochNumber(t *testing.T) {
+	blockchain, _, currentBlock, signer, signFn := PrepareXDCTestBlockChainWithPenaltyForV2Engine(t, 1802, params.TestXDPoSMockChainConfig)
+
+	blockCoinBase := "0x111000000000000000000000000000000123"
+	largeRound := int64(1802)
+	newBlock := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, currentBlock, int(currentBlock.NumberU64())+1, largeRound, blockCoinBase, signer, signFn, nil, nil, currentBlock.Header().Root.Hex())
+	err := blockchain.InsertBlock(newBlock)
+	assert.Nil(t, err)
+	largeRound2 := int64(3603)
+	newBlock2 := CreateBlock(blockchain, params.TestXDPoSMockChainConfig, newBlock, int(newBlock.NumberU64())+1, largeRound2, blockCoinBase, signer, signFn, nil, nil, newBlock.Header().Root.Hex())
+	err = blockchain.InsertBlock(newBlock2)
+	assert.Nil(t, err)
+
+	// block num, round, epoch is as follows
+	// 900,0,1 (v2 switch block, not v2 epoch switch block)
+	// 901,1,1 (1st epoch switch block)
+	// 902,2,1
+	// ...
+	// 1800,900,2 (2nd epoch switch block)
+	// 1801,901,2
+	// 1802,902,2
+	// 1803,1802,3 (epoch switch)
+	// epoch 4 has no block
+	// 1804,3603,5 (epoch switch)
+	engine := blockchain.Engine().(*XDPoS.XDPoS)
+
+	// init the snapshot, otherwise getEpochSwitchInfo would return error
+	checkpointHeader := blockchain.GetHeaderByNumber(blockchain.Config().XDPoS.V2.SwitchBlock.Uint64() + 1)
+	err = engine.Initial(blockchain, checkpointHeader)
+	assert.Nil(t, err)
+
+	info, err := engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(0)
+	assert.NotNil(t, err)
+	assert.Nil(t, info)
+
+	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(1)
+	assert.Equal(t, info.EpochRound, types.Round(1))
+	assert.Nil(t, err)
+
+	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(2)
+	assert.Equal(t, info.EpochRound, types.Round(900))
+	assert.Nil(t, err)
+
+	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(3)
+	assert.Equal(t, info.EpochRound, types.Round(largeRound))
+	assert.Nil(t, err)
+
+	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(4)
+	assert.NotNil(t, err)
+	assert.Nil(t, info)
+
+	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(5)
+	assert.Equal(t, info.EpochRound, types.Round(largeRound2))
+	assert.Nil(t, err)
+
+	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(6)
+	assert.NotNil(t, err)
+	assert.Nil(t, info)
+}

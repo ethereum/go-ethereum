@@ -17,6 +17,8 @@ var (
 
 	UncleHash      = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
 	InmemoryEpochs = 5 * EpochLength          // Number of mapping from block to epoch switch infos to keep in memory
+
+	InmemoryRound2Epochs = 65536 // Number of mapping of epoch switch blocks for quickly locating epoch switch block. One epoch ~ 0.5hours, so 65536 epochs ~ 3.7 years. And it uses ~ 10MB memory.
 )
 
 const (
