@@ -409,6 +409,8 @@ func compareHashedFilesets(preHashes map[string][32]byte, postHashes map[string]
 	return updates
 }
 
+// doGoModTidy runs 'go mod tidy' and asserts that go.sum/go.mod do not change
+// as a result.
 func doGoModTidy() {
 	targetFiles := []string{"go.mod", "go.sum"}
 	preHashes, err := hashSourceFiles(targetFiles)
