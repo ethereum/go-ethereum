@@ -419,6 +419,7 @@ func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localN
 		DB:                sqlDb,
 		NodeId:            localNode.ID(),
 		Spec:              configs.Mainnet,
+		NetworkName:       portalwire.Beacon.Name(),
 	})
 	if err != nil {
 		return nil, err

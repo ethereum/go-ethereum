@@ -14,17 +14,6 @@ import (
 	"github.com/protolambda/ztyp/codec"
 )
 
-var (
-	radiusRatio         metrics.GaugeFloat64
-	entriesCount        metrics.Gauge
-	contentStorageUsage metrics.Gauge
-)
-
-const (
-	countEntrySql         = "SELECT COUNT(1) FROM kvstore;"
-	conentStorageUsageSql = "SELECT SUM( length(value) ) FROM kvstore;"
-)
-
 func defaultContentIdFunc(contentKey []byte) []byte {
 	digest := sha256.Sum256(contentKey)
 	return digest[:]
@@ -38,6 +27,8 @@ type StateStorage struct {
 	log   log.Logger
 }
 
+var portalStorageMetrics *metrics.PortalStorageMetrics
+
 func NewStateStorage(store storage.ContentStorage, db *sql.DB) *StateStorage {
 	storage := &StateStorage{
 		store: store,
@@ -45,43 +36,10 @@ func NewStateStorage(store storage.ContentStorage, db *sql.DB) *StateStorage {
 		log:   log.New("storage", "state"),
 	}
 
-	if metrics.Enabled {
-		radiusRatio = metrics.NewRegisteredGaugeFloat64("portal/state/radius_ratio", nil)
-		radiusRatio.Update(1)
-
-		entriesCount = metrics.NewRegisteredGauge("portal/state/entry_count", nil)
-		log.Info("Counting entities in state storage for metrics")
-		count, err := db.Prepare(countEntrySql)
-		if err != nil {
-			log.Error("Querry preparation error", "network", "state", "metric", "entry_count", "err", err)
-			return nil
-		}
-		var res *int64 = new(int64)
-		q := count.QueryRow()
-		if q.Err() != nil {
-			log.Error("Querry execution error", "network", "state", "metric", "entry_count", "err", err)
-			return nil
-		} else {
-			q.Scan(&res)
-		}
-		entriesCount.Update(*res)
-
-		contentStorageUsage = metrics.NewRegisteredGauge("portal/state/content_storage", nil)
-		log.Info("Counting storage usage (bytes) in state for metrics")
-		str, err := db.Prepare(conentStorageUsageSql)
-		if err != nil {
-			log.Error("Querry preparation error", "network", "state", "metric", "content_storage", "err", err)
-			return nil
-		}
-		var resStr *int64 = new(int64)
-		q = str.QueryRow()
-		if q.Err() != nil {
-			log.Error("Querry execution error", "network", "state", "metric", "content_storage", "err", err)
-			return nil
-		} else {
-			q.Scan(resStr)
-		}
-		contentStorageUsage.Update(*resStr)
+	var err error
+	portalStorageMetrics, err = metrics.NewPortalStorageMetrics("state", db)
+	if err != nil {
+		return nil
 	}
 
 	return storage
@@ -141,8 +99,8 @@ func (s *StateStorage) putAccountTrieNode(contentKey []byte, contentId []byte, c
 	if err != nil {
 		s.log.Error("failed to save data after validate", "type", contentKey[0], "key", contentKey[1:], "value", content)
 	} else if metrics.Enabled {
-		entriesCount.Inc(1)
-		contentStorageUsage.Inc(int64(len(content)))
+		portalStorageMetrics.EntriesCount.Inc(1)
+		portalStorageMetrics.ContentStorageUsage.Inc(int64(len(content)))
 	}
 	return nil
 }
@@ -178,8 +136,8 @@ func (s *StateStorage) putContractStorageTrieNode(contentKey []byte, contentId [
 	if err != nil {
 		s.log.Error("failed to save data after validate", "type", contentKey[0], "key", contentKey[1:], "value", content)
 	} else if metrics.Enabled {
-		entriesCount.Inc(1)
-		contentStorageUsage.Inc(int64(len(content)))
+		portalStorageMetrics.EntriesCount.Inc(1)
+		portalStorageMetrics.ContentStorageUsage.Inc(int64(len(content)))
 	}
 	return nil
 }
@@ -211,8 +169,8 @@ func (s *StateStorage) putContractBytecode(contentKey []byte, contentId []byte, 
 	if err != nil {
 		s.log.Error("failed to save data after validate", "type", contentKey[0], "key", contentKey[1:], "value", content)
 	} else if metrics.Enabled {
-		entriesCount.Inc(1)
-		contentStorageUsage.Inc(int64(len(content)))
+		portalStorageMetrics.EntriesCount.Inc(1)
+		portalStorageMetrics.ContentStorageUsage.Inc(int64(len(content)))
 	}
 	return nil
 }

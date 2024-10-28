@@ -16,17 +16,6 @@ import (
 
 const BytesInMB uint64 = 1000 * 1000
 
-var (
-	radiusRatio         metrics.GaugeFloat64
-	entriesCount        metrics.Gauge
-	contentStorageUsage metrics.Gauge
-)
-
-const (
-	countEntrySql          = "SELECT COUNT(1) FROM beacon;"
-	contentStorageUsageSql = "SELECT SUM( length(content_value) ) FROM beacon;"
-)
-
 type BeaconStorage struct {
 	storageCapacityInBytes uint64
 	db                     *sql.DB
@@ -34,6 +23,8 @@ type BeaconStorage struct {
 	spec                   *common.Spec
 	cache                  *beaconStorageCache
 }
+
+var portalStorageMetrics *metrics.PortalStorageMetrics
 
 type beaconStorageCache struct {
 	OptimisticUpdate []byte
@@ -53,44 +44,13 @@ func NewBeaconStorage(config storage.PortalStorageConfig) (storage.ContentStorag
 	if err := bs.setup(); err != nil {
 		return nil, err
 	}
-	if metrics.Enabled {
-		radiusRatio = metrics.NewRegisteredGaugeFloat64("portal/beacon/radius_ratio", nil)
-		radiusRatio.Update(1)
 
-		entriesCount = metrics.NewRegisteredGauge("portal/beacon/entry_count", nil)
-		log.Info("Counting entities in beacon storage for metrics")
-		count, err := config.DB.Prepare(countEntrySql)
-		if err != nil {
-			log.Error("Querry preparation error", "network", config.NetworkName, "metric", "entry_count", "err", err)
-			return nil, err
-		}
-		var res *int64 = new(int64)
-		q := count.QueryRow()
-		if q.Err() != nil {
-			log.Error("Querry execution error", "network", config.NetworkName, "metric", "entry_count", "err", err)
-			return nil, err
-		} else {
-			q.Scan(res)
-		}
-		entriesCount.Update(*res)
-
-		contentStorageUsage = metrics.NewRegisteredGauge("portal/beacon/content_storage", nil)
-		log.Info("Counting storage usage (bytes) in beacon for metrics")
-		str, err := config.DB.Prepare(contentStorageUsageSql)
-		if err != nil {
-			log.Error("Querry preparation error", "network", config.NetworkName, "metric", "content_storage", "err", err)
-			return nil, err
-		}
-		var resStr *int64 = new(int64)
-		q = str.QueryRow()
-		if q.Err() != nil {
-			log.Error("Querry execution error", "network", config.NetworkName, "metric", "content_storage", "err", err)
-			return nil, err
-		} else {
-			q.Scan(resStr)
-		}
-		contentStorageUsage.Update(*resStr)
+	var err error
+	portalStorageMetrics, err = metrics.NewPortalStorageMetrics(config.NetworkName, config.DB)
+	if err != nil {
+		return nil, err
 	}
+
 	return bs, nil
 }
 
@@ -226,8 +186,8 @@ func (bs *BeaconStorage) putContentValue(contentId, contentKey, value []byte) er
 	length := 32 + len(contentKey) + len(value)
 	_, err := bs.db.ExecContext(context.Background(), InsertQueryBeacon, contentId, contentKey, value, length)
 	if metrics.Enabled && err != nil {
-		entriesCount.Inc(1)
-		contentStorageUsage.Inc(int64(len(value)))
+		portalStorageMetrics.EntriesCount.Inc(1)
+		portalStorageMetrics.ContentStorageUsage.Inc(int64(len(value)))
 	}
 	return err
 }
@@ -235,8 +195,8 @@ func (bs *BeaconStorage) putContentValue(contentId, contentKey, value []byte) er
 func (bs *BeaconStorage) putLcUpdate(period uint64, value []byte) error {
 	_, err := bs.db.ExecContext(context.Background(), InsertLCUpdateQuery, period, value, 0, len(value))
 	if metrics.Enabled && err != nil {
-		entriesCount.Inc(1)
-		contentStorageUsage.Inc(int64(len(value)))
+		portalStorageMetrics.EntriesCount.Inc(1)
+		portalStorageMetrics.ContentStorageUsage.Inc(int64(len(value)))
 	}
 	return err
 }

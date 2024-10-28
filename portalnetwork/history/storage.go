@@ -21,12 +21,6 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-var (
-	radiusRatio         metrics.GaugeFloat64
-	entriesCount        metrics.Gauge
-	contentStorageUsage metrics.Gauge
-)
-
 const (
 	sqliteName              = "history.sqlite"
 	contentDeletionFraction = 0.05 // 5% of the content will be deleted when the storage capacity is hit and radius gets adjusted.
@@ -61,6 +55,8 @@ type ContentStorage struct {
 	containStmt            *sql.Stmt
 	log                    log.Logger
 }
+
+var portalStorageMetrics *metrics.PortalStorageMetrics
 
 func xor(contentId, nodeId []byte) []byte {
 	// length of contentId maybe not 32bytes
@@ -125,25 +121,11 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 	// Check whether we already have data, and use it to set radius
 
 	// necessary to test NetworkName==history because state also initialize HistoryStorage
-	if metrics.Enabled && strings.ToLower(config.NetworkName) == "history" {
-		radiusRatio = metrics.NewRegisteredGaugeFloat64("portal/history/radius_ratio", nil)
-		radiusRatio.Update(1)
-
-		entriesCount = metrics.NewRegisteredGauge("portal/history/entry_count", nil)
-		log.Info("Counting entities in history storage for metrics")
-		count, err := hs.ContentCount()
+	if strings.ToLower(config.NetworkName) == "history" {
+		portalStorageMetrics, err = metrics.NewPortalStorageMetrics(config.NetworkName, config.DB)
 		if err != nil {
-			log.Debug("Querry execution error", "network", config.NetworkName, "metric", "entry_count", "err", err)
+			return nil, err
 		}
-		entriesCount.Update(int64(count))
-
-		contentStorageUsage = metrics.NewRegisteredGauge("portal/history/content_storage", nil)
-		log.Info("Counting storage usage (bytes) in history for metrics")
-		str, err := hs.ContentSize()
-		if err != nil {
-			log.Debug("Querry execution error", "network", config.NetworkName, "metric", "content_storage", "err", err)
-		}
-		contentStorageUsage.Update(int64(str))
 	}
 
 	return hs, err
@@ -217,8 +199,8 @@ func (p *ContentStorage) put(contentId []byte, content []byte) PutResult {
 	}
 
 	if metrics.Enabled {
-		entriesCount.Inc(1)
-		contentStorageUsage.Inc(int64(len(content)))
+		portalStorageMetrics.EntriesCount.Inc(1)
+		portalStorageMetrics.ContentStorageUsage.Inc(int64(len(content)))
 	}
 	return PutResult{}
 }
@@ -387,7 +369,7 @@ func (p *ContentStorage) EstimateNewRadius(currentRadius *uint256.Int) (*uint256
 			newRadius := new(uint256.Int).Div(currentRadius, uint256.MustFromBig(bigFormat))
 			newRadius.Mul(newRadius, uint256.NewInt(100))
 			newRadius.Mod(newRadius, storage.MaxDistance)
-			radiusRatio.Update(newRadius.Float64() / 100)
+			portalStorageMetrics.RadiusRatio.Update(newRadius.Float64() / 100)
 		}
 		return new(uint256.Int).Div(currentRadius, uint256.MustFromBig(bigFormat)), nil
 	}
@@ -451,7 +433,7 @@ func (p *ContentStorage) deleteContentFraction(fraction float64) (deleteCount in
 		if metrics.Enabled {
 			dis.Mul(dis, uint256.NewInt(100))
 			dis.Mod(dis, storage.MaxDistance)
-			radiusRatio.Update(dis.Float64() / 100)
+			portalStorageMetrics.RadiusRatio.Update(dis.Float64() / 100)
 		}
 	}
 	// row must close first, or database is locked
@@ -475,8 +457,8 @@ func (p *ContentStorage) del(contentId []byte) error {
 	}
 	_, err = p.delStmt.Exec(contentId)
 	if metrics.Enabled && err != nil {
-		entriesCount.Dec(1)
-		contentStorageUsage.Dec(int64(sizeDel))
+		portalStorageMetrics.EntriesCount.Dec(1)
+		portalStorageMetrics.ContentStorageUsage.Dec(int64(sizeDel))
 	}
 	return err
 }
@@ -499,8 +481,8 @@ func (p *ContentStorage) batchDel(ids [][]byte) error {
 	// delete items
 	_, err = p.sqliteDB.Exec(query, args...)
 	if metrics.Enabled && err != nil {
-		entriesCount.Dec(int64(len(args)))
-		contentStorageUsage.Dec(int64(sizeDel))
+		portalStorageMetrics.EntriesCount.Dec(int64(len(args)))
+		portalStorageMetrics.ContentStorageUsage.Dec(int64(sizeDel))
 	}
 	return err
 }
@@ -528,8 +510,8 @@ func (p *ContentStorage) deleteContentOutOfRadius(radius *uint256.Int) error {
 	count, err := res.RowsAffected()
 	p.log.Trace("delete items", "count", count)
 	if metrics.Enabled && err != nil {
-		entriesCount.Dec(count)
-		contentStorageUsage.Dec(int64(sizeDel))
+		portalStorageMetrics.EntriesCount.Dec(count)
+		portalStorageMetrics.ContentStorageUsage.Dec(int64(sizeDel))
 	}
 	return err
 }
