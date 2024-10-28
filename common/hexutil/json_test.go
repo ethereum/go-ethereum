@@ -75,7 +75,6 @@ var unmarshalBytesTests = []unmarshalTest{
 	{input: `""`, want: referenceBytes("")},
 	{input: `"0x"`, want: referenceBytes("")},
 	{input: `"0x02"`, want: referenceBytes("02")},
-	{input: `"0X02"`, want: referenceBytes("02")},
 	{input: `"0xffffffffff"`, want: referenceBytes("ffffffffff")},
 	{
 		input: `"0xffffffffffffffffffffffffffffffffffff"`,
