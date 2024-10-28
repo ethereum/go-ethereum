@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -40,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -2663,12 +2663,13 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	datadir := t.TempDir()
 	ancient := path.Join(datadir, "ancient")
 
-	db, err := rawdb.Open(rawdb.OpenOptions{
-		Directory:         datadir,
-		AncientsDirectory: ancient,
-	})
+	pdb, err := pebble.New(datadir, 0, 0, "", false)
 	if err != nil {
-		t.Fatalf("Failed to create persistent database: %v", err)
+		t.Fatalf("Failed to create persistent key-value database: %v", err)
+	}
+	db, err := rawdb.NewDatabaseWithFreezer(pdb, ancient, "", false)
+	if err != nil {
+		t.Fatalf("Failed to create persistent freezer database: %v", err)
 	}
 	defer db.Close()
 
@@ -4231,36 +4232,3 @@ func TestPragueRequests(t *testing.T) {
 		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
 	}
 }
-
-func BenchmarkReorg(b *testing.B) {
-	chainLength := b.N
-
-	dir := b.TempDir()
-	db, err := rawdb.NewLevelDBDatabase(dir, 128, 128, "", false)
-	if err != nil {
-		b.Fatalf("cannot create temporary database: %v", err)
-	}
-	defer db.Close()
-	gspec := &Genesis{
-		Config: params.TestChainConfig,
-		Alloc:  types.GenesisAlloc{benchRootAddr: {Balance: math.BigPow(2, 254)}},
-	}
-	blockchain, _ := NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil)
-	defer blockchain.Stop()
-
-	// Insert an easy and a difficult chain afterwards
-	easyBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(50000))
-	diffBlocks, _ := GenerateChain(params.TestChainConfig, blockchain.GetBlockByHash(blockchain.CurrentBlock().Hash()), ethash.NewFaker(), db, chainLength, genValueTx(50000))
-
-	if _, err := blockchain.InsertChain(easyBlocks); err != nil {
-		b.Fatalf("failed to insert easy chain: %v", err)
-	}
-	b.ResetTimer()
-	if _, err := blockchain.InsertChain(diffBlocks); err != nil {
-		b.Fatalf("failed to insert difficult chain: %v", err)
-	}
-}
-
-// Master: 			BenchmarkReorg-8   	   10000	    899591 ns/op	  820154 B/op	    1440 allocs/op 	1549443072 bytes of heap used
-// WithoutOldChain: BenchmarkReorg-8   	   10000	    1147281 ns/op	  943163 B/op	    1564 allocs/op 	1163870208 bytes of heap used
-// WithoutNewChain: BenchmarkReorg-8   	   10000	   1018922 ns/op	  943580 B/op	    1564 allocs/op  1171890176 bytes of heap used
