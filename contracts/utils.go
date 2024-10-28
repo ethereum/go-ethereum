@@ -35,14 +35,12 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/hexutil"
 	"github.com/XinFinOrg/XDPoSChain/consensus"
-
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS/utils"
 	"github.com/XinFinOrg/XDPoSChain/contracts/blocksigner/contract"
 	randomizeContract "github.com/XinFinOrg/XDPoSChain/contracts/randomize/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
-	stateDatabase "github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -210,8 +208,8 @@ func BuildTxOpeningRandomize(nonce uint64, randomizeAddr common.Address, randomi
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(state *stateDatabase.StateDB, block *types.Block) ([]common.Address, error) {
-	return stateDatabase.GetSigners(state, block), nil
+func GetSignersFromContract(statedb *state.StateDB, block *types.Block) ([]common.Address, error) {
+	return state.GetSigners(statedb, block), nil
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
@@ -414,8 +412,8 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 }
 
 // Get candidate owner by address.
-func GetCandidatesOwnerBySigner(state *state.StateDB, signerAddr common.Address) common.Address {
-	owner := stateDatabase.GetCandidateOwner(state, signerAddr)
+func GetCandidatesOwnerBySigner(statedb *state.StateDB, signerAddr common.Address) common.Address {
+	owner := state.GetCandidateOwner(statedb, signerAddr)
 	return owner
 }
 
@@ -427,14 +425,14 @@ func CalculateRewardForHolders(foundationWalletAddr common.Address, state *state
 	return nil, rewards
 }
 
-func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.StateDB, masterAddr common.Address, totalReward *big.Int, blockNumber uint64) (map[common.Address]*big.Int, error) {
-	owner := GetCandidatesOwnerBySigner(state, masterAddr)
+func GetRewardBalancesRate(foundationWalletAddr common.Address, statedb *state.StateDB, masterAddr common.Address, totalReward *big.Int, blockNumber uint64) (map[common.Address]*big.Int, error) {
+	owner := GetCandidatesOwnerBySigner(statedb, masterAddr)
 	balances := make(map[common.Address]*big.Int)
 	rewardMaster := new(big.Int).Mul(totalReward, new(big.Int).SetInt64(common.RewardMasterPercent))
 	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
 	balances[owner] = rewardMaster
 	// Get voters for masternode.
-	voters := stateDatabase.GetVoters(state, masterAddr)
+	voters := state.GetVoters(statedb, masterAddr)
 
 	if len(voters) > 0 {
 		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(common.RewardVoterPercent))
@@ -446,7 +444,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 			if _, ok := voterCaps[voteAddr]; ok && common.TIP2019Block.Uint64() <= blockNumber {
 				continue
 			}
-			voterCap := stateDatabase.GetVoterCap(state, masterAddr, voteAddr)
+			voterCap := state.GetVoterCap(statedb, masterAddr, voteAddr)
 			totalCap.Add(totalCap, voterCap)
 			voterCaps[voteAddr] = voterCap
 		}
