@@ -17,6 +17,7 @@ package vm_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -33,6 +34,8 @@ import (
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/core/vm"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/eth/tracers"
+	_ "github.com/ava-labs/libevm/eth/tracers/native"
 	"github.com/ava-labs/libevm/libevm"
 	"github.com/ava-labs/libevm/libevm/ethtest"
 	"github.com/ava-labs/libevm/libevm/hookstest"
@@ -338,7 +341,7 @@ func TestInheritReadOnly(t *testing.T) {
 	rng := ethtest.NewPseudoRand(42)
 	contractAddr := rng.Address()
 	state.CreateAccount(contractAddr)
-	state.SetCode(contractAddr, convertBytes[vm.OpCode, byte](contract))
+	state.SetCode(contractAddr, convertBytes[vm.OpCode, byte](contract...))
 
 	// (3)
 
@@ -404,7 +407,7 @@ func makeReturnProxy(t *testing.T, dest common.Address, call vm.OpCode) []vm.OpC
 	}
 
 	contract = append(contract, vm.PUSH20)
-	contract = append(contract, convertBytes[byte, vm.OpCode](dest[:])...)
+	contract = append(contract, convertBytes[byte, vm.OpCode](dest[:]...)...)
 
 	contract = append(contract,
 		p0, // gas
@@ -417,7 +420,7 @@ func makeReturnProxy(t *testing.T, dest common.Address, call vm.OpCode) []vm.OpC
 	return contract
 }
 
-func convertBytes[From ~byte, To ~byte](buf []From) []To {
+func convertBytes[From ~byte, To ~byte](buf ...From) []To {
 	out := make([]To, len(buf))
 	for i, b := range buf {
 		out[i] = To(b)
@@ -672,13 +675,56 @@ func TestPrecompileMakeCall(t *testing.T) {
 			evm.Origin = eoa
 			state.CreateAccount(caller)
 			proxy := makeReturnProxy(t, sut, tt.incomingCallType)
-			state.SetCode(caller, convertBytes[vm.OpCode, byte](proxy))
+			state.SetCode(caller, convertBytes[vm.OpCode, byte](proxy...))
 
 			got, _, err := evm.Call(vm.AccountRef(eoa), caller, tt.eoaTxCallData, 1e6, uint256.NewInt(0))
 			require.NoError(t, err)
 			require.Equal(t, tt.want.String(), string(got))
 		})
 	}
+}
+
+func TestPrecompileCallWithTracer(t *testing.T) {
+	// The native pre-state tracer, when logging storage, assumes an invariant
+	// that is broken by a precompile calling another contract. This is a test
+	// of the fix, ensuring that an SLOADed value is properly handled by the
+	// tracer.
+
+	rng := ethtest.NewPseudoRand(42 * 142857)
+	precompile := rng.Address()
+	contract := rng.Address()
+
+	hooks := &hookstest.Stub{
+		PrecompileOverrides: map[common.Address]libevm.PrecompiledContract{
+			precompile: vm.NewStatefulPrecompile(func(env vm.PrecompileEnvironment, input []byte, suppliedGas uint64) (ret []byte, remainingGas uint64, err error) {
+				return env.Call(contract, nil, suppliedGas, uint256.NewInt(0))
+			}),
+		},
+	}
+	hooks.Register(t)
+
+	state, evm := ethtest.NewZeroEVM(t)
+	evm.GasPrice = big.NewInt(1)
+
+	state.CreateAccount(contract)
+	var zeroHash common.Hash
+	value := rng.Hash()
+	state.SetState(contract, zeroHash, value)
+	state.SetCode(contract, convertBytes[vm.OpCode, byte](vm.PC, vm.SLOAD))
+
+	const tracerName = "prestateTracer"
+	tracer, err := tracers.DefaultDirectory.New(tracerName, nil, nil)
+	require.NoErrorf(t, err, "tracers.DefaultDirectory.New(%q)", tracerName)
+	evm.Config.Tracer = tracer
+
+	_, _, err = evm.Call(vm.AccountRef(rng.Address()), precompile, []byte{}, 1e6, uint256.NewInt(0))
+	require.NoError(t, err, "evm.Call([precompile that calls regular contract])")
+
+	gotJSON, err := tracer.GetResult()
+	require.NoErrorf(t, err, "%T.GetResult()", tracer)
+	var got map[common.Address]struct{ Storage map[common.Hash]common.Hash }
+	require.NoErrorf(t, json.Unmarshal(gotJSON, &got), "json.Unmarshal(%T.GetResult(), %T)", tracer, &got)
+	require.Equal(t, value, got[contract].Storage[zeroHash], "value loaded with SLOAD")
 }
 
 //nolint:testableexamples // Including output would only make the example more complicated and hide the true intent

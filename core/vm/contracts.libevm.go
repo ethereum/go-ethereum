@@ -54,29 +54,38 @@ type evmCallArgs struct {
 }
 
 // A CallType refers to a *CALL* [OpCode] / respective method on [EVM].
-type CallType uint8
+type CallType OpCode
 
 const (
-	UnknownCallType CallType = iota
-	Call
-	CallCode
-	DelegateCall
-	StaticCall
+	Call         = CallType(CALL)
+	CallCode     = CallType(CALLCODE)
+	DelegateCall = CallType(DELEGATECALL)
+	StaticCall   = CallType(STATICCALL)
 )
+
+func (t CallType) isValid() bool {
+	switch t {
+	case Call, CallCode, DelegateCall, StaticCall:
+		return true
+	default:
+		return false
+	}
+}
 
 // String returns a human-readable representation of the CallType.
 func (t CallType) String() string {
-	switch t {
-	case Call:
-		return "Call"
-	case CallCode:
-		return "CallCode"
-	case DelegateCall:
-		return "DelegateCall"
-	case StaticCall:
-		return "StaticCall"
+	if t.isValid() {
+		return t.OpCode().String()
 	}
 	return fmt.Sprintf("Unknown %T(%d)", t, t)
+}
+
+// OpCode returns t's equivalent OpCode.
+func (t CallType) OpCode() OpCode {
+	if t.isValid() {
+		return OpCode(t)
+	}
+	return INVALID
 }
 
 // run runs the [PrecompiledContract], differentiating between stateful and

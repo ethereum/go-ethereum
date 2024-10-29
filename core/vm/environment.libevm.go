@@ -90,7 +90,7 @@ func (e *environment) Call(addr common.Address, input []byte, gas uint64, value 
 	return e.callContract(Call, addr, input, gas, value, opts...)
 }
 
-func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) ([]byte, uint64, error) {
+func (e *environment) callContract(typ CallType, addr common.Address, input []byte, gas uint64, value *uint256.Int, opts ...CallOption) (retData []byte, retGas uint64, retErr error) {
 	// Depth and read-only setting are handled by [EVMInterpreter.Run], which
 	// isn't used for precompiles, so we need to do it ourselves to maintain the
 	// expected invariants.
@@ -122,11 +122,24 @@ func (e *environment) callContract(typ CallType, addr common.Address, input []by
 		}
 	}
 
+	if in.readOnly && value != nil && !value.IsZero() {
+		return nil, gas, ErrWriteProtection
+	}
+	if t := e.evm.Config.Tracer; t != nil {
+		var bigVal *big.Int
+		if value != nil {
+			bigVal = value.ToBig()
+		}
+		t.CaptureEnter(typ.OpCode(), caller.Address(), addr, input, gas, bigVal)
+
+		startGas := gas
+		defer func() {
+			t.CaptureEnd(retData, startGas-retGas, retErr)
+		}()
+	}
+
 	switch typ {
 	case Call:
-		if in.readOnly && !value.IsZero() {
-			return nil, gas, ErrWriteProtection
-		}
 		return e.evm.Call(caller, addr, input, gas, value)
 	case CallCode, DelegateCall, StaticCall:
 		// TODO(arr4n): these cases should be very similar to CALL, hence the
