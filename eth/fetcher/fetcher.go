@@ -679,7 +679,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 				go f.broadcastBlock(block, true)
 			}
 		case consensus.ErrFutureBlock:
-			delay := time.Unix(block.Time().Int64(), 0).Sub(time.Now()) // nolint: gosimple
+			delay := time.Until(time.Unix(block.Time().Int64(), 0))
 			log.Info("Receive future block", "number", block.NumberU64(), "hash", block.Hash().Hex(), "delay", delay)
 			time.Sleep(delay)
 			goto again
