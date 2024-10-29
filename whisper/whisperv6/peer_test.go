@@ -23,7 +23,6 @@ import (
 	mrand "math/rand"
 	"net"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -72,7 +71,6 @@ var keys = []string{
 }
 
 type TestData struct {
-	started int64
 	counter [NumNodes]int
 	mutex   sync.RWMutex
 }
@@ -226,14 +224,9 @@ func initialize(t *testing.T) {
 			},
 		}
 
+		startServer(t, node.server)
 		nodes[i] = &node
 	}
-
-	for i := 0; i < NumNodes; i++ {
-		go startServer(t, nodes[i].server)
-	}
-
-	waitForServersToStart(t)
 }
 
 func startServer(t *testing.T, s *p2p.Server) {
@@ -241,8 +234,6 @@ func startServer(t *testing.T, s *p2p.Server) {
 	if err != nil {
 		t.Fatalf("failed to start the fisrt server.")
 	}
-
-	atomic.AddInt64(&result.started, 1)
 }
 
 func stopServers() {
@@ -499,17 +490,4 @@ func checkBloomFilterExchange(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-}
-
-func waitForServersToStart(t *testing.T) {
-	const iterations = 200
-	var started int64
-	for j := 0; j < iterations; j++ {
-		time.Sleep(50 * time.Millisecond)
-		started = atomic.LoadInt64(&result.started)
-		if started == NumNodes {
-			return
-		}
-	}
-	t.Fatalf("Failed to start all the servers, running: %d", started)
 }
