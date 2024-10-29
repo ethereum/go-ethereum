@@ -596,7 +596,7 @@ func (s *Sync) children(req *nodeRequest, object node) ([]*nodeRequest, error) {
 			if node.Children[i] != nil {
 				children = append(children, childNode{
 					node: node.Children[i],
-					path: slices.Concat(req.path, []byte{i}),
+					path: append(append([]byte(nil), req.path...), byte(i)),
 				})
 			}
 		}
