@@ -273,7 +273,7 @@ func (t *prestateTracer) lookupAccount(addr common.Address) {
 	if !acc.exists() {
 		acc.empty = true
 	}
-
+	// The code must be fetched first for the emptiness check.
 	if t.config.DisableCode {
 		acc.Code = nil
 	}
