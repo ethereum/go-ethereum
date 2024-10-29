@@ -185,7 +185,7 @@ func (bs *BeaconStorage) getLcUpdateValueByRange(start, end uint64) ([]byte, err
 func (bs *BeaconStorage) putContentValue(contentId, contentKey, value []byte) error {
 	length := 32 + len(contentKey) + len(value)
 	_, err := bs.db.ExecContext(context.Background(), InsertQueryBeacon, contentId, contentKey, value, length)
-	if metrics.Enabled && err != nil {
+	if metrics.Enabled && err == nil {
 		portalStorageMetrics.EntriesCount.Inc(1)
 		portalStorageMetrics.ContentStorageUsage.Inc(int64(len(value)))
 	}
@@ -194,7 +194,7 @@ func (bs *BeaconStorage) putContentValue(contentId, contentKey, value []byte) er
 
 func (bs *BeaconStorage) putLcUpdate(period uint64, value []byte) error {
 	_, err := bs.db.ExecContext(context.Background(), InsertLCUpdateQuery, period, value, 0, len(value))
-	if metrics.Enabled && err != nil {
+	if metrics.Enabled && err == nil {
 		portalStorageMetrics.EntriesCount.Inc(1)
 		portalStorageMetrics.ContentStorageUsage.Inc(int64(len(value)))
 	}
