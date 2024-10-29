@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -872,7 +873,7 @@ func (d *Downloader) processSnapSyncContent() error {
 				}
 			}
 		} else { // results already piled up, consume before handling pivot move
-			results = append(append([]*fetchResult{oldPivot}, oldTail...), results...)
+			results = slices.Concat([]*fetchResult{oldPivot}, oldTail, results)
 		}
 		// Split around the pivot block and process the two sides via snap/full sync
 		if !d.committed.Load() {

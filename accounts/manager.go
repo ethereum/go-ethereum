@@ -18,6 +18,7 @@ package accounts
 
 import (
 	"reflect"
+	"slices"
 	"sort"
 	"sync"
 
@@ -255,7 +256,7 @@ func merge(slice []Wallet, wallets ...Wallet) []Wallet {
 			slice = append(slice, wallet)
 			continue
 		}
-		slice = append(slice[:n], append([]Wallet{wallet}, slice[n:]...)...)
+		slice = slices.Concat(slice[:n], []Wallet{wallet}, slice[n:])
 	}
 	return slice
 }

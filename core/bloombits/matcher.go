@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -417,7 +418,7 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 			// New retrieval request arrived to be distributed to some fetcher process
 			queue := requests[req.bit]
 			index := sort.Search(len(queue), func(i int) bool { return queue[i] >= req.section })
-			requests[req.bit] = append(queue[:index], append([]uint64{req.section}, queue[index:]...)...)
+			requests[req.bit] = slices.Concat(queue[:index], []uint64{req.section}, queue[index:])
 
 			// If it's a new bit and we have waiting fetchers, allocate to them
 			if len(queue) == 0 {
@@ -485,7 +486,7 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 				queue := requests[result.Bit]
 				for _, section := range missing {
 					index := sort.Search(len(queue), func(i int) bool { return queue[i] >= section })
-					queue = append(queue[:index], append([]uint64{section}, queue[index:]...)...)
+					queue = slices.Concat(queue[:index], []uint64{section}, queue[index:])
 				}
 				requests[result.Bit] = queue
 

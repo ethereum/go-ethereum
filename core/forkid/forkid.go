@@ -135,7 +135,7 @@ func newFilter(config *params.ChainConfig, genesis *types.Block, headfn func() (
 	// Calculate the all the valid fork hash and fork next combos
 	var (
 		forksByBlock, forksByTime = gatherForks(config, genesis.Time())
-		forks                     = append(append([]uint64{}, forksByBlock...), forksByTime...)
+		forks                     = slices.Concat(forksByBlock, forksByTime)
 		sums                      = make([][4]byte, len(forks)+1) // 0th is the genesis
 	)
 	hash := crc32.ChecksumIEEE(genesis.Hash().Bytes())
