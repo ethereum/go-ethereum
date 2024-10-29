@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/params"
@@ -136,14 +137,9 @@ func (c *Container) MarshalBinary() []byte {
 
 	// Write section contents.
 	for _, ty := range c.types {
-		b = append(b, []byte{ty.inputs, ty.outputs, byte(ty.maxStackHeight >> 8), byte(ty.maxStackHeight & 0x00ff)}...)
+		b = append(b, ty.inputs, ty.outputs, byte(ty.maxStackHeight >> 8), byte(ty.maxStackHeight & 0x00ff))
 	}
-	for _, code := range c.codeSections {
-		b = append(b, code...)
-	}
-	for _, section := range encodedContainer {
-		b = append(b, section...)
-	}
+	b = slices.Concat(b, slices.Concat(c.codeSections...), slices.Concat(encodedContainer...))
 	b = append(b, c.data...)
 
 	return b

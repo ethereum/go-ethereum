@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -50,11 +51,7 @@ func NewApp(usage string) *cli.App {
 
 // Merge merges the given flag slices.
 func Merge(groups ...[]cli.Flag) []cli.Flag {
-	var ret []cli.Flag
-	for _, group := range groups {
-		ret = append(ret, group...)
-	}
-	return ret
+	return slices.Concat(groups...)
 }
 
 var migrationApplied = map[*cli.Command]struct{}{}
