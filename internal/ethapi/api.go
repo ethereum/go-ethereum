@@ -1925,7 +1925,8 @@ func NewTransactionAPI(b Backend, nonceLock *AddrLocker) *TransactionAPI {
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
 func (api *TransactionAPI) GetBlockTransactionCountByNumber(ctx context.Context, blockNr rpc.BlockNumber) *hexutil.Uint {
 	if block, _ := api.b.BlockByNumber(ctx, blockNr); block != nil {
-		n := hexutil.Uint(len(block.Transactions()))
+		txs, _ := api.getAllBlockTransactions(ctx, block)
+		n := hexutil.Uint(len(txs))
 		return &n
 	}
 
@@ -1935,7 +1936,8 @@ func (api *TransactionAPI) GetBlockTransactionCountByNumber(ctx context.Context,
 // GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
 func (api *TransactionAPI) GetBlockTransactionCountByHash(ctx context.Context, blockHash common.Hash) *hexutil.Uint {
 	if block, _ := api.b.BlockByHash(ctx, blockHash); block != nil {
-		n := hexutil.Uint(len(block.Transactions()))
+		txs, _ := api.getAllBlockTransactions(ctx, block)
+		n := hexutil.Uint(len(txs))
 		return &n
 	}
 
