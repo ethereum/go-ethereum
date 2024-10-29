@@ -12,6 +12,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/common"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
@@ -20,7 +21,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/ethdb/leveldb"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/XinFinOrg/XDPoSChain/trie"
-	"github.com/XinFinOrg/XDPoSChain/common/lru"
 )
 
 var (
@@ -170,7 +170,7 @@ func getAllChilds(n StateNode, db *leveldb.Database) ([17]*StateNode, error) {
 				}
 				if err == nil {
 					childs[i] = &StateNode{node: childNode, path: append(n.path, byte(i))}
-				} else if err != nil {
+				} else {
 					_, ok := err.(*trie.MissingNodeError)
 					if !ok {
 						return childs, err
@@ -187,7 +187,7 @@ func getAllChilds(n StateNode, db *leveldb.Database) ([17]*StateNode, error) {
 		}
 		if err == nil {
 			childs[0] = &StateNode{node: childNode, path: append(n.path, node.Key...)}
-		} else if err != nil {
+		} else {
 			_, ok := err.(*trie.MissingNodeError)
 			if !ok {
 				return childs, err
