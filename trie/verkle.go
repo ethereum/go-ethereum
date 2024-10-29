@@ -32,7 +32,6 @@ import (
 )
 
 var (
-	zero               [32]byte
 	errInvalidRootType = errors.New("invalid node type for root")
 )
 
@@ -286,21 +285,19 @@ func (t *VerkleTrie) IsVerkle() bool {
 // Proof builds and returns the verkle multiproof for keys, built against
 // the pre tree. The post tree is passed in order to add the post values
 // to that proof.
-func (t *VerkleTrie) Proof(posttrie *VerkleTrie, keys [][]byte, resolver verkle.NodeResolverFn) (*verkle.VerkleProof, verkle.StateDiff, error) {
+func (t *VerkleTrie) Proof(posttrie *VerkleTrie, keys [][]byte) (*verkle.VerkleProof, verkle.StateDiff, error) {
 	var postroot verkle.VerkleNode
 	if posttrie != nil {
 		postroot = posttrie.root
 	}
-	proof, _, _, _, err := verkle.MakeVerkleMultiProof(t.root, postroot, keys, resolver)
+	proof, _, _, _, err := verkle.MakeVerkleMultiProof(t.root, postroot, keys, t.FlatdbNodeResolver)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	p, kvps, err := verkle.SerializeProof(proof)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return p, kvps, nil
 }
 
