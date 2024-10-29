@@ -390,7 +390,7 @@ func (c *Clique) snapshot(chain consensus.ChainReader, number uint64, hash commo
 		headers []*types.Header
 		snap    *Snapshot
 	)
-	for snap == nil {
+	for {
 		// If an in-memory snapshot was found, use that
 		if s, ok := c.recents.Get(hash); ok {
 			snap = s.(*Snapshot)
