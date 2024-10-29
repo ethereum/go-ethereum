@@ -24,9 +24,14 @@ Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-	install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
-	test       [ -coverage ] [ packages... ]                                                    -- runs the tests
-	lint                                                                                        -- runs certain pre-selected linters
+	lint           -- runs certain pre-selected linters
+	check_tidy     -- verifies that everything is 'go mod tidy'-ed
+	check_generate -- verifies that everything is 'go generate'-ed
+	check_baddeps  -- verifies that certain dependencies are avoided
+
+	install    [ -arch architecture ] [ -cc compiler ] [ packages... ] -- builds packages and executables
+	test       [ -coverage ] [ packages... ]                           -- runs the tests
+
 	archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
 	importkeys                                                                                  -- imports signing keys from env
 	debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
@@ -39,11 +44,9 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -156,6 +159,12 @@ func main() {
 		doTest(os.Args[2:])
 	case "lint":
 		doLint(os.Args[2:])
+	case "check_tidy":
+		doCheckTidy()
+	case "check_generate":
+		doCheckGenerate()
+	case "check_baddeps":
+		doCheckBadDeps()
 	case "archive":
 		doArchive(os.Args[2:])
 	case "dockerx":
@@ -168,8 +177,6 @@ func main() {
 		doPurge(os.Args[2:])
 	case "sanitycheck":
 		doSanityCheck()
-	case "generate":
-		doGenerate()
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -348,130 +355,93 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 	return filepath.Join(cachedir, base)
 }
 
-// hashAllSourceFiles iterates all files under the top-level project directory
-// computing the hash of each file (excluding files within the tests
-// subrepo)
-func hashAllSourceFiles() (map[string][32]byte, error) {
-	res := make(map[string][32]byte)
-	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
-		if strings.HasPrefix(path, filepath.FromSlash("tests/testdata")) {
-			return filepath.SkipDir
-		}
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		// open the file and hash it
-		f, err := os.OpenFile(path, os.O_RDONLY, 0666)
-		if err != nil {
-			return err
-		}
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, f); err != nil {
-			return err
-		}
-		res[path] = [32]byte(hasher.Sum(nil))
-		return nil
-	})
+// doCheckTidy assets that the Go modules files are tidied already.
+func doCheckTidy() {
+	targets := []string{"go.mod", "go.sum"}
+
+	hashes, err := build.HashFiles(targets)
 	if err != nil {
-		return nil, err
+		log.Fatalf("failed to hash go.mod/go.sum: %v", err)
 	}
-	return res, nil
-}
+	build.MustRun(new(build.GoToolchain).Go("mod", "tidy"))
 
-// hashSourceFiles iterates the provided set of filepaths (relative to the top-level geth project directory)
-// computing the hash of each file.
-func hashSourceFiles(files []string) (map[string][32]byte, error) {
-	res := make(map[string][32]byte)
-	for _, filePath := range files {
-		f, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
-		if err != nil {
-			return nil, err
-		}
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, f); err != nil {
-			return nil, err
-		}
-		res[filePath] = [32]byte(hasher.Sum(nil))
-	}
-	return res, nil
-}
-
-// compareHashedFilesets compares two maps (key is relative file path to top-level geth directory, value is its hash)
-// and returns the list of file paths whose hashes differed.
-func compareHashedFilesets(preHashes map[string][32]byte, postHashes map[string][32]byte) []string {
-	updates := []string{}
-	for path, postHash := range postHashes {
-		preHash, ok := preHashes[path]
-		if !ok || preHash != postHash {
-			updates = append(updates, path)
-		}
-	}
-	return updates
-}
-
-// doGoModTidy runs 'go mod tidy' and asserts that go.sum/go.mod do not change
-// as a result.
-func doGoModTidy() {
-	targetFiles := []string{"go.mod", "go.sum"}
-	preHashes, err := hashSourceFiles(targetFiles)
+	tidied, err := build.HashFiles(targets)
 	if err != nil {
-		log.Fatal("failed to hash go.mod/go.sum", "err", err)
+		log.Fatalf("failed to rehash go.mod/go.sum: %v", err)
 	}
-	tc := new(build.GoToolchain)
-	c := tc.Go("mod", "tidy")
-	build.MustRun(c)
-	postHashes, err := hashSourceFiles(targetFiles)
-	updates := compareHashedFilesets(preHashes, postHashes)
-	for _, updatedFile := range updates {
-		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
+	if updates := build.DiffHashes(hashes, tidied); len(updates) > 0 {
+		log.Fatalf("files changed on running 'go mod tidy': %v", updates)
 	}
-	if len(updates) != 0 {
-		log.Fatal("go.sum and/or go.mod were updated by running 'go mod tidy'")
-	}
+	fmt.Println("No untidy module files detected.")
 }
 
-// doGenerate ensures that re-generating generated files does not cause
-// any mutations in the source file tree:  i.e. all generated files were
-// updated and committed.  Any stale generated files are updated.
-func doGenerate() {
+// doCheckGenerate ensures that re-generating generated files does not cause
+// any mutations in the source file tree.
+func doCheckGenerate() {
 	var (
-		tc       = new(build.GoToolchain)
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching binaries.")
-		verify   = flag.Bool("verify", false, "check whether any files are changed by go generate")
 	)
+	// Compute the origin hashes of all the files
+	var hashes map[string][32]byte
 
-	protocPath := downloadProtoc(*cachedir)
-	protocGenGoPath := downloadProtocGenGo(*cachedir)
-
-	var preHashes map[string][32]byte
-	if *verify {
-		var err error
-		preHashes, err = hashAllSourceFiles()
-		if err != nil {
-			log.Fatal("failed to compute map of source hashes", "err", err)
-		}
+	var err error
+	hashes, err = build.HashFolder(".", []string{"tests/testdata", "build/cache"})
+	if err != nil {
+		log.Fatal("Error computing hashes", "err", err)
 	}
-
-	c := tc.Go("generate", "./...")
+	// Run any go generate steps we might be missing
+	var (
+		protocPath      = downloadProtoc(*cachedir)
+		protocGenGoPath = downloadProtocGenGo(*cachedir)
+	)
+	c := new(build.GoToolchain).Go("generate", "./...")
 	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
 	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
 	build.MustRun(c)
 
-	if !*verify {
-		return
-	}
-	// Check if files were changed.
-	postHashes, err := hashAllSourceFiles()
+	// Check if generate file hashes have changed
+	generated, err := build.HashFolder(".", []string{"tests/testdata", "build/cache"})
 	if err != nil {
-		log.Fatal("error computing source tree file hashes", "err", err)
+		log.Fatalf("Error re-computing hashes: %v", err)
 	}
-	updates := compareHashedFilesets(preHashes, postHashes)
-	for _, updatedFile := range updates {
-		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
+	updates := build.DiffHashes(hashes, generated)
+	for _, file := range updates {
+		log.Printf("File changed: %s", file)
 	}
 	if len(updates) != 0 {
 		log.Fatal("One or more generated files were updated by running 'go generate ./...'")
 	}
+	fmt.Println("No stale files detected.")
+}
+
+// doCheckBadDeps verifies whether certain unintended dependencies between some
+// packages leak into the codebase due to a refactor. This is not an exhaustive
+// list, rather something we build up over time at sensitive places.
+func doCheckBadDeps() {
+	baddeps := [][2]string{
+		// Rawdb tends to be a dumping ground for db utils, sometimes leaking the db itself
+		{"github.com/ethereum/go-ethereum/core/rawdb", "github.com/ethereum/go-ethereum/ethdb/leveldb"},
+		{"github.com/ethereum/go-ethereum/core/rawdb", "github.com/ethereum/go-ethereum/ethdb/pebbledb"},
+	}
+	tc := new(build.GoToolchain)
+
+	var failed bool
+	for _, rule := range baddeps {
+		out, err := tc.Go("list", "-deps", rule[0]).CombinedOutput()
+		if err != nil {
+			log.Fatalf("Failed to list '%s' dependencies: %v", rule[0], err)
+		}
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.TrimSpace(line) == rule[1] {
+				log.Printf("Found bad dependency '%s' -> '%s'", rule[0], rule[1])
+				failed = true
+			}
+		}
+	}
+	if failed {
+		log.Fatalf("Bad dependencies detected.")
+	}
+	fmt.Println("No bad dependencies detected.")
 }
 
 // doLint runs golangci-lint on requested packages.
@@ -488,8 +458,6 @@ func doLint(cmdline []string) {
 	linter := downloadLinter(*cachedir)
 	lflags := []string{"run", "--config", ".golangci.yml"}
 	build.MustRunCommandWithOutput(linter, append(lflags, packages...)...)
-
-	doGoModTidy()
 	fmt.Println("You have achieved perfection.")
 }
 
