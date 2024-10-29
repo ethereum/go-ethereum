@@ -385,7 +385,7 @@ func doCheckGenerate() {
 	var hashes map[string][32]byte
 
 	var err error
-	hashes, err = build.HashFolder(".", []string{"tests/testdata"})
+	hashes, err = build.HashFolder(".", []string{"tests/testdata", "build/cache"})
 	if err != nil {
 		log.Fatal("Error computing hashes", "err", err)
 	}
@@ -400,7 +400,7 @@ func doCheckGenerate() {
 	build.MustRun(c)
 
 	// Check if generate file hashes have changed
-	generated, err := build.HashFolder(".", []string{"tests/testdata"})
+	generated, err := build.HashFolder(".", []string{"tests/testdata", "build/cache"})
 	if err != nil {
 		log.Fatalf("Error re-computing hashes: %v", err)
 	}
