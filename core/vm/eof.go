@@ -137,7 +137,7 @@ func (c *Container) MarshalBinary() []byte {
 
 	// Write section contents.
 	for _, ty := range c.types {
-		b = append(b, ty.inputs, ty.outputs, byte(ty.maxStackHeight >> 8), byte(ty.maxStackHeight & 0x00ff))
+		b = append(b, ty.inputs, ty.outputs, byte(ty.maxStackHeight>>8), byte(ty.maxStackHeight&0x00ff))
 	}
 	b = slices.Concat(b, slices.Concat(c.codeSections...), slices.Concat(encodedContainer...))
 	b = append(b, c.data...)
