@@ -53,7 +53,7 @@ type XDPoS_v1 struct {
 	signFn clique.SignerFn // Signer function to authorize hashes with
 	lock   sync.RWMutex    // Protects the signer fields
 
-	HookReward            func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{})
+	HookReward            func(chain consensus.ChainReader, state *state.StateDB, parentState *state.StateDB, header *types.Header) (map[string]interface{}, error)
 	HookPenalty           func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error)
 	HookPenaltyTIPSigning func(chain consensus.ChainReader, header *types.Header, candidate []common.Address) ([]common.Address, error)
 	HookValidator         func(header *types.Header, signers []common.Address) ([]byte, error)
@@ -834,7 +834,7 @@ func (x *XDPoS_v1) Finalize(chain consensus.ChainReader, header *types.Header, s
 	// _ = c.CacheData(header, txs, receipts)
 
 	if x.HookReward != nil && number%rCheckpoint == 0 {
-		err, rewards := x.HookReward(chain, state, parentState, header)
+		rewards, err := x.HookReward(chain, state, parentState, header)
 		if err != nil {
 			return nil, err
 		}

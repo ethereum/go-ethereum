@@ -258,13 +258,13 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 	}
 
 	// Hook calculates reward for masternodes
-	adaptor.EngineV1.HookReward = func(chain consensus.ChainReader, stateBlock *state.StateDB, parentState *state.StateDB, header *types.Header) (error, map[string]interface{}) {
+	adaptor.EngineV1.HookReward = func(chain consensus.ChainReader, stateBlock *state.StateDB, parentState *state.StateDB, header *types.Header) (map[string]interface{}, error) {
 		number := header.Number.Uint64()
 		rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
 		foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
 		if foundationWalletAddr == (common.Address{}) {
 			log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
-			return errors.New("foundation Wallet Address is empty"), nil
+			return nil, errors.New("foundation Wallet Address is empty")
 		}
 		rewards := make(map[string]interface{})
 		if number > 0 && number-rCheckpoint > 0 && foundationWalletAddr != (common.Address{}) {
@@ -290,7 +290,7 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			voterResults := make(map[common.Address]interface{})
 			if len(signers) > 0 {
 				for signer, calcReward := range rewardSigners {
-					err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
+					rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
 					if err != nil {
 						log.Crit("Fail to calculate reward for holders.", "error", err)
 					}
@@ -305,7 +305,7 @@ func AttachConsensusV1Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			rewards["rewards"] = voterResults
 			log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
 		}
-		return nil, rewards
+		return rewards, nil
 	}
 }
 

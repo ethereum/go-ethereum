@@ -918,7 +918,7 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 			log.Trace("Skipping account with special transaction invalid nonce", "sender", from, "nonce", nonce, "tx nonce ", tx.Nonce(), "to", to)
 			continue
 		}
-		err, logs, tokenFeeUsed, gas := w.commitTransaction(balanceFee, tx, bc, coinbase, gp)
+		logs, tokenFeeUsed, gas, err := w.commitTransaction(balanceFee, tx, bc, coinbase, gp)
 		switch err {
 		case core.ErrNonceTooLow:
 			// New head notification data race between the transaction pool and miner, shift
@@ -1026,7 +1026,7 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 			txs.Pop()
 			continue
 		}
-		err, logs, tokenFeeUsed, gas := w.commitTransaction(balanceFee, tx, bc, coinbase, gp)
+		logs, tokenFeeUsed, gas, err := w.commitTransaction(balanceFee, tx, bc, coinbase, gp)
 		switch {
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -1090,16 +1090,16 @@ func (w *Work) commitTransactions(mux *event.TypeMux, balanceFee map[common.Addr
 	}
 }
 
-func (w *Work) commitTransaction(balanceFee map[common.Address]*big.Int, tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool) (error, []*types.Log, bool, uint64) {
+func (w *Work) commitTransaction(balanceFee map[common.Address]*big.Int, tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool) ([]*types.Log, bool, uint64, error) {
 	snap := w.state.Snapshot()
 
 	receipt, gas, err, tokenFeeUsed := core.ApplyTransaction(w.config, balanceFee, bc, &coinbase, gp, w.state, w.tradingState, w.header, tx, &w.header.GasUsed, vm.Config{})
 	if err != nil {
 		w.state.RevertToSnapshot(snap)
-		return err, nil, false, 0
+		return nil, false, 0, err
 	}
 	w.txs = append(w.txs, tx)
 	w.receipts = append(w.receipts, receipt)
 
-	return nil, receipt.Logs, tokenFeeUsed, gas
+	return receipt.Logs, tokenFeeUsed, gas, nil
 }

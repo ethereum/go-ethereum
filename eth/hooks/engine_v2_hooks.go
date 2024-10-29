@@ -196,7 +196,7 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 		voterResults := make(map[common.Address]interface{})
 		if len(signers) > 0 {
 			for signer, calcReward := range rewardSigners {
-				err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
+				rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, parentState, signer, calcReward, number)
 				if err != nil {
 					log.Error("[HookReward] Fail to calculate reward for holders.", "error", err)
 					return nil, err

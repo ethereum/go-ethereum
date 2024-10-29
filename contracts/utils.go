@@ -417,12 +417,12 @@ func GetCandidatesOwnerBySigner(statedb *state.StateDB, signerAddr common.Addres
 	return owner
 }
 
-func CalculateRewardForHolders(foundationWalletAddr common.Address, state *state.StateDB, signer common.Address, calcReward *big.Int, blockNumber uint64) (error, map[common.Address]*big.Int) {
+func CalculateRewardForHolders(foundationWalletAddr common.Address, state *state.StateDB, signer common.Address, calcReward *big.Int, blockNumber uint64) (map[common.Address]*big.Int, error) {
 	rewards, err := GetRewardBalancesRate(foundationWalletAddr, state, signer, calcReward, blockNumber)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, rewards
+	return rewards, nil
 }
 
 func GetRewardBalancesRate(foundationWalletAddr common.Address, statedb *state.StateDB, masterAddr common.Address, totalReward *big.Int, blockNumber uint64) (map[common.Address]*big.Int, error) {
