@@ -220,43 +220,123 @@ func (x *XDPoS_v2) CalculateMissingRounds(chain consensus.ChainReader, header *t
 	return missedRoundsMetadata, nil
 }
 
-func (x *XDPoS_v2) GetBlockByEpochNumber(chain consensus.ChainReader, targetEpochNum uint64) (*types.BlockInfo, *types.BlockInfo, error) {
+func (x *XDPoS_v2) getBlockByEpochNumberInCache(chain consensus.ChainReader, estRound types.Round) *types.BlockInfo {
+	epochSwitchInCache := make([]*types.BlockInfo, 0)
+	for r := estRound; r < estRound+types.Round(x.config.Epoch); r++ {
+		info, ok := x.round2epochBlockInfo.Get(r)
+		if ok {
+			blockInfo := info.(*types.BlockInfo)
+			epochSwitchInCache = append(epochSwitchInCache, blockInfo)
+		}
+	}
+	if len(epochSwitchInCache) == 1 {
+		return epochSwitchInCache[0]
+	} else if len(epochSwitchInCache) == 0 {
+		return nil
+	}
+	// when multiple cache hits, need to find the one in main chain
+	for _, blockInfo := range epochSwitchInCache {
+		header := chain.GetHeaderByNumber(blockInfo.Number.Uint64())
+		if header == nil {
+			continue
+		}
+		if header.Hash() == blockInfo.Hash {
+			return blockInfo
+		}
+	}
+	return nil
+}
+
+func (x *XDPoS_v2) binarySearchBlockByEpochNumber(chain consensus.ChainReader, targetEpochNum uint64, start, end uint64) (*types.BlockInfo, error) {
+	// `end` must be larger than the target and `start` could be the target
+	for start < end {
+		header := chain.GetHeaderByNumber((start + end) / 2)
+		if header == nil {
+			return nil, errors.New("header nil in binary search")
+		}
+		isEpochSwitch, epochNum, err := x.IsEpochSwitch(header)
+		if err != nil {
+			return nil, err
+		}
+		if epochNum == targetEpochNum {
+			_, round, _, err := x.getExtraFields(header)
+			if err != nil {
+				return nil, err
+			}
+			if isEpochSwitch {
+				return &types.BlockInfo{
+					Hash:   header.Hash(),
+					Round:  round,
+					Number: header.Number,
+				}, nil
+			} else {
+				end = header.Number.Uint64()
+				// trick to shorten the search
+				estStart := end - uint64(round)%x.config.Epoch
+				if start < estStart {
+					start = estStart
+				}
+			}
+		} else if epochNum > targetEpochNum {
+			end = header.Number.Uint64()
+		} else if epochNum < targetEpochNum {
+			// if start keeps the same, means no result and the search is over
+			nextStart := header.Number.Uint64()
+			if nextStart == start {
+				break
+			}
+			start = nextStart
+		}
+	}
+	return nil, errors.New("no epoch switch header in binary search (all rounds in this epoch are missed, which is very rare)")
+}
+
+func (x *XDPoS_v2) GetBlockByEpochNumber(chain consensus.ChainReader, targetEpochNum uint64) (*types.BlockInfo, error) {
 	currentHeader := chain.CurrentHeader()
 	epochSwitchInfo, err := x.getEpochSwitchInfo(chain, currentHeader, currentHeader.Hash())
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(epochSwitchInfo.EpochSwitchBlockInfo.Round)/x.config.Epoch
-	// since below function GetEpochSwitchInfoBetween(chain, start, end) return nil if start == end, we early return the result
+	// if current epoch is this epoch, we early return the result
 	if targetEpochNum == epochNum {
-		return epochSwitchInfo.EpochSwitchBlockInfo, nil, nil
+		return epochSwitchInfo.EpochSwitchBlockInfo, nil
 	}
 	if targetEpochNum > epochNum {
-		return nil, nil, errors.New("input epoch number > current epoch number")
+		return nil, errors.New("input epoch number > current epoch number")
 	}
 	if targetEpochNum < x.config.V2.SwitchBlock.Uint64()/x.config.Epoch {
-		return nil, nil, errors.New("input epoch number < v2 begin epoch number")
+		return nil, errors.New("input epoch number < v2 begin epoch number")
 	}
+	// the block's round should be in [estRound,estRound+Epoch-1]
+	estRound := types.Round((targetEpochNum - x.config.V2.SwitchBlock.Uint64()/x.config.Epoch) * x.config.Epoch)
+	// check the round2epochBlockInfo cache
+	blockInfo := x.getBlockByEpochNumberInCache(chain, estRound)
+	if blockInfo != nil {
+		return blockInfo, nil
+	}
+	// if cache miss, we do search
 	epoch := big.NewInt(int64(x.config.Epoch))
 	estblockNumDiff := new(big.Int).Mul(epoch, big.NewInt(int64(epochNum-targetEpochNum)))
 	estBlockNum := new(big.Int).Sub(epochSwitchInfo.EpochSwitchBlockInfo.Number, estblockNumDiff)
 	if estBlockNum.Cmp(x.config.V2.SwitchBlock) == -1 {
 		estBlockNum.Set(x.config.V2.SwitchBlock)
 	}
-	estBlockHeader := chain.GetHeaderByNumber(estBlockNum.Uint64())
-	epochSwitchInfos, err := x.GetEpochSwitchInfoBetween(chain, estBlockHeader, currentHeader)
-	if err != nil {
-		return nil, nil, err
-	}
-	for i, info := range epochSwitchInfos {
-		epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(info.EpochSwitchBlockInfo.Round)/x.config.Epoch
-		if epochNum == targetEpochNum {
-			if i < len(epochSwitchInfos)-1 {
-				nextEpoch := epochSwitchInfos[i+1].EpochSwitchBlockInfo
-				return info.EpochSwitchBlockInfo, nextEpoch, nil
+	// if the targrt is close, we search brute-forcily
+	closeEpochNum := uint64(2)
+	if closeEpochNum >= epochNum-targetEpochNum {
+		estBlockHeader := chain.GetHeaderByNumber(estBlockNum.Uint64())
+		epochSwitchInfos, err := x.GetEpochSwitchInfoBetween(chain, estBlockHeader, currentHeader)
+		if err != nil {
+			return nil, err
+		}
+		for _, info := range epochSwitchInfos {
+			epochNum := x.config.V2.SwitchBlock.Uint64()/x.config.Epoch + uint64(info.EpochSwitchBlockInfo.Round)/x.config.Epoch
+			if epochNum == targetEpochNum {
+				return info.EpochSwitchBlockInfo, nil
 			}
-			return info.EpochSwitchBlockInfo, nil, nil
 		}
 	}
-	return nil, nil, errors.New("input epoch number not found (all rounds in this epoch are missed, which is very rare)")
+	// else, we use binary search
+	return x.binarySearchBlockByEpochNumber(chain, targetEpochNum, estBlockNum.Uint64(), epochSwitchInfo.EpochSwitchBlockInfo.Number.Uint64())
 }

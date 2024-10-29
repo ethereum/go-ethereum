@@ -350,7 +350,7 @@ An API exclusively for V2 consensus, designed to assist in getting rewards of th
 Given the epoch number, search the epoch switch block.
 */
 func (api *API) GetBlockInfoByEpochNum(epochNumber uint64) (*utils.EpochNumInfo, error) {
-	thisEpoch, nextEpoch, err := api.XDPoS.EngineV2.GetBlockByEpochNumber(api.chain, epochNumber)
+	thisEpoch, err := api.XDPoS.EngineV2.GetBlockByEpochNumber(api.chain, epochNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +359,9 @@ func (api *API) GetBlockInfoByEpochNum(epochNumber uint64) (*utils.EpochNumInfo,
 		EpochRound:            thisEpoch.Round,
 		EpochFirstBlockNumber: thisEpoch.Number,
 	}
-	if nextEpoch != nil {
+	nextEpoch, err := api.XDPoS.EngineV2.GetBlockByEpochNumber(api.chain, epochNumber+1)
+
+	if err == nil {
 		info.EpochLastBlockNumber = new(big.Int).Sub(nextEpoch.Number, big.NewInt(1))
 	}
 	return info, nil

@@ -217,7 +217,7 @@ func TestGetBlockByEpochNumber(t *testing.T) {
 
 	info, err = engine.APIs(blockchain)[0].Service.(*XDPoS.API).GetBlockInfoByEpochNum(3)
 	assert.Equal(t, info.EpochFirstBlockNumber.Int64(), int64(1803))
-	assert.Equal(t, info.EpochLastBlockNumber.Int64(), int64(1803))
+	assert.Nil(t, info.EpochLastBlockNumber)
 	assert.Equal(t, info.EpochRound, types.Round(largeRound))
 	assert.Nil(t, err)
 
