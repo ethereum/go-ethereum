@@ -456,7 +456,7 @@ func (p *ContentStorage) del(contentId []byte) error {
 		}
 	}
 	_, err = p.delStmt.Exec(contentId)
-	if metrics.Enabled && err != nil {
+	if metrics.Enabled && err == nil {
 		portalStorageMetrics.EntriesCount.Dec(1)
 		portalStorageMetrics.ContentStorageUsage.Dec(int64(sizeDel))
 	}
@@ -480,7 +480,7 @@ func (p *ContentStorage) batchDel(ids [][]byte) error {
 
 	// delete items
 	_, err = p.sqliteDB.Exec(query, args...)
-	if metrics.Enabled && err != nil {
+	if metrics.Enabled && err == nil {
 		portalStorageMetrics.EntriesCount.Dec(int64(len(args)))
 		portalStorageMetrics.ContentStorageUsage.Dec(int64(sizeDel))
 	}
@@ -509,7 +509,7 @@ func (p *ContentStorage) deleteContentOutOfRadius(radius *uint256.Int) error {
 	}
 	count, err := res.RowsAffected()
 	p.log.Trace("delete items", "count", count)
-	if metrics.Enabled && err != nil {
+	if metrics.Enabled && err == nil {
 		portalStorageMetrics.EntriesCount.Dec(count)
 		portalStorageMetrics.ContentStorageUsage.Dec(int64(sizeDel))
 	}
