@@ -64,11 +64,13 @@ func (msg *CallMsg) SetGas(gas int64)          { msg.msg.Gas = uint64(gas) }
 func (msg *CallMsg) SetGasPrice(price *BigInt) { msg.msg.GasPrice = price.bigint }
 func (msg *CallMsg) SetValue(value *BigInt)    { msg.msg.Value = value.bigint }
 func (msg *CallMsg) SetData(data []byte)       { msg.msg.Data = common.CopyBytes(data) }
+
 func (msg *CallMsg) SetTo(address *Address) {
 	if address == nil {
 		msg.msg.To = nil
+	} else {
+		msg.msg.To = &address.address
 	}
-	msg.msg.To = &address.address
 }
 
 // SyncProgress gives progress indications when the node is synchronising with

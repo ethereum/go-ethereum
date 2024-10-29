@@ -82,7 +82,6 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 	logger.Info("Starting remote server health-check")
 
 	stat := &serverStat{
-		address:  client.address,
 		services: make(map[string]map[string]string),
 	}
 	if client == nil {
@@ -94,6 +93,8 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 		}
 		client = conn
 	}
+	stat.address = client.address
+
 	// Client connected one way or another, run health-checks
 	logger.Debug("Checking for nginx availability")
 	if infos, err := checkNginx(client, w.network); err != nil {
