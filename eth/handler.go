@@ -769,7 +769,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		var unkownTxs []*types.Transaction
 
 		for i, tx := range txs {
 			// Validate and mark the remote transaction
@@ -778,9 +777,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			p.MarkTransaction(tx.Hash())
 			exist, _ := pm.knownTxs.ContainsOrAdd(tx.Hash(), true)
-			if !exist {
-				unkownTxs = append(unkownTxs, tx)
-			} else {
+			if exist {
 				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce(), "to", tx.To())
 			}
 
@@ -797,7 +794,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		var unkownOrderTxs []*types.OrderTransaction
 
 		for i, tx := range txs {
 			// Validate and mark the remote transaction
@@ -806,9 +802,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			p.MarkOrderTransaction(tx.Hash())
 			exist, _ := pm.knowOrderTxs.ContainsOrAdd(tx.Hash(), true)
-			if !exist {
-				unkownOrderTxs = append(unkownOrderTxs, tx)
-			} else {
+			if exist {
 				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce())
 			}
 
@@ -828,7 +822,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		var unkownLendingTxs []*types.LendingTransaction
 
 		for i, tx := range txs {
 			// Validate and mark the remote transaction
@@ -837,9 +830,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			p.MarkLendingTransaction(tx.Hash())
 			exist, _ := pm.knowLendingTxs.ContainsOrAdd(tx.Hash(), true)
-			if !exist {
-				unkownLendingTxs = append(unkownLendingTxs, tx)
-			} else {
+			if exist {
 				log.Trace("Discard known tx", "hash", tx.Hash(), "nonce", tx.Nonce())
 			}
 
