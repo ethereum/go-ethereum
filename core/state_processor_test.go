@@ -645,6 +645,7 @@ var testKaustinenLikeChainConfig = &params.ChainConfig{
 	TerminalTotalDifficulty: common.Big0,
 }
 
+// TestProcessVerkleInvalidContractCreation checks for several modes of contract creation failures
 func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	var (
 		coinbase = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
@@ -718,12 +719,20 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	tx1ContractStem := utils.GetTreeKey(tx1ContractAddress[:], uint256.NewInt(0), 105)
 	tx1ContractStem = tx1ContractStem[:31]
 
-	// Check that values 0x29 and 0x05 are found in the storage (and that they lead
+	tx2ContractAddress := crypto.CreateAddress(account2, 1)
+	tx2ContractStem := utils.GetTreeKey(tx2ContractAddress[:], uint256.NewInt(0), 133)
+	tx2ContractStem = tx2ContractStem[:31]
+
+	eip2935Stem := utils.GetTreeKey(params.HistoryStorageAddress[:], uint256.NewInt(0), 0)
+	eip2935Stem = eip2935Stem[:31]
+
+	// Check that slot values 0x29 and 0x45 are found in the storage (and that they lead
 	// to no update, since the contract creation code reverted)
 	for _, stemStateDiff := range statediffs[0] {
-		// Check that the value 0x85, which is overflowing the account header,
+		// Check that the slot number 133, which is overflowing the account header,
 		// is present.
 		if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("917f78f74226b0e3755134ce3e3433cac8df5a657f6c9b9a3d0122a3e4beb0")) {
+			panic("prout")
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
 				if suffixDiff.Suffix != 133 {
 					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
@@ -735,7 +744,7 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
 				}
 			}
-		} else if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("5b5fdfedd6a0e932da408ac7d772a36513d1eee9b9926e52620c43a433aad7")) {
+		} else if bytes.Equal(stemStateDiff.Stem[:], eip2935Stem) {
 			// BLOCKHASH contract stem
 			if len(stemStateDiff.SuffixDiffs) > 1 {
 				t.Fatalf("invalid suffix diff count found for BLOCKHASH contract: %d != 1", len(stemStateDiff.SuffixDiffs))
@@ -763,7 +772,7 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	// code should make it to the witness.
 	for _, stemStateDiff := range statediffs[1] {
 		for _, suffixDiff := range stemStateDiff.SuffixDiffs {
-			if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("5b5fdfedd6a0e932da408ac7d772a36513d1eee9b9926e52620c43a433aad7")) {
+			if bytes.Equal(stemStateDiff.Stem[:], eip2935Stem) {
 				// BLOCKHASH contract stem
 				if len(stemStateDiff.SuffixDiffs) > 1 {
 					t.Fatalf("invalid suffix diff count found for BLOCKHASH contract at block #2: %d != 1", len(stemStateDiff.SuffixDiffs))
@@ -827,8 +836,11 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 		gen.AddTx(&tx)
 	})
 
+	eip2935Stem := utils.GetTreeKey(params.HistoryStorageAddress[:], uint256.NewInt(0), 0)
+	eip2935Stem = eip2935Stem[:31]
+
 	for _, stemStateDiff := range statediffs[0] {
-		if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("5b5fdfedd6a0e932da408ac7d772a36513d1eee9b9926e52620c43a433aad7")) {
+		if bytes.Equal(stemStateDiff.Stem[:], eip2935Stem) {
 			// BLOCKHASH contract stem
 			if len(stemStateDiff.SuffixDiffs) > 1 {
 				t.Fatalf("invalid suffix diff count found for BLOCKHASH contract: %d != 1", len(stemStateDiff.SuffixDiffs))
