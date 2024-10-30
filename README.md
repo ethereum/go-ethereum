@@ -1,13 +1,22 @@
+# libevm
+
+[![API Reference](
+https://pkg.go.dev/badge/github.com/ava-labs/libevm
+)](https://pkg.go.dev/github.com/ava-labs/libevm?tab=doc)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ava-labs/libevm)](https://goreportcard.com/report/github.com/ava-labs/libevm)
+[![Go Build & Test](https://github.com/ava-labs/libevm/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/ava-labs/libevm/actions/workflows/go.yml)
+
+The Ethereum Virtual Machine (EVM) as a library, `libevm` is a fork of [`geth`](https://github.com/ethereum/go-ethereum) with
+injectable configuration directives. Although designed to support the Avalanche [C-Chain](https://github.com/ava-labs/coreth) and
+[EVM-L1s](https://github.com/ava-labs/subnet-evm) (formerly _subnets_), configuration is general-purpose and backwards-compatible
+with `geth`.
+
+
+We are immensely grateful for the hard work of the `geth` authors, and hope that our contribution can be of value to others too. Thank you!
+
 ## Go Ethereum
 
 Golang execution layer implementation of the Ethereum protocol.
-
-[![API Reference](
-https://pkg.go.dev/badge/github.com/ethereum/go-ethereum
-)](https://pkg.go.dev/github.com/ethereum/go-ethereum?tab=doc)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ethereum/go-ethereum)](https://goreportcard.com/report/github.com/ethereum/go-ethereum)
-[![Travis](https://app.travis-ci.com/ethereum/go-ethereum.svg?branch=master)](https://app.travis-ci.com/github/ethereum/go-ethereum)
-[![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/nthXNEv)
 
 Automated builds are available for stable releases and the unstable master branch. Binary
 archives are published at https://geth.ethereum.org/downloads/.

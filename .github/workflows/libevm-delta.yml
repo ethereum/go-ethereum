@@ -10,8 +10,8 @@ on:
 jobs:
   diffs:
     env:
-      # Last commit on `renamed-go-module` branch to be merged into `main`
-      LIBEVM_BASE: a7f08d0e757d5a69d3e269c69dcea7e45bab97e3
+      # Last commit from rename-module workflow job to be included in `main`
+      LIBEVM_BASE: 0b56af5a01b8a0c6fc9d60247bb79ffd03d1bcfd
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
