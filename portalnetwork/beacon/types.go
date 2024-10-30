@@ -20,7 +20,8 @@ var (
 	Deneb     common.ForkDigest = [4]byte{0x6a, 0x95, 0xa1, 0xa9}
 )
 
-//go:generate sszgen --path types.go --exclude-objs ForkedLightClientBootstrap,ForkedLightClientUpdate,LightClientUpdateRange
+// note: We changed the generated file since fastssz issues which can't be passed by the CI, so we commented the go:generate line
+///go:generate sszgen --path types.go --exclude-objs ForkedLightClientBootstrap,ForkedLightClientUpdate,LightClientUpdateRange,ForkedLightClientOptimisticUpdate,ForkedLightClientFinalityUpdate,HistoricalSummariesProof,HistoricalSummariesWithProof,ForkedHistoricalSummariesWithProof
 
 type LightClientUpdateKey struct {
 	StartPeriod uint64
