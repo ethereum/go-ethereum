@@ -272,7 +272,7 @@ Return:
 }
 ```
 
-Return (same call with `{diffMode: True}`):
+Return (same call with `tracerConfig: {diffMode: True}`):
 
 ```terminal
 {
@@ -300,7 +300,7 @@ debug.traceCall(
     data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
   },
   'latest',
-  { tracer: 'prestateTracer', tracerConfig: { disableStorage: true } }
+  { tracer: 'prestateTracer', tracerConfig: { disableStorage: true, disableCode: true } }
 );
 ```
 
