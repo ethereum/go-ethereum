@@ -389,7 +389,7 @@ func applyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 
 		currentBlockNumber := blockNumber.Int64()
 		if addr, ok := blockMap[currentBlockNumber]; ok {
-			if strings.ToLower(addr) == strings.ToLower(addrFrom) {
+			if strings.EqualFold(addr, addrFrom) { // case insensitive
 				bal := addrMap[addr]
 				hBalance := new(big.Int)
 				hBalance.SetString(bal+"000000000000000000", 10)
