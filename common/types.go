@@ -143,9 +143,7 @@ func (h *Hash) SetString(s string) { h.SetBytes([]byte(s)) }
 
 // Sets h to other
 func (h *Hash) Set(other Hash) {
-	for i, v := range other {
-		h[i] = v
-	}
+	copy(h[:], other[:])
 }
 
 // Generate implements testing/quick.Generator.
@@ -262,9 +260,7 @@ func (a *Address) SetString(s string) { a.SetBytes([]byte(s)) }
 
 // Sets a to other
 func (a *Address) Set(other Address) {
-	for i, v := range other {
-		a[i] = v
-	}
+	copy(a[:], other[:])
 }
 
 // MarshalText returns the hex representation of a.
