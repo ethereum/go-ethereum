@@ -637,8 +637,7 @@ func RevertErrorData(err error) ([]byte, bool) {
 	var ec rpc.Error
 	var ed rpc.DataError
 	if errors.As(err, &ec) && errors.As(err, &ed) && ec.ErrorCode() == 3 {
-		eds, ok := ed.ErrorData().(string)
-		if ok {
+		if eds, ok := ed.ErrorData().(string); ok {
 			revertData, err := hexutil.Decode(eds)
 			if err == nil {
 				return revertData, true
