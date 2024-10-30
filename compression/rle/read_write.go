@@ -26,9 +26,9 @@ import (
 
 const (
 	token             byte = 0xfe
-	emptyShaToken          = 0xfd
-	emptyListShaToken      = 0xfe
-	tokenToken             = 0xff
+	emptyShaToken     byte = 0xfd
+	emptyListShaToken byte = 0xfe
+	tokenToken        byte = 0xff
 )
 
 var empty = crypto.Keccak256([]byte(""))
