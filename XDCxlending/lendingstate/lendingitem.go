@@ -207,7 +207,7 @@ func (l *LendingItem) VerifyLendingItem(state *state.StateDB) error {
 	if err := l.VerifyLendingStatus(); err != nil {
 		return err
 	}
-	if valid, _ := IsValidPair(state, l.Relayer, l.LendingToken, l.Term); valid == false {
+	if valid, _ := IsValidPair(state, l.Relayer, l.LendingToken, l.Term); !valid {
 		return fmt.Errorf("invalid pair . LendToken %s . Term: %v", l.LendingToken.Hex(), l.Term)
 	}
 	if l.Status == LendingStatusNew {
