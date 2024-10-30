@@ -75,7 +75,7 @@ func (ec *Client) BlockReceipts(ctx context.Context, blockNrOrHash rpc.BlockNumb
 	var r []*types.Receipt
 	err := ec.c.CallContext(ctx, &r, "eth_getBlockReceipts", blockNrOrHash)
 	if err == nil && r == nil {
-		return nil, ethereum.NotFound
+		return nil, ethereum.ErrNotFound
 	}
 	return r, err
 }
@@ -92,7 +92,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	if err != nil {
 		return nil, err
 	} else if len(raw) == 0 {
-		return nil, ethereum.NotFound
+		return nil, ethereum.ErrNotFound
 	}
 	// Decode header and transactions.
 	var head *types.Header
@@ -154,7 +154,7 @@ func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.He
 	var head *types.Header
 	err := ec.c.CallContext(ctx, &head, "eth_getBlockByHash", hash, false)
 	if err == nil && head == nil {
-		err = ethereum.NotFound
+		err = ethereum.ErrNotFound
 	}
 	return head, err
 }
@@ -165,7 +165,7 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.H
 	var head *types.Header
 	err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", toBlockNumArg(number), false)
 	if err == nil && head == nil {
-		err = ethereum.NotFound
+		err = ethereum.ErrNotFound
 	}
 	return head, err
 }
@@ -195,7 +195,7 @@ func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *
 	if err != nil {
 		return nil, false, err
 	} else if json == nil {
-		return nil, false, ethereum.NotFound
+		return nil, false, ethereum.ErrNotFound
 	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
 		return nil, false, errors.New("server returned transaction without signature")
 	}
@@ -241,7 +241,7 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 	err := ec.c.CallContext(ctx, &json, "eth_getTransactionByBlockHashAndIndex", blockHash, hexutil.Uint64(index))
 	if err == nil {
 		if json == nil {
-			return nil, ethereum.NotFound
+			return nil, ethereum.ErrNotFound
 		} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
 			return nil, errors.New("server returned transaction without signature")
 		}
@@ -257,7 +257,7 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 	err := ec.c.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
 	if err == nil {
 		if r == nil {
-			return nil, ethereum.NotFound
+			return nil, ethereum.ErrNotFound
 		}
 	}
 	return r, err
@@ -268,7 +268,7 @@ func (ec *Client) GetTransactionReceiptResult(ctx context.Context, txHash common
 	result, err := ec.c.GetResultCallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
 	if err == nil {
 		if r == nil {
-			return nil, nil, ethereum.NotFound
+			return nil, nil, ethereum.ErrNotFound
 		}
 	}
 	return r, result, err
