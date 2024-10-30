@@ -1517,6 +1517,8 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 		if balanceStateDiff.CurrentValue != nil {
 			t.Fatal("the pre-state balance before must be nil, since the contract didn't exist")
 		}
+		// Ensure that the value is burnt, and therefore that the balance of the self-destructed
+		// contract isn't modified (it should remain missing from the state)
 		if balanceStateDiff.NewValue != nil {
 			t.Fatal("the post-state balance after self-destruct must be nil since the contract shouldn't be created at all")
 		}
