@@ -757,11 +757,6 @@ func (f *FilterMaps) applyUpdateBatch(u *updateBatch) {
 	}
 }
 
-// updatedRangeLength returns the length of the updated filter map range.
-func (u *updateBatch) updatedRangeLength() uint32 {
-	return u.afterLastMap - u.firstMap
-}
-
 // headEpoch returns the head epoch index.
 func (u *updateBatch) headEpoch() uint32 {
 	return uint32(u.headLvPointer >> (u.f.logValuesPerMap + u.f.logMapsPerEpoch))
