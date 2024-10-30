@@ -598,7 +598,7 @@ func (pool *LendingPool) validateLending(tx *types.LendingTransaction) error {
 	if !lendingstate.IsValidRelayer(cloneStateDb, tx.RelayerAddress()) {
 		return fmt.Errorf("invalid lending relayer. ExchangeAddress: %s", tx.RelayerAddress().Hex())
 	}
-	if valid, _ := lendingstate.IsValidPair(cloneStateDb, tx.RelayerAddress(), tx.LendingToken(), tx.Term()); valid == false {
+	if valid, _ := lendingstate.IsValidPair(cloneStateDb, tx.RelayerAddress(), tx.LendingToken(), tx.Term()); !valid {
 		return fmt.Errorf("invalid pair. Relayer: %s. LendingToken: %s. Term: %d", tx.RelayerAddress().Hex(), tx.LendingToken().Hex(), tx.Term())
 	}
 	if tx.IsCreatedLending() {
