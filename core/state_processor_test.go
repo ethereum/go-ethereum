@@ -679,7 +679,7 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	//
 	// - The second block contains a single failing contract creation transaction,
 	//   that fails right off the bat.
-	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
+	_, chain, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 2, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 
 		if i == 0 {
@@ -720,48 +720,66 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	tx1ContractStem = tx1ContractStem[:31]
 
 	tx2ContractAddress := crypto.CreateAddress(account2, 1)
-	tx2ContractStem := utils.GetTreeKey(tx2ContractAddress[:], uint256.NewInt(0), 133)
+	tx2SlotKey := [32]byte{}
+	tx2SlotKey[31] = 133
+	tx2ContractStem := utils.StorageSlotKey(tx2ContractAddress[:], tx2SlotKey[:])
 	tx2ContractStem = tx2ContractStem[:31]
 
 	eip2935Stem := utils.GetTreeKey(params.HistoryStorageAddress[:], uint256.NewInt(0), 0)
 	eip2935Stem = eip2935Stem[:31]
 
-	// Check that slot values 0x29 and 0x45 are found in the storage (and that they lead
-	// to no update, since the contract creation code reverted)
+	// Check that the witness contains what we expect: a storage entry for each of the two contract
+	// creations that failed: one at 133 for the 2nd tx, and one at 105 for the first tx.
 	for _, stemStateDiff := range statediffs[0] {
 		// Check that the slot number 133, which is overflowing the account header,
-		// is present.
-		if bytes.Equal(stemStateDiff.Stem[:], common.Hex2Bytes("917f78f74226b0e3755134ce3e3433cac8df5a657f6c9b9a3d0122a3e4beb0")) {
-			panic("prout")
+		// is present. Note that the offset of the 2nd group (first group after the
+		// header) is skipping the first 64 values, hence we still have an offset
+		// of 133, and not 133 - 64.
+		if bytes.Equal(stemStateDiff.Stem[:], tx2ContractStem[:]) {
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
 				if suffixDiff.Suffix != 133 {
 					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
 				}
+				if suffixDiff.CurrentValue != nil {
+					t.Fatalf("invalid prestate value found for %x in block #1: %v != nil\n", stemStateDiff.Stem, suffixDiff.CurrentValue)
+				}
+				if suffixDiff.NewValue != nil {
+					t.Fatalf("invalid poststate value found for %x in block #1: %v != nil\n", stemStateDiff.Stem, suffixDiff.NewValue)
+				}
 			}
 		} else if bytes.Equal(stemStateDiff.Stem[:], tx1ContractStem) {
+			// For this contract creation, check that only the accound header and storage slot 41
+			// are found in the witness.
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
 				if suffixDiff.Suffix != 105 && suffixDiff.Suffix != 0 && suffixDiff.Suffix != 1 {
 					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
 				}
 			}
 		} else if bytes.Equal(stemStateDiff.Stem[:], eip2935Stem) {
-			// BLOCKHASH contract stem
+			// Check the eip 2935 group of leaves.
+			// Check that only one leaf was accessed, and is present in the witness.
 			if len(stemStateDiff.SuffixDiffs) > 1 {
 				t.Fatalf("invalid suffix diff count found for BLOCKHASH contract: %d != 1", len(stemStateDiff.SuffixDiffs))
 			}
+			// Check that this leaf is the first storage slot
 			if stemStateDiff.SuffixDiffs[0].Suffix != 64 {
 				t.Fatalf("invalid suffix diff value found for BLOCKHASH contract: %d != 64", stemStateDiff.SuffixDiffs[0].Suffix)
 			}
-			// check that the "current value" is nil and that the new value isn't.
+			// check that the prestate value is nil and that the poststate value isn't.
 			if stemStateDiff.SuffixDiffs[0].CurrentValue != nil {
 				t.Fatalf("non-nil current value in BLOCKHASH contract insert: %x", stemStateDiff.SuffixDiffs[0].CurrentValue)
 			}
 			if stemStateDiff.SuffixDiffs[0].NewValue == nil {
 				t.Fatalf("nil new value in BLOCKHASH contract insert")
 			}
+			if *stemStateDiff.SuffixDiffs[0].NewValue != chain[0].Hash() {
+				t.Fatalf("invalid BLOCKHASH value: %x != %x", *&stemStateDiff.SuffixDiffs[0].NewValue, chain[0].Hash())
+			}
 		} else {
+			// For all other entries present in the witness, check that nothing beyond
+			// the account header was accessed.
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
-				if suffixDiff.Suffix > 4 {
+				if suffixDiff.Suffix > 2 {
 					t.Fatalf("invalid suffix diff found for %x in block #1: %d\n", stemStateDiff.Stem, suffixDiff.Suffix)
 				}
 			}
@@ -793,6 +811,8 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	}
 }
 
+// TestProcessVerkleContractWithEmptyCode checks that the witness contains all valid
+// entries, if the initcode returns an empty code.
 func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421
 	config := *testKaustinenLikeChainConfig
@@ -825,7 +845,7 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 		}
 	)
 
-	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
+	_, chain, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 		var tx types.Transaction
 		// a transaction that does some PUSH1n but returns a 0-sized contract
@@ -840,6 +860,8 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 	eip2935Stem = eip2935Stem[:31]
 
 	for _, stemStateDiff := range statediffs[0] {
+		// Handle the case of the history contract: make sure only the correct
+		// slots are added to the witness.
 		if bytes.Equal(stemStateDiff.Stem[:], eip2935Stem) {
 			// BLOCKHASH contract stem
 			if len(stemStateDiff.SuffixDiffs) > 1 {
@@ -855,9 +877,12 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 			if stemStateDiff.SuffixDiffs[0].NewValue == nil {
 				t.Fatalf("nil new value in BLOCKHASH contract insert")
 			}
+			if *stemStateDiff.SuffixDiffs[0].NewValue != chain[0].Hash() {
+				t.Fatalf("invalid BLOCKHASH value: %x != %x", *&stemStateDiff.SuffixDiffs[0].NewValue, chain[0].Hash())
+			}
 		} else {
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
-				if suffixDiff.Suffix > 4 {
+				if suffixDiff.Suffix > 2 {
 					// if d8898012c484fb48610ecb7963886339207dab004bce968b007b616ffa18e0 shows up, it means that the PUSHn
 					// in the transaction above added entries into the witness, when they should not have since they are
 					// part of a contract deployment.
@@ -868,7 +893,9 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 	}
 }
 
-func TestProcessVerklExtCodeHashOpcode(t *testing.T) {
+// TestProcessVerkleExtCodeHashOpcode verifies that calling EXTCODEHASH on another
+// deployed contract, creates all the right entries in the witness.
+func TestProcessVerkleExtCodeHashOpcode(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421
 	config := *testKaustinenLikeChainConfig
 	config.ChainID.SetUint64(69421)
@@ -907,27 +934,26 @@ func TestProcessVerklExtCodeHashOpcode(t *testing.T) {
 		byte(vm.PUSH1), 0x00,
 		byte(vm.CODECOPY),
 
-		byte(vm.PUSH1), 2, // PUSH1 2
-		byte(vm.PUSH1), 0x00, // PUSH1 0
+		byte(vm.PUSH1), 2,
+		byte(vm.PUSH1), 0x00,
 		byte(vm.RETURN),
 
-		// Contract that auto-calls EXTCODEHASH
-		byte(vm.PUSH1), 42, // PUSH1 42
+		byte(vm.PUSH1), 42,
 	}
 	deployer := crypto.PubkeyToAddress(testKey.PublicKey)
 	dummyContractAddr := crypto.CreateAddress(deployer, 0)
 
+	// contract that calls EXTCODEHASH on the dummy contract
 	extCodeHashContract := []byte{
-		byte(vm.PUSH1), 22, // PUSH1 22
-		byte(vm.PUSH1), 12, // PUSH1 12
-		byte(vm.PUSH1), 0x00, // PUSH1 0
+		byte(vm.PUSH1), 22,
+		byte(vm.PUSH1), 12,
+		byte(vm.PUSH1), 0x00,
 		byte(vm.CODECOPY),
 
-		byte(vm.PUSH1), 22, // PUSH1 22
-		byte(vm.PUSH1), 0x00, // PUSH1 0
+		byte(vm.PUSH1), 22,
+		byte(vm.PUSH1), 0x00,
 		byte(vm.RETURN),
 
-		// Contract that auto-calls EXTCODEHASH
 		byte(vm.PUSH20),
 		0x3a, 0x22, 0x0f, 0x35, 0x12, 0x52, 0x08, 0x9d, 0x38, 0x5b, 0x29, 0xbe, 0xca, 0x14, 0xe2, 0x7f, 0x20, 0x4c, 0x29, 0x6a,
 		byte(vm.EXTCODEHASH),
@@ -965,12 +991,17 @@ func TestProcessVerklExtCodeHashOpcode(t *testing.T) {
 	}
 
 	codeHashStateDiff := statediffs[1][stateDiffIdx].SuffixDiffs[0]
+	// Check location of code hash was accessed
 	if codeHashStateDiff.Suffix != utils.CodeHashLeafKey {
 		t.Fatalf("code hash invalid suffix")
 	}
+	// check the code hash wasn't present in the prestate, as
+	// the contract was deployed in this block.
 	if codeHashStateDiff.CurrentValue == nil {
 		t.Fatalf("codeHash.CurrentValue must not be empty")
 	}
+	// check the poststate value corresponds to the code hash
+	// of the deployed contract.
 	expCodeHash := crypto.Keccak256Hash(dummyContract[12:])
 	if *codeHashStateDiff.CurrentValue != expCodeHash {
 		t.Fatalf("codeHash.CurrentValue unexpected code hash")
@@ -980,6 +1011,8 @@ func TestProcessVerklExtCodeHashOpcode(t *testing.T) {
 	}
 }
 
+// TestProcessVerkleBalanceOpcode checks that calling balance
+// on another contract will add the correct entries to the witness.
 func TestProcessVerkleBalanceOpcode(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421
 	config := *testKaustinenLikeChainConfig
@@ -1043,17 +1076,19 @@ func TestProcessVerkleBalanceOpcode(t *testing.T) {
 	if balanceStateDiff.Suffix != utils.BasicDataLeafKey {
 		t.Fatalf("invalid suffix diff")
 	}
-	if balanceStateDiff.CurrentValue == nil {
-		t.Fatalf("invalid current value")
+	// check the prestate balance wasn't 0 or missing
+	if balanceStateDiff.CurrentValue == nil || *balanceStateDiff.CurrentValue == zero {
+		t.Fatalf("invalid current value %v", *&balanceStateDiff.CurrentValue)
 	}
-	if *balanceStateDiff.CurrentValue == zero {
-		t.Fatalf("invalid current value")
-	}
+	// check that the poststate witness value for the balance is nil,
+	// meaning that it didn't get updated.
 	if balanceStateDiff.NewValue != nil {
 		t.Fatalf("invalid new value")
 	}
 }
 
+// TestProcessVerkleSelfDestructInSeparateTx controls the contents of the witness after
+// a non-eip6780-compliant selfdestruct occurs.
 func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421
 	config := *testKaustinenLikeChainConfig
@@ -1186,6 +1221,8 @@ func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
 	}
 }
 
+// TestProcessVerkleSelfDestructInSeparateTx controls the contents of the witness after
+// a eip6780-compliant selfdestruct occurs.
 func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421
 	config := *testKaustinenLikeChainConfig
@@ -1296,6 +1333,9 @@ func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 	}
 }
 
+// TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary checks the content of the witness
+// if a selfdestruct occurs in a different tx than the one that created it, but the beneficiary
+// is the selfdestructed account.
 func TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421
 	config := *testKaustinenLikeChainConfig
@@ -1402,6 +1442,9 @@ func TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary(t *testing.T) 
 	}
 }
 
+// TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary checks the content of the witness
+// if a selfdestruct occurs in the same tx as the one that created it, but the beneficiary
+// is the selfdestructed account.
 func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421
 	config := *testKaustinenLikeChainConfig
