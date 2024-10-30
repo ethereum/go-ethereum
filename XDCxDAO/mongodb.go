@@ -825,7 +825,10 @@ func (db *MongoDatabase) EnsureIndexes() error {
 }
 
 func (db *MongoDatabase) Close() error {
-	return db.Close()
+	if db.Session != nil {
+		db.Session.Close()
+	}
+	return nil
 }
 
 // HasAncient returns an error as we don't have a backing chain freezer.
