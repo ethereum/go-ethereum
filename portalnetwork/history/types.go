@@ -6,7 +6,8 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 )
 
-//go:generate sszgen --path types.go --exclude-objs BlockHeaderProof,PortalReceipts
+// note: We changed the generated file since fastssz issues which can't be passed by the CI, so we commented the go:generate line
+///go:generate sszgen --path types.go --exclude-objs BlockHeaderProof,PortalReceipts
 
 type BlockHeaderProofType uint8
 
