@@ -216,8 +216,8 @@ The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode re
 #### prestateTracer config {#prestate-tracer-config}
 
 - `diffMode`: `BOOL`. Setting this to true will enable diff mode (default = false).
-- `disableCode`: `BOOL`. Setting this to true will disable code capture (default = false).
-- `disableStorage`: `BOOL`. Setting this to true will disable storage capture (default = false).
+- `disableCode`: `BOOL`. Setting this to true will disable contract code capture (default = false).
+- `disableStorage`: `BOOL`. Setting this to true will disable contract storage capture (default = false).
 
 In `diff` mode the result object will contain a `pre` and a `post` object:
 
