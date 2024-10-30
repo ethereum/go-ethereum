@@ -203,7 +203,6 @@ func NewFilterMaps(db ethdb.KeyValueStore, chain blockchain, params Params, hist
 			log.Error("Error fetching tail block pointer, resetting log index", "error", err)
 			fm.filterMapsRange = filterMapsRange{} // updateLoop resets the database
 		}
-		headBlockPtr, _ := fm.getBlockLvPointer(fm.headBlockNumber)
 		log.Trace("Log index head", "number", fm.headBlockNumber, "hash", fm.headBlockHash.String(), "log value pointer", fm.headLvPointer)
 		log.Trace("Log index tail", "number", fm.tailBlockNumber, "parentHash", fm.tailParentHash.String(), "log value pointer", fm.tailBlockLvPointer)
 	}
@@ -337,7 +336,7 @@ func (f *FilterMaps) updateMapCache() {
 // Note that this function assumes that the indexer read lock is being held when
 // called from outside the updateLoop goroutine.
 func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
-	if lvIndex < f.tailBlockLvPointer || lvIndex > f.headLvPointer {
+	if lvIndex < f.tailBlockLvPointer || lvIndex >= f.headLvPointer {
 		return nil, nil
 	}
 	// find possible block range based on map to block pointers
