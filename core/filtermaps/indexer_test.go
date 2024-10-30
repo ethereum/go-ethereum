@@ -140,14 +140,11 @@ func TestIndexerCompareDb(t *testing.T) {
 	chain2 := ts.chain.getCanonicalChain()
 	ts.storeDbHash("chain 2 [0, 1200]")
 
-	ts.setHistory(800, false)
-	ts.fm.WaitIdle()
-	ts.storeDbHash("chain 2 [401, 1200]")
-
 	ts.chain.setHead(600)
 	ts.fm.WaitIdle()
 	ts.checkDbHash("chain 1/2 [0, 600]")
 
+	ts.setHistory(800, false)
 	ts.chain.setCanonicalChain(chain1)
 	ts.fm.WaitIdle()
 	ts.storeDbHash("chain 1 [201, 1000]")
@@ -155,6 +152,11 @@ func TestIndexerCompareDb(t *testing.T) {
 	ts.setHistory(0, false)
 	ts.fm.WaitIdle()
 	ts.checkDbHash("chain 1 [0, 1000]")
+
+	ts.setHistory(800, false)
+	ts.chain.setCanonicalChain(chain2)
+	ts.fm.WaitIdle()
+	ts.storeDbHash("chain 2 [401, 1200]")
 
 	ts.setHistory(0, true)
 	ts.fm.WaitIdle()
@@ -282,7 +284,10 @@ func (tc *testChain) GetHeader(hash common.Hash, number uint64) *types.Header {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 
-	return tc.blocks[hash].Header()
+	if block := tc.blocks[hash]; block != nil {
+		return block.Header()
+	}
+	return nil
 }
 
 func (tc *testChain) GetCanonicalHash(number uint64) common.Hash {
@@ -377,7 +382,7 @@ func (tc *testChain) addBlocks(count, maxTxPerBlock, maxLogsPerReceipt, maxTopic
 			tc.receipts[hash] = types.Receipts{}
 		}
 	}
-	tc.chainHeadFeed.Send(core.ChainEvent{Block: tc.blocks[tc.canonical[len(tc.canonical)-1]]})
+	tc.chainHeadFeed.Send(core.ChainEvent{Header: tc.blocks[tc.canonical[len(tc.canonical)-1]].Header()})
 }
 
 func (tc *testChain) setHead(headNum int) {
@@ -385,7 +390,7 @@ func (tc *testChain) setHead(headNum int) {
 	defer tc.lock.Unlock()
 
 	tc.canonical = tc.canonical[:headNum+1]
-	tc.chainHeadFeed.Send(core.ChainEvent{Block: tc.blocks[tc.canonical[len(tc.canonical)-1]]})
+	tc.chainHeadFeed.Send(core.ChainEvent{Header: tc.blocks[tc.canonical[len(tc.canonical)-1]].Header()})
 }
 
 func (tc *testChain) getCanonicalChain() []common.Hash {
@@ -404,5 +409,5 @@ func (tc *testChain) setCanonicalChain(cc []common.Hash) {
 
 	tc.canonical = make([]common.Hash, len(cc))
 	copy(tc.canonical, cc)
-	tc.chainHeadFeed.Send(core.ChainEvent{Block: tc.blocks[tc.canonical[len(tc.canonical)-1]]})
+	tc.chainHeadFeed.Send(core.ChainEvent{Header: tc.blocks[tc.canonical[len(tc.canonical)-1]].Header()})
 }
