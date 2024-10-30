@@ -352,7 +352,7 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		return nil, errExceedMaxTopics
 	}
 
-	borConfig := api.chainConfig.Bor
+	borConfig := api.sys.backend.ChainConfig().Bor
 
 	var filter *Filter
 
@@ -435,7 +435,7 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 		return nil, errFilterNotFound
 	}
 
-	borConfig := api.chainConfig.Bor
+	borConfig := api.sys.backend.ChainConfig().Bor
 
 	var filter *Filter
 

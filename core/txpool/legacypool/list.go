@@ -531,14 +531,26 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 	return removed, invalids
 }
 
-// FilterTxConditional returns the conditional transactions with invalid KnownAccounts
-// TODO - We will also have to check block range and time stamp range!
-func (l *list) FilterTxConditional(state *state.StateDB) types.Transactions {
+// FilterTxConditional returns the conditional transactions with invalid PIP15 options
+func (l *list) FilterTxConditional(state *state.StateDB, header *types.Header) types.Transactions {
+	if state == nil || header == nil {
+		return nil
+	}
+
 	removed := l.txs.filter(func(tx *types.Transaction) bool {
 		if options := tx.GetOptions(); options != nil {
-			err := state.ValidateKnownAccounts(options.KnownAccounts)
-			if err != nil {
-				log.Error("Error while Filtering Tx Conditional", "err", err)
+			if err := state.ValidateKnownAccounts(options.KnownAccounts); err != nil {
+				log.Debug("Error while Filtering Tx Conditional's known accounts", "err", err)
+				return true
+			}
+
+			if err := header.ValidateBlockNumberOptionsPIP15(options.BlockNumberMin, options.BlockNumberMax); err != nil {
+				log.Debug("Error while Filtering Tx Conditional's block number options", "err", err)
+				return true
+			}
+
+			if err := header.ValidateTimestampOptionsPIP15(options.TimestampMin, options.TimestampMax); err != nil {
+				log.Debug("Error while Filtering Tx Conditional's timestamp options", "err", err)
 				return true
 			}
 

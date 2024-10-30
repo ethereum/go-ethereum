@@ -1818,6 +1818,11 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 			fullTx:    true,
 			file:      "hash-pending-fullTx",
 		},
+		// 26. safe block
+		{
+			blockNumber: rpc.SafeBlockNumber,
+			file:        "tag-safe",
+		},
 	}
 
 	for i, tt := range testSuite {

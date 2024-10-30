@@ -218,6 +218,8 @@ The ```bor server``` command runs the Bor client.
 
 - ```bootnodes```: Comma separated enode URLs for P2P discovery bootstrap
 
+- ```discovery.dns```: Comma separated list of enrtree:// URLs which will be queried for nodes to connect to
+
 - ```maxpeers```: Maximum number of network peers (network disabled if set to 0) (default: 50)
 
 - ```maxpendpeers```: Maximum number of pending connection attempts (default: 50)

@@ -806,6 +806,13 @@ func (c *Command) Flags(config *Config) *flagset.Flagset {
 		Default: c.cliConfig.P2P.TxArrivalWait,
 		Group:   "P2P",
 	})
+	f.SliceStringFlag(&flagset.SliceStringFlag{
+		Name:    "discovery.dns",
+		Usage:   "Comma separated list of enrtree:// URLs which will be queried for nodes to connect to",
+		Value:   &c.cliConfig.P2P.Discovery.DNS,
+		Default: c.cliConfig.P2P.Discovery.DNS,
+		Group:   "P2P",
+	})
 
 	// metrics
 	f.BoolFlag(&flagset.BoolFlag{

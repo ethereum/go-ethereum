@@ -97,13 +97,17 @@ func BenchmarkListAdd(b *testing.B) {
 	}
 }
 
-func TestFilterTxConditional(t *testing.T) {
+func TestFilterTxConditionalKnownAccounts(t *testing.T) {
 	t.Parallel()
 
 	// Create an in memory state db to test against.
 	memDb := rawdb.NewMemoryDatabase()
 	db := state.NewDatabase(memDb)
 	state, _ := state.New(common.Hash{}, db, nil)
+
+	header := &types.Header{
+		Number: big.NewInt(0),
+	}
 
 	// Create a private key to sign transactions.
 	key, _ := crypto.GenerateKey()
@@ -118,7 +122,7 @@ func TestFilterTxConditional(t *testing.T) {
 
 	// There should be no drops at this point.
 	// No state has been modified.
-	drops := list.FilterTxConditional(state)
+	drops := list.FilterTxConditional(state, header)
 
 	count := len(drops)
 	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
@@ -151,7 +155,7 @@ func TestFilterTxConditional(t *testing.T) {
 	list.Add(tx2, DefaultConfig.PriceBump)
 
 	// There should still be no drops as no state has been modified.
-	drops = list.FilterTxConditional(state)
+	drops = list.FilterTxConditional(state, header)
 
 	count = len(drops)
 	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
@@ -165,7 +169,129 @@ func TestFilterTxConditional(t *testing.T) {
 	fmt.Println("after2", trie.Hash())
 
 	// tx2 should be the single transaction filtered out
-	drops = list.FilterTxConditional(state)
+	drops = list.FilterTxConditional(state, header)
+
+	count = len(drops)
+	require.Equal(t, 1, count, "got %d filtered by TxOptions when there should be a single one", count)
+
+	require.Equal(t, tx2, drops[0], "Got %x, expected %x", drops[0].Hash(), tx2.Hash())
+}
+
+func TestFilterTxConditionalBlockNumber(t *testing.T) {
+	t.Parallel()
+
+	// Create an in memory state db to test against.
+	memDb := rawdb.NewMemoryDatabase()
+	db := state.NewDatabase(memDb)
+	state, _ := state.New(common.Hash{}, db, nil)
+
+	header := &types.Header{
+		Number: big.NewInt(100),
+	}
+
+	// Create a private key to sign transactions.
+	key, _ := crypto.GenerateKey()
+
+	// Create a list.
+	list := newList(true)
+
+	// Create a transaction with no defined tx options
+	// and add to the list.
+	tx := transaction(0, 1000, key)
+	list.Add(tx, DefaultConfig.PriceBump)
+
+	// There should be no drops at this point.
+	// No state has been modified.
+	drops := list.FilterTxConditional(state, header)
+
+	count := len(drops)
+	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
+
+	// Create another transaction with a block number option and add to the list.
+	tx2 := transaction(1, 1000, key)
+
+	var options types.OptionsPIP15
+
+	options.BlockNumberMin = big.NewInt(90)
+	options.BlockNumberMax = big.NewInt(110)
+
+	tx2.PutOptions(&options)
+	list.Add(tx2, DefaultConfig.PriceBump)
+
+	// There should still be no drops as no state has been modified.
+	drops = list.FilterTxConditional(state, header)
+
+	count = len(drops)
+	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
+
+	// Set block number that conflicts with tx2's policy
+	header.Number = big.NewInt(120)
+
+	// tx2 should be the single transaction filtered out
+	drops = list.FilterTxConditional(state, header)
+
+	count = len(drops)
+	require.Equal(t, 1, count, "got %d filtered by TxOptions when there should be a single one", count)
+
+	require.Equal(t, tx2, drops[0], "Got %x, expected %x", drops[0].Hash(), tx2.Hash())
+}
+
+func TestFilterTxConditionalTimestamp(t *testing.T) {
+	t.Parallel()
+
+	// Create an in memory state db to test against.
+	memDb := rawdb.NewMemoryDatabase()
+	db := state.NewDatabase(memDb)
+	state, _ := state.New(common.Hash{}, db, nil)
+
+	header := &types.Header{
+		Number: big.NewInt(0),
+		Time:   100,
+	}
+
+	// Create a private key to sign transactions.
+	key, _ := crypto.GenerateKey()
+
+	// Create a list.
+	list := newList(true)
+
+	// Create a transaction with no defined tx options
+	// and add to the list.
+	tx := transaction(0, 1000, key)
+	list.Add(tx, DefaultConfig.PriceBump)
+
+	// There should be no drops at this point.
+	// No state has been modified.
+	drops := list.FilterTxConditional(state, header)
+
+	count := len(drops)
+	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
+
+	// Create another transaction with a timestamp option and add to the list.
+	tx2 := transaction(1, 1000, key)
+
+	var options types.OptionsPIP15
+
+	minTimestamp := uint64(90)
+	maxTimestamp := uint64(110)
+
+	options.TimestampMin = &minTimestamp
+	options.TimestampMax = &maxTimestamp
+
+	tx2.PutOptions(&options)
+	list.Add(tx2, DefaultConfig.PriceBump)
+
+	// There should still be no drops as no state has been modified.
+	drops = list.FilterTxConditional(state, header)
+
+	count = len(drops)
+	require.Equal(t, 0, count, "got %d filtered by TxOptions when there should not be any", count)
+
+	// Set timestamp that conflicts with tx2's policy
+	header.Time = 120
+
+	// tx2 should be the single transaction filtered out
+	drops = list.FilterTxConditional(state, header)
 
 	count = len(drops)
 	require.Equal(t, 1, count, "got %d filtered by TxOptions when there should be a single one", count)

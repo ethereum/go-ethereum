@@ -729,6 +729,10 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 			}
 		}
 
+		if block == nil {
+			return nil
+		}
+
 		header = block.Header()
 		td = fullBackend.GetTd(context.Background(), header.Hash())
 

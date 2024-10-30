@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/metrics/prometheus"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
@@ -360,9 +361,15 @@ func (s *Server) setupMetrics(config *TelemetryConfig, serviceName string) error
 
 		prometheusMux.Handle("/debug/metrics/prometheus", prometheus.Handler(metrics.DefaultRegistry))
 
+		timeouts := rpc.DefaultHTTPTimeouts
+
 		promServer := &http.Server{
-			Addr:    config.PrometheusAddr,
-			Handler: prometheusMux,
+			Addr:              config.PrometheusAddr,
+			Handler:           prometheusMux,
+			ReadTimeout:       timeouts.ReadTimeout,
+			ReadHeaderTimeout: timeouts.ReadHeaderTimeout,
+			WriteTimeout:      timeouts.WriteTimeout,
+			IdleTimeout:       timeouts.IdleTimeout,
 		}
 
 		go func() {

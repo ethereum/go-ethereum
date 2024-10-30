@@ -540,8 +540,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	}
 
 	if txLookupLimit != nil {
-		txLookupLimit = new(uint64)
-		*txLookupLimit = txLookupCacheLimit
 		bc.txIndexer = newTxIndexer(*txLookupLimit, bc)
 	}
 

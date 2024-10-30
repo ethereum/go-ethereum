@@ -1925,7 +1925,8 @@ func NewTransactionAPI(b Backend, nonceLock *AddrLocker) *TransactionAPI {
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
 func (api *TransactionAPI) GetBlockTransactionCountByNumber(ctx context.Context, blockNr rpc.BlockNumber) *hexutil.Uint {
 	if block, _ := api.b.BlockByNumber(ctx, blockNr); block != nil {
-		n := hexutil.Uint(len(block.Transactions()))
+		txs, _ := api.getAllBlockTransactions(ctx, block)
+		n := hexutil.Uint(len(txs))
 		return &n
 	}
 
@@ -1935,7 +1936,8 @@ func (api *TransactionAPI) GetBlockTransactionCountByNumber(ctx context.Context,
 // GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
 func (api *TransactionAPI) GetBlockTransactionCountByHash(ctx context.Context, blockHash common.Hash) *hexutil.Uint {
 	if block, _ := api.b.BlockByHash(ctx, blockHash); block != nil {
-		n := hexutil.Uint(len(block.Transactions()))
+		txs, _ := api.getAllBlockTransactions(ctx, block)
+		n := hexutil.Uint(len(txs))
 		return &n
 	}
 
@@ -2006,19 +2008,12 @@ func (api *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common
 
 	// Try to return an already finalized transaction
 	found, tx, blockHash, blockNumber, index, err := api.b.GetTransaction(ctx, hash)
-	if !found {
-		// No finalized transaction, try to retrieve it from the pool
-		if tx := api.b.GetPoolTransaction(hash); tx != nil {
-			return NewRPCPendingTransaction(tx, api.b.CurrentHeader(), api.b.ChainConfig()), nil
-		}
-		if err == nil {
-			return nil, nil
-		}
-		return nil, NewTxIndexingError()
+	if err != nil {
+		return nil, err
 	}
 
 	// fetch bor block tx if necessary
-	if tx == nil {
+	if !found {
 		if tx, blockHash, blockNumber, index, err = api.b.GetBorBlockTransaction(ctx, hash); err != nil {
 			return nil, err
 		}
@@ -2077,10 +2072,8 @@ func (api *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash commo
 	if err != nil {
 		return nil, NewTxIndexingError() // transaction is not fully indexed
 	}
+
 	if !found {
-		return nil, nil // transaction is not existent or reachable
-	}
-	if tx == nil {
 		tx, blockHash, blockNumber, index = rawdb.ReadBorTransaction(api.b.ChainDb(), hash)
 		borTx = true
 	}
