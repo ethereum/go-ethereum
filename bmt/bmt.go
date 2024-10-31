@@ -196,11 +196,8 @@ type Tree struct {
 func (t *Tree) Draw(hash []byte, d int) string {
 	var left, right []string
 	var anc []*Node
-	for i, n := range t.leaves {
+	for _, n := range t.leaves {
 		left = append(left, fmt.Sprintf("%v", hashstr(n.left)))
-		if i%2 == 0 {
-			anc = append(anc, n.parent)
-		}
 		right = append(right, fmt.Sprintf("%v", hashstr(n.right)))
 	}
 	anc = t.leaves
