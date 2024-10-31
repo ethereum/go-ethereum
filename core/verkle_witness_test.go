@@ -864,18 +864,17 @@ func TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary(t *testing.T) 
 	// execution which is created in a *previous* transaction sending the remaining
 	// balance to itself.
 	selfDestructContract := []byte{
-		byte(vm.PUSH1), 22, // PUSH1 22
-		byte(vm.PUSH1), 12, // PUSH1 12
-		byte(vm.PUSH1), 0x00, // PUSH1 0
-		byte(vm.CODECOPY),
+		byte(vm.PUSH1), 2, // PUSH1 2
+		byte(vm.PUSH1), 10, // PUSH1 12
+		byte(vm.PUSH0),    // PUSH0
+		byte(vm.CODECOPY), // Codecopy ( to offset 0, code@offset: 10, length: 2)
 
-		byte(vm.PUSH1), 22, // PUSH1 22
-		byte(vm.PUSH1), 0x00, // PUSH1 0
-		byte(vm.RETURN),
+		byte(vm.PUSH1), 22,
+		byte(vm.PUSH0),
+		byte(vm.RETURN), // RETURN( memory[0:2] )
 
 		// Deployed code
-		byte(vm.PUSH20),                                                                                                        // PUSH20
-		0x3a, 0x22, 0x0f, 0x35, 0x12, 0x52, 0x08, 0x9d, 0x38, 0x5b, 0x29, 0xbe, 0xca, 0x14, 0xe2, 0x7f, 0x20, 0x4c, 0x29, 0x6a, // 0x3a220f351252089d385b29beca14e27f204c296a
+		byte(vm.ADDRESS),
 		byte(vm.SELFDESTRUCT),
 	}
 	deployer := crypto.PubkeyToAddress(testKey.PublicKey)
@@ -949,19 +948,18 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 		contract   = crypto.CreateAddress(deployer, 0)
 	)
 	// Also add the contract-to-destroy
-	gspec.Alloc[contract] = &types.Account{
-		Code:       nil,
-		Storage:    nil,
-		Balance:    nil,
-		Nonce:      0,
-		PrivateKey: nil,
+	gspec.Alloc[contract] = types.Account{
+		Balance: big.NewInt(100),
 	}
 	// The goal of this test is to test SELFDESTRUCT that happens in a contract
 	// execution which is created in **the same** transaction sending the remaining
 	// balance to itself.
 	t.Logf("Contract: %v", contract.String())
 
+	// TODO: investigate why this test succeeds regardless of whether the
+	// selfdestruct-to-self is used, or selfdestruct-to-zero is used.
 	selfDestructContract := []byte{byte(vm.ADDRESS), byte(vm.SELFDESTRUCT)}
+	//selfDestructContract := []byte{byte(vm.NUMBER), byte(vm.SELFDESTRUCT)}
 
 	_, _, _, _, stateDiffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
