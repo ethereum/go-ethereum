@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -254,7 +255,7 @@ var traceFlags = []cli.Flag{
 var app = flags.NewApp("the evm command line interface")
 
 func init() {
-	app.Flags = flags.Merge(vmFlags, traceFlags, debug.Flags)
+	app.Flags = slices.Concat(vmFlags, traceFlags, debug.Flags)
 	app.Commands = []*cli.Command{
 		compileCommand,
 		disasmCommand,
