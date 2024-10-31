@@ -16,7 +16,7 @@ var (
 
 func (i nodeEvent) String() string {
 	switch {
-	case 0 <= i && i <= 8:
+	case i <= 8:
 		return _nodeEvent_name_0[_nodeEvent_index_0[i]:_nodeEvent_index_0[i+1]]
 	case 265 <= i && i <= 267:
 		i -= 265
