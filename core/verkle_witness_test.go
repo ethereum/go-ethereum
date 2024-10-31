@@ -250,31 +250,16 @@ func getContractStoredBlockHash(statedb *state.StateDB, number uint64) common.Ha
 // TestProcessVerkleInvalidContractCreation checks for several modes of contract creation failures
 func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	var (
-		coinbase = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
 		account1 = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
 		account2 = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
-		gspec    = &Genesis{
-			Config: testKaustinenLikeChainConfig,
-			Alloc: GenesisAlloc{
-				coinbase: {
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account1: {
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account2: {
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   1,
-				},
-				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
-				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
-				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
-				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
-			},
-		}
+		gspec    = verkleTestGenesis(testKaustinenLikeChainConfig)
 	)
+	// slightly modify it to suit the live txs from the testnet
+	gspec.Alloc[account2] = types.Account{
+		Balance: big.NewInt(1000000000000000000), // 1 ether
+		Nonce:   1,
+	}
+
 	// Create two blocks that reproduce what is happening on kaustinen.
 	// - The first block contains two failing contract creation transactions, that
 	//   write to storage before they revert.
@@ -285,35 +270,27 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 		gen.SetPoS()
 
 		if i == 0 {
-			var tx1, tx2, tx3 types.Transaction
-			// SSTORE at slot 41 and reverts
-			tx1payload := common.Hex2Bytes("f8d48084479c2c18830186a08080b8806000602955bda3f9600060ca55600060695523b360006039551983576000601255b0620c2fde2c592ac2600060bc55e0ac6000606455a63e22600060e655eb607e605c5360a2605d5360c7605e53601d605f5360eb606053606b606153608e60625360816063536079606453601e60655360fc60665360b7606753608b60685383021e7ca0cc20c65a97d2e526b8ec0f4266e8b01bdcde43b9aeb59d8bfb44e8eb8119c109a07a8e751813ae1b2ce734960dbc39a4f954917d7822a2c5d1dca18b06c584131f")
-			if err := tx1.UnmarshalBinary(tx1payload); err != nil {
-				t.Fatal(err)
+			for _, rlpData := range []string{
+				// SSTORE at slot 41 and reverts
+				"f8d48084479c2c18830186a08080b8806000602955bda3f9600060ca55600060695523b360006039551983576000601255b0620c2fde2c592ac2600060bc55e0ac6000606455a63e22600060e655eb607e605c5360a2605d5360c7605e53601d605f5360eb606053606b606153608e60625360816063536079606453601e60655360fc60665360b7606753608b60685383021e7ca0cc20c65a97d2e526b8ec0f4266e8b01bdcde43b9aeb59d8bfb44e8eb8119c109a07a8e751813ae1b2ce734960dbc39a4f954917d7822a2c5d1dca18b06c584131f",
+				// SSTORE at slot 133 and reverts
+				"02f8db83010f2c01843b9aca0084479c2c18830186a08080b88060006085553fad6000600a55600060565555600060b55506600060cf557f1b8b38183e7bd1bdfaa7123c5a4976e54cce0e42049d841411978fd3595e25c66019527f0538943712953cf08900aae40222a40b2d5a4ac8075ad8cf0870e2be307edbb96039527f9f3174ff85024747041ae7a611acffb987c513c088d90ab288aec080a0cd6ac65ce2cb0a912371f6b5a551ba8caffc22ec55ad4d3cb53de41d05eb77b6a02e0dfe8513dfa6ec7bfd7eda6f5c0dac21b39b982436045e128cec46cfd3f960",
+				// this one is a simple transfer that succeeds, necessary to get the correct nonce in the other block.
+				"f8e80184479c2c18830186a094bbbbde4ca27f83fc18aa108170547ff57675936a80b8807ff71f7c15faadb969a76a5f54a81a0117e1e743cb7f24e378eda28442ea4c6eb6604a527fb5409e5718d44e23bfffac926e5ea726067f772772e7e19446acba0c853f62f5606a526020608a536088608b536039608c536004608d5360af608e537f7f7675d9f210e0a61564e6d11e7cd75f5bc9009ac9f6b94a0fc63035441a83021e7ba04a4a172d81ebb02847829b76a387ac09749c8b65668083699abe20c887fb9efca07c5b1a990702ec7b31a5e8e3935cd9a77649f8c25a84131229e24ab61aec6093",
+			} {
+				var tx = new(types.Transaction)
+				if err := tx.UnmarshalBinary(common.Hex2Bytes(rlpData)); err != nil {
+					t.Fatal(err)
+				}
+				gen.AddTx(tx)
 			}
-			gen.AddTx(&tx1)
-
-			// SSTORE at slot 133 and reverts
-			tx2payload := common.Hex2Bytes("02f8db83010f2c01843b9aca0084479c2c18830186a08080b88060006085553fad6000600a55600060565555600060b55506600060cf557f1b8b38183e7bd1bdfaa7123c5a4976e54cce0e42049d841411978fd3595e25c66019527f0538943712953cf08900aae40222a40b2d5a4ac8075ad8cf0870e2be307edbb96039527f9f3174ff85024747041ae7a611acffb987c513c088d90ab288aec080a0cd6ac65ce2cb0a912371f6b5a551ba8caffc22ec55ad4d3cb53de41d05eb77b6a02e0dfe8513dfa6ec7bfd7eda6f5c0dac21b39b982436045e128cec46cfd3f960")
-			if err := tx2.UnmarshalBinary(tx2payload); err != nil {
-				t.Fatal(err)
-			}
-			gen.AddTx(&tx2)
-
-			// this one is a simple transfer that succeeds, necessary to get the correct nonce in the other block.
-			tx3payload := common.Hex2Bytes("f8e80184479c2c18830186a094bbbbde4ca27f83fc18aa108170547ff57675936a80b8807ff71f7c15faadb969a76a5f54a81a0117e1e743cb7f24e378eda28442ea4c6eb6604a527fb5409e5718d44e23bfffac926e5ea726067f772772e7e19446acba0c853f62f5606a526020608a536088608b536039608c536004608d5360af608e537f7f7675d9f210e0a61564e6d11e7cd75f5bc9009ac9f6b94a0fc63035441a83021e7ba04a4a172d81ebb02847829b76a387ac09749c8b65668083699abe20c887fb9efca07c5b1a990702ec7b31a5e8e3935cd9a77649f8c25a84131229e24ab61aec6093")
-			if err := tx3.UnmarshalBinary(tx3payload); err != nil {
-				t.Fatal(err)
-			}
-			gen.AddTx(&tx3)
 		} else {
-			var tx types.Transaction
+			var tx = new(types.Transaction)
 			// immediately reverts
-			txpayload := common.Hex2Bytes("01f8d683010f2c028443ad7d0e830186a08080b880b00e7fa3c849dce891cce5fae8a4c46cbb313d6aec0c0ffe7863e05fb7b22d4807674c6055527ffbfcb0938f3e18f7937aa8fa95d880afebd5c4cec0d85186095832d03c85cf8a60755260ab60955360cf6096536066609753606e60985360fa609953609e609a53608e609b536024609c5360f6609d536072609e5360a4609fc080a08fc6f7101f292ff1fb0de8ac69c2d320fbb23bfe61cf327173786ea5daee6e37a044c42d91838ef06646294bf4f9835588aee66243b16a66a2da37641fae4c045f")
-			if err := tx.UnmarshalBinary(txpayload); err != nil {
+			if err := tx.UnmarshalBinary(common.Hex2Bytes("01f8d683010f2c028443ad7d0e830186a08080b880b00e7fa3c849dce891cce5fae8a4c46cbb313d6aec0c0ffe7863e05fb7b22d4807674c6055527ffbfcb0938f3e18f7937aa8fa95d880afebd5c4cec0d85186095832d03c85cf8a60755260ab60955360cf6096536066609753606e60985360fa609953609e609a53608e609b536024609c5360f6609d536072609e5360a4609fc080a08fc6f7101f292ff1fb0de8ac69c2d320fbb23bfe61cf327173786ea5daee6e37a044c42d91838ef06646294bf4f9835588aee66243b16a66a2da37641fae4c045f")); err != nil {
 				t.Fatal(err)
 			}
-			gen.AddTx(&tx)
+			gen.AddTx(tx)
 		}
 	})
 
@@ -413,39 +390,42 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 	}
 }
 
+func verkleTestGenesis(config *params.ChainConfig) *Genesis {
+	var (
+		coinbase = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+		account1 = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
+		account2 = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
+	)
+	return &Genesis{
+		Config: config,
+		Alloc: GenesisAlloc{
+			coinbase: GenesisAccount{
+				Balance: big.NewInt(1000000000000000000), // 1 ether
+				Nonce:   0,
+			},
+			account1: GenesisAccount{
+				Balance: big.NewInt(1000000000000000000), // 1 ether
+				Nonce:   0,
+			},
+			account2: GenesisAccount{
+				Balance: big.NewInt(1000000000000000000), // 1 ether
+				Nonce:   3,
+			},
+			params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
+			params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
+			params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
+			params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
+		},
+	}
+}
+
 // TestProcessVerkleContractWithEmptyCode checks that the witness contains all valid
 // entries, if the initcode returns an empty code.
 func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 	// The test txs were taken from a secondary testnet with chain id 69421
 	config := *testKaustinenLikeChainConfig
 	config.ChainID.SetUint64(69421)
-
-	var (
-		coinbase = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
-		account1 = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
-		account2 = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
-		gspec    = &Genesis{
-			Config: &config,
-			Alloc: GenesisAlloc{
-				coinbase: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account1: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account2: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   3,
-				},
-				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
-				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
-				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
-				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
-			},
-		}
-	)
+	gspec := verkleTestGenesis(&config)
 
 	_, chain, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
@@ -505,30 +485,7 @@ func TestProcessVerkleExtCodeHashOpcode(t *testing.T) {
 	var (
 		signer     = types.LatestSigner(&config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
-		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
-		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
-		gspec      = &Genesis{
-			Config: &config,
-			Alloc: GenesisAlloc{
-				coinbase: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account1: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account2: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   3,
-				},
-				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
-				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
-				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
-				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
-			},
-		}
+		gspec      = verkleTestGenesis(&config)
 	)
 	dummyContract := []byte{
 		byte(vm.PUSH1), 2,
@@ -623,32 +580,9 @@ func TestProcessVerkleBalanceOpcode(t *testing.T) {
 	var (
 		signer     = types.LatestSigner(&config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
-		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
 		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
-		gspec      = &Genesis{
-			Config: &config,
-			Alloc: GenesisAlloc{
-				coinbase: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account1: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account2: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   3,
-				},
-				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
-				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
-				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
-				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
-			},
-		}
+		gspec      = verkleTestGenesis(&config)
 	)
-
 	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
 		txData := slices.Concat(
@@ -833,30 +767,8 @@ func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 	var (
 		signer     = types.LatestSigner(&config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
-		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
 		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
-		gspec      = &Genesis{
-			Config: &config,
-			Alloc: GenesisAlloc{
-				coinbase: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account1: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account2: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   3,
-				},
-				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
-				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
-				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
-				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
-			},
-		}
+		gspec      = verkleTestGenesis(&config)
 	)
 
 	// The goal of this test is to test SELFDESTRUCT that happens in a contract
@@ -946,30 +858,7 @@ func TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary(t *testing.T) 
 	var (
 		signer     = types.LatestSigner(&config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
-		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
-		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
-		gspec      = &Genesis{
-			Config: &config,
-			Alloc: GenesisAlloc{
-				coinbase: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account1: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account2: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   3,
-				},
-				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
-				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
-				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
-				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
-			},
-		}
+		gspec      = verkleTestGenesis(&config)
 	)
 	// The goal of this test is to test SELFDESTRUCT that happens in a contract
 	// execution which is created in a *previous* transaction sending the remaining
@@ -1055,42 +944,24 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 	var (
 		signer     = types.LatestSigner(&config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
-		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
-		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
-		gspec      = &Genesis{
-			Config: &config,
-			Alloc: GenesisAlloc{
-				coinbase: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account1: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account2: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   3,
-				},
-				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
-				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
-				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
-				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
-			},
-		}
+		gspec      = verkleTestGenesis(&config)
+		deployer   = crypto.PubkeyToAddress(testKey.PublicKey)
+		contract   = crypto.CreateAddress(deployer, 0)
 	)
-
+	// Also add the contract-to-destroy
+	gspec.Alloc[contract] = &types.Account{
+		Code:       nil,
+		Storage:    nil,
+		Balance:    nil,
+		Nonce:      0,
+		PrivateKey: nil,
+	}
 	// The goal of this test is to test SELFDESTRUCT that happens in a contract
 	// execution which is created in **the same** transaction sending the remaining
 	// balance to itself.
-	selfDestructContract := []byte{
-		byte(vm.PUSH20),
-		0x3a, 0x22, 0x0f, 0x35, 0x12, 0x52, 0x08, 0x9d, 0x38, 0x5b, 0x29, 0xbe, 0xca, 0x14, 0xe2, 0x7f, 0x20, 0x4c, 0x29, 0x6a, // 0x3a220f351252089d385b29beca14e27f204c296a
-		byte(vm.SELFDESTRUCT),
-	}
-	deployer := crypto.PubkeyToAddress(testKey.PublicKey)
-	contract := crypto.CreateAddress(deployer, 0)
+	t.Logf("Contract: %v", contract.String())
+
+	selfDestructContract := []byte{byte(vm.ADDRESS), byte(vm.SELFDESTRUCT)}
 
 	_, _, _, _, stateDiffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
