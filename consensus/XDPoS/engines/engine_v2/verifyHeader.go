@@ -109,7 +109,7 @@ func (x *XDPoS_v2) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		if !bytes.Equal(header.Nonce[:], utils.NonceDropVote) {
 			return utils.ErrInvalidCheckpointVote
 		}
-		if header.Validators == nil || len(header.Validators) == 0 {
+		if len(header.Validators) == 0 {
 			return utils.ErrEmptyEpochSwitchValidators
 		}
 		if len(header.Validators)%common.AddressLength != 0 {
