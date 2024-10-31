@@ -181,7 +181,7 @@ func TestSendLending(t *testing.T) {
 		t.FailNow()
 	}
 
-	for true {
+	for {
 		// 10%
 		interestRate := 10 * common.BaseLendingInterest.Uint64()
 		// lendToken: USD, collateral: BTC
