@@ -216,12 +216,14 @@ The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode re
 #### prestateTracer config {#prestate-tracer-config}
 
 - `diffMode`: `BOOL`. Setting this to true will enable diff mode (default = false).
+- `disableCode`: `BOOL`. Setting this to true will disable contract code capture (default = false).
+- `disableStorage`: `BOOL`. Setting this to true will disable contract storage capture (default = false).
 
 In `diff` mode the result object will contain a `pre` and a `post` object:
 
 1. The result only includes accounts that were modified. Accounts without changes will be omitted in this mode.
 2. In `pre` you will find the state of an account before the tx started, and in `post` its state after tx execution finished.
-3. `pre` can include fields that were not modified, if some other fields for the same account were modified. 
+3. `pre` can include fields that were not modified, if some other fields for the same account were modified.
 4. `post` will contain only the modified fields. e.g. if `nonce` of an account hasn't changed it will be omitted from `post`.
 5. Deletion (i.e. account selfdestruct, or storage clearing) will be signified by inclusion in `pre` and omission in `post`.
 6. Insertion (i.e. account creation or new slots) will be signified by omission in `pre` and inclusion in `post`.
@@ -270,7 +272,7 @@ Return:
 }
 ```
 
-Return (same call with `{diffMode: True}`):
+Return (same call with `tracerConfig: {diffMode: True}`):
 
 ```terminal
 {
@@ -287,6 +289,43 @@ Return (same call with `{diffMode: True}`):
   }
 }
 ```
+
+Example of `disableStorage` and `disableCode` mode:
+
+```js
+debug.traceCall(
+  {
+    from: '0x35a9f94af726f07b5162df7e828cc9dc8439e7d0',
+    to: '0xc8ba32cab1757528daf49033e3673fae77dcf05d',
+    data: '0xd1a2eab2000000000000000000000000000000000000000000000000000000000024aea100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000050000000204895cd480cc8412691a880028a25aec86786f1ed2aa5562bc400000000000000c6403c14f35be1da6f433eadbb6e9178a47fbc7c6c1d568d2f2b876e929089c8d8db646304fd001a187dc8a600000000000000000000000000000000'
+  },
+  'latest',
+  { tracer: 'prestateTracer', tracerConfig: { disableStorage: true, disableCode: true } }
+);
+```
+
+Return:
+
+```terminal
+{
+  0x0000000000000000000000000000000000000002: {
+    balance: "0x0"
+  },
+  0x008b3b2f992c0e14edaa6e2c662bec549caa8df1: {
+    balance: "0x2638035a26d133809"
+  },
+  0x35a9f94af726f07b5162df7e828cc9dc8439e7d0: {
+    balance: "0x7a48734599f7284",
+    nonce: 1133
+  },
+  0xc8ba32cab1757528daf49033e3673fae77dcf05d: {
+    balance: "0x0",
+    nonce: 1
+  }
+}
+```
+
+It will return the same result as the first example, but without the storage slots and code.
 
 ### noopTracer {#noop-tracer}
 
