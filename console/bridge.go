@@ -48,14 +48,6 @@ func newBridge(client *rpc.Client, prompter prompt.UserPrompter, printer io.Writ
 	}
 }
 
-func getJeth(vm *goja.Runtime) *goja.Object {
-	jeth := vm.Get("jeth")
-	if jeth == nil {
-		panic(vm.ToValue("jeth object does not exist"))
-	}
-	return jeth.ToObject(vm)
-}
-
 // Sleep will block the console for the specified number of seconds.
 func (b *bridge) Sleep(call jsre.Call) (goja.Value, error) {
 	if nArgs := len(call.Arguments); nArgs < 1 {
