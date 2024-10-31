@@ -684,10 +684,7 @@ func (l *Lending) HasLendingState(block *types.Block, author common.Address) boo
 		return false
 	}
 	_, err = l.StateCache.OpenTrie(root)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (l *Lending) GetTriegc() *prque.Prque {
