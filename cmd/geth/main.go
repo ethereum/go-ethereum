@@ -20,6 +20,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,7 +54,7 @@ const (
 
 var (
 	// flags that configure the node
-	nodeFlags = flags.Merge([]cli.Flag{
+	nodeFlags = slices.Concat([]cli.Flag{
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
@@ -251,7 +252,7 @@ func init() {
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
-	app.Flags = flags.Merge(
+	app.Flags = slices.Concat(
 		nodeFlags,
 		rpcFlags,
 		consoleFlags,

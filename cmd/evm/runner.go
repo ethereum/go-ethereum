@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"os"
 	goruntime "runtime"
+	"slices"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ var runCommand = &cli.Command{
 	Usage:       "Run arbitrary evm binary",
 	ArgsUsage:   "<code>",
 	Description: `The run command runs arbitrary EVM code.`,
-	Flags:       flags.Merge(vmFlags, traceFlags),
+	Flags:       slices.Concat(vmFlags, traceFlags),
 }
 
 // readGenesis will read the given JSON format genesis file and return
