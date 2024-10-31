@@ -156,7 +156,7 @@ var (
 	// Deprecated Oct 2024
 	EnablePersonal = &cli.BoolFlag{
 		Name:     "rpc.enabledeprecatedpersonal",
-		Usage:    "This flag is deprecated",
+		Usage:    "This used to enable the 'personal' namespace.",
 		Category: flags.DeprecatedCategory,
 	}
 )

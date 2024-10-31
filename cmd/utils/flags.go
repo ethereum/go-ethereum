@@ -1394,6 +1394,9 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	if ctx.IsSet(JWTSecretFlag.Name) {
 		cfg.JWTSecret = ctx.String(JWTSecretFlag.Name)
 	}
+	if ctx.IsSet(EnablePersonal.Name) {
+		log.Warn(fmt.Sprintf("Option --%s is deprecated. The 'personal' RPC namespace has been removed.", EnablePersonal.Name))
+	}
 
 	if ctx.IsSet(ExternalSignerFlag.Name) {
 		cfg.ExternalSigner = ctx.String(ExternalSignerFlag.Name)
