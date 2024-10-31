@@ -540,10 +540,8 @@ func GenerateVerkleChainWithGenesis(genesis *Genesis, engine consensus.Engine, n
 	db := rawdb.NewMemoryDatabase()
 	cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 	cacheConfig.SnapshotLimit = 0
-
 	triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
 	defer triedb.Close()
-
 	genesisBlock, err := genesis.Commit(db, triedb)
 	if err != nil {
 		panic(err)
