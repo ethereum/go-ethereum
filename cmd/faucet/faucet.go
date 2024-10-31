@@ -517,7 +517,7 @@ func (f *faucet) apiHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Send an error if too frequent funding, othewise a success
 		if !fund {
-			if err = sendError(wsconn, fmt.Errorf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))); err != nil { // nolint: gosimple
+			if err = sendError(wsconn, fmt.Errorf("%s left until next allowance", common.PrettyDuration(time.Until(timeout)))); err != nil {
 				log.Warn("Failed to send funding error to client", "err", err)
 				return
 			}
