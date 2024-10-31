@@ -419,9 +419,7 @@ func (s *stateSync) process(req *stateReq) error {
 		default:
 			return fmt.Errorf("invalid state node %s: %v", hash.TerminalString(), err)
 		}
-		if _, ok := req.tasks[hash]; ok {
-			delete(req.tasks, hash)
-		}
+		delete(req.tasks, hash)
 	}
 	// Put unfulfilled tasks back into the retry queue
 	npeers := s.d.peers.Len()
