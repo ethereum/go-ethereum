@@ -153,6 +153,12 @@ var (
 		Usage:    "Enable expensive metrics collection and reporting (deprecated)",
 		Category: flags.DeprecatedCategory,
 	}
+	// Deprecated Oct 2024
+	EnablePersonal = &cli.BoolFlag{
+		Name:     "rpc.enabledeprecatedpersonal",
+		Usage:    "This used to enable the 'personal' namespace.",
+		Category: flags.DeprecatedCategory,
+	}
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.
