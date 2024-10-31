@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -83,7 +83,7 @@ var (
 		Name:   "listen",
 		Usage:  "Runs a discovery node",
 		Action: discv4Listen,
-		Flags: flags.Merge(discoveryNodeFlags, []cli.Flag{
+		Flags: slices.Concat(discoveryNodeFlags, []cli.Flag{
 			httpAddrFlag,
 		}),
 	}
@@ -91,7 +91,7 @@ var (
 		Name:   "crawl",
 		Usage:  "Updates a nodes.json file with random nodes found in the DHT",
 		Action: discv4Crawl,
-		Flags:  flags.Merge(discoveryNodeFlags, []cli.Flag{crawlTimeoutFlag, crawlParallelismFlag}),
+		Flags:  slices.Concat(discoveryNodeFlags, []cli.Flag{crawlTimeoutFlag, crawlParallelismFlag}),
 	}
 	discv4TestCommand = &cli.Command{
 		Name:   "test",

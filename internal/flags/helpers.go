@@ -48,15 +48,6 @@ func NewApp(usage string) *cli.App {
 	return app
 }
 
-// Merge merges the given flag slices.
-func Merge(groups ...[]cli.Flag) []cli.Flag {
-	var ret []cli.Flag
-	for _, group := range groups {
-		ret = append(ret, group...)
-	}
-	return ret
-}
-
 var migrationApplied = map[*cli.Command]struct{}{}
 
 // MigrateGlobalFlags makes all global flag values available in the

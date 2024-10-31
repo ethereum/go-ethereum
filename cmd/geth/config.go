@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -53,7 +54,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Export configuration values in a TOML format",
 		ArgsUsage:   "<dumpfile (optional)>",
-		Flags:       flags.Merge(nodeFlags, rpcFlags),
+		Flags:       slices.Concat(nodeFlags, rpcFlags),
 		Description: `Export configuration values in TOML format (to stdout by default).`,
 	}
 
