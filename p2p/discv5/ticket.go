@@ -441,7 +441,7 @@ func (s *ticketStore) removeTicketRef(ref ticketRef) {
 		}
 	}
 	if idx == -1 {
-		panic(nil)
+		panic("ticketStore removeTicketRef: idx == -1")
 	}
 	list = append(list[:idx], list[idx+1:]...)
 	if len(list) != 0 {
@@ -802,7 +802,7 @@ func (r *topicRadius) chooseLookupBucket(a, b int) int {
 			rnd--
 		}
 	}
-	panic(nil) // should never happen
+	panic("topicRadius chooseLookupBucket") // should never happen
 }
 
 func (r *topicRadius) needMoreLookups(a, b int, maxValue float64) bool {

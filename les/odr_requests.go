@@ -196,7 +196,7 @@ func (r *TrieRequest) GetCost(peer *peer) uint64 {
 	case lpv2:
 		return peer.GetRequestCost(GetProofsV2Msg, 1)
 	default:
-		panic(nil)
+		panic("TrieRequest GetCost")
 	}
 }
 
@@ -356,7 +356,7 @@ func (r *ChtRequest) GetCost(peer *peer) uint64 {
 	case lpv2:
 		return peer.GetRequestCost(GetHelperTrieProofsMsg, 1)
 	default:
-		panic(nil)
+		panic("ChtRequest GetCost")
 	}
 }
 

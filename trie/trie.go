@@ -243,7 +243,7 @@ func (t *Trie) tryGetAllLeftKeyAndValue(origNode Node, prefix []byte, limit []by
 			if err != nil {
 				return nil, nil, n, false, err
 			}
-			if err == nil && didResolve {
+			if didResolve {
 				n = n.copy()
 				n.Children[i] = newnode
 			}

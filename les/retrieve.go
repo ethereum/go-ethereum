@@ -306,7 +306,7 @@ func (r *sentReq) tryRequest() {
 	s, ok := r.sentTo[p]
 	r.lock.RUnlock()
 	if !ok {
-		panic(nil)
+		panic("sentReq tryRequest: !ok")
 	}
 
 	defer func() {

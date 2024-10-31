@@ -22,11 +22,10 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/common/bitutil"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -165,7 +164,7 @@ func (c *ChtIndexerBackend) Process(header *types.Header) {
 
 	td := core.GetTd(c.diskdb, hash, num)
 	if td == nil {
-		panic(nil)
+		panic("ChtIndexerBackend Process: td == nil")
 	}
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], num)

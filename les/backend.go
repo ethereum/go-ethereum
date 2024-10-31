@@ -147,7 +147,7 @@ func lesTopic(genesisHash common.Hash, protocolVersion uint) discv5.Topic {
 	case lpv2:
 		name = "LES2"
 	default:
-		panic(nil)
+		panic("lesTopic")
 	}
 	return discv5.Topic(name + "@" + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
 }

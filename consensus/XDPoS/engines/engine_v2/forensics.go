@@ -210,7 +210,7 @@ func (f *Forensics) findAncestorQCs(chain consensus.ChainReader, currentQc types
 		parentHash := quorumCertificate.ProposedBlockInfo.Hash
 		parentHeader := chain.GetHeaderByHash(parentHash)
 		if parentHeader == nil {
-			log.Error("[findAncestorQCs] Forensics findAncestorQCs unable to find its parent block header", "BlockNum", parentHeader.Number.Int64(), "ParentHash", parentHash.Hex())
+			log.Error("[findAncestorQCs] Forensics findAncestorQCs unable to find its parent block header", "ParentHash", parentHash.Hex())
 			return nil, errors.New("unable to find parent block header in forensics")
 		}
 		var decodedExtraField types.ExtraFields_v2
