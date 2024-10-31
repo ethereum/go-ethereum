@@ -256,9 +256,6 @@ func AutoEnvVars(flags []cli.Flag, prefix string) {
 		case *BigFlag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
 
-		case *TextMarshalerFlag:
-			flag.EnvVars = append(flag.EnvVars, envvar)
-
 		case *DirectoryFlag:
 			flag.EnvVars = append(flag.EnvVars, envvar)
 		}
