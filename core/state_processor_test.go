@@ -773,7 +773,7 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 				t.Fatalf("nil new value in BLOCKHASH contract insert")
 			}
 			if *stemStateDiff.SuffixDiffs[0].NewValue != chain[0].Hash() {
-				t.Fatalf("invalid BLOCKHASH value: %x != %x", *&stemStateDiff.SuffixDiffs[0].NewValue, chain[0].Hash())
+				t.Fatalf("invalid BLOCKHASH value: %x != %x", *stemStateDiff.SuffixDiffs[0].NewValue, chain[0].Hash())
 			}
 		} else {
 			// For all other entries present in the witness, check that nothing beyond
@@ -878,7 +878,7 @@ func TestProcessVerkleContractWithEmptyCode(t *testing.T) {
 				t.Fatalf("nil new value in BLOCKHASH contract insert")
 			}
 			if *stemStateDiff.SuffixDiffs[0].NewValue != chain[0].Hash() {
-				t.Fatalf("invalid BLOCKHASH value: %x != %x", *&stemStateDiff.SuffixDiffs[0].NewValue, chain[0].Hash())
+				t.Fatalf("invalid BLOCKHASH value: %x != %x", *stemStateDiff.SuffixDiffs[0].NewValue, chain[0].Hash())
 			}
 		} else {
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
@@ -1078,7 +1078,7 @@ func TestProcessVerkleBalanceOpcode(t *testing.T) {
 	}
 	// check the prestate balance wasn't 0 or missing
 	if balanceStateDiff.CurrentValue == nil || *balanceStateDiff.CurrentValue == zero {
-		t.Fatalf("invalid current value %v", *&balanceStateDiff.CurrentValue)
+		t.Fatalf("invalid current value %v", *balanceStateDiff.CurrentValue)
 	}
 	// check that the poststate witness value for the balance is nil,
 	// meaning that it didn't get updated.
