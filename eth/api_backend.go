@@ -494,7 +494,7 @@ func (b *EthApiBackend) GetVotersRewards(masternodeAddr common.Address) map[comm
 	var voterResults map[common.Address]*big.Int
 	for signer, calcReward := range rewardSigners {
 		if signer == masternodeAddr {
-			err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, state, masternodeAddr, calcReward, number)
+			rewards, err := contracts.CalculateRewardForHolders(foundationWalletAddr, state, masternodeAddr, calcReward, number)
 			if err != nil {
 				log.Crit("Fail to calculate reward for holders.", "error", err)
 				return nil
