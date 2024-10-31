@@ -79,7 +79,7 @@ type flatCallAction struct {
 	SelfDestructed *common.Address `json:"address,omitempty"`
 	Balance        *big.Int        `json:"balance,omitempty"`
 	CallType       string          `json:"callType,omitempty"`
-	CreationMethod string          `json:"creationMethod,omitempty"`
+	CreateType     string          `json:"createType,omitempty"`
 	From           *common.Address `json:"from,omitempty"`
 	Gas            *uint64         `json:"gas,omitempty"`
 	Init           *[]byte         `json:"init,omitempty"`
@@ -296,11 +296,11 @@ func newFlatCreate(input *callFrame) *flatCallFrame {
 	return &flatCallFrame{
 		Type: strings.ToLower(vm.CREATE.String()),
 		Action: flatCallAction{
-			CreationMethod: strings.ToLower(vm.OpCode(input.Type).String()),
-			From:           &input.From,
-			Gas:            &input.Gas,
-			Value:          input.Value,
-			Init:           &actionInit,
+			CreateType: strings.ToLower(vm.OpCode(input.Type).String()),
+			From:       &input.From,
+			Gas:        &input.Gas,
+			Value:      input.Value,
+			Init:       &actionInit,
 		},
 		Result: &flatCallResult{
 			GasUsed: &input.GasUsed,
