@@ -46,10 +46,10 @@ type LendingMsg struct {
 
 func getLendingNonce(userAddress common.Address) (uint64, error) {
 	rpcClient, err := rpc.DialHTTP("http://127.0.0.1:8501")
-	defer rpcClient.Close()
 	if err != nil {
 		return 0, err
 	}
+	defer rpcClient.Close()
 	var result interface{}
 	err = rpcClient.Call(&result, "XDCx_getLendingOrderCount", userAddress)
 	if err != nil {

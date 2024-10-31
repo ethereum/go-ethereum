@@ -515,11 +515,11 @@ func Test_CreateOrder(t *testing.T) {
 
 func sendOrder(nonce uint64) {
 	rpcClient, err := rpc.DialHTTP("http://localhost:8501")
-	defer rpcClient.Close()
 	if err != nil {
 		fmt.Println("rpc.DialHTTP failed", "err", err)
 		os.Exit(1)
 	}
+	defer rpcClient.Close()
 	rand.Seed(time.Now().UTC().UnixNano())
 	item := &LendingOrderMsg{
 		AccountNonce:    nonce,
