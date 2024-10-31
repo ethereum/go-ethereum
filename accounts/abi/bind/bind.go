@@ -266,6 +266,14 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 			// Ensure there is no duplicated identifier
 			normalizedName := methodNormalizer(alias(aliases, original.Name))
+			// Name shouldn't start with a digit. It will make the generated code invalid.
+			if len(normalizedName) > 0 && unicode.IsDigit(rune(normalizedName[0])) {
+				normalizedName = fmt.Sprintf("E%s", normalizedName)
+				normalizedName = abi.ResolveNameConflict(normalizedName, func(name string) bool {
+					_, ok := eventIdentifiers[name]
+					return ok
+				})
+			}
 			if eventIdentifiers[normalizedName] {
 				return nil, fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
