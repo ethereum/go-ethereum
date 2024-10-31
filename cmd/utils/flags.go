@@ -176,12 +176,6 @@ var (
 		Usage:    "Custom node name",
 		Category: flags.NetworkingCategory,
 	}
-	DocRootFlag = &flags.DirectoryFlag{
-		Name:     "docroot",
-		Usage:    "Document Root for HTTPClient file scheme",
-		Value:    flags.DirectoryString(flags.HomeDir()),
-		Category: flags.APICategory,
-	}
 	ExitWhenSyncedFlag = &cli.BoolFlag{
 		Name:     "exitwhensynced",
 		Usage:    "Exits after block synchronisation completes",
@@ -1754,9 +1748,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.TrieCleanCache += cfg.SnapshotCache
 			cfg.SnapshotCache = 0 // Disabled
 		}
-	}
-	if ctx.IsSet(DocRootFlag.Name) {
-		cfg.DocRoot = ctx.String(DocRootFlag.Name)
 	}
 	if ctx.IsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
