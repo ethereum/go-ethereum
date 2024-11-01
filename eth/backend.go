@@ -37,6 +37,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/contracts"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/bloombits"
+	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
@@ -72,9 +73,9 @@ type Ethereum struct {
 	shutdownChan chan bool // Channel for shutting down the ethereum
 
 	// Handlers
-	txPool          *core.TxPool
-	orderPool       *core.OrderPool
-	lendingPool     *core.LendingPool
+	txPool          *txpool.TxPool
+	orderPool       *txpool.OrderPool
+	lendingPool     *txpool.LendingPool
 	blockchain      *core.BlockChain
 	protocolManager *ProtocolManager
 	lesServer       LesServer
@@ -186,9 +187,9 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 	if config.TxPool.Journal != "" {
 		config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
 	}
-	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
-	eth.orderPool = core.NewOrderPool(eth.chainConfig, eth.blockchain)
-	eth.lendingPool = core.NewLendingPool(eth.chainConfig, eth.blockchain)
+	eth.txPool = txpool.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
+	eth.orderPool = txpool.NewOrderPool(eth.chainConfig, eth.blockchain)
+	eth.lendingPool = txpool.NewLendingPool(eth.chainConfig, eth.blockchain)
 	if common.RollbackHash != (common.Hash{}) {
 		curBlock := eth.blockchain.CurrentBlock()
 		if curBlock == nil {
@@ -517,7 +518,7 @@ func (e *Ethereum) Miner() *miner.Miner { return e.miner }
 
 func (e *Ethereum) AccountManager() *accounts.Manager  { return e.accountManager }
 func (e *Ethereum) BlockChain() *core.BlockChain       { return e.blockchain }
-func (e *Ethereum) TxPool() *core.TxPool               { return e.txPool }
+func (e *Ethereum) TxPool() *txpool.TxPool             { return e.txPool }
 func (e *Ethereum) EventMux() *event.TypeMux           { return e.eventMux }
 func (e *Ethereum) Engine() consensus.Engine           { return e.engine }
 func (e *Ethereum) ChainDb() ethdb.Database            { return e.chainDb }
@@ -591,7 +592,7 @@ func (e *Ethereum) GetXDCX() *XDCx.XDCX {
 	return e.XDCX
 }
 
-func (e *Ethereum) OrderPool() *core.OrderPool {
+func (e *Ethereum) OrderPool() *txpool.OrderPool {
 	return e.orderPool
 }
 
@@ -600,6 +601,6 @@ func (e *Ethereum) GetXDCXLending() *XDCxlending.Lending {
 }
 
 // LendingPool geth eth lending pool
-func (e *Ethereum) LendingPool() *core.LendingPool {
+func (e *Ethereum) LendingPool() *txpool.LendingPool {
 	return e.lendingPool
 }

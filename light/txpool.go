@@ -26,6 +26,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
@@ -68,6 +69,7 @@ type TxPool struct {
 
 	homestead bool
 	eip2718   bool // Fork indicator whether we are in the eip2718 stage.
+	eip1559   bool // Fork indicator whether we are in the eip1559 stage.
 }
 
 // TxRelayBackend provides an interface to the mechanism that forwards transacions
@@ -316,6 +318,7 @@ func (p *TxPool) setNewHead(head *types.Header) {
 	next := new(big.Int).Add(head.Number, big.NewInt(1))
 	p.homestead = p.config.IsHomestead(head.Number)
 	p.eip2718 = p.config.IsEIP1559(next)
+	p.eip1559 = p.config.IsEIP1559(next)
 }
 
 // Stop stops the light transaction pool
@@ -378,7 +381,7 @@ func (p *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error {
 	// Validate the transaction sender and it's sig. Throw
 	// if the from fields is invalid.
 	if from, err = types.Sender(p.signer, tx); err != nil {
-		return core.ErrInvalidSender
+		return txpool.ErrInvalidSender
 	}
 	// Last but not least check for nonce errors
 	currentState := p.currentState(ctx)
@@ -390,14 +393,14 @@ func (p *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error {
 	// block limit gas.
 	header := p.chain.GetHeaderByHash(p.head)
 	if header.GasLimit < tx.Gas() {
-		return core.ErrGasLimit
+		return txpool.ErrGasLimit
 	}
 
 	// Transactions can't be negative. This may never happen
 	// using RLP decoded transactions but may occur if you create
 	// a transaction using the RPC for example.
 	if tx.Value().Sign() < 0 {
-		return core.ErrNegativeValue
+		return txpool.ErrNegativeValue
 	}
 
 	// Transactor should have enough funds to cover the costs
@@ -407,7 +410,7 @@ func (p *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error {
 	}
 
 	// Should supply enough intrinsic gas
-	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, p.homestead)
+	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, p.homestead, p.eip1559)
 	if err != nil {
 		return err
 	}
@@ -528,6 +531,25 @@ func (p *TxPool) Content() (map[common.Address]types.Transactions, map[common.Ad
 	// There are no queued transactions in a light pool, just return an empty map
 	queued := make(map[common.Address]types.Transactions)
 	return pending, queued
+}
+
+// ContentFrom retrieves the data content of the transaction pool, returning the
+// pending as well as queued transactions of this address, grouped by nonce.
+func (pool *TxPool) ContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
+	// Retrieve the pending transactions and sort by nonce
+	var pending types.Transactions
+	for _, tx := range pool.pending {
+		account, _ := types.Sender(pool.signer, tx)
+		if account != addr {
+			continue
+		}
+		pending = append(pending, tx)
+	}
+	// There are no queued transactions in a light pool, just return an empty map
+	return pending, types.Transactions{}
 }
 
 // RemoveTransactions removes all given transactions from the pool.

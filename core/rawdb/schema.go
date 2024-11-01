@@ -25,7 +25,9 @@ import (
 
 // The fields below define the low level database schema prefixing.
 var (
+	// headBlockKey tracks the latest known full block's hash.
 	headBlockKey = []byte("LastBlock")
+
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
 	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash

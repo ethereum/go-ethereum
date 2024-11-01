@@ -23,11 +23,15 @@ import (
 	"math/big"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
+	cmath "github.com/XinFinOrg/XDPoSChain/common/math"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 )
+
+var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 var (
 	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
@@ -57,6 +61,8 @@ type StateTransition struct {
 	msg        Message
 	gas        uint64
 	gasPrice   *big.Int
+	gasFeeCap  *big.Int
+	gasTipCap  *big.Int
 	initialGas uint64
 	value      *big.Int
 	data       []byte
@@ -71,18 +77,20 @@ type Message interface {
 	To() *common.Address
 
 	GasPrice() *big.Int
+	GasFeeCap() *big.Int
+	GasTipCap() *big.Int
 	Gas() uint64
 	Value() *big.Int
 
 	Nonce() uint64
-	CheckNonce() bool
+	IsFake() bool
 	Data() []byte
 	BalanceTokenFee() *big.Int
 	AccessList() types.AccessList
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
-func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead bool) (uint64, error) {
+func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, isHomestead bool, isEIP3860 bool) (uint64, error) {
 	// Set the starting gas for the raw transaction
 	var gas uint64
 	if isContractCreation && isHomestead {
@@ -90,8 +98,9 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, 
 	} else {
 		gas = params.TxGas
 	}
+	dataLen := uint64(len(data))
 	// Bump the required gas by the amount of transactional data
-	if len(data) > 0 {
+	if dataLen > 0 {
 		// Zero and non-zero bytes are priced differently
 		var nz uint64
 		for _, byt := range data {
@@ -105,11 +114,19 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, 
 		}
 		gas += nz * params.TxDataNonZeroGas
 
-		z := uint64(len(data)) - nz
+		z := dataLen - nz
 		if (math.MaxUint64-gas)/params.TxDataZeroGas < z {
 			return 0, ErrGasUintOverflow
 		}
 		gas += z * params.TxDataZeroGas
+
+		if isContractCreation && isEIP3860 {
+			lenWords := toWordSize(dataLen)
+			if (math.MaxUint64-gas)/params.InitCodeWordGas < lenWords {
+				return 0, ErrGasUintOverflow
+			}
+			gas += lenWords * params.InitCodeWordGas
+		}
 	}
 	if accessList != nil {
 		gas += uint64(len(accessList)) * params.TxAccessListAddressGas
@@ -118,16 +135,27 @@ func IntrinsicGas(data []byte, accessList types.AccessList, isContractCreation, 
 	return gas, nil
 }
 
+// toWordSize returns the ceiled word size required for init code payment calculation.
+func toWordSize(size uint64) uint64 {
+	if size > math.MaxUint64-31 {
+		return math.MaxUint64/32 + 1
+	}
+
+	return (size + 31) / 32
+}
+
 // NewStateTransition initialises and returns a new state transition object.
 func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
-		gp:       gp,
-		evm:      evm,
-		msg:      msg,
-		gasPrice: msg.GasPrice(),
-		value:    msg.Value(),
-		data:     msg.Data(),
-		state:    evm.StateDB,
+		gp:        gp,
+		evm:       evm,
+		msg:       msg,
+		gasPrice:  msg.GasPrice(),
+		gasFeeCap: msg.GasFeeCap(),
+		gasTipCap: msg.GasTipCap(),
+		value:     msg.Value(),
+		data:      msg.Data(),
+		state:     evm.StateDB,
 	}
 }
 
@@ -171,15 +199,18 @@ func (st *StateTransition) to() vm.AccountRef {
 }
 
 func (st *StateTransition) buyGas() error {
-	var (
-		state           = st.state
-		balanceTokenFee = st.balanceTokenFee()
-		from            = st.from()
-	)
-	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
+	mgval := new(big.Int).SetUint64(st.msg.Gas())
+	mgval = mgval.Mul(mgval, st.gasPrice)
+	balanceTokenFee := st.balanceTokenFee()
 	if balanceTokenFee == nil {
-		if state.GetBalance(from.Address()).Cmp(mgval) < 0 {
-			return errInsufficientBalanceForGas
+		balanceCheck := mgval
+		if st.gasFeeCap != nil {
+			balanceCheck = new(big.Int).SetUint64(st.msg.Gas())
+			balanceCheck = balanceCheck.Mul(balanceCheck, st.gasFeeCap)
+			balanceCheck.Add(balanceCheck, st.value)
+		}
+		if have, want := st.state.GetBalance(st.msg.From()), balanceCheck; have.Cmp(want) < 0 {
+			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From().Hex(), have, want)
 		}
 	} else if balanceTokenFee.Cmp(mgval) < 0 {
 		return errInsufficientBalanceForGas
@@ -191,25 +222,55 @@ func (st *StateTransition) buyGas() error {
 
 	st.initialGas = st.msg.Gas()
 	if balanceTokenFee == nil {
-		state.SubBalance(from.Address(), mgval)
+		st.state.SubBalance(st.msg.From(), mgval)
 	}
 	return nil
 }
 
 func (st *StateTransition) preCheck() error {
-	// Make sure this transaction's nonce is correct
-	if st.msg.CheckNonce() {
+	// Only check transactions that are not fake
+	msg := st.msg
+	if !msg.IsFake() {
 		// Make sure this transaction's nonce is correct.
-		stNonce := st.state.GetNonce(st.from().Address())
-		if msgNonce := st.msg.Nonce(); stNonce < msgNonce {
+		stNonce := st.state.GetNonce(msg.From())
+		if msgNonce := msg.Nonce(); stNonce < msgNonce {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
-				st.msg.From().Hex(), msgNonce, stNonce)
+				msg.From().Hex(), msgNonce, stNonce)
 		} else if stNonce > msgNonce {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
-				st.msg.From().Hex(), msgNonce, stNonce)
+				msg.From().Hex(), msgNonce, stNonce)
 		} else if stNonce+1 < stNonce {
 			return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
-				st.msg.From().Hex(), stNonce)
+				msg.From().Hex(), stNonce)
+		}
+		// Make sure the sender is an EOA
+		if codeHash := st.state.GetCodeHash(msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
+			return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+				msg.From().Hex(), codeHash)
+		}
+	}
+	// Make sure that transaction gasFeeCap is greater than the baseFee (post london)
+	if st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber) {
+		// Skip the checks if gas fields are zero and baseFee was explicitly disabled (eth_call)
+		if !st.evm.Config.NoBaseFee || st.gasFeeCap.BitLen() > 0 || st.gasTipCap.BitLen() > 0 {
+			if l := st.gasFeeCap.BitLen(); l > 256 {
+				return fmt.Errorf("%w: address %v, maxFeePerGas bit length: %d", ErrFeeCapVeryHigh,
+					msg.From().Hex(), l)
+			}
+			if l := st.gasTipCap.BitLen(); l > 256 {
+				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas bit length: %d", ErrTipVeryHigh,
+					msg.From().Hex(), l)
+			}
+			if st.gasFeeCap.Cmp(st.gasTipCap) < 0 {
+				return fmt.Errorf("%w: address %v, maxPriorityFeePerGas: %s, maxFeePerGas: %s", ErrTipAboveFeeCap,
+					msg.From().Hex(), st.gasTipCap, st.gasFeeCap)
+			}
+			// This will panic if baseFee is nil, but basefee presence is verified
+			// as part of header validation.
+			if st.gasFeeCap.Cmp(st.evm.Context.BaseFee) < 0 {
+				return fmt.Errorf("%w: address %v, maxFeePerGas: %s baseFee: %s", ErrFeeCapTooLow,
+					msg.From().Hex(), st.gasFeeCap, st.evm.Context.BaseFee)
+			}
 		}
 	}
 	return st.buyGas()
@@ -241,16 +302,20 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 
 	// Check clauses 1-3, buy gas if everything is correct
 	if err = st.preCheck(); err != nil {
-		return
+		return nil, 0, false, err, nil
 	}
-	msg := st.msg
-	sender := st.from() // err checked in preCheck
 
-	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
-	contractCreation := msg.To() == nil
+	var (
+		msg              = st.msg
+		sender           = st.from() // err checked in preCheck
+		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber)
+		homestead        = rules.IsHomestead
+		eip3529          = rules.IsEIP1559
+		contractCreation = msg.To() == nil
+	)
 
-	// Pay intrinsic gas
-	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead)
+	// Check clauses 4-5, subtract intrinsic gas if everything is correct
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, rules.IsEIP1559)
 	if err != nil {
 		return nil, 0, false, err, nil
 	}
@@ -259,7 +324,12 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 	}
 	st.gas -= gas
 
-	if rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber); rules.IsEIP1559 {
+	// Check whether the init code size has been exceeded.
+	if rules.IsEIP1559 && contractCreation && len(st.data) > params.MaxInitCodeSize {
+		return nil, 0, false, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(st.data), params.MaxInitCodeSize), nil
+	}
+
+	if rules.IsEIP1559 {
 		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 	}
 
@@ -293,22 +363,32 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 			return nil, 0, false, vmerr, nil
 		}
 	}
-	st.refundGas()
+	if !eip3529 {
+		// Before EIP-3529: refunds were capped to gasUsed / 2
+		st.refundGas(params.RefundQuotient)
+	} else {
+		// After EIP-3529: refunds are capped to gasUsed / 5
+		st.refundGas(params.RefundQuotientEIP3529)
+	}
 
 	if st.evm.Context.BlockNumber.Cmp(common.TIPTRC21Fee) > 0 {
 		if (owner != common.Address{}) {
 			st.state.AddBalance(owner, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 		}
 	} else {
-		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+		effectiveTip := st.gasPrice
+		if st.evm.ChainConfig().IsEIP1559(st.evm.Context.BlockNumber) {
+			effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
+		}
+		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip))
 	}
 
 	return ret, st.gasUsed(), vmerr != nil, nil, vmerr
 }
 
-func (st *StateTransition) refundGas() {
-	// Apply refund counter, capped to half of the used gas.
-	refund := st.gasUsed() / 2
+func (st *StateTransition) refundGas(refundQuotient uint64) {
+	// Apply refund counter, capped to a refund quotient
+	refund := st.gasUsed() / refundQuotient
 	if refund > st.state.GetRefund() {
 		refund = st.state.GetRefund()
 	}

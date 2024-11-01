@@ -53,15 +53,20 @@ var waitDeployedTests = map[string]struct {
 }
 
 func TestWaitDeployed(t *testing.T) {
+	config := *params.TestXDPoSMockChainConfig
+	config.Eip1559Block = big.NewInt(0)
 	for name, test := range waitDeployedTests {
 		backend := backends.NewXDCSimulatedBackend(
 			core.GenesisAlloc{
-				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000)},
-			}, 10000000, params.TestXDPoSMockChainConfig,
+				crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(100000000000000000)},
+			}, 10000000, &config,
 		)
 
-		// Create the transaction.
-		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, big.NewInt(1), common.FromHex(test.code))
+		// Create the transaction
+		head, _ := backend.HeaderByNumber(context.Background(), nil) // Should be child's, good enough
+		gasPrice := new(big.Int).Add(head.BaseFee, big.NewInt(1))
+
+		tx := types.NewContractCreation(0, big.NewInt(0), test.gas, gasPrice, common.FromHex(test.code))
 		tx, _ = types.SignTx(tx, types.HomesteadSigner{}, testKey)
 
 		// Wait for it to get mined in the background.

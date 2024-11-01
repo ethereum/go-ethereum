@@ -19,6 +19,7 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -78,7 +79,7 @@ type downloadTester struct {
 // newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
 	testdb := rawdb.NewMemoryDatabase()
-	genesis := core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(1000000000))
+	genesis := core.GenesisBlockForTesting(testdb, testAddress, big.NewInt(math.MaxInt64))
 
 	tester := &downloadTester{
 		genesis:           genesis,
@@ -109,7 +110,8 @@ func newTester() *downloadTester {
 // reassembly.
 func (dl *downloadTester) makeChain(n int, seed byte, parent *types.Block, parentReceipts types.Receipts, heavy bool) ([]common.Hash, map[common.Hash]*types.Header, map[common.Hash]*types.Block, map[common.Hash]types.Receipts) {
 	// Generate the block chain
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), dl.peerDb, n, func(i int, block *core.BlockGen) {
+	config := dl.Config()
+	blocks, receipts := core.GenerateChain(config, parent, ethash.NewFaker(), dl.peerDb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 
 		// If a heavy chain is requested, delay blocks to raise difficulty
@@ -118,8 +120,8 @@ func (dl *downloadTester) makeChain(n int, seed byte, parent *types.Block, paren
 		}
 		// If the block number is multiple of 3, send a bonus transaction to the miner
 		if parent == dl.genesis && i%3 == 0 {
-			signer := types.MakeSigner(params.TestChainConfig, block.Number())
-			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
+			signer := types.MakeSigner(config, block.Number())
+			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, block.BaseFee(), nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
@@ -464,7 +466,11 @@ func (dl *downloadTester) handleProposedBlock(header *types.Header) error {
 }
 
 // Config retrieves the blockchain's chain configuration.
-func (dl *downloadTester) Config() *params.ChainConfig { return params.TestChainConfig }
+func (dl *downloadTester) Config() *params.ChainConfig {
+	config := *params.TestChainConfig
+	config.Eip1559Block = big.NewInt((0))
+	return &config
+}
 
 type downloadTesterPeer struct {
 	dl    *downloadTester

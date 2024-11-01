@@ -19,6 +19,7 @@ package light
 import (
 	"bytes"
 	"context"
+	"errors"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
@@ -29,6 +30,13 @@ import (
 
 var sha3_nil = crypto.Keccak256Hash(nil)
 
+// errNonCanonicalHash is returned if the requested chain data doesn't belong
+// to the canonical chain. ODR can only retrieve the canonical chain data covered
+// by the CHT or Bloom trie for verification.
+var errNonCanonicalHash = errors.New("hash is not currently canonical")
+
+// GetHeaderByNumber retrieves the canonical block header corresponding to the
+// given number. The returned header is proven by local CHT.
 func GetHeaderByNumber(ctx context.Context, odr OdrBackend, number uint64) (*types.Header, error) {
 	db := odr.Database()
 	hash := core.GetCanonicalHash(db, number)
@@ -113,7 +121,7 @@ func GetBlock(ctx context.Context, odr OdrBackend, hash common.Hash, number uint
 	// Retrieve the block header and body contents
 	header := core.GetHeader(odr.Database(), hash, number)
 	if header == nil {
-		return nil, ErrNoHeader
+		return nil, errNoHeader
 	}
 	body, err := GetBody(ctx, odr, hash, number)
 	if err != nil {
@@ -129,6 +137,13 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 	// Retrieve the potentially incomplete receipts from disk or network
 	receipts := core.GetBlockReceipts(odr.Database(), hash, number)
 	if receipts == nil {
+		header, err := GetHeaderByNumber(ctx, odr, number)
+		if err != nil {
+			return nil, errNoHeader
+		}
+		if header.Hash() != hash {
+			return nil, errNonCanonicalHash
+		}
 		r := &ReceiptsRequest{Hash: hash, Number: number}
 		if err := odr.Retrieve(ctx, r); err != nil {
 			return nil, err
@@ -144,7 +159,7 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		genesis := core.GetCanonicalHash(odr.Database(), 0)
 		config, _ := core.GetChainConfig(odr.Database(), genesis)
 
-		if err := core.SetReceiptsData(config, block, receipts); err != nil {
+		if err := receipts.DeriveFields(config, hash, number, block.BaseFee(), block.Transactions()); err != nil {
 			return nil, err
 		}
 		core.WriteBlockReceipts(odr.Database(), hash, number, receipts)

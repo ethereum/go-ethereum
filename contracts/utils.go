@@ -41,6 +41,7 @@ import (
 	randomizeContract "github.com/XinFinOrg/XDPoSChain/contracts/randomize/contract"
 	"github.com/XinFinOrg/XDPoSChain/core"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
+	"github.com/XinFinOrg/XDPoSChain/core/txpool"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/log"
@@ -60,7 +61,7 @@ type RewardLog struct {
 var TxSignMu sync.RWMutex
 
 // Send tx sign for block number to smart contract blockSigner.
-func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database, eb common.Address) error {
+func CreateTransactionSign(chainConfig *params.ChainConfig, pool *txpool.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database, eb common.Address) error {
 	TxSignMu.Lock()
 	defer TxSignMu.Unlock()
 	if chainConfig.XDPoS != nil {
