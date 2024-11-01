@@ -19,6 +19,7 @@ package core
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"math/big"
 	"slices"
 	"testing"
@@ -162,10 +163,20 @@ func TestProcessVerkle(t *testing.T) {
 
 		// Add two contract creations in block #2
 		if i == 1 {
-			tx, _ = types.SignTx(types.NewContractCreation(6, big.NewInt(16), 3000000, big.NewInt(875000000), code), signer, testKey)
+			tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 6,
+				Value:    big.NewInt(16),
+				Gas:      3000000,
+				GasPrice: big.NewInt(875000000),
+				Data:     code,
+			}), signer, testKey)
 			gen.AddTx(tx)
 
-			tx, _ = types.SignTx(types.NewContractCreation(7, big.NewInt(0), 3000000, big.NewInt(875000000), codeWithExtCodeCopy), signer, testKey)
+			tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 7,
+				Value:    big.NewInt(0),
+				Gas:      3000000,
+				GasPrice: big.NewInt(875000000),
+				Data:     codeWithExtCodeCopy,
+			}), signer, testKey)
 			gen.AddTx(tx)
 		}
 	})
@@ -524,11 +535,20 @@ func TestProcessVerkleExtCodeHashOpcode(t *testing.T) {
 
 		if i == 0 {
 			// Create dummy contract.
-			tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(0), 100_000, big.NewInt(875000000), dummyContract), signer, testKey)
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 0,
+				Value:    big.NewInt(0),
+				Gas:      100_000,
+				GasPrice: big.NewInt(875000000),
+				Data:     dummyContract,
+			}), signer, testKey)
 			gen.AddTx(tx)
 
 			// Create contract with EXTCODEHASH opcode.
-			tx, _ = types.SignTx(types.NewContractCreation(1, big.NewInt(0), 100_000, big.NewInt(875000000), extCodeHashContract), signer, testKey)
+			tx, _ = types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 1,
+				Value:    big.NewInt(0),
+				Gas:      100_000,
+				GasPrice: big.NewInt(875000000),
+				Data:     extCodeHashContract}), signer, testKey)
 			gen.AddTx(tx)
 		} else {
 			tx, _ := types.SignTx(types.NewTransaction(2, extCodeHashContractAddr, big.NewInt(0), 100_000, big.NewInt(875000000), nil), signer, testKey)
@@ -590,7 +610,11 @@ func TestProcessVerkleBalanceOpcode(t *testing.T) {
 			common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d").Bytes(),
 			[]byte{byte(vm.BALANCE)})
 
-		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(0), 100_000, big.NewInt(875000000), txData), signer, testKey)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 0,
+			Value:    big.NewInt(0),
+			Gas:      100_000,
+			GasPrice: big.NewInt(875000000),
+			Data:     txData}), signer, testKey)
 		gen.AddTx(tx)
 	})
 
@@ -665,7 +689,12 @@ func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
 
 		if i == 0 {
 			// Create selfdestruct contract, sending 42 wei.
-			tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(42), 100_000, big.NewInt(875000000), selfDestructContract), signer, testKey)
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 0,
+				Value:    big.NewInt(42),
+				Gas:      100_000,
+				GasPrice: big.NewInt(875000000),
+				Data:     selfDestructContract,
+			}), signer, testKey)
 			gen.AddTx(tx)
 		} else {
 			// Call it.
@@ -765,7 +794,12 @@ func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 
 	_, _, _, _, statediffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
-		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(42), 100_000, big.NewInt(875000000), selfDestructContract), signer, testKey)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 0,
+			Value:    big.NewInt(42),
+			Gas:      100_000,
+			GasPrice: big.NewInt(875000000),
+			Data:     selfDestructContract,
+		}), signer, testKey)
 		gen.AddTx(tx)
 	})
 
@@ -865,7 +899,12 @@ func TestProcessVerkleSelfDestructInSeparateTxWithSelfBeneficiary(t *testing.T) 
 		gen.SetPoS()
 		if i == 0 {
 			// Create self-destruct contract, sending 42 wei.
-			tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(42), 100_000, big.NewInt(875000000), selfDestructContract), signer, testKey)
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 0,
+				Value:    big.NewInt(42),
+				Gas:      100_000,
+				GasPrice: big.NewInt(875000000),
+				Data:     selfDestructContract,
+			}), signer, testKey)
 			gen.AddTx(tx)
 		} else {
 			// Call it.
@@ -928,23 +967,22 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 		deployer   = crypto.PubkeyToAddress(testKey.PublicKey)
 		contract   = crypto.CreateAddress(deployer, 0)
 	)
-	// Also add the contract-to-destroy
-	gspec.Alloc[contract] = types.Account{
-		Balance: big.NewInt(100),
-	}
+
 	// The goal of this test is to test SELFDESTRUCT that happens in a contract
 	// execution which is created in **the same** transaction sending the remaining
 	// balance to itself.
 	t.Logf("Contract: %v", contract.String())
 
-	// TODO: investigate why this test succeeds regardless of whether the
-	// selfdestruct-to-self is used, or selfdestruct-to-zero is used.
 	selfDestructContract := []byte{byte(vm.ADDRESS), byte(vm.SELFDESTRUCT)}
-	//selfDestructContract := []byte{byte(vm.NUMBER), byte(vm.SELFDESTRUCT)}
 
 	_, _, _, _, stateDiffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
 		gen.SetPoS()
-		tx, _ := types.SignTx(types.NewContractCreation(0, big.NewInt(42), 100_000, big.NewInt(875000000), selfDestructContract), signer, testKey)
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 0,
+			Value:    big.NewInt(42),
+			Gas:      100_000,
+			GasPrice: big.NewInt(875000000),
+			Data:     selfDestructContract,
+		}), signer, testKey)
 		gen.AddTx(tx)
 	})
 	stateDiff := stateDiffs[0] // state difference of block 1
@@ -973,6 +1011,78 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 		// contract isn't modified (it should remain missing from the state)
 		if balanceStateDiff.NewValue != nil {
 			t.Fatal("the post-state balance after self-destruct must be nil since the contract shouldn't be created at all")
+		}
+	}
+}
+
+// TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiaryAndPrefundedAccount checks the
+// content of the witness if a selfdestruct occurs in the same tx as the one that created it,
+// it, but the beneficiary is the selfdestructed account. The difference with the test above,
+// is that the created account is prefunded and so the final value should be 0.
+func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiaryAndPrefundedAccount(t *testing.T) {
+	// The test txs were taken from a secondary testnet with chain id 69421
+	config := *testKaustinenLikeChainConfig
+	config.ChainID.SetUint64(69421)
+
+	var (
+		signer     = types.LatestSigner(&config)
+		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		gspec      = verkleTestGenesis(&config)
+		deployer   = crypto.PubkeyToAddress(testKey.PublicKey)
+		contract   = crypto.CreateAddress(deployer, 0)
+	)
+	// Prefund the account
+	gspec.Alloc[contract] = types.Account{
+		Balance: big.NewInt(100),
+	}
+	// The goal of this test is to test SELFDESTRUCT that happens in a contract
+	// execution which is created in **the same** transaction sending the remaining
+	// balance to itself.
+	t.Logf("Contract: %v", contract.String())
+
+	selfDestructContract := []byte{byte(vm.ADDRESS), byte(vm.SELFDESTRUCT)}
+
+	_, _, _, _, stateDiffs := GenerateVerkleChainWithGenesis(gspec, beacon.New(ethash.NewFaker()), 1, func(i int, gen *BlockGen) {
+		gen.SetPoS()
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: 0,
+			Value:    big.NewInt(42),
+			Gas:      100_000,
+			GasPrice: big.NewInt(875000000),
+			Data:     selfDestructContract,
+		}), signer, testKey)
+		gen.AddTx(tx)
+	})
+	stateDiff := stateDiffs[0] // state difference of block 1
+
+	{ // Check self-destructed contract in the witness
+		selfDestructContractTreeKey := utils.CodeHashKey(contract[:])
+
+		var stateDiffIdx = -1
+		for i, stemStateDiff := range stateDiff {
+			if bytes.Equal(stemStateDiff.Stem[:], selfDestructContractTreeKey[:31]) {
+				stateDiffIdx = i
+				break
+			}
+		}
+		if stateDiffIdx == -1 {
+			t.Fatal("no state diff found for stem")
+		}
+		balanceStateDiff := stateDiff[stateDiffIdx].SuffixDiffs[0]
+		if balanceStateDiff.Suffix != utils.BasicDataLeafKey {
+			t.Fatal("balance invalid suffix")
+		}
+		expected, _ := hex.DecodeString("0000000000000000000000000000000000000000000000000000000000000064")
+		if balanceStateDiff.CurrentValue == nil || !bytes.Equal(balanceStateDiff.CurrentValue[:], expected) {
+			t.Fatalf("incorrect prestate balance: %x != %x", *balanceStateDiff.CurrentValue, expected)
+		}
+		// Ensure that the value is burnt, and therefore that the balance of the self-destructed
+		// contract isn't modified (it should remain missing from the state)
+		expected = make([]byte, 32)
+		if balanceStateDiff.NewValue == nil {
+			t.Fatal("incorrect nil poststate balance")
+		}
+		if !bytes.Equal(balanceStateDiff.NewValue[:], expected[:]) {
+			t.Fatalf("incorrect poststate balance: %x != %x", *balanceStateDiff.NewValue, expected[:])
 		}
 	}
 }

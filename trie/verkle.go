@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -169,10 +170,38 @@ func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) er
 	return t.root.Insert(k, v[:], t.nodeResolver)
 }
 
-// DeleteAccount implements state.Trie, deleting the specified account from the
-// trie. If the account was not existent in the trie, no error will be returned.
-// If the trie is corrupted, an error will be returned.
+var zero32 [32]byte
+
+// DeleteAccount leaves the account untouched, as no account deletion can happen
+// in verkle.
+// There is a special corner case, in which an account that is prefunded, CREATE2-d
+// and then SELFDESTRUCT-d should see its funds drained. EIP161 says that account
+// should be removed, but this is verboten by the verkle spec. This contains a
+// workaround in which the method checks for this corner case, and if so, overwrites
+// the balance with 0. This will be removed once the spec has been clarified.
 func (t *VerkleTrie) DeleteAccount(addr common.Address) error {
+	k := utils.BasicDataKeyWithEvaluatedAddress(t.cache.Get(addr.Bytes()))
+	values, err := t.root.(*verkle.InternalNode).GetValuesAtStem(k, t.nodeResolver)
+	if err != nil {
+		return fmt.Errorf("Error getting data at %x in delete: %w", k, err)
+	}
+	var prefunded bool
+	for i, v := range values {
+		switch i {
+		case 0:
+			prefunded = len(v) == 32
+		case 1:
+			prefunded = len(v) == 32 && bytes.Equal(v, types.EmptyCodeHash[:])
+		default:
+			prefunded = v == nil
+		}
+		if !prefunded {
+			break
+		}
+	}
+	if prefunded {
+		t.root.Insert(k, common.Hash{}.Bytes(), t.nodeResolver)
+	}
 	return nil
 }
 
