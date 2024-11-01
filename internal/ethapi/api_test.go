@@ -643,6 +643,16 @@ func TestEstimateGas(t *testing.T) {
 		signer         = types.HomesteadSigner{}
 		randomAccounts = newAccounts(2)
 	)
+	packRevert := func(revertMessage string) []byte {
+		var revertSelector = crypto.Keccak256([]byte("Error(string)"))[:4]
+		stringType, _ := abi.NewType("string", "", nil)
+		args := abi.Arguments{
+			{Type: stringType},
+		}
+		encodedMessage, _ := args.Pack(revertMessage)
+
+		return append(revertSelector, encodedMessage...)
+	}
 
 	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
@@ -809,7 +819,7 @@ func TestEstimateGas(t *testing.T) {
 				},
 			},
 			blockOverrides: BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
-			expectErr:      newRevertError(abi.PackRevert("block 11")),
+			expectErr:      newRevertError(packRevert("block 11")),
 		},
 	}
 	for i, tc := range testSuite {
