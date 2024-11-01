@@ -633,49 +633,30 @@ func TestProcessVerkleSelfDestructInSeparateTx(t *testing.T) {
 	var (
 		signer     = types.LatestSigner(&config)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		coinbase   = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
-		account1   = common.HexToAddress("0x687704DB07e902e9A8B3754031D168D46E3D586e")
 		account2   = common.HexToAddress("0x6177843db3138ae69679A54b95cf345ED759450d")
-		gspec      = &Genesis{
-			Config: &config,
-			Alloc: GenesisAlloc{
-				coinbase: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account1: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   0,
-				},
-				account2: GenesisAccount{
-					Balance: big.NewInt(1000000000000000000), // 1 ether
-					Nonce:   3,
-				},
-				params.BeaconRootsAddress:        {Nonce: 1, Code: params.BeaconRootsCode, Balance: common.Big0},
-				params.HistoryStorageAddress:     {Nonce: 1, Code: params.HistoryStorageCode, Balance: common.Big0},
-				params.WithdrawalQueueAddress:    {Nonce: 1, Code: params.WithdrawalQueueCode, Balance: common.Big0},
-				params.ConsolidationQueueAddress: {Nonce: 1, Code: params.ConsolidationQueueCode, Balance: common.Big0},
-			},
-		}
+		gspec      = verkleTestGenesis(&config)
 	)
 
-	// The goal of this test is to test SELFDESTRUCT that happens in a contract
+	// runtime code: selfdestruct ( 0x6177843db3138ae69679A54b95cf345ED759450d )
+	runtimeCode := slices.Concat(
+		[]byte{byte(vm.PUSH20)},
+		account2.Bytes(),
+		[]byte{byte(vm.SELFDESTRUCT)})
+
+	//The goal of this test is to test SELFDESTRUCT that happens in a contract
 	// execution which is created in a previous transaction.
-	selfDestructContract := []byte{
-		byte(vm.PUSH1), 22,
+	selfDestructContract := slices.Concat([]byte{
+		byte(vm.PUSH1), byte(len(runtimeCode)),
 		byte(vm.PUSH1), 12,
 		byte(vm.PUSH1), 0x00,
-		byte(vm.CODECOPY),
+		byte(vm.CODECOPY), // Codecopy( to-offset: 0, code offset: 12, length: 22 )
 
-		byte(vm.PUSH1), 22,
+		byte(vm.PUSH1), byte(len(runtimeCode)),
 		byte(vm.PUSH1), 0x00,
-		byte(vm.RETURN),
+		byte(vm.RETURN), // Return ( 0 : len(runtimecode)
+	},
+		runtimeCode)
 
-		// Deployed code
-		byte(vm.PUSH20),
-		0x61, 0x77, 0x84, 0x3d, 0xb3, 0x13, 0x8a, 0xe6, 0x96, 0x79, 0xA5, 0x4b, 0x95, 0xcf, 0x34, 0x5E, 0xD7, 0x59, 0x45, 0x0d, // 0x6177843db3138ae69679A54b95cf345ED759450d
-		byte(vm.SELFDESTRUCT),
-	}
 	deployer := crypto.PubkeyToAddress(testKey.PublicKey)
 	contract := crypto.CreateAddress(deployer, 0)
 
@@ -774,11 +755,11 @@ func TestProcessVerkleSelfDestructInSameTx(t *testing.T) {
 	// The goal of this test is to test SELFDESTRUCT that happens in a contract
 	// execution which is created in **the same** transaction sending the remaining
 	// balance to an external (i.e: not itself) account.
-	selfDestructContract := []byte{
-		byte(vm.PUSH20),
-		0x61, 0x77, 0x84, 0x3d, 0xb3, 0x13, 0x8a, 0xe6, 0x96, 0x79, 0xA5, 0x4b, 0x95, 0xcf, 0x34, 0x5E, 0xD7, 0x59, 0x45, 0x0d, // 0x6177843db3138ae69679A54b95cf345ED759450d
-		byte(vm.SELFDESTRUCT),
-	}
+
+	selfDestructContract := slices.Concat(
+		[]byte{byte(vm.PUSH20)},
+		account2.Bytes(),
+		[]byte{byte(vm.SELFDESTRUCT)})
 	deployer := crypto.PubkeyToAddress(testKey.PublicKey)
 	contract := crypto.CreateAddress(deployer, 0)
 
