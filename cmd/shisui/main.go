@@ -105,7 +105,7 @@ var (
 
 func init() {
 	app.Action = shisui
-	app.Flags = flags.Merge(portalProtocolFlags, historyRpcFlags, metricsFlags)
+	app.Flags = slices.Concat(portalProtocolFlags, historyRpcFlags, metricsFlags)
 	flags.AutoEnvVars(app.Flags, "SHISUI")
 }
 
