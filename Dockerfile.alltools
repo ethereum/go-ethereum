@@ -23,7 +23,7 @@ RUN cd /go-ethereum && go run build/ci.go install -static ./cmd/geth
 
 RUN cd /go-ethereum && go run build/ci.go install -static
 
-# Pull all binaries into a second stage deploy alpine container
+# Pull all binaries into a second stage and deploy an alpine container
 FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
