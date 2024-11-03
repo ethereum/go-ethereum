@@ -1710,9 +1710,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Warn("The flag --txlookuplimit is deprecated and will be removed, please use --history.transactions")
 		cfg.TransactionHistory = ctx.Uint64(TxLookupLimitFlag.Name)
 	}
-	if ctx.String(GCModeFlag.Name) == "archive" && cfg.TransactionHistory != 0 {
-		cfg.TransactionHistory = 0
-		log.Warn("Disabled transaction unindexing for archive node")
+	if cfg.NoPruning {
+		if cfg.TransactionHistory != 0 {
+			cfg.TransactionHistory = 0
+			log.Warn("Disabled transaction unindexing for archive node")
+		}
 
 		cfg.StateScheme = rawdb.HashScheme
 		log.Warn("Forcing hash state-scheme for archive mode")
