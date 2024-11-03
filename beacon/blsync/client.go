@@ -32,7 +32,7 @@ import (
 type Client struct {
 	urls         []string
 	customHeader map[string]string
-	config       *params.LightClientConfig
+	config       *params.ClientConfig
 	scheduler    *request.Scheduler
 	blockSync    *beaconBlockSync
 	engineRPC    *rpc.Client
@@ -41,11 +41,11 @@ type Client struct {
 	engineClient *engineClient
 }
 
-func NewClient(config params.LightClientConfig) *Client {
+func NewClient(config params.ClientConfig) *Client {
 	// create data structures
 	var (
 		db             = memorydb.New()
-		committeeChain = light.NewCommitteeChain(db, config.ChainConfig, config.Threshold, !config.NoFilter)
+		committeeChain = light.NewCommitteeChain(db, &config.ChainConfig, config.Threshold, !config.NoFilter)
 		headTracker    = light.NewHeadTracker(committeeChain, config.Threshold)
 	)
 	headSync := sync.NewHeadSync(headTracker, committeeChain)

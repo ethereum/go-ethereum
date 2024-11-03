@@ -39,19 +39,13 @@ const syncCommitteeDomain = 7
 
 var knownForks = []string{"GENESIS", "ALTAIR", "BELLATRIX", "CAPELLA", "DENEB"}
 
-// LightClientConfig contains beacon light client configuration.
-type LightClientConfig struct {
-	LightChainConfig
+// ClientConfig contains beacon light client configuration.
+type ClientConfig struct {
+	ChainConfig
 	Apis         []string
 	CustomHeader map[string]string
 	Threshold    int
 	NoFilter     bool
-}
-
-// LightChainConfig contains beacon light chain configuration.
-type LightChainConfig struct {
-	*ChainConfig
-	Checkpoint common.Hash
 }
 
 // ChainConfig contains the beacon chain configuration.
@@ -59,6 +53,7 @@ type ChainConfig struct {
 	GenesisTime           uint64      // Unix timestamp of slot 0
 	GenesisValidatorsRoot common.Hash // Root hash of the genesis validator set, used for signature domain calculation
 	Forks                 Forks
+	Checkpoint            common.Hash
 }
 
 // ForkAtEpoch returns the latest active fork at the given epoch.

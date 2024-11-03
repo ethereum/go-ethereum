@@ -1892,20 +1892,20 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 // MakeBeaconLightConfig constructs a beacon light client config based on the
 // related command line flags.
-func MakeBeaconLightConfig(ctx *cli.Context) bparams.LightClientConfig {
-	var config bparams.LightClientConfig
+func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
+	var config bparams.ClientConfig
 	customConfig := ctx.IsSet(BeaconConfigFlag.Name)
 	CheckExclusive(ctx, MainnetFlag, SepoliaFlag, HoleskyFlag, BeaconConfigFlag)
 	switch {
 	case ctx.Bool(MainnetFlag.Name):
-		config.LightChainConfig = bparams.MainnetLightConfig
+		config.ChainConfig = *bparams.MainnetLightConfig
 	case ctx.Bool(SepoliaFlag.Name):
-		config.LightChainConfig = bparams.SepoliaLightConfig
+		config.ChainConfig = *bparams.SepoliaLightConfig
 	case ctx.Bool(HoleskyFlag.Name):
-		config.LightChainConfig = bparams.HoleskyLightConfig
+		config.ChainConfig = *bparams.HoleskyLightConfig
 	default:
 		if !customConfig {
-			config.LightChainConfig = bparams.MainnetLightConfig
+			config.ChainConfig = *bparams.MainnetLightConfig
 		}
 	}
 	// Genesis root and time should always be specified together with custom chain config
@@ -1919,7 +1919,7 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.LightClientConfig {
 		if !ctx.IsSet(BeaconCheckpointFlag.Name) {
 			Fatalf("Custom beacon chain config is specified but checkpoint is missing")
 		}
-		config.ChainConfig = &bparams.ChainConfig{
+		config.ChainConfig = bparams.ChainConfig{
 			GenesisTime: ctx.Uint64(BeaconGenesisTimeFlag.Name),
 		}
 		if c, err := hexutil.Decode(ctx.String(BeaconGenesisRootFlag.Name)); err == nil && len(c) <= 32 {
