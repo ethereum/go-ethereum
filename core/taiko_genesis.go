@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	InternalDevnetOntakeBlock = new(big.Int).SetUint64(2)
+	InternalDevnetOntakeBlock = new(big.Int).SetUint64(0)
 	HeklaOntakeBlock          = new(big.Int).SetUint64(840_512)
 	MainnetOntakeBlock        = new(big.Int).SetUint64(538_304)
 )
