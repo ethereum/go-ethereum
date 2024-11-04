@@ -1145,36 +1145,38 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 
 		return talkRespBytes, nil
 	} else {
-		connId := p.connIdGen.GenCid(id, false)
-		connIdSend := connId.SendId()
+		connectionId := p.connIdGen.GenCid(id, false)
 
-		go func(bctx context.Context) {
+		go func(bctx context.Context, connId *libutp.ConnId) {
 			var conn *utp.Conn
-			defer func() {
+			var connectCtx context.Context
+			var cancel context.CancelFunc
+			defer func(clsConn *utp.Conn) {
 				p.connIdGen.Remove(connId)
-				if conn == nil {
+				if clsConn == nil {
 					return
 				}
-				err := conn.Close()
+				err := clsConn.Close()
 				if err != nil {
 					p.Log.Error("failed to close connection", "err", err)
 				}
-			}()
+			}(conn)
+			connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
+			defer func(cancelFunc context.CancelFunc) {
+				cancelFunc()
+			}(cancel)
 			for {
 				select {
 				case <-bctx.Done():
 					return
 				default:
-					ctx, cancel := context.WithTimeout(bctx, defaultUTPConnectTimeout)
-
 					p.Log.Debug("will accept find content conn from: ", "source", addr, "connId", connId)
-					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
-					cancel()
+					conn, err = p.utp.AcceptUTPContext(connectCtx, connectionId.SendId())
 					if err != nil {
 						if metrics.Enabled {
 							p.portalMetrics.utpOutFailConn.Inc(1)
 						}
-						p.Log.Error("failed to accept utp connection for handle find content", "connId", connIdSend, "err", err)
+						p.Log.Error("failed to accept utp connection for handle find content", "connId", connectionId.SendId(), "err", err)
 						return
 					}
 
@@ -1204,10 +1206,10 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 					return
 				}
 			}
-		}(p.closeCtx)
+		}(p.closeCtx, connectionId)
 
 		idBuffer := make([]byte, 2)
-		binary.BigEndian.PutUint16(idBuffer, uint16(connIdSend))
+		binary.BigEndian.PutUint16(idBuffer, uint16(connectionId.SendId()))
 		connIdMsg := &portalwire.ConnectionId{
 			Id: idBuffer,
 		}
@@ -1277,36 +1279,39 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 
 	idBuffer := make([]byte, 2)
 	if contentKeyBitlist.Count() != 0 {
-		connId := p.connIdGen.GenCid(id, false)
-		connIdSend := connId.SendId()
+		connectionId := p.connIdGen.GenCid(id, false)
 
-		go func(bctx context.Context) {
+		go func(bctx context.Context, connId *libutp.ConnId) {
 			var conn *utp.Conn
-			defer func() {
+			var connectCtx context.Context
+			var cancel context.CancelFunc
+			defer func(clsConn *utp.Conn) {
 				p.connIdGen.Remove(connId)
-				if conn == nil {
+				if clsConn == nil {
 					return
 				}
-				err := conn.Close()
+				err := clsConn.Close()
 				if err != nil {
 					p.Log.Error("failed to close connection", "err", err)
 				}
-			}()
+			}(conn)
+			connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
+			defer func(cancelFunc context.CancelFunc) {
+				cancelFunc()
+			}(cancel)
 			for {
 				select {
 				case <-bctx.Done():
 					return
 				default:
-					ctx, cancel := context.WithTimeout(bctx, defaultUTPConnectTimeout)
-
 					p.Log.Debug("will accept offer conn from: ", "source", addr, "connId", connId)
-					conn, err = p.utp.AcceptUTPContext(ctx, connIdSend)
+					conn, err = p.utp.AcceptUTPContext(connectCtx, connectionId.SendId())
 					cancel()
 					if err != nil {
 						if metrics.Enabled {
 							p.portalMetrics.utpInFailConn.Inc(1)
 						}
-						p.Log.Error("failed to accept utp connection for handle offer", "connId", connIdSend, "err", err)
+						p.Log.Error("failed to accept utp connection for handle offer", "connId", connectionId.SendId(), "err", err)
 						return
 					}
 
@@ -1345,9 +1350,9 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 					return
 				}
 			}
-		}(p.closeCtx)
+		}(p.closeCtx, connectionId)
 
-		binary.BigEndian.PutUint16(idBuffer, uint16(connIdSend))
+		binary.BigEndian.PutUint16(idBuffer, uint16(connectionId.SendId()))
 	} else {
 		binary.BigEndian.PutUint16(idBuffer, uint16(0))
 	}
