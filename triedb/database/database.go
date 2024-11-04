@@ -60,7 +60,7 @@ type StateReader interface {
 	Storage(accountHash, storageHash common.Hash) ([]byte, error)
 }
 
-// StateDatabase warps the methods of a backing state store.
+// StateDatabase wraps the methods of a backing state store.
 type StateDatabase interface {
 	// StateReader returns a state reader associated with the specific state.
 	// An error will be returned if the specified state is not available.
