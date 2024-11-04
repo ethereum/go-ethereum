@@ -442,22 +442,22 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	// Call identity, and pop return value
 	staticCallIdentity := p.
 		StaticCall(nil, 0x4, 0, 0, 0, 0).
-		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
+		Op(vm.POP).Jump(lbl).Bytes() // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	callIdentity := p.
 		Call(nil, 0x4, 0, 0, 0, 0, 0).
-		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
+		Op(vm.POP).Jump(lbl).Bytes() // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	callInexistant := p.
 		Call(nil, 0xff, 0, 0, 0, 0, 0).
-		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
+		Op(vm.POP).Jump(lbl).Bytes() // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	callEOA := p.
 		Call(nil, 0xE0, 0, 0, 0, 0, 0). // call addr of EOA
-		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
+		Op(vm.POP).Jump(lbl).Bytes() // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	// Push as if we were making call, then pop it off again, and loop
@@ -465,19 +465,19 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		Ops(vm.DUP1, vm.DUP1, vm.DUP1).
 		Push(0x4).
 		Ops(vm.GAS, vm.POP, vm.POP, vm.POP, vm.POP, vm.POP, vm.POP).
-		Jump(lbl).Bytecode()
+		Jump(lbl).Bytes()
 
 	p, lbl = program.New().Jumpdest()
 	loopingCode2 := p.
 		Push(0x01020304).Push(uint64(0x0102030405)).
 		Ops(vm.POP, vm.POP).
 		Op(vm.PUSH6).Append(make([]byte, 6)).Op(vm.JUMP). // Jumpdest zero expressed in 6 bytes
-		Bytecode()
+		Bytes()
 
 	p, lbl = program.New().Jumpdest()
 	callRevertingContractWithInput := p.
 		Call(nil, 0xee, 0, 0, 0x20, 0x0, 0x0).
-		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
+		Op(vm.POP).Jump(lbl).Bytes() // pop return value and jump to label
 
 	//tracer := logger.NewJSONLogger(nil, os.Stdout)
 	//Execute(loopingCode, nil, &Config{
@@ -716,104 +716,49 @@ func TestRuntimeJSTracer(t *testing.T) {
 		this.exits++;
 		this.gasUsed = res.getGasUsed();
 	}}`}
+	initcode := program.New().Return(0, 0).Bytes()
 	tests := []struct {
 		code []byte
 		// One result per tracer
 		results []string
 	}{
-		{
-			// CREATE
-			code: []byte{
-				// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
-				byte(vm.PUSH5),
-				// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
-				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
-				byte(vm.PUSH1), 0,
-				byte(vm.MSTORE),
-				// length, offset, value
-				byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
-				byte(vm.CREATE),
-				byte(vm.POP),
-			},
+		{ // CREATE
+			code: program.New().MstorePadded(initcode, 0).
+				Push(len(initcode)). // length
+				Push(32 - len(initcode)). // offset
+				Push(0). // value
+				Op(vm.CREATE).
+				Op(vm.POP).Bytes(),
 			results: []string{`"1,1,952853,6,12"`, `"1,1,952853,6,0"`},
 		},
-		{
-			// CREATE2
-			code: []byte{
-				// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
-				byte(vm.PUSH5),
-				// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
-				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
-				byte(vm.PUSH1), 0,
-				byte(vm.MSTORE),
-				// salt, length, offset, value
-				byte(vm.PUSH1), 1, byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
-				byte(vm.CREATE2),
-				byte(vm.POP),
-			},
+		{ // CREATE2
+			code: program.New().MstorePadded(initcode, 0).
+				Push(1). // salt
+				Push(len(initcode)). // length
+				Push(32 - len(initcode)). // offset
+				Push(0). // value
+				Op(vm.CREATE2).
+				Op(vm.POP).Bytes(),
 			results: []string{`"1,1,952844,6,13"`, `"1,1,952844,6,0"`},
 		},
-		{
-			// CALL
-			code: []byte{
-				// outsize, outoffset, insize, inoffset
-				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
-				byte(vm.PUSH1), 0, // value
-				byte(vm.PUSH1), 0xbb, //address
-				byte(vm.GAS), // gas
-				byte(vm.CALL),
-				byte(vm.POP),
-			},
+		{ // CALL
+			code:    program.New().Call(nil, 0xbb, 0, 0, 0, 0, 0).Op(vm.POP).Bytes(),
 			results: []string{`"1,1,981796,6,13"`, `"1,1,981796,6,0"`},
 		},
-		{
-			// CALLCODE
-			code: []byte{
-				// outsize, outoffset, insize, inoffset
-				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
-				byte(vm.PUSH1), 0, // value
-				byte(vm.PUSH1), 0xcc, //address
-				byte(vm.GAS), // gas
-				byte(vm.CALLCODE),
-				byte(vm.POP),
-			},
+		{ // CALLCODE
+			code:    program.New().CallCode(nil, 0xcc, 0, 0, 0, 0, 0).Op(vm.POP).Bytes(),
 			results: []string{`"1,1,981796,6,13"`, `"1,1,981796,6,0"`},
 		},
-		{
-			// STATICCALL
-			code: []byte{
-				// outsize, outoffset, insize, inoffset
-				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
-				byte(vm.PUSH1), 0xdd, //address
-				byte(vm.GAS), // gas
-				byte(vm.STATICCALL),
-				byte(vm.POP),
-			},
+		{ // STATICCALL
+			code:    program.New().StaticCall(nil, 0xdd, 0, 0, 0, 0).Op(vm.POP).Bytes(),
 			results: []string{`"1,1,981799,6,12"`, `"1,1,981799,6,0"`},
 		},
-		{
-			// DELEGATECALL
-			code: []byte{
-				// outsize, outoffset, insize, inoffset
-				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
-				byte(vm.PUSH1), 0xee, //address
-				byte(vm.GAS), // gas
-				byte(vm.DELEGATECALL),
-				byte(vm.POP),
-			},
+		{ // DELEGATECALL
+			code:    program.New().DelegateCall(nil, 0xee, 0, 0, 0, 0).Op(vm.POP).Bytes(),
 			results: []string{`"1,1,981799,6,12"`, `"1,1,981799,6,0"`},
 		},
-		{
-			// CALL self-destructing contract
-			code: []byte{
-				// outsize, outoffset, insize, inoffset
-				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.PUSH1), 0,
-				byte(vm.PUSH1), 0, // value
-				byte(vm.PUSH1), 0xff, //address
-				byte(vm.GAS), // gas
-				byte(vm.CALL),
-				byte(vm.POP),
-			},
+		{ // CALL self-destructing contract
+			code:    program.New().Call(nil, 0xff, 0, 0, 0, 0, 0).Op(vm.POP).Bytes(),
 			results: []string{`"2,2,0,5003,12"`, `"2,2,0,5003,0"`},
 		},
 	}
@@ -896,16 +841,8 @@ func TestJSTracerCreateTx(t *testing.T) {
 
 func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 	// Simply pushes and pops some values in a loop
-	code := []byte{
-		byte(vm.JUMPDEST),
-		byte(vm.PUSH1), 0,
-		byte(vm.PUSH1), 0,
-		byte(vm.POP),
-		byte(vm.POP),
-		byte(vm.PUSH1), 0, // jumpdestination
-		byte(vm.JUMP),
-	}
-
+	p, lbl := program.New().Jumpdest()
+	code := p.Push(0).Push(0).Ops(vm.POP, vm.POP).Jump(lbl).Bytes()
 	stepTracer := `
 	{
 	step: function() {},

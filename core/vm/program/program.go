@@ -127,14 +127,14 @@ func (p *Program) Push0() *Program {
 	return p.Op(vm.PUSH0)
 }
 
-// Bytecode returns the Program bytecode
-func (p *Program) Bytecode() []byte {
+// Bytes returns the Program bytecode
+func (p *Program) Bytes() []byte {
 	return p.code
 }
 
 // Hex returns the Program bytecode as a hex string
 func (p *Program) Hex() string {
-	return fmt.Sprintf("%02x", p.Bytecode())
+	return fmt.Sprintf("%02x", p.Bytes())
 }
 
 // ExtcodeCopy performsa an extcodecopy invocation
@@ -276,6 +276,29 @@ func (p *Program) Mstore(data []byte, memStart uint32) *Program {
 		p.Push(b)
 		p.Push(uint32(idx) + memStart)
 		p.Op(vm.MSTORE8)
+	}
+	return p
+}
+
+// MstorePadded stores the provided data (into the memory area starting at memStart).
+// If data does not align on 32 bytes, it will be LHS-padded.
+// For example, providing data 0x1122, it will do a PUSH2:
+// PUSH2 0x1122, resulting in
+// stack: 0x0000000000000000000000000000000000000000000000000000000000001122
+// followed by MSTORE(0,0)
+// And thus, the resulting memory will be
+// [ 0000000000000000000000000000000000000000000000000000000000001122 ]
+func (p *Program) MstorePadded(data []byte, memStart uint32) *Program {
+	var idx = 0
+	// We need to store it in chunks of 32 bytes
+	for ; idx < len(data); idx += 32 {
+		end := min(len(data), idx+32)
+		chunk := data[idx:end]
+		// push the value
+		p.Push(chunk)
+		// push the memory index
+		p.Push(uint32(idx) + memStart)
+		p.Op(vm.MSTORE)
 	}
 	return p
 }

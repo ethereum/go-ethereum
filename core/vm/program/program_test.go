@@ -143,7 +143,7 @@ func TestCreateAndCall(t *testing.T) {
 	deployed.Return(0, 32)
 
 	// Pack them
-	ctor.ReturnData(deployed.Bytecode())
+	ctor.ReturnData(deployed.Bytes())
 	// Verify constructor + runtime code
 	{
 		want := "6005600055606060005360006001536054600253606060035360006004536052600553606060065360206007536060600853600060095360f3600a53600b6000f3"
@@ -155,21 +155,134 @@ func TestCreateAndCall(t *testing.T) {
 
 func TestCreate2Call(t *testing.T) {
 	// Some runtime code
-	runtime := New().Ops(vm.ADDRESS, vm.SELFDESTRUCT).Bytecode()
+	runtime := New().Ops(vm.ADDRESS, vm.SELFDESTRUCT).Bytes()
 	want := common.FromHex("0x30ff")
 	if !bytes.Equal(want, runtime) {
 		t.Fatalf("runtime code error\nwant: %x\nhave: %x\n", want, runtime)
 	}
 	// A constructor returning the runtime code
-	initcode := New().ReturnData(runtime).Bytecode()
+	initcode := New().ReturnData(runtime).Bytes()
 	want = common.FromHex("603060005360ff60015360026000f3")
 	if !bytes.Equal(want, initcode) {
 		t.Fatalf("initcode error\nwant: %x\nhave: %x\n", want, initcode)
 	}
 	// A factory invoking the constructor
-	outer := New().Create2AndCall(initcode, nil).Bytecode()
+	outer := New().Create2AndCall(initcode, nil).Bytes()
 	want = common.FromHex("60606000536030600153606060025360006003536053600453606060055360ff6006536060600753600160085360536009536060600a536002600b536060600c536000600d5360f3600e536000600f60006000f560006000600060006000855af15050")
 	if !bytes.Equal(want, outer) {
 		t.Fatalf("factory error\nwant: %x\nhave: %x\n", want, outer)
+	}
+}
+
+func TestGenerator(t *testing.T) {
+	for i, tc := range []struct {
+		want   []byte
+		haveFn func() []byte
+	}{
+		{ // CREATE
+			want: []byte{
+				// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
+				byte(vm.PUSH5),
+				// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
+				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
+				byte(vm.PUSH1), 0,
+				byte(vm.MSTORE),
+				// length, offset, value
+				byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
+				byte(vm.CREATE),
+				byte(vm.POP),
+			},
+			haveFn: func() []byte {
+				initcode := New().Return(0, 0).Bytes()
+				return New().MstorePadded(initcode, 0).
+					Push(len(initcode)).      // length
+					Push(32 - len(initcode)). // offset
+					Push(0).                  // value
+					Op(vm.CREATE).
+					Op(vm.POP).Bytes()
+			},
+		},
+		{ // CREATE2
+			want: []byte{
+				// Store initcode in memory at 0x00 (5 bytes left-padded to 32 bytes)
+				byte(vm.PUSH5),
+				// Init code: PUSH1 0, PUSH1 0, RETURN (3 steps)
+				byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN),
+				byte(vm.PUSH1), 0,
+				byte(vm.MSTORE),
+				// salt, length, offset, value
+				byte(vm.PUSH1), 1, byte(vm.PUSH1), 5, byte(vm.PUSH1), 27, byte(vm.PUSH1), 0,
+				byte(vm.CREATE2),
+				byte(vm.POP),
+			},
+			haveFn: func() []byte {
+				initcode := New().Return(0, 0).Bytes()
+				return New().MstorePadded(initcode, 0).
+					Push(1).                  // salt
+					Push(len(initcode)).      // length
+					Push(32 - len(initcode)). // offset
+					Push(0).                  // value
+					Op(vm.CREATE2).
+					Op(vm.POP).Bytes()
+			},
+		},
+		{ // CALL
+			want: []byte{
+				// outsize, outoffset, insize, inoffset
+				byte(vm.PUSH1), 0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.DUP1),        // value
+				byte(vm.PUSH1), 0xbb, //address
+				byte(vm.GAS), // gas
+				byte(vm.CALL),
+				byte(vm.POP),
+			},
+			haveFn: func() []byte {
+				return New().Call(nil, 0xbb, 0, 0, 0, 0, 0).Op(vm.POP).Bytes()
+			},
+		},
+		{ // CALLCODE
+			want: []byte{
+				// outsize, outoffset, insize, inoffset
+				byte(vm.PUSH1), 0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0, // value
+				byte(vm.PUSH1), 0xcc, //address
+				byte(vm.GAS), // gas
+				byte(vm.CALLCODE),
+				byte(vm.POP),
+			},
+			haveFn: func() []byte {
+				return New().CallCode(nil, 0xcc, 0, 0, 0, 0, 0).Op(vm.POP).Bytes()
+			},
+		},
+		{ // STATICCALL
+			want: []byte{
+				// outsize, outoffset, insize, inoffset
+				byte(vm.PUSH1), 0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xdd, //address
+				byte(vm.GAS), // gas
+				byte(vm.STATICCALL),
+				byte(vm.POP),
+			},
+			haveFn: func() []byte {
+				return New().StaticCall(nil, 0xdd, 0, 0, 0, 0).Op(vm.POP).Bytes()
+			},
+		},
+		{ // DELEGATECALL
+			want: []byte{
+				// outsize, outoffset, insize, inoffset
+				byte(vm.PUSH1), 0, byte(vm.DUP1), byte(vm.DUP1), byte(vm.DUP1),
+				byte(vm.PUSH1), 0xee, //address
+				byte(vm.GAS), // gas
+				byte(vm.DELEGATECALL),
+				byte(vm.POP),
+			},
+			haveFn: func() []byte {
+				return New().DelegateCall(nil, 0xee, 0, 0, 0, 0).Op(vm.POP).Bytes()
+			},
+		},
+	} {
+		if have := tc.haveFn(); !bytes.Equal(have, tc.want) {
+			t.Fatalf("test %d error\nhave: %x\nwant: %x\n", i, have, tc.want)
+		}
 	}
 }
