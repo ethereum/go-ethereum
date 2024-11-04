@@ -2245,34 +2245,6 @@ func benchmarkBatchInsert(b *testing.B, size int) {
 	}
 }
 
-func BenchmarkInsertRemoteWithAllLocals(b *testing.B) {
-	// Allocate keys for testing
-	key, _ := crypto.GenerateKey()
-	account := crypto.PubkeyToAddress(key.PublicKey)
-
-	remoteKey, _ := crypto.GenerateKey()
-	remoteAddr := crypto.PubkeyToAddress(remoteKey.PublicKey)
-
-	remotes := make([]*types.Transaction, 1000)
-	for i := 0; i < len(remotes); i++ {
-		remotes[i] = pricedTransaction(uint64(i), 100000, big.NewInt(2), remoteKey) // Higher gasprice
-	}
-	// Benchmark importing the transactions into the queue
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		pool, _ := setupPool()
-		testAddBalance(pool, account, big.NewInt(100000000))
-		b.StartTimer()
-		// Assign a high enough balance for testing
-		testAddBalance(pool, remoteAddr, big.NewInt(100000000))
-		for i := 0; i < len(remotes); i++ {
-			pool.addRemotes([]*types.Transaction{remotes[i]})
-		}
-		pool.Close()
-	}
-}
-
 // Benchmarks the speed of batch transaction insertion in case of multiple accounts.
 func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	// Generate a batch of transactions to enqueue into the pool

@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package legacypool implements the normal EVM execution transaction pool.
-package tracking
+package tracker
 
 import (
 	"sync"
@@ -48,19 +48,18 @@ type TxTracker struct {
 	signer    types.Signer
 
 	shutdownCh chan struct{}
-	triggerCh  chan struct{}
 	mu         sync.Mutex
 	wg         sync.WaitGroup
 }
 
-func NewTxTracker(journalPath string, journalTime time.Duration, chainConfig *params.ChainConfig, next *txpool.TxPool) *TxTracker {
+// New creates a new TxTracker
+func New(journalPath string, journalTime time.Duration, chainConfig *params.ChainConfig, next *txpool.TxPool) *TxTracker {
 	signer := types.LatestSigner(chainConfig)
 	pool := &TxTracker{
 		all:        make(map[common.Hash]*types.Transaction),
 		byAddr:     make(map[common.Address]*legacypool.SortedMap),
 		signer:     signer,
 		shutdownCh: make(chan struct{}),
-		triggerCh:  make(chan struct{}),
 		pool:       next,
 	}
 	if journalPath != "" {
@@ -148,20 +147,13 @@ func (tracker *TxTracker) Start() error {
 	return nil
 }
 
-// Start implements node.Lifecycle interface
+// Stop implements node.Lifecycle interface
 // Stop terminates all goroutines belonging to the service, blocking until they
 // are all terminated.
 func (tracker *TxTracker) Stop() error {
 	close(tracker.shutdownCh)
 	tracker.wg.Wait()
 	return nil
-}
-
-// TriggerRecheck triggers a recheck, whereby the tracker potentially resubmits
-// transactions to the tx pool. This method is mainly useful for test purposes,
-// in order to speed up the process.
-func (tracker *TxTracker) TriggerRecheck() {
-	tracker.triggerCh <- struct{}{}
 }
 
 func (tracker *TxTracker) loop() {
@@ -180,11 +172,6 @@ func (tracker *TxTracker) loop() {
 		select {
 		case <-tracker.shutdownCh:
 			return
-		case <-tracker.triggerCh:
-			resubmits, _ := tracker.recheck(false)
-			if len(resubmits) > 0 {
-				tracker.pool.Add(resubmits, false)
-			}
 		case <-t.C:
 			checkJournal := tracker.journal != nil && time.Since(lastJournal) > tracker.rejournal
 			resubmits, rejournal := tracker.recheck(checkJournal)

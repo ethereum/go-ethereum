@@ -1699,13 +1699,6 @@ func (p *BlobPool) ContentFrom(addr common.Address) ([]*types.Transaction, []*ty
 	return []*types.Transaction{}, []*types.Transaction{}
 }
 
-// Locals retrieves the accounts currently considered local by the pool.
-//
-// There is no notion of local accounts in the blob pool.
-func (p *BlobPool) Locals() []common.Address {
-	return []common.Address{}
-}
-
 // Status returns the known status (unknown/pending/queued) of a transaction
 // identified by their hashes.
 func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
