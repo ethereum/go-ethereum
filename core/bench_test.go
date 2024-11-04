@@ -81,9 +81,15 @@ var (
 // value-transfer transaction with n bytes of extra data in each
 // block.
 func genValueTx(nbytes int) func(int, *BlockGen) {
+	// We can reuse the data for all transactions.
+	// During signing, the method tx.WithSignature(s, sig)
+	// performs:
+	// 	cpy := tx.inner.copy()
+	//	cpy.setSignatureValues(signer.ChainID(), v, r, s)
+	// After this operation, the data can be reused by the caller.
+	data := make([]byte, nbytes)
 	return func(i int, gen *BlockGen) {
 		toaddr := common.Address{}
-		data := make([]byte, nbytes)
 		gas, _ := IntrinsicGas(data, nil, false, false, false, false)
 		signer := gen.Signer()
 		gasPrice := big.NewInt(0)
@@ -210,15 +216,27 @@ func BenchmarkChainRead_full_10k(b *testing.B) {
 	benchReadChain(b, true, 10000)
 }
 func BenchmarkChainRead_header_100k(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
 	benchReadChain(b, false, 100000)
 }
 func BenchmarkChainRead_full_100k(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
 	benchReadChain(b, true, 100000)
 }
 func BenchmarkChainRead_header_500k(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
 	benchReadChain(b, false, 500000)
 }
 func BenchmarkChainRead_full_500k(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
 	benchReadChain(b, true, 500000)
 }
 func BenchmarkChainWrite_header_10k(b *testing.B) {
@@ -234,9 +252,15 @@ func BenchmarkChainWrite_full_100k(b *testing.B) {
 	benchWriteChain(b, true, 100000)
 }
 func BenchmarkChainWrite_header_500k(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
 	benchWriteChain(b, false, 500000)
 }
 func BenchmarkChainWrite_full_500k(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
 	benchWriteChain(b, true, 500000)
 }
 
