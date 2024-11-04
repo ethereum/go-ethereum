@@ -477,7 +477,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 
 	p, lbl = program.New().Jumpdest()
 	loopingCode2 := p.
-		Push(0x01020304).Push(0x0102030405).
+		Push(0x01020304).Push(uint64(0x0102030405)).
 		Ops(vm.POP, vm.POP).
 		Op(vm.PUSH6).Append(make([]byte, 6)).Op(vm.JUMP). // Jumpdest zero expressed in 6 bytes
 		Bytecode()
