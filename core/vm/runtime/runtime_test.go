@@ -442,30 +442,22 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	// Call identity, and pop return value
 	staticCallIdentity := p.
 		StaticCall(nil, 0x4, 0, 0, 0, 0).
-		Op(vm.POP). // pop return value
-		Jump(lbl).  // jump to label
-		Bytecode()
+		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	callIdentity := p.
 		Call(nil, 0x4, 0, 0, 0, 0, 0).
-		Op(vm.POP). // pop return value
-		Jump(lbl).  // jump to label
-		Bytecode()
+		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	callInexistant := p.
 		Call(nil, 0xff, 0, 0, 0, 0, 0).
-		Op(vm.POP). // pop return value
-		Jump(lbl).  // jump to label
-		Bytecode()
+		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	callEOA := p.
 		Call(nil, 0xE0, 0, 0, 0, 0, 0). // call addr of EOA
-		Op(vm.POP).                     // pop return value
-		Jump(lbl).                      // jump to label
-		Bytecode()
+		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	// Push as if we were making call, then pop it off again, and loop
@@ -485,9 +477,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	p, lbl = program.New().Jumpdest()
 	callRevertingContractWithInput := p.
 		Call(nil, 0xee, 0, 0, 0x20, 0x0, 0x0).
-		Op(vm.POP).
-		Jump(lbl).
-		Bytecode()
+		Op(vm.POP).Jump(lbl).Bytecode() // pop return value and jump to label
 
 	//tracer := logger.NewJSONLogger(nil, os.Stdout)
 	//Execute(loopingCode, nil, &Config{
