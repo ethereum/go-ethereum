@@ -14,6 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the goevmlab library. If not, see <http://www.gnu.org/licenses/>.
 
+// package program is a utility to create EVM bytecode for testing, but _not_ for production. As such:
+//
+// - There are not package guarantees. We might iterate heavily on this package, and do backwards-incompatible changes without warning
+// - There are no quality-guarantees. These utilities may produce evm-code that is non-functional. YMMV.
+// - There are no stability-guarantees. The utility will `panic` if the inputs do not align / make sense.
 package program
 
 import (
