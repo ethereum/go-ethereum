@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm/program"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
@@ -436,110 +437,57 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 // BenchmarkSimpleLoop test a pretty simple loop which loops until OOG
 // 55 ms
 func BenchmarkSimpleLoop(b *testing.B) {
-	staticCallIdentity := []byte{
-		byte(vm.JUMPDEST), //  [ count ]
-		// push args for the call
-		byte(vm.PUSH1), 0, // out size
-		byte(vm.DUP1),       // out offset
-		byte(vm.DUP1),       // out insize
-		byte(vm.DUP1),       // in offset
-		byte(vm.PUSH1), 0x4, // address of identity
-		byte(vm.GAS), // gas
-		byte(vm.STATICCALL),
-		byte(vm.POP),      // pop return value
-		byte(vm.PUSH1), 0, // jumpdestination
-		byte(vm.JUMP),
-	}
 
-	callIdentity := []byte{
-		byte(vm.JUMPDEST), //  [ count ]
-		// push args for the call
-		byte(vm.PUSH1), 0, // out size
-		byte(vm.DUP1),       // out offset
-		byte(vm.DUP1),       // out insize
-		byte(vm.DUP1),       // in offset
-		byte(vm.DUP1),       // value
-		byte(vm.PUSH1), 0x4, // address of identity
-		byte(vm.GAS), // gas
-		byte(vm.CALL),
-		byte(vm.POP),      // pop return value
-		byte(vm.PUSH1), 0, // jumpdestination
-		byte(vm.JUMP),
-	}
+	p, lbl := program.New().Jumpdest()
+	// Call identity, and pop return value
+	staticCallIdentity := p.
+		StaticCall(nil, 0x4, 0, 0, 0, 0).
+		Op(vm.POP). // pop return value
+		Jump(lbl).  // jump to label
+		Bytecode()
 
-	callInexistant := []byte{
-		byte(vm.JUMPDEST), //  [ count ]
-		// push args for the call
-		byte(vm.PUSH1), 0, // out size
-		byte(vm.DUP1),        // out offset
-		byte(vm.DUP1),        // out insize
-		byte(vm.DUP1),        // in offset
-		byte(vm.DUP1),        // value
-		byte(vm.PUSH1), 0xff, // address of existing contract
-		byte(vm.GAS), // gas
-		byte(vm.CALL),
-		byte(vm.POP),      // pop return value
-		byte(vm.PUSH1), 0, // jumpdestination
-		byte(vm.JUMP),
-	}
+	p, lbl = program.New().Jumpdest()
+	callIdentity := p.
+		Call(nil, 0x4, 0, 0, 0, 0, 0).
+		Op(vm.POP). // pop return value
+		Jump(lbl).  // jump to label
+		Bytecode()
 
-	callEOA := []byte{
-		byte(vm.JUMPDEST), //  [ count ]
-		// push args for the call
-		byte(vm.PUSH1), 0, // out size
-		byte(vm.DUP1),        // out offset
-		byte(vm.DUP1),        // out insize
-		byte(vm.DUP1),        // in offset
-		byte(vm.DUP1),        // value
-		byte(vm.PUSH1), 0xE0, // address of EOA
-		byte(vm.GAS), // gas
-		byte(vm.CALL),
-		byte(vm.POP),      // pop return value
-		byte(vm.PUSH1), 0, // jumpdestination
-		byte(vm.JUMP),
-	}
+	p, lbl = program.New().Jumpdest()
+	callInexistant := p.
+		Call(nil, 0xff, 0, 0, 0, 0, 0).
+		Op(vm.POP). // pop return value
+		Jump(lbl).  // jump to label
+		Bytecode()
 
-	loopingCode := []byte{
-		byte(vm.JUMPDEST), //  [ count ]
-		// push args for the call
-		byte(vm.PUSH1), 0, // out size
-		byte(vm.DUP1),       // out offset
-		byte(vm.DUP1),       // out insize
-		byte(vm.DUP1),       // in offset
-		byte(vm.PUSH1), 0x4, // address of identity
-		byte(vm.GAS), // gas
+	p, lbl = program.New().Jumpdest()
+	callEOA := p.
+		Call(nil, 0xE0, 0, 0, 0, 0, 0). // call addr of EOA
+		Op(vm.POP).                     // pop return value
+		Jump(lbl).                      // jump to label
+		Bytecode()
 
-		byte(vm.POP), byte(vm.POP), byte(vm.POP), byte(vm.POP), byte(vm.POP), byte(vm.POP),
-		byte(vm.PUSH1), 0, // jumpdestination
-		byte(vm.JUMP),
-	}
+	p, lbl = program.New().Jumpdest()
+	// Push as if we were making call, then pop it off again, and loop
+	loopingCode := p.Push(0).
+		Ops(vm.DUP1, vm.DUP1, vm.DUP1).
+		Push(0x4).
+		Ops(vm.GAS, vm.POP, vm.POP, vm.POP, vm.POP, vm.POP, vm.POP).
+		Jump(lbl).Bytecode()
 
-	loopingCode2 := []byte{
-		byte(vm.JUMPDEST), //  [ count ]
-		// push args for the call
-		byte(vm.PUSH4), 1, 2, 3, 4,
-		byte(vm.PUSH5), 1, 2, 3, 4, 5,
+	p, lbl = program.New().Jumpdest()
+	loopingCode2 := p.
+		Push(0x01020304).Push(0x0102030405).
+		Ops(vm.POP, vm.POP).
+		Op(vm.PUSH6).Append(make([]byte, 6)).Op(vm.JUMP). // Jumpdest zero expressed in 6 bytes
+		Bytecode()
 
-		byte(vm.POP), byte(vm.POP),
-		byte(vm.PUSH6), 0, 0, 0, 0, 0, 0, // jumpdestination
-		byte(vm.JUMP),
-	}
-
-	callRevertingContractWithInput := []byte{
-		byte(vm.JUMPDEST), //
-		// push args for the call
-		byte(vm.PUSH1), 0, // out size
-		byte(vm.DUP1),        // out offset
-		byte(vm.PUSH1), 0x20, // in size
-		byte(vm.PUSH1), 0x00, // in offset
-		byte(vm.PUSH1), 0x00, // value
-		byte(vm.PUSH1), 0xEE, // address of reverting contract
-		byte(vm.GAS), // gas
-		byte(vm.CALL),
-		byte(vm.POP),      // pop return value
-		byte(vm.PUSH1), 0, // jumpdestination
-		byte(vm.JUMP),
-	}
+	p, lbl = program.New().Jumpdest()
+	callRevertingContractWithInput := p.
+		Call(nil, 0xee, 0, 0, 0x20, 0x0, 0x0).
+		Op(vm.POP).
+		Jump(lbl).
+		Bytecode()
 
 	//tracer := logger.NewJSONLogger(nil, os.Stdout)
 	//Execute(loopingCode, nil, &Config{

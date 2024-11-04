@@ -149,11 +149,11 @@ func (p *Program) ExtcodeCopy(address, memOffset, codeOffset, length any) *Progr
 // Call is a convenience function to make a call. If 'gas' is nil, the opcode GAS will
 // be used to provide all gas.
 func (p *Program) Call(gas *big.Int, address, value, inOffset, inSize, outOffset, outSize any) *Program {
-	p.Push(outSize)
-	p.Push(outOffset)
-	p.Push(inSize)
-	p.Push(inOffset)
-	p.Push(value)
+	if outOffset == outSize && inSize == outSize && inOffset == outSize && value == outSize {
+		p.Push(outSize).Ops(vm.DUP1, vm.DUP1, vm.DUP1, vm.DUP1)
+	} else {
+		p.Push(outSize).Push(outOffset).Push(inSize).Push(inOffset).Push(value)
+	}
 	p.Push(address)
 	if gas == nil {
 		p.Op(vm.GAS)
@@ -166,10 +166,11 @@ func (p *Program) Call(gas *big.Int, address, value, inOffset, inSize, outOffset
 // DelegateCall is a convenience function to make a delegatecall. If 'gas' is nil, the opcode GAS will
 // be used to provide all gas.
 func (p *Program) DelegateCall(gas *big.Int, address, inOffset, inSize, outOffset, outSize any) *Program {
-	p.Push(outSize)
-	p.Push(outOffset)
-	p.Push(inSize)
-	p.Push(inOffset)
+	if outOffset == outSize && inSize == outSize && inOffset == outSize {
+		p.Push(outSize).Ops(vm.DUP1, vm.DUP1, vm.DUP1)
+	} else {
+		p.Push(outSize).Push(outOffset).Push(inSize).Push(inOffset)
+	}
 	p.Push(address)
 	if gas == nil {
 		p.Op(vm.GAS)
@@ -182,10 +183,11 @@ func (p *Program) DelegateCall(gas *big.Int, address, inOffset, inSize, outOffse
 // StaticCall is a convenience function to make a staticcall. If 'gas' is nil, the opcode GAS will
 // be used to provide all gas.
 func (p *Program) StaticCall(gas *big.Int, address, inOffset, inSize, outOffset, outSize any) *Program {
-	p.Push(outSize)
-	p.Push(outOffset)
-	p.Push(inSize)
-	p.Push(inOffset)
+	if outOffset == outSize && inSize == outSize && inOffset == outSize {
+		p.Push(outSize).Ops(vm.DUP1, vm.DUP1, vm.DUP1)
+	} else {
+		p.Push(outSize).Push(outOffset).Push(inSize).Push(inOffset)
+	}
 	p.Push(address)
 	if gas == nil {
 		p.Op(vm.GAS)
@@ -198,10 +200,11 @@ func (p *Program) StaticCall(gas *big.Int, address, inOffset, inSize, outOffset,
 // StaticCall is a convenience function to make a callcode. If 'gas' is nil, the opcode GAS will
 // be used to provide all gas.
 func (p *Program) CallCode(gas *big.Int, address, value, inOffset, inSize, outOffset, outSize any) *Program {
-	p.Push(outSize)
-	p.Push(outOffset)
-	p.Push(inSize)
-	p.Push(inOffset)
+	if outOffset == outSize && inSize == outSize && inOffset == outSize {
+		p.Push(outSize).Ops(vm.DUP1, vm.DUP1, vm.DUP1)
+	} else {
+		p.Push(outSize).Push(outOffset).Push(inSize).Push(inOffset)
+	}
 	p.Push(value)
 	p.Push(address)
 	if gas == nil {
@@ -218,16 +221,17 @@ func (p *Program) Label() uint64 {
 }
 
 // Jumpdest adds a JUMPDEST op, and returns the PC of that instruction
-func (p *Program) Jumpdest() uint64 {
+func (p *Program) Jumpdest() (*Program, uint64) {
 	here := p.Label()
 	p.Op(vm.JUMPDEST)
-	return here
+	return p, here
 }
 
 // Jump pushes the destination and adds a JUMP
-func (p *Program) Jump(loc any) {
+func (p *Program) Jump(loc any) *Program {
 	p.Push(loc)
 	p.Op(vm.JUMP)
+	return p
 }
 
 // Jump pushes the destination and adds a JUMP
