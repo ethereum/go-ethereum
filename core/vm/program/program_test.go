@@ -17,12 +17,141 @@
 package program
 
 import (
+	"bytes"
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-
-	"bytes"
-	"testing"
 )
+
+func TestPush(t *testing.T) {
+	tests := []struct {
+		input    interface{}
+		expected string
+	}{
+		// native ints
+		{0, "6000"},
+		{nil, "6000"},
+		{uint64(1), "6001"},
+		{0xfff, "610fff"},
+		// bigints
+		{big.NewInt(0), "6000"},
+		{big.NewInt(1), "6001"},
+		{big.NewInt(0xfff), "610fff"},
+		// Addresses
+		{common.HexToAddress("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "73deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"},
+		{&common.Address{}, "6000"},
+	}
+	for i, tc := range tests {
+		have := New().Push(tc.input).Hex()
+		if have != tc.expected {
+			t.Errorf("test %d: got %v expected %v", i, have, tc.expected)
+		}
+	}
+}
+
+func TestCall(t *testing.T) {
+	{ // Nil gas
+		have := New().Call(nil, common.HexToAddress("0x1337"), big.NewInt(1), 1, 2, 3, 4).Hex()
+		want := "600460036002600160016113375af1"
+		if have != want {
+			t.Errorf("have %v want %v", have, want)
+		}
+	}
+	{ // Non nil gas
+		have := New().Call(big.NewInt(0xffff), common.HexToAddress("0x1337"), big.NewInt(1), 1, 2, 3, 4).Hex()
+		want := "6004600360026001600161133761fffff1"
+		if have != want {
+			t.Errorf("have %v want %v", have, want)
+		}
+	}
+}
+
+func TestMstore(t *testing.T) {
+	{
+		have := New().Mstore(common.FromHex("0xaabb"), 0).Hex()
+		want := "60aa60005360bb600153"
+		if have != want {
+			t.Errorf("have %v want %v", have, want)
+		}
+	}
+	{ // store at offset
+		have := New().Mstore(common.FromHex("0xaabb"), 3).Hex()
+		want := "60aa60035360bb600453"
+		if have != want {
+			t.Errorf("have %v want %v", have, want)
+		}
+	}
+	{ // 34 bytes
+		data := common.FromHex("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" +
+			"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" +
+			"FFFF")
+
+		have := New().Mstore(data, 0).Hex()
+		want := "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60005260ff60205360ff602153"
+		if have != want {
+			t.Errorf("have %v want %v", have, want)
+		}
+	}
+}
+
+func TestMemToStorage(t *testing.T) {
+	have := New().MemToStorage(0, 33, 1).Hex()
+	want := "600051600155602051600255"
+	if have != want {
+		t.Errorf("have %v want %v", have, want)
+	}
+}
+
+func TestSstore(t *testing.T) {
+	have := New().Sstore(0x1337, []byte("1234")).Hex()
+	want := "633132333461133755"
+	if have != want {
+		t.Errorf("have %v want %v", have, want)
+	}
+}
+
+func TestReturnData(t *testing.T) {
+	{
+		have := New().ReturnData([]byte{0xFF}).Hex()
+		want := "60ff60005360016000f3"
+		if have != want {
+			t.Errorf("have %v want %v", have, want)
+		}
+	}
+	{
+		// 32 bytes
+		data := common.FromHex("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+		have := New().ReturnData(data).Hex()
+		want := "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60005260206000f3"
+		if have != want {
+			t.Errorf("have %v want %v", have, want)
+		}
+	}
+}
+
+func TestCreateAndCall(t *testing.T) {
+	// A constructor that stores a slot
+	ctor := New().Sstore(0, big.NewInt(5))
+
+	// A runtime bytecode which reads the slot and returns
+	deployed := New()
+	deployed.Push(0).Op(vm.SLOAD) // [value] in stack
+	deployed.Push(0)              // [value, 0]
+	deployed.Op(vm.MSTORE)
+	deployed.Return(0, 32)
+
+	// Pack them
+	ctor.ReturnData(deployed.Bytecode())
+	// Verify constructor + runtime code
+	{
+		want := "6005600055606060005360006001536054600253606060035360006004536052600553606060065360206007536060600853600060095360f3600a53600b6000f3"
+		if got := ctor.Hex(); got != want {
+			t.Fatalf("1: got %v expected %v", got, want)
+		}
+	}
+}
 
 func TestCreate2Call(t *testing.T) {
 	// Some runtime code

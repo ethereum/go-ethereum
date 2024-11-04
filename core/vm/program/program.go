@@ -138,17 +138,17 @@ func (p *Program) Hex() string {
 }
 
 // ExtcodeCopy performsa an extcodecopy invocation
-func (p *Program) ExtcodeCopy(address, memOffset, codeOffset, length any) {
+func (p *Program) ExtcodeCopy(address, memOffset, codeOffset, length any) *Program {
 	p.Push(length)
 	p.Push(codeOffset)
 	p.Push(memOffset)
 	p.Push(address)
-	p.Op(vm.EXTCODECOPY)
+	return p.Op(vm.EXTCODECOPY)
 }
 
 // Call is a convenience function to make a call. If 'gas' is nil, the opcode GAS will
 // be used to provide all gas.
-func (p *Program) Call(gas *big.Int, address, value, inOffset, inSize, outOffset, outSize any) {
+func (p *Program) Call(gas *big.Int, address, value, inOffset, inSize, outOffset, outSize any) *Program {
 	p.Push(outSize)
 	p.Push(outOffset)
 	p.Push(inSize)
@@ -160,12 +160,12 @@ func (p *Program) Call(gas *big.Int, address, value, inOffset, inSize, outOffset
 	} else {
 		p.pushBig(gas)
 	}
-	p.Op(vm.CALL)
+	return p.Op(vm.CALL)
 }
 
 // DelegateCall is a convenience function to make a delegatecall. If 'gas' is nil, the opcode GAS will
 // be used to provide all gas.
-func (p *Program) DelegateCall(gas *big.Int, address, inOffset, inSize, outOffset, outSize any) {
+func (p *Program) DelegateCall(gas *big.Int, address, inOffset, inSize, outOffset, outSize any) *Program {
 	p.Push(outSize)
 	p.Push(outOffset)
 	p.Push(inSize)
@@ -176,12 +176,12 @@ func (p *Program) DelegateCall(gas *big.Int, address, inOffset, inSize, outOffse
 	} else {
 		p.pushBig(gas)
 	}
-	p.Op(vm.DELEGATECALL)
+	return p.Op(vm.DELEGATECALL)
 }
 
 // StaticCall is a convenience function to make a staticcall. If 'gas' is nil, the opcode GAS will
 // be used to provide all gas.
-func (p *Program) StaticCall(gas *big.Int, address, inOffset, inSize, outOffset, outSize any) {
+func (p *Program) StaticCall(gas *big.Int, address, inOffset, inSize, outOffset, outSize any) *Program {
 	p.Push(outSize)
 	p.Push(outOffset)
 	p.Push(inSize)
@@ -192,12 +192,12 @@ func (p *Program) StaticCall(gas *big.Int, address, inOffset, inSize, outOffset,
 	} else {
 		p.pushBig(gas)
 	}
-	p.Op(vm.STATICCALL)
+	return p.Op(vm.STATICCALL)
 }
 
 // StaticCall is a convenience function to make a callcode. If 'gas' is nil, the opcode GAS will
 // be used to provide all gas.
-func (p *Program) CallCode(gas *big.Int, address, value, inOffset, inSize, outOffset, outSize any) {
+func (p *Program) CallCode(gas *big.Int, address, value, inOffset, inSize, outOffset, outSize any) *Program {
 	p.Push(outSize)
 	p.Push(outOffset)
 	p.Push(inSize)
@@ -209,7 +209,7 @@ func (p *Program) CallCode(gas *big.Int, address, value, inOffset, inSize, outOf
 	} else {
 		p.pushBig(gas)
 	}
-	p.Op(vm.CALLCODE)
+	return p.Op(vm.CALLCODE)
 }
 
 // Label returns the PC (of the next instruction)
