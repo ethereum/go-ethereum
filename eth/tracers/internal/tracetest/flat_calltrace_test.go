@@ -42,7 +42,7 @@ type flatCallTraceAction struct {
 	SelfDestructed common.Address `json:"address,omitempty"`
 	Balance        hexutil.Big    `json:"balance,omitempty"`
 	CallType       string         `json:"callType,omitempty"`
-	CreateType     string         `json:"createType,omitempty"`
+	CreationMethod string         `json:"creationMethod,omitempty"`
 	From           common.Address `json:"from,omitempty"`
 	Gas            hexutil.Uint64 `json:"gas,omitempty"`
 	Init           hexutil.Bytes  `json:"init,omitempty"`

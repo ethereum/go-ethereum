@@ -51,7 +51,7 @@
     {
       "type": "create",
       "action": {
-        "createType": "create",
+        "creationMethod": "create",
         "from": "0x877bd459c9b7d8576b44e59e09d076c25946f443",
         "value": "0x0",
         "gas": "0x19ed8",
@@ -73,7 +73,7 @@
     {
       "type": "create",
       "action": {
-        "createType": "create2",
+        "creationMethod": "create2",
         "from": "0x2e8eded627eead210cb6143eb39ef7a3e44e4f00",
         "value": "0x0",
         "gas": "0x5117",
