@@ -240,17 +240,35 @@ func (t *httpServerConn) SetWriteDeadline(time.Time) error { return nil }
 // NewHTTPServer creates a new HTTP RPC server around an API provider.
 //
 // Deprecated: Server implements http.Handler
-func NewHTTPServer(cors []string, vhosts []string, srv *Server, writeTimeout time.Duration) *http.Server {
+func NewHTTPServer(cors []string, vhosts []string, timeouts HTTPTimeouts, srv *Server) *http.Server {
 	// Wrap the CORS-handler within a host-handler
 	handler := newCorsHandler(srv, cors)
 	handler = newVHostHandler(vhosts, handler)
-	handler = http.TimeoutHandler(handler, writeTimeout, `{"error":"http server timeout"}`)
-	log.Info("NewHTTPServer", "writeTimeout", writeTimeout)
+
+	// Make sure timeout values are meaningful
+	if timeouts.ReadTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP read timeout", "provided", timeouts.ReadTimeout, "updated", DefaultHTTPTimeouts.ReadTimeout)
+		timeouts.ReadTimeout = DefaultHTTPTimeouts.ReadTimeout
+	}
+	if timeouts.WriteTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP write timeout", "provided", timeouts.WriteTimeout, "updated", DefaultHTTPTimeouts.WriteTimeout)
+		timeouts.WriteTimeout = DefaultHTTPTimeouts.WriteTimeout
+	}
+	if timeouts.IdleTimeout < time.Second {
+		log.Warn("Sanitizing invalid HTTP idle timeout", "provided", timeouts.IdleTimeout, "updated", DefaultHTTPTimeouts.IdleTimeout)
+		timeouts.IdleTimeout = DefaultHTTPTimeouts.IdleTimeout
+	}
+
+	// PR #469: return http code 503 and error message to client when timeout
+	handler = http.TimeoutHandler(handler, timeouts.WriteTimeout, `{"error":"http server timeout"}`)
+	log.Info("NewHTTPServer", "writeTimeout", timeouts.WriteTimeout)
+
+	// Bundle and start the HTTP server
 	return &http.Server{
 		Handler:      handler,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: writeTimeout + time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  timeouts.ReadTimeout,
+		WriteTimeout: timeouts.WriteTimeout + time.Second,
+		IdleTimeout:  timeouts.IdleTimeout,
 	}
 }
 

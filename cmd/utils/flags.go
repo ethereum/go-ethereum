@@ -435,10 +435,20 @@ var (
 		Usage: "HTTP-RPC server listening port",
 		Value: node.DefaultHTTPPort,
 	}
+	RPCHttpReadTimeoutFlag = cli.DurationFlag{
+		Name:  "rpcreadtimeout",
+		Usage: "HTTP-RPC server read timeout",
+		Value: rpc.DefaultHTTPTimeouts.ReadTimeout,
+	}
 	RPCHttpWriteTimeoutFlag = cli.DurationFlag{
 		Name:  "rpcwritetimeout",
-		Usage: "HTTP-RPC server write timeout (default = 10s)",
-		Value: node.DefaultHTTPWriteTimeOut,
+		Usage: "HTTP-RPC server write timeout",
+		Value: rpc.DefaultHTTPTimeouts.WriteTimeout,
+	}
+	RPCHttpIdleTimeoutFlag = cli.DurationFlag{
+		Name:  "rpcidletimeout",
+		Usage: "HTTP-RPC server idle timeout",
+		Value: rpc.DefaultHTTPTimeouts.IdleTimeout,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -779,8 +789,14 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalIsSet(RPCPortFlag.Name) {
 		cfg.HTTPPort = ctx.GlobalInt(RPCPortFlag.Name)
 	}
+	if ctx.GlobalIsSet(RPCHttpReadTimeoutFlag.Name) {
+		cfg.HTTPTimeouts.ReadTimeout = ctx.GlobalDuration(RPCHttpReadTimeoutFlag.Name)
+	}
 	if ctx.GlobalIsSet(RPCHttpWriteTimeoutFlag.Name) {
-		cfg.HTTPWriteTimeout = ctx.GlobalDuration(RPCHttpWriteTimeoutFlag.Name)
+		cfg.HTTPTimeouts.WriteTimeout = ctx.GlobalDuration(RPCHttpWriteTimeoutFlag.Name)
+	}
+	if ctx.GlobalIsSet(RPCHttpIdleTimeoutFlag.Name) {
+		cfg.HTTPTimeouts.IdleTimeout = ctx.GlobalDuration(RPCHttpIdleTimeoutFlag.Name)
 	}
 	if ctx.GlobalIsSet(RPCCORSDomainFlag.Name) {
 		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(RPCCORSDomainFlag.Name))
