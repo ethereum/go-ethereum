@@ -140,7 +140,7 @@ func (n *Node) Register(constructor ServiceConstructor) error {
 	return nil
 }
 
-// Start create a live P2P node and starts running it.
+// Start creates a live P2P node and starts running it.
 func (n *Node) Start() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
@@ -217,7 +217,7 @@ func (n *Node) Start() error {
 		// Mark the service started for potential cleanup
 		started = append(started, kind)
 	}
-	// Lastly start the configured RPC interfaces
+	// Lastly, start the configured RPC interfaces
 	if err := n.startRPC(services); err != nil {
 		for _, service := range services {
 			service.Stop()
@@ -252,7 +252,7 @@ func (n *Node) openDataDir() error {
 	return nil
 }
 
-// startRPC is a helper method to start all the various RPC endpoint during node
+// startRPC is a helper method to start all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC(services map[reflect.Type]Service) error {
@@ -293,7 +293,7 @@ func (n *Node) startInProc(apis []rpc.API) error {
 		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
-		n.log.Debug("InProc registered", "service", api.Service, "namespace", api.Namespace)
+		n.log.Debug("InProc registered", "namespace", api.Namespace)
 	}
 	n.inprocHandler = handler
 	return nil
@@ -320,22 +320,13 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 
 // startIPC initializes and starts the IPC RPC endpoint.
 func (n *Node) startIPC(apis []rpc.API) error {
-	// Short circuit if the IPC endpoint isn't being exposed
 	if n.ipcEndpoint == "" {
-		return nil
+		return nil // IPC disabled.
 	}
-	isClosed := func() bool {
-		n.lock.RLock()
-		defer n.lock.RUnlock()
-		return n.ipcListener == nil
-	}
-
-	listener, handler, err := rpc.StartIPCEndpoint(isClosed, n.ipcEndpoint, apis)
+	listener, handler, err := rpc.StartIPCEndpoint(n.ipcEndpoint, apis)
 	if err != nil {
 		return err
 	}
-
-	// All listeners booted successfully
 	n.ipcListener = listener
 	n.ipcHandler = handler
 	log.Info("IPC endpoint opened", "url", n.ipcEndpoint)
@@ -348,7 +339,7 @@ func (n *Node) stopIPC() {
 		n.ipcListener.Close()
 		n.ipcListener = nil
 
-		n.log.Info("IPC endpoint closed", "endpoint", n.ipcEndpoint)
+		n.log.Info("IPC endpoint closed", "url", n.ipcEndpoint)
 	}
 	if n.ipcHandler != nil {
 		n.ipcHandler.Stop()

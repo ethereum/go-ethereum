@@ -80,11 +80,10 @@ func StartWSEndpoint(endpoint string, apis []API, modules []string, wsOrigins []
 	}
 	go NewWSServer(wsOrigins, handler).Serve(listener)
 	return listener, handler, err
-
 }
 
 // StartIPCEndpoint starts an IPC endpoint.
-func StartIPCEndpoint(isClosedFn func() bool, ipcEndpoint string, apis []API) (net.Listener, *Server, error) {
+func StartIPCEndpoint(ipcEndpoint string, apis []API) (net.Listener, *Server, error) {
 	// Register all the APIs exposed by the services.
 	var (
 		handler    = NewServer()
@@ -104,30 +103,10 @@ func StartIPCEndpoint(isClosedFn func() bool, ipcEndpoint string, apis []API) (n
 	}
 	log.Debug("IPCs registered", "namespaces", strings.Join(registered, ","))
 	// All APIs registered, start the IPC listener.
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = CreateIPCListener(ipcEndpoint); err != nil {
+	listener, err := ipcListen(ipcEndpoint)
+	if err != nil {
 		return nil, nil, err
 	}
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				// Terminate if the listener was closed
-				if isClosedFn() {
-					log.Info("IPC closed", "err", err)
-					return
-				}
-				// Not closed, just some error; report and continue
-				log.Error("IPC accept failed", "err", err)
-				continue
-			}
-			log.Trace("Accepted RPC connection", "conn", conn.RemoteAddr())
-			go handler.ServeCodec(NewCodec(conn), 0)
-		}
-	}()
-
+	go handler.ServeListener(listener)
 	return listener, handler, nil
 }

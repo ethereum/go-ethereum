@@ -24,23 +24,17 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/p2p/netutil"
 )
 
-// CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on
-// Windows this is a named pipe
-func CreateIPCListener(endpoint string) (net.Listener, error) {
-	return ipcListen(endpoint)
-}
-
-// ServeListener accepts connections on l, serving JSON-RPC on them.
+// ServeListener accepts connections on l, serving IPC-RPC on them.
 func (s *Server) ServeListener(l net.Listener) error {
 	for {
 		conn, err := l.Accept()
 		if netutil.IsTemporaryError(err) {
-			log.Warn("RPC accept error", "err", err)
+			log.Warn("IPC accept error", "err", err)
 			continue
 		} else if err != nil {
 			return err
 		}
-		log.Trace("Accepted RPC connection", "conn", conn.RemoteAddr())
+		log.Trace("IPC accepted connection")
 		go s.ServeCodec(NewCodec(conn), 0)
 	}
 }
