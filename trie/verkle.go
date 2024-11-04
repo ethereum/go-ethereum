@@ -170,8 +170,6 @@ func (t *VerkleTrie) UpdateStorage(address common.Address, key, value []byte) er
 	return t.root.Insert(k, v[:], t.nodeResolver)
 }
 
-var zero32 [32]byte
-
 // DeleteAccount leaves the account untouched, as no account deletion can happen
 // in verkle.
 // There is a special corner case, in which an account that is prefunded, CREATE2-d
