@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"github.com/ethereum/go-ethereum/internal/debug"
 	"net"
 	"net/http"
 	"os/signal"
@@ -105,7 +106,7 @@ var (
 
 func init() {
 	app.Action = shisui
-	app.Flags = slices.Concat(portalProtocolFlags, historyRpcFlags, metricsFlags)
+	app.Flags = slices.Concat(portalProtocolFlags, historyRpcFlags, metricsFlags, debug.Flags)
 	flags.AutoEnvVars(app.Flags, "SHISUI")
 }
 
@@ -121,6 +122,9 @@ func shisui(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	go func() {
+		debug.Setup(ctx)
+	}()
 
 	// Start metrics export if enabled
 	utils.SetupMetrics(ctx)
