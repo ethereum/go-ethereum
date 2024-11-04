@@ -968,9 +968,9 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiary(t *testing.T) {
 		contract   = crypto.CreateAddress(deployer, 0)
 	)
 
-	// The goal of this test is to test SELFDESTRUCT that happens in a contract
-	// execution which is created in **the same** transaction sending the remaining
-	// balance to itself.
+	// The goal of this test is to test SELFDESTRUCT that happens while executing
+	// the init code of a contract creation, that occurs in **the same** transaction.
+	// The balance is sent to itself.
 	t.Logf("Contract: %v", contract.String())
 
 	selfDestructContract := []byte{byte(vm.ADDRESS), byte(vm.SELFDESTRUCT)}
