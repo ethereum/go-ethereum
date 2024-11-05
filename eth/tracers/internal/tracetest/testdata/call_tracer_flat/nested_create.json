@@ -51,6 +51,7 @@
     {
       "type": "create",
       "action": {
+        "creationMethod": "create",
         "from": "0x877bd459c9b7d8576b44e59e09d076c25946f443",
         "value": "0x0",
         "gas": "0x53e90",
@@ -71,6 +72,7 @@
     {
       "type": "create",
       "action": {
+        "creationMethod": "create",
         "from": "0x9db7a1baf185a865ffee3824946ccd8958191e5e",
         "value": "0x0",
         "gas": "0x30b34",
