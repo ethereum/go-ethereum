@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/holiman/uint256"
 )
 
 func TestPush(t *testing.T) {
@@ -32,13 +33,19 @@ func TestPush(t *testing.T) {
 	}{
 		// native ints
 		{0, "6000"},
-		{nil, "6000"},
-		{uint64(1), "6001"},
 		{0xfff, "610fff"},
+		{nil, "6000"},
+		{uint8(1), "6001"},
+		{uint16(1), "6001"},
+		{uint32(1), "6001"},
+		{uint64(1), "6001"},
 		// bigints
 		{big.NewInt(0), "6000"},
 		{big.NewInt(1), "6001"},
 		{big.NewInt(0xfff), "610fff"},
+		// uint256
+		{uint256.NewInt(1), "6001"},
+		{uint256.Int{1, 0, 0, 0}, "6001"},
 		// Addresses
 		{common.HexToAddress("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"), "73deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"},
 		{&common.Address{}, "6000"},
@@ -60,7 +67,7 @@ func TestCall(t *testing.T) {
 		}
 	}
 	{ // Non nil gas
-		have := New().Call(big.NewInt(0xffff), common.HexToAddress("0x1337"), big.NewInt(1), 1, 2, 3, 4).Hex()
+		have := New().Call(uint256.NewInt(0xffff), common.HexToAddress("0x1337"), big.NewInt(1), 1, 2, 3, 4).Hex()
 		want := "6004600360026001600161133761fffff1"
 		if have != want {
 			t.Errorf("have %v want %v", have, want)
@@ -171,7 +178,7 @@ func TestCreateAndCall(t *testing.T) {
 
 func TestCreate2Call(t *testing.T) {
 	// Some runtime code
-	runtime := New().Ops(vm.ADDRESS, vm.SELFDESTRUCT).Bytes()
+	runtime := New().Op(vm.ADDRESS, vm.SELFDESTRUCT).Bytes()
 	want := common.FromHex("0x30ff")
 	if !bytes.Equal(want, runtime) {
 		t.Fatalf("runtime code error\nwant: %x\nhave: %x\n", want, runtime)
@@ -183,7 +190,7 @@ func TestCreate2Call(t *testing.T) {
 		t.Fatalf("initcode error\nwant: %x\nhave: %x\n", want, initcode)
 	}
 	// A factory invoking the constructor
-	outer := New().Create2AndCall(initcode, nil).Bytes()
+	outer := New().Create2ThenCall(initcode, nil).Bytes()
 	want = common.FromHex("60606000536030600153606060025360006003536053600453606060055360ff6006536060600753600160085360536009536060600a536002600b536060600c536000600d5360f3600e536000600f60006000f560006000600060006000855af15050")
 	if !bytes.Equal(want, outer) {
 		t.Fatalf("factory error\nwant: %x\nhave: %x\n", want, outer)
@@ -211,9 +218,9 @@ func TestGenerator(t *testing.T) {
 			haveFn: func() []byte {
 				initcode := New().Return(0, 0).Bytes()
 				return New().MstoreSmall(initcode, 0).
-					Push(len(initcode)). // length
+					Push(len(initcode)).      // length
 					Push(32 - len(initcode)). // offset
-					Push(0). // value
+					Push(0).                  // value
 					Op(vm.CREATE).
 					Op(vm.POP).Bytes()
 			},
@@ -234,10 +241,10 @@ func TestGenerator(t *testing.T) {
 			haveFn: func() []byte {
 				initcode := New().Return(0, 0).Bytes()
 				return New().MstoreSmall(initcode, 0).
-					Push(1). // salt
-					Push(len(initcode)). // length
+					Push(1).                  // salt
+					Push(len(initcode)).      // length
 					Push(32 - len(initcode)). // offset
-					Push(0). // value
+					Push(0).                  // value
 					Op(vm.CREATE2).
 					Op(vm.POP).Bytes()
 			},

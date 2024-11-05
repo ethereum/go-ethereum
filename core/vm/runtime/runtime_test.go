@@ -437,7 +437,6 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 // BenchmarkSimpleLoop test a pretty simple loop which loops until OOG
 // 55 ms
 func BenchmarkSimpleLoop(b *testing.B) {
-
 	p, lbl := program.New().Jumpdest()
 	// Call identity, and pop return value
 	staticCallIdentity := p.
@@ -457,22 +456,22 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	p, lbl = program.New().Jumpdest()
 	callEOA := p.
 		Call(nil, 0xE0, 0, 0, 0, 0, 0). // call addr of EOA
-		Op(vm.POP).Jump(lbl).Bytes() // pop return value and jump to label
+		Op(vm.POP).Jump(lbl).Bytes()    // pop return value and jump to label
 
 	p, lbl = program.New().Jumpdest()
 	// Push as if we were making call, then pop it off again, and loop
 	loopingCode := p.Push(0).
-		Ops(vm.DUP1, vm.DUP1, vm.DUP1).
+		Op(vm.DUP1, vm.DUP1, vm.DUP1).
 		Push(0x4).
-		Ops(vm.GAS, vm.POP, vm.POP, vm.POP, vm.POP, vm.POP, vm.POP).
+		Op(vm.GAS, vm.POP, vm.POP, vm.POP, vm.POP, vm.POP, vm.POP).
 		Jump(lbl).Bytes()
 
 	p, lbl = program.New().Jumpdest()
 	loopingCode2 := p.
 		Push(0x01020304).Push(uint64(0x0102030405)).
-		Ops(vm.POP, vm.POP).
+		Op(vm.POP, vm.POP).
 		Op(vm.PUSH6).Append(make([]byte, 6)).Op(vm.JUMP). // Jumpdest zero expressed in 6 bytes
-		Bytes()
+		Jump(lbl).Bytes()
 
 	p, lbl = program.New().Jumpdest()
 	callRevertingContractWithInput := p.
@@ -723,20 +722,20 @@ func TestRuntimeJSTracer(t *testing.T) {
 		results []string
 	}{
 		{ // CREATE
-			code: program.New().MstorePadded(initcode, 0).
-				Push(len(initcode)). // length
+			code: program.New().MstoreSmall(initcode, 0).
+				Push(len(initcode)).      // length
 				Push(32 - len(initcode)). // offset
-				Push(0). // value
+				Push(0).                  // value
 				Op(vm.CREATE).
 				Op(vm.POP).Bytes(),
 			results: []string{`"1,1,952853,6,12"`, `"1,1,952853,6,0"`},
 		},
 		{ // CREATE2
-			code: program.New().MstorePadded(initcode, 0).
-				Push(1). // salt
-				Push(len(initcode)). // length
+			code: program.New().MstoreSmall(initcode, 0).
+				Push(1).                  // salt
+				Push(len(initcode)).      // length
 				Push(32 - len(initcode)). // offset
-				Push(0). // value
+				Push(0).                  // value
 				Op(vm.CREATE2).
 				Op(vm.POP).Bytes(),
 			results: []string{`"1,1,952844,6,13"`, `"1,1,952844,6,0"`},
@@ -842,7 +841,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 	// Simply pushes and pops some values in a loop
 	p, lbl := program.New().Jumpdest()
-	code := p.Push(0).Push(0).Ops(vm.POP, vm.POP).Jump(lbl).Bytes()
+	code := p.Push(0).Push(0).Op(vm.POP, vm.POP).Jump(lbl).Bytes()
 	stepTracer := `
 	{
 	step: function() {},
