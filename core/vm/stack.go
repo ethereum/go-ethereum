@@ -28,14 +28,27 @@ type stackArena struct {
 	top  int // first free slot
 }
 
-func (sa *stackArena) push(value *uint256.Int) {
+func (sa *stackArena) push(value uint256.Int) {
 	if len(sa.data) <= sa.top {
 		// we need to grow the arena
 		sa.data = slices.Grow(sa.data, 512)
 		sa.data = sa.data[:cap(sa.data)]
 	}
-	sa.data[sa.top] = *value
+	sa.data[sa.top] = value
 	sa.top++
+}
+
+// weird optimization, adds an element onto the stack
+// and returns a pointer to it. Might contain some old data
+// so we need to make sure to properly overwrite it.
+func (sa *stackArena) peekElement() uint256.Int {
+	if len(sa.data) <= sa.top {
+		// we need to grow the arena
+		sa.data = slices.Grow(sa.data, 512)
+		sa.data = sa.data[:cap(sa.data)]
+	}
+	elem := sa.data[sa.top]
+	return elem
 }
 
 func (sa *stackArena) pop() {
@@ -88,9 +101,23 @@ func (s *Stack) Data() []uint256.Int {
 	return s.inner.data[s.bottom : s.bottom+s.size]
 }
 
-func (s *Stack) push(d *uint256.Int) {
+func (s *Stack) push(d uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	s.inner.push(d)
+	s.size++
+}
+
+func (s *Stack) pushBytes(d []byte) {
+	elem := s.inner.peekElement()
+	elem.SetBytes(d)
+	s.inner.push(elem)
+	s.size++
+}
+
+func (s *Stack) pushU64(d uint64) {
+	elem := s.inner.peekElement()
+	elem.SetUint64(d)
+	s.inner.push(elem)
 	s.size++
 }
 
@@ -155,10 +182,10 @@ func (s *Stack) swap16() {
 }
 
 func (s *Stack) dup(n int) {
-	// TODO: check size of inner
-	s.inner.data[s.bottom+s.size] = s.inner.data[s.bottom+s.size-n]
+	elem := s.inner.peekElement()
+	elem.Set(&s.inner.data[s.bottom+s.size-n])
+	s.inner.push(elem)
 	s.size++
-	s.inner.top++
 }
 
 func (s *Stack) peek() *uint256.Int {
