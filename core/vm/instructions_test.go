@@ -117,8 +117,8 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		stack.push(x)
 		stack.push(y)
 		opFn(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
-		if len(stack.data) != 1 {
-			t.Errorf("Expected one item on stack after %v, got %d: ", name, len(stack.data))
+		if stack.len() != 1 {
+			t.Errorf("Expected one item on stack after %v, got %d: ", name, stack.len())
 		}
 		actual := stack.pop()
 
@@ -734,8 +734,8 @@ func TestRandom(t *testing.T) {
 			evmInterpreter = env.interpreter
 		)
 		opRandom(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
-		if len(stack.data) != 1 {
-			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
+		if stack.len() != 1 {
+			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, stack.len())
 		}
 		actual := stack.pop()
 		expected, overflow := uint256.FromBig(new(big.Int).SetBytes(tt.random.Bytes()))
@@ -776,8 +776,8 @@ func TestBlobHash(t *testing.T) {
 		)
 		stack.push(uint256.NewInt(tt.idx))
 		opBlobHash(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
-		if len(stack.data) != 1 {
-			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, len(stack.data))
+		if stack.len() != 1 {
+			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, stack.len())
 		}
 		actual := stack.pop()
 		expected, overflow := uint256.FromBig(new(big.Int).SetBytes(tt.expect.Bytes()))
