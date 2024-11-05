@@ -150,7 +150,7 @@ func (s *hookedStateDB) Snapshot() int {
 }
 
 func (s *hookedStateDB) AddPreimage(hash common.Hash, bytes []byte) {
-	s.inner.Snapshot()
+	s.inner.AddPreimage(hash, bytes)
 }
 
 func (s *hookedStateDB) Witness() *stateless.Witness {
