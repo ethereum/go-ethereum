@@ -129,6 +129,22 @@ func TestReturnData(t *testing.T) {
 			t.Errorf("have %v want %v", have, want)
 		}
 	}
+	{ // ReturnViaCodeCopy
+		data := common.FromHex("0x6001")
+		have := New().Append([]byte{0x5b, 0x5b, 0x5b}).ReturnViaCodeCopy(data).Hex()
+		want := "5b5b5b600261001060003960026000f36001"
+		if have != want {
+			t.Errorf("have %v want %v", have, want)
+		}
+	}
+	{ // ReturnViaCodeCopy larger code
+		data := common.FromHex("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60005260206000f3")
+		have := New().Append([]byte{0x5b, 0x5b, 0x5b}).ReturnViaCodeCopy(data).Hex()
+		want := "5b5b5b602961001060003960296000f37fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff60005260206000f3"
+		if have != want {
+			t.Errorf("have %v want %v", have, want)
+		}
+	}
 }
 
 func TestCreateAndCall(t *testing.T) {
@@ -194,10 +210,10 @@ func TestGenerator(t *testing.T) {
 			},
 			haveFn: func() []byte {
 				initcode := New().Return(0, 0).Bytes()
-				return New().MstorePadded(initcode, 0).
-					Push(len(initcode)).      // length
+				return New().MstoreSmall(initcode, 0).
+					Push(len(initcode)). // length
 					Push(32 - len(initcode)). // offset
-					Push(0).                  // value
+					Push(0). // value
 					Op(vm.CREATE).
 					Op(vm.POP).Bytes()
 			},
@@ -217,11 +233,11 @@ func TestGenerator(t *testing.T) {
 			},
 			haveFn: func() []byte {
 				initcode := New().Return(0, 0).Bytes()
-				return New().MstorePadded(initcode, 0).
-					Push(1).                  // salt
-					Push(len(initcode)).      // length
+				return New().MstoreSmall(initcode, 0).
+					Push(1). // salt
+					Push(len(initcode)). // length
 					Push(32 - len(initcode)). // offset
-					Push(0).                  // value
+					Push(0). // value
 					Op(vm.CREATE2).
 					Op(vm.POP).Bytes()
 			},

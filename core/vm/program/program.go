@@ -280,26 +280,29 @@ func (p *Program) Mstore(data []byte, memStart uint32) *Program {
 	return p
 }
 
-// MstorePadded stores the provided data (into the memory area starting at memStart).
-// If data does not align on 32 bytes, it will be LHS-padded.
+// MstoreSmall stores the provided data, which must be smaller than 32 bytes,
+// into the memory area starting at memStart.
+// The data will be LHS zero-added to align on 32 bytes.
 // For example, providing data 0x1122, it will do a PUSH2:
 // PUSH2 0x1122, resulting in
 // stack: 0x0000000000000000000000000000000000000000000000000000000000001122
 // followed by MSTORE(0,0)
 // And thus, the resulting memory will be
 // [ 0000000000000000000000000000000000000000000000000000000000001122 ]
-func (p *Program) MstorePadded(data []byte, memStart uint32) *Program {
-	var idx = 0
-	// We need to store it in chunks of 32 bytes
-	for ; idx < len(data); idx += 32 {
-		end := min(len(data), idx+32)
-		chunk := data[idx:end]
-		// push the value
-		p.Push(chunk)
-		// push the memory index
-		p.Push(uint32(idx) + memStart)
-		p.Op(vm.MSTORE)
+func (p *Program) MstoreSmall(data []byte, memStart uint32) *Program {
+	if len(data) > 32 {
+		// For larger sizes, use Mstore instead.
+		panic(fmt.Sprintf("only <=32 byte data size supported"))
 	}
+	if len(data) == 0 {
+		// Storing 0-length data smells of an error somewhere.
+		panic(fmt.Sprintf("data is zero length"))
+	}
+	// push the value
+	p.Push(data)
+	// push the memory index
+	p.Push(memStart)
+	p.Op(vm.MSTORE)
 	return p
 }
 
@@ -322,6 +325,30 @@ func (p *Program) MemToStorage(memStart, memSize, startSlot int) *Program {
 	return p
 }
 
+// ReturnViaCodeCopy utilises CODECOPY to place the given data in the bytecode of
+// p, loads into memory (offset 0) and returns the code.
+// This is a typical "constructor".
+// Note: since all indexing is calculated immediately, the preceding bytecode
+// must not be expanded or shortened.
+func (p *Program) ReturnViaCodeCopy(data []byte) *Program {
+	p.Push(len(data))
+	// For convenience, we'll use PUSH2 for the offset. Then we know we can always
+	// fit, since code is limited to 0xc000
+	p.Op(vm.PUSH2)
+	offsetPos := p.Size()  // Need to update this position later on
+	p.Append([]byte{0, 0}) // Offset of the code to be copied
+	p.Push(0)              // Offset in memory (destination)
+	p.Op(vm.CODECOPY)      // Copy from code[offset:offset+len] to memory[0:]
+	p.Return(0, len(data)) // Return memory[0:len]
+	offset := p.Size()
+	p.Append(data) // And add the data
+
+	// Now, go back and fix the offset
+	p.code[offsetPos] = byte(offset >> 8)
+	p.code[offsetPos+1] = byte(offset)
+	return p
+}
+
 // Sstore stores the given byte array to the given slot.
 // OBS! Does not verify that the value indeed fits into 32 bytes
 // If it does not, it will panic later on via pushBig
@@ -340,7 +367,7 @@ func (p *Program) Tstore(slot any, value any) *Program {
 	return p.Op(vm.TSTORE)
 }
 
-func (p *Program) Return(offset, len uint32) *Program {
+func (p *Program) Return(offset, len int) *Program {
 	p.Push(len)
 	p.Push(offset)
 	return p.Op(vm.RETURN)
@@ -349,7 +376,7 @@ func (p *Program) Return(offset, len uint32) *Program {
 // ReturnData loads the given data into memory, and does a return with it
 func (p *Program) ReturnData(data []byte) *Program {
 	p.Mstore(data, 0)
-	return p.Return(0, uint32(len(data)))
+	return p.Return(0, len(data))
 }
 
 // Create2 uses create2 to construct a contract with the given bytecode.
