@@ -60,4 +60,9 @@ var (
 	// input transaction of non-blob type when a blob transaction from this sender
 	// remains pending (and vice-versa).
 	ErrAlreadyReserved = errors.New("address already reserved")
+
+	// ErrAuthorityReserved is returned if a transaction has an authorization
+	// signed by an address which already has in-flight transactions known to the
+	// pool.
+	ErrAuthorityReserved = errors.New("authority already reserved")
 )
