@@ -56,8 +56,24 @@ func (st *Stack) push(d *uint256.Int) {
 	if st.size == len(st.data) {
 		st.data = append(st.data, *d)
 	} else {
-		st.data[st.size] = *d
+		st.data[st.size].Set(d)
 	}
+	st.size++
+}
+
+func (st *Stack) pushBytes(d []byte) {
+	if st.size == len(st.data) {
+		st.data = append(st.data, uint256.Int{})
+	}
+	st.data[st.size].SetBytes(d)
+	st.size++
+}
+
+func (st *Stack) pushU64(d uint64) {
+	if st.size == len(st.data) {
+		st.data = append(st.data, uint256.Int{})
+	}
+	st.data[st.size].SetUint64(d)
 	st.size++
 }
 

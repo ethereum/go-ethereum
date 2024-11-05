@@ -231,7 +231,7 @@ func opSAR(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 }
 
 func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	offset, size := scope.Stack.pop(), scope.Stack.peek()
+	offset, size := scope.Stack.pop(), scope.Stack.pop()
 	data := scope.Memory.GetPtr(offset.Uint64(), size.Uint64())
 
 	if interpreter.hasher == nil {
@@ -246,29 +246,29 @@ func opKeccak256(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	if evm.Config.EnablePreimageRecording {
 		evm.StateDB.AddPreimage(interpreter.hasherBuf, data)
 	}
-	size.SetBytes(interpreter.hasherBuf[:])
+	scope.Stack.pushBytes(interpreter.hasherBuf[:])
 	return nil, nil
 }
 
 func opAddress(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Address().Bytes()))
+	scope.Stack.pushBytes(scope.Contract.Address().Bytes())
 	return nil, nil
 }
 
 func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	slot := scope.Stack.peek()
+	slot := scope.Stack.pop()
 	address := common.Address(slot.Bytes20())
-	slot.Set(interpreter.evm.StateDB.GetBalance(address))
+	scope.Stack.push(interpreter.evm.StateDB.GetBalance(address))
 	return nil, nil
 }
 
 func opOrigin(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(interpreter.evm.Origin.Bytes()))
+	scope.Stack.pushBytes(interpreter.evm.Origin.Bytes())
 	return nil, nil
 }
 
 func opCaller(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetBytes(scope.Contract.Caller().Bytes()))
+	scope.Stack.pushBytes(scope.Contract.Caller().Bytes())
 	return nil, nil
 }
 
@@ -289,7 +289,7 @@ func opCallDataLoad(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 }
 
 func opCallDataSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(scope.Contract.Input))))
+	scope.Stack.pushU64(uint64(len(scope.Contract.Input)))
 	return nil, nil
 }
 
@@ -312,7 +312,7 @@ func opCallDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 }
 
 func opReturnDataSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(interpreter.returnData))))
+	scope.Stack.pushU64(uint64(len(interpreter.returnData)))
 	return nil, nil
 }
 
@@ -339,13 +339,13 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeConte
 }
 
 func opExtCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	slot := scope.Stack.peek()
-	slot.SetUint64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
+	slot := scope.Stack.pop()
+	scope.Stack.pushU64(uint64(interpreter.evm.StateDB.GetCodeSize(slot.Bytes20())))
 	return nil, nil
 }
 
 func opCodeSize(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(new(uint256.Int).SetUint64(uint64(len(scope.Contract.Code))))
+	scope.Stack.pushU64(uint64(len(scope.Contract.Code)))
 	return nil, nil
 }
 
