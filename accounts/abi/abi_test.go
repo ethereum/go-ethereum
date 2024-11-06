@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/internal/testrand"
 	"math/big"
 	"reflect"
 	"strings"
@@ -30,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/testrand"
 )
 
 const jsondata = `
@@ -318,7 +318,7 @@ func TestCustomErrors(t *testing.T) {
 	check("MyError", "MyError(uint256)")
 }
 
-func TestCustomErrorUnpack(t *testing.T) {
+func TestCustomErrorUnpackIntoInterface(t *testing.T) {
 	t.Parallel()
 	errorName := "MyError"
 	json := fmt.Sprintf(`[{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"uint256","name":"balance","type":"uint256"}],"name":"%s","type":"error"}]`, errorName)
