@@ -51,7 +51,7 @@ var (
 
 	testUserKey, _  = crypto.GenerateKey()
 	testUserAddress = crypto.PubkeyToAddress(testUserKey.PublicKey)
-
+	genesisGasLimit = params.GenesisGasLimit
 	// Test transactions
 	pendingTxs []*types.Transaction
 	newTxs     []*types.Transaction
@@ -59,7 +59,7 @@ var (
 	testConfig = Config{
 		PendingFeeRecipient: testBankAddress,
 		Recommit:            time.Second,
-		GasCeil:             params.GenesisGasLimit,
+		GasCeil:             &genesisGasLimit,
 	}
 )
 
