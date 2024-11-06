@@ -40,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/gasestimator"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -991,10 +990,10 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		return 0, err
 	}
 	// Construct the gas estimator option from the user input
-	opts := &gasestimator.Options{
+	opts := &Options{
 		Config:     b.ChainConfig(),
 		Chain:      chainContext,
-		Header:     blockOverrides.MakeHeader(header),
+		Header:     header,
 		State:      state,
 		ErrorRatio: estimateGasErrorRatio,
 	}
@@ -1009,7 +1008,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	call := args.ToMessage(header.BaseFee, true, true)
 
 	// Run the gas estimation and wrap any revertals into a custom return
-	estimate, revert, err := gasestimator.Estimate(ctx, call, opts, gasCap)
+	estimate, revert, err := Estimate(ctx, call, opts, gasCap, blockOverrides)
 	if err != nil {
 		if len(revert) > 0 {
 			return 0, newRevertError(revert)
