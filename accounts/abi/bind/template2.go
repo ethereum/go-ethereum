@@ -55,20 +55,15 @@ var (
 	// {{.Type}}Instance represents a deployed instance of the {{.Type}} contract.
 	type {{.Type}}Instance struct {
 		{{.Type}}
-		address common.Address
-		backend bind.ContractBackend
+		address common.Address  // consider removing this, not clear what it's used for now (and why did we need custom deploy method on previous abi?)
 	}
 
-	func New{{.Type}}Instance(c *{{.Type}}, address common.Address, backend bind.ContractBackend) *{{.Type}}Instance {
-		return &{{.Type}}Instance{Db: *c, address: address, backend: backend}
+	func New{{.Type}}Instance(c *{{.Type}}, address common.Address) *{{.Type}}Instance {
+		return &{{.Type}}Instance{ {{$contract.Type}}: *c, address: address}
 	}
 
 	func (i *{{$contract.Type}}Instance) Address() common.Address {
 		return i.address
-	}
-
-	func (i *{{$contract.Type}}Instance) Backend() bind.ContractBackend {
-		return i.backend
 	}
 
 	// {{.Type}} is an auto generated Go binding around an Ethereum contract.
@@ -136,7 +131,7 @@ var (
 			Raw *types.Log // Blockchain specific contextual infos
 		}
 
-		func (_{{$contract.Type}} *{{$contract.Type}}) {{.Normalized.Name}}EventID() common.Hash {
+		func {{$contract.Type}}{{.Normalized.Name}}EventID() common.Hash {
 			return common.HexToHash("{{.Original.ID}}")
 		}
 

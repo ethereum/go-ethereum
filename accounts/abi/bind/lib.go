@@ -28,6 +28,10 @@ type ContractInstance interface {
 	Backend() ContractBackend
 }
 
+type ContractInstanceV2 interface {
+	Address() common.Address
+}
+
 func CallRaw(instance ContractInstance, opts *CallOpts, input []byte) ([]byte, error) {
 	backend := instance.Backend()
 	c := NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
