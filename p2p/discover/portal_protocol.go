@@ -1151,27 +1151,25 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			var conn *utp.Conn
 			var connectCtx context.Context
 			var cancel context.CancelFunc
-			defer func(clsConn *utp.Conn) {
+			defer func() {
 				p.connIdGen.Remove(connId)
-				if clsConn == nil {
+				if conn == nil {
 					return
 				}
-				err := clsConn.Close()
+				err := conn.Close()
 				if err != nil {
 					p.Log.Error("failed to close connection", "err", err)
 				}
-			}(conn)
-			connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
-			defer func(cancelFunc context.CancelFunc) {
-				cancelFunc()
-			}(cancel)
+			}()
 			for {
 				select {
 				case <-bctx.Done():
 					return
 				default:
 					p.Log.Debug("will accept find content conn from: ", "source", addr, "connId", connId)
+					connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
 					conn, err = p.utp.AcceptUTPContext(connectCtx, connectionId.SendId())
+					cancel()
 					if err != nil {
 						if metrics.Enabled {
 							p.portalMetrics.utpOutFailConn.Inc(1)
@@ -1285,26 +1283,23 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 			var conn *utp.Conn
 			var connectCtx context.Context
 			var cancel context.CancelFunc
-			defer func(clsConn *utp.Conn) {
+			defer func() {
 				p.connIdGen.Remove(connId)
-				if clsConn == nil {
+				if conn == nil {
 					return
 				}
-				err := clsConn.Close()
+				err := conn.Close()
 				if err != nil {
 					p.Log.Error("failed to close connection", "err", err)
 				}
-			}(conn)
-			connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
-			defer func(cancelFunc context.CancelFunc) {
-				cancelFunc()
-			}(cancel)
+			}()
 			for {
 				select {
 				case <-bctx.Done():
 					return
 				default:
 					p.Log.Debug("will accept offer conn from: ", "source", addr, "connId", connId)
+					connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
 					conn, err = p.utp.AcceptUTPContext(connectCtx, connectionId.SendId())
 					cancel()
 					if err != nil {
