@@ -1152,7 +1152,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 			var connectCtx context.Context
 			var cancel context.CancelFunc
 			defer func() {
-				p.connIdGen.Remove(connId)
+				p.connIdGen.Remove(connectionId)
 				if conn == nil {
 					return
 				}
@@ -1284,7 +1284,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 			var connectCtx context.Context
 			var cancel context.CancelFunc
 			defer func() {
-				p.connIdGen.Remove(connId)
+				p.connIdGen.Remove(connectionId)
 				if conn == nil {
 					return
 				}
