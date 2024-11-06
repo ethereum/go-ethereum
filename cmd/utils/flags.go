@@ -1280,22 +1280,23 @@ func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 	cfg.Miner.PendingFeeRecipient = common.BytesToAddress(b)
 }
 
-// MakePasswordList reads password lines from the file specified by the global --password flag.
-func MakePasswordList(ctx *cli.Context) []string {
+// MakePasswordList reads the first line of the given file, trims line endings,
+// and returns the password and whether the reading was successful.
+func ReadPasswordFromList(ctx *cli.Context) (string, bool) {
 	path := ctx.Path(PasswordFileFlag.Name)
 	if path == "" {
-		return nil
+		return "", false
 	}
 	text, err := os.ReadFile(path)
 	if err != nil {
 		Fatalf("Failed to read password file: %v", err)
 	}
 	lines := strings.Split(string(text), "\n")
-	// Sanitise DOS line endings.
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], "\r")
+	if len(lines) == 0 {
+		return "", false
 	}
-	return lines
+	// Sanitise DOS line endings.
+	return strings.TrimRight(lines[0], "\r"), true
 }
 
 func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
@@ -1772,11 +1773,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			passphrase string
 			err        error
 		)
-		if list := MakePasswordList(ctx); len(list) > 0 {
-			// Just take the first value. Although the function returns a possible multiple values and
-			// some usages iterate through them as attempts, that doesn't make sense in this setting,
-			// when we're definitely concerned with only one account.
-			passphrase = list[0]
+		if pw, ok := ReadPasswordFromList(ctx); ok {
+			passphrase = pw
 		}
 
 		// Unlock the developer account by local keystore.

@@ -46,17 +46,13 @@ func GetPassPhrase(text string, confirmation bool) string {
 	return password
 }
 
-// GetPassPhraseWithList retrieves the password associated with an account, either fetched
-// from a list of preloaded passphrases, or requested interactively from the user.
-func GetPassPhraseWithList(text string, confirmation bool, index int, passwords []string) string {
+// GetPassPhraseWithList retrieves the first password from the given list, or
+// requests one interactively from the user, using the given prompt.
+func GetPassPhraseWithList(text string, passwords []string) string {
 	// If a list of passwords was supplied, retrieve from them
 	if len(passwords) > 0 {
-		if index < len(passwords) {
-			return passwords[index]
-		}
-		return passwords[len(passwords)-1]
+		return passwords[0]
 	}
 	// Otherwise prompt the user for the password
-	password := GetPassPhrase(text, confirmation)
-	return password
+	return GetPassPhrase(text, true)
 }

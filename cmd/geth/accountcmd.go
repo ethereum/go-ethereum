@@ -237,8 +237,10 @@ func accountCreate(ctx *cli.Context) error {
 		scryptP = keystore.LightScryptP
 	}
 
-	password := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-
+	password, ok := utils.ReadPasswordFromList(ctx)
+	if !ok {
+		password = utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	}
 	account, err := keystore.StoreKey(keydir, password, scryptN, scryptP)
 
 	if err != nil {
@@ -305,10 +307,12 @@ func importWallet(ctx *cli.Context) error {
 	if len(backends) == 0 {
 		utils.Fatalf("Keystore is not available")
 	}
+	password, ok := utils.ReadPasswordFromList(ctx)
+	if !ok {
+		password = utils.GetPassPhrase("", false)
+	}
 	ks := backends[0].(*keystore.KeyStore)
-	passphrase := utils.GetPassPhraseWithList("", false, 0, utils.MakePasswordList(ctx))
-
-	acct, err := ks.ImportPreSaleKey(keyJSON, passphrase)
+	acct, err := ks.ImportPreSaleKey(keyJSON, password)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
@@ -331,9 +335,11 @@ func accountImport(ctx *cli.Context) error {
 		utils.Fatalf("Keystore is not available")
 	}
 	ks := backends[0].(*keystore.KeyStore)
-	passphrase := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-
-	acct, err := ks.ImportECDSA(key, passphrase)
+	password, ok := utils.ReadPasswordFromList(ctx)
+	if !ok {
+		password = utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	}
+	acct, err := ks.ImportECDSA(key, password)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
