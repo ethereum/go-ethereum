@@ -1927,9 +1927,11 @@ func MakeBeaconLightConfig(ctx *cli.Context) bparams.ClientConfig {
 		} else {
 			Fatalf("Invalid hex string", "beacon.genesis.gvroot", ctx.String(BeaconGenesisRootFlag.Name), "error", err)
 		}
-		if err := config.ChainConfig.LoadForks(ctx.String(BeaconConfigFlag.Name)); err != nil {
-			Fatalf("Could not load beacon chain config file", "file name", ctx.String(BeaconConfigFlag.Name), "error", err)
+		configFile := ctx.String(BeaconConfigFlag.Name)
+		if err := config.ChainConfig.LoadForks(configFile); err != nil {
+			Fatalf("Could not load beacon chain config", "file", configFile, "error", err)
 		}
+		log.Info("Using custom beacon chain config", "file", configFile)
 	} else {
 		if ctx.IsSet(BeaconGenesisRootFlag.Name) {
 			Fatalf("Genesis root is specified but custom beacon chain config is missing")
