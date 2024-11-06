@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"github.com/ethereum/go-ethereum/internal/debug"
 	"net"
 	"net/http"
 	"os/signal"
@@ -16,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ethereum/go-ethereum/internal/debug"
+	
 	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
