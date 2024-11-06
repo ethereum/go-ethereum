@@ -198,10 +198,10 @@ func enable1153(jt *JumpTable) {
 
 // opTload implements TLOAD opcode
 func opTload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	loc := scope.Stack.peek()
+	loc := scope.Stack.pop()
 	hash := common.Hash(loc.Bytes32())
 	val := interpreter.evm.StateDB.GetTransientState(scope.Contract.Address(), hash)
-	loc.SetBytes(val.Bytes())
+	scope.Stack.pushBytes(val.Bytes())
 	return nil, nil
 }
 
@@ -275,12 +275,12 @@ func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 
 // opBlobHash implements the BLOBHASH opcode
 func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	index := scope.Stack.peek()
+	index := scope.Stack.pop()
 	if index.LtUint64(uint64(len(interpreter.evm.TxContext.BlobHashes))) {
 		blobHash := interpreter.evm.TxContext.BlobHashes[index.Uint64()]
-		index.SetBytes32(blobHash[:])
+		scope.Stack.pushBytes(blobHash[:])
 	} else {
-		index.Clear()
+		scope.Stack.pushU64(0)
 	}
 	return nil, nil
 }

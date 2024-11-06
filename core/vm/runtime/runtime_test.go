@@ -985,3 +985,25 @@ func BenchmarkTracerStepVsCallFrame(b *testing.B) {
 	benchmarkNonModifyingCode(10000000, code, "tracer-step-10M", stepTracer, b)
 	benchmarkNonModifyingCode(10000000, code, "tracer-call-frame-10M", callFrameTracer, b)
 }
+
+func BenchmarkShortDeepStacks(b *testing.B) {
+	// This piece of code will push a few items to the stack, and then call itself
+	// recursively.
+	var code []byte
+	code = append(code, byte(vm.PUSH0))
+	code = append(code, byte(vm.PUSH0))
+	for i := 0; i < 512; i++ {
+		code = append(code, byte(vm.PUSH0))
+		code = append(code, byte(vm.ADD))
+	}
+	code = append(code, []byte{
+		byte(vm.ADDRESS), // address to call
+		byte(vm.GAS),
+		byte(vm.CALL),
+	}...)
+	benchmarkNonModifyingCode(30_000_000, code, "deep-short-stacks-30M", "", b)
+}
+
+// BenchmarkShortDeepStacks/deep-short-stacks-30M-8         	    2659	    425652 ns/op	  210414 B/op	    3177 allocs/op
+
+// BenchmarkShortDeepStacks/deep-short-stacks-30M-8         	   77020	     14174 ns/op	    3098 B/op	      38 allocs/op

@@ -616,7 +616,7 @@ func TestOpTstore(t *testing.T) {
 	if stack.len() != 1 {
 		t.Fatal("stack wrong size")
 	}
-	val := stack.peek()
+	val := stack.Back(0)
 	if !bytes.Equal(val.Bytes(), value) {
 		t.Fatal("incorrect element read from transient storage")
 	}

@@ -140,10 +140,6 @@ func (st *Stack) dup(n int) {
 	st.push(&st.data[st.len()-n])
 }
 
-func (st *Stack) peek() *uint256.Int {
-	return &st.data[st.len()-1]
-}
-
 // Back returns the n'th item in stack
 func (st *Stack) Back(n int) *uint256.Int {
 	return &st.data[st.len()-n-1]
