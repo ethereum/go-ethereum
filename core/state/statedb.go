@@ -132,7 +132,7 @@ type StateDB struct {
 	transientStorage transientStorage
 
 	// Journal of state modifications. This is the backbone of
-	// Snapshot and RevertToSnapshot.
+	// Snapshot and RevertSnapshot.
 	journal journal
 
 	// State witness if cross validation is needed
@@ -707,21 +707,21 @@ func (s *StateDB) Copy() *StateDB {
 	return state
 }
 
-// Snapshot returns an identifier for the current revision of the state.
-func (s *StateDB) Snapshot() int {
-	return s.journal.snapshot()
+// Snapshot starts a new journalled scope.
+func (s *StateDB) Snapshot() {
+	s.journal.snapshot()
 }
 
-// DiscardSnapshot removes the snapshot with the given id; after calling this
-// method, it is no longer possible to revert to that particular snapshot, the
-// changes are considered part of the parent scope.
-func (s *StateDB) DiscardSnapshot(id int) {
-	s.journal.discardSnapshot(id)
+// DiscardSnapshot removes the ability to roll back the changes in the most
+// recent journalled scope. After calling this method, the changes are considered
+// part of the parent scope.
+func (s *StateDB) DiscardSnapshot() {
+	s.journal.discardSnapshot()
 }
 
-// RevertToSnapshot reverts all state changes made since the given revision.
-func (s *StateDB) RevertToSnapshot(revid int) {
-	s.journal.revertToSnapshot(revid, s)
+// RevertSnapshot reverts all state changes made in the most recent journalled scope.
+func (s *StateDB) RevertSnapshot() {
+	s.journal.revertSnapshot(s)
 }
 
 // GetRefund returns the current value of the refund counter.

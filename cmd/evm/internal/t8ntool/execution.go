@@ -253,16 +253,16 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		statedb.SetTxContext(tx.Hash(), txIndex)
 
 		var (
-			snapshot = statedb.Snapshot()
-			prevGas  = gaspool.Gas()
+			prevGas = gaspool.Gas()
 		)
+		statedb.Snapshot()
 		if tracer != nil && tracer.OnTxStart != nil {
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		// (ret []byte, usedGas uint64, failed bool, err error)
 		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
 		if err != nil {
-			statedb.RevertToSnapshot(snapshot)
+			statedb.RevertSnapshot()
 			log.Info("rejected tx", "index", i, "hash", tx.Hash(), "from", msg.From, "error", err)
 			rejectedTxs = append(rejectedTxs, &rejectedTx{i, err.Error()})
 			gaspool.SetGas(prevGas)
@@ -276,7 +276,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			}
 			continue
 		}
-		statedb.DiscardSnapshot(snapshot)
+		statedb.DiscardSnapshot()
 		includedTxs = append(includedTxs, tx)
 		if hashError != nil {
 			return nil, nil, nil, NewError(ErrorMissingBlockhash, hashError)

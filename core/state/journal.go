@@ -22,7 +22,7 @@ import (
 )
 
 type journal interface {
-	// snapshot returns an identifier for the current revision of the state.
+	// snapshot starts a new journal scope which can be reverted or discarded.
 	// The lifeycle of journalling is as follows:
 	// - snapshot() starts a 'scope'.
 	// - The method snapshot() may be called any number of times.
@@ -30,15 +30,15 @@ type journal interface {
 	//  the scope via either of:
 	//   - revertToSnapshot, which undoes the changes in the scope, or
 	//   - discardSnapshot, which discards the ability to revert the changes in the scope.
-	snapshot() int
+	snapshot()
 
-	// revertToSnapshot reverts all state changes made since the given revision.
-	revertToSnapshot(revid int, s *StateDB)
+	// revertSnapshot reverts all state changes made since the last call to snapshot().
+	revertSnapshot(s *StateDB)
 
-	// discardSnapshot removes the snapshot with the given id; after calling this
+	// discardSnapshot removes the latest snapshot; after calling this
 	// method, it is no longer possible to revert to that particular snapshot, the
 	// changes are considered part of the parent scope.
-	discardSnapshot(revid int)
+	discardSnapshot()
 
 	// reset clears the journal so it can be reused.
 	reset()
