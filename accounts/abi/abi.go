@@ -50,6 +50,7 @@ func JSON(reader io.Reader) (ABI, error) {
 
 	var abi ABI
 	if err := dec.Decode(&abi); err != nil {
+		fmt.Println(err)
 		return ABI{}, err
 	}
 	return abi, nil
