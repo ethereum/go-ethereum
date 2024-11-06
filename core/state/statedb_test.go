@@ -563,14 +563,13 @@ func (test *snapshotTest) String() string {
 func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
-		state, _     = New(types.EmptyRootHash, NewDatabaseForTesting())
-		snapshotRevs = make([]int, len(test.snapshots))
-		sindex       = 0
-		checkstates  = make([]*StateDB, len(test.snapshots))
+		state, _    = New(types.EmptyRootHash, NewDatabaseForTesting())
+		sindex      = 0
+		checkstates = make([]*StateDB, len(test.snapshots))
 	)
 	for i, action := range test.actions {
 		if len(test.snapshots) > sindex && i == test.snapshots[sindex] {
-			snapshotRevs[sindex] = state.Snapshot()
+			state.Snapshot()
 			checkstates[sindex] = state.Copy()
 			sindex++
 		}
@@ -579,7 +578,7 @@ func (test *snapshotTest) run() bool {
 	// Revert all snapshots in reverse order. Each revert must yield a state
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
-		state.RevertToSnapshot(snapshotRevs[sindex])
+		state.RevertSnapshot()
 		if err := test.checkEqual(state, checkstates[sindex]); err != nil {
 			test.err = fmt.Errorf("state mismatch after revert to snapshot %d\n%v", sindex, err)
 			return false
@@ -738,13 +737,13 @@ func TestTouchDelete(t *testing.T) {
 	root, _ := s.state.Commit(0, false)
 	s.state, _ = New(root, s.state.db)
 
-	snapshot := s.state.Snapshot()
+	s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(uint256.Int), tracing.BalanceChangeUnspecified)
 
 	if len(s.state.journal.dirtyAccounts()) != 1 {
 		t.Fatal("expected one dirty state object")
 	}
-	s.state.RevertToSnapshot(snapshot)
+	s.state.RevertSnapshot()
 	if len(s.state.journal.dirtyAccounts()) != 0 {
 		t.Fatal("expected no dirty state object")
 	}
@@ -989,9 +988,11 @@ func TestDeleteCreateRevert(t *testing.T) {
 	state.SelfDestruct(addr)
 	state.Finalise(true)
 
-	id := state.Snapshot()
-	state.SetBalance(addr, uint256.NewInt(2), tracing.BalanceChangeUnspecified)
-	state.RevertToSnapshot(id)
+	state.Snapshot()
+	{
+		state.SetBalance(addr, uint256.NewInt(2), tracing.BalanceChangeUnspecified)
+	}
+	state.RevertSnapshot()
 
 	// Commit the entire state and make sure we don't crash and have the correct state
 	root, _ = state.Commit(0, true)
@@ -1134,25 +1135,15 @@ func TestStateDBAccessList(t *testing.T) {
 		}
 	}
 
-	var ids []int
-	push := func(id int) {
-		ids = append(ids, id)
-	}
-	pop := func() int {
-		id := ids[len(ids)-1]
-		ids = ids[:len(ids)-1]
-		return id
-	}
-
-	push(state.journal.snapshot())                    // journal id 0
+	state.journal.snapshot()                          // journal id 0
 	state.AddAddressToAccessList(addr("aa"))          // 1
-	push(state.journal.snapshot())                    // journal id 1
+	state.journal.snapshot()                          // journal id 1
 	state.AddAddressToAccessList(addr("bb"))          // 2
-	push(state.journal.snapshot())                    // journal id 2
+	state.journal.snapshot()                          // journal id 2
 	state.AddSlotToAccessList(addr("bb"), slot("01")) // 3
-	push(state.journal.snapshot())                    // journal id 3
+	state.journal.snapshot()                          // journal id 3
 	state.AddSlotToAccessList(addr("bb"), slot("02")) // 4
-	push(state.journal.snapshot())                    // journal id 4
+	state.journal.snapshot()                          // journal id 4
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 
@@ -1166,11 +1157,11 @@ func TestStateDBAccessList(t *testing.T) {
 
 	// some new ones
 	state.AddSlotToAccessList(addr("bb"), slot("03")) // 5
-	push(state.journal.snapshot())                    // journal id 5
+	state.journal.snapshot()                          // journal id 5
 	state.AddSlotToAccessList(addr("aa"), slot("01")) // 6
-	push(state.journal.snapshot())                    // journal id 6
+	state.journal.snapshot()                          // journal id 6
 	state.AddAddressToAccessList(addr("cc"))          // 7
-	push(state.journal.snapshot())                    // journal id 7
+	state.journal.snapshot()                          // journal id 7
 	state.AddSlotToAccessList(addr("cc"), slot("01")) // 8
 
 	verifyAddrs("aa", "bb", "cc")
@@ -1179,7 +1170,7 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("cc", "01")
 
 	// now start rolling back changes
-	state.journal.revertToSnapshot(pop(), state) // revert to 6
+	state.journal.revertSnapshot(state) // revert to 6
 	if _, ok := state.SlotInAccessList(addr("cc"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
@@ -1187,7 +1178,7 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("aa", "01")
 	verifySlots("bb", "01", "02", "03")
 
-	state.journal.revertToSnapshot(pop(), state) // revert to 5
+	state.journal.revertSnapshot(state) // revert to 5
 	if state.AddressInAccessList(addr("cc")) {
 		t.Fatalf("addr present, expected missing")
 	}
@@ -1195,40 +1186,40 @@ func TestStateDBAccessList(t *testing.T) {
 	verifySlots("aa", "01")
 	verifySlots("bb", "01", "02", "03")
 
-	state.journal.revertToSnapshot(pop(), state) // revert to 4
+	state.journal.revertSnapshot(state) // revert to 4
 	if _, ok := state.SlotInAccessList(addr("aa"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02", "03")
 
-	state.journal.revertToSnapshot(pop(), state) // revert to 3
+	state.journal.revertSnapshot(state) // revert to 3
 	if _, ok := state.SlotInAccessList(addr("bb"), slot("03")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01", "02")
 
-	state.journal.revertToSnapshot(pop(), state) // revert to 2
+	state.journal.revertSnapshot(state) // revert to 2
 	if _, ok := state.SlotInAccessList(addr("bb"), slot("02")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 	verifySlots("bb", "01")
 
-	state.journal.revertToSnapshot(pop(), state) // revert to 1
+	state.journal.revertSnapshot(state) // revert to 1
 	if _, ok := state.SlotInAccessList(addr("bb"), slot("01")); ok {
 		t.Fatalf("slot present, expected missing")
 	}
 	verifyAddrs("aa", "bb")
 
-	state.journal.revertToSnapshot(pop(), state) // revert to 0
+	state.journal.revertSnapshot(state) // revert to 0
 	if state.AddressInAccessList(addr("bb")) {
 		t.Fatalf("addr present, expected missing")
 	}
 	verifyAddrs("aa")
 
-	state.journal.revertToSnapshot(0, state)
+	state.journal.revertSnapshot(state)
 	if state.AddressInAccessList(addr("aa")) {
 		t.Fatalf("addr present, expected missing")
 	}
@@ -1299,7 +1290,7 @@ func TestStateDBTransientStorage(t *testing.T) {
 	key := common.Hash{0x01}
 	value := common.Hash{0x02}
 	addr := common.Address{}
-	revision := state.journal.snapshot()
+	state.journal.snapshot()
 	state.SetTransientState(addr, key, value)
 
 	// the retrieved value should equal what was set
@@ -1309,7 +1300,7 @@ func TestStateDBTransientStorage(t *testing.T) {
 
 	// revert the transient state being set and then check that the
 	// value is now the empty hash
-	state.journal.revertToSnapshot(revision, state)
+	state.journal.revertSnapshot(state)
 	if got, exp := state.GetTransientState(addr, key), (common.Hash{}); exp != got {
 		t.Fatalf("transient storage mismatch: have %x, want %x", got, exp)
 	}
@@ -1403,22 +1394,24 @@ func TestStorageDirtiness(t *testing.T) {
 	checkDirty(common.Hash{0x1}, common.Hash{}, false)
 
 	// the storage change is valid, dirty marker is expected
-	snap := state.Snapshot()
-	state.SetState(addr, common.Hash{0x1}, common.Hash{0x1})
-	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
-
+	state.Snapshot()
+	{
+		state.SetState(addr, common.Hash{0x1}, common.Hash{0x1})
+		checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
+	}
 	// the storage change is reverted, dirtiness should be revoked
-	state.RevertToSnapshot(snap)
+	state.RevertSnapshot()
 	checkDirty(common.Hash{0x1}, common.Hash{}, false)
 
 	// the storage is reset back to its original value, dirtiness should be revoked
 	state.SetState(addr, common.Hash{0x1}, common.Hash{0x1})
-	snap = state.Snapshot()
-	state.SetState(addr, common.Hash{0x1}, common.Hash{})
-	checkDirty(common.Hash{0x1}, common.Hash{}, false)
-
+	state.Snapshot()
+	{
+		state.SetState(addr, common.Hash{0x1}, common.Hash{})
+		checkDirty(common.Hash{0x1}, common.Hash{}, false)
+	}
 	// the storage change is reverted, dirty value should be set back
-	state.RevertToSnapshot(snap)
+	state.RevertSnapshot()
 	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
 }
 
@@ -1463,10 +1456,12 @@ func TestStorageDirtiness2(t *testing.T) {
 	checkDirty(common.Hash{0x1}, common.Hash{0xa}, false)
 
 	// Enter new scope
-	snap := state.Snapshot()
-	state.SetState(addr, common.Hash{0x1}, common.Hash{0xb}) // SLOT(1) = 0xB
-	checkDirty(common.Hash{0x1}, common.Hash{0xb}, true)     // Should be flagged dirty
-	state.RevertToSnapshot(snap)                             // Revert scope
+	state.Snapshot()
+	{
+		state.SetState(addr, common.Hash{0x1}, common.Hash{0xb}) // SLOT(1) = 0xB
+		checkDirty(common.Hash{0x1}, common.Hash{0xb}, true)     // Should be flagged dirty
+	}
+	state.RevertSnapshot() // Revert scope
 
 	// the storage change has been set back to original, dirtiness should be revoked
 	checkDirty(common.Hash{0x1}, common.Hash{0x1}, false)

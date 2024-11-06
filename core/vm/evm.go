@@ -190,7 +190,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	snapshot := evm.StateDB.Snapshot()
+	evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 
 	if !evm.StateDB.Exist(addr) {
@@ -198,7 +198,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			// add proof of absence to witness
 			wgas := evm.AccessEvents.AddAccount(addr, false)
 			if gas < wgas {
-				evm.StateDB.RevertToSnapshot(snapshot)
+				evm.StateDB.RevertSnapshot()
 				return nil, 0, ErrOutOfGas
 			}
 			gas -= wgas
@@ -206,7 +206,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
 			// Calling a non-existing account, don't do anything.
-			evm.StateDB.DiscardSnapshot(snapshot)
+			evm.StateDB.DiscardSnapshot()
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
@@ -235,7 +235,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	// above we revert to the snapshot and consume any gas remaining. Additionally,
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertSnapshot()
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
@@ -244,7 +244,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			gas = 0
 		}
 	} else {
-		evm.StateDB.DiscardSnapshot(snapshot)
+		evm.StateDB.DiscardSnapshot()
 	}
 	return ret, gas, err
 }
@@ -275,7 +275,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -290,7 +290,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		gas = contract.Gas
 	}
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertSnapshot()
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
@@ -299,7 +299,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 			gas = 0
 		}
 	} else {
-		evm.StateDB.DiscardSnapshot(snapshot)
+		evm.StateDB.DiscardSnapshot()
 	}
 	return ret, gas, err
 }
@@ -325,7 +325,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	var snapshot = evm.StateDB.Snapshot()
+	evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
@@ -339,7 +339,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		gas = contract.Gas
 	}
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertSnapshot()
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
@@ -347,7 +347,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 			gas = 0
 		}
 	} else {
-		evm.StateDB.DiscardSnapshot(snapshot)
+		evm.StateDB.DiscardSnapshot()
 	}
 	return ret, gas, err
 }
@@ -373,7 +373,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
-	var snapshot = evm.StateDB.Snapshot()
+	evm.StateDB.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -399,7 +399,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		gas = contract.Gas
 	}
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertSnapshot()
 		if err != ErrExecutionReverted {
 			if evm.Config.Tracer != nil && evm.Config.Tracer.OnGasChange != nil {
 				evm.Config.Tracer.OnGasChange(gas, 0, tracing.GasChangeCallFailedExecution)
@@ -408,7 +408,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 			gas = 0
 		}
 	} else {
-		evm.StateDB.DiscardSnapshot(snapshot)
+		evm.StateDB.DiscardSnapshot()
 	}
 	return ret, gas, err
 }
@@ -482,7 +482,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 	// Create a new account on the state only if the object was not present.
 	// It might be possible the contract code is deployed to a pre-existent
 	// account with non-zero balance.
-	snapshot := evm.StateDB.Snapshot()
+	evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
 	}
@@ -516,12 +516,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 
 	ret, err = evm.initNewContract(contract, address, value)
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
-		evm.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertSnapshot()
 		if err != ErrExecutionReverted {
 			contract.UseGas(contract.Gas, evm.Config.Tracer, tracing.GasChangeCallFailedExecution)
 		}
 	} else {
-		evm.StateDB.DiscardSnapshot(snapshot)
+		evm.StateDB.DiscardSnapshot()
 	}
 	return ret, address, contract.Gas, err
 }

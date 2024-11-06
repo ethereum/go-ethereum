@@ -141,16 +141,16 @@ func (s *hookedStateDB) Prepare(rules params.Rules, sender, coinbase common.Addr
 	s.inner.Prepare(rules, sender, coinbase, dest, precompiles, txAccesses)
 }
 
-func (s *hookedStateDB) DiscardSnapshot(id int) {
-	s.inner.DiscardSnapshot(id)
+func (s *hookedStateDB) DiscardSnapshot() {
+	s.inner.DiscardSnapshot()
 }
 
-func (s *hookedStateDB) RevertToSnapshot(i int) {
-	s.inner.RevertToSnapshot(i)
+func (s *hookedStateDB) RevertSnapshot() {
+	s.inner.RevertSnapshot()
 }
 
-func (s *hookedStateDB) Snapshot() int {
-	return s.inner.Snapshot()
+func (s *hookedStateDB) Snapshot() {
+	s.inner.Snapshot()
 }
 
 func (s *hookedStateDB) AddPreimage(hash common.Hash, bytes []byte) {

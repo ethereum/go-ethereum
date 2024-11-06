@@ -18,13 +18,11 @@ package state
 
 import (
 	"bytes"
-	"fmt"
 	"maps"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
 
@@ -349,50 +347,33 @@ func (j *sparseJournal) copy() journal {
 	return cp
 }
 
-// snapshot returns an identifier for the current revision of the state.
+// snapshot starts a new journal scope which can be reverted or discarded.
 // OBS: A call to Snapshot is _required_ in order to initialize the journalling,
 // invoking the journal-methods without having invoked Snapshot will lead to
 // panic.
-func (j *sparseJournal) snapshot() int {
-	id := len(j.entries)
+func (j *sparseJournal) snapshot() {
 	j.entries = append(j.entries, newScopedJournal())
-	return id
 }
 
-// revertToSnapshot reverts all state changes made since the given revision.
-func (j *sparseJournal) revertToSnapshot(id int, s *StateDB) {
-	if id >= len(j.entries) {
-		panic(fmt.Errorf("revision id %v cannot be reverted", id))
-	}
-	// Revert the entries sequentially
-	for i := len(j.entries) - 1; i >= id; i-- {
-		entry := j.entries[i]
-		entry.revert(s)
-	}
+// revertSnapshot reverts all state changes made since the last call to snapshot().
+func (j *sparseJournal) revertSnapshot(s *StateDB) {
+	id := len(j.entries) - 1
+	j.entries[id].revert(s)
 	j.entries = j.entries[:id]
 }
 
-// discardSnapshot removes the snapshot with the given id; after calling this
+// discardSnapshot removes the latest snapshot; after calling this
 // method, it is no longer possible to revert to that particular snapshot, the
 // changes are considered part of the parent scope.
-func (j *sparseJournal) discardSnapshot(id int) {
-	if id == 0 {
-		return
-	}
+func (j *sparseJournal) discardSnapshot() {
+	id := len(j.entries) - 1
 	// here we must merge the 'id' with it's parent.
-	want := len(j.entries) - 1
-	have := id
-	if want != have {
-		if want == 0 && id == 1 {
-			// If a transcation is applied successfully, the statedb.Finalize will
-			// end by clearing and resetting the journal. Invoking a discardSnapshot
-			// afterwards will lead us here.
-			// Let's not panic, but it's ok to complain a bit
-			log.Error("Extraneous invocation to discard snapshot")
-			return
-		} else {
-			panic(fmt.Sprintf("journalling error, want discard(%d), have discard(%d)", want, have))
-		}
+	if id == 0 {
+		// If a transaction is applied successfully, the statedb.Finalize will
+		// end by clearing and resetting the journal. Invoking a discardSnapshot
+		// afterwards will land here: calling discard on an empty journal.
+		// This is fine
+		return
 	}
 	entry := j.entries[id]
 	parent := j.entries[id-1]

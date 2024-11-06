@@ -219,7 +219,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{})
 
 	for i := 0; i < b.N; i++ {
-		snap := state.StateDB.Snapshot()
+		state.StateDB.Snapshot()
 		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil, test.Genesis.Config)
 		if err != nil {
 			b.Fatalf("failed to create call tracer: %v", err)
@@ -238,7 +238,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		if _, err = tracer.GetResult(); err != nil {
 			b.Fatal(err)
 		}
-		state.StateDB.RevertToSnapshot(snap)
+		state.StateDB.RevertSnapshot()
 	}
 }
 

@@ -75,23 +75,23 @@ func testJournalAccessList(t *testing.T, j journal) {
 	statedb.accessList = newAccessList()
 	statedb.journal = j
 
+	j.snapshot()
 	{
 		// If the journal performs the rollback in the wrong order, this
 		// will cause a panic.
-		id := j.snapshot()
 		statedb.AddSlotToAccessList(common.Address{0x1}, common.Hash{0x4})
 		statedb.AddSlotToAccessList(common.Address{0x3}, common.Hash{0x4})
-		statedb.RevertToSnapshot(id)
 	}
+	statedb.RevertSnapshot()
+	j.snapshot()
 	{
-		id := j.snapshot()
 		statedb.AddAddressToAccessList(common.Address{0x2})
 		statedb.AddAddressToAccessList(common.Address{0x3})
 		statedb.AddAddressToAccessList(common.Address{0x4})
-		statedb.RevertToSnapshot(id)
-		if statedb.accessList.ContainsAddress(common.Address{0x2}) {
-			t.Fatal("should be missing")
-		}
+	}
+	statedb.RevertSnapshot()
+	if statedb.accessList.ContainsAddress(common.Address{0x2}) {
+		t.Fatal("should be missing")
 	}
 }
 
@@ -107,25 +107,27 @@ func testJournalRefunds(t *testing.T, j journal) {
 	var statedb = &StateDB{}
 	statedb.accessList = newAccessList()
 	statedb.journal = j
-	zero := j.snapshot()
-	j.refundChange(0)
-	j.refundChange(1)
+	j.snapshot()
 	{
-		id := j.snapshot()
-		j.refundChange(2)
-		j.refundChange(3)
-		j.revertToSnapshot(id, statedb)
+		j.refundChange(0)
+		j.refundChange(1)
+		j.snapshot()
+		{
+			j.refundChange(2)
+			j.refundChange(3)
+		}
+		j.revertSnapshot(statedb)
 		if have, want := statedb.refund, uint64(2); have != want {
 			t.Fatalf("have %d want %d", have, want)
 		}
+		j.snapshot()
+		{
+			j.refundChange(2)
+			j.refundChange(3)
+		}
+		j.discardSnapshot()
 	}
-	{
-		id := j.snapshot()
-		j.refundChange(2)
-		j.refundChange(3)
-		j.discardSnapshot(id)
-	}
-	j.revertToSnapshot(zero, statedb)
+	j.revertSnapshot(statedb)
 	if have, want := statedb.refund, uint64(0); have != want {
 		t.Fatalf("have %d want %d", have, want)
 	}

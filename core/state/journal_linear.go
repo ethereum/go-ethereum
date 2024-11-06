@@ -17,20 +17,13 @@
 package state
 
 import (
-	"fmt"
 	"maps"
 	"slices"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 )
-
-type revision struct {
-	id           int
-	journalIndex int
-}
 
 // journalEntry is a modification entry in the state change linear journal that can be
 // reverted on demand.
@@ -52,8 +45,7 @@ type linearJournal struct {
 	entries []journalEntry         // Current changes tracked by the linearJournal
 	dirties map[common.Address]int // Dirty accounts and the number of changes
 
-	validRevisions []revision
-	nextRevisionId int
+	revisions []int // sequence of indexes to points in time designating snapshots
 }
 
 // compile-time interface check
@@ -71,9 +63,8 @@ func newLinearJournal() *linearJournal {
 // can be reused.
 func (j *linearJournal) reset() {
 	j.entries = j.entries[:0]
-	j.validRevisions = j.validRevisions[:0]
+	j.revisions = j.revisions[:0]
 	clear(j.dirties)
-	j.nextRevisionId = 0
 }
 
 func (j linearJournal) dirtyAccounts() []common.Address {
@@ -85,33 +76,33 @@ func (j linearJournal) dirtyAccounts() []common.Address {
 	return dirty
 }
 
-// snapshot returns an identifier for the current revision of the state.
-func (j *linearJournal) snapshot() int {
-	id := j.nextRevisionId
-	j.nextRevisionId++
-	j.validRevisions = append(j.validRevisions, revision{id, j.length()})
-	return id
+// snapshot starts a new journal scope which can be reverted or discarded.
+func (j *linearJournal) snapshot() {
+	j.revisions = append(j.revisions, len(j.entries))
 }
 
-func (j *linearJournal) revertToSnapshot(revid int, s *StateDB) {
-	// Find the snapshot in the stack of valid snapshots.
-	idx := sort.Search(len(j.validRevisions), func(i int) bool {
-		return j.validRevisions[i].id >= revid
-	})
-	if idx == len(j.validRevisions) || j.validRevisions[idx].id != revid {
-		panic(fmt.Errorf("revision id %v cannot be reverted (valid revisions: %d)", revid, len(j.validRevisions)))
-	}
-	snapshot := j.validRevisions[idx].journalIndex
-
+// revertSnapshot reverts all state changes made since the last call to snapshot().
+func (j *linearJournal) revertSnapshot(s *StateDB) {
+	id := len(j.revisions) - 1
+	revision := j.revisions[id]
 	// Replay the linearJournal to undo changes and remove invalidated snapshots
-	j.revert(s, snapshot)
-	j.validRevisions = j.validRevisions[:idx]
+	j.revertTo(s, revision)
+	j.revisions = j.revisions[:id]
 }
 
-// discardSnapshot removes the snapshot with the given id; after calling this
+// discardSnapshot removes the latest snapshot; after calling this
 // method, it is no longer possible to revert to that particular snapshot, the
 // changes are considered part of the parent scope.
-func (j *linearJournal) discardSnapshot(id int) {
+func (j *linearJournal) discardSnapshot() {
+	id := len(j.revisions) - 1
+	if id == 0 {
+		// If a transaction is applied successfully, the statedb.Finalize will
+		// end by clearing and resetting the journal. Invoking a discardSnapshot
+		// afterwards will land here: calling discard on an empty journal.
+		// This is fine
+		return
+	}
+	j.revisions = j.revisions[:id]
 }
 
 // append inserts a new modification entry to the end of the change linearJournal.
@@ -124,7 +115,7 @@ func (j *linearJournal) append(entry journalEntry) {
 
 // revert undoes a batch of journalled modifications along with any reverted
 // dirty handling too.
-func (j *linearJournal) revert(statedb *StateDB, snapshot int) {
+func (j *linearJournal) revertTo(statedb *StateDB, snapshot int) {
 	for i := len(j.entries) - 1; i >= snapshot; i-- {
 		// Undo the changes made by the operation
 		j.entries[i].revert(statedb)
@@ -158,10 +149,9 @@ func (j *linearJournal) copy() journal {
 		entries = append(entries, j.entries[i].copy())
 	}
 	return &linearJournal{
-		entries:        entries,
-		dirties:        maps.Clone(j.dirties),
-		validRevisions: slices.Clone(j.validRevisions),
-		nextRevisionId: j.nextRevisionId,
+		entries:   entries,
+		dirties:   maps.Clone(j.dirties),
+		revisions: slices.Clone(j.revisions),
 	}
 }
 
