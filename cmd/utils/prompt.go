@@ -45,14 +45,3 @@ func GetPassPhrase(text string, confirmation bool) string {
 	}
 	return password
 }
-
-// GetPassPhraseWithList retrieves the first password from the given list, or
-// requests one interactively from the user, using the given prompt.
-func GetPassPhraseWithList(text string, passwords []string) string {
-	// If a list of passwords was supplied, retrieve from them
-	if len(passwords) > 0 {
-		return passwords[0]
-	}
-	// Otherwise prompt the user for the password
-	return GetPassPhrase(text, true)
-}
