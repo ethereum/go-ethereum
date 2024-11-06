@@ -1280,25 +1280,6 @@ func setEtherbase(ctx *cli.Context, cfg *ethconfig.Config) {
 	cfg.Miner.PendingFeeRecipient = common.BytesToAddress(b)
 }
 
-// MakePasswordList reads the first line of the given file, trims line endings,
-// and returns the password and whether the reading was successful.
-func ReadPasswordFromList(ctx *cli.Context) (string, bool) {
-	path := ctx.Path(PasswordFileFlag.Name)
-	if path == "" {
-		return "", false
-	}
-	text, err := os.ReadFile(path)
-	if err != nil {
-		Fatalf("Failed to read password file: %v", err)
-	}
-	lines := strings.Split(string(text), "\n")
-	if len(lines) == 0 {
-		return "", false
-	}
-	// Sanitise DOS line endings.
-	return strings.TrimRight(lines[0], "\r"), true
-}
-
 func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setNodeKey(ctx, cfg)
 	setNAT(ctx, cfg)
@@ -1773,10 +1754,15 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			passphrase string
 			err        error
 		)
-		if pw, ok := ReadPasswordFromList(ctx); ok {
-			passphrase = pw
+		if path := ctx.Path(PasswordFileFlag.Name); path != "" {
+			if text, err := os.ReadFile(path); err != nil {
+				Fatalf("Failed to read password file: %v", err)
+			} else {
+				if lines := strings.Split(string(text), "\n"); len(lines) > 0 {
+					passphrase = strings.TrimRight(lines[0], "\r") // Sanitise DOS line endings.
+				}
+			}
 		}
-
 		// Unlock the developer account by local keystore.
 		var ks *keystore.KeyStore
 		if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {

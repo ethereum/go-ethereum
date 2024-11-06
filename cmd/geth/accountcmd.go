@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -220,6 +221,24 @@ func accountList(ctx *cli.Context) error {
 	return nil
 }
 
+// readPasswordFromFile reads the first line of the given file, trims line endings,
+// and returns the password and whether the reading was successful.
+func readPasswordFromFile(path string) (string, bool) {
+	if path == "" {
+		return "", false
+	}
+	text, err := os.ReadFile(path)
+	if err != nil {
+		utils.Fatalf("Failed to read password file: %v", err)
+	}
+	lines := strings.Split(string(text), "\n")
+	if len(lines) == 0 {
+		return "", false
+	}
+	// Sanitise DOS line endings.
+	return strings.TrimRight(lines[0], "\r"), true
+}
+
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
 	cfg := loadBaseConfig(ctx)
@@ -237,7 +256,7 @@ func accountCreate(ctx *cli.Context) error {
 		scryptP = keystore.LightScryptP
 	}
 
-	password, ok := utils.ReadPasswordFromList(ctx)
+	password, ok := readPasswordFromFile(ctx.Path(utils.PasswordFileFlag.Name))
 	if !ok {
 		password = utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	}
@@ -307,7 +326,7 @@ func importWallet(ctx *cli.Context) error {
 	if len(backends) == 0 {
 		utils.Fatalf("Keystore is not available")
 	}
-	password, ok := utils.ReadPasswordFromList(ctx)
+	password, ok := readPasswordFromFile(ctx.Path(utils.PasswordFileFlag.Name))
 	if !ok {
 		password = utils.GetPassPhrase("", false)
 	}
@@ -335,7 +354,7 @@ func accountImport(ctx *cli.Context) error {
 		utils.Fatalf("Keystore is not available")
 	}
 	ks := backends[0].(*keystore.KeyStore)
-	password, ok := utils.ReadPasswordFromList(ctx)
+	password, ok := readPasswordFromFile(ctx.Path(utils.PasswordFileFlag.Name))
 	if !ok {
 		password = utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
 	}
