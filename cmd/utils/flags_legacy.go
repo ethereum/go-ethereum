@@ -159,6 +159,12 @@ var (
 		Usage:    "This used to enable the 'personal' namespace.",
 		Category: flags.DeprecatedCategory,
 	}
+	UnlockedAccountFlag = &cli.StringFlag{
+		Name:     "unlock",
+		Usage:    "Comma separated list of accounts to unlock (deprecated)",
+		Value:    "",
+		Category: flags.DeprecatedCategory,
+	}
 )
 
 // showDeprecated displays deprecated flags that will be soon removed from the codebase.

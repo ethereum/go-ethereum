@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -24,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/urfave/cli/v2"
 )
 
@@ -219,35 +219,6 @@ func accountList(ctx *cli.Context) error {
 	return nil
 }
 
-// tries unlocking the specified account a few times.
-func unlockAccount(ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
-	account, err := utils.MakeAddress(ks, address)
-	if err != nil {
-		utils.Fatalf("Could not list accounts: %v", err)
-	}
-	for trials := 0; trials < 3; trials++ {
-		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
-		password := utils.GetPassPhraseWithList(prompt, false, i, passwords)
-		err = ks.Unlock(account, password)
-		if err == nil {
-			log.Info("Unlocked account", "address", account.Address.Hex())
-			return account, password
-		}
-		if err, ok := err.(*keystore.AmbiguousAddrError); ok {
-			log.Info("Unlocked account", "address", account.Address.Hex())
-			return ambiguousAddrRecovery(ks, err, password), password
-		}
-		if err != keystore.ErrDecrypt {
-			// No need to prompt again if the error is not decryption-related.
-			break
-		}
-	}
-	// All trials expended to unlock account, bail out
-	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
-
-	return accounts.Account{}, ""
-}
-
 func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrError, auth string) accounts.Account {
 	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
 	for _, a := range err.Matches {
@@ -323,10 +294,24 @@ func accountUpdate(ctx *cli.Context) error {
 	ks := backends[0].(*keystore.KeyStore)
 
 	for _, addr := range ctx.Args().Slice() {
-		account, oldPassword := unlockAccount(ks, addr, 0, nil)
-		newPassword := utils.GetPassPhraseWithList("Please give a new password. Do not forget this password.", true, 0, nil)
-		if err := ks.Update(account, oldPassword, newPassword); err != nil {
-			utils.Fatalf("Could not update the account: %v", err)
+		account, err := utils.MakeAddress(ks, addr)
+		if err != nil {
+			return fmt.Errorf("could not locate account: %w", err)
+		}
+		newPassword := utils.GetPassPhrase("Please give a NEW password. Do not forget this password.", true)
+		updateFn := func(attempt int) error {
+			prompt := fmt.Sprintf("Please provide the OLD password for account %s | Attempt %d/%d", addr, attempt+1, 3)
+			password := utils.GetPassPhrase(prompt, false)
+			return ks.Update(account, password, newPassword)
+		}
+		// let user attempt unlock thrice.
+		for attempts := 0; attempts < 3; attempts++ {
+			if err = updateFn(attempts); !errors.Is(err, keystore.ErrDecrypt) {
+				break // nil or some other type of error
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("could not update account: %w", err)
 		}
 	}
 	return nil
