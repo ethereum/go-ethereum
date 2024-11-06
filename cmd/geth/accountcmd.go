@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/urfave/cli/v2"
 )
@@ -294,10 +295,10 @@ func accountUpdate(ctx *cli.Context) error {
 	ks := backends[0].(*keystore.KeyStore)
 
 	for _, addr := range ctx.Args().Slice() {
-		account, err := utils.MakeAddress(ks, addr)
-		if err != nil {
-			return fmt.Errorf("could not locate account: %w", err)
+		if !common.IsHexAddress(addr) {
+			return errors.New("address must be specified in hexadecimal form")
 		}
+		account := accounts.Account{Address: common.HexToAddress(addr)}
 		newPassword := utils.GetPassPhrase("Please give a NEW password. Do not forget this password.", true)
 		updateFn := func(attempt int) error {
 			prompt := fmt.Sprintf("Please provide the OLD password for account %s | Attempt %d/%d", addr, attempt+1, 3)
@@ -305,10 +306,9 @@ func accountUpdate(ctx *cli.Context) error {
 			return ks.Update(account, password, newPassword)
 		}
 		// let user attempt unlock thrice.
-		for attempts := 0; attempts < 3; attempts++ {
-			if err = updateFn(attempts); !errors.Is(err, keystore.ErrDecrypt) {
-				break // nil or some other type of error
-			}
+		err := updateFn(0)
+		for attempts := 1; attempts < 3 && errors.Is(err, keystore.ErrDecrypt); attempts++ {
+			err = updateFn(attempts)
 		}
 		if err != nil {
 			return fmt.Errorf("could not update account: %w", err)
