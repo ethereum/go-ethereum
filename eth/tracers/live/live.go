@@ -174,7 +174,12 @@ func newLive(cfg json.RawMessage, stack tracers.LiveApiRegister, backend tracing
 	}
 
 	latest := l.getFreezerTail()
-	offset := latest - tail - frozen
+	var offset uint64
+	if latest == 0 {
+		offset = 0
+	} else {
+		offset = latest - tail - frozen
+	}
 	log.Info("Open live tracer", "path", config.Path, "offset", offset, "tail", tail, "frozen", frozen, "latest", latest, "tables", tables)
 
 	// Initialize the latest block number as the sum of the tail, frozen, and offset
