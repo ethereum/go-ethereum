@@ -54,10 +54,9 @@ func (st *Stack) Data() []uint256.Int {
 func (st *Stack) push(d uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	if st.size == len(st.data) {
-		st.data = append(st.data, d)
-	} else {
-		st.data[st.size] = d
+		st.data = append(st.data, uint256.Int{})
 	}
+	st.data[st.size] = d
 	st.size++
 }
 
