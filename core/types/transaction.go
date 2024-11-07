@@ -481,7 +481,7 @@ func (tx *Transaction) TxCost(number *big.Int) *big.Int {
 
 func (tx *Transaction) IsSpecialTransaction() bool {
 	to := tx.To()
-	return to != nil && (*to == common.RandomizeSMCBinary || *to == common.BlockSignersBinary)
+	return to != nil && (*to == common.BlockSignersBinary || *to == common.RandomizeSMCBinary)
 }
 
 func (tx *Transaction) IsTradingTransaction() bool {
