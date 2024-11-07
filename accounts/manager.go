@@ -29,14 +29,6 @@ import (
 // the manager will buffer in its channel.
 const managerSubBufferSize = 50
 
-// Config contains the settings of the global account manager.
-//
-// TODO(rjl493456442, karalabe, holiman): Get rid of this when account management
-// is removed in favor of Clef.
-type Config struct {
-	InsecureUnlockAllowed bool // Whether account unlocking in insecure environment is allowed
-}
-
 // newBackendEvent lets the manager know it should
 // track the given backend for wallet updates.
 type newBackendEvent struct {
@@ -47,7 +39,6 @@ type newBackendEvent struct {
 // Manager is an overarching account manager that can communicate with various
 // backends for signing transactions.
 type Manager struct {
-	config      *Config                    // Global account manager configurations
 	backends    map[reflect.Type][]Backend // Index of backends currently registered
 	updaters    []event.Subscription       // Wallet update subscriptions for all backends
 	updates     chan WalletEvent           // Subscription sink for backend wallet changes
@@ -63,7 +54,7 @@ type Manager struct {
 
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
-func NewManager(config *Config, backends ...Backend) *Manager {
+func NewManager(backends ...Backend) *Manager {
 	// Retrieve the initial list of wallets from the backends and sort by URL
 	var wallets []Wallet
 	for _, backend := range backends {
@@ -78,7 +69,6 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 	}
 	// Assemble the account manager and return
 	am := &Manager{
-		config:      config,
 		backends:    make(map[reflect.Type][]Backend),
 		updaters:    subs,
 		updates:     updates,
@@ -104,11 +94,6 @@ func (am *Manager) Close() error {
 	errc := make(chan error)
 	am.quit <- errc
 	return <-errc
-}
-
-// Config returns the configuration of account manager.
-func (am *Manager) Config() *Config {
-	return am.config
 }
 
 // AddBackend starts the tracking of an additional backend for wallet updates.
