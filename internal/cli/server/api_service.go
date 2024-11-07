@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -11,6 +12,7 @@ import (
 )
 
 func (s *Server) GetRootHash(ctx context.Context, req *protobor.GetRootHashRequest) (*protobor.GetRootHashResponse, error) {
+	fmt.Printf(">>>>> GetRootHash: %v\n", req)
 	rootHash, err := s.backend.APIBackend.GetRootHash(ctx, req.StartBlockNumber, req.EndBlockNumber)
 	if err != nil {
 		return nil, err
@@ -20,6 +22,7 @@ func (s *Server) GetRootHash(ctx context.Context, req *protobor.GetRootHashReque
 }
 
 func (s *Server) GetVoteOnHash(ctx context.Context, req *protobor.GetVoteOnHashRequest) (*protobor.GetVoteOnHashResponse, error) {
+	fmt.Printf(">>>>> GetVoteOnHash: %v\n", req)
 	vote, err := s.backend.APIBackend.GetVoteOnHash(ctx, req.StartBlockNumber, req.EndBlockNumber, req.Hash, req.MilestoneId)
 	if err != nil {
 		return nil, err
@@ -37,6 +40,7 @@ func headerToProtoborHeader(h *types.Header) *protobor.Header {
 }
 
 func (s *Server) GetHeaderByNumber(ctx context.Context, req *protobor.GetHeaderByNumberRequest) (*protobor.GetHeaderByNumberResponse, error) {
+	fmt.Printf(">>>>> GetHeaderByNumber: %v\n", req)
 	header, err := s.backend.APIBackend.HeaderByNumber(ctx, rpc.BlockNumber(req.Number))
 	if err != nil {
 		return nil, err
@@ -46,6 +50,7 @@ func (s *Server) GetHeaderByNumber(ctx context.Context, req *protobor.GetHeaderB
 }
 
 func (s *Server) GetBlockByNumber(ctx context.Context, req *protobor.GetBlockByNumberRequest) (*protobor.GetBlockByNumberResponse, error) {
+	fmt.Printf(">>>>> GetBlockByNumber: %v\n", req)
 	block, err := s.backend.APIBackend.BlockByNumber(ctx, rpc.BlockNumber(req.Number))
 	if err != nil {
 		return nil, err
@@ -61,6 +66,7 @@ func blockToProtoBlock(h *types.Block) *protobor.Block {
 }
 
 func (s *Server) GetTransactionReceipt(ctx context.Context, req *protobor.ReceiptRequest) (*protobor.ReceiptResponse, error) {
+	fmt.Printf(">>>>> GetTransactionReceipt: %v\n", req)
 	_, blockHash, _, txnIndex, err := s.backend.APIBackend.GetTransaction(ctx, protoutil.ConvertH256ToHash(req.Hash))
 	if err != nil {
 		return nil, err
@@ -83,6 +89,7 @@ func (s *Server) GetTransactionReceipt(ctx context.Context, req *protobor.Receip
 }
 
 func (s *Server) GetBorBlockReceipt(ctx context.Context, req *protobor.ReceiptRequest) (*protobor.ReceiptResponse, error) {
+	fmt.Printf(">>>>> GetBorBlockReceipt: %v\n", req)
 	receipt, err := s.backend.APIBackend.GetBorBlockReceipt(ctx, protoutil.ConvertH256ToHash(req.Hash))
 	if err != nil {
 		return nil, err
