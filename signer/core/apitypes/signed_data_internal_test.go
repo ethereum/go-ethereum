@@ -250,7 +250,7 @@ func TestConvertAddressDataToSlice(t *testing.T) {
 func TestTypedDataArrayValidate(t *testing.T) {
 	t.Parallel()
 
-	type TestDataInput struct {
+	type testDataInput struct {
 		Name        string           `json:"name"`
 		Domain      TypedDataDomain  `json:"domain"`
 		PrimaryType string           `json:"primaryType"`
@@ -258,17 +258,14 @@ func TestTypedDataArrayValidate(t *testing.T) {
 		Message     TypedDataMessage `json:"data"`
 		Digest      string           `json:"digest"`
 	}
-
 	fc, err := os.ReadFile("./testdata/typed-data.json")
 	require.NoError(t, err, "error reading test data file")
 
-	var tests []TestDataInput
+	var tests []testDataInput
 	err = json.Unmarshal(fc, &tests)
 	require.NoError(t, err, "error unmarshalling test data file contents")
 
-	for _, tt := range tests {
-		tc := tt
-
+	for _, tc := range tests {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 

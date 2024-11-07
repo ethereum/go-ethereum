@@ -325,9 +325,11 @@ type Type struct {
 	Type string `json:"type"`
 }
 
-// isArray returns true if the type is a fixed or variable sized array
+// isArray returns true if the type is a fixed or variable sized array.
+// This method may return false positives, in case the Type is not a valid
+// expression, e.g. "fooo[[[[".
 func (t *Type) isArray() bool {
-	return len(strings.Split(t.Type, "[")) > 1
+	return strings.IndexByte(t.Type, '[') > 0
 }
 
 // typeName returns the canonical name of the type. If the type is 'Person[]' or 'Person[2]', then
@@ -462,9 +464,9 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 		encType := field.Type
 		encValue := data[field.Name]
 		if encType[len(encType)-1:] == "]" {
-			encodedData, encErr := typedData.encodeArrayValue(encValue, encType, depth)
-			if encErr != nil {
-				return nil, encErr
+			encodedData, err := typedData.encodeArrayValue(encValue, encType, depth)
+			if err != nil {
+				return nil, err
 			}
 			buffer.Write(encodedData)
 		} else if typedData.Types[field.Type] != nil {
@@ -494,14 +496,14 @@ func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType strin
 		return nil, dataMismatchError(encType, encValue)
 	}
 
-	arrayBuffer := bytes.Buffer{}
+	arrayBuffer := new(bytes.Buffer)
 	parsedType := strings.Split(encType, "[")[0]
 	for _, item := range arrayValue {
 		if reflect.TypeOf(item).Kind() == reflect.Slice ||
 			reflect.TypeOf(item).Kind() == reflect.Array {
-			encodedData, encErr := typedData.encodeArrayValue(item, parsedType, depth+1)
-			if encErr != nil {
-				return nil, encErr
+			encodedData, err := typedData.encodeArrayValue(item, parsedType, depth+1)
+			if err != nil {
+				return nil, err
 			}
 			arrayBuffer.Write(encodedData)
 		} else {
@@ -510,16 +512,16 @@ func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType strin
 				if !ok {
 					return nil, dataMismatchError(parsedType, item)
 				}
-				encodedData, encErr := typedData.EncodeData(parsedType, mapValue, depth+1)
-				if encErr != nil {
-					return nil, encErr
+				encodedData, err := typedData.EncodeData(parsedType, mapValue, depth+1)
+				if err != nil {
+					return nil, err
 				}
 				digest := crypto.Keccak256(encodedData)
 				arrayBuffer.Write(digest)
 			} else {
-				bytesValue, encErr := typedData.EncodePrimitiveValue(parsedType, item, depth)
-				if encErr != nil {
-					return nil, encErr
+				bytesValue, err := typedData.EncodePrimitiveValue(parsedType, item, depth)
+				if err != nil {
+					return nil, err
 				}
 				arrayBuffer.Write(bytesValue)
 			}
