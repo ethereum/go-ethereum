@@ -52,9 +52,14 @@ type Manager struct {
 	lock sync.RWMutex
 }
 
+// Config is a legacy struct which is not used
+type Config struct {
+	InsecureUnlockAllowed bool // Unused legacy-parameter
+}
+
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
-func NewManager(backends ...Backend) *Manager {
+func NewManager(config *Config, backends ...Backend) *Manager {
 	// Retrieve the initial list of wallets from the backends and sort by URL
 	var wallets []Wallet
 	for _, backend := range backends {

@@ -193,7 +193,7 @@ nodes.
 // makeAccountManager creates an account manager with backends
 func makeAccountManager(ctx *cli.Context) *accounts.Manager {
 	cfg := loadBaseConfig(ctx)
-	am := accounts.NewManager()
+	am := accounts.NewManager(nil)
 	keydir, isEphemeral, err := cfg.Node.GetKeyStoreDir()
 	if err != nil {
 		utils.Fatalf("Failed to get the keystore directory: %v", err)
