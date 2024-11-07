@@ -30,70 +30,70 @@ import (
 func opAdd(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.Add(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opSub(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.Sub(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opMul(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.Mul(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opDiv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.Div(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opSdiv(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.SDiv(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opMod(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.Mod(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opSmod(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.SMod(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opExp(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	base, exponent := scope.Stack.pop(), scope.Stack.pop()
 	exponent.Exp(&base, &exponent)
-	scope.Stack.push(&exponent)
+	scope.Stack.push(exponent)
 	return nil, nil
 }
 
 func opSignExtend(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	back, num := scope.Stack.pop(), scope.Stack.pop()
 	num.ExtendSign(&num, &back)
-	scope.Stack.push(&num)
+	scope.Stack.push(num)
 	return nil, nil
 }
 
 func opNot(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x := scope.Stack.pop()
 	x.Not(&x)
-	scope.Stack.push(&x)
+	scope.Stack.push(x)
 	return nil, nil
 }
 
@@ -160,42 +160,42 @@ func opIszero(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 func opAnd(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.And(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opOr(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.Or(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opXor(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y := scope.Stack.pop(), scope.Stack.pop()
 	y.Xor(&x, &y)
-	scope.Stack.push(&y)
+	scope.Stack.push(y)
 	return nil, nil
 }
 
 func opByte(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	th, val := scope.Stack.pop(), scope.Stack.pop()
 	val.Byte(&th)
-	scope.Stack.push(&val)
+	scope.Stack.push(val)
 	return nil, nil
 }
 
 func opAddmod(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y, z := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.pop()
 	z.AddMod(&x, &y, &z)
-	scope.Stack.push(&z)
+	scope.Stack.push(z)
 	return nil, nil
 }
 
 func opMulmod(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	x, y, z := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.pop()
 	z.MulMod(&x, &y, &z)
-	scope.Stack.push(&z)
+	scope.Stack.push(z)
 	return nil, nil
 }
 
@@ -207,7 +207,7 @@ func opSHL(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	shift, value := scope.Stack.pop(), scope.Stack.pop()
 	if shift.LtUint64(256) {
 		value.Lsh(&value, uint(shift.Uint64()))
-		scope.Stack.push(&value)
+		scope.Stack.push(value)
 	} else {
 		scope.Stack.pushU64(0)
 	}
@@ -222,7 +222,7 @@ func opSHR(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	shift, value := scope.Stack.pop(), scope.Stack.pop()
 	if shift.LtUint64(256) {
 		value.Rsh(&value, uint(shift.Uint64()))
-		scope.Stack.push(&value)
+		scope.Stack.push(value)
 	} else {
 		scope.Stack.pushU64(0)
 	}
@@ -240,12 +240,12 @@ func opSAR(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 		} else {
 			// Max negative shift: all bits set
 			value.SetAllOne()
-			scope.Stack.push(&value)
+			scope.Stack.push(value)
 		}
 		return nil, nil
 	}
 	value.SRsh(&value, uint(shift.Uint64()))
-	scope.Stack.push(&value)
+	scope.Stack.push(value)
 	return nil, nil
 }
 
@@ -277,7 +277,7 @@ func opAddress(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 func opBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.pop()
 	address := common.Address(slot.Bytes20())
-	scope.Stack.push(interpreter.evm.StateDB.GetBalance(address))
+	scope.Stack.push(*interpreter.evm.StateDB.GetBalance(address))
 	return nil, nil
 }
 
@@ -292,7 +292,7 @@ func opCaller(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 }
 
 func opCallValue(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.push(scope.Contract.value)
+	scope.Stack.push(*scope.Contract.value)
 	return nil, nil
 }
 
@@ -443,7 +443,7 @@ func opExtCodeHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 
 func opGasprice(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v, _ := uint256.FromBig(interpreter.evm.GasPrice)
-	scope.Stack.push(v)
+	scope.Stack.push(*v)
 	return nil, nil
 }
 
@@ -486,13 +486,13 @@ func opTimestamp(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 
 func opNumber(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v, _ := uint256.FromBig(interpreter.evm.Context.BlockNumber)
-	scope.Stack.push(v)
+	scope.Stack.push(*v)
 	return nil, nil
 }
 
 func opDifficulty(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v, _ := uint256.FromBig(interpreter.evm.Context.Difficulty)
-	scope.Stack.push(v)
+	scope.Stack.push(*v)
 	return nil, nil
 }
 
@@ -989,7 +989,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 		if missing := pushByteSize - (end - start); missing > 0 {
 			a.Lsh(a, uint(8*missing))
 		}
-		scope.Stack.push(a)
+		scope.Stack.push(*a)
 		*pc += size
 		return nil, nil
 	}

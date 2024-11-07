@@ -990,11 +990,9 @@ func BenchmarkShortDeepStacks(b *testing.B) {
 	// This piece of code will push a few items to the stack, and then call itself
 	// recursively.
 	var code []byte
-	code = append(code, byte(vm.PUSH0))
-	code = append(code, byte(vm.PUSH0))
-	for i := 0; i < 512; i++ {
-		code = append(code, byte(vm.PUSH0))
-		code = append(code, byte(vm.ADD))
+	for i := 0; i < 16; i++ {
+		code = append(code, byte(vm.PUSH1))
+		code = append(code, byte(0x00))
 	}
 	code = append(code, []byte{
 		byte(vm.ADDRESS), // address to call

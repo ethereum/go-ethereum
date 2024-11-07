@@ -51,12 +51,12 @@ func (st *Stack) Data() []uint256.Int {
 	return st.data[0:st.size]
 }
 
-func (st *Stack) push(d *uint256.Int) {
+func (st *Stack) push(d uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	if st.size == len(st.data) {
-		st.data = append(st.data, *d)
+		st.data = append(st.data, d)
 	} else {
-		st.data[st.size].Set(d)
+		st.data[st.size] = d
 	}
 	st.size++
 }
@@ -137,7 +137,7 @@ func (st *Stack) swap16() {
 }
 
 func (st *Stack) dup(n int) {
-	st.push(&st.data[st.len()-n])
+	st.push(st.data[st.len()-n])
 }
 
 // Back returns the n'th item in stack

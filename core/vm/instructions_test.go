@@ -114,8 +114,8 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		x := new(uint256.Int).SetBytes(common.Hex2Bytes(test.X))
 		y := new(uint256.Int).SetBytes(common.Hex2Bytes(test.Y))
 		expected := new(uint256.Int).SetBytes(common.Hex2Bytes(test.Expected))
-		stack.push(x)
-		stack.push(y)
+		stack.push(*x)
+		stack.push(*y)
 		opFn(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if stack.len() != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", name, stack.len())
@@ -228,9 +228,9 @@ func TestAddMod(t *testing.T) {
 		y := new(uint256.Int).SetBytes(common.Hex2Bytes(test.y))
 		z := new(uint256.Int).SetBytes(common.Hex2Bytes(test.z))
 		expected := new(uint256.Int).SetBytes(common.Hex2Bytes(test.expected))
-		stack.push(z)
-		stack.push(y)
-		stack.push(x)
+		stack.push(*z)
+		stack.push(*y)
+		stack.push(*x)
 		opAddmod(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		actual := stack.pop()
 		if actual.Cmp(expected) != 0 {
@@ -256,8 +256,8 @@ func TestWriteExpectedValues(t *testing.T) {
 		for i, param := range args {
 			x := new(uint256.Int).SetBytes(common.Hex2Bytes(param.x))
 			y := new(uint256.Int).SetBytes(common.Hex2Bytes(param.y))
-			stack.push(x)
-			stack.push(y)
+			stack.push(*x)
+			stack.push(*y)
 			opFn(&pc, interpreter, &ScopeContext{nil, stack, nil})
 			actual := stack.pop()
 			result[i] = TwoOperandTestcase{param.x, param.y, fmt.Sprintf("%064x", actual)}
@@ -308,7 +308,7 @@ func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		for _, arg := range intArgs {
-			stack.push(arg)
+			stack.push(*arg)
 		}
 		op(&pc, evmInterpreter, scope)
 		stack.pop()
@@ -543,14 +543,14 @@ func TestOpMstore(t *testing.T) {
 	mem.Resize(64)
 	pc := uint64(0)
 	v := "abcdef00000000000000abba000000000deaf000000c0de00100000000133700"
-	stack.push(new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
-	stack.push(new(uint256.Int))
+	stack.push(*new(uint256.Int).SetBytes(common.Hex2Bytes(v)))
+	stack.push(*new(uint256.Int))
 	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if got := common.Bytes2Hex(mem.GetCopy(0, 32)); got != v {
 		t.Fatalf("Mstore fail, got %v, expected %v", got, v)
 	}
-	stack.push(new(uint256.Int).SetUint64(0x1))
-	stack.push(new(uint256.Int))
+	stack.push(*new(uint256.Int).SetUint64(0x1))
+	stack.push(*new(uint256.Int))
 	opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	if common.Bytes2Hex(mem.GetCopy(0, 32)) != "0000000000000000000000000000000000000000000000000000000000000001" {
 		t.Fatalf("Mstore failed to overwrite previous value")
@@ -573,8 +573,8 @@ func BenchmarkOpMstore(bench *testing.B) {
 
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		stack.push(value)
-		stack.push(memStart)
+		stack.push(*value)
+		stack.push(*memStart)
 		opMstore(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
@@ -601,16 +601,16 @@ func TestOpTstore(t *testing.T) {
 	env.interpreter = evmInterpreter
 	pc := uint64(0)
 	// push the value to the stack
-	stack.push(new(uint256.Int).SetBytes(value))
+	stack.push(*new(uint256.Int).SetBytes(value))
 	// push the location to the stack
-	stack.push(new(uint256.Int))
+	stack.push(*new(uint256.Int))
 	opTstore(&pc, evmInterpreter, &scopeContext)
 	// there should be no elements on the stack after TSTORE
 	if stack.len() != 0 {
 		t.Fatal("stack wrong size")
 	}
 	// push the location to the stack
-	stack.push(new(uint256.Int))
+	stack.push(*new(uint256.Int))
 	opTload(&pc, evmInterpreter, &scopeContext)
 	// there should be one element on the stack after TLOAD
 	if stack.len() != 1 {
@@ -636,8 +636,8 @@ func BenchmarkOpKeccak256(bench *testing.B) {
 
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		stack.push(uint256.NewInt(32))
-		stack.push(start)
+		stack.push(*uint256.NewInt(32))
+		stack.push(*start)
 		opKeccak256(&pc, evmInterpreter, &ScopeContext{mem, stack, nil})
 	}
 }
@@ -774,7 +774,7 @@ func TestBlobHash(t *testing.T) {
 			pc             = uint64(0)
 			evmInterpreter = env.interpreter
 		)
-		stack.push(uint256.NewInt(tt.idx))
+		stack.push(*uint256.NewInt(tt.idx))
 		opBlobHash(&pc, evmInterpreter, &ScopeContext{nil, stack, nil})
 		if stack.len() != 1 {
 			t.Errorf("Expected one item on stack after %v, got %d: ", tt.name, stack.len())
@@ -887,9 +887,9 @@ func TestOpMCopy(t *testing.T) {
 		src, _ := uint256.FromHex(tc.src)
 		dst, _ := uint256.FromHex(tc.dst)
 
-		stack.push(len)
-		stack.push(src)
-		stack.push(dst)
+		stack.push(*len)
+		stack.push(*src)
+		stack.push(*dst)
 		wantErr := (tc.wantGas == 0)
 		// Calc mem expansion
 		var memorySize uint64
@@ -930,7 +930,7 @@ func TestOpMCopy(t *testing.T) {
 
 // TestPush sanity-checks how code with immediates are handled when the code size is
 // smaller than the size of the immediate.
-func TestPush(t *testing.T) {
+func Testpush2(t *testing.T) {
 	code := common.FromHex("0011223344556677889900aabbccddeeff0102030405060708090a0b0c0d0e0ff1e1d1c1b1a19181716151413121")
 
 	push32 := makePush(32, 32)

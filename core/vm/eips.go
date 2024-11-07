@@ -89,7 +89,7 @@ func enable1884(jt *JumpTable) {
 
 func opSelfBalance(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	balance := interpreter.evm.StateDB.GetBalance(scope.Contract.Address())
-	scope.Stack.push(balance)
+	scope.Stack.push(*balance)
 	return nil, nil
 }
 
@@ -108,7 +108,7 @@ func enable1344(jt *JumpTable) {
 // opChainID implements CHAINID opcode
 func opChainID(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	chainId, _ := uint256.FromBig(interpreter.evm.chainConfig.ChainID)
-	scope.Stack.push(chainId)
+	scope.Stack.push(*chainId)
 	return nil, nil
 }
 
@@ -219,7 +219,7 @@ func opTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 // opBaseFee implements BASEFEE opcode
 func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
-	scope.Stack.push(baseFee)
+	scope.Stack.push(*baseFee)
 	return nil, nil
 }
 
@@ -288,7 +288,7 @@ func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 // opBlobBaseFee implements BLOBBASEFEE opcode
 func opBlobBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	blobBaseFee, _ := uint256.FromBig(interpreter.evm.Context.BlobBaseFee)
-	scope.Stack.push(blobBaseFee)
+	scope.Stack.push(*blobBaseFee)
 	return nil, nil
 }
 
@@ -358,11 +358,10 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	var (
 		codeLen = uint64(len(scope.Contract.Code))
-		integer = new(uint256.Int)
 	)
 	*pc += 1
 	if *pc < codeLen {
-		scope.Stack.push(integer.SetUint64(uint64(scope.Contract.Code[*pc])))
+		scope.Stack.pushU64(uint64(scope.Contract.Code[*pc]))
 
 		if !scope.Contract.IsDeployment && *pc%31 == 0 {
 			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
@@ -375,7 +374,7 @@ func opPush1EIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 			}
 		}
 	} else {
-		scope.Stack.push(integer.Clear())
+		scope.Stack.pushU64(0)
 	}
 	return nil, nil
 }
@@ -387,11 +386,11 @@ func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
 			start   = min(codeLen, int(*pc+1))
 			end     = min(codeLen, start+pushByteSize)
 		)
-		scope.Stack.push(new(uint256.Int).SetBytes(
+		scope.Stack.pushBytes(
 			common.RightPadBytes(
 				scope.Contract.Code[start:end],
 				pushByteSize,
-			)),
+			),
 		)
 
 		if !scope.Contract.IsDeployment {
