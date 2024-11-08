@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -8,6 +9,7 @@ import (
 
 // GetBorReceiptByHash retrieves the bor block receipt in a given block.
 func (bc *BlockChain) GetBorReceiptByHash(hash common.Hash) *types.Receipt {
+	fmt.Printf(">>>>> GetBorBlockReceiptBorBlockchain\n")
 	if receipt, ok := bc.borReceiptsCache.Get(hash); ok {
 		return receipt
 	}
