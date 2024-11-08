@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/cli/server/proto"
@@ -13,7 +12,6 @@ import (
 )
 
 func PeerInfoToPeer(info *p2p.PeerInfo) *proto.Peer {
-	fmt.Printf(">>>>> PeerInfoToPeer: %v\n", info)
 	return &proto.Peer{
 		Id:      info.ID,
 		Enode:   info.Enode,
@@ -26,14 +24,12 @@ func PeerInfoToPeer(info *p2p.PeerInfo) *proto.Peer {
 }
 
 func ConvertBloomToProtoBloom(bloom types.Bloom) *protobor.Bloom {
-	fmt.Printf(">>>>> ConvertBloomToProtoBloom: %v\n", bloom)
 	return &protobor.Bloom{
 		Bloom: bloom.Bytes(),
 	}
 }
 
 func ConvertLogsToProtoLogs(logs []*types.Log) []*protobor.Log {
-	fmt.Printf(">>>>> ConvertLogsToProtoLogs: %v\n", logs)
 	var protoLogs []*protobor.Log
 	for _, log := range logs {
 		protoLog := &protobor.Log{
@@ -54,7 +50,6 @@ func ConvertLogsToProtoLogs(logs []*types.Log) []*protobor.Log {
 }
 
 func ConvertTopicsToProtoTopics(topics []common.Hash) []*protocommon.H256 {
-	fmt.Printf(">>>>> ConvertTopicsToProtoTopics: %v\n", topics)
 	var protoTopics []*protocommon.H256
 	for _, topic := range topics {
 		protoTopics = append(protoTopics, protoutil.ConvertHashToH256(topic))
@@ -64,7 +59,6 @@ func ConvertTopicsToProtoTopics(topics []common.Hash) []*protocommon.H256 {
 }
 
 func ConvertReceiptToProtoReceipt(receipt *types.Receipt) *protobor.Receipt {
-	fmt.Printf(">>>>> ConvertReceiptToProtoReceipt: %v\n", receipt)
 	return &protobor.Receipt{
 		Type:              uint64(receipt.Type),
 		PostState:         receipt.PostState,

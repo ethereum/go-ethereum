@@ -20,7 +20,6 @@ var errBorEngineNotAvailable error = errors.New("Only available in Bor engine")
 // GetRootHash returns root hash for given start and end block
 func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
 	var api *bor.API
-	fmt.Printf(">>>>> GetRootHashApiBackend\n")
 
 	for _, _api := range b.eth.Engine().APIs(b.eth.BlockChain()) {
 		if _api.Namespace == "bor" {
@@ -43,7 +42,6 @@ func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, end
 // GetVoteOnHash returns the vote on hash
 func (b *EthAPIBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
 	var api *bor.API
-	fmt.Printf(">>>>> GetVoteOnHashApiBackend\n")
 
 	for _, _api := range b.eth.Engine().APIs(b.eth.BlockChain()) {
 		if _api.Namespace == "bor" {
@@ -92,7 +90,6 @@ func (b *EthAPIBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, e
 
 // GetBorBlockReceipt returns bor block receipt
 func (b *EthAPIBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-	fmt.Printf(">>>>> GetBorBlockReceiptApiBackend\n")
 
 	receipt := b.eth.blockchain.GetBorReceiptByHash(hash)
 	if receipt == nil {
@@ -104,7 +101,6 @@ func (b *EthAPIBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash
 
 // GetBorBlockLogs returns bor block logs
 func (b *EthAPIBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
-	fmt.Printf(">>>>> GetBorBlockLogsApiBackend\n")
 	receipt := b.eth.blockchain.GetBorReceiptByHash(hash)
 	if receipt == nil {
 		return nil, nil
@@ -115,25 +111,21 @@ func (b *EthAPIBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) (
 
 // GetBorBlockTransaction returns bor block tx
 func (b *EthAPIBackend) GetBorBlockTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	fmt.Printf(">>>>> GetBorBlockTransactionApiBackend\n")
 	tx, blockHash, blockNumber, index := rawdb.ReadBorTransaction(b.eth.ChainDb(), hash)
 	return tx, blockHash, blockNumber, index, nil
 }
 
 func (b *EthAPIBackend) GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
-	fmt.Printf(">>>>> GetBorBlockTransactionWithBlockHashApiBackend\n")
 	tx, blockHash, blockNumber, index := rawdb.ReadBorTransactionWithBlockHash(b.eth.ChainDb(), txHash, blockHash)
 	return tx, blockHash, blockNumber, index, nil
 }
 
 // SubscribeStateSyncEvent subscribes to state sync event
 func (b *EthAPIBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
-	fmt.Printf(">>>>> SubscribeStateSyncEventApiBackend\n")
 	return b.eth.BlockChain().SubscribeStateSyncEvent(ch)
 }
 
 // SubscribeChain2HeadEvent subscribes to reorg/head/fork event
 func (b *EthAPIBackend) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
-	fmt.Printf(">>>>> SubscribeChain2HeadEventApiBackend\n")
 	return b.eth.BlockChain().SubscribeChain2HeadEvent(ch)
 }
