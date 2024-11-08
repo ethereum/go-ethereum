@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/reflection"
 	"io"
 	"math/big"
 	"net"
@@ -443,6 +444,7 @@ func (s *Server) gRPCServerByListener(listener net.Listener) error {
 	s.grpcServer = grpc.NewServer(s.withLoggingUnaryInterceptor())
 	proto.RegisterBorServer(s.grpcServer, s)
 	protobor.RegisterBorApiServer(s.grpcServer, s)
+	reflection.Register(s.grpcServer)
 
 	go func() {
 		if err := s.grpcServer.Serve(listener); err != nil {
