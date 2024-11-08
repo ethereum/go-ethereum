@@ -275,6 +275,57 @@ func fuzzCrossG2Mul(data []byte) int {
 	return 1
 }
 
+func fuzzCrossG2MultiExp(data []byte) int {
+	var (
+		input        = bytes.NewReader(data)
+		gnarkScalars []fr.Element
+		gnarkPoints  []gnark.G2Affine
+		blstScalars  []*blst.Scalar
+		blstPoints   []*blst.P2Affine
+	)
+	// n random scalars (max 17)
+	for i := 0; i < 17; i++ {
+		// note that geth/crypto/bls12381 works only with scalars <= 32bytes
+		s, err := randomScalar(input, fr.Modulus())
+		if err != nil {
+			break
+		}
+		// get a random G1 point as basis
+		cp1, bl1, err := getG2Points(input)
+		if err != nil {
+			break
+		}
+
+		gnarkScalar := new(fr.Element).SetBigInt(s)
+		gnarkScalars = append(gnarkScalars, *gnarkScalar)
+		gnarkPoints = append(gnarkPoints, *cp1)
+
+		blstScalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
+		blstScalars = append(blstScalars, blstScalar)
+		blstPoints = append(blstPoints, bl1)
+	}
+
+	if len(gnarkScalars) == 0 || len(gnarkScalars) != len(gnarkPoints) {
+		return 0
+	}
+
+	// gnark multi exp
+	cp := new(gnark.G2Affine)
+	cp.MultiExp(gnarkPoints, gnarkScalars, ecc.MultiExpConfig{})
+
+	expectedGnark := multiExpG2Gnark(gnarkPoints, gnarkScalars)
+	if !bytes.Equal(cp.Marshal(), expectedGnark.Marshal()) {
+		panic("g1 multi exponentiation mismatch")
+	}
+
+	// blst multi exp
+	expectedBlst := blst.P2AffinesMult(blstPoints, blstScalars, 256).ToAffine()
+	if !bytes.Equal(cp.Marshal(), expectedBlst.Serialize()) {
+		panic("g1 multi exponentiation mismatch, gnark/blst")
+	}
+	return 1
+}
+
 func getG1Points(input io.Reader) (*gnark.G1Affine, *blst.P1Affine, error) {
 	// sample a random scalar
 	s, err := randomScalar(input, fp.Modulus())
@@ -337,6 +388,19 @@ func multiExpG1Gnark(gs []gnark.G1Affine, scalars []fr.Element) gnark.G1Affine {
 	res := gnark.G1Affine{}
 	for i := 0; i < len(gs); i++ {
 		tmp := new(gnark.G1Affine)
+		sb := scalars[i].Bytes()
+		scalarBytes := new(big.Int).SetBytes(sb[:])
+		tmp.ScalarMultiplication(&gs[i], scalarBytes)
+		res.Add(&res, tmp)
+	}
+	return res
+}
+
+// multiExpG1Gnark is a naive implementation of G1 multi-exponentiation
+func multiExpG2Gnark(gs []gnark.G2Affine, scalars []fr.Element) gnark.G2Affine {
+	res := gnark.G2Affine{}
+	for i := 0; i < len(gs); i++ {
+		tmp := new(gnark.G2Affine)
 		sb := scalars[i].Bytes()
 		scalarBytes := new(big.Int).SetBytes(sb[:])
 		tmp.ScalarMultiplication(&gs[i], scalarBytes)

@@ -27,6 +27,12 @@ func FuzzCrossPairing(f *testing.F) {
 	})
 }
 
+func FuzzCrossG2MultiExp(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzCrossG2MultiExp(data)
+	})
+}
+
 func FuzzCrossG1Add(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		fuzzCrossG1Add(data)

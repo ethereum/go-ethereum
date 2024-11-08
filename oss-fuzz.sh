@@ -213,6 +213,10 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
+  FuzzCrossG2MultiExp fuzz_cross_g2_multiexp \
+  $repo/tests/fuzzers/bls12381/bls12381_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   FuzzCrossPairing fuzz_cross_pairing\
   $repo/tests/fuzzers/bls12381/bls12381_test.go
 
