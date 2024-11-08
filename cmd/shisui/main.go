@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"database/sql"
 	"encoding/hex"
@@ -243,10 +244,11 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, addr string, cli
 	if err != nil {
 		return err
 	}
+	utp := discover.NewPortalUtp(context.Background(), config.Protocol, discV5, conn)
 
 	var historyNetwork *history.HistoryNetwork
 	if slices.Contains(config.Networks, portalwire.History.Name()) {
-		historyNetwork, err = initHistory(config, server, conn, localNode, discV5)
+		historyNetwork, err = initHistory(config, server, conn, localNode, discV5, utp)
 		if err != nil {
 			return err
 		}
@@ -255,7 +257,7 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, addr string, cli
 
 	var beaconNetwork *beacon.BeaconNetwork
 	if slices.Contains(config.Networks, portalwire.Beacon.Name()) {
-		beaconNetwork, err = initBeacon(config, server, conn, localNode, discV5)
+		beaconNetwork, err = initBeacon(config, server, conn, localNode, discV5, utp)
 		if err != nil {
 			return err
 		}
@@ -264,7 +266,7 @@ func startPortalRpcServer(config Config, conn discover.UDPConn, addr string, cli
 
 	var stateNetwork *state.StateNetwork
 	if slices.Contains(config.Networks, portalwire.State.Name()) {
-		stateNetwork, err = initState(config, server, conn, localNode, discV5)
+		stateNetwork, err = initState(config, server, conn, localNode, discV5, utp)
 		if err != nil {
 			return err
 		}
@@ -371,7 +373,7 @@ func doPortMapping(natm nat.Interface, ln *enode.LocalNode, addr *net.UDPAddr) {
 	}()
 }
 
-func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) (*history.HistoryNetwork, error) {
+func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5, utp *discover.PortalUtp) (*history.HistoryNetwork, error) {
 	networkName := portalwire.History.Name()
 	db, err := history.NewDB(config.DataDir, networkName)
 	if err != nil {
@@ -388,7 +390,18 @@ func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, local
 	}
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.History, config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
+	protocol, err := discover.NewPortalProtocol(
+		config.Protocol,
+		portalwire.History,
+		config.PrivateKey,
+		conn,
+		localNode,
+		discV5,
+		contentStorage,
+		contentQueue,
+		func(p *discover.PortalProtocol) {
+			p.Utp = utp
+		})
 
 	if err != nil {
 		return nil, err
@@ -407,7 +420,7 @@ func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, local
 	return historyNetwork, historyNetwork.Start()
 }
 
-func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) (*beacon.BeaconNetwork, error) {
+func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5, utp *discover.PortalUtp) (*beacon.BeaconNetwork, error) {
 	dbPath := path.Join(config.DataDir, "beacon")
 	err := os.MkdirAll(dbPath, 0755)
 	if err != nil {
@@ -430,7 +443,18 @@ func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localN
 	}
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.Beacon, config.PrivateKey, conn, localNode, discV5, contentStorage, contentQueue)
+	protocol, err := discover.NewPortalProtocol(
+		config.Protocol,
+		portalwire.Beacon,
+		config.PrivateKey,
+		conn,
+		localNode,
+		discV5,
+		contentStorage,
+		contentQueue,
+		func(p *discover.PortalProtocol) {
+			p.Utp = utp
+		})
 
 	if err != nil {
 		return nil, err
@@ -447,7 +471,7 @@ func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localN
 	return beaconNetwork, beaconNetwork.Start()
 }
 
-func initState(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5) (*state.StateNetwork, error) {
+func initState(config Config, server *rpc.Server, conn discover.UDPConn, localNode *enode.LocalNode, discV5 *discover.UDPv5, utp *discover.PortalUtp) (*state.StateNetwork, error) {
 	networkName := portalwire.State.Name()
 	db, err := history.NewDB(config.DataDir, networkName)
 	if err != nil {
@@ -465,7 +489,18 @@ func initState(config Config, server *rpc.Server, conn discover.UDPConn, localNo
 	stateStore := state.NewStateStorage(contentStorage, db)
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	protocol, err := discover.NewPortalProtocol(config.Protocol, portalwire.State, config.PrivateKey, conn, localNode, discV5, stateStore, contentQueue)
+	protocol, err := discover.NewPortalProtocol(
+		config.Protocol,
+		portalwire.State,
+		config.PrivateKey,
+		conn,
+		localNode,
+		discV5,
+		stateStore,
+		contentQueue,
+		func(p *discover.PortalProtocol) {
+			p.Utp = utp
+		})
 
 	if err != nil {
 		return nil, err

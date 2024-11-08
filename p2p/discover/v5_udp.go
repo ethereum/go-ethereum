@@ -588,6 +588,8 @@ func (t *UDPv5) dispatch() {
 			if ct.c == active && ct.timer == active.timeout {
 				ct.c.err <- errTimeout
 			}
+			delete(t.activeCallByAuth, ct.c.nonce)
+			ct.c.timeout.Stop()
 
 		case c := <-t.callDoneCh:
 			active := t.activeCallByNode[c.id]

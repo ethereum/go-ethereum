@@ -13,21 +13,18 @@ import (
 	"math/big"
 	"math/rand"
 	"net"
-	"net/netip"
 	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
-
-	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -41,7 +38,6 @@ import (
 	"github.com/optimism-java/utp-go/libutp"
 	"github.com/prysmaticlabs/go-bitfield"
 	"github.com/tetratelabs/wabin/leb128"
-	"go.uber.org/zap"
 )
 
 const (
@@ -173,17 +169,15 @@ type PortalProtocol struct {
 	protocolName string
 
 	DiscV5         *UDPv5
-	utp            *utp.Listener
-	utpSm          *utp.SocketManager
-	packetRouter   *utp.PacketRouter
-	connIdGen      libutp.ConnIdGenerator
-	ListenAddr     string
 	localNode      *enode.LocalNode
 	Log            log.Logger
 	PrivateKey     *ecdsa.PrivateKey
 	NetRestrict    *netutil.Netlist
 	BootstrapNodes []*enode.Node
 	conn           UDPConn
+
+	Utp       *PortalUtp
+	connIdGen libutp.ConnIdGenerator
 
 	validSchemes   enr.IdentityScheme
 	radiusCache    *fastcache.Cache
@@ -213,7 +207,6 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId portalwire.Proto
 	protocol := &PortalProtocol{
 		protocolId:     string(protocolId),
 		protocolName:   protocolId.Name(),
-		ListenAddr:     config.ListenAddr,
 		Log:            log.New("protocol", protocolId.Name()),
 		PrivateKey:     privateKey,
 		NetRestrict:    config.NetRestrict,
@@ -231,6 +224,7 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId portalwire.Proto
 		DiscV5:         discV5,
 		NAT:            config.NAT,
 		clock:          config.clock,
+		connIdGen:      libutp.NewConnIdGenerator(),
 	}
 
 	for _, opt := range opts {
@@ -253,7 +247,10 @@ func (p *PortalProtocol) Start() error {
 	}
 
 	p.DiscV5.RegisterTalkHandler(p.protocolId, p.handleTalkRequest)
-	p.DiscV5.RegisterTalkHandler(string(portalwire.Utp), p.handleUtpTalkRequest)
+	err = p.Utp.Start()
+	if err != nil {
+		return err
+	}
 
 	go p.table.loop()
 
@@ -271,10 +268,7 @@ func (p *PortalProtocol) Stop() {
 	p.cancelCloseCtx()
 	p.table.close()
 	p.DiscV5.Close()
-	err := p.utp.Close()
-	if err != nil {
-		p.Log.Error("failed to close utp listener", "err", err)
-	}
+	p.Utp.Stop()
 }
 func (p *PortalProtocol) RoutingTableInfo() [][]string {
 	p.table.mutex.Lock()
@@ -319,46 +313,6 @@ func (p *PortalProtocol) setupUDPListening() error {
 			name:     "ethereum portal peer discovery",
 			port:     laddr.Port,
 		}
-	}
-
-	var err error
-	p.packetRouter = utp.NewPacketRouter(
-		func(buf []byte, addr *net.UDPAddr) (int, error) {
-			p.Log.Info("will send to target data", "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
-
-			if n, ok := p.DiscV5.GetCachedNode(addr.String()); ok {
-				//_, err := p.DiscV5.TalkRequestToID(id, addr, string(portalwire.UTPNetwork), buf)
-				req := &v5wire.TalkRequest{Protocol: string(portalwire.Utp), Message: buf}
-				p.DiscV5.sendFromAnotherThreadWithNode(n, netip.AddrPortFrom(netutil.IPToAddr(addr.IP), uint16(addr.Port)), req)
-
-				return len(buf), err
-			} else {
-				p.Log.Warn("not found target node info", "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
-				return 0, fmt.Errorf("not found target node id")
-			}
-		})
-
-	ctx := context.Background()
-	var logger *zap.Logger
-
-	if p.Log.Enabled(ctx, log.LevelDebug) || p.Log.Enabled(ctx, log.LevelTrace) {
-		logger, err = zap.NewDevelopmentConfig().Build()
-	} else {
-		logger, err = zap.NewProductionConfig().Build()
-	}
-
-	if err != nil {
-		return err
-	}
-	p.utpSm, err = utp.NewSocketManagerWithOptions("utp", laddr, utp.WithLogger(logger.Named(p.ListenAddr)), utp.WithPacketRouter(p.packetRouter), utp.WithMaxPacketSize(1145))
-	if err != nil {
-		return err
-	}
-	p.utp, err = utp.ListenUTPOptions("utp", (*utp.Addr)(laddr), utp.WithSocketManager(p.utpSm))
-
-	p.connIdGen = utp.NewConnIdGenerator()
-	if err != nil {
-		return err
 	}
 	return nil
 }
@@ -628,10 +582,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				}
 
 				connctx, conncancel := context.WithTimeout(ctx, defaultUTPConnectTimeout)
-				laddr := p.utp.Addr().(*utp.Addr)
-				raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
-				p.Log.Info("will connect to: ", "addr", raddr.String(), "connId", connId)
-				conn, err = utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(connctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
+				conn, err = p.Utp.DialWithCid(connctx, target, connId)
 				conncancel()
 				if err != nil {
 					if metrics.Enabled {
@@ -720,11 +671,8 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 			log.Debug("Node added to replacements list", "protocol", p.protocolName, "node", target.IP(), "port", target.UDP())
 		}
 		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
-		laddr := p.utp.Addr().(*utp.Addr)
-		raddr := &utp.Addr{IP: target.IP(), Port: target.UDP()}
 		connId := binary.BigEndian.Uint16(connIdMsg.Id[:])
-		p.Log.Info("will connect to: ", "addr", raddr.String(), "connId", connId)
-		conn, err := utp.DialUTPOptions("utp", laddr, raddr, utp.WithContext(connctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
+		conn, err := p.Utp.DialWithCid(connctx, target, connId)
 		defer func() {
 			if conn == nil {
 				if metrics.Enabled {
@@ -884,15 +832,6 @@ func (p *PortalProtocol) processPong(target *enode.Node, resp []byte) (*portalwi
 
 	p.radiusCache.Set([]byte(target.ID().String()), customPayload.Radius)
 	return pong, nil
-}
-
-func (p *PortalProtocol) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
-	if n := p.DiscV5.getNode(id); n != nil {
-		p.table.addInboundNode(n)
-	}
-	p.Log.Trace("receive utp data", "addr", addr, "msg-length", len(msg))
-	p.packetRouter.ReceiveMessage(msg, addr)
-	return []byte("")
 }
 
 func (p *PortalProtocol) handleTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
@@ -1168,7 +1107,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 				default:
 					p.Log.Debug("will accept find content conn from: ", "source", addr, "connId", connId)
 					connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
-					conn, err = p.utp.AcceptUTPContext(connectCtx, connectionId.SendId())
+					conn, err = p.Utp.AcceptWithCid(connectCtx, id, uint16(connectionId.SendId()))
 					cancel()
 					if err != nil {
 						if metrics.Enabled {
@@ -1300,7 +1239,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 				default:
 					p.Log.Debug("will accept offer conn from: ", "source", addr, "connId", connId)
 					connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
-					conn, err = p.utp.AcceptUTPContext(connectCtx, connectionId.SendId())
+					conn, err = p.Utp.AcceptWithCid(connectCtx, id, uint16(connectionId.SendId()))
 					cancel()
 					if err != nil {
 						if metrics.Enabled {

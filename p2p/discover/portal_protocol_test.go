@@ -83,9 +83,21 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 	if err != nil {
 		return nil, err
 	}
+	utpSocket := NewPortalUtp(context.Background(), conf, discV5, conn)
 
 	contentQueue := make(chan *ContentElement, 50)
-	portalProtocol, err := NewPortalProtocol(conf, portalwire.History, privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
+	portalProtocol, err := NewPortalProtocol(
+		conf,
+		portalwire.History,
+		privKey,
+		conn,
+		localNode,
+		discV5,
+		&storage.MockStorage{Db: make(map[string][]byte)},
+		contentQueue,
+		func(p *PortalProtocol) {
+			p.Utp = utpSocket
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -119,8 +131,12 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 
 	node1Addr, _ := utp.ResolveUTPAddr("utp", udpAddrStr1)
 	node2Addr, _ := utp.ResolveUTPAddr("utp", udpAddrStr2)
+	fmt.Println(udpAddrStr1)
+	fmt.Println(udpAddrStr2)
+	fmt.Println(node1Addr)
+	fmt.Println(node2Addr)
 
-	cid := uint32(12)
+	cid := uint16(12)
 	cliSendMsgWithCid := "there are connection id : 12!"
 	cliSendMsgWithRandomCid := "there are connection id: random!"
 
@@ -140,7 +156,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 			workGroup.Done()
 			_ = acceptConn.Close()
 		}()
-		acceptConn, err := node1.utp.AcceptUTPWithConnId(cid)
+		acceptConn, err := node1.Utp.AcceptWithCid(context.Background(), node2.localNode.ID(), cid)
 		if err != nil {
 			panic(err)
 		}
@@ -162,7 +178,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 			workGroup.Done()
 			_ = randomConnIdConn.Close()
 		}()
-		randomConnIdConn, err := node1.utp.Accept()
+		randomConnIdConn, err := node1.Utp.Accept(context.Background())
 		if err != nil {
 			panic(err)
 		}
@@ -187,7 +203,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 				_ = connWithConnId.Close()
 			}
 		}()
-		connWithConnId, err := utp.DialUTPOptions("utp", node2Addr, node1Addr, utp.WithConnId(cid), utp.WithSocketManager(node2.utpSm))
+		connWithConnId, err = node2.Utp.DialWithCid(context.Background(), node1.localNode.Node(), cid)
 		if err != nil {
 			panic(err)
 		}
@@ -210,7 +226,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 				_ = randomConnIdConn.Close()
 			}
 		}()
-		randomConnIdConn, err := utp.DialUTPOptions("utp", node2Addr, node1Addr, utp.WithSocketManager(node2.utpSm))
+		randomConnIdConn, err = node2.Utp.Dial(context.Background(), node1.localNode.Node())
 		if err != nil && err != io.EOF {
 			panic(err)
 		}
