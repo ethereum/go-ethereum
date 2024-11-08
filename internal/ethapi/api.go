@@ -1287,9 +1287,18 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 	}
 
 	// Ensure any missing fields are filled, extract the recipient and input data
-	if err := args.setDefaults(ctx, b, true); err != nil {
+	if err = args.setFeeDefaults(ctx, b, header); err != nil {
 		return nil, 0, nil, err
 	}
+	if args.Nonce == nil {
+		nonce := hexutil.Uint64(db.GetNonce(args.from()))
+		args.Nonce = &nonce
+	}
+	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	if err = args.CallDefaults(b.RPCGasCap(), blockCtx.BaseFee, b.ChainConfig().ChainID); err != nil {
+		return nil, 0, nil, err
+	}
+
 	var to common.Address
 	if args.To != nil {
 		to = *args.To
