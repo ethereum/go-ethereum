@@ -3,8 +3,10 @@ package server
 import (
 	"context"
 	"errors"
+
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
+
 	protobor "github.com/maticnetwork/polyproto/bor"
 	protoutil "github.com/maticnetwork/polyproto/utils"
 )
