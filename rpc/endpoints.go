@@ -23,8 +23,9 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 )
 
-// checkModuleAvailability check that all names given in modules are actually
-// available API services.
+// checkModuleAvailability checks that all names given in modules are actually
+// available API services. It assumes that the MetadataApi module ("rpc") is always available;
+// the registration of this "rpc" module happens in NewServer() and is thus common to all endpoints.
 func checkModuleAvailability(modules []string, apis []API) (bad, available []string) {
 	availableSet := make(map[string]struct{})
 	for _, api := range apis {
@@ -34,7 +35,7 @@ func checkModuleAvailability(modules []string, apis []API) (bad, available []str
 		}
 	}
 	for _, name := range modules {
-		if _, ok := availableSet[name]; !ok {
+		if _, ok := availableSet[name]; !ok && name != MetadataApi {
 			bad = append(bad, name)
 		}
 	}
