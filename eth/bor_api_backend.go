@@ -90,7 +90,6 @@ func (b *EthAPIBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, e
 
 // GetBorBlockReceipt returns bor block receipt
 func (b *EthAPIBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
-
 	receipt := b.eth.blockchain.GetBorReceiptByHash(hash)
 	if receipt == nil {
 		return nil, ethereum.NotFound
