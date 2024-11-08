@@ -198,22 +198,46 @@ func (s *hookedStateDB) SetState(address common.Address, key common.Hash, value 
 }
 
 func (s *hookedStateDB) SelfDestruct(address common.Address) uint256.Int {
-	prev := s.inner.SelfDestruct(address)
-	if !prev.IsZero() {
-		if s.hooks.OnBalanceChange != nil {
-			s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-		}
+	var prevCode []byte
+	var prevCodeHash common.Hash
+
+	if s.hooks.OnCodeChange != nil {
+		prevCode = s.inner.GetCode(address)
+		prevCodeHash = s.inner.GetCodeHash(address)
 	}
+
+	prev := s.inner.SelfDestruct(address)
+
+	if s.hooks.OnBalanceChange != nil && !prev.IsZero() {
+		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
+	}
+
+	if s.hooks.OnCodeChange != nil && len(prevCode) > 0 {
+		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
+	}
+
 	return prev
 }
 
 func (s *hookedStateDB) SelfDestruct6780(address common.Address) (uint256.Int, bool) {
-	prev, changed := s.inner.SelfDestruct6780(address)
-	if !prev.IsZero() && changed {
-		if s.hooks.OnBalanceChange != nil {
-			s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
-		}
+	var prevCode []byte
+	var prevCodeHash common.Hash
+
+	if s.hooks.OnCodeChange != nil {
+		prevCodeHash = s.inner.GetCodeHash(address)
+		prevCode = s.inner.GetCode(address)
 	}
+
+	prev, changed := s.inner.SelfDestruct6780(address)
+
+	if s.hooks.OnBalanceChange != nil && changed && !prev.IsZero() {
+		s.hooks.OnBalanceChange(address, prev.ToBig(), new(big.Int), tracing.BalanceDecreaseSelfdestruct)
+	}
+
+	if s.hooks.OnCodeChange != nil && changed && len(prevCode) > 0 {
+		s.hooks.OnCodeChange(address, prevCodeHash, prevCode, types.EmptyCodeHash, nil)
+	}
+
 	return prev, changed
 }
 
