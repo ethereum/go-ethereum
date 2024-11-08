@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -34,8 +35,11 @@ import (
 )
 
 const (
-	// defaultCleanSize is the default memory allowance of clean cache.
-	defaultCleanSize = 16 * 1024 * 1024
+	// defaultTrieCleanSize is the default memory allowance of clean trie cache.
+	defaultTrieCleanSize = 16 * 1024 * 1024
+
+	// defaultStateCleanSize is the default memory allowance of clean state cache.
+	defaultStateCleanSize = 16 * 1024 * 1024
 
 	// maxBufferSize is the maximum memory allowance of node buffer.
 	// Too large buffer will cause the system to pause for a long
@@ -68,6 +72,24 @@ type layer interface {
 	// - no error will be returned if the requested node is not found in database.
 	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, *nodeLoc, error)
 
+	// account directly retrieves the account RLP associated with a particular
+	// hash in the slim data format. An error will be returned if the read
+	// operation exits abnormally. Specifically, if the layer is already stale.
+	//
+	// Note:
+	// - the returned account is not a copy, please don't modify it.
+	// - no error will be returned if the requested account is not found in database.
+	account(hash common.Hash, depth int) ([]byte, error)
+
+	// storage directly retrieves the storage data associated with a particular hash,
+	// within a particular account. An error will be returned if the read operation
+	// exits abnormally. Specifically, if the layer is already stale.
+	//
+	// Note:
+	// - the returned storage data is not a copy, please don't modify it.
+	// - no error will be returned if the requested slot is not found in database.
+	storage(accountHash, storageHash common.Hash, depth int) ([]byte, error)
+
 	// rootHash returns the root hash for which this layer was made.
 	rootHash() common.Hash
 
@@ -92,9 +114,11 @@ type layer interface {
 // Config contains the settings for database.
 type Config struct {
 	StateHistory    uint64 // Number of recent blocks to maintain state history for
-	CleanCacheSize  int    // Maximum memory allowance (in bytes) for caching clean nodes
+	TrieCleanSize   int    // Maximum memory allowance (in bytes) for caching clean **trie nodes**
+	StateCleanSize  int    // Maximum memory allowance (in bytes) for caching clean **states**
 	WriteBufferSize int    // Maximum memory allowance (in bytes) for write buffer
-	ReadOnly        bool   // Flag whether the database is opened in read only mode.
+	ReadOnly        bool   // Flag whether the database is opened in read only mode
+	SnapshotNoBuild bool   // Flag Whether the background generation is allowed
 }
 
 // sanitize checks the provided user configurations and changes anything that's
@@ -114,7 +138,11 @@ func (c *Config) fields() []interface{} {
 	if c.ReadOnly {
 		list = append(list, "readonly", true)
 	}
-	list = append(list, "cache", common.StorageSize(c.CleanCacheSize))
+	if c.SnapshotNoBuild {
+		list = append(list, "snapshot", false)
+	}
+	list = append(list, "triecache", common.StorageSize(c.TrieCleanSize))
+	list = append(list, "statecache", common.StorageSize(c.StateCleanSize))
 	list = append(list, "buffer", common.StorageSize(c.WriteBufferSize))
 	list = append(list, "history", c.StateHistory)
 	return list
@@ -123,24 +151,26 @@ func (c *Config) fields() []interface{} {
 // Defaults contains default settings for Ethereum mainnet.
 var Defaults = &Config{
 	StateHistory:    params.FullImmutabilityThreshold,
-	CleanCacheSize:  defaultCleanSize,
+	TrieCleanSize:   defaultTrieCleanSize,
+	StateCleanSize:  defaultStateCleanSize,
 	WriteBufferSize: defaultBufferSize,
 }
 
 // ReadOnly is the config in order to open database in read only mode.
 var ReadOnly = &Config{ReadOnly: true}
 
-// Database is a multiple-layered structure for maintaining in-memory trie nodes.
-// It consists of one persistent base layer backed by a key-value store, on top
-// of which arbitrarily many in-memory diff layers are stacked. The memory diffs
-// can form a tree with branching, but the disk layer is singleton and common to
-// all. If a reorg goes deeper than the disk layer, a batch of reverse diffs can
-// be applied to rollback. The deepest reorg that can be handled depends on the
-// amount of state histories tracked in the disk.
+// Database is a multiple-layered structure for maintaining in-memory states
+// along with its dirty trie nodes. It consists of one persistent base layer
+// backed by a key-value store, on top of which arbitrarily many in-memory diff
+// layers are stacked. The memory diffs can form a tree with branching, but the
+// disk layer is singleton and common to all. If a reorg goes deeper than the
+// disk layer, a batch of reverse diffs can be applied to rollback. The deepest
+// reorg that can be handled depends on the amount of state histories tracked
+// in the disk.
 //
 // At most one readable and writable database can be opened at the same time in
-// the whole system which ensures that only one database writer can operate disk
-// state. Unexpected open operations can cause the system to panic.
+// the whole system which ensures that only one database writer can operate the
+// persistent state. Unexpected open operations can cause the system to panic.
 type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
@@ -194,6 +224,12 @@ func New(diskdb ethdb.Database, config *Config, isVerkle bool) *Database {
 			log.Crit("Failed to disable database", "err", err) // impossible to happen
 		}
 	}
+	// Resolving the state snapshot generation progress from the database is
+	// mandatory. This ensures that uncovered flat states are not accessed,
+	// even if background generation is not allowed. If permitted, the generation
+	// might be scheduled.
+	db.setStateGenerator()
+
 	fields := config.fields()
 	if db.isVerkle {
 		fields = append(fields, "verkle", true)
@@ -249,6 +285,53 @@ func (db *Database) repairHistory() error {
 		log.Warn("Truncated extra state histories", "number", pruned)
 	}
 	return nil
+}
+
+// setStateGenerator loads the state generation progress marker and potentially
+// resume the state generation if it's permitted.
+func (db *Database) setStateGenerator() {
+	// Load the state snapshot generation progress marker to prevent access
+	// to uncovered states.
+	generator, root := loadGenerator(db.diskdb)
+	if generator == nil {
+		// Initialize an empty generator to rebuild the state snapshot
+		// from scratch
+		generator = &journalGenerator{
+			Marker: []byte{},
+		}
+	}
+	// Short circuit if the whole state snapshot has already been fully generated.
+	// The generator will be left as nil in disk layer for representing the whole
+	// state snapshot is available for accessing.
+	if generator.Done {
+		return
+	}
+	var origin uint64
+	if len(generator.Marker) >= 8 {
+		origin = binary.BigEndian.Uint64(generator.Marker)
+	}
+	stats := &generatorStats{
+		origin:   origin,
+		start:    time.Now(),
+		accounts: generator.Accounts,
+		slots:    generator.Slots,
+		storage:  common.StorageSize(generator.Storage),
+	}
+	dl := db.tree.bottom()
+
+	// Construct the generator and link it to the disk layer, ensuring that the
+	// generation progress is resolved to prevent accessing uncovered states
+	// regardless of whether background state snapshot generation is allowed.
+	noBuild := db.readOnly || db.config.SnapshotNoBuild
+	dl.generator = newGenerator(db.diskdb, noBuild, generator.Marker, stats)
+
+	// Short circuit if the background generation is not permitted. Notably,
+	// snapshot generation is not functional in the verkle design.
+	if noBuild || db.isVerkle || db.waitSync {
+		return
+	}
+	stats.log("Starting snapshot generation", root, generator.Marker)
+	dl.generator.run(root)
 }
 
 // Update adds a new layer into the tree, if that can be linked to an existing
@@ -311,8 +394,13 @@ func (db *Database) Disable() error {
 	}
 	db.waitSync = true
 
-	// Mark the disk layer as stale to prevent access to persistent state.
-	db.tree.bottom().markStale()
+	// Terminate the state generator if it's active and mark the disk layer
+	// as stale to prevent access to persistent state.
+	disk := db.tree.bottom()
+	if disk.generator != nil {
+		disk.generator.stop()
+	}
+	disk.markStale()
 
 	// Write the initial sync flag to persist it across restarts.
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
@@ -343,6 +431,7 @@ func (db *Database) Enable(root common.Hash) error {
 	// reset the persistent state id back to zero.
 	batch := db.diskdb.NewBatch()
 	rawdb.DeleteTrieJournal(batch)
+	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)
 	if err := batch.Write(); err != nil {
 		return err
@@ -356,13 +445,13 @@ func (db *Database) Enable(root common.Hash) error {
 			return err
 		}
 	}
-	// Re-construct a new disk layer backed by persistent state
-	// with **empty clean cache and node buffer**.
-	db.tree.reset(newDiskLayer(root, 0, db, nil, newBuffer(db.config.WriteBufferSize, nil, 0)))
-
 	// Re-enable the database as the final step.
 	db.waitSync = false
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncFinished)
+
+	// Re-construct a new disk layer backed by persistent state
+	// and schedule the state snapshot generation if it's permitted.
+	db.tree.reset(generateSnapshot(db, root))
 	log.Info("Rebuilt trie database", "root", root)
 	return nil
 }
@@ -456,8 +545,12 @@ func (db *Database) Close() error {
 	// following mutations.
 	db.readOnly = true
 
-	// Release the memory held by clean cache.
-	db.tree.bottom().resetCache()
+	// Terminate the background generation if it's active
+	disk := db.tree.bottom()
+	if disk.generator != nil {
+		disk.generator.stop()
+	}
+	disk.resetCache() // release the memory held by clean cache
 
 	// Close the attached state history freezer.
 	if db.freezer == nil {
@@ -535,4 +628,32 @@ func (db *Database) StorageHistory(address common.Address, slot common.Hash, sta
 // state history in the local store.
 func (db *Database) HistoryRange() (uint64, uint64, error) {
 	return historyRange(db.freezer)
+}
+
+// WaitGeneration waits until the background generation is finished. It assumes
+// that the generation is permitted; otherwise, it will block indefinitely.
+func (db *Database) WaitGeneration() {
+	gen := db.tree.bottom().generator
+	if gen == nil || gen.completed() {
+		return
+	}
+	<-gen.done
+}
+
+// AccountIterator creates a new account iterator for the specified root hash and
+// seeks to a starting account hash.
+func (db *Database) AccountIterator(root common.Hash, seek common.Hash) (AccountIterator, error) {
+	if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
+		return nil, errNotConstructed
+	}
+	return newFastAccountIterator(db, root, seek)
+}
+
+// StorageIterator creates a new storage iterator for the specified root hash and
+// account. The iterator will be move to the specific start position.
+func (db *Database) StorageIterator(root common.Hash, account common.Hash, seek common.Hash) (StorageIterator, error) {
+	if gen := db.tree.bottom().generator; gen != nil && !gen.completed() {
+		return nil, errNotConstructed
+	}
+	return newFastStorageIterator(db, root, account, seek)
 }
