@@ -39,8 +39,8 @@ func headerToProtoborHeader(h *types.Header) *protobor.Header {
 	}
 }
 
-func (s *Server) GetHeaderByNumber(ctx context.Context, req *protobor.GetHeaderByNumberRequest) (*protobor.GetHeaderByNumberResponse, error) {
-	fmt.Printf(">>>>> GetHeaderByNumber: %v\n", req)
+func (s *Server) HeaderByNumber(ctx context.Context, req *protobor.GetHeaderByNumberRequest) (*protobor.GetHeaderByNumberResponse, error) {
+	fmt.Printf(">>>>> HeaderByNumber: %v\n", req)
 	header, err := s.backend.APIBackend.HeaderByNumber(ctx, rpc.BlockNumber(req.Number))
 	if err != nil {
 		return nil, err
@@ -49,8 +49,8 @@ func (s *Server) GetHeaderByNumber(ctx context.Context, req *protobor.GetHeaderB
 	return &protobor.GetHeaderByNumberResponse{Header: headerToProtoborHeader(header)}, nil
 }
 
-func (s *Server) GetBlockByNumber(ctx context.Context, req *protobor.GetBlockByNumberRequest) (*protobor.GetBlockByNumberResponse, error) {
-	fmt.Printf(">>>>> GetBlockByNumber: %v\n", req)
+func (s *Server) BlockByNumber(ctx context.Context, req *protobor.GetBlockByNumberRequest) (*protobor.GetBlockByNumberResponse, error) {
+	fmt.Printf(">>>>> BlockByNumber: %v\n", req)
 	block, err := s.backend.APIBackend.BlockByNumber(ctx, rpc.BlockNumber(req.Number))
 	if err != nil {
 		return nil, err
@@ -65,8 +65,8 @@ func blockToProtoBlock(h *types.Block) *protobor.Block {
 	}
 }
 
-func (s *Server) GetTransactionReceipt(ctx context.Context, req *protobor.ReceiptRequest) (*protobor.ReceiptResponse, error) {
-	fmt.Printf(">>>>> GetTransactionReceipt: %v\n", req)
+func (s *Server) TransactionReceipt(ctx context.Context, req *protobor.ReceiptRequest) (*protobor.ReceiptResponse, error) {
+	fmt.Printf(">>>>> TransactionReceipt: %v\n", req)
 	_, blockHash, _, txnIndex, err := s.backend.APIBackend.GetTransaction(ctx, protoutil.ConvertH256ToHash(req.Hash))
 	if err != nil {
 		return nil, err
@@ -88,8 +88,8 @@ func (s *Server) GetTransactionReceipt(ctx context.Context, req *protobor.Receip
 	return &protobor.ReceiptResponse{Receipt: ConvertReceiptToProtoReceipt(receipts[txnIndex])}, nil
 }
 
-func (s *Server) GetBorBlockReceipt(ctx context.Context, req *protobor.ReceiptRequest) (*protobor.ReceiptResponse, error) {
-	fmt.Printf(">>>>> GetBorBlockReceipt: %v\n", req)
+func (s *Server) BorBlockReceipt(ctx context.Context, req *protobor.ReceiptRequest) (*protobor.ReceiptResponse, error) {
+	fmt.Printf(">>>>> BorBlockReceipt: %v\n", req)
 	receipt, err := s.backend.APIBackend.GetBorBlockReceipt(ctx, protoutil.ConvertH256ToHash(req.Hash))
 	if err != nil {
 		return nil, err

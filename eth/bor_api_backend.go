@@ -40,7 +40,7 @@ func (b *EthAPIBackend) GetRootHash(ctx context.Context, starBlockNr uint64, end
 	return root, nil
 }
 
-// GetRootHash returns root hash for given start and end block
+// GetVoteOnHash returns the vote on hash
 func (b *EthAPIBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
 	var api *bor.API
 	fmt.Printf(">>>>> GetVoteOnHashApiBackend\n")
