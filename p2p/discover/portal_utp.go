@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/optimism-java/utp-go"
+	"github.com/optimism-java/utp-go/libutp"
 	"go.uber.org/zap"
 )
 
@@ -32,10 +33,11 @@ type PortalUtp struct {
 
 func NewPortalUtp(ctx context.Context, config *PortalProtocolConfig, discV5 *UDPv5, conn UDPConn) *PortalUtp {
 	return &PortalUtp{
-		ctx:    ctx,
-		log:    log.New("protocol", "utp"),
-		discV5: discV5,
-		conn:   conn,
+		ctx:        ctx,
+		log:        log.New("protocol", "utp", "local", conn.LocalAddr().String()),
+		discV5:     discV5,
+		conn:       conn,
+		ListenAddr: config.ListenAddr,
 	}
 }
 
@@ -95,8 +97,8 @@ func (p *PortalUtp) Stop() {
 
 func (p *PortalUtp) DialWithCid(ctx context.Context, dest *enode.Node, connId uint16) (net.Conn, error) {
 	raddr := &utp.Addr{IP: dest.IP(), Port: dest.UDP()}
-	p.log.Info("will connect to: ", "addr", raddr.String(), "connId", connId)
-	conn, err := utp.DialUTPOptions("utp", p.lAddr, raddr, utp.WithContext(ctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(uint32(connId)))
+	p.log.Debug("will connect to: ", "nodeId", dest.ID().String(), "connId", connId)
+	conn, err := utp.DialUTPOptions("utp", p.lAddr, raddr, utp.WithContext(ctx), utp.WithSocketManager(p.utpSm), utp.WithConnId(connId))
 	return conn, err
 }
 
@@ -107,12 +109,13 @@ func (p *PortalUtp) Dial(ctx context.Context, dest *enode.Node) (net.Conn, error
 	return conn, err
 }
 
-func (p *PortalUtp) AcceptWithCid(ctx context.Context, nodeId enode.ID, cid uint16) (*utp.Conn, error) {
-	return p.listener.AcceptUTPContext(ctx, uint32(cid))
+func (p *PortalUtp) AcceptWithCid(ctx context.Context, nodeId enode.ID, cid *libutp.ConnId) (*utp.Conn, error) {
+	p.log.Debug("will accept from: ", "nodeId", nodeId.String(), "sendId", cid.SendId(), "recvId", cid.RecvId())
+	return p.listener.AcceptUTPContext(ctx, nodeId, cid)
 }
 
 func (p *PortalUtp) Accept(ctx context.Context) (*utp.Conn, error) {
-	return p.listener.AcceptUTPContext(ctx, 0)
+	return p.listener.AcceptUTPContext(ctx, enode.ID{}, nil)
 }
 
 func (p *PortalUtp) getLocalAddr() *net.UDPAddr {
@@ -121,8 +124,8 @@ func (p *PortalUtp) getLocalAddr() *net.UDPAddr {
 	return laddr
 }
 
-func (p *PortalUtp) packetRouterFunc(buf []byte, addr *net.UDPAddr) (int, error) {
-	p.log.Info("will send to target data", "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
+func (p *PortalUtp) packetRouterFunc(buf []byte, id enode.ID, addr *net.UDPAddr) (int, error) {
+	p.log.Info("will send to target data", "nodeId", id.String(), "ip", addr.IP.To4().String(), "port", addr.Port, "bufLength", len(buf))
 
 	if n, ok := p.discV5.GetCachedNode(addr.String()); ok {
 		//_, err := p.DiscV5.TalkRequestToID(id, addr, string(portalwire.UTPNetwork), buf)
@@ -137,7 +140,7 @@ func (p *PortalUtp) packetRouterFunc(buf []byte, addr *net.UDPAddr) (int, error)
 }
 
 func (p *PortalUtp) handleUtpTalkRequest(id enode.ID, addr *net.UDPAddr, msg []byte) []byte {
-	p.log.Trace("receive utp data", "addr", addr, "msg-length", len(msg))
-	p.packetRouter.ReceiveMessage(msg, addr)
+	p.log.Trace("receive utp data", "nodeId", id.String(), "addr", addr, "msg-length", len(msg))
+	p.packetRouter.ReceiveMessage(msg, &utp.NodeInfo{Id: id, Addr: addr})
 	return []byte("")
 }

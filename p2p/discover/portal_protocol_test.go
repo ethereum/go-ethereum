@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/optimism-java/utp-go"
+	"github.com/optimism-java/utp-go/libutp"
 	"github.com/prysmaticlabs/go-bitfield"
 	"golang.org/x/exp/slices"
 
@@ -126,19 +127,10 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 	assert.NoError(t, err)
 	time.Sleep(12 * time.Second)
 
-	udpAddrStr1 := fmt.Sprintf("%s:%d", node1.localNode.Node().IP(), node1.localNode.Node().UDP())
-	udpAddrStr2 := fmt.Sprintf("%s:%d", node2.localNode.Node().IP(), node2.localNode.Node().UDP())
-
-	node1Addr, _ := utp.ResolveUTPAddr("utp", udpAddrStr1)
-	node2Addr, _ := utp.ResolveUTPAddr("utp", udpAddrStr2)
-	fmt.Println(udpAddrStr1)
-	fmt.Println(udpAddrStr2)
-	fmt.Println(node1Addr)
-	fmt.Println(node2Addr)
-
-	cid := uint16(12)
-	cliSendMsgWithCid := "there are connection id : 12!"
-	cliSendMsgWithRandomCid := "there are connection id: random!"
+	cid1 := libutp.ReceConnId(12)
+	cid2 := libutp.ReceConnId(116)
+	cliSendMsgWithCid1 := "there are connection id : 12!"
+	cliSendMsgWithCid2 := "there are connection id: 116!"
 
 	serverEchoWithCid := "accept connection sends back msg: echo"
 
@@ -156,7 +148,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 			workGroup.Done()
 			_ = acceptConn.Close()
 		}()
-		acceptConn, err := node1.Utp.AcceptWithCid(context.Background(), node2.localNode.ID(), cid)
+		acceptConn, err := node1.Utp.AcceptWithCid(context.Background(), node2.localNode.ID(), cid1)
 		if err != nil {
 			panic(err)
 		}
@@ -166,30 +158,30 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		if err != nil && err != io.EOF {
 			panic(err)
 		}
-		assert.Equal(t, cliSendMsgWithCid, string(buf[:n]))
+		assert.Equal(t, cliSendMsgWithCid1, string(buf[:n]))
 		_, err = acceptConn.Write([]byte(serverEchoWithCid))
 		if err != nil {
 			panic(err)
 		}
 	}()
 	go func() {
-		var randomConnIdConn net.Conn
+		var connId2Conn net.Conn
 		defer func() {
 			workGroup.Done()
-			_ = randomConnIdConn.Close()
+			_ = connId2Conn.Close()
 		}()
-		randomConnIdConn, err := node1.Utp.Accept(context.Background())
+		connId2Conn, err := node1.Utp.AcceptWithCid(context.Background(), node2.localNode.ID(), cid2)
 		if err != nil {
 			panic(err)
 		}
 		buf := make([]byte, 100)
-		n, err := randomConnIdConn.Read(buf)
+		n, err := connId2Conn.Read(buf)
 		if err != nil && err != io.EOF {
 			panic(err)
 		}
-		assert.Equal(t, cliSendMsgWithRandomCid, string(buf[:n]))
+		assert.Equal(t, cliSendMsgWithCid2, string(buf[:n]))
 
-		_, err = randomConnIdConn.Write(largeTestContent)
+		_, err = connId2Conn.Write(largeTestContent)
 		if err != nil {
 			panic(err)
 		}
@@ -203,11 +195,11 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 				_ = connWithConnId.Close()
 			}
 		}()
-		connWithConnId, err = node2.Utp.DialWithCid(context.Background(), node1.localNode.Node(), cid)
+		connWithConnId, err = node2.Utp.DialWithCid(context.Background(), node1.localNode.Node(), uint16(cid1.SendId()))
 		if err != nil {
 			panic(err)
 		}
-		_, err = connWithConnId.Write([]byte("there are connection id : 12!"))
+		_, err = connWithConnId.Write([]byte(cliSendMsgWithCid1))
 		if err != nil && err != io.EOF {
 			panic(err)
 		}
@@ -219,18 +211,18 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		assert.Equal(t, serverEchoWithCid, string(buf[:n]))
 	}()
 	go func() {
-		var randomConnIdConn net.Conn
+		var ConnId2Conn net.Conn
 		defer func() {
 			workGroup.Done()
-			if randomConnIdConn != nil {
-				_ = randomConnIdConn.Close()
+			if ConnId2Conn != nil {
+				_ = ConnId2Conn.Close()
 			}
 		}()
-		randomConnIdConn, err = node2.Utp.Dial(context.Background(), node1.localNode.Node())
+		ConnId2Conn, err = node2.Utp.DialWithCid(context.Background(), node1.localNode.Node(), uint16(cid2.SendId()))
 		if err != nil && err != io.EOF {
 			panic(err)
 		}
-		_, err = randomConnIdConn.Write([]byte(cliSendMsgWithRandomCid))
+		_, err = ConnId2Conn.Write([]byte(cliSendMsgWithCid2))
 		if err != nil {
 			panic(err)
 		}
@@ -239,7 +231,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 		buf := make([]byte, 1024)
 		for {
 			var n int
-			n, err = randomConnIdConn.Read(buf)
+			n, err = ConnId2Conn.Read(buf)
 			if err != nil {
 				if errors.Is(err, io.EOF) {
 					break

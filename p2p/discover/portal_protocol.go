@@ -582,7 +582,7 @@ func (p *PortalProtocol) processOffer(target *enode.Node, resp []byte, request *
 				}
 
 				connctx, conncancel := context.WithTimeout(ctx, defaultUTPConnectTimeout)
-				conn, err = p.Utp.DialWithCid(connctx, target, connId)
+				conn, err = p.Utp.DialWithCid(connctx, target, libutp.ReceConnId(connId).SendId())
 				conncancel()
 				if err != nil {
 					if metrics.Enabled {
@@ -672,7 +672,7 @@ func (p *PortalProtocol) processContent(target *enode.Node, resp []byte) (byte, 
 		}
 		connctx, conncancel := context.WithTimeout(p.closeCtx, defaultUTPConnectTimeout)
 		connId := binary.BigEndian.Uint16(connIdMsg.Id[:])
-		conn, err := p.Utp.DialWithCid(connctx, target, connId)
+		conn, err := p.Utp.DialWithCid(connctx, target, libutp.ReceConnId(connId).SendId())
 		defer func() {
 			if conn == nil {
 				if metrics.Enabled {
@@ -1105,9 +1105,9 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 				case <-bctx.Done():
 					return
 				default:
-					p.Log.Debug("will accept find content conn from: ", "source", addr, "connId", connId)
+					p.Log.Debug("will accept find content conn from: ", "nodeId", id.String(), "source", addr, "connId", connId)
 					connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
-					conn, err = p.Utp.AcceptWithCid(connectCtx, id, uint16(connectionId.SendId()))
+					conn, err = p.Utp.AcceptWithCid(connectCtx, id, connectionId)
 					cancel()
 					if err != nil {
 						if metrics.Enabled {
@@ -1239,7 +1239,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 				default:
 					p.Log.Debug("will accept offer conn from: ", "source", addr, "connId", connId)
 					connectCtx, cancel = context.WithTimeout(bctx, defaultUTPConnectTimeout)
-					conn, err = p.Utp.AcceptWithCid(connectCtx, id, uint16(connectionId.SendId()))
+					conn, err = p.Utp.AcceptWithCid(connectCtx, id, connectionId)
 					cancel()
 					if err != nil {
 						if metrics.Enabled {
