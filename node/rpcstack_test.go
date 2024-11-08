@@ -36,3 +36,18 @@ func TestNewWebsocketUpgradeHandler_websocket(t *testing.T) {
 	response := <-responses
 	assert.Equal(t, "websocket", response.Header.Get("Upgrade"))
 }
+
+// TestIsWebsocket tests if an incoming websocket upgrade request is handled properly.
+func TestIsWebsocket(t *testing.T) {
+	r, _ := http.NewRequest("GET", "/", nil)
+
+	assert.False(t, isWebsocket(r))
+	r.Header.Set("upgrade", "websocket")
+	assert.False(t, isWebsocket(r))
+	r.Header.Set("connection", "upgrade")
+	assert.True(t, isWebsocket(r))
+	r.Header.Set("connection", "upgrade,keep-alive")
+	assert.True(t, isWebsocket(r))
+	r.Header.Set("connection", " UPGRADE,keep-alive")
+	assert.True(t, isWebsocket(r))
+}

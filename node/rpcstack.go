@@ -166,5 +166,5 @@ func NewWebsocketUpgradeHandler(h http.Handler, ws http.Handler) http.Handler {
 // isWebsocket checks the header of an http request for a websocket upgrade request.
 func isWebsocket(r *http.Request) bool {
 	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
-		strings.ToLower(r.Header.Get("Connection")) == "upgrade"
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
 }
