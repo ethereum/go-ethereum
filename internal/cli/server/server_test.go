@@ -34,7 +34,7 @@ func TestServer_DeveloperMode(t *testing.T) {
 		currBlock := server.backend.BlockChain().CurrentBlock().Number.Int64()
 		expected := blockNumber + i + 1
 
-		if res := assert.Equal(t, currBlock, expected); res == false {
+		if res := assert.Equal(t, expected, currBlock); res == false {
 			break
 		}
 	}

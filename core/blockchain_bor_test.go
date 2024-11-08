@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/triedb"
 )
 
 func TestChain2HeadEvent(t *testing.T) {
@@ -24,7 +24,7 @@ func TestChain2HeadEvent(t *testing.T) {
 			Config: params.TestChainConfig,
 			Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000000)}},
 		}
-		genesis = gspec.MustCommit(db, trie.NewDatabase(db, trie.HashDefaults))
+		genesis = gspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 		signer  = types.LatestSigner(gspec.Config)
 	)
 

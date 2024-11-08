@@ -64,7 +64,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		GasLimit:    gas,
 		BaseFee:     big.NewInt(8),
 	}
-	alloc := core.GenesisAlloc{}
+	alloc := types.GenesisAlloc{}
 	// The code pushes 'deadbeef' into memory, then the other params, and calls CREATE2, then returns
 	// the address
 	loop := []byte{
@@ -72,18 +72,18 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		byte(vm.PUSH1), 0, // jumpdestination
 		byte(vm.JUMP),
 	}
-	alloc[common.HexToAddress("0x00000000000000000000000000000000deadbeef")] = core.GenesisAccount{
+	alloc[common.HexToAddress("0x00000000000000000000000000000000deadbeef")] = types.Account{
 		Nonce:   1,
 		Code:    loop,
 		Balance: big.NewInt(1),
 	}
-	alloc[from] = core.GenesisAccount{
+	alloc[from] = types.Account{
 		Nonce:   1,
 		Code:    []byte{},
 		Balance: big.NewInt(500000000000000),
 	}
-	triedb, _, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme)
-	defer triedb.Close()
+	state := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme)
+	defer state.Close()
 
 	// Create the tracer, the EVM environment and run it
 	tracer := logger.NewStructLogger(&logger.Config{
@@ -92,9 +92,8 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		//EnableMemory: false,
 		//EnableReturnData: false,
 	})
-	evm := vm.NewEVM(blockContext, txContext, statedb, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer})
-
-	msg, err := core.TransactionToMessage(tx, signer, nil)
+	evm := vm.NewEVM(blockContext, txContext, state.StateDB, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer.Hooks()})
+	msg, err := core.TransactionToMessage(tx, signer, blockContext.BaseFee)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
@@ -103,7 +102,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		snap := statedb.Snapshot()
+		snap := state.StateDB.Snapshot()
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 
 		_, err = st.TransitionDb(context.Background())
@@ -111,57 +110,12 @@ func BenchmarkTransactionTrace(b *testing.B) {
 			b.Fatal(err)
 		}
 
-		statedb.RevertToSnapshot(snap)
+		state.StateDB.RevertToSnapshot(snap)
 
 		if have, want := len(tracer.StructLogs()), 244752; have != want {
 			b.Fatalf("trace wrong, want %d steps, have %d", want, have)
 		}
 
 		tracer.Reset()
-	}
-}
-
-func TestMemCopying(t *testing.T) {
-	t.Parallel()
-
-	for i, tc := range []struct {
-		memsize  int64
-		offset   int64
-		size     int64
-		wantErr  string
-		wantSize int
-	}{
-		{0, 0, 100, "", 100},    // Should pad up to 100
-		{0, 100, 0, "", 0},      // No need to pad (0 size)
-		{100, 50, 100, "", 100}, // Should pad 100-150
-		{100, 50, 5, "", 5},     // Wanted range fully within memory
-		{100, -50, 0, "offset or size must not be negative", 0},                        // Error
-		{0, 1, 1024*1024 + 1, "reached limit for padding memory slice: 1048578", 0},    // Error
-		{10, 0, 1024*1024 + 100, "reached limit for padding memory slice: 1048666", 0}, // Error
-
-	} {
-		mem := vm.NewMemory()
-		mem.Resize(uint64(tc.memsize))
-		cpy, err := GetMemoryCopyPadded(mem, tc.offset, tc.size)
-
-		if want := tc.wantErr; want != "" {
-			if err == nil {
-				t.Fatalf("test %d: want '%v' have no error", i, want)
-			}
-
-			if have := err.Error(); want != have {
-				t.Fatalf("test %d: want '%v' have '%v'", i, want, have)
-			}
-
-			continue
-		}
-
-		if err != nil {
-			t.Fatalf("test %d: unexpected error: %v", i, err)
-		}
-
-		if want, have := tc.wantSize, len(cpy); have != want {
-			t.Fatalf("test %d: want %v have %v", i, want, have)
-		}
 	}
 }

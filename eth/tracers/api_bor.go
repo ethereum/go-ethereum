@@ -86,7 +86,7 @@ func (api *API) traceBorBlock(ctx context.Context, block *types.Block, config *T
 		tracer := logger.NewStructLogger(config.Config)
 
 		// Run the transaction with tracing enabled.
-		vmenv := vm.NewEVM(blockCtx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer, NoBaseFee: true})
+		vmenv := vm.NewEVM(blockCtx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true})
 
 		// Call Prepare to clear out the statedb access list
 		// Not sure if we need to do this

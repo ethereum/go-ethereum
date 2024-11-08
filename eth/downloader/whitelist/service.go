@@ -60,6 +60,7 @@ func NewService(db ethdb.Database) *Service {
 				Hash:     checkpointHash,
 				interval: 256,
 				db:       db,
+				name:     "checkpoint",
 			},
 		},
 
@@ -70,6 +71,7 @@ func NewService(db ethdb.Database) *Service {
 				Hash:     milestoneHash,
 				interval: 256,
 				db:       db,
+				name:     "milestone",
 			},
 
 			Locked:                locked,

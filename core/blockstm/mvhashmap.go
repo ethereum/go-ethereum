@@ -198,9 +198,9 @@ func (res *MVReadResult) Value() interface{} {
 	return res.value
 }
 
-func (mvr MVReadResult) Status() int {
-	if mvr.depIdx != -1 {
-		if mvr.incarnation == -1 {
+func (res MVReadResult) Status() int {
+	if res.depIdx != -1 {
+		if res.incarnation == -1 {
 			return MVReadResultDependency
 		} else {
 			return MVReadResultDone

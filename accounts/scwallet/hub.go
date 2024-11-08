@@ -97,6 +97,7 @@ func (hub *Hub) readPairings() error {
 
 		return err
 	}
+	defer pairingFile.Close()
 
 	pairingData, err := io.ReadAll(pairingFile)
 	if err != nil {
@@ -256,7 +257,7 @@ func (hub *Hub) refreshWallets() {
 
 			continue
 		}
-		// Card connected, start tracking in amongst the wallets
+		// Card connected, start tracking among the wallets
 		hub.wallets[reader] = wallet
 		events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletArrived})
 	}

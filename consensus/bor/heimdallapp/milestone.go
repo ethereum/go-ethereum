@@ -14,30 +14,31 @@ import (
 )
 
 func (h *HeimdallAppClient) FetchMilestoneCount(_ context.Context) (int64, error) {
-	log.Info("Fetching milestone count")
+	log.Debug("Fetching milestone count")
 
 	res := h.hApp.CheckpointKeeper.GetMilestoneCount(h.NewContext())
 
-	log.Info("Fetched Milestone Count")
+	log.Debug("Fetched Milestone Count", "res", int64(res))
 
 	return int64(res), nil
 }
 
 func (h *HeimdallAppClient) FetchMilestone(_ context.Context) (*milestone.Milestone, error) {
-	log.Info("Fetching Latest Milestone")
+	log.Debug("Fetching Latest Milestone")
 
 	res, err := h.hApp.CheckpointKeeper.GetLastMilestone(h.NewContext())
 	if err != nil {
 		return nil, err
 	}
 
-	log.Info("Fetched Latest Milestone")
+	milestone := toBorMilestone(res)
+	log.Debug("Fetched Latest Milestone", "milestone", milestone)
 
-	return toBorMilestone(res), nil
+	return milestone, nil
 }
 
 func (h *HeimdallAppClient) FetchNoAckMilestone(_ context.Context, milestoneID string) error {
-	log.Info("Fetching No Ack Milestone By MilestoneID", "MilestoneID", milestoneID)
+	log.Debug("Fetching No Ack Milestone By MilestoneID", "MilestoneID", milestoneID)
 
 	res := h.hApp.CheckpointKeeper.GetNoAckMilestone(h.NewContext(), milestoneID)
 	if res {
@@ -45,21 +46,21 @@ func (h *HeimdallAppClient) FetchNoAckMilestone(_ context.Context, milestoneID s
 		return nil
 	}
 
-	return fmt.Errorf("Still No Ack Milestone exist corresponding to MilestoneId:%v", milestoneID)
+	return fmt.Errorf("still no-ack milestone exist corresponding to milestoneID: %v", milestoneID)
 }
 
 func (h *HeimdallAppClient) FetchLastNoAckMilestone(_ context.Context) (string, error) {
-	log.Info("Fetching Latest No Ack Milestone ID")
+	log.Debug("Fetching Latest No Ack Milestone ID")
 
 	res := h.hApp.CheckpointKeeper.GetLastNoAckMilestone(h.NewContext())
 
-	log.Info("Fetched Latest No Ack Milestone ID")
+	log.Debug("Fetched Latest No Ack Milestone ID", "res", res)
 
 	return res, nil
 }
 
 func (h *HeimdallAppClient) FetchMilestoneID(_ context.Context, milestoneID string) error {
-	log.Info("Fetching Milestone ID ", "MilestoneID", milestoneID)
+	log.Debug("Fetching Milestone ID ", "MilestoneID", milestoneID)
 
 	res := chTypes.GetMilestoneID()
 
@@ -67,7 +68,7 @@ func (h *HeimdallAppClient) FetchMilestoneID(_ context.Context, milestoneID stri
 		return nil
 	}
 
-	return fmt.Errorf("Milestone corresponding to Milestone ID:%v doesn't exist in Heimdall", milestoneID)
+	return fmt.Errorf("milestone corresponding to milestoneID: %v doesn't exist in heimdall", milestoneID)
 }
 
 func toBorMilestone(hdMilestone *hmTypes.Milestone) *milestone.Milestone {

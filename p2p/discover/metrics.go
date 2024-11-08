@@ -44,7 +44,7 @@ func init() {
 	}
 }
 
-// meteredConn is a wrapper around a net.UDPConn that meters both the
+// meteredUdpConn is a wrapper around a net.UDPConn that meters both the
 // inbound and outbound network traffic.
 type meteredUdpConn struct {
 	UDPConn

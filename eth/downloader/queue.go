@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -86,6 +87,16 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 	}
 
 	return item
+}
+
+// body returns a representation of the fetch result as a types.Body object.
+// nolint : unused
+func (f *fetchResult) body() types.Body {
+	return types.Body{
+		Transactions: f.Transactions,
+		Uncles:       f.Uncles,
+		Withdrawals:  f.Withdrawals,
+	}
 }
 
 // SetBodyDone flags the body as finished.
@@ -867,7 +878,7 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction, txListH
 					return errInvalidBody
 				}
 				for _, hash := range tx.BlobHashes() {
-					if hash[0] != params.BlobTxHashVersion {
+					if !kzg4844.IsValidVersionedHash(hash[:]) {
 						return errInvalidBody
 					}
 				}

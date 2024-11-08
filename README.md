@@ -2,11 +2,11 @@
 Bor is the Official Golang implementation of the Polygon PoS blockchain. It is a fork of [geth](https://github.com/ethereum/go-ethereum) and is EVM compatible (upto London fork).
 
 [![API Reference](
-https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
+https://pkg.go.dev/badge/github.com/maticnetwork/bor
 )](https://pkg.go.dev/github.com/maticnetwork/bor)
 [![Go Report Card](https://goreportcard.com/badge/github.com/maticnetwork/bor)](https://goreportcard.com/report/github.com/maticnetwork/bor)
 ![MIT License](https://img.shields.io/github/license/maticnetwork/bor)
-[![Discord](https://img.shields.io/discord/714888181740339261?color=1C1CE1&label=Polygon%20%7C%20Discord%20%F0%9F%91%8B%20&style=flat-square)](https://discord.com/invite/0xPolygonDevs)
+[![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.com/invite/0xpolygonrnd)
 [![Twitter Follow](https://img.shields.io/twitter/follow/0xPolygon.svg?style=social)](https://twitter.com/0xPolygon)
 
 ### Installing bor using packaging
@@ -79,4 +79,4 @@ included in our repository in the `COPYING` file.
 
 ## Join our Discord server
 
-Join Polygon community  – share your ideas or just say hi over [on Discord](https://discord.com/invite/0xPolygonDevs).
+Join Polygon community  – share your ideas or just say hi over on [Polygon Community Discord](https://discord.com/invite/0xPolygonCommunity) or on [Polygon R&D Discord](https://discord.com/invite/0xpolygonrnd).

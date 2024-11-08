@@ -275,13 +275,3 @@ func checkRecords(records []*enr.Record) ([]*enode.Node, error) {
 
 	return nodes, nil
 }
-
-func containsUint(ints []uint, x uint) bool {
-	for i := range ints {
-		if ints[i] == x {
-			return true
-		}
-	}
-
-	return false
-}

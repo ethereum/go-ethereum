@@ -157,7 +157,12 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 			}
 		}
 	}
-
+	if len(request.Transaction.BlobHashes) > 0 {
+		fmt.Printf("Blob hashes:\n")
+		for _, bh := range request.Transaction.BlobHashes {
+			fmt.Printf("   %v\n", bh)
+		}
+	}
 	if request.Transaction.Data != nil {
 		d := *request.Transaction.Data
 		if len(d) > 0 {

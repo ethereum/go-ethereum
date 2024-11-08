@@ -28,27 +28,16 @@ import (
 // for less cluttered pprof profiles.
 var Enabled = false
 
-// EnabledExpensive is a soft-flag meant for external packages to check if costly
-// metrics gathering is allowed or not. The goal is to separate standard metrics
-// for health monitoring and debug metrics that might impact runtime performance.
-var EnabledExpensive = false
-
 // enablerFlags is the CLI flag names to use to enable metrics collections.
 var enablerFlags = []string{"metrics"}
 
 // enablerEnvVars is the env var names to use to enable metrics collections.
 var enablerEnvVars = []string{"GETH_METRICS"}
 
-// expensiveEnablerFlags is the CLI flag names to use to enable metrics collections.
-var expensiveEnablerFlags = []string{"metrics.expensive"}
-
-// expensiveEnablerEnvVars is the env var names to use to enable metrics collections.
-var expensiveEnablerEnvVars = []string{"GETH_METRICS_EXPENSIVE"}
-
 // configFlag is the CLI flag name to use to start node by providing a toml based config
 var configFlag = "config"
 
-// Init enables or disables the metrics system. Since we need this to run before
+// init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
 // and peek into the command line args for the metrics flag.
 func init() {
@@ -57,14 +46,6 @@ func init() {
 			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
 				log.Info("Enabling metrics collection")
 				Enabled = true
-			}
-		}
-	}
-	for _, enabler := range expensiveEnablerEnvVars {
-		if val, found := syscall.Getenv(enabler); found && !EnabledExpensive {
-			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
-				log.Info("Enabling expensive metrics collection")
-				EnabledExpensive = true
 			}
 		}
 	}
@@ -86,12 +67,6 @@ func init() {
 			if !Enabled && flag == enabler {
 				log.Info("Enabling metrics collection")
 				Enabled = true
-			}
-		}
-		for _, enabler := range expensiveEnablerFlags {
-			if !EnabledExpensive && flag == enabler {
-				log.Info("Enabling expensive metrics collection")
-				EnabledExpensive = true
 			}
 		}
 	}
@@ -135,7 +110,6 @@ func updateMetricsFromConfig(path string) {
 
 	// We have the values now, update them
 	Enabled = conf.Telemetry.Enabled
-	EnabledExpensive = conf.Telemetry.Expensive
 }
 
 var threadCreateProfile = pprof.Lookup("threadcreate")

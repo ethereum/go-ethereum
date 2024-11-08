@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
-	"golang.org/x/exp/slices"
 )
 
 var nullNode *enode.Node
@@ -107,8 +107,9 @@ func idAtDistance(a enode.ID, n int) (b enode.ID) {
 	return b
 }
 
+// intIP returns a LAN IP address based on i.
 func intIP(i int) net.IP {
-	return net.IP{byte(i), 0, 2, byte(i)}
+	return net.IP{10, 0, byte(i >> 8), byte(i & 0xFF)}
 }
 
 // fillBucket inserts nodes into the given bucket until it is full.
@@ -274,7 +275,7 @@ NotEqual:
 }
 
 func nodeEqual(n1 *enode.Node, n2 *enode.Node) bool {
-	return n1.ID() == n2.ID() && n1.IP().Equal(n2.IP())
+	return n1.ID() == n2.ID() && n1.IPAddr() == n2.IPAddr()
 }
 
 func sortByID[N nodeType](nodes []N) {

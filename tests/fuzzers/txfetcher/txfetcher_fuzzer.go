@@ -30,9 +30,8 @@ import (
 )
 
 var (
-	peers             []string
-	txs               []*types.Transaction
-	testTxArrivalWait = 500 * time.Millisecond
+	peers []string
+	txs   []*types.Transaction
 )
 
 func init() {
@@ -87,7 +86,6 @@ func fuzz(input []byte) int {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
-		testTxArrivalWait,
 		nil,
 		clock, rand,
 	)

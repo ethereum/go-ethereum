@@ -1,0 +1,94 @@
+name: package_x86_rpm
+
+on:
+  push:
+    branches:
+      - 'master'
+    paths:
+      - '**'
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+
+jobs:
+  build:
+    permissions:
+      id-token: write
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@master
+        with:
+          go-version: 1.22.1
+      - name: Adding TAG to ENV
+        run: echo "GIT_TAG=`echo $(git describe --tags --abbrev=0)`" >> $GITHUB_ENV
+
+      - name: Adding a TAG.1 to the env
+        run: echo "GIT_TAG1=`echo $(git describe --tags --abbrev=0)`" | sed 's/-/./g' >> $GITHUB_ENV
+
+      - name: Cleaning repo
+        run: make clean
+      - name: Building for amd64
+        run: make bor
+
+      - name: Installing some dependencies
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Setup rpm package for binary
+        run: |
+          mkdir -p packaging/rpm/SPECS
+          mkdir -p packaging/rpm/BUILD
+          mkdir -p packaging/rpm/RPMS
+          mkdir -p packaging/rpm/SRPMS
+          
+          touch packaging/rpm/bor.spec 
+          echo "Name: bor" >> packaging/rpm/SPECS/bor.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor.spec
+          echo "BuildArch: x86_64" >> packaging/rpm/SPECS/bor.spec
+          echo "Summary: bor rpm package" >> packaging/rpm/SPECS/bor.spec
+          
+          echo "%description" >> packaging/rpm/SPECS/bor.spec
+          echo "Bor rpm package" >> packaging/rpm/SPECS/bor.spec
+          
+          echo "%pre" >> packaging/rpm/SPECS/bor.spec
+          echo "getent group bor >/dev/null || groupadd -r bor" >> packaging/rpm/SPECS/bor.spec
+          echo "getent passwd bor >/dev/null || useradd -s /bin/false -d /var/lib/bor -r bor -g bor" >> packaging/rpm/SPECS/bor.spec
+          
+          echo "%install" >> packaging/rpm/SPECS/bor.spec
+          echo "mkdir -p %{buildroot}/usr/bin" >> packaging/rpm/SPECS/bor.spec
+          echo "cp /home/runner/work/bor/bor/build/bin/bor %{buildroot}/usr/bin/" >> packaging/rpm/SPECS/bor.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor.spec
+          echo "/usr/bin/bor" >> packaging/rpm/SPECS/bor.spec
+          
+
+      - name: construct rpm package
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+                   --define "_builddir %{_topdir}/BUILD" \
+                   --define "_rpmdir %{_topdir}/RPMS" \
+                   --define "_srcrpmdir %{_topdir}/SRPMS" \
+                   --define "__spec_install_post /bin/true" \
+                   -bb packaging/rpm/SPECS/bor.spec
+
+      - name: rename file for post rpm build and for checksum
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/x86_64/bor-${{ env.GIT_TAG1 }}-1.x86_64.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/x86_64/bor-${{ env.GIT_TAG1 }}.x86_64.rpm
+
+      - name: checksum for the rpm package
+        run: sha256sum /home/runner/work/bor/bor/packaging/rpm_build/RPMS/x86_64/bor-${{ env.GIT_TAG1 }}.x86_64.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/x86_64/bor-${{ env.GIT_TAG1 }}.x86_64.rpm.checksum
+
+      - name: Release bor Packages
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.GIT_TAG }}
+          prerelease: true
+          files: |
+            packaging/rpm_build/RPMS/x86_64/bor-**.rpm
+            packaging/rpm_build/RPMS/x86_64/bor-**.rpm.checksum

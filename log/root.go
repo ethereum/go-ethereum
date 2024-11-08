@@ -1,17 +1,15 @@
 package log
 
 import (
+	"log/slog"
 	"os"
 	"sync/atomic"
-
-	"golang.org/x/exp/slog"
 )
 
 var root atomic.Value
 
 func init() {
-	defaultLogger := &logger{slog.New(DiscardHandler())}
-	SetDefault(defaultLogger)
+	root.Store(&logger{slog.New(DiscardHandler())})
 }
 
 // SetDefault sets the default global logger

@@ -204,21 +204,6 @@ func (mr *MockBackendMockRecorder) HeaderByNumber(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HeaderByNumber", reflect.TypeOf((*MockBackend)(nil).HeaderByNumber), arg0, arg1)
 }
 
-// PendingBlockAndReceipts mocks base method.
-func (m *MockBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PendingBlockAndReceipts")
-	ret0, _ := ret[0].(*types.Block)
-	ret1, _ := ret[1].(types.Receipts)
-	return ret0, ret1
-}
-
-// PendingBlockAndReceipts indicates an expected call of PendingBlockAndReceipts.
-func (mr *MockBackendMockRecorder) PendingBlockAndReceipts() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PendingBlockAndReceipts", reflect.TypeOf((*MockBackend)(nil).PendingBlockAndReceipts))
-}
-
 // ServiceFilter mocks base method.
 func (m *MockBackend) ServiceFilter(arg0 context.Context, arg1 *bloombits.MatcherSession) {
 	m.ctrl.T.Helper()

@@ -48,36 +48,36 @@ func (p *PeersRemoveCommand) Flags() *flagset.Flagset {
 }
 
 // Synopsis implements the cli.Command interface
-func (c *PeersRemoveCommand) Synopsis() string {
+func (p *PeersRemoveCommand) Synopsis() string {
 	return "Disconnects a peer from the client"
 }
 
 // Run implements the cli.Command interface
-func (c *PeersRemoveCommand) Run(args []string) int {
-	flags := c.Flags()
+func (p *PeersRemoveCommand) Run(args []string) int {
+	flags := p.Flags()
 	if err := flags.Parse(args); err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
 	args = flags.Args()
 	if len(args) != 1 {
-		c.UI.Error("No enode address provided")
+		p.UI.Error("No enode address provided")
 		return 1
 	}
 
-	borClt, err := c.BorConn()
+	borClt, err := p.BorConn()
 	if err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 
 	req := &proto.PeersRemoveRequest{
 		Enode:   args[0],
-		Trusted: c.trusted,
+		Trusted: p.trusted,
 	}
 	if _, err := borClt.PeersRemove(context.Background(), req); err != nil {
-		c.UI.Error(err.Error())
+		p.UI.Error(err.Error())
 		return 1
 	}
 

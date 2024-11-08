@@ -1,0 +1,323 @@
+name: rpm_mainnet_profile
+
+on:
+  push:
+    branches:
+      - 'master'
+    paths:
+      - '**'
+    tags:
+      - 'v*.*.*'
+      - 'v*.*.*-*'
+
+jobs:
+  build:
+    permissions:
+      id-token: write
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Adding TAG to ENV
+        run: echo "GIT_TAG=`echo $(git describe --tags --abbrev=0)`" >> $GITHUB_ENV
+
+      - name: Adding a TAG1 to the env
+        run: echo "GIT_TAG1=`echo $(git describe --tags --abbrev=0)`" | sed 's/-/./g' >> $GITHUB_ENV
+
+      - name: Installing some dependencies
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Setup rpm package directories
+        run: |
+          mkdir -p packaging/rpm/SPECS
+          mkdir -p packaging/rpm/BUILD
+          mkdir -p packaging/rpm/RPMS
+          mkdir -p packaging/rpm/SRPMS
+
+      - name: Start tasks needed for Mainnet Sentry node
+        run: echo "#########################################################################"
+
+      - name: Setting up Mainnet Sentry Node Spec files
+        run: |
+          touch packaging/rpm/bor-mainnet-sentry.spec 
+          echo "Name: bor-mainnet-sentry-config" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "Summary: bor mainnet sentry config rpm package" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "Bor Mumbai Sentry rpm package" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-mainnet-sentry.spec
+
+      - name: Build Mainnet Sentry Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-mainnet-sentry.spec 
+          
+      - name: Start tasks needed for Mainnet Sentry PBSS node
+        run: echo "#########################################################################"
+
+      - name: Setting up Mainnet Sentry PBSS Node Spec files
+        run: |
+          touch packaging/rpm/bor-pbss-mainnet-sentry.spec 
+          echo "Name: bor-pbss-mainnet-sentry-config" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "Summary: bor mainnet sentry config rpm package" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "Bor Mumbai Sentry rpm package" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/sentry/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec
+
+      - name: Build Mainnet Sentry PBSS Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-pbss-mainnet-sentry.spec 
+
+      - name: Setting up Mainnet Validator Node node
+        run: echo "#########################################################################"
+
+      - name: Setting up Mainnet Validator Node Spec files
+        run: |
+          touch packaging/rpm/bor-mainnet-validator.spec 
+          echo "Name: bor-mainnet-validator-config" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "Summary: bor mainnet validator config rpm package" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "Bor Mainnet Validator rpm package" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/validator/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-mainnet-validator.spec
+
+
+      - name: Build Mainnet Validator Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-mainnet-validator.spec   
+
+      - name: Setting up Mainnet Validator PBSS Node node
+        run: echo "#########################################################################"
+
+      - name: Setting up Mainnet Validator Node Spec files
+        run: |
+          touch packaging/rpm/bor-pbss-mainnet-validator.spec 
+          echo "Name: bor-pbss-mainnet-validator-config" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "Summary: bor mainnet validator config rpm package" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "Bor Mainnet Validator rpm package" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/validator/bor/pbss_config.toml %{buildroot}/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec
+
+
+      - name: Build Mainnet Validator PBSS Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-pbss-mainnet-validator.spec 
+
+      - name: Setting up Mainnet Boot node
+        run: echo "#########################################################################"
+
+      - name: Setting up Mainnet Boot Node Spec files
+        run: |
+          touch packaging/rpm/bor-mainnet-bootnode.spec 
+          echo "Name: bor-mainnet-bootnode-config" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "Summary: bor mainnet bootnode config rpm package" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+
+          echo "%description" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "Bor Mainnet Bootnode rpm package" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/sentry/sentry/bor/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor_bootnode.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-mainnet-bootnode.spec
+
+      - name: Build Mainnet Boot Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-mainnet-bootnode.spec   
+
+      - name: Setting up Mainnet Archive node
+        run: echo "#########################################################################"
+
+      - name: Setting up Mainnet Archive Node spec file
+        run: |
+          touch packaging/rpm/bor-mainnet-archive.spec 
+          echo "Name: bor-mainnet-archive-config" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "Version: ${{ env.GIT_TAG1 }}" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "Release: 1%{?dist}" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "License: GPL/AGPL" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "BuildArch: noarch" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "Summary: bor mainnet archive config rpm package" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          
+          echo "%description" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "Bor Mainnet Archive rpm package" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          
+          echo "" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "%pre" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "%install" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "mkdir -p %{buildroot}/var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/mainnet-v1/archive/config.toml %{buildroot}/var/lib/bor/" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "mkdir -p %{buildroot}/lib/systemd/system" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "cp /home/runner/work/bor/bor/packaging/templates/systemd/bor.service %{buildroot}/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          
+          echo "%files" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "/var/lib/bor/config.toml" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "/lib/systemd/system/bor.service" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "%attr(0755, bor, bor) /var/lib/bor" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "%post" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+          echo "/bin/systemctl daemon-reload" >> packaging/rpm/SPECS/bor-mainnet-archive.spec
+
+      - name: Build Mainnet Archive Node profile RPM
+        run: |
+          rpmbuild --define "_topdir /home/runner/work/bor/bor/packaging/rpm_build" \
+           --define "_builddir %{_topdir}/BUILD" \
+           --define "_rpmdir %{_topdir}/RPMS" \
+           --define "_srcrpmdir %{_topdir}/SRPMS" \
+           --define "__spec_install_post /bin/true" \
+           -bb packaging/rpm/SPECS/bor-mainnet-archive.spec  
+
+      - name: renaming file for rpm release appendage archive mainnet
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-archive-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage bootnode mainnet
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage sentry mainnet
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage sentry pbss mainnet
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-sentry-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage validator mainnet
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm
+      - name: renaming file for rpm release appendage validator pbss mainnet
+        run: mv /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-validator-config-${{ env.GIT_TAG1 }}-1.noarch.rpm /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm
+
+      - name: adding shasum for the rpm build mainnet archive
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-archive-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build mainnet bootnode
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-bootnode-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build mainnet sentry
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build mainnet sentry pbss
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-pbss-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-sentry-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build mainnet validator
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+      - name: adding shasum for the rpm build mainnet pbss validator
+        run: cd /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/ && sha256sum bor-pbss-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm > /home/runner/work/bor/bor/packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-validator-config-${{ env.GIT_TAG1 }}.noarch.rpm.checksum
+
+      - name: Release bor Packages
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.GIT_TAG }}
+          prerelease: true
+          files: |
+            packaging/rpm_build/RPMS/noarch/bor-mainnet-**.rpm
+            packaging/rpm_build/RPMS/noarch/bor-mainnet-**.rpm.checksum
+            packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-**.rpm
+            packaging/rpm_build/RPMS/noarch/bor-pbss-mainnet-**.rpm.checksum

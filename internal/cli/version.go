@@ -14,7 +14,7 @@ type VersionCommand struct {
 }
 
 // MarkDown implements cli.MarkDown interface
-func (d *VersionCommand) MarkDown() string {
+func (c *VersionCommand) MarkDown() string {
 	examples := []string{
 		"## Usage",
 		CodeBlock([]string{
