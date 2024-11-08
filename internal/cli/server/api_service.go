@@ -60,7 +60,7 @@ func blockToProtoBlock(h *types.Block) *protobor.Block {
 }
 
 func (s *Server) TransactionReceipt(ctx context.Context, req *protobor.ReceiptRequest) (*protobor.ReceiptResponse, error) {
-	_, blockHash, _, txnIndex, err := s.backend.APIBackend.GetTransaction(ctx, protoutil.ConvertH256ToHash(req.Hash))
+	_, _, blockHash, _, txnIndex, err := s.backend.APIBackend.GetTransaction(ctx, protoutil.ConvertH256ToHash(req.Hash))
 	if err != nil {
 		return nil, err
 	}
