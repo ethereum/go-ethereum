@@ -81,32 +81,46 @@ type execStats struct {
 	GasUsed        uint64        `json:"gasUsed"`        // the amount of gas used during execution
 }
 
-func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, stats execStats, err error) {
-	var gasUsed uint64
+func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, execStats, error) {
 	if bench {
+		// Do one warm-up run
+		output, gasUsed, err := execFunc()
 		result := testing.Benchmark(func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				output, gasUsed, err = execFunc()
+				haveOutput, haveGasUsed, haveErr := execFunc()
+				if !bytes.Equal(haveOutput, output) {
+					b.Fatalf("output differs, have\n%x\nwant%x\n", haveOutput, output)
+				}
+				if haveGasUsed != gasUsed {
+					b.Fatalf("gas differs, have %v want%v", haveGasUsed, gasUsed)
+				}
+				if haveErr != err {
+					b.Fatalf("err differs, have %v want%v", haveErr, err)
+				}
 			}
 		})
 		// Get the average execution time from the benchmarking result.
 		// There are other useful stats here that could be reported.
-		stats.Time = time.Duration(result.NsPerOp())
-		stats.Allocs = result.AllocsPerOp()
-		stats.BytesAllocated = result.AllocedBytesPerOp()
-		stats.GasUsed = gasUsed
-	} else {
-		var memStatsBefore, memStatsAfter goruntime.MemStats
-		goruntime.ReadMemStats(&memStatsBefore)
-		startTime := time.Now()
-		output, gasUsed, err = execFunc()
-		stats.Time = time.Since(startTime)
-		goruntime.ReadMemStats(&memStatsAfter)
-		stats.Allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
-		stats.BytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
-		stats.GasUsed = gasUsed
+		stats := execStats{
+			Time:           time.Duration(result.NsPerOp()),
+			Allocs:         result.AllocsPerOp(),
+			BytesAllocated: result.AllocedBytesPerOp(),
+			GasUsed:        gasUsed,
+		}
+		return output, stats, err
 	}
-
+	var memStatsBefore, memStatsAfter goruntime.MemStats
+	goruntime.ReadMemStats(&memStatsBefore)
+	t0 := time.Now()
+	output, gasUsed, err := execFunc()
+	duration := time.Since(t0)
+	goruntime.ReadMemStats(&memStatsAfter)
+	stats := execStats{
+		Time:           duration,
+		Allocs:         int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs),
+		BytesAllocated: int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc),
+		GasUsed:        gasUsed,
+	}
 	return output, stats, err
 }
 
