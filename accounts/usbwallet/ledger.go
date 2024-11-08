@@ -397,8 +397,8 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 	if chainID == nil {
 		signer = new(types.HomesteadSigner)
 	} else {
-		signer = types.NewEIP155Signer(chainID)
-		// For EIP-1559 Tx, the V value is 0 or 1, so you don't need to subtract
+		signer = types.LatestSignerForChainID(chainID)
+		// For non-legacy transactions, V is 0 or 1, no need to subtract here.
 		if tx.Type() == types.LegacyTxType {
 			signature[64] -= byte(chainID.Uint64()*2 + 35)
 		}
