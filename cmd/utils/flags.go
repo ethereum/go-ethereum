@@ -320,7 +320,7 @@ var (
 		Usage:    "Target EL engine API URL",
 		Category: flags.BeaconCategory,
 	}
-	BlsyncJWTSecretFlag = &cli.StringFlag{
+	BlsyncJWTSecretFlag = &flags.DirectoryFlag{
 		Name:     "blsync.jwtsecret",
 		Usage:    "Path to a JWT secret to use for target engine API endpoint",
 		Category: flags.BeaconCategory,
