@@ -17,7 +17,6 @@
 package netutil
 
 import (
-	"math/rand"
 	"net"
 	"net/netip"
 	"path/filepath"
