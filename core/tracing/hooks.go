@@ -34,6 +34,7 @@ type OpContext interface {
 	Address() common.Address
 	CallValue() *uint256.Int
 	CallInput() []byte
+	ContractCode() []byte
 }
 
 // StateDB gives tracers access to the whole state.
@@ -42,6 +43,7 @@ type StateDB interface {
 	GetNonce(common.Address) uint64
 	GetCode(common.Address) []byte
 	GetState(common.Address, common.Hash) common.Hash
+	GetTransientState(common.Address, common.Hash) common.Hash
 	Exist(common.Address) bool
 	GetRefund() uint64
 }
@@ -53,9 +55,8 @@ type VMContext struct {
 	Time        uint64
 	Random      *common.Hash
 	// Effective tx gas price
-	GasPrice    *big.Int
-	ChainConfig *params.ChainConfig
-	StateDB     StateDB
+	GasPrice *big.Int
+	StateDB  StateDB
 }
 
 // BlockEvent is emitted upon tracing an incoming block.
@@ -300,13 +301,13 @@ const (
 	GasChangeCallStorageColdAccess GasChangeReason = 13
 	// GasChangeCallFailedExecution is the burning of the remaining gas when the execution failed without a revert.
 	GasChangeCallFailedExecution GasChangeReason = 14
-	// GasChangeWitnessContractInit flags the event of of adding to the witness during the contract creation initialization step
+	// GasChangeWitnessContractInit flags the event of adding to the witness during the contract creation initialization step.
 	GasChangeWitnessContractInit GasChangeReason = 15
-	// GasChangeWitnessContractCreation flags the event of adding to the witness during the contract creation finalization step
+	// GasChangeWitnessContractCreation flags the event of adding to the witness during the contract creation finalization step.
 	GasChangeWitnessContractCreation GasChangeReason = 16
-	// GasChangeWitnessCodeChunk flags the event of adding one or more contract code chunks to the witness
+	// GasChangeWitnessCodeChunk flags the event of adding one or more contract code chunks to the witness.
 	GasChangeWitnessCodeChunk GasChangeReason = 17
-	// GasChangeWitnessContractCollisionCheck flags the event of adding to the witness when checking for contract address collision
+	// GasChangeWitnessContractCollisionCheck flags the event of adding to the witness when checking for contract address collision.
 	GasChangeWitnessContractCollisionCheck GasChangeReason = 18
 
 	// GasChangeIgnored is a special value that can be used to indicate that the gas change should be ignored as

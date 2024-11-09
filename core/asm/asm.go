@@ -26,18 +26,26 @@ import (
 
 // Iterator for disassembled EVM instructions
 type instructionIterator struct {
-	code    []byte
-	pc      uint64
-	arg     []byte
-	op      vm.OpCode
-	error   error
-	started bool
+	code       []byte
+	pc         uint64
+	arg        []byte
+	op         vm.OpCode
+	error      error
+	started    bool
+	eofEnabled bool
 }
 
 // NewInstructionIterator creates a new instruction iterator.
 func NewInstructionIterator(code []byte) *instructionIterator {
 	it := new(instructionIterator)
 	it.code = code
+	return it
+}
+
+// NewEOFInstructionIterator creates a new instruction iterator for EOF-code.
+func NewEOFInstructionIterator(code []byte) *instructionIterator {
+	it := NewInstructionIterator(code)
+	it.eofEnabled = true
 	return it
 }
 
@@ -63,13 +71,26 @@ func (it *instructionIterator) Next() bool {
 		// We reached the end.
 		return false
 	}
-
 	it.op = vm.OpCode(it.code[it.pc])
-	if it.op.IsPush() {
-		a := uint64(it.op) - uint64(vm.PUSH0)
-		u := it.pc + 1 + a
+	var a int
+	if !it.eofEnabled { // Legacy code
+		if it.op.IsPush() {
+			a = int(it.op) - int(vm.PUSH0)
+		}
+	} else { // EOF code
+		if it.op == vm.RJUMPV {
+			// RJUMPV is unique as it has a variable sized operand. The total size is
+			// determined by the count byte which immediately follows RJUMPV.
+			maxIndex := int(it.code[it.pc+1])
+			a = (maxIndex+1)*2 + 1
+		} else {
+			a = vm.Immediates(it.op)
+		}
+	}
+	if a > 0 {
+		u := it.pc + 1 + uint64(a)
 		if uint64(len(it.code)) <= it.pc || uint64(len(it.code)) < u {
-			it.error = fmt.Errorf("incomplete push instruction at %v", it.pc)
+			it.error = fmt.Errorf("incomplete instruction at %v", it.pc)
 			return false
 		}
 		it.arg = it.code[it.pc+1 : u]
@@ -105,7 +126,6 @@ func PrintDisassembled(code string) error {
 	if err != nil {
 		return err
 	}
-
 	it := NewInstructionIterator(script)
 	for it.Next() {
 		if it.Arg() != nil && 0 < len(it.Arg()) {

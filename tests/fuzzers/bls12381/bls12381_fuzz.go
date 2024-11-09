@@ -257,8 +257,12 @@ func fuzzCrossG1MultiExp(data []byte) int {
 	cp.MultiExp(gnarkPoints, gnarkScalars, ecc.MultiExpConfig{})
 
 	// compare result
-	if !(bytes.Equal(cp.Marshal(), g1.ToBytes(&kp))) {
-		panic("G1 multi exponentiation mismatch gnark / geth ")
+	gnarkRes := cp.Marshal()
+	gethRes := g1.ToBytes(&kp)
+	if !bytes.Equal(gnarkRes, gethRes) {
+		msg := fmt.Sprintf("G1 multi exponentiation mismatch gnark/geth.\ngnark: %x\ngeth:  %x\ninput: %x\n ",
+			gnarkRes, gethRes, data)
+		panic(msg)
 	}
 
 	return 1
@@ -283,15 +287,18 @@ func getG1Points(input io.Reader) (*bls12381.PointG1, *gnark.G1Affine, *blst.P1A
 	if err != nil {
 		panic(fmt.Sprintf("Could not marshal gnark.G1 -> geth.G1: %v", err))
 	}
-	if !bytes.Equal(g1.ToBytes(kp), cpBytes) {
-		panic("bytes(gnark.G1) != bytes(geth.G1)")
+
+	gnarkRes := g1.ToBytes(kp)
+	if !bytes.Equal(gnarkRes, cpBytes) {
+		panic(fmt.Sprintf("bytes(gnark.G1) != bytes(geth.G1)\ngnark.G1: %x\ngeth.G1:  %x\n", gnarkRes, cpBytes))
 	}
 
 	// marshal gnark point -> blst point
 	scalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
 	p1 := new(blst.P1Affine).From(scalar)
-	if !bytes.Equal(p1.Serialize(), cpBytes) {
-		panic("bytes(blst.G1) != bytes(geth.G1)")
+	blstRes := p1.Serialize()
+	if !bytes.Equal(blstRes, cpBytes) {
+		panic(fmt.Sprintf("bytes(blst.G1) != bytes(geth.G1)\nblst.G1: %x\ngeth.G1: %x\n", blstRes, cpBytes))
 	}
 
 	return kp, cp, p1, nil
@@ -316,8 +323,10 @@ func getG2Points(input io.Reader) (*bls12381.PointG2, *gnark.G2Affine, *blst.P2A
 	if err != nil {
 		panic(fmt.Sprintf("Could not marshal gnark.G2 -> geth.G2: %v", err))
 	}
-	if !bytes.Equal(g2.ToBytes(kp), cpBytes) {
-		panic("bytes(gnark.G2) != bytes(geth.G2)")
+
+	gnarkRes := g2.ToBytes(kp)
+	if !bytes.Equal(gnarkRes, cpBytes) {
+		panic(fmt.Sprintf("bytes(gnark.G2) != bytes(geth.G2)\ngnark.G2: %x\ngeth.G2:  %x\n", gnarkRes, cpBytes))
 	}
 
 	// marshal gnark point -> blst point

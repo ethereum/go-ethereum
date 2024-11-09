@@ -3,7 +3,6 @@ package metrics
 import (
 	"math"
 	"math/rand"
-	"runtime"
 	"testing"
 	"time"
 )
@@ -27,6 +26,7 @@ func BenchmarkCompute1000(b *testing.B) {
 		SampleVariance(mean, s)
 	}
 }
+
 func BenchmarkCompute1000000(b *testing.B) {
 	s := make([]int64, 1000000)
 	var sum int64
@@ -38,28 +38,6 @@ func BenchmarkCompute1000000(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		SampleVariance(mean, s)
-	}
-}
-func BenchmarkCopy1000(b *testing.B) {
-	s := make([]int64, 1000)
-	for i := 0; i < len(s); i++ {
-		s[i] = int64(i)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		sCopy := make([]int64, len(s))
-		copy(sCopy, s)
-	}
-}
-func BenchmarkCopy1000000(b *testing.B) {
-	s := make([]int64, 1000000)
-	for i := 0; i < len(s); i++ {
-		s[i] = int64(i)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		sCopy := make([]int64, len(s))
-		copy(sCopy, s)
 	}
 }
 
@@ -237,17 +215,9 @@ func TestUniformSampleStatistics(t *testing.T) {
 }
 
 func benchmarkSample(b *testing.B, s Sample) {
-	var memStats runtime.MemStats
-	runtime.ReadMemStats(&memStats)
-	pauseTotalNs := memStats.PauseTotalNs
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		s.Update(1)
 	}
-	b.StopTimer()
-	runtime.GC()
-	runtime.ReadMemStats(&memStats)
-	b.Logf("GC cost: %d ns/op", int(memStats.PauseTotalNs-pauseTotalNs)/b.N)
 }
 
 func testExpDecaySampleStatistics(t *testing.T, s SampleSnapshot) {

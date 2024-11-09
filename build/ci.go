@@ -24,9 +24,14 @@ Usage: go run build/ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-	install    [ -arch architecture ] [ -cc compiler ] [ packages... ]                          -- builds packages and executables
-	test       [ -coverage ] [ packages... ]                                                    -- runs the tests
-	lint                                                                                        -- runs certain pre-selected linters
+	lint           -- runs certain pre-selected linters
+	check_tidy     -- verifies that everything is 'go mod tidy'-ed
+	check_generate -- verifies that everything is 'go generate'-ed
+	check_baddeps  -- verifies that certain dependencies are avoided
+
+	install    [ -arch architecture ] [ -cc compiler ] [ packages... ] -- builds packages and executables
+	test       [ -coverage ] [ packages... ]                           -- runs the tests
+
 	archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -signify key-envvar ] [ -upload dest ] -- archives build artifacts
 	importkeys                                                                                  -- imports signing keys from env
 	debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
@@ -39,26 +44,23 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
-	"strconv"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/cespare/cp"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/signify"
 	"github.com/ethereum/go-ethereum/internal/build"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/internal/version"
 )
 
 var (
@@ -110,7 +112,7 @@ var (
 	// A debian package is created for all executables listed here.
 	debEthereum = debPackage{
 		Name:        "ethereum",
-		Version:     params.Version,
+		Version:     version.Semantic,
 		Executables: debExecutables,
 	}
 
@@ -121,11 +123,12 @@ var (
 
 	// Distros for which packages are created
 	debDistros = []string{
-		"xenial", // 16.04, EOL: 04/2026
-		"bionic", // 18.04, EOL: 04/2028
-		"focal",  // 20.04, EOL: 04/2030
-		"jammy",  // 22.04, EOL: 04/2032
-		"noble",  // 24.04, EOL: 04/2034
+		"xenial",   // 16.04, EOL: 04/2026
+		"bionic",   // 18.04, EOL: 04/2028
+		"focal",    // 20.04, EOL: 04/2030
+		"jammy",    // 22.04, EOL: 04/2032
+		"noble",    // 24.04, EOL: 04/2034
+		"oracular", // 24.10, EOL: 07/2025
 	}
 
 	// This is where the tests should be unpacked.
@@ -144,7 +147,7 @@ func executablePath(name string) string {
 func main() {
 	log.SetFlags(log.Lshortfile)
 
-	if !common.FileExist(filepath.Join("build", "ci.go")) {
+	if !build.FileExist(filepath.Join("build", "ci.go")) {
 		log.Fatal("this script must be run from the root of the repository")
 	}
 	if len(os.Args) < 2 {
@@ -157,10 +160,16 @@ func main() {
 		doTest(os.Args[2:])
 	case "lint":
 		doLint(os.Args[2:])
+	case "check_tidy":
+		doCheckTidy()
+	case "check_generate":
+		doCheckGenerate()
+	case "check_baddeps":
+		doCheckBadDeps()
 	case "archive":
 		doArchive(os.Args[2:])
-	case "docker":
-		doDocker(os.Args[2:])
+	case "dockerx":
+		doDockerBuildx(os.Args[2:])
 	case "debsrc":
 		doDebianSource(os.Args[2:])
 	case "nsis":
@@ -169,8 +178,6 @@ func main() {
 		doPurge(os.Args[2:])
 	case "sanitycheck":
 		doSanityCheck()
-	case "generate":
-		doGenerate()
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -205,12 +212,6 @@ func doInstall(cmdline []string) {
 	// Configure the build.
 	gobuild := tc.Go("build", buildFlags(env, *staticlink, buildTags)...)
 
-	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
-	// better disable it. This check isn't the best, it should probably
-	// check for something in env instead.
-	if env.CI && runtime.GOARCH == "arm64" {
-		gobuild.Args = append(gobuild.Args, "-p", "1")
-	}
 	// We use -trimpath to avoid leaking local paths into the built executables.
 	gobuild.Args = append(gobuild.Args, "-trimpath")
 
@@ -226,8 +227,7 @@ func doInstall(cmdline []string) {
 
 	// Do the build!
 	for _, pkg := range packages {
-		args := make([]string, len(gobuild.Args))
-		copy(args, gobuild.Args)
+		args := slices.Clone(gobuild.Args)
 		args = append(args, "-o", executablePath(path.Base(pkg)))
 		args = append(args, pkg)
 		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
@@ -355,128 +355,93 @@ func downloadSpecTestFixtures(csdb *build.ChecksumDB, cachedir string) string {
 	return filepath.Join(cachedir, base)
 }
 
-// hashAllSourceFiles iterates all files under the top-level project directory
-// computing the hash of each file (excluding files within the tests
-// subrepo)
-func hashAllSourceFiles() (map[string]common.Hash, error) {
-	res := make(map[string]common.Hash)
-	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
-		if strings.HasPrefix(path, filepath.FromSlash("tests/testdata")) {
-			return filepath.SkipDir
-		}
-		if !d.Type().IsRegular() {
-			return nil
-		}
-		// open the file and hash it
-		f, err := os.OpenFile(path, os.O_RDONLY, 0666)
-		if err != nil {
-			return err
-		}
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, f); err != nil {
-			return err
-		}
-		res[path] = common.Hash(hasher.Sum(nil))
-		return nil
-	})
+// doCheckTidy assets that the Go modules files are tidied already.
+func doCheckTidy() {
+	targets := []string{"go.mod", "go.sum"}
+
+	hashes, err := build.HashFiles(targets)
 	if err != nil {
-		return nil, err
+		log.Fatalf("failed to hash go.mod/go.sum: %v", err)
 	}
-	return res, nil
-}
+	build.MustRun(new(build.GoToolchain).Go("mod", "tidy"))
 
-// hashSourceFiles iterates the provided set of filepaths (relative to the top-level geth project directory)
-// computing the hash of each file.
-func hashSourceFiles(files []string) (map[string]common.Hash, error) {
-	res := make(map[string]common.Hash)
-	for _, filePath := range files {
-		f, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
-		if err != nil {
-			return nil, err
-		}
-		hasher := sha256.New()
-		if _, err := io.Copy(hasher, f); err != nil {
-			return nil, err
-		}
-		res[filePath] = common.Hash(hasher.Sum(nil))
-	}
-	return res, nil
-}
-
-// compareHashedFilesets compares two maps (key is relative file path to top-level geth directory, value is its hash)
-// and returns the list of file paths whose hashes differed.
-func compareHashedFilesets(preHashes map[string]common.Hash, postHashes map[string]common.Hash) []string {
-	updates := []string{}
-	for path, postHash := range postHashes {
-		preHash, ok := preHashes[path]
-		if !ok || preHash != postHash {
-			updates = append(updates, path)
-		}
-	}
-	return updates
-}
-
-func doGoModTidy() {
-	targetFiles := []string{"go.mod", "go.sum"}
-	preHashes, err := hashSourceFiles(targetFiles)
+	tidied, err := build.HashFiles(targets)
 	if err != nil {
-		log.Fatal("failed to hash go.mod/go.sum", "err", err)
+		log.Fatalf("failed to rehash go.mod/go.sum: %v", err)
 	}
-	tc := new(build.GoToolchain)
-	c := tc.Go("mod", "tidy")
-	build.MustRun(c)
-	postHashes, err := hashSourceFiles(targetFiles)
-	updates := compareHashedFilesets(preHashes, postHashes)
-	for _, updatedFile := range updates {
-		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
+	if updates := build.DiffHashes(hashes, tidied); len(updates) > 0 {
+		log.Fatalf("files changed on running 'go mod tidy': %v", updates)
 	}
-	if len(updates) != 0 {
-		log.Fatal("go.sum and/or go.mod were updated by running 'go mod tidy'")
-	}
+	fmt.Println("No untidy module files detected.")
 }
 
-// doGenerate ensures that re-generating generated files does not cause
-// any mutations in the source file tree:  i.e. all generated files were
-// updated and committed.  Any stale generated files are updated.
-func doGenerate() {
+// doCheckGenerate ensures that re-generating generated files does not cause
+// any mutations in the source file tree.
+func doCheckGenerate() {
 	var (
-		tc       = new(build.GoToolchain)
 		cachedir = flag.String("cachedir", "./build/cache", "directory for caching binaries.")
-		verify   = flag.Bool("verify", false, "check whether any files are changed by go generate")
 	)
+	// Compute the origin hashes of all the files
+	var hashes map[string][32]byte
 
-	protocPath := downloadProtoc(*cachedir)
-	protocGenGoPath := downloadProtocGenGo(*cachedir)
-
-	var preHashes map[string]common.Hash
-	if *verify {
-		var err error
-		preHashes, err = hashAllSourceFiles()
-		if err != nil {
-			log.Fatal("failed to compute map of source hashes", "err", err)
-		}
+	var err error
+	hashes, err = build.HashFolder(".", []string{"tests/testdata", "build/cache"})
+	if err != nil {
+		log.Fatal("Error computing hashes", "err", err)
 	}
-
-	c := tc.Go("generate", "./...")
+	// Run any go generate steps we might be missing
+	var (
+		protocPath      = downloadProtoc(*cachedir)
+		protocGenGoPath = downloadProtocGenGo(*cachedir)
+	)
+	c := new(build.GoToolchain).Go("generate", "./...")
 	pathList := []string{filepath.Join(protocPath, "bin"), protocGenGoPath, os.Getenv("PATH")}
 	c.Env = append(c.Env, "PATH="+strings.Join(pathList, string(os.PathListSeparator)))
 	build.MustRun(c)
 
-	if !*verify {
-		return
-	}
-	// Check if files were changed.
-	postHashes, err := hashAllSourceFiles()
+	// Check if generate file hashes have changed
+	generated, err := build.HashFolder(".", []string{"tests/testdata", "build/cache"})
 	if err != nil {
-		log.Fatal("error computing source tree file hashes", "err", err)
+		log.Fatalf("Error re-computing hashes: %v", err)
 	}
-	updates := compareHashedFilesets(preHashes, postHashes)
-	for _, updatedFile := range updates {
-		fmt.Fprintf(os.Stderr, "changed file %s\n", updatedFile)
+	updates := build.DiffHashes(hashes, generated)
+	for _, file := range updates {
+		log.Printf("File changed: %s", file)
 	}
 	if len(updates) != 0 {
 		log.Fatal("One or more generated files were updated by running 'go generate ./...'")
 	}
+	fmt.Println("No stale files detected.")
+}
+
+// doCheckBadDeps verifies whether certain unintended dependencies between some
+// packages leak into the codebase due to a refactor. This is not an exhaustive
+// list, rather something we build up over time at sensitive places.
+func doCheckBadDeps() {
+	baddeps := [][2]string{
+		// Rawdb tends to be a dumping ground for db utils, sometimes leaking the db itself
+		{"github.com/ethereum/go-ethereum/core/rawdb", "github.com/ethereum/go-ethereum/ethdb/leveldb"},
+		{"github.com/ethereum/go-ethereum/core/rawdb", "github.com/ethereum/go-ethereum/ethdb/pebbledb"},
+	}
+	tc := new(build.GoToolchain)
+
+	var failed bool
+	for _, rule := range baddeps {
+		out, err := tc.Go("list", "-deps", rule[0]).CombinedOutput()
+		if err != nil {
+			log.Fatalf("Failed to list '%s' dependencies: %v", rule[0], err)
+		}
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.TrimSpace(line) == rule[1] {
+				log.Printf("Found bad dependency '%s' -> '%s'", rule[0], rule[1])
+				failed = true
+			}
+		}
+	}
+	if failed {
+		log.Fatalf("Bad dependencies detected.")
+	}
+	fmt.Println("No bad dependencies detected.")
 }
 
 // doLint runs golangci-lint on requested packages.
@@ -493,8 +458,6 @@ func doLint(cmdline []string) {
 	linter := downloadLinter(*cachedir)
 	lflags := []string{"run", "--config", ".golangci.yml"}
 	build.MustRunCommandWithOutput(linter, append(lflags, packages...)...)
-
-	doGoModTidy()
 	fmt.Println("You have achieved perfection.")
 }
 
@@ -638,7 +601,7 @@ func doArchive(cmdline []string) {
 
 	var (
 		env      = build.Env()
-		basegeth = archiveBasename(*arch, params.ArchiveVersion(env.Commit))
+		basegeth = archiveBasename(*arch, version.Archive(env.Commit))
 		geth     = "geth-" + basegeth + ext
 		alltools = "geth-alltools-" + basegeth + ext
 	)
@@ -723,10 +686,9 @@ func maybeSkipArchive(env build.Environment) {
 }
 
 // Builds the docker images and optionally uploads them to Docker Hub.
-func doDocker(cmdline []string) {
+func doDockerBuildx(cmdline []string) {
 	var (
-		image    = flag.Bool("image", false, `Whether to build and push an arch specific docker image`)
-		manifest = flag.String("manifest", "", `Push a multi-arch docker image for the specified architectures (usually "amd64,arm64")`)
+		platform = flag.String("platform", "", `Push a multi-arch docker image for the specified architectures (usually "linux/amd64,linux/arm64")`)
 		upload   = flag.String("upload", "", `Where to upload the docker image (usually "ethereum/client-go")`)
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -759,131 +721,28 @@ func doDocker(cmdline []string) {
 	case env.Branch == "master":
 		tags = []string{"latest"}
 	case strings.HasPrefix(env.Tag, "v1."):
-		tags = []string{"stable", fmt.Sprintf("release-1.%d", params.VersionMinor), "v" + params.Version}
+		tags = []string{"stable", fmt.Sprintf("release-%v", version.Family), "v" + version.Semantic}
 	}
-	// If architecture specific image builds are requested, build and push them
-	if *image {
-		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:TAG", *upload), ".")
-		build.MustRunCommand("docker", "build", "--build-arg", "COMMIT="+env.Commit, "--build-arg", "VERSION="+params.VersionWithMeta, "--build-arg", "BUILDNUM="+env.Buildnum, "--tag", fmt.Sprintf("%s:alltools-TAG", *upload), "-f", "Dockerfile.alltools", ".")
+	// Need to create a mult-arch builder
+	build.MustRunCommand("docker", "buildx", "create", "--use", "--name", "multi-arch-builder", "--platform", *platform)
 
-		// Tag and upload the images to Docker Hub
-		for _, tag := range tags {
-			gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, runtime.GOARCH)
-			toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, runtime.GOARCH)
-
-			// If the image already exists (non version tag), check the build
-			// number to prevent overwriting a newer commit if concurrent builds
-			// are running. This is still a tiny bit racey if two published are
-			// done at the same time, but that's extremely unlikely even on the
-			// master branch.
-			for _, img := range []string{gethImage, toolImage} {
-				if exec.Command("docker", "pull", img).Run() != nil {
-					continue // Generally the only failure is a missing image, which is good
-				}
-				buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"buildnum\"}}", img).CombinedOutput()
-				if err != nil {
-					log.Fatalf("Failed to inspect container: %v\nOutput: %s", err, string(buildnum))
-				}
-				buildnum = bytes.TrimSpace(buildnum)
-
-				if len(buildnum) > 0 && len(env.Buildnum) > 0 {
-					oldnum, err := strconv.Atoi(string(buildnum))
-					if err != nil {
-						log.Fatalf("Failed to parse old image build number: %v", err)
-					}
-					newnum, err := strconv.Atoi(env.Buildnum)
-					if err != nil {
-						log.Fatalf("Failed to parse current build number: %v", err)
-					}
-					if oldnum > newnum {
-						log.Fatalf("Current build number %d not newer than existing %d", newnum, oldnum)
-					} else {
-						log.Printf("Updating %s from build %d to %d", img, oldnum, newnum)
-					}
-				}
-			}
-			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:TAG", *upload), gethImage)
-			build.MustRunCommand("docker", "image", "tag", fmt.Sprintf("%s:alltools-TAG", *upload), toolImage)
-			build.MustRunCommand("docker", "push", gethImage)
-			build.MustRunCommand("docker", "push", toolImage)
-		}
-	}
-	// If multi-arch image manifest push is requested, assemble it
-	if len(*manifest) != 0 {
-		// Since different architectures are pushed by different builders, wait
-		// until all required images are updated.
-		var mismatch bool
-		for i := 0; i < 2; i++ { // 2 attempts, second is race check
-			mismatch = false // hope there's no mismatch now
-
-			for _, tag := range tags {
-				for _, arch := range strings.Split(*manifest, ",") {
-					gethImage := fmt.Sprintf("%s:%s-%s", *upload, tag, arch)
-					toolImage := fmt.Sprintf("%s:alltools-%s-%s", *upload, tag, arch)
-
-					for _, img := range []string{gethImage, toolImage} {
-						if out, err := exec.Command("docker", "pull", img).CombinedOutput(); err != nil {
-							log.Printf("Required image %s unavailable: %v\nOutput: %s", img, err, out)
-							mismatch = true
-							break
-						}
-						buildnum, err := exec.Command("docker", "inspect", "--format", "{{index .Config.Labels \"buildnum\"}}", img).CombinedOutput()
-						if err != nil {
-							log.Fatalf("Failed to inspect container: %v\nOutput: %s", err, string(buildnum))
-						}
-						buildnum = bytes.TrimSpace(buildnum)
-
-						if string(buildnum) != env.Buildnum {
-							log.Printf("Build number mismatch on %s: want %s, have %s", img, env.Buildnum, buildnum)
-							mismatch = true
-							break
-						}
-					}
-					if mismatch {
-						break
-					}
-				}
-				if mismatch {
-					break
-				}
-			}
-			if mismatch {
-				// Build numbers mismatching, retry in a short time to
-				// avoid concurrent fails in both publisher images. If
-				// however the retry failed too, it means the concurrent
-				// builder is still crunching, let that do the publish.
-				if i == 0 {
-					time.Sleep(30 * time.Second)
-				}
-				continue
-			}
-			break
-		}
-		if mismatch {
-			log.Println("Relinquishing publish to other builder")
-			return
-		}
-		// Assemble and push the Geth manifest image
-		for _, tag := range tags {
-			gethImage := fmt.Sprintf("%s:%s", *upload, tag)
-
-			var gethSubImages []string
-			for _, arch := range strings.Split(*manifest, ",") {
-				gethSubImages = append(gethSubImages, gethImage+"-"+arch)
-			}
-			build.MustRunCommand("docker", append([]string{"manifest", "create", gethImage}, gethSubImages...)...)
-			build.MustRunCommand("docker", "manifest", "push", gethImage)
-		}
-		// Assemble and push the alltools manifest image
-		for _, tag := range tags {
-			toolImage := fmt.Sprintf("%s:alltools-%s", *upload, tag)
-
-			var toolSubImages []string
-			for _, arch := range strings.Split(*manifest, ",") {
-				toolSubImages = append(toolSubImages, toolImage+"-"+arch)
-			}
-			build.MustRunCommand("docker", append([]string{"manifest", "create", toolImage}, toolSubImages...)...)
-			build.MustRunCommand("docker", "manifest", "push", toolImage)
+	for _, spec := range []struct {
+		file string
+		base string
+	}{
+		{file: "Dockerfile", base: fmt.Sprintf("%s:", *upload)},
+		{file: "Dockerfile.alltools", base: fmt.Sprintf("%s:alltools-", *upload)},
+	} {
+		for _, tag := range tags { // latest, stable etc
+			gethImage := fmt.Sprintf("%s%s", spec.base, tag)
+			build.MustRunCommand("docker", "buildx", "build",
+				"--build-arg", "COMMIT="+env.Commit,
+				"--build-arg", "VERSION="+version.WithMeta,
+				"--build-arg", "BUILDNUM="+env.Buildnum,
+				"--tag", gethImage,
+				"--platform", *platform,
+				"--push",
+				"--file", spec.file, ".")
 		}
 	}
 }
@@ -1025,7 +884,7 @@ func ppaUpload(workdir, ppa, sshUser string, files []string) {
 	var idfile string
 	if sshkey := getenvBase64("PPA_SSH_KEY"); len(sshkey) > 0 {
 		idfile = filepath.Join(workdir, "sshkey")
-		if !common.FileExist(idfile) {
+		if !build.FileExist(idfile) {
 			os.WriteFile(idfile, sshkey, 0600)
 		}
 	}
@@ -1250,19 +1109,19 @@ func doWindowsInstaller(cmdline []string) {
 	// Build the installer. This assumes that all the needed files have been previously
 	// built (don't mix building and packaging to keep cross compilation complexity to a
 	// minimum).
-	version := strings.Split(params.Version, ".")
+	ver := strings.Split(version.Semantic, ".")
 	if env.Commit != "" {
-		version[2] += "-" + env.Commit[:8]
+		ver[2] += "-" + env.Commit[:8]
 	}
-	installer, err := filepath.Abs("geth-" + archiveBasename(*arch, params.ArchiveVersion(env.Commit)) + ".exe")
+	installer, err := filepath.Abs("geth-" + archiveBasename(*arch, version.Archive(env.Commit)) + ".exe")
 	if err != nil {
 		log.Fatalf("Failed to convert installer file path: %v", err)
 	}
 	build.MustRunCommand("makensis.exe",
 		"/DOUTPUTFILE="+installer,
-		"/DMAJORVERSION="+version[0],
-		"/DMINORVERSION="+version[1],
-		"/DBUILDVERSION="+version[2],
+		"/DMAJORVERSION="+ver[0],
+		"/DMINORVERSION="+ver[1],
+		"/DBUILDVERSION="+ver[2],
 		"/DARCH="+*arch,
 		filepath.Join(*workdir, "geth.nsi"),
 	)

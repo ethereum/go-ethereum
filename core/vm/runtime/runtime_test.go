@@ -395,7 +395,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 	cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	cfg.GasLimit = gas
 	if len(tracerCode) > 0 {
-		tracer, err := tracers.DefaultDirectory.New(tracerCode, new(tracers.Context), nil)
+		tracer, err := tracers.DefaultDirectory.New(tracerCode, new(tracers.Context), nil, cfg.ChainConfig)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -514,6 +514,17 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.JUMP),
 	}
 
+	loopingCode2 := []byte{
+		byte(vm.JUMPDEST), //  [ count ]
+		// push args for the call
+		byte(vm.PUSH4), 1, 2, 3, 4,
+		byte(vm.PUSH5), 1, 2, 3, 4, 5,
+
+		byte(vm.POP), byte(vm.POP),
+		byte(vm.PUSH6), 0, 0, 0, 0, 0, 0, // jumpdestination
+		byte(vm.JUMP),
+	}
+
 	callRevertingContractWithInput := []byte{
 		byte(vm.JUMPDEST), //
 		// push args for the call
@@ -540,6 +551,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 	benchmarkNonModifyingCode(100000000, staticCallIdentity, "staticcall-identity-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callIdentity, "call-identity-100M", "", b)
 	benchmarkNonModifyingCode(100000000, loopingCode, "loop-100M", "", b)
+	benchmarkNonModifyingCode(100000000, loopingCode2, "loop2-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callInexistant, "call-nonexist-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callEOA, "call-EOA-100M", "", b)
 	benchmarkNonModifyingCode(100000000, callRevertingContractWithInput, "call-reverting-100M", "", b)
@@ -887,7 +899,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 			statedb.SetCode(common.HexToAddress("0xee"), calleeCode)
 			statedb.SetCode(common.HexToAddress("0xff"), suicideCode)
 
-			tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil)
+			tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil, params.MergedTestChainConfig)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -922,7 +934,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 	code := []byte{byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.RETURN)}
 
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-	tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil)
+	tracer, err := tracers.DefaultDirectory.New(jsTracer, new(tracers.Context), nil, params.MergedTestChainConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

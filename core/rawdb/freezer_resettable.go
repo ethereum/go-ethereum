@@ -202,6 +202,14 @@ func (f *resettableFreezer) Sync() error {
 	return f.freezer.Sync()
 }
 
+// AncientDatadir returns the path of the ancient store.
+func (f *resettableFreezer) AncientDatadir() (string, error) {
+	f.lock.RLock()
+	defer f.lock.RUnlock()
+
+	return f.freezer.AncientDatadir()
+}
+
 // cleanup removes the directory located in the specified path
 // has the name with deletion marker suffix.
 func cleanup(path string) error {

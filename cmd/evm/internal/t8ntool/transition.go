@@ -82,7 +82,9 @@ type input struct {
 }
 
 func Transition(ctx *cli.Context) error {
-	var getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) { return nil, nil, nil }
+	var getTracer = func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
+		return nil, nil, nil
+	}
 
 	baseDir, err := createBasedir(ctx)
 	if err != nil {
@@ -97,7 +99,7 @@ func Transition(ctx *cli.Context) error {
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 			Debug:            true,
 		}
-		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+		getTracer = func(txIndex int, txHash common.Hash, _ *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
 			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.jsonl", txIndex, txHash.String())))
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
@@ -121,12 +123,12 @@ func Transition(ctx *cli.Context) error {
 		if ctx.IsSet(TraceTracerConfigFlag.Name) {
 			config = []byte(ctx.String(TraceTracerConfigFlag.Name))
 		}
-		getTracer = func(txIndex int, txHash common.Hash) (*tracers.Tracer, io.WriteCloser, error) {
+		getTracer = func(txIndex int, txHash common.Hash, chainConfig *params.ChainConfig) (*tracers.Tracer, io.WriteCloser, error) {
 			traceFile, err := os.Create(filepath.Join(baseDir, fmt.Sprintf("trace-%d-%v.json", txIndex, txHash.String())))
 			if err != nil {
 				return nil, nil, NewError(ErrorIO, fmt.Errorf("failed creating trace-file: %v", err))
 			}
-			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config)
+			tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name), nil, config, chainConfig)
 			if err != nil {
 				return nil, nil, NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %w", err))
 			}

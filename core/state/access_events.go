@@ -28,8 +28,8 @@ import (
 
 // mode specifies how a tree location has been accessed
 // for the byte value:
-// * the first bit is set if the branch has been edited
-// * the second bit is set if the branch has been read
+// * the first bit is set if the branch has been read
+// * the second bit is set if the branch has been edited
 type mode byte
 
 const (
@@ -117,7 +117,7 @@ func (ae *AccessEvents) ValueTransferGas(callerAddr, targetAddr common.Address) 
 	return gas
 }
 
-// ContractCreateCPreheck charges access costs before
+// ContractCreatePreCheckGas charges access costs before
 // a contract creation is initiated. It is just reads, because the
 // address collision is done before the transfer, and so no write
 // are guaranteed to happen at this point.

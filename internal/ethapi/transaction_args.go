@@ -22,11 +22,11 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -100,7 +100,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 	if err := args.setBlobTxSidecar(ctx); err != nil {
 		return err
 	}
-	if err := args.setFeeDefaults(ctx, b); err != nil {
+	if err := args.setFeeDefaults(ctx, b, b.CurrentHeader()); err != nil {
 		return err
 	}
 
@@ -183,15 +183,12 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, skipGas
 }
 
 // setFeeDefaults fills in default fee values for unspecified tx fields.
-func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) error {
-	head := b.CurrentHeader()
+func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head *types.Header) error {
 	// Sanity check the EIP-4844 fee parameters.
 	if args.BlobFeeCap != nil && args.BlobFeeCap.ToInt().Sign() == 0 {
 		return errors.New("maxFeePerBlobGas, if specified, must be non-zero")
 	}
-	if err := args.setCancunFeeDefaults(ctx, head, b); err != nil {
-		return err
-	}
+	args.setCancunFeeDefaults(head)
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
@@ -243,7 +240,7 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend) erro
 }
 
 // setCancunFeeDefaults fills in reasonable default fee values for unspecified fields.
-func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *types.Header, b Backend) error {
+func (args *TransactionArgs) setCancunFeeDefaults(head *types.Header) {
 	// Set maxFeePerBlobGas if it is missing.
 	if args.BlobHashes != nil && args.BlobFeeCap == nil {
 		var excessBlobGas uint64
@@ -258,7 +255,6 @@ func (args *TransactionArgs) setCancunFeeDefaults(ctx context.Context, head *typ
 		val := new(big.Int).Mul(blobBaseFee, big.NewInt(2))
 		args.BlobFeeCap = (*hexutil.Big)(val)
 	}
-	return nil
 }
 
 // setLondonFeeDefaults fills in reasonable default fee values for unspecified fields.
@@ -443,7 +439,10 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 			// Backfill the legacy gasPrice for EVM execution, unless we're all zeroes
 			gasPrice = new(big.Int)
 			if gasFeeCap.BitLen() > 0 || gasTipCap.BitLen() > 0 {
-				gasPrice = math.BigMin(new(big.Int).Add(gasTipCap, baseFee), gasFeeCap)
+				gasPrice = gasPrice.Add(gasTipCap, baseFee)
+				if gasPrice.Cmp(gasFeeCap) > 0 {
+					gasPrice = gasFeeCap
+				}
 			}
 		}
 	}

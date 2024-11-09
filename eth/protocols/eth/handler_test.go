@@ -17,10 +17,12 @@
 package eth
 
 import (
+	"bytes"
 	"math"
 	"math/big"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -37,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -75,27 +78,26 @@ func newTestBackendWithGenerator(blocks int, shanghai bool, generator func(int, 
 
 	if shanghai {
 		config = &params.ChainConfig{
-			ChainID:                       big.NewInt(1),
-			HomesteadBlock:                big.NewInt(0),
-			DAOForkBlock:                  nil,
-			DAOForkSupport:                true,
-			EIP150Block:                   big.NewInt(0),
-			EIP155Block:                   big.NewInt(0),
-			EIP158Block:                   big.NewInt(0),
-			ByzantiumBlock:                big.NewInt(0),
-			ConstantinopleBlock:           big.NewInt(0),
-			PetersburgBlock:               big.NewInt(0),
-			IstanbulBlock:                 big.NewInt(0),
-			MuirGlacierBlock:              big.NewInt(0),
-			BerlinBlock:                   big.NewInt(0),
-			LondonBlock:                   big.NewInt(0),
-			ArrowGlacierBlock:             big.NewInt(0),
-			GrayGlacierBlock:              big.NewInt(0),
-			MergeNetsplitBlock:            big.NewInt(0),
-			ShanghaiTime:                  u64(0),
-			TerminalTotalDifficulty:       big.NewInt(0),
-			TerminalTotalDifficultyPassed: true,
-			Ethash:                        new(params.EthashConfig),
+			ChainID:                 big.NewInt(1),
+			HomesteadBlock:          big.NewInt(0),
+			DAOForkBlock:            nil,
+			DAOForkSupport:          true,
+			EIP150Block:             big.NewInt(0),
+			EIP155Block:             big.NewInt(0),
+			EIP158Block:             big.NewInt(0),
+			ByzantiumBlock:          big.NewInt(0),
+			ConstantinopleBlock:     big.NewInt(0),
+			PetersburgBlock:         big.NewInt(0),
+			IstanbulBlock:           big.NewInt(0),
+			MuirGlacierBlock:        big.NewInt(0),
+			BerlinBlock:             big.NewInt(0),
+			LondonBlock:             big.NewInt(0),
+			ArrowGlacierBlock:       big.NewInt(0),
+			GrayGlacierBlock:        big.NewInt(0),
+			MergeNetsplitBlock:      big.NewInt(0),
+			ShanghaiTime:            u64(0),
+			TerminalTotalDifficulty: big.NewInt(0),
+			Ethash:                  new(params.EthashConfig),
 		}
 		engine = beacon.NewFaker()
 	}
@@ -143,10 +145,12 @@ func (b *testBackend) RunPeer(peer *Peer, handler Handler) error {
 func (b *testBackend) PeerInfo(enode.ID) interface{} { panic("not implemented") }
 
 func (b *testBackend) AcceptTxs() bool {
-	panic("data processing tests should be done in the handler package")
+	return true
+	//panic("data processing tests should be done in the handler package")
 }
 func (b *testBackend) Handle(*Peer, Packet) error {
-	panic("data processing tests should be done in the handler package")
+	return nil
+	//panic("data processing tests should be done in the handler package")
 }
 
 // Tests that block headers can be retrieved from a remote chain based on user queries.
@@ -498,4 +502,77 @@ func testGetBlockReceipts(t *testing.T, protocol uint) {
 	}); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
 	}
+}
+
+type decoder struct {
+	msg []byte
+}
+
+func (d decoder) Decode(val interface{}) error {
+	buffer := bytes.NewBuffer(d.msg)
+	s := rlp.NewStream(buffer, uint64(len(d.msg)))
+	return s.Decode(val)
+}
+
+func (d decoder) Time() time.Time {
+	return time.Now()
+}
+
+func setup() (*testBackend, *testPeer) {
+	// Generate some transactions etc.
+	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+	acc2Key, _ := crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+	acc1Addr := crypto.PubkeyToAddress(acc1Key.PublicKey)
+	acc2Addr := crypto.PubkeyToAddress(acc2Key.PublicKey)
+	signer := types.HomesteadSigner{}
+	gen := func(n int, block *core.BlockGen) {
+		if n%2 == 0 {
+			w := &types.Withdrawal{
+				Address: common.Address{0xaa},
+				Amount:  42,
+			}
+			block.AddWithdrawal(w)
+		}
+		switch n {
+		case 0:
+			// In block 1, the test bank sends account #1 some ether.
+			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testAddr), acc1Addr, big.NewInt(10_000_000_000_000_000), params.TxGas, block.BaseFee(), nil), signer, testKey)
+			block.AddTx(tx)
+		case 1:
+			// In block 2, the test bank sends some more ether to account #1.
+			// acc1Addr passes it on to account #2.
+			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testAddr), acc1Addr, big.NewInt(1_000_000_000_000_000), params.TxGas, block.BaseFee(), nil), signer, testKey)
+			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1_000_000_000_000_000), params.TxGas, block.BaseFee(), nil), signer, acc1Key)
+			block.AddTx(tx1)
+			block.AddTx(tx2)
+		case 2:
+			// Block 3 is empty but was mined by account #2.
+			block.SetCoinbase(acc2Addr)
+			block.SetExtra([]byte("yeehaw"))
+		}
+	}
+	backend := newTestBackendWithGenerator(maxBodiesServe+15, true, gen)
+	peer, _ := newTestPeer("peer", ETH68, backend)
+	// Discard all messages
+	go func() {
+		for {
+			msg, err := peer.app.ReadMsg()
+			if err == nil {
+				msg.Discard()
+			}
+		}
+	}()
+	return backend, peer
+}
+
+func FuzzEthProtocolHandlers(f *testing.F) {
+	handlers := eth68
+	backend, peer := setup()
+	f.Fuzz(func(t *testing.T, code byte, msg []byte) {
+		handler := handlers[uint64(code)%protocolLengths[ETH68]]
+		if handler == nil {
+			return
+		}
+		handler(backend, decoder{msg: msg}, peer.Peer)
+	})
 }

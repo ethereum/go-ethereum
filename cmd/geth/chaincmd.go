@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -36,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/era"
-	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
@@ -49,7 +49,7 @@ var (
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
-		Flags: flags.Merge([]cli.Flag{
+		Flags: slices.Concat([]cli.Flag{
 			utils.CachePreimagesFlag,
 			utils.OverrideCancun,
 			utils.OverrideVerkle,
@@ -76,7 +76,7 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 		Name:      "import",
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
-		Flags: flags.Merge([]cli.Flag{
+		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
@@ -115,7 +115,7 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
-		Flags: flags.Merge([]cli.Flag{
+		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 		}, utils.DatabaseFlags),
@@ -131,7 +131,7 @@ be gzipped.`,
 		Name:      "import-history",
 		Usage:     "Import an Era archive",
 		ArgsUsage: "<dir>",
-		Flags: flags.Merge([]cli.Flag{
+		Flags: slices.Concat([]cli.Flag{
 			utils.TxLookupLimitFlag,
 		},
 			utils.DatabaseFlags,
@@ -147,7 +147,7 @@ from Era archives.
 		Name:      "export-history",
 		Usage:     "Export blockchain history to Era archives",
 		ArgsUsage: "<dir> <first> <last>",
-		Flags:     flags.Merge(utils.DatabaseFlags),
+		Flags:     slices.Concat(utils.DatabaseFlags),
 		Description: `
 The export-history command will export blocks and their corresponding receipts
 into Era archives. Eras are typically packaged in steps of 8192 blocks.
@@ -158,7 +158,7 @@ into Era archives. Eras are typically packaged in steps of 8192 blocks.
 		Name:      "import-preimages",
 		Usage:     "Import the preimage database from an RLP stream",
 		ArgsUsage: "<datafile>",
-		Flags: flags.Merge([]cli.Flag{
+		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 		}, utils.DatabaseFlags),
@@ -173,7 +173,7 @@ It's deprecated, please use "geth db import" instead.
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
 		ArgsUsage: "[? <blockHash> | <blockNum>]",
-		Flags: flags.Merge([]cli.Flag{
+		Flags: slices.Concat([]cli.Flag{
 			utils.CacheFlag,
 			utils.IterativeOutputFlag,
 			utils.ExcludeCodeFlag,
@@ -221,22 +221,23 @@ func initGenesis(ctx *cli.Context) error {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		overrides.OverrideVerkle = &v
 	}
-	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabaseWithFreezer(name, 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
-		if err != nil {
-			utils.Fatalf("Failed to open database: %v", err)
-		}
-		defer chaindb.Close()
 
-		triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
-		defer triedb.Close()
-
-		_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
-		if err != nil {
-			utils.Fatalf("Failed to write genesis block: %v", err)
-		}
-		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
+	chaindb, err := stack.OpenDatabaseWithFreezer("chaindata", 0, 0, ctx.String(utils.AncientFlag.Name), "", false)
+	if err != nil {
+		utils.Fatalf("Failed to open database: %v", err)
 	}
+	defer chaindb.Close()
+
+	triedb := utils.MakeTrieDatabase(ctx, chaindb, ctx.Bool(utils.CachePreimagesFlag.Name), false, genesis.IsVerkle())
+	defer triedb.Close()
+
+	_, hash, err := core.SetupGenesisBlockWithOverride(chaindb, triedb, genesis, &overrides)
+	if err != nil {
+		utils.Fatalf("Failed to write genesis block: %v", err)
+	}
+
+	log.Info("Successfully wrote genesis state", "database", "chaindata", "hash", hash)
+
 	return nil
 }
 
@@ -258,29 +259,22 @@ func dumpGenesis(ctx *cli.Context) error {
 
 	// dump whatever already exists in the datadir
 	stack, _ := makeConfigNode(ctx)
-	for _, name := range []string{"chaindata", "lightchaindata"} {
-		db, err := stack.OpenDatabase(name, 0, 0, "", true)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return err
-			}
-			continue
-		}
-		genesis, err := core.ReadGenesis(db)
-		if err != nil {
-			utils.Fatalf("failed to read genesis: %s", err)
-		}
-		db.Close()
 
-		if err := json.NewEncoder(os.Stdout).Encode(*genesis); err != nil {
-			utils.Fatalf("could not encode stored genesis: %s", err)
-		}
-		return nil
+	db, err := stack.OpenDatabase("chaindata", 0, 0, "", true)
+	if err != nil {
+		return err
 	}
-	if ctx.IsSet(utils.DataDirFlag.Name) {
-		utils.Fatalf("no existing datadir at %s", stack.Config().DataDir)
+	defer db.Close()
+
+	genesis, err = core.ReadGenesis(db)
+	if err != nil {
+		utils.Fatalf("failed to read genesis: %s", err)
 	}
-	utils.Fatalf("no network preset provided, and no genesis exists in the default datadir")
+
+	if err := json.NewEncoder(os.Stdout).Encode(*genesis); err != nil {
+		utils.Fatalf("could not encode stored genesis: %s", err)
+	}
+
 	return nil
 }
 
@@ -557,7 +551,7 @@ func parseDumpConfig(ctx *cli.Context, db ethdb.Database) (*state.DumpConfig, co
 	default:
 		return nil, common.Hash{}, fmt.Errorf("invalid start argument: %x. 20 or 32 hex-encoded bytes required", startArg)
 	}
-	var conf = &state.DumpConfig{
+	conf := &state.DumpConfig{
 		SkipCode:          ctx.Bool(utils.ExcludeCodeFlag.Name),
 		SkipStorage:       ctx.Bool(utils.ExcludeStorageFlag.Name),
 		OnlyWithAddresses: !ctx.Bool(utils.IncludeIncompletesFlag.Name),

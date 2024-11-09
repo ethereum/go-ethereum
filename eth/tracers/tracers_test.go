@@ -99,11 +99,13 @@ func BenchmarkTransactionTrace(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		snap := state.StateDB.Snapshot()
+		tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-		_, err = st.TransitionDb()
+		res, err := st.TransitionDb()
 		if err != nil {
 			b.Fatal(err)
 		}
+		tracer.OnTxEnd(&types.Receipt{GasUsed: res.UsedGas}, nil)
 		state.StateDB.RevertToSnapshot(snap)
 		if have, want := len(tracer.StructLogs()), 244752; have != want {
 			b.Fatalf("trace wrong, want %d steps, have %d", want, have)

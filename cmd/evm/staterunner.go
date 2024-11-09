@@ -27,26 +27,51 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
 )
 
+var (
+	forkFlag = &cli.StringFlag{
+		Name:     "statetest.fork",
+		Usage:    "The hard-fork to run the test against",
+		Category: flags.VMCategory,
+	}
+	idxFlag = &cli.IntFlag{
+		Name:     "statetest.index",
+		Usage:    "The index of the subtest to run",
+		Category: flags.VMCategory,
+		Value:    -1, // default to select all subtest indices
+	}
+	testNameFlag = &cli.StringFlag{
+		Name:     "statetest.name",
+		Usage:    "The name of the state test to run",
+		Category: flags.VMCategory,
+	}
+)
 var stateTestCommand = &cli.Command{
 	Action:    stateTestCmd,
 	Name:      "statetest",
 	Usage:     "Executes the given state tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
 	ArgsUsage: "<file>",
+	Flags: []cli.Flag{
+		forkFlag,
+		idxFlag,
+		testNameFlag,
+	},
 }
 
 // StatetestResult contains the execution status after running a state test, any
 // error that might have occurred and a dump of the final state if requested.
 type StatetestResult struct {
-	Name  string       `json:"name"`
-	Pass  bool         `json:"pass"`
-	Root  *common.Hash `json:"stateRoot,omitempty"`
-	Fork  string       `json:"fork"`
-	Error string       `json:"error,omitempty"`
-	State *state.Dump  `json:"state,omitempty"`
+	Name       string       `json:"name"`
+	Pass       bool         `json:"pass"`
+	Root       *common.Hash `json:"stateRoot,omitempty"`
+	Fork       string       `json:"fork"`
+	Error      string       `json:"error,omitempty"`
+	State      *state.Dump  `json:"state,omitempty"`
+	BenchStats *execStats   `json:"benchStats,omitempty"`
 }
 
 func stateTestCmd(ctx *cli.Context) error {
@@ -67,7 +92,7 @@ func stateTestCmd(ctx *cli.Context) error {
 	}
 	// Load the test content from the input file
 	if len(ctx.Args().First()) != 0 {
-		return runStateTest(ctx.Args().First(), cfg, ctx.Bool(DumpFlag.Name))
+		return runStateTest(ctx, ctx.Args().First(), cfg, ctx.Bool(DumpFlag.Name), ctx.Bool(BenchFlag.Name))
 	}
 	// Read filenames from stdin and execute back-to-back
 	scanner := bufio.NewScanner(os.Stdin)
@@ -76,15 +101,48 @@ func stateTestCmd(ctx *cli.Context) error {
 		if len(fname) == 0 {
 			return nil
 		}
-		if err := runStateTest(fname, cfg, ctx.Bool(DumpFlag.Name)); err != nil {
+		if err := runStateTest(ctx, fname, cfg, ctx.Bool(DumpFlag.Name), ctx.Bool(BenchFlag.Name)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+type stateTestCase struct {
+	name string
+	test tests.StateTest
+	st   tests.StateSubtest
+}
+
+// collectMatchedSubtests returns test cases which match against provided filtering CLI parameters
+func collectMatchedSubtests(ctx *cli.Context, testsByName map[string]tests.StateTest) []stateTestCase {
+	var res []stateTestCase
+	subtestName := ctx.String(testNameFlag.Name)
+	if subtestName != "" {
+		if subtest, ok := testsByName[subtestName]; ok {
+			testsByName := make(map[string]tests.StateTest)
+			testsByName[subtestName] = subtest
+		}
+	}
+	idx := ctx.Int(idxFlag.Name)
+	fork := ctx.String(forkFlag.Name)
+
+	for key, test := range testsByName {
+		for _, st := range test.Subtests() {
+			if idx != -1 && st.Index != idx {
+				continue
+			}
+			if fork != "" && st.Fork != fork {
+				continue
+			}
+			res = append(res, stateTestCase{name: key, st: st, test: test})
+		}
+	}
+	return res
+}
+
 // runStateTest loads the state-test given by fname, and executes the test.
-func runStateTest(fname string, cfg vm.Config, dump bool) error {
+func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, bench bool) error {
 	src, err := os.ReadFile(fname)
 	if err != nil {
 		return err
@@ -94,31 +152,38 @@ func runStateTest(fname string, cfg vm.Config, dump bool) error {
 		return err
 	}
 
+	matchingTests := collectMatchedSubtests(ctx, testsByName)
+
 	// Iterate over all the tests, run them and aggregate the results
-	results := make([]StatetestResult, 0, len(testsByName))
-	for key, test := range testsByName {
-		for _, st := range test.Subtests() {
-			// Run the test and aggregate the result
-			result := &StatetestResult{Name: key, Fork: st.Fork, Pass: true}
-			test.Run(st, cfg, false, rawdb.HashScheme, func(err error, tstate *tests.StateTestState) {
-				var root common.Hash
-				if tstate.StateDB != nil {
-					root = tstate.StateDB.IntermediateRoot(false)
-					result.Root = &root
-					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
-					if dump { // Dump any state to aid debugging
-						cpy, _ := state.New(root, tstate.StateDB.Database())
-						dump := cpy.RawDump(nil)
-						result.State = &dump
-					}
+	var results []StatetestResult
+	for _, test := range matchingTests {
+		// Run the test and aggregate the result
+		result := &StatetestResult{Name: test.name, Fork: test.st.Fork, Pass: true}
+		test.test.Run(test.st, cfg, false, rawdb.HashScheme, func(err error, tstate *tests.StateTestState) {
+			var root common.Hash
+			if tstate.StateDB != nil {
+				root = tstate.StateDB.IntermediateRoot(false)
+				result.Root = &root
+				fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
+				if dump { // Dump any state to aid debugging
+					cpy, _ := state.New(root, tstate.StateDB.Database())
+					dump := cpy.RawDump(nil)
+					result.State = &dump
 				}
-				if err != nil {
-					// Test failed, mark as so
-					result.Pass, result.Error = false, err.Error()
-				}
+			}
+			if err != nil {
+				// Test failed, mark as so
+				result.Pass, result.Error = false, err.Error()
+			}
+		})
+		if bench {
+			_, stats, _ := timedExec(true, func() ([]byte, uint64, error) {
+				_, _, gasUsed, _ := test.test.RunNoVerify(test.st, cfg, false, rawdb.HashScheme)
+				return nil, gasUsed, nil
 			})
-			results = append(results, *result)
+			result.BenchStats = &stats
 		}
+		results = append(results, *result)
 	}
 	out, _ := json.MarshalIndent(results, "", "  ")
 	fmt.Println(string(out))

@@ -18,7 +18,7 @@
 package ethconfig
 
 import (
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -134,15 +134,9 @@ type Config struct {
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
 
-	// Enables prefetching trie nodes for read operations too
-	EnableWitnessCollection bool `toml:"-"`
-
 	// Enables VM tracing
 	VMTrace           string
 	VMTraceJsonConfig string
-
-	// Miscellaneous options
-	DocRoot string `toml:"-"`
 
 	// RPCGasCap is the global gas cap for eth-call variants.
 	RPCGasCap uint64
@@ -165,10 +159,8 @@ type Config struct {
 // Clique is allowed for now to live standalone, but ethash is forbidden and can
 // only exist on already merged networks.
 func CreateConsensusEngine(config *params.ChainConfig, db ethdb.Database) (consensus.Engine, error) {
-	// Geth v1.14.0 dropped support for non-merged networks in any consensus
-	// mode. If such a network is requested, reject startup.
-	if !config.TerminalTotalDifficultyPassed {
-		return nil, errors.New("only PoS networks are supported, please transition old ones with Geth v1.13.x")
+	if config.TerminalTotalDifficulty == nil {
+		return nil, fmt.Errorf("only PoS networks are supported, please transition old ones with Geth v1.13.x")
 	}
 	// Wrap previously supported consensus engines into their post-merge counterpart
 	if config.Clique != nil {

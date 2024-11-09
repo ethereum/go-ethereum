@@ -524,7 +524,7 @@ func TestT9n(t *testing.T) {
 			ok, err := cmpJson(have, want)
 			switch {
 			case err != nil:
-				t.Logf(string(have))
+				t.Log(string(have))
 				t.Fatalf("test %d, json parsing failed: %v", i, err)
 			case !ok:
 				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
@@ -659,7 +659,7 @@ func TestB11r(t *testing.T) {
 			ok, err := cmpJson(have, want)
 			switch {
 			case err != nil:
-				t.Logf(string(have))
+				t.Log(string(have))
 				t.Fatalf("test %d, json parsing failed: %v", i, err)
 			case !ok:
 				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
