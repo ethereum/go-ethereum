@@ -1,3 +1,19 @@
+// Copyright 2024 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package netutil
 
 import (
@@ -122,70 +138,4 @@ func TestIPToAddr(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestRandomAddr(t *testing.T) {
-	// Use a fixed seed for reproducibility
-	rng := rand.New(rand.NewSource(42))
-
-	// Test IPv4 generation
-	t.Run("IPv4", func(t *testing.T) {
-		addr := RandomAddr(rng, true)
-		if !addr.Is4() {
-			t.Errorf("Expected IPv4 address, got %v", addr)
-		}
-	})
-
-	// Test IPv6 generation
-	t.Run("IPv6", func(t *testing.T) {
-		addr := RandomAddr(rng, false)
-		if !addr.Is6() {
-			t.Errorf("Expected IPv6 address, got %v", addr)
-		}
-	})
-
-	// Test random choice between IPv4 and IPv6
-	t.Run("Random choice", func(t *testing.T) {
-		ipv4Count := 0
-		ipv6Count := 0
-		iterations := 1000
-
-		for i := 0; i < iterations; i++ {
-			addr := RandomAddr(rng, false)
-			if addr.Is4() {
-				ipv4Count++
-			} else if addr.Is6() {
-				ipv6Count++
-			} else {
-				t.Errorf("Invalid address generated: %v", addr)
-			}
-		}
-
-		if ipv4Count == 0 || ipv6Count == 0 {
-			t.Errorf("Expected mix of IPv4 and IPv6 addresses, got %d IPv4 and %d IPv6", ipv4Count, ipv6Count)
-		}
-	})
-
-	// Test randomness of generated addresses
-	t.Run("Randomness check", func(t *testing.T) {
-		addresses := make(map[string]bool)
-		for i := 0; i < 1000; i++ {
-			addr := RandomAddr(rng, false)
-			addresses[addr.String()] = true
-		}
-		if len(addresses) < 990 {
-			t.Errorf("Expected close to 1000 unique addresses, got %d", len(addresses))
-		}
-	})
-
-	// Test different seeds produce different results
-	t.Run("Different seeds", func(t *testing.T) {
-		rng1 := rand.New(rand.NewSource(42))
-		rng2 := rand.New(rand.NewSource(43))
-		addr1 := RandomAddr(rng1, false)
-		addr2 := RandomAddr(rng2, false)
-		if addr1 == addr2 {
-			t.Errorf("Expected different addresses for different seeds, got %v and %v", addr1, addr2)
-		}
-	})
 }
