@@ -70,7 +70,7 @@ func main() {
 
 func sync(ctx *cli.Context) error {
 	// set up blsync
-	client := blsync.NewClient(ctx)
+	client := blsync.NewClient(utils.MakeBeaconLightConfig(ctx))
 	client.SetEngineRPC(makeRPCClient(ctx))
 	client.Start()
 
