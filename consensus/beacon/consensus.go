@@ -83,19 +83,35 @@ func (beacon *Beacon) Author(header *types.Header) (common.Address, error) {
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum consensus engine.
 func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header) error {
-	reached, err := IsTTDReached(chain, header.ParentHash, header.Number.Uint64()-1)
-	if err != nil {
-		return err
-	}
-	if !reached {
-		return beacon.ethone.VerifyHeader(chain, header)
-	}
-	// Short circuit if the parent is not known
+	// During the live merge transision, the consensus engine used the terminal
+	// total difficulty to detect when PoW (PoA) switched to PoS. Maintainig the
+	// total difficulty values however require applying all the blocks from the
+	// genesis to build up the TD. This stops being a possibility if the tail of
+	// the chain is pruned already during sync.
+	//
+	// One heuristic that can be used to distinguis pre-merge and post-merge
+	// blocks is whether their *difficulty* is >0 or ==0 respectively. This of
+	// course would mean that we cannot prove anymore for a past chain that it
+	// truly transisioned at the correct TTD, but if we consider that ancient
+	// point in time finalized a long time ago, there should be no attempt from
+	// the consensus client to rewrite very old history.
+	//
+	// One thing that's probably not needed but which we can add to make this
+	// verification even stricter is to enforce that the chain can switch from
+	// >0 to ==0 TD only once by forbidding an ==0 to be followed by a >0.
+
+	// Verify that we're not reverting to pre-merge from post-merge
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	// Sanity checks passed, do a proper verification
+	if parent.Difficulty.Sign() == 0 && header.Difficulty.Sign() > 0 {
+		return consensus.ErrInvalidTerminalBlock
+	}
+	// Check >0 TDs with pre-merge, --0 TDs with post-merge rules
+	if header.Difficulty.Sign() > 0 {
+		return beacon.ethone.VerifyHeader(chain, header)
+	}
 	return beacon.verifyHeader(chain, header, parent)
 }
 
