@@ -27,7 +27,7 @@ import (
 
 var (
 	stPool = sync.Pool{New: func() any { return new(stNode) }}
-	bPool  = sync.Pool{New: func() any { return make([]byte, 0, 32) }}
+	bPool  = newByteslicepool(32, 100)
 	_      = types.TrieHasher((*StackTrie)(nil))
 )
 
@@ -398,7 +398,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	// Skip committing the non-root node if the size is smaller than 32 bytes
 	// as tiny nodes are always embedded in their parent except root node.
 	if len(blob) < 32 && len(path) > 0 {
-		val := bPool.Get().([]byte)
+		val := bPool.Get()
 		val = val[:len(blob)]
 		copy(val, blob)
 		st.val = val
@@ -406,7 +406,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	}
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values.
-	val := bPool.Get().([]byte)
+	val := bPool.Get()
 	val = val[:32]
 	t.h.hashDataTo(blob, val)
 	st.val = val
