@@ -318,19 +318,13 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		return
 
 	case branchNode:
-		var nodes fullNode
+		var nodes fullnodeEncoder
 		for i, child := range st.children {
 			if child == nil {
-				nodes.Children[i] = nilValueNode
 				continue
 			}
 			t.hash(child, append(path, byte(i)))
-
-			if len(child.val) < 32 {
-				nodes.Children[i] = rawNode(child.val)
-			} else {
-				nodes.Children[i] = hashNode(child.val)
-			}
+			nodes.Children[i] = child.val
 			st.children[i] = nil
 			stPool.Put(child.reset()) // Release child back to pool.
 		}
@@ -342,11 +336,9 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 		t.hash(st.children[0], append(path, st.key...))
 
 		// encode the extension node
-		n := shortNode{Key: hexToCompactInPlace(st.key)}
-		if len(st.children[0].val) < 32 {
-			n.Val = rawNode(st.children[0].val)
-		} else {
-			n.Val = hashNode(st.children[0].val)
+		n := shortNodeEncoder{
+			Key: hexToCompactInPlace(st.key),
+			Val: st.children[0].val,
 		}
 		n.encode(t.h.encbuf)
 		blob = t.h.encodedBytes()
@@ -356,9 +348,13 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 
 	case leafNode:
 		st.key = append(st.key, byte(16))
-		n := shortNode{Key: hexToCompactInPlace(st.key), Val: valueNode(st.val)}
-
-		n.encode(t.h.encbuf)
+		{
+			w := t.h.encbuf
+			offset := w.List()
+			w.WriteBytes(hexToCompactInPlace(st.key))
+			w.WriteBytes(st.val)
+			w.ListEnd(offset)
+		}
 		blob = t.h.encodedBytes()
 
 	default:
