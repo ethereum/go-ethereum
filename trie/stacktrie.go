@@ -27,6 +27,7 @@ import (
 
 var (
 	stPool = sync.Pool{New: func() any { return new(stNode) }}
+	bPool  = sync.Pool{New: func() any { return make([]byte, 0, 32) }}
 	_      = types.TrieHasher((*StackTrie)(nil))
 )
 
@@ -145,6 +146,12 @@ const (
 )
 
 func (n *stNode) reset() *stNode {
+	if n.typ == hashedNode {
+		// On hashnodes, we 'own' the val: it is guaranteed to be not held
+		// by external caller. Hence, when we arrive here, we can put it back
+		// into the pool
+		bPool.Put(n.val)
+	}
 	n.key = n.key[:0]
 	n.val = nil
 	for i := range n.children {
@@ -342,11 +349,16 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 			}
 			t.hash(child, append(path, byte(i)))
 			nodes.Children[i] = child.val
-			st.children[i] = nil
-			stPool.Put(child.reset()) // Release child back to pool.
 		}
 		nodes.encode(t.h.encbuf)
 		blob = t.h.encodedBytes()
+		for i, child := range st.children {
+			if child == nil {
+				continue
+			}
+			st.children[i] = nil
+			stPool.Put(child.reset()) // Release child back to pool.
+		}
 
 	case extNode:
 		// recursively hash and commit child as the first step
@@ -381,15 +393,23 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	st.typ = hashedNode
 	st.key = st.key[:0]
 
+	st.val = nil // Release reference to potentially externally held slice.
+
 	// Skip committing the non-root node if the size is smaller than 32 bytes
 	// as tiny nodes are always embedded in their parent except root node.
 	if len(blob) < 32 && len(path) > 0 {
-		st.val = common.CopyBytes(blob)
+		val := bPool.Get().([]byte)
+		val = val[:len(blob)]
+		copy(val, blob)
+		st.val = val
 		return
 	}
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values.
-	st.val = t.h.hashData(blob)
+	val := bPool.Get().([]byte)
+	val = val[:32]
+	t.h.hashDataTo(blob, val)
+	st.val = val
 
 	// Invoke the callback it's provided. Notably, the path and blob slices are
 	// volatile, please deep-copy the slices in callback if the contents need
