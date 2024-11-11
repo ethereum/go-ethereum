@@ -100,7 +100,7 @@ func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
 	var (
 		blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-		vmenv        = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vm.Config{})
+		vmenv        = vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{})
 	)
 	ProcessBeaconBlockRoot(root, vmenv, b.statedb)
 }
@@ -116,8 +116,12 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
+	var (
+		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
+		vmenv        = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
+	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.cm.config, bc, &b.header.Coinbase, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vmConfig)
+	receipt, err := ApplyTransaction(b.cm.config, vmenv, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
 	if err != nil {
 		panic(err)
 	}
@@ -360,7 +364,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			requests = append(requests, depositRequests)
 			// create EVM for system calls
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-			vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
+			vmenv := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
 			// EIP-7002 withdrawals
 			withdrawalRequests := ProcessWithdrawalQueue(vmenv, statedb)
 			requests = append(requests, withdrawalRequests)
@@ -466,7 +470,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		if config.IsPrague(b.header.Number, b.header.Time) {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-			vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
+			vmenv := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
 			ProcessParentBlockHash(b.header.ParentHash, vmenv, statedb)
 		}
 

@@ -201,15 +201,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+	evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
 	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
-		evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
 	}
 	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
 		var (
 			prevNumber = pre.Env.Number - 1
 			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
-			evm        = vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vmConfig)
 		)
 		core.ProcessParentBlockHash(prevHash, evm, statedb)
 	}
@@ -248,6 +247,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		}
 		if tracer != nil {
 			vmConfig.Tracer = tracer.Hooks
+			evm.SetConfig(vmConfig)
 		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
 
@@ -256,12 +256,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			snapshot  = statedb.Snapshot()
 			prevGas   = gaspool.Gas()
 		)
-		evm := vm.NewEVM(vmContext, txContext, statedb, chainConfig, vmConfig)
-
 		if tracer != nil && tracer.OnTxStart != nil {
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		// (ret []byte, usedGas uint64, failed bool, err error)
+
+		evm.SetTxContext(txContext)
 		msgResult, err := core.ApplyMessage(evm, msg, gaspool)
 		if err != nil {
 			statedb.RevertToSnapshot(snapshot)
@@ -376,11 +376,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		}
 		requests = append(requests, depositRequests)
 		// create EVM for system calls
-		vmenv := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
 		// EIP-7002 withdrawals
-		requests = append(requests, core.ProcessWithdrawalQueue(vmenv, statedb))
+		requests = append(requests, core.ProcessWithdrawalQueue(evm, statedb))
 		// EIP-7251 consolidations
-		requests = append(requests, core.ProcessConsolidationQueue(vmenv, statedb))
+		requests = append(requests, core.ProcessConsolidationQueue(evm, statedb))
 	}
 
 	// Commit block

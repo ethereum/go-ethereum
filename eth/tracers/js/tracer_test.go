@@ -64,12 +64,13 @@ func testCtx() *vmContext {
 
 func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainConfig, contractCode []byte) (json.RawMessage, error) {
 	var (
-		env             = vm.NewEVM(vmctx.blockCtx, vmctx.txCtx, &dummyStatedb{}, chaincfg, vm.Config{Tracer: tracer.Hooks})
+		env             = vm.NewEVM(vmctx.blockCtx, &dummyStatedb{}, chaincfg, vm.Config{Tracer: tracer.Hooks})
 		gasLimit uint64 = 31000
 		startGas uint64 = 10000
 		value           = uint256.NewInt(0)
 		contract        = vm.NewContract(account{}, account{}, value, startGas)
 	)
+	env.SetTxContext(vmctx.txCtx)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 	if contractCode != nil {
 		contract.Code = contractCode
@@ -191,7 +192,8 @@ func TestHaltBetweenSteps(t *testing.T) {
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(&account{}, &account{}, uint256.NewInt(0), 0),
 	}
-	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(1)}, &dummyStatedb{}, chainConfig, vm.Config{Tracer: tracer.Hooks})
+	env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, chainConfig, vm.Config{Tracer: tracer.Hooks})
+	env.SetTxContext(vm.TxContext{GasPrice: big.NewInt(1)})
 	tracer.OnTxStart(env.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
 	tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, 0, big.NewInt(0))
 	tracer.OnOpcode(0, 0, 0, 0, scope, nil, 0, nil)
@@ -214,7 +216,8 @@ func TestNoStepExec(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, vm.TxContext{GasPrice: big.NewInt(100)}, &dummyStatedb{}, chainConfig, vm.Config{Tracer: tracer.Hooks})
+		env := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, chainConfig, vm.Config{Tracer: tracer.Hooks})
+		env.SetTxContext(vm.TxContext{GasPrice: big.NewInt(100)})
 		tracer.OnTxStart(env.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
 		tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, 1000, big.NewInt(0))
 		tracer.OnExit(0, nil, 0, nil, false)
