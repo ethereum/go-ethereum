@@ -48,16 +48,19 @@ type StackTrie struct {
 	last       []byte
 	onTrieNode OnTrieNode
 
-	keyScratch []byte
+	keyScratch  []byte
+	pathScratch []byte
 }
 
 // NewStackTrie allocates and initializes an empty trie. The committed nodes
 // will be discarded immediately if no callback is configured.
 func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 	return &StackTrie{
-		root:       stPool.Get().(*stNode),
-		h:          newHasher(false),
-		onTrieNode: onTrieNode,
+		root:        stPool.Get().(*stNode),
+		h:           newHasher(false),
+		onTrieNode:  onTrieNode,
+		keyScratch:  make([]byte, 0, 32),
+		pathScratch: make([]byte, 0, 32),
 	}
 }
 
@@ -86,7 +89,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
 	}
-	t.insert(t.root, k, value, nil)
+	t.insert(t.root, k, value, t.pathScratch[:0])
 	return nil
 }
 
