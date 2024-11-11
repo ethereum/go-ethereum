@@ -32,8 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	beaconConsensus "github.com/ethereum/go-ethereum/consensus/beacon"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -62,12 +61,11 @@ var (
 
 func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	config := *params.AllEthashProtocolChanges
-	engine := consensus.Engine(beaconConsensus.New(ethash.NewFaker()))
+	engine := beacon.New(ethash.NewFaker())
 	if merged {
 		config.TerminalTotalDifficulty = common.Big0
-		engine = beaconConsensus.NewFaker()
 	} else {
-		engine.(*beaconConsensus.Beacon).TestingTTDBlock(uint64(n))
+		engine.TestingTTDBlock(uint64(n))
 	}
 	genesis := &core.Genesis{
 		Config: &config,

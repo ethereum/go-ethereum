@@ -1089,7 +1089,7 @@ func TestTraceChain(t *testing.T) {
 func newTestMergedBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
 	backend := &testBackend{
 		chainConfig: gspec.Config,
-		engine:      beacon.NewFaker(),
+		engine:      beacon.New(ethash.NewFaker()),
 		chaindb:     rawdb.NewMemoryDatabase(),
 	}
 	// Generate blocks for testing
