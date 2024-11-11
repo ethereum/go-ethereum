@@ -47,6 +47,8 @@ type StackTrie struct {
 	h          *hasher
 	last       []byte
 	onTrieNode OnTrieNode
+
+	keyScratch []byte
 }
 
 // NewStackTrie allocates and initializes an empty trie. The committed nodes
@@ -64,7 +66,18 @@ func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
 	}
-	k := t.TrieKey(key)
+	var k []byte
+	{
+		// We can reuse the key scratch area, but only if the insert-method
+		// never holds on to it.
+		if cap(t.keyScratch) < 2*len(key) { // realloc to ensure sufficient cap
+			t.keyScratch = make([]byte, 2*len(key), 2*len(key))
+		}
+		// resize to ensure correct size
+		t.keyScratch = t.keyScratch[:2*len(key)]
+		writeHexKey(t.keyScratch, key)
+		k = t.keyScratch
+	}
 	if bytes.Compare(t.last, k) >= 0 {
 		return errors.New("non-ascending key order")
 	}
@@ -152,6 +165,7 @@ func (n *stNode) getDiffIndex(key []byte) int {
 
 // Helper function to that inserts a (key, value) pair into
 // the trie.
+// The key is not retained by this method, but always copied if needed.
 func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 	switch st.typ {
 	case branchNode: /* Branch */
@@ -283,7 +297,7 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 
 	case emptyNode: /* Empty */
 		st.typ = leafNode
-		st.key = key
+		st.key = append(st.key, key...)
 		st.val = value
 
 	case hashedNode:
