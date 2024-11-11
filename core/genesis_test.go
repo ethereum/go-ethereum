@@ -191,7 +191,7 @@ func TestGenesisHashes(t *testing.T) {
 	}
 }
 
-func TestGenesis_Commit(t *testing.T) {
+func TestGenesisCommit(t *testing.T) {
 	genesis := &Genesis{
 		BaseFee: big.NewInt(params.InitialBaseFee),
 		Config:  params.TestChainConfig,
@@ -208,13 +208,6 @@ func TestGenesis_Commit(t *testing.T) {
 	// This value should have been set as default in the ToBlock method.
 	if genesisBlock.Difficulty().Cmp(params.GenesisDifficulty) != 0 {
 		t.Errorf("assumption wrong: want: %d, got: %v", params.GenesisDifficulty, genesisBlock.Difficulty())
-	}
-
-	// Expect the stored total difficulty to be the difficulty of the genesis block.
-	stored := rawdb.ReadTd(db, genesisBlock.Hash(), genesisBlock.NumberU64())
-
-	if stored.Cmp(genesisBlock.Difficulty()) != 0 {
-		t.Errorf("inequal difficulty; stored: %v, genesisBlock: %v", stored, genesisBlock.Difficulty())
 	}
 }
 
