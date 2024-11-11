@@ -66,6 +66,8 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 	if merged {
 		config.TerminalTotalDifficulty = common.Big0
 		engine = beaconConsensus.NewFaker()
+	} else {
+		engine.(*beaconConsensus.Beacon).TestingTTDBlock(uint64(n))
 	}
 	genesis := &core.Genesis{
 		Config: &config,
@@ -101,7 +103,6 @@ func generateMergeChain(n int, merged bool) (*core.Genesis, []*types.Block) {
 		}
 		config.TerminalTotalDifficulty = totalDifficulty
 	}
-
 	return genesis, blocks
 }
 
