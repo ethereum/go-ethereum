@@ -419,3 +419,9 @@ func (f *MemoryFreezer) Reset() error {
 	f.items, f.tail = 0, 0
 	return nil
 }
+
+// AncientDatadir returns the path of the ancient store.
+// Since the memory freezer is ephemeral, an empty string is returned.
+func (f *MemoryFreezer) AncientDatadir() (string, error) {
+	return "", nil
+}

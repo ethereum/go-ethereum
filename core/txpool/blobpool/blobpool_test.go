@@ -1449,11 +1449,29 @@ func TestAdd(t *testing.T) {
 	}
 }
 
+// fakeBilly is a billy.Database implementation which just drops data on the floor.
+type fakeBilly struct {
+	billy.Database
+	count uint64
+}
+
+func (f *fakeBilly) Put(data []byte) (uint64, error) {
+	f.count++
+	return f.count, nil
+}
+
+var _ billy.Database = (*fakeBilly)(nil)
+
 // Benchmarks the time it takes to assemble the lazy pending transaction list
 // from the pool contents.
 func BenchmarkPoolPending100Mb(b *testing.B) { benchmarkPoolPending(b, 100_000_000) }
 func BenchmarkPoolPending1GB(b *testing.B)   { benchmarkPoolPending(b, 1_000_000_000) }
-func BenchmarkPoolPending10GB(b *testing.B)  { benchmarkPoolPending(b, 10_000_000_000) }
+func BenchmarkPoolPending10GB(b *testing.B) {
+	if testing.Short() {
+		b.Skip("Skipping in short-mode")
+	}
+	benchmarkPoolPending(b, 10_000_000_000)
+}
 
 func benchmarkPoolPending(b *testing.B, datacap uint64) {
 	// Calculate the maximum number of transaction that would fit into the pool
@@ -1476,6 +1494,15 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 
 	if err := pool.Init(1, chain.CurrentBlock(), makeAddressReserver()); err != nil {
 		b.Fatalf("failed to create blob pool: %v", err)
+	}
+	// Make the pool not use disk (just drop everything). This test never reads
+	// back the data, it just iterates over the pool in-memory items
+	pool.store = &fakeBilly{pool.store, 0}
+	// Avoid validation - verifying all blob proofs take significant time
+	// when the capacity is large. The purpose of this bench is to measure assembling
+	// the lazies, not the kzg verifications.
+	pool.txValidationFn = func(tx *types.Transaction, head *types.Header, signer types.Signer, opts *txpool.ValidationOptions) error {
+		return nil // accept all
 	}
 	// Fill the pool up with one random transaction from each account with the
 	// same price and everything to maximize the worst case scenario

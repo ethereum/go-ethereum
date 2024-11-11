@@ -21,6 +21,7 @@
 package leveldb
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 	"time"
@@ -204,6 +205,36 @@ func (db *Database) Put(key []byte, value []byte) error {
 // Delete removes the key from the key-value store.
 func (db *Database) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
+}
+
+var ErrTooManyKeys = errors.New("too many keys in deleted range")
+
+// DeleteRange deletes all of the keys (and values) in the range [start,end)
+// (inclusive on start, exclusive on end).
+// Note that this is a fallback implementation as leveldb does not natively
+// support range deletion. It can be slow and therefore the number of deleted
+// keys is limited in order to avoid blocking for a very long time.
+// ErrTooManyKeys is returned if the range has only been partially deleted.
+// In this case the caller can repeat the call until it finally succeeds.
+func (db *Database) DeleteRange(start, end []byte) error {
+	batch := db.NewBatch()
+	it := db.NewIterator(nil, start)
+	defer it.Release()
+
+	var count int
+	for it.Next() && bytes.Compare(end, it.Key()) > 0 {
+		count++
+		if count > 10000 { // should not block for more than a second
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			return ErrTooManyKeys
+		}
+		if err := batch.Delete(it.Key()); err != nil {
+			return err
+		}
+	}
+	return batch.Write()
 }
 
 // NewBatch creates a write-only key-value store that buffers changes to its host
