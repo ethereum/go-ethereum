@@ -86,7 +86,3 @@ func (n hashNode) encode(w rlp.EncoderBuffer) {
 func (n valueNode) encode(w rlp.EncoderBuffer) {
 	w.WriteBytes(n)
 }
-
-func (n rawNode) encode(w rlp.EncoderBuffer) {
-	w.Write(n)
-}
