@@ -81,13 +81,18 @@ func BenchmarkDeriveSha200(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	var exp common.Hash
-	var got common.Hash
+	var exp = types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+
+	var have common.Hash
+
 	b.Run("std_trie", func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			exp = types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+			have = types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+		}
+		if have != exp {
+			b.Errorf("got %x exp %x", have, exp)
 		}
 	})
 
@@ -95,12 +100,22 @@ func BenchmarkDeriveSha200(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			got = types.DeriveSha(txs, trie.NewStackTrie(nil))
+			have = types.DeriveShaNG(txs, trie.NewStackTrie(nil))
+		}
+		if have != exp {
+			b.Errorf("got %x exp %x", have, exp)
 		}
 	})
-	if got != exp {
-		b.Errorf("got %x exp %x", got, exp)
-	}
+	//b.Run("stack_trie_reuse", func(b *testing.B) {
+	//	b.ResetTimer()
+	//	b.ReportAllocs()
+	//	for i := 0; i < b.N; i++ {
+	//		have = types.DeriveShaNG(txs, trie.NewStackTrie(nil))
+	//	}
+	//	if have != exp {
+	//		b.Errorf("got %x exp %x", have, exp)
+	//	}
+	//})
 }
 
 func TestFuzzDeriveSha(t *testing.T) {

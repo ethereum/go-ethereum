@@ -14,26 +14,26 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package trie
+package types
 
-// bytesPool is a pool for byteslices. It is safe for concurrent use.
-type bytesPool struct {
+// BytesPool is a pool for byteslices. It is safe for concurrent use.
+type BytesPool struct {
 	c chan []byte
 	w int
 }
 
-// newBytesPool creates a new bytesPool. The sliceCap sets the capacity of
+// NewBytesPool creates a new BytesPool. The sliceCap sets the capacity of
 // newly allocated slices, and the nitems determines how many items the pool
 // will hold, at maximum.
-func newBytesPool(sliceCap, nitems int) *bytesPool {
-	return &bytesPool{
+func NewBytesPool(sliceCap, nitems int) *BytesPool {
+	return &BytesPool{
 		c: make(chan []byte, nitems),
 		w: sliceCap,
 	}
 }
 
 // Get returns a slice. Safe for concurrent use.
-func (bp *bytesPool) Get() []byte {
+func (bp *BytesPool) Get() []byte {
 	select {
 	case b := <-bp.c:
 		return b
@@ -44,7 +44,7 @@ func (bp *bytesPool) Get() []byte {
 
 // Put returns a slice to the pool. Safe for concurrent use. This method
 // will ignore slices that are too small or too large (>3x the cap)
-func (bp *bytesPool) Put(b []byte) {
+func (bp *BytesPool) Put(b []byte) {
 	if c := cap(b); c < bp.w || c > 3*bp.w {
 		return
 	}

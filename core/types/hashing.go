@@ -84,6 +84,11 @@ type TrieHasher interface {
 	Hash() common.Hash
 }
 
+type RecyclingTrieHasher interface {
+	TrieHasher
+	Reclaim(*BytesPool)
+}
+
 // DerivableList is the input to DeriveSha.
 // It is implemented by the 'Transactions' and 'Receipts' types.
 // This is internal, do not use these methods.
@@ -95,10 +100,7 @@ type DerivableList interface {
 func encodeForDerive(list DerivableList, i int, buf *bytes.Buffer) []byte {
 	buf.Reset()
 	list.EncodeIndex(i, buf)
-	// It's really unfortunate that we need to perform this copy.
-	// StackTrie holds onto the values until Hash is called, so the values
-	// written to it must not alias.
-	return common.CopyBytes(buf.Bytes())
+	return buf.Bytes()
 }
 
 // DeriveSha creates the tree hashes of transactions, receipts, and withdrawals in a block header.
@@ -118,17 +120,84 @@ func DeriveSha(list DerivableList, hasher TrieHasher) common.Hash {
 	for i := 1; i < list.Len() && i <= 0x7f; i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
 		value := encodeForDerive(list, i, valueBuf)
+		// It's really unfortunate that we need to perform this copy.
+		// StackTrie holds onto the values until Hash is called, so the values
+		// written to it must not alias.
+		value = common.CopyBytes(value)
 		hasher.Update(indexBuf, value)
 	}
 	if list.Len() > 0 {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], 0)
 		value := encodeForDerive(list, 0, valueBuf)
+		value = common.CopyBytes(value)
+
 		hasher.Update(indexBuf, value)
 	}
 	for i := 0x80; i < list.Len(); i++ {
 		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
 		value := encodeForDerive(list, i, valueBuf)
+		value = common.CopyBytes(value)
+
 		hasher.Update(indexBuf, value)
+	}
+	return hasher.Hash()
+}
+
+func DeriveShaNG(list DerivableList, hasher RecyclingTrieHasher) common.Hash {
+	hasher.Reset()
+
+	valueBuf := encodeBufferPool.Get().(*bytes.Buffer)
+	defer encodeBufferPool.Put(valueBuf)
+
+	cap := 300
+	vPool := NewBytesPool(cap, 40)
+	hasher.Reclaim(vPool)
+
+	// StackTrie requires values to be inserted in increasing hash order, which is not the
+	// order that `list` provides hashes in. This insertion sequence ensures that the
+	// order is correct.
+	//
+	// The error returned by hasher is omitted because hasher will produce an incorrect
+	// hash in case any error occurs.
+	var indexBuf []byte
+	for i := 1; i < list.Len() && i <= 0x7f; i++ {
+		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
+		value := encodeForDerive(list, i, valueBuf)
+		// It's really unfortunate that we need to perform this copy.
+		// StackTrie holds onto the values until Hash is called, so the values
+		// written to it must not alias
+		vBuf := vPool.Get()
+		if cap < len(value) {
+			vBuf = common.CopyBytes(value)
+		} else {
+			vBuf = vBuf[:len(value)]
+			copy(vBuf, value)
+		}
+		hasher.Update(indexBuf, vBuf)
+	}
+	if list.Len() > 0 {
+		indexBuf = rlp.AppendUint64(indexBuf[:0], 0)
+		value := encodeForDerive(list, 0, valueBuf)
+		vBuf := vPool.Get()
+		if cap < len(value) {
+			vBuf = common.CopyBytes(value)
+		} else {
+			vBuf = vBuf[:len(value)]
+			copy(vBuf, value)
+		}
+		hasher.Update(indexBuf, vBuf)
+	}
+	for i := 0x80; i < list.Len(); i++ {
+		indexBuf = rlp.AppendUint64(indexBuf[:0], uint64(i))
+		value := encodeForDerive(list, i, valueBuf)
+		vBuf := vPool.Get()
+		if cap < len(value) {
+			vBuf = common.CopyBytes(value)
+		} else {
+			vBuf = vBuf[:len(value)]
+			copy(vBuf, value)
+		}
+		hasher.Update(indexBuf, vBuf)
 	}
 	return hasher.Hash()
 }

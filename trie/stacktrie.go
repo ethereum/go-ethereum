@@ -27,7 +27,7 @@ import (
 
 var (
 	stPool = sync.Pool{New: func() any { return new(stNode) }}
-	bPool  = newBytesPool(32, 100)
+	bPool  = types.NewBytesPool(32, 100)
 	_      = types.TrieHasher((*StackTrie)(nil))
 )
 
@@ -50,6 +50,7 @@ type StackTrie struct {
 	onTrieNode OnTrieNode
 	kBuf       []byte // buf space used for hex-key during insertions
 	pBuf       []byte // buf space used for path during insertions
+	vPool      *types.BytesPool
 }
 
 // NewStackTrie allocates and initializes an empty trie. The committed nodes
@@ -64,13 +65,17 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 	}
 }
 
+func (st *StackTrie) Reclaim(vPool *types.BytesPool) {
+	st.vPool = vPool
+}
+
 // Update inserts a (key, value) pair into the stack trie.
 func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
 	}
 	var k []byte
-	{                                 // Need to expand the 'key' into hex-form. We use the dedicated buf for that.
+	{ // Need to expand the 'key' into hex-form. We use the dedicated buf for that.
 		if cap(t.kBuf) < 2*len(key) { // realloc to ensure sufficient cap
 			t.kBuf = make([]byte, 2*len(key), 2*len(key))
 		}
@@ -392,7 +397,11 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	st.typ = hashedNode
 	st.key = st.key[:0]
 
-	st.val = nil // Release reference to potentially externally held slice.
+	// Release reference to (potentially externally held) value-slice.
+	if len(st.val) > 0 && t.vPool != nil {
+		t.vPool.Put(st.val)
+	}
+	st.val = nil
 
 	// Skip committing the non-root node if the size is smaller than 32 bytes
 	// as tiny nodes are always embedded in their parent except root node.
