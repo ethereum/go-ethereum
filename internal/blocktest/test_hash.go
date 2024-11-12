@@ -53,6 +53,12 @@ func (h *testHasher) Update(key, val []byte) error {
 	return nil
 }
 
+// UpdateSafe is identical to Update, except that this method will copy the
+// value slice. The caller is free to modify the value bytes after this method returns.
+func (h *testHasher) UpdateSafe(key, value []byte) error {
+	return h.Update(key, common.CopyBytes(value))
+}
+
 // Hash returns the hash value.
 func (h *testHasher) Hash() common.Hash {
 	return common.BytesToHash(h.hasher.Sum(nil))

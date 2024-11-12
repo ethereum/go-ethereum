@@ -50,6 +50,7 @@ type StackTrie struct {
 	onTrieNode OnTrieNode
 	kBuf       []byte // buf space used for hex-key during insertions
 	pBuf       []byte // buf space used for path during insertions
+	vPool      *bytesPool
 }
 
 // NewStackTrie allocates and initializes an empty trie. The committed nodes
@@ -61,6 +62,7 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 		onTrieNode: onTrieNode,
 		kBuf:       make([]byte, 64),
 		pBuf:       make([]byte, 64),
+		vPool:      newBytesPool(300, 20),
 	}
 }
 
@@ -73,7 +75,16 @@ func (t *StackTrie) grow(key []byte) {
 	}
 }
 
+// UpdateSafe is identical to Update, except that this method will copy the
+// value slice. The caller is free to modify the value bytes after this method returns.
+func (t *StackTrie) UpdateSafe(key, value []byte) error {
+	// The stacktrie always copies the value (is already safe).
+	return t.Update(key, value)
+}
+
 // Update inserts a (key, value) pair into the stack trie.
+// The value is copied, and the caller is free to modify the value after this
+// method returns.
 func (t *StackTrie) Update(key, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("trying to insert empty (deletion)")
@@ -88,7 +99,14 @@ func (t *StackTrie) Update(key, value []byte) error {
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
 	}
-	t.insert(t.root, k, value, t.pBuf[:0])
+	vBuf := t.vPool.Get()
+	if cap(vBuf) < len(value) {
+		vBuf = common.CopyBytes(value)
+	} else {
+		vBuf = vBuf[:len(value)]
+		copy(vBuf, value)
+	}
+	t.insert(t.root, k, vBuf, t.pBuf[:0])
 	return nil
 }
 
@@ -393,7 +411,11 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 	st.typ = hashedNode
 	st.key = st.key[:0]
 
-	st.val = nil // Release reference to potentially externally held slice.
+	// Release reference to (potentially externally held) value-slice.
+	if cap(st.val) > 0 && t.vPool != nil {
+		t.vPool.Put(st.val)
+	}
+	st.val = nil
 
 	// Skip committing the non-root node if the size is smaller than 32 bytes
 	// as tiny nodes are always embedded in their parent except root node.
