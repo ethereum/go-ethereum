@@ -81,13 +81,16 @@ func BenchmarkDeriveSha200(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	var exp common.Hash
-	var got common.Hash
+	want := types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+	var have common.Hash
 	b.Run("std_trie", func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			exp = types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+			have = types.DeriveSha(txs, trie.NewEmpty(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil)))
+		}
+		if have != want {
+			b.Errorf("have %x want %x", have, want)
 		}
 	})
 
@@ -95,12 +98,12 @@ func BenchmarkDeriveSha200(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			got = types.DeriveSha(txs, trie.NewStackTrie(nil))
+			have = types.DeriveSha(txs, trie.NewStackTrie(nil))
+		}
+		if have != want {
+			b.Errorf("have %x want %x", have, want)
 		}
 	})
-	if got != exp {
-		b.Errorf("got %x exp %x", got, exp)
-	}
 }
 
 func TestFuzzDeriveSha(t *testing.T) {
@@ -224,6 +227,12 @@ func (d *hashToHumanReadable) Update(i []byte, i2 []byte) error {
 	l := fmt.Sprintf("%x %x\n", i, i2)
 	d.data = append(d.data, []byte(l)...)
 	return nil
+}
+
+// UpdateSafe is identical to Update, except that this method will copy the
+// value slice. The caller is free to modify the value bytes after this method returns.
+func (d *hashToHumanReadable) UpdateSafe(key, value []byte) error {
+	return d.Update(key, common.CopyBytes(value))
 }
 
 func (d *hashToHumanReadable) Hash() common.Hash {
