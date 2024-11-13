@@ -50,7 +50,7 @@ type StackTrie struct {
 	onTrieNode OnTrieNode
 	kBuf       []byte // buf space used for hex-key during insertions
 	pBuf       []byte // buf space used for path during insertions
-	vPool      *bytesPool
+	vPool      *unsafeBytesPool
 }
 
 // NewStackTrie allocates and initializes an empty trie. The committed nodes
@@ -62,7 +62,7 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 		onTrieNode: onTrieNode,
 		kBuf:       make([]byte, 64),
 		pBuf:       make([]byte, 64),
-		vPool:      newBytesPool(300, 20),
+		vPool:      newUnsafeBytesPool(300, 20),
 	}
 }
 
@@ -99,7 +99,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 	} else {
 		t.last = append(t.last[:0], k...) // reuse key slice
 	}
-	vBuf := t.vPool.Get()
+	vBuf := t.vPool.get()
 	if cap(vBuf) < len(value) {
 		vBuf = common.CopyBytes(value)
 	} else {
@@ -114,6 +114,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 func (t *StackTrie) Reset() {
 	t.root = stPool.Get().(*stNode)
 	t.last = nil
+	t.onTrieNode = nil
 }
 
 // TrieKey returns the internal key representation for the given user key.
@@ -166,7 +167,7 @@ func (n *stNode) reset() *stNode {
 		// On hashnodes, we 'own' the val: it is guaranteed to be not held
 		// by external caller. Hence, when we arrive here, we can put it back
 		// into the pool
-		bPool.Put(n.val)
+		bPool.put(n.val)
 	}
 	n.key = n.key[:0]
 	n.val = nil
@@ -413,20 +414,20 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 
 	// Release reference to (potentially externally held) value-slice.
 	if cap(st.val) > 0 && t.vPool != nil {
-		t.vPool.Put(st.val)
+		t.vPool.put(st.val)
 	}
 	st.val = nil
 
 	// Skip committing the non-root node if the size is smaller than 32 bytes
 	// as tiny nodes are always embedded in their parent except root node.
 	if len(blob) < 32 && len(path) > 0 {
-		st.val = bPool.GetWithSize(len(blob))
+		st.val = bPool.getWithSize(len(blob))
 		copy(st.val, blob)
 		return
 	}
 	// Write the hash to the 'val'. We allocate a new val here to not mutate
 	// input values.
-	st.val = bPool.GetWithSize(32)
+	st.val = bPool.getWithSize(32)
 	t.h.hashDataTo(st.val, blob)
 
 	// Invoke the callback it's provided. Notably, the path and blob slices are
