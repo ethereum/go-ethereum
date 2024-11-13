@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -113,6 +114,10 @@ func getRpcBlockNumberFromString(blockNumber string) (rpc.BlockNumber, error) {
 	case "safe":
 		return rpc.SafeBlockNumber, nil
 	default:
-		return rpc.BlockNumber(0), errors.New("invalid block number")
+		blckNum, err := strconv.ParseUint(blockNumber, 10, 64)
+		if err != nil {
+			return rpc.BlockNumber(0), errors.New("invalid block number")
+		}
+		return rpc.BlockNumber(blckNum), nil
 	}
 }
