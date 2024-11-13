@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"sort"
+	"slices"
 	"sync/atomic"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
@@ -56,7 +56,12 @@ type blockFees struct {
 	err     error
 }
 
-// processedFees contains the results of a processed block and is also used for caching
+type cacheKey struct {
+	number      uint64
+	percentiles string
+}
+
+// processedFees contains the results of a processed block.
 type processedFees struct {
 	reward               []*big.Int
 	baseFee, nextBaseFee *big.Int
@@ -64,20 +69,9 @@ type processedFees struct {
 }
 
 // txGasAndReward is sorted in ascending order based on reward
-type (
-	txGasAndReward struct {
-		gasUsed uint64
-		reward  *big.Int
-	}
-	sortGasAndReward []txGasAndReward
-)
-
-func (s sortGasAndReward) Len() int { return len(s) }
-func (s sortGasAndReward) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-func (s sortGasAndReward) Less(i, j int) bool {
-	return s[i].reward.Cmp(s[j].reward) < 0
+type txGasAndReward struct {
+	gasUsed uint64
+	reward  *big.Int
 }
 
 // processBlock takes a blockFees structure with the blockNumber, the header and optionally
@@ -112,12 +106,14 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		return
 	}
 
-	sorter := make(sortGasAndReward, len(bf.block.Transactions()))
+	sorter := make([]txGasAndReward, len(bf.block.Transactions()))
 	for i, tx := range bf.block.Transactions() {
 		reward, _ := tx.EffectiveGasTip(bf.block.BaseFee())
 		sorter[i] = txGasAndReward{gasUsed: bf.receipts[i].GasUsed, reward: reward}
 	}
-	sort.Stable(sorter)
+	slices.SortStableFunc(sorter, func(a, b txGasAndReward) int {
+		return a.reward.Cmp(b.reward)
+	})
 
 	var txIndex int
 	sumGasUsed := sorter[0].gasUsed
@@ -268,13 +264,10 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 					oracle.processBlock(fees, rewardPercentiles)
 					results <- fees
 				} else {
-					cacheKey := struct {
-						number      uint64
-						percentiles string
-					}{blockNumber, string(percentileKey)}
+					cacheKey := cacheKey{number: blockNumber, percentiles: string(percentileKey)}
 
 					if p, ok := oracle.historyCache.Get(cacheKey); ok {
-						fees.results = p.(processedFees)
+						fees.results = p
 						results <- fees
 					} else {
 						if len(rewardPercentiles) != 0 {

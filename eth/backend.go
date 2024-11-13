@@ -225,11 +225,7 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config, XDCXServ *XDCx.XDCX
 	} else {
 		eth.ApiBackend = &EthApiBackend{eth, nil, nil}
 	}
-	gpoParams := config.GPO
-	if gpoParams.Default == nil {
-		gpoParams.Default = config.GasPrice
-	}
-	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
+	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, config.GPO, config.GasPrice)
 
 	// Set global ipc endpoint.
 	eth.blockchain.IPCEndpoint = ctx.GetConfig().IPCEndpoint()
