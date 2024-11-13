@@ -94,11 +94,13 @@ func BenchmarkDeriveSha200(b *testing.B) {
 		}
 	})
 
+	st := trie.NewStackTrie(nil)
 	b.Run("stack_trie", func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			have = types.DeriveSha(txs, trie.NewStackTrie(nil))
+			st.Reset()
+			have = types.DeriveSha(txs, st)
 		}
 		if have != want {
 			b.Errorf("have %x want %x", have, want)
