@@ -1724,11 +1724,19 @@ func (p *BlobPool) Clear() {
 	// manually iterating and deleting every entry is super sub-optimal
 	// However, Clear is not currently used in production so
 	// performance is not critical at the moment.
-	for _, entry := range p.lookup {
-		if err := p.store.Delete(entry); err != nil {
+	for hash := range p.lookup.txIndex {
+		id, _ := p.lookup.storeidOfTx(hash)
+		if err := p.store.Delete(id); err != nil {
 			log.Warn("failed to delete blob tx from backing store", "err", err)
 		}
 	}
+	for hash := range p.lookup.blobIndex {
+		id, _ := p.lookup.storeidOfBlob(hash)
+		if err := p.store.Delete(id); err != nil {
+			log.Warn("failed to delete blob from backing store", "err", err)
+		}
+	}
+
 	// unreserve each tracked account.  Ideally, we could just clear the
 	// reservation map in the parent txpool context.  However, if we clear in
 	// parent context, to avoid exposing the subpool lock, we have to lock the
@@ -1746,7 +1754,7 @@ func (p *BlobPool) Clear() {
 	for acct, _ := range p.index {
 		p.reserve(acct, false)
 	}
-	p.lookup = make(map[common.Hash]uint64)
+	p.lookup = newLookup()
 	p.index = make(map[common.Address][]*blobTxMeta)
 	p.spent = make(map[common.Address]*uint256.Int)
 
