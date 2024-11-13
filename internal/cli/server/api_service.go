@@ -38,7 +38,11 @@ func headerToProtoborHeader(h *types.Header) *protobor.Header {
 }
 
 func (s *Server) HeaderByNumber(ctx context.Context, req *protobor.GetHeaderByNumberRequest) (*protobor.GetHeaderByNumberResponse, error) {
-	header, err := s.backend.APIBackend.HeaderByNumber(ctx, rpc.BlockNumber(req.Number))
+	bN, err := getRpcBlockNumberFromString(req.Number)
+	if err != nil {
+		return nil, err
+	}
+	header, err := s.backend.APIBackend.HeaderByNumber(ctx, bN)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +51,11 @@ func (s *Server) HeaderByNumber(ctx context.Context, req *protobor.GetHeaderByNu
 }
 
 func (s *Server) BlockByNumber(ctx context.Context, req *protobor.GetBlockByNumberRequest) (*protobor.GetBlockByNumberResponse, error) {
-	block, err := s.backend.APIBackend.BlockByNumber(ctx, rpc.BlockNumber(req.Number))
+	bN, err := getRpcBlockNumberFromString(req.Number)
+	if err != nil {
+		return nil, err
+	}
+	block, err := s.backend.APIBackend.BlockByNumber(ctx, bN)
 	if err != nil {
 		return nil, err
 	}
@@ -90,4 +98,28 @@ func (s *Server) BorBlockReceipt(ctx context.Context, req *protobor.ReceiptReque
 	}
 
 	return &protobor.ReceiptResponse{Receipt: ConvertReceiptToProtoReceipt(receipt)}, nil
+}
+
+func getRpcBlockNumberFromString(blockNumber string) (rpc.BlockNumber, error) {
+	if blockNumber == "latest" {
+		return rpc.LatestBlockNumber, nil
+	}
+
+	if blockNumber == "earliest" {
+		return rpc.EarliestBlockNumber, nil
+	}
+
+	if blockNumber == "pending" {
+		return rpc.PendingBlockNumber, nil
+	}
+
+	if blockNumber == "finalized" {
+		return rpc.FinalizedBlockNumber, nil
+	}
+
+	if blockNumber == "safe" {
+		return rpc.SafeBlockNumber, nil
+	}
+
+	return rpc.BlockNumber(0), errors.New("invalid block number")
 }

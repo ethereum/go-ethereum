@@ -65,7 +65,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0
 	github.com/maticnetwork/crand v1.0.2
 	github.com/maticnetwork/heimdall v1.0.7
-	github.com/maticnetwork/polyproto v0.0.3
+	github.com/maticnetwork/polyproto v0.0.4-0.20241113101917-6744479e4d59
 	github.com/mattn/go-colorable v0.1.13
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mitchellh/cli v1.1.5
