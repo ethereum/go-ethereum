@@ -131,11 +131,7 @@ func New(ctx *node.ServiceContext, config *ethconfig.Config) (*LightEthereum, er
 		return nil, err
 	}
 	leth.ApiBackend = &LesApiBackend{leth, nil}
-	gpoParams := config.GPO
-	if gpoParams.Default == nil {
-		gpoParams.Default = config.GasPrice
-	}
-	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
+	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, config.GPO, config.GasPrice)
 	return leth, nil
 }
 
