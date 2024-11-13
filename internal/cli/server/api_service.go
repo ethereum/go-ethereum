@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -118,7 +119,7 @@ func getRpcBlockNumberFromString(blockNumber string) (rpc.BlockNumber, error) {
 		if err != nil {
 			return rpc.BlockNumber(0), errors.New("invalid block number")
 		}
-		if blckNum > uint64(^uint32(0)) {
+		if blckNum > math.MaxInt64 {
 			return rpc.BlockNumber(0), errors.New("block number out of range")
 		}
 		return rpc.BlockNumber(blckNum), nil
