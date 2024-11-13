@@ -375,7 +375,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			return nil, nil, nil, NewError(ErrorEVM, fmt.Errorf("could not parse requests logs: %v", err))
 		}
 		requests = append(requests, depositRequests)
-		// create EVM for system calls
+
 		// EIP-7002 withdrawals
 		requests = append(requests, core.ProcessWithdrawalQueue(evm, statedb))
 		// EIP-7251 consolidations

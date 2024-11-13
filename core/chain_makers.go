@@ -100,9 +100,9 @@ func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
 	var (
 		blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-		vmenv        = vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{})
+		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{})
 	)
-	ProcessBeaconBlockRoot(root, vmenv, b.statedb)
+	ProcessBeaconBlockRoot(root, evm, b.statedb)
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
@@ -118,10 +118,10 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	}
 	var (
 		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
-		vmenv        = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
+		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.cm.config, vmenv, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
+	receipt, err := ApplyTransaction(b.cm.config, evm, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
 	if err != nil {
 		panic(err)
 	}
@@ -364,12 +364,12 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			requests = append(requests, depositRequests)
 			// create EVM for system calls
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-			vmenv := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
 			// EIP-7002 withdrawals
-			withdrawalRequests := ProcessWithdrawalQueue(vmenv, statedb)
+			withdrawalRequests := ProcessWithdrawalQueue(evm, statedb)
 			requests = append(requests, withdrawalRequests)
 			// EIP-7251 consolidations
-			consolidationRequests := ProcessConsolidationQueue(vmenv, statedb)
+			consolidationRequests := ProcessConsolidationQueue(evm, statedb)
 			requests = append(requests, consolidationRequests)
 		}
 		if requests != nil {
@@ -470,8 +470,8 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		if config.IsPrague(b.header.Number, b.header.Time) {
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
-			vmenv := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
-			ProcessParentBlockHash(b.header.ParentHash, vmenv, statedb)
+			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+			ProcessParentBlockHash(b.header.ParentHash, evm, statedb)
 		}
 
 		// Execute any user modifications to the block.
