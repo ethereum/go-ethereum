@@ -217,10 +217,6 @@ var AppHelpFlagGroups = []flagGroup{
 			//utils.NoCompactionFlag,
 		}, debug.Flags...),
 	},
-	//{
-	//	Name:  "WHISPER (EXPERIMENTAL)",
-	//	Flags: whisperFlags,
-	//},
 	{
 		Name: "DEPRECATED",
 		Flags: []cli.Flag{

@@ -9,7 +9,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/ethstats"
 	"github.com/XinFinOrg/XDPoSChain/les"
 	"github.com/XinFinOrg/XDPoSChain/node"
-	whisper "github.com/XinFinOrg/XDPoSChain/whisper/whisperv6"
 )
 
 // RegisterEthService adds an Ethereum client to the stack.
@@ -35,15 +34,6 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) {
 	}
 	if err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
-	}
-}
-
-// RegisterShhService configures Whisper and adds it to the given node.
-func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
-	if err := stack.Register(func(n *node.ServiceContext) (node.Service, error) {
-		return whisper.New(cfg), nil
-	}); err != nil {
-		Fatalf("Failed to register the Whisper service: %v", err)
 	}
 }
 

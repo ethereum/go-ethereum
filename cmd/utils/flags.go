@@ -58,7 +58,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/p2p/netutil"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	whisper "github.com/XinFinOrg/XDPoSChain/whisper/whisperv6"
 	gopsutil "github.com/shirou/gopsutil/mem"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -590,20 +589,6 @@ var (
 		Name:  "gpo.ignoreprice",
 		Usage: "Gas price below which gpo will ignore transactions",
 		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
-	}
-	WhisperEnabledFlag = cli.BoolFlag{
-		Name:  "shh",
-		Usage: "Enable Whisper",
-	}
-	WhisperMaxMessageSizeFlag = cli.IntFlag{
-		Name:  "shh.maxmessagesize",
-		Usage: "Max message size accepted",
-		Value: int(whisper.DefaultMaxMessageSize),
-	}
-	WhisperMinPOWFlag = cli.Float64Flag{
-		Name:  "shh.pow",
-		Usage: "Minimum POW accepted",
-		Value: whisper.DefaultMinimumPoW,
 	}
 	XDCXDataDirFlag = DirectoryFlag{
 		Name:  "XDCx.datadir",
@@ -1141,16 +1126,6 @@ func checkExclusive(ctx *cli.Context, args ...interface{}) {
 	}
 	if len(set) > 1 {
 		Fatalf("Flags %v can't be used at the same time", strings.Join(set, ", "))
-	}
-}
-
-// SetShhConfig applies shh-related command line flags to the config.
-func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
-	if ctx.GlobalIsSet(WhisperMaxMessageSizeFlag.Name) {
-		cfg.MaxMessageSize = uint32(ctx.GlobalUint(WhisperMaxMessageSizeFlag.Name))
-	}
-	if ctx.GlobalIsSet(WhisperMinPOWFlag.Name) {
-		cfg.MinimumAcceptedPOW = ctx.GlobalFloat64(WhisperMinPOWFlag.Name)
 	}
 }
 

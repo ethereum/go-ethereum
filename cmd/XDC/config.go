@@ -37,7 +37,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	whisper "github.com/XinFinOrg/XDPoSChain/whisper/whisperv6"
 	"github.com/naoina/toml"
 )
 
@@ -47,7 +46,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(append(nodeFlags, rpcFlags...), whisperFlags...),
+		Flags:       append(nodeFlags, rpcFlags...),
 		Category:    "MISCELLANEOUS COMMANDS",
 		Description: `The dumpconfig command shows configuration values.`,
 	}
@@ -91,7 +90,6 @@ type Bootnodes struct {
 
 type XDCConfig struct {
 	Eth         ethconfig.Config
-	Shh         whisper.Config
 	Node        node.Config
 	Ethstats    ethstatsConfig
 	XDCX        XDCx.Config
@@ -130,7 +128,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	// Load defaults.
 	cfg := XDCConfig{
 		Eth:         ethconfig.Defaults,
-		Shh:         whisper.DefaultConfig,
 		XDCX:        XDCx.DefaultConfig,
 		Node:        defaultNodeConfig(),
 		StakeEnable: true,
@@ -212,7 +209,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 
-	utils.SetShhConfig(ctx, stack, &cfg.Shh)
 	utils.SetXDCXConfig(ctx, &cfg.XDCX, cfg.Node.DataDir)
 	return stack, cfg
 }
@@ -230,16 +226,6 @@ func applyValues(values []string, params *[]string) {
 
 }
 
-// enableWhisper returns true in case one of the whisper flags is set.
-func enableWhisper(ctx *cli.Context) bool {
-	for _, flag := range whisperFlags {
-		if ctx.GlobalIsSet(flag.GetName()) {
-			return true
-		}
-	}
-	return false
-}
-
 func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	stack, cfg := makeConfigNode(ctx)
 
@@ -247,19 +233,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	// enable in default
 	utils.RegisterXDCXService(stack, &cfg.XDCX)
 	utils.RegisterEthService(stack, &cfg.Eth)
-
-	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
-	shhEnabled := enableWhisper(ctx)
-	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DeveloperFlag.Name)
-	if shhEnabled || shhAutoEnabled {
-		if ctx.GlobalIsSet(utils.WhisperMaxMessageSizeFlag.Name) {
-			cfg.Shh.MaxMessageSize = uint32(ctx.Int(utils.WhisperMaxMessageSizeFlag.Name))
-		}
-		if ctx.GlobalIsSet(utils.WhisperMinPOWFlag.Name) {
-			cfg.Shh.MinimumAcceptedPOW = ctx.Float64(utils.WhisperMinPOWFlag.Name)
-		}
-		utils.RegisterShhService(stack, &cfg.Shh)
-	}
 
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
