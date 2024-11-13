@@ -50,7 +50,7 @@ type StackTrie struct {
 	onTrieNode OnTrieNode
 	kBuf       []byte // buf space used for hex-key during insertions
 	pBuf       []byte // buf space used for path during insertions
-	vPool      *bytesPool
+	vPool      *unsafeBytesPool
 }
 
 // NewStackTrie allocates and initializes an empty trie. The committed nodes
@@ -62,7 +62,7 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 		onTrieNode: onTrieNode,
 		kBuf:       make([]byte, 0, 64),
 		pBuf:       make([]byte, 0, 32),
-		vPool:      newBytesPool(300, 20),
+		vPool:      newUnsafeBytesPool(300, 20),
 	}
 }
 
@@ -113,6 +113,7 @@ func (t *StackTrie) Update(key, value []byte) error {
 func (t *StackTrie) Reset() {
 	t.root = stPool.Get().(*stNode)
 	t.last = nil
+	t.onTrieNode = nil
 }
 
 // TrieKey returns the internal key representation for the given user key.
