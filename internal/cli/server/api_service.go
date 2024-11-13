@@ -101,25 +101,18 @@ func (s *Server) BorBlockReceipt(ctx context.Context, req *protobor.ReceiptReque
 }
 
 func getRpcBlockNumberFromString(blockNumber string) (rpc.BlockNumber, error) {
-	if blockNumber == "latest" {
+	switch blockNumber {
+	case "latest":
 		return rpc.LatestBlockNumber, nil
-	}
-
-	if blockNumber == "earliest" {
+	case "earliest":
 		return rpc.EarliestBlockNumber, nil
-	}
-
-	if blockNumber == "pending" {
+	case "pending":
 		return rpc.PendingBlockNumber, nil
-	}
-
-	if blockNumber == "finalized" {
+	case "finalized":
 		return rpc.FinalizedBlockNumber, nil
-	}
-
-	if blockNumber == "safe" {
+	case "safe":
 		return rpc.SafeBlockNumber, nil
+	default:
+		return rpc.BlockNumber(0), errors.New("invalid block number")
 	}
-
-	return rpc.BlockNumber(0), errors.New("invalid block number")
 }
