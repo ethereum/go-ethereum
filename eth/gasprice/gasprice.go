@@ -29,7 +29,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/XinFinOrg/XDPoSChain/rpc"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/XinFinOrg/XDPoSChain/common/lru"
 )
 
 const sampleNumber = 3 // Number of transactions sampled in a block
@@ -72,7 +72,8 @@ type Oracle struct {
 
 	checkBlocks, percentile           int
 	maxHeaderHistory, maxBlockHistory uint64
-	historyCache                      *lru.Cache
+
+	historyCache *lru.Cache[cacheKey, processedFees]
 }
 
 // NewOracle returns a new gasprice oracle which can recommend suitable
@@ -114,7 +115,7 @@ func NewOracle(backend OracleBackend, params Config) *Oracle {
 		log.Warn("Sanitizing invalid gasprice oracle max block history", "provided", params.MaxBlockHistory, "updated", maxBlockHistory)
 	}
 
-	cache, _ := lru.New(2048)
+	cache := lru.NewCache[cacheKey, processedFees](2048)
 	headEvent := make(chan core.ChainHeadEvent, 1)
 	backend.SubscribeChainHeadEvent(headEvent)
 	go func() {
