@@ -1964,9 +1964,9 @@ func numSlots(tx *types.Transaction) int {
 
 // Clear implements txpool.SubPool, removing all tracked txs from the pool
 // and rotating the journal.
-func (p *LegacyPool) Clear() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (pool *LegacyPool) Clear() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
 
 	// unreserve each tracked account.  Ideally, we could just clear the
 	// reservation map in the parent txpool context.  However, if we clear in
@@ -1982,22 +1982,22 @@ func (p *LegacyPool) Clear() {
 	// The transaction addition may attempt to reserve the sender addr which
 	// can't happen until Clear releases the reservation lock.  Clear cannot
 	// acquire the subpool lock until the transaction addition is completed.
-	for _, tx := range p.all.remotes {
-		senderAddr, _ := types.Sender(p.signer, tx)
-		p.reserve(senderAddr, false)
+	for _, tx := range pool.all.remotes {
+		senderAddr, _ := types.Sender(pool.signer, tx)
+		pool.reserve(senderAddr, false)
 	}
-	for localSender, _ := range p.locals.accounts {
-		p.reserve(localSender, false)
+	for localSender, _ := range pool.locals.accounts {
+		pool.reserve(localSender, false)
 	}
 
-	p.all = newLookup()
-	p.priced = newPricedList(p.all)
-	p.pending = make(map[common.Address]*list)
-	p.queue = make(map[common.Address]*list)
+	pool.all = newLookup()
+	pool.priced = newPricedList(pool.all)
+	pool.pending = make(map[common.Address]*list)
+	pool.queue = make(map[common.Address]*list)
 
-	if !p.config.NoLocals && p.config.Journal != "" {
-		p.journal = newTxJournal(p.config.Journal)
-		if err := p.journal.rotate(p.local()); err != nil {
+	if !pool.config.NoLocals && pool.config.Journal != "" {
+		pool.journal = newTxJournal(pool.config.Journal)
+		if err := pool.journal.rotate(pool.local()); err != nil {
 			log.Warn("Failed to rotate transaction journal", "err", err)
 		}
 	}
