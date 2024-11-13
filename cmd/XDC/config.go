@@ -46,7 +46,7 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(append(nodeFlags, rpcFlags...), whisperFlags...),
+		Flags:       append(nodeFlags, rpcFlags...),
 		Category:    "MISCELLANEOUS COMMANDS",
 		Description: `The dumpconfig command shows configuration values.`,
 	}
@@ -88,19 +88,8 @@ type Bootnodes struct {
 	Testnet []string
 }
 
-// whisper has been deprecated, but clients out there might still have [Shh]
-// in their config, which will crash. Cut them some slack by keeping the
-// config, and displaying a message that those config switches are ineffectual.
-// To be removed circa Q1 2021 -- @gballet.
-type whisperDeprecatedConfig struct {
-	MaxMessageSize                        uint32  `toml:",omitempty"`
-	MinimumAcceptedPOW                    float64 `toml:",omitempty"`
-	RestrictConnectionBetweenLightClients bool    `toml:",omitempty"`
-}
-
 type XDCConfig struct {
 	Eth         ethconfig.Config
-	Shh         whisperDeprecatedConfig
 	Node        node.Config
 	Ethstats    ethstatsConfig
 	XDCX        XDCx.Config
@@ -149,10 +138,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
-		}
-
-		if cfg.Shh != (whisperDeprecatedConfig{}) {
-			log.Warn("Deprecated whisper config detected. Whisper has been moved to github.com/ethereum/whisper")
 		}
 	}
 	if ctx.GlobalIsSet(utils.StakingEnabledFlag.Name) {
@@ -224,7 +209,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
 
-	utils.SetShhConfig(ctx, stack)
 	utils.SetXDCXConfig(ctx, &cfg.XDCX, cfg.Node.DataDir)
 	return stack, cfg
 }
@@ -242,15 +226,6 @@ func applyValues(values []string, params *[]string) {
 
 }
 
-// checkWhisper returns true in case one of the whisper flags is set.
-func checkWhisper(ctx *cli.Context) {
-	for _, flag := range whisperFlags {
-		if ctx.GlobalIsSet(flag.GetName()) {
-			log.Warn("deprecated whisper flag detected. Whisper has been moved to github.com/ethereum/whisper")
-		}
-	}
-}
-
 func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	stack, cfg := makeConfigNode(ctx)
 
@@ -259,7 +234,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	utils.RegisterXDCXService(stack, &cfg.XDCX)
 	utils.RegisterEthService(stack, &cfg.Eth)
 
-	checkWhisper(ctx)
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
