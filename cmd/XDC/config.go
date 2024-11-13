@@ -88,8 +88,19 @@ type Bootnodes struct {
 	Testnet []string
 }
 
+// whisper has been deprecated, but clients out there might still have [Shh]
+// in their config, which will crash. Cut them some slack by keeping the
+// config, and displaying a message that those config switches are ineffectual.
+// To be removed circa Q1 2021 -- @gballet.
+type whisperDeprecatedConfig struct {
+	MaxMessageSize                        uint32  `toml:",omitempty"`
+	MinimumAcceptedPOW                    float64 `toml:",omitempty"`
+	RestrictConnectionBetweenLightClients bool    `toml:",omitempty"`
+}
+
 type XDCConfig struct {
 	Eth         ethconfig.Config
+	Shh         whisperDeprecatedConfig
 	Node        node.Config
 	Ethstats    ethstatsConfig
 	XDCX        XDCx.Config
@@ -138,6 +149,10 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
+		}
+
+		if cfg.Shh != (whisperDeprecatedConfig{}) {
+			log.Warn("Deprecated whisper config detected. Whisper has been moved to github.com/ethereum/whisper")
 		}
 	}
 	if ctx.GlobalIsSet(utils.StakingEnabledFlag.Name) {
