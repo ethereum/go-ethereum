@@ -17,6 +17,7 @@
 package common
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -77,23 +78,44 @@ type Vote struct {
 	Voter      Address
 }
 
+// BytesToHash sets b to hash.
+// If b is larger than len(h), b will be cropped from the left.
 func BytesToHash(b []byte) Hash {
 	var h Hash
 	h.SetBytes(b)
 	return h
 }
+
 func StringToHash(s string) Hash { return BytesToHash([]byte(s)) }
-func BigToHash(b *big.Int) Hash  { return BytesToHash(b.Bytes()) }
+
+// BigToHash sets byte representation of b to hash.
+// If b is larger than len(h), b will be cropped from the left.
+func BigToHash(b *big.Int) Hash { return BytesToHash(b.Bytes()) }
+
 func Uint64ToHash(b uint64) Hash { return BytesToHash(new(big.Int).SetUint64(b).Bytes()) }
-func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
+
+// HexToHash sets byte representation of s to hash.
+// If b is larger than len(h), b will be cropped from the left.
+func HexToHash(s string) Hash { return BytesToHash(FromHex(s)) }
+
+// Cmp compares two hashes.
+func (h Hash) Cmp(other Hash) int {
+	return bytes.Compare(h[:], other[:])
+}
 
 // IsZero returns if a Hash is empty
 func (h Hash) IsZero() bool { return h == Hash{} }
 
 // Get the string representation of the underlying hash
 func (h Hash) Str() string   { return string(h[:]) }
+
+// Bytes gets the byte representation of the underlying hash.
 func (h Hash) Bytes() []byte { return h[:] }
+
+// Big converts a hash to a big integer.
 func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
+
+// Hex converts a hash to a hex string.
 func (h Hash) Hex() string   { return hexutil.Encode(h[:]) }
 
 // TerminalString implements log.TerminalStringer, formatting a string for console
@@ -129,7 +151,8 @@ func (h Hash) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(h[:]).MarshalText()
 }
 
-// Sets the hash to the value of b. If b is larger than len(h), 'b' will be cropped (from the left).
+// SetBytes sets the hash to the value of b.
+// If b is larger than len(h), b will be cropped from the left.
 func (h *Hash) SetBytes(b []byte) {
 	if len(b) > len(h) {
 		b = b[len(b)-HashLength:]
