@@ -245,9 +245,10 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		// TODO (rjl493456442) it's a bit weird to reset the tracer in the
+		// middle of block execution, please improve it somehow.
 		if tracer != nil {
-			vmConfig.Tracer = tracer.Hooks
-			evm.SetConfig(vmConfig)
+			evm.SetTracer(tracer.Hooks)
 		}
 		statedb.SetTxContext(tx.Hash(), txIndex)
 

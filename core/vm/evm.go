@@ -133,11 +133,9 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 	return evm
 }
 
-// SetConfig resets the config and re-initialize the interpreter just in case
-// some additional EIPs are activated by new config.
-func (evm *EVM) SetConfig(config Config) {
-	evm.Config = config
-	evm.interpreter = NewEVMInterpreter(evm)
+// SetTracer sets the tracer for following state transition.
+func (evm *EVM) SetTracer(tracer *tracing.Hooks) {
+	evm.Config.Tracer = tracer
 }
 
 // SetPrecompiles sets the precompiled contracts for the EVM.
