@@ -115,6 +115,7 @@ func (it *diffAccountIterator) Next() bool {
 	}
 	// Iterator seems to be still alive, retrieve and cache the live hash
 	it.curHash = it.keys[0]
+
 	// key cached, shift the iterator and notify the user of success
 	it.keys = it.keys[1:]
 	return true
@@ -135,7 +136,7 @@ func (it *diffAccountIterator) Hash() common.Hash {
 // This method may _fail_, if the underlying layer has been flattened between
 // the call to Next and Account. That type of error will set it.Err.
 // This method assumes that flattening does not delete elements from
-// the accountdata mapping (writing nil into it is fine though), and will panic
+// the accountData mapping (writing nil into it is fine though), and will panic
 // if elements have been deleted.
 //
 // Note the returned account is not a copy, please don't modify it.
