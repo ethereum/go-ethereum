@@ -35,6 +35,7 @@ type contractCode struct {
 type accountDelete struct {
 	address        common.Address         // address is the unique account identifier
 	origin         []byte                 // origin is the original value of account data in slim-RLP encoding.
+	storages       map[common.Hash][]byte // storages stores mutated slots, the value should be nil.
 	storagesOrigin map[common.Hash][]byte // storagesOrigin stores the original values of mutated slots in prefix-zero-trimmed RLP format.
 }
 
@@ -85,12 +86,10 @@ func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common
 		accounts[addrHash] = nil
 		accountsOrigin[addr] = op.origin
 
+		if len(op.storages) > 0 {
+			storages[addrHash] = op.storages
+		}
 		if len(op.storagesOrigin) > 0 {
-			subset := make(map[common.Hash][]byte, len(op.storagesOrigin))
-			for key := range op.storagesOrigin {
-				subset[key] = nil
-			}
-			storages[addrHash] = subset
 			storagesOrigin[addr] = op.storagesOrigin
 		}
 	}
@@ -121,17 +120,16 @@ func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common
 		// Aggregate the storage original values. If the slot is already present
 		// in aggregated storagesOrigin set, skip it.
 		if len(op.storagesOrigin) > 0 {
-			origin := storagesOrigin[addr]
-			if origin == nil {
+			origin, exist := storagesOrigin[addr]
+			if !exist {
 				storagesOrigin[addr] = op.storagesOrigin
-				continue
-			}
-			for key, slot := range op.storagesOrigin {
-				if _, found := origin[key]; !found {
-					origin[key] = slot
+			} else {
+				for key, slot := range op.storagesOrigin {
+					if _, found := origin[key]; !found {
+						origin[key] = slot
+					}
 				}
 			}
-			storagesOrigin[addr] = origin
 		}
 	}
 	return &stateUpdate{

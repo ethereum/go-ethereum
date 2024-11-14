@@ -543,10 +543,14 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			continue
 		}
 		// Push the account to disk
-		rawdb.WriteAccountSnapshot(batch, hash, data)
-		base.cache.Set(hash[:], data)
-		snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
-
+		if len(data) != 0 {
+			rawdb.WriteAccountSnapshot(batch, hash, data)
+			base.cache.Set(hash[:], data)
+			snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
+		} else {
+			rawdb.DeleteAccountSnapshot(batch, hash)
+			base.cache.Set(hash[:], nil)
+		}
 		snapshotFlushAccountItemMeter.Mark(1)
 		snapshotFlushAccountSizeMeter.Mark(int64(len(data)))
 	}

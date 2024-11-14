@@ -399,10 +399,7 @@ func (dl *diffLayer) flatten() snapshot {
 			continue
 		}
 		// Storage exists in both parent and child, merge the slots
-		comboData := parent.storageData[accountHash]
-		for storageHash, data := range storage {
-			comboData[storageHash] = data
-		}
+		maps.Copy(parent.storageData[accountHash], storage)
 	}
 	// Return the combo parent
 	return &diffLayer{

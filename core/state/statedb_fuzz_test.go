@@ -353,8 +353,8 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *triedb.Database
 	if !bytes.Equal(full, oBlob) {
 		return fmt.Errorf("account value is not matched, %x", addrHash)
 	}
-	if len(account) == 0 {
-		if len(nBlob) != 0 {
+	if len(nBlob) == 0 {
+		if len(account) != 0 {
 			return errors.New("unexpected account data")
 		}
 	} else {
@@ -363,7 +363,6 @@ func (test *stateTest) verifyAccountUpdate(next common.Hash, db *triedb.Database
 			return fmt.Errorf("unexpected account data, %x, want %v, got: %v", addrHash, full, nBlob)
 		}
 	}
-
 	// Decode accounts
 	var (
 		oAcct types.StateAccount

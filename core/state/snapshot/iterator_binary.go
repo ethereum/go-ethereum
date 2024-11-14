@@ -67,20 +67,17 @@ func (dl *diffLayer) initBinaryAccountIterator(seek common.Hash) Iterator {
 func (dl *diffLayer) initBinaryStorageIterator(account, seek common.Hash) Iterator {
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
-		a := dl.StorageIterator(account, seek)
-		b := dl.Parent().StorageIterator(account, seek)
 		l := &binaryIterator{
-			a:       a,
-			b:       b,
+			a:       dl.StorageIterator(account, seek),
+			b:       dl.Parent().StorageIterator(account, seek),
 			account: account,
 		}
 		l.aDone = !l.a.Next()
 		l.bDone = !l.b.Next()
 		return l
 	}
-	a := dl.StorageIterator(account, seek)
 	l := &binaryIterator{
-		a:       a,
+		a:       dl.StorageIterator(account, seek),
 		b:       parent.initBinaryStorageIterator(account, seek),
 		account: account,
 	}
