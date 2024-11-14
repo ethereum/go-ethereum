@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 	"errors"
-	"strconv"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -115,7 +115,7 @@ func getRpcBlockNumberFromString(blockNumber string) (rpc.BlockNumber, error) {
 	case "safe":
 		return rpc.SafeBlockNumber, nil
 	default:
-		blckNum, err := strconv.ParseUint(blockNumber, 10, 64)
+		blckNum, err := hexutil.DecodeUint64(blockNumber)
 		if err != nil {
 			return rpc.BlockNumber(0), errors.New("invalid block number")
 		}
