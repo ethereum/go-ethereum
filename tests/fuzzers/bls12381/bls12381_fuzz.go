@@ -31,9 +31,45 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/bls12381"
+	bls12381 "github.com/kilic/bls12-381"
 	blst "github.com/supranational/blst/bindings/go"
 )
+
+func fuzzG1SubgroupChecks(data []byte) int {
+	input := bytes.NewReader(data)
+	kpG1, cpG1, blG1, err := getG1Points(input)
+	if err != nil {
+		return 0
+	}
+	inSubGroupKilic := bls12381.NewG1().InCorrectSubgroup(kpG1)
+	inSubGroupGnark := cpG1.IsInSubGroup()
+	inSubGroupBLST := blG1.InG1()
+	if inSubGroupKilic != inSubGroupGnark {
+		panic(fmt.Sprintf("differing subgroup check, kilic %v, gnark %v", inSubGroupKilic, inSubGroupGnark))
+	}
+	if inSubGroupKilic != inSubGroupBLST {
+		panic(fmt.Sprintf("differing subgroup check, kilic %v, blst %v", inSubGroupKilic, inSubGroupBLST))
+	}
+	return 1
+}
+
+func fuzzG2SubgroupChecks(data []byte) int {
+	input := bytes.NewReader(data)
+	kpG2, cpG2, blG2, err := getG2Points(input)
+	if err != nil {
+		return 0
+	}
+	inSubGroupKilic := bls12381.NewG2().InCorrectSubgroup(kpG2)
+	inSubGroupGnark := cpG2.IsInSubGroup()
+	inSubGroupBLST := blG2.InG2()
+	if inSubGroupKilic != inSubGroupGnark {
+		panic(fmt.Sprintf("differing subgroup check, kilic %v, gnark %v", inSubGroupKilic, inSubGroupGnark))
+	}
+	if inSubGroupKilic != inSubGroupBLST {
+		panic(fmt.Sprintf("differing subgroup check, kilic %v, blst %v", inSubGroupKilic, inSubGroupBLST))
+	}
+	return 1
+}
 
 func fuzzCrossPairing(data []byte) int {
 	input := bytes.NewReader(data)
@@ -51,7 +87,7 @@ func fuzzCrossPairing(data []byte) int {
 	}
 
 	// compute pairing using geth
-	engine := bls12381.NewPairingEngine()
+	engine := bls12381.NewEngine()
 	engine.AddPair(kpG1, kpG2)
 	kResult := engine.Result()
 
@@ -180,7 +216,7 @@ func fuzzCrossG2Add(data []byte) int {
 func fuzzCrossG1MultiExp(data []byte) int {
 	var (
 		input        = bytes.NewReader(data)
-		gethScalars  []*big.Int
+		gethScalars  []*bls12381.Fr
 		gnarkScalars []fr.Element
 		gethPoints   []*bls12381.PointG1
 		gnarkPoints  []gnark.G1Affine
@@ -197,7 +233,7 @@ func fuzzCrossG1MultiExp(data []byte) int {
 		if err != nil {
 			break
 		}
-		gethScalars = append(gethScalars, s)
+		gethScalars = append(gethScalars, bls12381.NewFr().FromBytes(s.Bytes()))
 		var gnarkScalar = &fr.Element{}
 		gnarkScalar = gnarkScalar.SetBigInt(s)
 		gnarkScalars = append(gnarkScalars, *gnarkScalar)
@@ -221,8 +257,12 @@ func fuzzCrossG1MultiExp(data []byte) int {
 	cp.MultiExp(gnarkPoints, gnarkScalars, ecc.MultiExpConfig{})
 
 	// compare result
-	if !(bytes.Equal(cp.Marshal(), g1.ToBytes(&kp))) {
-		panic("G1 multi exponentiation mismatch gnark / geth ")
+	gnarkRes := cp.Marshal()
+	gethRes := g1.ToBytes(&kp)
+	if !bytes.Equal(gnarkRes, gethRes) {
+		msg := fmt.Sprintf("G1 multi exponentiation mismatch gnark/geth.\ngnark: %x\ngeth:  %x\ninput: %x\n ",
+			gnarkRes, gethRes, data)
+		panic(msg)
 	}
 
 	return 1
@@ -247,15 +287,18 @@ func getG1Points(input io.Reader) (*bls12381.PointG1, *gnark.G1Affine, *blst.P1A
 	if err != nil {
 		panic(fmt.Sprintf("Could not marshal gnark.G1 -> geth.G1: %v", err))
 	}
-	if !bytes.Equal(g1.ToBytes(kp), cpBytes) {
-		panic("bytes(gnark.G1) != bytes(geth.G1)")
+
+	gnarkRes := g1.ToBytes(kp)
+	if !bytes.Equal(gnarkRes, cpBytes) {
+		panic(fmt.Sprintf("bytes(gnark.G1) != bytes(geth.G1)\ngnark.G1: %x\ngeth.G1:  %x\n", gnarkRes, cpBytes))
 	}
 
 	// marshal gnark point -> blst point
 	scalar := new(blst.Scalar).FromBEndian(common.LeftPadBytes(s.Bytes(), 32))
 	p1 := new(blst.P1Affine).From(scalar)
-	if !bytes.Equal(p1.Serialize(), cpBytes) {
-		panic("bytes(blst.G1) != bytes(geth.G1)")
+	blstRes := p1.Serialize()
+	if !bytes.Equal(blstRes, cpBytes) {
+		panic(fmt.Sprintf("bytes(blst.G1) != bytes(geth.G1)\nblst.G1: %x\ngeth.G1: %x\n", blstRes, cpBytes))
 	}
 
 	return kp, cp, p1, nil
@@ -280,8 +323,10 @@ func getG2Points(input io.Reader) (*bls12381.PointG2, *gnark.G2Affine, *blst.P2A
 	if err != nil {
 		panic(fmt.Sprintf("Could not marshal gnark.G2 -> geth.G2: %v", err))
 	}
-	if !bytes.Equal(g2.ToBytes(kp), cpBytes) {
-		panic("bytes(gnark.G2) != bytes(geth.G2)")
+
+	gnarkRes := g2.ToBytes(kp)
+	if !bytes.Equal(gnarkRes, cpBytes) {
+		panic(fmt.Sprintf("bytes(gnark.G2) != bytes(geth.G2)\ngnark.G2: %x\ngeth.G2:  %x\n", gnarkRes, cpBytes))
 	}
 
 	// marshal gnark point -> blst point

@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/gballet/go-verkle"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 )
 
@@ -346,6 +346,33 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			gen(i, b)
 		}
 
+		var requests [][]byte
+		if config.IsPrague(b.header.Number, b.header.Time) {
+			// EIP-6110 deposits
+			var blockLogs []*types.Log
+			for _, r := range b.receipts {
+				blockLogs = append(blockLogs, r.Logs...)
+			}
+			depositRequests, err := ParseDepositLogs(blockLogs, config)
+			if err != nil {
+				panic(fmt.Sprintf("failed to parse deposit log: %v", err))
+			}
+			requests = append(requests, depositRequests)
+			// create EVM for system calls
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
+			// EIP-7002 withdrawals
+			withdrawalRequests := ProcessWithdrawalQueue(vmenv, statedb)
+			requests = append(requests, withdrawalRequests)
+			// EIP-7251 consolidations
+			consolidationRequests := ProcessConsolidationQueue(vmenv, statedb)
+			requests = append(requests, consolidationRequests)
+		}
+		if requests != nil {
+			reqHash := types.CalcRequestsHash(requests)
+			b.header.RequestsHash = &reqHash
+		}
+
 		body := types.Body{Transactions: b.txs, Uncles: b.uncles, Withdrawals: b.withdrawals}
 		block, err := b.engine.FinalizeAndAssemble(cm, b.header, statedb, &body, b.receipts)
 		if err != nil {
@@ -368,7 +395,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	defer triedb.Close()
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabaseWithNodeDB(db, triedb), nil)
+		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
 		if err != nil {
 			panic(err)
 		}
@@ -435,16 +462,15 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		// Save pre state for proof generation
 		// preState := statedb.Copy()
 
-		// TODO uncomment when the 2935 PR is merged
-		// if config.IsPrague(b.header.Number, b.header.Time) {
-		// if !config.IsPrague(b.parent.Number(), b.parent.Time()) {
-		// Transition case: insert all 256 ancestors
-		// 		InsertBlockHashHistoryAtEip2935Fork(statedb, b.header.Number.Uint64()-1, b.header.ParentHash, chainreader)
-		// 	} else {
-		// 		ProcessParentBlockHash(statedb, b.header.Number.Uint64()-1, b.header.ParentHash)
-		// 	}
-		// }
-		// Execute any user modifications to the block
+		// Pre-execution system calls.
+		if config.IsPrague(b.header.Number, b.header.Time) {
+			// EIP-2935
+			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
+			vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
+			ProcessParentBlockHash(b.header.ParentHash, vmenv, statedb)
+		}
+
+		// Execute any user modifications to the block.
 		if gen != nil {
 			gen(i, b)
 		}
@@ -458,7 +484,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			panic(err)
 		}
 
-		// Write state changes to db
+		// Write state changes to DB.
 		root, err := statedb.Commit(b.header.Number.Uint64(), config.IsEIP158(b.header.Number))
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
@@ -467,15 +493,14 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			panic(fmt.Sprintf("trie write error: %v", err))
 		}
 
-		// TODO uncomment when proof generation is merged
-		// proofs = append(proofs, block.ExecutionWitness().VerkleProof)
-		// keyvals = append(keyvals, block.ExecutionWitness().StateDiff)
+		proofs = append(proofs, block.ExecutionWitness().VerkleProof)
+		keyvals = append(keyvals, block.ExecutionWitness().StateDiff)
 
 		return block, b.receipts
 	}
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabaseWithNodeDB(db, trdb), nil)
+		statedb, err := state.New(parent.Root(), state.NewDatabase(trdb, nil))
 		if err != nil {
 			panic(err)
 		}

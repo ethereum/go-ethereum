@@ -101,6 +101,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer file.Close()
 	if err := json.NewDecoder(file).Decode(g); err != nil {
 		panic(err)
 	}

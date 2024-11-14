@@ -22,12 +22,14 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
+	"sync"
 
 	"github.com/dop251/goja"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/internal"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,10 +48,10 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	type ctorFn = func(*tracers.Context, json.RawMessage) (*tracers.Tracer, error)
+	type ctorFn = func(*tracers.Context, json.RawMessage, *params.ChainConfig) (*tracers.Tracer, error)
 	lookup := func(code string) ctorFn {
-		return func(ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
-			return newJsTracer(code, ctx, cfg)
+		return func(ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
+			return newJsTracer(code, ctx, cfg, chainConfig)
 		}
 	}
 	for name, code := range assetTracers {
@@ -58,9 +60,17 @@ func init() {
 	tracers.DefaultDirectory.RegisterJSEval(newJsTracer)
 }
 
-// bigIntProgram is compiled once and the exported function mostly invoked to convert
-// hex strings into big ints.
-var bigIntProgram = goja.MustCompile("bigInt", bigIntegerJS, false)
+var compiledBigInt *goja.Program
+var compileOnce sync.Once
+
+// getBigIntProgram compiles the bigint library, if needed, and returns the compiled
+// goja program.
+func getBigIntProgram() *goja.Program {
+	compileOnce.Do(func() {
+		compiledBigInt = goja.MustCompile("bigInt", bigIntegerJS, false)
+	})
+	return compiledBigInt
+}
 
 type toBigFn = func(vm *goja.Runtime, val string) (goja.Value, error)
 type toBufFn = func(vm *goja.Runtime, val []byte) (goja.Value, error)
@@ -102,6 +112,7 @@ func fromBuf(vm *goja.Runtime, bufType goja.Value, buf goja.Value, allowString b
 type jsTracer struct {
 	vm                *goja.Runtime
 	env               *tracing.VMContext
+	chainConfig       *params.ChainConfig
 	toBig             toBigFn               // Converts a hex string into a JS bigint
 	toBuf             toBufFn               // Converts a []byte into a JS buffer
 	fromBuf           fromBufFn             // Converts an array, hex string or Uint8Array to a []byte
@@ -138,13 +149,14 @@ type jsTracer struct {
 // The methods `result` and `fault` are required to be present.
 // The methods `step`, `enter`, and `exit` are optional, but note that
 // `enter` and `exit` always go together.
-func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage) (*tracers.Tracer, error) {
+func newJsTracer(code string, ctx *tracers.Context, cfg json.RawMessage, chainConfig *params.ChainConfig) (*tracers.Tracer, error) {
 	vm := goja.New()
 	// By default field names are exported to JS as is, i.e. capitalized.
 	vm.SetFieldNameMapper(goja.UncapFieldNameMapper())
 	t := &jsTracer{
-		vm:  vm,
-		ctx: make(map[string]goja.Value),
+		vm:          vm,
+		ctx:         make(map[string]goja.Value),
+		chainConfig: chainConfig,
 	}
 
 	t.setTypeConverters()
@@ -244,7 +256,7 @@ func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from
 	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
 	t.dbValue = db.setupObject()
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
+	rules := t.chainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 	t.ctx["block"] = t.vm.ToValue(t.env.BlockNumber.Uint64())
 	t.ctx["gas"] = t.vm.ToValue(tx.Gas())
@@ -254,6 +266,12 @@ func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from
 		return
 	}
 	t.ctx["gasPrice"] = gasPriceBig
+	coinbase, err := t.toBuf(t.vm, env.Coinbase.Bytes())
+	if err != nil {
+		t.err = err
+		return
+	}
+	t.ctx["coinbase"] = t.vm.ToValue(coinbase)
 }
 
 // OnTxEnd implements the Tracer interface and is invoked at the end of
@@ -269,7 +287,9 @@ func (t *jsTracer) OnTxEnd(receipt *types.Receipt, err error) {
 		}
 		return
 	}
-	t.ctx["gasUsed"] = t.vm.ToValue(receipt.GasUsed)
+	if receipt != nil {
+		t.ctx["gasUsed"] = t.vm.ToValue(receipt.GasUsed)
+	}
 }
 
 // onStart implements the Tracer interface to initialize the tracing operation.
@@ -556,7 +576,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 func (t *jsTracer) setTypeConverters() error {
 	// Inject bigint logic.
 	// TODO: To be replaced after goja adds support for native JS bigint.
-	toBigCode, err := t.vm.RunProgram(bigIntProgram)
+	toBigCode, err := t.vm.RunProgram(getBigIntProgram())
 	if err != nil {
 		return err
 	}

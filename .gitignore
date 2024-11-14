@@ -4,16 +4,11 @@
 # or operating system, you probably want to add a global ignore instead:
 #   git config --global core.excludesfile ~/.gitignore_global
 
-/tmp
 */**/*un~
 */**/*.test
 *un~
 .DS_Store
 */**/.DS_Store
-.ethtest
-*/**/*tx_database*
-*/**/*dapps*
-build/_vendor/pkg
 
 #*
 .#*
@@ -28,6 +23,14 @@ build/_vendor/pkg
 /build/bin/
 /geth*.zip
 
+# used by the build/ci.go archive + upload tool
+/geth*.tar.gz
+/geth*.tar.gz.sig
+/geth*.tar.gz.asc
+/geth*.zip.sig
+/geth*.zip.asc
+
+
 # travis
 profile.tmp
 profile.cov
@@ -37,16 +40,5 @@ profile.cov
 
 # VS Code
 .vscode
-
-# dashboard
-/dashboard/assets/flow-typed
-/dashboard/assets/node_modules
-/dashboard/assets/stats.json
-/dashboard/assets/bundle.js
-/dashboard/assets/bundle.js.map
-/dashboard/assets/package-lock.json
-
-**/yarn-error.log
-logs/
 
 tests/spec-tests/

@@ -110,7 +110,7 @@ func (r *serviceRegistry) subscription(service, name string) *callback {
 }
 
 // suitableCallbacks iterates over the methods of the given type. It determines if a method
-// satisfies the criteria for a RPC callback or a subscription callback and adds it to the
+// satisfies the criteria for an RPC callback or a subscription callback and adds it to the
 // collection of callbacks. See server documentation for a summary of these criteria.
 func suitableCallbacks(receiver reflect.Value) map[string]*callback {
 	typ := receiver.Type()

@@ -20,8 +20,8 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
+	"net/netip"
 	"reflect"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -175,8 +175,8 @@ func (ln *LocalNode) delete(e enr.Entry) {
 	}
 }
 
-func (ln *LocalNode) endpointForIP(ip net.IP) *lnEndpoint {
-	if ip.To4() != nil {
+func (ln *LocalNode) endpointForIP(ip netip.Addr) *lnEndpoint {
+	if ip.Is4() {
 		return &ln.endpoint4
 	}
 	return &ln.endpoint6
@@ -188,7 +188,7 @@ func (ln *LocalNode) SetStaticIP(ip net.IP) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.endpointForIP(ip).staticIP = ip
+	ln.endpointForIP(netutil.IPToAddr(ip)).staticIP = ip
 	ln.updateEndpoints()
 }
 
@@ -198,7 +198,7 @@ func (ln *LocalNode) SetFallbackIP(ip net.IP) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.endpointForIP(ip).fallbackIP = ip
+	ln.endpointForIP(netutil.IPToAddr(ip)).fallbackIP = ip
 	ln.updateEndpoints()
 }
 
@@ -215,21 +215,21 @@ func (ln *LocalNode) SetFallbackUDP(port int) {
 
 // UDPEndpointStatement should be called whenever a statement about the local node's
 // UDP endpoint is received. It feeds the local endpoint predictor.
-func (ln *LocalNode) UDPEndpointStatement(fromaddr, endpoint *net.UDPAddr) {
+func (ln *LocalNode) UDPEndpointStatement(fromaddr, endpoint netip.AddrPort) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.endpointForIP(endpoint.IP).track.AddStatement(fromaddr.String(), endpoint.String())
+	ln.endpointForIP(endpoint.Addr()).track.AddStatement(fromaddr.Addr(), endpoint)
 	ln.updateEndpoints()
 }
 
 // UDPContact should be called whenever the local node has announced itself to another node
 // via UDP. It feeds the local endpoint predictor.
-func (ln *LocalNode) UDPContact(toaddr *net.UDPAddr) {
+func (ln *LocalNode) UDPContact(toaddr netip.AddrPort) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.endpointForIP(toaddr.IP).track.AddContact(toaddr.String())
+	ln.endpointForIP(toaddr.Addr()).track.AddContact(toaddr.Addr())
 	ln.updateEndpoints()
 }
 
@@ -268,27 +268,11 @@ func (e *lnEndpoint) get() (newIP net.IP, newPort uint16) {
 	}
 	if e.staticIP != nil {
 		newIP = e.staticIP
-	} else if ip, port := predictAddr(e.track); ip != nil {
-		newIP = ip
-		newPort = port
+	} else if ap := e.track.PredictEndpoint(); ap.IsValid() {
+		newIP = ap.Addr().AsSlice()
+		newPort = ap.Port()
 	}
 	return newIP, newPort
-}
-
-// predictAddr wraps IPTracker.PredictEndpoint, converting from its string-based
-// endpoint representation to IP and port types.
-func predictAddr(t *netutil.IPTracker) (net.IP, uint16) {
-	ep := t.PredictEndpoint()
-	if ep == "" {
-		return nil, 0
-	}
-	ipString, portString, _ := net.SplitHostPort(ep)
-	ip := net.ParseIP(ipString)
-	port, err := strconv.ParseUint(portString, 10, 16)
-	if err != nil {
-		return nil, 0
-	}
-	return ip, uint16(port)
 }
 
 func (ln *LocalNode) invalidate() {
@@ -314,7 +298,7 @@ func (ln *LocalNode) sign() {
 		panic(fmt.Errorf("enode: can't verify local record: %v", err))
 	}
 	ln.cur.Store(n)
-	log.Info("New local node record", "seq", ln.seq, "id", n.ID(), "ip", n.IP(), "udp", n.UDP(), "tcp", n.TCP())
+	log.Info("New local node record", "seq", ln.seq, "id", n.ID(), "ip", n.IPAddr(), "udp", n.UDP(), "tcp", n.TCP())
 }
 
 func (ln *LocalNode) bumpSeq() {

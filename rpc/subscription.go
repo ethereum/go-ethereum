@@ -97,7 +97,7 @@ func NotifierFromContext(ctx context.Context) (*Notifier, bool) {
 	return n, ok
 }
 
-// Notifier is tied to a RPC connection that supports subscriptions.
+// Notifier is tied to an RPC connection that supports subscriptions.
 // Server callbacks use the notifier to send notifications.
 type Notifier struct {
 	h         *handler
@@ -371,5 +371,8 @@ func (sub *ClientSubscription) unmarshal(result json.RawMessage) (interface{}, e
 
 func (sub *ClientSubscription) requestUnsubscribe() error {
 	var result interface{}
-	return sub.client.Call(&result, sub.namespace+unsubscribeMethodSuffix, sub.subid)
+	ctx, cancel := context.WithTimeout(context.Background(), unsubscribeTimeout)
+	defer cancel()
+	err := sub.client.CallContext(ctx, &result, sub.namespace+unsubscribeMethodSuffix, sub.subid)
+	return err
 }

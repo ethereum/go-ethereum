@@ -75,7 +75,7 @@ func (ts *TestScheduler) Run(testIndex int, exp ...any) {
 		if count == 0 {
 			continue
 		}
-		ts.t.Errorf("Missing %d Server.Fail(s) from server %s in test case #%d", count, server.(string), testIndex)
+		ts.t.Errorf("Missing %d Server.Fail(s) from server %s in test case #%d", count, server.Name(), testIndex)
 	}
 
 	if !reflect.DeepEqual(ts.sent[testIndex], expReqs) {
@@ -104,7 +104,7 @@ func (ts *TestScheduler) Send(server request.Server, req request.Request) reques
 
 func (ts *TestScheduler) Fail(server request.Server, desc string) {
 	if ts.expFail[server] == 0 {
-		ts.t.Errorf("Unexpected Fail from server %s in test case #%d: %s", server.(string), ts.testIndex, desc)
+		ts.t.Errorf("Unexpected Fail from server %s in test case #%d: %s", server.Name(), ts.testIndex, desc)
 		return
 	}
 	ts.expFail[server]--
@@ -173,24 +173,24 @@ type TestCommitteeChain struct {
 	init     bool
 }
 
-func (t *TestCommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
-	t.fsp, t.nsp, t.init = bootstrap.Header.SyncPeriod(), bootstrap.Header.SyncPeriod()+2, true
+func (tc *TestCommitteeChain) CheckpointInit(bootstrap types.BootstrapData) error {
+	tc.fsp, tc.nsp, tc.init = bootstrap.Header.SyncPeriod(), bootstrap.Header.SyncPeriod()+2, true
 	return nil
 }
 
-func (t *TestCommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommittee *types.SerializedSyncCommittee) error {
+func (tc *TestCommitteeChain) InsertUpdate(update *types.LightClientUpdate, nextCommittee *types.SerializedSyncCommittee) error {
 	period := update.AttestedHeader.Header.SyncPeriod()
-	if period < t.fsp || period > t.nsp || !t.init {
+	if period < tc.fsp || period > tc.nsp || !tc.init {
 		return light.ErrInvalidPeriod
 	}
-	if period == t.nsp {
-		t.nsp++
+	if period == tc.nsp {
+		tc.nsp++
 	}
 	return nil
 }
 
-func (t *TestCommitteeChain) NextSyncPeriod() (uint64, bool) {
-	return t.nsp, t.init
+func (tc *TestCommitteeChain) NextSyncPeriod() (uint64, bool) {
+	return tc.nsp, tc.init
 }
 
 func (tc *TestCommitteeChain) ExpInit(t *testing.T, ExpInit bool) {
@@ -199,8 +199,8 @@ func (tc *TestCommitteeChain) ExpInit(t *testing.T, ExpInit bool) {
 	}
 }
 
-func (t *TestCommitteeChain) SetNextSyncPeriod(nsp uint64) {
-	t.init, t.nsp = true, nsp
+func (tc *TestCommitteeChain) SetNextSyncPeriod(nsp uint64) {
+	tc.init, tc.nsp = true, nsp
 }
 
 func (tc *TestCommitteeChain) ExpNextSyncPeriod(t *testing.T, expNsp uint64) {
@@ -212,32 +212,37 @@ func (tc *TestCommitteeChain) ExpNextSyncPeriod(t *testing.T, expNsp uint64) {
 
 type TestHeadTracker struct {
 	phead     types.HeadInfo
-	validated []types.SignedHeader
+	validated []types.OptimisticUpdate
+	finality  types.FinalityUpdate
 }
 
-func (ht *TestHeadTracker) ValidateHead(head types.SignedHeader) (bool, error) {
-	ht.validated = append(ht.validated, head)
+func (ht *TestHeadTracker) ValidateOptimistic(update types.OptimisticUpdate) (bool, error) {
+	ht.validated = append(ht.validated, update)
 	return true, nil
 }
 
-// TODO add test case for finality
-func (ht *TestHeadTracker) ValidateFinality(head types.FinalityUpdate) (bool, error) {
+func (ht *TestHeadTracker) ValidateFinality(update types.FinalityUpdate) (bool, error) {
+	ht.finality = update
 	return true, nil
 }
 
-func (ht *TestHeadTracker) ExpValidated(t *testing.T, tci int, expHeads []types.SignedHeader) {
+func (ht *TestHeadTracker) ValidatedFinality() (types.FinalityUpdate, bool) {
+	return ht.finality, ht.finality.Attested.Header != (types.Header{})
+}
+
+func (ht *TestHeadTracker) ExpValidated(t *testing.T, tci int, expHeads []types.OptimisticUpdate) {
 	for i, expHead := range expHeads {
 		if i >= len(ht.validated) {
-			t.Errorf("Missing validated head in test case #%d index #%d (expected {slot %d blockRoot %x}, got none)", tci, i, expHead.Header.Slot, expHead.Header.Hash())
+			t.Errorf("Missing validated head in test case #%d index #%d (expected {slot %d blockRoot %x}, got none)", tci, i, expHead.Attested.Header.Slot, expHead.Attested.Header.Hash())
 			continue
 		}
-		if ht.validated[i] != expHead {
-			vhead := ht.validated[i].Header
-			t.Errorf("Wrong validated head in test case #%d index #%d (expected {slot %d blockRoot %x}, got {slot %d blockRoot %x})", tci, i, expHead.Header.Slot, expHead.Header.Hash(), vhead.Slot, vhead.Hash())
+		if !reflect.DeepEqual(ht.validated[i], expHead) {
+			vhead := ht.validated[i].Attested.Header
+			t.Errorf("Wrong validated head in test case #%d index #%d (expected {slot %d blockRoot %x}, got {slot %d blockRoot %x})", tci, i, expHead.Attested.Header.Slot, expHead.Attested.Header.Hash(), vhead.Slot, vhead.Hash())
 		}
 	}
 	for i := len(expHeads); i < len(ht.validated); i++ {
-		vhead := ht.validated[i].Header
+		vhead := ht.validated[i].Attested.Header
 		t.Errorf("Unexpected validated head in test case #%d index #%d (expected none, got {slot %d blockRoot %x})", tci, i, vhead.Slot, vhead.Hash())
 	}
 	ht.validated = nil

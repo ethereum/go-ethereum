@@ -58,6 +58,7 @@ const (
 // EvResponse or EvFail. Additionally, it may also send application-defined
 // events that the Modules can interpret.
 type requestServer interface {
+	Name() string
 	Subscribe(eventCallback func(Event))
 	SendRequest(ID, Request)
 	Unsubscribe()
@@ -69,6 +70,7 @@ type requestServer interface {
 // limit the number of parallel in-flight requests and temporarily disable
 // new requests based on timeouts and response failures.
 type server interface {
+	Server
 	subscribe(eventCallback func(Event))
 	canRequestNow() bool
 	sendRequest(Request) ID
@@ -138,6 +140,11 @@ type serverWithTimeout struct {
 	lastID       ID
 }
 
+// Name implements request.Server
+func (s *serverWithTimeout) Name() string {
+	return s.parent.Name()
+}
+
 // init initializes serverWithTimeout
 func (s *serverWithTimeout) init(clock mclock.Clock) {
 	s.clock = clock
@@ -179,10 +186,14 @@ func (s *serverWithTimeout) eventCallback(event Event) {
 			// call will just do nothing
 			timer.Stop()
 			delete(s.timeouts, id)
-			s.childEventCb(event)
+			if s.childEventCb != nil {
+				s.childEventCb(event)
+			}
 		}
 	default:
-		s.childEventCb(event)
+		if s.childEventCb != nil {
+			s.childEventCb(event)
+		}
 	}
 }
 
@@ -204,25 +215,27 @@ func (s *serverWithTimeout) startTimeout(reqData RequestResponse) {
 			delete(s.timeouts, id)
 			childEventCb := s.childEventCb
 			s.lock.Unlock()
-			childEventCb(Event{Type: EvFail, Data: reqData})
+			if childEventCb != nil {
+				childEventCb(Event{Type: EvFail, Data: reqData})
+			}
 		})
 		childEventCb := s.childEventCb
 		s.lock.Unlock()
-		childEventCb(Event{Type: EvTimeout, Data: reqData})
+		if childEventCb != nil {
+			childEventCb(Event{Type: EvTimeout, Data: reqData})
+		}
 	})
 }
 
 // unsubscribe stops all goroutines associated with the server.
 func (s *serverWithTimeout) unsubscribe() {
 	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	for _, timer := range s.timeouts {
 		if timer != nil {
 			timer.Stop()
 		}
 	}
-	s.childEventCb = nil
+	s.lock.Unlock()
 	s.parent.Unsubscribe()
 }
 
@@ -321,10 +334,10 @@ func (s *serverWithLimits) eventCallback(event Event) {
 	}
 	childEventCb := s.childEventCb
 	s.lock.Unlock()
-	if passEvent {
+	if passEvent && childEventCb != nil {
 		childEventCb(event)
 	}
-	if sendCanRequestAgain {
+	if sendCanRequestAgain && childEventCb != nil {
 		childEventCb(Event{Type: EvCanRequestAgain})
 	}
 }
@@ -340,13 +353,12 @@ func (s *serverWithLimits) sendRequest(request Request) (reqId ID) {
 // unsubscribe stops all goroutines associated with the server.
 func (s *serverWithLimits) unsubscribe() {
 	s.lock.Lock()
-	defer s.lock.Unlock()
-
 	if s.delayTimer != nil {
 		s.delayTimer.Stop()
 		s.delayTimer = nil
 	}
 	s.childEventCb = nil
+	s.lock.Unlock()
 	s.serverWithTimeout.unsubscribe()
 }
 
@@ -376,7 +388,7 @@ func (s *serverWithLimits) canRequestNow() bool {
 	}
 	childEventCb := s.childEventCb
 	s.lock.Unlock()
-	if sendCanRequestAgain {
+	if sendCanRequestAgain && childEventCb != nil {
 		childEventCb(Event{Type: EvCanRequestAgain})
 	}
 	return canRequest
@@ -408,7 +420,7 @@ func (s *serverWithLimits) delay(delay time.Duration) {
 		}
 		childEventCb := s.childEventCb
 		s.lock.Unlock()
-		if sendCanRequestAgain {
+		if sendCanRequestAgain && childEventCb != nil {
 			childEventCb(Event{Type: EvCanRequestAgain})
 		}
 	})

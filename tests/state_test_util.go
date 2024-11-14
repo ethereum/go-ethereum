@@ -196,7 +196,7 @@ func (t *StateTest) checkError(subtest StateSubtest, err error) error {
 
 // Run executes a specific subtest and verifies the post-state and logs
 func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string, postCheck func(err error, st *StateTestState)) (result error) {
-	st, root, err := t.RunNoVerify(subtest, vmconfig, snapshotter, scheme)
+	st, root, _, err := t.RunNoVerify(subtest, vmconfig, snapshotter, scheme)
 	// Invoke the callback at the end of function for further analysis.
 	defer func() {
 		postCheck(result, &st)
@@ -222,16 +222,16 @@ func (t *StateTest) Run(subtest StateSubtest, vmconfig vm.Config, snapshotter bo
 	if logs := rlpHash(st.StateDB.Logs()); logs != common.Hash(post.Logs) {
 		return fmt.Errorf("post state logs hash mismatch: got %x, want %x", logs, post.Logs)
 	}
-	st.StateDB, _ = state.New(root, st.StateDB.Database(), st.Snapshots)
+	st.StateDB, _ = state.New(root, st.StateDB.Database())
 	return nil
 }
 
 // RunNoVerify runs a specific subtest and returns the statedb and post-state root.
 // Remember to call state.Close after verifying the test result!
-func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (st StateTestState, root common.Hash, err error) {
+func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapshotter bool, scheme string) (st StateTestState, root common.Hash, gasUsed uint64, err error) {
 	config, eips, err := GetChainConfig(subtest.Fork)
 	if err != nil {
-		return st, common.Hash{}, UnsupportedForkError{subtest.Fork}
+		return st, common.Hash{}, 0, UnsupportedForkError{subtest.Fork}
 	}
 	vmconfig.ExtraEips = eips
 
@@ -250,7 +250,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	msg, err := t.json.Tx.toMessage(post, baseFee)
 	if err != nil {
-		return st, common.Hash{}, err
+		return st, common.Hash{}, 0, err
 	}
 
 	{ // Blob transactions may be present after the Cancun fork.
@@ -260,7 +260,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		// Here, we just do this shortcut smaller fix, since state tests do not
 		// utilize those codepaths
 		if len(msg.BlobHashes)*params.BlobTxBlobGasPerBlob > params.MaxBlobGasPerBlock {
-			return st, common.Hash{}, errors.New("blob gas exceeds maximum")
+			return st, common.Hash{}, 0, errors.New("blob gas exceeds maximum")
 		}
 	}
 
@@ -269,10 +269,10 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 		var ttx types.Transaction
 		err := ttx.UnmarshalBinary(post.TxBytes)
 		if err != nil {
-			return st, common.Hash{}, err
+			return st, common.Hash{}, 0, err
 		}
 		if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
-			return st, common.Hash{}, err
+			return st, common.Hash{}, 0, err
 		}
 	}
 
@@ -297,19 +297,18 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	if tracer := vmconfig.Tracer; tracer != nil && tracer.OnTxStart != nil {
 		tracer.OnTxStart(evm.GetVMContext(), nil, msg.From)
-		if evm.Config.Tracer.OnTxEnd != nil {
-			defer func() {
-				evm.Config.Tracer.OnTxEnd(nil, err)
-			}()
-		}
 	}
 	// Execute the message.
 	snapshot := st.StateDB.Snapshot()
 	gaspool := new(core.GasPool)
 	gaspool.AddGas(block.GasLimit())
-	_, err = core.ApplyMessage(evm, msg, gaspool)
+	vmRet, err := core.ApplyMessage(evm, msg, gaspool)
 	if err != nil {
 		st.StateDB.RevertToSnapshot(snapshot)
+		if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
+			evm.Config.Tracer.OnTxEnd(nil, err)
+		}
+		return st, common.Hash{}, 0, err
 	}
 	// Add 0-value mining reward. This only makes a difference in the cases
 	// where
@@ -320,7 +319,11 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 
 	// Commit state mutations into database.
 	root, _ = st.StateDB.Commit(block.NumberU64(), config.IsEIP158(block.Number()))
-	return st, root, err
+	if tracer := evm.Config.Tracer; tracer != nil && tracer.OnTxEnd != nil {
+		receipt := &types.Receipt{GasUsed: vmRet.UsedGas}
+		tracer.OnTxEnd(receipt, nil)
+	}
+	return st, root, vmRet.UsedGas, nil
 }
 
 func (t *StateTest) gasLimit(subtest StateSubtest) uint64 {
@@ -409,8 +412,10 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 		if tx.MaxPriorityFeePerGas == nil {
 			tx.MaxPriorityFeePerGas = tx.MaxFeePerGas
 		}
-		gasPrice = math.BigMin(new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee),
-			tx.MaxFeePerGas)
+		gasPrice = new(big.Int).Add(tx.MaxPriorityFeePerGas, baseFee)
+		if gasPrice.Cmp(tx.MaxFeePerGas) > 0 {
+			gasPrice = tx.MaxFeePerGas
+		}
 	}
 	if gasPrice == nil {
 		return nil, errors.New("no gas price provided")
@@ -460,8 +465,8 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		tconf.PathDB = pathdb.Defaults
 	}
 	triedb := triedb.NewDatabase(db, tconf)
-	sdb := state.NewDatabaseWithNodeDB(db, triedb)
-	statedb, _ := state.New(types.EmptyRootHash, sdb, nil)
+	sdb := state.NewDatabase(triedb, nil)
+	statedb, _ := state.New(types.EmptyRootHash, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code)
 		statedb.SetNonce(addr, a.Nonce)
@@ -484,7 +489,8 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	statedb, _ = state.New(root, sdb, snaps)
+	sdb = state.NewDatabase(triedb, snaps)
+	statedb, _ = state.New(root, sdb)
 	return StateTestState{statedb, triedb, snaps}
 }
 

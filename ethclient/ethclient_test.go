@@ -14,18 +14,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethclient
+package ethclient_test
 
 import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
@@ -33,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -40,154 +43,33 @@ import (
 
 // Verify that Client implements the ethereum interfaces.
 var (
-	_ = ethereum.ChainReader(&Client{})
-	_ = ethereum.TransactionReader(&Client{})
-	_ = ethereum.ChainStateReader(&Client{})
-	_ = ethereum.ChainSyncReader(&Client{})
-	_ = ethereum.ContractCaller(&Client{})
-	_ = ethereum.GasEstimator(&Client{})
-	_ = ethereum.GasPricer(&Client{})
-	_ = ethereum.LogFilterer(&Client{})
-	_ = ethereum.PendingStateReader(&Client{})
-	// _ = ethereum.PendingStateEventer(&Client{})
-	_ = ethereum.PendingContractCaller(&Client{})
+	_ = ethereum.ChainReader(&ethclient.Client{})
+	_ = ethereum.TransactionReader(&ethclient.Client{})
+	_ = ethereum.ChainStateReader(&ethclient.Client{})
+	_ = ethereum.ChainSyncReader(&ethclient.Client{})
+	_ = ethereum.ContractCaller(&ethclient.Client{})
+	_ = ethereum.GasEstimator(&ethclient.Client{})
+	_ = ethereum.GasPricer(&ethclient.Client{})
+	_ = ethereum.LogFilterer(&ethclient.Client{})
+	_ = ethereum.PendingStateReader(&ethclient.Client{})
+	// _ = ethereum.PendingStateEventer(&ethclient.Client{})
+	_ = ethereum.PendingContractCaller(&ethclient.Client{})
 )
 
-func TestToFilterArg(t *testing.T) {
-	blockHashErr := errors.New("cannot specify both BlockHash and FromBlock/ToBlock")
-	addresses := []common.Address{
-		common.HexToAddress("0xD36722ADeC3EdCB29c8e7b5a47f352D701393462"),
-	}
-	blockHash := common.HexToHash(
-		"0xeb94bb7d78b73657a9d7a99792413f50c0a45c51fc62bdcb08a53f18e9a2b4eb",
-	)
-
-	for _, testCase := range []struct {
-		name   string
-		input  ethereum.FilterQuery
-		output interface{}
-		err    error
-	}{
-		{
-			"without BlockHash",
-			ethereum.FilterQuery{
-				Addresses: addresses,
-				FromBlock: big.NewInt(1),
-				ToBlock:   big.NewInt(2),
-				Topics:    [][]common.Hash{},
-			},
-			map[string]interface{}{
-				"address":   addresses,
-				"fromBlock": "0x1",
-				"toBlock":   "0x2",
-				"topics":    [][]common.Hash{},
-			},
-			nil,
-		},
-		{
-			"with nil fromBlock and nil toBlock",
-			ethereum.FilterQuery{
-				Addresses: addresses,
-				Topics:    [][]common.Hash{},
-			},
-			map[string]interface{}{
-				"address":   addresses,
-				"fromBlock": "0x0",
-				"toBlock":   "latest",
-				"topics":    [][]common.Hash{},
-			},
-			nil,
-		},
-		{
-			"with negative fromBlock and negative toBlock",
-			ethereum.FilterQuery{
-				Addresses: addresses,
-				FromBlock: big.NewInt(-1),
-				ToBlock:   big.NewInt(-1),
-				Topics:    [][]common.Hash{},
-			},
-			map[string]interface{}{
-				"address":   addresses,
-				"fromBlock": "pending",
-				"toBlock":   "pending",
-				"topics":    [][]common.Hash{},
-			},
-			nil,
-		},
-		{
-			"with blockhash",
-			ethereum.FilterQuery{
-				Addresses: addresses,
-				BlockHash: &blockHash,
-				Topics:    [][]common.Hash{},
-			},
-			map[string]interface{}{
-				"address":   addresses,
-				"blockHash": blockHash,
-				"topics":    [][]common.Hash{},
-			},
-			nil,
-		},
-		{
-			"with blockhash and from block",
-			ethereum.FilterQuery{
-				Addresses: addresses,
-				BlockHash: &blockHash,
-				FromBlock: big.NewInt(1),
-				Topics:    [][]common.Hash{},
-			},
-			nil,
-			blockHashErr,
-		},
-		{
-			"with blockhash and to block",
-			ethereum.FilterQuery{
-				Addresses: addresses,
-				BlockHash: &blockHash,
-				ToBlock:   big.NewInt(1),
-				Topics:    [][]common.Hash{},
-			},
-			nil,
-			blockHashErr,
-		},
-		{
-			"with blockhash and both from / to block",
-			ethereum.FilterQuery{
-				Addresses: addresses,
-				BlockHash: &blockHash,
-				FromBlock: big.NewInt(1),
-				ToBlock:   big.NewInt(2),
-				Topics:    [][]common.Hash{},
-			},
-			nil,
-			blockHashErr,
-		},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			output, err := toFilterArg(testCase.input)
-			if (testCase.err == nil) != (err == nil) {
-				t.Fatalf("expected error %v but got %v", testCase.err, err)
-			}
-			if testCase.err != nil {
-				if testCase.err.Error() != err.Error() {
-					t.Fatalf("expected error %v but got %v", testCase.err, err)
-				}
-			} else if !reflect.DeepEqual(testCase.output, output) {
-				t.Fatalf("expected filter arg %v but got %v", testCase.output, output)
-			}
-		})
-	}
-}
-
 var (
-	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testAddr    = crypto.PubkeyToAddress(testKey.PublicKey)
-	testBalance = big.NewInt(2e15)
+	testKey, _         = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testAddr           = crypto.PubkeyToAddress(testKey.PublicKey)
+	testBalance        = big.NewInt(2e15)
+	revertContractAddr = common.HexToAddress("290f1b36649a61e369c6276f6d29463335b4400c")
+	revertCode         = common.FromHex("7f08c379a0000000000000000000000000000000000000000000000000000000006000526020600452600a6024527f75736572206572726f7200000000000000000000000000000000000000000000604452604e6000fd")
 )
 
 var genesis = &core.Genesis{
-	Config:    params.AllEthashProtocolChanges,
-	Alloc:     types.GenesisAlloc{testAddr: {Balance: testBalance}},
+	Config: params.AllEthashProtocolChanges,
+	Alloc: types.GenesisAlloc{
+		testAddr:           {Balance: testBalance},
+		revertContractAddr: {Code: revertCode},
+	},
 	ExtraData: []byte("test genesis"),
 	Timestamp: 9000,
 	BaseFee:   big.NewInt(params.InitialBaseFee),
@@ -209,27 +91,30 @@ var testTx2 = types.MustSignNewTx(testKey, types.LatestSigner(genesis.Config), &
 	To:       &common.Address{2},
 })
 
-func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
+func newTestBackend(config *node.Config) (*node.Node, []*types.Block, error) {
 	// Generate test chain.
 	blocks := generateTestChain()
 
 	// Create node
-	n, err := node.New(&node.Config{})
+	if config == nil {
+		config = new(node.Config)
+	}
+	n, err := node.New(config)
 	if err != nil {
-		t.Fatalf("can't create new node: %v", err)
+		return nil, nil, fmt.Errorf("can't create new node: %v", err)
 	}
 	// Create Ethereum Service
-	config := &ethconfig.Config{Genesis: genesis}
-	ethservice, err := eth.New(n, config)
+	ecfg := &ethconfig.Config{Genesis: genesis, RPCGasCap: 1000000}
+	ethservice, err := eth.New(n, ecfg)
 	if err != nil {
-		t.Fatalf("can't create new ethereum service: %v", err)
+		return nil, nil, fmt.Errorf("can't create new ethereum service: %v", err)
 	}
 	// Import the test chain.
 	if err := n.Start(); err != nil {
-		t.Fatalf("can't start test node: %v", err)
+		return nil, nil, fmt.Errorf("can't start test node: %v", err)
 	}
 	if _, err := ethservice.BlockChain().InsertChain(blocks[1:]); err != nil {
-		t.Fatalf("can't import test blocks: %v", err)
+		return nil, nil, fmt.Errorf("can't import test blocks: %v", err)
 	}
 	// Ensure the tx indexing is fully generated
 	for ; ; time.Sleep(time.Millisecond * 100) {
@@ -238,7 +123,7 @@ func newTestBackend(t *testing.T) (*node.Node, []*types.Block) {
 			break
 		}
 	}
-	return n, blocks
+	return n, blocks, nil
 }
 
 func generateTestChain() []*types.Block {
@@ -256,7 +141,10 @@ func generateTestChain() []*types.Block {
 }
 
 func TestEthClient(t *testing.T) {
-	backend, chain := newTestBackend(t)
+	backend, chain, err := newTestBackend(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client := backend.Attach()
 	defer backend.Close()
 	defer client.Close()
@@ -324,7 +212,7 @@ func testHeader(t *testing.T, chain []*types.Block, client *rpc.Client) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			ec := NewClient(client)
+			ec := ethclient.NewClient(client)
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -373,7 +261,7 @@ func testBalanceAt(t *testing.T, client *rpc.Client) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			ec := NewClient(client)
+			ec := ethclient.NewClient(client)
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -389,7 +277,7 @@ func testBalanceAt(t *testing.T, client *rpc.Client) {
 }
 
 func testTransactionInBlock(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := ethclient.NewClient(client)
 
 	// Get current block by number.
 	block, err := ec.BlockByNumber(context.Background(), nil)
@@ -421,7 +309,7 @@ func testTransactionInBlock(t *testing.T, client *rpc.Client) {
 }
 
 func testChainID(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := ethclient.NewClient(client)
 	id, err := ec.ChainID(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -432,7 +320,7 @@ func testChainID(t *testing.T, client *rpc.Client) {
 }
 
 func testGetBlock(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := ethclient.NewClient(client)
 
 	// Get current block number
 	blockNumber, err := ec.BlockNumber(context.Background())
@@ -477,7 +365,7 @@ func testGetBlock(t *testing.T, client *rpc.Client) {
 }
 
 func testStatusFunctions(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := ethclient.NewClient(client)
 
 	// Sync progress
 	progress, err := ec.SyncProgress(context.Background())
@@ -540,7 +428,7 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 }
 
 func testCallContractAtHash(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := ethclient.NewClient(client)
 
 	// EstimateGas
 	msg := ethereum.CallMsg{
@@ -567,7 +455,7 @@ func testCallContractAtHash(t *testing.T, client *rpc.Client) {
 }
 
 func testCallContract(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := ethclient.NewClient(client)
 
 	// EstimateGas
 	msg := ethereum.CallMsg{
@@ -594,7 +482,7 @@ func testCallContract(t *testing.T, client *rpc.Client) {
 }
 
 func testAtFunctions(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := ethclient.NewClient(client)
 
 	block, err := ec.HeaderByNumber(context.Background(), big.NewInt(1))
 	if err != nil {
@@ -697,7 +585,7 @@ func testAtFunctions(t *testing.T, client *rpc.Client) {
 }
 
 func testTransactionSender(t *testing.T, client *rpc.Client) {
-	ec := NewClient(client)
+	ec := ethclient.NewClient(client)
 	ctx := context.Background()
 
 	// Retrieve testTx1 via RPC.
@@ -737,7 +625,7 @@ func testTransactionSender(t *testing.T, client *rpc.Client) {
 	}
 }
 
-func sendTransaction(ec *Client) error {
+func sendTransaction(ec *ethclient.Client) error {
 	chainID, err := ec.ChainID(context.Background())
 	if err != nil {
 		return err
@@ -759,4 +647,41 @@ func sendTransaction(ec *Client) error {
 		return err
 	}
 	return ec.SendTransaction(context.Background(), tx)
+}
+
+// Here we show how to get the error message of reverted contract call.
+func ExampleRevertErrorData() {
+	// First create an ethclient.Client instance.
+	ctx := context.Background()
+	ec, _ := ethclient.DialContext(ctx, exampleNode.HTTPEndpoint())
+
+	// Call the contract.
+	// Note we expect the call to return an error.
+	contract := common.HexToAddress("290f1b36649a61e369c6276f6d29463335b4400c")
+	call := ethereum.CallMsg{To: &contract, Gas: 30000}
+	result, err := ec.CallContract(ctx, call, nil)
+	if len(result) > 0 {
+		panic("got result")
+	}
+	if err == nil {
+		panic("call did not return error")
+	}
+
+	// Extract the low-level revert data from the error.
+	revertData, ok := ethclient.RevertErrorData(err)
+	if !ok {
+		panic("unpacking revert failed")
+	}
+	fmt.Printf("revert: %x\n", revertData)
+
+	// Parse the revert data to obtain the error message.
+	message, err := abi.UnpackRevert(revertData)
+	if err != nil {
+		panic("parsing ABI error failed: " + err.Error())
+	}
+	fmt.Println("message:", message)
+
+	// Output:
+	// revert: 08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a75736572206572726f72
+	// message: user error
 }

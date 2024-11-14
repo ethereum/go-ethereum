@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -80,7 +81,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i i
 		SnapshotLimit:     0,
 		TrieDirtyDisabled: true, // Archive mode
 	}
-	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("failed to create tester chain: %v", err)
 	}
@@ -311,7 +312,7 @@ func TestTraceCall(t *testing.T) {
 			config:    &TraceCallConfig{TxIndex: uintPtr(1)},
 			expectErr: fmt.Errorf("tracing failed: insufficient funds for gas * price + value: address %s have 1000000000000000000 want 1000000000000000100", accounts[2].addr),
 		},
-		// After the target transaction, should be succeed
+		// After the target transaction, should be succeeded
 		{
 			blockNumber: rpc.BlockNumber(genBlocks - 1),
 			call: ethapi.TransactionArgs{
@@ -842,7 +843,7 @@ func TestTracingWithOverrides(t *testing.T) {
 							byte(vm.PUSH1), 00,
 							byte(vm.RETURN),
 						}),
-						StateDiff: &map[common.Hash]common.Hash{
+						StateDiff: map[common.Hash]common.Hash{
 							common.HexToHash("0x03"): common.HexToHash("0x11"),
 						},
 					},
@@ -897,9 +898,9 @@ func newAccounts(n int) (accounts []Account) {
 	return accounts
 }
 
-func newRPCBalance(balance *big.Int) **hexutil.Big {
+func newRPCBalance(balance *big.Int) *hexutil.Big {
 	rpcBalance := (*hexutil.Big)(balance)
-	return &rpcBalance
+	return rpcBalance
 }
 
 func newRPCBytes(bytes []byte) *hexutil.Bytes {
@@ -907,7 +908,7 @@ func newRPCBytes(bytes []byte) *hexutil.Bytes {
 	return &rpcBytes
 }
 
-func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.Hash {
+func newStates(keys []common.Hash, vals []common.Hash) map[common.Hash]common.Hash {
 	if len(keys) != len(vals) {
 		panic("invalid input")
 	}
@@ -915,7 +916,7 @@ func newStates(keys []common.Hash, vals []common.Hash) *map[common.Hash]common.H
 	for i := 0; i < len(keys); i++ {
 		m[keys[i]] = vals[i]
 	}
-	return &m
+	return m
 }
 
 func TestTraceChain(t *testing.T) {
@@ -991,6 +992,93 @@ func TestTraceChain(t *testing.T) {
 
 		if nref, nrel := ref.Load(), rel.Load(); nref != nrel {
 			t.Errorf("Ref and deref actions are not equal, ref %d rel %d", nref, nrel)
+		}
+	}
+}
+
+// newTestMergedBackend creates a post-merge chain
+func newTestMergedBackend(t *testing.T, n int, gspec *core.Genesis, generator func(i int, b *core.BlockGen)) *testBackend {
+	backend := &testBackend{
+		chainConfig: gspec.Config,
+		engine:      beacon.NewFaker(),
+		chaindb:     rawdb.NewMemoryDatabase(),
+	}
+	// Generate blocks for testing
+	_, blocks, _ := core.GenerateChainWithGenesis(gspec, backend.engine, n, generator)
+
+	// Import the canonical chain
+	cacheConfig := &core.CacheConfig{
+		TrieCleanLimit:    256,
+		TrieDirtyLimit:    256,
+		TrieTimeLimit:     5 * time.Minute,
+		SnapshotLimit:     0,
+		TrieDirtyDisabled: true, // Archive mode
+	}
+	chain, err := core.NewBlockChain(backend.chaindb, cacheConfig, gspec, nil, backend.engine, vm.Config{}, nil)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	backend.chain = chain
+	return backend
+}
+
+func TestTraceBlockWithBasefee(t *testing.T) {
+	t.Parallel()
+	accounts := newAccounts(1)
+	target := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	genesis := &core.Genesis{
+		Config: params.AllDevChainProtocolChanges,
+		Alloc: types.GenesisAlloc{
+			accounts[0].addr: {Balance: big.NewInt(1 * params.Ether)},
+			target: {Nonce: 1, Code: []byte{
+				byte(vm.BASEFEE), byte(vm.STOP),
+			}},
+		},
+	}
+	genBlocks := 1
+	signer := types.HomesteadSigner{}
+	var txHash common.Hash
+	var baseFee = new(big.Int)
+	backend := newTestMergedBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+			Nonce:    uint64(i),
+			To:       &target,
+			Value:    big.NewInt(0),
+			Gas:      5 * params.TxGas,
+			GasPrice: b.BaseFee(),
+			Data:     nil}),
+			signer, accounts[0].key)
+		b.AddTx(tx)
+		txHash = tx.Hash()
+		baseFee.Set(b.BaseFee())
+	})
+	defer backend.chain.Stop()
+	api := NewAPI(backend)
+
+	var testSuite = []struct {
+		blockNumber rpc.BlockNumber
+		config      *TraceConfig
+		want        string
+	}{
+		// Trace head block
+		{
+			blockNumber: rpc.BlockNumber(genBlocks),
+			want:        fmt.Sprintf(`[{"txHash":"%#x","result":{"gas":21002,"failed":false,"returnValue":"","structLogs":[{"pc":0,"op":"BASEFEE","gas":84000,"gasCost":2,"depth":1,"stack":[]},{"pc":1,"op":"STOP","gas":83998,"gasCost":0,"depth":1,"stack":["%#x"]}]}}]`, txHash, baseFee),
+		},
+	}
+	for i, tc := range testSuite {
+		result, err := api.TraceBlockByNumber(context.Background(), tc.blockNumber, tc.config)
+		if err != nil {
+			t.Errorf("test %d, want no error, have %v", i, err)
+			continue
+		}
+		have, _ := json.Marshal(result)
+		want := tc.want
+		if string(have) != want {
+			t.Errorf("test %d, result mismatch\nhave: %v\nwant: %v\n", i, string(have), want)
 		}
 	}
 }

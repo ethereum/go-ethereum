@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -283,9 +284,38 @@ func TestDecodeErrorsV5(t *testing.T) {
 	b = make([]byte, 63)
 	net.nodeA.expectDecodeErr(t, errInvalidHeader, b)
 
-	// TODO some more tests would be nice :)
-	// - check invalid authdata sizes
-	// - check invalid handshake data sizes
+	t.Run("invalid-handshake-datasize", func(t *testing.T) {
+		requiredNumber := 108
+
+		testDataFile := filepath.Join("testdata", "v5.1-ping-handshake"+".txt")
+		enc := hexFile(testDataFile)
+		//delete some byte from handshake to make it invalid
+		enc = enc[:len(enc)-requiredNumber]
+		net.nodeB.expectDecodeErr(t, errMsgTooShort, enc)
+	})
+
+	t.Run("invalid-auth-datasize", func(t *testing.T) {
+		testPacket := []byte{}
+		testDataFiles := []string{"v5.1-whoareyou", "v5.1-ping-handshake"}
+		for counter, name := range testDataFiles {
+			file := filepath.Join("testdata", name+".txt")
+			enc := hexFile(file)
+			if counter == 0 {
+				//make whoareyou header
+				testPacket = enc[:sizeofStaticPacketData-1]
+				testPacket = append(testPacket, 255)
+			}
+			if counter == 1 {
+				//append invalid auth size
+				testPacket = append(testPacket, enc[sizeofStaticPacketData:]...)
+			}
+		}
+
+		wantErr := "invalid auth size"
+		if _, err := net.nodeB.decode(testPacket); strings.HasSuffix(err.Error(), wantErr) {
+			t.Fatal(fmt.Errorf("(%s) got err %q, want %q", net.nodeB.ln.ID().TerminalString(), err, wantErr))
+		}
+	})
 }
 
 // This test checks that all test vectors can be decoded.
@@ -365,7 +395,6 @@ func TestTestVectorsV5(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(test.name, func(t *testing.T) {
 			net := newHandshakeTest()
 			defer net.close()
@@ -576,7 +605,7 @@ func (n *handshakeTestNode) n() *enode.Node {
 }
 
 func (n *handshakeTestNode) addr() string {
-	return n.ln.Node().IP().String()
+	return n.ln.Node().IPAddr().String()
 }
 
 func (n *handshakeTestNode) id() enode.ID {

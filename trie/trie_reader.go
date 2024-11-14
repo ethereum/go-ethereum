@@ -20,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
@@ -28,19 +27,19 @@ import (
 // for concurrent usage.
 type trieReader struct {
 	owner  common.Hash
-	reader database.Reader
+	reader database.NodeReader
 	banned map[string]struct{} // Marker to prevent node from being accessed, for tests
 }
 
 // newTrieReader initializes the trie reader with the given node reader.
-func newTrieReader(stateRoot, owner common.Hash, db database.Database) (*trieReader, error) {
+func newTrieReader(stateRoot, owner common.Hash, db database.NodeDatabase) (*trieReader, error) {
 	if stateRoot == (common.Hash{}) || stateRoot == types.EmptyRootHash {
 		if stateRoot == (common.Hash{}) {
 			log.Error("Zero state root hash!")
 		}
 		return &trieReader{owner: owner}, nil
 	}
-	reader, err := db.Reader(stateRoot)
+	reader, err := db.NodeReader(stateRoot)
 	if err != nil {
 		return nil, &MissingNodeError{Owner: owner, NodeHash: stateRoot, err: err}
 	}
@@ -56,6 +55,9 @@ func newEmptyReader() *trieReader {
 // node retrieves the rlp-encoded trie node with the provided trie node
 // information. An MissingNodeError will be returned in case the node is
 // not found or any error is encountered.
+//
+// Don't modify the returned byte slice since it's not deep-copied and
+// still be referenced by database.
 func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
 	// Perform the logics in tests for preventing trie node access.
 	if r.banned != nil {
@@ -71,24 +73,4 @@ func (r *trieReader) node(path []byte, hash common.Hash) ([]byte, error) {
 		return nil, &MissingNodeError{Owner: r.owner, NodeHash: hash, Path: path, err: err}
 	}
 	return blob, nil
-}
-
-// MerkleLoader implements triestate.TrieLoader for constructing tries.
-type MerkleLoader struct {
-	db database.Database
-}
-
-// NewMerkleLoader creates the merkle trie loader.
-func NewMerkleLoader(db database.Database) *MerkleLoader {
-	return &MerkleLoader{db: db}
-}
-
-// OpenTrie opens the main account trie.
-func (l *MerkleLoader) OpenTrie(root common.Hash) (triestate.Trie, error) {
-	return New(TrieID(root), l.db)
-}
-
-// OpenStorageTrie opens the storage trie of an account.
-func (l *MerkleLoader) OpenStorageTrie(stateRoot common.Hash, addrHash, root common.Hash) (triestate.Trie, error) {
-	return New(StorageTrieID(stateRoot, addrHash, root), l.db)
 }

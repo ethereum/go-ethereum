@@ -78,7 +78,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	})
 
 	// Initialize BlockChain.
-	chain, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}
@@ -162,8 +162,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	}
 
 	// Now import Era.
-	freezer := t.TempDir()
-	db2, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), freezer, "", false)
+	db2, err := rawdb.NewDatabaseWithFreezer(rawdb.NewMemoryDatabase(), "", "", false)
 	if err != nil {
 		panic(err)
 	}
@@ -172,7 +171,7 @@ func TestHistoryImportAndExport(t *testing.T) {
 	})
 
 	genesis.MustCommit(db2, triedb.NewDatabase(db, triedb.HashDefaults))
-	imported, err := core.NewBlockChain(db2, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil, nil)
+	imported, err := core.NewBlockChain(db2, nil, genesis, nil, ethash.NewFaker(), vm.Config{}, nil)
 	if err != nil {
 		t.Fatalf("unable to initialize chain: %v", err)
 	}

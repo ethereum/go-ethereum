@@ -28,11 +28,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie/triestate"
 )
 
 // randomStateSet generates a random state change set.
-func randomStateSet(n int) *triestate.Set {
+func randomStateSet(n int) (map[common.Address][]byte, map[common.Address]map[common.Hash][]byte) {
 	var (
 		accounts = make(map[common.Address][]byte)
 		storages = make(map[common.Address]map[common.Hash][]byte)
@@ -47,11 +46,12 @@ func randomStateSet(n int) *triestate.Set {
 		account := generateAccount(types.EmptyRootHash)
 		accounts[addr] = types.SlimAccountRLP(account)
 	}
-	return triestate.New(accounts, storages)
+	return accounts, storages
 }
 
 func makeHistory() *history {
-	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, randomStateSet(3))
+	accounts, storages := randomStateSet(3)
+	return newHistory(testrand.Hash(), types.EmptyRootHash, 0, accounts, storages)
 }
 
 func makeHistories(n int) []*history {
@@ -61,7 +61,8 @@ func makeHistories(n int) []*history {
 	)
 	for i := 0; i < n; i++ {
 		root := testrand.Hash()
-		h := newHistory(root, parent, uint64(i), randomStateSet(3))
+		accounts, storages := randomStateSet(3)
+		h := newHistory(root, parent, uint64(i), accounts, storages)
 		parent = root
 		result = append(result, h)
 	}
@@ -102,7 +103,7 @@ func TestEncodeDecodeHistory(t *testing.T) {
 	}
 }
 
-func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer *rawdb.ResettableFreezer, id uint64, root common.Hash, exist bool) {
+func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, id uint64, root common.Hash, exist bool) {
 	blob := rawdb.ReadStateHistoryMeta(freezer, id)
 	if exist && len(blob) == 0 {
 		t.Fatalf("Failed to load trie history, %d", id)
@@ -118,7 +119,7 @@ func checkHistory(t *testing.T, db ethdb.KeyValueReader, freezer *rawdb.Resettab
 	}
 }
 
-func checkHistoriesInRange(t *testing.T, db ethdb.KeyValueReader, freezer *rawdb.ResettableFreezer, from, to uint64, roots []common.Hash, exist bool) {
+func checkHistoriesInRange(t *testing.T, db ethdb.KeyValueReader, freezer ethdb.AncientReader, from, to uint64, roots []common.Hash, exist bool) {
 	for i, j := from, 0; i <= to; i, j = i+1, j+1 {
 		checkHistory(t, db, freezer, i, roots[j], exist)
 	}
@@ -129,7 +130,7 @@ func TestTruncateHeadHistory(t *testing.T) {
 		roots      []common.Hash
 		hs         = makeHistories(10)
 		db         = rawdb.NewMemoryDatabase()
-		freezer, _ = openFreezer(t.TempDir(), false)
+		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
 
@@ -157,7 +158,7 @@ func TestTruncateTailHistory(t *testing.T) {
 		roots      []common.Hash
 		hs         = makeHistories(10)
 		db         = rawdb.NewMemoryDatabase()
-		freezer, _ = openFreezer(t.TempDir(), false)
+		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
 
@@ -200,7 +201,7 @@ func TestTruncateTailHistories(t *testing.T) {
 			roots      []common.Hash
 			hs         = makeHistories(10)
 			db         = rawdb.NewMemoryDatabase()
-			freezer, _ = openFreezer(t.TempDir()+fmt.Sprintf("%d", i), false)
+			freezer, _ = rawdb.NewStateFreezer(t.TempDir()+fmt.Sprintf("%d", i), false, false)
 		)
 		defer freezer.Close()
 
@@ -228,7 +229,7 @@ func TestTruncateOutOfRange(t *testing.T) {
 	var (
 		hs         = makeHistories(10)
 		db         = rawdb.NewMemoryDatabase()
-		freezer, _ = openFreezer(t.TempDir(), false)
+		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false, false)
 	)
 	defer freezer.Close()
 
@@ -266,11 +267,6 @@ func TestTruncateOutOfRange(t *testing.T) {
 			t.Errorf("Unexpected error, want: %v, got: %v", c.expErr, gotErr)
 		}
 	}
-}
-
-// openFreezer initializes the freezer instance for storing state histories.
-func openFreezer(datadir string, readOnly bool) (*rawdb.ResettableFreezer, error) {
-	return rawdb.NewStateFreezer(datadir, readOnly)
 }
 
 func compareSet[k comparable](a, b map[k][]byte) bool {

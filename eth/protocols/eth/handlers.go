@@ -42,6 +42,9 @@ func handleGetBlockHeaders(backend Backend, msg Decoder, peer *Peer) error {
 // ServiceGetBlockHeadersQuery assembles the response to a header query. It is
 // exposed to allow external packages to test protocol behavior.
 func ServiceGetBlockHeadersQuery(chain *core.BlockChain, query *GetBlockHeadersRequest, peer *Peer) []rlp.RawValue {
+	if query.Amount == 0 {
+		return nil
+	}
 	if query.Skip == 0 {
 		// The fast path: when the request is for a contiguous segment of headers.
 		return serviceContiguousBlockHeaderQuery(chain, query)
@@ -190,7 +193,7 @@ func serviceContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHe
 		return headers
 	}
 	{ // Last mode: deliver ancestors of H
-		for i := uint64(1); header != nil && i < count; i++ {
+		for i := uint64(1); i < count; i++ {
 			header = chain.GetHeaderByHash(header.ParentHash)
 			if header == nil {
 				break

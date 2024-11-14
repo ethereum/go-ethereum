@@ -21,7 +21,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -57,24 +56,32 @@ type Config struct {
 // sets defaults on the config
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
+		var (
+			shanghaiTime = uint64(0)
+			cancunTime   = uint64(0)
+		)
 		cfg.ChainConfig = &params.ChainConfig{
-			ChainID:             big.NewInt(1),
-			HomesteadBlock:      new(big.Int),
-			DAOForkBlock:        new(big.Int),
-			DAOForkSupport:      false,
-			EIP150Block:         new(big.Int),
-			EIP155Block:         new(big.Int),
-			EIP158Block:         new(big.Int),
-			ByzantiumBlock:      new(big.Int),
-			ConstantinopleBlock: new(big.Int),
-			PetersburgBlock:     new(big.Int),
-			IstanbulBlock:       new(big.Int),
-			MuirGlacierBlock:    new(big.Int),
-			BerlinBlock:         new(big.Int),
-			LondonBlock:         new(big.Int),
-		}
+			ChainID:                 big.NewInt(1),
+			HomesteadBlock:          new(big.Int),
+			DAOForkBlock:            new(big.Int),
+			DAOForkSupport:          false,
+			EIP150Block:             new(big.Int),
+			EIP155Block:             new(big.Int),
+			EIP158Block:             new(big.Int),
+			ByzantiumBlock:          new(big.Int),
+			ConstantinopleBlock:     new(big.Int),
+			PetersburgBlock:         new(big.Int),
+			IstanbulBlock:           new(big.Int),
+			MuirGlacierBlock:        new(big.Int),
+			BerlinBlock:             new(big.Int),
+			LondonBlock:             new(big.Int),
+			ArrowGlacierBlock:       nil,
+			GrayGlacierBlock:        nil,
+			TerminalTotalDifficulty: big.NewInt(0),
+			MergeNetsplitBlock:      nil,
+			ShanghaiTime:            &shanghaiTime,
+			CancunTime:              &cancunTime}
 	}
-
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
 	}
@@ -101,6 +108,7 @@ func setDefaults(cfg *Config) {
 	if cfg.BlobBaseFee == nil {
 		cfg.BlobBaseFee = big.NewInt(params.BlobTxMinBlobGasprice)
 	}
+	cfg.Random = &(common.Hash{})
 }
 
 // Execute executes the code using the input as call data during the execution.
@@ -115,7 +123,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	}
 	var (
 		address = common.BytesToAddress([]byte("contract"))
@@ -134,13 +142,16 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	// set the receiver's (the executing contract) code for execution.
 	cfg.State.SetCode(address, code)
 	// Call the code with the given configuration.
-	ret, _, err := vmenv.Call(
+	ret, leftOverGas, err := vmenv.Call(
 		sender,
 		common.BytesToAddress([]byte("contract")),
 		input,
 		cfg.GasLimit,
 		uint256.MustFromBig(cfg.Value),
 	)
+	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
+		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
+	}
 	return ret, cfg.State, err
 }
 
@@ -152,7 +163,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 	setDefaults(cfg)
 
 	if cfg.State == nil {
-		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		cfg.State, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	}
 	var (
 		vmenv  = NewEnv(cfg)
@@ -173,6 +184,9 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		cfg.GasLimit,
 		uint256.MustFromBig(cfg.Value),
 	)
+	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
+		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
+	}
 	return code, address, leftOverGas, err
 }
 
@@ -206,5 +220,8 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		cfg.GasLimit,
 		uint256.MustFromBig(cfg.Value),
 	)
+	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
+		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - leftOverGas}, err)
+	}
 	return ret, leftOverGas, err
 }

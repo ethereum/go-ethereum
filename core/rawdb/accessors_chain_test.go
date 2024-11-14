@@ -388,10 +388,10 @@ func TestBlockReceiptStorage(t *testing.T) {
 	// Insert the receipt slice into the database and check presence
 	WriteReceipts(db, hash, 0, receipts)
 	if rs := ReadReceipts(db, hash, 0, 0, params.TestChainConfig); len(rs) == 0 {
-		t.Fatalf("no receipts returned")
+		t.Fatal("no receipts returned")
 	} else {
 		if err := checkReceiptsRLP(rs, receipts); err != nil {
-			t.Fatalf(err.Error())
+			t.Fatal(err)
 		}
 	}
 	// Delete the body and ensure that the receipts are no longer returned (metadata can't be recomputed)
@@ -401,7 +401,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 	}
 	// Ensure that receipts without metadata can be returned without the block body too
 	if err := checkReceiptsRLP(ReadRawReceipts(db, hash, 0), receipts); err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err)
 	}
 	// Sanity check that body alone without the receipt is a full purge
 	WriteBody(db, hash, 0, body)
@@ -640,7 +640,7 @@ func makeTestBlocks(nblock int, txsPerBlock int) []*types.Block {
 			Number: big.NewInt(int64(i)),
 			Extra:  []byte("test block"),
 		}
-		blocks[i] = types.NewBlockWithHeader(header).WithBody(txs, nil)
+		blocks[i] = types.NewBlockWithHeader(header).WithBody(types.Body{Transactions: txs})
 		blocks[i].Hash() // pre-cache the block hash
 	}
 	return blocks
@@ -649,11 +649,15 @@ func makeTestBlocks(nblock int, txsPerBlock int) []*types.Block {
 // makeTestReceipts creates fake receipts for the ancient write benchmark.
 func makeTestReceipts(n int, nPerBlock int) []types.Receipts {
 	receipts := make([]*types.Receipt, nPerBlock)
+	var logs []*types.Log
+	for i := 0; i < 5; i++ {
+		logs = append(logs, new(types.Log))
+	}
 	for i := 0; i < len(receipts); i++ {
 		receipts[i] = &types.Receipt{
 			Status:            types.ReceiptStatusSuccessful,
 			CumulativeGasUsed: 0x888888888,
-			Logs:              make([]*types.Log, 5),
+			Logs:              logs,
 		}
 	}
 	allReceipts := make([]types.Receipts, n)
@@ -794,7 +798,7 @@ func TestDeriveLogFields(t *testing.T) {
 		}),
 	}
 	// Create the corresponding receipts
-	receipts := []*receiptLogs{
+	receipts := []*types.Receipt{
 		{
 			Logs: []*types.Log{
 				{Address: common.BytesToAddress([]byte{0x11})},
@@ -818,9 +822,7 @@ func TestDeriveLogFields(t *testing.T) {
 	// Derive log metadata fields
 	number := big.NewInt(1)
 	hash := common.BytesToHash([]byte{0x03, 0x14})
-	if err := deriveLogFields(receipts, hash, number.Uint64(), txs); err != nil {
-		t.Fatal(err)
-	}
+	types.Receipts(receipts).DeriveFields(params.TestChainConfig, hash, number.Uint64(), 0, big.NewInt(0), big.NewInt(0), txs)
 
 	// Iterate over all the computed fields and check that they're correct
 	logIndex := uint(0)

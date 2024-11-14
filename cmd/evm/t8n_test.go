@@ -234,7 +234,7 @@ func TestT8n(t *testing.T) {
 		{ // Test post-merge transition
 			base: "./testdata/24",
 			input: t8nInput{
-				"alloc.json", "txs.json", "env.json", "Merge", "",
+				"alloc.json", "txs.json", "env.json", "Paris", "",
 			},
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
@@ -242,7 +242,7 @@ func TestT8n(t *testing.T) {
 		{ // Test post-merge transition where input is missing random
 			base: "./testdata/24",
 			input: t8nInput{
-				"alloc.json", "txs.json", "env-missingrandom.json", "Merge", "",
+				"alloc.json", "txs.json", "env-missingrandom.json", "Paris", "",
 			},
 			output:      t8nOutput{alloc: false, result: false},
 			expExitCode: 3,
@@ -250,7 +250,7 @@ func TestT8n(t *testing.T) {
 		{ // Test base fee calculation
 			base: "./testdata/25",
 			input: t8nInput{
-				"alloc.json", "txs.json", "env.json", "Merge", "",
+				"alloc.json", "txs.json", "env.json", "Paris", "",
 			},
 			output: t8nOutput{alloc: true, result: true},
 			expOut: "exp.json",
@@ -378,7 +378,7 @@ func TestT8nTracing(t *testing.T) {
 		{
 			base: "./testdata/32",
 			input: t8nInput{
-				"alloc.json", "txs.json", "env.json", "Merge", "",
+				"alloc.json", "txs.json", "env.json", "Paris", "",
 			},
 			extraArgs:      []string{"--trace", "--trace.callframes"},
 			expectedTraces: []string{"trace-0-0x47806361c0fa084be3caa18afe8c48156747c01dbdfc1ee11b5aecdbe4fcf23e.jsonl"},
@@ -524,7 +524,7 @@ func TestT9n(t *testing.T) {
 			ok, err := cmpJson(have, want)
 			switch {
 			case err != nil:
-				t.Logf(string(have))
+				t.Log(string(have))
 				t.Fatalf("test %d, json parsing failed: %v", i, err)
 			case !ok:
 				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))
@@ -659,7 +659,7 @@ func TestB11r(t *testing.T) {
 			ok, err := cmpJson(have, want)
 			switch {
 			case err != nil:
-				t.Logf(string(have))
+				t.Log(string(have))
 				t.Fatalf("test %d, json parsing failed: %v", i, err)
 			case !ok:
 				t.Fatalf("test %d: output wrong, have \n%v\nwant\n%v\n", i, string(have), string(want))

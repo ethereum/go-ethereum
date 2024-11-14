@@ -18,6 +18,7 @@ package trienode
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -78,7 +79,7 @@ func NewNodeSet(owner common.Hash) *NodeSet {
 // ForEachWithOrder iterates the nodes with the order from bottom to top,
 // right to left, nodes with the longest path will be iterated first.
 func (set *NodeSet) ForEachWithOrder(callback func(path string, n *Node)) {
-	var paths []string
+	paths := make([]string, 0, len(set.Nodes))
 	for path := range set.Nodes {
 		paths = append(paths, path)
 	}
@@ -99,6 +100,23 @@ func (set *NodeSet) AddNode(path []byte, n *Node) {
 	set.Nodes[string(path)] = n
 }
 
+// MergeSet merges this 'set' with 'other'. It assumes that the sets are disjoint,
+// and thus does not deduplicate data (count deletes, dedup leaves etc).
+func (set *NodeSet) MergeSet(other *NodeSet) error {
+	if set.Owner != other.Owner {
+		return fmt.Errorf("nodesets belong to different owner are not mergeable %x-%x", set.Owner, other.Owner)
+	}
+	maps.Copy(set.Nodes, other.Nodes)
+
+	set.deletes += other.deletes
+	set.updates += other.updates
+
+	// Since we assume the sets are disjoint, we can safely append leaves
+	// like this without deduplication.
+	set.Leaves = append(set.Leaves, other.Leaves...)
+	return nil
+}
+
 // Merge adds a set of nodes into the set.
 func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*Node) error {
 	if set.Owner != owner {
@@ -114,7 +132,12 @@ func (set *NodeSet) Merge(owner common.Hash, nodes map[string]*Node) error {
 				set.updates -= 1
 			}
 		}
-		set.AddNode([]byte(path), node)
+		if node.IsDeleted() {
+			set.deletes += 1
+		} else {
+			set.updates += 1
+		}
+		set.Nodes[path] = node
 	}
 	return nil
 }
@@ -130,12 +153,11 @@ func (set *NodeSet) Size() (int, int) {
 	return set.updates, set.deletes
 }
 
-// Hashes returns the hashes of all updated nodes. TODO(rjl493456442) how can
-// we get rid of it?
-func (set *NodeSet) Hashes() []common.Hash {
-	var ret []common.Hash
-	for _, node := range set.Nodes {
-		ret = append(ret, node.Hash)
+// HashSet returns a set of trie nodes keyed by node hash.
+func (set *NodeSet) HashSet() map[common.Hash][]byte {
+	ret := make(map[common.Hash][]byte, len(set.Nodes))
+	for _, n := range set.Nodes {
+		ret[n.Hash] = n.Blob
 	}
 	return ret
 }
@@ -144,16 +166,14 @@ func (set *NodeSet) Hashes() []common.Hash {
 func (set *NodeSet) Summary() string {
 	var out = new(strings.Builder)
 	fmt.Fprintf(out, "nodeset owner: %v\n", set.Owner)
-	if set.Nodes != nil {
-		for path, n := range set.Nodes {
-			// Deletion
-			if n.IsDeleted() {
-				fmt.Fprintf(out, "  [-]: %x\n", path)
-				continue
-			}
-			// Insertion or update
-			fmt.Fprintf(out, "  [+/*]: %x -> %v \n", path, n.Hash)
+	for path, n := range set.Nodes {
+		// Deletion
+		if n.IsDeleted() {
+			fmt.Fprintf(out, "  [-]: %x\n", path)
+			continue
 		}
+		// Insertion or update
+		fmt.Fprintf(out, "  [+/*]: %x -> %v \n", path, n.Hash)
 	}
 	for _, n := range set.Leaves {
 		fmt.Fprintf(out, "[leaf]: %v\n", n)
@@ -191,7 +211,7 @@ func (set *MergedNodeSet) Merge(other *NodeSet) error {
 
 // Flatten returns a two-dimensional map for internal nodes.
 func (set *MergedNodeSet) Flatten() map[common.Hash]map[string]*Node {
-	nodes := make(map[common.Hash]map[string]*Node)
+	nodes := make(map[common.Hash]map[string]*Node, len(set.Sets))
 	for owner, set := range set.Sets {
 		nodes[owner] = set.Nodes
 	}

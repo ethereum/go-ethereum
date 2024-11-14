@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/triestate"
+	"golang.org/x/exp/maps"
 )
 
 // State history records the state changes involved in executing a block. The
@@ -242,21 +242,15 @@ type history struct {
 }
 
 // newHistory constructs the state history object with provided state change set.
-func newHistory(root common.Hash, parent common.Hash, block uint64, states *triestate.Set) *history {
+func newHistory(root common.Hash, parent common.Hash, block uint64, accounts map[common.Address][]byte, storages map[common.Address]map[common.Hash][]byte) *history {
 	var (
-		accountList []common.Address
+		accountList = maps.Keys(accounts)
 		storageList = make(map[common.Address][]common.Hash)
 	)
-	for addr := range states.Accounts {
-		accountList = append(accountList, addr)
-	}
 	slices.SortFunc(accountList, common.Address.Cmp)
 
-	for addr, slots := range states.Storages {
-		slist := make([]common.Hash, 0, len(slots))
-		for slotHash := range slots {
-			slist = append(slist, slotHash)
-		}
+	for addr, slots := range storages {
+		slist := maps.Keys(slots)
 		slices.SortFunc(slist, common.Hash.Cmp)
 		storageList[addr] = slist
 	}
@@ -267,9 +261,9 @@ func newHistory(root common.Hash, parent common.Hash, block uint64, states *trie
 			root:    root,
 			block:   block,
 		},
-		accounts:    states.Accounts,
+		accounts:    accounts,
 		accountList: accountList,
-		storages:    states.Storages,
+		storages:    storages,
 		storageList: storageList,
 	}
 }
@@ -384,10 +378,11 @@ func (r *decoder) readAccount(pos int) (accountIndex, []byte, error) {
 func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.Hash][]byte, error) {
 	var (
 		last    common.Hash
-		list    []common.Hash
-		storage = make(map[common.Hash][]byte)
+		count   = int(accIndex.storageSlots)
+		list    = make([]common.Hash, 0, count)
+		storage = make(map[common.Hash][]byte, count)
 	)
-	for j := 0; j < int(accIndex.storageSlots); j++ {
+	for j := 0; j < count; j++ {
 		var (
 			index slotIndex
 			start = (accIndex.storageOffset + uint32(j)) * uint32(slotIndexSize)
@@ -430,9 +425,10 @@ func (r *decoder) readStorage(accIndex accountIndex) ([]common.Hash, map[common.
 // decode deserializes the account and storage data from the provided byte stream.
 func (h *history) decode(accountData, storageData, accountIndexes, storageIndexes []byte) error {
 	var (
-		accounts    = make(map[common.Address][]byte)
+		count       = len(accountIndexes) / accountIndexSize
+		accounts    = make(map[common.Address][]byte, count)
 		storages    = make(map[common.Address]map[common.Hash][]byte)
-		accountList []common.Address
+		accountList = make([]common.Address, 0, count)
 		storageList = make(map[common.Address][]common.Hash)
 
 		r = &decoder{
@@ -445,7 +441,7 @@ func (h *history) decode(accountData, storageData, accountIndexes, storageIndexe
 	if err := r.verify(); err != nil {
 		return err
 	}
-	for i := 0; i < len(accountIndexes)/accountIndexSize; i++ {
+	for i := 0; i < count; i++ {
 		// Resolve account first
 		accIndex, accData, err := r.readAccount(i)
 		if err != nil {
@@ -472,8 +468,8 @@ func (h *history) decode(accountData, storageData, accountIndexes, storageIndexe
 }
 
 // readHistory reads and decodes the state history object by the given id.
-func readHistory(freezer *rawdb.ResettableFreezer, id uint64) (*history, error) {
-	blob := rawdb.ReadStateHistoryMeta(freezer, id)
+func readHistory(reader ethdb.AncientReader, id uint64) (*history, error) {
+	blob := rawdb.ReadStateHistoryMeta(reader, id)
 	if len(blob) == 0 {
 		return nil, fmt.Errorf("state history not found %d", id)
 	}
@@ -483,10 +479,10 @@ func readHistory(freezer *rawdb.ResettableFreezer, id uint64) (*history, error) 
 	}
 	var (
 		dec            = history{meta: &m}
-		accountData    = rawdb.ReadStateAccountHistory(freezer, id)
-		storageData    = rawdb.ReadStateStorageHistory(freezer, id)
-		accountIndexes = rawdb.ReadStateAccountIndex(freezer, id)
-		storageIndexes = rawdb.ReadStateStorageIndex(freezer, id)
+		accountData    = rawdb.ReadStateAccountHistory(reader, id)
+		storageData    = rawdb.ReadStateStorageHistory(reader, id)
+		accountIndexes = rawdb.ReadStateAccountIndex(reader, id)
+		storageIndexes = rawdb.ReadStateStorageIndex(reader, id)
 	)
 	if err := dec.decode(accountData, storageData, accountIndexes, storageIndexes); err != nil {
 		return nil, err
@@ -495,21 +491,21 @@ func readHistory(freezer *rawdb.ResettableFreezer, id uint64) (*history, error) 
 }
 
 // writeHistory persists the state history with the provided state set.
-func writeHistory(freezer *rawdb.ResettableFreezer, dl *diffLayer) error {
+func writeHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	// Short circuit if state set is not available.
 	if dl.states == nil {
 		return errors.New("state change set is not available")
 	}
 	var (
 		start   = time.Now()
-		history = newHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states)
+		history = newHistory(dl.rootHash(), dl.parentLayer().rootHash(), dl.block, dl.states.accountOrigin, dl.states.storageOrigin)
 	)
 	accountData, storageData, accountIndex, storageIndex := history.encode()
 	dataSize := common.StorageSize(len(accountData) + len(storageData))
 	indexSize := common.StorageSize(len(accountIndex) + len(storageIndex))
 
 	// Write history data into five freezer table respectively.
-	rawdb.WriteStateHistory(freezer, dl.stateID(), history.meta.encode(), accountIndex, storageIndex, accountData, storageData)
+	rawdb.WriteStateHistory(writer, dl.stateID(), history.meta.encode(), accountIndex, storageIndex, accountData, storageData)
 
 	historyDataBytesMeter.Mark(int64(dataSize))
 	historyIndexBytesMeter.Mark(int64(indexSize))
@@ -521,13 +517,13 @@ func writeHistory(freezer *rawdb.ResettableFreezer, dl *diffLayer) error {
 
 // checkHistories retrieves a batch of meta objects with the specified range
 // and performs the callback on each item.
-func checkHistories(freezer *rawdb.ResettableFreezer, start, count uint64, check func(*meta) error) error {
+func checkHistories(reader ethdb.AncientReader, start, count uint64, check func(*meta) error) error {
 	for count > 0 {
 		number := count
 		if number > 10000 {
 			number = 10000 // split the big read into small chunks
 		}
-		blobs, err := rawdb.ReadStateHistoryMetaList(freezer, start, number)
+		blobs, err := rawdb.ReadStateHistoryMetaList(reader, start, number)
 		if err != nil {
 			return err
 		}
@@ -548,12 +544,12 @@ func checkHistories(freezer *rawdb.ResettableFreezer, start, count uint64, check
 
 // truncateFromHead removes the extra state histories from the head with the given
 // parameters. It returns the number of items removed from the head.
-func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead uint64) (int, error) {
-	ohead, err := freezer.Ancients()
+func truncateFromHead(db ethdb.Batcher, store ethdb.AncientStore, nhead uint64) (int, error) {
+	ohead, err := store.Ancients()
 	if err != nil {
 		return 0, err
 	}
-	otail, err := freezer.Tail()
+	otail, err := store.Tail()
 	if err != nil {
 		return 0, err
 	}
@@ -566,7 +562,7 @@ func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead 
 		return 0, nil
 	}
 	// Load the meta objects in range [nhead+1, ohead]
-	blobs, err := rawdb.ReadStateHistoryMetaList(freezer, nhead+1, ohead-nhead)
+	blobs, err := rawdb.ReadStateHistoryMetaList(store, nhead+1, ohead-nhead)
 	if err != nil {
 		return 0, err
 	}
@@ -581,7 +577,7 @@ func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead 
 	if err := batch.Write(); err != nil {
 		return 0, err
 	}
-	ohead, err = freezer.TruncateHead(nhead)
+	ohead, err = store.TruncateHead(nhead)
 	if err != nil {
 		return 0, err
 	}
@@ -590,12 +586,12 @@ func truncateFromHead(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, nhead 
 
 // truncateFromTail removes the extra state histories from the tail with the given
 // parameters. It returns the number of items removed from the tail.
-func truncateFromTail(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, ntail uint64) (int, error) {
-	ohead, err := freezer.Ancients()
+func truncateFromTail(db ethdb.Batcher, store ethdb.AncientStore, ntail uint64) (int, error) {
+	ohead, err := store.Ancients()
 	if err != nil {
 		return 0, err
 	}
-	otail, err := freezer.Tail()
+	otail, err := store.Tail()
 	if err != nil {
 		return 0, err
 	}
@@ -608,7 +604,7 @@ func truncateFromTail(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, ntail 
 		return 0, nil
 	}
 	// Load the meta objects in range [otail+1, ntail]
-	blobs, err := rawdb.ReadStateHistoryMetaList(freezer, otail+1, ntail-otail)
+	blobs, err := rawdb.ReadStateHistoryMetaList(store, otail+1, ntail-otail)
 	if err != nil {
 		return 0, err
 	}
@@ -623,7 +619,7 @@ func truncateFromTail(db ethdb.Batcher, freezer *rawdb.ResettableFreezer, ntail 
 	if err := batch.Write(); err != nil {
 		return 0, err
 	}
-	otail, err = freezer.TruncateTail(ntail)
+	otail, err = store.TruncateTail(ntail)
 	if err != nil {
 		return 0, err
 	}

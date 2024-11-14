@@ -1199,7 +1199,6 @@ func TestUnpackRevert(t *testing.T) {
 		{"4e487b7100000000000000000000000000000000000000000000000000000000000000ff", "unknown panic code: 0xff", nil},
 	}
 	for index, c := range cases {
-		index, c := index, c
 		t.Run(fmt.Sprintf("case %d", index), func(t *testing.T) {
 			t.Parallel()
 			got, err := UnpackRevert(common.Hex2Bytes(c.input))
@@ -1216,5 +1215,12 @@ func TestUnpackRevert(t *testing.T) {
 				t.Fatalf("Output mismatch, want %v, got %v", c.expect, got)
 			}
 		})
+	}
+}
+
+func TestInternalContractType(t *testing.T) {
+	jsonData := `[{"inputs":[{"components":[{"internalType":"uint256","name":"dailyLimit","type":"uint256"},{"internalType":"uint256","name":"txLimit","type":"uint256"},{"internalType":"uint256","name":"accountDailyLimit","type":"uint256"},{"internalType":"uint256","name":"minAmount","type":"uint256"},{"internalType":"bool","name":"onlyWhitelisted","type":"bool"}],"internalType":"struct IMessagePassingBridge.BridgeLimits","name":"bridgeLimits","type":"tuple"},{"components":[{"internalType":"uint256","name":"lastTransferReset","type":"uint256"},{"internalType":"uint256","name":"bridged24Hours","type":"uint256"}],"internalType":"struct IMessagePassingBridge.AccountLimit","name":"accountDailyLimit","type":"tuple"},{"components":[{"internalType":"uint256","name":"lastTransferReset","type":"uint256"},{"internalType":"uint256","name":"bridged24Hours","type":"uint256"}],"internalType":"struct IMessagePassingBridge.BridgeDailyLimit","name":"bridgeDailyLimit","type":"tuple"},{"internalType":"contract INameService","name":"nameService","type":"INameService"},{"internalType":"bool","name":"isClosed","type":"bool"},{"internalType":"address","name":"from","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"canBridge","outputs":[{"internalType":"bool","name":"isWithinLimit","type":"bool"},{"internalType":"string","name":"error","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint8","name":"decimals","type":"uint8"}],"name":"normalizeFrom18ToTokenDecimals","outputs":[{"internalType":"uint256","name":"normalized","type":"uint256"}],"stateMutability":"pure","type":"function"},{"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint8","name":"decimals","type":"uint8"}],"name":"normalizeFromTokenTo18Decimals","outputs":[{"internalType":"uint256","name":"normalized","type":"uint256"}],"stateMutability":"pure","type":"function"}]`
+	if _, err := JSON(strings.NewReader(jsonData)); err != nil {
+		t.Fatal(err)
 	}
 }

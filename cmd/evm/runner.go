@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"os"
 	goruntime "runtime"
+	"slices"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ var runCommand = &cli.Command{
 	Usage:       "Run arbitrary evm binary",
 	ArgsUsage:   "<code>",
 	Description: `The run command runs arbitrary EVM code.`,
-	Flags:       flags.Merge(vmFlags, traceFlags),
+	Flags:       slices.Concat(vmFlags, traceFlags),
 }
 
 // readGenesis will read the given JSON format genesis file and return
@@ -75,36 +76,53 @@ func readGenesis(genesisPath string) *core.Genesis {
 }
 
 type execStats struct {
-	time           time.Duration // The execution time.
-	allocs         int64         // The number of heap allocations during execution.
-	bytesAllocated int64         // The cumulative number of bytes allocated during execution.
+	Time           time.Duration `json:"time"`           // The execution Time.
+	Allocs         int64         `json:"allocs"`         // The number of heap allocations during execution.
+	BytesAllocated int64         `json:"bytesAllocated"` // The cumulative number of bytes allocated during execution.
+	GasUsed        uint64        `json:"gasUsed"`        // the amount of gas used during execution
 }
 
-func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, gasLeft uint64, stats execStats, err error) {
+func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, execStats, error) {
 	if bench {
+		// Do one warm-up run
+		output, gasUsed, err := execFunc()
 		result := testing.Benchmark(func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				output, gasLeft, err = execFunc()
+				haveOutput, haveGasUsed, haveErr := execFunc()
+				if !bytes.Equal(haveOutput, output) {
+					b.Fatalf("output differs, have\n%x\nwant%x\n", haveOutput, output)
+				}
+				if haveGasUsed != gasUsed {
+					b.Fatalf("gas differs, have %v want%v", haveGasUsed, gasUsed)
+				}
+				if haveErr != err {
+					b.Fatalf("err differs, have %v want%v", haveErr, err)
+				}
 			}
 		})
-
 		// Get the average execution time from the benchmarking result.
 		// There are other useful stats here that could be reported.
-		stats.time = time.Duration(result.NsPerOp())
-		stats.allocs = result.AllocsPerOp()
-		stats.bytesAllocated = result.AllocedBytesPerOp()
-	} else {
-		var memStatsBefore, memStatsAfter goruntime.MemStats
-		goruntime.ReadMemStats(&memStatsBefore)
-		startTime := time.Now()
-		output, gasLeft, err = execFunc()
-		stats.time = time.Since(startTime)
-		goruntime.ReadMemStats(&memStatsAfter)
-		stats.allocs = int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs)
-		stats.bytesAllocated = int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc)
+		stats := execStats{
+			Time:           time.Duration(result.NsPerOp()),
+			Allocs:         result.AllocsPerOp(),
+			BytesAllocated: result.AllocedBytesPerOp(),
+			GasUsed:        gasUsed,
+		}
+		return output, stats, err
 	}
-
-	return output, gasLeft, stats, err
+	var memStatsBefore, memStatsAfter goruntime.MemStats
+	goruntime.ReadMemStats(&memStatsBefore)
+	t0 := time.Now()
+	output, gasUsed, err := execFunc()
+	duration := time.Since(t0)
+	goruntime.ReadMemStats(&memStatsAfter)
+	stats := execStats{
+		Time:           duration,
+		Allocs:         int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs),
+		BytesAllocated: int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc),
+		GasUsed:        gasUsed,
+	}
+	return output, stats, err
 }
 
 func runCmd(ctx *cli.Context) error {
@@ -155,14 +173,13 @@ func runCmd(ctx *cli.Context) error {
 	})
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)
-	sdb := state.NewDatabaseWithNodeDB(db, triedb)
-	statedb, _ = state.New(genesis.Root(), sdb, nil)
+	sdb := state.NewDatabase(triedb, nil)
+	statedb, _ = state.New(genesis.Root(), sdb)
 	chainConfig = genesisConfig.Config
 
 	if ctx.String(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.String(SenderFlag.Name))
 	}
-	statedb.CreateAccount(sender)
 
 	if ctx.String(ReceiverFlag.Name) != "" {
 		receiver = common.HexToAddress(ctx.String(ReceiverFlag.Name))
@@ -222,6 +239,7 @@ func runCmd(ctx *cli.Context) error {
 		Time:        genesisConfig.Timestamp,
 		Coinbase:    genesisConfig.Coinbase,
 		BlockNumber: new(big.Int).SetUint64(genesisConfig.Number),
+		BaseFee:     genesisConfig.BaseFee,
 		BlobHashes:  blobHashes,
 		BlobBaseFee: blobBaseFee,
 		EVMConfig: vm.Config{
@@ -264,12 +282,13 @@ func runCmd(ctx *cli.Context) error {
 			statedb.SetCode(receiver, code)
 		}
 		execFunc = func() ([]byte, uint64, error) {
-			return runtime.Call(receiver, input, &runtimeConfig)
+			output, gasLeft, err := runtime.Call(receiver, input, &runtimeConfig)
+			return output, initialGas - gasLeft, err
 		}
 	}
 
 	bench := ctx.Bool(BenchFlag.Name)
-	output, leftOverGas, stats, err := timedExec(bench, execFunc)
+	output, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
 		root, err := statedb.Commit(genesisConfig.Number, true)
@@ -277,7 +296,7 @@ func runCmd(ctx *cli.Context) error {
 			fmt.Printf("Failed to commit changes %v\n", err)
 			return err
 		}
-		dumpdb, err := state.New(root, sdb, nil)
+		dumpdb, err := state.New(root, sdb)
 		if err != nil {
 			fmt.Printf("Failed to open statedb %v\n", err)
 			return err
@@ -299,7 +318,7 @@ func runCmd(ctx *cli.Context) error {
 execution time:  %v
 allocations:     %d
 allocated bytes: %d
-`, initialGas-leftOverGas, stats.time, stats.allocs, stats.bytesAllocated)
+`, stats.GasUsed, stats.Time, stats.Allocs, stats.BytesAllocated)
 	}
 	if tracer == nil {
 		fmt.Printf("%#x\n", output)

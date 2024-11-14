@@ -18,7 +18,9 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"io"
+	"net"
 	"sync"
 	"sync/atomic"
 
@@ -88,7 +90,7 @@ func (s *Server) SetHTTPBodyLimit(limit int) {
 }
 
 // RegisterName creates a service for the given receiver type under the given name. When no
-// methods on the given receiver match the criteria to be either a RPC method or a
+// methods on the given receiver match the criteria to be either an RPC method or a
 // subscription an error is returned. Otherwise a new service is created and added to the
 // service collection this server provides to clients.
 func (s *Server) RegisterName(name string, receiver interface{}) error {
@@ -151,8 +153,8 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 
 	reqs, batch, err := codec.readBatch()
 	if err != nil {
-		if err != io.EOF {
-			resp := errorMessage(&invalidMessageError{"parse error"})
+		if msg := messageForReadError(err); msg != "" {
+			resp := errorMessage(&invalidMessageError{msg})
 			codec.writeJSON(ctx, resp, true)
 		}
 		return
@@ -162,6 +164,20 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 	} else {
 		h.handleMsg(reqs[0])
 	}
+}
+
+func messageForReadError(err error) string {
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() {
+			return "read timeout"
+		} else {
+			return "read error"
+		}
+	} else if err != io.EOF {
+		return "parse error"
+	}
+	return ""
 }
 
 // Stop stops reading new requests, waits for stopPendingRequestTimeout to allow pending

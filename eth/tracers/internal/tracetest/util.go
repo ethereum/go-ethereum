@@ -47,6 +47,11 @@ func (c *callContext) toBlockContext(genesis *core.Genesis) vm.BlockContext {
 	if genesis.Config.IsLondon(context.BlockNumber) {
 		context.BaseFee = (*big.Int)(c.BaseFee)
 	}
+
+	if genesis.Config.TerminalTotalDifficulty != nil && genesis.Config.TerminalTotalDifficulty.Sign() == 0 {
+		context.Random = &genesis.Mixhash
+	}
+
 	if genesis.ExcessBlobGas != nil && genesis.BlobGasUsed != nil {
 		excessBlobGas := eip4844.CalcExcessBlobGas(*genesis.ExcessBlobGas, *genesis.BlobGasUsed)
 		context.BlobBaseFee = eip4844.CalcBlobFee(excessBlobGas)
