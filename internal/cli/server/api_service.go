@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 
@@ -38,7 +40,11 @@ func headerToProtoborHeader(h *types.Header) *protobor.Header {
 }
 
 func (s *Server) HeaderByNumber(ctx context.Context, req *protobor.GetHeaderByNumberRequest) (*protobor.GetHeaderByNumberResponse, error) {
-	header, err := s.backend.APIBackend.HeaderByNumber(ctx, rpc.BlockNumber(req.Number))
+	bN, err := getRpcBlockNumberFromString(req.Number)
+	if err != nil {
+		return nil, err
+	}
+	header, err := s.backend.APIBackend.HeaderByNumber(ctx, bN)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +53,11 @@ func (s *Server) HeaderByNumber(ctx context.Context, req *protobor.GetHeaderByNu
 }
 
 func (s *Server) BlockByNumber(ctx context.Context, req *protobor.GetBlockByNumberRequest) (*protobor.GetBlockByNumberResponse, error) {
-	block, err := s.backend.APIBackend.BlockByNumber(ctx, rpc.BlockNumber(req.Number))
+	bN, err := getRpcBlockNumberFromString(req.Number)
+	if err != nil {
+		return nil, err
+	}
+	block, err := s.backend.APIBackend.BlockByNumber(ctx, bN)
 	if err != nil {
 		return nil, err
 	}
@@ -90,4 +100,28 @@ func (s *Server) BorBlockReceipt(ctx context.Context, req *protobor.ReceiptReque
 	}
 
 	return &protobor.ReceiptResponse{Receipt: ConvertReceiptToProtoReceipt(receipt)}, nil
+}
+
+func getRpcBlockNumberFromString(blockNumber string) (rpc.BlockNumber, error) {
+	switch blockNumber {
+	case "latest":
+		return rpc.LatestBlockNumber, nil
+	case "earliest":
+		return rpc.EarliestBlockNumber, nil
+	case "pending":
+		return rpc.PendingBlockNumber, nil
+	case "finalized":
+		return rpc.FinalizedBlockNumber, nil
+	case "safe":
+		return rpc.SafeBlockNumber, nil
+	default:
+		blckNum, err := hexutil.DecodeUint64(blockNumber)
+		if err != nil {
+			return rpc.BlockNumber(0), errors.New("invalid block number")
+		}
+		if blckNum > math.MaxInt64 {
+			return rpc.BlockNumber(0), errors.New("block number out of range")
+		}
+		return rpc.BlockNumber(blckNum), nil
+	}
 }

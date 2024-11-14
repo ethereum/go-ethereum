@@ -132,7 +132,7 @@ func (mr *MockBackendMockRecorder) GetBorBlockLogs(arg0, arg1 interface{}) *gomo
 // GetBorBlockReceipt mocks base method.
 func (m *MockBackend) GetBorBlockReceipt(arg0 context.Context, arg1 common.Hash) (*types.Receipt, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BorBlockReceipt", arg0, arg1)
+	ret := m.ctrl.Call(m, "GetBorBlockReceipt", arg0, arg1)
 	ret0, _ := ret[0].(*types.Receipt)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -141,7 +141,7 @@ func (m *MockBackend) GetBorBlockReceipt(arg0 context.Context, arg1 common.Hash)
 // GetBorBlockReceipt indicates an expected call of GetBorBlockReceipt.
 func (mr *MockBackendMockRecorder) GetBorBlockReceipt(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BorBlockReceipt", reflect.TypeOf((*MockBackend)(nil).GetBorBlockReceipt), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBorBlockReceipt", reflect.TypeOf((*MockBackend)(nil).GetBorBlockReceipt), arg0, arg1)
 }
 
 // GetLogs mocks base method.
