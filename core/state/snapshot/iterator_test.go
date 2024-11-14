@@ -99,9 +99,6 @@ func TestStorageIteratorBasics(t *testing.T) {
 	for account := range accounts {
 		it, _ := diffLayer.StorageIterator(account, common.Hash{})
 		verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
-
-		it = diffLayer.newBinaryStorageIterator(account, common.Hash{})
-		verifyIterator(t, 100, it, verifyNothing) // Nil is allowed for single layer iterator
 	}
 
 	diskLayer := diffToDisk(diffLayer)
@@ -569,7 +566,7 @@ func TestAccountIteratorFlattening(t *testing.T) {
 	})
 	t.Run("binary", func(t *testing.T) {
 		testAccountIteratorFlattening(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
-			return snaps.layers[root].(*diffLayer).newBinaryAccountIterator(common.Hash{})
+			return snaps.layers[root].(*diffLayer).newBinaryAccountIterator(seek)
 
 		})
 	})
@@ -771,7 +768,7 @@ func TestAccountIteratorDeletions(t *testing.T) {
 	})
 	t.Run("binary", func(t *testing.T) {
 		testAccountIteratorDeletions(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
-			return snaps.layers[root].(*diffLayer).newBinaryAccountIterator(common.Hash{})
+			return snaps.layers[root].(*diffLayer).newBinaryAccountIterator(seek)
 
 		})
 	})
@@ -833,7 +830,7 @@ func TestStorageIteratorDeletions(t *testing.T) {
 	})
 	t.Run("binary", func(t *testing.T) {
 		testStorageIteratorDeletions(t, func(snaps *Tree, root, account, seek common.Hash) StorageIterator {
-			return snaps.layers[root].(*diffLayer).newBinaryStorageIterator(account, common.Hash{})
+			return snaps.layers[root].(*diffLayer).newBinaryStorageIterator(account, seek)
 		})
 	})
 }

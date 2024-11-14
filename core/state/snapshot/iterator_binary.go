@@ -117,33 +117,47 @@ func (dl *diffLayer) initBinaryStorageIterator(account, seek common.Hash) Iterat
 // or an error if iteration failed for some reason (e.g. root being iterated
 // becomes stale and garbage collected).
 func (it *binaryIterator) Next() bool {
+	for {
+		ok := it.next()
+		if !ok {
+			return ok
+		}
+		if len(it.Account()) == 0 && len(it.Slot()) == 0 {
+			continue
+		}
+		return ok
+	}
+}
+
+func (it *binaryIterator) next() bool {
 	if it.aDone && it.bDone {
 		return false
 	}
-first:
-	if it.aDone {
-		it.k = it.b.Hash()
+	for {
+		if it.aDone {
+			it.k = it.b.Hash()
+			it.bDone = !it.b.Next()
+			return true
+		}
+		if it.bDone {
+			it.k = it.a.Hash()
+			it.aDone = !it.a.Next()
+			return true
+		}
+		nextA, nextB := it.a.Hash(), it.b.Hash()
+		if diff := bytes.Compare(nextA[:], nextB[:]); diff < 0 {
+			it.aDone = !it.a.Next()
+			it.k = nextA
+			return true
+		} else if diff == 0 {
+			// Now we need to advance one of them
+			it.aDone = !it.a.Next()
+			continue
+		}
 		it.bDone = !it.b.Next()
+		it.k = nextB
 		return true
 	}
-	if it.bDone {
-		it.k = it.a.Hash()
-		it.aDone = !it.a.Next()
-		return true
-	}
-	nextA, nextB := it.a.Hash(), it.b.Hash()
-	if diff := bytes.Compare(nextA[:], nextB[:]); diff < 0 {
-		it.aDone = !it.a.Next()
-		it.k = nextA
-		return true
-	} else if diff == 0 {
-		// Now we need to advance one of them
-		it.aDone = !it.a.Next()
-		goto first
-	}
-	it.bDone = !it.b.Next()
-	it.k = nextB
-	return true
 }
 
 // Error returns any failure that occurred during iteration, which might have
