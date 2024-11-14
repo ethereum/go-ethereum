@@ -118,14 +118,13 @@ func (dl *diffLayer) initBinaryStorageIterator(account, seek common.Hash) Iterat
 // becomes stale and garbage collected).
 func (it *binaryIterator) Next() bool {
 	for {
-		ok := it.next()
-		if !ok {
-			return ok
+		if !it.next() {
+			return false
 		}
 		if len(it.Account()) == 0 && len(it.Slot()) == 0 {
 			continue
 		}
-		return ok
+		return true
 	}
 }
 

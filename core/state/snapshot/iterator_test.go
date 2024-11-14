@@ -567,7 +567,6 @@ func TestAccountIteratorFlattening(t *testing.T) {
 	t.Run("binary", func(t *testing.T) {
 		testAccountIteratorFlattening(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
 			return snaps.layers[root].(*diffLayer).newBinaryAccountIterator(seek)
-
 		})
 	})
 }
@@ -769,7 +768,6 @@ func TestAccountIteratorDeletions(t *testing.T) {
 	t.Run("binary", func(t *testing.T) {
 		testAccountIteratorDeletions(t, func(snaps *Tree, root, seek common.Hash) AccountIterator {
 			return snaps.layers[root].(*diffLayer).newBinaryAccountIterator(seek)
-
 		})
 	})
 }
