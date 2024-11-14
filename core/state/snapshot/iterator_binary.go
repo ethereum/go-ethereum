@@ -39,12 +39,12 @@ type binaryIterator struct {
 // initBinaryAccountIterator creates a simplistic iterator to step over all the
 // accounts in a slow, but easily verifiable way. Note this function is used for
 // initialization, use `newBinaryAccountIterator` as the API.
-func (dl *diffLayer) initBinaryAccountIterator() Iterator {
+func (dl *diffLayer) initBinaryAccountIterator(seek common.Hash) Iterator {
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
 		l := &binaryIterator{
-			a:               dl.AccountIterator(common.Hash{}),
-			b:               dl.Parent().AccountIterator(common.Hash{}),
+			a:               dl.AccountIterator(seek),
+			b:               dl.Parent().AccountIterator(seek),
 			accountIterator: true,
 		}
 		l.aDone = !l.a.Next()
@@ -52,8 +52,8 @@ func (dl *diffLayer) initBinaryAccountIterator() Iterator {
 		return l
 	}
 	l := &binaryIterator{
-		a:               dl.AccountIterator(common.Hash{}),
-		b:               parent.initBinaryAccountIterator(),
+		a:               dl.AccountIterator(seek),
+		b:               parent.initBinaryAccountIterator(seek),
 		accountIterator: true,
 	}
 	l.aDone = !l.a.Next()
@@ -64,12 +64,12 @@ func (dl *diffLayer) initBinaryAccountIterator() Iterator {
 // initBinaryStorageIterator creates a simplistic iterator to step over all the
 // storage slots in a slow, but easily verifiable way. Note this function is used
 // for initialization, use `newBinaryStorageIterator` as the API.
-func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
+func (dl *diffLayer) initBinaryStorageIterator(account, seek common.Hash) Iterator {
 	parent, ok := dl.parent.(*diffLayer)
 	if !ok {
 		// If the storage in this layer is already destructed, discard all
 		// deeper layers but still return a valid single-branch iterator.
-		a, destructed := dl.StorageIterator(account, common.Hash{})
+		a, destructed := dl.StorageIterator(account, seek)
 		if destructed {
 			l := &binaryIterator{
 				a:       a,
@@ -81,7 +81,7 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 		}
 		// The parent is disk layer, don't need to take care "destructed"
 		// anymore.
-		b, _ := dl.Parent().StorageIterator(account, common.Hash{})
+		b, _ := dl.Parent().StorageIterator(account, seek)
 		l := &binaryIterator{
 			a:       a,
 			b:       b,
@@ -93,7 +93,7 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 	}
 	// If the storage in this layer is already destructed, discard all
 	// deeper layers but still return a valid single-branch iterator.
-	a, destructed := dl.StorageIterator(account, common.Hash{})
+	a, destructed := dl.StorageIterator(account, seek)
 	if destructed {
 		l := &binaryIterator{
 			a:       a,
@@ -105,7 +105,7 @@ func (dl *diffLayer) initBinaryStorageIterator(account common.Hash) Iterator {
 	}
 	l := &binaryIterator{
 		a:       a,
-		b:       parent.initBinaryStorageIterator(account),
+		b:       parent.initBinaryStorageIterator(account, seek),
 		account: account,
 	}
 	l.aDone = !l.a.Next()
@@ -195,19 +195,21 @@ func (it *binaryIterator) Slot() []byte {
 // Release recursively releases all the iterators in the stack.
 func (it *binaryIterator) Release() {
 	it.a.Release()
-	it.b.Release()
+	if it.b != nil {
+		it.b.Release()
+	}
 }
 
 // newBinaryAccountIterator creates a simplistic account iterator to step over
 // all the accounts in a slow, but easily verifiable way.
-func (dl *diffLayer) newBinaryAccountIterator() AccountIterator {
-	iter := dl.initBinaryAccountIterator()
+func (dl *diffLayer) newBinaryAccountIterator(seek common.Hash) AccountIterator {
+	iter := dl.initBinaryAccountIterator(seek)
 	return iter.(AccountIterator)
 }
 
 // newBinaryStorageIterator creates a simplistic account iterator to step over
 // all the storage slots in a slow, but easily verifiable way.
-func (dl *diffLayer) newBinaryStorageIterator(account common.Hash) StorageIterator {
-	iter := dl.initBinaryStorageIterator(account)
+func (dl *diffLayer) newBinaryStorageIterator(account, seek common.Hash) StorageIterator {
+	iter := dl.initBinaryStorageIterator(account, seek)
 	return iter.(StorageIterator)
 }
