@@ -29,6 +29,11 @@ import (
 // the manager will buffer in its channel.
 const managerSubBufferSize = 50
 
+// Config is a legacy struct which is not used
+type Config struct {
+	InsecureUnlockAllowed bool // Unused legacy-parameter
+}
+
 // newBackendEvent lets the manager know it should
 // track the given backend for wallet updates.
 type newBackendEvent struct {
@@ -50,11 +55,6 @@ type Manager struct {
 	quit chan chan error
 	term chan struct{} // Channel is closed upon termination of the update loop
 	lock sync.RWMutex
-}
-
-// Config is a legacy struct which is not used
-type Config struct {
-	InsecureUnlockAllowed bool // Unused legacy-parameter
 }
 
 // NewManager creates a generic account manager to sign transaction via various
