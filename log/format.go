@@ -78,12 +78,11 @@ type TerminalStringer interface {
 // a terminal with color-coded level output and terser human friendly timestamp.
 // This format should only be used for interactive programs or while developing.
 //
-//     [LEVEL] [TIME] MESAGE key=value key=value ...
+//	[LEVEL] [TIME] MESAGE key=value key=value ...
 //
 // Example:
 //
-//     [DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
-//
+//	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
 func TerminalFormat(usecolor bool) Format {
 	return FormatFunc(func(r *Record) []byte {
 		var color = 0
@@ -148,7 +147,6 @@ func TerminalFormat(usecolor bool) Format {
 // format for key/value pairs.
 //
 // For more details see: http://godoc.org/github.com/kr/logfmt
-//
 func LogfmtFormat() Format {
 	return FormatFunc(func(r *Record) []byte {
 		common := []interface{}{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
@@ -358,49 +356,19 @@ func formatLogfmtValue(value interface{}, term bool) string {
 	}
 }
 
-var stringBufPool = sync.Pool{
-	New: func() interface{} { return new(bytes.Buffer) },
-}
-
+// escapeString checks if the provided string needs escaping/quoting, and
+// calls strconv.Quote if needed
 func escapeString(s string) string {
-	needsQuotes := false
-	needsEscape := false
+	needsQuoting := false
 	for _, r := range s {
-		if r <= ' ' || r == '=' || r == '"' {
-			needsQuotes = true
-		}
-		if r == '\\' || r == '"' || r == '\n' || r == '\r' || r == '\t' {
-			needsEscape = true
+		// We quote everything below " (0x34) and above~ (0x7E), plus equal-sign
+		if r <= '"' || r > '~' || r == '=' {
+			needsQuoting = true
+			break
 		}
 	}
-	if !needsEscape && !needsQuotes {
+	if !needsQuoting {
 		return s
 	}
-	e := stringBufPool.Get().(*bytes.Buffer)
-	e.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '\\', '"':
-			e.WriteByte('\\')
-			e.WriteByte(byte(r))
-		case '\n':
-			e.WriteString("\\n")
-		case '\r':
-			e.WriteString("\\r")
-		case '\t':
-			e.WriteString("\\t")
-		default:
-			e.WriteRune(r)
-		}
-	}
-	e.WriteByte('"')
-	var ret string
-	if needsQuotes {
-		ret = e.String()
-	} else {
-		ret = string(e.Bytes()[1 : e.Len()-1])
-	}
-	e.Reset()
-	stringBufPool.Put(e)
-	return ret
+	return strconv.Quote(s)
 }
