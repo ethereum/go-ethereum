@@ -94,11 +94,9 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 		conn,
 		localNode,
 		discV5,
+		utpSocket,
 		&storage.MockStorage{Db: make(map[string][]byte)},
-		contentQueue,
-		func(p *PortalProtocol) {
-			p.Utp = utpSocket
-		})
+		contentQueue)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +193,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 				_ = connWithConnId.Close()
 			}
 		}()
-		connWithConnId, err = node2.Utp.DialWithCid(context.Background(), node1.localNode.Node(), uint16(cid1.SendId()))
+		connWithConnId, err = node2.Utp.DialWithCid(context.Background(), node1.localNode.Node(), cid1.SendId())
 		if err != nil {
 			panic(err)
 		}
@@ -218,7 +216,7 @@ func TestPortalWireProtocolUdp(t *testing.T) {
 				_ = ConnId2Conn.Close()
 			}
 		}()
-		ConnId2Conn, err = node2.Utp.DialWithCid(context.Background(), node1.localNode.Node(), uint16(cid2.SendId()))
+		ConnId2Conn, err = node2.Utp.DialWithCid(context.Background(), node1.localNode.Node(), cid2.SendId())
 		if err != nil && err != io.EOF {
 			panic(err)
 		}

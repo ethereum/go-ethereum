@@ -2,6 +2,7 @@ package history
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/json"
@@ -334,8 +335,8 @@ func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*HistoryNetwork, e
 	}
 
 	contentQueue := make(chan *discover.ContentElement, 50)
-
-	portalProtocol, err := discover.NewPortalProtocol(conf, portalwire.History, privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
+	utpSocket := discover.NewPortalUtp(context.Background(), conf, discV5, conn)
+	portalProtocol, err := discover.NewPortalProtocol(conf, portalwire.History, privKey, conn, localNode, discV5, utpSocket, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}

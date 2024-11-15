@@ -2,6 +2,7 @@ package beacon
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -65,7 +66,8 @@ func SetupBeaconNetwork(addr string, bootNodes []*enode.Node) (*BeaconNetwork, e
 
 	contentQueue := make(chan *discover.ContentElement, 50)
 
-	portalProtocol, err := discover.NewPortalProtocol(conf, portalwire.Beacon, privKey, conn, localNode, discV5, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
+	utpSocket := discover.NewPortalUtp(context.Background(), conf, discV5, conn)
+	portalProtocol, err := discover.NewPortalProtocol(conf, portalwire.Beacon, privKey, conn, localNode, discV5, utpSocket, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}

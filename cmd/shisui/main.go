@@ -123,9 +123,6 @@ func shisui(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	go func() {
-		debug.Setup(ctx)
-	}()
 
 	// Start metrics export if enabled
 	utils.SetupMetrics(ctx)
@@ -397,11 +394,9 @@ func initHistory(config Config, server *rpc.Server, conn discover.UDPConn, local
 		conn,
 		localNode,
 		discV5,
+		utp,
 		contentStorage,
-		contentQueue,
-		func(p *discover.PortalProtocol) {
-			p.Utp = utp
-		})
+		contentQueue)
 
 	if err != nil {
 		return nil, err
@@ -450,11 +445,9 @@ func initBeacon(config Config, server *rpc.Server, conn discover.UDPConn, localN
 		conn,
 		localNode,
 		discV5,
+		utp,
 		contentStorage,
-		contentQueue,
-		func(p *discover.PortalProtocol) {
-			p.Utp = utp
-		})
+		contentQueue)
 
 	if err != nil {
 		return nil, err
@@ -496,11 +489,9 @@ func initState(config Config, server *rpc.Server, conn discover.UDPConn, localNo
 		conn,
 		localNode,
 		discV5,
+		utp,
 		stateStore,
-		contentQueue,
-		func(p *discover.PortalProtocol) {
-			p.Utp = utp
-		})
+		contentQueue)
 
 	if err != nil {
 		return nil, err

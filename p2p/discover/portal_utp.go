@@ -42,26 +42,20 @@ func NewPortalUtp(ctx context.Context, config *PortalProtocolConfig, discV5 *UDP
 }
 
 func (p *PortalUtp) Start() error {
-	errCh := make(chan error, 1)
-	p.startOnce.Do(func() {
-		defer func() {
-			close(errCh)
-		}()
-		laddr := p.getLocalAddr()
-
-		p.packetRouter = utp.NewPacketRouter(p.packetRouterFunc)
-
+	var err error
+	go p.startOnce.Do(func() {
 		var logger *zap.Logger
-		var err error
 		if p.log.Enabled(p.ctx, log.LevelDebug) || p.log.Enabled(p.ctx, log.LevelTrace) {
 			logger, err = zap.NewDevelopmentConfig().Build()
 		} else {
 			logger, err = zap.NewProductionConfig().Build()
 		}
 		if err != nil {
-			errCh <- err
 			return
 		}
+
+		laddr := p.getLocalAddr()
+		p.packetRouter = utp.NewPacketRouter(p.packetRouterFunc)
 		p.utpSm, err = utp.NewSocketManagerWithOptions(
 			"utp",
 			laddr,
@@ -70,12 +64,10 @@ func (p *PortalUtp) Start() error {
 			utp.WithPacketRouter(p.packetRouter),
 			utp.WithMaxPacketSize(1145))
 		if err != nil {
-			errCh <- err
 			return
 		}
 		p.listener, err = utp.ListenUTPOptions("utp", (*utp.Addr)(laddr), utp.WithSocketManager(p.utpSm))
 		if err != nil {
-			errCh <- err
 			return
 		}
 		p.lAddr = p.listener.Addr().(*utp.Addr)
@@ -84,7 +76,7 @@ func (p *PortalUtp) Start() error {
 		p.discV5.RegisterTalkHandler(string(portalwire.Utp), p.handleUtpTalkRequest)
 	})
 
-	return <-errCh
+	return err
 }
 
 func (p *PortalUtp) Stop() {

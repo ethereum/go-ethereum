@@ -201,7 +201,7 @@ func defaultContentIdFunc(contentKey []byte) []byte {
 	return digest[:]
 }
 
-func NewPortalProtocol(config *PortalProtocolConfig, protocolId portalwire.ProtocolId, privateKey *ecdsa.PrivateKey, conn UDPConn, localNode *enode.LocalNode, discV5 *UDPv5, storage storage.ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
+func NewPortalProtocol(config *PortalProtocolConfig, protocolId portalwire.ProtocolId, privateKey *ecdsa.PrivateKey, conn UDPConn, localNode *enode.LocalNode, discV5 *UDPv5, utp *PortalUtp, storage storage.ContentStorage, contentQueue chan *ContentElement, opts ...PortalProtocolOption) (*PortalProtocol, error) {
 	closeCtx, cancelCloseCtx := context.WithCancel(context.Background())
 
 	protocol := &PortalProtocol{
@@ -222,6 +222,7 @@ func NewPortalProtocol(config *PortalProtocolConfig, protocolId portalwire.Proto
 		offerQueue:     make(chan *OfferRequestWithNode, concurrentOffers),
 		conn:           conn,
 		DiscV5:         discV5,
+		Utp:            utp,
 		NAT:            config.NAT,
 		clock:          config.clock,
 		connIdGen:      libutp.NewConnIdGenerator(),
@@ -247,7 +248,9 @@ func (p *PortalProtocol) Start() error {
 	}
 
 	p.DiscV5.RegisterTalkHandler(p.protocolId, p.handleTalkRequest)
-	err = p.Utp.Start()
+	if p.Utp != nil {
+		err = p.Utp.Start()
+	}
 	if err != nil {
 		return err
 	}
@@ -268,7 +271,9 @@ func (p *PortalProtocol) Stop() {
 	p.cancelCloseCtx()
 	p.table.close()
 	p.DiscV5.Close()
-	p.Utp.Stop()
+	if p.Utp != nil {
+		p.Utp.Stop()
+	}
 }
 func (p *PortalProtocol) RoutingTableInfo() [][]string {
 	p.table.mutex.Lock()
@@ -1146,7 +1151,7 @@ func (p *PortalProtocol) handleFindContent(id enode.ID, addr *net.UDPAddr, reque
 		}(p.closeCtx, connectionId)
 
 		idBuffer := make([]byte, 2)
-		binary.BigEndian.PutUint16(idBuffer, uint16(connectionId.SendId()))
+		binary.BigEndian.PutUint16(idBuffer, connectionId.SendId())
 		connIdMsg := &portalwire.ConnectionId{
 			Id: idBuffer,
 		}
@@ -1286,7 +1291,7 @@ func (p *PortalProtocol) handleOffer(id enode.ID, addr *net.UDPAddr, request *po
 			}
 		}(p.closeCtx, connectionId)
 
-		binary.BigEndian.PutUint16(idBuffer, uint16(connectionId.SendId()))
+		binary.BigEndian.PutUint16(idBuffer, connectionId.SendId())
 	} else {
 		binary.BigEndian.PutUint16(idBuffer, uint16(0))
 	}
