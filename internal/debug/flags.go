@@ -22,35 +22,70 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/metrics/exp"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
+	"golang.org/x/exp/slog"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/urfave/cli.v1"
 )
 
 var (
-	VerbosityFlag = cli.IntFlag{
+	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
 		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
 		Value: 3,
+	}
+	logVmoduleFlag = &cli.StringFlag{
+		Name:  "log-vmodule",
+		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
+		Value: "",
 	}
 	vmoduleFlag = cli.StringFlag{
 		Name:  "vmodule",
 		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
 		Value: "",
 	}
-	backtraceAtFlag = cli.StringFlag{
-		Name:  "backtrace",
-		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
-		Value: "",
+	logjsonFlag = &cli.BoolFlag{
+		Name:   "log-json",
+		Usage:  "Format logs with JSON",
+		Hidden: true,
 	}
-	debugFlag = cli.BoolFlag{
-		Name:  "debug",
-		Usage: "Prepends log messages with call-site location (file and line number)",
+	logFormatFlag = &cli.StringFlag{
+		Name:  "log-format",
+		Usage: "Log format to use (json|logfmt|terminal)",
+	}
+	logFileFlag = &cli.StringFlag{
+		Name:  "log-file",
+		Usage: "Write logs to a file",
+	}
+	logRotateFlag = &cli.BoolFlag{
+		Name:  "log-rotate",
+		Usage: "Enables log file rotation",
+	}
+	logMaxSizeMBsFlag = &cli.IntFlag{
+		Name:  "log-maxsize",
+		Usage: "Maximum size in MBs of a single log file",
+		Value: 100,
+	}
+	logMaxBackupsFlag = &cli.IntFlag{
+		Name:  "log-maxbackups",
+		Usage: "Maximum number of log files to retain",
+		Value: 10,
+	}
+	logMaxAgeFlag = &cli.IntFlag{
+		Name:  "log-maxage",
+		Usage: "Maximum number of days to retain a log file",
+		Value: 30,
+	}
+	logCompressFlag = &cli.BoolFlag{
+		Name:  "log-compress",
+		Usage: "Compress the log files",
 	}
 	pprofFlag = cli.BoolFlag{
 		Name:  "pprof",
@@ -95,10 +130,17 @@ var (
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	VerbosityFlag,
-	//vmoduleFlag,
-	//backtraceAtFlag,
-	debugFlag,
+	verbosityFlag,
+	logVmoduleFlag,
+	vmoduleFlag,
+	logjsonFlag,
+	logFormatFlag,
+	logFileFlag,
+	logRotateFlag,
+	logMaxSizeMBsFlag,
+	logMaxBackupsFlag,
+	logMaxAgeFlag,
+	logCompressFlag,
 	pprofFlag,
 	pprofAddrFlag,
 	pprofPortFlag,
@@ -110,26 +152,117 @@ var Flags = []cli.Flag{
 	debugDataDirFlag,
 }
 
-var Glogger *log.GlogHandler
+var (
+	glogger                *log.GlogHandler
+	logOutputFile          io.WriteCloser
+	defaultTerminalHandler *log.TerminalHandler
+)
 
 func init() {
-	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-	output := io.Writer(os.Stderr)
-	if usecolor {
-		output = colorable.NewColorableStderr()
+	defaultTerminalHandler = log.NewTerminalHandler(os.Stderr, false)
+	glogger = log.NewGlogHandler(defaultTerminalHandler)
+	glogger.Verbosity(log.LvlInfo)
+	log.SetDefault(log.NewLogger(glogger))
+}
+
+func ResetLogging() {
+	if defaultTerminalHandler != nil {
+		defaultTerminalHandler.ResetFieldPadding()
 	}
-	Glogger = log.NewGlogHandler(log.StreamHandler(output, log.TerminalFormat(usecolor)))
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
+	var (
+		handler        slog.Handler
+		terminalOutput = io.Writer(os.Stderr)
+		output         io.Writer
+		logFmtFlag     = ctx.String(logFormatFlag.Name)
+	)
+	var (
+		logFile  = ctx.String(logFileFlag.Name)
+		rotation = ctx.Bool(logRotateFlag.Name)
+	)
+	if len(logFile) > 0 {
+		if err := validateLogLocation(filepath.Dir(logFile)); err != nil {
+			return fmt.Errorf("failed to initiatilize file logger: %v", err)
+		}
+	}
+	context := []interface{}{"rotate", rotation}
+	if len(logFmtFlag) > 0 {
+		context = append(context, "format", logFmtFlag)
+	} else {
+		context = append(context, "format", "terminal")
+	}
+	if rotation {
+		// Lumberjack uses <processname>-lumberjack.log in is.TempDir() if empty.
+		// so typically /tmp/geth-lumberjack.log on linux
+		if len(logFile) > 0 {
+			context = append(context, "location", logFile)
+		} else {
+			context = append(context, "location", filepath.Join(os.TempDir(), "geth-lumberjack.log"))
+		}
+		logOutputFile = &lumberjack.Logger{
+			Filename:   logFile,
+			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
+			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
+			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
+			Compress:   ctx.Bool(logCompressFlag.Name),
+		}
+		output = io.MultiWriter(terminalOutput, logOutputFile)
+	} else if logFile != "" {
+		var err error
+		if logOutputFile, err = os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err != nil {
+			return err
+		}
+		output = io.MultiWriter(logOutputFile, terminalOutput)
+		context = append(context, "location", logFile)
+	} else {
+		output = terminalOutput
+	}
+
+	switch {
+	case ctx.Bool(logjsonFlag.Name):
+		// Retain backwards compatibility with `--log-json` flag if `--log-format` not set
+		defer log.Warn("The flag '--log-json' is deprecated, please use '--log-format=json' instead")
+		handler = log.JSONHandler(output)
+	case logFmtFlag == "json":
+		handler = log.JSONHandler(output)
+	case logFmtFlag == "logfmt":
+		handler = log.LogfmtHandler(output)
+	case logFmtFlag == "", logFmtFlag == "terminal":
+		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		if useColor {
+			terminalOutput = colorable.NewColorableStderr()
+			if logOutputFile != nil {
+				output = io.MultiWriter(logOutputFile, terminalOutput)
+			} else {
+				output = terminalOutput
+			}
+		}
+		handler = log.NewTerminalHandler(output, useColor)
+	default:
+		// Unknown log format specified
+		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
+	}
+
+	glogger = log.NewGlogHandler(handler)
+
 	// logging
-	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
-	Glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
-	Glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
-	Glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
-	log.Root().SetHandler(Glogger)
+	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
+	glogger.Verbosity(verbosity)
+	vmodule := ctx.String(logVmoduleFlag.Name)
+	if vmodule == "" {
+		// Retain backwards compatibility with `--vmodule` flag if `--log-vmodule` not set
+		vmodule = ctx.String(vmoduleFlag.Name)
+		if vmodule != "" {
+			defer log.Warn("The flag '--vmodule' is deprecated, please use '--log-vmodule' instead")
+		}
+	}
+	glogger.Vmodule(vmodule)
+
+	log.SetDefault(log.NewLogger(glogger))
 
 	// profiling, tracing
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
@@ -164,6 +297,11 @@ func Setup(ctx *cli.Context) error {
 			}
 		}()
 	}
+
+	if len(logFile) > 0 || rotation {
+		log.Info("Logging configured", context...)
+	}
+
 	return nil
 }
 
@@ -172,4 +310,21 @@ func Setup(ctx *cli.Context) error {
 func Exit() {
 	Handler.StopCPUProfile()
 	Handler.StopGoTrace()
+	if logOutputFile != nil {
+		logOutputFile.Close()
+	}
+}
+
+func validateLogLocation(path string) error {
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		return fmt.Errorf("error creating the directory: %w", err)
+	}
+	// Check if the path is writable by trying to create a temporary file
+	tmp := filepath.Join(path, "tmp")
+	if f, err := os.Create(tmp); err != nil {
+		return err
+	} else {
+		f.Close()
+	}
+	return os.Remove(tmp)
 }
