@@ -1,1 +1,1 @@
-var preloaded = "some-preloaded-string";
+let preloaded = "some-preloaded-string";
