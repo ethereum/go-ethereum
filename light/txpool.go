@@ -450,7 +450,10 @@ func (p *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 	}
 
 	// Print a log message if low enough level is set
-	log.Debug("Pooled new transaction", "hash", hash, "from", log.Lazy{Fn: func() common.Address { from, _ := types.Sender(p.signer, tx); return from }}, "to", tx.To())
+	if log.Enabled(log.LevelDebug) {
+		from, _ := types.Sender(p.signer, tx)
+		log.Debug("Pooled new transaction", "hash", hash, "from", from, "to", tx.To())
+	}
 	return nil
 }
 

@@ -618,6 +618,16 @@ var (
 		Name:  "slave",
 		Usage: "Enable slave mode",
 	}
+	// Deprecated November 2023
+	LogBacktraceAtFlag = &cli.StringFlag{
+		Name:  "log-backtrace",
+		Usage: "Request a stack trace at a specific logging statement (deprecated)",
+		Value: "",
+	}
+	LogDebugFlag = &cli.BoolFlag{
+		Name:  "log-debug",
+		Usage: "Prepends log messages with call-site location (deprecated)",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1014,6 +1024,13 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	}
 	if ctx.GlobalIsSet(AnnounceTxsFlag.Name) {
 		cfg.AnnounceTxs = ctx.GlobalBool(AnnounceTxsFlag.Name)
+	}
+	// deprecation notice for log debug flags (TODO: find a more appropriate place to put these?)
+	if ctx.IsSet(LogBacktraceAtFlag.Name) {
+		log.Warn("log.backtrace flag is deprecated")
+	}
+	if ctx.IsSet(LogDebugFlag.Name) {
+		log.Warn("log.debug flag is deprecated")
 	}
 }
 

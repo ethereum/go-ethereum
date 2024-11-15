@@ -136,6 +136,8 @@ var (
 		utils.GpoIgnoreGasPriceFlag,
 		//utils.ExtraDataFlag,
 		configFileFlag,
+		utils.LogDebugFlag,
+		utils.LogBacktraceAtFlag,
 		utils.AnnounceTxsFlag,
 		utils.StoreRewardFlag,
 		utils.RollbackFlag,

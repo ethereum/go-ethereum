@@ -24,9 +24,7 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
-	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/tests"
-
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -49,16 +47,15 @@ func stateTestCmd(ctx *cli.Context) error {
 	if len(ctx.Args().First()) == 0 {
 		return errors.New("path-to-test argument required")
 	}
-	// Configure the go-ethereum logger
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
 
 	// Configure the EVM logger
 	config := &vm.LogConfig{
-		EnableMemory: !ctx.GlobalBool(DisableMemoryFlag.Name),
-		DisableStack: ctx.GlobalBool(DisableStackFlag.Name),
+		EnableMemory:     !ctx.GlobalBool(DisableMemoryFlag.Name),
+		DisableStack:     ctx.GlobalBool(DisableStackFlag.Name),
+		DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
+		EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
 	}
+
 	var (
 		tracer   vm.EVMLogger
 		debugger *vm.StructLogger

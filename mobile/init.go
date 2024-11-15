@@ -27,7 +27,7 @@ import (
 
 func init() {
 	// Initialize the logger
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelInfo, false)))
 
 	// Initialize the goroutine count
 	runtime.GOMAXPROCS(runtime.NumCPU())

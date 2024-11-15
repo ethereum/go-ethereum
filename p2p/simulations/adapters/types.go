@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/XinFinOrg/XDPoSChain/crypto"
@@ -38,7 +39,6 @@ import (
 // * SimNode    - An in-memory node
 // * ExecNode   - A child process node
 // * DockerNode - A Docker container node
-//
 type Node interface {
 	// Addr returns the node's address (e.g. an Enode URL)
 	Addr() []byte
@@ -97,24 +97,39 @@ type NodeConfig struct {
 
 	// function to sanction or prevent suggesting a peer
 	Reachable func(id discover.NodeID) bool
+
+	// LogFile is the log file name of the p2p node at runtime.
+	//
+	// The default value is empty so that the default log writer
+	// is the system standard output.
+	LogFile string
+
+	// LogVerbosity is the log verbosity of the p2p node at runtime.
+	//
+	// The default verbosity is INFO.
+	LogVerbosity slog.Level
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by encoding
 // all fields as strings
 type nodeConfigJSON struct {
-	ID         string   `json:"id"`
-	PrivateKey string   `json:"private_key"`
-	Name       string   `json:"name"`
-	Services   []string `json:"services"`
+	ID           string   `json:"id"`
+	PrivateKey   string   `json:"private_key"`
+	Name         string   `json:"name"`
+	Services     []string `json:"services"`
+	LogFile      string   `json:"logfile"`
+	LogVerbosity int      `json:"log_verbosity"`
 }
 
 // MarshalJSON implements the json.Marshaler interface by encoding the config
 // fields as strings
 func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 	confJSON := nodeConfigJSON{
-		ID:       n.ID.String(),
-		Name:     n.Name,
-		Services: n.Services,
+		ID:           n.ID.String(),
+		Name:         n.Name,
+		Services:     n.Services,
+		LogFile:      n.LogFile,
+		LogVerbosity: int(n.LogVerbosity),
 	}
 	if n.PrivateKey != nil {
 		confJSON.PrivateKey = hex.EncodeToString(crypto.FromECDSA(n.PrivateKey))
@@ -152,6 +167,8 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 
 	n.Name = confJSON.Name
 	n.Services = confJSON.Services
+	n.LogFile = confJSON.LogFile
+	n.LogVerbosity = slog.Level(confJSON.LogVerbosity)
 
 	return nil
 }

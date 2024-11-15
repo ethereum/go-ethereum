@@ -22,21 +22,18 @@ import (
 	"fmt"
 	"io"
 	"os"
+	goruntime "runtime"
 	"runtime/pprof"
 	"time"
-
-	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
-
-	goruntime "runtime"
 
 	"github.com/XinFinOrg/XDPoSChain/cmd/evm/internal/compiler"
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core"
+	"github.com/XinFinOrg/XDPoSChain/core/rawdb"
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
 	"github.com/XinFinOrg/XDPoSChain/core/vm/runtime"
-	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -71,12 +68,12 @@ func readGenesis(genesisPath string) *core.Genesis {
 }
 
 func runCmd(ctx *cli.Context) error {
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
 	logconfig := &vm.LogConfig{
-		EnableMemory: !ctx.GlobalBool(DisableMemoryFlag.Name),
-		DisableStack: ctx.GlobalBool(DisableStackFlag.Name),
+		EnableMemory:     !ctx.GlobalBool(DisableMemoryFlag.Name),
+		DisableStack:     ctx.GlobalBool(DisableStackFlag.Name),
+		DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
+		EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
+		Debug:            ctx.Bool(DebugFlag.Name),
 	}
 
 	var (
@@ -95,6 +92,7 @@ func runCmd(ctx *cli.Context) error {
 	} else {
 		debugLogger = vm.NewStructLogger(logconfig)
 	}
+
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
 		db := rawdb.NewMemoryDatabase()

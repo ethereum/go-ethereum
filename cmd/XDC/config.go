@@ -33,8 +33,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
-	"github.com/XinFinOrg/XDPoSChain/internal/debug"
-	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/naoina/toml"
@@ -143,9 +141,9 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	if ctx.GlobalIsSet(utils.StakingEnabledFlag.Name) {
 		cfg.StakeEnable = ctx.GlobalBool(utils.StakingEnabledFlag.Name)
 	}
-	if !ctx.GlobalIsSet(debug.VerbosityFlag.Name) {
-		debug.Glogger.Verbosity(log.Lvl(cfg.Verbosity))
-	}
+	// if !ctx.GlobalIsSet(debug.VerbosityFlag.Name) {
+	// 	debug.Verbosity(log.Lvl(cfg.Verbosity))
+	// }
 
 	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {
 		ctx.Set(utils.NATFlag.Name, cfg.NAT)

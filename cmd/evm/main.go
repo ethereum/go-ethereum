@@ -110,6 +110,14 @@ var (
 		Name:  "nostack",
 		Usage: "disable stack output",
 	}
+	DisableStorageFlag = &cli.BoolFlag{
+		Name:     "nostorage",
+		Usage:    "disable storage output",
+	}
+	DisableReturnDataFlag = &cli.BoolFlag{
+		Name:     "noreturndata",
+		Usage:    "enable return data output",
+	}
 )
 
 func init() {
