@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBytesConversion(t *testing.T) {
@@ -202,4 +203,15 @@ func TestStringToBinaryAddress(t *testing.T) {
 			t.Errorf("fail to convert string address to binary address\nwant: %s\nhave: %s", have, want)
 		}
 	}
+}
+
+func BenchmarkPrettyDuration(b *testing.B) {
+	var x = PrettyDuration(time.Duration(int64(1203123912312)))
+	b.Logf("Pre %s", time.Duration(x).String())
+	var a string
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		a = x.String()
+	}
+	b.Logf("Post %s", a)
 }
