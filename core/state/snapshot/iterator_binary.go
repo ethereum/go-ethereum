@@ -121,10 +121,14 @@ func (it *binaryIterator) Next() bool {
 		if !it.next() {
 			return false
 		}
-		if len(it.Account()) == 0 && len(it.Slot()) == 0 {
-			continue
+		if len(it.Account()) != 0 || len(it.Slot()) != 0 {
+			return true
 		}
-		return true
+		// it.fail might be set if error occurs by calling
+		// it.Account() or it.Slot(), stop iteration if so.
+		if it.fail != nil {
+			return false
+		}
 	}
 }
 
