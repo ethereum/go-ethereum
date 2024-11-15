@@ -416,7 +416,7 @@ func allBlobTxs(addr common.Address, config *params.ChainConfig) []txData {
 func newTestAccountManager(t *testing.T) (*accounts.Manager, accounts.Account) {
 	var (
 		dir        = t.TempDir()
-		am         = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: true})
+		am         = accounts.NewManager(nil)
 		b          = keystore.NewKeyStore(dir, 2, 1)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	)
