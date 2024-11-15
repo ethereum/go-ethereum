@@ -381,7 +381,7 @@ func createBlockFromHeader(bc *core.BlockChain, customHeader *types.Header, txs 
 		var gasUsed = new(uint64)
 		var receipts types.Receipts
 		for i, tx := range txs {
-			statedb.Prepare(tx.Hash(), i)
+			statedb.SetTxContext(tx.Hash(), i)
 			receipt, _, err, _ := core.ApplyTransaction(bc.Config(), nil, bc, &header.Coinbase, gp, statedb, nil, &header, tx, gasUsed, vm.Config{})
 			if err != nil {
 				return nil, fmt.Errorf("%v when applying transaction", err)

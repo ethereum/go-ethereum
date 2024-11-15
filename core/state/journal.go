@@ -88,6 +88,11 @@ type (
 		address *common.Address
 		slot    *common.Hash
 	}
+
+	transientStorageChange struct {
+		account       *common.Address
+		key, prevalue common.Hash
+	}
 )
 
 func (ch createObjectChange) undo(s *StateDB) {
@@ -132,6 +137,10 @@ func (ch codeChange) undo(s *StateDB) {
 
 func (ch storageChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
+}
+
+func (ch transientStorageChange) undo(s *StateDB) {
+	s.setTransientState(*ch.account, ch.key, ch.prevalue)
 }
 
 func (ch refundChange) undo(s *StateDB) {

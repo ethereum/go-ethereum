@@ -117,7 +117,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, tra
 				return nil, nil, 0, err
 			}
 		}
-		statedb.Prepare(tx.Hash(), i)
+		statedb.SetTxContext(tx.Hash(), i)
 		receipt, gas, err, tokenFeeUsed := applyTransaction(p.config, balanceFee, gp, statedb, coinbaseOwner, blockNumber, header.BaseFee, blockHash, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, err
@@ -197,7 +197,7 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 				return nil, nil, 0, err
 			}
 		}
-		statedb.Prepare(tx.Hash(), i)
+		statedb.SetTxContext(tx.Hash(), i)
 		receipt, gas, err, tokenFeeUsed := applyTransaction(p.config, balanceFee, gp, statedb, coinbaseOwner, blockNumber, header.BaseFee, blockHash, tx, usedGas, vmenv)
 		if err != nil {
 			return nil, nil, 0, err
@@ -466,6 +466,7 @@ func ApplyTransaction(config *params.ChainConfig, tokensFee map[common.Address]*
 	blockContext := NewEVMBlockContext(header, bc, author)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, XDCxState, config, cfg)
 	coinbaseOwner := getCoinbaseOwner(bc, statedb, header, author)
+	// return applyTransaction(config, tokensFee, gp, statedb, coinbaseOwner, header.Number, header.BaseFee, header.Hash(), tx, usedGas, vmenv)
 	return applyTransaction(config, tokensFee, gp, statedb, coinbaseOwner, header.Number, header.BaseFee, header.Hash(), tx, usedGas, vmenv)
 }
 
