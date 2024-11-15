@@ -79,24 +79,18 @@ func (h *TerminalHandler) format(buf []byte, r slog.Record, usecolor bool) []byt
 }
 
 func (h *TerminalHandler) formatAttributes(buf *bytes.Buffer, r slog.Record, color string) {
-	// tmp is a temporary buffer we use, until bytes.Buffer.AvailableBuffer() (1.21)
-	// can be used.
-	var tmp = make([]byte, 40)
 	writeAttr := func(attr slog.Attr, first, last bool) {
 		buf.WriteByte(' ')
 
 		if color != "" {
 			buf.WriteString(color)
-			//buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
-			buf.Write(appendEscapeString(tmp[:0], attr.Key))
+			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
 			buf.WriteString("\x1b[0m=")
 		} else {
-			//buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
-			buf.Write(appendEscapeString(tmp[:0], attr.Key))
+			buf.Write(appendEscapeString(buf.AvailableBuffer(), attr.Key))
 			buf.WriteByte('=')
 		}
-		//val := FormatSlogValue(attr.Value, true, buf.AvailableBuffer())
-		val := FormatSlogValue(attr.Value, tmp[:0])
+		val := FormatSlogValue(attr.Value, buf.AvailableBuffer())
 
 		padding := h.fieldPadding[attr.Key]
 
