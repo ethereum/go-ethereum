@@ -3,6 +3,7 @@ package log
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -10,7 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/holiman/uint256"
-	"golang.org/x/exp/slog"
 )
 
 const (

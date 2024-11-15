@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/XinFinOrg/XDPoSChain/crypto"
@@ -30,7 +31,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/gorilla/websocket"
-	"golang.org/x/exp/slog"
 )
 
 // Node represents a node in a simulation network which is created by a

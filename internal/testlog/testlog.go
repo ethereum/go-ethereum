@@ -21,11 +21,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"golang.org/x/exp/slog"
 )
 
 const (

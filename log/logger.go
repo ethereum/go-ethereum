@@ -2,12 +2,11 @@ package log
 
 import (
 	"context"
+	"log/slog"
 	"math"
 	"os"
 	"runtime"
 	"time"
-
-	"golang.org/x/exp/slog"
 )
 
 const errorKey = "LOG_ERROR"

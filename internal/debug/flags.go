@@ -19,6 +19,7 @@ package debug
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -30,7 +31,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/metrics/exp"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"golang.org/x/exp/slog"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/urfave/cli.v1"
 )

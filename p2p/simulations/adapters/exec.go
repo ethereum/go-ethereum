@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -42,7 +43,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/rpc"
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/gorilla/websocket"
-	"golang.org/x/exp/slog"
 )
 
 // ExecAdapter is a NodeAdapter which runs simulation nodes by executing the
@@ -384,7 +384,7 @@ func initLogging() {
 // and the node config from an environment variable.
 func execP2PNode() {
 	initLogging()
-	
+
 	// read the services from argv
 	serviceNames := strings.Split(os.Args[1], ",")
 
@@ -395,7 +395,7 @@ func execP2PNode() {
 	}
 	var conf execNodeConfig
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
-		log.Crit("error decoding " + envNodeConfig, "err", err)
+		log.Crit("error decoding "+envNodeConfig, "err", err)
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
