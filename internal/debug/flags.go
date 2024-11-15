@@ -25,10 +25,10 @@ import (
 	"runtime"
 
 	"github.com/XinFinOrg/XDPoSChain/log"
-	"github.com/XinFinOrg/XDPoSChain/log/term"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/XinFinOrg/XDPoSChain/metrics/exp"
 	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -113,7 +113,7 @@ var Flags = []cli.Flag{
 var Glogger *log.GlogHandler
 
 func init() {
-	usecolor := term.IsTty(os.Stderr.Fd()) && os.Getenv("TERM") != "dumb"
+	usecolor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 	output := io.Writer(os.Stderr)
 	if usecolor {
 		output = colorable.NewColorableStderr()
