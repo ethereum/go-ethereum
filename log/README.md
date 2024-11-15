@@ -1,8 +1,8 @@
-![obligatory xkcd](http://imgs.xkcd.com/comics/standards.png)
+![obligatory xkcd](https://imgs.xkcd.com/comics/standards.png)
 
 # log15 [![godoc reference](https://godoc.org/github.com/inconshreveable/log15?status.png)](https://godoc.org/github.com/inconshreveable/log15) [![Build Status](https://travis-ci.org/inconshreveable/log15.svg?branch=master)](https://travis-ci.org/inconshreveable/log15)
 
-Package log15 provides an opinionated, simple toolkit for best-practice logging in Go (golang) that is both human and machine readable. It is modeled after the Go standard library's [`io`](http://golang.org/pkg/io/) and [`net/http`](http://golang.org/pkg/net/http/) packages and is an alternative to the standard library's [`log`](http://golang.org/pkg/log/) package.
+Package log15 provides an opinionated, simple toolkit for best-practice logging in Go (golang) that is both human and machine readable. It is modeled after the Go standard library's [`io`](https://golang.org/pkg/io/) and [`net/http`](https://golang.org/pkg/net/http/) packages and is an alternative to the standard library's [`log`](https://golang.org/pkg/log/) package.
 
 ## Features
 - A simple, easy-to-understand API
