@@ -107,7 +107,7 @@ func (h Hash) Cmp(other Hash) int {
 func (h Hash) IsZero() bool { return h == Hash{} }
 
 // Get the string representation of the underlying hash
-func (h Hash) Str() string   { return string(h[:]) }
+func (h Hash) Str() string { return string(h[:]) }
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash) Bytes() []byte { return h[:] }
@@ -116,12 +116,12 @@ func (h Hash) Bytes() []byte { return h[:] }
 func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 
 // Hex converts a hash to a hex string.
-func (h Hash) Hex() string   { return hexutil.Encode(h[:]) }
+func (h Hash) Hex() string { return hexutil.Encode(h[:]) }
 
 // TerminalString implements log.TerminalStringer, formatting a string for console
 // output during logging.
 func (h Hash) TerminalString() string {
-	return fmt.Sprintf("%x…%x", h[:3], h[29:])
+	return fmt.Sprintf("%x..%x", h[:3], h[29:])
 }
 
 // String implements the stringer interface and is used also by the logger when
