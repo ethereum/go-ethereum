@@ -329,9 +329,10 @@ func (st *StateTransition) TransitionDb(owner common.Address) (ret []byte, usedG
 		return nil, 0, false, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(st.data), params.MaxInitCodeSize), nil
 	}
 
-	if rules.IsEIP1559 {
-		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
-	}
+	// Execute the preparatory steps for state transition which includes:
+	// - prepare accessList(post-berlin)
+	// - reset transient storage(eip 1153)
+	st.state.Prepare(rules, msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 
 	var (
 		evm = st.evm

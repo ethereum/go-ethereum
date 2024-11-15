@@ -522,7 +522,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		header := block.Header()
 		msg, _ := tx.AsMessage(signer, balance, header.Number, header.BaseFee)
 		txContext := core.NewEVMTxContext(msg)
-		statedb.Prepare(tx.Hash(), i)
+		statedb.SetTxContext(tx.Hash(), i)
 
 		vmenv := vm.NewEVM(blockCtx, txContext, statedb, XDCxState, api.config, vm.Config{})
 		owner := common.Address{}
@@ -746,8 +746,8 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, t
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, txContext, statedb, nil, api.config, vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
 
-	// Call Prepare to clear out the statedb access list
-	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
+	// Call SetTxContext to clear out the statedb access list
+	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
 
 	owner := common.Address{}
 	ret, gas, failed, err, _ := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), owner)
@@ -799,7 +799,7 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 	usedGas := new(uint64)
 	// Iterate over and process the individual transactions
 	for idx, tx := range block.Transactions() {
-		statedb.Prepare(tx.Hash(), idx)
+		statedb.SetTxContext(tx.Hash(), idx)
 		if idx == txIndex {
 			var balanceFee *big.Int
 			if tx.To() != nil {
