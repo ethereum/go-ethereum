@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+
+	"github.com/holiman/uint256"
 )
 
 func TestPrettyInt64(t *testing.T) {
@@ -75,6 +77,24 @@ func TestPrettyBigInt(t *testing.T) {
 	for _, tt := range tests {
 		v, _ := new(big.Int).SetString(tt.int, 10)
 		if have := formatLogfmtBigInt(v); have != tt.s {
+			t.Errorf("invalid output %s, want %s", have, tt.s)
+		}
+	}
+}
+
+func TestPrettyUint256(t *testing.T) {
+	tests := []struct {
+		int string
+		s   string
+	}{
+		{"111222333444555678999", "111,222,333,444,555,678,999"},
+		{"11122233344455567899900", "11,122,233,344,455,567,899,900"},
+	}
+
+	for _, tt := range tests {
+		v := new(uint256.Int)
+		v.SetFromDecimal(tt.int)
+		if have := formatLogfmtUint256(v); have != tt.s {
 			t.Errorf("invalid output %s, want %s", have, tt.s)
 		}
 	}
