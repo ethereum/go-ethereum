@@ -113,9 +113,9 @@ func (dl *diffLayer) account(hash common.Hash, depth int) ([]byte, error) {
 		dirtyStateReadMeter.Mark(int64(len(blob)))
 
 		if len(blob) == 0 {
-			stateAccountMissMeter.Mark(1)
+			stateAccountInexMeter.Mark(1)
 		} else {
-			stateAccountHitMeter.Mark(1)
+			stateAccountExistMeter.Mark(1)
 		}
 		return blob, nil
 	}
@@ -139,9 +139,9 @@ func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 		dirtyStateReadMeter.Mark(int64(len(blob)))
 
 		if len(blob) == 0 {
-			stateStorageMissMeter.Mark(1)
+			stateStorageInexMeter.Mark(1)
 		} else {
-			stateStorageHitMeter.Mark(1)
+			stateStorageExistMeter.Mark(1)
 		}
 		return blob, nil
 	}

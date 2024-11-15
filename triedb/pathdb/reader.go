@@ -68,13 +68,13 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 		// is not found.
 		switch loc.loc {
 		case locCleanCache:
-			cleanFalseMeter.Mark(1)
+			nodeCleanFalseMeter.Mark(1)
 		case locDirtyCache:
-			dirtyFalseMeter.Mark(1)
+			nodeDirtyFalseMeter.Mark(1)
 		case locDiffLayer:
-			diffFalseMeter.Mark(1)
+			nodeDiffFalseMeter.Mark(1)
 		case locDiskLayer:
-			diskFalseMeter.Mark(1)
+			nodeDiskFalseMeter.Mark(1)
 		}
 		blobHex := "nil"
 		if len(blob) > 0 {

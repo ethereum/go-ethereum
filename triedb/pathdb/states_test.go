@@ -27,7 +27,6 @@ import (
 
 func TestStatesMerge(t *testing.T) {
 	a := newStates(
-		nil,
 		map[common.Hash][]byte{
 			common.Hash{0xa}: {0xa0},
 			common.Hash{0xb}: {0xb0},
@@ -47,21 +46,22 @@ func TestStatesMerge(t *testing.T) {
 		},
 	)
 	b := newStates(
-		map[common.Hash]struct{}{
-			common.Hash{0xa}: {},
-			common.Hash{0xc}: {},
-		},
 		map[common.Hash][]byte{
 			common.Hash{0xa}: {0xa1},
 			common.Hash{0xb}: {0xb1},
+			common.Hash{0xc}: nil, // delete account
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			common.Hash{0xa}: {
 				common.Hash{0x1}: {0x11},
+				common.Hash{0x2}: nil, // delete slot
 				common.Hash{0x3}: {0x31},
 			},
 			common.Hash{0xb}: {
 				common.Hash{0x1}: {0x11},
+			},
+			common.Hash{0xc}: {
+				common.Hash{0x1}: nil, // delete slot
 			},
 		},
 	)
@@ -115,7 +115,6 @@ func TestStatesMerge(t *testing.T) {
 
 func TestStatesRevert(t *testing.T) {
 	a := newStates(
-		nil,
 		map[common.Hash][]byte{
 			common.Hash{0xa}: {0xa0},
 			common.Hash{0xb}: {0xb0},
@@ -135,21 +134,22 @@ func TestStatesRevert(t *testing.T) {
 		},
 	)
 	b := newStates(
-		map[common.Hash]struct{}{
-			common.Hash{0xa}: {},
-			common.Hash{0xc}: {},
-		},
 		map[common.Hash][]byte{
 			common.Hash{0xa}: {0xa1},
 			common.Hash{0xb}: {0xb1},
+			common.Hash{0xc}: nil,
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			common.Hash{0xa}: {
 				common.Hash{0x1}: {0x11},
+				common.Hash{0x2}: nil,
 				common.Hash{0x3}: {0x31},
 			},
 			common.Hash{0xb}: {
 				common.Hash{0x1}: {0x11},
+			},
+			common.Hash{0xc}: {
+				common.Hash{0x1}: nil,
 			},
 		},
 	)
@@ -164,7 +164,7 @@ func TestStatesRevert(t *testing.T) {
 			common.Hash{0xa}: {
 				common.Hash{0x1}: {0x10},
 				common.Hash{0x2}: {0x20},
-				common.Hash{0x3}: {},
+				common.Hash{0x3}: nil,
 			},
 			common.Hash{0xb}: {
 				common.Hash{0x1}: {0x10},
@@ -201,8 +201,8 @@ func TestStatesRevert(t *testing.T) {
 	if !exist || !bytes.Equal(blob, []byte{0x20}) {
 		t.Error("Unexpected value for a's storage")
 	}
-	_, exist = a.storage(common.Hash{0xa}, common.Hash{0x3})
-	if exist {
+	blob, exist = a.storage(common.Hash{0xa}, common.Hash{0x3})
+	if !exist || len(blob) != 0 {
 		t.Error("Unexpected value for a's storage")
 	}
 	blob, exist = a.storage(common.Hash{0xb}, common.Hash{0x1})
@@ -220,41 +220,8 @@ func TestStatesRevert(t *testing.T) {
 	}
 }
 
-func TestDestructJournalEncode(t *testing.T) {
-	var enc journal
-	enc.add(nil)          // nil
-	enc.add([]destruct{}) // zero size destructs
-	enc.add([]destruct{
-		{Hash: common.HexToHash("0xdeadbeef"), Exist: true},
-		{Hash: common.HexToHash("0xcafebabe"), Exist: false},
-	})
-	var buf bytes.Buffer
-	enc.encode(&buf)
-
-	var dec journal
-	if err := dec.decode(rlp.NewStream(&buf, 0)); err != nil {
-		t.Fatalf("Failed to decode journal, %v", err)
-	}
-	if len(enc.destructs) != len(dec.destructs) {
-		t.Fatalf("Unexpected destruct journal length, want: %d, got: %d", len(enc.destructs), len(dec.destructs))
-	}
-	for i := 0; i < len(enc.destructs); i++ {
-		want := enc.destructs[i]
-		got := dec.destructs[i]
-		if len(want) == 0 && len(got) == 0 {
-			continue
-		}
-		if !reflect.DeepEqual(want, got) {
-			t.Fatalf("Unexpected destruct, want: %v, got: %v", want, got)
-		}
-	}
-}
-
 func TestStatesEncode(t *testing.T) {
 	s := newStates(
-		map[common.Hash]struct{}{
-			common.Hash{0x1}: {},
-		},
 		map[common.Hash][]byte{
 			common.Hash{0x1}: {0x1},
 		},
@@ -272,9 +239,6 @@ func TestStatesEncode(t *testing.T) {
 	if err := dec.decode(rlp.NewStream(buf, 0)); err != nil {
 		t.Fatalf("Failed to decode states, %v", err)
 	}
-	if !reflect.DeepEqual(s.destructSet, dec.destructSet) {
-		t.Fatal("Unexpected destruct set")
-	}
 	if !reflect.DeepEqual(s.accountData, dec.accountData) {
 		t.Fatal("Unexpected account data")
 	}
@@ -285,9 +249,6 @@ func TestStatesEncode(t *testing.T) {
 
 func TestStateWithOriginEncode(t *testing.T) {
 	s := NewStateSetWithOrigin(
-		map[common.Hash]struct{}{
-			common.Hash{0x1}: {},
-		},
 		map[common.Hash][]byte{
 			common.Hash{0x1}: {0x1},
 		},
@@ -313,9 +274,6 @@ func TestStateWithOriginEncode(t *testing.T) {
 	if err := dec.decode(rlp.NewStream(buf, 0)); err != nil {
 		t.Fatalf("Failed to decode states, %v", err)
 	}
-	if !reflect.DeepEqual(s.destructSet, dec.destructSet) {
-		t.Fatal("Unexpected destruct set")
-	}
 	if !reflect.DeepEqual(s.accountData, dec.accountData) {
 		t.Fatal("Unexpected account data")
 	}
@@ -337,7 +295,6 @@ func TestStateSizeTracking(t *testing.T) {
 		2*common.HashLength + 1 /* storage data of 0xc */
 
 	a := newStates(
-		nil,
 		map[common.Hash][]byte{
 			common.Hash{0xa}: {0xa0}, // common.HashLength+1
 			common.Hash{0xb}: {0xb0}, // common.HashLength+1
@@ -360,27 +317,30 @@ func TestStateSizeTracking(t *testing.T) {
 		t.Fatalf("Unexpected size, want: %d, got: %d", expSizeA, a.size)
 	}
 
-	expSizeB := 2*common.HashLength + /* destruct set data */
-		common.HashLength + 2 + common.HashLength + 3 + /* account data */
+	expSizeB := common.HashLength + 2 + common.HashLength + 3 + common.HashLength + /* account data */
 		2*common.HashLength + 3 + 2*common.HashLength + 2 + /* storage data of 0xa */
-		2*common.HashLength + 2 + 2*common.HashLength + 2 /* storage data of 0xb */
+		2*common.HashLength + 2 + 2*common.HashLength + 2 + /* storage data of 0xb */
+		3*2*common.HashLength /* storage data of 0xc */
 	b := newStates(
-		map[common.Hash]struct{}{
-			common.Hash{0xa}: {}, // common.HashLength
-			common.Hash{0xc}: {}, // common.HashLength
-		},
 		map[common.Hash][]byte{
 			common.Hash{0xa}: {0xa1, 0xa1},       // common.HashLength+2
 			common.Hash{0xb}: {0xb1, 0xb1, 0xb1}, // common.HashLength+3
+			common.Hash{0xc}: nil,                // common.HashLength, account deletion
 		},
 		map[common.Hash]map[common.Hash][]byte{
 			common.Hash{0xa}: {
 				common.Hash{0x1}: {0x11, 0x11, 0x11}, // 2*common.HashLength+3
-				common.Hash{0x3}: {0x31, 0x31},       // 2*common.HashLength+1
+				common.Hash{0x3}: {0x31, 0x31},       // 2*common.HashLength+2, slot creation
 			},
 			common.Hash{0xb}: {
 				common.Hash{0x1}: {0x11, 0x11}, // 2*common.HashLength+2
-				common.Hash{0x2}: {0x22, 0x22}, // 2*common.HashLength+2
+				common.Hash{0x2}: {0x22, 0x22}, // 2*common.HashLength+2, slot creation
+			},
+			// The storage of 0xc is entirely removed
+			common.Hash{0xc}: {
+				common.Hash{0x1}: nil, // 2*common.HashLength, slot deletion
+				common.Hash{0x2}: nil, // 2*common.HashLength, slot deletion
+				common.Hash{0x3}: nil, // 2*common.HashLength, slot deletion
 			},
 		},
 	)
@@ -389,12 +349,10 @@ func TestStateSizeTracking(t *testing.T) {
 	}
 
 	a.merge(b)
-	mergeSize := expSizeA + 2*common.HashLength    /* destruct set data */
-	mergeSize += 1 /* account a data change */ + 2 /* account b data change */
-	mergeSize -= common.HashLength + 1             /* account data removal of 0xc */
-	mergeSize += 2 + 1                             /* storage a change */
-	mergeSize += 2*common.HashLength + 2 - 1       /* storage b change */
-	mergeSize -= 2*common.HashLength + 1           /* storage data removal of 0xc */
+	mergeSize := expSizeA + 1 /* account a data change */ + 2 /* account b data change */ - 1 /* account c data change */
+	mergeSize += 2*common.HashLength + 2 + 2                                                  /* storage a change */
+	mergeSize += 2*common.HashLength + 2 - 1                                                  /* storage b change */
+	mergeSize += 2*2*common.HashLength - 1                                                    /* storage data removal of 0xc */
 
 	if a.size != uint64(mergeSize) {
 		t.Fatalf("Unexpected size, want: %d, got: %d", mergeSize, a.size)
@@ -411,49 +369,22 @@ func TestStateSizeTracking(t *testing.T) {
 			common.Hash{0xa}: {
 				common.Hash{0x1}: {0x10},
 				common.Hash{0x2}: {0x20},
-				common.Hash{0x3}: {},
+				common.Hash{0x3}: nil, // revert slot creation
 			},
 			common.Hash{0xb}: {
 				common.Hash{0x1}: {0x10, 0x11, 0x12},
-				common.Hash{0x2}: {},
+				common.Hash{0x2}: nil, // revert slot creation
 			},
 			common.Hash{0xc}: {
 				common.Hash{0x1}: {0x10},
+				common.Hash{0x2}: {0x20}, // resurrected slot
+				common.Hash{0x3}: {0x30}, // resurrected slot
 			},
 		},
 	)
-	if a.size != uint64(expSizeA) {
-		t.Fatalf("Unexpected size, want: %d, got: %d", expSizeA, a.size)
-	}
-
-	// Revert state set a again, this time with additional slots which were
-	// deleted in account destruction and re-created because of resurrection.
-	a.merge(b)
-	a.revert(
-		map[common.Hash][]byte{
-			common.Hash{0xa}: {0xa0},
-			common.Hash{0xb}: {0xb0},
-			common.Hash{0xc}: {0xc0},
-		},
-		map[common.Hash]map[common.Hash][]byte{
-			common.Hash{0xa}: {
-				common.Hash{0x1}: {0x10},
-				common.Hash{0x2}: {0x20},
-				common.Hash{0x3}: {},
-				common.Hash{0x4}: {0x40},       // this slot was not in the set a, but resurrected because of revert
-				common.Hash{0x5}: {0x50, 0x51}, // this slot was not in the set a, but resurrected because of revert
-			},
-			common.Hash{0xb}: {
-				common.Hash{0x1}: {0x10, 0x11, 0x12},
-				common.Hash{0x2}: {},
-			},
-			common.Hash{0xc}: {
-				common.Hash{0x1}: {0x10},
-			},
-		},
-	)
-	expSize := expSizeA + common.HashLength*2 + 1 + /* slot 4 */ +common.HashLength*2 + 2 /* slot 5 */
-	if a.size != uint64(expSize) {
-		t.Fatalf("Unexpected size, want: %d, got: %d", expSize, a.size)
+	revertSize := expSizeA + 2*common.HashLength + 2*common.HashLength // delete-marker of a.3 and b.2 slot
+	revertSize += 2 * (2*common.HashLength + 1)                        // resurrected slot, c.2, c.3
+	if a.size != uint64(revertSize) {
+		t.Fatalf("Unexpected size, want: %d, got: %d", revertSize, a.size)
 	}
 }

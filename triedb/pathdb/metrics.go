@@ -24,16 +24,16 @@ var (
 	cleanNodeReadMeter  = metrics.NewRegisteredMeter("pathdb/clean/node/read", nil)
 	cleanNodeWriteMeter = metrics.NewRegisteredMeter("pathdb/clean/node/write", nil)
 
-	stateAccountMissMeter = metrics.NewRegisteredMeter("pathdb/state/account/miss/total", nil)
-	stateAccountHitMeter  = metrics.NewRegisteredMeter("pathdb/state/account/hit/total", nil)
-	stateStorageMissMeter = metrics.NewRegisteredMeter("pathdb/state/storage/miss/total", nil)
-	stateStorageHitMeter  = metrics.NewRegisteredMeter("pathdb/state/storage/hit/total", nil)
-
 	dirtyNodeHitMeter     = metrics.NewRegisteredMeter("pathdb/dirty/node/hit", nil)
 	dirtyNodeMissMeter    = metrics.NewRegisteredMeter("pathdb/dirty/node/miss", nil)
 	dirtyNodeReadMeter    = metrics.NewRegisteredMeter("pathdb/dirty/node/read", nil)
 	dirtyNodeWriteMeter   = metrics.NewRegisteredMeter("pathdb/dirty/node/write", nil)
 	dirtyNodeHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/node/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
+
+	stateAccountInexMeter  = metrics.NewRegisteredMeter("pathdb/state/account/inex/total", nil)
+	stateStorageInexMeter  = metrics.NewRegisteredMeter("pathdb/state/storage/inex/total", nil)
+	stateAccountExistMeter = metrics.NewRegisteredMeter("pathdb/state/account/exist/total", nil)
+	stateStorageExistMeter = metrics.NewRegisteredMeter("pathdb/state/storage/exist/total", nil)
 
 	dirtyStateHitMeter     = metrics.NewRegisteredMeter("pathdb/dirty/state/hit", nil)
 	dirtyStateMissMeter    = metrics.NewRegisteredMeter("pathdb/dirty/state/miss", nil)
@@ -41,10 +41,10 @@ var (
 	dirtyStateWriteMeter   = metrics.NewRegisteredMeter("pathdb/dirty/state/write", nil)
 	dirtyStateHitDepthHist = metrics.NewRegisteredHistogram("pathdb/dirty/state/depth", nil, metrics.NewExpDecaySample(1028, 0.015))
 
-	cleanFalseMeter = metrics.NewRegisteredMeter("pathdb/clean/false", nil)
-	dirtyFalseMeter = metrics.NewRegisteredMeter("pathdb/dirty/false", nil)
-	diskFalseMeter  = metrics.NewRegisteredMeter("pathdb/disk/false", nil)
-	diffFalseMeter  = metrics.NewRegisteredMeter("pathdb/diff/false", nil)
+	nodeCleanFalseMeter = metrics.NewRegisteredMeter("pathdb/clean/false", nil)
+	nodeDirtyFalseMeter = metrics.NewRegisteredMeter("pathdb/dirty/false", nil)
+	nodeDiskFalseMeter  = metrics.NewRegisteredMeter("pathdb/disk/false", nil)
+	nodeDiffFalseMeter  = metrics.NewRegisteredMeter("pathdb/diff/false", nil)
 
 	commitTimeTimer  = metrics.NewRegisteredTimer("pathdb/commit/time", nil)
 	commitNodesMeter = metrics.NewRegisteredMeter("pathdb/commit/nodes", nil)

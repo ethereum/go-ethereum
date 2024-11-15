@@ -17,7 +17,6 @@
 package pathdb
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -49,78 +48,32 @@ func (c *counter) report(count metrics.Meter, size metrics.Meter) {
 	size.Mark(int64(c.size))
 }
 
-// destruct represents the record of destruct set modification.
-type destruct struct {
-	Hash  common.Hash
-	Exist bool
-}
-
-// journal contains the list of modifications applied for destruct set.
-type journal struct {
-	destructs [][]destruct
-}
-
-func (j *journal) add(entries []destruct) {
-	j.destructs = append(j.destructs, entries)
-}
-
-func (j *journal) pop() ([]destruct, error) {
-	if len(j.destructs) == 0 {
-		return nil, errors.New("destruct journal is not available")
-	}
-	last := j.destructs[len(j.destructs)-1]
-	j.destructs = j.destructs[:len(j.destructs)-1]
-	return last, nil
-}
-
-func (j *journal) reset() {
-	j.destructs = nil
-}
-
-func (j *journal) encode(w io.Writer) error {
-	return rlp.Encode(w, j.destructs)
-}
-
-func (j *journal) decode(r *rlp.Stream) error {
-	var dec [][]destruct
-	if err := r.Decode(&dec); err != nil {
-		return err
-	}
-	j.destructs = dec
-	return nil
-}
-
-// stateSet represents a collection of state modifications belonging to a
-// transition(a block execution) or several aggregated transitions.
+// stateSet represents a collection of state modifications associated with a
+// transition (e.g., a block execution) or multiple aggregated transitions.
+//
+// A stateSet can only reside within a diffLayer or the buffer of a diskLayer,
+// serving as the envelope for the set. Lock protection is not required for
+// accessing or mutating the account set and storage set, as the associated
+// envelope is always marked as stale before any mutation is applied. Any
+// subsequent state access will be denied due to the stale flag. Therefore,
+// state access and mutation won't happen at the same time with guarantee.
 type stateSet struct {
-	// destructSet is a very special helper marker. If an account is marked as
-	// deleted, then it's recorded in this set. However, it's allowed that an
-	// account is included here but still available in other sets (e.g.,
-	// accountData and storageData). The reason is the diff layer includes all
-	// the changes in a *block*. It can happen that:
-	//
-	// - in the tx_1, account A is deleted
-	// - in the tx_2, account A is recreated
-	//
-	// But we still need this marker to indicate the "old" A is deleted, all
-	// data in other set belongs to the "new" A.
-	destructSet map[common.Hash]struct{}               // Keyed markers for deleted (and potentially) recreated accounts
-	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrieval (nil is not expected)
+	accountData map[common.Hash][]byte                 // Keyed accounts for direct retrieval (nil means deleted)
 	storageData map[common.Hash]map[common.Hash][]byte // Keyed storage slots for direct retrieval. one per account (nil means deleted)
-	size        uint64                                 // Memory size of the state data (destructSet, accountData and storageData)
+	size        uint64                                 // Memory size of the state data (accountData and storageData)
 
-	journal           *journal                      // Track the modifications to destructSet, used for reversal
 	accountListSorted []common.Hash                 // List of account for iteration. If it exists, it's sorted, otherwise it's nil
 	storageListSorted map[common.Hash][]common.Hash // List of storage slots for iterated retrievals, one per account. Any existing lists are sorted if non-nil
-	lock              sync.RWMutex                  // Lock for guarding the two lists above
+
+	// Lock for guarding the two lists above. These lists might be accessed
+	// concurrently and lock protection is essential to avoid concurrent
+	// slice or map read/write.
+	listLock sync.RWMutex
 }
 
-// newStates constructs the state set with the provided data.
-func newStates(destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte) *stateSet {
+// newStates constructs the state set with the provided account and storage data.
+func newStates(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte) *stateSet {
 	// Don't panic for the lazy callers, initialize the nil maps instead.
-	if destructs == nil {
-		destructs = make(map[common.Hash]struct{})
-	}
 	if accounts == nil {
 		accounts = make(map[common.Hash][]byte)
 	}
@@ -128,10 +81,8 @@ func newStates(destructs map[common.Hash]struct{}, accounts map[common.Hash][]by
 		storages = make(map[common.Hash]map[common.Hash][]byte)
 	}
 	s := &stateSet{
-		destructSet:       destructs,
 		accountData:       accounts,
 		storageData:       storages,
-		journal:           &journal{},
 		storageListSorted: make(map[common.Hash][]common.Hash),
 	}
 	s.size = s.check()
@@ -143,10 +94,6 @@ func (s *stateSet) account(hash common.Hash) ([]byte, bool) {
 	// If the account is known locally, return it
 	if data, ok := s.accountData[hash]; ok {
 		return data, true
-	}
-	// If the account is known locally, but deleted, return it
-	if _, ok := s.destructSet[hash]; ok {
-		return nil, true
 	}
 	return nil, false // account is unknown in this set
 }
@@ -160,29 +107,22 @@ func (s *stateSet) storage(accountHash, storageHash common.Hash) ([]byte, bool) 
 			return data, true
 		}
 	}
-	// If the account is known locally, but deleted, return an empty slot
-	if _, ok := s.destructSet[accountHash]; ok {
-		return nil, true
-	}
 	return nil, false // storage is unknown in this set
 }
 
 // check sanitizes accounts and storage slots to ensure the data validity.
 // Additionally, it computes the total memory size occupied by the maps.
 func (s *stateSet) check() uint64 {
-	size := len(s.destructSet) * common.HashLength
-	for accountHash, blob := range s.accountData {
-		if blob == nil {
-			panic(fmt.Sprintf("account %#x nil", accountHash)) // nil account blob is not permitted
-		}
+	var size int
+	for _, blob := range s.accountData {
 		size += common.HashLength + len(blob)
 	}
 	for accountHash, slots := range s.storageData {
 		if slots == nil {
 			panic(fmt.Sprintf("storage %#x nil", accountHash)) // nil slots is not permitted
 		}
-		for _, val := range slots {
-			size += 2*common.HashLength + len(val)
+		for _, blob := range slots {
+			size += 2*common.HashLength + len(blob)
 		}
 	}
 	return uint64(size)
@@ -193,73 +133,65 @@ func (s *stateSet) check() uint64 {
 //
 // Note, the returned slice is not a copy, so do not modify it.
 //
-//nolint:unused
+// nolint:unused
 func (s *stateSet) accountList() []common.Hash {
 	// If an old list already exists, return it
-	s.lock.RLock()
+	s.listLock.RLock()
 	list := s.accountListSorted
-	s.lock.RUnlock()
+	s.listLock.RUnlock()
 
 	if list != nil {
 		return list
 	}
-	// No old sorted account list exists, generate a new one
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	// No old sorted account list exists, generate a new one. It's possible that
+	// multiple threads waiting for the write lock may regenerate the list
+	// multiple times, which is acceptable.
+	s.listLock.Lock()
+	defer s.listLock.Unlock()
 
-	s.accountListSorted = make([]common.Hash, 0, len(s.destructSet)+len(s.accountData))
-	for hash := range s.accountData {
-		s.accountListSorted = append(s.accountListSorted, hash)
-	}
-	for hash := range s.destructSet {
-		if _, ok := s.accountData[hash]; !ok {
-			s.accountListSorted = append(s.accountListSorted, hash)
-		}
-	}
-	slices.SortFunc(s.accountListSorted, common.Hash.Cmp)
-	return s.accountListSorted
+	list = maps.Keys(s.accountData)
+	slices.SortFunc(list, common.Hash.Cmp)
+	s.accountListSorted = list
+	return list
 }
 
 // StorageList returns a sorted list of all storage slot hashes in this state set
-// for the given account. If the whole storage is destructed in this layer, then
-// an additional flag *destructed = true* will be returned, otherwise the flag is
-// false. Besides, the returned list will include the hash of deleted storage slot.
-// Note a special case is an account is deleted in a prior tx but is recreated in
-// the following tx with some storage slots set. In this case the returned list is
-// not empty but the flag is true.
+// for the given account. The returned list will include the hash of deleted
+// storage slot.
 //
 // Note, the returned slice is not a copy, so do not modify it.
 //
-//nolint:unused
-func (s *stateSet) storageList(accountHash common.Hash) ([]common.Hash, bool) {
-	s.lock.RLock()
-	_, destructed := s.destructSet[accountHash]
+// nolint:unused
+func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
+	s.listLock.RLock()
 	if _, ok := s.storageData[accountHash]; !ok {
 		// Account not tracked by this layer
-		s.lock.RUnlock()
-		return nil, destructed
+		s.listLock.RUnlock()
+		return nil
 	}
 	// If an old list already exists, return it
 	if list, exist := s.storageListSorted[accountHash]; exist {
-		s.lock.RUnlock()
-		return list, destructed // the cached list can't be nil
+		s.listLock.RUnlock()
+		return list // the cached list can't be nil
 	}
-	s.lock.RUnlock()
+	s.listLock.RUnlock()
 
-	// No old sorted account list exists, generate a new one
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	// No old sorted account list exists, generate a new one. It's possible that
+	// multiple threads waiting for the write lock may regenerate the list
+	// multiple times, which is acceptable.
+	s.listLock.Lock()
+	defer s.listLock.Unlock()
 
-	storageList := maps.Keys(s.storageData[accountHash])
-	slices.SortFunc(storageList, common.Hash.Cmp)
-	s.storageListSorted[accountHash] = storageList
-	return storageList, destructed
+	list := maps.Keys(s.storageData[accountHash])
+	slices.SortFunc(list, common.Hash.Cmp)
+	s.storageListSorted[accountHash] = list
+	return list
 }
 
 // clearCache invalidates the cached account list and storage lists.
 func (s *stateSet) clearCache() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.listLock.Lock()
+	defer s.listLock.Unlock()
 
 	s.accountListSorted = nil
 	s.storageListSorted = make(map[common.Hash][]common.Hash)
@@ -275,40 +207,7 @@ func (s *stateSet) merge(other *stateSet) {
 		delta             int
 		accountOverwrites counter
 		storageOverwrites counter
-		destructs         []destruct
 	)
-	// Apply account deletion markers and discard any previously cached data if exists
-	for accountHash := range other.destructSet {
-		if origin, ok := s.accountData[accountHash]; ok {
-			delta -= common.HashLength + len(origin)
-			accountOverwrites.add(common.HashLength + len(origin))
-			delete(s.accountData, accountHash)
-		}
-		if _, ok := s.storageData[accountHash]; ok {
-			// Looping through the nested map may cause slight performance degradation.
-			// However, since account destruction is no longer possible after the cancun
-			// fork, this overhead is considered acceptable.
-			for _, val := range s.storageData[accountHash] {
-				delta -= 2*common.HashLength + len(val)
-				storageOverwrites.add(2*common.HashLength + len(val))
-			}
-			delete(s.storageData, accountHash)
-		}
-		// Keep track of whether the account has already been marked as destructed.
-		// This additional marker is useful for undoing the merge operation.
-		_, exist := s.destructSet[accountHash]
-		destructs = append(destructs, destruct{
-			Hash:  accountHash,
-			Exist: exist,
-		})
-		if exist {
-			continue
-		}
-		delta += common.HashLength
-		s.destructSet[accountHash] = struct{}{}
-	}
-	s.journal.add(destructs)
-
 	// Apply the updated account data
 	for accountHash, data := range other.accountData {
 		if origin, ok := s.accountData[accountHash]; ok {
@@ -321,7 +220,7 @@ func (s *stateSet) merge(other *stateSet) {
 	}
 	// Apply all the updated storage slots (individually)
 	for accountHash, storage := range other.storageData {
-		// If storage didn't exist (or was deleted) in the set, overwrite blindly
+		// If storage didn't exist in the set, overwrite blindly
 		if _, ok := s.storageData[accountHash]; !ok {
 			// To prevent potential concurrent map read/write issues, allocate a
 			// new map for the storage instead of claiming it directly from the
@@ -356,68 +255,49 @@ func (s *stateSet) merge(other *stateSet) {
 
 // revert takes the original value of accounts and storages as input and reverts
 // the latest state transition applied on the state set.
+//
+// Notably, this operation may result in the set containing more entries after a
+// revert. For example, if account x did not exist and was created during transition
+// w, reverting w will retain an x=nil entry in the set.
 func (s *stateSet) revert(accountOrigin map[common.Hash][]byte, storageOrigin map[common.Hash]map[common.Hash][]byte) {
-	// Load the destruct journal whose availability is always expected
-	destructs, err := s.journal.pop()
-	if err != nil {
-		panic(fmt.Sprintf("failed to revert state, %v", err))
-	}
-	// Revert the modifications to the destruct set by journal
-	var delta int
-	for _, entry := range destructs {
-		if entry.Exist {
-			continue
-		}
-		delete(s.destructSet, entry.Hash)
-		delta -= common.HashLength
-	}
-	// Overwrite the account data with original value blindly
+	var delta int // size tracking
 	for addrHash, blob := range accountOrigin {
-		if len(blob) == 0 {
-			if data, ok := s.accountData[addrHash]; ok {
-				delta -= common.HashLength + len(data)
-			} else {
-				panic(fmt.Sprintf("non-existent account for deleting, %x", addrHash))
-			}
-			delete(s.accountData, addrHash)
-		} else {
-			if data, ok := s.accountData[addrHash]; ok {
-				delta += len(blob) - len(data)
-			} else {
-				delta += len(blob) + common.HashLength
-			}
+		data, ok := s.accountData[addrHash]
+		if !ok {
+			panic(fmt.Sprintf("non-existent account for reverting, %x", addrHash))
+		}
+		delta += len(blob) - len(data)
+
+		if len(blob) != 0 {
 			s.accountData[addrHash] = blob
+		} else {
+			if len(data) == 0 {
+				panic(fmt.Sprintf("invalid account mutation (null to null), %x", addrHash))
+			}
+			s.accountData[addrHash] = nil
 		}
 	}
 	// Overwrite the storage data with original value blindly
 	for addrHash, storage := range storageOrigin {
-		// It might be possible that the storage set is not existent because
-		// the whole storage is deleted.
 		slots := s.storageData[addrHash]
 		if len(slots) == 0 {
-			slots = make(map[common.Hash][]byte)
+			panic(fmt.Sprintf("non-existent storage set for reverting, %x", addrHash))
 		}
 		for storageHash, blob := range storage {
-			if len(blob) == 0 {
-				if data, ok := slots[storageHash]; ok {
-					delta -= 2*common.HashLength + len(data)
-				} else {
-					panic(fmt.Sprintf("non-existent storage slot for deleting, %x %x", addrHash, storageHash))
-				}
-				delete(slots, storageHash)
-			} else {
-				if data, ok := slots[storageHash]; ok {
-					delta += len(blob) - len(data)
-				} else {
-					delta += 2*common.HashLength + len(blob)
-				}
-				slots[storageHash] = blob
+			data, ok := slots[storageHash]
+			if !ok {
+				panic(fmt.Sprintf("non-existent storage slot for reverting, %x-%x", addrHash, storageHash))
 			}
-		}
-		if len(slots) == 0 {
-			delete(s.storageData, addrHash)
-		} else {
-			s.storageData[addrHash] = slots
+			delta += len(blob) - len(data)
+
+			if len(blob) != 0 {
+				slots[storageHash] = blob
+			} else {
+				if len(data) == 0 {
+					panic(fmt.Sprintf("invalid storage slot mutation (null to null), %x-%x", addrHash, storageHash))
+				}
+				slots[storageHash] = nil
+			}
 		}
 	}
 	s.clearCache()
@@ -437,86 +317,65 @@ func (s *stateSet) updateSize(delta int) {
 
 // encode serializes the content of state set into the provided writer.
 func (s *stateSet) encode(w io.Writer) error {
-	// Encode destructs
-	destructs := make([]common.Hash, 0, len(s.destructSet))
-	for hash := range s.destructSet {
-		destructs = append(destructs, hash)
-	}
-	if err := rlp.Encode(w, destructs); err != nil {
-		return err
-	}
 	// Encode accounts
-	type account struct {
-		Hash common.Hash
-		Blob []byte
+	type accounts struct {
+		AddrHashes []common.Hash
+		Accounts   [][]byte
 	}
-	accounts := make([]account, 0, len(s.accountData))
-	for hash, blob := range s.accountData {
-		accounts = append(accounts, account{Hash: hash, Blob: blob})
+	var enc accounts
+	for addrHash, blob := range s.accountData {
+		enc.AddrHashes = append(enc.AddrHashes, addrHash)
+		enc.Accounts = append(enc.Accounts, blob)
 	}
-	if err := rlp.Encode(w, accounts); err != nil {
+	if err := rlp.Encode(w, enc); err != nil {
 		return err
 	}
 	// Encode storages
 	type Storage struct {
-		Hash  common.Hash
-		Keys  []common.Hash
-		Blobs [][]byte
+		AddrHash common.Hash
+		Keys     []common.Hash
+		Blobs    [][]byte
 	}
 	storages := make([]Storage, 0, len(s.storageData))
-	for accountHash, slots := range s.storageData {
+	for addrHash, slots := range s.storageData {
 		keys := make([]common.Hash, 0, len(slots))
 		vals := make([][]byte, 0, len(slots))
 		for key, val := range slots {
 			keys = append(keys, key)
 			vals = append(vals, val)
 		}
-		storages = append(storages, Storage{Hash: accountHash, Keys: keys, Blobs: vals})
+		storages = append(storages, Storage{
+			AddrHash: addrHash,
+			Keys:     keys,
+			Blobs:    vals,
+		})
 	}
-	if err := rlp.Encode(w, storages); err != nil {
-		return err
-	}
-	// Encode journal
-	return s.journal.encode(w)
+	return rlp.Encode(w, storages)
 }
 
 // decode deserializes the content from the rlp stream into the state set.
 func (s *stateSet) decode(r *rlp.Stream) error {
-	// Decode destructs
-	var (
-		destructs   []common.Hash
-		destructSet = make(map[common.Hash]struct{})
-	)
-	if err := r.Decode(&destructs); err != nil {
-		return fmt.Errorf("load diff destructs: %v", err)
-	}
-	for _, hash := range destructs {
-		destructSet[hash] = struct{}{}
-	}
-	s.destructSet = destructSet
-
-	// Decode accounts
-	type account struct {
-		Hash common.Hash
-		Blob []byte
+	type accounts struct {
+		AddrHashes []common.Hash
+		Accounts   [][]byte
 	}
 	var (
-		accounts   []account
+		dec        accounts
 		accountSet = make(map[common.Hash][]byte)
 	)
-	if err := r.Decode(&accounts); err != nil {
+	if err := r.Decode(&dec); err != nil {
 		return fmt.Errorf("load diff accounts: %v", err)
 	}
-	for _, account := range accounts {
-		accountSet[account.Hash] = account.Blob
+	for i := 0; i < len(dec.AddrHashes); i++ {
+		accountSet[dec.AddrHashes[i]] = dec.Accounts[i]
 	}
 	s.accountData = accountSet
 
 	// Decode storages
 	type storage struct {
-		AccountHash common.Hash
-		Keys        []common.Hash
-		Vals        [][]byte
+		AddrHash common.Hash
+		Keys     []common.Hash
+		Vals     [][]byte
 	}
 	var (
 		storages   []storage
@@ -526,19 +385,14 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 		return fmt.Errorf("load diff storage: %v", err)
 	}
 	for _, entry := range storages {
-		storageSet[entry.AccountHash] = make(map[common.Hash][]byte)
+		storageSet[entry.AddrHash] = make(map[common.Hash][]byte, len(entry.Keys))
 		for i := 0; i < len(entry.Keys); i++ {
-			storageSet[entry.AccountHash][entry.Keys[i]] = entry.Vals[i]
+			storageSet[entry.AddrHash][entry.Keys[i]] = entry.Vals[i]
 		}
 	}
 	s.storageData = storageSet
 	s.storageListSorted = make(map[common.Hash][]common.Hash)
 
-	// Decode journal
-	s.journal = &journal{}
-	if err := s.journal.decode(r); err != nil {
-		return err
-	}
 	s.size = s.check()
 	return nil
 }
@@ -546,20 +400,18 @@ func (s *stateSet) decode(r *rlp.Stream) error {
 // reset clears all cached state data, including any optional sorted lists that
 // may have been generated.
 func (s *stateSet) reset() {
-	s.destructSet = make(map[common.Hash]struct{})
 	s.accountData = make(map[common.Hash][]byte)
 	s.storageData = make(map[common.Hash]map[common.Hash][]byte)
 	s.size = 0
-	s.journal.reset()
 	s.accountListSorted = nil
 	s.storageListSorted = make(map[common.Hash][]common.Hash)
 }
 
 // dbsize returns the approximate size for db write.
 //
-//nolint:unused
+// nolint:unused
 func (s *stateSet) dbsize() int {
-	m := (len(s.destructSet) + len(s.accountData)) * len(rawdb.SnapshotAccountPrefix)
+	m := len(s.accountData) * len(rawdb.SnapshotAccountPrefix)
 	for _, slots := range s.storageData {
 		m += len(slots) * len(rawdb.SnapshotStoragePrefix)
 	}
@@ -587,7 +439,7 @@ type StateSetWithOrigin struct {
 }
 
 // NewStateSetWithOrigin constructs the state set with the provided data.
-func NewStateSetWithOrigin(destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte, accountOrigin map[common.Address][]byte, storageOrigin map[common.Address]map[common.Hash][]byte) *StateSetWithOrigin {
+func NewStateSetWithOrigin(accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte, accountOrigin map[common.Address][]byte, storageOrigin map[common.Address]map[common.Hash][]byte) *StateSetWithOrigin {
 	// Don't panic for the lazy callers, initialize the nil maps instead.
 	if accountOrigin == nil {
 		accountOrigin = make(map[common.Address][]byte)
@@ -607,7 +459,7 @@ func NewStateSetWithOrigin(destructs map[common.Hash]struct{}, accounts map[comm
 			size += 2*common.HashLength + len(data)
 		}
 	}
-	set := newStates(destructs, accounts, storages)
+	set := newStates(accounts, storages)
 	return &StateSetWithOrigin{
 		stateSet:      set,
 		accountOrigin: accountOrigin,
