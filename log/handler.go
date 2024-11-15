@@ -13,42 +13,6 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-// Lazy allows you to defer calculation of a logged value that is expensive
-// to compute until it is certain that it must be evaluated with the given filters.
-//
-// You may wrap any function which takes no arguments to Lazy. It may return any
-// number of values of any type.
-type Lazy struct {
-	Fn interface{}
-}
-
-func evaluateLazy(lz Lazy) (interface{}, error) {
-	t := reflect.TypeOf(lz.Fn)
-
-	if t.Kind() != reflect.Func {
-		return nil, fmt.Errorf("INVALID_LAZY, not func: %+v", lz.Fn)
-	}
-
-	if t.NumIn() > 0 {
-		return nil, fmt.Errorf("INVALID_LAZY, func takes args: %+v", lz.Fn)
-	}
-
-	if t.NumOut() == 0 {
-		return nil, fmt.Errorf("INVALID_LAZY, no func return val: %+v", lz.Fn)
-	}
-
-	value := reflect.ValueOf(lz.Fn)
-	results := value.Call([]reflect.Value{})
-	if len(results) == 1 {
-		return results[0].Interface(), nil
-	}
-	values := make([]interface{}, len(results))
-	for i, v := range results {
-		values[i] = v.Interface()
-	}
-	return values, nil
-}
-
 type discardHandler struct{}
 
 // DiscardHandler returns a no-op handler
@@ -112,7 +76,7 @@ func NewTerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) *T
 func (h *TerminalHandler) Handle(_ context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	buf := h.TerminalFormat(h.buf, r, h.useColor)
+	buf := h.format(h.buf, r, h.useColor)
 	h.wr.Write(buf)
 	h.buf = buf[:0]
 	return nil
@@ -149,6 +113,7 @@ func (l *leveler) Level() slog.Level {
 	return l.minLevel
 }
 
+// JSONHandler returns a handler which prints records in JSON format.
 func JSONHandler(wr io.Writer) slog.Handler {
 	return slog.NewJSONHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplaceJSON,

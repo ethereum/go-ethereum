@@ -107,7 +107,6 @@ func TestLoggerOutput(t *testing.T) {
 		bigint    = big.NewInt(100)
 		nilbig    *big.Int
 		err       = fmt.Errorf("Oh nooes it's crap")
-		lazy      = Lazy{Fn: func() interface{} { return "lazy value" }}
 		smallUint = uint256.NewInt(500_000)
 		bigUint   = &uint256.Int{0xff, 0xff, 0xff, 0xff}
 	)
@@ -126,13 +125,12 @@ func TestLoggerOutput(t *testing.T) {
 		"struct", customA,
 		"struct", customB,
 		"ptrstruct", &customA,
-		"lazy", lazy,
 		"smalluint", smallUint,
 		"bigUint", bigUint)
 
 	have := out.String()
 	t.Logf("output %v", out.String())
-	want := `INFO [11-07|19:14:33.821] This is a message                        foo=123 bytes="[0 0 0 0 0 0 0 0 0 0]" bonk="a string with text" time=0001-01-01T00:00:00+0000 bigint=100 nilbig=<nil> err="Oh nooes it's crap" struct="{A:Foo B:12}" struct="{A:Foo\nLinebreak B:122}" ptrstruct="&{A:Foo B:12}" lazy="lazy value" smalluint=500,000 bigUint=1,600,660,942,523,603,594,864,898,306,482,794,244,293,965,082,972,225,630,372,095
+	want := `INFO [11-07|19:14:33.821] This is a message                        foo=123 bytes="[0 0 0 0 0 0 0 0 0 0]" bonk="a string with text" time=0001-01-01T00:00:00+0000 bigint=100 nilbig=<nil> err="Oh nooes it's crap" struct="{A:Foo B:12}" struct="{A:Foo\nLinebreak B:122}" ptrstruct="&{A:Foo B:12}" smalluint=500,000 bigUint=1,600,660,942,523,603,594,864,898,306,482,794,244,293,965,082,972,225,630,372,095
 `
 	if !bytes.Equal([]byte(have)[25:], []byte(want)[25:]) {
 		t.Errorf("Error\nhave: %q\nwant: %q", have, want)

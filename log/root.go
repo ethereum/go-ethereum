@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"os"
 	"sync/atomic"
 
@@ -114,4 +115,8 @@ func Crit(msg string, ctx ...interface{}) {
 // New is a convenient alias for Root().New
 func New(ctx ...interface{}) Logger {
 	return Root().With(ctx...)
+}
+
+func Enabled(level slog.Level) bool {
+	return Root().Enabled(context.Background(), level)
 }

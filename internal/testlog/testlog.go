@@ -100,6 +100,10 @@ func LoggerWithHandler(t *testing.T, handler slog.Handler) log.Logger {
 
 func (l *logger) Write(level slog.Level, msg string, ctx ...interface{}) {}
 
+func (l *logger) Enabled(ctx context.Context, level slog.Level) bool {
+	return l.l.Enabled(ctx, level)
+}
+
 func (l *logger) Trace(msg string, ctx ...interface{}) {
 	l.t.Helper()
 	l.mu.Lock()
@@ -183,7 +187,7 @@ func (h *bufHandler) terminalFormat(r slog.Record) string {
 	}
 
 	for _, attr := range attrs {
-		fmt.Fprintf(buf, " %s=%s", attr.Key, string(log.FormatSlogValue(attr.Value, true, nil)))
+		fmt.Fprintf(buf, " %s=%s", attr.Key, string(log.FormatSlogValue(attr.Value, nil)))
 	}
 	buf.WriteByte('\n')
 	return buf.String()
