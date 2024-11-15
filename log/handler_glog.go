@@ -57,6 +57,11 @@ func NewGlogHandler(h Handler) *GlogHandler {
 	}
 }
 
+// SetHandler updates the handler to write records to the specified sub-handler.
+func (h *GlogHandler) SetHandler(nh Handler) {
+	h.origin = nh
+}
+
 // pattern contains a filter for the Vmodule option, holding a verbosity level
 // and a file pattern to match.
 type pattern struct {
@@ -77,14 +82,14 @@ func (h *GlogHandler) Verbosity(level Lvl) {
 //
 // For instance:
 //
-//  pattern="gopher.go=3"
-//   sets the V level to 3 in all Go files named "gopher.go"
+//	pattern="gopher.go=3"
+//	 sets the V level to 3 in all Go files named "gopher.go"
 //
-//  pattern="foo=3"
-//   sets V to 3 in all files of any packages whose import path ends in "foo"
+//	pattern="foo=3"
+//	 sets V to 3 in all files of any packages whose import path ends in "foo"
 //
-//  pattern="foo/*=3"
-//   sets V to 3 in all files of any packages whose import path contains "foo"
+//	pattern="foo/*=3"
+//	 sets V to 3 in all files of any packages whose import path contains "foo"
 func (h *GlogHandler) Vmodule(ruleset string) error {
 	var filter []pattern
 	for _, rule := range strings.Split(ruleset, ",") {
