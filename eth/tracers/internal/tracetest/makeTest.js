@@ -1,10 +1,10 @@
 // makeTest generates a test for the configured tracer by running
 // a prestate reassembled and a call trace run, assembling all the
 // gathered information into a test case.
-var makeTest = function(tx, traceConfig) {
+const makeTest = function(tx, traceConfig) {
     // Generate the genesis block from the block, transaction and prestate data
-    var block   = eth.getBlock(eth.getTransaction(tx).blockHash);
-    var genesis = eth.getBlock(block.parentHash);
+    const block = eth.getBlock(eth.getTransaction(tx).blockHash);
+    let genesis = eth.getBlock(block.parentHash);
 
     delete genesis.gasUsed;
     delete genesis.logsBloom;
@@ -21,8 +21,8 @@ var makeTest = function(tx, traceConfig) {
     genesis.timestamp = genesis.timestamp.toString();
 
     genesis.alloc = debug.traceTransaction(tx, {tracer: "prestateTracer"});
-    for (var key in genesis.alloc) {
-        var nonce = genesis.alloc[key].nonce;
+    for (const key in genesis.alloc) {
+        const nonce = genesis.alloc[key].nonce;
         if (nonce) {
             genesis.alloc[key].nonce = nonce.toString();
         }
@@ -30,10 +30,10 @@ var makeTest = function(tx, traceConfig) {
     genesis.config = admin.nodeInfo.protocols.eth.config;
 
     // Generate the call trace and produce the test input
-    var result = debug.traceTransaction(tx, traceConfig);
+    const result = debug.traceTransaction(tx, traceConfig);
     delete result.time;
 
-    var context = {
+    const context = {
         number:     block.number.toString(),
         difficulty: block.difficulty,
         timestamp:  block.timestamp.toString(),
