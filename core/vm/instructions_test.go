@@ -106,7 +106,7 @@ func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFu
 		env            = NewEVM(BlockContext{}, TxContext{}, nil, nil, params.TestChainConfig, Config{})
 		stack          = newstack()
 		pc             = uint64(0)
-		evmInterpreter = env.interpreter.(*EVMInterpreter)
+		evmInterpreter = env.interpreter
 	)
 
 	for i, test := range tests {
@@ -249,7 +249,7 @@ func TestWriteExpectedValues(t *testing.T) {
 			env         = NewEVM(BlockContext{}, TxContext{}, nil, nil, params.TestChainConfig, Config{})
 			stack       = newstack()
 			pc          = uint64(0)
-			interpreter = env.interpreter.(*EVMInterpreter)
+			interpreter = env.interpreter
 		)
 		result := make([]TwoOperandTestcase, len(args))
 		for i, param := range args {
