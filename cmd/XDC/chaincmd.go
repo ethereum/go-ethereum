@@ -203,6 +203,8 @@ func initGenesis(ctx *cli.Context) error {
 
 	// Open an initialise both full and light databases
 	stack, _ := makeFullNode(ctx)
+	defer stack.Close()
+
 	for _, name := range []string{"chaindata", "lightchaindata"} {
 		chaindb, err := stack.OpenDatabase(name, 0, 0, "")
 		if err != nil {
@@ -228,6 +230,8 @@ func importChain(ctx *cli.Context) error {
 	go metrics.CollectProcessMetrics(3 * time.Second)
 
 	stack, _ := makeFullNode(ctx)
+	defer stack.Close()
+
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
 
@@ -319,6 +323,8 @@ func exportChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack, _ := makeFullNode(ctx)
+	defer stack.Close()
+
 	chain, db := utils.MakeChain(ctx, stack)
 	defer db.Close()
 	start := time.Now()
@@ -353,6 +359,8 @@ func importPreimages(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack, _ := makeFullNode(ctx)
+	defer stack.Close()
+
 	diskdb := utils.MakeChainDatabase(ctx, stack)
 	defer diskdb.Close()
 
@@ -370,6 +378,8 @@ func exportPreimages(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack, _ := makeFullNode(ctx)
+	defer stack.Close()
+
 	diskdb := utils.MakeChainDatabase(ctx, stack)
 	defer diskdb.Close()
 
@@ -388,6 +398,8 @@ func copyDb(ctx *cli.Context) error {
 	}
 	// Initialize a new chain for the running node to sync into
 	stack, _ := makeFullNode(ctx)
+	defer stack.Close()
+	
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
 
@@ -461,9 +473,11 @@ func removeDB(ctx *cli.Context) error {
 
 func dump(ctx *cli.Context) error {
 	stack, _ := makeFullNode(ctx)
+	defer stack.Close()
+
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
-	
+
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
