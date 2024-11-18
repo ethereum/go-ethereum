@@ -363,7 +363,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		headers         stat
 		bodies          stat
 		receipts        stat
-		tds             stat
 		numHashPairings stat
 		hashNumPairings stat
 		legacyTries     stat
@@ -408,6 +407,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			bodies.Add(size)
 		case bytes.HasPrefix(key, blockReceiptsPrefix) && len(key) == (len(blockReceiptsPrefix)+8+common.HashLength):
 			receipts.Add(size)
+		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerTDSuffix):
+			// The TD has been removed, but we still count it here
+			// to avoid overusing the unknown data counter.
 		case bytes.HasPrefix(key, headerPrefix) && bytes.HasSuffix(key, headerHashSuffix):
 			numHashPairings.Add(size)
 		case bytes.HasPrefix(key, headerNumberPrefix) && len(key) == (len(headerNumberPrefix)+common.HashLength):
@@ -498,7 +500,6 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Headers", headers.Size(), headers.Count()},
 		{"Key-Value store", "Bodies", bodies.Size(), bodies.Count()},
 		{"Key-Value store", "Receipt lists", receipts.Size(), receipts.Count()},
-		{"Key-Value store", "Difficulties", tds.Size(), tds.Count()},
 		{"Key-Value store", "Block number->hash", numHashPairings.Size(), numHashPairings.Count()},
 		{"Key-Value store", "Block hash->number", hashNumPairings.Size(), hashNumPairings.Count()},
 		{"Key-Value store", "Transaction index", txLookups.Size(), txLookups.Count()},

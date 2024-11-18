@@ -140,7 +140,7 @@ func errOut(n int, err error) chan error {
 // td are stored correctly in chain. If ttd is not configured yet, all headers
 // will be treated legacy PoW headers.
 // Note, this function will not verify the header validity but just split them.
-func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) ([]*types.Header, []*types.Header, error) {
+func (beacon *Beacon) splitHeaders(headers []*types.Header) ([]*types.Header, []*types.Header, error) {
 	var (
 		preHeaders  = headers
 		postHeaders []*types.Header
@@ -160,7 +160,7 @@ func (beacon *Beacon) splitHeaders(chain consensus.ChainHeaderReader, headers []
 // a results channel to retrieve the async verifications.
 // VerifyHeaders expect the headers to be ordered and continuous.
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
-	preHeaders, postHeaders, err := beacon.splitHeaders(chain, headers)
+	preHeaders, postHeaders, err := beacon.splitHeaders(headers)
 	if err != nil {
 		return make(chan struct{}), errOut(len(headers), err)
 	}
