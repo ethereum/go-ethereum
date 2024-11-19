@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -290,6 +291,7 @@ func (self *worker) update() {
 		}
 	}()
 	for {
+		prevReset0TimeMillisec := int64(0)
 		// A real event arrived, process interesting content
 		select {
 		case v := <-MinePeriodCh:
@@ -301,12 +303,14 @@ func (self *worker) update() {
 			if atomic.LoadInt32(&self.mining) == 1 {
 				self.commitNewWork()
 			}
-			timeout.Reset(time.Duration(minePeriod) * time.Second)
+			resetTime := getResetTime(self.chain, minePeriod, &prevReset0TimeMillisec)
+			timeout.Reset(resetTime)
 
 		// Handle ChainHeadEvent
 		case <-self.chainHeadCh:
 			self.commitNewWork()
-			timeout.Reset(time.Duration(minePeriod) * time.Second)
+			resetTime := getResetTime(self.chain, minePeriod, &prevReset0TimeMillisec)
+			timeout.Reset(resetTime)
 
 		// Handle ChainSideEvent
 		case <-self.chainSideCh:
@@ -351,6 +355,31 @@ func (self *worker) update() {
 			return
 		}
 	}
+}
+
+func getResetTime(chain *core.BlockChain, minePeriod int, prevReset0TimeMillisec *int64) time.Duration {
+	minePeriodDuration := time.Duration(minePeriod) * time.Second
+	currentBlockTime := chain.CurrentBlock().Time().Int64()
+	nowTime := time.Now().UnixMilli()
+	resetTime := time.Duration(currentBlockTime)*time.Second + minePeriodDuration - time.Duration(nowTime)*time.Millisecond
+	// in case the current block time is not very accurate
+	if resetTime > minePeriodDuration {
+		resetTime = minePeriodDuration
+	}
+	// in case the current block is too far in the past, the block time already is huge, we wait for mine period
+	if resetTime < 0 {
+		resetTime = minePeriodDuration
+	}
+	if resetTime == 0 {
+		if nowTime == *prevReset0TimeMillisec {
+			// in case it resets to 0 in one millisecond too many times, we wait for mine period
+			resetTime = minePeriodDuration
+		} else {
+			*prevReset0TimeMillisec = nowTime
+		}
+	}
+	log.Debug("[update] Miner worker timer reset", "resetMilliseconds", resetTime.Milliseconds(), "minePeriodSec", minePeriod, "currentBlockTimeSec", fmt.Sprintf("%d", currentBlockTime), "currentSystemTimeSec", fmt.Sprintf("%d.%03d", nowTime/1000, nowTime%1000))
+	return resetTime
 }
 
 func (self *worker) wait() {
