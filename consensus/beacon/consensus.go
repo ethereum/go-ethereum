@@ -79,6 +79,8 @@ func New(ethone consensus.Engine) *Beacon {
 // chains, we do need a split point. This method supports setting an explicit
 // block number to use as the splitter *for testing*, instead of having to keep
 // the notion of TDs in the client just for testing.
+//
+// The block with supplied number is regarded as the last pre-merge block.
 func (beacon *Beacon) TestingTTDBlock(number uint64) {
 	beacon.ttdblock = &number
 }
@@ -100,7 +102,7 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 	// genesis to build up the TD. This stops being a possibility if the tail of
 	// the chain is pruned already during sync.
 	//
-	// One heuristic that can be used to distinguis pre-merge and post-merge
+	// One heuristic that can be used to distinguish pre-merge and post-merge
 	// blocks is whether their *difficulty* is >0 or ==0 respectively. This of
 	// course would mean that we cannot prove anymore for a past chain that it
 	// truly transitioned at the correct TTD, but if we consider that ancient
@@ -126,21 +128,11 @@ func (beacon *Beacon) VerifyHeader(chain consensus.ChainHeaderReader, header *ty
 	return beacon.verifyHeader(chain, header, parent)
 }
 
-// errOut constructs an error channel with prefilled errors inside.
-func errOut(n int, err error) chan error {
-	errs := make(chan error, n)
-	for i := 0; i < n; i++ {
-		errs <- err
-	}
-	return errs
-}
-
 // splitHeaders splits the provided header batch into two parts according to
-// the configured ttd. It requires the parent of header batch along with its
-// td are stored correctly in chain. If ttd is not configured yet, all headers
-// will be treated legacy PoW headers.
+// the difficulty field.
+//
 // Note, this function will not verify the header validity but just split them.
-func (beacon *Beacon) splitHeaders(headers []*types.Header) ([]*types.Header, []*types.Header, error) {
+func (beacon *Beacon) splitHeaders(headers []*types.Header) ([]*types.Header, []*types.Header) {
 	var (
 		preHeaders  = headers
 		postHeaders []*types.Header
@@ -152,7 +144,7 @@ func (beacon *Beacon) splitHeaders(headers []*types.Header) ([]*types.Header, []
 			break
 		}
 	}
-	return preHeaders, postHeaders, nil
+	return preHeaders, postHeaders
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
@@ -160,10 +152,7 @@ func (beacon *Beacon) splitHeaders(headers []*types.Header) ([]*types.Header, []
 // a results channel to retrieve the async verifications.
 // VerifyHeaders expect the headers to be ordered and continuous.
 func (beacon *Beacon) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header) (chan<- struct{}, <-chan error) {
-	preHeaders, postHeaders, err := beacon.splitHeaders(headers)
-	if err != nil {
-		return make(chan struct{}), errOut(len(headers), err)
-	}
+	preHeaders, postHeaders := beacon.splitHeaders(headers)
 	if len(postHeaders) == 0 {
 		return beacon.ethone.VerifyHeaders(chain, headers)
 	}
