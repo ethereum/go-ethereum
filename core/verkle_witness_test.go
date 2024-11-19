@@ -338,7 +338,7 @@ func TestProcessVerkleInvalidContractCreation(t *testing.T) {
 				}
 			}
 		} else if bytes.Equal(stemStateDiff.Stem[:], tx1ContractStem) {
-			// For this contract creation, check that only the accound header and storage slot 41
+			// For this contract creation, check that only the account header and storage slot 41
 			// are found in the witness.
 			for _, suffixDiff := range stemStateDiff.SuffixDiffs {
 				if suffixDiff.Suffix != 105 && suffixDiff.Suffix != 0 && suffixDiff.Suffix != 1 {
