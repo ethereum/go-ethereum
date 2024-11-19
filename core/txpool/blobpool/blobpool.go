@@ -1714,3 +1714,53 @@ func (p *BlobPool) Status(hash common.Hash) txpool.TxStatus {
 	}
 	return txpool.TxStatusUnknown
 }
+
+// Clear implements txpool.SubPool, removing all tracked transactions
+// from the blob pool and persistent store.
+func (p *BlobPool) Clear() {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	// manually iterating and deleting every entry is super sub-optimal
+	// However, Clear is not currently used in production so
+	// performance is not critical at the moment.
+	for hash := range p.lookup.txIndex {
+		id, _ := p.lookup.storeidOfTx(hash)
+		if err := p.store.Delete(id); err != nil {
+			log.Warn("failed to delete blob tx from backing store", "err", err)
+		}
+	}
+	for hash := range p.lookup.blobIndex {
+		id, _ := p.lookup.storeidOfBlob(hash)
+		if err := p.store.Delete(id); err != nil {
+			log.Warn("failed to delete blob from backing store", "err", err)
+		}
+	}
+
+	// unreserve each tracked account.  Ideally, we could just clear the
+	// reservation map in the parent txpool context.  However, if we clear in
+	// parent context, to avoid exposing the subpool lock, we have to lock the
+	// reservations and then lock each subpool.
+	//
+	// This creates the potential for a deadlock situation:
+	//
+	// * TxPool.Clear locks the reservations
+	// * a new transaction is received which locks the subpool mutex
+	// * TxPool.Clear attempts to lock subpool mutex
+	//
+	// The transaction addition may attempt to reserve the sender addr which
+	// can't happen until Clear releases the reservation lock.  Clear cannot
+	// acquire the subpool lock until the transaction addition is completed.
+	for acct, _ := range p.index {
+		p.reserve(acct, false)
+	}
+	p.lookup = newLookup()
+	p.index = make(map[common.Address][]*blobTxMeta)
+	p.spent = make(map[common.Address]*uint256.Int)
+
+	var (
+		basefee = uint256.MustFromBig(eip1559.CalcBaseFee(p.chain.Config(), p.head))
+		blobfee = uint256.NewInt(params.BlobTxMinBlobGasprice)
+	)
+	p.evict = newPriceHeap(basefee, blobfee, p.index)
+}
