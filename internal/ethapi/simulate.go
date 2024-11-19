@@ -200,7 +200,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
-		if err := sim.sanitizeCall(&call, sim.state, header, blockContext, &gasUsed); err != nil {
+		if err := sim.sanitizeCall(&call, tracingStateDB, header, blockContext, &gasUsed); err != nil {
 			return nil, nil, err
 		}
 		tx := call.ToTransaction(types.DynamicFeeTxType)
@@ -265,7 +265,7 @@ func repairLogs(calls []simCallResult, hash common.Hash) {
 	}
 }
 
-func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, header *types.Header, blockContext vm.BlockContext, gasUsed *uint64) error {
+func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, header *types.Header, blockContext vm.BlockContext, gasUsed *uint64) error {
 	if call.Nonce == nil {
 		nonce := state.GetNonce(call.from())
 		call.Nonce = (*hexutil.Uint64)(&nonce)
