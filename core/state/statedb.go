@@ -940,9 +940,9 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 	defer iter.Release()
 
 	var (
-		nodes   = trienode.NewNodeSet(addrHash)
-		slots   = make(map[common.Hash][]byte)
-		deletes = make(map[common.Hash][]byte)
+		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is all nil)
+		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is all nil)
+		storageOrigins = make(map[common.Hash][]byte)  // the set for preserving the original slot value
 	)
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		nodes.AddNode(path, trienode.NewDeleted())
@@ -953,8 +953,8 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 			return nil, nil, nil, err
 		}
 		key := iter.Hash()
-		slots[key] = slot
-		deletes[key] = nil
+		storageOrigins[key] = slot
+		storages[key] = nil
 
 		if err := stack.Update(key.Bytes(), slot); err != nil {
 			return nil, nil, nil, err
@@ -966,7 +966,7 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 	if stack.Hash() != root {
 		return nil, nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
 	}
-	return deletes, slots, nodes, nil
+	return storages, storageOrigins, nodes, nil
 }
 
 // slowDeleteStorage serves as a less-efficient alternative to "fastDeleteStorage,"
