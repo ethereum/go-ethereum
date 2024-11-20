@@ -80,9 +80,13 @@ func FromChain(db ethdb.Database, chain *core.BlockChain, post *types.GenesisAll
 		}
 		blocks[i-1] = btBlock
 	}
-	alloc, err := core.GetGenesisState(db, chain.Genesis().Hash())
-	if err != nil {
-		return bt, fmt.Errorf("failed to get genesis alloc: %v", err)
+	allocData := rawdb.ReadGenesisStateSpec(db, chain.Genesis().Hash())
+	if len(allocData) == 0 {
+		return bt, fmt.Errorf("alloc data missing")
+	}
+	var alloc types.GenesisAlloc
+	if err := alloc.UnmarshalJSON(allocData); err != nil {
+		return bt, fmt.Errorf("failed to read genesis alloc: %v", err)
 	}
 	if post == nil {
 		post = &types.GenesisAlloc{}

@@ -120,12 +120,12 @@ func fillSupplyOmittedFields(path string) error {
 		}
 		expected = []supplyInfo{{
 			Number:     0,
-			Hash:       common.HexToHash("0x52f276d96f0afaaf2c3cb358868bdc2779c4b0cb8de3e7e5302e247c0b66a703"),
+			Hash:       common.HexToHash("0xc02ee8ee5b54a40e43f0fa827d431e1bd4f217e941790dda10b2521d1925a20b"),
 			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		}, {
 			Number:     1,
-			Hash:       common.HexToHash("0xe430cdf604a88b9d713d4f89fd100ddddf38c1cc6b049e3d5df563c7bfd320fc"),
-			ParentHash: common.HexToHash("0x52f276d96f0afaaf2c3cb358868bdc2779c4b0cb8de3e7e5302e247c0b66a703"),
+			Hash:       common.HexToHash("0x2aa3c443e44f958a52d9dc13a3748a23094892675bfedb362afbf6068248572b"),
+			ParentHash: common.HexToHash("0xc02ee8ee5b54a40e43f0fa827d431e1bd4f217e941790dda10b2521d1925a20b"),
 		}}
 	)
 	gspec.Config.TerminalTotalDifficulty = big.NewInt(0)
@@ -289,7 +289,7 @@ func fillSupplyWithdrawals(path string) error {
 		head     = chain.CurrentBlock()
 		expected = []supplyInfo{{
 			Number:     0,
-			Hash:       common.HexToHash("0x52f276d96f0afaaf2c3cb358868bdc2779c4b0cb8de3e7e5302e247c0b66a703"),
+			Hash:       common.HexToHash("0xc02ee8ee5b54a40e43f0fa827d431e1bd4f217e941790dda10b2521d1925a20b"),
 			ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		}, {
 			Issuance: &supplyInfoIssuance{
@@ -459,7 +459,7 @@ func fillSupplySelfdestruct(path string) error {
 			GenesisAlloc: (*hexutil.Big)(new(big.Int).Mul(big.NewInt(2), big.NewInt(params.Ether))),
 		},
 		Number:     0,
-		Hash:       common.HexToHash("0x16d2bb0b366d3963bf2d8d75cb4b3bc0f233047c948fa746cbd38ac82bf9cfe9"),
+		Hash:       common.HexToHash("0x9e597272c69b46903e5307d7f68a9026070d61e4e504fd2a96e41e4387466728"),
 		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 	}, {
 		Burn: &supplyInfoBurn{
