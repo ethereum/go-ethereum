@@ -151,6 +151,18 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return c.address, tx, c, nil
 }
 
+func DeployContractRaw(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *BoundContract, error) {
+	// Otherwise try to deploy the contract
+	c := NewBoundContract(common.Address{}, abi, backend, backend, backend)
+
+	tx, err := c.transact(opts, nil, append(bytecode, packedParams...))
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	c.address = crypto.CreateAddress(opts.From, tx.Nonce())
+	return c.address, tx, c, nil
+}
+
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
@@ -177,6 +189,10 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 	}
 	res := *results
 	return c.abi.UnpackIntoInterface(res[0], method, output)
+}
+
+func (c *BoundContract) CallRaw(opts *CallOpts, input []byte) ([]byte, error) {
+	return c.call(opts, input)
 }
 
 func (c *BoundContract) call(opts *CallOpts, input []byte) ([]byte, error) {

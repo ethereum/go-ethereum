@@ -75,28 +75,52 @@ func TestV2(t *testing.T) {
 		Backend: backend,
 		Client:  backend.Client(),
 	}
-	address, _, boundContract, err := bind.DeployContract(&opts, contractABI, common.Hex2Bytes(v2_generated_testcase.V2GeneratedTestcaseMetaData.Bin), &bindBackend)
+	address, tx, _, err := bind.DeployContract(&opts, contractABI, common.Hex2Bytes(v2_generated_testcase.V2GeneratedTestcaseMetaData.Bin), &bindBackend)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	_, err = bind.WaitDeployed(context.Background(), &bindBackend, tx)
+	if err != nil {
+		t.Fatalf("error deploying bound contract: %+v", err)
+	}
+
 	contract, err := v2_generated_testcase.NewV2GeneratedTestcase()
 	if err != nil {
 		t.Fatal(err) // can't happen here with the example used.  consider removing this block
 	}
-	contractInstance := v2_generated_testcase.NewV2GeneratedTestcaseInstance(contract, address)
-	sinkCh := make(chan *v2_generated_testcase.V2GeneratedTestcase)
+	//contractInstance := v2_generated_testcase.NewV2GeneratedTestcaseInstance(contract, address, bindBackend)
+	contractInstance := ContractInstance{
+		Address: address,
+		Backend: bindBackend,
+	}
+	sinkCh := make(chan *v2_generated_testcase.V2GeneratedTestcaseStruct)
 	// q:  what extra functionality is given by specifying this as a custom method, instead of catching emited methods
 	// from the sync channel?
-	unpackStruct := func(log *types.Log) (v2_generated_testcase.V2GeneratedTestcaseStruct, error) {
+	unpackStruct := func(log *types.Log) (*v2_generated_testcase.V2GeneratedTestcaseStruct, error) {
 		res, err := contract.UnpackStructEvent(log)
-		return *res, err
+		return res, err
+	}
+	watchOpts := bind.WatchOpts{
+		Start:   nil,
+		Context: context.Background(),
 	}
 	// TODO: test using various topics
 	// q: does nil topics mean to accept any?
-	sub, err := WatchLogs[v2_generated_testcase.V2GeneratedTestcaseStruct](contractInstance, v2_generated_testcase.V2GeneratedTestcaseStructEventID(), unpackStruct, sinkCh)
+	sub, err := WatchLogs[v2_generated_testcase.V2GeneratedTestcaseStruct](&contractInstance, &watchOpts, v2_generated_testcase.V2GeneratedTestcaseStructEventID(), unpackStruct, sinkCh, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer sub.Unsubscribe()
 	// send a balance to our contract (contract must accept ether by default)
 }
+
+func TestDeployment(t *testing.T) {
+	DeployContracts
+}
+
+/* test-cases that should be extracted from v1 tests
+
+* EventChecker
+
+ */
