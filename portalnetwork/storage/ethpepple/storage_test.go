@@ -11,6 +11,7 @@ import (
 )
 
 const dataDir = "./node1"
+
 var testRadius = uint256.NewInt(100000)
 
 func clearNodeData() {
@@ -23,10 +24,10 @@ func getTestDb() (storage.ContentStorage, error) {
 		return nil, err
 	}
 	config := PeppleStorageConfig{
-		DB: db,
+		DB:                db,
 		StorageCapacityMB: 100,
-		NodeId: enode.ID{},
-		NetworkName: "history",
+		NodeId:            enode.ID{},
+		NetworkName:       "history",
 	}
 	return NewPeppleStorage(config)
 }
@@ -35,7 +36,7 @@ func TestReadRadius(t *testing.T) {
 	db, err := getTestDb()
 	assert.NoError(t, err)
 	defer clearNodeData()
-	assert.True(t, db.Radius().Eq(storage.MaxDistance)) 
+	assert.True(t, db.Radius().Eq(storage.MaxDistance))
 
 	data, err := testRadius.MarshalSSZ()
 	assert.NoError(t, err)
@@ -70,5 +71,4 @@ func TestStorage(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, value, val)
 	}
-
 }

@@ -21,7 +21,7 @@ type PeppleStorageConfig struct {
 }
 
 func NewPeppleDB(dataDir string, cache, handles int, namespace string) (ethdb.KeyValueStore, error) {
-	db, err := pebble.New(dataDir + "/" + namespace, cache, handles, namespace, false)
+	db, err := pebble.New(dataDir+"/"+namespace, cache, handles, namespace, false)
 	return db, err
 }
 
@@ -30,19 +30,19 @@ type ContentStorage struct {
 	storageCapacityInBytes uint64
 	radius                 atomic.Value
 	// size 									 uint64
-	log                    log.Logger
-	db ethdb.KeyValueStore
+	log log.Logger
+	db  ethdb.KeyValueStore
 }
 
 func NewPeppleStorage(config PeppleStorageConfig) (storage.ContentStorage, error) {
 	cs := &ContentStorage{
 		nodeId:                 config.NodeId,
-		db:               config.DB,
+		db:                     config.DB,
 		storageCapacityInBytes: config.StorageCapacityMB * 1000_000,
 		log:                    log.New("storage", config.NetworkName),
 	}
 	cs.radius.Store(storage.MaxDistance)
-	exist, err := cs.db.Has(storage.RadisuKey); 
+	exist, err := cs.db.Has(storage.RadisuKey)
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (c *ContentStorage) Put(contentKey []byte, contentId []byte, content []byte
 }
 
 // Radius implements storage.ContentStorage.
-func (p *ContentStorage) Radius() *uint256.Int {
-	radius := p.radius.Load()
+func (c *ContentStorage) Radius() *uint256.Int {
+	radius := c.radius.Load()
 	val := radius.(*uint256.Int)
 	return val
 }
