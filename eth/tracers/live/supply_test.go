@@ -52,7 +52,7 @@ func (bt *blockTest) UnmarshalJSON(data []byte) error {
 // The tests have been filled using the executable at
 // eth/tracers/live/tests/supply_filler.go.
 func TestSupplyTracerBlockchain(t *testing.T) {
-	dirPath := filepath.Join("tests", "supply")
+	dirPath := filepath.Join("testdata", "supply")
 	files, err := os.ReadDir(dirPath)
 	if err != nil {
 		t.Fatalf("failed to retrieve tracer test suite: %v", err)

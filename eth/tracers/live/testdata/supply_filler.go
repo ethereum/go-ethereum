@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"os"
 	"path"
@@ -137,7 +138,7 @@ func fillSupplyOmittedFields(path string) error {
 	if err := compareAsJSON(expected, out); err != nil {
 		return err
 	}
-	if err := writeArtifact(filepath.Join(path, "omitted_fields.json"), "omitted_fields_cancun", db, chain, expected, nil); err != nil {
+	if err := writeArtefact(filepath.Join(path, "omitted_fields.json"), "omitted_fields_cancun", db, chain, expected, nil); err != nil {
 		return err
 	}
 	return nil
@@ -183,7 +184,7 @@ func fillSupplyGenesisAlloc(path string) error {
 	if err := compareAsJSON(expected, out); err != nil {
 		return err
 	}
-	if err := writeArtifact(filepath.Join(path, "genesis_alloc.json"), "genesis_alloc_grayGlacier", db, chain, expected, nil); err != nil {
+	if err := writeArtefact(filepath.Join(path, "genesis_alloc.json"), "genesis_alloc_grayGlacier", db, chain, expected, nil); err != nil {
 		return err
 	}
 	return nil
@@ -255,7 +256,7 @@ func fillSupplyEip1559Burn(path string) error {
 	if err := compareAsJSON(expected, out); err != nil {
 		return err
 	}
-	if err := writeArtifact(filepath.Join(path, "eip1559_burn.json"), "eip1559_burn_grayGlacier", db, chain, expected, nil); err != nil {
+	if err := writeArtefact(filepath.Join(path, "eip1559_burn.json"), "eip1559_burn_grayGlacier", db, chain, expected, nil); err != nil {
 		return err
 	}
 	return nil
@@ -302,7 +303,7 @@ func fillSupplyWithdrawals(path string) error {
 	if err := compareAsJSON(expected, out); err != nil {
 		return err
 	}
-	if err := writeArtifact(filepath.Join(path, "withdrawals.json"), "withdrawals_cancun", db, chain, expected, nil); err != nil {
+	if err := writeArtefact(filepath.Join(path, "withdrawals.json"), "withdrawals_cancun", db, chain, expected, nil); err != nil {
 		return err
 	}
 	return nil
@@ -636,7 +637,7 @@ func fillSupplySelfdestructItselfAndRevert(path string) error {
 	if err := compareAsJSON(expected, output); err != nil {
 		return err
 	}
-	if err := writeArtifact(filepath.Join(path, "selfdestruct_itself_and_revert.json"), "selfdestruct_itself_and_revert_grayGlacier", db, chain, expected, nil); err != nil {
+	if err := writeArtefact(filepath.Join(path, "selfdestruct_itself_and_revert.json"), "selfdestruct_itself_and_revert_grayGlacier", db, chain, expected, nil); err != nil {
 		return err
 	}
 	return nil
@@ -717,7 +718,7 @@ func compareAsJSON(expected interface{}, actual interface{}) error {
 	return nil
 }
 
-func writeArtifact(path, name string, db ethdb.Database, chain *core.BlockChain, expected []supplyInfo, post *types.GenesisAlloc) error {
+func writeArtefact(path, name string, db ethdb.Database, chain *core.BlockChain, expected []supplyInfo, post *types.GenesisAlloc) error {
 	bt, err := btFromChain(db, chain, post)
 	if err != nil {
 		return fmt.Errorf("failed to fill tests from chain: %v", err)
@@ -739,6 +740,7 @@ func writeBTs(path string, tests map[string]*blockTest) error {
 	if err := os.WriteFile(path, enc, 0644); err != nil {
 		return fmt.Errorf("failed to write test to file: %v", err)
 	}
+	slog.Info("Wrote artefact", "file", path)
 	return nil
 }
 
