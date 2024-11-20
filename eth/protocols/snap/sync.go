@@ -2212,8 +2212,9 @@ func (s *Syncer) processStorageResponse(res *storageResponse) {
 		// Persist the received storage segments. These flat state maybe
 		// outdated during the sync, but it can be fixed later during the
 		// snapshot generation.
+		var kBuf []byte
 		for j := 0; j < len(res.hashes[i]); j++ {
-			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
+			kBuf = rawdb.WriteStorageSnapshotWithKey(batch, kBuf, account, res.hashes[i][j], res.slots[i][j])
 
 			// If we're storing large contracts, generate the trie nodes
 			// on the fly to not trash the gluing points
@@ -2412,12 +2413,13 @@ func (s *Syncer) forwardAccountTask(task *accountTask) {
 			s.accountBytes += common.StorageSize(len(key) + len(value))
 		},
 	}
+	var kBuf []byte
 	for i, hash := range res.hashes {
 		if task.needCode[i] || task.needState[i] {
 			break
 		}
 		slim := types.SlimAccountRLP(*res.accounts[i])
-		rawdb.WriteAccountSnapshot(batch, hash, slim)
+		kBuf = rawdb.WriteAccountSnapshotWithKey(batch, kBuf, hash, slim)
 
 		if !task.needHeal[i] {
 			// If the storage task is complete, drop it into the stack trie

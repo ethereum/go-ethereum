@@ -85,6 +85,16 @@ func WriteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash, entry []byt
 	}
 }
 
+// WriteAccountSnapshot stores the snapshot entry of an account trie leaf.
+// The provided buf (allowed to be nil) is used for writing the key, and is potentially reallocated.
+func WriteAccountSnapshotWithKey(db ethdb.KeyValueWriter, buf []byte, hash common.Hash, entry []byte) []byte {
+	buf = appendAccountSnapshotKey(buf[:0], hash)
+	if err := db.Put(buf, entry); err != nil {
+		log.Crit("Failed to store account snapshot", "err", err)
+	}
+	return buf
+}
+
 // DeleteAccountSnapshot removes the snapshot entry of an account trie leaf.
 func DeleteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(accountSnapshotKey(hash)); err != nil {
@@ -96,6 +106,17 @@ func DeleteAccountSnapshot(db ethdb.KeyValueWriter, hash common.Hash) {
 func ReadStorageSnapshot(db ethdb.KeyValueReader, accountHash, storageHash common.Hash) []byte {
 	data, _ := db.Get(storageSnapshotKey(accountHash, storageHash))
 	return data
+}
+
+// WriteStorageSnapshotWithKey stores the snapshot entry of a storage trie leaf,
+// with a reusable buffer for keying. It shortens and then appends the key to the
+// buffer and returns the (potentially reallocated) buffer.
+func WriteStorageSnapshotWithKey(db ethdb.KeyValueWriter, buf []byte, accountHash, storageHash common.Hash, entry []byte) []byte {
+	buf = appendStorageSnapshotKey(buf[:0], accountHash, storageHash)
+	if err := db.Put(buf, entry); err != nil {
+		log.Crit("Failed to store storage snapshot", "err", err)
+	}
+	return buf
 }
 
 // WriteStorageSnapshot stores the snapshot entry of a storage trie leaf.

@@ -37,6 +37,7 @@ func nodeCacheKey(owner common.Hash, path []byte) []byte {
 // Note this function will also inject all the newly written nodes
 // into clean cache.
 func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.Node, clean *fastcache.Cache) (total int) {
+	var buf []byte
 	for owner, subset := range nodes {
 		for path, n := range subset {
 			if n.IsDeleted() {
@@ -50,9 +51,9 @@ func writeNodes(batch ethdb.Batch, nodes map[common.Hash]map[string]*trienode.No
 				}
 			} else {
 				if owner == (common.Hash{}) {
-					rawdb.WriteAccountTrieNode(batch, []byte(path), n.Blob)
+					buf = rawdb.WriteAccountTrieNodeWithKey(batch, buf, []byte(path), n.Blob)
 				} else {
-					rawdb.WriteStorageTrieNode(batch, owner, []byte(path), n.Blob)
+					buf = rawdb.WriteStorageTrieNodeWithKey(batch, buf, owner, []byte(path), n.Blob)
 				}
 				if clean != nil {
 					clean.Set(nodeCacheKey(owner, []byte(path)), n.Blob)

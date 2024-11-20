@@ -87,6 +87,17 @@ func WriteAccountTrieNode(db ethdb.KeyValueWriter, path []byte, node []byte) {
 	}
 }
 
+// WriteAccountTrieNodeWithKey writes the provided account trie node into database,
+// usng a reusable key buffer.
+func WriteAccountTrieNodeWithKey(db ethdb.KeyValueWriter, buf []byte, path []byte, node []byte) []byte {
+	buf = append(buf[:0], TrieNodeAccountPrefix...)
+	buf = append(buf, path...)
+	if err := db.Put(buf, node); err != nil {
+		log.Crit("Failed to store account trie node", "err", err)
+	}
+	return buf
+}
+
 // DeleteAccountTrieNode deletes the specified account trie node from the database.
 func DeleteAccountTrieNode(db ethdb.KeyValueWriter, path []byte) {
 	if err := db.Delete(accountTrieNodeKey(path)); err != nil {
@@ -115,6 +126,18 @@ func WriteStorageTrieNode(db ethdb.KeyValueWriter, accountHash common.Hash, path
 	if err := db.Put(storageTrieNodeKey(accountHash, path), node); err != nil {
 		log.Crit("Failed to store storage trie node", "err", err)
 	}
+}
+
+// WriteStorageTrieNodeWithKey writes the provided storage trie node into database, using
+// a reusable key buffer.
+func WriteStorageTrieNodeWithKey(db ethdb.KeyValueWriter, buf []byte, accountHash common.Hash, path []byte, node []byte) []byte {
+	buf = append(buf[:0], TrieNodeStoragePrefix...)
+	buf = append(buf, accountHash.Bytes()...)
+	buf = append(buf, path...)
+	if err := db.Put(buf, node); err != nil {
+		log.Crit("Failed to store storage trie node", "err", err)
+	}
+	return buf
 }
 
 // DeleteStorageTrieNode deletes the specified storage trie node from the database.
