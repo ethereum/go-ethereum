@@ -111,7 +111,7 @@ func (tr *tableRevalidation) startRequest(tab *Table, n *tableNode) {
 
 func (tab *Table) doRevalidate(resp revalidationResponse, node *enode.Node) {
 	// Ping the selected node and wait for a pong response.
-	remoteSeq, err := tab.net.ping(node)
+	remoteSeq, err := tab.net.Ping(node)
 	resp.didRespond = err == nil
 
 	// Also fetch record if the node replied and returned a higher sequence number.

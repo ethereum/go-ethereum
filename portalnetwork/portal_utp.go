@@ -1,4 +1,4 @@
-package discover
+package portalnetwork
 
 import (
 	"context"
@@ -8,10 +8,11 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/optimism-java/utp-go"
 	"github.com/optimism-java/utp-go/libutp"
 	"go.uber.org/zap"
@@ -20,8 +21,8 @@ import (
 type PortalUtp struct {
 	ctx          context.Context
 	log          log.Logger
-	discV5       *UDPv5
-	conn         UDPConn
+	discV5       *discover.UDPv5
+	conn         discover.UDPConn
 	ListenAddr   string
 	listener     *utp.Listener
 	utpSm        *utp.SocketManager
@@ -31,7 +32,7 @@ type PortalUtp struct {
 	startOnce sync.Once
 }
 
-func NewPortalUtp(ctx context.Context, config *PortalProtocolConfig, discV5 *UDPv5, conn UDPConn) *PortalUtp {
+func NewPortalUtp(ctx context.Context, config *PortalProtocolConfig, discV5 *discover.UDPv5, conn discover.UDPConn) *PortalUtp {
 	return &PortalUtp{
 		ctx:        ctx,
 		log:        log.New("protocol", "utp", "local", conn.LocalAddr().String()),

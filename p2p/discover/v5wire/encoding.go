@@ -94,7 +94,7 @@ const (
 	// Should reject packets smaller than minPacketSize.
 	minPacketSize = 63
 
-	maxPacketSize = 1280
+	MaxPacketSize = 1280
 
 	minMessageSize      = 48 // this refers to data after static headers
 	randomPacketMsgSize = 20
@@ -169,7 +169,7 @@ func NewCodec(ln *enode.LocalNode, key *ecdsa.PrivateKey, clock mclock.Clock, pr
 		privkey:    key,
 		sc:         NewSessionCache(1024, clock),
 		protocolID: DefaultProtocolID,
-		decbuf:     make([]byte, maxPacketSize),
+		decbuf:     make([]byte, MaxPacketSize),
 	}
 	if protocolID != nil {
 		c.protocolID = *protocolID

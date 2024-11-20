@@ -63,7 +63,7 @@ func TestRevalidation_nodeRemoved(t *testing.T) {
 	tr.handleResponse(tab, resp)
 
 	// Ensure the node was not re-added to the table.
-	if tab.getNode(node.ID()) != nil {
+	if tab.GetNode(node.ID()) != nil {
 		t.Fatal("node was re-added to Table")
 	}
 	if tr.fast.contains(node.ID()) || tr.slow.contains(node.ID()) {

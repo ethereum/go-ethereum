@@ -54,27 +54,27 @@ func (n *tableNode) String() string {
 	return n.Node.String()
 }
 
-// nodesByDistance is a list of nodes, ordered by distance to target.
-type nodesByDistance struct {
-	entries []*enode.Node
-	target  enode.ID
+// NodesByDistance is a list of nodes, ordered by distance to target.
+type NodesByDistance struct {
+	Entries []*enode.Node
+	Target  enode.ID
 }
 
-// push adds the given node to the list, keeping the total size below maxElems.
-func (h *nodesByDistance) push(n *enode.Node, maxElems int) {
-	ix := sort.Search(len(h.entries), func(i int) bool {
-		return enode.DistCmp(h.target, h.entries[i].ID(), n.ID()) > 0
+// Push adds the given node to the list, keeping the total size below maxElems.
+func (h *NodesByDistance) Push(n *enode.Node, maxElems int) {
+	ix := sort.Search(len(h.Entries), func(i int) bool {
+		return enode.DistCmp(h.Target, h.Entries[i].ID(), n.ID()) > 0
 	})
 
-	end := len(h.entries)
-	if len(h.entries) < maxElems {
-		h.entries = append(h.entries, n)
+	end := len(h.Entries)
+	if len(h.Entries) < maxElems {
+		h.Entries = append(h.Entries, n)
 	}
 	if ix < end {
 		// Slide existing entries down to make room.
 		// This will overwrite the entry we just appended.
-		copy(h.entries[ix+1:], h.entries[ix:])
-		h.entries[ix] = n
+		copy(h.Entries[ix+1:], h.Entries[ix:])
+		h.Entries[ix] = n
 	}
 }
 

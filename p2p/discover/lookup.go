@@ -24,30 +24,30 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
-// lookup performs a network search for nodes close to the given target. It approaches the
+// Lookup performs a network search for nodes close to the given target. It approaches the
 // target by querying nodes that are closer to it on each iteration. The given target does
 // not need to be an actual node identifier.
-type lookup struct {
+type Lookup struct {
 	tab         *Table
 	queryfunc   queryFunc
 	replyCh     chan []*enode.Node
 	cancelCh    <-chan struct{}
 	asked, seen map[enode.ID]bool
-	result      nodesByDistance
+	result      NodesByDistance
 	replyBuffer []*enode.Node
 	queries     int
 }
 
 type queryFunc func(*enode.Node) ([]*enode.Node, error)
 
-func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *lookup {
-	it := &lookup{
+func NewLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *Lookup {
+	it := &Lookup{
 		tab:       tab,
 		queryfunc: q,
 		asked:     make(map[enode.ID]bool),
 		seen:      make(map[enode.ID]bool),
-		result:    nodesByDistance{target: target},
-		replyCh:   make(chan []*enode.Node, alpha),
+		result:    NodesByDistance{Target: target},
+		replyCh:   make(chan []*enode.Node, Alpha),
 		cancelCh:  ctx.Done(),
 		queries:   -1,
 	}
@@ -57,16 +57,16 @@ func newLookup(ctx context.Context, tab *Table, target enode.ID, q queryFunc) *l
 	return it
 }
 
-// run runs the lookup to completion and returns the closest nodes found.
-func (it *lookup) run() []*enode.Node {
+// Run runs the lookup to completion and returns the closest nodes found.
+func (it *Lookup) Run() []*enode.Node {
 	for it.advance() {
 	}
-	return it.result.entries
+	return it.result.Entries
 }
 
 // advance advances the lookup until any new nodes have been found.
 // It returns false when the lookup has ended.
-func (it *lookup) advance() bool {
+func (it *Lookup) advance() bool {
 	for it.startQueries() {
 		select {
 		case nodes := <-it.replyCh:
@@ -74,7 +74,7 @@ func (it *lookup) advance() bool {
 			for _, n := range nodes {
 				if n != nil && !it.seen[n.ID()] {
 					it.seen[n.ID()] = true
-					it.result.push(n, bucketSize)
+					it.result.Push(n, BucketSize)
 					it.replyBuffer = append(it.replyBuffer, n)
 				}
 			}
@@ -89,7 +89,7 @@ func (it *lookup) advance() bool {
 	return false
 }
 
-func (it *lookup) shutdown() {
+func (it *Lookup) shutdown() {
 	for it.queries > 0 {
 		<-it.replyCh
 		it.queries--
@@ -98,28 +98,28 @@ func (it *lookup) shutdown() {
 	it.replyBuffer = nil
 }
 
-func (it *lookup) startQueries() bool {
+func (it *Lookup) startQueries() bool {
 	if it.queryfunc == nil {
 		return false
 	}
 
 	// The first query returns nodes from the local table.
 	if it.queries == -1 {
-		closest := it.tab.findnodeByID(it.result.target, bucketSize, false)
+		closest := it.tab.FindnodeByID(it.result.Target, BucketSize, false)
 		// Avoid finishing the lookup too quickly if table is empty. It'd be better to wait
 		// for the table to fill in this case, but there is no good mechanism for that
 		// yet.
-		if len(closest.entries) == 0 {
+		if len(closest.Entries) == 0 {
 			it.slowdown()
 		}
 		it.queries = 1
-		it.replyCh <- closest.entries
+		it.replyCh <- closest.Entries
 		return true
 	}
 
 	// Ask the closest nodes that we haven't asked yet.
-	for i := 0; i < len(it.result.entries) && it.queries < alpha; i++ {
-		n := it.result.entries[i]
+	for i := 0; i < len(it.result.Entries) && it.queries < Alpha; i++ {
+		n := it.result.Entries[i]
 		if !it.asked[n.ID()] {
 			it.asked[n.ID()] = true
 			it.queries++
@@ -130,7 +130,7 @@ func (it *lookup) startQueries() bool {
 	return it.queries > 0
 }
 
-func (it *lookup) slowdown() {
+func (it *Lookup) slowdown() {
 	sleep := time.NewTimer(1 * time.Second)
 	defer sleep.Stop()
 	select {
@@ -139,9 +139,9 @@ func (it *lookup) slowdown() {
 	}
 }
 
-func (it *lookup) query(n *enode.Node, reply chan<- []*enode.Node) {
+func (it *Lookup) query(n *enode.Node, reply chan<- []*enode.Node) {
 	r, err := it.queryfunc(n)
-	if !errors.Is(err, errClosed) { // avoid recording failures on shutdown.
+	if !errors.Is(err, ErrClosed) { // avoid recording failures on shutdown.
 		success := len(r) > 0
 		it.tab.trackRequest(n, success, r)
 		if err != nil {
@@ -158,10 +158,10 @@ type lookupIterator struct {
 	nextLookup lookupFunc
 	ctx        context.Context
 	cancel     func()
-	lookup     *lookup
+	lookup     *Lookup
 }
 
-type lookupFunc func(ctx context.Context) *lookup
+type lookupFunc func(ctx context.Context) *Lookup
 
 func newLookupIterator(ctx context.Context, next lookupFunc) *lookupIterator {
 	ctx, cancel := context.WithCancel(ctx)

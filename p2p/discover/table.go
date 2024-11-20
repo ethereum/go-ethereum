@@ -39,8 +39,8 @@ import (
 )
 
 const (
-	alpha           = 3  // Kademlia concurrency factor
-	bucketSize      = 16 // Kademlia bucket size
+	Alpha           = 3  // Kademlia concurrency factor
+	BucketSize      = 16 // Kademlia bucket size
 	maxReplacements = 10 // Size of per-bucket replacement list
 
 	// We keep buckets for the upper 1/15 of distances because
@@ -92,9 +92,9 @@ type Table struct {
 type transport interface {
 	Self() *enode.Node
 	RequestENR(*enode.Node) (*enode.Node, error)
-	lookupRandom() []*enode.Node
-	lookupSelf() []*enode.Node
-	ping(*enode.Node) (seq uint64, err error)
+	LookupRandom() []*enode.Node
+	LookupSelf() []*enode.Node
+	Ping(*enode.Node) (seq uint64, err error)
 }
 
 // bucket contains nodes, ordered by their last activity. the entry
@@ -118,7 +118,7 @@ type trackRequestOp struct {
 	success    bool
 }
 
-func newTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
+func NewTable(t transport, db *enode.DB, cfg Config) (*Table, error) {
 	cfg = cfg.withDefaults()
 	tab := &Table{
 		net:             t,
@@ -196,8 +196,8 @@ func (tab *Table) self() *enode.Node {
 	return tab.net.Self()
 }
 
-// getNode returns the node with the given ID or nil if it isn't in the table.
-func (tab *Table) getNode(id enode.ID) *enode.Node {
+// GetNode returns the node with the given ID or nil if it isn't in the table.
+func (tab *Table) GetNode(id enode.ID) *enode.Node {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 
@@ -210,8 +210,8 @@ func (tab *Table) getNode(id enode.ID) *enode.Node {
 	return nil
 }
 
-// close terminates the network listener and flushes the node database.
-func (tab *Table) close() {
+// Close terminates the network listener and flushes the node database.
+func (tab *Table) Close() {
 	close(tab.closeReq)
 	<-tab.closed
 }
@@ -255,40 +255,40 @@ func (tab *Table) refresh() <-chan struct{} {
 	return done
 }
 
-// findnodeByID returns the n nodes in the table that are closest to the given id.
+// FindnodeByID returns the n nodes in the table that are closest to the given id.
 // This is used by the FINDNODE/v4 handler.
 //
 // The preferLive parameter says whether the caller wants liveness-checked results. If
 // preferLive is true and the table contains any verified nodes, the result will not
 // contain unverified nodes. However, if there are no verified nodes at all, the result
 // will contain unverified nodes.
-func (tab *Table) findnodeByID(target enode.ID, nresults int, preferLive bool) *nodesByDistance {
+func (tab *Table) FindnodeByID(target enode.ID, nresults int, preferLive bool) *NodesByDistance {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 
 	// Scan all buckets. There might be a better way to do this, but there aren't that many
 	// buckets, so this solution should be fine. The worst-case complexity of this loop
 	// is O(tab.len() * nresults).
-	nodes := &nodesByDistance{target: target}
-	liveNodes := &nodesByDistance{target: target}
+	nodes := &NodesByDistance{Target: target}
+	liveNodes := &NodesByDistance{Target: target}
 	for _, b := range &tab.buckets {
 		for _, n := range b.entries {
-			nodes.push(n.Node, nresults)
+			nodes.Push(n.Node, nresults)
 			if preferLive && n.isValidatedLive {
-				liveNodes.push(n.Node, nresults)
+				liveNodes.Push(n.Node, nresults)
 			}
 		}
 	}
 
-	if preferLive && len(liveNodes.entries) > 0 {
+	if preferLive && len(liveNodes.Entries) > 0 {
 		return liveNodes
 	}
 	return nodes
 }
 
-// appendBucketNodes adds nodes at the given distance to the result slice.
+// AppendBucketNodes adds nodes at the given distance to the result slice.
 // This is used by the FINDNODE/v5 handler.
-func (tab *Table) appendBucketNodes(dist uint, result []*enode.Node, checkLive bool) []*enode.Node {
+func (tab *Table) AppendBucketNodes(dist uint, result []*enode.Node, checkLive bool) []*enode.Node {
 	if dist > 256 {
 		return result
 	}
@@ -322,12 +322,12 @@ func (tab *Table) len() (n int) {
 	return n
 }
 
-// addFoundNode adds a node which may not be live. If the bucket has space available,
+// AddFoundNode adds a node which may not be live. If the bucket has space available,
 // adding the node succeeds immediately. Otherwise, the node is added to the replacements
 // list.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) addFoundNode(n *enode.Node, forceSetLive bool) bool {
+func (tab *Table) AddFoundNode(n *enode.Node, forceSetLive bool) bool {
 	op := addNodeOp{node: n, isInbound: false, forceSetLive: forceSetLive}
 	select {
 	case tab.addNodeCh <- op:
@@ -337,7 +337,7 @@ func (tab *Table) addFoundNode(n *enode.Node, forceSetLive bool) bool {
 	}
 }
 
-// addInboundNode adds a node from an inbound contact. If the bucket has no space, the
+// AddInboundNode adds a node from an inbound contact. If the bucket has no space, the
 // node is added to the replacements list.
 //
 // There is an additional safety measure: if the table is still initializing the node is
@@ -345,7 +345,7 @@ func (tab *Table) addFoundNode(n *enode.Node, forceSetLive bool) bool {
 // repeatedly.
 //
 // The caller must not hold tab.mutex.
-func (tab *Table) addInboundNode(n *enode.Node) bool {
+func (tab *Table) AddInboundNode(n *enode.Node) bool {
 	op := addNodeOp{node: n, isInbound: true}
 	select {
 	case tab.addNodeCh <- op:
@@ -363,8 +363,8 @@ func (tab *Table) trackRequest(n *enode.Node, success bool, foundNodes []*enode.
 	}
 }
 
-// loop is the main loop of Table.
-func (tab *Table) loop() {
+// Loop is the main loop of Table.
+func (tab *Table) Loop() {
 	var (
 		refresh         = time.NewTimer(tab.nextRefreshTime())
 		refreshDone     = make(chan struct{})           // where doRefresh reports completion
@@ -447,7 +447,7 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	tab.loadSeedNodes()
 
 	// Run self lookup to discover new neighbor nodes.
-	tab.net.lookupSelf()
+	tab.net.LookupSelf()
 
 	// The Kademlia paper specifies that the bucket refresh should
 	// perform a lookup in the least recently used bucket. We cannot
@@ -456,7 +456,7 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	// sha3 preimage that falls into a chosen bucket.
 	// We perform a few lookups with a random target instead.
 	for i := 0; i < 3; i++ {
-		tab.net.lookupRandom()
+		tab.net.LookupRandom()
 	}
 }
 
@@ -542,7 +542,7 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 		tab.log.Debug("the node is already in table", "id", req.node.ID())
 		return false
 	}
-	if len(b.entries) >= bucketSize {
+	if len(b.entries) >= BucketSize {
 		// Bucket full, maybe add as replacement.
 		tab.log.Debug("the bucket is full and will add in replacement", "id", req.node.ID())
 		tab.addReplacement(b, req.node)
@@ -697,7 +697,7 @@ func (tab *Table) handleTrackRequest(op trackRequestOp) {
 	// many times, but only if there are enough other nodes in the bucket. This latter
 	// condition specifically exists to make bootstrapping in smaller test networks more
 	// reliable.
-	if fails >= maxFindnodeFailures && len(b.entries) >= bucketSize/4 {
+	if fails >= maxFindnodeFailures && len(b.entries) >= BucketSize/4 {
 		tab.deleteInBucket(b, op.node.ID())
 	}
 
@@ -716,4 +716,33 @@ func pushNode(list []*tableNode, n *tableNode, max int) ([]*tableNode, *tableNod
 	copy(list[1:], list)
 	list[0] = n
 	return list, removed
+}
+
+func (tab *Table) WaitInit() {
+	<-tab.initDone
+}
+
+func (tab *Table) NodeIds() [][]string {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+	nodes := make([][]string, 0)
+	for _, b := range &tab.buckets {
+		bucketNodes := make([]string, 0)
+		for _, n := range b.entries {
+			bucketNodes = append(bucketNodes, "0x"+n.ID().String())
+		}
+		nodes = append(nodes, bucketNodes)
+	}
+	return nodes
+}
+
+func (tab *Table) Config() Config {
+	return tab.cfg
+}
+
+func (tab *Table) DeleteNode(n *enode.Node) {
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+	b := tab.bucket(n.ID())
+	tab.deleteInBucket(b, n.ID())
 }
