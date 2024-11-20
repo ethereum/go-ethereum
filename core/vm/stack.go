@@ -24,7 +24,7 @@ import (
 
 var stackPool = sync.Pool{
 	New: func() interface{} {
-		return &Stack{data: make([]uint256.Int, 0, 16)}
+		return &Stack{data: make([]uint256.Int, 0, 16), size: 0}
 	},
 }
 
@@ -33,6 +33,7 @@ var stackPool = sync.Pool{
 // initialized objects.
 type Stack struct {
 	data []uint256.Int
+	size int
 }
 
 func newstack() *Stack {
@@ -41,27 +42,48 @@ func newstack() *Stack {
 
 func returnStack(s *Stack) {
 	s.data = s.data[:0]
+	s.size = 0
 	stackPool.Put(s)
 }
 
 // Data returns the underlying uint256.Int array.
 func (st *Stack) Data() []uint256.Int {
-	return st.data
+	return st.data[0:st.size]
 }
 
-func (st *Stack) push(d *uint256.Int) {
+func (st *Stack) push(d uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
-	st.data = append(st.data, *d)
+	if st.size == len(st.data) {
+		st.data = append(st.data, uint256.Int{})
+	}
+	st.data[st.size] = d
+	st.size++
+}
+
+func (st *Stack) pushBytes(d []byte) {
+	if st.size == len(st.data) {
+		st.data = append(st.data, uint256.Int{})
+	}
+	st.data[st.size].SetBytes(d)
+	st.size++
+}
+
+func (st *Stack) pushU64(d uint64) {
+	if st.size == len(st.data) {
+		st.data = append(st.data, uint256.Int{})
+	}
+	st.data[st.size].SetUint64(d)
+	st.size++
 }
 
 func (st *Stack) pop() (ret uint256.Int) {
-	ret = st.data[len(st.data)-1]
-	st.data = st.data[:len(st.data)-1]
+	ret = st.data[st.size-1]
+	st.size--
 	return
 }
 
 func (st *Stack) len() int {
-	return len(st.data)
+	return st.size
 }
 
 func (st *Stack) swap1() {
@@ -114,11 +136,7 @@ func (st *Stack) swap16() {
 }
 
 func (st *Stack) dup(n int) {
-	st.push(&st.data[st.len()-n])
-}
-
-func (st *Stack) peek() *uint256.Int {
-	return &st.data[st.len()-1]
+	st.push(st.data[st.len()-n])
 }
 
 // Back returns the n'th item in stack
