@@ -230,7 +230,8 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	if msgContext.BlobFeeCap != nil && msgContext.BlobFeeCap.BitLen() == 0 {
 		evmContext.BlobBaseFee = new(big.Int)
 	}
-	evm := vm.NewEVM(evmContext, msgContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true})
+	evm := vm.NewEVM(evmContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true})
+	evm.SetTxContext(msgContext)
 	// Monitor the outer context and interrupt the EVM upon cancellation. To avoid
 	// a dangling goroutine until the outer estimation finishes, create an internal
 	// context for the lifetime of this method call.
