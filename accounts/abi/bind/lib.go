@@ -17,7 +17,6 @@
 package bind
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -30,10 +29,5 @@ type ContractInstance interface {
 
 type ContractInstanceV2 interface {
 	Address() common.Address
-}
-
-func CallRaw(instance ContractInstance, opts *CallOpts, input []byte) ([]byte, error) {
-	backend := instance.Backend()
-	c := NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
-	return c.call(opts, input)
+	Backend() ContractBackend
 }

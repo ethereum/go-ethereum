@@ -38,6 +38,12 @@ var (
 {{end}}
 
 {{range $contract := .Contracts}}
+	var {{$contract.Type}}LibraryDeps = map[string]*bind.MetaData{
+	{{range $pattern, $name := .Libraries}}
+		"{{$pattern}}": &{{$name}}MetaData,
+	{{end}}
+	}
+
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
 	var {{.Type}}MetaData = &bind.MetaData{
 		ABI: "{{.InputABI}}",
@@ -52,18 +58,12 @@ var (
 		{{end}}
 	}
 
-	// {{.Type}}Instance represents a deployed instance of the {{.Type}} contract.
-	type {{.Type}}Instance struct {
-		{{.Type}}
-		address common.Address  // consider removing this, not clear what it's used for now (and why did we need custom deploy method on previous abi?)
-	}
-
-	func New{{.Type}}Instance(c *{{.Type}}, address common.Address) *{{.Type}}Instance {
-		return &{{.Type}}Instance{ {{$contract.Type}}: *c, address: address}
-	}
-
 	func (i *{{$contract.Type}}Instance) Address() common.Address {
 		return i.address
+	}
+
+	func (i *{{$contract.Type}}Instance) Backend() bind.ContractBackend {
+		return i.backend
 	}
 
 	// {{.Type}} is an auto generated Go binding around an Ethereum contract.
@@ -86,7 +86,8 @@ var (
 		return _{{$contract.Type}}.deployCode
 	}
 
-	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}}, {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
+	// TODO: test constructor with inputs
+	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
 		return _{{$contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
 	}
 

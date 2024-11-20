@@ -312,17 +312,19 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		}
 
 		contracts[types[i]] = &tmplContract{
-			Type:        capitalise(types[i]),
-			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
-			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
-			Constructor: evmABI.Constructor,
-			Calls:       calls,
-			Transacts:   transacts,
-			Fallback:    fallback,
-			Receive:     receive,
-			Events:      events,
-			Libraries:   make(map[string]string),
+			Type:         capitalise(types[i]),
+			InputABI:     strings.ReplaceAll(strippedABI, "\"", "\\\""),
+			InputBin:     strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
+			Constructor:  evmABI.Constructor,
+			Calls:        calls,
+			Transacts:    transacts,
+			Fallback:     fallback,
+			Receive:      receive,
+			Events:       events,
+			Libraries:    make(map[string]string),
+			AllLibraries: make(map[string]string),
 		}
+
 		// Function 4-byte signatures are stored in the same sequence
 		// as types, if available.
 		if len(fsigs) > i {
@@ -340,14 +342,54 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				if _, ok := isLib[name]; !ok {
 					isLib[name] = struct{}{}
 				}
+
 			}
 		}
+		// Check if that type has already been identified as a library
+		for i := 0; i < len(types); i++ {
+			_, ok := isLib[types[i]]
+			contracts[types[i]].Library = ok
+		}
+
+		// recursively traverse the library dependency graph
+		// of the contract, flattening it into a list.
+		//
+		// For abigenv2, we do not generate contract deploy
+		// methods (which in v1 recursively deploy their
+		// library dependencies).  So, the entire set of
+		// library dependencies is required, and we will
+		// the order to deploy and link them at runtime.
+		var findDeps func(contract *tmplContract) map[string]struct{}
+		findDeps = func(contract *tmplContract) map[string]struct{} {
+			// 1) match all libraries that this contract depends on
+			re, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
+			if err != nil {
+				panic(err)
+			}
+			libBin := contracts[contract.Type].InputBin
+			matches := re.FindAllStringSubmatch(libBin, -1)
+			var result map[string]struct{}
+
+			// 2) recurse, gathering nested library dependencies
+			for _, match := range matches {
+				pattern := match[1]
+				result[pattern] = struct{}{}
+				depContract := contracts[pattern]
+				for subPattern, _ := range findDeps(depContract) {
+					result[subPattern] = struct{}{}
+				}
+			}
+			return result
+		}
+		// take the set of library patterns, convert it to a map of pattern -> type
+		deps := findDeps(contracts[types[i]])
+		contracts[types[i]].AllLibraries = make(map[string]string)
+		for contractPattern, _ := range deps {
+			contractType := libs[contractPattern]
+			contracts[types[i]].AllLibraries[contractType] = contractPattern
+		}
 	}
-	// Check if that type has already been identified as a library
-	for i := 0; i < len(types); i++ {
-		_, ok := isLib[types[i]]
-		contracts[types[i]].Library = ok
-	}
+
 	// Generate the contract template data content and render it
 	data := &tmplData{
 		Package:   pkg,
