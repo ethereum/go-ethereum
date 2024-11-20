@@ -83,7 +83,7 @@ func runBlockTest(t *testing.T, test *blockTest) {
 	traceOutputPath := filepath.ToSlash(t.TempDir())
 	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
 	// Load supply tracer
-	tracer, err := newSupply(json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
+	tracer, err := newSupplyTracer(json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
 	if err != nil {
 		t.Fatalf("failed to create tracer: %v", err)
 	}
