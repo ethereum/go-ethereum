@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"unicode"
 
 	"github.com/ethereum/go-ethereum/tests"
 )
@@ -62,7 +61,6 @@ func TestSupplyTracerBlockchain(t *testing.T) {
 		if !strings.HasSuffix(file.Name(), ".json") {
 			continue
 		}
-		file := file // capture range variable
 		var testcases map[string]*blockTest
 		var blob []byte
 		// Tracer test found, read if from disk
@@ -72,58 +70,51 @@ func TestSupplyTracerBlockchain(t *testing.T) {
 		if err := json.Unmarshal(blob, &testcases); err != nil {
 			t.Fatalf("failed to parse testcase %s: %v", file.Name(), err)
 		}
-		for testname, test := range testcases {
-			t.Run(fmt.Sprintf("%s/%s", camel(strings.TrimSuffix(file.Name(), ".json")), testname), func(t *testing.T) {
-				t.Parallel()
-
-				traceOutputPath := filepath.ToSlash(t.TempDir())
-				traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
-				// Load supply tracer
-				tracer, err := newSupply(json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
-				if err != nil {
-					t.Fatalf("failed to create tracer: %v", err)
-				}
-				if err := test.bt.Run(false, "path", false, tracer, nil); err != nil {
-					t.Errorf("failed to run test: %v\n", err)
-				}
-				// Check and compare the results
-				file, err := os.OpenFile(traceOutputFilename, os.O_RDONLY, 0666)
-				if err != nil {
-					t.Fatalf("failed to open output file: %v", err)
-				}
-				defer file.Close()
-
-				var (
-					output  []supplyInfo
-					scanner = bufio.NewScanner(file)
-				)
-				for scanner.Scan() {
-					blockBytes := scanner.Bytes()
-					var info supplyInfo
-					if err := json.Unmarshal(blockBytes, &info); err != nil {
-						t.Fatalf("failed to unmarshal result: %v", err)
-					}
-					output = append(output, info)
-				}
-				if len(output) != len(test.Expected) {
-					fmt.Printf("output: %v\n", output)
-					t.Fatalf("expected %d supply infos, got %d", len(test.Expected), len(output))
-				}
-				for i, expected := range test.Expected {
-					compareAsJSON(t, expected, output[i])
-				}
-			})
+		for testname, blockTest := range testcases {
+			t.Run(fmt.Sprintf("%s/%s", file.Name(), testname),
+				func(t *testing.T) { runBlockTest(t, blockTest) })
 		}
 	}
 }
 
-// camel converts a snake cased input string into a camel cased output.
-func camel(str string) string {
-	pieces := strings.Split(str, "_")
-	for i := 1; i < len(pieces); i++ {
-		pieces[i] = string(unicode.ToUpper(rune(pieces[i][0]))) + pieces[i][1:]
+func runBlockTest(t *testing.T, test *blockTest) {
+	t.Parallel()
+
+	traceOutputPath := filepath.ToSlash(t.TempDir())
+	traceOutputFilename := path.Join(traceOutputPath, "supply.jsonl")
+	// Load supply tracer
+	tracer, err := newSupply(json.RawMessage(fmt.Sprintf(`{"path":"%s"}`, traceOutputPath)))
+	if err != nil {
+		t.Fatalf("failed to create tracer: %v", err)
 	}
-	return strings.Join(pieces, "")
+	if err := test.bt.Run(false, "path", false, tracer, nil); err != nil {
+		t.Errorf("failed to run test: %v\n", err)
+	}
+	// Check and compare the results
+	file, err := os.OpenFile(traceOutputFilename, os.O_RDONLY, 0666)
+	if err != nil {
+		t.Fatalf("failed to open output file: %v", err)
+	}
+	defer file.Close()
+
+	var (
+		output  []supplyInfo
+		scanner = bufio.NewScanner(file)
+	)
+	for scanner.Scan() {
+		var info supplyInfo
+		if err := json.Unmarshal(scanner.Bytes(), &info); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+		output = append(output, info)
+	}
+	if len(output) != len(test.Expected) {
+		fmt.Printf("output: %v\n", output)
+		t.Fatalf("expected %d supply infos, got %d", len(test.Expected), len(output))
+	}
+	for i, expected := range test.Expected {
+		compareAsJSON(t, expected, output[i])
+	}
 }
 
 func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
@@ -136,6 +127,6 @@ func compareAsJSON(t *testing.T, expected interface{}, actual interface{}) {
 		t.Fatalf("failed to marshal actual value to JSON: %v", err)
 	}
 	if !bytes.Equal(want, have) {
-		t.Fatalf("incorrect supply info:\nexpected:\n%s\ngot:\n%s", string(want), string(have))
+		t.Fatalf("incorrect supply info:\nhave: %s\nwant: %s", string(have), string(want))
 	}
 }

@@ -26,7 +26,6 @@ import (
 	"math/big"
 	"os"
 	"reflect"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -89,7 +88,7 @@ func FromChain(db ethdb.Database, chain *core.BlockChain, post *types.GenesisAll
 		post = &types.GenesisAlloc{}
 	}
 	bt.json = btJSON{
-		Network:   capitalize(chain.Config().LatestFork(head.Number, head.Time).String()),
+		Network:   chain.Config().LatestFork(head.Number, head.Time).String(),
 		Blocks:    blocks,
 		Genesis:   FromHeader(chain.Genesis().Header()),
 		Pre:       alloc,
@@ -465,12 +464,4 @@ func (bb *btBlock) decode() (*types.Block, error) {
 	var b types.Block
 	err = rlp.DecodeBytes(data, &b)
 	return &b, err
-}
-
-func capitalize(s string) string {
-	// Check if the string is empty
-	if len(s) == 0 {
-		return s
-	}
-	return strings.ToUpper(string(s[0])) + s[1:]
 }

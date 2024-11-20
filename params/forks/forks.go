@@ -44,43 +44,43 @@ const (
 func (f Fork) String() string {
 	switch f {
 	case Prague:
-		return "prague"
+		return "Prague"
 	case Cancun:
-		return "cancun"
+		return "Cancun"
 	case Shanghai:
-		return "shanghai"
+		return "Shanghai"
 	case Paris:
-		return "paris"
+		return "Paris"
 	case GrayGlacier:
-		return "grayGlacier"
+		return "GrayGlacier"
 	case ArrowGlacier:
-		return "arrowGlacier"
+		return "ArrowGlacier"
 	case London:
-		return "london"
+		return "London"
 	case Berlin:
-		return "berlin"
+		return "Berlin"
 	case MuirGlacier:
-		return "muirGlacier"
+		return "MuirGlacier"
 	case Istanbul:
-		return "istanbul"
+		return "Istanbul"
 	case Petersburg:
-		return "petersburg"
+		return "Petersburg"
 	case Constantinople:
-		return "constantinople"
+		return "Constantinople"
 	case Byzantium:
-		return "byzantium"
+		return "Byzantium"
 	case SpuriousDragon:
-		return "spuriousDragon"
+		return "SpuriousDragon"
 	case TangerineWhistle:
-		return "tangerineWhistle"
+		return "TangerineWhistle"
 	case DAO:
-		return "dao"
+		return "Dao"
 	case Homestead:
-		return "homestead"
+		return "Homestead"
 	case FrontierThawing:
-		return "frontierThawing"
+		return "FrontierThawing"
 	case Frontier:
-		return "frontier"
+		return "Frontier"
 	default:
 		panic("unknown fork")
 	}
