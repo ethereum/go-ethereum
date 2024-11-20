@@ -342,17 +342,23 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				if _, ok := isLib[name]; !ok {
 					isLib[name] = struct{}{}
 				}
-
 			}
 		}
-		// Check if that type has already been identified as a library
-		for i := 0; i < len(types); i++ {
-			_, ok := isLib[types[i]]
-			contracts[types[i]].Library = ok
-		}
+	}
 
+	// Check if that type has already been identified as a library
+	for i := 0; i < len(types); i++ {
+		_, ok := isLib[types[i]]
+		contracts[types[i]].Library = ok
+	}
+
+	// compute the full set of libraries that each contract depends on.
+	for _, contract := range contracts {
+		if contract.Library {
+			continue
+		}
 		// recursively traverse the library dependency graph
-		// of the contract, flattening it into a list.
+		// of the contract, flattening it into a set.
 		//
 		// For abigenv2, we do not generate contract deploy
 		// methods (which in v1 recursively deploy their
@@ -368,25 +374,25 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			}
 			libBin := contracts[contract.Type].InputBin
 			matches := re.FindAllStringSubmatch(libBin, -1)
-			var result map[string]struct{}
+			result := make(map[string]struct{})
 
 			// 2) recurse, gathering nested library dependencies
 			for _, match := range matches {
 				pattern := match[1]
 				result[pattern] = struct{}{}
-				depContract := contracts[pattern]
+				depContract := contracts[libs[pattern]]
 				for subPattern, _ := range findDeps(depContract) {
 					result[subPattern] = struct{}{}
 				}
 			}
 			return result
 		}
-		// take the set of library patterns, convert it to a map of pattern -> type
-		deps := findDeps(contracts[types[i]])
-		contracts[types[i]].AllLibraries = make(map[string]string)
+		// take the set of library patterns, convert it to a map of type -> pattern
+		deps := findDeps(contract)
+		contract.AllLibraries = make(map[string]string)
 		for contractPattern, _ := range deps {
 			contractType := libs[contractPattern]
-			contracts[types[i]].AllLibraries[contractType] = contractPattern
+			contract.AllLibraries[contractType] = contractPattern
 		}
 	}
 

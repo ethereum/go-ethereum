@@ -39,9 +39,9 @@ var (
 
 {{range $contract := .Contracts}}
 	var {{$contract.Type}}LibraryDeps = map[string]*bind.MetaData{
-	{{range $pattern, $name := .Libraries}}
+	{{range $pattern, $name := .AllLibraries -}}
 		"{{$pattern}}": &{{$name}}MetaData,
-	{{end}}
+	{{ end}}
 	}
 
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
