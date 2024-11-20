@@ -43,8 +43,8 @@ var (
 	errUnknownNode      = errors.New("unknown node")
 	errTimeout          = errors.New("RPC timeout")
 	errClockWarp        = errors.New("reply deadline too far in the future")
-	errClosed           = errors.New("socket closed")
-	errLowPort          = errors.New("low port")
+	ErrClosed           = errors.New("socket closed")
+	ErrLowPort          = errors.New("low port")
 	errNoUDPEndpoint    = errors.New("node has no UDP endpoint")
 )
 
@@ -143,12 +143,12 @@ func ListenV4(c UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv4, error) {
 		log:             cfg.Log,
 	}
 
-	tab, err := newTable(t, ln.Database(), cfg)
+	tab, err := NewTable(t, ln.Database(), cfg)
 	if err != nil {
 		return nil, err
 	}
 	t.tab = tab
-	go tab.loop()
+	go tab.Loop()
 
 	t.wg.Add(2)
 	go t.loop()
@@ -167,7 +167,7 @@ func (t *UDPv4) Close() {
 		t.cancelCloseCtx()
 		t.conn.Close()
 		t.wg.Wait()
-		t.tab.close()
+		t.tab.Close()
 	})
 }
 
@@ -179,7 +179,7 @@ func (t *UDPv4) Resolve(n *enode.Node) *enode.Node {
 		return rn
 	}
 	// Check table for the ID, we might have a newer version there.
-	if intable := t.tab.getNode(n.ID()); intable != nil && intable.Seq() > n.Seq() {
+	if intable := t.tab.GetNode(n.ID()); intable != nil && intable.Seq() > n.Seq() {
 		n = intable
 		if rn, err := t.RequestENR(n); err == nil {
 			return rn
@@ -210,14 +210,14 @@ func (t *UDPv4) ourEndpoint() v4wire.Endpoint {
 	return v4wire.NewEndpoint(addr, uint16(node.TCP()))
 }
 
-// Ping sends a ping message to the given node.
-func (t *UDPv4) Ping(n *enode.Node) error {
-	_, err := t.ping(n)
+// PingWithoutResp sends a ping message to the given node.
+func (t *UDPv4) PingWithoutResp(n *enode.Node) error {
+	_, err := t.Ping(n)
 	return err
 }
 
 // ping sends a ping message to the given node and waits for a reply.
-func (t *UDPv4) ping(n *enode.Node) (seq uint64, err error) {
+func (t *UDPv4) Ping(n *enode.Node) (seq uint64, err error) {
 	addr, ok := n.UDPEndpoint()
 	if !ok {
 		return 0, errNoUDPEndpoint
@@ -271,7 +271,7 @@ func (t *UDPv4) LookupPubkey(key *ecdsa.PublicKey) []*enode.Node {
 		// case and run the bootstrapping logic.
 		<-t.tab.refresh()
 	}
-	return t.newLookup(t.closeCtx, v4wire.EncodePubkey(key)).run()
+	return t.newLookup(t.closeCtx, v4wire.EncodePubkey(key)).Run()
 }
 
 // RandomNodes is an iterator yielding nodes from a random walk of the DHT.
@@ -280,25 +280,25 @@ func (t *UDPv4) RandomNodes() enode.Iterator {
 }
 
 // lookupRandom implements transport.
-func (t *UDPv4) lookupRandom() []*enode.Node {
-	return t.newRandomLookup(t.closeCtx).run()
+func (t *UDPv4) LookupRandom() []*enode.Node {
+	return t.newRandomLookup(t.closeCtx).Run()
 }
 
 // lookupSelf implements transport.
-func (t *UDPv4) lookupSelf() []*enode.Node {
+func (t *UDPv4) LookupSelf() []*enode.Node {
 	pubkey := v4wire.EncodePubkey(&t.priv.PublicKey)
-	return t.newLookup(t.closeCtx, pubkey).run()
+	return t.newLookup(t.closeCtx, pubkey).Run()
 }
 
-func (t *UDPv4) newRandomLookup(ctx context.Context) *lookup {
+func (t *UDPv4) newRandomLookup(ctx context.Context) *Lookup {
 	var target v4wire.Pubkey
 	crand.Read(target[:])
 	return t.newLookup(ctx, target)
 }
 
-func (t *UDPv4) newLookup(ctx context.Context, targetKey v4wire.Pubkey) *lookup {
+func (t *UDPv4) newLookup(ctx context.Context, targetKey v4wire.Pubkey) *Lookup {
 	target := enode.ID(crypto.Keccak256Hash(targetKey[:]))
-	it := newLookup(ctx, t.tab, target, func(n *enode.Node) ([]*enode.Node, error) {
+	it := NewLookup(ctx, t.tab, target, func(n *enode.Node) ([]*enode.Node, error) {
 		addr, ok := n.UDPEndpoint()
 		if !ok {
 			return nil, errNoUDPEndpoint
@@ -315,7 +315,7 @@ func (t *UDPv4) findnode(toid enode.ID, toAddrPort netip.AddrPort, target v4wire
 
 	// Add a matcher for 'neighbours' replies to the pending reply queue. The matcher is
 	// active until enough nodes have been received.
-	nodes := make([]*enode.Node, 0, bucketSize)
+	nodes := make([]*enode.Node, 0, BucketSize)
 	nreceived := 0
 	rm := t.pending(toid, toAddrPort.Addr(), v4wire.NeighborsPacket, func(r v4wire.Packet) (matched bool, requestDone bool) {
 		reply := r.(*v4wire.Neighbors)
@@ -328,7 +328,7 @@ func (t *UDPv4) findnode(toid enode.ID, toAddrPort netip.AddrPort, target v4wire
 			}
 			nodes = append(nodes, n)
 		}
-		return true, nreceived >= bucketSize
+		return true, nreceived >= BucketSize
 	})
 	t.send(toAddrPort, toid, &v4wire.Findnode{
 		Target:     target,
@@ -400,7 +400,7 @@ func (t *UDPv4) pending(id enode.ID, ip netip.Addr, ptype byte, callback replyMa
 	case t.addReplyMatcher <- p:
 		// loop will handle it
 	case <-t.closeCtx.Done():
-		ch <- errClosed
+		ch <- ErrClosed
 	}
 	return p
 }
@@ -461,7 +461,7 @@ func (t *UDPv4) loop() {
 		select {
 		case <-t.closeCtx.Done():
 			for el := plist.Front(); el != nil; el = el.Next() {
-				el.Value.(*replyMatcher).errc <- errClosed
+				el.Value.(*replyMatcher).errc <- ErrClosed
 			}
 			return
 
@@ -599,7 +599,7 @@ func (t *UDPv4) ensureBond(toid enode.ID, toaddr netip.AddrPort) {
 
 func (t *UDPv4) nodeFromRPC(sender netip.AddrPort, rn v4wire.Node) (*enode.Node, error) {
 	if rn.UDP <= 1024 {
-		return nil, errLowPort
+		return nil, ErrLowPort
 	}
 	if err := netutil.CheckRelayIP(sender.Addr().AsSlice(), rn.IP); err != nil {
 		return nil, err
@@ -692,10 +692,10 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from netip.AddrPort, fromID enode
 	n := enode.NewV4(h.senderKey, fromIP, int(req.From.TCP), int(from.Port()))
 	if time.Since(t.db.LastPongReceived(n.ID(), from.Addr())) > bondExpiration {
 		t.sendPing(fromID, from, func() {
-			t.tab.addInboundNode(n)
+			t.tab.AddInboundNode(n)
 		})
 	} else {
-		t.tab.addInboundNode(n)
+		t.tab.AddInboundNode(n)
 	}
 
 	// Update node database and endpoint predictor.
@@ -747,7 +747,7 @@ func (t *UDPv4) handleFindnode(h *packetHandlerV4, from netip.AddrPort, fromID e
 	// Determine closest nodes.
 	target := enode.ID(crypto.Keccak256Hash(req.Target[:]))
 	preferLive := !t.tab.cfg.NoFindnodeLivenessCheck
-	closest := t.tab.findnodeByID(target, bucketSize, preferLive).entries
+	closest := t.tab.FindnodeByID(target, BucketSize, preferLive).Entries
 
 	// Send neighbors in chunks with at most maxNeighbors per packet
 	// to stay below the packet size limit.

@@ -59,8 +59,8 @@ func TestUDPv4_Lookup(t *testing.T) {
 	for _, e := range results {
 		t.Logf("  ld=%d, %x", enode.LogDist(lookupTestnet.target.ID(), e.ID()), e.ID().Bytes())
 	}
-	if len(results) != bucketSize {
-		t.Errorf("wrong number of results: got %d, want %d", len(results), bucketSize)
+	if len(results) != BucketSize {
+		t.Errorf("wrong number of results: got %d, want %d", len(results), BucketSize)
 	}
 	checkLookupResults(t, lookupTestnet, results)
 }

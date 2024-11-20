@@ -1,21 +1,22 @@
-package discover
+package portalnetwork
 
 import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/holiman/uint256"
 )
 
 // DiscV5API json-rpc spec
 // https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/ethereum/portal-network-specs/assembled-spec/jsonrpc/openrpc.json&uiSchema%5BappBar%5D%5Bui:splitView%5D=false&uiSchema%5BappBar%5D%5Bui:input%5D=false&uiSchema%5BappBar%5D%5Bui:examplesDropdown%5D=false
 type DiscV5API struct {
-	DiscV5 *UDPv5
+	DiscV5 *discover.UDPv5
 }
 
-func NewDiscV5API(discV5 *UDPv5) *DiscV5API {
+func NewDiscV5API(discV5 *discover.UDPv5) *DiscV5API {
 	return &DiscV5API{discV5}
 }
 
@@ -103,9 +104,7 @@ func (d *DiscV5API) AddEnr(enr string) (bool, error) {
 	}
 
 	// immediately add the node to the routing table
-	d.DiscV5.tab.mutex.Lock()
-	defer d.DiscV5.tab.mutex.Unlock()
-	d.DiscV5.tab.handleAddNode(addNodeOp{node: n, isInbound: true, forceSetLive: true})
+	d.DiscV5.Table().AddInboundNode(n)
 	return true, nil
 }
 
@@ -114,7 +113,7 @@ func (d *DiscV5API) GetEnr(nodeId string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	n := d.DiscV5.tab.GetNode(id)
+	n := d.DiscV5.Table().GetNode(id)
 	if n == nil {
 		return false, errors.New("record not in local routing table")
 	}
@@ -128,15 +127,12 @@ func (d *DiscV5API) DeleteEnr(nodeId string) (bool, error) {
 		return false, err
 	}
 
-	n := d.DiscV5.tab.GetNode(id)
+	n := d.DiscV5.Table().GetNode(id)
 	if n == nil {
 		return false, errors.New("record not in local routing table")
 	}
 
-	d.DiscV5.tab.mutex.Lock()
-	defer d.DiscV5.tab.mutex.Unlock()
-	b := d.DiscV5.tab.bucket(n.ID())
-	d.DiscV5.tab.deleteInBucket(b, n.ID())
+	d.DiscV5.Table().DeleteNode(n)
 	return true, nil
 }
 
@@ -302,10 +298,7 @@ func (p *PortalProtocolAPI) DeleteEnr(nodeId string) (bool, error) {
 		return false, nil
 	}
 
-	p.portalProtocol.table.mutex.Lock()
-	defer p.portalProtocol.table.mutex.Unlock()
-	b := p.portalProtocol.table.bucket(n.ID())
-	p.portalProtocol.table.deleteInBucket(b, n.ID())
+	p.portalProtocol.table.DeleteNode(n)
 	return true, nil
 }
 

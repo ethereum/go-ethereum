@@ -45,14 +45,14 @@ func init() {
 
 func newTestTable(t transport, cfg Config) (*Table, *enode.DB) {
 	tab, db := newInactiveTestTable(t, cfg)
-	go tab.loop()
+	go tab.Loop()
 	return tab, db
 }
 
 // newInactiveTestTable creates a Table without running the main loop.
 func newInactiveTestTable(t transport, cfg Config) (*Table, *enode.DB) {
 	db, _ := enode.OpenDB("")
-	tab, _ := newTable(t, db, cfg)
+	tab, _ := NewTable(t, db, cfg)
 	return tab, db
 }
 
@@ -110,20 +110,20 @@ func intIP(i int) net.IP {
 func fillBucket(tab *Table, id enode.ID) (last *tableNode) {
 	ld := enode.LogDist(tab.self().ID(), id)
 	b := tab.bucket(id)
-	for len(b.entries) < bucketSize {
+	for len(b.entries) < BucketSize {
 		node := nodeAtDistance(tab.self().ID(), ld, intIP(ld))
-		if !tab.addFoundNode(node, false) {
+		if !tab.AddFoundNode(node, false) {
 			panic("node not added")
 		}
 	}
-	return b.entries[bucketSize-1]
+	return b.entries[BucketSize-1]
 }
 
 // fillTable adds nodes the table to the end of their corresponding bucket
 // if the bucket is not full. The caller must not hold tab.mutex.
 func fillTable(tab *Table, nodes []*enode.Node, setLive bool) {
 	for _, n := range nodes {
-		tab.addFoundNode(n, setLive)
+		tab.AddFoundNode(n, setLive)
 	}
 }
 
@@ -160,8 +160,8 @@ func (t *pingRecorder) updateRecord(n *enode.Node) {
 
 // Stubs to satisfy the transport interface.
 func (t *pingRecorder) Self() *enode.Node           { return nullNode }
-func (t *pingRecorder) lookupSelf() []*enode.Node   { return nil }
-func (t *pingRecorder) lookupRandom() []*enode.Node { return nil }
+func (t *pingRecorder) LookupSelf() []*enode.Node   { return nil }
+func (t *pingRecorder) LookupRandom() []*enode.Node { return nil }
 
 func (t *pingRecorder) waitPing(timeout time.Duration) *enode.Node {
 	t.mu.Lock()
@@ -190,7 +190,7 @@ func (t *pingRecorder) waitPing(timeout time.Duration) *enode.Node {
 }
 
 // ping simulates a ping request.
-func (t *pingRecorder) ping(n *enode.Node) (seq uint64, err error) {
+func (t *pingRecorder) Ping(n *enode.Node) (seq uint64, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

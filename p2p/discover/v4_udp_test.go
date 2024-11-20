@@ -112,7 +112,7 @@ func (test *udpTest) waitPacketOut(validate interface{}) (closed bool) {
 	test.t.Helper()
 
 	dgram, err := test.pipe.receive()
-	if err == errClosed {
+	if err == ErrClosed {
 		return true
 	} else if err != nil {
 		test.t.Error("packet receive error:", err)
@@ -151,7 +151,7 @@ func TestUDPv4_pingTimeout(t *testing.T) {
 	key := newkey()
 	toaddr := &net.UDPAddr{IP: net.ParseIP("1.2.3.4"), Port: 2222}
 	node := enode.NewV4(&key.PublicKey, toaddr.IP, 0, toaddr.Port)
-	if _, err := test.udp.ping(node); err != errTimeout {
+	if _, err := test.udp.Ping(node); err != errTimeout {
 		t.Error("expected timeout error, got", err)
 	}
 }
@@ -256,9 +256,9 @@ func TestUDPv4_findnode(t *testing.T) {
 	// put a few nodes into the table. their exact
 	// distribution shouldn't matter much, although we need to
 	// take care not to overflow any bucket.
-	nodes := &nodesByDistance{target: testTarget.ID()}
+	nodes := &NodesByDistance{Target: testTarget.ID()}
 	live := make(map[enode.ID]bool)
-	numCandidates := 2 * bucketSize
+	numCandidates := 2 * BucketSize
 	for i := 0; i < numCandidates; i++ {
 		key := newkey()
 		ip := net.IP{10, 13, 0, byte(i)}
@@ -267,8 +267,8 @@ func TestUDPv4_findnode(t *testing.T) {
 		if i > numCandidates/2 {
 			live[n.ID()] = true
 		}
-		test.table.addFoundNode(n, live[n.ID()])
-		nodes.push(n, numCandidates)
+		test.table.AddFoundNode(n, live[n.ID()])
+		nodes.Push(n, numCandidates)
 	}
 
 	// ensure there's a bond with the test node,
@@ -277,7 +277,7 @@ func TestUDPv4_findnode(t *testing.T) {
 	test.table.db.UpdateLastPongReceived(remoteID, test.remoteaddr.Addr(), time.Now())
 
 	// check that closest neighbors are returned.
-	expected := test.table.findnodeByID(testTarget.ID(), bucketSize, true)
+	expected := test.table.FindnodeByID(testTarget.ID(), BucketSize, true)
 	test.packetIn(nil, &v4wire.Findnode{Target: testTarget, Expiration: futureExp})
 	waitNeighbors := func(want []*enode.Node) {
 		test.waitPacketOut(func(p *v4wire.Neighbors, to netip.AddrPort, hash []byte) {
@@ -287,7 +287,7 @@ func TestUDPv4_findnode(t *testing.T) {
 			}
 			for i, n := range p.Nodes {
 				if n.ID.ID() != want[i].ID() {
-					t.Errorf("result mismatch at %d:\n  got: %v\n  want: %v", i, n, expected.entries[i])
+					t.Errorf("result mismatch at %d:\n  got: %v\n  want: %v", i, n, expected.Entries[i])
 				}
 				if !live[n.ID.ID()] {
 					t.Errorf("result includes dead node %v", n.ID.ID())
@@ -296,7 +296,7 @@ func TestUDPv4_findnode(t *testing.T) {
 		})
 	}
 	// Receive replies.
-	want := expected.entries
+	want := expected.Entries
 	if len(want) > v4wire.MaxNeighbors {
 		waitNeighbors(want[:v4wire.MaxNeighbors])
 		want = want[v4wire.MaxNeighbors:]
@@ -644,7 +644,7 @@ func (c *dgramPipe) receive() (dgram, error) {
 		c.cond.Wait()
 	}
 	if c.closed {
-		return dgram{}, errClosed
+		return dgram{}, ErrClosed
 	}
 	if timedOut {
 		return dgram{}, errTimeout

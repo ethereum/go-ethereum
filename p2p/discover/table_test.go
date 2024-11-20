@@ -59,7 +59,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 		Log:   testlog.Logger(t, log.LevelTrace),
 	})
 	defer db.Close()
-	defer tab.close()
+	defer tab.Close()
 
 	<-tab.initDone
 
@@ -79,7 +79,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	transport.dead[replacementNode.ID()] = !newNodeIsResponding
 
 	// Add replacement node to table.
-	tab.addFoundNode(replacementNode, false)
+	tab.AddFoundNode(replacementNode, false)
 
 	t.Log("last:", last.ID())
 	t.Log("replacement:", replacementNode.ID())
@@ -108,7 +108,7 @@ func testPingReplace(t *testing.T, newNodeIsResponding, lastInBucketIsResponding
 	// Check bucket content.
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
-	wantSize := bucketSize
+	wantSize := BucketSize
 	if !lastInBucketIsResponding && !newNodeIsResponding {
 		wantSize--
 	}
@@ -150,11 +150,11 @@ func TestTable_IPLimit(t *testing.T) {
 	transport := newPingRecorder()
 	tab, db := newTestTable(transport, Config{})
 	defer db.Close()
-	defer tab.close()
+	defer tab.Close()
 
 	for i := 0; i < tableIPLimit+1; i++ {
 		n := nodeAtDistance(tab.self().ID(), i, net.IP{172, 0, 1, byte(i)})
-		tab.addFoundNode(n, false)
+		tab.AddFoundNode(n, false)
 	}
 	if tab.len() > tableIPLimit {
 		t.Errorf("too many nodes in table")
@@ -167,12 +167,12 @@ func TestTable_BucketIPLimit(t *testing.T) {
 	transport := newPingRecorder()
 	tab, db := newTestTable(transport, Config{})
 	defer db.Close()
-	defer tab.close()
+	defer tab.Close()
 
 	d := 3
 	for i := 0; i < bucketIPLimit+1; i++ {
 		n := nodeAtDistance(tab.self().ID(), d, net.IP{172, 0, 1, byte(i)})
-		tab.addFoundNode(n, false)
+		tab.AddFoundNode(n, false)
 	}
 	if tab.len() > bucketIPLimit {
 		t.Errorf("too many nodes in table")
@@ -204,11 +204,11 @@ func TestTable_findnodeByID(t *testing.T) {
 		transport := newPingRecorder()
 		tab, db := newTestTable(transport, Config{})
 		defer db.Close()
-		defer tab.close()
+		defer tab.Close()
 		fillTable(tab, test.All, true)
 
 		// check that closest(Target, N) returns nodes
-		result := tab.findnodeByID(test.Target, test.N, false).entries
+		result := tab.FindnodeByID(test.Target, test.N, false).Entries
 		if hasDuplicates(result) {
 			t.Errorf("result contains duplicates")
 			return false
@@ -264,7 +264,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	t := &closeTest{
 		Self:   gen(enode.ID{}, rand).(enode.ID),
 		Target: gen(enode.ID{}, rand).(enode.ID),
-		N:      rand.Intn(bucketSize),
+		N:      rand.Intn(BucketSize),
 	}
 	for _, id := range gen([]enode.ID{}, rand).([]enode.ID) {
 		r := new(enr.Record)
@@ -279,20 +279,20 @@ func TestTable_addInboundNode(t *testing.T) {
 	tab, db := newTestTable(newPingRecorder(), Config{})
 	<-tab.initDone
 	defer db.Close()
-	defer tab.close()
+	defer tab.Close()
 
 	// Insert two nodes.
 	n1 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 1})
 	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
-	tab.addFoundNode(n1, false)
-	tab.addFoundNode(n2, false)
+	tab.AddFoundNode(n1, false)
+	tab.AddFoundNode(n2, false)
 	checkBucketContent(t, tab, []*enode.Node{n1, n2})
 
 	// Add a changed version of n2. The bucket should be updated.
 	newrec := n2.Record()
 	newrec.Set(enr.IP{99, 99, 99, 99})
 	n2v2 := enode.SignNull(newrec, n2.ID())
-	tab.addInboundNode(n2v2)
+	tab.AddInboundNode(n2v2)
 	checkBucketContent(t, tab, []*enode.Node{n1, n2v2})
 
 	// Try updating n2 without sequence number change. The update is accepted
@@ -301,7 +301,7 @@ func TestTable_addInboundNode(t *testing.T) {
 	newrec.Set(enr.IP{100, 100, 100, 100})
 	newrec.SetSeq(n2.Seq())
 	n2v3 := enode.SignNull(newrec, n2.ID())
-	tab.addInboundNode(n2v3)
+	tab.AddInboundNode(n2v3)
 	checkBucketContent(t, tab, []*enode.Node{n1, n2v3})
 }
 
@@ -309,20 +309,20 @@ func TestTable_addFoundNode(t *testing.T) {
 	tab, db := newTestTable(newPingRecorder(), Config{})
 	<-tab.initDone
 	defer db.Close()
-	defer tab.close()
+	defer tab.Close()
 
 	// Insert two nodes.
 	n1 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 1})
 	n2 := nodeAtDistance(tab.self().ID(), 256, net.IP{88, 77, 66, 2})
-	tab.addFoundNode(n1, false)
-	tab.addFoundNode(n2, false)
+	tab.AddFoundNode(n1, false)
+	tab.AddFoundNode(n2, false)
 	checkBucketContent(t, tab, []*enode.Node{n1, n2})
 
 	// Add a changed version of n2. The bucket should be updated.
 	newrec := n2.Record()
 	newrec.Set(enr.IP{99, 99, 99, 99})
 	n2v2 := enode.SignNull(newrec, n2.ID())
-	tab.addFoundNode(n2v2, false)
+	tab.AddFoundNode(n2v2, false)
 	checkBucketContent(t, tab, []*enode.Node{n1, n2v2})
 
 	// Try updating n2 without a sequence number change.
@@ -331,7 +331,7 @@ func TestTable_addFoundNode(t *testing.T) {
 	newrec.Set(enr.IP{100, 100, 100, 100})
 	newrec.SetSeq(n2.Seq())
 	n2v3 := enode.SignNull(newrec, n2.ID())
-	tab.addFoundNode(n2v3, false)
+	tab.AddFoundNode(n2v3, false)
 	checkBucketContent(t, tab, []*enode.Node{n1, n2v2})
 }
 
@@ -340,18 +340,18 @@ func TestTable_addInboundNodeUpdateV4Accept(t *testing.T) {
 	tab, db := newTestTable(newPingRecorder(), Config{})
 	<-tab.initDone
 	defer db.Close()
-	defer tab.close()
+	defer tab.Close()
 
 	// Add a v4 node.
 	key, _ := crypto.HexToECDSA("dd3757a8075e88d0f2b1431e7d3c5b1562e1c0aab9643707e8cbfcc8dae5cfe3")
 	n1 := enode.NewV4(&key.PublicKey, net.IP{88, 77, 66, 1}, 9000, 9000)
-	tab.addInboundNode(n1)
+	tab.AddInboundNode(n1)
 	checkBucketContent(t, tab, []*enode.Node{n1})
 
 	// Add an updated version with changed IP.
 	// The update will be accepted because it is inbound.
 	n1v2 := enode.NewV4(&key.PublicKey, net.IP{99, 99, 99, 99}, 9000, 9000)
-	tab.addInboundNode(n1v2)
+	tab.AddInboundNode(n1v2)
 	checkBucketContent(t, tab, []*enode.Node{n1v2})
 }
 
@@ -361,18 +361,18 @@ func TestTable_addFoundNodeV4UpdateReject(t *testing.T) {
 	tab, db := newTestTable(newPingRecorder(), Config{})
 	<-tab.initDone
 	defer db.Close()
-	defer tab.close()
+	defer tab.Close()
 
 	// Add a v4 node.
 	key, _ := crypto.HexToECDSA("dd3757a8075e88d0f2b1431e7d3c5b1562e1c0aab9643707e8cbfcc8dae5cfe3")
 	n1 := enode.NewV4(&key.PublicKey, net.IP{88, 77, 66, 1}, 9000, 9000)
-	tab.addFoundNode(n1, false)
+	tab.AddFoundNode(n1, false)
 	checkBucketContent(t, tab, []*enode.Node{n1})
 
 	// Add an updated version with changed IP.
 	// The update won't be accepted because it isn't inbound.
 	n1v2 := enode.NewV4(&key.PublicKey, net.IP{99, 99, 99, 99}, 9000, 9000)
-	tab.addFoundNode(n1v2, false)
+	tab.AddFoundNode(n1v2, false)
 	checkBucketContent(t, tab, []*enode.Node{n1})
 }
 
@@ -407,14 +407,14 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 	})
 	<-tab.initDone
 	defer db.Close()
-	defer tab.close()
+	defer tab.Close()
 
 	// Insert a node.
 	var r enr.Record
 	r.Set(enr.IP(net.IP{127, 0, 0, 1}))
 	id := enode.ID{1}
 	n1 := enode.SignNull(&r, id)
-	tab.addFoundNode(n1, false)
+	tab.AddFoundNode(n1, false)
 
 	// Update the node record.
 	r.Set(enr.WithEntry("foo", "bar"))
@@ -426,7 +426,7 @@ func TestTable_revalidateSyncRecord(t *testing.T) {
 	waitForRevalidationPing(t, transport, tab, n2.ID())
 	waitForRevalidationPing(t, transport, tab, n2.ID())
 
-	intable := tab.getNode(id)
+	intable := tab.GetNode(id)
 	if !reflect.DeepEqual(intable, n2) {
 		t.Fatalf("table contains old record with seq %d, want seq %d", intable.Seq(), n2.Seq())
 	}
@@ -448,22 +448,22 @@ func TestNodesPush(t *testing.T) {
 
 	// Insert all permutations into lists with size limit 3.
 	for _, nodes := range perm {
-		list := nodesByDistance{target: target}
+		list := NodesByDistance{Target: target}
 		for _, n := range nodes {
-			list.push(n, 3)
+			list.Push(n, 3)
 		}
-		if !slices.EqualFunc(list.entries, perm[0], nodeIDEqual) {
+		if !slices.EqualFunc(list.Entries, perm[0], nodeIDEqual) {
 			t.Fatal("not equal")
 		}
 	}
 
 	// Insert all permutations into lists with size limit 2.
 	for _, nodes := range perm {
-		list := nodesByDistance{target: target}
+		list := NodesByDistance{Target: target}
 		for _, n := range nodes {
-			list.push(n, 2)
+			list.Push(n, 2)
 		}
-		if !slices.EqualFunc(list.entries, perm[0][:2], nodeIDEqual) {
+		if !slices.EqualFunc(list.Entries, perm[0][:2], nodeIDEqual) {
 			t.Fatal("not equal")
 		}
 	}

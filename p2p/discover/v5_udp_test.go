@@ -143,7 +143,7 @@ func TestUDPv5_unknownPacket(t *testing.T) {
 
 	// Make Node known.
 	n := test.getNode(test.remotekey, test.remoteaddr).Node()
-	test.table.addFoundNode(n, false)
+	test.table.AddFoundNode(n, false)
 
 	test.packetIn(&v5wire.Unknown{Nonce: nonce})
 	test.waitPacketOut(func(p *v5wire.Whoareyou, addr netip.AddrPort, _ v5wire.Nonce) {
@@ -237,7 +237,7 @@ func TestUDPv5_pingCall(t *testing.T) {
 
 	// This ping times out.
 	go func() {
-		_, err := test.udp.ping(remote)
+		_, err := test.udp.Ping(remote)
 		done <- err
 	}()
 	test.waitPacketOut(func(p *v5wire.Ping, addr netip.AddrPort, _ v5wire.Nonce) {})
@@ -247,7 +247,7 @@ func TestUDPv5_pingCall(t *testing.T) {
 
 	// This ping works.
 	go func() {
-		_, err := test.udp.ping(remote)
+		_, err := test.udp.Ping(remote)
 		done <- err
 	}()
 	test.waitPacketOut(func(p *v5wire.Ping, addr netip.AddrPort, _ v5wire.Nonce) {
@@ -259,7 +259,7 @@ func TestUDPv5_pingCall(t *testing.T) {
 
 	// This ping gets a reply from the wrong endpoint.
 	go func() {
-		_, err := test.udp.ping(remote)
+		_, err := test.udp.Ping(remote)
 		done <- err
 	}()
 	test.waitPacketOut(func(p *v5wire.Ping, addr netip.AddrPort, _ v5wire.Nonce) {
@@ -288,7 +288,7 @@ func TestUDPv5_findnodeCall(t *testing.T) {
 	)
 	go func() {
 		var err error
-		response, err = test.udp.findnode(remote, distances)
+		response, err = test.udp.Findnode(remote, distances)
 		done <- err
 	}()
 
@@ -330,11 +330,11 @@ func TestUDPv5_callResend(t *testing.T) {
 	remote := test.getNode(test.remotekey, test.remoteaddr).Node()
 	done := make(chan error, 2)
 	go func() {
-		_, err := test.udp.ping(remote)
+		_, err := test.udp.Ping(remote)
 		done <- err
 	}()
 	go func() {
-		_, err := test.udp.ping(remote)
+		_, err := test.udp.Ping(remote)
 		done <- err
 	}()
 
@@ -367,7 +367,7 @@ func TestUDPv5_multipleHandshakeRounds(t *testing.T) {
 	remote := test.getNode(test.remotekey, test.remoteaddr).Node()
 	done := make(chan error, 1)
 	go func() {
-		_, err := test.udp.ping(remote)
+		_, err := test.udp.Ping(remote)
 		done <- err
 	}()
 
@@ -398,7 +398,7 @@ func TestUDPv5_callTimeoutReset(t *testing.T) {
 		done     = make(chan error, 1)
 	)
 	go func() {
-		_, err := test.udp.findnode(remote, []uint{distance})
+		_, err := test.udp.Findnode(remote, []uint{distance})
 		done <- err
 	}()
 
@@ -535,38 +535,38 @@ func TestUDPv5_talkRequest(t *testing.T) {
 	}
 }
 
-// This test checks that lookupDistances works.
+// This test checks that LookupDistances works.
 func TestUDPv5_lookupDistances(t *testing.T) {
 	test := newUDPV5Test(t)
 	lnID := test.table.self().ID()
 
 	t.Run("target distance of 1", func(t *testing.T) {
 		node := nodeAtDistance(lnID, 1, intIP(0))
-		dists := lookupDistances(lnID, node.ID())
+		dists := LookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{1, 2, 3}, dists)
 	})
 
 	t.Run("target distance of 2", func(t *testing.T) {
 		node := nodeAtDistance(lnID, 2, intIP(0))
-		dists := lookupDistances(lnID, node.ID())
+		dists := LookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{2, 3, 1}, dists)
 	})
 
 	t.Run("target distance of 128", func(t *testing.T) {
 		node := nodeAtDistance(lnID, 128, intIP(0))
-		dists := lookupDistances(lnID, node.ID())
+		dists := LookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{128, 129, 127}, dists)
 	})
 
 	t.Run("target distance of 255", func(t *testing.T) {
 		node := nodeAtDistance(lnID, 255, intIP(0))
-		dists := lookupDistances(lnID, node.ID())
+		dists := LookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{255, 256, 254}, dists)
 	})
 
 	t.Run("target distance of 256", func(t *testing.T) {
 		node := nodeAtDistance(lnID, 256, intIP(0))
-		dists := lookupDistances(lnID, node.ID())
+		dists := LookupDistances(lnID, node.ID())
 		require.Equal(t, []uint{256, 255, 254}, dists)
 	})
 }
@@ -817,7 +817,7 @@ func (test *udpV5Test) waitPacketOut(validate interface{}) (closed bool) {
 	exptype := fn.Type().In(0)
 
 	dgram, err := test.pipe.receive()
-	if err == errClosed {
+	if err == ErrClosed {
 		return true
 	}
 	if err == errTimeout {
