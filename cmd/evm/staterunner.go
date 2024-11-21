@@ -177,7 +177,9 @@ func runStateTest(ctx *cli.Context, fname string, cfg vm.Config, dump bool, benc
 			}
 		})
 		if bench {
-			_, stats, _ := timedExec(true, func() ([]byte, uint64, error) {
+			// TODO: verify that each bench exec didn't produce a different result than the first run
+			// ..
+			_, stats, _, _ := timedExec(true, func() ([]byte, uint64, error) {
 				_, _, gasUsed, _ := test.test.RunNoVerify(test.st, cfg, false, rawdb.HashScheme)
 				return nil, gasUsed, nil
 			})

@@ -82,24 +82,34 @@ type execStats struct {
 	GasUsed        uint64        `json:"gasUsed"`        // the amount of gas used during execution
 }
 
-func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, execStats, error) {
+func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, stats execStats, execErr error, benchErr error) {
 	if bench {
 		// Do one warm-up run
-		output, gasUsed, err := execFunc()
+		var gasUsed uint64
+		output, gasUsed, execErr = execFunc()
+		var benchErr error
+		testing.Init()
 		result := testing.Benchmark(func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				haveOutput, haveGasUsed, haveErr := execFunc()
 				if !bytes.Equal(haveOutput, output) {
-					b.Fatalf("output differs, have\n%x\nwant%x\n", haveOutput, output)
+					benchErr = fmt.Errorf("output differs, have\n%x\nwant %x\n", haveOutput, output)
+					b.FailNow()
 				}
 				if haveGasUsed != gasUsed {
-					b.Fatalf("gas differs, have %v want%v", haveGasUsed, gasUsed)
+					benchErr = fmt.Errorf("gas differs, have %v want%v", haveGasUsed, gasUsed)
+					b.FailNow()
 				}
-				if haveErr != err {
-					b.Fatalf("err differs, have %v want%v", haveErr, err)
+				if haveErr != execErr {
+					benchErr = fmt.Errorf("err differs, have %v want %v", haveErr, execErr)
+					b.FailNow()
 				}
 			}
 		})
+
+		if benchErr != nil {
+			return nil, execStats{}, nil, benchErr
+		}
 		// Get the average execution time from the benchmarking result.
 		// There are other useful stats here that could be reported.
 		stats := execStats{
@@ -108,7 +118,7 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 			BytesAllocated: result.AllocedBytesPerOp(),
 			GasUsed:        gasUsed,
 		}
-		return output, stats, err
+		return output, stats, execErr, nil
 	}
 	var memStatsBefore, memStatsAfter goruntime.MemStats
 	goruntime.ReadMemStats(&memStatsBefore)
@@ -116,13 +126,13 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 	output, gasUsed, err := execFunc()
 	duration := time.Since(t0)
 	goruntime.ReadMemStats(&memStatsAfter)
-	stats := execStats{
+	stats = execStats{
 		Time:           duration,
 		Allocs:         int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs),
 		BytesAllocated: int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc),
 		GasUsed:        gasUsed,
 	}
-	return output, stats, err
+	return output, stats, err, nil
 }
 
 func runCmd(ctx *cli.Context) error {
@@ -137,7 +147,7 @@ func runCmd(ctx *cli.Context) error {
 	var (
 		tracer      *tracing.Hooks
 		debugLogger *logger.StructLogger
-		statedb     *state.StateDB
+		prestate    *state.StateDB
 		chainConfig *params.ChainConfig
 		sender      = common.BytesToAddress([]byte("sender"))
 		receiver    = common.BytesToAddress([]byte("receiver"))
@@ -174,7 +184,7 @@ func runCmd(ctx *cli.Context) error {
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)
 	sdb := state.NewDatabase(triedb, nil)
-	statedb, _ = state.New(genesis.Root(), sdb)
+	prestate, _ = state.New(genesis.Root(), sdb)
 	chainConfig = genesisConfig.Config
 
 	if ctx.String(SenderFlag.Name) != "" {
@@ -231,7 +241,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 	runtimeConfig := runtime.Config{
 		Origin:      sender,
-		State:       statedb,
+		State:       prestate,
 		GasLimit:    initialGas,
 		GasPrice:    flags.GlobalBig(ctx, PriceFlag.Name),
 		Value:       flags.GlobalBig(ctx, ValueFlag.Name),
@@ -274,24 +284,32 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.Bool(CreateFlag.Name) {
 		input = append(code, input...)
 		execFunc = func() ([]byte, uint64, error) {
+			// don't mutate the state!
+			runtimeConfig.State = prestate.Copy()
 			output, _, gasLeft, err := runtime.Create(input, &runtimeConfig)
 			return output, gasLeft, err
 		}
 	} else {
 		if len(code) > 0 {
-			statedb.SetCode(receiver, code)
+			prestate.SetCode(receiver, code)
 		}
 		execFunc = func() ([]byte, uint64, error) {
+			// don't mutate the state!
+			runtimeConfig.State = prestate.Copy()
 			output, gasLeft, err := runtime.Call(receiver, input, &runtimeConfig)
 			return output, initialGas - gasLeft, err
 		}
 	}
 
 	bench := ctx.Bool(BenchFlag.Name)
-	output, stats, err := timedExec(bench, execFunc)
+	output, stats, execErr, benchErr := timedExec(bench, execFunc)
+	if benchErr != nil {
+		fmt.Printf("benchmarking execution failed: %v\n", benchErr)
+		return benchErr
+	}
 
 	if ctx.Bool(DumpFlag.Name) {
-		root, err := statedb.Commit(genesisConfig.Number, true)
+		root, err := runtimeConfig.State.Commit(genesisConfig.Number, true)
 		if err != nil {
 			fmt.Printf("Failed to commit changes %v\n", err)
 			return err
@@ -310,7 +328,7 @@ func runCmd(ctx *cli.Context) error {
 			logger.WriteTrace(os.Stderr, debugLogger.StructLogs())
 		}
 		fmt.Fprintln(os.Stderr, "#### LOGS ####")
-		logger.WriteLogs(os.Stderr, statedb.Logs())
+		logger.WriteLogs(os.Stderr, prestate.Logs())
 	}
 
 	if bench || ctx.Bool(StatDumpFlag.Name) {
@@ -322,8 +340,8 @@ allocated bytes: %d
 	}
 	if tracer == nil {
 		fmt.Printf("%#x\n", output)
-		if err != nil {
-			fmt.Printf(" error: %v\n", err)
+		if execErr != nil {
+			fmt.Printf(" error: %v\n", execErr)
 		}
 	}
 
