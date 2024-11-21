@@ -16,10 +16,14 @@
 
 package vm
 
-// A CallOption modifies the default behaviour of a contract call.
-type CallOption interface {
-	libevmCallOption() // noop to only allow internally defined options
+import "github.com/ava-labs/libevm/libevm/options"
+
+type callConfig struct {
+	unsafeCallerAddressProxying bool
 }
+
+// A CallOption modifies the default behaviour of a contract call.
+type CallOption = options.Option[callConfig]
 
 // WithUNSAFECallerAddressProxying results in precompiles making contract calls
 // specifying their own caller's address as the caller. This is NOT SAFE for
@@ -29,10 +33,7 @@ type CallOption interface {
 // Deprecated: this option MUST NOT be used other than to allow migration to
 // libevm when backwards compatibility is required.
 func WithUNSAFECallerAddressProxying() CallOption {
-	return callOptUNSAFECallerAddressProxy{}
+	return options.Func[callConfig](func(c *callConfig) {
+		c.unsafeCallerAddressProxying = true
+	})
 }
-
-// Deprecated: see [WithUNSAFECallerAddressProxying].
-type callOptUNSAFECallerAddressProxy struct{}
-
-func (callOptUNSAFECallerAddressProxy) libevmCallOption() {}
