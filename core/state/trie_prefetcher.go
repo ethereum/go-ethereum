@@ -18,7 +18,6 @@ package state
 
 import (
 	"errors"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -230,10 +229,8 @@ type subfetcher struct {
 	addr  common.Address // Address of the account that the trie belongs to
 	trie  Trie           // Trie being populated with nodes
 
-	tasks []*subfetcherTask // Items queued up for retrieval
-	lock  sync.Mutex        // Lock protecting the task queue
+	tasks chan []*subfetcherTask // Queue items for retrieval
 
-	wake chan struct{} // Wake channel if a new task is scheduled
 	stop chan struct{} // Channel to interrupt processing
 	term chan struct{} // Channel to signal interruption
 
@@ -267,7 +264,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		owner:         owner,
 		root:          root,
 		addr:          addr,
-		wake:          make(chan struct{}, 1),
+		tasks:         make(chan []*subfetcherTask),
 		stop:          make(chan struct{}),
 		term:          make(chan struct{}),
 		seenReadAddr:  make(map[common.Address]struct{}),
@@ -281,30 +278,20 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 
 // schedule adds a batch of trie keys to the queue to prefetch.
 func (sf *subfetcher) schedule(addrs []common.Address, slots []common.Hash, read bool) error {
-	// Ensure the subfetcher is still alive
-	select {
-	case <-sf.term:
-		return errTerminated
-	default:
-	}
-	// Append the tasks to the current queue
-	sf.lock.Lock()
+	tasks := make([]*subfetcherTask, 0, len(addrs)+len(slots))
 	for _, addr := range addrs {
-		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, addr: &addr})
+		tasks = append(tasks, &subfetcherTask{read: read, addr: &addr})
 	}
 	for _, slot := range slots {
-		sf.tasks = append(sf.tasks, &subfetcherTask{read: read, slot: &slot})
+		tasks = append(tasks, &subfetcherTask{read: read, slot: &slot})
 	}
-	sf.lock.Unlock()
 
-	// Notify the background thread to execute scheduled tasks
 	select {
-	case sf.wake <- struct{}{}:
-		// Wake signal sent
-	default:
-		// Wake signal not sent as a previous one is already queued
+	case sf.tasks <- tasks:
+		return nil
+	case <-sf.term:
+		return errTerminated
 	}
-	return nil
 }
 
 // wait blocks until the subfetcher terminates. This method is used to block on
@@ -379,15 +366,29 @@ func (sf *subfetcher) loop() {
 	if err := sf.openTrie(); err != nil {
 		return
 	}
+
+	var tasks []*subfetcherTask
+	// Adding a default case to the select statement would spin the for loop so
+	// we instead have a `work` channel signaller. A necessary invariant is that
+	// there is a buffered item i.f.f. there are tasks; therefore only
+	// addTasks() may append to the above slice and only the <-work branch may
+	// deplete it.
+	work := make(chan struct{}, 1)
+	defer close(work)
+	addTasks := func(ts []*subfetcherTask) {
+		tasks = append(tasks, ts...)
+		select {
+		case work <- struct{}{}:
+		default:
+		}
+	}
+
 	for {
 		select {
-		case <-sf.wake:
-			// Execute all remaining tasks in a single run
-			sf.lock.Lock()
-			tasks := sf.tasks
-			sf.tasks = nil
-			sf.lock.Unlock()
+		case ts := <-sf.tasks:
+			addTasks(ts)
 
+		case <-work:
 			for _, task := range tasks {
 				if task.addr != nil {
 					key := *task.addr
@@ -451,20 +452,21 @@ func (sf *subfetcher) loop() {
 					}
 				}
 			}
+			tasks = tasks[:0] // avoid reallocation
 
 		case <-sf.stop:
 			// Termination is requested, abort if no more tasks are pending. If
 			// there are some, exhaust them first.
-			sf.lock.Lock()
-			done := sf.tasks == nil
-			sf.lock.Unlock()
-
-			if done {
+			if len(tasks) > 0 {
+				// See earlier invariant that guarantees a receive on `work` to clear `tasks`.
+				continue
+			}
+			select {
+			case ts := <-sf.tasks:
+				addTasks(ts)
+			default:
 				return
 			}
-			// Some tasks are pending, loop and pick them up (that wake branch
-			// will be selected eventually, whilst stop remains closed to this
-			// branch will also run afterwards).
 		}
 	}
 }
