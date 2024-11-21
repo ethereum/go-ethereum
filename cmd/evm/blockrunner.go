@@ -23,12 +23,12 @@ import (
 	"os"
 	"regexp"
 	"slices"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/exp/maps"
 )
 
 var blockTestCommand = &cli.Command{
@@ -80,11 +80,8 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	tracer := tracerFromFlags(ctx)
 
 	// Pull out keys to sort and ensure tests are run in order.
-	var keys []string
-	for key := range tests {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	keys := maps.Keys(tests)
+	slices.Sort(keys)
 
 	// Run all the tests.
 	var results []testResult

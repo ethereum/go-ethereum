@@ -189,8 +189,8 @@ var (
 var traceFlags = []cli.Flag{
 	TraceFlag,
 	TraceFormatFlag,
-	TraceDisableMemoryFlag,
 	TraceDisableStackFlag,
+	TraceDisableMemoryFlag,
 	TraceDisableStorageFlag,
 	TraceDisableReturnDataFlag,
 
