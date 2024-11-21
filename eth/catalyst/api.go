@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/internal/version"
@@ -995,7 +996,7 @@ func (api *ConsensusAPI) executeStatelessPayload(params engine.ExecutableData, v
 	api.lastNewPayloadLock.Unlock()
 
 	log.Trace("Executing block statelessly", "number", block.Number(), "hash", params.BlockHash)
-	stateRoot, receiptRoot, err := core.ExecuteStateless(api.eth.BlockChain().Config(), block, witness)
+	stateRoot, receiptRoot, err := core.ExecuteStateless(api.eth.BlockChain().Config(), vm.Config{}, block, witness)
 	if err != nil {
 		log.Warn("ExecuteStatelessPayload: execution failed", "err", err)
 		errorMsg := err.Error()
