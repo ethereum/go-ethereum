@@ -256,7 +256,7 @@ func buildFlags(env build.Environment, staticLinking bool, buildTags []string) (
 		// See https://sourceware.org/binutils/docs-2.23.1/ld/Options.html#Options
 		// regarding the options --build-id=none and --strip-all. It is needed for
 		// reproducible builds; removing references to temporary files in C-land, and
-		// making build-id reproducably absent.
+		// making build-id reproducibly absent.
 		extld := []string{"-Wl,-z,stack-size=0x800000,--build-id=none,--strip-all"}
 		if staticLinking {
 			extld = append(extld, "-static")
