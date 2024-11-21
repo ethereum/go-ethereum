@@ -758,9 +758,9 @@ func (c *ChainConfig) LatestFork(num *big.Int, time uint64) forks.Fork {
 		return forks.Byzantium
 	case c.IsEIP158(num):
 		return forks.SpuriousDragon
-	case c.IsEIP155(num):
-		return forks.TangerineWhistle
 	case c.IsEIP150(num):
+		return forks.TangerineWhistle
+	case c.IsDAOFork(num):
 		return forks.DAO
 	case c.IsHomestead(num):
 		return forks.Homestead
