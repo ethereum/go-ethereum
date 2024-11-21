@@ -80,8 +80,8 @@ type StructLog struct {
 
 // overrides for gencodec
 type structLogMarshaling struct {
-	Gas         math.HexOrDecimal64
-	GasCost     math.HexOrDecimal64
+	Gas         math.Decimal64
+	GasCost     math.Decimal64
 	Memory      hexutil.Bytes
 	ReturnData  hexutil.Bytes
 	Stack       []hexutil.U256

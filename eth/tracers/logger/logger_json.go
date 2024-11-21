@@ -34,7 +34,7 @@ import (
 // overrides for gencodec
 type callFrameMarshaling struct {
 	Input hexutil.Bytes
-	Gas   math.HexOrDecimal64
+	Gas   math.Decimal64
 	Value *hexutil.Big
 	Type  string `json:"type"` // adds call to Type() in MarshalJSON
 }
@@ -161,15 +161,15 @@ func (l *jsonLogger) OnEnd(depth int, output []byte, gasUsed uint64, err error, 
 
 func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	type endLog struct {
-		Output  string              `json:"output"`
-		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
-		Err     string              `json:"error,omitempty"`
+		Output  string         `json:"output"`
+		GasUsed math.Decimal64 `json:"gasUsed,string"`
+		Err     string         `json:"error,omitempty"`
 	}
 	var errMsg string
 	if err != nil {
 		errMsg = err.Error()
 	}
-	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), errMsg})
+	l.encoder.Encode(endLog{common.Bytes2Hex(output), math.Decimal64(gasUsed), errMsg})
 }
 
 func (l *jsonLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {

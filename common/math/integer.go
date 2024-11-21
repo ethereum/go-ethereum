@@ -51,6 +51,35 @@ func (i HexOrDecimal64) MarshalText() ([]byte, error) {
 	return []byte(fmt.Sprintf("%#x", uint64(i))), nil
 }
 
+// Decimal64 marshals uint64 as numeric value wrapped by a string.
+type Decimal64 uint64
+
+// UnmarshalJSON implements json.Unmarshaler.
+//
+// It is similar to UnmarshalText, but allows parsing real decimals too, not just
+// quoted decimal strings.
+func (i *Decimal64) UnmarshalJSON(input []byte) error {
+	if len(input) > 1 && input[0] == '"' {
+		input = input[1 : len(input)-1]
+	}
+	return i.UnmarshalText(input)
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (i *Decimal64) UnmarshalText(input []byte) error {
+	n, ok := ParseUint64(string(input))
+	if !ok {
+		return fmt.Errorf("invalid hex or decimal integer %q", input)
+	}
+	*i = Decimal64(n)
+	return nil
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (i Decimal64) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("%d", uint64(i))), nil
+}
+
 // ParseUint64 parses s as an integer in decimal or hexadecimal syntax.
 // Leading zeros are accepted. The empty string parses as zero.
 func ParseUint64(s string) (uint64, bool) {
