@@ -528,6 +528,9 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		base.genAbort <- abort
 		stats = <-abort
 	}
+	// Put the deletion in the batch writer, flush all updates in the final step.
+	rawdb.DeleteSnapshotRoot(batch)
+
 	// Mark the original base as stale as we're going to create a new wrapper
 	base.lock.Lock()
 	if base.stale {
@@ -553,6 +556,16 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 		}
 		snapshotFlushAccountItemMeter.Mark(1)
 		snapshotFlushAccountSizeMeter.Mark(int64(len(data)))
+
+		// Ensure we don't write too much data blindly. It's ok to flush, the
+		// root will go missing in case of a crash and we'll detect and regen
+		// the snapshot.
+		if batch.ValueSize() > 64*1024*1024 {
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to write state changes", "err", err)
+			}
+			batch.Reset()
+		}
 	}
 	// Push all the storage slots into the database
 	for accountHash, storage := range bottom.storageData {
@@ -578,6 +591,16 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			}
 			snapshotFlushStorageItemMeter.Mark(1)
 			snapshotFlushStorageSizeMeter.Mark(int64(len(data)))
+
+			// Ensure we don't write too much data blindly. It's ok to flush, the
+			// root will go missing in case of a crash and we'll detect and regen
+			// the snapshot.
+			if batch.ValueSize() > 64*1024*1024 {
+				if err := batch.Write(); err != nil {
+					log.Crit("Failed to write state changes", "err", err)
+				}
+				batch.Reset()
+			}
 		}
 	}
 	// Update the snapshot block marker and write any remainder data
