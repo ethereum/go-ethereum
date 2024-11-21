@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -133,13 +134,13 @@ func (miner *Miner) BuildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 // getPending retrieves the pending block based on the current head block.
 // The result might be nil if pending generation is failed.
 func (miner *Miner) getPending() *newPayloadResult {
-	header := miner.chain.CurrentHeader()
 	miner.pendingMu.Lock()
 	defer miner.pendingMu.Unlock()
+
+	header := miner.chain.CurrentHeader()
 	if cached := miner.pending.resolve(header.Hash()); cached != nil {
 		return cached
 	}
-
 	var (
 		timestamp  = uint64(time.Now().Unix())
 		withdrawal types.Withdrawals
@@ -158,6 +159,15 @@ func (miner *Miner) getPending() *newPayloadResult {
 		noTxs:       false,
 	}, false) // we will never make a witness for a pending block
 	if ret.err != nil {
+		return nil
+	}
+	// Derive the receipt fields for RPC querying.
+	var blobGasPrice *big.Int
+	if ret.block.ExcessBlobGas() != nil {
+		blobGasPrice = eip4844.CalcBlobFee(*ret.block.ExcessBlobGas())
+	}
+	err := types.Receipts(ret.receipts).DeriveFields(miner.chain.Config(), ret.block.Hash(), ret.block.NumberU64(), ret.block.Time(), ret.block.BaseFee(), blobGasPrice, ret.block.Transactions())
+	if err != nil {
 		return nil
 	}
 	miner.pending.update(header.Hash(), ret)

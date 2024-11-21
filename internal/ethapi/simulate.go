@@ -178,6 +178,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		txes                 = make([]*types.Transaction, len(block.Calls))
 		callResults          = make([]simCallResult, len(block.Calls))
 		receipts             = make([]*types.Receipt, len(block.Calls))
+
 		// Block hash will be repaired after execution.
 		tracer   = newTracer(sim.traceTransfers, blockContext.BlockNumber.Uint64(), common.Hash{}, common.Hash{}, 0)
 		vmConfig = &vm.Config{
@@ -205,7 +206,8 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tx := call.ToTransaction(types.DynamicFeeTxType)
 		txes[i] = tx
 		tracer.reset(tx.Hash(), uint(i))
-		// EoA check is always skipped, even in validation mode.
+
+		// EOA check is always skipped, even in validation mode.
 		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
 		evm.SetTxContext(core.NewEVMTxContext(msg))
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, sim.gp)
@@ -221,10 +223,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			root = sim.state.IntermediateRoot(sim.chainConfig.IsEIP158(blockContext.BlockNumber)).Bytes()
 		}
 		gasUsed += result.UsedGas
-		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, tx, gasUsed, root)
-		blobGasUsed += receipts[i].BlobGasUsed
-		logs := tracer.Logs()
-		callRes := simCallResult{ReturnValue: result.Return(), Logs: logs, GasUsed: hexutil.Uint64(result.UsedGas)}
+		receipts[i] = core.MakeReceipt(evm, result, sim.state, tx, gasUsed, root)
+		blobGasUsed += tx.BlobGas()
+
+		callRes := simCallResult{ReturnValue: result.Return(), Logs: tracer.Logs(), GasUsed: hexutil.Uint64(result.UsedGas)}
 		if result.Failed() {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusFailed)
 			if errors.Is(result.Err, vm.ErrExecutionReverted) {
@@ -241,6 +243,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 	}
 	header.Root = sim.state.IntermediateRoot(true)
 	header.GasUsed = gasUsed
+
 	if sim.chainConfig.IsCancun(header.Number, header.Time) {
 		header.BlobGasUsed = &blobGasUsed
 	}

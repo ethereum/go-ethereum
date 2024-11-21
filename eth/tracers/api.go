@@ -972,6 +972,12 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		msg         = args.ToMessage(vmctx.BaseFee, true, true)
 		tx          = args.ToTransaction(types.LegacyTxType)
 		traceConfig *TraceConfig
+		txContext   = &Context{
+			BlockNumber: new(big.Int).Add(block.Number(), common.Big1),
+			BlockHash:   common.Hash{},
+			TxIndex:     0,
+			TxHash:      tx.Hash(),
+		}
 	)
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
@@ -984,7 +990,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 	if config != nil {
 		traceConfig = &config.TraceConfig
 	}
-	return api.traceTx(ctx, tx, msg, new(Context), vmctx, statedb, traceConfig)
+	return api.traceTx(ctx, tx, msg, txContext, vmctx, statedb, traceConfig)
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
@@ -1014,7 +1020,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 			return nil, err
 		}
 	}
-	// The actual TxContext will be created as part of ApplyTransactionWithEVM.
+	// The actual TxContext will be created as part of ApplyTransaction.
 	evm := vm.NewEVM(vmctx, statedb, api.backend.ChainConfig(), vm.Config{Tracer: tracer.Hooks, NoBaseFee: true})
 	evm.SetTxContext(vm.TxContext{GasPrice: message.GasPrice, BlobFeeCap: message.BlobGasFeeCap})
 
@@ -1037,7 +1043,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 
 	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-	_, err = core.ApplyTransactionWithEVM(message, new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm)
+	_, err = core.ApplyTransactionWithHooks(message, new(core.GasPool).AddGas(message.GasLimit), statedb, tx, txctx.TxIndex, txctx.BlockHash, &usedGas, evm, tracer.Hooks)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}

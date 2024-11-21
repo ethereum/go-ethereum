@@ -244,15 +244,12 @@ func (s *StateDB) AddLog(log *types.Log) {
 	s.logSize++
 }
 
-// GetLogs returns the logs matching the specified transaction hash, and annotates
-// them with the given blockNumber and blockHash.
-func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log {
-	logs := s.logs[hash]
-	for _, l := range logs {
-		l.BlockNumber = blockNumber
-		l.BlockHash = blockHash
-	}
-	return logs
+// GetLogs returns the logs matching the specified transaction hash.
+//
+// TODO (rjl493456442) these logs are partially annotated (with transaction
+// information), please get rid of these annotations as well.
+func (s *StateDB) GetLogs(hash common.Hash) []*types.Log {
+	return s.logs[hash]
 }
 
 func (s *StateDB) Logs() []*types.Log {
@@ -331,11 +328,6 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 		return stateObject.Root()
 	}
 	return common.Hash{}
-}
-
-// TxIndex returns the current transaction index set by SetTxContext.
-func (s *StateDB) TxIndex() int {
-	return s.txIndex
 }
 
 func (s *StateDB) GetCode(addr common.Address) []byte {

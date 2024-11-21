@@ -76,7 +76,7 @@ type newPayloadResult struct {
 	fees     *big.Int               // total block fees
 	sidecars []*types.BlobTxSidecar // collected blobs of blob transactions
 	stateDB  *state.StateDB         // StateDB after executing the transactions
-	receipts []*types.Receipt       // Receipts collected during construction
+	receipts []*types.Receipt       // Receipts collected during construction, only contain consensus fields
 	requests [][]byte               // Consensus layer requests collected during block construction
 	witness  *stateless.Witness     // Witness is an optional stateless proof
 }
@@ -113,11 +113,10 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 	}
 
 	body := types.Body{Transactions: work.txs, Withdrawals: params.withdrawals}
-	allLogs := make([]*types.Log, 0)
+	var allLogs [][]*types.Log
 	for _, r := range work.receipts {
-		allLogs = append(allLogs, r.Logs...)
+		allLogs = append(allLogs, r.Logs)
 	}
-
 	// Collect consensus-layer requests if Prague is enabled.
 	var requests [][]byte
 	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
@@ -138,7 +137,6 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 		reqHash := types.CalcRequestsHash(requests)
 		work.header.RequestsHash = &reqHash
 	}
-
 	block, err := miner.engine.FinalizeAndAssemble(miner.chain, work.header, work.state, &body, work.receipts)
 	if err != nil {
 		return &newPayloadResult{err: err}
@@ -309,7 +307,7 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Gas()
 	)
-	receipt, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx, &env.header.GasUsed)
+	receipt, err := core.ApplyTransaction(env.signer, env.gasPool, env.state, tx, &env.header.GasUsed, env.evm)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.SetGas(gp)

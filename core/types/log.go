@@ -59,3 +59,28 @@ type logMarshaling struct {
 	TxIndex     hexutil.Uint
 	Index       hexutil.Uint
 }
+
+// DeriveLogFields fills the logs with contextual infos like corresponding block
+// and transaction info.
+func DeriveLogFields(hash common.Hash, number uint64, logs [][]*Log, txs []*Transaction, removed bool) []*Log {
+	var (
+		combined []*Log
+		logIndex = uint(0)
+	)
+	for i := 0; i < len(txs); i++ {
+		for j := 0; j < len(logs[i]); j++ {
+			l := logs[i][j]
+			l.BlockNumber = number
+			l.BlockHash = hash
+			l.TxHash = txs[i].Hash()
+			l.TxIndex = uint(i)
+			l.Index = logIndex
+			if removed {
+				l.Removed = true
+			}
+			combined = append(combined, l)
+			logIndex++
+		}
+	}
+	return combined
+}

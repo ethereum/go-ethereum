@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
@@ -1534,7 +1533,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 // writeBlockAndSetHead is the internal implementation of WriteBlockAndSetHead.
 // This function expects the chain mutex to be held.
-func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs []*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
+func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types.Receipt, logs [][]*types.Log, state *state.StateDB, emitHeadEvent bool) (status WriteStatus, err error) {
 	if err := bc.writeBlockWithState(block, receipts, state); err != nil {
 		return NonStatTy, err
 	}
@@ -1552,7 +1551,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 
 	bc.chainFeed.Send(ChainEvent{Header: block.Header()})
 	if len(logs) > 0 {
-		bc.logsFeed.Send(logs)
+		bc.logsFeed.Send(types.DeriveLogFields(block.Hash(), block.NumberU64(), logs, block.Transactions(), false))
 	}
 	// In theory, we should fire a ChainHeadEvent when we inject
 	// a canonical block, but sometimes we can insert a batch of
@@ -2157,25 +2156,11 @@ func (bc *BlockChain) recoverAncestors(block *types.Block, makeWitness bool) (co
 // collectLogs collects the logs that were generated or removed during the
 // processing of a block. These logs are later announced as deleted or reborn.
 func (bc *BlockChain) collectLogs(b *types.Block, removed bool) []*types.Log {
-	var blobGasPrice *big.Int
-	excessBlobGas := b.ExcessBlobGas()
-	if excessBlobGas != nil {
-		blobGasPrice = eip4844.CalcBlobFee(*excessBlobGas)
+	var logs [][]*types.Log
+	for _, receipt := range rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64()) {
+		logs = append(logs, receipt.Logs)
 	}
-	receipts := rawdb.ReadRawReceipts(bc.db, b.Hash(), b.NumberU64())
-	if err := receipts.DeriveFields(bc.chainConfig, b.Hash(), b.NumberU64(), b.Time(), b.BaseFee(), blobGasPrice, b.Transactions()); err != nil {
-		log.Error("Failed to derive block receipts fields", "hash", b.Hash(), "number", b.NumberU64(), "err", err)
-	}
-	var logs []*types.Log
-	for _, receipt := range receipts {
-		for _, log := range receipt.Logs {
-			if removed {
-				log.Removed = true
-			}
-			logs = append(logs, log)
-		}
-	}
-	return logs
+	return types.DeriveLogFields(b.Hash(), b.NumberU64(), logs, b.Transactions(), removed)
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the

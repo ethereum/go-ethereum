@@ -151,7 +151,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		statedb     = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre)
 		signer      = types.MakeSigner(chainConfig, new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp)
 		gaspool     = new(core.GasPool)
-		blockHash   = common.Hash{0x13, 0x37}
 		rejectedTxs []*rejectedTx
 		includedTxs types.Transactions
 		gasUsed     = uint64(0)
@@ -312,7 +311,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 			}
 
 			// Set the receipt logs and create the bloom filter.
-			receipt.Logs = statedb.GetLogs(tx.Hash(), vmContext.BlockNumber.Uint64(), blockHash)
+			receipt.Logs = statedb.GetLogs(tx.Hash())
+			// TODO (rjl493456442) should we derive fields for logs? receipts?
+
 			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 			// These three are non-consensus fields:
 			//receipt.BlockHash
@@ -367,9 +368,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	var requests [][]byte
 	if chainConfig.IsPrague(vmContext.BlockNumber, vmContext.Time) {
 		// EIP-6110 deposits
-		var allLogs []*types.Log
+		var allLogs [][]*types.Log
 		for _, receipt := range receipts {
-			allLogs = append(allLogs, receipt.Logs...)
+			allLogs = append(allLogs, receipt.Logs)
 		}
 		depositRequests, err := core.ParseDepositLogs(allLogs, chainConfig)
 		if err != nil {

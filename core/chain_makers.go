@@ -44,6 +44,7 @@ type BlockGen struct {
 	parent  *types.Block
 	header  *types.Header
 	statedb *state.StateDB
+	signer  types.Signer
 
 	gasPool     *GasPool
 	txs         []*types.Transaction
@@ -118,14 +119,14 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
+	receipt, err := ApplyTransaction(b.signer, b.gasPool, b.statedb, tx, &b.header.GasUsed, evm)
 	if err != nil {
 		panic(err)
 	}
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
 	if b.header.BlobGasUsed != nil {
-		*b.header.BlobGasUsed += receipt.BlobGasUsed
+		*b.header.BlobGasUsed += tx.BlobGas()
 	}
 }
 
@@ -317,6 +318,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	genblock := func(i int, parent *types.Block, triedb *triedb.Database, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, cm: cm, parent: parent, statedb: statedb, engine: engine}
 		b.header = cm.makeHeader(parent, statedb, b.engine)
+		b.signer = types.MakeSigner(config, b.header.Number, b.header.Time)
 
 		// Set the difficulty for clique block. The chain maker doesn't have access
 		// to a chain, so the difficulty will be left unset (nil). Set it here to the
@@ -350,9 +352,9 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		var requests [][]byte
 		if config.IsPrague(b.header.Number, b.header.Time) {
 			// EIP-6110 deposits
-			var blockLogs []*types.Log
+			var blockLogs [][]*types.Log
 			for _, r := range b.receipts {
-				blockLogs = append(blockLogs, r.Logs...)
+				blockLogs = append(blockLogs, r.Logs)
 			}
 			depositRequests, err := ParseDepositLogs(blockLogs, config)
 			if err != nil {
@@ -421,7 +423,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if err := receipts.DeriveFields(config, block.Hash(), block.NumberU64(), block.Time(), block.BaseFee(), blobGasPrice, txs); err != nil {
 			panic(err)
 		}
-
 		// Re-expand to ensure all receipts are returned.
 		receipts = receipts[:receiptsCount]
 
@@ -458,6 +459,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 	genblock := func(i int, parent *types.Block, triedb *triedb.Database, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, cm: cm, parent: parent, statedb: statedb, engine: engine}
 		b.header = cm.makeHeader(parent, statedb, b.engine)
+		b.signer = types.MakeSigner(config, b.header.Number, b.header.Time)
 
 		// TODO uncomment when proof generation is merged
 		// Save pre state for proof generation

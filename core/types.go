@@ -55,6 +55,6 @@ type Processor interface {
 type ProcessResult struct {
 	Receipts types.Receipts
 	Requests [][]byte
-	Logs     []*types.Log
+	Logs     [][]*types.Log
 	GasUsed  uint64
 }
