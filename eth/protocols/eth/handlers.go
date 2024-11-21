@@ -455,7 +455,9 @@ func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 		hashes := make([]common.Hash, len(response))
 		for i, receipts := range response {
 			var r []*types.Receipt
-			r = append(r, receipts...)
+			for _, receipt := range receipts {
+				r = append(r, (*types.Receipt)(receipt))
+			}
 			hashes[i] = types.DeriveSha(types.Receipts(r), hasher)
 		}
 		return hashes
