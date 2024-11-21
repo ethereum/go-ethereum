@@ -18,7 +18,6 @@ package eth
 
 import (
 	"bytes"
-	"io"
 	"math"
 	"math/big"
 	"math/rand"
@@ -576,38 +575,6 @@ func FuzzEthProtocolHandlers(f *testing.F) {
 		}
 		handler(backend, decoder{msg: msg}, peer.Peer)
 	})
-}
-
-type receiptForNetwork struct {
-	Type    byte
-	Status  uint64
-	GasUsed uint64
-	Logs    []*types.Log
-}
-
-func (r *receiptForNetwork) EncodeRLP(_w io.Writer) error {
-	data := &types.ReceiptForStorage{Status: r.Status, CumulativeGasUsed: r.GasUsed, Logs: r.Logs}
-	if r.Type == types.LegacyTxType {
-		return rlp.Encode(_w, data)
-	}
-	w := rlp.NewEncoderBuffer(_w)
-	outerList := w.List()
-	w.Write([]byte{r.Type})
-	if r.Status == types.ReceiptStatusSuccessful {
-		w.Write([]byte{0x01})
-	} else {
-		w.Write([]byte{0x00})
-	}
-	w.WriteUint64(r.GasUsed)
-	logList := w.List()
-	for _, log := range r.Logs {
-		if err := log.EncodeRLP(w); err != nil {
-			return err
-		}
-	}
-	w.ListEnd(logList)
-	w.ListEnd(outerList)
-	return w.Flush()
 }
 
 func TestTransformReceipts(t *testing.T) {

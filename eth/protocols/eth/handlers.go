@@ -429,28 +429,36 @@ func handleReceipts68(backend Backend, msg Decoder, peer *Peer) error {
 
 func handleReceipts69(backend Backend, msg Decoder, peer *Peer) error {
 	// A batch of receipts arrived to one of our previous requests
-	res := new(ReceiptsPacket)
+	res := new(ReceiptsPacket69)
 	if err := msg.Decode(res); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
+	var response ReceiptsResponse
 	// calculate the bloom filter before dispatching
-	for _, receipts := range res.ReceiptsResponse {
+	for _, receipts := range res.ReceiptsResponse69 {
+		var rec []*types.Receipt
 		for _, receipt := range receipts {
-			receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+			receipt.Bloom = types.CreateBloom(types.Receipts{(*types.Receipt)(receipt)})
+			rec = append(rec, (*types.Receipt)(receipt))
 		}
+		response = append(response, rec)
 	}
 	metadata := func() interface{} {
 		hasher := trie.NewStackTrie(nil)
-		hashes := make([]common.Hash, len(res.ReceiptsResponse))
-		for i, receipt := range res.ReceiptsResponse {
-			hashes[i] = types.DeriveSha(types.Receipts(receipt), hasher)
+		hashes := make([]common.Hash, len(response))
+		for i, receipts := range response {
+			var r []*types.Receipt
+			for _, receipt := range receipts {
+				r = append(r, (*types.Receipt)(receipt))
+			}
+			hashes[i] = types.DeriveSha(types.Receipts(r), hasher)
 		}
 		return hashes
 	}
 	return peer.dispatchResponse(&Response{
 		id:   res.RequestId,
 		code: ReceiptsMsg,
-		Res:  &res.ReceiptsResponse,
+		Res:  &response,
 	}, metadata)
 }
 

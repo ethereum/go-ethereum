@@ -260,6 +260,16 @@ type ReceiptsPacket struct {
 	ReceiptsResponse
 }
 
+// ReceiptsResponse is the network packet for block receipts distribution.
+type ReceiptsResponse69 [][]*receiptForNetwork
+
+// ReceiptsPacket is the network packet for block receipts distribution with
+// request ID wrapping.
+type ReceiptsPacket69 struct {
+	RequestId uint64
+	ReceiptsResponse69
+}
+
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
 type ReceiptsRLPResponse []rlp.RawValue
 
