@@ -1,6 +1,8 @@
 package ethpepple
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"os"
 	"testing"
 
@@ -10,16 +12,24 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const dataDir = "./node1"
-
 var testRadius = uint256.NewInt(100000)
 
-func clearNodeData() {
-	_ = os.RemoveAll(dataDir)
+func clearNodeData(path string) {
+	_ = os.RemoveAll(path)
 }
 
-func getTestDb() (storage.ContentStorage, error) {
-	db, err := NewPeppleDB(dataDir, 100, 100, "history")
+func getRandomPath() string {
+	// gen a random hex string
+	bytes := make([]byte, 32)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(bytes)
+}
+
+func getTestDb(path string) (storage.ContentStorage, error) {
+	db, err := NewPeppleDB(path, 100, 100, "history")
 	if err != nil {
 		return nil, err
 	}
@@ -33,9 +43,10 @@ func getTestDb() (storage.ContentStorage, error) {
 }
 
 func TestReadRadius(t *testing.T) {
-	db, err := getTestDb()
+	path := getRandomPath()
+	db, err := getTestDb(path)
 	assert.NoError(t, err)
-	defer clearNodeData()
+	defer clearNodeData(path)
 	assert.True(t, db.Radius().Eq(storage.MaxDistance))
 
 	data, err := testRadius.MarshalSSZ()
@@ -46,15 +57,16 @@ func TestReadRadius(t *testing.T) {
 	err = store.db.Close()
 	assert.NoError(t, err)
 
-	db, err = getTestDb()
+	db, err = getTestDb(path)
 	assert.NoError(t, err)
 	assert.True(t, db.Radius().Eq(testRadius))
 }
 
 func TestStorage(t *testing.T) {
-	db, err := getTestDb()
+	path := getRandomPath()
+	db, err := getTestDb(path)
 	assert.NoError(t, err)
-	defer clearNodeData()
+	defer clearNodeData(path)
 	testcases := map[string][]byte{
 		"test1": []byte("test1"),
 		"test2": []byte("test2"),
