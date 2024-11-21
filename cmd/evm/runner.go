@@ -82,33 +82,24 @@ type execStats struct {
 	GasUsed        uint64        `json:"gasUsed"`        // the amount of gas used during execution
 }
 
-func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []byte, stats execStats, execErr error, benchErr error) {
+func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, execStats, error) {
 	if bench {
 		// Do one warm-up run
-		var gasUsed uint64
-		output, gasUsed, execErr = execFunc()
-		var benchErr error
+		output, gasUsed, err := execFunc()
 		result := testing.Benchmark(func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				haveOutput, haveGasUsed, haveErr := execFunc()
 				if !bytes.Equal(haveOutput, output) {
-					benchErr = fmt.Errorf("output differs, have\n%x\nwant %x\n", haveOutput, output)
-					b.FailNow()
+					panic(fmt.Sprintf("output differs, have\n%x\nwant %x\n", haveOutput, output))
 				}
 				if haveGasUsed != gasUsed {
-					benchErr = fmt.Errorf("gas differs, have %v want%v", haveGasUsed, gasUsed)
-					b.FailNow()
+					panic(fmt.Sprintf("gas differs, have %v want%v", haveGasUsed, gasUsed))
 				}
 				if haveErr != execErr {
-					benchErr = fmt.Errorf("err differs, have %v want %v", haveErr, execErr)
-					b.FailNow()
+					panic(fmt.Sprintf("err differs, have %v want %v", haveErr, execErr))
 				}
 			}
 		})
-
-		if benchErr != nil {
-			return nil, execStats{}, nil, benchErr
-		}
 		// Get the average execution time from the benchmarking result.
 		// There are other useful stats here that could be reported.
 		stats := execStats{
@@ -117,7 +108,7 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []by
 			BytesAllocated: result.AllocedBytesPerOp(),
 			GasUsed:        gasUsed,
 		}
-		return output, stats, execErr, nil
+		return output, stats, err
 	}
 	var memStatsBefore, memStatsAfter goruntime.MemStats
 	goruntime.ReadMemStats(&memStatsBefore)
@@ -125,13 +116,13 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []by
 	output, gasUsed, err := execFunc()
 	duration := time.Since(t0)
 	goruntime.ReadMemStats(&memStatsAfter)
-	stats = execStats{
+	stats := execStats{
 		Time:           duration,
 		Allocs:         int64(memStatsAfter.Mallocs - memStatsBefore.Mallocs),
 		BytesAllocated: int64(memStatsAfter.TotalAlloc - memStatsBefore.TotalAlloc),
 		GasUsed:        gasUsed,
 	}
-	return output, stats, err, nil
+	return output, stats, err
 }
 
 func runCmd(ctx *cli.Context) error {
@@ -301,10 +292,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	bench := ctx.Bool(BenchFlag.Name)
-	output, stats, execErr, err := timedExec(bench, execFunc)
-	if err != nil {
-		return fmt.Errorf("benchmarking failed: %v\n", err)
-	}
+	output, stats, execErr := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
 		root, err := runtimeConfig.State.Commit(genesisConfig.Number, true)
