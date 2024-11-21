@@ -131,6 +131,7 @@ func runStateTest(ctx *cli.Context, fname string) ([]testResult, error) {
 				if state.StateDB != nil {
 					root = state.StateDB.IntermediateRoot(false)
 					result.Root = &root
+					fmt.Fprintf(os.Stderr, "{\"stateRoot\": \"%#x\"}\n", root)
 					// Dump any state to aid debugging.
 					if ctx.Bool(DumpFlag.Name) {
 						result.State = dump(state.StateDB)
