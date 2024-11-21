@@ -178,11 +178,11 @@ func Setup(ctx *cli.Context) error {
 		handler        slog.Handler
 		terminalOutput = io.Writer(os.Stderr)
 		output         io.Writer
-		logFmtFlag     = ctx.String(logFormatFlag.Name)
+		logFmtFlag     = ctx.GlobalString(logFormatFlag.Name)
 	)
 	var (
-		logFile  = ctx.String(logFileFlag.Name)
-		rotation = ctx.Bool(logRotateFlag.Name)
+		logFile  = ctx.GlobalString(logFileFlag.Name)
+		rotation = ctx.GlobalBool(logRotateFlag.Name)
 	)
 	if len(logFile) > 0 {
 		if err := validateLogLocation(filepath.Dir(logFile)); err != nil {
@@ -205,10 +205,10 @@ func Setup(ctx *cli.Context) error {
 		}
 		logOutputFile = &lumberjack.Logger{
 			Filename:   logFile,
-			MaxSize:    ctx.Int(logMaxSizeMBsFlag.Name),
-			MaxBackups: ctx.Int(logMaxBackupsFlag.Name),
-			MaxAge:     ctx.Int(logMaxAgeFlag.Name),
-			Compress:   ctx.Bool(logCompressFlag.Name),
+			MaxSize:    ctx.GlobalInt(logMaxSizeMBsFlag.Name),
+			MaxBackups: ctx.GlobalInt(logMaxBackupsFlag.Name),
+			MaxAge:     ctx.GlobalInt(logMaxAgeFlag.Name),
+			Compress:   ctx.GlobalBool(logCompressFlag.Name),
 		}
 		output = io.MultiWriter(terminalOutput, logOutputFile)
 	} else if logFile != "" {
@@ -223,7 +223,7 @@ func Setup(ctx *cli.Context) error {
 	}
 
 	switch {
-	case ctx.Bool(logjsonFlag.Name):
+	case ctx.GlobalBool(logjsonFlag.Name):
 		// Retain backwards compatibility with `--log-json` flag if `--log-format` not set
 		defer log.Warn("The flag '--log-json' is deprecated, please use '--log-format=json' instead")
 		handler = log.JSONHandlerWithLevel(output, log.LevelInfo)
@@ -244,18 +244,18 @@ func Setup(ctx *cli.Context) error {
 		handler = log.NewTerminalHandler(output, useColor)
 	default:
 		// Unknown log format specified
-		return fmt.Errorf("unknown log format: %v", ctx.String(logFormatFlag.Name))
+		return fmt.Errorf("unknown log format: %v", ctx.GlobalString(logFormatFlag.Name))
 	}
 
 	glogger = log.NewGlogHandler(handler)
 
 	// logging
-	verbosity := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
+	verbosity := log.FromLegacyLevel(ctx.GlobalInt(verbosityFlag.Name))
 	glogger.Verbosity(verbosity)
-	vmodule := ctx.String(logVmoduleFlag.Name)
+	vmodule := ctx.GlobalString(logVmoduleFlag.Name)
 	if vmodule == "" {
 		// Retain backwards compatibility with `--vmodule` flag if `--log-vmodule` not set
-		vmodule = ctx.String(vmoduleFlag.Name)
+		vmodule = ctx.GlobalString(vmoduleFlag.Name)
 		if vmodule != "" {
 			defer log.Warn("The flag '--vmodule' is deprecated, please use '--log-vmodule' instead")
 		}

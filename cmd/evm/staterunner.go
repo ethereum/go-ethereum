@@ -52,8 +52,8 @@ func stateTestCmd(ctx *cli.Context) error {
 	config := &vm.LogConfig{
 		EnableMemory:     !ctx.GlobalBool(DisableMemoryFlag.Name),
 		DisableStack:     ctx.GlobalBool(DisableStackFlag.Name),
-		DisableStorage:   ctx.Bool(DisableStorageFlag.Name),
-		EnableReturnData: !ctx.Bool(DisableReturnDataFlag.Name),
+		DisableStorage:   ctx.GlobalBool(DisableStorageFlag.Name),
+		EnableReturnData: !ctx.GlobalBool(DisableReturnDataFlag.Name),
 	}
 
 	var (
