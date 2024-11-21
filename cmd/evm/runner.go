@@ -301,10 +301,9 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	bench := ctx.Bool(BenchFlag.Name)
-	output, stats, execErr, benchErr := timedExec(bench, execFunc)
-	if benchErr != nil {
-		fmt.Printf("benchmarking execution failed: %v\n", benchErr)
-		return benchErr
+	output, stats, execErr, err := timedExec(bench, execFunc)
+	if err != nil {
+		return fmt.Errorf("benchmarking failed: %v\n", err)
 	}
 
 	if ctx.Bool(DumpFlag.Name) {
