@@ -18,6 +18,8 @@
 package state
 
 import (
+	"fmt"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -131,4 +133,175 @@ func testJournalRefunds(t *testing.T, j journal) {
 	if have, want := statedb.refund, uint64(0); have != want {
 		t.Fatalf("have %d want %d", have, want)
 	}
+}
+
+func FuzzJournals(f *testing.F) {
+
+	randByte := func() byte {
+		return byte(rand.Int())
+	}
+	randBool := func() bool {
+		return rand.Int()%2 == 0
+	}
+	randAccount := func() *types.StateAccount {
+		return &types.StateAccount{
+			Nonce:    uint64(randByte()),
+			Balance:  uint256.NewInt(uint64(randByte())),
+			Root:     types.EmptyRootHash,
+			CodeHash: types.EmptyCodeHash[:],
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, operations []byte) {
+		var (
+			statedb1, _ = New(types.EmptyRootHash, NewDatabaseForTesting())
+			statedb2, _ = New(types.EmptyRootHash, NewDatabaseForTesting())
+			linear      = newLinearJournal()
+			sparse      = newSparseJournal()
+		)
+		statedb1.journal = linear
+		statedb2.journal = sparse
+		linear.snapshot()
+		sparse.snapshot()
+
+		for _, o := range operations {
+			switch o {
+			case 0:
+				addr := randByte()
+				linear.accessListAddAccount(common.Address{addr})
+				sparse.accessListAddAccount(common.Address{addr})
+				statedb1.accessList.AddAddress(common.Address{addr})
+				statedb2.accessList.AddAddress(common.Address{addr})
+			case 1:
+				addr := randByte()
+				slot := randByte()
+				linear.accessListAddSlot(common.Address{addr}, common.Hash{slot})
+				sparse.accessListAddSlot(common.Address{addr}, common.Hash{slot})
+				statedb1.accessList.AddSlot(common.Address{addr}, common.Hash{slot})
+				statedb2.accessList.AddSlot(common.Address{addr}, common.Hash{slot})
+			case 2:
+				addr := randByte()
+				account := randAccount()
+				destructed := randBool()
+				newContract := randBool()
+				linear.balanceChange(common.Address{addr}, account, destructed, newContract)
+				sparse.balanceChange(common.Address{addr}, account, destructed, newContract)
+			case 3:
+				linear = linear.copy().(*linearJournal)
+				sparse = sparse.copy().(*sparseJournal)
+			case 4:
+				addr := randByte()
+				account := randAccount()
+				linear.createContract(common.Address{addr}, account)
+				sparse.createContract(common.Address{addr}, account)
+			case 5:
+				addr := randByte()
+				linear.createObject(common.Address{addr})
+				sparse.createObject(common.Address{addr})
+			case 6:
+				addr := randByte()
+				account := randAccount()
+				linear.destruct(common.Address{addr}, account)
+				sparse.destruct(common.Address{addr}, account)
+			case 7:
+				txHash := randByte()
+				linear.logChange(common.Hash{txHash})
+				sparse.logChange(common.Hash{txHash})
+			case 8:
+				addr := randByte()
+				account := randAccount()
+				destructed := randBool()
+				newContract := randBool()
+				linear.nonceChange(common.Address{addr}, account, destructed, newContract)
+				sparse.nonceChange(common.Address{addr}, account, destructed, newContract)
+			case 9:
+				refund := randByte()
+				linear.refundChange(uint64(refund))
+				sparse.refundChange(uint64(refund))
+			case 10:
+				addr := randByte()
+				account := randAccount()
+				linear.setCode(common.Address{addr}, account)
+				sparse.setCode(common.Address{addr}, account)
+			case 11:
+				addr := randByte()
+				key := randByte()
+				prev := randByte()
+				origin := randByte()
+				linear.storageChange(common.Address{addr}, common.Hash{key}, common.Hash{prev}, common.Hash{origin})
+				sparse.storageChange(common.Address{addr}, common.Hash{key}, common.Hash{prev}, common.Hash{origin})
+			case 12:
+				addr := randByte()
+				account := randAccount()
+				destructed := randBool()
+				newContract := randBool()
+				linear.touchChange(common.Address{addr}, account, destructed, newContract)
+				sparse.touchChange(common.Address{addr}, account, destructed, newContract)
+			case 13:
+				addr := randByte()
+				key := randByte()
+				prev := randByte()
+				linear.transientStateChange(common.Address{addr}, common.Hash{key}, common.Hash{prev})
+				sparse.transientStateChange(common.Address{addr}, common.Hash{key}, common.Hash{prev})
+			case 14:
+				linear.reset()
+				sparse.reset()
+			case 15:
+				linear.snapshot()
+				sparse.snapshot()
+			case 16:
+				linear.discardSnapshot()
+				sparse.discardSnapshot()
+			case 17:
+				linear.revertSnapshot(statedb1)
+				sparse.revertSnapshot(statedb2)
+			case 18:
+				accs1 := linear.dirtyAccounts()
+				accs2 := linear.dirtyAccounts()
+				if len(accs1) != len(accs2) {
+					panic(fmt.Sprintf("mismatched accounts: %v %v", accs1, accs2))
+
+				}
+				for _, val := range accs1 {
+					found := false
+					for _, val2 := range accs2 {
+						if val == val2 {
+							if found {
+								panic(fmt.Sprintf("account found twice: %v %v account %v", accs1, accs2, val))
+							}
+							found = true
+						}
+					}
+					if !found {
+						panic(fmt.Sprintf("missing account: %v %v account %v", accs1, accs2, val))
+					}
+				}
+			}
+		}
+		// After all operations have been processed, verify equality
+		accs1 := linear.dirtyAccounts()
+		accs2 := linear.dirtyAccounts()
+		for _, val := range accs1 {
+			found := false
+			for _, val2 := range accs2 {
+				if val == val2 {
+					if found {
+						panic(fmt.Sprintf("account found twice: %v %v account %v", accs1, accs2, val))
+					}
+					found = true
+				}
+			}
+			if !found {
+				panic(fmt.Sprintf("missing account: %v %v account %v", accs1, accs2, val))
+			}
+		}
+		h1, err1 := statedb1.Commit(0, false)
+		h2, err2 := statedb2.Commit(0, false)
+		if err1 != err2 {
+			panic(fmt.Sprintf("mismatched errors: %v %v", err1, err2))
+		}
+		if h1 != h2 {
+			panic(fmt.Sprintf("mismatched roots: %v %v", h1, h2))
+		}
+	})
 }
