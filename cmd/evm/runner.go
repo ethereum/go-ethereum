@@ -95,8 +95,8 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 				if haveGasUsed != gasUsed {
 					panic(fmt.Sprintf("gas differs, have %v want%v", haveGasUsed, gasUsed))
 				}
-				if haveErr != execErr {
-					panic(fmt.Sprintf("err differs, have %v want %v", haveErr, execErr))
+				if haveErr != err {
+					panic(fmt.Sprintf("err differs, have %v want %v", haveErr, err))
 				}
 			}
 		})
