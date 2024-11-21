@@ -88,7 +88,6 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) (output []by
 		var gasUsed uint64
 		output, gasUsed, execErr = execFunc()
 		var benchErr error
-		testing.Init()
 		result := testing.Benchmark(func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				haveOutput, haveGasUsed, haveErr := execFunc()
