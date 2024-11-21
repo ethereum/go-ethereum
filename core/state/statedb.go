@@ -940,9 +940,9 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 	defer iter.Release()
 
 	var (
-		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is all nil)
-		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is all nil)
-		storageOrigins = make(map[common.Hash][]byte)  // the set for preserving the original slot value
+		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is nil)
+		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is nil)
+		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot
 	)
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		nodes.AddNode(path, trienode.NewDeleted())
@@ -953,8 +953,8 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 			return nil, nil, nil, err
 		}
 		key := iter.Hash()
-		storageOrigins[key] = slot
 		storages[key] = nil
+		storageOrigins[key] = slot
 
 		if err := stack.Update(key.Bytes(), slot); err != nil {
 			return nil, nil, nil, err
@@ -982,15 +982,15 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 		return nil, nil, nil, fmt.Errorf("failed to open storage iterator, err: %w", err)
 	}
 	var (
-		nodes   = trienode.NewNodeSet(addrHash)
-		slots   = make(map[common.Hash][]byte)
-		deletes = make(map[common.Hash][]byte)
+		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is nil)
+		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is nil)
+		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot
 	)
 	for it.Next(true) {
 		if it.Leaf() {
 			key := common.BytesToHash(it.LeafKey())
-			slots[key] = common.CopyBytes(it.LeafBlob())
-			deletes[key] = nil
+			storages[key] = nil
+			storageOrigins[key] = common.CopyBytes(it.LeafBlob())
 			continue
 		}
 		if it.Hash() == (common.Hash{}) {
@@ -1001,7 +1001,7 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 	if err := it.Error(); err != nil {
 		return nil, nil, nil, err
 	}
-	return deletes, slots, nodes, nil
+	return storages, storageOrigins, nodes, nil
 }
 
 // deleteStorage is designed to delete the storage trie of a designated account.
@@ -1010,25 +1010,25 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 // efficient approach.
 func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
 	var (
-		err     error
-		slots   map[common.Hash][]byte
-		deletes map[common.Hash][]byte
-		nodes   *trienode.NodeSet
+		err            error
+		nodes          *trienode.NodeSet      // the set for trie node mutations (value is nil)
+		storages       map[common.Hash][]byte // the set for storage mutations (value is nil)
+		storageOrigins map[common.Hash][]byte // the set for tracking the original value of slot
 	)
 	// The fast approach can be failed if the snapshot is not fully
 	// generated, or it's internally corrupted. Fallback to the slow
 	// one just in case.
 	snaps := s.db.Snapshot()
 	if snaps != nil {
-		deletes, slots, nodes, err = s.fastDeleteStorage(snaps, addrHash, root)
+		storages, storageOrigins, nodes, err = s.fastDeleteStorage(snaps, addrHash, root)
 	}
 	if snaps == nil || err != nil {
-		deletes, slots, nodes, err = s.slowDeleteStorage(addr, addrHash, root)
+		storages, storageOrigins, nodes, err = s.slowDeleteStorage(addr, addrHash, root)
 	}
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return deletes, slots, nodes, nil
+	return storages, storageOrigins, nodes, nil
 }
 
 // handleDestruction processes all destruction markers and deletes the account
