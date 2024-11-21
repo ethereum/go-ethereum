@@ -218,9 +218,8 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 		return snap, nil
 	}
 	// Existing snapshot loaded, seed all the layers
-	for head != nil {
+	for ; head != nil; head = head.Parent() {
 		snap.layers[head.Root()] = head
-		head = head.Parent()
 	}
 	return snap, nil
 }
