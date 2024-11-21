@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -191,6 +192,10 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		v := ctx.Uint64(utils.OverrideVerkle.Name)
 		cfg.Eth.OverrideVerkle = &v
 	}
+
+	// Start metrics export if enabled
+	utils.SetupMetrics(&cfg.Metrics)
+	go metrics.CollectProcessMetrics(3 * time.Second)
 
 	backend, eth := utils.RegisterEthService(stack, &cfg.Eth)
 
