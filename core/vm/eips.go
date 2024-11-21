@@ -705,14 +705,57 @@ func enableEOF(jt *JumpTable) {
 	}
 }
 
+// opExtCodeCopyEIP7702 implements the EIP-7702 variation of opExtCodeCopy.
+func opExtCodeCopyEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	var (
+		stack      = scope.Stack
+		a          = stack.pop()
+		memOffset  = stack.pop()
+		codeOffset = stack.pop()
+		length     = stack.pop()
+	)
+	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
+	if overflow {
+		uint64CodeOffset = math.MaxUint64
+	}
+	addr := common.Address(a.Bytes20())
+	code := interpreter.evm.StateDB.ResolveCode(addr)
+	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
+	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
+
+	return nil, nil
+}
+
+// opExtCodeSizeEIP7702 implements the EIP-7702 variation of opExtCodeSize.
+func opExtCodeSizeEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	slot := scope.Stack.peek()
+	slot.SetUint64(uint64(len(interpreter.evm.StateDB.ResolveCode(slot.Bytes20()))))
+	return nil, nil
+}
+
+// opExtCodeHashEIP7702 implements the EIP-7702 variation of opExtCodeHash.
+func opExtCodeHashEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	slot := scope.Stack.peek()
+	address := common.Address(slot.Bytes20())
+	if interpreter.evm.StateDB.Empty(address) {
+		slot.Clear()
+	} else {
+		slot.SetBytes(interpreter.evm.StateDB.ResolveCodeHash(address).Bytes())
+	}
+	return nil, nil
+}
+
 // enable7702 the EIP-7702 changes to support delegation designators.
 func enable7702(jt *JumpTable) {
+	jt[EXTCODECOPY].execute = opExtCodeCopyEIP7702
 	jt[EXTCODECOPY].constantGas = params.WarmStorageReadCostEIP2929
 	jt[EXTCODECOPY].dynamicGas = gasExtCodeCopyEIP7702
 
+	jt[EXTCODESIZE].execute = opExtCodeSizeEIP7702
 	jt[EXTCODESIZE].constantGas = params.WarmStorageReadCostEIP2929
 	jt[EXTCODESIZE].dynamicGas = gasEip7702CodeCheck
 
+	jt[EXTCODEHASH].execute = opExtCodeHashEIP7702
 	jt[EXTCODEHASH].constantGas = params.WarmStorageReadCostEIP2929
 	jt[EXTCODEHASH].dynamicGas = gasEip7702CodeCheck
 
