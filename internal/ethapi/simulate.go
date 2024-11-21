@@ -200,7 +200,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
-		if err := sim.sanitizeCall(&call, tracingStateDB, header, blockContext, &gasUsed); err != nil {
+		if err := sim.sanitizeCall(&call, sim.state, header, blockContext, &gasUsed); err != nil {
 			return nil, nil, err
 		}
 		tx := call.ToTransaction(types.DynamicFeeTxType)
