@@ -326,8 +326,8 @@ allocated bytes: %d
 	}
 	if tracer == nil {
 		fmt.Printf("%#x\n", output)
-		if execErr != nil {
-			fmt.Printf(" error: %v\n", execErr)
+		if err != nil {
+			fmt.Printf(" error: %v\n", err)
 		}
 	}
 
