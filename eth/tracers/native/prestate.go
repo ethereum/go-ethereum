@@ -238,13 +238,11 @@ func (t *prestateTracer) processDiffState() {
 
 				newVal := t.env.StateDB.GetState(addr, key)
 				if val == newVal {
-					// Omit unchanged slots
+					// omit unchanged slots
 					delete(t.pre[addr].Storage, key)
 				} else {
 					modified = true
-					if newVal != (common.Hash{}) {
-						postAccount.Storage[key] = newVal
-					}
+					postAccount.Storage[key] = newVal
 				}
 			}
 		}
