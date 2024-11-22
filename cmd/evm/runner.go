@@ -314,7 +314,7 @@ func runCmd(ctx *cli.Context) error {
 			logger.WriteTrace(os.Stderr, debugLogger.StructLogs())
 		}
 		fmt.Fprintln(os.Stderr, "#### LOGS ####")
-		logger.WriteLogs(os.Stderr, prestate.Logs())
+		logger.WriteLogs(os.Stderr, runtimeConfig.State.Logs())
 	}
 
 	if bench || ctx.Bool(StatDumpFlag.Name) {
