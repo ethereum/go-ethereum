@@ -6,15 +6,16 @@
 package metrics
 
 import (
+	"flag"
+	"io"
 	"os"
 	"runtime/metrics"
 	"runtime/pprof"
 	"strconv"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/naoina/toml"
 )
 
 // Enabled is checked by the constructor functions for all of the
@@ -24,34 +25,58 @@ import (
 // for less cluttered pprof profiles.
 var Enabled = false
 
-// enablerFlags is the CLI flag names to use to enable metrics collections.
-var enablerFlags = []string{"metrics"}
-
-// enablerEnvVars is the env var names to use to enable metrics collections.
-var enablerEnvVars = []string{"GETH_METRICS"}
-
 // init enables or disables the metrics system. Since we need this to run before
 // any other code gets to create meters and timers, we'll actually do an ugly hack
 // and peek into the command line args for the metrics flag.
 func init() {
-	for _, enabler := range enablerEnvVars {
-		if val, found := syscall.Getenv(enabler); found && !Enabled {
-			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
-				log.Info("Enabling metrics collection")
-				Enabled = true
-			}
+	if val, found := syscall.Getenv("GETH_METRICS"); found && !Enabled {
+		if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
+			Enabled = true
 		}
 	}
-	for _, arg := range os.Args {
-		flag := strings.TrimLeft(arg, "-")
 
-		for _, enabler := range enablerFlags {
-			if !Enabled && flag == enabler {
-				log.Info("Enabling metrics collection")
-				Enabled = true
-			}
+	fs := flag.NewFlagSet("", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.Bool("metrics", false, "")
+	fs.String("config", "", "")
+
+	// The flag package will quit parsing immediately if it encounters a flag that
+	// was not declared to it ahead of time. We could be fancy and try to look
+	// through the args to find the ones we care about, but then we'd need to
+	// handle the various ways that flags can be defined -- which was the point of
+	// using the flags package in the first place! So instead, let's chop off the
+	// first element in the args list each time a parse fails. This way we will
+	// eventually parse every arg and get the ones we care about.
+	for i := range os.Args[1:] {
+		if err := fs.Parse(os.Args[i+1:]); err == nil {
+			break
 		}
 	}
+
+	// Now visit the flags we defined which are present in the args and see if we
+	// should enable metrics.
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "metrics":
+			Enabled = true
+		case "config":
+			data, err := os.ReadFile(f.Value.String())
+			if err != nil {
+				return
+			}
+			var cfg map[string]map[string]any
+			if err := toml.Unmarshal(data, &cfg); err != nil {
+				return
+			}
+			// A config file is definitely being used and was parsed correct. Let's
+			// try to peek inside and see if metrics are listed as enabled.
+			if m, ok := cfg["Metrics"]; ok {
+				if v, ok := m["Enabled"].(bool); ok && v {
+					Enabled = true
+				}
+			}
+		}
+	})
 }
 
 var threadCreateProfile = pprof.Lookup("threadcreate")

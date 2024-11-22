@@ -151,7 +151,7 @@ func loadBaseConfig(ctx *cli.Context) gethConfig {
 	// Load config file.
 	if file := ctx.String(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
-			utils.Fatalf("%v", err)
+			utils.Fatalf("failed to load config: %v", err)
 		}
 	}
 
