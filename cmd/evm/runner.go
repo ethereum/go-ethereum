@@ -292,7 +292,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	bench := ctx.Bool(BenchFlag.Name)
-	output, stats, execErr := timedExec(bench, execFunc)
+	output, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
 		root, err := runtimeConfig.State.Commit(genesisConfig.Number, true)
