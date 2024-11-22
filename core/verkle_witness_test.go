@@ -226,7 +226,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 			header := &types.Header{ParentHash: common.Hash{byte(i)}, Number: big.NewInt(int64(i)), Difficulty: new(big.Int)}
 			vmContext := NewEVMBlockContext(header, nil, new(common.Address))
 			evm := vm.NewEVM(vmContext, statedb, params.MergedTestChainConfig, vm.Config{})
-			ProcessParentBlockHash(header.ParentHash, evm, statedb)
+			ProcessParentBlockHash(header.ParentHash, evm)
 		}
 		// Read block hashes for block 0 .. num-1
 		for i := 0; i < num; i++ {

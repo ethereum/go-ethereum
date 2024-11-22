@@ -98,11 +98,8 @@ func (b *BlockGen) Difficulty() *big.Int {
 // block.
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
-	var (
-		blockContext = NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{})
-	)
-	ProcessBeaconBlockRoot(root, evm, b.statedb)
+	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
+	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}))
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
@@ -121,7 +118,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
-	receipt, err := ApplyTransaction(b.cm.config, evm, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
+	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
 	if err != nil {
 		panic(err)
 	}
@@ -366,10 +363,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
 			// EIP-7002 withdrawals
-			withdrawalRequests := ProcessWithdrawalQueue(evm, statedb)
+			withdrawalRequests := ProcessWithdrawalQueue(evm)
 			requests = append(requests, withdrawalRequests)
 			// EIP-7251 consolidations
-			consolidationRequests := ProcessConsolidationQueue(evm, statedb)
+			consolidationRequests := ProcessConsolidationQueue(evm)
 			requests = append(requests, consolidationRequests)
 		}
 		if requests != nil {
@@ -471,7 +468,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
-			ProcessParentBlockHash(b.header.ParentHash, evm, statedb)
+			ProcessParentBlockHash(b.header.ParentHash, evm)
 		}
 
 		// Execute any user modifications to the block.

@@ -203,14 +203,14 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 	}
 	evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
 	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	if pre.Env.BlockHashes != nil && chainConfig.IsPrague(new(big.Int).SetUint64(pre.Env.Number), pre.Env.Timestamp) {
 		var (
 			prevNumber = pre.Env.Number - 1
 			prevHash   = pre.Env.BlockHashes[math.HexOrDecimal64(prevNumber)]
 		)
-		core.ProcessParentBlockHash(prevHash, evm, statedb)
+		core.ProcessParentBlockHash(prevHash, evm)
 	}
 	for i := 0; txIt.Next(); i++ {
 		tx, err := txIt.Tx()
@@ -378,9 +378,9 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		requests = append(requests, depositRequests)
 
 		// EIP-7002 withdrawals
-		requests = append(requests, core.ProcessWithdrawalQueue(evm, statedb))
+		requests = append(requests, core.ProcessWithdrawalQueue(evm))
 		// EIP-7251 consolidations
-		requests = append(requests, core.ProcessConsolidationQueue(evm, statedb))
+		requests = append(requests, core.ProcessConsolidationQueue(evm))
 	}
 
 	// Commit block

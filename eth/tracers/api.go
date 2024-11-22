@@ -381,11 +381,11 @@ func (api *API) traceChain(start, end *types.Block, config *TraceConfig, closed 
 			context := core.NewEVMBlockContext(next.Header(), api.chainContext(ctx), nil)
 			evm := vm.NewEVM(context, statedb, api.backend.ChainConfig(), vm.Config{})
 			if beaconRoot := next.BeaconRoot(); beaconRoot != nil {
-				core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
+				core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 			}
 			// Insert parent hash in history contract.
 			if api.backend.ChainConfig().IsPrague(next.Number(), next.Time()) {
-				core.ProcessParentBlockHash(next.ParentHash(), evm, statedb)
+				core.ProcessParentBlockHash(next.ParentHash(), evm)
 			}
 			// Clean out any pending release functions of trace state. Note this
 			// step must be done after constructing tracing state, because the
@@ -537,10 +537,10 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	)
 	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	if chainConfig.IsPrague(block.Number(), block.Time()) {
-		core.ProcessParentBlockHash(block.ParentHash(), evm, statedb)
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	for i, tx := range block.Transactions() {
 		if err := ctx.Err(); err != nil {
@@ -605,10 +605,10 @@ func (api *API) traceBlock(ctx context.Context, block *types.Block, config *Trac
 	blockCtx := core.NewEVMBlockContext(block.Header(), api.chainContext(ctx), nil)
 	evm := vm.NewEVM(blockCtx, statedb, api.backend.ChainConfig(), vm.Config{})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	if api.backend.ChainConfig().IsPrague(block.Number(), block.Time()) {
-		core.ProcessParentBlockHash(block.ParentHash(), evm, statedb)
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 
 	// JS tracers have high overhead. In this case run a parallel
@@ -784,10 +784,10 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 	}
 	evm := vm.NewEVM(vmctx, statedb, chainConfig, vm.Config{})
 	if beaconRoot := block.BeaconRoot(); beaconRoot != nil {
-		core.ProcessBeaconBlockRoot(*beaconRoot, evm, statedb)
+		core.ProcessBeaconBlockRoot(*beaconRoot, evm)
 	}
 	if chainConfig.IsPrague(block.Number(), block.Time()) {
-		core.ProcessParentBlockHash(block.ParentHash(), evm, statedb)
+		core.ProcessParentBlockHash(block.ParentHash(), evm)
 	}
 	for i, tx := range block.Transactions() {
 		// Prepare the transaction for un-traced execution
@@ -1037,7 +1037,7 @@ func (api *API) traceTx(ctx context.Context, tx *types.Transaction, message *cor
 
 	// Call Prepare to clear out the statedb access list
 	statedb.SetTxContext(txctx.TxHash, txctx.TxIndex)
-	_, err = core.ApplyTransactionWithEVM(message, api.backend.ChainConfig(), new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm)
+	_, err = core.ApplyTransactionWithEVM(message, new(core.GasPool).AddGas(message.GasLimit), statedb, vmctx.BlockNumber, txctx.BlockHash, tx, &usedGas, evm)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %w", err)
 	}
