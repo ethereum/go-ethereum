@@ -90,7 +90,7 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 			for i := 0; i < b.N; i++ {
 				haveOutput, haveGasUsed, haveErr := execFunc()
 				if !bytes.Equal(haveOutput, output) {
-					panic(fmt.Sprintf("output differs, have\n%x\nwant %x\n", haveOutput, output))
+					panic(fmt.Sprintf("output differs\nhave %x\nwant %x\n", haveOutput, output))
 				}
 				if haveGasUsed != gasUsed {
 					panic(fmt.Sprintf("gas differs, have %v want %v", haveGasUsed, gasUsed))
