@@ -1033,7 +1033,7 @@ func TestProcessVerkleSelfDestructInSameTxWithSelfBeneficiaryAndPrefundedAccount
 	)
 	// Prefund the account, at an address that the contract will be deployed at,
 	// before it selfdestrucs. We can therefore check that the account itseld is
-	// NOT destroyed, which is what the currrent version of the spec requires.
+	// NOT destroyed, which is what the current version of the spec requires.
 	// TODO(gballet) revisit after the spec has been modified.
 	gspec.Alloc[contract] = types.Account{
 		Balance: big.NewInt(100),

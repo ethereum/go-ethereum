@@ -96,7 +96,7 @@ func (meta *functionMetadata) checkInputs(stackMin int) error {
 }
 
 // checkStackMax checks the if current maximum stack combined with the
-// functin max stack will result in a stack overflow, and if so returns an error.
+// function max stack will result in a stack overflow, and if so returns an error.
 func (meta *functionMetadata) checkStackMax(stackMax int) error {
 	newMaxStack := stackMax + int(meta.maxStackHeight) - int(meta.inputs)
 	if newMaxStack > int(params.StackLimit) {
