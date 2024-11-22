@@ -538,7 +538,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 	}
 	base.stale = true
 	base.lock.Unlock()
-
+	var kBuf []byte
 	// Destroy all the destructed accounts from the database
 	for hash := range bottom.destructSet {
 		// Skip any account not covered yet by the snapshot
@@ -575,7 +575,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 			continue
 		}
 		// Push the account to disk
-		rawdb.WriteAccountSnapshot(batch, hash, data)
+		kBuf = rawdb.WriteAccountSnapshotWithKey(batch, kBuf, hash, data)
 		base.cache.Set(hash[:], data)
 		snapshotCleanAccountWriteMeter.Mark(int64(len(data)))
 
@@ -607,7 +607,7 @@ func diffToDisk(bottom *diffLayer) *diskLayer {
 				continue
 			}
 			if len(data) > 0 {
-				rawdb.WriteStorageSnapshot(batch, accountHash, storageHash, data)
+				kBuf = rawdb.WriteStorageSnapshotWithKey(batch, kBuf, accountHash, storageHash, data)
 				base.cache.Set(append(accountHash[:], storageHash[:]...), data)
 				snapshotCleanStorageWriteMeter.Mark(int64(len(data)))
 			} else {

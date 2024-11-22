@@ -209,13 +209,21 @@ func accountSnapshotKey(hash common.Hash) []byte {
 	return append(SnapshotAccountPrefix, hash.Bytes()...)
 }
 
+func appendAccountSnapshotKey(buf []byte, hash common.Hash) []byte {
+	buf = append(buf, SnapshotAccountPrefix...)
+	return append(buf, hash.Bytes()...)
+}
+
 // storageSnapshotKey = SnapshotStoragePrefix + account hash + storage hash
 func storageSnapshotKey(accountHash, storageHash common.Hash) []byte {
-	buf := make([]byte, len(SnapshotStoragePrefix)+common.HashLength+common.HashLength)
-	n := copy(buf, SnapshotStoragePrefix)
-	n += copy(buf[n:], accountHash.Bytes())
-	copy(buf[n:], storageHash.Bytes())
-	return buf
+	buf := make([]byte, 0, len(SnapshotStoragePrefix)+common.HashLength+common.HashLength)
+	return appendStorageSnapshotKey(buf, accountHash, storageHash)
+}
+
+func appendStorageSnapshotKey(buf []byte, accountHash, storageHash common.Hash) []byte {
+	buf = append(buf, SnapshotStoragePrefix...)
+	buf = append(buf, accountHash.Bytes()...)
+	return append(buf, storageHash.Bytes()...)
 }
 
 // storageSnapshotsKey = SnapshotStoragePrefix + account hash + storage hash
