@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 env:
-  FIXTURES_TAG: "verkle@v0.0.7"
+  FIXTURES_TAG: "verkle@v0.0.8"
 
 jobs:
   setup:
