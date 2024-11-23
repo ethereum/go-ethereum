@@ -53,9 +53,11 @@ var _ journal = (*linearJournal)(nil)
 
 // newLinearJournal creates a new initialized linearJournal.
 func newLinearJournal() *linearJournal {
-	return &linearJournal{
+	s := &linearJournal{
 		dirties: make(map[common.Address]int),
 	}
+	s.snapshot() // create snaphot zero
+	return s
 }
 
 // reset clears the journal, after this operation the journal can be used anew.
@@ -65,6 +67,7 @@ func (j *linearJournal) reset() {
 	j.entries = j.entries[:0]
 	j.revisions = j.revisions[:0]
 	clear(j.dirties)
+	j.snapshot()
 }
 
 func (j linearJournal) dirtyAccounts() []common.Address {
@@ -84,10 +87,17 @@ func (j *linearJournal) snapshot() {
 // revertSnapshot reverts all state changes made since the last call to snapshot().
 func (j *linearJournal) revertSnapshot(s *StateDB) {
 	id := len(j.revisions) - 1
+	if id < 0 {
+		j.snapshot()
+		return
+	}
 	revision := j.revisions[id]
 	// Replay the linearJournal to undo changes and remove invalidated snapshots
 	j.revertTo(s, revision)
 	j.revisions = j.revisions[:id]
+	if id == 0 {
+		j.snapshot()
+	}
 }
 
 // discardSnapshot removes the latest snapshot; after calling this
@@ -95,7 +105,7 @@ func (j *linearJournal) revertSnapshot(s *StateDB) {
 // changes are considered part of the parent scope.
 func (j *linearJournal) discardSnapshot() {
 	id := len(j.revisions) - 1
-	if id == 0 {
+	if id <= 0 {
 		// If a transaction is applied successfully, the statedb.Finalize will
 		// end by clearing and resetting the journal. Invoking a discardSnapshot
 		// afterwards will land here: calling discard on an empty journal.
@@ -312,6 +322,11 @@ func (ch createContractChange) revert(s *StateDB) {
 }
 
 func (ch createContractChange) dirtied() *common.Address {
+	// This method returns nil, since the transformation from non-contract to
+	// contract is not an operation which has an effect on the trie:
+	// it does not make the account part of the dirty-set.
+	// Creating the account (createObject) or setting the code (setCode)
+	// however, do, and are.
 	return nil
 }
 

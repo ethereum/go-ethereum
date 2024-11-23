@@ -334,12 +334,14 @@ func newSparseJournal() *sparseJournal {
 // slices can be reused
 func (j *sparseJournal) reset() {
 	j.entries = j.entries[:0]
+	j.ripeMagic = false
 	j.snapshot()
 }
 
 func (j *sparseJournal) copy() journal {
 	cp := &sparseJournal{
-		entries: make([]*scopedJournal, 0, len(j.entries)),
+		entries:   make([]*scopedJournal, 0, len(j.entries)),
+		ripeMagic: j.ripeMagic,
 	}
 	for _, entry := range j.entries {
 		cp.entries = append(cp.entries, entry.deepCopy())
@@ -360,6 +362,9 @@ func (j *sparseJournal) revertSnapshot(s *StateDB) {
 	id := len(j.entries) - 1
 	j.entries[id].revert(s)
 	j.entries = j.entries[:id]
+	if id == 0 {
+		j.snapshot()
+	}
 }
 
 // discardSnapshot removes the latest snapshot; after calling this
