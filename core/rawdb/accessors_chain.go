@@ -731,7 +731,7 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	//
 	// The TD freezer table is retained for backward compatibility within this
 	// major version (1.14.x) and will be discarded in the next major version.
-	if err := op.Append(ChainFreezerDifficultyTable, num, big.NewInt(0)); err != nil {
+	if err := op.Append(ChainFreezerDifficultyTable, num, common.Big0); err != nil {
 		return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
 	}
 	return nil
