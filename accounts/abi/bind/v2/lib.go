@@ -23,6 +23,7 @@ func deployContract(backend bind.ContractBackend, auth *bind.TransactOpts, const
 	if err != nil {
 		return nil, common.Address{}, fmt.Errorf("contract bytecode is not a hex string: %s", contractBinBytes[2:])
 	}
+	fmt.Println("before DeployContractRaw")
 	addr, tx, _, err := bind.DeployContractRaw(auth, contractBinBytes, backend, constructor)
 	if err != nil {
 		return nil, common.Address{}, fmt.Errorf("failed to deploy contract: %v", err)
