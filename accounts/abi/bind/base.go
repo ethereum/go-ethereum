@@ -401,7 +401,12 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 		Value:     value,
 		Data:      input,
 	}
-	return c.transactor.EstimateGas(ensureContext(opts.Context), msg)
+	res, err := c.transactor.EstimateGas(ensureContext(opts.Context), msg)
+	if err != nil {
+		fmt.Printf("msg data is %x\n", msg.Data)
+		panic(err)
+	}
+	return res, nil
 }
 
 func (c *BoundContract) getNonce(opts *TransactOpts) (uint64, error) {

@@ -3,7 +3,6 @@ package v2
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2_generated_testcase"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2_testcase_library"
@@ -163,20 +162,20 @@ func TestDeployment(t *testing.T) {
 
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelDebug, true)))
 
-	// TODO: add public interface for deploy library, deploy contract (or make them same method?)
-	//  want to allow more flexibility.
-
+	// TODO: allow for the flexibility of deploying only libraries.
 	// also, i kind of hate this conversion.  But the API of LinkAndDeployContractWithOverrides feels cleaner this way... idk.
 	libMetas := make(map[string]*bind.MetaData)
 	for pattern, metadata := range v2_testcase_library.TestArrayLibraryDeps {
 		libMetas[pattern] = metadata
 	}
+
+	// TODO: test case with arguments-containing constructor
 	txs, _, err := LinkAndDeployContractWithOverrides(&opts, bindBackend, []byte{}, v2_testcase_library.TestArrayMetaData, v2_testcase_library.TestArrayLibraryDeps, nil)
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
+	bindBackend.Commit()
 	for _, tx := range txs {
-		fmt.Println("waiting for deployment")
 		_, err = bind.WaitDeployed(context.Background(), &bindBackend, tx)
 		if err != nil {
 			t.Fatalf("error deploying bound contract: %+v", err)
