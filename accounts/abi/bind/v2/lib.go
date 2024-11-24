@@ -30,8 +30,11 @@ func deployContract(backend bind.ContractBackend, auth *bind.TransactOpts, const
 	return tx, addr, nil
 }
 
-func deployLibs(backend bind.ContractBackend, auth *bind.TransactOpts, contracts map[string]string) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[common.Address]struct{}, err error) {
-	for _, contractBin := range contracts {
+func deployLibs(backend bind.ContractBackend, auth *bind.TransactOpts, contracts map[string]string) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[string]common.Address, err error) {
+	deploymentTxs = make(map[common.Address]*types.Transaction)
+	deployAddrs = make(map[string]common.Address)
+
+	for pattern, contractBin := range contracts {
 		contractBinBytes, err := hex.DecodeString(contractBin[2:])
 		if err != nil {
 			return deploymentTxs, deployAddrs, fmt.Errorf("contract bytecode is not a hex string: %s", contractBin[2:])
@@ -42,7 +45,7 @@ func deployLibs(backend bind.ContractBackend, auth *bind.TransactOpts, contracts
 			return deploymentTxs, deployAddrs, fmt.Errorf("failed to deploy contract: %v", err)
 		}
 		deploymentTxs[addr] = tx
-		deployAddrs[addr] = struct{}{}
+		deployAddrs[pattern] = addr
 	}
 
 	return deploymentTxs, deployAddrs, nil
@@ -58,7 +61,7 @@ func linkContract(contract string, linkedLibs map[string]common.Address) (deploy
 	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contract, -1) {
 		matchingPattern := match[1]
 		addr := linkedLibs[matchingPattern]
-		contract = strings.ReplaceAll(contract, matchingPattern, addr.String())
+		contract = strings.ReplaceAll(contract, "__$"+matchingPattern+"$__", addr.String()[2:])
 	}
 	return contract, nil
 }
@@ -75,17 +78,22 @@ func linkLibs(deps *map[string]string, linked *map[string]common.Address) (deplo
 	deployableDeps = make(map[string]string)
 
 	for pattern, dep := range *deps {
+		fmt.Printf("dep is:\n%s\n", dep)
+		fmt.Println(pattern)
 		// attempt to replace references to every single linked dep
 		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(dep, -1) {
 			matchingPattern := match[1]
+			fmt.Printf("has matching pattern %s\n", matchingPattern)
 			addr, ok := (*linked)[matchingPattern]
 			if !ok {
 				continue
 			}
-			(*deps)[pattern] = strings.ReplaceAll(dep, matchingPattern, addr.String())
+			(*deps)[pattern] = strings.ReplaceAll(dep, "__$"+matchingPattern+"$__", addr.String()[2:])
+			fmt.Printf("lib after linking:\n%s\n", (*deps)[pattern])
 		}
 		// if we linked something into this dep, see if it can be deployed
 		if !reMatchAnyPattern.MatchString((*deps)[pattern]) {
+			fmt.Printf("is deployable %s\n", pattern)
 			deployableDeps[pattern] = (*deps)[pattern]
 			delete(*deps, pattern)
 		}
@@ -94,8 +102,18 @@ func linkLibs(deps *map[string]string, linked *map[string]common.Address) (deplo
 	return deployableDeps
 }
 
-func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.ContractBackend, constructorInputs []byte, contract *bind.MetaData, libs map[string]string, overrides map[string]common.Address) (allDeployTxs map[common.Address]*types.Transaction, allDeployAddrs map[common.Address]struct{}, err error) {
+func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.ContractBackend, constructorInputs []byte, contract *bind.MetaData, libMetas map[string]*bind.MetaData, overrides map[string]common.Address) (allDeployTxs map[common.Address]*types.Transaction, allDeployAddrs map[common.Address]struct{}, err error) {
 	// initialize the set of already-deployed contracts with given override addresses
+
+	allDeployAddrs = make(map[common.Address]struct{})
+	allDeployTxs = make(map[common.Address]*types.Transaction)
+
+	// re-express libraries as a map of pattern -> pre-linking binary
+	libs := make(map[string]string)
+	for pattern, meta := range libMetas {
+		libs[pattern] = meta.Bin
+	}
+
 	linked := make(map[string]common.Address)
 	for pattern, deployAddr := range overrides {
 		linked[pattern] = deployAddr
@@ -111,8 +129,10 @@ func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.Co
 			break
 		}
 		deployTxs, deployAddrs, err := deployLibs(backend, auth, deployableDeps)
-		for addr, _ := range deployAddrs {
+		for pattern, addr := range deployAddrs {
 			allDeployAddrs[addr] = struct{}{}
+			linked[pattern] = addr
+			fmt.Printf("we've linked %s\n", pattern)
 		}
 		for addr, tx := range deployTxs {
 			allDeployTxs[addr] = tx

@@ -165,6 +165,12 @@ func TestDeployment(t *testing.T) {
 
 	// TODO: add public interface for deploy library, deploy contract (or make them same method?)
 	//  want to allow more flexibility.
+
+	// also, i kind of hate this conversion.  But the API of LinkAndDeployContractWithOverrides feels cleaner this way... idk.
+	libMetas := make(map[string]*bind.MetaData)
+	for pattern, metadata := range v2_testcase_library.TestArrayLibraryDeps {
+		libMetas[pattern] = metadata
+	}
 	txs, _, err := LinkAndDeployContractWithOverrides(&opts, bindBackend, []byte{}, v2_testcase_library.TestArrayMetaData, v2_testcase_library.TestArrayLibraryDeps, nil)
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)

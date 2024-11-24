@@ -38,12 +38,13 @@ var (
 {{end}}
 
 {{range $contract := .Contracts}}
-	var {{$contract.Type}}LibraryDeps = map[string]string{
+	var {{$contract.Type}}LibraryDeps = map[string]*bind.MetaData{
 	{{range $name, $pattern := .AllLibraries -}}
-		"{{$name}}": "{{$pattern}}",
+		"{{$pattern}}": {{$name}}MetaData,
 	{{ end}}
 	}
 
+	// TODO: convert this type to value type after everything works.
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
 	var {{.Type}}MetaData = &bind.MetaData{
 		ABI: "{{.InputABI}}",
