@@ -163,12 +163,13 @@ func TestDeployment(t *testing.T) {
 
 	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelDebug, true)))
 
-	///LinkAndDeployContractsWithOverride(&opts, bindBackend, v2_test)
-	deployTxs, err := DeployContracts(&opts, bindBackend, []byte{}, v2_testcase_library.TestArrayLibraryDeps)
+	// TODO: add public interface for deploy library, deploy contract (or make them same method?)
+	//  want to allow more flexibility.
+	txs, _, err := LinkAndDeployContractWithOverrides(&opts, bindBackend, []byte{}, v2_testcase_library.TestArrayMetaData, v2_testcase_library.TestArrayLibraryDeps, nil)
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
-	for _, tx := range deployTxs {
+	for _, tx := range txs {
 		fmt.Println("waiting for deployment")
 		_, err = bind.WaitDeployed(context.Background(), &bindBackend, tx)
 		if err != nil {

@@ -18,19 +18,26 @@ type ContractInstance struct {
 	Backend bind.ContractBackend
 }
 
-func deployDeps(backend bind.ContractBackend, auth *bind.TransactOpts, constructorInputs map[string][]byte, contracts map[string]string) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[common.Address]struct{}, err error) {
-	for pattern, contractBin := range contracts {
+func deployContract(backend bind.ContractBackend, auth *bind.TransactOpts, constructor []byte, contract string) (deploymentTx *types.Transaction, deploymentAddr common.Address, err error) {
+	contractBinBytes, err := hex.DecodeString(contract[2:])
+	if err != nil {
+		return nil, common.Address{}, fmt.Errorf("contract bytecode is not a hex string: %s", contractBinBytes[2:])
+	}
+	addr, tx, _, err := bind.DeployContractRaw(auth, contractBinBytes, backend, constructor)
+	if err != nil {
+		return nil, common.Address{}, fmt.Errorf("failed to deploy contract: %v", err)
+	}
+	return tx, addr, nil
+}
+
+func deployLibs(backend bind.ContractBackend, auth *bind.TransactOpts, contracts map[string]string) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[common.Address]struct{}, err error) {
+	for _, contractBin := range contracts {
 		contractBinBytes, err := hex.DecodeString(contractBin[2:])
 		if err != nil {
 			return deploymentTxs, deployAddrs, fmt.Errorf("contract bytecode is not a hex string: %s", contractBin[2:])
 		}
-		var constructorInput []byte
-		if inp, ok := constructorInputs[pattern]; ok {
-			constructorInput = inp
-		} else {
-			constructorInput = make([]byte, 0) // TODO check if we can pass a nil byte slice here.
-		}
-		addr, tx, _, err := bind.DeployContractRaw(auth, contractBinBytes, backend, constructorInput)
+		// TODO: can pass nil for constructor?
+		addr, tx, _, err := bind.DeployContractRaw(auth, contractBinBytes, backend, []byte{})
 		if err != nil {
 			return deploymentTxs, deployAddrs, fmt.Errorf("failed to deploy contract: %v", err)
 		}
@@ -41,7 +48,22 @@ func deployDeps(backend bind.ContractBackend, auth *bind.TransactOpts, construct
 	return deploymentTxs, deployAddrs, nil
 }
 
-func linkDeps(deps *map[string]string, linked *map[string]common.Address) (deployableDeps map[string]string) {
+func linkContract(contract string, linkedLibs map[string]common.Address) (deployableContract string, err error) {
+	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
+	if err != nil {
+		return "", err
+	}
+
+	// link in any library the contract depends on
+	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contract, -1) {
+		matchingPattern := match[1]
+		addr := linkedLibs[matchingPattern]
+		contract = strings.ReplaceAll(contract, matchingPattern, addr.String())
+	}
+	return contract, nil
+}
+
+func linkLibs(deps *map[string]string, linked *map[string]common.Address) (deployableDeps map[string]string) {
 	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
 	if err != nil {
 		panic(err)
@@ -72,25 +94,23 @@ func linkDeps(deps *map[string]string, linked *map[string]common.Address) (deplo
 	return deployableDeps
 }
 
-func LinkAndDeployContractsWithOverride(auth *bind.TransactOpts, backend bind.ContractBackend, constructorInputs map[string][]byte, contracts, libs map[string]string, overrides map[string]common.Address) (allDeployTxs map[common.Address]*types.Transaction, allDeployAddrs map[common.Address]struct{}, err error) {
-	var depsToDeploy map[string]string // map of pattern -> unlinked binary for deps we will deploy
-
+func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.ContractBackend, constructorInputs []byte, contract *bind.MetaData, libs map[string]string, overrides map[string]common.Address) (allDeployTxs map[common.Address]*types.Transaction, allDeployAddrs map[common.Address]struct{}, err error) {
 	// initialize the set of already-deployed contracts with given override addresses
 	linked := make(map[string]common.Address)
 	for pattern, deployAddr := range overrides {
 		linked[pattern] = deployAddr
-		if _, ok := contracts[pattern]; ok {
-			delete(contracts, pattern)
+		if _, ok := libs[pattern]; ok {
+			delete(libs, pattern)
 		}
 	}
 
 	// link and deploy dynamic libraries
 	for {
-		deployableDeps := linkDeps(&depsToDeploy, &linked)
+		deployableDeps := linkLibs(&libs, &linked)
 		if len(deployableDeps) == 0 {
 			break
 		}
-		deployTxs, deployAddrs, err := deployDeps(backend, auth, constructorInputs, deployableDeps)
+		deployTxs, deployAddrs, err := deployLibs(backend, auth, deployableDeps)
 		for addr, _ := range deployAddrs {
 			allDeployAddrs[addr] = struct{}{}
 		}
@@ -101,17 +121,14 @@ func LinkAndDeployContractsWithOverride(auth *bind.TransactOpts, backend bind.Co
 			return deployTxs, allDeployAddrs, err
 		}
 	}
-
+	linkedContract, err := linkContract(contract.Bin, linked)
+	if err != nil {
+		return allDeployTxs, allDeployAddrs, err
+	}
 	// link and deploy the contracts
-	contractBins := make(map[string]string)
-	linkedContracts := linkDeps(&contractBins, &linked)
-	deployTxs, deployAddrs, err := deployDeps(backend, auth, constructorInputs, linkedContracts)
-	for addr, _ := range deployAddrs {
-		allDeployAddrs[addr] = struct{}{}
-	}
-	for addr, tx := range deployTxs {
-		allDeployTxs[addr] = tx
-	}
+	contractTx, contractAddr, err := deployContract(backend, auth, constructorInputs, linkedContract)
+	allDeployAddrs[contractAddr] = struct{}{}
+	allDeployTxs[contractAddr] = contractTx
 	return allDeployTxs, allDeployAddrs, err
 }
 
