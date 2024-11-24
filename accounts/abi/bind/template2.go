@@ -39,8 +39,8 @@ var (
 
 {{range $contract := .Contracts}}
 	var {{$contract.Type}}LibraryDeps = map[string]*bind.MetaData{
-	{{range $pattern, $name := .AllLibraries -}}
-		"{{$pattern}}": &{{$name}}MetaData,
+	{{range $name, $pattern := .AllLibraries -}}
+		"{{$pattern}}": {{$name}}MetaData,
 	{{ end}}
 	}
 
@@ -58,18 +58,9 @@ var (
 		{{end}}
 	}
 
-	func (i *{{$contract.Type}}Instance) Address() common.Address {
-		return i.address
-	}
-
-	func (i *{{$contract.Type}}Instance) Backend() bind.ContractBackend {
-		return i.backend
-	}
-
 	// {{.Type}} is an auto generated Go binding around an Ethereum contract.
 	type {{.Type}} struct {
 		abi abi.ABI
-		deployCode []byte
 	}
 
 	// New{{.Type}} creates a new instance of {{.Type}}.
@@ -78,13 +69,10 @@ var (
 		if err != nil {
 			return nil, err
 		}
-		code := common.Hex2Bytes({{.Type}}MetaData.Bin)
-		return &{{.Type}}{abi: *parsed, deployCode: code}, nil
+		return &{{.Type}}{abi: *parsed}, nil
 	}
 
-	func (_{{$contract.Type}} *{{$contract.Type}}) DeployCode() []byte {
-		return _{{$contract.Type}}.deployCode
-	}
+	// TODO: create custom exported types where unpack would generate a struct return.
 
 	// TODO: test constructor with inputs
 	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {

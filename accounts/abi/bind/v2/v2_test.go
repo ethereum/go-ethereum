@@ -3,11 +3,15 @@ package v2
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2_generated_testcase"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2_testcase_library"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"io"
+	"os"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -116,7 +120,61 @@ func TestV2(t *testing.T) {
 }
 
 func TestDeployment(t *testing.T) {
-	DeployContracts
+	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
+	backend := simulated.NewBackend(
+		types.GenesisAlloc{
+			testAddr: {Balance: big.NewInt(10000000000000000)},
+		},
+		func(nodeConf *node.Config, ethConf *ethconfig.Config) {
+			ethConf.Genesis.Difficulty = big.NewInt(0)
+		},
+	)
+	defer backend.Close()
+
+	_, err := JSON(strings.NewReader(v2_generated_testcase.V2GeneratedTestcaseMetaData.ABI))
+	if err != nil {
+		panic(err)
+	}
+
+	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
+	opts := bind.TransactOpts{
+		From:  testAddr,
+		Nonce: nil,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			signedTx, err := tx.WithSignature(signer, signature)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return signedTx, nil
+		},
+		Context: context.Background(),
+	}
+	// we should just be able to use the backend directly, instead of using
+	// this deprecated interface.  However, the simulated backend no longer
+	// implements backends.SimulatedBackend...
+	bindBackend := backends.SimulatedBackend{
+		Backend: backend,
+		Client:  backend.Client(),
+	}
+
+	log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelDebug, true)))
+
+	///LinkAndDeployContractsWithOverride(&opts, bindBackend, v2_test)
+	deployTxs, err := DeployContracts(&opts, bindBackend, []byte{}, v2_testcase_library.TestArrayLibraryDeps)
+	if err != nil {
+		t.Fatalf("err: %+v\n", err)
+	}
+	for _, tx := range deployTxs {
+		fmt.Println("waiting for deployment")
+		_, err = bind.WaitDeployed(context.Background(), &bindBackend, tx)
+		if err != nil {
+			t.Fatalf("error deploying bound contract: %+v", err)
+		}
+	}
 }
 
 /* test-cases that should be extracted from v1 tests
