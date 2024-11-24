@@ -48,7 +48,7 @@ func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
 		case *shortNode:
-			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
+			if !bytes.HasPrefix(key, n.Key) {
 				// The trie doesn't contain the key.
 				tn = nil
 			} else {
@@ -371,7 +371,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 		}
 		return unset(cld, cld.Children[key[pos]], key, pos+1, removeLeft)
 	case *shortNode:
-		if len(key[pos:]) < len(cld.Key) || !bytes.Equal(cld.Key, key[pos:pos+len(cld.Key)]) {
+		if !bytes.HasPrefix(key[pos:], cld.Key) {
 			// Find the fork point, it's a non-existent branch.
 			if removeLeft {
 				if bytes.Compare(cld.Key, key[pos:]) < 0 {
@@ -434,7 +434,7 @@ func hasRightElement(node node, key []byte) bool {
 			}
 			node, pos = rn.Children[key[pos]], pos+1
 		case *shortNode:
-			if len(key)-pos < len(rn.Key) || !bytes.Equal(rn.Key, key[pos:pos+len(rn.Key)]) {
+			if !bytes.HasPrefix(key[pos:], rn.Key) {
 				return bytes.Compare(rn.Key, key[pos:]) > 0
 			}
 			node, pos = rn.Val, pos+len(rn.Key)
@@ -589,7 +589,7 @@ func get(tn node, key []byte, skipResolved bool) ([]byte, node) {
 	for {
 		switch n := tn.(type) {
 		case *shortNode:
-			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
+			if !bytes.HasPrefix(key, n.Key) {
 				return nil, nil
 			}
 			tn = n.Val
