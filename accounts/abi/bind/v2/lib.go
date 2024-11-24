@@ -1,6 +1,7 @@
 package v2
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -17,49 +18,101 @@ type ContractInstance struct {
 	Backend bind.ContractBackend
 }
 
-func DeployContracts(auth *bind.TransactOpts, backend bind.ContractBackend, constructorInput []byte, contracts map[string]*bind.MetaData) {
-	// match if the contract has dynamic libraries that need to be linked
-	hasDepsMatcher, err := regexp.Compile("__\\$.*\\$__")
+func deployDeps(backend bind.ContractBackend, auth *bind.TransactOpts, constructorInputs map[string][]byte, contracts map[string]string) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[common.Address]struct{}, err error) {
+	for pattern, contractBin := range contracts {
+		contractBinBytes, err := hex.DecodeString(contractBin[2:])
+		if err != nil {
+			return deploymentTxs, deployAddrs, fmt.Errorf("contract bytecode is not a hex string: %s", contractBin[2:])
+		}
+		var constructorInput []byte
+		if inp, ok := constructorInputs[pattern]; ok {
+			constructorInput = inp
+		} else {
+			constructorInput = make([]byte, 0) // TODO check if we can pass a nil byte slice here.
+		}
+		addr, tx, _, err := bind.DeployContractRaw(auth, contractBinBytes, backend, constructorInput)
+		if err != nil {
+			return deploymentTxs, deployAddrs, fmt.Errorf("failed to deploy contract: %v", err)
+		}
+		deploymentTxs[addr] = tx
+		deployAddrs[addr] = struct{}{}
+	}
+
+	return deploymentTxs, deployAddrs, nil
+}
+
+func linkDeps(deps *map[string]string, linked *map[string]common.Address) (deployableDeps map[string]string) {
+	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
 	if err != nil {
 		panic(err)
 	}
+	reMatchAnyPattern, err := regexp.Compile("__\\$.*\\$__")
+	if err != nil {
+		panic(err)
+	}
+	deployableDeps = make(map[string]string)
 
-	// deps we are linking
-	wipDeps := make(map[string]string)
-	for id, metadata := range contracts {
-		wipDeps[id] = metadata.Bin
+	for pattern, dep := range *deps {
+		// attempt to replace references to every single linked dep
+		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(dep, -1) {
+			matchingPattern := match[1]
+			addr, ok := (*linked)[matchingPattern]
+			if !ok {
+				continue
+			}
+			(*deps)[pattern] = strings.ReplaceAll(dep, matchingPattern, addr.String())
+		}
+		// if we linked something into this dep, see if it can be deployed
+		if !reMatchAnyPattern.MatchString((*deps)[pattern]) {
+			deployableDeps[pattern] = (*deps)[pattern]
+			delete(*deps, pattern)
+		}
 	}
 
-	// nested iteration:  find contracts without library dependencies first,
-	// deploy them, link them into any other contracts that depend on them.
-	// repeat this until there are no more contracts to link/deploy
-	for {
-		for id, contractBin := range wipDeps {
-			if !hasDepsMatcher.MatchString(contractBin) {
-				// this library/contract doesn't depend on any others
-				// it can be deployed as-is.
-				abi, err := contracts[id].GetAbi()
-				if err != nil {
-					panic(err)
-				}
-				addr, _, _, err := bind.DeployContractRaw(auth, *abi, []byte(contractBin), backend, constructorInput)
-				if err != nil {
-					panic(err)
-				}
-				delete(wipDeps, id)
+	return deployableDeps
+}
 
-				// embed the address of the deployed contract into any
-				// libraries/contracts that depend on it.
-				for id, contractBin := range wipDeps {
-					contractBin = strings.ReplaceAll(contractBin, fmt.Sprintf("__$%s%__", id), fmt.Sprintf("__$%s$__", addr.String()))
-					wipDeps[id] = contractBin
-				}
-			}
+func LinkAndDeployContractsWithOverride(auth *bind.TransactOpts, backend bind.ContractBackend, constructorInputs map[string][]byte, contracts, libs map[string]string, overrides map[string]common.Address) (allDeployTxs map[common.Address]*types.Transaction, allDeployAddrs map[common.Address]struct{}, err error) {
+	var depsToDeploy map[string]string // map of pattern -> unlinked binary for deps we will deploy
+
+	// initialize the set of already-deployed contracts with given override addresses
+	linked := make(map[string]common.Address)
+	for pattern, deployAddr := range overrides {
+		linked[pattern] = deployAddr
+		if _, ok := contracts[pattern]; ok {
+			delete(contracts, pattern)
 		}
-		if len(wipDeps) == 0 {
+	}
+
+	// link and deploy dynamic libraries
+	for {
+		deployableDeps := linkDeps(&depsToDeploy, &linked)
+		if len(deployableDeps) == 0 {
 			break
 		}
+		deployTxs, deployAddrs, err := deployDeps(backend, auth, constructorInputs, deployableDeps)
+		for addr, _ := range deployAddrs {
+			allDeployAddrs[addr] = struct{}{}
+		}
+		for addr, tx := range deployTxs {
+			allDeployTxs[addr] = tx
+		}
+		if err != nil {
+			return deployTxs, allDeployAddrs, err
+		}
 	}
+
+	// link and deploy the contracts
+	contractBins := make(map[string]string)
+	linkedContracts := linkDeps(&contractBins, &linked)
+	deployTxs, deployAddrs, err := deployDeps(backend, auth, constructorInputs, linkedContracts)
+	for addr, _ := range deployAddrs {
+		allDeployAddrs[addr] = struct{}{}
+	}
+	for addr, tx := range deployTxs {
+		allDeployTxs[addr] = tx
+	}
+	return allDeployTxs, allDeployAddrs, err
 }
 
 func FilterLogs[T any](instance *ContractInstance, opts *bind.FilterOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {

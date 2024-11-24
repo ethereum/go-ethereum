@@ -151,9 +151,10 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return c.address, tx, c, nil
 }
 
-func DeployContractRaw(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *BoundContract, error) {
-	// Otherwise try to deploy the contract
-	c := NewBoundContract(common.Address{}, abi, backend, backend, backend)
+func DeployContractRaw(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *BoundContract, error) {
+	// TODO: it's weird to instantiate a bound contract (implies existence of contract) in order to deploy a contract
+	// that doesn't yet exist
+	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
 
 	tx, err := c.transact(opts, nil, append(bytecode, packedParams...))
 	if err != nil {
