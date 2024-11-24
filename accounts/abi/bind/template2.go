@@ -38,9 +38,9 @@ var (
 {{end}}
 
 {{range $contract := .Contracts}}
-	var {{$contract.Type}}LibraryDeps = map[string]*bind.MetaData{
+	var {{$contract.Type}}LibraryDeps = map[string]string{
 	{{range $name, $pattern := .AllLibraries -}}
-		"{{$pattern}}": {{$name}}MetaData,
+		"{{$name}}": "{{$pattern}}",
 	{{ end}}
 	}
 
