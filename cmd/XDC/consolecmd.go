@@ -111,7 +111,10 @@ func localConsole(ctx *cli.Context) error {
 // remoteConsole will connect to a remote XDC instance, attaching a JavaScript
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
-	// Attach to a remotely running XDC instance and start the JavaScript console
+	if ctx.Args().Len() > 1 {
+		utils.Fatalf("invalid command-line: too many arguments")
+	}
+
 	endpoint := ctx.Args().First()
 	if endpoint == "" {
 		path := node.DefaultDataDir()
