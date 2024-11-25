@@ -167,7 +167,6 @@ var (
 func init() {
 	// Initialize the CLI app and start XDC
 	app.Action = XDC
-	app.HideVersion = true // we have a command to print the version
 	app.Copyright = "Copyright (c) 2024 XDPoSChain"
 	app.Commands = []*cli.Command{
 		// See chaincmd.go:
