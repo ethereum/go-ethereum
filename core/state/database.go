@@ -193,7 +193,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	}
 	// Set up the trie reader, which is expected to always be available
 	// as the gatekeeper unless the state is corrupted.
-	tr, err := newTrieReader(stateRoot, db.triedb, db.pointCache)
+	tr, err := newTrieReader(stateRoot, db.triedb, db, db.pointCache)
 	if err != nil {
 		return nil, err
 	}

@@ -48,6 +48,19 @@ type Reader interface {
 	// - The returned storage slot is safe to modify after the call
 	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
 
+	// ContractCode returns the code associated with a particular account.
+	//
+	// - Returns an empty code if it does not exist
+	// - It can return an error to indicate code doesn't exist
+	// - The returned code is safe to modify after the call
+	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
+
+	// ContractCodeSize returns the size of the code associated with a particular account.
+	//
+	// - Returns 0 if the code does not exist
+	// - It can return an error to indicate code doesn't exist
+	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
+
 	// Copy returns a deep-copied state reader.
 	Copy() Reader
 }
@@ -123,6 +136,16 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	return value, nil
 }
 
+// ContractCode implements Reader, retrieving the code associated with a particular account.
+func (r *stateReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	return nil, nil
+}
+
+// ContractCodeSize implements Reader, returning the size of the code associated with a particular account.
+func (r *stateReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	return 0, nil
+}
+
 // Copy implements Reader, returning a deep-copied snap reader.
 func (r *stateReader) Copy() Reader {
 	return &stateReader{
@@ -134,17 +157,18 @@ func (r *stateReader) Copy() Reader {
 // trieReader implements the Reader interface, providing functions to access
 // state from the referenced trie.
 type trieReader struct {
-	root     common.Hash                    // State root which uniquely represent a state
-	db       *triedb.Database               // Database for loading trie
-	buff     crypto.KeccakState             // Buffer for keccak256 hashing
-	mainTrie Trie                           // Main trie, resolved in constructor
-	subRoots map[common.Address]common.Hash // Set of storage roots, cached when the account is resolved
-	subTries map[common.Address]Trie        // Group of storage tries, cached when it's resolved
+	root       common.Hash                    // State root which uniquely represent a state
+	db         *triedb.Database               // Database for loading trie
+	contractDB Database                       // Database for loading code
+	buff       crypto.KeccakState             // Buffer for keccak256 hashing
+	mainTrie   Trie                           // Main trie, resolved in constructor
+	subRoots   map[common.Address]common.Hash // Set of storage roots, cached when the account is resolved
+	subTries   map[common.Address]Trie        // Group of storage tries, cached when it's resolved
 }
 
 // trieReader constructs a trie reader of the specific state. An error will be
 // returned if the associated trie specified by root is not existent.
-func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCache) (*trieReader, error) {
+func newTrieReader(root common.Hash, db *triedb.Database, contractDB Database, cache *utils.PointCache) (*trieReader, error) {
 	var (
 		tr  Trie
 		err error
@@ -158,12 +182,13 @@ func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCach
 		return nil, err
 	}
 	return &trieReader{
-		root:     root,
-		db:       db,
-		buff:     crypto.NewKeccakState(),
-		mainTrie: tr,
-		subRoots: make(map[common.Address]common.Hash),
-		subTries: make(map[common.Address]Trie),
+		root:       root,
+		db:         db,
+		contractDB: contractDB,
+		buff:       crypto.NewKeccakState(),
+		mainTrie:   tr,
+		subRoots:   make(map[common.Address]common.Hash),
+		subTries:   make(map[common.Address]Trie),
 	}, nil
 }
 
@@ -225,6 +250,16 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	}
 	value.SetBytes(ret)
 	return value, nil
+}
+
+// ContractCode implements Reader, retrieving the code associated with a particular account.
+func (r *trieReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	return r.contractDB.ContractCode(addr, codeHash)
+}
+
+// ContractCodeSize implements Reader, returning the size of the code associated with a particular account.
+func (r *trieReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	return r.contractDB.ContractCodeSize(addr, codeHash)
 }
 
 // Copy implements Reader, returning a deep-copied trie reader.
@@ -296,6 +331,30 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 		errs = append(errs, err)
 	}
 	return common.Hash{}, errors.Join(errs...)
+}
+
+// ContractCode implements Reader, retrieving the code associated with a particular account.
+func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	var errs []error
+	for _, reader := range r.readers {
+		code, err := reader.ContractCode(addr, codeHash)
+		if err == nil {
+			return code, nil
+		}
+	}
+	return nil, errors.Join(errs...)
+}
+
+// ContractCodeSize implements Reader, returning the size of the code associated with a particular account.
+func (r *multiReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	var errs []error
+	for _, reader := range r.readers {
+		size, err := reader.ContractCodeSize(addr, codeHash)
+		if err == nil {
+			return size, nil
+		}
+	}
+	return 0, errors.Join(errs...)
 }
 
 // Copy implementing Reader interface, returning a deep-copied state reader.
