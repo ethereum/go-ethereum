@@ -169,8 +169,16 @@ func TestDeployment(t *testing.T) {
 		libMetas[pattern] = metadata
 	}
 
+	ctrct, err := v2_testcase_library.NewTestArray()
+	if err != nil {
+		panic(err)
+	}
+	constructorInput, err := ctrct.PackConstructor(big.NewInt(42), false)
+	if err != nil {
+		t.Fatalf("fack %v", err)
+	}
 	// TODO: test case with arguments-containing constructor
-	txs, _, err := LinkAndDeployContractWithOverrides(&opts, bindBackend, []byte{}, v2_testcase_library.TestArrayMetaData, v2_testcase_library.TestArrayLibraryDeps, nil)
+	txs, _, err := LinkAndDeployContractWithOverrides(&opts, bindBackend, constructorInput, v2_testcase_library.TestArrayMetaData, v2_testcase_library.TestArrayLibraryDeps, nil)
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
