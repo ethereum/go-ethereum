@@ -56,11 +56,16 @@ func init() {
 	// Now visit the flags we defined which are present in the args and see if we
 	// should enable metrics.
 	fs.Visit(func(f *flag.Flag) {
+		g, ok := f.Value.(flag.Getter)
+		if !ok {
+			// Don't expect this to fail, but skip over just in case it does.
+			return
+		}
 		switch f.Name {
 		case "metrics":
-			Enabled = true
+			Enabled = g.Get().(bool)
 		case "config":
-			data, err := os.ReadFile(f.Value.String())
+			data, err := os.ReadFile(g.Get().(string))
 			if err != nil {
 				return
 			}
