@@ -106,30 +106,35 @@ var (
 		Category: flags.LoggingCategory,
 	}
 	pprofPortFlag = &cli.IntFlag{
-		Name:     "pprofport",
+		Name:     "pprof-port",
+		Aliases:  []string{"pprofport"},
 		Usage:    "pprof HTTP server listening port",
 		Value:    6060,
 		Category: flags.LoggingCategory,
 	}
 	pprofAddrFlag = &cli.StringFlag{
-		Name:     "pprofaddr",
+		Name:     "pprof-addr",
+		Aliases:  []string{"pprofaddr"},
 		Usage:    "pprof HTTP server listening interface",
 		Value:    "127.0.0.1",
 		Category: flags.LoggingCategory,
 	}
 	memprofilerateFlag = &cli.IntFlag{
-		Name:     "memprofilerate",
+		Name:     "pprof-memprofilerate",
+		Aliases:  []string{"memprofilerate"},
 		Usage:    "Turn on memory profiling with the given rate",
 		Value:    runtime.MemProfileRate,
 		Category: flags.LoggingCategory,
 	}
 	blockprofilerateFlag = &cli.IntFlag{
-		Name:     "blockprofilerate",
+		Name:     "pprof-blockprofilerate",
+		Aliases:  []string{"blockprofilerate"},
 		Usage:    "Turn on block profiling with the given rate",
 		Category: flags.LoggingCategory,
 	}
 	cpuprofileFlag = &cli.StringFlag{
-		Name:     "cpuprofile",
+		Name:     "pprof-cpuprofile",
+		Aliases:  []string{"cpuprofile"},
 		Usage:    "Write CPU profile to the given file",
 		Category: flags.LoggingCategory,
 	}

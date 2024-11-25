@@ -101,11 +101,11 @@ var (
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
-		utils.EtherbaseFlag,
-		utils.GasPriceFlag,
-		utils.StakerThreadsFlag,
-		utils.StakingEnabledFlag,
-		utils.TargetGasLimitFlag,
+		utils.MinerEtherbaseFlag,
+		utils.MinerGasPriceFlag,
+		utils.MinerThreadsFlag,
+		utils.MiningEnabledFlag,
+		utils.MinerGasLimitFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		//utils.DiscoveryV5Flag,
@@ -122,8 +122,8 @@ var (
 		utils.EnableXDCPrefixFlag,
 		utils.RewoundFlag,
 		utils.NetworkIdFlag,
-		utils.RPCCORSDomainFlag,
-		utils.RPCVirtualHostsFlag,
+		utils.HTTPCORSDomainFlag,
+		utils.HTTPVirtualHostsFlag,
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
 		utils.MetricsHTTPFlag,
@@ -145,14 +145,14 @@ var (
 	}
 
 	rpcFlags = []cli.Flag{
-		utils.RPCEnabledFlag,
+		utils.HTTPEnabledFlag,
 		utils.RPCGlobalGasCapFlag,
-		utils.RPCListenAddrFlag,
-		utils.RPCPortFlag,
-		utils.RPCHttpReadTimeoutFlag,
-		utils.RPCHttpWriteTimeoutFlag,
-		utils.RPCHttpIdleTimeoutFlag,
-		utils.RPCApiFlag,
+		utils.HTTPListenAddrFlag,
+		utils.HTTPPortFlag,
+		utils.HTTPReadTimeoutFlag,
+		utils.HTTPWriteTimeoutFlag,
+		utils.HTTPIdleTimeoutFlag,
+		utils.HTTPApiFlag,
 		utils.WSEnabledFlag,
 		utils.WSListenAddrFlag,
 		utils.WSPortFlag,
@@ -329,7 +329,7 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 				} else {
 					log.Info("Masternode found. Enabling staking mode...")
 					// Use a reduced number of threads if requested
-					if threads := ctx.Int(utils.StakerThreadsFlag.Name); threads > 0 {
+					if threads := ctx.Int(utils.MinerThreadsFlag.Name); threads > 0 {
 						type threaded interface {
 							SetThreads(threads int)
 						}
@@ -371,7 +371,7 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 					} else {
 						log.Info("Masternode found. Enabling staking mode...")
 						// Use a reduced number of threads if requested
-						if threads := ctx.Int(utils.StakerThreadsFlag.Name); threads > 0 {
+						if threads := ctx.Int(utils.MinerThreadsFlag.Name); threads > 0 {
 							type threaded interface {
 								SetThreads(threads int)
 							}

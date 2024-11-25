@@ -71,7 +71,7 @@ func runXDC(t *testing.T, args ...string) *testXDC {
 			if i < len(args)-1 {
 				tt.Datadir = args[i+1]
 			}
-		case "--etherbase":
+		case "--miner-etherbase":
 			if i < len(args)-1 {
 				tt.Etherbase = args[i+1]
 			}

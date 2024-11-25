@@ -138,8 +138,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 			utils.Fatalf("%v", err)
 		}
 	}
-	if ctx.IsSet(utils.StakingEnabledFlag.Name) {
-		cfg.StakeEnable = ctx.Bool(utils.StakingEnabledFlag.Name)
+	if ctx.IsSet(utils.MiningEnabledFlag.Name) {
+		cfg.StakeEnable = ctx.Bool(utils.MiningEnabledFlag.Name)
 	}
 	// if !ctx.IsSet(debug.VerbosityFlag.Name) {
 	// 	debug.Verbosity(log.Lvl(cfg.Verbosity))
@@ -175,8 +175,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 
 	// Check GasPrice
 	common.MinGasPrice = big.NewInt(common.DefaultMinGasPrice)
-	if ctx.IsSet(utils.GasPriceFlag.Name) {
-		if gasPrice := int64(ctx.Int(utils.GasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
+	if ctx.IsSet(utils.MinerGasPriceFlag.Name) {
+		if gasPrice := int64(ctx.Int(utils.MinerGasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
 			common.MinGasPrice = big.NewInt(gasPrice)
 		}
 	}

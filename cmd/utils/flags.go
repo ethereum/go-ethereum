@@ -113,6 +113,7 @@ var (
 	}
 	DeveloperPeriodFlag = &cli.IntFlag{
 		Name:     "dev-period",
+		Aliases:  []string{"dev.period"},
 		Usage:    "Block period to use in developer mode (0 = mine only if transaction pending)",
 		Category: flags.DevCategory,
 	}
@@ -149,13 +150,15 @@ var (
 
 	// Light server and client settings
 	LightServFlag = &cli.IntFlag{
-		Name:     "lightserv",
+		Name:     "light-serv",
+		Aliases:  []string{"lightserv"},
 		Usage:    "Maximum percentage of time allowed for serving LES requests (0-90)",
 		Value:    ethconfig.Defaults.LightServ,
 		Category: flags.LightCategory,
 	}
 	LightPeersFlag = &cli.IntFlag{
-		Name:     "lightpeers",
+		Name:     "light-peers",
+		Aliases:  []string{"lightpeers"},
 		Usage:    "Maximum number of LES client peers",
 		Value:    ethconfig.Defaults.LightPeers,
 		Category: flags.LightCategory,
@@ -163,36 +166,42 @@ var (
 
 	// Ethash settings
 	EthashCacheDirFlag = &flags.DirectoryFlag{
-		Name:     "ethash.cachedir",
+		Name:     "ethash-cachedir",
+		Aliases:  []string{"ethash.cachedir"},
 		Usage:    "Directory to store the ethash verification caches (default = inside the datadir)",
 		Category: flags.EthashCategory,
 	}
 	EthashCachesInMemoryFlag = &cli.IntFlag{
-		Name:     "ethash.cachesinmem",
+		Name:     "ethash-cachesinmem",
+		Aliases:  []string{"ethash.cachesinmem"},
 		Usage:    "Number of recent ethash caches to keep in memory (16MB each)",
 		Value:    ethconfig.Defaults.Ethash.CachesInMem,
 		Category: flags.EthashCategory,
 	}
 	EthashCachesOnDiskFlag = &cli.IntFlag{
-		Name:     "ethash.cachesondisk",
+		Name:     "ethash-cachesondisk",
+		Aliases:  []string{"ethash.cachesondisk"},
 		Usage:    "Number of recent ethash caches to keep on disk (16MB each)",
 		Value:    ethconfig.Defaults.Ethash.CachesOnDisk,
 		Category: flags.EthashCategory,
 	}
 	EthashDatasetDirFlag = &flags.DirectoryFlag{
-		Name:     "ethash.dagdir",
+		Name:     "ethash-dagdir",
+		Aliases:  []string{"ethash.dagdir"},
 		Usage:    "Directory to store the ethash mining DAGs (default = inside home folder)",
 		Value:    flags.DirectoryString(ethconfig.Defaults.Ethash.DatasetDir),
 		Category: flags.EthashCategory,
 	}
 	EthashDatasetsInMemoryFlag = &cli.IntFlag{
-		Name:     "ethash.dagsinmem",
+		Name:     "ethash-dagsinmem",
+		Aliases:  []string{"ethash.dagsinmem"},
 		Usage:    "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
 		Value:    ethconfig.Defaults.Ethash.DatasetsInMem,
 		Category: flags.EthashCategory,
 	}
 	EthashDatasetsOnDiskFlag = &cli.IntFlag{
-		Name:     "ethash.dagsondisk",
+		Name:     "ethash-dagsondisk",
+		Aliases:  []string{"ethash.dagsondisk"},
 		Usage:    "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
 		Value:    ethconfig.Defaults.Ethash.DatasetsOnDisk,
 		Category: flags.EthashCategory,
@@ -200,60 +209,70 @@ var (
 
 	// Transaction pool settings
 	TxPoolNoLocalsFlag = &cli.BoolFlag{
-		Name:     "txpool.nolocals",
+		Name:     "txpool-nolocals",
+		Aliases:  []string{"txpool.nolocals"},
 		Usage:    "Disables price exemptions for locally submitted transactions",
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolJournalFlag = &cli.StringFlag{
-		Name:     "txpool.journal",
+		Name:     "txpool-journal",
+		Aliases:  []string{"txpool.journal"},
 		Usage:    "Disk journal for local transaction to survive node restarts",
 		Value:    txpool.DefaultConfig.Journal,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolRejournalFlag = &cli.DurationFlag{
-		Name:     "txpool.rejournal",
+		Name:     "txpool-rejournal",
+		Aliases:  []string{"txpool.rejournal"},
 		Usage:    "Time interval to regenerate the local transaction journal",
 		Value:    txpool.DefaultConfig.Rejournal,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolPriceLimitFlag = &cli.Uint64Flag{
-		Name:     "txpool.pricelimit",
+		Name:     "txpool-pricelimit",
+		Aliases:  []string{"txpool.pricelimit"},
 		Usage:    "Minimum gas price limit to enforce for acceptance into the pool",
 		Value:    ethconfig.Defaults.TxPool.PriceLimit,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolPriceBumpFlag = &cli.Uint64Flag{
-		Name:     "txpool.pricebump",
+		Name:     "txpool-pricebump",
+		Aliases:  []string{"txpool.pricebump"},
 		Usage:    "Price bump percentage to replace an already existing transaction",
 		Value:    ethconfig.Defaults.TxPool.PriceBump,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolAccountSlotsFlag = &cli.Uint64Flag{
-		Name:     "txpool.accountslots",
+		Name:     "txpool-accountslots",
+		Aliases:  []string{"txpool.accountslots"},
 		Usage:    "Minimum number of executable transaction slots guaranteed per account",
 		Value:    ethconfig.Defaults.TxPool.AccountSlots,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolGlobalSlotsFlag = &cli.Uint64Flag{
-		Name:     "txpool.globalslots",
+		Name:     "txpool-globalslots",
+		Aliases:  []string{"txpool.globalslots"},
 		Usage:    "Maximum number of executable transaction slots for all accounts",
 		Value:    ethconfig.Defaults.TxPool.GlobalSlots,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolAccountQueueFlag = &cli.Uint64Flag{
-		Name:     "txpool.accountqueue",
+		Name:     "txpool-accountqueue",
+		Aliases:  []string{"txpool.accountqueue"},
 		Usage:    "Maximum number of non-executable transaction slots permitted per account",
 		Value:    ethconfig.Defaults.TxPool.AccountQueue,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolGlobalQueueFlag = &cli.Uint64Flag{
-		Name:     "txpool.globalqueue",
+		Name:     "txpool-globalqueue",
+		Aliases:  []string{"txpool.globalqueue"},
 		Usage:    "Maximum number of non-executable transaction slots for all accounts",
 		Value:    ethconfig.Defaults.TxPool.GlobalQueue,
 		Category: flags.TxPoolCategory,
 	}
 	TxPoolLifetimeFlag = &cli.DurationFlag{
-		Name:     "txpool.lifetime",
+		Name:     "txpool-lifetime",
+		Aliases:  []string{"txpool.lifetime"},
 		Usage:    "Maximum amount of time non-executable transaction are queued",
 		Value:    ethconfig.Defaults.TxPool.Lifetime,
 		Category: flags.TxPoolCategory,
@@ -267,19 +286,22 @@ var (
 		Category: flags.PerfCategory,
 	}
 	CacheDatabaseFlag = &cli.IntFlag{
-		Name:     "cache.database",
+		Name:     "cache-database",
+		Aliases:  []string{"cache.database"},
 		Usage:    "Percentage of cache memory allowance to use for database io",
 		Value:    50,
 		Category: flags.PerfCategory,
 	}
 	CacheGCFlag = &cli.IntFlag{
-		Name:     "cache.gc",
+		Name:     "cache-gc",
+		Aliases:  []string{"cache.gc"},
 		Usage:    "Percentage of cache memory allowance to use for trie pruning",
 		Value:    25,
 		Category: flags.PerfCategory,
 	}
 	CacheLogSizeFlag = &cli.IntFlag{
-		Name:     "cache.blocklogs",
+		Name:     "cache-blocklogs",
+		Aliases:  []string{"cache.blocklogs"},
 		Usage:    "Size (in number of blocks) of the log cache for filtering",
 		Value:    ethconfig.Defaults.FilterLogCacheSize,
 		Category: flags.PerfCategory,
@@ -291,37 +313,42 @@ var (
 	}
 
 	// Miner settings
-	StakingEnabledFlag = &cli.BoolFlag{
+	MiningEnabledFlag = &cli.BoolFlag{
 		Name:     "mine",
-		Usage:    "Enable staking",
+		Usage:    "Enable mining",
 		Category: flags.MinerCategory,
 	}
-	StakerThreadsFlag = &cli.IntFlag{
-		Name:     "minerthreads",
-		Usage:    "Number of CPU threads to use for staking",
+	MinerThreadsFlag = &cli.IntFlag{
+		Name:     "miner-threads",
+		Aliases:  []string{"minerthreads"},
+		Usage:    "Number of CPU threads to use for mining",
 		Value:    runtime.NumCPU(),
 		Category: flags.MinerCategory,
 	}
-	TargetGasLimitFlag = &cli.Uint64Flag{
-		Name:     "targetgaslimit",
+	MinerGasLimitFlag = &cli.Uint64Flag{
+		Name:     "miner-gaslimit",
+		Aliases:  []string{"targetgaslimit"},
 		Usage:    "Target gas limit sets the artificial target gas floor for the blocks to mine",
 		Value:    params.XDCGenesisGasLimit,
 		Category: flags.MinerCategory,
 	}
-	EtherbaseFlag = &cli.StringFlag{
-		Name:     "etherbase",
-		Usage:    "Public address for block mining rewards (default = first account created)",
-		Value:    "0",
-		Category: flags.MinerCategory,
-	}
-	GasPriceFlag = &flags.BigFlag{
-		Name:     "gasprice",
+	MinerGasPriceFlag = &flags.BigFlag{
+		Name:     "miner-gasprice",
+		Aliases:  []string{"gasprice"},
 		Usage:    "Minimal gas price to accept for mining a transactions",
 		Value:    ethconfig.Defaults.GasPrice,
 		Category: flags.MinerCategory,
 	}
-	ExtraDataFlag = &cli.StringFlag{
-		Name:     "extradata",
+	MinerEtherbaseFlag = &cli.StringFlag{
+		Name:     "miner-etherbase",
+		Aliases:  []string{"etherbase"},
+		Usage:    "Public address for block mining rewards (default = first account created)",
+		Value:    "0",
+		Category: flags.MinerCategory,
+	}
+	MinerExtraDataFlag = &cli.StringFlag{
+		Name:     "miner-extradata",
+		Aliases:  []string{"extradata"},
 		Usage:    "Block extra data set by the miner (default = client version)",
 		Category: flags.MinerCategory,
 	}
@@ -355,7 +382,8 @@ var (
 		Category: flags.APICategory,
 	}
 	RPCGlobalTxFeeCap = &cli.Float64Flag{
-		Name:     "rpc.txfeecap",
+		Name:     "rpc-txfeecap",
+		Aliases:  []string{"rpc.txfeecap"},
 		Usage:    "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
 		Value:    ethconfig.Defaults.RPCTxFeeCap,
 		Category: flags.APICategory,
@@ -389,39 +417,66 @@ var (
 		Usage:    "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
 		Category: flags.APICategory,
 	}
-	RPCEnabledFlag = &cli.BoolFlag{
-		Name:     "rpc",
+	HTTPEnabledFlag = &cli.BoolFlag{
+		Name:     "http",
+		Aliases:  []string{"rpc"},
 		Usage:    "Enable the HTTP-RPC server",
 		Category: flags.APICategory,
 	}
-	RPCListenAddrFlag = &cli.StringFlag{
-		Name:     "rpcaddr",
+	HTTPListenAddrFlag = &cli.StringFlag{
+		Name:     "http-addr",
+		Aliases:  []string{"rpcaddr"},
 		Usage:    "HTTP-RPC server listening interface",
 		Value:    node.DefaultHTTPHost,
 		Category: flags.APICategory,
 	}
-	RPCPortFlag = &cli.IntFlag{
-		Name:     "rpcport",
+	HTTPPortFlag = &cli.IntFlag{
+		Name:     "http-port",
+		Aliases:  []string{"rpcport"},
 		Usage:    "HTTP-RPC server listening port",
 		Value:    node.DefaultHTTPPort,
 		Category: flags.APICategory,
 	}
-	RPCCORSDomainFlag = &cli.StringFlag{
-		Name:     "rpccorsdomain",
+	HTTPCORSDomainFlag = &cli.StringFlag{
+		Name:     "http-corsdomain",
+		Aliases:  []string{"rpccorsdomain"},
 		Usage:    "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
 		Value:    "",
 		Category: flags.APICategory,
 	}
-	RPCVirtualHostsFlag = &cli.StringFlag{
-		Name:     "rpcvhosts",
+	HTTPVirtualHostsFlag = &cli.StringFlag{
+		Name:     "http-vhosts",
+		Aliases:  []string{"rpcvhosts"},
 		Usage:    "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
 		Value:    strings.Join(node.DefaultConfig.HTTPVirtualHosts, ","),
 		Category: flags.APICategory,
 	}
-	RPCApiFlag = &cli.StringFlag{
-		Name:     "rpcapi",
+	HTTPApiFlag = &cli.StringFlag{
+		Name:     "http-api",
+		Aliases:  []string{"rpcapi"},
 		Usage:    "API's offered over the HTTP-RPC interface",
 		Value:    "",
+		Category: flags.APICategory,
+	}
+	HTTPReadTimeoutFlag = &cli.DurationFlag{
+		Name:     "http-readtimeout",
+		Aliases:  []string{"rpcreadtimeout"},
+		Usage:    "HTTP-RPC server read timeout",
+		Value:    rpc.DefaultHTTPTimeouts.ReadTimeout,
+		Category: flags.APICategory,
+	}
+	HTTPWriteTimeoutFlag = &cli.DurationFlag{
+		Name:     "http-writetimeout",
+		Aliases:  []string{"rpcwritetimeout"},
+		Usage:    "HTTP-RPC server write timeout",
+		Value:    rpc.DefaultHTTPTimeouts.WriteTimeout,
+		Category: flags.APICategory,
+	}
+	HTTPIdleTimeoutFlag = &cli.DurationFlag{
+		Name:     "http-idletimeout",
+		Aliases:  []string{"rpcidletimeout"},
+		Usage:    "HTTP-RPC server idle timeout",
+		Value:    rpc.DefaultHTTPTimeouts.IdleTimeout,
 		Category: flags.APICategory,
 	}
 	WSEnabledFlag = &cli.BoolFlag{
@@ -430,25 +485,29 @@ var (
 		Category: flags.APICategory,
 	}
 	WSListenAddrFlag = &cli.StringFlag{
-		Name:     "wsaddr",
+		Name:     "ws-addr",
+		Aliases:  []string{"wsaddr"},
 		Usage:    "WS-RPC server listening interface",
 		Value:    node.DefaultWSHost,
 		Category: flags.APICategory,
 	}
 	WSPortFlag = &cli.IntFlag{
-		Name:     "wsport",
+		Name:     "ws-port",
+		Aliases:  []string{"wsport"},
 		Usage:    "WS-RPC server listening port",
 		Value:    node.DefaultWSPort,
 		Category: flags.APICategory,
 	}
 	WSApiFlag = &cli.StringFlag{
-		Name:     "wsapi",
+		Name:     "ws-api",
+		Aliases:  []string{"wsapi"},
 		Usage:    "API's offered over the WS-RPC interface",
 		Value:    "",
 		Category: flags.APICategory,
 	}
 	WSAllowedOriginsFlag = &cli.StringFlag{
-		Name:     "wsorigins",
+		Name:     "ws-origins",
+		Aliases:  []string{"wsorigins"},
 		Usage:    "Origins from which to accept websockets requests",
 		Value:    "",
 		Category: flags.APICategory,
@@ -461,24 +520,6 @@ var (
 	PreloadJSFlag = &cli.StringFlag{
 		Name:     "preload",
 		Usage:    "Comma separated list of JavaScript files to preload into the console",
-		Category: flags.APICategory,
-	}
-	RPCHttpReadTimeoutFlag = &cli.DurationFlag{
-		Name:     "rpcreadtimeout",
-		Usage:    "HTTP-RPC server read timeout",
-		Value:    rpc.DefaultHTTPTimeouts.ReadTimeout,
-		Category: flags.APICategory,
-	}
-	RPCHttpWriteTimeoutFlag = &cli.DurationFlag{
-		Name:     "rpcwritetimeout",
-		Usage:    "HTTP-RPC server write timeout",
-		Value:    rpc.DefaultHTTPTimeouts.WriteTimeout,
-		Category: flags.APICategory,
-	}
-	RPCHttpIdleTimeoutFlag = &cli.DurationFlag{
-		Name:     "rpcidletimeout",
-		Usage:    "HTTP-RPC server idle timeout",
-		Value:    rpc.DefaultHTTPTimeouts.IdleTimeout,
 		Category: flags.APICategory,
 	}
 
@@ -561,25 +602,29 @@ var (
 
 	// Gas price oracle settings
 	GpoBlocksFlag = &cli.IntFlag{
-		Name:     "gpoblocks",
+		Name:     "gpo-blocks",
+		Aliases:  []string{"gpoblocks"},
 		Usage:    "Number of recent blocks to check for gas prices",
 		Value:    ethconfig.Defaults.GPO.Blocks,
 		Category: flags.GasPriceCategory,
 	}
 	GpoPercentileFlag = &cli.IntFlag{
-		Name:     "gpopercentile",
+		Name:     "gpo-percentile",
+		Aliases:  []string{"gpopercentile"},
 		Usage:    "Suggested gas price is the given percentile of a set of recent transaction gas prices",
 		Value:    ethconfig.Defaults.GPO.Percentile,
 		Category: flags.GasPriceCategory,
 	}
 	GpoMaxGasPriceFlag = &cli.Int64Flag{
-		Name:     "gpo.maxprice",
+		Name:     "gpo-maxprice",
+		Aliases:  []string{"gpo.maxprice"},
 		Usage:    "Maximum gas price will be recommended by gpo",
 		Value:    ethconfig.Defaults.GPO.MaxPrice.Int64(),
 		Category: flags.GasPriceCategory,
 	}
 	GpoIgnoreGasPriceFlag = &cli.Int64Flag{
-		Name:     "gpo.ignoreprice",
+		Name:     "gpo-ignoreprice",
+		Aliases:  []string{"gpo.ignoreprice"},
 		Usage:    "Gas price below which gpo will ignore transactions",
 		Value:    ethconfig.Defaults.GPO.IgnorePrice.Int64(),
 		Category: flags.GasPriceCategory,
@@ -597,13 +642,15 @@ var (
 	// to enable a public-OK metrics endpoint without having to worry about ALSO exposing
 	// other profiling behavior or information.
 	MetricsHTTPFlag = &cli.StringFlag{
-		Name:     "metrics.addr",
+		Name:     "metrics-addr",
+		Aliases:  []string{"metrics.addr"},
 		Usage:    "Enable stand-alone metrics HTTP server listening interface",
 		Value:    metrics.DefaultConfig.HTTP,
 		Category: flags.MetricsCategory,
 	}
 	MetricsPortFlag = &cli.IntFlag{
-		Name:     "metrics.port",
+		Name:     "metrics-port",
+		Aliases:  []string{"metrics.port"},
 		Usage:    "Metrics HTTP server listening port",
 		Value:    metrics.DefaultConfig.Port,
 		Category: flags.MetricsCategory,
@@ -661,31 +708,36 @@ var (
 		Category: flags.XdcxCategory,
 	}
 	XDCXDataDirFlag = &flags.DirectoryFlag{
-		Name:     "XDCx.datadir",
+		Name:     "XDCx-datadir",
+		Aliases:  []string{"XDCx.datadir"},
 		Usage:    "Data directory for the XDCX databases",
 		Value:    flags.DirectoryString(filepath.Join(DataDirFlag.Value.String(), "XDCx")),
 		Category: flags.XdcxCategory,
 	}
 	XDCXDBEngineFlag = &cli.StringFlag{
-		Name:     "XDCx.dbengine",
+		Name:     "XDCx-dbengine",
+		Aliases:  []string{"XDCx.dbengine"},
 		Usage:    "Database engine for XDCX (leveldb, mongodb)",
 		Value:    "leveldb",
 		Category: flags.XdcxCategory,
 	}
 	XDCXDBNameFlag = &cli.StringFlag{
-		Name:     "XDCx.dbName",
+		Name:     "XDCx-dbName",
+		Aliases:  []string{"XDCx.dbName"},
 		Usage:    "Database name for XDCX",
 		Value:    "XDCdex",
 		Category: flags.XdcxCategory,
 	}
 	XDCXDBConnectionUrlFlag = &cli.StringFlag{
-		Name:     "XDCx.dbConnectionUrl",
+		Name:     "XDCx-dbConnectionUrl",
+		Aliases:  []string{"XDCx.dbConnectionUrl"},
 		Usage:    "ConnectionUrl to database if dbEngine is mongodb. Host:port. If there are multiple instances, separated by comma. Eg: localhost:27017,localhost:27018",
 		Value:    "localhost:27017",
 		Category: flags.XdcxCategory,
 	}
 	XDCXDBReplicaSetNameFlag = &cli.StringFlag{
-		Name:     "XDCx.dbReplicaSetName",
+		Name:     "XDCx-dbReplicaSetName",
+		Aliases:  []string{"XDCx.dbReplicaSetName"},
 		Usage:    "ReplicaSetName if Master-Slave is setup",
 		Category: flags.XdcxCategory,
 	}
@@ -847,33 +899,33 @@ func splitAndTrim(input string) (ret []string) {
 // setHTTP creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
-	if ctx.Bool(RPCEnabledFlag.Name) && cfg.HTTPHost == "" {
+	if ctx.Bool(HTTPEnabledFlag.Name) && cfg.HTTPHost == "" {
 		cfg.HTTPHost = "127.0.0.1"
-		if ctx.IsSet(RPCListenAddrFlag.Name) {
-			cfg.HTTPHost = ctx.String(RPCListenAddrFlag.Name)
+		if ctx.IsSet(HTTPListenAddrFlag.Name) {
+			cfg.HTTPHost = ctx.String(HTTPListenAddrFlag.Name)
 		}
 	}
 
-	if ctx.IsSet(RPCPortFlag.Name) {
-		cfg.HTTPPort = ctx.Int(RPCPortFlag.Name)
+	if ctx.IsSet(HTTPPortFlag.Name) {
+		cfg.HTTPPort = ctx.Int(HTTPPortFlag.Name)
 	}
-	if ctx.IsSet(RPCHttpReadTimeoutFlag.Name) {
-		cfg.HTTPTimeouts.ReadTimeout = ctx.Duration(RPCHttpReadTimeoutFlag.Name)
+	if ctx.IsSet(HTTPReadTimeoutFlag.Name) {
+		cfg.HTTPTimeouts.ReadTimeout = ctx.Duration(HTTPReadTimeoutFlag.Name)
 	}
-	if ctx.IsSet(RPCHttpWriteTimeoutFlag.Name) {
-		cfg.HTTPTimeouts.WriteTimeout = ctx.Duration(RPCHttpWriteTimeoutFlag.Name)
+	if ctx.IsSet(HTTPWriteTimeoutFlag.Name) {
+		cfg.HTTPTimeouts.WriteTimeout = ctx.Duration(HTTPWriteTimeoutFlag.Name)
 	}
-	if ctx.IsSet(RPCHttpIdleTimeoutFlag.Name) {
-		cfg.HTTPTimeouts.IdleTimeout = ctx.Duration(RPCHttpIdleTimeoutFlag.Name)
+	if ctx.IsSet(HTTPIdleTimeoutFlag.Name) {
+		cfg.HTTPTimeouts.IdleTimeout = ctx.Duration(HTTPIdleTimeoutFlag.Name)
 	}
-	if ctx.IsSet(RPCCORSDomainFlag.Name) {
-		cfg.HTTPCors = splitAndTrim(ctx.String(RPCCORSDomainFlag.Name))
+	if ctx.IsSet(HTTPCORSDomainFlag.Name) {
+		cfg.HTTPCors = splitAndTrim(ctx.String(HTTPCORSDomainFlag.Name))
 	}
-	if ctx.IsSet(RPCApiFlag.Name) {
-		cfg.HTTPModules = splitAndTrim(ctx.String(RPCApiFlag.Name))
+	if ctx.IsSet(HTTPApiFlag.Name) {
+		cfg.HTTPModules = splitAndTrim(ctx.String(HTTPApiFlag.Name))
 	}
-	if ctx.IsSet(RPCVirtualHostsFlag.Name) {
-		cfg.HTTPVirtualHosts = splitAndTrim(ctx.String(RPCVirtualHostsFlag.Name))
+	if ctx.IsSet(HTTPVirtualHostsFlag.Name) {
+		cfg.HTTPVirtualHosts = splitAndTrim(ctx.String(HTTPVirtualHostsFlag.Name))
 	}
 }
 
@@ -969,10 +1021,10 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 // setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
 func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config) {
-	if ctx.IsSet(EtherbaseFlag.Name) {
-		account, err := MakeAddress(ks, ctx.String(EtherbaseFlag.Name))
+	if ctx.IsSet(MinerEtherbaseFlag.Name) {
+		account, err := MakeAddress(ks, ctx.String(MinerEtherbaseFlag.Name))
 		if err != nil {
-			Fatalf("Option %q: %v", EtherbaseFlag.Name, err)
+			Fatalf("Option %q: %v", MinerEtherbaseFlag.Name, err)
 		}
 		cfg.Etherbase = account.Address
 	}
@@ -1317,8 +1369,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
 		cfg.TrieCache = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
-	if ctx.IsSet(StakerThreadsFlag.Name) {
-		cfg.MinerThreads = ctx.Int(StakerThreadsFlag.Name)
+	if ctx.IsSet(MinerThreadsFlag.Name) {
+		cfg.MinerThreads = ctx.Int(MinerThreadsFlag.Name)
 	}
 	if ctx.IsSet(DocRootFlag.Name) {
 		cfg.DocRoot = ctx.String(DocRootFlag.Name)
@@ -1332,11 +1384,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if ctx.IsSet(RPCGlobalGasCapFlag.Name) {
 		cfg.RPCGasCap = ctx.Uint64(RPCGlobalGasCapFlag.Name)
 	}
-	if ctx.IsSet(ExtraDataFlag.Name) {
-		cfg.ExtraData = []byte(ctx.String(ExtraDataFlag.Name))
+	if ctx.IsSet(MinerExtraDataFlag.Name) {
+		cfg.ExtraData = []byte(ctx.String(MinerExtraDataFlag.Name))
 	}
-	if ctx.IsSet(GasPriceFlag.Name) {
-		cfg.GasPrice = flags.GlobalBig(ctx, GasPriceFlag.Name)
+	if ctx.IsSet(MinerGasPriceFlag.Name) {
+		cfg.GasPrice = flags.GlobalBig(ctx, MinerGasPriceFlag.Name)
 	}
 	if ctx.IsSet(CacheLogSizeFlag.Name) {
 		cfg.FilterLogCacheSize = ctx.Int(CacheLogSizeFlag.Name)
@@ -1388,7 +1440,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		log.Info("Using developer account", "address", developer.Address)
 
 		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.Int(DeveloperPeriodFlag.Name)), developer.Address)
-		if !ctx.IsSet(GasPriceFlag.Name) {
+		if !ctx.IsSet(MinerGasPriceFlag.Name) {
 			cfg.GasPrice = big.NewInt(1)
 		}
 	}
@@ -1398,7 +1450,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 // SetupNetwork configures the system for either the main net or some test network.
 func SetupNetwork(ctx *cli.Context) {
 	// TODO(fjl): move target gas limit into config
-	params.TargetGasLimit = ctx.Uint64(TargetGasLimitFlag.Name)
+	params.TargetGasLimit = ctx.Uint64(MinerGasLimitFlag.Name)
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
