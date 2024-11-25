@@ -129,6 +129,13 @@ type executionPayloadEnvelopeMarshaling struct {
 	Requests   []hexutil.Bytes
 }
 
+// Max size of inclusion list in bytes.
+const MaxBytesPerInclusionList = uint64(8192)
+
+type InclusionListV1 struct {
+	Transactions [][]byte `json:"transactions"  gencodec:"required"`
+}
+
 type PayloadStatusV1 struct {
 	Status          string         `json:"status"`
 	Witness         *hexutil.Bytes `json:"witness"`
