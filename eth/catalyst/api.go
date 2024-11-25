@@ -117,8 +117,9 @@ var caps = []string{
 type ConsensusAPI struct {
 	eth *eth.Ethereum
 
-	remoteBlocks *headerQueue  // Cache of remote payloads received
-	localBlocks  *payloadQueue // Cache of local payloads generated
+	remoteBlocks        *headerQueue        // Cache of remote payloads received
+	localBlocks         *payloadQueue       // Cache of local payloads generated
+	localInclusionLists *inclusionListQueue // Cache of inclusion list generated
 
 	// The forkchoice update and new payload method require us to return the
 	// latest valid hash in an invalid chain. To support that return, we need
@@ -171,11 +172,12 @@ func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
 		log.Warn("Engine API started but chain not configured for merge yet")
 	}
 	api := &ConsensusAPI{
-		eth:               eth,
-		remoteBlocks:      newHeaderQueue(),
-		localBlocks:       newPayloadQueue(),
-		invalidBlocksHits: make(map[common.Hash]int),
-		invalidTipsets:    make(map[common.Hash]*types.Header),
+		eth:                 eth,
+		remoteBlocks:        newHeaderQueue(),
+		localBlocks:         newPayloadQueue(),
+		localInclusionLists: newInclusionListQueue(),
+		invalidBlocksHits:   make(map[common.Hash]int),
+		invalidTipsets:      make(map[common.Hash]*types.Header),
 	}
 	eth.Downloader().SetBadBlockCallback(api.setInvalidAncestor)
 	return api
@@ -549,6 +551,10 @@ func (api *ConsensusAPI) GetBlobsV1(hashes []common.Hash) ([]*engine.BlobAndProo
 }
 
 func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) (engine.InclusionList, error) {
+	if inclusionList := api.localInclusionLists.get(parentHash); inclusionList != nil {
+		return inclusionList, nil
+	}
+
 	args := &miner.BuildInclusionListArgs{
 		Parent: parentHash,
 	}
@@ -557,6 +563,8 @@ func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) (engine.Incl
 		log.Error("Failed to build inclusion list", "err", err)
 		return nil, err
 	}
+
+	api.localInclusionLists.put(parentHash, inclusionList)
 
 	return inclusionList, nil
 }
