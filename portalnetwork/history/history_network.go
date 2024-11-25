@@ -13,7 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -61,18 +61,18 @@ func (c *ContentKey) encode() []byte {
 	return res
 }
 
-type HistoryNetwork struct {
-	portalProtocol    *discover.PortalProtocol
+type Network struct {
+	portalProtocol    *portalwire.PortalProtocol
 	masterAccumulator *MasterAccumulator
 	closeCtx          context.Context
 	closeFunc         context.CancelFunc
 	log               log.Logger
 }
 
-func NewHistoryNetwork(portalProtocol *discover.PortalProtocol, accu *MasterAccumulator) *HistoryNetwork {
+func NewHistoryNetwork(portalProtocol *portalwire.PortalProtocol, accu *MasterAccumulator) *Network {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &HistoryNetwork{
+	return &Network{
 		portalProtocol:    portalProtocol,
 		masterAccumulator: accu,
 		closeCtx:          ctx,
@@ -81,7 +81,7 @@ func NewHistoryNetwork(portalProtocol *discover.PortalProtocol, accu *MasterAccu
 	}
 }
 
-func (h *HistoryNetwork) Start() error {
+func (h *Network) Start() error {
 	err := h.portalProtocol.Start()
 	if err != nil {
 		return err
@@ -91,7 +91,7 @@ func (h *HistoryNetwork) Start() error {
 	return nil
 }
 
-func (h *HistoryNetwork) Stop() {
+func (h *Network) Stop() {
 	h.closeFunc()
 	h.portalProtocol.Stop()
 }
@@ -99,7 +99,7 @@ func (h *HistoryNetwork) Stop() {
 // Currently doing 4 retries on lookups but only when the validation fails.
 const requestRetries = 4
 
-func (h *HistoryNetwork) GetBlockHeader(blockHash []byte) (*types.Header, error) {
+func (h *Network) GetBlockHeader(blockHash []byte) (*types.Header, error) {
 	contentKey := newContentKey(BlockHeaderType, blockHash).encode()
 	contentId := h.portalProtocol.ToContentId(contentKey)
 	h.log.Trace("contentKey convert to contentId", "contentKey", hexutil.Encode(contentKey), "contentId", hexutil.Encode(contentId))
@@ -155,7 +155,7 @@ func (h *HistoryNetwork) GetBlockHeader(blockHash []byte) (*types.Header, error)
 	return nil, storage.ErrContentNotFound
 }
 
-func (h *HistoryNetwork) GetBlockBody(blockHash []byte) (*types.Body, error) {
+func (h *Network) GetBlockBody(blockHash []byte) (*types.Body, error) {
 	header, err := h.GetBlockHeader(blockHash)
 	if err != nil {
 		return nil, err
@@ -206,7 +206,7 @@ func (h *HistoryNetwork) GetBlockBody(blockHash []byte) (*types.Body, error) {
 	return nil, storage.ErrContentNotFound
 }
 
-func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error) {
+func (h *Network) GetReceipts(blockHash []byte) ([]*types.Receipt, error) {
 	header, err := h.GetBlockHeader(blockHash)
 	if err != nil {
 		return nil, err
@@ -255,7 +255,7 @@ func (h *HistoryNetwork) GetReceipts(blockHash []byte) ([]*types.Receipt, error)
 	return nil, storage.ErrContentNotFound
 }
 
-func (h *HistoryNetwork) verifyHeader(header *types.Header, proof BlockHeaderProof) (bool, error) {
+func (h *Network) verifyHeader(header *types.Header, proof BlockHeaderProof) (bool, error) {
 	return h.masterAccumulator.VerifyHeader(*header, proof)
 }
 
@@ -457,7 +457,7 @@ func ToPortalReceipts(receipts []*types.Receipt) (*PortalReceipts, error) {
 	return &PortalReceipts{Receipts: res}, nil
 }
 
-func (h *HistoryNetwork) processContentLoop(ctx context.Context) {
+func (h *Network) processContentLoop(ctx context.Context) {
 	contentChan := h.portalProtocol.GetContent()
 	for {
 		select {
@@ -488,7 +488,7 @@ func (h *HistoryNetwork) processContentLoop(ctx context.Context) {
 	}
 }
 
-func (h *HistoryNetwork) validateContent(contentKey []byte, content []byte) error {
+func (h *Network) validateContent(contentKey []byte, content []byte) error {
 	switch ContentType(contentKey[0]) {
 	case BlockHeaderType:
 		headerWithProof, err := DecodeBlockHeaderWithProof(content)
@@ -559,7 +559,7 @@ func (h *HistoryNetwork) validateContent(contentKey []byte, content []byte) erro
 	return errors.New("unknown content type")
 }
 
-func (h *HistoryNetwork) validateContents(contentKeys [][]byte, contents [][]byte) error {
+func (h *Network) validateContents(contentKeys [][]byte, contents [][]byte) error {
 	for i, content := range contents {
 		contentKey := contentKeys[i]
 		err := h.validateContent(contentKey, content)

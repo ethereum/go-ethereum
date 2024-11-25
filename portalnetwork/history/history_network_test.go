@@ -16,8 +16,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -241,7 +241,7 @@ func TestValidateContents(t *testing.T) {
 func TestValidateContentForCancun(t *testing.T) {
 	master, err := NewMasterAccumulator()
 	require.NoError(t, err)
-	historyNetwork := &HistoryNetwork{
+	historyNetwork := &Network{
 		masterAccumulator: &master,
 	}
 
@@ -287,12 +287,12 @@ func parseBlockHeaderKeyContent() ([]contentEntry, error) {
 	return res, nil
 }
 
-func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*HistoryNetwork, error) {
+func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*Network, error) {
 	glogger := log.NewGlogHandler(log.NewTerminalHandler(os.Stderr, true))
 	slogVerbosity := log.FromLegacyLevel(5)
 	glogger.Verbosity(slogVerbosity)
 	log.SetDefault(log.NewLogger(glogger))
-	conf := discover.DefaultPortalProtocolConfig()
+	conf := portalwire.DefaultPortalProtocolConfig()
 	if addr != "" {
 		conf.ListenAddr = addr
 	}
@@ -327,16 +327,16 @@ func genHistoryNetwork(addr string, bootNodes []*enode.Node) (*HistoryNetwork, e
 
 	localNode := enode.NewLocalNode(nodeDB, privKey)
 	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
-	localNode.Set(discover.Tag)
+	localNode.Set(portalwire.Tag)
 
 	discV5, err := discover.ListenV5(conn, localNode, discCfg)
 	if err != nil {
 		return nil, err
 	}
 
-	contentQueue := make(chan *discover.ContentElement, 50)
-	utpSocket := discover.NewPortalUtp(context.Background(), conf, discV5, conn)
-	portalProtocol, err := discover.NewPortalProtocol(conf, portalwire.History, privKey, conn, localNode, discV5, utpSocket, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
+	contentQueue := make(chan *portalwire.ContentElement, 50)
+	utpSocket := portalwire.NewPortalUtp(context.Background(), conf, discV5, conn)
+	portalProtocol, err := portalwire.NewPortalProtocol(conf, portalwire.History, privKey, conn, localNode, discV5, utpSocket, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}

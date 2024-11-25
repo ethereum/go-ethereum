@@ -1,14 +1,14 @@
 package beacon
 
 import (
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 )
 
 type API struct {
-	*discover.PortalProtocolAPI
+	*portalwire.PortalProtocolAPI
 }
 
-func (p *API) BeaconRoutingTableInfo() *discover.RoutingTableInfo {
+func (p *API) BeaconRoutingTableInfo() *portalwire.RoutingTableInfo {
 	return p.RoutingTableInfo()
 }
 
@@ -28,7 +28,7 @@ func (p *API) BeaconLookupEnr(nodeId string) (string, error) {
 	return p.LookupEnr(nodeId)
 }
 
-func (p *API) BeaconPing(enr string) (*discover.PortalPongResp, error) {
+func (p *API) BeaconPing(enr string) (*portalwire.PortalPongResp, error) {
 	return p.Ping(enr)
 }
 
@@ -48,7 +48,7 @@ func (p *API) BeaconRecursiveFindNodes(nodeId string) ([]string, error) {
 	return p.RecursiveFindNodes(nodeId)
 }
 
-func (p *API) BeaconGetContent(contentKeyHex string) (*discover.ContentInfo, error) {
+func (p *API) BeaconGetContent(contentKeyHex string) (*portalwire.ContentInfo, error) {
 	return p.RecursiveFindContent(contentKeyHex)
 }
 
@@ -64,11 +64,11 @@ func (p *API) BeaconGossip(contentKeyHex, contentHex string) (int, error) {
 	return p.Gossip(contentKeyHex, contentHex)
 }
 
-func (p *API) BeaconTraceGetContent(contentKeyHex string) (*discover.TraceContentResult, error) {
+func (p *API) BeaconTraceGetContent(contentKeyHex string) (*portalwire.TraceContentResult, error) {
 	return p.TraceRecursiveFindContent(contentKeyHex)
 }
 
-func NewBeaconNetworkAPI(BeaconAPI *discover.PortalProtocolAPI) *API {
+func NewBeaconNetworkAPI(BeaconAPI *portalwire.PortalProtocolAPI) *API {
 	return &API{
 		BeaconAPI,
 	}

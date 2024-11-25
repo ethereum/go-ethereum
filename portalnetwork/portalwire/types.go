@@ -5,7 +5,7 @@ import (
 )
 
 // note: We changed the generated file since fastssz issues which can't be passed by the CI, so we commented the go:generate line
-///go:generate sszgen --path messages.go --exclude-objs Content,Enrs,ContentKV
+///go:generate sszgen --path types.go --exclude-objs Content,Enrs,ContentKV
 
 // Message codes for the portal protocol.
 const (
@@ -37,18 +37,6 @@ const (
 	PerContentKeyOverhead = 4
 )
 
-// Protocol IDs for the portal protocol.
-// var (
-// 	StateNetwork             = []byte{0x50, 0x0a}
-// 	HistoryNetwork           = []byte{0x50, 0x0b}
-// 	TxGossipNetwork          = []byte{0x50, 0x0c}
-// 	HeaderGossipNetwork      = []byte{0x50, 0x0d}
-// 	CanonicalIndicesNetwork  = []byte{0x50, 0x0e}
-// 	BeaconLightClientNetwork = []byte{0x50, 0x1a}
-// 	UTPNetwork               = []byte{0x75, 0x74, 0x70}
-// 	Rendezvous               = []byte{0x72, 0x65, 0x6e}
-// )
-
 type ProtocolId []byte
 
 var (
@@ -61,7 +49,7 @@ var (
 	Utp               ProtocolId = []byte{0x75, 0x74, 0x70}
 )
 
-var protocalName = map[string]string{
+var protocolName = map[string]string{
 	string(State):             "state",
 	string(History):           "history",
 	string(Beacon):            "beacon",
@@ -71,20 +59,8 @@ var protocalName = map[string]string{
 }
 
 func (p ProtocolId) Name() string {
-	return protocalName[string(p)]
+	return protocolName[string(p)]
 }
-
-// const (
-// 	HistoryNetworkName = "history"
-// 	BeaconNetworkName  = "beacon"
-// 	StateNetworkName   = "state"
-// )
-
-// var NetworkNameMap = map[string]string{
-// 	string(StateNetwork):             StateNetworkName,
-// 	string(HistoryNetwork):           HistoryNetworkName,
-// 	string(BeaconLightClientNetwork): BeaconNetworkName,
-// }
 
 type ContentKV struct {
 	ContentKey []byte

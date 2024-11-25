@@ -60,7 +60,7 @@ func marshalReceipt(receipt *types.Receipt, blockHash common.Hash, blockNumber u
 }
 
 type API struct {
-	History *history.HistoryNetwork
+	History *history.Network
 	ChainID *big.Int
 }
 

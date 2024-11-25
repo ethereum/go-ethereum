@@ -8,11 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type Entry struct {
-	ContentKey   string `yaml:"content_key"`
-	ContentValue string `yaml:"content_value"`
-}
-
 func TestLightClientBootstrapValidation(t *testing.T) {
 	bootstrap, err := GetLightClientBootstrap(0)
 	require.NoError(t, err)

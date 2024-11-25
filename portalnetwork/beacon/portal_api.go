@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/ztyp/codec"
@@ -17,7 +17,7 @@ const BeaconGenesisTime uint64 = 1606824023
 var _ ConsensusAPI = &PortalLightApi{}
 
 type PortalLightApi struct {
-	portalProtocol *discover.PortalProtocol
+	portalProtocol *portalwire.PortalProtocol
 	spec           *common.Spec
 }
 

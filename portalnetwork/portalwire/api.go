@@ -1,4 +1,4 @@
-package portalnetwork
+package portalwire
 
 import (
 	"errors"
@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/holiman/uint256"
 )
 
@@ -73,7 +72,7 @@ type RespByNode struct {
 	RespondedWith []string `json:"respondedWith"`
 }
 
-type Enrs struct {
+type EnrsResp struct {
 	Enrs []string `json:"enrs"`
 }
 
@@ -328,7 +327,7 @@ func (p *PortalProtocolAPI) Ping(enr string) (*PortalPongResp, error) {
 		return nil, err
 	}
 
-	customPayload := &portalwire.PingPongCustomData{}
+	customPayload := &PingPongCustomData{}
 	err = customPayload.UnmarshalSSZ(pong.CustomPayload)
 	if err != nil {
 		return nil, err
@@ -381,14 +380,14 @@ func (p *PortalProtocolAPI) FindContent(enr string, contentKey string) (interfac
 	}
 
 	switch flag {
-	case portalwire.ContentRawSelector:
+	case ContentRawSelector:
 		contentInfo := &ContentInfo{
 			Content:     hexutil.Encode(findContent.([]byte)),
 			UtpTransfer: false,
 		}
 		p.portalProtocol.Log.Trace("FindContent", "contentInfo", contentInfo)
 		return contentInfo, nil
-	case portalwire.ContentConnIdSelector:
+	case ContentConnIdSelector:
 		contentInfo := &ContentInfo{
 			Content:     hexutil.Encode(findContent.([]byte)),
 			UtpTransfer: true,
@@ -402,7 +401,7 @@ func (p *PortalProtocolAPI) FindContent(enr string, contentKey string) (interfac
 		}
 
 		p.portalProtocol.Log.Trace("FindContent", "enrs", enrs)
-		return &Enrs{
+		return &EnrsResp{
 			Enrs: enrs,
 		}, nil
 	}

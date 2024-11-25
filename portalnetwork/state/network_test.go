@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
@@ -37,7 +37,7 @@ type MockAPI struct {
 	header string
 }
 
-func (p *MockAPI) HistoryGetContent(contentKeyHex string) (*discover.ContentInfo, error) {
+func (p *MockAPI) HistoryGetContent(contentKeyHex string) (*portalwire.ContentInfo, error) {
 	headerWithProof := &history.BlockHeaderWithProof{
 		Header: hexutil.MustDecode(p.header),
 		Proof: &history.BlockHeaderProof{
@@ -49,7 +49,7 @@ func (p *MockAPI) HistoryGetContent(contentKeyHex string) (*discover.ContentInfo
 	if err != nil {
 		return nil, err
 	}
-	return &discover.ContentInfo{
+	return &portalwire.ContentInfo{
 		Content:     hexutil.Encode(data),
 		UtpTransfer: false,
 	}, nil

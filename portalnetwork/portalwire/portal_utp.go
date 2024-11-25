@@ -1,4 +1,4 @@
-package discover
+package portalwire
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
@@ -20,8 +20,8 @@ import (
 type PortalUtp struct {
 	ctx          context.Context
 	log          log.Logger
-	discV5       *UDPv5
-	conn         UDPConn
+	discV5       *discover.UDPv5
+	conn         discover.UDPConn
 	ListenAddr   string
 	listener     *utp.Listener
 	utpSm        *utp.SocketManager
@@ -31,7 +31,7 @@ type PortalUtp struct {
 	startOnce sync.Once
 }
 
-func NewPortalUtp(ctx context.Context, config *PortalProtocolConfig, discV5 *UDPv5, conn UDPConn) *PortalUtp {
+func NewPortalUtp(ctx context.Context, config *PortalProtocolConfig, discV5 *discover.UDPv5, conn discover.UDPConn) *PortalUtp {
 	return &PortalUtp{
 		ctx:        ctx,
 		log:        log.New("protocol", "utp", "local", conn.LocalAddr().String()),
@@ -73,7 +73,7 @@ func (p *PortalUtp) Start() error {
 		p.lAddr = p.listener.Addr().(*utp.Addr)
 
 		// register discv5 listener
-		p.discV5.RegisterTalkHandler(string(portalwire.Utp), p.handleUtpTalkRequest)
+		p.discV5.RegisterTalkHandler(string(Utp), p.handleUtpTalkRequest)
 	})
 
 	return err
@@ -121,7 +121,7 @@ func (p *PortalUtp) packetRouterFunc(buf []byte, id enode.ID, addr *net.UDPAddr)
 
 	if n, ok := p.discV5.GetCachedNode(addr.String()); ok {
 		//_, err := p.DiscV5.TalkRequestToID(id, addr, string(portalwire.UTPNetwork), buf)
-		req := &v5wire.TalkRequest{Protocol: string(portalwire.Utp), Message: buf}
+		req := &v5wire.TalkRequest{Protocol: string(Utp), Message: buf}
 		p.discV5.SendFromAnotherThreadWithNode(n, netip.AddrPortFrom(netutil.IPToAddr(addr.IP), uint16(addr.Port)), req)
 
 		return len(buf), nil

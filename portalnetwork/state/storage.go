@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
 	"github.com/protolambda/ztyp/codec"
@@ -27,7 +28,7 @@ type StateStorage struct {
 	log   log.Logger
 }
 
-var portalStorageMetrics *metrics.PortalStorageMetrics
+var portalStorageMetrics *portalwire.PortalStorageMetrics
 
 func NewStateStorage(store storage.ContentStorage, db *sql.DB) *StateStorage {
 	storage := &StateStorage{
@@ -37,7 +38,7 @@ func NewStateStorage(store storage.ContentStorage, db *sql.DB) *StateStorage {
 	}
 
 	var err error
-	portalStorageMetrics, err = metrics.NewPortalStorageMetrics("state", db)
+	portalStorageMetrics, err = portalwire.NewPortalStorageMetrics("state", db)
 	if err != nil {
 		return nil
 	}

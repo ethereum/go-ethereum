@@ -1,14 +1,14 @@
 package state
 
 import (
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 )
 
 type API struct {
-	*discover.PortalProtocolAPI
+	*portalwire.PortalProtocolAPI
 }
 
-func (p *API) StateRoutingTableInfo() *discover.RoutingTableInfo {
+func (p *API) StateRoutingTableInfo() *portalwire.RoutingTableInfo {
 	return p.RoutingTableInfo()
 }
 
@@ -28,7 +28,7 @@ func (p *API) StateLookupEnr(nodeId string) (string, error) {
 	return p.LookupEnr(nodeId)
 }
 
-func (p *API) StatePing(enr string) (*discover.PortalPongResp, error) {
+func (p *API) StatePing(enr string) (*portalwire.PortalPongResp, error) {
 	return p.Ping(enr)
 }
 
@@ -48,7 +48,7 @@ func (p *API) StateRecursiveFindNodes(nodeId string) ([]string, error) {
 	return p.RecursiveFindNodes(nodeId)
 }
 
-func (p *API) StateGetContent(contentKeyHex string) (*discover.ContentInfo, error) {
+func (p *API) StateGetContent(contentKeyHex string) (*portalwire.ContentInfo, error) {
 	return p.RecursiveFindContent(contentKeyHex)
 }
 
@@ -64,11 +64,11 @@ func (p *API) StateGossip(contentKeyHex, contentHex string) (int, error) {
 	return p.Gossip(contentKeyHex, contentHex)
 }
 
-func (p *API) StateTraceGetContent(contentKeyHex string) (*discover.TraceContentResult, error) {
+func (p *API) StateTraceGetContent(contentKeyHex string) (*portalwire.TraceContentResult, error) {
 	return p.TraceRecursiveFindContent(contentKeyHex)
 }
 
-func NewStateNetworkAPI(portalProtocolAPI *discover.PortalProtocolAPI) *API {
+func NewStateNetworkAPI(portalProtocolAPI *portalwire.PortalProtocolAPI) *API {
 	return &API{
 		portalProtocolAPI,
 	}

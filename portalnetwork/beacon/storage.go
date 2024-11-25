@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/holiman/uint256"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/protolambda/ztyp/codec"
@@ -16,7 +18,7 @@ import (
 
 const BytesInMB uint64 = 1000 * 1000
 
-type BeaconStorage struct {
+type Storage struct {
 	storageCapacityInBytes uint64
 	db                     *sql.DB
 	log                    log.Logger
@@ -24,17 +26,17 @@ type BeaconStorage struct {
 	cache                  *beaconStorageCache
 }
 
-var portalStorageMetrics *metrics.PortalStorageMetrics
+var portalStorageMetrics *portalwire.PortalStorageMetrics
 
 type beaconStorageCache struct {
 	OptimisticUpdate []byte
 	FinalityUpdate   []byte
 }
 
-var _ storage.ContentStorage = &BeaconStorage{}
+var _ storage.ContentStorage = &Storage{}
 
 func NewBeaconStorage(config storage.PortalStorageConfig) (storage.ContentStorage, error) {
-	bs := &BeaconStorage{
+	bs := &Storage{
 		storageCapacityInBytes: config.StorageCapacityMB * BytesInMB,
 		db:                     config.DB,
 		log:                    log.New("beacon_storage"),
@@ -46,7 +48,7 @@ func NewBeaconStorage(config storage.PortalStorageConfig) (storage.ContentStorag
 	}
 
 	var err error
-	portalStorageMetrics, err = metrics.NewPortalStorageMetrics(config.NetworkName, config.DB)
+	portalStorageMetrics, err = portalwire.NewPortalStorageMetrics(config.NetworkName, config.DB)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +56,7 @@ func NewBeaconStorage(config storage.PortalStorageConfig) (storage.ContentStorag
 	return bs, nil
 }
 
-func (bs *BeaconStorage) setup() error {
+func (bs *Storage) setup() error {
 	if _, err := bs.db.Exec(CreateQueryDBBeacon); err != nil {
 		return err
 	}
@@ -64,7 +66,7 @@ func (bs *BeaconStorage) setup() error {
 	return nil
 }
 
-func (bs *BeaconStorage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
+func (bs *Storage) Get(contentKey []byte, contentId []byte) ([]byte, error) {
 	switch storage.ContentType(contentKey[0]) {
 	case LightClientBootstrap:
 		return bs.getContentValue(contentId)
@@ -89,7 +91,7 @@ func (bs *BeaconStorage) Get(contentKey []byte, contentId []byte) ([]byte, error
 	return nil, nil
 }
 
-func (bs *BeaconStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
+func (bs *Storage) Put(contentKey []byte, contentId []byte, content []byte) error {
 	switch storage.ContentType(contentKey[0]) {
 	case LightClientBootstrap:
 		return bs.putContentValue(contentId, contentKey, content)
@@ -129,20 +131,20 @@ func (bs *BeaconStorage) Put(contentKey []byte, contentId []byte, content []byte
 	return nil
 }
 
-func (bs *BeaconStorage) Radius() *uint256.Int {
+func (bs *Storage) Radius() *uint256.Int {
 	return storage.MaxDistance
 }
 
-func (bs *BeaconStorage) getContentValue(contentId []byte) ([]byte, error) {
+func (bs *Storage) getContentValue(contentId []byte) ([]byte, error) {
 	res := make([]byte, 0)
 	err := bs.db.QueryRowContext(context.Background(), ContentValueLookupQueryBeacon, contentId).Scan(&res)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, storage.ErrContentNotFound
 	}
 	return res, err
 }
 
-func (bs *BeaconStorage) getLcUpdateValueByRange(start, end uint64) ([]byte, error) {
+func (bs *Storage) getLcUpdateValueByRange(start, end uint64) ([]byte, error) {
 	// LightClientUpdateRange := make([]ForkedLightClientUpdate, 0)
 	var lightClientUpdateRange LightClientUpdateRange
 	rows, err := bs.db.QueryContext(context.Background(), LCUpdateLookupQueryByRange, start, end)
@@ -182,7 +184,7 @@ func (bs *BeaconStorage) getLcUpdateValueByRange(start, end uint64) ([]byte, err
 	return buf.Bytes(), nil
 }
 
-func (bs *BeaconStorage) putContentValue(contentId, contentKey, value []byte) error {
+func (bs *Storage) putContentValue(contentId, contentKey, value []byte) error {
 	length := 32 + len(contentKey) + len(value)
 	_, err := bs.db.ExecContext(context.Background(), InsertQueryBeacon, contentId, contentKey, value, length)
 	if metrics.Enabled && err == nil {
@@ -192,7 +194,7 @@ func (bs *BeaconStorage) putContentValue(contentId, contentKey, value []byte) er
 	return err
 }
 
-func (bs *BeaconStorage) putLcUpdate(period uint64, value []byte) error {
+func (bs *Storage) putLcUpdate(period uint64, value []byte) error {
 	_, err := bs.db.ExecContext(context.Background(), InsertLCUpdateQuery, period, value, 0, len(value))
 	if metrics.Enabled && err == nil {
 		portalStorageMetrics.EntriesCount.Inc(1)

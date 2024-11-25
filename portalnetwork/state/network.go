@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/portalnetwork/history"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -21,7 +21,7 @@ import (
 )
 
 type StateNetwork struct {
-	portalProtocol *discover.PortalProtocol
+	portalProtocol *portalwire.PortalProtocol
 	closeCtx       context.Context
 	closeFunc      context.CancelFunc
 	log            log.Logger
@@ -29,7 +29,7 @@ type StateNetwork struct {
 	client         *rpc.Client
 }
 
-func NewStateNetwork(portalProtocol *discover.PortalProtocol, client *rpc.Client) *StateNetwork {
+func NewStateNetwork(portalProtocol *portalwire.PortalProtocol, client *rpc.Client) *StateNetwork {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &StateNetwork{
 		portalProtocol: portalProtocol,
@@ -196,7 +196,7 @@ func (h *StateNetwork) getStateRoot(blockHash common.Bytes32) (common.Bytes32, e
 	contentKey = append(contentKey, blockHash[:]...)
 
 	arg := hexutil.Encode(contentKey)
-	res := &discover.ContentInfo{}
+	res := &portalwire.ContentInfo{}
 	err := h.client.CallContext(ctx, res, "portal_historyGetContent", arg)
 	if err != nil {
 		return common.Bytes32{}, err

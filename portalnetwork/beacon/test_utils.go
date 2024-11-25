@@ -9,8 +9,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/golang/snappy"
@@ -22,7 +22,7 @@ import (
 )
 
 func SetupBeaconNetwork(addr string, bootNodes []*enode.Node) (*BeaconNetwork, error) {
-	conf := discover.DefaultPortalProtocolConfig()
+	conf := portalwire.DefaultPortalProtocolConfig()
 	if addr != "" {
 		conf.ListenAddr = addr
 	}
@@ -57,17 +57,17 @@ func SetupBeaconNetwork(addr string, bootNodes []*enode.Node) (*BeaconNetwork, e
 
 	localNode := enode.NewLocalNode(nodeDB, privKey)
 	localNode.SetFallbackIP(net.IP{127, 0, 0, 1})
-	localNode.Set(discover.Tag)
+	localNode.Set(portalwire.Tag)
 
 	discV5, err := discover.ListenV5(conn, localNode, discCfg)
 	if err != nil {
 		return nil, err
 	}
 
-	contentQueue := make(chan *discover.ContentElement, 50)
+	contentQueue := make(chan *portalwire.ContentElement, 50)
 
-	utpSocket := discover.NewPortalUtp(context.Background(), conf, discV5, conn)
-	portalProtocol, err := discover.NewPortalProtocol(conf, portalwire.Beacon, privKey, conn, localNode, discV5, utpSocket, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
+	utpSocket := portalwire.NewPortalUtp(context.Background(), conf, discV5, conn)
+	portalProtocol, err := portalwire.NewPortalProtocol(conf, portalwire.Beacon, privKey, conn, localNode, discV5, utpSocket, &storage.MockStorage{Db: make(map[string][]byte)}, contentQueue)
 	if err != nil {
 		return nil, err
 	}
@@ -232,11 +232,11 @@ func BuildHistoricalSummariesProof(beaconState deneb.BeaconState) ([][]byte, err
 		leavesBytes = append(leavesBytes, dest)
 	}
 
-	tree, err := ssz.TreeFromChunks(leavesBytes)
+	chunks, err := ssz.TreeFromChunks(leavesBytes)
 	if err != nil {
 		return nil, err
 	}
-	proof, err := tree.Prove(59)
+	proof, err := chunks.Prove(59)
 	if err != nil {
 		return nil, err
 	}

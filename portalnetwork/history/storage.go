@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
 	"github.com/mattn/go-sqlite3"
@@ -57,7 +58,7 @@ type ContentStorage struct {
 	log                    log.Logger
 }
 
-var portalStorageMetrics *metrics.PortalStorageMetrics
+var portalStorageMetrics *portalwire.PortalStorageMetrics
 
 func xor(contentId, nodeId []byte) []byte {
 	// length of contentId maybe not 32bytes
@@ -123,7 +124,7 @@ func NewHistoryStorage(config storage.PortalStorageConfig) (storage.ContentStora
 
 	// necessary to test NetworkName==history because state also initialize HistoryStorage
 	if strings.ToLower(config.NetworkName) == "history" {
-		portalStorageMetrics, err = metrics.NewPortalStorageMetrics(config.NetworkName, config.DB)
+		portalStorageMetrics, err = portalwire.NewPortalStorageMetrics(config.NetworkName, config.DB)
 		if err != nil {
 			return nil, err
 		}

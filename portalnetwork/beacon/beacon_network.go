@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	ssz "github.com/ferranbt/fastssz"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
@@ -28,7 +28,7 @@ const (
 )
 
 type BeaconNetwork struct {
-	portalProtocol *discover.PortalProtocol
+	portalProtocol *portalwire.PortalProtocol
 	spec           *common.Spec
 	log            log.Logger
 	closeCtx       context.Context
@@ -36,7 +36,7 @@ type BeaconNetwork struct {
 	lightClient    *ConsensusLightClient
 }
 
-func NewBeaconNetwork(portalProtocol *discover.PortalProtocol) *BeaconNetwork {
+func NewBeaconNetwork(portalProtocol *portalwire.PortalProtocol) *BeaconNetwork {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &BeaconNetwork{

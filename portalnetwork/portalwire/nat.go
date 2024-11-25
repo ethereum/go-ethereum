@@ -1,4 +1,4 @@
-package discover
+package portalwire
 
 import (
 	"net"

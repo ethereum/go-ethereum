@@ -1,14 +1,14 @@
 package history
 
 import (
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 )
 
 type API struct {
-	*discover.PortalProtocolAPI
+	*portalwire.PortalProtocolAPI
 }
 
-func (p *API) HistoryRoutingTableInfo() *discover.RoutingTableInfo {
+func (p *API) HistoryRoutingTableInfo() *portalwire.RoutingTableInfo {
 	return p.RoutingTableInfo()
 }
 
@@ -28,7 +28,7 @@ func (p *API) HistoryLookupEnr(nodeId string) (string, error) {
 	return p.LookupEnr(nodeId)
 }
 
-func (p *API) HistoryPing(enr string) (*discover.PortalPongResp, error) {
+func (p *API) HistoryPing(enr string) (*portalwire.PortalPongResp, error) {
 	return p.Ping(enr)
 }
 
@@ -48,7 +48,7 @@ func (p *API) HistoryRecursiveFindNodes(nodeId string) ([]string, error) {
 	return p.RecursiveFindNodes(nodeId)
 }
 
-func (p *API) HistoryGetContent(contentKeyHex string) (*discover.ContentInfo, error) {
+func (p *API) HistoryGetContent(contentKeyHex string) (*portalwire.ContentInfo, error) {
 	return p.RecursiveFindContent(contentKeyHex)
 }
 
@@ -64,11 +64,11 @@ func (p *API) HistoryGossip(contentKeyHex, contentHex string) (int, error) {
 	return p.Gossip(contentKeyHex, contentHex)
 }
 
-func (p *API) HistoryTraceGetContent(contentKeyHex string) (*discover.TraceContentResult, error) {
+func (p *API) HistoryTraceGetContent(contentKeyHex string) (*portalwire.TraceContentResult, error) {
 	return p.TraceRecursiveFindContent(contentKeyHex)
 }
 
-func NewHistoryNetworkAPI(historyAPI *discover.PortalProtocolAPI) *API {
+func NewHistoryNetworkAPI(historyAPI *portalwire.PortalProtocolAPI) *API {
 	return &API{
 		historyAPI,
 	}
