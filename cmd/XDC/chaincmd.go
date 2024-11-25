@@ -34,7 +34,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/event"
-	"github.com/XinFinOrg/XDPoSChain/internal/flags"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
 	"github.com/urfave/cli/v2"
@@ -409,7 +408,10 @@ func copyDb(ctx *cli.Context) error {
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
 
-	syncmode := *flags.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
+	var syncmode downloader.SyncMode
+	if err := syncmode.UnmarshalText([]byte(ctx.String(utils.SyncModeFlag.Name))); err != nil {
+		utils.Fatalf("invalid --syncmode flag: %v", err)
+	}
 	dl := downloader.New(syncmode, chainDb, new(event.TypeMux), chain, nil, nil, nil)
 
 	// Create a source peer to satisfy downloader requests from

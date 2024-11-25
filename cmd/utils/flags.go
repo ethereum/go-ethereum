@@ -129,11 +129,10 @@ var (
 		Category: flags.APICategory,
 	}
 
-	defaultSyncMode = ethconfig.Defaults.SyncMode
-	SyncModeFlag    = &flags.TextMarshalerFlag{
+	SyncModeFlag = &cli.StringFlag{
 		Name:     "syncmode",
 		Usage:    `Blockchain sync mode ("fast", "full", or "light")`,
-		Value:    &defaultSyncMode,
+		Value:    ethconfig.Defaults.SyncMode.String(),
 		Category: flags.EthCategory,
 	}
 	GCModeFlag = &cli.StringFlag{
@@ -1340,7 +1339,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 
 	switch {
 	case ctx.IsSet(SyncModeFlag.Name):
-		cfg.SyncMode = *flags.GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
+		if err = cfg.SyncMode.UnmarshalText([]byte(ctx.String(SyncModeFlag.Name))); err != nil {
+			Fatalf("invalid --syncmode flag: %v", err)
+		}
 	case ctx.Bool(FastSyncFlag.Name):
 		cfg.SyncMode = downloader.FastSync
 	case ctx.Bool(LightModeFlag.Name):
