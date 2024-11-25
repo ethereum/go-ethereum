@@ -76,7 +76,7 @@ var (
 	// TODO: create custom exported types where unpack would generate a struct return.
 
 	// TODO: test constructor with inputs
-	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}} {{end}}) ([]byte, error) {
+	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) ([]byte, error) {
 		return _{{$contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
 	}
 

@@ -23,7 +23,6 @@ func deployContract(backend bind.ContractBackend, auth *bind.TransactOpts, const
 	if err != nil {
 		return nil, common.Address{}, fmt.Errorf("contract bytecode is not a hex string: %s", contractBinBytes[2:])
 	}
-	fmt.Println("before DeployContractRaw")
 	addr, tx, _, err := bind.DeployContractRaw(auth, contractBinBytes, backend, constructor)
 	if err != nil {
 		return nil, common.Address{}, fmt.Errorf("failed to deploy contract: %v", err)
@@ -79,42 +78,35 @@ func linkLibs(deps *map[string]string, linked *map[string]common.Address) (deplo
 	deployableDeps = make(map[string]string)
 
 	for pattern, dep := range *deps {
-		fmt.Printf("dep is:\n%s\n", dep)
-		fmt.Println(pattern)
 		// attempt to replace references to every single linked dep
 		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(dep, -1) {
 			matchingPattern := match[1]
-			fmt.Printf("has matching pattern %s\n", matchingPattern)
 			addr, ok := (*linked)[matchingPattern]
 			if !ok {
 				continue
 			}
 			(*deps)[pattern] = strings.ReplaceAll(dep, "__$"+matchingPattern+"$__", addr.String()[2:])
-			fmt.Printf("lib after linking:\n%s\n", (*deps)[pattern])
 		}
 		// if we linked something into this dep, see if it can be deployed
 		if !reMatchAnyPattern.MatchString((*deps)[pattern]) {
-			fmt.Printf("is deployable %s\n", pattern)
 			deployableDeps[pattern] = (*deps)[pattern]
 			delete(*deps, pattern)
 		}
 	}
-
 	return deployableDeps
 }
 
 func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.ContractBackend, constructorInputs []byte, contract *bind.MetaData, libMetas map[string]*bind.MetaData, overrides map[string]common.Address) (allDeployTxs map[common.Address]*types.Transaction, allDeployAddrs map[common.Address]struct{}, err error) {
-	// initialize the set of already-deployed contracts with given override addresses
-
 	allDeployAddrs = make(map[common.Address]struct{})
 	allDeployTxs = make(map[common.Address]*types.Transaction)
 
-	// re-express libraries as a map of pattern -> pre-linking binary
+	// re-express libraries as a map of pattern -> pre-link binary
 	libs := make(map[string]string)
 	for pattern, meta := range libMetas {
 		libs[pattern] = meta.Bin
 	}
 
+	// initialize the set of already-deployed contracts with given override addresses
 	linked := make(map[string]common.Address)
 	for pattern, deployAddr := range overrides {
 		linked[pattern] = deployAddr
@@ -133,7 +125,6 @@ func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.Co
 		for pattern, addr := range deployAddrs {
 			allDeployAddrs[addr] = struct{}{}
 			linked[pattern] = addr
-			fmt.Printf("we've linked %s\n", pattern)
 		}
 		for addr, tx := range deployTxs {
 			allDeployTxs[addr] = tx

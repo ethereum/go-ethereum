@@ -37,4 +37,9 @@ contract TestArray {
         assert(arr[0] == 0);
         assert(arr[1] == 2);
     }
+
+    // a constructor with parameters
+    constructor(uint256 foo) {
+
+    }
 }
