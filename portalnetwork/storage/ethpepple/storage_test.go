@@ -1,17 +1,13 @@
 package ethpepple
 
 import (
-	"crypto/rand"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/assert"
 )
-
-var testRadius = uint256.NewInt(100000)
 
 func genBytes(length int) []byte {
 	res := make([]byte, length)
@@ -21,68 +17,119 @@ func genBytes(length int) []byte {
 	return res
 }
 
-func getTestDb() (storage.ContentStorage, error) {
-	db := memorydb.New()
+func TestNewPeppleDB(t *testing.T) {
+	db, err := NewPeppleDB(t.TempDir(), 16, 16, "test")
+	assert.NoError(t, err)
+	defer db.Close()
+
+	assert.NotNil(t, db)
+}
+
+func setupTestStorage(t *testing.T) storage.ContentStorage {
+	db, err := NewPeppleDB(t.TempDir(), 16, 16, "test")
+	assert.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
 	config := PeppleStorageConfig{
-		DB:                db,
 		StorageCapacityMB: 1,
+		DB:                db,
 		NodeId:            uint256.NewInt(0).Bytes32(),
-		NetworkName:       "history",
+		NetworkName:       "test",
 	}
-	return NewPeppleStorage(config)
+
+	storage, err := NewPeppleStorage(config)
+	assert.NoError(t, err)
+	return storage
 }
 
-func TestReadRadius(t *testing.T) {
-	db, err := getTestDb()
-	assert.NoError(t, err)
-	assert.True(t, db.Radius().Eq(storage.MaxDistance))
+func TestContentStoragePutAndGet(t *testing.T) {
+	db := setupTestStorage(t)
 
-	data, err := testRadius.MarshalSSZ()
-	assert.NoError(t, err)
-	db.Put(nil, storage.RadisuKey, data)
-
-	store := db.(*ContentStorage)
-	err = store.db.Close()
-	assert.NoError(t, err)
-}
-
-func TestStorage(t *testing.T) {
-	db, err := getTestDb()
-	assert.NoError(t, err)
-	testcases := map[string][]byte{
-		"test1": []byte("test1"),
-		"test2": []byte("test2"),
-		"test3": []byte("test3"),
-		"test4": []byte("test4"),
+	testCases := []struct {
+		contentKey []byte
+		contentId  []byte
+		content    []byte
+	}{
+		{[]byte("key1"), []byte("id1"), []byte("content1")},
+		{[]byte("key2"), []byte("id2"), []byte("content2")},
 	}
 
-	for key, value := range testcases {
-		db.Put(nil, []byte(key), value)
-	}
-
-	for key, value := range testcases {
-		val, err := db.Get(nil, []byte(key))
+	for _, tc := range testCases {
+		err := db.Put(tc.contentKey, tc.contentId, tc.content)
 		assert.NoError(t, err)
-		assert.Equal(t, value, val)
+
+		got, err := db.Get(tc.contentKey, tc.contentId)
+		assert.NoError(t, err)
+		assert.Equal(t, tc.content, got)
 	}
 }
 
-func TestXor(t *testing.T) {
-	nodeId := uint256.NewInt(0).Bytes32()
-	bs := make([]byte, 32)
-	rand.Read(bs)
-	dis := xor(bs, nodeId[:])
-	assert.Equal(t, bs, dis)
+func TestRadius(t *testing.T) {
+	db := setupTestStorage(t)
+	radius := db.Radius()
+	assert.NotNil(t, radius)
+	assert.True(t, radius.Eq(storage.MaxDistance))
+}
 
-	nodeId2 := uint256.NewInt(2).Bytes32()
-	dis = xor(bs, nodeId2[:])
-	assert.Equal(t, bs, xor(dis, nodeId2[:]))
+// func TestPrune(t *testing.T) {
+//     db, err := NewPeppleDB(t.TempDir(), 16, 16, "test")
+//     assert.NoError(t, err)
+//     defer db.Close()
+
+//     config := PeppleStorageConfig{
+//         StorageCapacityMB: 1, // 1MB capacity
+//         DB:                db,
+//         NodeId:            uint256.NewInt(0).Bytes32(),
+//         NetworkName:       "test",
+//     }
+
+//     storage, err := NewPeppleStorage(config)
+//     assert.NoError(t, err)
+
+//     // Add content exceeding capacity
+//     largeContent := make([]byte, 900_000) // 900KB
+//     err = storage.Put([]byte("key1"), []byte("id1"), largeContent)
+//     assert.NoError(t, err)
+
+//     smallContent := make([]byte, 200_000) // 200KB
+//     err = storage.Put([]byte("key2"), []byte("id2"), smallContent)
+//     assert.NoError(t, err)
+
+//     // Wait for prune to complete
+//     time.Sleep(6 * time.Second)
+
+//     // Verify content after pruning
+//     _, err = storage.Get([]byte("key2"), []byte("id2"))
+//     assert.Error(t, err) // Should be pruned
+// }
+
+func TestXOR(t *testing.T) {
+	testCases := []struct {
+		contentId []byte
+		nodeId    []byte
+		expected  []byte
+	}{
+		{
+			contentId: []byte{0x01},
+			nodeId:    make([]byte, 32),
+			expected:  append([]byte{0x01}, make([]byte, 31)...),
+		},
+		{
+			contentId: []byte{0xFF},
+			nodeId:    []byte{0x0F},
+			expected:  append([]byte{0xF0}, make([]byte, 31)...),
+		},
+	}
+
+	for _, tc := range testCases {
+		result := xor(tc.contentId, tc.nodeId)
+		assert.Equal(t, tc.expected, result)
+	}
 }
 
 // the capacity is 1MB, so prune will delete over 50Kb content
 func TestPrune(t *testing.T) {
-	db, err := getTestDb()
-	assert.NoError(t, err)
+	db := setupTestStorage(t)
 	// the nodeId is zeros, so contentKey and contentId is the same
 	testcases := []struct {
 		contentKey  [32]byte
@@ -130,7 +177,7 @@ func TestPrune(t *testing.T) {
 		db.Put(val.contentKey[:], val.contentKey[:], val.content)
 	}
 	// // wait to prune done
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second)
 	for _, val := range testcases {
 		content, err := db.Get(val.contentKey[:], val.contentKey[:])
 		if !val.shouldPrune {
@@ -139,4 +186,9 @@ func TestPrune(t *testing.T) {
 			assert.Error(t, err)
 		}
 	}
+	radius := db.Radius()
+	data, err := radius.MarshalSSZ()
+	assert.NoError(t, err)
+	actual := uint256.NewInt(4).Bytes32()
+	assert.Equal(t, data, actual)
 }
