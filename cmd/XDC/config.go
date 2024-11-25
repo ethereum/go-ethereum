@@ -27,31 +27,31 @@ import (
 	"strings"
 	"unicode"
 
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/XinFinOrg/XDPoSChain/XDCx"
 	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
 	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
+	"github.com/XinFinOrg/XDPoSChain/internal/flags"
 	"github.com/XinFinOrg/XDPoSChain/node"
 	"github.com/XinFinOrg/XDPoSChain/params"
 	"github.com/naoina/toml"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	dumpConfigCommand = cli.Command{
-		Action:      utils.MigrateFlags(dumpConfig),
+	dumpConfigCommand = &cli.Command{
+		Action:      dumpConfig,
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(nodeFlags, rpcFlags...),
-		Category:    "MISCELLANEOUS COMMANDS",
+		Flags:       utils.GroupFlags(nodeFlags, rpcFlags),
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 
-	configFileFlag = cli.StringFlag{
-		Name:  "config",
-		Usage: "TOML configuration file",
+	configFileFlag = &cli.StringFlag{
+		Name:     "config",
+		Usage:    "TOML configuration file",
+		Category: flags.EthCategory,
 	}
 )
 
@@ -133,24 +133,24 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		NAT:         "",
 	}
 	// Load config file.
-	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
+	if file := ctx.String(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
-	if ctx.GlobalIsSet(utils.StakingEnabledFlag.Name) {
-		cfg.StakeEnable = ctx.GlobalBool(utils.StakingEnabledFlag.Name)
+	if ctx.IsSet(utils.MiningEnabledFlag.Name) {
+		cfg.StakeEnable = ctx.Bool(utils.MiningEnabledFlag.Name)
 	}
-	// if !ctx.GlobalIsSet(debug.VerbosityFlag.Name) {
+	// if !ctx.IsSet(debug.VerbosityFlag.Name) {
 	// 	debug.Verbosity(log.Lvl(cfg.Verbosity))
 	// }
 
-	if !ctx.GlobalIsSet(utils.NATFlag.Name) && cfg.NAT != "" {
+	if !ctx.IsSet(utils.NATFlag.Name) && cfg.NAT != "" {
 		ctx.Set(utils.NATFlag.Name, cfg.NAT)
 	}
 
 	// Check testnet is enable.
-	if ctx.GlobalBool(utils.XDCTestnetFlag.Name) {
+	if ctx.Bool(utils.XDCTestnetFlag.Name) {
 		common.IsTestnet = true
 		common.TRC21IssuerSMC = common.TRC21IssuerSMCTestNet
 		cfg.Eth.NetworkId = 51
@@ -159,24 +159,24 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		common.TIPXDCXCancellationFee = common.TIPXDCXCancellationFeeTestnet
 	}
 
-	if ctx.GlobalBool(utils.EnableXDCPrefixFlag.Name) {
+	if ctx.Bool(utils.EnableXDCPrefixFlag.Name) {
 		common.Enable0xPrefix = false
 	}
 
 	// Rewound
-	if rewound := ctx.GlobalInt(utils.RewoundFlag.Name); rewound != 0 {
+	if rewound := ctx.Int(utils.RewoundFlag.Name); rewound != 0 {
 		common.Rewound = uint64(rewound)
 	}
 
 	// Check rollback hash exist.
-	if rollbackHash := ctx.GlobalString(utils.RollbackFlag.Name); rollbackHash != "" {
+	if rollbackHash := ctx.String(utils.RollbackFlag.Name); rollbackHash != "" {
 		common.RollbackHash = common.HexToHash(rollbackHash)
 	}
 
 	// Check GasPrice
 	common.MinGasPrice = big.NewInt(common.DefaultMinGasPrice)
-	if ctx.GlobalIsSet(utils.GasPriceFlag.Name) {
-		if gasPrice := int64(ctx.GlobalInt(utils.GasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
+	if ctx.IsSet(utils.MinerGasPriceFlag.Name) {
+		if gasPrice := int64(ctx.Int(utils.MinerGasPriceFlag.Name)); gasPrice > common.DefaultMinGasPrice {
 			common.MinGasPrice = big.NewInt(gasPrice)
 		}
 	}
@@ -203,8 +203,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
-	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
-		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
+	if ctx.IsSet(utils.EthStatsURLFlag.Name) {
+		cfg.Ethstats.URL = ctx.String(utils.EthStatsURLFlag.Name)
 	}
 
 	utils.SetXDCXConfig(ctx, &cfg.XDCX, cfg.Node.DataDir)

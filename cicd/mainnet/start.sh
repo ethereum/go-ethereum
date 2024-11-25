@@ -74,11 +74,11 @@ XDC --ethstats ${netstats} --gcmode archive \
 --nat extip:${INSTANCE_IP} \
 --bootnodes ${bootnodes} --syncmode full \
 --datadir /work/xdcchain --networkid 50 \
--port $port --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 \
---rpcport $rpc_port \
---rpcapi db,eth,debug,net,shh,txpool,personal,web3,XDPoS \
---rpcvhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
---gasprice "1" --targetgaslimit "420000000" --verbosity ${log_level} \
+--port $port --http --http-corsdomain "*" --http-addr 0.0.0.0 \
+--http-port $rpc_port \
+--http-api db,eth,debug,net,shh,txpool,personal,web3,XDPoS \
+--http-vhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
+--miner-gasprice "1" --miner-gaslimit "420000000" --verbosity ${log_level} \
 --debugdatadir /work/xdcchain \
---ws --wsaddr=0.0.0.0 --wsport $ws_port \
---wsorigins "*" 2>&1 >>/work/xdcchain/xdc.log | tee -a /work/xdcchain/xdc.log
+--ws --ws-addr=0.0.0.0 --ws-port $ws_port \
+--ws-origins "*" 2>&1 >>/work/xdcchain/xdc.log | tee -a /work/xdcchain/xdc.log
