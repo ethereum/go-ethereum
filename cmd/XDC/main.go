@@ -201,6 +201,7 @@ func init() {
 		if err := debug.Setup(ctx); err != nil {
 			return err
 		}
+		flags.CheckEnvVars(ctx, app.Flags, "XDC")
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
