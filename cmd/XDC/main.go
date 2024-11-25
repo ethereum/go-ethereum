@@ -226,6 +226,7 @@ func main() {
 // blocking mode, waiting for it to be shut down.
 func XDC(ctx *cli.Context) error {
 	node, cfg := makeFullNode(ctx)
+	defer node.Close()
 	startNode(ctx, node, cfg)
 	node.Wait()
 	return nil
