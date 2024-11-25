@@ -28,16 +28,15 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/eth"
 	"github.com/XinFinOrg/XDPoSChain/eth/ethconfig"
 	"github.com/XinFinOrg/XDPoSChain/params"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	makecacheCommand = cli.Command{
-		Action:    utils.MigrateFlags(makecache),
+	makecacheCommand = &cli.Command{
+		Action:    makecache,
 		Name:      "makecache",
 		Usage:     "Generate ethash verification cache (for testing)",
 		ArgsUsage: "<blockNum> <outputDir>",
-		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
 The makecache command generates an ethash cache in <outputDir>.
 
@@ -45,12 +44,11 @@ This command exists to support the system testing project.
 Regular users do not need to execute it.
 `,
 	}
-	makedagCommand = cli.Command{
-		Action:    utils.MigrateFlags(makedag),
+	makedagCommand = &cli.Command{
+		Action:    makedag,
 		Name:      "makedag",
 		Usage:     "Generate ethash mining DAG (for testing)",
 		ArgsUsage: "<blockNum> <outputDir>",
-		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
 The makedag command generates an ethash DAG in <outputDir>.
 
@@ -58,28 +56,26 @@ This command exists to support the system testing project.
 Regular users do not need to execute it.
 `,
 	}
-	versionCommand = cli.Command{
-		Action:    utils.MigrateFlags(version),
+	versionCommand = &cli.Command{
+		Action:    version,
 		Name:      "version",
 		Usage:     "Print version numbers",
 		ArgsUsage: " ",
-		Category:  "MISCELLANEOUS COMMANDS",
 		Description: `
 The output of this command is supposed to be machine-readable.
 `,
 	}
-	licenseCommand = cli.Command{
-		Action:    utils.MigrateFlags(license),
+	licenseCommand = &cli.Command{
+		Action:    license,
 		Name:      "license",
 		Usage:     "Display license information",
 		ArgsUsage: " ",
-		Category:  "MISCELLANEOUS COMMANDS",
 	}
 )
 
 // makecache generates an ethash verification cache into the provided folder.
 func makecache(ctx *cli.Context) error {
-	args := ctx.Args()
+	args := ctx.Args().Slice()
 	if len(args) != 2 {
 		utils.Fatalf(`Usage: XDC makecache <block number> <outputdir>`)
 	}
@@ -94,7 +90,7 @@ func makecache(ctx *cli.Context) error {
 
 // makedag generates an ethash mining DAG into the provided folder.
 func makedag(ctx *cli.Context) error {
-	args := ctx.Args()
+	args := ctx.Args().Slice()
 	if len(args) != 2 {
 		utils.Fatalf(`Usage: XDC makedag <block number> <outputdir>`)
 	}

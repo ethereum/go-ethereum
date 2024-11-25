@@ -43,26 +43,31 @@ func tmpDatadirWithKeystore(t *testing.T) string {
 }
 
 func TestAccountListEmpty(t *testing.T) {
-	XDC := runXDC(t, "account", "list")
+	datadir := tmpdir(t)
+	defer os.RemoveAll(datadir)
+	XDC := runXDC(t, "account", "list", "--datadir", datadir)
 	XDC.ExpectExit()
 }
 
 func TestAccountList(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	XDC := runXDC(t, "account", "list", "--datadir", datadir)
-	defer XDC.ExpectExit()
-	if runtime.GOOS == "windows" {
-		XDC.Expect(`
-Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} keystore://{{.Datadir}}\keystore\UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
-Account #1: {f466859ead1932d743d622cb74fc058882e8648a} keystore://{{.Datadir}}\keystore\aaa
-Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}\keystore\zzz
-`)
-	} else {
-		XDC.Expect(`
+	defer os.RemoveAll(datadir)
+	var want = `
 Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} keystore://{{.Datadir}}/keystore/UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
 Account #1: {f466859ead1932d743d622cb74fc058882e8648a} keystore://{{.Datadir}}/keystore/aaa
 Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}/keystore/zzz
-`)
+`
+	if runtime.GOOS == "windows" {
+		want = `
+Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} keystore://{{.Datadir}}\keystore\UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
+Account #1: {f466859ead1932d743d622cb74fc058882e8648a} keystore://{{.Datadir}}\keystore\aaa
+Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}\keystore\zzz
+`
+	}
+	{
+		geth := runXDC(t, "account", "list", "--datadir", datadir)
+		geth.Expect(want)
+		geth.ExpectExit()
 	}
 }
 
@@ -92,9 +97,8 @@ Fatal: Passphrases do not match
 
 func TestAccountUpdate(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	XDC := runXDC(t, "account", "update",
-		"--datadir", datadir, "--lightkdf",
-		"f466859ead1932d743d622cb74fc058882e8648a")
+	defer os.RemoveAll(datadir)
+	XDC := runXDC(t, "account", "update", "--datadir", datadir, "--lightkdf", "f466859ead1932d743d622cb74fc058882e8648a")
 	defer XDC.ExpectExit()
 	XDC.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
@@ -107,7 +111,9 @@ Repeat passphrase: {{.InputLine "foobar2"}}
 }
 
 func TestWalletImport(t *testing.T) {
-	XDC := runXDC(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
+	datadir := tmpdir(t)
+	defer os.RemoveAll(datadir)
+	XDC := runXDC(t, "wallet", "import", "--datadir", datadir, "--lightkdf", "testdata/guswallet.json")
 	defer XDC.ExpectExit()
 	XDC.Expect(`
 !! Unsupported terminal, password will be echoed.
@@ -119,6 +125,36 @@ Address: {xdcd4584b5f6229b7be90727b0fc8c6b91bb427821f}
 	if len(files) != 1 {
 		t.Errorf("expected one key file in keystore directory, found %d files (error: %v)", len(files), err)
 	}
+}
+
+func TestAccountHelp(t *testing.T) {
+	geth := runXDC(t, "account", "-h")
+	geth.WaitExit()
+	if have, want := geth.ExitStatus(), 0; have != want {
+		t.Errorf("exit error, have %d want %d", have, want)
+	}
+
+	geth = runXDC(t, "account", "import", "-h")
+	geth.WaitExit()
+	if have, want := geth.ExitStatus(), 0; have != want {
+		t.Errorf("exit error, have %d want %d", have, want)
+	}
+}
+
+func importAccountWithExpect(t *testing.T, key string, expected string) {
+	dir := t.TempDir()
+	defer os.RemoveAll(dir)
+	keyfile := filepath.Join(dir, "key.prv")
+	if err := os.WriteFile(keyfile, []byte(key), 0600); err != nil {
+		t.Error(err)
+	}
+	passwordFile := filepath.Join(dir, "password.txt")
+	if err := os.WriteFile(passwordFile, []byte("foobar"), 0600); err != nil {
+		t.Error(err)
+	}
+	geth := runXDC(t, "account", "import", "--lightkdf", "-password", passwordFile, keyfile)
+	defer geth.ExpectExit()
+	geth.Expect(expected)
 }
 
 func TestWalletImportBadPassword(t *testing.T) {
@@ -133,10 +169,11 @@ Fatal: could not decrypt key with given passphrase
 
 func TestUnlockFlag(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
+	defer os.RemoveAll(datadir)
 	XDC := runXDC(t,
-		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
-		"js", "testdata/empty.js")
+		"js", "--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0",
+		"--port", "0", "--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
+		"testdata/empty.js")
 	XDC.Expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
@@ -157,6 +194,7 @@ Passphrase: {{.InputLine "foobar"}}
 
 func TestUnlockFlagWrongPassword(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
+	defer os.RemoveAll(datadir)
 	XDC := runXDC(t,
 		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a")
@@ -176,10 +214,11 @@ Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could 
 // https://github.com/XinFinOrg/XDPoSChain/issues/1785
 func TestUnlockFlagMultiIndex(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
+	defer os.RemoveAll(datadir)
 	XDC := runXDC(t,
-		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
-		"--unlock", "0,2",
-		"js", "testdata/empty.js")
+		"js", "--datadir", datadir, "--nat", "none", "--nodiscover",
+		"--maxpeers", "0", "--port", "0", "--unlock", "0,2",
+		"testdata/empty.js")
 	XDC.Expect(`
 Unlocking account 0 | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
@@ -203,10 +242,11 @@ Passphrase: {{.InputLine "foobar"}}
 
 func TestUnlockFlagPasswordFile(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
+	defer os.RemoveAll(datadir)
 	XDC := runXDC(t,
-		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
-		"--password", "testdata/passwords.txt", "--unlock", "0,2",
-		"js", "testdata/empty.js")
+		"js", "--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0",
+		"--port", "0", "--password", "testdata/passwords.txt", "--unlock", "0,2",
+		"testdata/empty.js")
 	XDC.ExpectExit()
 
 	wantMessages := []string{
@@ -223,6 +263,7 @@ func TestUnlockFlagPasswordFile(t *testing.T) {
 
 func TestUnlockFlagPasswordFileWrongPassword(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
+	defer os.RemoveAll(datadir)
 	XDC := runXDC(t,
 		"--datadir", datadir, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
 		"--password", "testdata/wrong-passwords.txt", "--unlock", "0,2")
@@ -235,9 +276,9 @@ Fatal: Failed to unlock account 0 (could not decrypt key with given passphrase)
 func TestUnlockFlagAmbiguous(t *testing.T) {
 	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
 	XDC := runXDC(t,
-		"--keystore", store, "--nat", "none", "--nodiscover", "--maxpeers", "0", "--port", "0",
-		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
-		"js", "testdata/empty.js")
+		"js", "--keystore", store, "--nat", "none", "--nodiscover", "--maxpeers", "0",
+		"--port", "0", "--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
+		"testdata/empty.js")
 	defer XDC.ExpectExit()
 
 	// Helper for the expect template, returns absolute keystore path.

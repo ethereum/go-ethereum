@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/XinFinOrg/XDPoSChain/cmd/utils"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/XinFinOrg/XDPoSChain/internal/flags"
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -34,8 +34,8 @@ var gitCommit = ""
 var app *cli.App
 
 func init() {
-	app = utils.NewApp(gitCommit, "an Ethereum key manager")
-	app.Commands = []cli.Command{
+	app = flags.NewApp(gitCommit, "an Ethereum key manager")
+	app.Commands = []*cli.Command{
 		commandGenerate,
 		commandInspect,
 		commandSignMessage,
@@ -45,15 +45,15 @@ func init() {
 
 // Commonly used command line flags.
 var (
-	passphraseFlag = cli.StringFlag{
+	passphraseFlag = &cli.StringFlag{
 		Name:  "passwordfile",
-		Usage: "the file that contains the passphrase for the keyfile",
+		Usage: "the file that contains the password for the keyfile",
 	}
-	jsonFlag = cli.BoolFlag{
+	jsonFlag = &cli.BoolFlag{
 		Name:  "json",
 		Usage: "output JSON instead of human-readable format",
 	}
-	messageFlag = cli.StringFlag{
+	messageFlag = &cli.StringFlag{
 		Name:  "message",
 		Usage: "the file that contains the message to sign/verify",
 	}

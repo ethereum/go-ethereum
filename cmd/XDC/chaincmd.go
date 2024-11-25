@@ -34,23 +34,24 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/eth/downloader"
 	"github.com/XinFinOrg/XDPoSChain/event"
+	"github.com/XinFinOrg/XDPoSChain/internal/flags"
 	"github.com/XinFinOrg/XDPoSChain/log"
 	"github.com/XinFinOrg/XDPoSChain/metrics"
-	"gopkg.in/urfave/cli.v1"
+	"github.com/urfave/cli/v2"
 )
 
 var (
-	initCommand = cli.Command{
-		Action:    utils.MigrateFlags(initGenesis),
+	initCommand = &cli.Command{
+		Action:    initGenesis,
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.XDCXDataDirFlag,
 			utils.LightModeFlag,
 			utils.XDCTestnetFlag,
 		},
-		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
@@ -58,20 +59,20 @@ participating.
 
 It expects the genesis file as argument.`,
 	}
-	importCommand = cli.Command{
-		Action:    utils.MigrateFlags(importChain),
+	importCommand = &cli.Command{
+		Action:    importChain,
 		Name:      "import",
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.XDCXDataDirFlag,
 			utils.CacheFlag,
 			utils.LightModeFlag,
 			utils.GCModeFlag,
 			utils.CacheDatabaseFlag,
 			utils.CacheGCFlag,
 		},
-		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
 with several RLP-encoded blocks, or several files can be used.
@@ -79,30 +80,31 @@ with several RLP-encoded blocks, or several files can be used.
 If only one file is used, import error will result in failure. If several files are used,
 processing will proceed even if an individual RLP-file import failure occurs.`,
 	}
-	exportCommand = cli.Command{
-		Action:    utils.MigrateFlags(exportChain),
+	exportCommand = &cli.Command{
+		Action:    exportChain,
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.XDCXDataDirFlag,
 			utils.CacheFlag,
 			utils.LightModeFlag,
 		},
-		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
 if already existing.`,
 	}
-	importPreimagesCommand = cli.Command{
-		Action:    utils.MigrateFlags(importPreimages),
+	importPreimagesCommand = &cli.Command{
+		Action:    importPreimages,
 		Name:      "import-preimages",
 		Usage:     "Import the preimage database from an RLP stream",
 		ArgsUsage: "<datafile>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.XDCXDataDirFlag,
 			utils.CacheFlag,
 			utils.LightModeFlag,
 		},
@@ -110,57 +112,58 @@ if already existing.`,
 		Description: `
 	The import-preimages command imports hash preimages from an RLP encoded stream.`,
 	}
-	exportPreimagesCommand = cli.Command{
-		Action:    utils.MigrateFlags(exportPreimages),
+	exportPreimagesCommand = &cli.Command{
+		Action:    exportPreimages,
 		Name:      "export-preimages",
 		Usage:     "Export the preimage database into an RLP stream",
 		ArgsUsage: "<dumpfile>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.XDCXDataDirFlag,
 			utils.CacheFlag,
 			utils.LightModeFlag,
 		},
-		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The export-preimages command export hash preimages to an RLP encoded stream`,
 	}
-	copydbCommand = cli.Command{
-		Action:    utils.MigrateFlags(copyDb),
+	copydbCommand = &cli.Command{
+		Action:    copyDb,
 		Name:      "copydb",
 		Usage:     "Create a local chain from a target chaindata folder",
 		ArgsUsage: "<sourceChaindataDir>",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.XDCXDataDirFlag,
 			utils.CacheFlag,
 			utils.SyncModeFlag,
 			utils.FakePoWFlag,
 			utils.TestnetFlag,
 			utils.RinkebyFlag,
 		},
-		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The first argument must be the directory containing the blockchain to download from`,
 	}
-	removedbCommand = cli.Command{
-		Action:    utils.MigrateFlags(removeDB),
+	removedbCommand = &cli.Command{
+		Action:    removeDB,
 		Name:      "removedb",
 		Usage:     "Remove blockchain and state databases",
 		ArgsUsage: " ",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.XDCXDataDirFlag,
 			utils.LightModeFlag,
 		},
-		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 Remove blockchain and state databases`,
 	}
-	dumpCommand = cli.Command{
-		Action:    utils.MigrateFlags(dump),
+	dumpCommand = &cli.Command{
+		Action:    dump,
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
 		ArgsUsage: "[<blockHash> | <blockNum>]...",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
+			utils.XDCXDataDirFlag,
 			utils.CacheFlag,
 			utils.LightModeFlag,
 		},
@@ -174,12 +177,10 @@ Use "ethereum dump 0" to dump the genesis block.`,
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
 func initGenesis(ctx *cli.Context) error {
-	// Make sure we have a valid genesis JSON
-	genesisPath := ctx.Args().First()
 	genesis := new(core.Genesis)
 
-	if ctx.GlobalBool(utils.XDCTestnetFlag.Name) {
-		if len(genesisPath) > 0 {
+	if ctx.Bool(utils.XDCTestnetFlag.Name) {
+		if ctx.Args().Len() > 0 {
 			utils.Fatalf("Flags --apothem and genesis file can't be used at the same time")
 		}
 		err := json.Unmarshal(apothemGenesis, &genesis)
@@ -187,8 +188,12 @@ func initGenesis(ctx *cli.Context) error {
 			utils.Fatalf("invalid genesis json: %v", err)
 		}
 	} else {
+		if ctx.Args().Len() != 1 {
+			utils.Fatalf("need genesis.json file as the only argument")
+		}
+		genesisPath := ctx.Args().First()
 		if len(genesisPath) == 0 {
-			utils.Fatalf("Must supply path to genesis JSON file")
+			utils.Fatalf("invalid path to genesis file")
 		}
 		file, err := os.Open(genesisPath)
 		if err != nil {
@@ -220,10 +225,9 @@ func initGenesis(ctx *cli.Context) error {
 }
 
 func importChain(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-
 	// Start metrics export if enabled
 	utils.SetupMetrics(ctx)
 	// Start system runtime metrics collection
@@ -253,12 +257,12 @@ func importChain(ctx *cli.Context) error {
 	// Import the chain
 	start := time.Now()
 
-	if len(ctx.Args()) == 1 {
+	if ctx.Args().Len() == 1 {
 		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 			log.Error("Import error", "err", err)
 		}
 	} else {
-		for _, arg := range ctx.Args() {
+		for _, arg := range ctx.Args().Slice() {
 			if err := utils.ImportChain(chain, arg); err != nil {
 				log.Error("Import error", "file", arg, "err", err)
 			}
@@ -291,7 +295,7 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("Allocations:   %.3f million\n", float64(mem.Mallocs)/1000000)
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
 
-	if ctx.GlobalIsSet(utils.NoCompactionFlag.Name) {
+	if ctx.IsSet(utils.NoCompactionFlag.Name) {
 		return nil
 	}
 
@@ -319,9 +323,10 @@ func importChain(ctx *cli.Context) error {
 }
 
 func exportChain(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
+
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
@@ -331,7 +336,7 @@ func exportChain(ctx *cli.Context) error {
 
 	var err error
 	fp := ctx.Args().First()
-	if len(ctx.Args()) < 3 {
+	if ctx.Args().Len() < 3 {
 		err = utils.ExportChain(chain, fp)
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
@@ -355,9 +360,10 @@ func exportChain(ctx *cli.Context) error {
 
 // importPreimages imports preimage data from the specified file.
 func importPreimages(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
+
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
 
@@ -374,7 +380,7 @@ func importPreimages(ctx *cli.Context) error {
 
 // exportPreimages dumps the preimage data to specified json file in streaming way.
 func exportPreimages(ctx *cli.Context) error {
-	if len(ctx.Args()) < 1 {
+	if ctx.Args().Len() < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack, _ := makeFullNode(ctx)
@@ -393,21 +399,21 @@ func exportPreimages(ctx *cli.Context) error {
 
 func copyDb(ctx *cli.Context) error {
 	// Ensure we have a source chain directory to copy
-	if len(ctx.Args()) != 1 {
+	if ctx.Args().Len() != 1 {
 		utils.Fatalf("Source chaindata directory path argument missing")
 	}
 	// Initialize a new chain for the running node to sync into
 	stack, _ := makeFullNode(ctx)
 	defer stack.Close()
-	
+
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
 
-	syncmode := *utils.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
+	syncmode := *flags.GlobalTextMarshaler(ctx, utils.SyncModeFlag.Name).(*downloader.SyncMode)
 	dl := downloader.New(syncmode, chainDb, new(event.TypeMux), chain, nil, nil, nil)
 
 	// Create a source peer to satisfy downloader requests from
-	db, err := rawdb.NewLevelDBDatabase(ctx.Args().First(), ctx.GlobalInt(utils.CacheFlag.Name), 256, "")
+	db, err := rawdb.NewLevelDBDatabase(ctx.Args().First(), ctx.Int(utils.CacheFlag.Name), 256, "")
 	if err != nil {
 		return err
 	}
@@ -478,7 +484,7 @@ func dump(ctx *cli.Context) error {
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
 
-	for _, arg := range ctx.Args() {
+	for _, arg := range ctx.Args().Slice() {
 		var block *types.Block
 		if hashish(arg) {
 			block = chain.GetBlockByHash(common.HexToHash(arg))
