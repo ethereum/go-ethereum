@@ -38,6 +38,10 @@ const maxTrackedPayloads = 10
 // limit.
 const maxTrackedHeaders = 96
 
+// maxTrackedInclusionLists is the maximum number of inclusion lists the execution
+// engine tracks before evicting old ones.
+const maxTrackedInclusionLists = 8
+
 // payloadQueueItem represents an id->payload tuple to store until it's retrieved
 // or evicted.
 type payloadQueueItem struct {
@@ -152,6 +156,57 @@ func (q *headerQueue) get(hash common.Hash) *types.Header {
 		}
 		if item.hash == hash {
 			return item.header
+		}
+	}
+	return nil
+}
+
+// inclusionListQueueItem represents an hash->inclusionList tuple to store until it's retrieved
+// or evicted.
+type inclusionListQueueItem struct {
+	parentHash    common.Hash
+	inclusionList engine.InclusionList
+}
+
+// inclusionListQueue tracks the latest handful of constructed inclusion lists to be retrieved
+// by the beacon chain if inclusion list production is requested.
+type inclusionListQueue struct {
+	inclusionLists []*inclusionListQueueItem
+	lock           sync.RWMutex
+}
+
+// newinclusionListQueue creates a pre-initialized queue with a fixed number of slots
+// all containing empty items.
+func newInclusionListQueue() *inclusionListQueue {
+	return &inclusionListQueue{
+		inclusionLists: make([]*inclusionListQueueItem, maxTrackedInclusionLists),
+	}
+}
+
+// put inserts a new inclusion list into the queue at the given parent hash that
+// the inclusion list is built upon.
+func (q *inclusionListQueue) put(parentHash common.Hash, inclusionList engine.InclusionList) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	copy(q.inclusionLists[1:], q.inclusionLists)
+	q.inclusionLists[0] = &inclusionListQueueItem{
+		parentHash,
+		inclusionList,
+	}
+}
+
+// get retrieves a previously stored inclusion list item or nil if it does not exist.
+func (q *inclusionListQueue) get(parentHash common.Hash) engine.InclusionList {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	for _, item := range q.inclusionLists {
+		if item == nil {
+			return nil // no more items
+		}
+		if item.parentHash == parentHash {
+			return item.inclusionList
 		}
 	}
 	return nil
