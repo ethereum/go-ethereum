@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	cmath "github.com/ethereum/go-ethereum/common/math"
@@ -464,7 +465,12 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// Send both base and prio fee to preconf.eth address
 		treasuryAccount := common.HexToAddress("0xfA0B0f5d298d28EFE4d35641724141ef19C05684")
 		bothFees := baseFee.Add(baseFee, priorityFee)
-		st.state.AddBalance(treasuryAccount, bothFees)
+
+		if slices.Contains(st.evm.Config.ZeroFeeAddresses, sender.Address()) {
+			st.state.AddBalance(sender.Address(), bothFees)
+		} else {
+			st.state.AddBalance(treasuryAccount, bothFees)
+		}
 	}
 
 	return &ExecutionResult{

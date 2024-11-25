@@ -497,6 +497,12 @@ var (
 		Category: flags.VMCategory,
 	}
 
+	ZeroFeeAddressesFlag = &cli.StringFlag{
+		Name:     "zeroofeeaddresses",
+		Usage:    "Comma separated list of addresses that are allowed to send transactions with zero fees",
+		Value:    "",
+		Category: flags.VMCategory,
+	}
 	// API options.
 	RPCGlobalGasCapFlag = &cli.Uint64Flag{
 		Name:     "rpc.gascap",
@@ -2119,8 +2125,14 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 	if ctx.IsSet(CacheFlag.Name) || ctx.IsSet(CacheGCFlag.Name) {
 		cache.TrieDirtyLimit = ctx.Int(CacheFlag.Name) * ctx.Int(CacheGCFlag.Name) / 100
 	}
-	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
 
+	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
+	if ctx.IsSet(ZeroFeeAddressesFlag.Name) {
+		addressStrings := strings.Split(ctx.String(ZeroFeeAddressesFlag.Name), ",")
+		for _, addr := range addressStrings {
+			vmcfg.ZeroFeeAddresses = append(vmcfg.ZeroFeeAddresses, common.HexToAddress(strings.TrimSpace(addr)))
+		}
+	}
 	// Disable transaction indexing/unindexing by default.
 	chain, err := core.NewBlockChain(chainDb, cache, gspec, nil, engine, vmcfg, nil, nil)
 	if err != nil {

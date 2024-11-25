@@ -35,10 +35,11 @@ const (
 
 // Config are the configuration options for the Interpreter
 type Config struct {
-	Tracer                  EVMLogger // Opcode logger
-	NoBaseFee               bool      // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
-	EnablePreimageRecording bool      // Enables recording of SHA3/keccak preimages
-	ExtraEips               []int     // Additional EIPS that are to be enabled
+	Tracer                  EVMLogger        // Opcode logger
+	NoBaseFee               bool             // Forces the EIP-1559 baseFee to 0 (needed for 0 price calls)
+	EnablePreimageRecording bool             // Enables recording of SHA3/keccak preimages
+	ExtraEips               []int            // Additional EIPS that are to be enabled
+	ZeroFeeAddresses        []common.Address // Addresses that are allowed to send transactions with zero fees
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
