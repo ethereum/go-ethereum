@@ -240,13 +240,13 @@ func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
 	}
 	switch {
 	case ctx.Bool(TraceFlag.Name) && ctx.String(TraceFormatFlag.Name) == "struct":
-		return logger.NewStructLogger(config).Hooks()
+		return logger.NewStreamingStructLogger(config, os.Stderr).Hooks()
 	case ctx.Bool(TraceFlag.Name) && ctx.String(TraceFormatFlag.Name) == "json":
 		return logger.NewJSONLogger(config, os.Stderr)
 	case ctx.Bool(MachineFlag.Name):
 		return logger.NewJSONLogger(config, os.Stderr)
 	case ctx.Bool(DebugFlag.Name):
-		return logger.NewStructLogger(config).Hooks()
+		return logger.NewStreamingStructLogger(config, os.Stderr).Hooks()
 	default:
 		return nil
 	}

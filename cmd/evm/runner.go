@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
@@ -217,10 +219,10 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
 	} else if ctx.Bool(DebugFlag.Name) {
-		debugLogger = logger.NewStructLogger(logconfig)
+		debugLogger = logger.NewStreamingStructLogger(logconfig, os.Stderr)
 		tracer = debugLogger.Hooks()
 	} else {
-		debugLogger = logger.NewStructLogger(logconfig)
+		debugLogger = logger.NewStreamingStructLogger(logconfig, os.Stderr)
 	}
 
 	initialGas := ctx.Uint64(GasFlag.Name)
@@ -365,12 +367,10 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	if ctx.Bool(DebugFlag.Name) {
-		if debugLogger != nil {
-			fmt.Fprintln(os.Stderr, "#### TRACE ####")
-			logger.WriteTrace(os.Stderr, debugLogger.StructLogs())
+		if logs := runtimeConfig.State.Logs(); len(logs) > 0 {
+			fmt.Fprintln(os.Stderr, "### LOGS")
+			writeLogs(os.Stderr, logs)
 		}
-		fmt.Fprintln(os.Stderr, "#### LOGS ####")
-		logger.WriteLogs(os.Stderr, runtimeConfig.State.Logs())
 	}
 
 	if bench || ctx.Bool(StatDumpFlag.Name) {
@@ -388,4 +388,17 @@ allocated bytes: %d
 	}
 
 	return nil
+}
+
+// writeLogs writes vm logs in a readable format to the given writer
+func writeLogs(writer io.Writer, logs []*types.Log) {
+	for _, log := range logs {
+		fmt.Fprintf(writer, "LOG%d: %x bn=%d txi=%x\n", len(log.Topics), log.Address, log.BlockNumber, log.TxIndex)
+
+		for i, topic := range log.Topics {
+			fmt.Fprintf(writer, "%08d  %x\n", i, topic)
+		}
+		fmt.Fprint(writer, hex.Dump(log.Data))
+		fmt.Fprintln(writer)
+	}
 }
