@@ -80,7 +80,7 @@ func (f *DirectoryFlag) String() string  { return cli.FlagStringer(f) }
 // and adds variable to flag set for parsing.
 func (f *DirectoryFlag) Apply(set *flag.FlagSet) error {
 	eachName(f, func(name string) {
-		set.Var(&f.Value, f.Name, f.Usage)
+		set.Var(&f.Value, name, f.Usage)
 	})
 	return nil
 }
@@ -166,7 +166,7 @@ func (f *TextMarshalerFlag) String() string  { return cli.FlagStringer(f) }
 
 func (f *TextMarshalerFlag) Apply(set *flag.FlagSet) error {
 	eachName(f, func(name string) {
-		set.Var(textMarshalerVal{f.Value}, f.Name, f.Usage)
+		set.Var(textMarshalerVal{f.Value}, name, f.Usage)
 	})
 	return nil
 }
@@ -248,7 +248,7 @@ func (f *BigFlag) String() string  { return cli.FlagStringer(f) }
 func (f *BigFlag) Apply(set *flag.FlagSet) error {
 	eachName(f, func(name string) {
 		f.Value = new(big.Int)
-		set.Var((*bigValue)(f.Value), f.Name, f.Usage)
+		set.Var((*bigValue)(f.Value), name, f.Usage)
 	})
 
 	return nil
