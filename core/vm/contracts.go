@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/cloudflare/circl/sign/bls"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -105,6 +106,9 @@ var PrecompiledContractsCancun = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{8}):    &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{9}):    &blake2F{},
 	common.BytesToAddress([]byte{0x0a}): &kzgPointEvaluation{},
+
+	// primev pre-compiles start at 0xf addresses
+	common.BytesToAddress([]byte{0xf0}): &bls12381SignatureVerification{},
 }
 
 // PrecompiledContractsBLS contains the set of pre-compiled Ethereum
@@ -652,6 +656,34 @@ var (
 	errBLS12381G1PointSubgroup             = errors.New("g1 point is not on correct subgroup")
 	errBLS12381G2PointSubgroup             = errors.New("g2 point is not on correct subgroup")
 )
+
+// bls12381SignatureVerification implements BLS signature verification precompile.
+type bls12381SignatureVerification struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+func (c *bls12381SignatureVerification) RequiredGas(input []byte) uint64 {
+	return params.BlsSignVerifyGas
+}
+
+func (c *bls12381SignatureVerification) Run(input []byte) ([]byte, error) {
+	// Input format:
+	// - pubkey (48 bytes) - G1 point
+	// - message (32 bytes) - Hash of the message
+	// - signature (96 bytes) - G2 point
+	if len(input) != 176 {
+		return nil, errBLS12381InvalidInputLength
+	}
+
+	var pubKey bls.PublicKey[bls.G1]
+	if err := pubKey.UnmarshalBinary(input[:48]); err != nil {
+		return nil, err
+	}
+
+	if !bls.Verify(&pubKey, input[48:80], input[80:]) {
+		return nil, nil
+	}
+	return input[:48], nil
+}
 
 // bls12381G1Add implements EIP-2537 G1Add precompile.
 type bls12381G1Add struct{}
