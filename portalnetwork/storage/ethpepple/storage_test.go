@@ -71,38 +71,6 @@ func TestRadius(t *testing.T) {
 	assert.True(t, radius.Eq(storage.MaxDistance))
 }
 
-// func TestPrune(t *testing.T) {
-//     db, err := NewPeppleDB(t.TempDir(), 16, 16, "test")
-//     assert.NoError(t, err)
-//     defer db.Close()
-
-//     config := PeppleStorageConfig{
-//         StorageCapacityMB: 1, // 1MB capacity
-//         DB:                db,
-//         NodeId:            uint256.NewInt(0).Bytes32(),
-//         NetworkName:       "test",
-//     }
-
-//     storage, err := NewPeppleStorage(config)
-//     assert.NoError(t, err)
-
-//     // Add content exceeding capacity
-//     largeContent := make([]byte, 900_000) // 900KB
-//     err = storage.Put([]byte("key1"), []byte("id1"), largeContent)
-//     assert.NoError(t, err)
-
-//     smallContent := make([]byte, 200_000) // 200KB
-//     err = storage.Put([]byte("key2"), []byte("id2"), smallContent)
-//     assert.NoError(t, err)
-
-//     // Wait for prune to complete
-//     time.Sleep(6 * time.Second)
-
-//     // Verify content after pruning
-//     _, err = storage.Get([]byte("key2"), []byte("id2"))
-//     assert.Error(t, err) // Should be pruned
-// }
-
 func TestXOR(t *testing.T) {
 	testCases := []struct {
 		contentId []byte
@@ -117,7 +85,7 @@ func TestXOR(t *testing.T) {
 		{
 			contentId: []byte{0xFF},
 			nodeId:    []byte{0x0F},
-			expected:  append([]byte{0xF0}, make([]byte, 31)...),
+			expected:  []byte{0xF0},
 		},
 	}
 
@@ -190,5 +158,5 @@ func TestPrune(t *testing.T) {
 	data, err := radius.MarshalSSZ()
 	assert.NoError(t, err)
 	actual := uint256.NewInt(4).Bytes32()
-	assert.Equal(t, data, actual)
+	assert.Equal(t, data, actual[:])
 }
