@@ -56,7 +56,6 @@ func linkContract(contract string, linkedLibs map[string]common.Address) (deploy
 	if err != nil {
 		return "", err
 	}
-
 	// link in any library the contract depends on
 	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contract, -1) {
 		matchingPattern := match[1]
