@@ -20,7 +20,6 @@ package metrics
 var (
 	_ SampleSnapshot    = (*emptySnapshot)(nil)
 	_ HistogramSnapshot = (*emptySnapshot)(nil)
-	_ GaugeSnapshot     = (*emptySnapshot)(nil)
 	_ MeterSnapshot     = (*emptySnapshot)(nil)
 	_ TimerSnapshot     = (*emptySnapshot)(nil)
 )

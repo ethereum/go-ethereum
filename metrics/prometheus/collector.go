@@ -55,7 +55,7 @@ func (c *collector) Add(name string, i any) error {
 		c.addCounter(name, m.Snapshot())
 	case *metrics.CounterFloat64:
 		c.addCounterFloat64(name, m.Snapshot())
-	case metrics.Gauge:
+	case *metrics.Gauge:
 		c.addGauge(name, m.Snapshot())
 	case metrics.GaugeFloat64:
 		c.addGaugeFloat64(name, m.Snapshot())

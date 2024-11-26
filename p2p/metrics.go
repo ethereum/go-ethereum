@@ -37,9 +37,9 @@ const (
 )
 
 var (
-	activePeerGauge         metrics.Gauge = metrics.NilGauge{}
-	activeInboundPeerGauge  metrics.Gauge = metrics.NilGauge{}
-	activeOutboundPeerGauge metrics.Gauge = metrics.NilGauge{}
+	activePeerGauge         = metrics.NewGauge()
+	activeInboundPeerGauge  = metrics.NewGauge()
+	activeOutboundPeerGauge = metrics.NewGauge()
 
 	ingressTrafficMeter = metrics.NewRegisteredMeter("p2p/ingress", nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/egress", nil)

@@ -20,7 +20,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"value": metric.Snapshot().Count(),
 		}
 		return measurement, fields
-	case metrics.Gauge:
+	case *metrics.Gauge:
 		measurement := fmt.Sprintf("%s%s.gauge", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Value(),
