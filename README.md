@@ -279,8 +279,8 @@ that other nodes can use to connect to it and exchange peer information. Make su
 replace the displayed IP address information (most probably `[::]`) with your externally
 accessible IP to get the actual `enode` URL.
 
-*Note: You could also use a full-fledged `geth` node as a bootnode, but it's the less
-recommended way.*
+*Note: You could also use a full-fledged `geth` node as a bootnode, which is the recommended way, 
+but it is good practice to create a static nodekey with the bootnode utility*
 
 #### Starting up your member nodes
 
