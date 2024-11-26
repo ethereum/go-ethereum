@@ -336,7 +336,8 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		// Only trie reader can provide contract code.
+		// Skip state reader as it doesn't provide contract code and
+		// always returns an error.
 		if _, ok := reader.(*trieReader); ok {
 			code, err := reader.ContractCode(addr, codeHash)
 			if err == nil {
@@ -352,7 +353,8 @@ func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([
 func (r *multiReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		// Only trie reader can provide contract code.
+		// Skip state reader as it doesn't provide contract code and
+		// always returns an error.
 		if _, ok := reader.(*trieReader); ok {
 			size, err := reader.ContractCodeSize(addr, codeHash)
 			if err == nil {
