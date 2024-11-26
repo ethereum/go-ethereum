@@ -222,6 +222,7 @@ func NewStreamingStructLogger(cfg *Config, writer io.Writer) *StructLogger {
 func NewStructLogger(cfg *Config) *StructLogger {
 	logger := &StructLogger{
 		storage: make(map[common.Address]Storage),
+		logs:    make([]json.RawMessage, 0),
 	}
 	if cfg != nil {
 		logger.cfg = *cfg
@@ -236,14 +237,6 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 		OnExit:    l.OnExit,
 		OnOpcode:  l.OnOpcode,
 	}
-}
-
-// Reset clears the data held by the logger.
-func (l *StructLogger) Reset() {
-	l.storage = make(map[common.Address]Storage)
-	l.output = make([]byte, 0)
-	l.logs = l.logs[:0]
-	l.err = nil
 }
 
 // OnOpcode logs a new structured log message and pushes it out to the environment
