@@ -101,6 +101,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 
 func BindV2(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, libs map[string]string, aliases map[string]string) (string, error) {
 	data, err := bind(types, abis, bytecodes, fsigs, pkg, libs, aliases)
+
 	if err != nil {
 		return "", err
 	}
@@ -396,12 +397,21 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		}
 	}
 
+	// map of contract name -> pattern
+	invertedLibs := make(map[string]string)
+	// assume that this is invertible/onto because I assume library names are unique now
+	// TODO: check that they've been sanitized at this point.
+	for pattern, name := range libs {
+		invertedLibs[name] = pattern
+	}
+
 	// Generate the contract template data content and render it
 	data := &tmplData{
-		Package:   pkg,
-		Contracts: contracts,
-		Libraries: libs,
-		Structs:   structs,
+		Package:      pkg,
+		Contracts:    contracts,
+		Libraries:    libs,
+		InvertedLibs: invertedLibs,
+		Structs:      structs,
 	}
 	return data, nil
 }

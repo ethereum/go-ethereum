@@ -38,6 +38,7 @@ var (
 {{end}}
 
 {{range $contract := .Contracts}}
+	// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
 	var {{$contract.Type}}LibraryDeps = map[string]*bind.MetaData{
 	{{range $name, $pattern := .AllLibraries -}}
 		"{{$pattern}}": {{$name}}MetaData,
@@ -48,6 +49,7 @@ var (
 	// {{.Type}}MetaData contains all meta data concerning the {{.Type}} contract.
 	var {{.Type}}MetaData = &bind.MetaData{
 		ABI: "{{.InputABI}}",
+		Pattern: "{{index $.InvertedLibs .Type}}",
 		{{if $contract.FuncSigs -}}
 		Sigs: map[string]string{
 			{{range $strsig, $binsig := .FuncSigs}}"{{$binsig}}": "{{$strsig}}",

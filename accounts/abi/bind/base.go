@@ -89,11 +89,12 @@ type WatchOpts struct {
 
 // MetaData collects all metadata for a bound contract.
 type MetaData struct {
-	mu   sync.Mutex
-	Sigs map[string]string
-	Bin  string
-	ABI  string
-	ab   *abi.ABI
+	mu      sync.Mutex
+	Sigs    map[string]string
+	Bin     string
+	ABI     string
+	ab      *abi.ABI
+	Pattern string
 }
 
 func (m *MetaData) GetAbi() (*abi.ABI, error) {
