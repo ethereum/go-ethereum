@@ -83,3 +83,9 @@ type tmplStruct struct {
 //
 //go:embed source.go.tpl
 var tmplSource string
+
+// tmplSourceV2 is the Go source template that the generated Go contract binding
+// for abigen v2 is based on.
+//
+//go:embed source2.go.tpl
+var tmplSourceV2 string
