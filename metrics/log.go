@@ -36,10 +36,6 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 			case *GaugeInfo:
 				l.Printf("gauge %s\n", name)
 				l.Printf("  value:       %s\n", metric.Snapshot().Value())
-			case Healthcheck:
-				metric.Check()
-				l.Printf("healthcheck %s\n", name)
-				l.Printf("  error:       %v\n", metric.Error())
 			case Histogram:
 				h := metric.Snapshot()
 				ps := h.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})

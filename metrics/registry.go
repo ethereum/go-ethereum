@@ -136,7 +136,7 @@ func (r *StandardRegistry) Register(name string, i interface{}) error {
 // RunHealthchecks run all registered healthchecks.
 func (r *StandardRegistry) RunHealthchecks() {
 	r.metrics.Range(func(key, value any) bool {
-		if h, ok := value.(Healthcheck); ok {
+		if h, ok := value.(*Healthcheck); ok {
 			h.Check()
 		}
 		return true
@@ -157,7 +157,7 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 			values["value"] = metric.Snapshot().Value()
 		case *GaugeFloat64:
 			values["value"] = metric.Snapshot().Value()
-		case Healthcheck:
+		case *Healthcheck:
 			values["error"] = nil
 			metric.Check()
 			if err := metric.Error(); nil != err {
@@ -214,7 +214,7 @@ func (r *StandardRegistry) Unregister(name string) {
 
 func (r *StandardRegistry) loadOrRegister(name string, i interface{}) (interface{}, bool, bool) {
 	switch i.(type) {
-	case *Counter, *CounterFloat64, *Gauge, *GaugeFloat64, *GaugeInfo, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
+	case *Counter, *CounterFloat64, *Gauge, *GaugeFloat64, *GaugeInfo, *Healthcheck, Histogram, Meter, Timer, ResettingTimer:
 	default:
 		return nil, false, false
 	}
