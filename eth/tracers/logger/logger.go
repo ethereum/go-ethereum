@@ -363,26 +363,35 @@ func (t *mdLogger) OnEnter(depth int, typ byte, from common.Address, to common.A
 	if depth != 0 {
 		return
 	}
-	create := vm.OpCode(typ) == vm.CREATE
-	if !create {
-		fmt.Fprintf(t.out, "From: `%v`\nTo: `%v`\nData: `%#x`\nGas: `%d`\nValue `%v` wei\n",
-			from.String(), to.String(),
-			input, gas, value)
+	if create := vm.OpCode(typ) == vm.CREATE; !create {
+		fmt.Fprintf(t.out, "Pre-execution info:\n"+
+			"  - from: `%v`\n"+
+			"  - to: `%v`\n"+
+			"  - data: `%#x`\n"+
+			"  - gas: `%d`\n"+
+			"  - value: `%v` wei\n",
+			from.String(), to.String(), input, gas, value)
 	} else {
-		fmt.Fprintf(t.out, "From: `%v`\nCreate at: `%v`\nData: `%#x`\nGas: `%d`\nValue `%v` wei\n",
-			from.String(), to.String(),
-			input, gas, value)
+		fmt.Fprintf(t.out, "Pre-execution info:\n"+
+			"  - from: `%v`\n"+
+			"  - create: `%v`\n"+
+			"  - data: `%#x`\n"+
+			"  - gas: `%d`\n"+
+			"  - value: `%v` wei\n",
+			from.String(), to.String(), input, gas, value)
 	}
-
 	fmt.Fprintf(t.out, `
-|  Pc   |      Op     | Cost |   Stack   |   RStack  |  Refund |
-|-------|-------------|------|-----------|-----------|---------|
+|  Pc   |      Op     | Cost |   Refund  |   Stack   |
+|-------|-------------|------|-----------|-----------|
 `)
 }
 
 func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
 	if depth == 0 {
-		fmt.Fprintf(t.out, "\nOutput: `%#x`\nConsumed gas: `%d`\nError: `%v`\n",
+		fmt.Fprintf(t.out, "\nPost-execution info:\n"+
+			"  - output: `%#x`\n"+
+			"  - consumed gas: `%d`\n"+
+			"  - error: `%v`\n",
 			output, gasUsed, err)
 	}
 }
@@ -390,7 +399,8 @@ func (t *mdLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, r
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
 func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 	stack := scope.StackData()
-	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |", pc, vm.OpCode(op).String(), cost)
+	fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10v |", pc, vm.OpCode(op).String(),
+		cost, t.env.StateDB.GetRefund())
 
 	if !t.cfg.DisableStack {
 		// format stack
@@ -401,7 +411,6 @@ func (t *mdLogger) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
 		fmt.Fprintf(t.out, "%10v |", b)
 	}
-	fmt.Fprintf(t.out, "%10v |", t.env.StateDB.GetRefund())
 	fmt.Fprintln(t.out, "")
 	if err != nil {
 		fmt.Fprintf(t.out, "Error: %v\n", err)

@@ -33,7 +33,9 @@ import (
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
-const journalVersion uint64 = 0
+// 0: initial version
+// 1: destruct flag in diff layer is removed
+const journalVersion uint64 = 1
 
 // journalGenerator is a disk layer entry containing the generator progress marker.
 type journalGenerator struct {
@@ -46,11 +48,6 @@ type journalGenerator struct {
 	Accounts uint64
 	Slots    uint64
 	Storage  uint64
-}
-
-// journalDestruct is an account deletion entry in a diffLayer's disk journal.
-type journalDestruct struct {
-	Hash common.Hash
 }
 
 // journalAccount is an account entry in a diffLayer's disk journal.
@@ -109,8 +106,8 @@ func loadAndParseJournal(db ethdb.KeyValueStore, base *diskLayer) (snapshot, jou
 	// is not matched with disk layer; or the it's the legacy-format journal,
 	// etc.), we just discard all diffs and try to recover them later.
 	var current snapshot = base
-	err := iterateJournal(db, func(parent common.Hash, root common.Hash, destructSet map[common.Hash]struct{}, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte) error {
-		current = newDiffLayer(current, root, destructSet, accountData, storageData)
+	err := iterateJournal(db, func(parent common.Hash, root common.Hash, accountData map[common.Hash][]byte, storageData map[common.Hash]map[common.Hash][]byte) error {
+		current = newDiffLayer(current, root, accountData, storageData)
 		return nil
 	})
 	if err != nil {
@@ -238,16 +235,12 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 	if err := rlp.Encode(buffer, dl.root); err != nil {
 		return common.Hash{}, err
 	}
-	destructs := make([]journalDestruct, 0, len(dl.destructSet))
-	for hash := range dl.destructSet {
-		destructs = append(destructs, journalDestruct{Hash: hash})
-	}
-	if err := rlp.Encode(buffer, destructs); err != nil {
-		return common.Hash{}, err
-	}
 	accounts := make([]journalAccount, 0, len(dl.accountData))
 	for hash, blob := range dl.accountData {
-		accounts = append(accounts, journalAccount{Hash: hash, Blob: blob})
+		accounts = append(accounts, journalAccount{
+			Hash: hash,
+			Blob: blob,
+		})
 	}
 	if err := rlp.Encode(buffer, accounts); err != nil {
 		return common.Hash{}, err
@@ -271,7 +264,7 @@ func (dl *diffLayer) Journal(buffer *bytes.Buffer) (common.Hash, error) {
 
 // journalCallback is a function which is invoked by iterateJournal, every
 // time a difflayer is loaded from disk.
-type journalCallback = func(parent common.Hash, root common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error
+type journalCallback = func(parent common.Hash, root common.Hash, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte) error
 
 // iterateJournal iterates through the journalled difflayers, loading them from
 // the database, and invoking the callback for each loaded layer.
@@ -310,10 +303,8 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 	for {
 		var (
 			root        common.Hash
-			destructs   []journalDestruct
 			accounts    []journalAccount
 			storage     []journalStorage
-			destructSet = make(map[common.Hash]struct{})
 			accountData = make(map[common.Hash][]byte)
 			storageData = make(map[common.Hash]map[common.Hash][]byte)
 		)
@@ -325,17 +316,11 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 			}
 			return fmt.Errorf("load diff root: %v", err)
 		}
-		if err := r.Decode(&destructs); err != nil {
-			return fmt.Errorf("load diff destructs: %v", err)
-		}
 		if err := r.Decode(&accounts); err != nil {
 			return fmt.Errorf("load diff accounts: %v", err)
 		}
 		if err := r.Decode(&storage); err != nil {
 			return fmt.Errorf("load diff storage: %v", err)
-		}
-		for _, entry := range destructs {
-			destructSet[entry.Hash] = struct{}{}
 		}
 		for _, entry := range accounts {
 			if len(entry.Blob) > 0 { // RLP loses nil-ness, but `[]byte{}` is not a valid item, so reinterpret that
@@ -355,7 +340,7 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 			}
 			storageData[entry.Hash] = slots
 		}
-		if err := callback(parent, root, destructSet, accountData, storageData); err != nil {
+		if err := callback(parent, root, accountData, storageData); err != nil {
 			return err
 		}
 		parent = root

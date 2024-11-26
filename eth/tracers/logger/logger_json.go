@@ -71,7 +71,7 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 	l.hooks = &tracing.Hooks{
 		OnTxStart:         l.OnTxStart,
 		OnSystemCallStart: l.onSystemCallStart,
-		OnExit:            l.OnEnd,
+		OnExit:            l.OnExit,
 		OnOpcode:          l.OnOpcode,
 		OnFault:           l.OnFault,
 	}
@@ -150,13 +150,6 @@ func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common
 		frame.Input = input
 	}
 	l.encoder.Encode(frame)
-}
-
-func (l *jsonLogger) OnEnd(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	if depth > 0 {
-		return
-	}
-	l.OnExit(depth, output, gasUsed, err, false)
 }
 
 func (l *jsonLogger) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {

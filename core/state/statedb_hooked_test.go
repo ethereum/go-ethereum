@@ -35,7 +35,7 @@ func TestBurn(t *testing.T) {
 	// the following occur:
 	// 1. contract B creates contract A
 	// 2. contract A is destructed
-	// 3. constract B sends ether to A
+	// 3. contract B sends ether to A
 
 	var burned = new(uint256.Int)
 	s, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
