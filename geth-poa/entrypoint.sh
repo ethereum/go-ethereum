@@ -12,6 +12,7 @@ GETH_DATA_DIR=${GETH_DATA_DIR:-/data}
 GETH_CHAINDATA_DIR="$GETH_DATA_DIR/geth/chaindata"
 GETH_KEYSTORE_DIR="$GETH_DATA_DIR/keystore"
 GETH_KEYSTORE_PASSWORD=${GETH_KEYSTORE_PASSWORD:-"primev"}
+GETH_ZERO_FEE_ADDRESSES=${GETH_ZERO_FEE_ADDRESSES:-}
 CHAIN_ID=$(cat "$GENESIS_L1_PATH" | jq -r .config.chainId)
 RPC_PORT="${RPC_PORT:-8545}"
 WS_PORT="${WS_PORT:-8546}"
@@ -21,6 +22,12 @@ if [ -n "$GETH_LOG_TAGS" ]; then
     LOG_TAGS_OPTION="--log.tags=$GETH_LOG_TAGS"
 else
     LOG_TAGS_OPTION=""
+fi
+
+if [ -n "$GETH_ZERO_FEE_ADDRESSES" ]; then
+    ZERO_FEE_ADDRESSES="--zero-fee-addresses=$GETH_ZERO_FEE_ADDRESSES"
+else
+    ZERO_FEE_ADDRESSES=""
 fi
 
 # Generate signer key if needed
@@ -94,6 +101,7 @@ if [ "$GETH_NODE_TYPE" = "bootnode" ]; then
 		--verbosity="$GETH_VERBOSITY" \
 		--log.format="$GETH_LOG_FORMAT" \
 		$LOG_TAGS_OPTION \
+		$ZERO_FEE_ADDRESSES \
 		--datadir="$GETH_DATA_DIR" \
 		--port 30301 \
 		--http \
@@ -138,6 +146,7 @@ elif [ "$GETH_NODE_TYPE" = "signer" ]; then
 		--verbosity="$GETH_VERBOSITY" \
 		--log.format="$GETH_LOG_FORMAT" \
 		$LOG_TAGS_OPTION \
+		$ZERO_FEE_ADDRESSES \
 		--datadir="$GETH_DATA_DIR" \
 		--port="$GETH_PORT" \
 		--syncmode="${GETH_SYNC_MODE}" \
@@ -190,6 +199,7 @@ elif [ "$GETH_NODE_TYPE" = "member" ]; then
 		--verbosity="$GETH_VERBOSITY" \
 		--log.format="$GETH_LOG_FORMAT" \
 		$LOG_TAGS_OPTION \
+		$ZERO_FEE_ADDRESSES \
 		--datadir="$GETH_DATA_DIR" \
 		--port="$GETH_PORT" \
 		--syncmode="${GETH_SYNC_MODE}" \

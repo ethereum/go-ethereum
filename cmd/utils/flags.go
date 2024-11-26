@@ -497,10 +497,9 @@ var (
 		Category: flags.VMCategory,
 	}
 
-	ZeroFeeAddressesFlag = &cli.StringFlag{
-		Name:     "zeroofeeaddresses",
+	ZeroFeeAddressesFlag = &cli.StringSliceFlag{
+		Name:     "zero-fee-addresses",
 		Usage:    "Comma separated list of addresses that are allowed to send transactions with zero fees",
-		Value:    "",
 		Category: flags.VMCategory,
 	}
 	// API options.
@@ -2128,9 +2127,11 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.Bool(VMEnableDebugFlag.Name)}
 	if ctx.IsSet(ZeroFeeAddressesFlag.Name) {
-		addressStrings := strings.Split(ctx.String(ZeroFeeAddressesFlag.Name), ",")
-		for _, addr := range addressStrings {
-			vmcfg.ZeroFeeAddresses = append(vmcfg.ZeroFeeAddresses, common.HexToAddress(strings.TrimSpace(addr)))
+		for _, addr := range ctx.StringSlice(ZeroFeeAddressesFlag.Name) {
+			vmcfg.ZeroFeeAddresses = append(
+				vmcfg.ZeroFeeAddresses,
+				common.HexToAddress(strings.TrimSpace(addr)),
+			)
 		}
 	}
 	// Disable transaction indexing/unindexing by default.
