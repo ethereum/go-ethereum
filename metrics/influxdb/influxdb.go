@@ -8,7 +8,7 @@ import (
 
 func readMeter(namespace, name string, i interface{}) (string, map[string]interface{}) {
 	switch metric := i.(type) {
-	case metrics.Counter:
+	case *metrics.Counter:
 		measurement := fmt.Sprintf("%s%s.count", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Count(),

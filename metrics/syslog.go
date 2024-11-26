@@ -15,7 +15,7 @@ func Syslog(r Registry, d time.Duration, w *syslog.Writer) {
 	for range time.Tick(d) {
 		r.Each(func(name string, i interface{}) {
 			switch metric := i.(type) {
-			case Counter:
+			case *Counter:
 				w.Info(fmt.Sprintf("counter %s: count: %d", name, metric.Snapshot().Count()))
 			case CounterFloat64:
 				w.Info(fmt.Sprintf("counter %s: count: %f", name, metric.Snapshot().Count()))

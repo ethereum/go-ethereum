@@ -26,7 +26,7 @@ func WriteOnce(r Registry, w io.Writer) {
 	slices.SortFunc(namedMetrics, namedMetric.cmp)
 	for _, namedMetric := range namedMetrics {
 		switch metric := namedMetric.m.(type) {
-		case Counter:
+		case *Counter:
 			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  count:       %9d\n", metric.Snapshot().Count())
 		case CounterFloat64:

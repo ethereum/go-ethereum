@@ -21,7 +21,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 	for range time.Tick(freq) {
 		r.Each(func(name string, i interface{}) {
 			switch metric := i.(type) {
-			case Counter:
+			case *Counter:
 				l.Printf("counter %s\n", name)
 				l.Printf("  count:       %9d\n", metric.Snapshot().Count())
 			case CounterFloat64:

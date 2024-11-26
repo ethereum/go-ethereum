@@ -51,7 +51,7 @@ func newCollector() *collector {
 // metric type is not supported/known.
 func (c *collector) Add(name string, i any) error {
 	switch m := i.(type) {
-	case metrics.Counter:
+	case *metrics.Counter:
 		c.addCounter(name, m.Snapshot())
 	case metrics.CounterFloat64:
 		c.addCounterFloat64(name, m.Snapshot())

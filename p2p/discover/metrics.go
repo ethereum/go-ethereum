@@ -34,7 +34,7 @@ const (
 )
 
 var (
-	bucketsCounter      []metrics.Counter
+	bucketsCounter      []*metrics.Counter
 	ingressTrafficMeter = metrics.NewRegisteredMeter(ingressMeterName, nil)
 	egressTrafficMeter  = metrics.NewRegisteredMeter(egressMeterName, nil)
 )
