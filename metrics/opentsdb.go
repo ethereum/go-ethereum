@@ -70,7 +70,7 @@ func (c *OpenTSDBConfig) writeRegistry(w io.Writer, now int64, shortHostname str
 			fmt.Fprintf(w, "put %s.%s.count %d %f host=%s\n", c.Prefix, name, now, metric.Snapshot().Count(), shortHostname)
 		case *Gauge:
 			fmt.Fprintf(w, "put %s.%s.value %d %d host=%s\n", c.Prefix, name, now, metric.Snapshot().Value(), shortHostname)
-		case GaugeFloat64:
+		case *GaugeFloat64:
 			fmt.Fprintf(w, "put %s.%s.value %d %f host=%s\n", c.Prefix, name, now, metric.Snapshot().Value(), shortHostname)
 		case GaugeInfo:
 			fmt.Fprintf(w, "put %s.%s.value %d %s host=%s\n", c.Prefix, name, now, metric.Snapshot().Value().String(), shortHostname)

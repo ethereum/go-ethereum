@@ -35,7 +35,7 @@ func WriteOnce(r Registry, w io.Writer) {
 		case *Gauge:
 			fmt.Fprintf(w, "gauge %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  value:       %9d\n", metric.Snapshot().Value())
-		case GaugeFloat64:
+		case *GaugeFloat64:
 			fmt.Fprintf(w, "gauge %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  value:       %f\n", metric.Snapshot().Value())
 		case GaugeInfo:
