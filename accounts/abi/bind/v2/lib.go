@@ -203,6 +203,7 @@ func LinkAndDeploy(auth *bind.TransactOpts, backend bind.ContractBackend, deploy
 	return res, nil
 }
 
+// TODO: adding docs soon (jwasinger)
 func FilterLogs[T any](instance *ContractInstance, opts *bind.FilterOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
 	backend := instance.Backend
 	c := bind.NewBoundContract(instance.Address, abi.ABI{}, backend, backend, backend)
@@ -213,6 +214,7 @@ func FilterLogs[T any](instance *ContractInstance, opts *bind.FilterOpts, eventI
 	return &EventIterator[T]{unpack: unpack, logs: logs, sub: sub}, nil
 }
 
+// TODO: adding docs soon (jwasinger)
 func WatchLogs[T any](instance *ContractInstance, opts *bind.WatchOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
 	backend := instance.Backend
 	c := bind.NewBoundContract(instance.Address, abi.ABI{}, backend, backend, backend)
@@ -313,6 +315,8 @@ func (it *EventIterator[T]) Close() error {
 	return nil
 }
 
+// Transact creates and submits a transaction to the bound contract instance
+// using the provided abi-encoded input (or nil).
 func Transact(instance bind.ContractInstance, opts *bind.TransactOpts, input []byte) (*types.Transaction, error) {
 	var (
 		addr    = instance.Address()
@@ -322,14 +326,9 @@ func Transact(instance bind.ContractInstance, opts *bind.TransactOpts, input []b
 	return c.RawTransact(opts, input)
 }
 
-// TODO: why do we need sepaarate transact/transfer methods?
-func Transfer(instance bind.ContractInstance, opts *bind.TransactOpts) (*types.Transaction, error) {
-	backend := instance.Backend()
-	c := bind.NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
-	return c.Transfer(opts)
-}
-
-func CallRaw(instance bind.ContractInstance, opts *bind.CallOpts, input []byte) ([]byte, error) {
+// Call performs an eth_call on the given bound contract instance, using the
+// provided abi-encoded input (or nil).
+func Call(instance bind.ContractInstance, opts *bind.CallOpts, input []byte) ([]byte, error) {
 	backend := instance.Backend()
 	c := bind.NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
 	return c.CallRaw(opts, input)
