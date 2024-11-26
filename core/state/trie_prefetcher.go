@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/ava-labs/libevm/common"
+	"github.com/ava-labs/libevm/libevm/options"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
 )
@@ -49,9 +50,11 @@ type triePrefetcher struct {
 	storageDupMeter   metrics.Meter
 	storageSkipMeter  metrics.Meter
 	storageWasteMeter metrics.Meter
+
+	options []PrefetcherOption
 }
 
-func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePrefetcher {
+func newTriePrefetcher(db Database, root common.Hash, namespace string, opts ...PrefetcherOption) *triePrefetcher {
 	prefix := triePrefetchMetricsPrefix + namespace
 	p := &triePrefetcher{
 		db:       db,
@@ -67,6 +70,8 @@ func newTriePrefetcher(db Database, root common.Hash, namespace string) *triePre
 		storageDupMeter:   metrics.GetOrRegisterMeter(prefix+"/storage/dup", nil),
 		storageSkipMeter:  metrics.GetOrRegisterMeter(prefix+"/storage/skip", nil),
 		storageWasteMeter: metrics.GetOrRegisterMeter(prefix+"/storage/waste", nil),
+
+		options: opts,
 	}
 	return p
 }
@@ -99,6 +104,7 @@ func (p *triePrefetcher) close() {
 			}
 		}
 	}
+	p.releaseWorkerPools()
 	// Clear out all fetchers (will crash on a second call, deliberate)
 	p.fetchers = nil
 }
@@ -122,6 +128,8 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 		storageDupMeter:   p.storageDupMeter,
 		storageSkipMeter:  p.storageSkipMeter,
 		storageWasteMeter: p.storageWasteMeter,
+
+		options: p.options,
 	}
 	// If the prefetcher is already a copy, duplicate the data
 	if p.fetches != nil {
@@ -150,7 +158,7 @@ func (p *triePrefetcher) prefetch(owner common.Hash, root common.Hash, addr comm
 	id := p.trieID(owner, root)
 	fetcher := p.fetchers[id]
 	if fetcher == nil {
-		fetcher = newSubfetcher(p.db, p.root, owner, root, addr)
+		fetcher = newSubfetcher(p.db, p.root, owner, root, addr, p.options...)
 		p.fetchers[id] = fetcher
 	}
 	fetcher.schedule(keys)
@@ -226,11 +234,13 @@ type subfetcher struct {
 	seen map[string]struct{} // Tracks the entries already loaded
 	dups int                 // Number of duplicate preload tasks
 	used [][]byte            // Tracks the entries used in the end
+
+	pool *subfetcherPool
 }
 
 // newSubfetcher creates a goroutine to prefetch state items belonging to a
 // particular root hash.
-func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address) *subfetcher {
+func newSubfetcher(db Database, state common.Hash, owner common.Hash, root common.Hash, addr common.Address, opts ...PrefetcherOption) *subfetcher {
 	sf := &subfetcher{
 		db:    db,
 		state: state,
@@ -243,6 +253,7 @@ func newSubfetcher(db Database, state common.Hash, owner common.Hash, root commo
 		copy:  make(chan chan Trie),
 		seen:  make(map[string]struct{}),
 	}
+	options.As[prefetcherConfig](opts...).applyTo(sf)
 	go sf.loop()
 	return sf
 }
@@ -294,7 +305,10 @@ func (sf *subfetcher) abort() {
 // out of tasks or its underlying trie is retrieved for committing.
 func (sf *subfetcher) loop() {
 	// No matter how the loop stops, signal anyone waiting that it's terminated
-	defer close(sf.term)
+	defer func() {
+		sf.pool.wait()
+		close(sf.term)
+	}()
 
 	// Start by opening the trie and stop processing if it fails
 	if sf.owner == (common.Hash{}) {
@@ -325,14 +339,14 @@ func (sf *subfetcher) loop() {
 			sf.lock.Unlock()
 
 			// Prefetch any tasks until the loop is interrupted
-			for i, task := range tasks {
+			for _, task := range tasks {
 				select {
-				case <-sf.stop:
-					// If termination is requested, add any leftover back and return
-					sf.lock.Lock()
-					sf.tasks = append(sf.tasks, tasks[i:]...)
-					sf.lock.Unlock()
-					return
+				//libevm:start
+				//
+				// The <-sf.stop case has been removed, in keeping with the equivalent change below. Future geth
+				// versions also remove it so our modification here can be undone when merging upstream.
+				//
+				//libevm:end
 
 				case ch := <-sf.copy:
 					// Somebody wants a copy of the current trie, grant them
@@ -344,9 +358,9 @@ func (sf *subfetcher) loop() {
 						sf.dups++
 					} else {
 						if len(task) == common.AddressLength {
-							sf.trie.GetAccount(common.BytesToAddress(task))
+							sf.pool.GetAccount(common.BytesToAddress(task))
 						} else {
-							sf.trie.GetStorage(sf.addr, task)
+							sf.pool.GetStorage(sf.addr, task)
 						}
 						sf.seen[string(task)] = struct{}{}
 					}
@@ -358,8 +372,26 @@ func (sf *subfetcher) loop() {
 			ch <- sf.db.CopyTrie(sf.trie)
 
 		case <-sf.stop:
-			// Termination is requested, abort and leave remaining tasks
-			return
+			//libevm:start
+			//
+			// This is copied, with alteration, from ethereum/go-ethereum#29519
+			// and can be deleted once we update to include that change.
+
+			// Termination is requested, abort if no more tasks are pending. If
+			// there are some, exhaust them first.
+			sf.lock.Lock()
+			done := len(sf.tasks) == 0
+			sf.lock.Unlock()
+
+			if done {
+				return
+			}
+
+			select {
+			case sf.wake <- struct{}{}:
+			default:
+			}
+			//libevm:end
 		}
 	}
 }
