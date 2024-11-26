@@ -151,7 +151,7 @@ func (r *StandardRegistry) GetAll() map[string]map[string]interface{} {
 		switch metric := i.(type) {
 		case *Counter:
 			values["count"] = metric.Snapshot().Count()
-		case CounterFloat64:
+		case *CounterFloat64:
 			values["count"] = metric.Snapshot().Count()
 		case Gauge:
 			values["value"] = metric.Snapshot().Value()
@@ -214,7 +214,7 @@ func (r *StandardRegistry) Unregister(name string) {
 
 func (r *StandardRegistry) loadOrRegister(name string, i interface{}) (interface{}, bool, bool) {
 	switch i.(type) {
-	case *Counter, CounterFloat64, Gauge, GaugeFloat64, GaugeInfo, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
+	case *Counter, *CounterFloat64, Gauge, GaugeFloat64, GaugeInfo, Healthcheck, Histogram, Meter, Timer, ResettingTimer:
 	default:
 		return nil, false, false
 	}

@@ -14,7 +14,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"value": metric.Snapshot().Count(),
 		}
 		return measurement, fields
-	case metrics.CounterFloat64:
+	case *metrics.CounterFloat64:
 		measurement := fmt.Sprintf("%s%s.count", namespace, name)
 		fields := map[string]interface{}{
 			"value": metric.Snapshot().Count(),

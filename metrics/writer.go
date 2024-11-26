@@ -29,7 +29,7 @@ func WriteOnce(r Registry, w io.Writer) {
 		case *Counter:
 			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  count:       %9d\n", metric.Snapshot().Count())
-		case CounterFloat64:
+		case *CounterFloat64:
 			fmt.Fprintf(w, "counter %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  count:       %f\n", metric.Snapshot().Count())
 		case Gauge:

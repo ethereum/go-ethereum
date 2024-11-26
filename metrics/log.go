@@ -24,7 +24,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 			case *Counter:
 				l.Printf("counter %s\n", name)
 				l.Printf("  count:       %9d\n", metric.Snapshot().Count())
-			case CounterFloat64:
+			case *CounterFloat64:
 				l.Printf("counter %s\n", name)
 				l.Printf("  count:       %f\n", metric.Snapshot().Count())
 			case Gauge:
