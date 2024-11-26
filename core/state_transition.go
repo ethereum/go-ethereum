@@ -187,6 +187,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
 func ApplyMessage(evm *vm.EVM, msg *Message, gp *GasPool) (*ExecutionResult, error) {
+	evm.SetTxContext(NewEVMTxContext(msg))
 	return NewStateTransition(evm, msg, gp).TransitionDb()
 }
 
