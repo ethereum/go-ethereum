@@ -217,17 +217,24 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil, test.Genesis.Config)
-	if err != nil {
-		b.Fatalf("failed to create call tracer: %v", err)
-	}
-	evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+	evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{})
 
 	for i := 0; i < b.N; i++ {
 		snap := state.StateDB.Snapshot()
-		_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil, test.Genesis.Config)
+		if err != nil {
+			b.Fatalf("failed to create call tracer: %v", err)
+		}
+		evm.Config.Tracer = tracer.Hooks
+		if tracer.OnTxStart != nil {
+			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		}
+		_, err = core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
+		}
+		if tracer.OnTxEnd != nil {
+			tracer.OnTxEnd(&types.Receipt{GasUsed: tx.Gas()}, nil)
 		}
 		if _, err = tracer.GetResult(); err != nil {
 			b.Fatal(err)
