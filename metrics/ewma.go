@@ -7,56 +7,37 @@ import (
 	"time"
 )
 
-type EWMASnapshot interface {
-	Rate() float64
-}
+// EWMASnapshot is a read-only copy of an EWMA.
+type EWMASnapshot float64
 
-// EWMAs continuously calculate an exponentially-weighted moving average
-// based on an outside source of clock ticks.
-type EWMA interface {
-	Snapshot() EWMASnapshot
-	Tick()
-	Update(int64)
-}
+// Rate returns the rate of events per second at the time the snapshot was
+// taken.
+func (a EWMASnapshot) Rate() float64 { return float64(a) }
 
 // NewEWMA constructs a new EWMA with the given alpha.
-func NewEWMA(alpha float64) EWMA {
-	return &StandardEWMA{alpha: alpha}
+func NewEWMA(alpha float64) *EWMA {
+	return &EWMA{alpha: alpha}
 }
 
 // NewEWMA1 constructs a new EWMA for a one-minute moving average.
-func NewEWMA1() EWMA {
+func NewEWMA1() *EWMA {
 	return NewEWMA(1 - math.Exp(-5.0/60.0/1))
 }
 
 // NewEWMA5 constructs a new EWMA for a five-minute moving average.
-func NewEWMA5() EWMA {
+func NewEWMA5() *EWMA {
 	return NewEWMA(1 - math.Exp(-5.0/60.0/5))
 }
 
 // NewEWMA15 constructs a new EWMA for a fifteen-minute moving average.
-func NewEWMA15() EWMA {
+func NewEWMA15() *EWMA {
 	return NewEWMA(1 - math.Exp(-5.0/60.0/15))
 }
 
-// ewmaSnapshot is a read-only copy of another EWMA.
-type ewmaSnapshot float64
-
-// Rate returns the rate of events per second at the time the snapshot was
-// taken.
-func (a ewmaSnapshot) Rate() float64 { return float64(a) }
-
-// NilEWMA is a no-op EWMA.
-type NilEWMA struct{}
-
-func (NilEWMA) Snapshot() EWMASnapshot { return (*emptySnapshot)(nil) }
-func (NilEWMA) Tick()                  {}
-func (NilEWMA) Update(n int64)         {}
-
-// StandardEWMA is the standard implementation of an EWMA and tracks the number
+// EWMA imlements an exponential weighted moving average. It tracks the number
 // of uncounted events and processes them on each tick.  It uses the
 // sync/atomic package to manage uncounted events.
-type StandardEWMA struct {
+type EWMA struct {
 	uncounted atomic.Int64
 	alpha     float64
 	rate      atomic.Uint64
@@ -65,14 +46,14 @@ type StandardEWMA struct {
 }
 
 // Snapshot returns a read-only copy of the EWMA.
-func (a *StandardEWMA) Snapshot() EWMASnapshot {
+func (a *EWMA) Snapshot() EWMASnapshot {
 	r := math.Float64frombits(a.rate.Load()) * float64(time.Second)
-	return ewmaSnapshot(r)
+	return EWMASnapshot(r)
 }
 
 // Tick ticks the clock to update the moving average.  It assumes it is called
 // every five seconds.
-func (a *StandardEWMA) Tick() {
+func (a *EWMA) Tick() {
 	// Optimization to avoid mutex locking in the hot-path.
 	if a.init.Load() {
 		a.updateRate(a.fetchInstantRate())
@@ -94,18 +75,18 @@ func (a *StandardEWMA) Tick() {
 	a.mutex.Unlock()
 }
 
-func (a *StandardEWMA) fetchInstantRate() float64 {
+func (a *EWMA) fetchInstantRate() float64 {
 	count := a.uncounted.Swap(0)
 	return float64(count) / float64(5*time.Second)
 }
 
-func (a *StandardEWMA) updateRate(instantRate float64) {
+func (a *EWMA) updateRate(instantRate float64) {
 	currentRate := math.Float64frombits(a.rate.Load())
 	currentRate += a.alpha * (instantRate - currentRate)
 	a.rate.Store(math.Float64bits(currentRate))
 }
 
 // Update adds n uncounted events.
-func (a *StandardEWMA) Update(n int64) {
+func (a *EWMA) Update(n int64) {
 	a.uncounted.Add(n)
 }

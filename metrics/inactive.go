@@ -22,7 +22,6 @@ var (
 	_ HistogramSnapshot = (*emptySnapshot)(nil)
 	_ GaugeSnapshot     = (*emptySnapshot)(nil)
 	_ MeterSnapshot     = (*emptySnapshot)(nil)
-	_ EWMASnapshot      = (*emptySnapshot)(nil)
 	_ TimerSnapshot     = (*emptySnapshot)(nil)
 )
 

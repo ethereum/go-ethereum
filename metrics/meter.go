@@ -108,7 +108,7 @@ type StandardMeter struct {
 	uncounted atomic.Int64 // not yet added to the EWMAs
 	rateMean  atomic.Uint64
 
-	a1, a5, a15 EWMA
+	a1, a5, a15 *EWMA
 	startTime   time.Time
 	stopped     atomic.Bool
 }
