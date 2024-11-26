@@ -92,9 +92,6 @@ func TestDeployment(t *testing.T) {
 		Backend: backend,
 		Client:  backend.Client(),
 	}
-
-	//log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelDebug, true)))
-
 	ctrct, err := nested_libraries.NewC1()
 	if err != nil {
 		panic(err)
@@ -102,9 +99,8 @@ func TestDeployment(t *testing.T) {
 
 	constructorInput, err := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
 	if err != nil {
-		t.Fatalf("fack %v", err)
+		t.Fatalf("failed to pack constructor: %v", err)
 	}
-	// TODO: test case with arguments-containing constructor
 	deploymentParams := DeploymentParams{
 		Contracts: []ContractDeployParams{
 			{

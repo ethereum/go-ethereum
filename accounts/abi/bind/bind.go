@@ -365,7 +365,8 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		// methods (which in v1 recursively deploy their
 		// library dependencies).  So, the entire set of
 		// library dependencies is required, and we will
-		// the order to deploy and link them at runtime.
+		// determine the order to deploy and link them at
+		// runtime.
 		var findDeps func(contract *tmplContract) map[string]struct{}
 		findDeps = func(contract *tmplContract) map[string]struct{} {
 			// 1) match all libraries that this contract depends on
