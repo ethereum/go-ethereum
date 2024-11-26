@@ -18,31 +18,25 @@ library L1 {
 
 library L2 {
     function Do(uint256 val) public pure returns (uint256) {
-        return uint256(1);
+        return L1.Do(val) + uint256(1);
     }
 }
 
 library L3 {
     function Do(uint256 val) public pure returns (uint256) {
-        return L1.Do(uint256(val)) + uint256(1);
+        return uint256(1);
     }
 }
 
 library L4 {
     function Do(uint256 val) public pure returns (uint256) {
-        return uint256(1);
-    }
-}
-
-library L5 {
-    function Do(uint256 val) public pure returns (uint256) {
-        return L3.Do(uint256(val)) + uint256(1);
+        return L2.Do(uint256(val)) + L3.Do(uint256(val)) + uint256(1);
     }
 }
 
 contract C1 {
     function Do(uint256 val) public pure  returns (uint256 res) {
-        return L5.Do(uint256(val)) + L1.Do(uint256(0)) + uint256(1);
+        return L4.Do(uint256(val)) + L1.Do(uint256(0)) + uint256(1);
     }
 
     constructor(uint256 v1, uint256 v2) {
