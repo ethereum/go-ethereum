@@ -65,6 +65,9 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 			return // Also invalid block, bail out
 		}
 		statedb.SetTxContext(tx.Hash(), i)
+
+		// We attempt to apply a transaction. The goal is not to execute
+		// the transaction successfully, rather to warm up touched data slots.
 		if _, err := ApplyMessage(evm, msg, gaspool); err != nil {
 			return // Ugh, something went horribly wrong, bail out
 		}
