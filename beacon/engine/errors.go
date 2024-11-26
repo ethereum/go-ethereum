@@ -74,6 +74,10 @@ var (
 	//   - newPayloadV1: if the payload was accepted, but not processed (side chain)
 	ACCEPTED = "ACCEPTED"
 
+	// INCLUSION_LIST_UNSATISFIED is returned by the engine API in the following calls:
+	//   - newPayloadV5: if the payload failed to satisfy the inclusion list constraints
+	INCLUSION_LIST_UNSATISFIED = "INCLUSION_LIST_UNSATISFIED"
+
 	GenericServerError       = &EngineAPIError{code: -32000, msg: "Server error"}
 	UnknownPayload           = &EngineAPIError{code: -38001, msg: "Unknown payload"}
 	InvalidForkChoiceState   = &EngineAPIError{code: -38002, msg: "Invalid forkchoice state"}
