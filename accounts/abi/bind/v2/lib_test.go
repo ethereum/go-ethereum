@@ -34,87 +34,8 @@ func JSON(reader io.Reader) (abi.ABI, error) {
 	return instance, nil
 }
 
-func TestV2(t *testing.T) {
-	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-	backend := simulated.NewBackend(
-		types.GenesisAlloc{
-			testAddr: {Balance: big.NewInt(10000000000000000)},
-		},
-		func(nodeConf *node.Config, ethConf *ethconfig.Config) {
-			ethConf.Genesis.Difficulty = big.NewInt(0)
-		},
-	)
-	defer backend.Close()
-
-	contractABI, err := JSON(strings.NewReader(v2_generated_testcase.V2GeneratedTestcaseMetaData.ABI))
-	if err != nil {
-		panic(err)
-	}
-
-	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
-	opts := bind.TransactOpts{
-		From:  testAddr,
-		Nonce: nil,
-		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
-			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
-			if err != nil {
-				t.Fatal(err)
-			}
-			signedTx, err := tx.WithSignature(signer, signature)
-			if err != nil {
-				t.Fatal(err)
-			}
-			return signedTx, nil
-		},
-		Context: context.Background(),
-	}
-	// we should just be able to use the backend directly, instead of using
-	// this deprecated interface.  However, the simulated backend no longer
-	// implements backends.SimulatedBackend...
-	bindBackend := backends.SimulatedBackend{
-		Backend: backend,
-		Client:  backend.Client(),
-	}
-	address, tx, _, err := bind.DeployContract(&opts, contractABI, common.Hex2Bytes(v2_generated_testcase.V2GeneratedTestcaseMetaData.Bin), &bindBackend)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = bind.WaitDeployed(context.Background(), &bindBackend, tx)
-	if err != nil {
-		t.Fatalf("error deploying bound contract: %+v", err)
-	}
-
-	contract, err := v2_generated_testcase.NewV2GeneratedTestcase()
-	if err != nil {
-		t.Fatal(err) // can't happen here with the example used.  consider removing this block
-	}
-	//contractInstance := v2_generated_testcase.NewV2GeneratedTestcaseInstance(contract, address, bindBackend)
-	contractInstance := ContractInstance{
-		Address: address,
-		Backend: bindBackend,
-	}
-	sinkCh := make(chan *v2_generated_testcase.V2GeneratedTestcaseStruct)
-	// q:  what extra functionality is given by specifying this as a custom method, instead of catching emited methods
-	// from the sync channel?
-	unpackStruct := func(log *types.Log) (*v2_generated_testcase.V2GeneratedTestcaseStruct, error) {
-		res, err := contract.UnpackStructEvent(log)
-		return res, err
-	}
-	watchOpts := bind.WatchOpts{
-		Start:   nil,
-		Context: context.Background(),
-	}
-	// TODO: test using various topics
-	// q: does nil topics mean to accept any?
-	sub, err := WatchLogs[v2_generated_testcase.V2GeneratedTestcaseStruct](&contractInstance, &watchOpts, v2_generated_testcase.V2GeneratedTestcaseStructEventID(), unpackStruct, sinkCh, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sub.Unsubscribe()
-	// send a balance to our contract (contract must accept ether by default)
-}
-
+// test that deploying a contract with library dependencies works,
+// verifying by calling the deployed contract.
 func TestDeployment(t *testing.T) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	backend := simulated.NewBackend(
@@ -228,57 +149,12 @@ func TestDeployment(t *testing.T) {
 
 /*
 	func TestDeploymentWithOverrides(t *testing.T) {
-		testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
-		backend := simulated.NewBackend(
-			types.GenesisAlloc{
-				testAddr: {Balance: big.NewInt(10000000000000000)},
-			},
-			func(nodeConf *node.Config, ethConf *ethconfig.Config) {
-				ethConf.Genesis.Difficulty = big.NewInt(0)
-			},
-		)
-		defer backend.Close()
-
-		_, err := JSON(strings.NewReader(v2_generated_testcase.V2GeneratedTestcaseMetaData.ABI))
-		if err != nil {
-			panic(err)
-		}
-
-		signer := types.LatestSigner(params.AllDevChainProtocolChanges)
-		opts := bind.TransactOpts{
-			From:  testAddr,
-			Nonce: nil,
-			Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
-				signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
-				if err != nil {
-					t.Fatal(err)
-				}
-				signedTx, err := tx.WithSignature(signer, signature)
-				if err != nil {
-					t.Fatal(err)
-				}
-				return signedTx, nil
-			},
-			Context: context.Background(),
-		}
-		// we should just be able to use the backend directly, instead of using
-		// this deprecated interface.  However, the simulated backend no longer
-		// implements backends.SimulatedBackend...
-		bindBackend := backends.SimulatedBackend{
-			Backend: backend,
-			Client:  backend.Client(),
-		}
 		// more deployment test case ideas:
 		// 1)  deploy libraries, then deploy contract first with libraries as overrides
 		// 2)  deploy contract without library dependencies.
 	}
 */
+
 func TestEvents(t *testing.T) {
 	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
 }
-
-/* test-cases that should be extracted from v1 tests
-
-* EventChecker
-
- */
