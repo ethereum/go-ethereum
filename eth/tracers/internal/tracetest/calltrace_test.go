@@ -175,7 +175,6 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 	}
 }
 
-// TODO (@sina) this benchmark has been broken for a while, please fix it.
 func BenchmarkTracers(b *testing.B) {
 	files, err := os.ReadDir(filepath.Join("testdata", "call_tracer"))
 	if err != nil {
