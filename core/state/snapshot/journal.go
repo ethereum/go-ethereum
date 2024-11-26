@@ -34,8 +34,9 @@ import (
 )
 
 const (
-	journalInitVersion    uint64 = 0 // initial version
-	journalCurrentVersion uint64 = 1 // current version, with destruct flag (in diff layers) removed
+	journalV0             uint64 = 0 // initial version
+	journalV1             uint64 = 1 // current version, with destruct flag (in diff layers) removed
+	journalCurrentVersion        = journalV1
 )
 
 // journalGenerator is a disk layer entry containing the generator progress marker.
@@ -291,7 +292,7 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 		log.Warn("Failed to resolve the journal version", "error", err)
 		return errors.New("failed to resolve journal version")
 	}
-	if version != journalInitVersion && version != journalCurrentVersion {
+	if version != journalV0 && version != journalCurrentVersion {
 		log.Warn("Discarded journal with wrong version", "required", journalCurrentVersion, "got", version)
 		return errors.New("wrong journal version")
 	}
@@ -342,13 +343,13 @@ func iterateJournal(db ethdb.KeyValueReader, callback journalCallback) error {
 		// This approach minimizes snapshot regeneration for Geth nodes upgrading from a
 		// legacy version that are already synced. The workaround can be safely removed
 		// after the next hard fork.
-		if version == journalInitVersion {
+		if version == journalV0 {
 			var destructs []journalDestruct
 			if err := r.Decode(&destructs); err != nil {
 				return fmt.Errorf("load diff destructs: %v", err)
 			}
 			if len(destructs) > 0 {
-				log.Warn("Incompatible legacy journal detected", "version", journalInitVersion)
+				log.Warn("Incompatible legacy journal detected", "version", journalV0)
 				return fmt.Errorf("incompatible legacy journal detected")
 			}
 		}
