@@ -494,5 +494,4 @@ func TestEIP7623(t *testing.T) {
 			t.Fatalf("invalid normal gas cost in test %v want %v got %v", i, test.gas7623, haveGas7623)
 		}
 	}
-
 }
