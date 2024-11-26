@@ -473,39 +473,31 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 }
 
 func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
-	// Calculate state change refund
-	stateRefund := st.gasUsed() / refundQuotient
-	if stateRefund > st.state.GetRefund() {
-		stateRefund = st.state.GetRefund()
+	// Apply refund counter, capped to a refund quotient
+	refund := st.gasUsed() / refundQuotient
+	if refund > st.state.GetRefund() {
+		refund = st.state.GetRefund()
 	}
 
-	// Calculate the total refund (unused gas + state refund)
-	totalRefund := st.gasRemaining + stateRefund
-
-	// Calculate the maximum refund allowed (150% of gas used)
-	maxRefund := st.gasUsed()/2 + st.gasUsed()
-
-	// Ensure the refund does not exceed the maximum allowed
-	if totalRefund > maxRefund {
-		totalRefund = maxRefund
+	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && refund > 0 {
+		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, st.gasRemaining+refund, tracing.GasChangeTxRefunds)
 	}
 
-	// Update gasRemaining
-	st.gasRemaining += stateRefund
+	st.gasRemaining += refund
 
-	// Return ETH for total refund, exchanged at the original rate.
-	totalRefundValue := new(big.Int).Mul(new(big.Int).SetUint64(totalRefund), st.msg.GasPrice)
-	st.state.AddBalance(st.msg.From, totalRefundValue, tracing.BalanceIncreaseGasReturn)
+	// Return ETH for remaining gas, exchanged at the original rate.
+	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gasRemaining), st.msg.GasPrice)
+	st.state.AddBalance(st.msg.From, remaining, tracing.BalanceIncreaseGasReturn)
 
-	// Notify the tracer about the gas change
 	if st.evm.Config.Tracer != nil && st.evm.Config.Tracer.OnGasChange != nil && st.gasRemaining > 0 {
 		st.evm.Config.Tracer.OnGasChange(st.gasRemaining, 0, tracing.GasChangeTxLeftOverReturned)
 	}
 
-	// Update gas pool
+	// Also return remaining gas to the block gas counter so it is
+	// available for the next transaction.
 	st.gp.AddGas(st.gasRemaining)
 
-	return stateRefund
+	return refund
 }
 
 // gasUsed returns the amount of gas used up by the state transition.
