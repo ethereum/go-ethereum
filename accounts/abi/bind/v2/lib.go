@@ -127,7 +127,7 @@ type DeploymentParams struct {
 	Contracts []ContractDeployParams
 	// Libraries is a map of pattern to metadata for library contracts that
 	// are to be deployed.
-	Libraries map[string]*bind.MetaData
+	Libraries []*bind.MetaData
 	// Overrides is an optional map of pattern to deployment address.
 	// Contracts/libraries that refer to dependencies in the override
 	// set are linked to the provided address (an already-deployed contract).
@@ -156,8 +156,8 @@ func LinkAndDeploy(auth *bind.TransactOpts, backend bind.ContractBackend, deploy
 
 	// re-express libraries as a map of pattern -> pre-link binary
 	pending := make(map[string]string)
-	for pattern, meta := range libMetas {
-		pending[pattern] = meta.Bin
+	for _, meta := range libMetas {
+		pending[meta.Pattern] = meta.Bin
 	}
 
 	// initialize the set of already-deployed contracts with given override addresses
