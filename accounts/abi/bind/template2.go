@@ -38,10 +38,9 @@ var (
 {{end}}
 
 {{range $contract := .Contracts}}
-	// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
-	var {{$contract.Type}}LibraryDeps = map[string]*bind.MetaData{
+	var {{$contract.Type}}LibraryDeps = []*bind.MetaData{
 	{{range $name, $pattern := .AllLibraries -}}
-		"{{$pattern}}": {{$name}}MetaData,
+		{{$name}}MetaData,
 	{{ end}}
 	}
 

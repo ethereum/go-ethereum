@@ -23,12 +23,11 @@ var (
 	_ = abi.ConvertType
 )
 
-// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
-var C1LibraryDeps = map[string]*bind.MetaData{
-	"ffc1393672b8ed81d0c8093ffcb0e7fbe8": L1MetaData,
-	"2ce896a6dd38932d354f317286f90bc675": L2MetaData,
-	"d03b97f5e1a564374023a72ac7d1806773": L3MetaData,
-	"5f33a1fab8ea7d932b4bc8c5e7dcd90bc2": L4MetaData,
+var C1LibraryDeps = []*bind.MetaData{
+	L1MetaData,
+	L2MetaData,
+	L3MetaData,
+	L4MetaData,
 }
 
 // TODO: convert this type to value type after everything works.
@@ -80,11 +79,10 @@ func (_C1 *C1) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
-var C2LibraryDeps = map[string]*bind.MetaData{
-	"ffc1393672b8ed81d0c8093ffcb0e7fbe8": L1MetaData,
-	"fd1474cf57f7ed48491e8bfdfd0d172adf": L2bMetaData,
-	"6070639404c39b5667691bb1f9177e1eac": L4bMetaData,
+var C2LibraryDeps = []*bind.MetaData{
+	L1MetaData,
+	L2bMetaData,
+	L4bMetaData,
 }
 
 // TODO: convert this type to value type after everything works.
@@ -136,8 +134,7 @@ func (_C2 *C2) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
-var L1LibraryDeps = map[string]*bind.MetaData{}
+var L1LibraryDeps = []*bind.MetaData{}
 
 // TODO: convert this type to value type after everything works.
 // L1MetaData contains all meta data concerning the L1 contract.
@@ -188,8 +185,7 @@ func (_L1 *L1) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
-var L2LibraryDeps = map[string]*bind.MetaData{}
+var L2LibraryDeps = []*bind.MetaData{}
 
 // TODO: convert this type to value type after everything works.
 // L2MetaData contains all meta data concerning the L2 contract.
@@ -240,8 +236,7 @@ func (_L2 *L2) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
-var L2bLibraryDeps = map[string]*bind.MetaData{}
+var L2bLibraryDeps = []*bind.MetaData{}
 
 // TODO: convert this type to value type after everything works.
 // L2bMetaData contains all meta data concerning the L2b contract.
@@ -292,8 +287,7 @@ func (_L2b *L2b) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
-var L3LibraryDeps = map[string]*bind.MetaData{}
+var L3LibraryDeps = []*bind.MetaData{}
 
 // TODO: convert this type to value type after everything works.
 // L3MetaData contains all meta data concerning the L3 contract.
@@ -344,8 +338,7 @@ func (_L3 *L3) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
-var L4LibraryDeps = map[string]*bind.MetaData{}
+var L4LibraryDeps = []*bind.MetaData{}
 
 // TODO: convert this type to value type after everything works.
 // L4MetaData contains all meta data concerning the L4 contract.
@@ -396,8 +389,7 @@ func (_L4 *L4) UnpackDo(data []byte) (*big.Int, error) {
 
 }
 
-// TODO: turn this into a list, now that the pattern is embedded in each MetaData object
-var L4bLibraryDeps = map[string]*bind.MetaData{}
+var L4bLibraryDeps = []*bind.MetaData{}
 
 // TODO: convert this type to value type after everything works.
 // L4bMetaData contains all meta data concerning the L4b contract.
