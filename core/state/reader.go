@@ -48,16 +48,23 @@ type Reader interface {
 	// - The returned storage slot is safe to modify after the call
 	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
 
-	// ContractCode returns the code associated with a particular account.
+	// ContractCode returns the code associated with the given code hash.
 	//
-	// - It returns an error to indicate code doesn't exist
+	// - It returns an error to indicate code doesn't exist or is empty
 	// - The returned code is safe to modify after the call
 	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
 
-	// ContractCodeSize returns the size of the code associated with a particular account.
+	// ContractCodeSize returns the size of the code associated with the given code hash.
 	//
 	// - It returns an error to indicate code doesn't exist
 	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
+
+	// SupportsCodeQuery returns true if the reader supports querying contract code. Right now
+	// the trie reader supports querying contract code but the state reader doesn't. This is
+	// technically an arbitrary distinction as code is not stored either in the snapshot or trie
+	// per se. Important point is that one of them implements the code query to avoid double-lookups
+	// for non-existent code.
+	SupportsCodeQuery() bool
 
 	// Copy returns a deep-copied state reader.
 	Copy() Reader
@@ -142,6 +149,12 @@ func (r *stateReader) ContractCode(addr common.Address, codeHash common.Hash) ([
 // ContractCodeSize implements Reader, returning the size of the code associated with a particular account.
 func (r *stateReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	return 0, errors.New("not supported")
+}
+
+// SupportsCodeQuery implements Reader, returning false as the state reader
+// doesn't support querying contract code.
+func (r *stateReader) SupportsCodeQuery() bool {
+	return false
 }
 
 // Copy implements Reader, returning a deep-copied snap reader.
@@ -260,6 +273,12 @@ func (r *trieReader) ContractCodeSize(addr common.Address, codeHash common.Hash)
 	return r.contractDB.ContractCodeSize(addr, codeHash)
 }
 
+// SupportsCodeQuery implements Reader, returning true as the trie reader
+// supports querying contract code.
+func (r *trieReader) SupportsCodeQuery() bool {
+	return true
+}
+
 // Copy implements Reader, returning a deep-copied trie reader.
 func (r *trieReader) Copy() Reader {
 	tries := make(map[common.Address]Trie)
@@ -336,15 +355,16 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		// Skip state reader as it doesn't provide contract code and
-		// always returns an error.
-		if _, ok := reader.(*trieReader); ok {
+		if reader.SupportsCodeQuery() {
 			code, err := reader.ContractCode(addr, codeHash)
 			if err == nil {
 				return code, nil
 			}
 			errs = append(errs, err)
 		}
+	}
+	if len(errs) == 0 {
+		return nil, errors.New("not found")
 	}
 	return nil, errors.Join(errs...)
 }
@@ -353,9 +373,7 @@ func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([
 func (r *multiReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		// Skip state reader as it doesn't provide contract code and
-		// always returns an error.
-		if _, ok := reader.(*trieReader); ok {
+		if reader.SupportsCodeQuery() {
 			size, err := reader.ContractCodeSize(addr, codeHash)
 			if err == nil {
 				return size, nil
@@ -363,7 +381,21 @@ func (r *multiReader) ContractCodeSize(addr common.Address, codeHash common.Hash
 			errs = append(errs, err)
 		}
 	}
+	if len(errs) == 0 {
+		return 0, errors.New("not found")
+	}
 	return 0, errors.Join(errs...)
+}
+
+// SupportsCodeQuery implements Reader, returning true if the reader supports querying contract code.
+func (r *multiReader) SupportsCodeQuery() bool {
+	// Return true if one of readers supports querying contract code.
+	for _, reader := range r.readers {
+		if reader.SupportsCodeQuery() {
+			return true
+		}
+	}
+	return false
 }
 
 // Copy implementing Reader interface, returning a deep-copied state reader.
