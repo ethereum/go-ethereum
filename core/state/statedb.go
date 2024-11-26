@@ -27,6 +27,7 @@ import (
 	"github.com/ava-labs/libevm/core/state/snapshot"
 	"github.com/ava-labs/libevm/core/types"
 	"github.com/ava-labs/libevm/crypto"
+	"github.com/ava-labs/libevm/libevm/stateconf"
 	"github.com/ava-labs/libevm/log"
 	"github.com/ava-labs/libevm/metrics"
 	"github.com/ava-labs/libevm/params"
@@ -63,7 +64,7 @@ type StateDB struct {
 	prefetcher *triePrefetcher
 	trie       Trie
 	hasher     crypto.KeccakState
-	snaps      *snapshot.Tree    // Nil if snapshot is not available
+	snaps      SnapshotTree      // Nil if snapshot is not available
 	snap       snapshot.Snapshot // Nil if snapshot is not available
 
 	// originalRoot is the pre-state root, before any changes were made.
@@ -141,7 +142,8 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+func New(root common.Hash, db Database, snaps SnapshotTree) (*StateDB, error) {
+	snaps = clearTypedNilPointer(snaps)
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -1162,7 +1164,7 @@ func (s *StateDB) handleDestruction(nodes *trienode.MergedNodeSet) (map[common.A
 //
 // The associated block number of the state transition is also provided
 // for more chain context.
-func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, error) {
+func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool, opts ...stateconf.SnapshotUpdateOption) (common.Hash, error) {
 	// Short circuit in case any database failure occurred earlier.
 	if s.dbErr != nil {
 		return common.Hash{}, fmt.Errorf("commit aborted due to earlier error: %v", s.dbErr)
@@ -1252,7 +1254,7 @@ func (s *StateDB) Commit(block uint64, deleteEmptyObjects bool) (common.Hash, er
 		start := time.Now()
 		// Only update if there's a state transition (skip empty Clique blocks)
 		if parent := s.snap.Root(); parent != root {
-			if err := s.snaps.Update(root, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages); err != nil {
+			if err := s.snaps.Update(root, parent, s.convertAccountSet(s.stateObjectsDestruct), s.accounts, s.storages, opts...); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", parent, "to", root, "err", err)
 			}
 			// Keep 128 diff layers in the memory, persistent layer is 129th.
