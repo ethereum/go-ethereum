@@ -268,32 +268,18 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM) {
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
-<<<<<<< HEAD
-func ProcessWithdrawalQueue(evm *vm.EVM) []byte {
-	return processRequestsSystemCall(evm, 0x01, params.WithdrawalQueueAddress)
-=======
-func ProcessWithdrawalQueue(requests *[][]byte, vmenv *vm.EVM, statedb vm.StateDB) {
-	processRequestsSystemCall(requests, vmenv, statedb, 0x01, params.WithdrawalQueueAddress)
->>>>>>> 7481705901 (all: simplify requests)
+func ProcessWithdrawalQueue(requests *[][]byte, evm *vm.EVM) {
+	processRequestsSystemCall(requests, evm, 0x01, params.WithdrawalQueueAddress)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
-<<<<<<< HEAD
-func ProcessConsolidationQueue(evm *vm.EVM) []byte {
-	return processRequestsSystemCall(evm, 0x02, params.ConsolidationQueueAddress)
+func ProcessConsolidationQueue(requests *[][]byte, evm *vm.EVM) {
+	processRequestsSystemCall(requests, evm, 0x02, params.ConsolidationQueueAddress)
 }
 
-func processRequestsSystemCall(evm *vm.EVM, requestType byte, addr common.Address) []byte {
+func processRequestsSystemCall(requests *[][]byte, evm *vm.EVM, requestType byte, addr common.Address) {
 	if tracer := evm.Config.Tracer; tracer != nil {
-=======
-func ProcessConsolidationQueue(requests *[][]byte, vmenv *vm.EVM, statedb vm.StateDB) {
-	processRequestsSystemCall(requests, vmenv, statedb, 0x02, params.ConsolidationQueueAddress)
-}
-
-func processRequestsSystemCall(requests *[][]byte, vmenv *vm.EVM, statedb vm.StateDB, requestType byte, addr common.Address) {
-	if tracer := vmenv.Config.Tracer; tracer != nil {
->>>>>>> 7481705901 (all: simplify requests)
 		if tracer.OnSystemCallStart != nil {
 			tracer.OnSystemCallStart()
 		}
