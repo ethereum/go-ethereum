@@ -136,12 +136,12 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 
 // ContractCode implements Reader, retrieving the code associated with a particular account.
 func (r *stateReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	return nil, nil
+	return nil, errors.New("not supported")
 }
 
 // ContractCodeSize implements Reader, returning the size of the code associated with a particular account.
 func (r *stateReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	return 0, nil
+	return 0, errors.New("not supported")
 }
 
 // Copy implements Reader, returning a deep-copied snap reader.
@@ -336,9 +336,13 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		code, err := reader.ContractCode(addr, codeHash)
-		if err == nil {
-			return code, nil
+		// Only trie reader can provide contract code.
+		if _, ok := reader.(*trieReader); ok {
+			code, err := reader.ContractCode(addr, codeHash)
+			if err == nil {
+				return code, nil
+			}
+			errs = append(errs, err)
 		}
 	}
 	return nil, errors.Join(errs...)
@@ -348,9 +352,13 @@ func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([
 func (r *multiReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		size, err := reader.ContractCodeSize(addr, codeHash)
-		if err == nil {
-			return size, nil
+		// Only trie reader can provide contract code.
+		if _, ok := reader.(*trieReader); ok {
+			size, err := reader.ContractCodeSize(addr, codeHash)
+			if err == nil {
+				return size, nil
+			}
+			errs = append(errs, err)
 		}
 	}
 	return 0, errors.Join(errs...)
