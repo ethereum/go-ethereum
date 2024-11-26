@@ -84,6 +84,7 @@ type execStats struct {
 
 func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, execStats, error) {
 	if bench {
+		testing.Init()
 		// Do one warm-up run
 		output, gasUsed, err := execFunc()
 		result := testing.Benchmark(func(b *testing.B) {
