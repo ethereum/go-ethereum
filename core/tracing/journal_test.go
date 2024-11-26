@@ -142,6 +142,21 @@ func TestJournalNestedCalls(t *testing.T) {
 	}
 }
 
+func TestNonceIncOnCreate(t *testing.T) {
+	tr := &testTracer{}
+	wr, err := WrapWithJournal(&Hooks{OnNonceChange: tr.OnNonceChange})
+	if err != nil {
+		t.Fatalf("failed to wrap test tracer: %v", err)
+	}
+	addr := common.HexToAddress("0x1234")
+	wr.OnEnter(0, CREATE, addr, addr, nil, 1000, big.NewInt(0))
+	wr.OnNonceChange(addr, 0, 1)
+	wr.OnExit(0, nil, 100, errors.New("revert"), true)
+	if tr.nonce != 1 {
+		t.Fatalf("unexpected nonce: %v", tr.nonce)
+	}
+}
+
 func TestAllHooksCalled(t *testing.T) {
 	tracer := newTracerAllHooks()
 	hooks := tracer.hooks()

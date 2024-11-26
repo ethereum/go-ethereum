@@ -25,6 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+const (
+	CREATE  = 0xf0
+	CREATE2 = 0xf5
+)
+
 type revision struct {
 	id           int
 	journalIndex int
@@ -33,8 +38,9 @@ type revision struct {
 // journal is a state change journal to be wrapped around a tracer.
 // It will emit the state change hooks with reverse values when a call reverts.
 type journal struct {
-	entries []entry
-	hooks   *Hooks
+	entries     []entry
+	hooks       *Hooks
+	lastCreator *common.Address // Account that initiated the last contract creation
 
 	validRevisions []revision
 	nextRevisionId int
@@ -136,12 +142,18 @@ func (j *journal) OnTxEnd(receipt *types.Receipt, err error) {
 
 func (j *journal) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	j.revIds = append(j.revIds, j.snapshot())
+	if typ == CREATE || typ == CREATE2 {
+		j.lastCreator = &from
+	}
 	if j.hooks.OnEnter != nil {
 		j.hooks.OnEnter(depth, typ, from, to, input, gas, value)
 	}
 }
 
 func (j *journal) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if j.lastCreator != nil {
+		j.lastCreator = nil
+	}
 	revId := j.revIds[len(j.revIds)-1]
 	j.revIds = j.revIds[:len(j.revIds)-1]
 	if reverted {
@@ -160,7 +172,14 @@ func (j *journal) OnBalanceChange(addr common.Address, prev, new *big.Int, reaso
 }
 
 func (j *journal) OnNonceChange(addr common.Address, prev, new uint64) {
-	j.entries = append(j.entries, nonceChange{addr: addr, prev: prev, new: new})
+	// When a contract is created, the nonce of the creator is incremented.
+	// This change is not reverted when the creation fails.
+	if j.lastCreator != nil && *j.lastCreator == addr {
+		// Skip only the first nonce change.
+		j.lastCreator = nil
+	} else {
+		j.entries = append(j.entries, nonceChange{addr: addr, prev: prev, new: new})
+	}
 	if j.hooks.OnNonceChange != nil {
 		j.hooks.OnNonceChange(addr, prev, new)
 	}
