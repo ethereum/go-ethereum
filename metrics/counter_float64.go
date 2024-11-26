@@ -36,28 +36,26 @@ type CounterFloat64Snapshot float64
 func (c CounterFloat64Snapshot) Count() float64 { return float64(c) }
 
 // CounterFloat64 is the uses atomic to manage a single float64 value.
-type CounterFloat64 struct {
-	floatBits atomic.Uint64
-}
+type CounterFloat64 atomic.Uint64
 
 // Clear sets the counter to zero.
 func (c *CounterFloat64) Clear() {
-	c.floatBits.Store(0)
+	(*atomic.Uint64)(c).Store(0)
 }
 
 // Dec decrements the counter by the given amount.
 func (c *CounterFloat64) Dec(v float64) {
-	atomicAddFloat(&c.floatBits, -v)
+	atomicAddFloat((*atomic.Uint64)(c), -v)
 }
 
 // Inc increments the counter by the given amount.
 func (c *CounterFloat64) Inc(v float64) {
-	atomicAddFloat(&c.floatBits, v)
+	atomicAddFloat((*atomic.Uint64)(c), v)
 }
 
 // Snapshot returns a read-only copy of the counter.
 func (c *CounterFloat64) Snapshot() CounterFloat64Snapshot {
-	return CounterFloat64Snapshot(math.Float64frombits(c.floatBits.Load()))
+	return CounterFloat64Snapshot(math.Float64frombits((*atomic.Uint64)(c).Load()))
 }
 
 func atomicAddFloat(fbits *atomic.Uint64, v float64) {
