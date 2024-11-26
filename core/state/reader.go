@@ -50,15 +50,13 @@ type Reader interface {
 
 	// ContractCode returns the code associated with a particular account.
 	//
-	// - Returns an empty code if it does not exist
-	// - It can return an error to indicate code doesn't exist
+	// - It returns an error to indicate code doesn't exist
 	// - The returned code is safe to modify after the call
 	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
 
 	// ContractCodeSize returns the size of the code associated with a particular account.
 	//
-	// - Returns 0 if the code does not exist
-	// - It can return an error to indicate code doesn't exist
+	// - It returns an error to indicate code doesn't exist
 	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
 
 	// Copy returns a deep-copied state reader.
@@ -269,12 +267,13 @@ func (r *trieReader) Copy() Reader {
 		tries[addr] = mustCopyTrie(tr)
 	}
 	return &trieReader{
-		root:     r.root,
-		db:       r.db,
-		buff:     crypto.NewKeccakState(),
-		mainTrie: mustCopyTrie(r.mainTrie),
-		subRoots: maps.Clone(r.subRoots),
-		subTries: tries,
+		root:       r.root,
+		db:         r.db,
+		contractDB: r.contractDB,
+		buff:       crypto.NewKeccakState(),
+		mainTrie:   mustCopyTrie(r.mainTrie),
+		subRoots:   maps.Clone(r.subRoots),
+		subTries:   tries,
 	}
 }
 
