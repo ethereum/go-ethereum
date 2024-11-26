@@ -50,7 +50,7 @@ func LogScaled(r Registry, freq time.Duration, scale time.Duration, l Logger) {
 				l.Printf("  95%%:         %12.2f\n", ps[2])
 				l.Printf("  99%%:         %12.2f\n", ps[3])
 				l.Printf("  99.9%%:       %12.2f\n", ps[4])
-			case Meter:
+			case *Meter:
 				m := metric.Snapshot()
 				l.Printf("meter %s\n", name)
 				l.Printf("  count:       %9d\n", m.Count())

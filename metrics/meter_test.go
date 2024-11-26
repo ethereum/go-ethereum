@@ -30,10 +30,10 @@ func TestGetOrRegisterMeter(t *testing.T) {
 func TestMeterDecay(t *testing.T) {
 	ma := meterArbiter{
 		ticker: time.NewTicker(time.Millisecond),
-		meters: make(map[*StandardMeter]struct{}),
+		meters: make(map[*Meter]struct{}),
 	}
 	defer ma.ticker.Stop()
-	m := newStandardMeter()
+	m := newMeter()
 	ma.meters[m] = struct{}{}
 	m.Mark(1)
 	ma.tickMeters()

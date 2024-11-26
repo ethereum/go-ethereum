@@ -59,7 +59,7 @@ func WriteOnce(r Registry, w io.Writer) {
 			fmt.Fprintf(w, "  95%%:         %12.2f\n", ps[2])
 			fmt.Fprintf(w, "  99%%:         %12.2f\n", ps[3])
 			fmt.Fprintf(w, "  99.9%%:       %12.2f\n", ps[4])
-		case Meter:
+		case *Meter:
 			m := metric.Snapshot()
 			fmt.Fprintf(w, "meter %s\n", namedMetric.name)
 			fmt.Fprintf(w, "  count:       %9d\n", m.Count())

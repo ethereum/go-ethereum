@@ -47,21 +47,21 @@ type triePrefetcher struct {
 	term     chan struct{}          // Channel to signal interruption
 	noreads  bool                   // Whether to ignore state-read-only prefetch requests
 
-	deliveryMissMeter metrics.Meter
+	deliveryMissMeter *metrics.Meter
 
-	accountLoadReadMeter  metrics.Meter
-	accountLoadWriteMeter metrics.Meter
-	accountDupReadMeter   metrics.Meter
-	accountDupWriteMeter  metrics.Meter
-	accountDupCrossMeter  metrics.Meter
-	accountWasteMeter     metrics.Meter
+	accountLoadReadMeter  *metrics.Meter
+	accountLoadWriteMeter *metrics.Meter
+	accountDupReadMeter   *metrics.Meter
+	accountDupWriteMeter  *metrics.Meter
+	accountDupCrossMeter  *metrics.Meter
+	accountWasteMeter     *metrics.Meter
 
-	storageLoadReadMeter  metrics.Meter
-	storageLoadWriteMeter metrics.Meter
-	storageDupReadMeter   metrics.Meter
-	storageDupWriteMeter  metrics.Meter
-	storageDupCrossMeter  metrics.Meter
-	storageWasteMeter     metrics.Meter
+	storageLoadReadMeter  *metrics.Meter
+	storageLoadWriteMeter *metrics.Meter
+	storageDupReadMeter   *metrics.Meter
+	storageDupWriteMeter  *metrics.Meter
+	storageDupCrossMeter  *metrics.Meter
+	storageWasteMeter     *metrics.Meter
 }
 
 func newTriePrefetcher(db Database, root common.Hash, namespace string, noreads bool) *triePrefetcher {

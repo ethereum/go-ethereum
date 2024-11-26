@@ -62,7 +62,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"p9999":    ps[6],
 		}
 		return measurement, fields
-	case metrics.Meter:
+	case *metrics.Meter:
 		ms := metric.Snapshot()
 		measurement := fmt.Sprintf("%s%s.meter", namespace, name)
 		fields := map[string]interface{}{

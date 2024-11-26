@@ -45,11 +45,11 @@ var (
 	egressTrafficMeter  = metrics.NewRegisteredMeter("p2p/egress", nil)
 
 	// general ingress/egress connection meters
-	serveMeter          metrics.Meter = metrics.NilMeter{}
-	serveSuccessMeter   metrics.Meter = metrics.NilMeter{}
-	dialMeter           metrics.Meter = metrics.NilMeter{}
-	dialSuccessMeter    metrics.Meter = metrics.NilMeter{}
-	dialConnectionError metrics.Meter = metrics.NilMeter{}
+	serveMeter          = metrics.NewInactiveMeter()
+	serveSuccessMeter   = metrics.NewInactiveMeter()
+	dialMeter           = metrics.NewInactiveMeter()
+	dialSuccessMeter    = metrics.NewInactiveMeter()
+	dialConnectionError = metrics.NewInactiveMeter()
 
 	// handshake error meters
 	dialTooManyPeers        = metrics.NewRegisteredMeter("p2p/dials/error/saturated", nil)

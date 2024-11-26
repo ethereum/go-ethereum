@@ -63,7 +63,7 @@ func (c *collector) Add(name string, i any) error {
 		c.addGaugeInfo(name, m.Snapshot())
 	case metrics.Histogram:
 		c.addHistogram(name, m.Snapshot())
-	case metrics.Meter:
+	case *metrics.Meter:
 		c.addMeter(name, m.Snapshot())
 	case metrics.Timer:
 		c.addTimer(name, m.Snapshot())
@@ -106,7 +106,7 @@ func (c *collector) addHistogram(name string, m metrics.HistogramSnapshot) {
 	c.buff.WriteRune('\n')
 }
 
-func (c *collector) addMeter(name string, m metrics.MeterSnapshot) {
+func (c *collector) addMeter(name string, m *metrics.MeterSnapshot) {
 	c.writeGaugeCounter(name, m.Count())
 }
 

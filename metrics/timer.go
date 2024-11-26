@@ -7,7 +7,11 @@ import (
 
 type TimerSnapshot interface {
 	HistogramSnapshot
-	MeterSnapshot
+	Count() int64
+	Rate1() float64
+	Rate5() float64
+	Rate15() float64
+	RateMean() float64
 }
 
 // Timer capture the duration and rate of events.
@@ -32,7 +36,7 @@ func GetOrRegisterTimer(name string, r Registry) Timer {
 
 // NewCustomTimer constructs a new StandardTimer from a Histogram and a Meter.
 // Be sure to call Stop() once the timer is of no use to allow for garbage collection.
-func NewCustomTimer(h Histogram, m Meter) Timer {
+func NewCustomTimer(h Histogram, m *Meter) Timer {
 	if !Enabled {
 		return NilTimer{}
 	}
@@ -80,7 +84,7 @@ func (NilTimer) UpdateSince(time.Time)   {}
 // and Meter.
 type StandardTimer struct {
 	histogram Histogram
-	meter     Meter
+	meter     *Meter
 	mutex     sync.Mutex
 }
 
@@ -123,7 +127,7 @@ func (t *StandardTimer) UpdateSince(ts time.Time) {
 // timerSnapshot is a read-only copy of another Timer.
 type timerSnapshot struct {
 	histogram HistogramSnapshot
-	meter     MeterSnapshot
+	meter     *MeterSnapshot
 }
 
 // Count returns the number of events recorded at the time the snapshot was
