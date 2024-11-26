@@ -23,15 +23,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
-func BenchmarkTransactionTrace(b *testing.B) {
+func BenchmarkTransactionTraceV2(b *testing.B) {
 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	from := crypto.PubkeyToAddress(key.PublicKey)
 	gas := uint64(1000000) // 1M gas
@@ -78,14 +78,14 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	state := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme)
 	defer state.Close()
 
-	// Create the tracer, the EVM environment and run it
-	tracer := logger.NewStructLogger(&logger.Config{
-		Debug: false,
-		//DisableStorage: true,
-		//EnableMemory: false,
-		//EnableReturnData: false,
-	})
-	evm := vm.NewEVM(context, state.StateDB, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer.Hooks()})
+	// Create a tracer which records the number of steps
+	var steps = 0
+	tracer := &tracing.Hooks{
+		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+			steps++
+		},
+	}
+	evm := vm.NewEVM(context, state.StateDB, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer})
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
@@ -95,16 +95,14 @@ func BenchmarkTransactionTrace(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		snap := state.StateDB.Snapshot()
-		tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
+		_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			b.Fatal(err)
 		}
-		tracer.OnTxEnd(&types.Receipt{GasUsed: res.UsedGas}, nil)
 		state.StateDB.RevertToSnapshot(snap)
-		if have, want := len(tracer.StructLogs()), 244752; have != want {
+		if have, want := steps, 244752; have != want {
 			b.Fatalf("trace wrong, want %d steps, have %d", want, have)
 		}
-		tracer.Reset()
+		steps = 0
 	}
 }
