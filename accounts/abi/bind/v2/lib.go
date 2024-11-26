@@ -18,6 +18,8 @@ type ContractInstance struct {
 	Backend bind.ContractBackend
 }
 
+// deployContract deploys a hex-encoded contract with the given constructor
+// input.  It returns the deployment transaction, address on success.
 func deployContract(backend bind.ContractBackend, auth *bind.TransactOpts, constructor []byte, contract string) (deploymentTx *types.Transaction, deploymentAddr common.Address, err error) {
 	contractBinBytes, err := hex.DecodeString(contract[2:])
 	if err != nil {
@@ -30,6 +32,9 @@ func deployContract(backend bind.ContractBackend, auth *bind.TransactOpts, const
 	return tx, addr, nil
 }
 
+// deployLibs iterates the set contracts (map of pattern to hex-encoded
+// contract deploy code). each value in contracts is deployed, and the
+// resulting addresses/deployment-txs are returned on success.
 func deployLibs(backend bind.ContractBackend, auth *bind.TransactOpts, contracts map[string]string) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[string]common.Address, err error) {
 	deploymentTxs = make(map[common.Address]*types.Transaction)
 	deployAddrs = make(map[string]common.Address)
@@ -51,6 +56,10 @@ func deployLibs(backend bind.ContractBackend, auth *bind.TransactOpts, contracts
 	return deploymentTxs, deployAddrs, nil
 }
 
+// linkContract takes an unlinked contract deploy code (contract) a map of
+// linked-and-deployed library dependencies, replaces references to library
+// deps in the contract code, and returns the contract deployment bytecode on
+// success.
 func linkContract(contract string, linkedLibs map[string]common.Address) (deployableContract string, err error) {
 	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
 	if err != nil {
@@ -65,7 +74,13 @@ func linkContract(contract string, linkedLibs map[string]common.Address) (deploy
 	return contract, nil
 }
 
-func linkLibs(deps *map[string]string, linked *map[string]common.Address) (deployableDeps map[string]string) {
+// linkLibs iterates the set of dependencies that have yet to be
+// linked/deployed (pending), replacing references to library dependencies
+// if those dependencies are fully linked/deployed (in 'linked').
+//
+// contracts that have become fully linked in the current invocation are
+// returned in the resulting map.
+func linkLibs(pending *map[string]string, linked map[string]common.Address) (deployableDeps map[string]string) {
 	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
 	if err != nil {
 		panic(err)
@@ -76,49 +91,61 @@ func linkLibs(deps *map[string]string, linked *map[string]common.Address) (deplo
 	}
 	deployableDeps = make(map[string]string)
 
-	for pattern, dep := range *deps {
+	for pattern, dep := range *pending {
 		// link references to dependent libraries that have been deployed
 		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(dep, -1) {
 			matchingPattern := match[1]
-			addr, ok := (*linked)[matchingPattern]
+			addr, ok := linked[matchingPattern]
 			if !ok {
 				continue
 			}
-			(*deps)[pattern] = strings.ReplaceAll(dep, "__$"+matchingPattern+"$__", addr.String()[2:])
+			(*pending)[pattern] = strings.ReplaceAll(dep, "__$"+matchingPattern+"$__", addr.String()[2:])
 		}
-		// if the library code became fully linked, deploy it
-		if !reMatchAnyPattern.MatchString((*deps)[pattern]) {
-			deployableDeps[pattern] = (*deps)[pattern]
-			delete(*deps, pattern)
+		// if the library code became fully linked, move it from pending->linked.
+		if !reMatchAnyPattern.MatchString((*pending)[pattern]) {
+			deployableDeps[pattern] = (*pending)[pattern]
+			delete(*pending, pattern)
 		}
 	}
 	return deployableDeps
 }
 
+// ContractDeployParams represents state needed to deploy a contract:
+// the metdata and constructor input (which can be nil if no input is specified).
 type ContractDeployParams struct {
-	Meta        *bind.MetaData
-	Constructor []byte
+	Meta *bind.MetaData
+	// Input is the ABI-encoded constructor input for the contract deployment.
+	Input []byte
 }
 
+// DeploymentParams represents parameters needed to deploy a
+// set of contracts, their dependency libraries.  It takes an optional override
+// list to specify libraries that have already been deployed on-chain.
 type DeploymentParams struct {
+	// Contracts is the set of contract deployment parameters for contracts
+	// that are about to be deployed.
 	Contracts []ContractDeployParams
-	// map of library pattern -> metadata
+	// Libraries is a map of pattern to metadata for library contracts that
+	// are to be deployed.
 	Libraries map[string]*bind.MetaData
-	// map of library pattern -> address
+	// Overrides is an optional map of pattern to deployment address.
+	// Contracts/libraries that refer to dependencies in the override
+	// set are linked to the provided address (an already-deployed contract).
 	Overrides map[string]common.Address
 }
 
+// DeploymentResult contains the relevant information from the deployment of
+// multiple contracts:  their deployment txs and addresses.
 type DeploymentResult struct {
-	// map of contract type name -> deploy transaction
+	// map of contract library pattern -> deploy transaction
 	Txs map[string]*types.Transaction
-	// map of contract type name -> deployed address
+	// map of contract library pattern -> deployed address
 	Addrs map[string]common.Address
 }
 
-// TODO: * pass single set of contracts (dont differentiate between contract/lib in parameters)
-//   - return map of pattern->address
-//   - in template, export a pattern for each contract (whether library/contract).
-func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.ContractBackend, deployParams DeploymentParams) (res *DeploymentResult, err error) {
+// LinkAndDeploy deploys a specified set of contracts and their dependent
+// libraries.
+func LinkAndDeploy(auth *bind.TransactOpts, backend bind.ContractBackend, deployParams DeploymentParams) (res *DeploymentResult, err error) {
 	libMetas := deployParams.Libraries
 	overrides := deployParams.Overrides
 
@@ -128,30 +155,29 @@ func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.Co
 	}
 
 	// re-express libraries as a map of pattern -> pre-link binary
-	libs := make(map[string]string)
+	pending := make(map[string]string)
 	for pattern, meta := range libMetas {
-		libs[pattern] = meta.Bin
+		pending[pattern] = meta.Bin
 	}
 
 	// initialize the set of already-deployed contracts with given override addresses
-	linked := make(map[string]common.Address)
+	deployed := make(map[string]common.Address)
 	for pattern, deployAddr := range overrides {
-		linked[pattern] = deployAddr
-		if _, ok := libs[pattern]; ok {
-			delete(libs, pattern)
+		deployed[pattern] = deployAddr
+		if _, ok := pending[pattern]; ok {
+			delete(pending, pattern)
 		}
 	}
 
 	// link and deploy dynamic libraries
 	for {
-		deployableDeps := linkLibs(&libs, &linked)
+		deployableDeps := linkLibs(&pending, deployed)
 		if len(deployableDeps) == 0 {
 			break
 		}
 		deployTxs, deployAddrs, err := deployLibs(backend, auth, deployableDeps)
 		for pattern, addr := range deployAddrs {
-			linked[pattern] = addr
-
+			deployed[pattern] = addr
 			res.Addrs[pattern] = addr
 			res.Txs[pattern] = deployTxs[addr]
 		}
@@ -161,12 +187,12 @@ func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.Co
 	}
 
 	for _, contractParams := range deployParams.Contracts {
-		linkedContract, err := linkContract(contractParams.Meta.Bin, linked)
+		linkedContract, err := linkContract(contractParams.Meta.Bin, deployed)
 		if err != nil {
 			return res, err
 		}
 		// link and deploy the contracts
-		contractTx, contractAddr, err := deployContract(backend, auth, contractParams.Constructor, linkedContract)
+		contractTx, contractAddr, err := deployContract(backend, auth, contractParams.Input, linkedContract)
 		if err != nil {
 			return res, err
 		}
