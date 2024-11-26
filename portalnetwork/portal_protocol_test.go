@@ -2,6 +2,7 @@ package portalnetwork
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -11,6 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/optimism-java/utp-go"
 	"github.com/optimism-java/utp-go/libutp"
@@ -20,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover/portalwire"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	assert "github.com/stretchr/testify/require"
 )
@@ -46,7 +49,7 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 
 	privKey := newkey()
 
-	discCfg := Config{
+	discCfg := discover.Config{
 		PrivateKey:  privKey,
 		NetRestrict: conf.NetRestrict,
 		Bootnodes:   conf.BootstrapNodes,
@@ -80,7 +83,7 @@ func setupLocalPortalNode(addr string, bootNodes []*enode.Node) (*PortalProtocol
 		}
 	}
 
-	discV5, err := ListenV5(conn, localNode, discCfg)
+	discV5, err := discover.ListenV5(conn, localNode, discCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -500,4 +503,12 @@ func TestTraceContentLookup(t *testing.T) {
 
 	node1Response := res.Trace.Responses[node1Id]
 	assert.Equal(t, node1Response.RespondedWith, ([]string)(nil))
+}
+
+func newkey() *ecdsa.PrivateKey {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic("couldn't generate key: " + err.Error())
+	}
+	return key
 }

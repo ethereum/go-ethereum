@@ -932,16 +932,17 @@ func (s *StateDB) clearJournalAndRefund() {
 // of a specific account. It leverages the associated state snapshot for fast
 // storage iteration and constructs trie node deletion markers by creating
 // stack trie with iterated slots.
-func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, *trienode.NodeSet, error) {
+func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
 	iter, err := snaps.StorageIterator(s.originalRoot, addrHash, common.Hash{})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer iter.Release()
 
 	var (
-		nodes = trienode.NewNodeSet(addrHash)
-		slots = make(map[common.Hash][]byte)
+		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is nil)
+		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is nil)
+		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot
 	)
 	stack := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
 		nodes.AddNode(path, trienode.NewDeleted())
@@ -949,42 +950,47 @@ func (s *StateDB) fastDeleteStorage(snaps *snapshot.Tree, addrHash common.Hash, 
 	for iter.Next() {
 		slot := common.CopyBytes(iter.Slot())
 		if err := iter.Error(); err != nil { // error might occur after Slot function
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		slots[iter.Hash()] = slot
+		key := iter.Hash()
+		storages[key] = nil
+		storageOrigins[key] = slot
 
-		if err := stack.Update(iter.Hash().Bytes(), slot); err != nil {
-			return nil, nil, err
+		if err := stack.Update(key.Bytes(), slot); err != nil {
+			return nil, nil, nil, err
 		}
 	}
 	if err := iter.Error(); err != nil { // error might occur during iteration
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if stack.Hash() != root {
-		return nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
+		return nil, nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
 	}
-	return slots, nodes, nil
+	return storages, storageOrigins, nodes, nil
 }
 
 // slowDeleteStorage serves as a less-efficient alternative to "fastDeleteStorage,"
 // employed when the associated state snapshot is not available. It iterates the
 // storage slots along with all internal trie nodes via trie directly.
-func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, *trienode.NodeSet, error) {
+func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
 	tr, err := s.db.OpenStorageTrie(s.originalRoot, addr, root, s.trie)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open storage trie, err: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to open storage trie, err: %w", err)
 	}
 	it, err := tr.NodeIterator(nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open storage iterator, err: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to open storage iterator, err: %w", err)
 	}
 	var (
-		nodes = trienode.NewNodeSet(addrHash)
-		slots = make(map[common.Hash][]byte)
+		nodes          = trienode.NewNodeSet(addrHash) // the set for trie node mutations (value is nil)
+		storages       = make(map[common.Hash][]byte)  // the set for storage mutations (value is nil)
+		storageOrigins = make(map[common.Hash][]byte)  // the set for tracking the original value of slot
 	)
 	for it.Next(true) {
 		if it.Leaf() {
-			slots[common.BytesToHash(it.LeafKey())] = common.CopyBytes(it.LeafBlob())
+			key := common.BytesToHash(it.LeafKey())
+			storages[key] = nil
+			storageOrigins[key] = common.CopyBytes(it.LeafBlob())
 			continue
 		}
 		if it.Hash() == (common.Hash{}) {
@@ -993,35 +999,36 @@ func (s *StateDB) slowDeleteStorage(addr common.Address, addrHash common.Hash, r
 		nodes.AddNode(it.Path(), trienode.NewDeleted())
 	}
 	if err := it.Error(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return slots, nodes, nil
+	return storages, storageOrigins, nodes, nil
 }
 
 // deleteStorage is designed to delete the storage trie of a designated account.
 // The function will make an attempt to utilize an efficient strategy if the
 // associated state snapshot is reachable; otherwise, it will resort to a less
 // efficient approach.
-func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, *trienode.NodeSet, error) {
+func (s *StateDB) deleteStorage(addr common.Address, addrHash common.Hash, root common.Hash) (map[common.Hash][]byte, map[common.Hash][]byte, *trienode.NodeSet, error) {
 	var (
-		err   error
-		slots map[common.Hash][]byte
-		nodes *trienode.NodeSet
+		err            error
+		nodes          *trienode.NodeSet      // the set for trie node mutations (value is nil)
+		storages       map[common.Hash][]byte // the set for storage mutations (value is nil)
+		storageOrigins map[common.Hash][]byte // the set for tracking the original value of slot
 	)
 	// The fast approach can be failed if the snapshot is not fully
 	// generated, or it's internally corrupted. Fallback to the slow
 	// one just in case.
 	snaps := s.db.Snapshot()
 	if snaps != nil {
-		slots, nodes, err = s.fastDeleteStorage(snaps, addrHash, root)
+		storages, storageOrigins, nodes, err = s.fastDeleteStorage(snaps, addrHash, root)
 	}
 	if snaps == nil || err != nil {
-		slots, nodes, err = s.slowDeleteStorage(addr, addrHash, root)
+		storages, storageOrigins, nodes, err = s.slowDeleteStorage(addr, addrHash, root)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return slots, nodes, nil
+	return storages, storageOrigins, nodes, nil
 }
 
 // handleDestruction processes all destruction markers and deletes the account
@@ -1068,16 +1075,16 @@ func (s *StateDB) handleDestruction() (map[common.Hash]*accountDelete, []*trieno
 		deletes[addrHash] = op
 
 		// Short circuit if the origin storage was empty.
-
 		if prev.Root == types.EmptyRootHash || s.db.TrieDB().IsVerkle() {
 			continue
 		}
 		// Remove storage slots belonging to the account.
-		slots, set, err := s.deleteStorage(addr, addrHash, prev.Root)
+		storages, storagesOrigin, set, err := s.deleteStorage(addr, addrHash, prev.Root)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
 		}
-		op.storagesOrigin = slots
+		op.storages = storages
+		op.storagesOrigin = storagesOrigin
 
 		// Aggregate the associated trie node changes.
 		nodes = append(nodes, set)
@@ -1267,7 +1274,7 @@ func (s *StateDB) commitAndFlush(block uint64, deleteEmptyObjects bool) (*stateU
 		// If snapshotting is enabled, update the snapshot tree with this new version
 		if snap := s.db.Snapshot(); snap != nil && snap.Snapshot(ret.originRoot) != nil {
 			start := time.Now()
-			if err := snap.Update(ret.root, ret.originRoot, ret.destructs, ret.accounts, ret.storages); err != nil {
+			if err := snap.Update(ret.root, ret.originRoot, ret.accounts, ret.storages); err != nil {
 				log.Warn("Failed to update snapshot tree", "from", ret.originRoot, "to", ret.root, "err", err)
 			}
 			// Keep 128 diff layers in the memory, persistent layer is 129th.

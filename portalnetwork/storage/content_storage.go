@@ -12,6 +12,9 @@ var MaxDistance = uint256.MustFromHex("0xfffffffffffffffffffffffffffffffffffffff
 
 type ContentType byte
 
+var RadisuKey = []byte("radius")
+var SizeKey = []byte("size")
+
 type ContentKey struct {
 	selector ContentType
 	data     []byte
