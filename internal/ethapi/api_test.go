@@ -570,16 +570,15 @@ func (b testBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
 	}
 	return big.NewInt(1)
 }
-func (b testBackend) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) *vm.EVM {
+func (b testBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = b.chain.GetVMConfig()
 	}
-	txContext := core.NewEVMTxContext(msg)
 	context := core.NewEVMBlockContext(header, b.chain, nil)
 	if blockContext != nil {
 		context = *blockContext
 	}
-	return vm.NewEVM(context, txContext, state, b.chain.Config(), *vmConfig)
+	return vm.NewEVM(context, state, b.chain.Config(), *vmConfig)
 }
 func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	panic("implement me")

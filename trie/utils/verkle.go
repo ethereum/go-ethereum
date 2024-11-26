@@ -217,7 +217,7 @@ func StorageIndex(storageKey []byte) (*uint256.Int, byte) {
 	// The first MAIN_STORAGE_OFFSET group will see its
 	// first 64 slots unreachable. This is either a typo in the
 	// spec or intended to conserve the 256-u256
-	// aligment. If we decide to ever access these 64
+	// alignment. If we decide to ever access these 64
 	// slots, uncomment this.
 	// // Get the new offset since we now know that we are above 64.
 	// pos.Sub(&pos, codeStorageDelta)

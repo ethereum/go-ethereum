@@ -132,7 +132,8 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to prepare transaction for tracing: %v", err)
 			}
-			evm := vm.NewEVM(context, core.NewEVMTxContext(msg), logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			evm := vm.NewEVM(context, logState, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+			evm.SetTxContext(core.NewEVMTxContext(msg))
 			tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
 			vmRet, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
@@ -220,12 +221,15 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
+
+	tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil, test.Genesis.Config)
+	if err != nil {
+		b.Fatalf("failed to create call tracer: %v", err)
+	}
+	evm := vm.NewEVM(context, state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
+	evm.SetTxContext(txContext)
+
 	for i := 0; i < b.N; i++ {
-		tracer, err := tracers.DefaultDirectory.New(tracerName, new(tracers.Context), nil, test.Genesis.Config)
-		if err != nil {
-			b.Fatalf("failed to create call tracer: %v", err)
-		}
-		evm := vm.NewEVM(context, txContext, state.StateDB, test.Genesis.Config, vm.Config{Tracer: tracer.Hooks})
 		snap := state.StateDB.Snapshot()
 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if _, err = st.TransitionDb(); err != nil {
@@ -372,7 +376,8 @@ func TestInternals(t *testing.T) {
 				Origin:   origin,
 				GasPrice: tx.GasPrice(),
 			}
-			evm := vm.NewEVM(context, txContext, logState, config, vm.Config{Tracer: tc.tracer.Hooks})
+			evm := vm.NewEVM(context, logState, config, vm.Config{Tracer: tc.tracer.Hooks})
+			evm.SetTxContext(txContext)
 			msg, err := core.TransactionToMessage(tx, signer, big.NewInt(0))
 			if err != nil {
 				t.Fatalf("test %v: failed to create message: %v", tc.name, err)

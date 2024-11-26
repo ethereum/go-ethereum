@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"math/big"
 	"time"
 
@@ -185,12 +184,12 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			NoBaseFee: !sim.validate,
 			Tracer:    tracer.Hooks(),
 		}
-		evm = vm.NewEVM(blockContext, vm.TxContext{GasPrice: new(big.Int)}, sim.state, sim.chainConfig, *vmConfig)
 	)
-	var tracingStateDB = vm.StateDB(sim.state)
+	tracingStateDB := vm.StateDB(sim.state)
 	if hooks := tracer.Hooks(); hooks != nil {
 		tracingStateDB = state.NewHookedState(sim.state, hooks)
 	}
+	evm := vm.NewEVM(blockContext, tracingStateDB, sim.chainConfig, *vmConfig)
 	// It is possible to override precompiles with EVM bytecode, or
 	// move them to another address.
 	if precompiles != nil {
@@ -208,7 +207,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 		tracer.reset(tx.Hash(), uint(i))
 		// EoA check is always skipped, even in validation mode.
 		msg := call.ToMessage(header.BaseFee, !sim.validate, true)
-		evm.Reset(core.NewEVMTxContext(msg), tracingStateDB)
+		evm.SetTxContext(core.NewEVMTxContext(msg))
 		result, err := applyMessageWithEVM(ctx, evm, msg, timeout, sim.gp)
 		if err != nil {
 			txErr := txValidationError(err)
@@ -265,7 +264,7 @@ func repairLogs(calls []simCallResult, hash common.Hash) {
 	}
 }
 
-func (sim *simulator) sanitizeCall(call *TransactionArgs, state *state.StateDB, header *types.Header, blockContext vm.BlockContext, gasUsed *uint64) error {
+func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, header *types.Header, blockContext vm.BlockContext, gasUsed *uint64) error {
 	if call.Nonce == nil {
 		nonce := state.GetNonce(call.from())
 		call.Nonce = (*hexutil.Uint64)(&nonce)
@@ -289,7 +288,7 @@ func (sim *simulator) activePrecompiles(base *types.Header) vm.PrecompiledContra
 		isMerge = (base.Difficulty.Sign() == 0)
 		rules   = sim.chainConfig.Rules(base.Number, isMerge, base.Time)
 	)
-	return maps.Clone(vm.ActivePrecompiledContracts(rules))
+	return vm.ActivePrecompiledContracts(rules)
 }
 
 // sanitizeChain checks the chain integrity. Specifically it checks that

@@ -17,6 +17,8 @@
 package state
 
 import (
+	"maps"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -33,6 +35,7 @@ type contractCode struct {
 type accountDelete struct {
 	address        common.Address         // address is the unique account identifier
 	origin         []byte                 // origin is the original value of account data in slim-RLP encoding.
+	storages       map[common.Hash][]byte // storages stores mutated slots, the value should be nil.
 	storagesOrigin map[common.Hash][]byte // storagesOrigin stores the original values of mutated slots in prefix-zero-trimmed RLP format.
 }
 
@@ -52,7 +55,6 @@ type accountUpdate struct {
 type stateUpdate struct {
 	originRoot     common.Hash                               // hash of the state before applying mutation
 	root           common.Hash                               // hash of the state after applying mutation
-	destructs      map[common.Hash]struct{}                  // destructs contains the list of destructed accounts
 	accounts       map[common.Hash][]byte                    // accounts stores mutated accounts in 'slim RLP' encoding
 	accountsOrigin map[common.Address][]byte                 // accountsOrigin stores the original values of mutated accounts in 'slim RLP' encoding
 	storages       map[common.Hash]map[common.Hash][]byte    // storages stores mutated slots in 'prefix-zero-trimmed' RLP format
@@ -71,7 +73,6 @@ func (sc *stateUpdate) empty() bool {
 // account deletions and account updates to form a comprehensive state update.
 func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common.Hash]*accountDelete, updates map[common.Hash]*accountUpdate, nodes *trienode.MergedNodeSet) *stateUpdate {
 	var (
-		destructs      = make(map[common.Hash]struct{})
 		accounts       = make(map[common.Hash][]byte)
 		accountsOrigin = make(map[common.Address][]byte)
 		storages       = make(map[common.Hash]map[common.Hash][]byte)
@@ -82,8 +83,12 @@ func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common
 	// within the same block, the deletions must be aggregated first.
 	for addrHash, op := range deletes {
 		addr := op.address
-		destructs[addrHash] = struct{}{}
+		accounts[addrHash] = nil
 		accountsOrigin[addr] = op.origin
+
+		if len(op.storages) > 0 {
+			storages[addrHash] = op.storages
+		}
 		if len(op.storagesOrigin) > 0 {
 			storagesOrigin[addr] = op.storagesOrigin
 		}
@@ -95,35 +100,41 @@ func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common
 		if op.code != nil {
 			codes[addr] = *op.code
 		}
-		// Aggregate the account changes. The original account value will only
-		// be tracked if it's not present yet.
 		accounts[addrHash] = op.data
+
+		// Aggregate the account original value. If the account is already
+		// present in the aggregated accountsOrigin set, skip it.
 		if _, found := accountsOrigin[addr]; !found {
 			accountsOrigin[addr] = op.origin
 		}
-		// Aggregate the storage changes. The original storage slot value will
-		// only be tracked if it's not present yet.
+		// Aggregate the storage mutation list. If a slot in op.storages is
+		// already present in aggregated storages set, the value will be
+		// overwritten.
 		if len(op.storages) > 0 {
-			storages[addrHash] = op.storages
-		}
-		if len(op.storagesOrigin) > 0 {
-			origin := storagesOrigin[addr]
-			if origin == nil {
-				storagesOrigin[addr] = op.storagesOrigin
-				continue
+			if _, exist := storages[addrHash]; !exist {
+				storages[addrHash] = op.storages
+			} else {
+				maps.Copy(storages[addrHash], op.storages)
 			}
-			for key, slot := range op.storagesOrigin {
-				if _, found := origin[key]; !found {
-					origin[key] = slot
+		}
+		// Aggregate the storage original values. If the slot is already present
+		// in aggregated storagesOrigin set, skip it.
+		if len(op.storagesOrigin) > 0 {
+			origin, exist := storagesOrigin[addr]
+			if !exist {
+				storagesOrigin[addr] = op.storagesOrigin
+			} else {
+				for key, slot := range op.storagesOrigin {
+					if _, found := origin[key]; !found {
+						origin[key] = slot
+					}
 				}
 			}
-			storagesOrigin[addr] = origin
 		}
 	}
 	return &stateUpdate{
 		originRoot:     types.TrieRootHash(originRoot),
 		root:           types.TrieRootHash(root),
-		destructs:      destructs,
 		accounts:       accounts,
 		accountsOrigin: accountsOrigin,
 		storages:       storages,
@@ -139,7 +150,6 @@ func newStateUpdate(originRoot common.Hash, root common.Hash, deletes map[common
 // package.
 func (sc *stateUpdate) stateSet() *triedb.StateSet {
 	return &triedb.StateSet{
-		Destructs:      sc.destructs,
 		Accounts:       sc.accounts,
 		AccountsOrigin: sc.accountsOrigin,
 		Storages:       sc.storages,
