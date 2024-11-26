@@ -77,7 +77,7 @@ func linkLibs(deps *map[string]string, linked *map[string]common.Address) (deplo
 	deployableDeps = make(map[string]string)
 
 	for pattern, dep := range *deps {
-		// attempt to replace references to every single linked dep
+		// link references to dependent libraries that have been deployed
 		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(dep, -1) {
 			matchingPattern := match[1]
 			addr, ok := (*linked)[matchingPattern]
@@ -86,7 +86,7 @@ func linkLibs(deps *map[string]string, linked *map[string]common.Address) (deplo
 			}
 			(*deps)[pattern] = strings.ReplaceAll(dep, "__$"+matchingPattern+"$__", addr.String()[2:])
 		}
-		// if we linked something into this dep, see if it can be deployed
+		// if the library code became fully linked, deploy it
 		if !reMatchAnyPattern.MatchString((*deps)[pattern]) {
 			deployableDeps[pattern] = (*deps)[pattern]
 			delete(*deps, pattern)
@@ -95,9 +95,37 @@ func linkLibs(deps *map[string]string, linked *map[string]common.Address) (deplo
 	return deployableDeps
 }
 
-func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.ContractBackend, constructorInputs []byte, contract *bind.MetaData, libMetas map[string]*bind.MetaData, overrides map[string]common.Address) (allDeployTxs map[common.Address]*types.Transaction, allDeployAddrs map[common.Address]struct{}, err error) {
-	allDeployAddrs = make(map[common.Address]struct{})
-	allDeployTxs = make(map[common.Address]*types.Transaction)
+type ContractDeployParams struct {
+	Meta        *bind.MetaData
+	Constructor []byte
+}
+
+type DeploymentParams struct {
+	Contracts []ContractDeployParams
+	// map of library pattern -> metadata
+	Libraries map[string]*bind.MetaData
+	// map of library pattern -> address
+	Overrides map[string]common.Address
+}
+
+type DeploymentResult struct {
+	// map of contract type name -> deploy transaction
+	Txs map[string]*types.Transaction
+	// map of contract type name -> deployed address
+	Addrs map[string]common.Address
+}
+
+// TODO: * pass single set of contracts (dont differentiate between contract/lib in parameters)
+//   - return map of pattern->address
+//   - in template, export a pattern for each contract (whether library/contract).
+func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.ContractBackend, deployParams DeploymentParams) (res *DeploymentResult, err error) {
+	libMetas := deployParams.Libraries
+	overrides := deployParams.Overrides
+
+	res = &DeploymentResult{
+		Txs:   make(map[string]*types.Transaction),
+		Addrs: make(map[string]common.Address),
+	}
 
 	// re-express libraries as a map of pattern -> pre-link binary
 	libs := make(map[string]string)
@@ -122,25 +150,31 @@ func LinkAndDeployContractWithOverrides(auth *bind.TransactOpts, backend bind.Co
 		}
 		deployTxs, deployAddrs, err := deployLibs(backend, auth, deployableDeps)
 		for pattern, addr := range deployAddrs {
-			allDeployAddrs[addr] = struct{}{}
 			linked[pattern] = addr
-		}
-		for addr, tx := range deployTxs {
-			allDeployTxs[addr] = tx
+
+			res.Addrs[pattern] = addr
+			res.Txs[pattern] = deployTxs[addr]
 		}
 		if err != nil {
-			return deployTxs, allDeployAddrs, err
+			return res, err
 		}
 	}
-	linkedContract, err := linkContract(contract.Bin, linked)
-	if err != nil {
-		return allDeployTxs, allDeployAddrs, err
+
+	for _, contractParams := range deployParams.Contracts {
+		linkedContract, err := linkContract(contractParams.Meta.Bin, linked)
+		if err != nil {
+			return res, err
+		}
+		// link and deploy the contracts
+		contractTx, contractAddr, err := deployContract(backend, auth, contractParams.Constructor, linkedContract)
+		if err != nil {
+			return res, err
+		}
+		res.Txs[contractParams.Meta.Pattern] = contractTx
+		res.Addrs[contractParams.Meta.Pattern] = contractAddr
 	}
-	// link and deploy the contracts
-	contractTx, contractAddr, err := deployContract(backend, auth, constructorInputs, linkedContract)
-	allDeployAddrs[contractAddr] = struct{}{}
-	allDeployTxs[contractAddr] = contractTx
-	return allDeployTxs, allDeployAddrs, err
+
+	return res, nil
 }
 
 func FilterLogs[T any](instance *ContractInstance, opts *bind.FilterOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
@@ -262,6 +296,7 @@ func Transact(instance bind.ContractInstance, opts *bind.TransactOpts, input []b
 	return c.RawTransact(opts, input)
 }
 
+// TODO: why do we need sepaarate transact/transfer methods?
 func Transfer(instance bind.ContractInstance, opts *bind.TransactOpts) (*types.Transaction, error) {
 	backend := instance.Backend()
 	c := bind.NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)

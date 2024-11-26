@@ -24,10 +24,11 @@ import (
 
 // tmplData is the data structure required to fill the binding template.
 type tmplData struct {
-	Package   string                   // Name of the package to place the generated file in
-	Contracts map[string]*tmplContract // List of contracts to generate into this file
-	Libraries map[string]string        // Map the bytecode's link pattern to the library name
-	Structs   map[string]*tmplStruct   // Contract struct type definitions
+	Package      string                   // Name of the package to place the generated file in
+	Contracts    map[string]*tmplContract // List of contracts to generate into this file
+	Libraries    map[string]string        // Map the bytecode's link pattern to the library name
+	InvertedLibs map[string]string        // map of the contract's name to the link pattern
+	Structs      map[string]*tmplStruct   // Contract struct type definitions
 }
 
 // tmplContract contains the data needed to generate an individual contract binding.

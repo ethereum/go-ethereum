@@ -3,9 +3,10 @@ package v2
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2_generated_testcase"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2_testcase_library"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/nested_libraries"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/v2_generated_testcase"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -165,30 +166,93 @@ func TestDeployment(t *testing.T) {
 	// TODO: allow for the flexibility of deploying only libraries.
 	// also, i kind of hate this conversion.  But the API of LinkAndDeployContractWithOverrides feels cleaner this way... idk.
 	libMetas := make(map[string]*bind.MetaData)
-	for pattern, metadata := range v2_testcase_library.TestArrayLibraryDeps {
+	for pattern, metadata := range nested_libraries.C1LibraryDeps {
 		libMetas[pattern] = metadata
 	}
 
-	ctrct, err := v2_testcase_library.NewTestArray()
+	ctrct, err := nested_libraries.NewC1()
 	if err != nil {
 		panic(err)
 	}
-	constructorInput, err := ctrct.PackConstructor(big.NewInt(42), false)
+
+	constructorInput, err := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
 	if err != nil {
 		t.Fatalf("fack %v", err)
 	}
 	// TODO: test case with arguments-containing constructor
-	txs, _, err := LinkAndDeployContractWithOverrides(&opts, bindBackend, constructorInput, v2_testcase_library.TestArrayMetaData, v2_testcase_library.TestArrayLibraryDeps, nil)
+	deploymentParams := DeploymentParams{
+		Contracts: []ContractDeployParams{
+			{
+				Meta:        nested_libraries.C1MetaData,
+				Constructor: constructorInput,
+			},
+		},
+		Libraries: nested_libraries.C1LibraryDeps,
+		Overrides: nil,
+	}
+	res, err := LinkAndDeployContractWithOverrides(&opts, bindBackend, deploymentParams)
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
 	bindBackend.Commit()
-	for _, tx := range txs {
+
+	// assert that only 4 txs were produced.
+	/*
+		if len(deployedLibs)+1 != 4 {
+			panic(fmt.Sprintf("whoops %d\n", len(deployedLibs)))
+		}
+	*/
+	for _, tx := range res.Txs {
 		_, err = bind.WaitDeployed(context.Background(), &bindBackend, tx)
 		if err != nil {
-			t.Fatalf("error deploying bound contract: %+v", err)
+			t.Fatalf("error deploying library: %+v", err)
 		}
 	}
+	c, err := nested_libraries.NewC1()
+	if err != nil {
+		t.Fatalf("err is %v", err)
+	}
+	doInput, err := c.PackDo(big.NewInt(1))
+	if err != nil {
+		t.Fatalf("pack function input err: %v\n", doInput)
+	}
+
+	cABI, err := nested_libraries.C1MetaData.GetAbi()
+	if err != nil {
+		t.Fatalf("error getting abi object: %v", err)
+	}
+	contractAddr := res.Addrs[nested_libraries.C1MetaData.Pattern]
+	boundC := bind.NewBoundContract(contractAddr, *cABI, &bindBackend, &bindBackend, &bindBackend)
+	callOpts := &bind.CallOpts{
+		From:    common.Address{},
+		Context: context.Background(),
+	}
+	c1Code, err := bindBackend.PendingCodeAt(context.Background(), contractAddr)
+	if err != nil {
+		t.Fatalf("error getting pending code at %x: %v", contractAddr, err)
+	}
+	fmt.Printf("contract code:\n%x\n", c1Code)
+	fmt.Printf("contract input:\n%x\n", doInput)
+	callRes, err := boundC.CallRaw(callOpts, doInput)
+	if err != nil {
+		t.Fatalf("err calling contract: %v", err)
+	}
+	unpacked, err := c.UnpackDo(callRes)
+	if err != nil {
+		t.Fatalf("err unpacking result: %v", err)
+	}
+
+	// TODO: test transact
+	fmt.Println(unpacked.String())
+}
+
+func TestDeploymentWithOverrides(t *testing.T) {
+	// test that libs sharing deps, if overrides not specified we will deploy multiple versions of the dependent deps
+	// test that libs sharing deps, if overrides specified... overrides work.
+}
+
+func TestEvents(t *testing.T) {
+	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
 }
 
 /* test-cases that should be extracted from v1 tests
