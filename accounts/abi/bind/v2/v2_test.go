@@ -179,7 +179,7 @@ func TestDeployment(t *testing.T) {
 		Libraries: nested_libraries.C1LibraryDeps,
 		Overrides: nil,
 	}
-	res, err := LinkAndDeployContractWithOverrides(&opts, bindBackend, deploymentParams)
+	res, err := LinkAndDeploy(&opts, bindBackend, deploymentParams)
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
