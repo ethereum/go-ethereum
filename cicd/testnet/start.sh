@@ -82,5 +82,6 @@ XDC --ethstats ${netstats} --gcmode archive \
 --http-vhosts "*" --unlock "${wallet}" --password /work/.pwd --mine \
 --miner-gasprice "1" --miner-gaslimit "420000000" --verbosity ${log_level} \
 --debugdatadir /work/xdcchain \
+--store-reward \
 --ws --ws-addr=0.0.0.0 --ws-port $ws_port \
 --ws-origins "*" 2>&1 >>/work/xdcchain/xdc.log | tee -a /work/xdcchain/xdc.log
