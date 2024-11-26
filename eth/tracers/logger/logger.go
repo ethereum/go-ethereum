@@ -23,7 +23,6 @@ import (
 	"io"
 	"maps"
 	"math/big"
-	"slices"
 	"strings"
 	"sync/atomic"
 
@@ -124,6 +123,69 @@ func (log *StructLog) WriteTo(writer io.Writer) {
 	fmt.Fprintln(writer)
 }
 
+// StructLogRes stores a structured log emitted by the EVM while replaying a
+// transaction in debug mode
+type StructLogRes struct {
+	Pc            uint64             `json:"pc"`
+	Op            string             `json:"op"`
+	Gas           uint64             `json:"gas"`
+	GasCost       uint64             `json:"gasCost"`
+	Depth         int                `json:"depth"`
+	Error         string             `json:"error,omitempty"`
+	Stack         *[]string          `json:"stack,omitempty"`
+	ReturnData    string             `json:"returnData,omitempty"`
+	Memory        *[]string          `json:"memory,omitempty"`
+	Storage       *map[string]string `json:"storage,omitempty"`
+	RefundCounter uint64             `json:"refund,omitempty"`
+}
+
+// toLegacyJSON converts the structlog to json-encoded legacy form (StructLogRes).
+//
+// The differences between the structlog json and the 'legacy' json are:
+// - Op. Legacy uses string (e.g. "SSTORE"), non-legacy uses a byte.
+//   - non-legacy has an 'opName' field containing the op name.
+//   - gas, gasCost: legacy uses integers, non-legacy hex-strings
+//   - memory: legacy uses a list of 64-char strings, each representing 32-byte chunks
+//     of evm memory. Non-legacy just uses a string of hexdata, no chunking.
+//   - storage: legacy has a storage-field.
+func (log *StructLog) toLegacyJSON() json.RawMessage {
+	msg := StructLogRes{
+		Pc:            log.Pc,
+		Op:            log.Op.String(),
+		Gas:           log.Gas,
+		GasCost:       log.GasCost,
+		Depth:         log.Depth,
+		Error:         log.ErrorString(),
+		RefundCounter: log.RefundCounter,
+	}
+	if log.Stack != nil {
+		stack := make([]string, len(log.Stack))
+		for i, stackValue := range log.Stack {
+			stack[i] = stackValue.Hex()
+		}
+		msg.Stack = &stack
+	}
+	if len(log.ReturnData) > 0 {
+		msg.ReturnData = hexutil.Bytes(log.ReturnData).String()
+	}
+	if log.Memory != nil {
+		memory := make([]string, 0, (len(log.Memory)+31)/32)
+		for i := 0; i+32 <= len(log.Memory); i += 32 {
+			memory = append(memory, fmt.Sprintf("%x", log.Memory[i:i+32]))
+		}
+		msg.Memory = &memory
+	}
+	if log.Storage != nil {
+		storage := make(map[string]string)
+		for i, storageValue := range log.Storage {
+			storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+		}
+		msg.Storage = &storage
+	}
+	element, _ := json.Marshal(msg)
+	return element
+}
+
 // StructLogger is an EVM state logger and implements EVMLogger.
 //
 // StructLogger can capture state based on the given Log configuration and also keeps
@@ -137,12 +199,13 @@ type StructLogger struct {
 	env *tracing.VMContext
 
 	storage map[common.Address]Storage
-	logs    []StructLog
 	output  []byte
 	err     error
 	usedGas uint64
 
-	writer io.Writer // If set, the logger will stream instead of store logs
+	writer     io.Writer         // If set, the logger will stream instead of store logs
+	logs       []json.RawMessage // buffer of json-encoded logs
+	resultSize int
 
 	interrupt atomic.Bool // Atomic flag to signal execution interruption
 	reason    error       // Textual reason for the interruption
@@ -191,8 +254,8 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 	if l.interrupt.Load() {
 		return
 	}
-	// check if already accumulated the specified number of logs
-	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
+	// check if already accumulated the size of the response.
+	if l.cfg.Limit != 0 && l.resultSize > l.cfg.Limit {
 		return
 	}
 	var (
@@ -242,11 +305,9 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 	log.Storage = storage
 	// create a log
 	if l.writer == nil {
-		// Non-streaming, need to copy slices.
-		log.Memory = slices.Clone(log.Memory)
-		log.Stack = slices.Clone(log.Stack)
-		log.ReturnData = slices.Clone(rData)
-		l.logs = append(l.logs, log)
+		entry := log.toLegacyJSON()
+		l.resultSize += len(entry)
+		l.logs = append(l.logs, entry)
 		return
 	}
 	log.WriteTo(l.writer)
@@ -283,7 +344,7 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 		Gas:         l.usedGas,
 		Failed:      failed,
 		ReturnValue: returnVal,
-		StructLogs:  formatLogs(l.StructLogs()),
+		StructLogs:  l.jsonLogs(),
 	})
 }
 
@@ -310,8 +371,9 @@ func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
 	}
 }
 
-// StructLogs returns the captured log entries.
-func (l *StructLogger) StructLogs() []StructLog { return l.logs }
+func (l *StructLogger) jsonLogs() []json.RawMessage {
+	return l.logs
+}
 
 // Error returns the VM error captured by the trace.
 func (l *StructLogger) Error() error { return l.err }
@@ -423,65 +485,8 @@ func (t *mdLogger) OnFault(pc uint64, op byte, gas, cost uint64, scope tracing.O
 // while replaying a transaction in debug mode as well as transaction
 // execution status, the amount of gas used and the return value
 type ExecutionResult struct {
-	Gas         uint64         `json:"gas"`
-	Failed      bool           `json:"failed"`
-	ReturnValue string         `json:"returnValue"`
-	StructLogs  []StructLogRes `json:"structLogs"`
-}
-
-// StructLogRes stores a structured log emitted by the EVM while replaying a
-// transaction in debug mode
-type StructLogRes struct {
-	Pc            uint64             `json:"pc"`
-	Op            string             `json:"op"`
-	Gas           uint64             `json:"gas"`
-	GasCost       uint64             `json:"gasCost"`
-	Depth         int                `json:"depth"`
-	Error         string             `json:"error,omitempty"`
-	Stack         *[]string          `json:"stack,omitempty"`
-	ReturnData    string             `json:"returnData,omitempty"`
-	Memory        *[]string          `json:"memory,omitempty"`
-	Storage       *map[string]string `json:"storage,omitempty"`
-	RefundCounter uint64             `json:"refund,omitempty"`
-}
-
-// formatLogs formats EVM returned structured logs for json output
-func formatLogs(logs []StructLog) []StructLogRes {
-	formatted := make([]StructLogRes, len(logs))
-	for index, trace := range logs {
-		formatted[index] = StructLogRes{
-			Pc:            trace.Pc,
-			Op:            trace.Op.String(),
-			Gas:           trace.Gas,
-			GasCost:       trace.GasCost,
-			Depth:         trace.Depth,
-			Error:         trace.ErrorString(),
-			RefundCounter: trace.RefundCounter,
-		}
-		if trace.Stack != nil {
-			stack := make([]string, len(trace.Stack))
-			for i, stackValue := range trace.Stack {
-				stack[i] = stackValue.Hex()
-			}
-			formatted[index].Stack = &stack
-		}
-		if len(trace.ReturnData) > 0 {
-			formatted[index].ReturnData = hexutil.Bytes(trace.ReturnData).String()
-		}
-		if trace.Memory != nil {
-			memory := make([]string, 0, (len(trace.Memory)+31)/32)
-			for i := 0; i+32 <= len(trace.Memory); i += 32 {
-				memory = append(memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
-			}
-			formatted[index].Memory = &memory
-		}
-		if trace.Storage != nil {
-			storage := make(map[string]string)
-			for i, storageValue := range trace.Storage {
-				storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
-			}
-			formatted[index].Storage = &storage
-		}
-	}
-	return formatted
+	Gas         uint64            `json:"gas"`
+	Failed      bool              `json:"failed"`
+	ReturnValue string            `json:"returnValue"`
+	StructLogs  []json.RawMessage `json:"structLogs"`
 }
