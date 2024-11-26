@@ -196,7 +196,7 @@ func (exp *exp) syncToExpvar() {
 			exp.publishGauge(name, i.Snapshot())
 		case *metrics.GaugeFloat64:
 			exp.publishGaugeFloat64(name, i.Snapshot())
-		case metrics.GaugeInfo:
+		case *metrics.GaugeInfo:
 			exp.publishGaugeInfo(name, i.Snapshot())
 		case metrics.Histogram:
 			exp.publishHistogram(name, i)
