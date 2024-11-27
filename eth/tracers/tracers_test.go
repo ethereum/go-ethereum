@@ -23,10 +23,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
 )
@@ -78,14 +78,8 @@ func BenchmarkTransactionTraceV2(b *testing.B) {
 	state := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false, rawdb.HashScheme)
 	defer state.Close()
 
-	// Create a tracer which records the number of steps
-	var steps = 0
-	tracer := &tracing.Hooks{
-		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-			steps++
-		},
-	}
-	evm := vm.NewEVM(context, state.StateDB, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer})
+	evm := vm.NewEVM(context, state.StateDB, params.AllEthashProtocolChanges, vm.Config{})
+
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
@@ -94,15 +88,15 @@ func BenchmarkTransactionTraceV2(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
+		tracer := logger.NewStructLogger(&logger.Config{Debug: false}).Hooks()
+		tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		evm.Config.Tracer = tracer
+
 		snap := state.StateDB.Snapshot()
 		_, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			b.Fatal(err)
 		}
 		state.StateDB.RevertToSnapshot(snap)
-		if have, want := steps, 244752; have != want {
-			b.Fatalf("trace wrong, want %d steps, have %d", want, have)
-		}
-		steps = 0
 	}
 }
