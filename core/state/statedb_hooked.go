@@ -73,13 +73,6 @@ func (s *hookedStateDB) GetCodeSize(addr common.Address) int {
 	return s.inner.GetCodeSize(addr)
 }
 
-func (s *hookedStateDB) ResolveCodeHash(addr common.Address) common.Hash {
-	return s.inner.ResolveCodeHash(addr)
-}
-func (s *hookedStateDB) ResolveCode(addr common.Address) []byte {
-	return s.inner.ResolveCode(addr)
-}
-
 func (s *hookedStateDB) AddRefund(u uint64) {
 	s.inner.AddRefund(u)
 }
