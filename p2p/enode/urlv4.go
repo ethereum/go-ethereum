@@ -101,6 +101,32 @@ func NewV4(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int) *Node {
 	return n
 }
 
+func NewV4WithDNS(pubkey *ecdsa.PublicKey, ip net.IP, dnsName string, tcp, udp int) *Node {
+	var r enr.Record
+	if len(ip) > 0 {
+		r.Set(enr.IP(ip))
+	}
+	// Always set TCP/UDP ports regardless of IP
+	// This is to ensure that the node is always
+	// considered valid even if the IP is not
+	// set.
+	if tcp != 0 {
+		r.Set(enr.TCP(tcp))
+	}
+	if udp != 0 {
+		r.Set(enr.UDP(udp))
+	}
+	signV4Compat(&r, pubkey)
+	n, err := New(v4CompatID{}, &r)
+	if err != nil {
+		panic(err)
+	}
+	n.dnsName = dnsName
+	n.tcp = uint16(tcp)
+	n.udp = uint16(udp)
+	return n
+}
+
 // isNewV4 returns true for nodes created by NewV4.
 func isNewV4(n *Node) bool {
 	var k s256raw
@@ -139,16 +165,18 @@ func parseComplete(rawurl string) (*Node, error) {
 	}
 	// Check if hostname is an IP address and create node accordingly
 	hostname := u.Hostname()
-	if ip := net.ParseIP(hostname); ip != nil {
-		// Create node with IP
-		node := NewV4(id, ip, int(tcpPort), int(udpPort))
-		return node, nil
+	ip := net.ParseIP(hostname)
+	if ip == nil {
+		ips, err := lookupIPFunc(hostname)
+		if err != nil {
+			return NewV4WithDNS(id, nil, hostname, int(tcpPort), int(udpPort)), nil
+		}
+		ip = ips[0]
 	}
-
-	// Create node for DNS name
-	node := NewV4(id, nil, int(tcpPort), int(udpPort))
-	node.dnsName = hostname
-	return node, nil
+	if ipv4 := ip.To4(); ipv4 != nil {
+		ip = ipv4
+	}
+	return NewV4(id, ip, int(tcpPort), int(udpPort)), nil
 }
 
 // parsePubkey parses a hex-encoded secp256k1 public key.
@@ -178,20 +206,19 @@ func (n *Node) URLv4() string {
 		nodeid = fmt.Sprintf("%s.%x", scheme, n.id[:])
 	}
 	u := url.URL{Scheme: "enode"}
-	if !n.ip.IsValid() {
+	if !n.ip.IsValid() && n.dnsName == "" {
 		u.Host = nodeid
+		return u.String()
+	}
+	u.User = url.User(nodeid)
+	if n.dnsName != "" {
+		u.Host = fmt.Sprintf("%s:%d", n.dnsName, n.TCP())
 	} else {
-		u.User = url.User(nodeid)
-		// Use DNS name if available, otherwise use IP
-		if n.DNSName() != "" {
-			u.Host = fmt.Sprintf("%s:%d", n.DNSName(), n.TCP())
-		} else {
-			addr := net.TCPAddr{IP: n.IP(), Port: n.TCP()}
-			u.Host = addr.String()
-		}
-		if n.UDP() != n.TCP() {
-			u.RawQuery = "discport=" + strconv.Itoa(n.UDP())
-		}
+		addr := net.TCPAddr{IP: n.IP(), Port: n.TCP()}
+		u.Host = addr.String()
+	}
+	if n.UDP() != n.TCP() {
+		u.RawQuery = "discport=" + strconv.Itoa(n.UDP())
 	}
 	return u.String()
 }
