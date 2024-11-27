@@ -55,12 +55,6 @@ type Database interface {
 	// OpenStorageTrie opens the storage trie of an account.
 	OpenStorageTrie(stateRoot common.Hash, address common.Address, root common.Hash, trie Trie) (Trie, error)
 
-	// ContractCode retrieves a particular contract's code.
-	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
-
-	// ContractCodeSize retrieves a particular contracts code's size.
-	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
-
 	// PointCache returns the cache holding points used in verkle tree key computation
 	PointCache() *utils.PointCache
 
@@ -182,13 +176,17 @@ func NewDatabaseForTesting() *CachingDB {
 func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	var readers []Reader
 
+	// Construct the code reader with retained caches. These caches are
+	// thread safe.
+	cReader := newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache)
+
 	// Set up the state snapshot reader if available. This feature
 	// is optional and may be partially useful if it's not fully
 	// generated.
 	if db.snap != nil {
 		snap := db.snap.Snapshot(stateRoot)
 		if snap != nil {
-			readers = append(readers, newStateReader(snap)) // snap reader is optional
+			readers = append(readers, newSingleReader(cReader, newFlatReader(snap)))
 		}
 	}
 	// Set up the trie reader, which is expected to always be available
@@ -197,7 +195,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	readers = append(readers, tr)
+	readers = append(readers, newSingleReader(cReader, tr))
 
 	return newMultiReader(readers...)
 }
@@ -229,21 +227,6 @@ func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 	return tr, nil
 }
 
-// ContractCode retrieves a particular contract's code.
-func (db *CachingDB) ContractCode(address common.Address, codeHash common.Hash) ([]byte, error) {
-	code, _ := db.codeCache.Get(codeHash)
-	if len(code) > 0 {
-		return code, nil
-	}
-	code = rawdb.ReadCode(db.disk, codeHash)
-	if len(code) > 0 {
-		db.codeCache.Add(codeHash, code)
-		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
-	}
-	return nil, errors.New("not found")
-}
-
 // ContractCodeWithPrefix retrieves a particular contract's code. If the
 // code can't be found in the cache, then check the existence with **new**
 // db scheme.
@@ -259,15 +242,6 @@ func (db *CachingDB) ContractCodeWithPrefix(address common.Address, codeHash com
 		return code, nil
 	}
 	return nil, errors.New("not found")
-}
-
-// ContractCodeSize retrieves a particular contracts code's size.
-func (db *CachingDB) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	if cached, ok := db.codeSizeCache.Get(codeHash); ok {
-		return cached, nil
-	}
-	code, err := db.ContractCode(addr, codeHash)
-	return len(code), err
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.

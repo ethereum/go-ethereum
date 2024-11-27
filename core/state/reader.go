@@ -20,8 +20,11 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/lru"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/utils"
@@ -29,9 +32,62 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
-// Reader defines the interface for accessing accounts and storage slots
+// CodeReader defines the interface for accessing contract code.
+type CodeReader interface {
+	// ContractCode retrieves a particular contract's code.
+	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
+
+	// ContractCodeSize retrieves a particular contracts code's size.
+	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
+}
+
+// cachingCodeReader implements CodeReader, accessing contract code either in
+// local key-value store or the shared code cache.
+type cachingCodeReader struct {
+	db ethdb.KeyValueReader
+
+	// These caches could be shared by multiple code reader instances,
+	// they are natively thread-safe.
+	codeCache     *lru.SizeConstrainedCache[common.Hash, []byte]
+	codeSizeCache *lru.Cache[common.Hash, int]
+}
+
+// newCachingCodeReader constructs the code reader.
+func newCachingCodeReader(db ethdb.KeyValueReader, codeCache *lru.SizeConstrainedCache[common.Hash, []byte], codeSizeCache *lru.Cache[common.Hash, int]) *cachingCodeReader {
+	return &cachingCodeReader{
+		db:            db,
+		codeCache:     codeCache,
+		codeSizeCache: codeSizeCache,
+	}
+}
+
+// ContractCode implements CodeReader, retrieving a particular contract's code.
+func (r *cachingCodeReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	code, _ := r.codeCache.Get(codeHash)
+	if len(code) > 0 {
+		return code, nil
+	}
+	code = rawdb.ReadCode(r.db, codeHash)
+	if len(code) > 0 {
+		r.codeCache.Add(codeHash, code)
+		r.codeSizeCache.Add(codeHash, len(code))
+		return code, nil
+	}
+	return nil, errors.New("not found")
+}
+
+// ContractCodeSize implements CodeReader, retrieving a particular contracts code's size.
+func (r *cachingCodeReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
+		return cached, nil
+	}
+	code, err := r.ContractCode(addr, codeHash)
+	return len(code), err
+}
+
+// StateReader defines the interface for accessing accounts and storage slots
 // associated with a specific state.
-type Reader interface {
+type StateReader interface {
 	// Account retrieves the account associated with a particular address.
 	//
 	// - Returns a nil account if it does not exist
@@ -48,27 +104,27 @@ type Reader interface {
 	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
 }
 
-// stateReader wraps a database state reader.
-type stateReader struct {
+// flatReader wraps a database state reader.
+type flatReader struct {
 	reader database.StateReader
 	buff   crypto.KeccakState
 }
 
-// newStateReader constructs a state reader with on the given state root.
-func newStateReader(reader database.StateReader) *stateReader {
-	return &stateReader{
+// newFlatReader constructs a state reader with on the given state root.
+func newFlatReader(reader database.StateReader) *flatReader {
+	return &flatReader{
 		reader: reader,
 		buff:   crypto.NewKeccakState(),
 	}
 }
 
-// Account implements Reader, retrieving the account specified by the address.
+// Account implements StateReader, retrieving the account specified by the address.
 //
 // An error will be returned if the associated snapshot is already stale or
 // the requested account is not yet covered by the snapshot.
 //
 // The returned account might be nil if it's not existent.
-func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *flatReader) Account(addr common.Address) (*types.StateAccount, error) {
 	account, err := r.reader.Account(crypto.HashData(r.buff, addr.Bytes()))
 	if err != nil {
 		return nil, err
@@ -91,14 +147,14 @@ func (r *stateReader) Account(addr common.Address) (*types.StateAccount, error) 
 	return acct, nil
 }
 
-// Storage implements Reader, retrieving the storage slot specified by the
+// Storage implements StateReader, retrieving the storage slot specified by the
 // address and slot key.
 //
 // An error will be returned if the associated snapshot is already stale or
 // the requested storage slot is not yet covered by the snapshot.
 //
 // The returned storage slot might be empty if it's not existent.
-func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
+func (r *flatReader) Storage(addr common.Address, key common.Hash) (common.Hash, error) {
 	addrHash := crypto.HashData(r.buff, addr.Bytes())
 	slotHash := crypto.HashData(r.buff, key.Bytes())
 	ret, err := r.reader.Storage(addrHash, slotHash)
@@ -119,7 +175,7 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	return value, nil
 }
 
-// trieReader implements the Reader interface, providing functions to access
+// trieReader implements the StateReader interface, providing functions to access
 // state from the referenced trie.
 type trieReader struct {
 	root     common.Hash                    // State root which uniquely represent a state
@@ -155,7 +211,7 @@ func newTrieReader(root common.Hash, db *triedb.Database, cache *utils.PointCach
 	}, nil
 }
 
-// Account implements Reader, retrieving the account specified by the address.
+// Account implements StateReader, retrieving the account specified by the address.
 //
 // An error will be returned if the trie state is corrupted. An nil account
 // will be returned if it's not existent in the trie.
@@ -172,7 +228,7 @@ func (r *trieReader) Account(addr common.Address) (*types.StateAccount, error) {
 	return account, nil
 }
 
-// Storage implements Reader, retrieving the storage slot specified by the
+// Storage implements StateReader, retrieving the storage slot specified by the
 // address and slot key.
 //
 // An error will be returned if the trie state is corrupted. An empty storage
@@ -213,6 +269,27 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	}
 	value.SetBytes(ret)
 	return value, nil
+}
+
+// Reader defines the interface for accessing accounts, storage slots and contract
+// code associated with a specific state.
+type Reader interface {
+	CodeReader
+	StateReader
+}
+
+// singleReader is the wrapper of CodeReader and StateReader interface.
+type singleReader struct {
+	CodeReader
+	StateReader
+}
+
+// newSingleReader constructs a reader with the supplied code reader and state reader.
+func newSingleReader(codeReader CodeReader, stateReader StateReader) *singleReader {
+	return &singleReader{
+		CodeReader:  codeReader,
+		StateReader: stateReader,
+	}
 }
 
 // multiReader is the aggregation of a list of Reader interface, providing state
@@ -268,4 +345,30 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 		errs = append(errs, err)
 	}
 	return common.Hash{}, errors.Join(errs...)
+}
+
+// ContractCode implements Reader, retrieving a particular contract's code.
+func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
+	var errs []error
+	for _, reader := range r.readers {
+		code, err := reader.ContractCode(addr, codeHash)
+		if err == nil {
+			return code, nil
+		}
+		errs = append(errs, err)
+	}
+	return nil, errors.Join(errs...)
+}
+
+// ContractCodeSize implements Reader, retrieving a particular contracts code's size.
+func (r *multiReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+	var errs []error
+	for _, reader := range r.readers {
+		size, err := reader.ContractCodeSize(addr, codeHash)
+		if err == nil {
+			return size, nil
+		}
+		errs = append(errs, err)
+	}
+	return 0, errors.Join(errs...)
 }
