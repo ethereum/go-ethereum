@@ -18,7 +18,6 @@ package state
 
 import (
 	"errors"
-	"maps"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -47,9 +46,6 @@ type Reader interface {
 	// - Returns an error only if an unexpected issue occurs
 	// - The returned storage slot is safe to modify after the call
 	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
-
-	// Copy returns a deep-copied state reader.
-	Copy() Reader
 }
 
 // stateReader wraps a database state reader.
@@ -121,14 +117,6 @@ func (r *stateReader) Storage(addr common.Address, key common.Hash) (common.Hash
 	var value common.Hash
 	value.SetBytes(content)
 	return value, nil
-}
-
-// Copy implements Reader, returning a deep-copied snap reader.
-func (r *stateReader) Copy() Reader {
-	return &stateReader{
-		reader: r.reader,
-		buff:   crypto.NewKeccakState(),
-	}
 }
 
 // trieReader implements the Reader interface, providing functions to access
@@ -227,22 +215,6 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
-// Copy implements Reader, returning a deep-copied trie reader.
-func (r *trieReader) Copy() Reader {
-	tries := make(map[common.Address]Trie)
-	for addr, tr := range r.subTries {
-		tries[addr] = mustCopyTrie(tr)
-	}
-	return &trieReader{
-		root:     r.root,
-		db:       r.db,
-		buff:     crypto.NewKeccakState(),
-		mainTrie: mustCopyTrie(r.mainTrie),
-		subRoots: maps.Clone(r.subRoots),
-		subTries: tries,
-	}
-}
-
 // multiReader is the aggregation of a list of Reader interface, providing state
 // access by leveraging all readers. The checking priority is determined by the
 // position in the reader list.
@@ -296,13 +268,4 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 		errs = append(errs, err)
 	}
 	return common.Hash{}, errors.Join(errs...)
-}
-
-// Copy implementing Reader interface, returning a deep-copied state reader.
-func (r *multiReader) Copy() Reader {
-	var readers []Reader
-	for _, reader := range r.readers {
-		readers = append(readers, reader.Copy())
-	}
-	return &multiReader{readers: readers}
 }
