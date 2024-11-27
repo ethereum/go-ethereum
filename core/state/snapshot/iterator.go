@@ -115,6 +115,7 @@ func (it *diffAccountIterator) Next() bool {
 	}
 	// Iterator seems to be still alive, retrieve and cache the live hash
 	it.curHash = it.keys[0]
+
 	// key cached, shift the iterator and notify the user of success
 	it.keys = it.keys[1:]
 	return true
@@ -135,7 +136,7 @@ func (it *diffAccountIterator) Hash() common.Hash {
 // This method may _fail_, if the underlying layer has been flattened between
 // the call to Next and Account. That type of error will set it.Err.
 // This method assumes that flattening does not delete elements from
-// the accountdata mapping (writing nil into it is fine though), and will panic
+// the accountData mapping (writing nil into it is fine though), and will panic
 // if elements have been deleted.
 //
 // Note the returned account is not a copy, please don't modify it.
@@ -143,10 +144,6 @@ func (it *diffAccountIterator) Account() []byte {
 	it.layer.lock.RLock()
 	blob, ok := it.layer.accountData[it.curHash]
 	if !ok {
-		if _, ok := it.layer.destructSet[it.curHash]; ok {
-			it.layer.lock.RUnlock()
-			return nil
-		}
 		panic(fmt.Sprintf("iterator referenced non-existent account: %x", it.curHash))
 	}
 	it.layer.lock.RUnlock()
@@ -247,11 +244,11 @@ type diffStorageIterator struct {
 // "destructed" returned. If it's true then it means the whole storage is
 // destructed in this layer(maybe recreated too), don't bother deeper layer
 // for storage retrieval.
-func (dl *diffLayer) StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool) {
+func (dl *diffLayer) StorageIterator(account common.Hash, seek common.Hash) StorageIterator {
 	// Create the storage for this account even it's marked
 	// as destructed. The iterator is for the new one which
 	// just has the same address as the deleted one.
-	hashes, destructed := dl.StorageList(account)
+	hashes := dl.StorageList(account)
 	index := sort.Search(len(hashes), func(i int) bool {
 		return bytes.Compare(seek[:], hashes[i][:]) <= 0
 	})
@@ -260,7 +257,7 @@ func (dl *diffLayer) StorageIterator(account common.Hash, seek common.Hash) (Sto
 		layer:   dl,
 		account: account,
 		keys:    hashes[index:],
-	}, destructed
+	}
 }
 
 // Next steps the iterator forward one element, returning false if exhausted.
@@ -339,13 +336,13 @@ type diskStorageIterator struct {
 // If the whole storage is destructed, then all entries in the disk
 // layer are deleted already. So the "destructed" flag returned here
 // is always false.
-func (dl *diskLayer) StorageIterator(account common.Hash, seek common.Hash) (StorageIterator, bool) {
+func (dl *diskLayer) StorageIterator(account common.Hash, seek common.Hash) StorageIterator {
 	pos := common.TrimRightZeroes(seek[:])
 	return &diskStorageIterator{
 		layer:   dl,
 		account: account,
 		it:      dl.diskdb.NewIterator(append(rawdb.SnapshotStoragePrefix, account.Bytes()...), pos),
-	}, false
+	}
 }
 
 // Next steps the iterator forward one element, returning false if exhausted.

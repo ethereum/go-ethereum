@@ -277,6 +277,13 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) (*rawdb.LegacyTxLoo
 	if tx == nil {
 		progress, err := bc.TxIndexProgress()
 		if err != nil {
+			// No error is returned if the transaction indexing progress is unreachable
+			// due to unexpected internal errors. In such cases, it is impossible to
+			// determine whether the transaction does not exist or has simply not been
+			// indexed yet without a progress marker.
+			//
+			// In such scenarios, the transaction is treated as unreachable, though
+			// this is clearly an unintended and unexpected situation.
 			return nil, nil, nil
 		}
 		// The transaction indexing is not finished yet, returning an
