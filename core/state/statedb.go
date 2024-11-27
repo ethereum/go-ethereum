@@ -71,24 +71,33 @@ func (m *mutation) isDelete() bool {
 //
 // * Contracts
 // * Accounts
+// * Proofs
 //
 // Once the state is committed, tries cached in stateDB (including account
 // trie, storage tries) will no longer be functional. A new state instance
 // must be created with new root and updated database for accessing post-
 // commit states.
 type StateDB struct {
-	db         Database
-	prefetcher *triePrefetcher
-	trie       Trie
-	reader     Reader
+	db              Database
+	prefetcher      *triePrefetcher
+	trie            Trie
+	reader          Reader
+	proofPrefetcher *triePrefetcher
+	proofTrie       Trie
+	proofReader     Reader
 
 	// originalRoot is the pre-state root, before any changes were made.
 	// It will be updated when the Commit is called.
 	originalRoot common.Hash
+	// originalProofRoot is the pre-state proof root, before any changes were made.
+	// It will be updated when the Commit is called.
+	originalProofRoot common.Hash
 
 	// This map holds 'live' objects, which will get modified while
 	// processing a state transition.
 	stateObjects map[common.Address]*stateObject
+
+	proofStateObjects map[common.Address]*stateObject
 
 	// This map holds 'deleted' objects. An object with the same address
 	// might also occur in the 'stateObjects' map due to account
@@ -97,11 +106,15 @@ type StateDB struct {
 	// boundaries.
 	stateObjectsDestruct map[common.Address]*stateObject
 
+	proofStateObjectsDestruct map[common.Address]*stateObject
+
 	// This map tracks the account mutations that occurred during the
 	// transition. Uncommitted mutations belonging to the same account
 	// can be merged into a single one which is equivalent from database's
 	// perspective. This map is populated at the transaction boundaries.
 	mutations map[common.Address]*mutation
+
+	proofMutations map[common.Address]*mutation
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -121,6 +134,9 @@ type StateDB struct {
 	logs    map[common.Hash][]*types.Log
 	logSize uint
 
+	proofLogs    map[common.Hash][]*types.Log
+	proofLogSize uint
+
 	// Preimages occurred seen by VM in the scope of block.
 	preimages map[common.Hash][]byte
 
@@ -135,8 +151,13 @@ type StateDB struct {
 	// Snapshot and RevertToSnapshot.
 	journal *journal
 
+	proofJournal *journal
+
 	// State witness if cross validation is needed
 	witness *stateless.Witness
+
+	// Proof witness if cross validation is needed
+	proofWitness *stateless.Witness
 
 	// Measurements gathered during execution for debugging purposes
 	AccountReads    time.Duration
@@ -147,6 +168,10 @@ type StateDB struct {
 	StorageUpdates  time.Duration
 	StorageCommits  time.Duration
 	SnapshotCommits time.Duration
+	ProofReads      time.Duration
+	ProofHashes     time.Duration
+	ProofUpdates    time.Duration
+	ProofCommits    time.Duration
 	TrieDBCommits   time.Duration
 
 	AccountLoaded  int          // Number of accounts retrieved from the database during the state transition
@@ -155,10 +180,13 @@ type StateDB struct {
 	StorageLoaded  int          // Number of storage slots retrieved from the database during the state transition
 	StorageUpdated atomic.Int64 // Number of storage slots updated during the state transition
 	StorageDeleted atomic.Int64 // Number of storage slots deleted during the state transition
+	ProofLoaded    int          // Number of proof nodes retrieved from the database during the state transition
+	ProofUpdated   atomic.Int64 // Number of proof nodes updated during the state transition
+	ProofDeleted   atomic.Int64 // Number of proof nodes deleted during the state transition
 }
 
 // New creates a new state from a given trie.
-func New(root common.Hash, db Database) (*StateDB, error) {
+func New(root common.Hash, proofRoot common.Hash, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -167,17 +195,29 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
+	proofTrie, err := db.OpenTrie(proofRoot)
+	if err != nil {
+		return nil, err
+	}
+	proofReader, err := db.Reader(proofRoot)
+	if err != nil {
+		return nil, err
+	}
 	sdb := &StateDB{
 		db:                   db,
 		trie:                 tr,
 		originalRoot:         root,
 		reader:               reader,
+		proofTrie:            proofTrie,
+		originalProofRoot:    proofRoot,
+		proofReader:          proofReader,
 		stateObjects:         make(map[common.Address]*stateObject),
 		stateObjectsDestruct: make(map[common.Address]*stateObject),
 		mutations:            make(map[common.Address]*mutation),
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
 		journal:              newJournal(),
+		proofJournal:         newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 	}
@@ -190,12 +230,14 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 // StartPrefetcher initializes a new trie prefetcher to pull in nodes from the
 // state trie concurrently while the state is mutated so that when we reach the
 // commit phase, most of the needed data is already hot.
-func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) {
+func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness, proofWitness *stateless.Witness) {
 	// Terminate any previously running prefetcher
 	s.StopPrefetcher()
 
 	// Enable witness collection if requested
 	s.witness = witness
+
+	s.proofWitness = proofWitness
 
 	// With the switch to the Proof-of-Stake consensus algorithm, block production
 	// rewards are now handled at the consensus layer. Consequently, a block may
@@ -210,6 +252,11 @@ func (s *StateDB) StartPrefetcher(namespace string, witness *stateless.Witness) 
 	if err := s.prefetcher.prefetch(common.Hash{}, s.originalRoot, common.Address{}, nil, nil, false); err != nil {
 		log.Error("Failed to prefetch account trie", "root", s.originalRoot, "err", err)
 	}
+
+	s.proofPrefetcher = newTriePrefetcher(s.db, s.originalProofRoot, namespace, proofWitness == nil)
+	if err := s.proofPrefetcher.prefetch(common.Hash{}, s.originalProofRoot, common.Address{}, nil, nil, false); err != nil {
+		log.Error("Failed to prefetch proof trie", "root", s.originalProofRoot, "err", err)
+	}
 }
 
 // StopPrefetcher terminates a running prefetcher and reports any leftover stats
@@ -219,6 +266,14 @@ func (s *StateDB) StopPrefetcher() {
 		s.prefetcher.terminate(false)
 		s.prefetcher.report()
 		s.prefetcher = nil
+	}
+}
+
+func (s *StateDB) StopProofPrefetcher() {
+	if s.proofPrefetcher != nil {
+		s.proofPrefetcher.terminate(false)
+		s.proofPrefetcher.report()
+		s.proofPrefetcher = nil
 	}
 }
 
@@ -244,6 +299,16 @@ func (s *StateDB) AddLog(log *types.Log) {
 	s.logSize++
 }
 
+func (s *StateDB) AddProofLog(log *types.Log) {
+	s.proofJournal.logChange(s.thash)
+
+	log.TxHash = s.thash
+	log.TxIndex = uint(s.txIndex)
+	log.Index = s.logSize
+	s.proofLogs[s.thash] = append(s.proofLogs[s.thash], log)
+	s.proofLogSize++
+}
+
 // GetLogs returns the logs matching the specified transaction hash, and annotates
 // them with the given blockNumber and blockHash.
 func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log {
@@ -255,9 +320,26 @@ func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common
 	return logs
 }
 
+func (s *StateDB) GetProofLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log {
+	logs := s.proofLogs[hash]
+	for _, l := range logs {
+		l.BlockNumber = blockNumber
+		l.BlockHash = blockHash
+	}
+	return logs
+}
+
 func (s *StateDB) Logs() []*types.Log {
 	var logs []*types.Log
 	for _, lgs := range s.logs {
+		logs = append(logs, lgs...)
+	}
+	return logs
+}
+
+func (s *StateDB) ProofLogs() []*types.Log {
+	var logs []*types.Log
+	for _, lgs := range s.proofLogs {
 		logs = append(logs, lgs...)
 	}
 	return logs
@@ -291,15 +373,32 @@ func (s *StateDB) SubRefund(gas uint64) {
 	s.refund -= gas
 }
 
+func (s *StateDB) SubProofRefund(gas uint64) {
+	s.proofJournal.refundChange(s.refund)
+	if gas > s.refund {
+		panic(fmt.Sprintf("Proof refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
+	}
+	s.refund -= gas
+}
+
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for self-destructed accounts.
 func (s *StateDB) Exist(addr common.Address) bool {
 	return s.getStateObject(addr) != nil
 }
 
+func (s *StateDB) ProofExist(addr common.Address) bool {
+	return s.getStateObject(addr) != nil
+}
+
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (s *StateDB) Empty(addr common.Address) bool {
+	so := s.getStateObject(addr)
+	return so == nil || so.empty()
+}
+
+func (s *StateDB) ProofEmpty(addr common.Address) bool {
 	so := s.getStateObject(addr)
 	return so == nil || so.empty()
 }
@@ -326,6 +425,24 @@ func (s *StateDB) GetNonce(addr common.Address) uint64 {
 // GetStorageRoot retrieves the storage root from the given address or empty
 // if object not found.
 func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Root()
+	}
+	return common.Hash{}
+}
+
+func (s *StateDB) GetProofValue(addr common.Address, key common.Hash) common.Hash {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.GetProofState(key)
+	}
+	return common.Hash{}
+}
+
+// GetProofRoot retrieves the proof root from the given address or empty
+// if object not found.
+func (s *StateDB) GetProofRoot(addr common.Address) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Root()
@@ -558,10 +675,28 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 	}
 }
 
+// updateProofStateObject writes the given object to the proof trie.
+func (s *StateDB) updateProofStateObject(obj *stateObject) {
+	addr := obj.Address()
+	if err := s.proofTrie.UpdateAccount(addr, &obj.data, len(obj.code)); err != nil {
+		s.setError(fmt.Errorf("updateProofStateObject (%x) error: %v", addr[:], err))
+	}
+	if obj.dirtyCode {
+		s.proofTrie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+	}
+}
+
 // deleteStateObject removes the given object from the state trie.
 func (s *StateDB) deleteStateObject(addr common.Address) {
 	if err := s.trie.DeleteAccount(addr); err != nil {
 		s.setError(fmt.Errorf("deleteStateObject (%x) error: %v", addr[:], err))
+	}
+}
+
+// deleteProofStateObject removes the given object from the proof trie.
+func (s *StateDB) deleteProofStateObject(addr common.Address) {
+	if err := s.proofTrie.DeleteAccount(addr); err != nil {
+		s.setError(fmt.Errorf("deleteProofStateObject (%x) error: %v", addr[:], err))
 	}
 }
 
@@ -603,8 +738,50 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	return obj
 }
 
+// getProofStateObject retrieves a proof state object given by the address, returning nil if
+// the object is not found or was deleted in this execution context.
+func (s *StateDB) getProofStateObject(addr common.Address) *stateObject {
+	// Prefer live objects if any is available
+	if obj := s.proofStateObjects[addr]; obj != nil {
+		return obj
+	}
+	// Short circuit if the account is already destructed in this block.
+	if _, ok := s.proofStateObjectsDestruct[addr]; ok {
+		return nil
+	}
+	s.ProofLoaded++
+
+	start := time.Now()
+	acct, err := s.proofReader.Account(addr)
+	if err != nil {
+		s.setError(fmt.Errorf("getProofStateObject (%x) error: %w", addr.Bytes(), err))
+		return nil
+	}
+	s.ProofReads += time.Since(start)
+
+	// Short circuit if the account is not found
+	if acct == nil {
+		return nil
+	}
+	// Schedule the resolved account for prefetching if it's enabled.
+	if s.proofPrefetcher != nil {
+		if err = s.proofPrefetcher.prefetch(common.Hash{}, s.originalProofRoot, common.Address{}, []common.Address{addr}, nil, true); err != nil {
+			log.Error("Failed to prefetch account", "addr", addr, "err", err)
+		}
+	}
+	// Insert into the live set
+	obj := newObject(s, addr, acct)
+	s.setProofStateObject(obj)
+	s.ProofLoaded++
+	return obj
+}
+
 func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
+}
+
+func (s *StateDB) setProofStateObject(object *stateObject) {
+	s.proofStateObjects[object.Address()] = object
 }
 
 // getOrNewStateObject retrieves a state object or create a new state object if nil.
@@ -612,6 +789,14 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 	obj := s.getStateObject(addr)
 	if obj == nil {
 		obj = s.createObject(addr)
+	}
+	return obj
+}
+
+func (s *StateDB) getOrNewProofStateObject(addr common.Address) *stateObject {
+	obj := s.getProofStateObject(addr)
+	if obj == nil {
+		obj = s.createProofObject(addr)
 	}
 	return obj
 }
@@ -625,12 +810,23 @@ func (s *StateDB) createObject(addr common.Address) *stateObject {
 	return obj
 }
 
+func (s *StateDB) createProofObject(addr common.Address) *stateObject {
+	obj := newObject(s, addr, nil)
+	s.journal.createObject(addr)
+	s.setProofStateObject(obj)
+	return obj
+}
+
 // CreateAccount explicitly creates a new state object, assuming that the
 // account did not previously exist in the state. If the account already
 // exists, this function will silently overwrite it which might lead to a
 // consensus bug eventually.
 func (s *StateDB) CreateAccount(addr common.Address) {
 	s.createObject(addr)
+}
+
+func (s *StateDB) CreateProofAccount(addr common.Address) {
+	s.createProofObject(addr)
 }
 
 // CreateContract is used whenever a contract is created. This may be preceded
@@ -651,20 +847,26 @@ func (s *StateDB) CreateContract(addr common.Address) {
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
-		db:                   s.db,
-		trie:                 mustCopyTrie(s.trie),
-		reader:               s.reader.Copy(),
-		originalRoot:         s.originalRoot,
-		stateObjects:         make(map[common.Address]*stateObject, len(s.stateObjects)),
-		stateObjectsDestruct: make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),
-		mutations:            make(map[common.Address]*mutation, len(s.mutations)),
-		dbErr:                s.dbErr,
-		refund:               s.refund,
-		thash:                s.thash,
-		txIndex:              s.txIndex,
-		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
-		logSize:              s.logSize,
-		preimages:            maps.Clone(s.preimages),
+		db:                        s.db,
+		trie:                      mustCopyTrie(s.trie),
+		reader:                    s.reader.Copy(),
+		originalRoot:              s.originalRoot,
+		stateObjects:              make(map[common.Address]*stateObject, len(s.stateObjects)),
+		stateObjectsDestruct:      make(map[common.Address]*stateObject, len(s.stateObjectsDestruct)),
+		mutations:                 make(map[common.Address]*mutation, len(s.mutations)),
+		proofTrie:                 mustCopyTrie(s.proofTrie),
+		proofReader:               s.proofReader.Copy(),
+		originalProofRoot:         s.originalProofRoot,
+		proofStateObjects:         make(map[common.Address]*stateObject, len(s.proofStateObjects)),
+		proofStateObjectsDestruct: make(map[common.Address]*stateObject, len(s.proofStateObjectsDestruct)),
+		proofMutations:            make(map[common.Address]*mutation, len(s.proofMutations)),
+		dbErr:                     s.dbErr,
+		refund:                    s.refund,
+		thash:                     s.thash,
+		txIndex:                   s.txIndex,
+		logs:                      make(map[common.Hash][]*types.Log, len(s.logs)),
+		logSize:                   s.logSize,
+		preimages:                 maps.Clone(s.preimages),
 
 		// Do we need to copy the access list and transient storage?
 		// In practice: No. At the start of a transaction, these two lists are empty.
@@ -679,6 +881,9 @@ func (s *StateDB) Copy() *StateDB {
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
 	}
+	if s.proofWitness != nil {
+		state.proofWitness = s.proofWitness.Copy()
+	}
 	if s.accessEvents != nil {
 		state.accessEvents = s.accessEvents.Copy()
 	}
@@ -686,13 +891,22 @@ func (s *StateDB) Copy() *StateDB {
 	for addr, obj := range s.stateObjects {
 		state.stateObjects[addr] = obj.deepCopy(state)
 	}
+	for addr, obj := range s.proofStateObjects {
+		state.proofStateObjects[addr] = obj.deepCopy(state)
+	}
 	// Deep copy destructed state objects.
 	for addr, obj := range s.stateObjectsDestruct {
 		state.stateObjectsDestruct[addr] = obj.deepCopy(state)
 	}
+	for addr, obj := range s.proofStateObjectsDestruct {
+		state.proofStateObjectsDestruct[addr] = obj.deepCopy(state)
+	}
 	// Deep copy the object state markers.
 	for addr, op := range s.mutations {
 		state.mutations[addr] = op.copy()
+	}
+	for addr, op := range s.proofMutations {
+		state.proofMutations[addr] = op.copy()
 	}
 	// Deep copy the logs occurred in the scope of block
 	for hash, logs := range s.logs {
