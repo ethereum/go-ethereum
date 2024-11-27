@@ -35,7 +35,7 @@ type CounterFloat64Snapshot float64
 // Count returns the value at the time the snapshot was taken.
 func (c CounterFloat64Snapshot) Count() float64 { return float64(c) }
 
-// CounterFloat64 is the uses atomic to manage a single float64 value.
+// CounterFloat64 holds a float64 value that can be incremented and decremented.
 type CounterFloat64 atomic.Uint64
 
 // Clear sets the counter to zero.

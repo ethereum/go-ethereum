@@ -34,8 +34,7 @@ type CounterSnapshot int64
 // Count returns the count at the time the snapshot was taken.
 func (c CounterSnapshot) Count() int64 { return int64(c) }
 
-// Counter is the standard implementation of a Counter and uses the
-// sync/atomic package to manage a single int64 value.
+// Counter hold an int64 value that can be incremented and decremented.
 type Counter atomic.Int64
 
 // Clear sets the counter to zero.

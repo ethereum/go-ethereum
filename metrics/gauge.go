@@ -32,7 +32,7 @@ func NewRegisteredGauge(name string, r Registry) *Gauge {
 	return c
 }
 
-// Gauge and uses the sync/atomic package to manage a single int64 value.
+// Gauge holds an int64 value that can be set arbitrarily.
 type Gauge atomic.Int64
 
 // Snapshot returns a read-only copy of the gauge.

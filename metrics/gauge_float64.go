@@ -35,7 +35,7 @@ func NewRegisteredGaugeFloat64(name string, r Registry) *GaugeFloat64 {
 	return c
 }
 
-// GaugeFloat64 and uses atomic to manage a single float64 value.
+// GaugeFloat64 hold a float64 value that can be set arbitrarily.
 type GaugeFloat64 atomic.Uint64
 
 // Snapshot returns a read-only copy of the gauge.

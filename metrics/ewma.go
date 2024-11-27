@@ -34,9 +34,8 @@ func NewEWMA15() *EWMA {
 	return NewEWMA(1 - math.Exp(-5.0/60.0/15))
 }
 
-// EWMA imlements an exponential weighted moving average. It tracks the number
-// of uncounted events and processes them on each tick.  It uses the
-// sync/atomic package to manage uncounted events.
+// EWMA continuously calculate an exponentially-weighted moving average
+// based on an outside source of clock ticks.
 type EWMA struct {
 	uncounted atomic.Int64
 	alpha     float64
