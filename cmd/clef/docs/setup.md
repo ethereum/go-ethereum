@@ -8,7 +8,7 @@ in order to ensure that the keys remain safe in the event that your computer sho
 
 ### Background 
 
-The Qubes operating system is based around virtual machines (qubes), where a set of virtual machines are configured, typically for 
+The Qubes operating system is based on virtual machines (qubes), where a set of virtual machines are configured, typically for 
 different purposes such as:
 
 - personal
