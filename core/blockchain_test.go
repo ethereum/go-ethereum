@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm/program"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -4254,30 +4255,13 @@ func TestEIP7702(t *testing.T) {
 		Alloc: types.GenesisAlloc{
 			addr1: {Balance: funds},
 			addr2: {Balance: funds},
-			// The address 0xAAAA sstores 1 into slot 2.
-			aa: {
-				Code: []byte{
-					byte(vm.PC),          // [0]
-					byte(vm.DUP1),        // [0,0]
-					byte(vm.DUP1),        // [0,0,0]
-					byte(vm.DUP1),        // [0,0,0,0]
-					byte(vm.PUSH1), 0x01, // [0,0,0,0,1] (value)
-					byte(vm.PUSH20), addr2[0], addr2[1], addr2[2], addr2[3], addr2[4], addr2[5], addr2[6], addr2[7], addr2[8], addr2[9], addr2[10], addr2[11], addr2[12], addr2[13], addr2[14], addr2[15], addr2[16], addr2[17], addr2[18], addr2[19],
-					byte(vm.GAS),
-					byte(vm.CALL),
-					byte(vm.STOP),
-				},
+			aa: { // The address 0xAAAA calls into addr2
+				Code:    program.New().Call(nil, addr2, 1, 0, 0, 0, 0).Bytes(),
 				Nonce:   0,
 				Balance: big.NewInt(0),
 			},
-			// The address 0xBBBB sstores 42 into slot 42.
-			bb: {
-				Code: []byte{
-					byte(vm.PUSH1), 0x42,
-					byte(vm.DUP1),
-					byte(vm.SSTORE),
-					byte(vm.STOP),
-				},
+			bb: { // The address 0xBBBB sstores 42 into slot 42.
+				Code:    program.New().Sstore(0x42, 0x42).Bytes(),
 				Nonce:   0,
 				Balance: big.NewInt(0),
 			},
@@ -4285,6 +4269,10 @@ func TestEIP7702(t *testing.T) {
 	}
 
 	// Sign authorization tuples.
+	// The way the auths are combined, it becomes
+	// 1. tx -> addr1 which is delegated to 0xaaaa
+	// 2. addr1:0xaaaa calls into addr2:0xbbbb
+	// 3. addr2:0xbbbb  writes to storage
 	auth1, _ := types.SignAuth(&types.Authorization{
 		ChainID: gspec.Config.ChainID.Uint64(),
 		Address: aa,
