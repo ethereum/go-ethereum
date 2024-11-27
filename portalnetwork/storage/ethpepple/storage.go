@@ -205,6 +205,8 @@ func (c *ContentStorage) Put(contentKey []byte, contentId []byte, content []byte
 			c.sizeChan <- struct{}{}
 			return err
 		}
+	} else {
+		c.capacityChan <- c.size
 	}
 	c.sizeChan <- struct{}{}
 	return nil
@@ -273,6 +275,8 @@ func (c *ContentStorage) prune() error {
 	if err != nil {
 		return err
 	}
+	c.size -= curentSize
+	c.capacityChan <- c.size - curentSize
 	return nil
 }
 
