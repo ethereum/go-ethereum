@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -35,6 +34,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/internal/ethapi/override"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -57,7 +57,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
@@ -666,8 +665,8 @@ func TestEstimateGas(t *testing.T) {
 	var testSuite = []struct {
 		blockNumber    rpc.BlockNumber
 		call           TransactionArgs
-		overrides      StateOverride
-		blockOverrides BlockOverrides
+		overrides      override.StateOverride
+		blockOverrides override.BlockOverrides
 		expectErr      error
 		want           uint64
 	}{
@@ -703,8 +702,8 @@ func TestEstimateGas(t *testing.T) {
 		{
 			blockNumber: rpc.LatestBlockNumber,
 			call:        TransactionArgs{},
-			overrides: StateOverride{
-				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+			overrides: override.StateOverride{
+				randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
 			},
 			expectErr: nil,
 			want:      53000,
@@ -716,8 +715,8 @@ func TestEstimateGas(t *testing.T) {
 				To:    &randomAccounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
-			overrides: StateOverride{
-				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
+			overrides: override.StateOverride{
+				randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
 			},
 			expectErr: core.ErrInsufficientFunds,
 		},
@@ -813,12 +812,12 @@ func TestEstimateGas(t *testing.T) {
 				To:   &accounts[1].addr,
 				Data: hex2Bytes("0x3592d016"), //estimate
 			},
-			overrides: StateOverride{
-				accounts[1].addr: OverrideAccount{
+			overrides: override.StateOverride{
+				accounts[1].addr: override.OverrideAccount{
 					Code: hex2Bytes("608060405234801561000f575f5ffd5b5060043610610034575f3560e01c806328b5e32b146100385780633592d0161461004b575b5f5ffd5b4360405190815260200160405180910390f35b610053610055565b005b61005e4361009d565b60405160200161006e91906101a5565b60408051601f198184030181529082905262461bcd60e51b8252610094916004016101cd565b60405180910390fd5b6060815f036100c35750506040805180820190915260018152600360fc1b602082015290565b815f5b81156100ec57806100d681610216565b91506100e59050600a83610242565b91506100c6565b5f8167ffffffffffffffff81111561010657610106610255565b6040519080825280601f01601f191660200182016040528015610130576020820181803683370190505b508593509050815b831561019c57610149600a85610269565b61015490603061027c565b60f81b8261016183610295565b92508281518110610174576101746102aa565b60200101906001600160f81b03191690815f1a905350610195600a85610242565b9350610138565b50949350505050565b650313637b1b5960d51b81525f82518060208501600685015e5f920160060191825250919050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b634e487b7160e01b5f52601160045260245ffd5b5f6001820161022757610227610202565b5060010190565b634e487b7160e01b5f52601260045260245ffd5b5f826102505761025061022e565b500490565b634e487b7160e01b5f52604160045260245ffd5b5f826102775761027761022e565b500690565b8082018082111561028f5761028f610202565b92915050565b5f816102a3576102a3610202565b505f190190565b634e487b7160e01b5f52603260045260245ffdfea2646970667358221220a253cad1e2e3523b8c053c1d0cd1e39d7f3bafcedd73440a244872701f05dab264736f6c634300081c0033"),
 				},
 			},
-			blockOverrides: BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
+			blockOverrides: override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
 			expectErr:      newRevertError(packRevert("block 11")),
 		},
 	}
@@ -883,9 +882,9 @@ func TestCall(t *testing.T) {
 	var testSuite = []struct {
 		name           string
 		blockNumber    rpc.BlockNumber
-		overrides      StateOverride
+		overrides      override.StateOverride
 		call           TransactionArgs
-		blockOverrides BlockOverrides
+		blockOverrides override.BlockOverrides
 		expectErr      error
 		want           string
 	}{
@@ -945,8 +944,8 @@ func TestCall(t *testing.T) {
 				To:    &randomAccounts[1].addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
-			overrides: StateOverride{
-				randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
+			overrides: override.StateOverride{
+				randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(new(big.Int).Mul(big.NewInt(1), big.NewInt(params.Ether)))},
 			},
 			want: "0x",
 		},
@@ -985,8 +984,8 @@ func TestCall(t *testing.T) {
 				To:   &randomAccounts[2].addr,
 				Data: hex2Bytes("8381f58a"), // call number()
 			},
-			overrides: StateOverride{
-				randomAccounts[2].addr: OverrideAccount{
+			overrides: override.StateOverride{
+				randomAccounts[2].addr: override.OverrideAccount{
 					Code:      hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033"),
 					StateDiff: map[common.Hash]common.Hash{{}: common.BigToHash(big.NewInt(123))},
 				},
@@ -1033,12 +1032,12 @@ func TestCall(t *testing.T) {
 				To:   &accounts[2].addr,
 				Data: hex2Bytes("0x28b5e32b"), //call
 			},
-			overrides: StateOverride{
-				accounts[2].addr: OverrideAccount{
+			overrides: override.StateOverride{
+				accounts[2].addr: override.OverrideAccount{
 					Code: hex2Bytes("608060405234801561000f575f5ffd5b5060043610610034575f3560e01c806328b5e32b146100385780633592d0161461004b575b5f5ffd5b4360405190815260200160405180910390f35b610053610055565b005b61005e4361009d565b60405160200161006e91906101a5565b60408051601f198184030181529082905262461bcd60e51b8252610094916004016101cd565b60405180910390fd5b6060815f036100c35750506040805180820190915260018152600360fc1b602082015290565b815f5b81156100ec57806100d681610216565b91506100e59050600a83610242565b91506100c6565b5f8167ffffffffffffffff81111561010657610106610255565b6040519080825280601f01601f191660200182016040528015610130576020820181803683370190505b508593509050815b831561019c57610149600a85610269565b61015490603061027c565b60f81b8261016183610295565b92508281518110610174576101746102aa565b60200101906001600160f81b03191690815f1a905350610195600a85610242565b9350610138565b50949350505050565b650313637b1b5960d51b81525f82518060208501600685015e5f920160060191825250919050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b634e487b7160e01b5f52601160045260245ffd5b5f6001820161022757610227610202565b5060010190565b634e487b7160e01b5f52601260045260245ffd5b5f826102505761025061022e565b500490565b634e487b7160e01b5f52604160045260245ffd5b5f826102775761027761022e565b500690565b8082018082111561028f5761028f610202565b92915050565b5f816102a3576102a3610202565b505f190190565b634e487b7160e01b5f52603260045260245ffdfea2646970667358221220a253cad1e2e3523b8c053c1d0cd1e39d7f3bafcedd73440a244872701f05dab264736f6c634300081c0033"),
 				},
 			},
-			blockOverrides: BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
+			blockOverrides: override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
 			want:           "0x000000000000000000000000000000000000000000000000000000000000000b",
 		},
 		// Clear storage trie
@@ -1061,8 +1060,8 @@ func TestCall(t *testing.T) {
 				// }
 				Input: hex2Bytes("610dad6000813103600f57600080fd5b6000548060005260206000f3"),
 			},
-			overrides: StateOverride{
-				dad: OverrideAccount{
+			overrides: override.StateOverride{
+				dad: override.OverrideAccount{
 					State: map[common.Hash]common.Hash{},
 				},
 			},
@@ -1089,7 +1088,7 @@ func TestCall(t *testing.T) {
 				BlobHashes: []common.Hash{{0x01, 0x22}},
 				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
 			},
-			overrides: StateOverride{
+			overrides: override.StateOverride{
 				randomAccounts[2].addr: {
 					Code: hex2Bytes("60004960005260206000f3"),
 				},
@@ -1115,8 +1114,8 @@ func TestCall(t *testing.T) {
 				// }
 				Input: hex2Bytes("610dad6000813103600f57600080fd5b6000548060005260206000f3"),
 			},
-			overrides: StateOverride{
-				dad: OverrideAccount{
+			overrides: override.StateOverride{
+				dad: override.OverrideAccount{
 					State: map[common.Hash]common.Hash{},
 				},
 			},
@@ -1270,8 +1269,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "simple",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(1000))},
+				StateOverrides: &override.StateOverride{
+					randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(1000))},
 				},
 				Calls: []TransactionArgs{{
 					From:  &randomAccounts[0].addr,
@@ -1313,8 +1312,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "simple-multi-block",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(2000))},
+				StateOverrides: &override.StateOverride{
+					randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(2000))},
 				},
 				Calls: []TransactionArgs{
 					{
@@ -1328,8 +1327,8 @@ func TestSimulateV1(t *testing.T) {
 					},
 				},
 			}, {
-				StateOverrides: &StateOverride{
-					randomAccounts[3].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
+				StateOverrides: &override.StateOverride{
+					randomAccounts[3].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
 				},
 				Calls: []TransactionArgs{
 					{
@@ -1387,8 +1386,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "evm-error",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{Code: hex2Bytes("f3")},
+				StateOverrides: &override.StateOverride{
+					randomAccounts[2].addr: override.OverrideAccount{Code: hex2Bytes("f3")},
 				},
 				Calls: []TransactionArgs{{
 					From: &randomAccounts[0].addr,
@@ -1414,7 +1413,7 @@ func TestSimulateV1(t *testing.T) {
 			name: "block-overrides",
 			tag:  latest,
 			blocks: []simBlock{{
-				BlockOverrides: &BlockOverrides{
+				BlockOverrides: &override.BlockOverrides{
 					Number:       (*hexutil.Big)(big.NewInt(11)),
 					FeeRecipient: &cac,
 				},
@@ -1429,7 +1428,7 @@ func TestSimulateV1(t *testing.T) {
 					},
 				},
 			}, {
-				BlockOverrides: &BlockOverrides{
+				BlockOverrides: &override.BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(12)),
 				},
 				Calls: []TransactionArgs{{
@@ -1472,7 +1471,7 @@ func TestSimulateV1(t *testing.T) {
 			name: "block-number-order",
 			tag:  latest,
 			blocks: []simBlock{{
-				BlockOverrides: &BlockOverrides{
+				BlockOverrides: &override.BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(12)),
 				},
 				Calls: []TransactionArgs{{
@@ -1484,7 +1483,7 @@ func TestSimulateV1(t *testing.T) {
 					},
 				}},
 			}, {
-				BlockOverrides: &BlockOverrides{
+				BlockOverrides: &override.BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(11)),
 				},
 				Calls: []TransactionArgs{{
@@ -1504,8 +1503,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "storage-contract",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{
+				StateOverrides: &override.StateOverride{
+					randomAccounts[2].addr: override.OverrideAccount{
 						Code: hex2Bytes("608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100d9565b60405180910390f35b610073600480360381019061006e919061009d565b61007e565b005b60008054905090565b8060008190555050565b60008135905061009781610103565b92915050565b6000602082840312156100b3576100b26100fe565b5b60006100c184828501610088565b91505092915050565b6100d3816100f4565b82525050565b60006020820190506100ee60008301846100ca565b92915050565b6000819050919050565b600080fd5b61010c816100f4565b811461011757600080fd5b5056fea2646970667358221220404e37f487a89a932dca5e77faaf6ca2de3b991f93d230604b1b8daaef64766264736f6c63430008070033"),
 					},
 				},
@@ -1546,8 +1545,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "logs",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{
+				StateOverrides: &override.StateOverride{
+					randomAccounts[2].addr: override.OverrideAccount{
 						// Yul code:
 						// object "Test" {
 						//    code {
@@ -1588,8 +1587,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "ecrecover-override",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{
+				StateOverrides: &override.StateOverride{
+					randomAccounts[2].addr: override.OverrideAccount{
 						// Yul code that returns ecrecover(0, 0, 0, 0).
 						// object "Test" {
 						//    code {
@@ -1616,7 +1615,7 @@ func TestSimulateV1(t *testing.T) {
 						// }
 						Code: hex2Bytes("6040516000815260006020820152600060408201526000606082015260208160808360015afa60008103603157600080fd5b601482f3"),
 					},
-					common.BytesToAddress([]byte{0x01}): OverrideAccount{
+					common.BytesToAddress([]byte{0x01}): override.OverrideAccount{
 						// Yul code that returns the address of the caller.
 						// object "Test" {
 						//    code {
@@ -1653,8 +1652,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "precompile-move",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					sha256Address: OverrideAccount{
+				StateOverrides: &override.StateOverride{
+					sha256Address: override.OverrideAccount{
 						// Yul code that returns the calldata.
 						// object "Test" {
 						//    code {
@@ -1708,8 +1707,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "transfer-logs",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[0].addr: OverrideAccount{
+				StateOverrides: &override.StateOverride{
+					randomAccounts[0].addr: override.OverrideAccount{
 						Balance: newRPCBalance(big.NewInt(100)),
 						// Yul code that transfers 100 wei to address passed in calldata:
 						// object "Test" {
@@ -1851,8 +1850,8 @@ func TestSimulateV1(t *testing.T) {
 			name: "validation-checks-from-contract",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
-					randomAccounts[2].addr: OverrideAccount{
+				StateOverrides: &override.StateOverride{
+					randomAccounts[2].addr: override.OverrideAccount{
 						Balance: newRPCBalance(big.NewInt(2098640803896784)),
 						Code:    hex2Bytes("00"),
 						Nonce:   newUint64(1),
@@ -1886,11 +1885,11 @@ func TestSimulateV1(t *testing.T) {
 			name: "validation-checks-success",
 			tag:  latest,
 			blocks: []simBlock{{
-				BlockOverrides: &BlockOverrides{
+				BlockOverrides: &override.BlockOverrides{
 					BaseFeePerGas: (*hexutil.Big)(big.NewInt(1)),
 				},
-				StateOverrides: &StateOverride{
-					randomAccounts[0].addr: OverrideAccount{Balance: newRPCBalance(big.NewInt(10000000))},
+				StateOverrides: &override.StateOverride{
+					randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(10000000))},
 				},
 				Calls: []TransactionArgs{{
 					From:         &randomAccounts[0].addr,
@@ -1919,7 +1918,7 @@ func TestSimulateV1(t *testing.T) {
 			name: "clear-storage",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
+				StateOverrides: &override.StateOverride{
 					randomAccounts[2].addr: {
 						Code: newBytes(genesis.Alloc[bab].Code),
 						StateDiff: map[common.Hash]common.Hash{
@@ -1941,7 +1940,7 @@ func TestSimulateV1(t *testing.T) {
 					To:   &bab,
 				}},
 			}, {
-				StateOverrides: &StateOverride{
+				StateOverrides: &override.StateOverride{
 					randomAccounts[2].addr: {
 						State: map[common.Hash]common.Hash{
 							common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(5)),
@@ -1988,10 +1987,10 @@ func TestSimulateV1(t *testing.T) {
 			name: "blockhash-opcode",
 			tag:  latest,
 			blocks: []simBlock{{
-				BlockOverrides: &BlockOverrides{
+				BlockOverrides: &override.BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(12)),
 				},
-				StateOverrides: &StateOverride{
+				StateOverrides: &override.StateOverride{
 					randomAccounts[2].addr: {
 						Code: hex2Bytes("600035804060008103601057600080fd5b5050"),
 					},
@@ -2013,7 +2012,7 @@ func TestSimulateV1(t *testing.T) {
 					Input: uint256ToBytes(uint256.NewInt(10)),
 				}},
 			}, {
-				BlockOverrides: &BlockOverrides{
+				BlockOverrides: &override.BlockOverrides{
 					Number: (*hexutil.Big)(big.NewInt(16)),
 				},
 				Calls: []TransactionArgs{{
@@ -2103,7 +2102,7 @@ func TestSimulateV1(t *testing.T) {
 			name: "basefee-non-validation",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
+				StateOverrides: &override.StateOverride{
 					randomAccounts[2].addr: {
 						// Yul code:
 						// object "Test" {
@@ -2138,7 +2137,7 @@ func TestSimulateV1(t *testing.T) {
 				},
 				},
 			}, {
-				BlockOverrides: &BlockOverrides{
+				BlockOverrides: &override.BlockOverrides{
 					BaseFeePerGas: (*hexutil.Big)(big.NewInt(1)),
 				},
 				Calls: []TransactionArgs{{
@@ -2211,7 +2210,7 @@ func TestSimulateV1(t *testing.T) {
 			name: "basefee-validation-mode",
 			tag:  latest,
 			blocks: []simBlock{{
-				StateOverrides: &StateOverride{
+				StateOverrides: &override.StateOverride{
 					randomAccounts[2].addr: {
 						// Yul code:
 						// object "Test" {
@@ -3381,97 +3380,6 @@ func TestRPCGetBlockReceipts(t *testing.T) {
 			continue
 		}
 		testRPCResponseWithFile(t, i, result, "eth_getBlockReceipts", tt.file)
-	}
-}
-
-type precompileContract struct{}
-
-func (p *precompileContract) RequiredGas(input []byte) uint64 { return 0 }
-
-func (p *precompileContract) Run(input []byte) ([]byte, error) { return nil, nil }
-
-func TestStateOverrideMovePrecompile(t *testing.T) {
-	db := state.NewDatabase(triedb.NewDatabase(rawdb.NewMemoryDatabase(), nil), nil)
-	statedb, err := state.New(common.Hash{}, db)
-	if err != nil {
-		t.Fatalf("failed to create statedb: %v", err)
-	}
-	precompiles := map[common.Address]vm.PrecompiledContract{
-		common.BytesToAddress([]byte{0x1}): &precompileContract{},
-		common.BytesToAddress([]byte{0x2}): &precompileContract{},
-	}
-	bytes2Addr := func(b []byte) *common.Address {
-		a := common.BytesToAddress(b)
-		return &a
-	}
-	var testSuite = []struct {
-		overrides           StateOverride
-		expectedPrecompiles map[common.Address]struct{}
-		fail                bool
-	}{
-		{
-			overrides: StateOverride{
-				common.BytesToAddress([]byte{0x1}): {
-					Code:             hex2Bytes("0xff"),
-					MovePrecompileTo: bytes2Addr([]byte{0x2}),
-				},
-				common.BytesToAddress([]byte{0x2}): {
-					Code: hex2Bytes("0x00"),
-				},
-			},
-			// 0x2 has already been touched by the moveTo.
-			fail: true,
-		}, {
-			overrides: StateOverride{
-				common.BytesToAddress([]byte{0x1}): {
-					Code:             hex2Bytes("0xff"),
-					MovePrecompileTo: bytes2Addr([]byte{0xff}),
-				},
-				common.BytesToAddress([]byte{0x3}): {
-					Code:             hex2Bytes("0x00"),
-					MovePrecompileTo: bytes2Addr([]byte{0xfe}),
-				},
-			},
-			// 0x3 is not a precompile.
-			fail: true,
-		}, {
-			overrides: StateOverride{
-				common.BytesToAddress([]byte{0x1}): {
-					Code:             hex2Bytes("0xff"),
-					MovePrecompileTo: bytes2Addr([]byte{0xff}),
-				},
-				common.BytesToAddress([]byte{0x2}): {
-					Code:             hex2Bytes("0x00"),
-					MovePrecompileTo: bytes2Addr([]byte{0xfe}),
-				},
-			},
-			expectedPrecompiles: map[common.Address]struct{}{common.BytesToAddress([]byte{0xfe}): {}, common.BytesToAddress([]byte{0xff}): {}},
-		},
-	}
-
-	for i, tt := range testSuite {
-		cpy := maps.Clone(precompiles)
-		// Apply overrides
-		err := tt.overrides.Apply(statedb, cpy)
-		if tt.fail {
-			if err == nil {
-				t.Errorf("test %d: want error, have nothing", i)
-			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("test %d: want no error, have %v", i, err)
-			continue
-		}
-		// Precompile keys
-		if len(cpy) != len(tt.expectedPrecompiles) {
-			t.Errorf("test %d: precompile mismatch, want %d, have %d", i, len(tt.expectedPrecompiles), len(cpy))
-		}
-		for k := range tt.expectedPrecompiles {
-			if _, ok := cpy[k]; !ok {
-				t.Errorf("test %d: precompile not found: %s", i, k.String())
-			}
-		}
 	}
 }
 
