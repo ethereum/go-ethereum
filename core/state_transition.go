@@ -17,7 +17,6 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"math/big"
@@ -310,7 +309,8 @@ func (st *stateTransition) preCheck() error {
 	if !msg.SkipFromEOACheck {
 		// Make sure the sender is an EOA
 		code := st.state.GetCode(msg.From)
-		if len(code) > 0 && !bytes.HasPrefix(code, types.DelegationPrefix) {
+		_, delegated := types.ParseDelegation(code)
+		if len(code) > 0 && !delegated {
 			return fmt.Errorf("%w: address %v, len(code): %d", ErrSenderNoEOA, msg.From.Hex(), len(code))
 		}
 	}
