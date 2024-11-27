@@ -7,6 +7,7 @@ import (
 )
 
 var ErrContentNotFound = fmt.Errorf("content not found")
+var ErrInsufficientRadius = fmt.Errorf("insufficient radius")
 
 var MaxDistance = uint256.MustFromHex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 

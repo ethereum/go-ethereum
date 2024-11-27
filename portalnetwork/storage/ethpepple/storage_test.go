@@ -2,7 +2,6 @@ package ethpepple
 
 import (
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/portalnetwork/storage"
 	"github.com/holiman/uint256"
@@ -102,61 +101,63 @@ func TestPrune(t *testing.T) {
 	testcases := []struct {
 		contentKey  [32]byte
 		content     []byte
-		shouldPrune bool
+		outOfRadius bool
+		err         error
 	}{
 		{
-			contentKey:  uint256.NewInt(1).Bytes32(),
-			content:     genBytes(900_000),
-			shouldPrune: false,
+			contentKey: uint256.NewInt(1).Bytes32(),
+			content:    genBytes(900_000),
 		},
 		{
-			contentKey:  uint256.NewInt(2).Bytes32(),
-			content:     genBytes(40_000),
-			shouldPrune: false,
+			contentKey: uint256.NewInt(2).Bytes32(),
+			content:    genBytes(40_000),
 		},
 		{
-			contentKey:  uint256.NewInt(3).Bytes32(),
-			content:     genBytes(20_000),
-			shouldPrune: true,
+			contentKey: uint256.NewInt(3).Bytes32(),
+			content:    genBytes(20_000),
+			err:        storage.ErrContentNotFound,
 		},
 		{
-			contentKey:  uint256.NewInt(4).Bytes32(),
-			content:     genBytes(20_000),
-			shouldPrune: true,
+			contentKey: uint256.NewInt(4).Bytes32(),
+			content:    genBytes(20_000),
+			err:        storage.ErrContentNotFound,
 		},
 		{
-			contentKey:  uint256.NewInt(5).Bytes32(),
-			content:     genBytes(20_000),
-			shouldPrune: true,
+			contentKey: uint256.NewInt(5).Bytes32(),
+			content:    genBytes(20_000),
+			err:        storage.ErrContentNotFound,
 		},
 		{
 			contentKey:  uint256.NewInt(6).Bytes32(),
 			content:     genBytes(20_000),
-			shouldPrune: false,
+			err:         storage.ErrInsufficientRadius,
+			outOfRadius: true,
 		},
 		{
 			contentKey:  uint256.NewInt(7).Bytes32(),
 			content:     genBytes(20_000),
-			shouldPrune: false,
+			err:         storage.ErrInsufficientRadius,
+			outOfRadius: true,
 		},
 	}
 
 	for _, val := range testcases {
-		db.Put(val.contentKey[:], val.contentKey[:], val.content)
+		err := db.Put(val.contentKey[:], val.contentKey[:], val.content)
+		if err != nil {
+			assert.Equal(t, val.err, err)
+		}
 	}
-	// // wait to prune done
-	time.Sleep(2 * time.Second)
 	for _, val := range testcases {
 		content, err := db.Get(val.contentKey[:], val.contentKey[:])
-		if !val.shouldPrune {
+		if err == nil {
 			assert.Equal(t, val.content, content)
-		} else {
-			assert.Error(t, err)
+		} else if !val.outOfRadius {
+			assert.Equal(t, val.err, err)
 		}
 	}
 	radius := db.Radius()
 	data, err := radius.MarshalSSZ()
 	assert.NoError(t, err)
-	actual := uint256.NewInt(4).Bytes32()
+	actual := uint256.NewInt(2).Bytes32()
 	assert.Equal(t, data, actual[:])
 }

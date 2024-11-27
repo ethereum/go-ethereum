@@ -182,6 +182,20 @@ func (c *ContentStorage) Get(contentKey []byte, contentId []byte) ([]byte, error
 
 // Put implements storage.ContentStorage.
 func (c *ContentStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
+	distance := xor(contentId, c.nodeId[:])
+	valid, err := c.inRadius(distance)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return storage.ErrInsufficientRadius
+	}
+
+	err = c.db.Set(distance, content, c.writeOptions)
+	if err != nil {
+		return err
+	}
+
 	length := uint64(len(contentId)) + uint64(len(content))
 	<-c.sizeChan
 	c.size += length
@@ -193,8 +207,7 @@ func (c *ContentStorage) Put(contentKey []byte, contentId []byte, content []byte
 		}
 	}
 	c.sizeChan <- struct{}{}
-	distance := xor(contentId, c.nodeId[:])
-	return c.db.Set(distance, content, c.writeOptions)
+	return nil
 }
 
 // Radius implements storage.ContentStorage.
@@ -261,6 +274,17 @@ func (c *ContentStorage) prune() error {
 		return err
 	}
 	return nil
+}
+
+func (c *ContentStorage) inRadius(distance []byte) (bool, error) {
+	dis := uint256.NewInt(0)
+	err := dis.UnmarshalSSZ(distance)
+	if err != nil {
+		return false, err
+	}
+	val := c.radius.Load()
+	radius := val.(*uint256.Int)
+	return radius.Gt(dis), nil
 }
 
 func xor(contentId, nodeId []byte) []byte {
