@@ -206,22 +206,45 @@ func New(config Config, diskdb ethdb.KeyValueStore, triedb *triedb.Database, roo
 		log.Warn("Snapshot maintenance disabled (syncing)")
 		return snap, nil
 	}
+	// Create the building waiter iff the background generation is allowed
+	if !config.NoBuild && !config.AsyncBuild {
+		defer snap.waitBuild()
+	}
 	if err != nil {
 		log.Warn("Failed to load snapshot", "err", err)
-		if config.NoBuild {
-			return nil, err
+		if !config.NoBuild {
+			snap.Rebuild(root)
+			return snap, nil
 		}
-		wait := snap.Rebuild(root)
-		if !config.AsyncBuild {
-			wait()
-		}
-		return snap, nil
+		return nil, err // Bail out the error, don't rebuild automatically.
 	}
 	// Existing snapshot loaded, seed all the layers
-	for ; head != nil; head = head.Parent() {
+	for head != nil {
 		snap.layers[head.Root()] = head
+		head = head.Parent()
 	}
 	return snap, nil
+}
+
+// waitBuild blocks until the snapshot finishes rebuilding. This method is meant
+// to be used by tests to ensure we're testing what we believe we are.
+func (t *Tree) waitBuild() {
+	// Find the rebuild termination channel
+	var done chan struct{}
+
+	t.lock.RLock()
+	for _, layer := range t.layers {
+		if layer, ok := layer.(*diskLayer); ok {
+			done = layer.genPending
+			break
+		}
+	}
+	t.lock.RUnlock()
+
+	// Wait until the snapshot is generated
+	if done != nil {
+		<-done
+	}
 }
 
 // Disable interrupts any pending snapshot generator, deletes all the snapshot
@@ -665,9 +688,8 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 
 // Rebuild wipes all available snapshot data from the persistent database and
 // discard all caches and diff layers. Afterwards, it starts a new snapshot
-// generator with the given root hash. The returned function blocks until
-// regeneration is complete.
-func (t *Tree) Rebuild(root common.Hash) (wait func()) {
+// generator with the given root hash.
+func (t *Tree) Rebuild(root common.Hash) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -699,11 +721,9 @@ func (t *Tree) Rebuild(root common.Hash) (wait func()) {
 	// Start generating a new snapshot from scratch on a background thread. The
 	// generator will run a wiper first if there's not one running right now.
 	log.Info("Rebuilding state snapshot")
-	disk := generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, root)
 	t.layers = map[common.Hash]snapshot{
-		root: disk,
+		root: generateSnapshot(t.diskdb, t.triedb, t.config.CacheSize, root),
 	}
-	return func() { <-disk.genPending }
 }
 
 // AccountIterator creates a new account iterator for the specified root hash and
