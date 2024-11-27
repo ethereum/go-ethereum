@@ -18,6 +18,7 @@ package state
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -367,105 +368,88 @@ func (sf *subfetcher) loop() {
 		return
 	}
 
-	var tasks []*subfetcherTask
-	// Adding a default case to the select statement would spin the for loop so
-	// we instead have a `work` channel signaller. A necessary invariant is that
-	// there is a buffered item i.f.f. there are tasks; therefore only
-	// addTasks() may append to the above slice and only the <-work branch may
-	// deplete it.
-	work := make(chan struct{}, 1)
-	defer close(work)
-	addTasks := func(ts []*subfetcherTask) {
-		tasks = append(tasks, ts...)
-		select {
-		case work <- struct{}{}:
-		default:
-		}
-	}
-
-	for {
-		select {
-		case ts := <-sf.tasks:
-			addTasks(ts)
-
-		case <-work:
-			for _, task := range tasks {
-				if task.addr != nil {
-					key := *task.addr
-					if task.read {
-						if _, ok := sf.seenReadAddr[key]; ok {
-							sf.dupsRead++
-							continue
-						}
-						if _, ok := sf.seenWriteAddr[key]; ok {
-							sf.dupsCross++
-							continue
-						}
-					} else {
-						if _, ok := sf.seenReadAddr[key]; ok {
-							sf.dupsCross++
-							continue
-						}
-						if _, ok := sf.seenWriteAddr[key]; ok {
-							sf.dupsWrite++
-							continue
-						}
-					}
-				} else {
-					key := *task.slot
-					if task.read {
-						if _, ok := sf.seenReadSlot[key]; ok {
-							sf.dupsRead++
-							continue
-						}
-						if _, ok := sf.seenWriteSlot[key]; ok {
-							sf.dupsCross++
-							continue
-						}
-					} else {
-						if _, ok := sf.seenReadSlot[key]; ok {
-							sf.dupsCross++
-							continue
-						}
-						if _, ok := sf.seenWriteSlot[key]; ok {
-							sf.dupsWrite++
-							continue
-						}
-					}
-				}
-				if task.addr != nil {
-					sf.trie.GetAccount(*task.addr)
-				} else {
-					sf.trie.GetStorage(sf.addr, (*task.slot)[:])
-				}
-				if task.read {
-					if task.addr != nil {
-						sf.seenReadAddr[*task.addr] = struct{}{}
-					} else {
-						sf.seenReadSlot[*task.slot] = struct{}{}
-					}
-				} else {
-					if task.addr != nil {
-						sf.seenWriteAddr[*task.addr] = struct{}{}
-					} else {
-						sf.seenWriteSlot[*task.slot] = struct{}{}
-					}
-				}
-			}
-			tasks = tasks[:0] // avoid reallocation
-
-		case <-sf.stop:
-			// Termination is requested, abort if no more tasks are pending. If
-			// there are some, exhaust them first.
-			if len(tasks) > 0 {
-				// See earlier invariant that guarantees a receive on `work` to clear `tasks`.
-				continue
-			}
+	work := make(chan *subfetcherTask)
+	go func() {
+		var wg sync.WaitGroup
+		for {
 			select {
-			case ts := <-sf.tasks:
-				addTasks(ts)
-			default:
+			case tasks := <-sf.tasks:
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					for _, t := range tasks {
+						work <- t
+					}
+				}()
+
+			case <-sf.stop:
+				wg.Wait() // guarantee of no more sends on `work`
+				close(work)
 				return
+			}
+		}
+	}()
+
+	for task := range work {
+		if task.addr != nil {
+			key := *task.addr
+			if task.read {
+				if _, ok := sf.seenReadAddr[key]; ok {
+					sf.dupsRead++
+					continue
+				}
+				if _, ok := sf.seenWriteAddr[key]; ok {
+					sf.dupsCross++
+					continue
+				}
+			} else {
+				if _, ok := sf.seenReadAddr[key]; ok {
+					sf.dupsCross++
+					continue
+				}
+				if _, ok := sf.seenWriteAddr[key]; ok {
+					sf.dupsWrite++
+					continue
+				}
+			}
+		} else {
+			key := *task.slot
+			if task.read {
+				if _, ok := sf.seenReadSlot[key]; ok {
+					sf.dupsRead++
+					continue
+				}
+				if _, ok := sf.seenWriteSlot[key]; ok {
+					sf.dupsCross++
+					continue
+				}
+			} else {
+				if _, ok := sf.seenReadSlot[key]; ok {
+					sf.dupsCross++
+					continue
+				}
+				if _, ok := sf.seenWriteSlot[key]; ok {
+					sf.dupsWrite++
+					continue
+				}
+			}
+		}
+		if task.addr != nil {
+			sf.trie.GetAccount(*task.addr)
+		} else {
+			sf.trie.GetStorage(sf.addr, (*task.slot)[:])
+		}
+		if task.read {
+			if task.addr != nil {
+				sf.seenReadAddr[*task.addr] = struct{}{}
+			} else {
+				sf.seenReadSlot[*task.slot] = struct{}{}
+			}
+		} else {
+			if task.addr != nil {
+				sf.seenWriteAddr[*task.addr] = struct{}{}
+			} else {
+				sf.seenWriteSlot[*task.slot] = struct{}{}
 			}
 		}
 	}
