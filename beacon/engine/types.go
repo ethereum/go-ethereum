@@ -351,6 +351,21 @@ func BlockToExecutableData(block *types.Block, fees *big.Int, sidecars []*types.
 	}
 }
 
+func InclusionListToTransactions(inclusionList *InclusionListV1) ([]*types.Transaction, error) {
+	txs, err := decodeTransactions(inclusionList.Transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	return txs, nil
+}
+
+func TransactionsToInclusionList(txs []*types.Transaction) *InclusionListV1 {
+	return &InclusionListV1{
+		Transactions: encodeTransactions(txs),
+	}
+}
+
 // ExecutionPayloadBody is used in the response to GetPayloadBodiesByHash and GetPayloadBodiesByRange
 type ExecutionPayloadBody struct {
 	TransactionData []hexutil.Bytes     `json:"transactions"`

@@ -33,9 +33,7 @@ func (miner *Miner) BuildInclusionList(args *BuildInclusionListArgs) (*engine.In
 		return nil, err
 	}
 
-	inclusionList := engine.InclusionListV1{
-		Transactions: make([][]byte, 0),
-	}
+	inclusionListTxs := make([]*types.Transaction, 0)
 	inclusionListSize := uint64(0)
 
 	for _, tx := range env.txs {
@@ -43,14 +41,9 @@ func (miner *Miner) BuildInclusionList(args *BuildInclusionListArgs) (*engine.In
 			continue
 		}
 
-		txBytes, err := tx.MarshalBinary()
-		if err != nil {
-			return nil, err
-		}
-
-		inclusionList.Transactions = append(inclusionList.Transactions, txBytes)
+		inclusionListTxs = append(inclusionListTxs, tx)
 		inclusionListSize += tx.Size()
 	}
 
-	return &inclusionList, nil
+	return engine.TransactionsToInclusionList(inclusionListTxs), nil
 }
