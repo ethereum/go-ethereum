@@ -350,11 +350,6 @@ func TestEvents(t *testing.T) {
 	sub2, err := WatchLogs[events.CBasic2](&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2, newCBasic2Ch)
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
-	fmt.Printf("watching for event with id %x\n", events.CBasic1EventID())
-	fmt.Printf("watching for event with id %x\n", events.CBasic2EventID())
-	//wtf do I do with this subscriptions??
-	_ = sub1
-	_ = sub2
 
 	crtctInstance := &ContractInstance{
 		Address: res.Addrs[events.CMetaData.Pattern],
@@ -397,10 +392,36 @@ done:
 	if e2Count != 1 {
 		t.Fatalf("expected event type 2 count to be 1.  got %d", e2Count)
 	}
-	// commit a few blocks...
-	// now filter for the previously-emitted events.
 
+	// now, test that we can filter those events that were just caught through the subscription
+
+	filterOpts := &bind.FilterOpts{
+		Start:   0,
+		Context: context.Background(),
+	}
 	// TODO: test that returning error from unpack prevents event from being received by sink.
+	it, err := FilterLogs[events.CBasic1](crtctInstance, filterOpts, events.CBasic1EventID(), unpackBasic)
+	if err != nil {
+		t.Fatalf("error filtering logs %v\n", err)
+	}
+	it2, err := FilterLogs[events.CBasic2](crtctInstance, filterOpts, events.CBasic1EventID(), unpackBasic2)
+	if err != nil {
+		t.Fatalf("error filtering logs %v\n", err)
+	}
+	e1Count = 0
+	e2Count = 0
+	for it.Next() {
+		e1Count++
+	}
+	for it2.Next() {
+		e2Count++
+	}
+	if e2Count != 1 {
+		t.Fatalf("bad")
+	}
+	if e1Count != 1 {
+		t.Fatalf("bad")
+	}
 }
 
 func TestEventsUnpackFailure(t *testing.T) {
@@ -445,7 +466,7 @@ func TestEventsUnpackFailure(t *testing.T) {
 	}
 
 	unpackBasic := func(raw *types.Log) (*events.CBasic1, error) {
-		return nil, fmt.Errorf("could not unpack event")
+		return nil, fmt.Errorf("this error should stop the filter that uses this unpack.")
 	}
 	unpackBasic2 := func(raw *types.Log) (*events.CBasic2, error) {
 		return &events.CBasic2{
@@ -463,9 +484,6 @@ func TestEventsUnpackFailure(t *testing.T) {
 	sub2, err := WatchLogs[events.CBasic2](&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2, newCBasic2Ch)
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
-	//wtf do I do with this subscriptions??
-	_ = sub1
-	_ = sub2
 
 	crtctInstance := &ContractInstance{
 		Address: res.Addrs[events.CMetaData.Pattern],
