@@ -198,13 +198,15 @@ func (s *ExpDecaySample) Snapshot() *sampleSnapshot {
 
 // Update samples a new value.
 func (s *ExpDecaySample) Update(v int64) {
+	if !metricsEnabled {
+		return
+	}
 	s.update(time.Now(), v)
 }
 
 // update samples a new value at a particular timestamp.  This is a method all
 // its own to facilitate testing.
 func (s *ExpDecaySample) update(t time.Time, v int64) {
-	//TODO(@holiman) Check metrics.Enabled
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.count++
@@ -326,6 +328,9 @@ func (s *UniformSample) Snapshot() *sampleSnapshot {
 
 // Update samples a new value.
 func (s *UniformSample) Update(v int64) {
+	if !metricsEnabled {
+		return
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	s.count++
