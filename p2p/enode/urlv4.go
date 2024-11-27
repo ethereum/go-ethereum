@@ -102,28 +102,16 @@ func NewV4(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int) *Node {
 }
 
 func NewV4WithDNS(pubkey *ecdsa.PublicKey, ip net.IP, dnsName string, tcp, udp int) *Node {
-	var r enr.Record
-	if len(ip) > 0 {
-		r.Set(enr.IP(ip))
-	}
+	n := NewV4(pubkey, ip, tcp, udp)
 	// Always set TCP/UDP ports regardless of IP
 	// This is to ensure that the node is always
 	// considered valid even if the IP is not
 	// set.
-	if tcp != 0 {
-		r.Set(enr.TCP(tcp))
-	}
-	if udp != 0 {
-		r.Set(enr.UDP(udp))
-	}
-	signV4Compat(&r, pubkey)
-	n, err := New(v4CompatID{}, &r)
-	if err != nil {
-		panic(err)
+	if len(ip) == 0 {
+		n.tcp = uint16(tcp)
+		n.udp = uint16(udp)
 	}
 	n.dnsName = dnsName
-	n.tcp = uint16(tcp)
-	n.udp = uint16(udp)
 	return n
 }
 
