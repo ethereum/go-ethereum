@@ -6,7 +6,6 @@
 package metrics
 
 import (
-	"fmt"
 	"runtime/metrics"
 	"runtime/pprof"
 	"time"
