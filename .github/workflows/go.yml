@@ -10,7 +10,7 @@ on:
 jobs:
   go_test_short:
     env:
-      FLAKY_REGEX: 'ava-labs/libevm/(eth|eth/tracers/js|eth/tracers/logger|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$'
+      FLAKY_REGEX: 'ava-labs/libevm/(triedb/pathdb|eth|eth/tracers/js|eth/tracers/logger|accounts/abi/bind|accounts/keystore|eth/downloader|miner|ethclient|ethclient/gethclient|eth/catalyst)$'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
