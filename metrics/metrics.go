@@ -17,11 +17,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// Enabled is checked by the constructor functions for all of the
-// standard metrics. If it is true, the metric returned is a stub.
+// Enabled is checked by functions that are deemed 'expensive', e.g. if a
+// meter-type does locking and/or non-trivial math operations during update.
 //
-// This global kill-switch helps quantify the observer effect and makes
-// for less cluttered pprof profiles.
+// The Enabled-flag is expected to be set, once, during startup, but toggling off and on
+// is not supported: YMMV.
 var Enabled = false
 
 // enablerFlags is the CLI flag names to use to enable metrics collections.
