@@ -290,6 +290,8 @@ func (sf *subfetcher) schedule(addrs []common.Address, slots []common.Hash, read
 	select {
 	case sf.tasks <- tasks:
 		return nil
+	case <-sf.stop:
+		return errTerminated // imminently so no need to wait for sf.term
 	case <-sf.term:
 		return errTerminated
 	}
