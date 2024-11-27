@@ -233,7 +233,10 @@ func FilterLogs[T any](instance *ContractInstance, opts *bind.FilterOpts, eventI
 	return &EventIterator[T]{unpack: unpack, logs: logs, sub: sub}, nil
 }
 
-// TODO: adding docs soon (jwasinger)
+// WatchLogs causes logs emitted with a given event id from a specified
+// contract to be intercepted, unpacked, and forwarded to sink.  If
+// unpack returns an error, the returned subscription is closed with the
+// error.
 func WatchLogs[T any](instance *ContractInstance, abi abi.ABI, opts *bind.WatchOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
 	backend := instance.Backend
 	c := bind.NewBoundContract(instance.Address, abi, backend, backend, backend)
@@ -270,7 +273,7 @@ func WatchLogs[T any](instance *ContractInstance, abi abi.ABI, opts *bind.WatchO
 
 // EventIterator is returned from FilterLogs and is used to iterate over the raw logs and unpacked data for events.
 type EventIterator[T any] struct {
-	Event *T // Event containing the contract specifics and raw log
+	event *T // event containing the contract specifics and raw log
 
 	unpack func(*types.Log) (*T, error) // Unpack function for the event
 
@@ -278,6 +281,11 @@ type EventIterator[T any] struct {
 	sub  ethereum.Subscription // Subscription for errors, completion and termination
 	done bool                  // Whether the subscription completed delivering logs
 	fail error                 // Occurred error to stop iteration
+}
+
+// Value returns the current value of the iterator, or nil if there isn't one.
+func (it *EventIterator[T]) Value() *T {
+	return it.event
 }
 
 // Next advances the iterator to the subsequent event, returning whether there
@@ -297,7 +305,7 @@ func (it *EventIterator[T]) Next() bool {
 				it.fail = err
 				return false
 			}
-			it.Event = res
+			it.event = res
 			return true
 
 		default:
@@ -312,7 +320,7 @@ func (it *EventIterator[T]) Next() bool {
 			it.fail = err
 			return false
 		}
-		it.Event = res
+		it.event = res
 		return true
 
 	case err := <-it.sub.Err():
