@@ -1,6 +1,7 @@
 package ethpepple
 
 import (
+	"bytes"
 	"encoding/binary"
 	"runtime"
 	"sync/atomic"
@@ -139,18 +140,6 @@ func NewPeppleStorage(config PeppleStorageConfig) (storage.ContentStorage, error
 		writeOptions:           &pebble.WriteOptions{Sync: false},
 	}
 	cs.radius.Store(storage.MaxDistance)
-	radius, _, err := cs.db.Get(storage.RadisuKey)
-	if err != nil && err != pebble.ErrNotFound {
-		return nil, err
-	}
-	if err == nil {
-		dis := uint256.NewInt(0)
-		err = dis.UnmarshalSSZ(radius)
-		if err != nil {
-			return nil, err
-		}
-		cs.radius.Store(dis)
-	}
 
 	val, _, err := cs.db.Get(storage.SizeKey)
 	if err != nil && err != pebble.ErrNotFound {
@@ -161,6 +150,22 @@ func NewPeppleStorage(config PeppleStorageConfig) (storage.ContentStorage, error
 		// init stage, no need to use lock
 		cs.size = size
 	}
+
+	iter, err := cs.db.NewIter(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+	if iter.Last() && iter.Valid() {
+		distance := iter.Key()
+		dis := uint256.NewInt(0)
+		err = dis.UnmarshalSSZ(distance)
+		if err != nil {
+			return nil, err
+		}
+		cs.radius.Store(dis)
+	}
+
 	cs.sizeChan <- struct{}{}
 	go cs.saveCapacity()
 	return cs, nil
@@ -256,12 +261,14 @@ func (c *ContentStorage) prune() error {
 
 	batch := c.db.NewBatch()
 	for iter.Last(); iter.Valid(); iter.Prev() {
+		if bytes.Equal(iter.Key(), storage.SizeKey) {
+			continue
+		}
 		if curentSize < expectSize {
 			batch.Delete(iter.Key(), nil)
 			curentSize += uint64(len(iter.Key())) + uint64(len(iter.Value()))
 		} else {
 			distance := iter.Key()
-			c.db.Set(storage.RadisuKey, distance, c.writeOptions)
 			dis := uint256.NewInt(0)
 			err = dis.UnmarshalSSZ(distance)
 			if err != nil {
