@@ -1969,64 +1969,61 @@ func RegisterFullSyncTester(stack *node.Node, eth *eth.Ethereum, target common.H
 	log.Info("Registered full-sync tester", "hash", target)
 }
 
-func SetupMetrics(ctx *cli.Context) {
-	if metrics.Enabled {
-		log.Info("Enabling metrics collection")
+func SetupMetrics(cfg *metrics.Config) {
+	if !cfg.Enabled {
+		return
+	}
+	metrics.Init(true)
+	log.Info("Enabling metrics collection")
+	var (
+		enableExport   = cfg.EnableInfluxDB
+		enableExportV2 = cfg.EnableInfluxDBV2
+	)
+	if enableExport && enableExportV2 {
+		Fatalf("Flags %v can't be used at the same time", strings.Join([]string{MetricsEnableInfluxDBFlag.Name, MetricsEnableInfluxDBV2Flag.Name}, ", "))
+	}
+	if enableExport || enableExportV2 {
+		v1FlagIsSet := cfg.InfluxDBUsername != "" || cfg.InfluxDBPassword != ""
+		v2FlagIsSet := cfg.InfluxDBToken != "" || cfg.InfluxDBOrganization != "" || cfg.InfluxDBBucket != ""
 
-		var (
-			enableExport   = ctx.Bool(MetricsEnableInfluxDBFlag.Name)
-			enableExportV2 = ctx.Bool(MetricsEnableInfluxDBV2Flag.Name)
-		)
-
-		if enableExport || enableExportV2 {
-			CheckExclusive(ctx, MetricsEnableInfluxDBFlag, MetricsEnableInfluxDBV2Flag)
-
-			v1FlagIsSet := ctx.IsSet(MetricsInfluxDBUsernameFlag.Name) ||
-				ctx.IsSet(MetricsInfluxDBPasswordFlag.Name)
-
-			v2FlagIsSet := ctx.IsSet(MetricsInfluxDBTokenFlag.Name) ||
-				ctx.IsSet(MetricsInfluxDBOrganizationFlag.Name) ||
-				ctx.IsSet(MetricsInfluxDBBucketFlag.Name)
-
-			if enableExport && v2FlagIsSet {
-				Fatalf("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
-			} else if enableExportV2 && v1FlagIsSet {
-				Fatalf("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
-			}
+		if enableExport && v2FlagIsSet {
+			Fatalf("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
+		} else if enableExportV2 && v1FlagIsSet {
+			Fatalf("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
 		}
+	}
 
-		var (
-			endpoint = ctx.String(MetricsInfluxDBEndpointFlag.Name)
-			database = ctx.String(MetricsInfluxDBDatabaseFlag.Name)
-			username = ctx.String(MetricsInfluxDBUsernameFlag.Name)
-			password = ctx.String(MetricsInfluxDBPasswordFlag.Name)
+	var (
+		endpoint = cfg.InfluxDBEndpoint
+		database = cfg.InfluxDBDatabase
+		username = cfg.InfluxDBUsername
+		password = cfg.InfluxDBPassword
 
-			token        = ctx.String(MetricsInfluxDBTokenFlag.Name)
-			bucket       = ctx.String(MetricsInfluxDBBucketFlag.Name)
-			organization = ctx.String(MetricsInfluxDBOrganizationFlag.Name)
-		)
+		token        = cfg.InfluxDBToken
+		bucket       = cfg.InfluxDBBucket
+		organization = cfg.InfluxDBOrganization
+	)
 
-		if enableExport {
-			tagsMap := SplitTagsFlag(ctx.String(MetricsInfluxDBTagsFlag.Name))
+	if enableExport {
+		tagsMap := SplitTagsFlag(cfg.InfluxDBTags)
 
-			log.Info("Enabling metrics export to InfluxDB")
+		log.Info("Enabling metrics export to InfluxDB")
 
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
-		} else if enableExportV2 {
-			tagsMap := SplitTagsFlag(ctx.String(MetricsInfluxDBTagsFlag.Name))
+		go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+	} else if enableExportV2 {
+		tagsMap := SplitTagsFlag(cfg.InfluxDBTags)
 
-			log.Info("Enabling metrics export to InfluxDB (v2)")
+		log.Info("Enabling metrics export to InfluxDB (v2)")
 
-			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
-		}
+		go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
+	}
 
-		if ctx.IsSet(MetricsHTTPFlag.Name) {
-			address := net.JoinHostPort(ctx.String(MetricsHTTPFlag.Name), fmt.Sprintf("%d", ctx.Int(MetricsPortFlag.Name)))
-			log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
-			exp.Setup(address)
-		} else if ctx.IsSet(MetricsPortFlag.Name) {
-			log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
-		}
+	if cfg.HTTP != "" {
+		address := net.JoinHostPort(cfg.HTTP, fmt.Sprintf("%d", cfg.Port))
+		log.Info("Enabling stand-alone metrics HTTP endpoint", "address", address)
+		exp.Setup(address)
+	} else if cfg.HTTP == "" && cfg.Port != 0 {
+		log.Warn(fmt.Sprintf("--%s specified without --%s, metrics server will not start.", MetricsPortFlag.Name, MetricsHTTPFlag.Name))
 	}
 }
 

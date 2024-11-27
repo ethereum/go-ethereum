@@ -64,7 +64,7 @@ var (
 // markDialError matches errors that occur while setting up a dial connection
 // to the corresponding meter.
 func markDialError(err error) {
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return
 	}
 	if err2 := errors.Unwrap(err); err2 != nil {
@@ -98,7 +98,7 @@ type meteredConn struct {
 // connection meter and also increases the metered peer count. If the metrics
 // system is disabled, function returns the original connection.
 func newMeteredConn(conn net.Conn) net.Conn {
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return conn
 	}
 	return &meteredConn{Conn: conn}

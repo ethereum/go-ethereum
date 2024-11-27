@@ -6,52 +6,34 @@
 package metrics
 
 import (
-	"os"
+	"fmt"
 	"runtime/metrics"
 	"runtime/pprof"
-	"strconv"
-	"strings"
-	"syscall"
 	"time"
+)
 
-	"github.com/ethereum/go-ethereum/log"
+var (
+	metricsEnabled = false
+	initRan        = false
 )
 
 // Enabled is checked by functions that are deemed 'expensive', e.g. if a
 // meter-type does locking and/or non-trivial math operations during update.
-//
+func Enabled() bool {
+	return metricsEnabled
+}
+
+// Init enables the metrics system.
 // The Enabled-flag is expected to be set, once, during startup, but toggling off and on
 // is not supported: YMMV.
-var Enabled = false
-
-// enablerFlags is the CLI flag names to use to enable metrics collections.
-var enablerFlags = []string{"metrics"}
-
-// enablerEnvVars is the env var names to use to enable metrics collections.
-var enablerEnvVars = []string{"GETH_METRICS"}
-
-// init enables or disables the metrics system. Since we need this to run before
-// any other code gets to create meters and timers, we'll actually do an ugly hack
-// and peek into the command line args for the metrics flag.
-func init() {
-	for _, enabler := range enablerEnvVars {
-		if val, found := syscall.Getenv(enabler); found && !Enabled {
-			if enable, _ := strconv.ParseBool(val); enable { // ignore error, flag parser will choke on it later
-				log.Info("Enabling metrics collection")
-				Enabled = true
-			}
-		}
+// Init is not safe to call concurrently. It has no effect if it was already called.
+func Init(enabled bool) {
+	metricsEnabled = enabled
+	if initRan {
+		return
 	}
-	for _, arg := range os.Args {
-		flag := strings.TrimLeft(arg, "-")
-
-		for _, enabler := range enablerFlags {
-			if !Enabled && flag == enabler {
-				log.Info("Enabling metrics collection")
-				Enabled = true
-			}
-		}
-	}
+	initRan = true
+	// TODO: Maybe start the ticker for exp delays, and things like that.
 }
 
 var threadCreateProfile = pprof.Lookup("threadcreate")
@@ -128,7 +110,7 @@ func readRuntimeStats(v *runtimeStats) {
 // CollectProcessMetrics periodically collects various metrics about the running process.
 func CollectProcessMetrics(refresh time.Duration) {
 	// Short circuit if the metrics system is disabled
-	if !Enabled {
+	if !metricsEnabled {
 		return
 	}
 

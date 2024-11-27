@@ -365,7 +365,7 @@ func (h *handler) runSnapExtension(peer *snap.Peer, handler snap.Handler) error 
 	defer h.decHandlers()
 
 	if err := h.peers.registerSnapExtension(peer); err != nil {
-		if metrics.Enabled {
+		if metrics.Enabled() {
 			if peer.Inbound() {
 				snap.IngressRegistrationErrorMeter.Mark(1)
 			} else {

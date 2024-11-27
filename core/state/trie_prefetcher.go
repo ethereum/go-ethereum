@@ -111,7 +111,7 @@ func (p *triePrefetcher) terminate(async bool) {
 
 // report aggregates the pre-fetching and usage metrics and reports them.
 func (p *triePrefetcher) report() {
-	if !metrics.Enabled {
+	if !metrics.Enabled() {
 		return
 	}
 	for _, fetcher := range p.fetchers {

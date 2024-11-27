@@ -45,7 +45,7 @@ func NewRegisteredResettingTimer(name string, r Registry) ResettingTimer {
 
 // NewResettingTimer constructs a new StandardResettingTimer
 func NewResettingTimer() ResettingTimer {
-	if !Enabled {
+	if !metricsEnabled {
 		return NilResettingTimer{}
 	}
 	return &StandardResettingTimer{
