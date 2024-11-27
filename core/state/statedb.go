@@ -368,24 +368,6 @@ func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	return common.Hash{}
 }
 
-// ResolveCode retrieves the code at addr, resolving any delegation designations
-// that may exist.
-func (s *StateDB) ResolveCode(addr common.Address) []byte {
-	if obj := s.resolveCode(addr); obj != nil {
-		return obj.Code()
-	}
-	return nil
-}
-
-// ResolveCodeHash retrieves the code at addr, resolving any delegation
-// designations that may exist.
-func (s *StateDB) ResolveCodeHash(addr common.Address) common.Hash {
-	if obj := s.resolveCode(addr); obj != nil {
-		return common.BytesToHash(obj.CodeHash())
-	}
-	return common.Hash{}
-}
-
 // GetState retrieves the value associated with the specific key.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
@@ -618,28 +600,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	obj := newObject(s, addr, acct)
 	s.setStateObject(obj)
 	s.AccountLoaded++
-	return obj
-}
-
-// resolveStateObject follows delegation designations to resolve a state object
-// given by the address, returning nil if the object is not found or was deleted
-// in this execution context.
-func (s *StateDB) resolveCode(addr common.Address) *stateObject {
-	obj := s.getStateObject(addr)
-	if obj == nil {
-		return nil
-	}
-	if s.witness != nil {
-		s.witness.AddCode(obj.Code())
-	}
-	addr, ok := types.ParseDelegation(obj.Code())
-	if !ok {
-		return obj
-	}
-	obj = s.getStateObject(addr)
-	if obj != nil && s.witness != nil {
-		s.witness.AddCode(obj.Code())
-	}
 	return obj
 }
 

@@ -337,7 +337,7 @@ func opExtCodeCopyEIP4762(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
-	code := interpreter.evm.StateDB.ResolveCode(addr)
+	code := interpreter.evm.resolveCode(addr)
 	contract := &Contract{
 		Code: code,
 		self: AccountRef(addr),
@@ -719,7 +719,7 @@ func opExtCodeCopyEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 		uint64CodeOffset = math.MaxUint64
 	}
 	addr := common.Address(a.Bytes20())
-	code := interpreter.evm.StateDB.ResolveCode(addr)
+	code := interpreter.evm.resolveCode(addr)
 	codeCopy := getData(code, uint64CodeOffset, length.Uint64())
 	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), codeCopy)
 
@@ -729,7 +729,7 @@ func opExtCodeCopyEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 // opExtCodeSizeEIP7702 implements the EIP-7702 variation of opExtCodeSize.
 func opExtCodeSizeEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	slot := scope.Stack.peek()
-	slot.SetUint64(uint64(len(interpreter.evm.StateDB.ResolveCode(slot.Bytes20()))))
+	slot.SetUint64(uint64(len(interpreter.evm.resolveCode(slot.Bytes20()))))
 	return nil, nil
 }
 
@@ -740,7 +740,7 @@ func opExtCodeHashEIP7702(pc *uint64, interpreter *EVMInterpreter, scope *ScopeC
 	if interpreter.evm.StateDB.Empty(address) {
 		slot.Clear()
 	} else {
-		slot.SetBytes(interpreter.evm.StateDB.ResolveCodeHash(address).Bytes())
+		slot.SetBytes(interpreter.evm.resolveCodeHash(address).Bytes())
 	}
 	return nil, nil
 }
