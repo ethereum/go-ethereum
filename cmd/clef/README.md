@@ -570,8 +570,8 @@ Results in the following invocation on the UI:
   "params": [
     {
       "transaction": {
-        "from": "0x0x694267f14675d7e1b9494fd8d72fefe1755710fa",
-        "to": "0x0x07a565b7ed7d7a678680a4c162885bedbb695fe0",
+        "from": "0x694267f14675d7e1b9494fd8d72fefe1755710fa",
+        "to": "0x07a565b7ed7d7a678680a4c162885bedbb695fe0",
         "gas": "0x333",
         "gasPrice": "0x1",
         "value": "0x0",
@@ -912,7 +912,7 @@ along with the UI.
 
 ### UI Implementations
 
-There are a couple of implementation for a UI. We'll try to keep this list up to date.
+There are a couple of implementations for a UI. We'll try to keep this list up to date.
 
 | Name | Repo | UI type| No external resources| Blocky support| Verifies permissions | Hash information | No secondary storage | Statically linked| Can modify parameters|
 | ---- | ---- | -------| ---- | ---- | ---- |---- | ---- | ---- | ---- |
