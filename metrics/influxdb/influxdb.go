@@ -97,7 +97,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"meanrate": ms.RateMean(),
 		}
 		return measurement, fields
-	case metrics.ResettingTimer:
+	case *metrics.ResettingTimer:
 		ms := metric.Snapshot()
 		if ms.Count() == 0 {
 			break

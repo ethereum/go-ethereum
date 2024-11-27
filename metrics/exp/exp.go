@@ -174,7 +174,7 @@ func (exp *exp) publishTimer(name string, metric *metrics.Timer) {
 	exp.getFloat(name + ".mean-rate").Set(t.RateMean())
 }
 
-func (exp *exp) publishResettingTimer(name string, metric metrics.ResettingTimer) {
+func (exp *exp) publishResettingTimer(name string, metric *metrics.ResettingTimer) {
 	t := metric.Snapshot()
 	ps := t.Percentiles([]float64{0.50, 0.75, 0.95, 0.99})
 	exp.getInt(name + ".count").Set(int64(t.Count()))
@@ -204,7 +204,7 @@ func (exp *exp) syncToExpvar() {
 			exp.publishMeter(name, i)
 		case *metrics.Timer:
 			exp.publishTimer(name, i)
-		case metrics.ResettingTimer:
+		case *metrics.ResettingTimer:
 			exp.publishResettingTimer(name, i)
 		default:
 			panic(fmt.Sprintf("unsupported type for '%s': %T", name, i))

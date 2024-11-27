@@ -67,7 +67,7 @@ func (c *collector) Add(name string, i any) error {
 		c.addMeter(name, m.Snapshot())
 	case *metrics.Timer:
 		c.addTimer(name, m.Snapshot())
-	case metrics.ResettingTimer:
+	case *metrics.ResettingTimer:
 		c.addResettingTimer(name, m.Snapshot())
 	default:
 		return fmt.Errorf("unknown prometheus metric type %T", i)
@@ -121,7 +121,7 @@ func (c *collector) addTimer(name string, m *metrics.TimerSnapshot) {
 	c.buff.WriteRune('\n')
 }
 
-func (c *collector) addResettingTimer(name string, m metrics.ResettingTimerSnapshot) {
+func (c *collector) addResettingTimer(name string, m *metrics.ResettingTimerSnapshot) {
 	if m.Count() <= 0 {
 		return
 	}
