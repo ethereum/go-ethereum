@@ -404,7 +404,6 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 	}
 	res, err := c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 	if err != nil {
-		fmt.Printf("msg data is %x\n", msg.Data)
 		panic(err)
 	}
 	return res, nil
@@ -517,6 +516,12 @@ func (c *BoundContract) filterLogs(opts *FilterOpts, eventID common.Hash, query 
 // subscription object that can be used to tear down the watcher.
 func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
 	return c.watchLogs(opts, c.abi.Events[name].ID, query...)
+}
+
+// WatchLogsForId filters subscribes to contract logs for future blocks, returning a
+// subscription object that can be used to tear down the watcher.
+func (c *BoundContract) WatchLogsForId(opts *WatchOpts, id common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+	return c.watchLogs(opts, id, query...)
 }
 
 func (c *BoundContract) watchLogs(opts *WatchOpts, eventID common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {

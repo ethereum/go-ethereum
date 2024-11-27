@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/events"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/nested_libraries"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,6 +36,7 @@ import (
 	"math/big"
 	"strings"
 	"testing"
+	"time"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -67,7 +69,7 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 	}
 
 	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
-	opts := bind.TransactOpts{
+	opts := &bind.TransactOpts{
 		From:  testAddr,
 		Nonce: nil,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
@@ -92,12 +94,17 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 		Backend: backend,
 		Client:  backend.Client(),
 	}
-	return &opts, &bindBackend, nil
+	return opts, &bindBackend, nil
+}
+
+// test deployment and interaction for a basic contract with no library deps
+func TestDeployment(t *testing.T) {
+
 }
 
 // test that deploying a contract with library dependencies works,
 // verifying by calling the deployed contract.
-func TestDeployment(t *testing.T) {
+func TestDeploymentLibraries(t *testing.T) {
 	opts, bindBackend, err := testSetup()
 	if err != nil {
 		t.Fatalf("err setting up test: %v", err)
@@ -278,6 +285,227 @@ func TestDeploymentWithOverrides(t *testing.T) {
 	}
 */
 
+// note to self: see how to filter logs in eth_call.
+
 func TestEvents(t *testing.T) {
 	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
+	txAuth, backend, err := testSetup()
+	if err != nil {
+		t.Fatalf("error setting up testing env: %v", err)
+	}
+
+	deploymentParams := DeploymentParams{
+		Contracts: []ContractDeployParams{
+			{
+				Meta: events.CMetaData,
+			},
+		},
+	}
+
+	res, err := LinkAndDeploy(txAuth, backend, deploymentParams)
+	if err != nil {
+		t.Fatalf("error deploying contract for testing: %v", err)
+	}
+
+	backend.Commit()
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.Pattern]); err != nil {
+		t.Fatalf("WaitDeployed failed %v", err)
+	}
+
+	ctrct, err := events.NewC()
+	if err != nil {
+		t.Fatalf("error instantiating contract instance: %v", err)
+	}
+
+	abi, err := events.CMetaData.GetAbi()
+	if err != nil {
+		t.Fatalf("error getting contract abi: %v", err)
+	}
+
+	// TODO: why did I introduce separate type, and not just use bound contract?
+	boundContract := ContractInstance{
+		res.Addrs[events.CMetaData.Pattern],
+		backend,
+	}
+
+	unpackBasic := func(raw *types.Log) (*events.CBasic1, error) {
+		return &events.CBasic1{
+			Id:   (new(big.Int)).SetBytes(raw.Topics[0].Bytes()),
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}, nil
+	}
+	unpackBasic2 := func(raw *types.Log) (*events.CBasic2, error) {
+		return &events.CBasic2{
+			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}, nil
+	}
+	newCBasic1Ch := make(chan *events.CBasic1)
+	newCBasic2Ch := make(chan *events.CBasic2)
+	watchOpts := &bind.WatchOpts{
+		Start:   nil,
+		Context: context.Background(),
+	}
+	sub1, err := WatchLogs[events.CBasic1](&boundContract, *abi, watchOpts, events.CBasic1EventID(), unpackBasic, newCBasic1Ch)
+	sub2, err := WatchLogs[events.CBasic2](&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2, newCBasic2Ch)
+	defer sub1.Unsubscribe()
+	defer sub2.Unsubscribe()
+	fmt.Printf("watching for event with id %x\n", events.CBasic1EventID())
+	fmt.Printf("watching for event with id %x\n", events.CBasic2EventID())
+	//wtf do I do with this subscriptions??
+	_ = sub1
+	_ = sub2
+
+	crtctInstance := &ContractInstance{
+		Address: res.Addrs[events.CMetaData.Pattern],
+		Backend: backend,
+	}
+	_ = ctrct
+	packedCall, err := ctrct.PackEmitMulti()
+	if err != nil {
+		t.Fatalf("failed to pack EmitMulti arguments")
+	}
+	tx, err := Transact(crtctInstance, txAuth, packedCall)
+	if err != nil {
+		t.Fatalf("failed to send transaction...")
+	}
+	backend.Commit()
+	if _, err := bind.WaitMined(context.Background(), backend, tx); err != nil {
+		t.Fatalf("error waiting for tx to be mined: %v", err)
+	}
+
+	timeout := time.NewTimer(2 * time.Second)
+	e1Count := 0
+	e2Count := 0
+	for {
+		select {
+		case _ = <-newCBasic1Ch:
+			e1Count++
+		case _ = <-newCBasic2Ch:
+			e2Count++
+		case _ = <-timeout.C:
+			goto done
+		}
+		if e1Count == 2 && e2Count == 1 {
+			break
+		}
+	}
+done:
+	if e1Count != 2 {
+		t.Fatalf("expected event type 1 count to be 2.  got %d", e1Count)
+	}
+	if e2Count != 1 {
+		t.Fatalf("expected event type 2 count to be 1.  got %d", e2Count)
+	}
+	// commit a few blocks...
+	// now filter for the previously-emitted events.
+
+	// TODO: test that returning error from unpack prevents event from being received by sink.
+}
+
+func TestEventsUnpackFailure(t *testing.T) {
+	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
+	txAuth, backend, err := testSetup()
+	if err != nil {
+		t.Fatalf("error setting up testing env: %v", err)
+	}
+
+	deploymentParams := DeploymentParams{
+		Contracts: []ContractDeployParams{
+			{
+				Meta: events.CMetaData,
+			},
+		},
+	}
+
+	res, err := LinkAndDeploy(txAuth, backend, deploymentParams)
+	if err != nil {
+		t.Fatalf("error deploying contract for testing: %v", err)
+	}
+
+	backend.Commit()
+	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.Pattern]); err != nil {
+		t.Fatalf("WaitDeployed failed %v", err)
+	}
+
+	ctrct, err := events.NewC()
+	if err != nil {
+		t.Fatalf("error instantiating contract instance: %v", err)
+	}
+
+	abi, err := events.CMetaData.GetAbi()
+	if err != nil {
+		t.Fatalf("error getting contract abi: %v", err)
+	}
+
+	// TODO: why did I introduce separate type, and not just use bound contract?
+	boundContract := ContractInstance{
+		res.Addrs[events.CMetaData.Pattern],
+		backend,
+	}
+
+	unpackBasic := func(raw *types.Log) (*events.CBasic1, error) {
+		return nil, fmt.Errorf("could not unpack event")
+	}
+	unpackBasic2 := func(raw *types.Log) (*events.CBasic2, error) {
+		return &events.CBasic2{
+			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}, nil
+	}
+	newCBasic1Ch := make(chan *events.CBasic1)
+	newCBasic2Ch := make(chan *events.CBasic2)
+	watchOpts := &bind.WatchOpts{
+		Start:   nil,
+		Context: context.Background(),
+	}
+	sub1, err := WatchLogs[events.CBasic1](&boundContract, *abi, watchOpts, events.CBasic1EventID(), unpackBasic, newCBasic1Ch)
+	sub2, err := WatchLogs[events.CBasic2](&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2, newCBasic2Ch)
+	defer sub1.Unsubscribe()
+	defer sub2.Unsubscribe()
+	//wtf do I do with this subscriptions??
+	_ = sub1
+	_ = sub2
+
+	crtctInstance := &ContractInstance{
+		Address: res.Addrs[events.CMetaData.Pattern],
+		Backend: backend,
+	}
+	_ = ctrct
+	packedCall, err := ctrct.PackEmitMulti()
+	if err != nil {
+		t.Fatalf("failed to pack EmitMulti arguments")
+	}
+	tx, err := Transact(crtctInstance, txAuth, packedCall)
+	if err != nil {
+		t.Fatalf("failed to send transaction...")
+	}
+	backend.Commit()
+	if _, err := bind.WaitMined(context.Background(), backend, tx); err != nil {
+		t.Fatalf("error waiting for tx to be mined: %v", err)
+	}
+
+	timeout := time.NewTimer(2 * time.Second)
+	e1Count := 0
+	e2Count := 0
+	for {
+		select {
+		case _ = <-newCBasic1Ch:
+			e1Count++
+		case _ = <-newCBasic2Ch:
+			e2Count++
+		case _ = <-timeout.C:
+			goto done
+		}
+		if e1Count == 2 && e2Count == 1 {
+			break
+		}
+	}
+done:
+	if e1Count != 0 {
+		t.Fatalf("expected event type 1 count to be 0.  got %d", e1Count)
+	}
+	if e2Count != 1 {
+		t.Fatalf("expected event type 2 count to be 1.  got %d", e2Count)
+	}
 }

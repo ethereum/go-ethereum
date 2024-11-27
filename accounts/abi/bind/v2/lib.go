@@ -29,6 +29,7 @@ import (
 	"strings"
 )
 
+// TODO: it's weird to have a mirror interface of this in the bind package...
 type ContractInstance struct {
 	Address common.Address
 	Backend bind.ContractBackend
@@ -233,10 +234,10 @@ func FilterLogs[T any](instance *ContractInstance, opts *bind.FilterOpts, eventI
 }
 
 // TODO: adding docs soon (jwasinger)
-func WatchLogs[T any](instance *ContractInstance, opts *bind.WatchOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
+func WatchLogs[T any](instance *ContractInstance, abi abi.ABI, opts *bind.WatchOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
 	backend := instance.Backend
-	c := bind.NewBoundContract(instance.Address, abi.ABI{}, backend, backend, backend)
-	logs, sub, err := c.WatchLogs(opts, eventID.String(), topics...)
+	c := bind.NewBoundContract(instance.Address, abi, backend, backend, backend)
+	logs, sub, err := c.WatchLogsForId(opts, eventID, topics...)
 	if err != nil {
 		return nil, err
 	}
@@ -335,10 +336,10 @@ func (it *EventIterator[T]) Close() error {
 
 // Transact creates and submits a transaction to the bound contract instance
 // using the provided abi-encoded input (or nil).
-func Transact(instance bind.ContractInstance, opts *bind.TransactOpts, input []byte) (*types.Transaction, error) {
+func Transact(instance *ContractInstance, opts *bind.TransactOpts, input []byte) (*types.Transaction, error) {
 	var (
-		addr    = instance.Address()
-		backend = instance.Backend()
+		addr    = instance.Address
+		backend = instance.Backend
 	)
 	c := bind.NewBoundContract(addr, abi.ABI{}, backend, backend, backend)
 	return c.RawTransact(opts, input)
@@ -346,8 +347,8 @@ func Transact(instance bind.ContractInstance, opts *bind.TransactOpts, input []b
 
 // Call performs an eth_call on the given bound contract instance, using the
 // provided abi-encoded input (or nil).
-func Call(instance bind.ContractInstance, opts *bind.CallOpts, input []byte) ([]byte, error) {
-	backend := instance.Backend()
-	c := bind.NewBoundContract(instance.Address(), abi.ABI{}, backend, backend, backend)
+func Call(instance *ContractInstance, opts *bind.CallOpts, input []byte) ([]byte, error) {
+	backend := instance.Backend
+	c := bind.NewBoundContract(instance.Address, abi.ABI{}, backend, backend, backend)
 	return c.CallRaw(opts, input)
 }
