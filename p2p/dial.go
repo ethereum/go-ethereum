@@ -135,6 +135,7 @@ type dialConfig struct {
 	log            log.Logger
 	clock          mclock.Clock
 	rand           *mrand.Rand
+	ttl            time.Duration
 }
 
 func (cfg dialConfig) withDefaults() dialConfig {
@@ -274,13 +275,15 @@ loop:
 		case node := <-d.addStaticCh:
 			id := node.ID()
 			_, exists := d.static[id]
-			d.log.Trace("Adding static node", "id", id, "ip", node.IPAddr(), "added", !exists)
+			d.log.Trace("Adding static node", "id", id, "addr", node.DisplayAddr(), "ip", node.IPAddr(), "added", !exists)
 			if exists {
 				continue loop
 			}
 			task := newDialTask(node, staticDialedConn)
 			d.static[id] = task
-			if d.checkDial(node) == nil {
+			if err := d.checkDial(node); err != nil {
+				d.log.Trace("Discarding dial candidate", "id", node.ID(), "addr", node.DisplayAddr(), "ip", node.IPAddr(), "reason", err)
+			} else {
 				d.addToStaticPool(task)
 			}
 
@@ -436,7 +439,7 @@ func (d *dialScheduler) removeFromStaticPool(idx int) {
 // startDial runs the given dial task in a separate goroutine.
 func (d *dialScheduler) startDial(task *dialTask) {
 	node := task.dest()
-	d.log.Trace("Starting p2p dial", "id", node.ID(), "ip", node.IPAddr(), "flag", task.flags)
+	d.log.Trace("Starting p2p dial", "id", node.ID(), "addr", node.DisplayAddr(), "ip", node.IPAddr(), "flag", task.flags)
 	hkey := string(node.ID().Bytes())
 	d.history.add(hkey, d.clock.Now().Add(dialHistoryExpiration))
 	d.dialing[node.ID()] = task
@@ -473,7 +476,7 @@ func (t *dialTask) dest() *enode.Node {
 }
 
 func (t *dialTask) run(d *dialScheduler) {
-	if t.needResolve() && !t.resolve(d) {
+	if !t.resolveIfNeeded(d) {
 		return
 	}
 
@@ -488,8 +491,36 @@ func (t *dialTask) run(d *dialScheduler) {
 	}
 }
 
-func (t *dialTask) needResolve() bool {
-	return t.flags&staticDialedConn != 0 && !t.dest().IPAddr().IsValid()
+// resolveIfNeeded attempts to resolve the node's IP address if it is invalid.
+// It returns true if the node's IP address is valid after resolution attempts.
+func (t *dialTask) resolveIfNeeded(d *dialScheduler) bool {
+	node := t.dest()
+
+	if t.flags&staticDialedConn != 0 {
+		if t.resolve(d) && node.IPAddr().IsValid() {
+			return true
+		}
+	}
+
+	if node.NeedsDNSResolve() {
+		if t.resolveDNS(d) && node.IPAddr().IsValid() {
+			return true
+		}
+	}
+
+	return false
+}
+
+// resolveDNS attempts to resolve the DNS name of the destination node.
+// It returns true if resolution succeeds.
+func (t *dialTask) resolveDNS(d *dialScheduler) bool {
+	node := t.dest()
+	d.log.Trace("Starting DNS resolution", "id", node.ID(), "addr", node.DisplayAddr())
+	if err := node.RefreshDNS(d.dialConfig.ttl); err != nil {
+		d.log.Trace("DNS resolution failed", "id", node.ID(), "addr", node.DisplayAddr())
+		return false
+	}
+	return true
 }
 
 // resolve attempts to find the current endpoint for the destination
@@ -533,8 +564,7 @@ func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 	dialMeter.Mark(1)
 	fd, err := d.dialer.Dial(d.ctx, dest)
 	if err != nil {
-		addr, _ := dest.TCPEndpoint()
-		d.log.Trace("Dial error", "id", dest.ID(), "addr", addr, "conn", t.flags, "err", cleanupDialErr(err))
+		d.log.Trace("Dial error", "id", dest.ID(), "addr", dest.DisplayAddr(), "ip", dest.IPAddr(), "conn", t.flags, "err", cleanupDialErr(err))
 		dialConnectionError.Mark(1)
 		return &dialError{err}
 	}

@@ -64,6 +64,10 @@ const (
 
 	// Maximum amount of time allowed for writing a complete message.
 	frameWriteTimeout = 20 * time.Second
+
+	defaultTTL = 5 * time.Minute
+	minTTL     = 1 * time.Second
+	maxTTL     = 24 * time.Hour
 )
 
 var (
@@ -121,6 +125,11 @@ type Config struct {
 	// Trusted nodes are used as pre-configured connections which are always
 	// allowed to connect, even above the peer limit.
 	TrustedNodes []*enode.Node
+
+	// TTL is the time-to-live for DNS discovery queries
+	// This value is passed to the DNS resolvers when performing name
+	// resolutions.
+	TTL time.Duration `toml:",omitempty"`
 
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
@@ -619,6 +628,11 @@ func (srv *Server) setupDialScheduler() {
 	}
 	if config.dialer == nil {
 		config.dialer = tcpDialer{&net.Dialer{Timeout: defaultDialTimeout}}
+	}
+	if srv.TTL >= minTTL && srv.TTL <= maxTTL {
+		config.ttl = srv.TTL
+	} else {
+		config.ttl = defaultTTL
 	}
 	srv.dialsched = newDialScheduler(config, srv.discmix, srv.SetupConn)
 	for _, n := range srv.StaticNodes {

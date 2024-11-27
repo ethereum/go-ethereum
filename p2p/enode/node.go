@@ -26,6 +26,7 @@ import (
 	"net"
 	"net/netip"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -41,6 +42,10 @@ type Node struct {
 	ip  netip.Addr
 	udp uint16
 	tcp uint16
+	// dns information
+	dnsName     string
+	dnsResolved time.Time
+	dnsTTL      time.Duration
 }
 
 // New wraps a node record. The record must be valid according to the given
@@ -255,6 +260,84 @@ func (n *Node) String() string {
 	enc, _ := rlp.EncodeToBytes(&n.r) // always succeeds because record is valid
 	b64 := base64.RawURLEncoding.EncodeToString(enc)
 	return "enr:" + b64
+}
+
+// resolveDNS attempts to resolve a DNS name to an IP address
+func (n *Node) resolveDNS(dnsName string) (netip.Addr, error) {
+	ips, err := net.LookupIP(dnsName)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	for _, ip := range ips {
+		if ip4 := ip.To4(); ip4 != nil {
+			addr, ok := netip.AddrFromSlice(ip4)
+			if ok {
+				return addr, nil
+			}
+		}
+	}
+	// Fall back to IPv6 if no IPv4 is available
+	for _, ip := range ips {
+		addr, ok := netip.AddrFromSlice(ip)
+		if ok {
+			return addr, nil
+		}
+	}
+
+	return netip.Addr{}, errors.New("no valid IP address found")
+}
+
+// SetDNS sets the DNS name and resolves it to an IP address
+func (n *Node) SetDNS(dnsName string, ttl time.Duration) error {
+	ip, err := n.resolveDNS(dnsName)
+	if err != nil {
+		return err
+	}
+
+	n.dnsName = dnsName
+	n.dnsResolved = time.Now()
+	n.dnsTTL = ttl
+
+	if ip.Is4() {
+		n.setIP4(ip)
+	} else {
+		n.setIP6(ip)
+	}
+	return nil
+}
+
+// DNSName returns the stored DNS name
+func (n *Node) DNSName() string {
+	return n.dnsName
+}
+
+// RefreshDNS updates the IP address from the stored DNS name
+func (n *Node) RefreshDNS(ttl time.Duration) error {
+	if n.dnsName == "" {
+		return errors.New("no DNS name set")
+	}
+	return n.SetDNS(n.dnsName, ttl)
+}
+
+// DisplayAddr returns either "hostname:port" or "ip:port"
+func (n *Node) DisplayAddr() string {
+	addr := n.dnsName
+	if addr == "" {
+		addr = n.ip.String()
+	}
+	return fmt.Sprintf("%s:%d", addr, n.tcp)
+}
+
+// NeedsDNSResolve returns true if the node has a DNS name that needs resolution
+func (n *Node) NeedsDNSResolve() bool {
+	if n.dnsName == "" {
+		return false
+	}
+	return !n.ip.IsValid() || time.Since(n.dnsResolved) > n.dnsTTL
+}
+
+func (n *Node) GetTTL() time.Duration {
+	return n.dnsTTL
 }
 
 // MarshalText implements encoding.TextMarshaler.
