@@ -19,7 +19,6 @@ package metrics
 // compile-time checks that interfaces are implemented.
 var (
 	_ HistogramSnapshot = (*emptySnapshot)(nil)
-	_ TimerSnapshot     = (*emptySnapshot)(nil)
 )
 
 type emptySnapshot struct{}

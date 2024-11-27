@@ -73,7 +73,7 @@ func readMeter(namespace, name string, i interface{}) (string, map[string]interf
 			"mean":  ms.RateMean(),
 		}
 		return measurement, fields
-	case metrics.Timer:
+	case *metrics.Timer:
 		ms := metric.Snapshot()
 		ps := ms.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
 

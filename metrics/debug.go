@@ -14,7 +14,7 @@ var (
 			//PauseQuantiles Histogram
 			PauseTotal *Gauge
 		}
-		ReadGCStats Timer
+		ReadGCStats *Timer
 	}
 	gcStats debug.GCStats
 )

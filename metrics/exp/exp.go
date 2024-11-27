@@ -155,7 +155,7 @@ func (exp *exp) publishMeter(name string, metric *metrics.Meter) {
 	exp.getFloat(name + ".mean").Set(m.RateMean())
 }
 
-func (exp *exp) publishTimer(name string, metric metrics.Timer) {
+func (exp *exp) publishTimer(name string, metric *metrics.Timer) {
 	t := metric.Snapshot()
 	ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 	exp.getInt(name + ".count").Set(t.Count())
@@ -202,7 +202,7 @@ func (exp *exp) syncToExpvar() {
 			exp.publishHistogram(name, i)
 		case *metrics.Meter:
 			exp.publishMeter(name, i)
-		case metrics.Timer:
+		case *metrics.Timer:
 			exp.publishTimer(name, i)
 		case metrics.ResettingTimer:
 			exp.publishResettingTimer(name, i)

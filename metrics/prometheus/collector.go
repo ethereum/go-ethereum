@@ -65,7 +65,7 @@ func (c *collector) Add(name string, i any) error {
 		c.addHistogram(name, m.Snapshot())
 	case *metrics.Meter:
 		c.addMeter(name, m.Snapshot())
-	case metrics.Timer:
+	case *metrics.Timer:
 		c.addTimer(name, m.Snapshot())
 	case metrics.ResettingTimer:
 		c.addResettingTimer(name, m.Snapshot())
@@ -110,7 +110,7 @@ func (c *collector) addMeter(name string, m *metrics.MeterSnapshot) {
 	c.writeGaugeCounter(name, m.Count())
 }
 
-func (c *collector) addTimer(name string, m metrics.TimerSnapshot) {
+func (c *collector) addTimer(name string, m *metrics.TimerSnapshot) {
 	pv := []float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999}
 	ps := m.Percentiles(pv)
 	c.writeSummaryCounter(name, m.Count())

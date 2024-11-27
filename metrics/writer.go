@@ -67,7 +67,7 @@ func WriteOnce(r Registry, w io.Writer) {
 			fmt.Fprintf(w, "  5-min rate:  %12.2f\n", m.Rate5())
 			fmt.Fprintf(w, "  15-min rate: %12.2f\n", m.Rate15())
 			fmt.Fprintf(w, "  mean rate:   %12.2f\n", m.RateMean())
-		case Timer:
+		case *Timer:
 			t := metric.Snapshot()
 			ps := t.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999})
 			fmt.Fprintf(w, "timer %s\n", namedMetric.name)
