@@ -49,7 +49,7 @@ func deployContract(backend bind.ContractBackend, auth *bind.TransactOpts, const
 }
 
 // deployLibs iterates the set contracts (map of pattern to hex-encoded
-// contract deploy code). each value in contracts is deployed, and the
+// contract deployer code). Each contract is deployed, and the
 // resulting addresses/deployment-txs are returned on success.
 func deployLibs(backend bind.ContractBackend, auth *bind.TransactOpts, contracts map[string]string) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[string]common.Address, err error) {
 	deploymentTxs = make(map[common.Address]*types.Transaction)
@@ -72,9 +72,9 @@ func deployLibs(backend bind.ContractBackend, auth *bind.TransactOpts, contracts
 	return deploymentTxs, deployAddrs, nil
 }
 
-// linkContract takes an unlinked contract deploy code (contract) a map of
-// linked-and-deployed library dependencies, replaces references to library
-// deps in the contract code, and returns the contract deployment bytecode on
+// linkContract takes an unlinked contract deployer hex-encoded code, a map of
+// already-deployed library dependencies, replaces references to deployed library
+// dependencies in the contract code, and returns the contract deployment bytecode on
 // success.
 func linkContract(contract string, linkedLibs map[string]common.Address) (deployableContract string, err error) {
 	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
@@ -92,10 +92,11 @@ func linkContract(contract string, linkedLibs map[string]common.Address) (deploy
 
 // linkLibs iterates the set of dependencies that have yet to be
 // linked/deployed (pending), replacing references to library dependencies
-// if those dependencies are fully linked/deployed (in 'linked').
+// (i.e. mutating pending) if those dependencies are fully linked/deployed
+// (in 'linked').
 //
 // contracts that have become fully linked in the current invocation are
-// returned in the resulting map.
+// returned.
 func linkLibs(pending *map[string]string, linked map[string]common.Address) (deployableDeps map[string]string) {
 	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
 	if err != nil {
@@ -160,7 +161,8 @@ type DeploymentResult struct {
 }
 
 // LinkAndDeploy deploys a specified set of contracts and their dependent
-// libraries.
+// libraries.  If an error occurs, only contracts which were successfully
+// deployed are returned in the result.
 func LinkAndDeploy(auth *bind.TransactOpts, backend bind.ContractBackend, deployParams DeploymentParams) (res *DeploymentResult, err error) {
 	libMetas := deployParams.Libraries
 	overrides := deployParams.Overrides
@@ -202,12 +204,12 @@ func LinkAndDeploy(auth *bind.TransactOpts, backend bind.ContractBackend, deploy
 		}
 	}
 
+	// link and deploy contracts
 	for _, contractParams := range deployParams.Contracts {
 		linkedContract, err := linkContract(contractParams.Meta.Bin, deployed)
 		if err != nil {
 			return res, err
 		}
-		// link and deploy the contracts
 		contractTx, contractAddr, err := deployContract(backend, auth, contractParams.Input, linkedContract)
 		if err != nil {
 			return res, err

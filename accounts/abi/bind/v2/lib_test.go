@@ -19,6 +19,7 @@ package v2
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
@@ -49,9 +50,7 @@ func JSON(reader io.Reader) (abi.ABI, error) {
 	return instance, nil
 }
 
-// test that deploying a contract with library dependencies works,
-// verifying by calling the deployed contract.
-func TestDeployment(t *testing.T) {
+func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	backend := simulated.NewBackend(
 		types.GenesisAlloc{
@@ -61,11 +60,10 @@ func TestDeployment(t *testing.T) {
 			ethConf.Genesis.Difficulty = big.NewInt(0)
 		},
 	)
-	defer backend.Close()
 
 	_, err := JSON(strings.NewReader(nested_libraries.C1MetaData.ABI))
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 
 	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
@@ -75,11 +73,13 @@ func TestDeployment(t *testing.T) {
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), testKey)
 			if err != nil {
-				t.Fatal(err)
+				panic(fmt.Sprintf("error signing tx: %v", err))
+				return nil, err
 			}
 			signedTx, err := tx.WithSignature(signer, signature)
 			if err != nil {
-				t.Fatal(err)
+				panic(fmt.Sprintf("error creating tx with sig: %v", err))
+				return nil, err
 			}
 			return signedTx, nil
 		},
@@ -92,6 +92,18 @@ func TestDeployment(t *testing.T) {
 		Backend: backend,
 		Client:  backend.Client(),
 	}
+	return &opts, &bindBackend, nil
+}
+
+// test that deploying a contract with library dependencies works,
+// verifying by calling the deployed contract.
+func TestDeployment(t *testing.T) {
+	opts, bindBackend, err := testSetup()
+	if err != nil {
+		t.Fatalf("err setting up test: %v", err)
+	}
+	defer bindBackend.Backend.Close()
+
 	ctrct, err := nested_libraries.NewC1()
 	if err != nil {
 		panic(err)
@@ -111,7 +123,7 @@ func TestDeployment(t *testing.T) {
 		Libraries: nested_libraries.C1LibraryDeps,
 		Overrides: nil,
 	}
-	res, err := LinkAndDeploy(&opts, bindBackend, deploymentParams)
+	res, err := LinkAndDeploy(opts, bindBackend, deploymentParams)
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -121,7 +133,7 @@ func TestDeployment(t *testing.T) {
 		t.Fatalf("deployment should have generated 5 addresses.  got %d", len(res.Addrs))
 	}
 	for _, tx := range res.Txs {
-		_, err = bind.WaitDeployed(context.Background(), &bindBackend, tx)
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
 		if err != nil {
 			t.Fatalf("error deploying library: %+v", err)
 		}
@@ -140,7 +152,7 @@ func TestDeployment(t *testing.T) {
 		t.Fatalf("error getting abi object: %v", err)
 	}
 	contractAddr := res.Addrs[nested_libraries.C1MetaData.Pattern]
-	boundC := bind.NewBoundContract(contractAddr, *cABI, &bindBackend, &bindBackend, &bindBackend)
+	boundC := bind.NewBoundContract(contractAddr, *cABI, bindBackend, bindBackend, bindBackend)
 	callOpts := &bind.CallOpts{
 		From:    common.Address{},
 		Context: context.Background(),
@@ -158,6 +170,106 @@ func TestDeployment(t *testing.T) {
 	}
 }
 
+func TestDeploymentWithOverrides(t *testing.T) {
+	opts, bindBackend, err := testSetup()
+	if err != nil {
+		t.Fatalf("err setting up test: %v", err)
+	}
+	defer bindBackend.Backend.Close()
+
+	// deploy some library deps
+	deploymentParams := DeploymentParams{
+		Libraries: nested_libraries.C1LibraryDeps,
+	}
+
+	res, err := LinkAndDeploy(opts, bindBackend, deploymentParams)
+	if err != nil {
+		t.Fatalf("err: %+v\n", err)
+	}
+	bindBackend.Commit()
+
+	if len(res.Addrs) != 4 {
+		t.Fatalf("deployment should have generated 4 addresses.  got %d", len(res.Addrs))
+	}
+	for _, tx := range res.Txs {
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
+		if err != nil {
+			t.Fatalf("error deploying library: %+v", err)
+		}
+	}
+
+	ctrct, err := nested_libraries.NewC1()
+	if err != nil {
+		panic(err)
+	}
+	constructorInput, err := ctrct.PackConstructor(big.NewInt(42), big.NewInt(1))
+	if err != nil {
+		t.Fatalf("failed to pack constructor: %v", err)
+	}
+	overrides := res.Addrs
+	// deploy the contract
+	deploymentParams = DeploymentParams{
+		Contracts: []ContractDeployParams{
+			{
+				Meta:  nested_libraries.C1MetaData,
+				Input: constructorInput,
+			},
+		},
+		Libraries: nil,
+		Overrides: overrides,
+	}
+	res, err = LinkAndDeploy(opts, bindBackend, deploymentParams)
+	if err != nil {
+		t.Fatalf("err: %+v\n", err)
+	}
+	bindBackend.Commit()
+
+	if len(res.Addrs) != 1 {
+		t.Fatalf("deployment should have generated 1 address.  got %d", len(res.Addrs))
+	}
+	for _, tx := range res.Txs {
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
+		if err != nil {
+			t.Fatalf("error deploying library: %+v", err)
+		}
+	}
+
+	// call the deployed contract and make sure it returns the correct result
+	c, err := nested_libraries.NewC1()
+	if err != nil {
+		t.Fatalf("err is %v", err)
+	}
+	doInput, err := c.PackDo(big.NewInt(1))
+	if err != nil {
+		t.Fatalf("pack function input err: %v\n", doInput)
+	}
+
+	cABI, err := nested_libraries.C1MetaData.GetAbi()
+	if err != nil {
+		t.Fatalf("error getting abi object: %v", err)
+	}
+	contractAddr := res.Addrs[nested_libraries.C1MetaData.Pattern]
+	boundC := bind.NewBoundContract(contractAddr, *cABI, bindBackend, bindBackend, bindBackend)
+	callOpts := &bind.CallOpts{
+		From:    common.Address{},
+		Context: context.Background(),
+	}
+	callRes, err := boundC.CallRaw(callOpts, doInput)
+	if err != nil {
+		t.Fatalf("err calling contract: %v", err)
+	}
+	internalCallCount, err := c.UnpackDo(callRes)
+	if err != nil {
+		t.Fatalf("err unpacking result: %v", err)
+	}
+	if internalCallCount.Uint64() != 6 {
+		t.Fatalf("expected internal call count of 6.  got %d.", internalCallCount.Uint64())
+	}
+}
+
+/*
+ *
+ */
 /*
 	func TestDeploymentWithOverrides(t *testing.T) {
 		// more deployment test case ideas:
