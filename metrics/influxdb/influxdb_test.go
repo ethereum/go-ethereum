@@ -33,7 +33,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	metrics.Init(true)
+	metrics.Enable()
 	os.Exit(m.Run())
 }
 

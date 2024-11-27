@@ -22,17 +22,12 @@ func Enabled() bool {
 	return metricsEnabled
 }
 
-// Init enables the metrics system.
+// Enable enables the metrics system.
 // The Enabled-flag is expected to be set, once, during startup, but toggling off and on
-// is not supported: YMMV.
-// Init is not safe to call concurrently. It has no effect if it was already called.
-func Init(enabled bool) {
-	metricsEnabled = enabled
-	if initRan {
-		return
-	}
-	initRan = true
-	// TODO: Maybe start the ticker for exp delays, and things like that.
+// is not supported,
+// Enable is not safe to call concurrently. It has no effect if it was already called.
+func Enable() {
+	metricsEnabled = true
 }
 
 var threadCreateProfile = pprof.Lookup("threadcreate")

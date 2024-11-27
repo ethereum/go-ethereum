@@ -1973,7 +1973,7 @@ func SetupMetrics(cfg *metrics.Config) {
 	if !cfg.Enabled {
 		return
 	}
-	metrics.Init(true)
+	metrics.Enable()
 	log.Info("Enabling metrics collection")
 	var (
 		enableExport   = cfg.EnableInfluxDB
