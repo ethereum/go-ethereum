@@ -222,8 +222,8 @@ The prestate tracer has two modes: `prestate` and `diff`. The `prestate` mode re
 In `diff` mode the result object will contain a `pre` and a `post` object:
 
 1. The result only includes accounts that were modified. Accounts without changes will be omitted in this mode.
-2. The `pre` object within the result captures the account’s state at the beginning of the transaction, showcasing its initial values, while the post object represents the account’s state once the transaction has been fully executed, revealing the outcome of the changes.
-3. It’s important to note that the `pre` object may also contain fields that have not been altered if other fields associated with the same account have experienced modifications. This holistic view ensures that all changes are contextualized within the account’s original state.
+2. The `pre` object within the result captures the account’s state at the beginning of the transaction, showcasing its initial values, while the `post` object represents the account’s state once the transaction has been fully executed, revealing the outcome of the changes.
+3. It’s important to note that the `pre` object may also contain the `nonce, balance, code` fields that have not been altered if other fields associated with the same account have experienced modifications. This holistic view ensures that all changes are contextualized within the account’s original state.
 4. `post` will contain only the modified fields. e.g. if `nonce` of an account hasn't changed it will be omitted from `post`.
 5. Deletion (i.e. account selfdestruct, or storage clearing) will be signified by inclusion in `pre` and omission in `post`.
 6. Insertion (i.e. account creation or new slots) will be signified by omission in `pre` and inclusion in `post`.
