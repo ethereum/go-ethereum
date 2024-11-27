@@ -18,7 +18,6 @@ package metrics
 
 // compile-time checks that interfaces are implemented.
 var (
-	_ SampleSnapshot    = (*emptySnapshot)(nil)
 	_ HistogramSnapshot = (*emptySnapshot)(nil)
 	_ TimerSnapshot     = (*emptySnapshot)(nil)
 )

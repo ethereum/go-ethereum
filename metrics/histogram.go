@@ -1,7 +1,16 @@
 package metrics
 
 type HistogramSnapshot interface {
-	SampleSnapshot
+	Count() int64
+	Max() int64
+	Mean() float64
+	Min() int64
+	Percentile(float64) float64
+	Percentiles([]float64) []float64
+	Size() int
+	StdDev() float64
+	Sum() int64
+	Variance() float64
 }
 
 // Histogram calculates distribution statistics from a series of int64 values.
