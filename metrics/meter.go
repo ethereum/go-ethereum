@@ -119,9 +119,9 @@ func (m *Meter) tick() {
 	m.a5.Update(n)
 	m.a15.Update(n)
 	// And trigger them to calculate the rates
-	m.a1.Tick()
-	m.a5.Tick()
-	m.a15.Tick()
+	m.a1.tick()
+	m.a5.tick()
+	m.a15.tick()
 }
 
 var arbiter = meterTicker{meters: make(map[*Meter]struct{})}

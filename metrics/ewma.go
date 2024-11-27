@@ -50,22 +50,22 @@ func (a *EWMA) Snapshot() EWMASnapshot {
 	return EWMASnapshot(r)
 }
 
-// Tick ticks the clock to update the moving average.  It assumes it is called
+// tick ticks the clock to update the moving average.  It assumes it is called
 // every five seconds.
-func (a *EWMA) Tick() {
+func (a *EWMA) tick() {
 	// Optimization to avoid mutex locking in the hot-path.
 	if a.init.Load() {
 		a.updateRate(a.fetchInstantRate())
 		return
 	}
-	// Slow-path: this is only needed on the first Tick() and preserves transactional updating
+	// Slow-path: this is only needed on the first tick() and preserves transactional updating
 	// of init and rate in the else block. The first conditional is needed below because
 	// a different thread could have set a.init = 1 between the time of the first atomic load and when
 	// the lock was acquired.
 	a.mutex.Lock()
 	if a.init.Load() {
 		// The fetchInstantRate() uses atomic loading, which is unnecessary in this critical section
-		// but again, this section is only invoked on the first successful Tick() operation.
+		// but again, this section is only invoked on the first successful tick() operation.
 		a.updateRate(a.fetchInstantRate())
 	} else {
 		a.init.Store(true)
