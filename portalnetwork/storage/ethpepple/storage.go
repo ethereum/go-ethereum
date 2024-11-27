@@ -3,7 +3,6 @@ package ethpepple
 import (
 	"encoding/binary"
 	"runtime"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -124,10 +123,8 @@ type ContentStorage struct {
 	log                    log.Logger
 	db                     *pebble.DB
 	size                   uint64
-	sizeChan               chan uint64
-	sizeMutex              sync.RWMutex
-	isPruning              bool
-	pruneDoneChan          chan uint64 // finish prune and get the pruned size
+	sizeChan               chan struct{}
+	capacityChan           chan uint64
 	writeOptions           *pebble.WriteOptions
 }
 
@@ -137,8 +134,8 @@ func NewPeppleStorage(config PeppleStorageConfig) (storage.ContentStorage, error
 		db:                     config.DB,
 		storageCapacityInBytes: config.StorageCapacityMB * 1000_000,
 		log:                    log.New("storage", config.NetworkName),
-		sizeChan:               make(chan uint64, 100),
-		pruneDoneChan:          make(chan uint64, 1),
+		sizeChan:               make(chan struct{}, 1),
+		capacityChan:           make(chan uint64, 100),
 		writeOptions:           &pebble.WriteOptions{Sync: false},
 	}
 	cs.radius.Store(storage.MaxDistance)
@@ -164,6 +161,7 @@ func NewPeppleStorage(config PeppleStorageConfig) (storage.ContentStorage, error
 		// init stage, no need to use lock
 		cs.size = size
 	}
+	cs.sizeChan <- struct{}{}
 	go cs.saveCapacity()
 	return cs, nil
 }
@@ -185,7 +183,16 @@ func (c *ContentStorage) Get(contentKey []byte, contentId []byte) ([]byte, error
 // Put implements storage.ContentStorage.
 func (c *ContentStorage) Put(contentKey []byte, contentId []byte, content []byte) error {
 	length := uint64(len(contentId)) + uint64(len(content))
-	c.sizeChan <- length
+	<-c.sizeChan
+	c.size += length
+	if c.size > c.storageCapacityInBytes {
+		err := c.prune()
+		if err != nil {
+			c.sizeChan <- struct{}{}
+			return err
+		}
+	}
+	c.sizeChan <- struct{}{}
 	distance := xor(contentId, c.nodeId[:])
 	return c.db.Set(distance, content, c.writeOptions)
 }
@@ -200,52 +207,36 @@ func (c *ContentStorage) Radius() *uint256.Int {
 func (c *ContentStorage) saveCapacity() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	sizeChanged := false
+	capacityChanged := false
+	var currentCapacity uint64 = 0
 	buf := make([]byte, 8) // uint64
 
 	for {
 		select {
 		case <-ticker.C:
-			if sizeChanged {
-				binary.BigEndian.PutUint64(buf, c.size)
+			if capacityChanged {
+				binary.BigEndian.PutUint64(buf, currentCapacity)
 				err := c.db.Set(storage.SizeKey, buf, c.writeOptions)
 				if err != nil {
 					c.log.Error("save capacity failed", "error", err)
 				}
-				sizeChanged = false
+				capacityChanged = false
 			}
-		case size := <-c.sizeChan:
-			c.log.Debug("reveice size %v", size)
-			c.sizeMutex.Lock()
-			c.size += size
-			c.sizeMutex.Unlock()
-			sizeChanged = true
-			if c.size > c.storageCapacityInBytes {
-				if !c.isPruning {
-					c.isPruning = true
-					go c.prune()
-				}
-			}
-		case prunedSize := <-c.pruneDoneChan:
-			c.isPruning = false
-			c.size -= prunedSize
-			sizeChanged = true
+		case capacity := <-c.capacityChan:
+			capacityChanged = true
+			currentCapacity = capacity
 		}
 	}
 }
 
-func (c *ContentStorage) prune() {
+func (c *ContentStorage) prune() error {
 	expectSize := uint64(float64(c.storageCapacityInBytes) * contentDeletionFraction)
 	var curentSize uint64 = 0
 
-	defer func() {
-		c.pruneDoneChan <- curentSize
-	}()
 	// get the keys to be deleted order by distance desc
 	iter, err := c.db.NewIter(nil)
 	if err != nil {
-		c.log.Error("get iter failed", "error", err)
-		return
+		return err
 	}
 
 	batch := c.db.NewBatch()
@@ -259,7 +250,7 @@ func (c *ContentStorage) prune() {
 			dis := uint256.NewInt(0)
 			err = dis.UnmarshalSSZ(distance)
 			if err != nil {
-				c.log.Error("unmarshal distance failed", "error", err)
+				return err
 			}
 			c.radius.Store(dis)
 			break
@@ -267,9 +258,9 @@ func (c *ContentStorage) prune() {
 	}
 	err = batch.Commit(&pebble.WriteOptions{Sync: true})
 	if err != nil {
-		c.log.Error("prune batch commit failed", "error", err)
-		return
+		return err
 	}
+	return nil
 }
 
 func xor(contentId, nodeId []byte) []byte {

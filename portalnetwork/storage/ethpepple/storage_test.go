@@ -117,12 +117,12 @@ func TestPrune(t *testing.T) {
 		{
 			contentKey:  uint256.NewInt(3).Bytes32(),
 			content:     genBytes(20_000),
-			shouldPrune: false,
+			shouldPrune: true,
 		},
 		{
 			contentKey:  uint256.NewInt(4).Bytes32(),
 			content:     genBytes(20_000),
-			shouldPrune: false,
+			shouldPrune: true,
 		},
 		{
 			contentKey:  uint256.NewInt(5).Bytes32(),
@@ -132,12 +132,12 @@ func TestPrune(t *testing.T) {
 		{
 			contentKey:  uint256.NewInt(6).Bytes32(),
 			content:     genBytes(20_000),
-			shouldPrune: true,
+			shouldPrune: false,
 		},
 		{
 			contentKey:  uint256.NewInt(7).Bytes32(),
 			content:     genBytes(20_000),
-			shouldPrune: true,
+			shouldPrune: false,
 		},
 	}
 
