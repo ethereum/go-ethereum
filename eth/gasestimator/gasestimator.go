@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ethapi
+package gasestimator
 
 import (
 	"context"
@@ -49,7 +49,7 @@ type Options struct {
 // Estimate returns the lowest possible gas limit that allows the transaction to
 // run successfully with the provided context options. It returns an error if the
 // transaction would always revert, or if there are unexpected failures.
-func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uint64, overrides *BlockOverrides) (uint64, []byte, error) {
+func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uint64) (uint64, []byte, error) {
 	// Binary search the gas limit, as it may need to be higher than the amount used
 	var (
 		lo uint64 // lowest-known gas limit where tx execution fails
@@ -114,7 +114,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	// unused access list items). Ever so slightly wasteful, but safer overall.
 	if len(call.Data) == 0 {
 		if call.To != nil && opts.State.GetCodeSize(*call.To) == 0 {
-			failed, _, err := execute(ctx, call, opts, params.TxGas, nil)
+			failed, _, err := execute(ctx, call, opts, params.TxGas)
 			if !failed && err == nil {
 				return params.TxGas, nil, nil
 			}
@@ -122,7 +122,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	}
 	// We first execute the transaction at the highest allowable gas limit, since if this fails we
 	// can return error immediately.
-	failed, result, err := execute(ctx, call, opts, hi, overrides)
+	failed, result, err := execute(ctx, call, opts, hi)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -144,7 +144,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	// check that gas amount and use as a limit for the binary search.
 	optimisticGasLimit := (result.UsedGas + result.RefundedGas + params.CallStipend) * 64 / 63
 	if optimisticGasLimit < hi {
-		failed, _, err = execute(ctx, call, opts, optimisticGasLimit, nil)
+		failed, _, err = execute(ctx, call, opts, optimisticGasLimit)
 		if err != nil {
 			// This should not happen under normal conditions since if we make it this far the
 			// transaction had run without error at least once before.
@@ -175,7 +175,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 			// range here is skewed to favor the low side.
 			mid = lo * 2
 		}
-		failed, _, err = execute(ctx, call, opts, mid, nil)
+		failed, _, err = execute(ctx, call, opts, mid)
 		if err != nil {
 			// This should not happen under normal conditions since if we make it this far the
 			// transaction had run without error at least once before.
@@ -195,14 +195,14 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 // returns true if the transaction fails for a reason that might be related to
 // not enough gas. A non-nil error means execution failed due to reasons unrelated
 // to the gas limit.
-func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit uint64, overrides *BlockOverrides) (bool, *core.ExecutionResult, error) {
+func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit uint64) (bool, *core.ExecutionResult, error) {
 	// Configure the call for this specific execution (and revert the change after)
 	defer func(gas uint64) { call.GasLimit = gas }(call.GasLimit)
 	call.GasLimit = gasLimit
 
 	// Execute the call and separate execution faults caused by a lack of gas or
 	// other non-fixable conditions
-	result, err := run(ctx, call, opts, overrides)
+	result, err := run(ctx, call, opts)
 	if err != nil {
 		if errors.Is(err, core.ErrIntrinsicGas) {
 			return true, nil, nil // Special case, raise gas limit
@@ -214,7 +214,7 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 
 // run assembles the EVM as defined by the consensus rules and runs the requested
 // call invocation.
-func run(ctx context.Context, call *core.Message, opts *Options, overrides *BlockOverrides) (*core.ExecutionResult, error) {
+func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
 	// Assemble the call and the call context
 	var (
 		msgContext = core.NewEVMTxContext(call)
@@ -222,9 +222,6 @@ func run(ctx context.Context, call *core.Message, opts *Options, overrides *Bloc
 
 		dirtyState = opts.State.Copy()
 	)
-
-	overrides.Apply(&evmContext)
-
 	// Lower the basefee to 0 to avoid breaking EVM
 	// invariants (basefee < feecap).
 	if msgContext.GasPrice.Sign() == 0 {
