@@ -22,13 +22,7 @@ func GetOrRegisterMeter(name string, r Registry) *Meter {
 // Be sure to call Stop() once the meter is of no use to allow for garbage collection.
 func NewMeter() *Meter {
 	m := newMeter()
-	arbiter.Lock()
-	defer arbiter.Unlock()
-	arbiter.meters[m] = struct{}{}
-	if !arbiter.started {
-		arbiter.started = true
-		go arbiter.tick()
-	}
+	arbiter.add(m)
 	return m
 }
 
@@ -95,9 +89,7 @@ func newMeter() *Meter {
 // Stop stops the meter, Mark() will be a no-op if you use it after being stopped.
 func (m *Meter) Stop() {
 	if stopped := m.stopped.Swap(true); !stopped {
-		arbiter.Lock()
-		delete(arbiter.meters, m)
-		arbiter.Unlock()
+		arbiter.remove(m)
 	}
 }
 
@@ -132,28 +124,46 @@ func (m *Meter) tick() {
 	m.a15.Tick()
 }
 
-// meterArbiter ticks meters every 5s from a single goroutine.
+var arbiter = meterTicker{meters: make(map[*Meter]struct{})}
+
+// meterTicker ticks meters every 5s from a single goroutine.
 // meters are references in a set for future stopping.
-type meterArbiter struct {
-	sync.RWMutex
+type meterTicker struct {
+	mu sync.RWMutex
+
 	started bool
 	meters  map[*Meter]struct{}
-	ticker  *time.Ticker
 }
 
-var arbiter = meterArbiter{ticker: time.NewTicker(5 * time.Second), meters: make(map[*Meter]struct{})}
-
-// tick meters on the scheduled interval
-func (ma *meterArbiter) tick() {
-	for range ma.ticker.C {
-		ma.tickMeters()
+// add adds another *Meter ot the arbiter, and starts the arbiter ticker.
+func (ma *meterTicker) add(m *Meter) {
+	ma.mu.Lock()
+	defer ma.mu.Unlock()
+	ma.meters[m] = struct{}{}
+	if !ma.started {
+		ma.started = true
+		go ma.loop()
 	}
 }
 
-func (ma *meterArbiter) tickMeters() {
-	ma.RLock()
-	defer ma.RUnlock()
-	for meter := range ma.meters {
-		meter.tick()
+// remove removes a meter from the set of ticked meters.
+func (ma *meterTicker) remove(m *Meter) {
+	ma.mu.Lock()
+	delete(ma.meters, m)
+	ma.mu.Unlock()
+}
+
+// loop ticks meters on a 5 second interval.
+func (ma *meterTicker) loop() {
+	ticker := time.NewTicker(5 * time.Second)
+	for range ticker.C {
+		if !metricsEnabled {
+			continue
+		}
+		ma.mu.RLock()
+		for meter := range ma.meters {
+			meter.tick()
+		}
+		ma.mu.RUnlock()
 	}
 }
