@@ -813,17 +813,13 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	if state == nil || err != nil {
 		return 0, err
 	}
-	chainContext := NewChainContext(ctx, b)
-	blockCtx := core.NewEVMBlockContext(header, chainContext, nil)
-	rules := b.ChainConfig().Rules(blockCtx.BlockNumber, blockCtx.Random != nil, blockCtx.Time)
-	precompiles := maps.Clone(vm.ActivePrecompiledContracts(rules))
-	if err := overrides.Apply(state, precompiles); err != nil {
+	if err := overrides.Apply(state, nil); err != nil {
 		return 0, err
 	}
 	// Construct the gas estimator option from the user input
 	opts := &gasestimator.Options{
 		Config:         b.ChainConfig(),
-		Chain:          chainContext,
+		Chain:          NewChainContext(ctx, b),
 		Header:         header,
 		BlockOverrides: blockOverrides,
 		State:          state,
