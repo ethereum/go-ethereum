@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -8,14 +9,10 @@ import (
 	"sync"
 )
 
-// DuplicateMetric is the error returned by Registry. Register when a metric
+// ErrDuplicateMetric is the error returned by Registry.Register when a metric
 // already exists. If you mean to Register that metric you must first
 // Unregister the existing metric.
-type DuplicateMetric string
-
-func (err DuplicateMetric) Error() string {
-	return fmt.Sprintf("duplicate metric: %s", string(err))
-}
+var ErrDuplicateMetric = errors.New("duplicate metric")
 
 // A Registry holds references to a set of metrics by name and can iterate
 // over them, calling callback functions provided by the user.
@@ -114,13 +111,13 @@ func (r *StandardRegistry) GetOrRegister(name string, i interface{}) interface{}
 	return item
 }
 
-// Register the given metric under the given name. Returns a DuplicateMetric
+// Register the given metric under the given name. Returns a ErrDuplicateMetric
 // if a metric by the given name is already registered.
 func (r *StandardRegistry) Register(name string, i interface{}) error {
 	// fast path
 	_, ok := r.metrics.Load(name)
 	if ok {
-		return DuplicateMetric(name)
+		return fmt.Errorf("%w: %v", ErrDuplicateMetric, name)
 	}
 
 	if v := reflect.ValueOf(i); v.Kind() == reflect.Func {
@@ -128,7 +125,7 @@ func (r *StandardRegistry) Register(name string, i interface{}) error {
 	}
 	_, loaded, _ := r.loadOrRegister(name, i)
 	if loaded {
-		return DuplicateMetric(name)
+		return fmt.Errorf("%w: %v", ErrDuplicateMetric, name)
 	}
 	return nil
 }
@@ -326,9 +323,7 @@ func (r *PrefixedRegistry) Unregister(name string) {
 }
 
 var (
-	DefaultRegistry    = NewRegistry()
-	EphemeralRegistry  = NewRegistry()
-	AccountingRegistry = NewRegistry() // registry used in swarm
+	DefaultRegistry = NewRegistry()
 )
 
 // Each call the given function for each registered metric.
@@ -347,7 +342,7 @@ func GetOrRegister(name string, i interface{}) interface{} {
 	return DefaultRegistry.GetOrRegister(name, i)
 }
 
-// Register the given metric under the given name.  Returns a DuplicateMetric
+// Register the given metric under the given name.  Returns a ErrDuplicateMetric
 // if a metric by the given name is already registered.
 func Register(name string, i interface{}) error {
 	return DefaultRegistry.Register(name, i)
