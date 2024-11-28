@@ -1979,20 +1979,9 @@ func SetupMetrics(cfg *metrics.Config) {
 		enableExport   = cfg.EnableInfluxDB
 		enableExportV2 = cfg.EnableInfluxDBV2
 	)
-	if enableExport && enableExportV2 {
+	if cfg.EnableInfluxDB && cfg.EnableInfluxDBV2 {
 		Fatalf("Flags %v can't be used at the same time", strings.Join([]string{MetricsEnableInfluxDBFlag.Name, MetricsEnableInfluxDBV2Flag.Name}, ", "))
 	}
-	if enableExport || enableExportV2 {
-		v1FlagIsSet := cfg.InfluxDBUsername != "" || cfg.InfluxDBPassword != ""
-		v2FlagIsSet := cfg.InfluxDBToken != "" || cfg.InfluxDBOrganization != "" || cfg.InfluxDBBucket != ""
-
-		if enableExport && v2FlagIsSet {
-			Fatalf("Flags --influxdb.metrics.organization, --influxdb.metrics.token, --influxdb.metrics.bucket are only available for influxdb-v2")
-		} else if enableExportV2 && v1FlagIsSet {
-			Fatalf("Flags --influxdb.metrics.username, --influxdb.metrics.password are only available for influxdb-v1")
-		}
-	}
-
 	var (
 		endpoint = cfg.InfluxDBEndpoint
 		database = cfg.InfluxDBDatabase
