@@ -140,7 +140,7 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 			hooks.OnTxStart(evm.GetVMContext(), tx, msg.From)
 		}
 		if hooks.OnTxEnd != nil {
-			defer func() { hooks.OnTxEnd(receipt, err) }()
+			defer hooks.OnTxEnd(receipt, err)
 		}
 	}
 
