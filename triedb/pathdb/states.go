@@ -258,7 +258,9 @@ func (s *stateSet) merge(other *stateSet) {
 //
 // Notably, this operation may result in the set containing more entries after a
 // revert. For example, if account x did not exist and was created during transition
-// w, reverting w will retain an x=nil entry in the set.
+// w, reverting w will retain an x=nil entry in the set. And also if account x along
+// with its storage slots was deleted in the transition w, reverting w will retain
+// a list of additional storage slots with their original value.
 func (s *stateSet) revertTo(accountOrigin map[common.Hash][]byte, storageOrigin map[common.Hash]map[common.Hash][]byte) {
 	var delta int // size tracking
 	for addrHash, blob := range accountOrigin {
