@@ -18,6 +18,7 @@ package state
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -221,7 +222,7 @@ func testIterativeStateSync(t *testing.T, count int, commit bool, bypath bool, s
 		)
 		for i, element := range codeElements {
 			data, err := cReader.ContractCode(common.Address{}, element.code)
-			if err != nil {
+			if err != nil || len(data) == 0 {
 				t.Fatalf("failed to retrieve contract bytecode for hash %x", element.code)
 			}
 			codeResults[i] = trie.CodeSyncResult{Hash: element.code, Data: data}
@@ -345,7 +346,7 @@ func testIterativeDelayedStateSync(t *testing.T, scheme string) {
 			codeResults := make([]trie.CodeSyncResult, len(codeElements)/2+1)
 			for i, element := range codeElements[:len(codeResults)] {
 				data, err := cReader.ContractCode(common.Address{}, element.code)
-				if err != nil {
+				if err != nil || len(data) == 0 {
 					t.Fatalf("failed to retrieve contract bytecode for %x", element.code)
 				}
 				codeResults[i] = trie.CodeSyncResult{Hash: element.code, Data: data}
@@ -451,7 +452,7 @@ func testIterativeRandomStateSync(t *testing.T, count int, scheme string) {
 			results := make([]trie.CodeSyncResult, 0, len(codeQueue))
 			for hash := range codeQueue {
 				data, err := cReader.ContractCode(common.Address{}, hash)
-				if err != nil {
+				if err != nil || len(data) == 0 {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
 				results = append(results, trie.CodeSyncResult{Hash: hash, Data: data})
@@ -550,7 +551,7 @@ func testIterativeRandomDelayedStateSync(t *testing.T, scheme string) {
 				delete(codeQueue, hash)
 
 				data, err := cReader.ContractCode(common.Address{}, hash)
-				if err != nil {
+				if err != nil || len(data) == 0 {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
 				results = append(results, trie.CodeSyncResult{Hash: hash, Data: data})
@@ -670,7 +671,7 @@ func testIncompleteStateSync(t *testing.T, scheme string) {
 			results := make([]trie.CodeSyncResult, 0, len(codeQueue))
 			for hash := range codeQueue {
 				data, err := cReader.ContractCode(common.Address{}, hash)
-				if err != nil {
+				if err != nil || len(data) == 0 {
 					t.Fatalf("failed to retrieve node data for %x", hash)
 				}
 				results = append(results, trie.CodeSyncResult{Hash: hash, Data: data})
@@ -733,6 +734,11 @@ func testIncompleteStateSync(t *testing.T, scheme string) {
 	// Sanity check that removing any node from the database is detected
 	for _, node := range addedCodes {
 		val := rawdb.ReadCode(dstDb, node)
+		if len(val) == 0 {
+			fmt.Println("node code")
+		} else {
+			fmt.Println("has code")
+		}
 		rawdb.DeleteCode(dstDb, node)
 		if err := checkStateConsistency(dstDb, ndb.Scheme(), srcRoot); err == nil {
 			t.Errorf("trie inconsistency not caught, missing: %x", node)

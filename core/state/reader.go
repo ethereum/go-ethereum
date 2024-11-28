@@ -35,10 +35,44 @@ import (
 // CodeReader defines the interface for accessing contract code.
 type CodeReader interface {
 	// ContractCode retrieves a particular contract's code.
+	//
+	// - Returns nil code along with nil error if the requested contract code
+	//   doesn't exist
+	// - Returns an error only if an unexpected issue occurs
 	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
 
 	// ContractCodeSize retrieves a particular contracts code's size.
+	//
+	// - Returns zero code size along with nil error if the requested contract code
+	//   doesn't exist
+	// - Returns an error only if an unexpected issue occurs
 	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
+}
+
+// StateReader defines the interface for accessing accounts and storage slots
+// associated with a specific state.
+type StateReader interface {
+	// Account retrieves the account associated with a particular address.
+	//
+	// - Returns a nil account if it does not exist
+	// - Returns an error only if an unexpected issue occurs
+	// - The returned account is safe to modify after the call
+	Account(addr common.Address) (*types.StateAccount, error)
+
+	// Storage retrieves the storage slot associated with a particular account
+	// address and slot key.
+	//
+	// - Returns an empty slot if it does not exist
+	// - Returns an error only if an unexpected issue occurs
+	// - The returned storage slot is safe to modify after the call
+	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
+}
+
+// Reader defines the interface for accessing accounts, storage slots and contract
+// code associated with a specific state.
+type Reader interface {
+	CodeReader
+	StateReader
 }
 
 // cachingCodeReader implements CodeReader, accessing contract code either in
@@ -62,6 +96,7 @@ func newCachingCodeReader(db ethdb.KeyValueReader, codeCache *lru.SizeConstraine
 }
 
 // ContractCode implements CodeReader, retrieving a particular contract's code.
+// If the contract code doesn't exist, no error will be returned.
 func (r *cachingCodeReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
 	code, _ := r.codeCache.Get(codeHash)
 	if len(code) > 0 {
@@ -71,37 +106,21 @@ func (r *cachingCodeReader) ContractCode(addr common.Address, codeHash common.Ha
 	if len(code) > 0 {
 		r.codeCache.Add(codeHash, code)
 		r.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
 	}
-	return nil, errors.New("not found")
+	return code, nil
 }
 
 // ContractCodeSize implements CodeReader, retrieving a particular contracts code's size.
+// If the contract code doesn't exist, no error will be returned.
 func (r *cachingCodeReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
 		return cached, nil
 	}
 	code, err := r.ContractCode(addr, codeHash)
-	return len(code), err
-}
-
-// StateReader defines the interface for accessing accounts and storage slots
-// associated with a specific state.
-type StateReader interface {
-	// Account retrieves the account associated with a particular address.
-	//
-	// - Returns a nil account if it does not exist
-	// - Returns an error only if an unexpected issue occurs
-	// - The returned account is safe to modify after the call
-	Account(addr common.Address) (*types.StateAccount, error)
-
-	// Storage retrieves the storage slot associated with a particular account
-	// address and slot key.
-	//
-	// - Returns an empty slot if it does not exist
-	// - Returns an error only if an unexpected issue occurs
-	// - The returned storage slot is safe to modify after the call
-	Storage(addr common.Address, slot common.Hash) (common.Hash, error)
+	if err != nil {
+		return 0, err
+	}
+	return len(code), nil
 }
 
 // flatReader wraps a database state reader.
@@ -269,13 +288,6 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	}
 	value.SetBytes(ret)
 	return value, nil
-}
-
-// Reader defines the interface for accessing accounts, storage slots and contract
-// code associated with a specific state.
-type Reader interface {
-	CodeReader
-	StateReader
 }
 
 // singleReader is the wrapper of CodeReader and StateReader interface.

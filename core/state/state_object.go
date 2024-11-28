@@ -514,6 +514,9 @@ func (s *stateObject) Code() []byte {
 	if err != nil {
 		s.db.setError(fmt.Errorf("can't load code hash %x: %v", s.CodeHash(), err))
 	}
+	if len(code) == 0 {
+		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
+	}
 	s.code = code
 	return code
 }
@@ -531,6 +534,9 @@ func (s *stateObject) CodeSize() int {
 	size, err := s.db.reader.ContractCodeSize(s.address, common.BytesToHash(s.CodeHash()))
 	if err != nil {
 		s.db.setError(fmt.Errorf("can't load code size %x: %v", s.CodeHash(), err))
+	}
+	if size == 0 {
+		s.db.setError(fmt.Errorf("code is not found %x", s.CodeHash()))
 	}
 	return size
 }

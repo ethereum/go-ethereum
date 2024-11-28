@@ -140,6 +140,9 @@ func (it *nodeIterator) step() error {
 		if err != nil {
 			return fmt.Errorf("code %x: %v", account.CodeHash, err)
 		}
+		if len(it.code) == 0 {
+			return fmt.Errorf("code is not found: %x", account.CodeHash)
+		}
 	}
 	it.accountHash = it.stateIt.Parent()
 	return nil
