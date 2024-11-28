@@ -278,7 +278,7 @@ type EventIterator[T any] struct {
 	unpack func(*types.Log) (*T, error) // Unpack function for the event
 
 	logs chan types.Log        // Log channel receiving the found contract events
-	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	sub  ethereum.Subscription // Subscription for solc_errors, completion and termination
 	done bool                  // Whether the subscription completed delivering logs
 	fail error                 // Occurred error to stop iteration
 }

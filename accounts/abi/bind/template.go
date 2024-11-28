@@ -46,6 +46,7 @@ type tmplContract struct {
 	Libraries    map[string]string      // Same as tmplData, but filtered to only keep direct deps that the contract needs
 	AllLibraries map[string]string      // same as Libraries, but all direct/indirect library dependencies
 	Library      bool                   // Indicator whether the contract is a library
+	Errors       map[string]*tmplError
 }
 
 // tmplMethod is a wrapper around an abi.Method that contains a few preprocessed
@@ -61,6 +62,11 @@ type tmplMethod struct {
 type tmplEvent struct {
 	Original   abi.Event // Original event as parsed by the abi package
 	Normalized abi.Event // Normalized version of the parsed fields
+}
+
+type tmplError struct {
+	Original   abi.Error
+	Normalized abi.Error
 }
 
 // tmplField is a wrapper around a struct field with binding language

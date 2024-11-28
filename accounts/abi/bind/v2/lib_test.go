@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/events"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/nested_libraries"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/solc_errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -98,8 +99,60 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 }
 
 // test deployment and interaction for a basic contract with no library deps
-func TestDeployment(t *testing.T) {
+func TestErrors(t *testing.T) {
+	opts, bindBackend, err := testSetup()
+	if err != nil {
+		t.Fatalf("err setting up test: %v", err)
+	}
+	defer bindBackend.Backend.Close()
 
+	deploymentParams := DeploymentParams{
+		Contracts: []ContractDeployParams{
+			{
+				Meta: solc_errors.CMetaData,
+			},
+		},
+	}
+	res, err := LinkAndDeploy(opts, bindBackend, deploymentParams)
+	if err != nil {
+		t.Fatalf("err: %+v\n", err)
+	}
+	bindBackend.Commit()
+
+	if len(res.Addrs) != 1 {
+		t.Fatalf("deployment should have generated 1 addresses.  got %d", len(res.Addrs))
+	}
+	for _, tx := range res.Txs {
+		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
+		if err != nil {
+			t.Fatalf("error deploying library: %+v", err)
+		}
+	}
+	c, err := solc_errors.NewC()
+	if err != nil {
+		t.Fatalf("err is %v", err)
+	}
+	doInput, err := c.PackFoo()
+	if err != nil {
+		t.Fatalf("pack function input err: %v\n", doInput)
+	}
+
+	cABI, err := nested_libraries.C1MetaData.GetAbi()
+	if err != nil {
+		t.Fatalf("error getting abi object: %v", err)
+	}
+	contractAddr := res.Addrs[solc_errors.CMetaData.Pattern]
+	boundC := bind.NewBoundContract(contractAddr, *cABI, bindBackend, bindBackend, bindBackend)
+	callOpts := &bind.CallOpts{
+		From:    common.Address{},
+		Context: context.Background(),
+	}
+	callRes, err := boundC.CallRaw(callOpts, doInput)
+	if err != nil {
+		fmt.Println(callRes)
+		t.Fatalf("err calling contract: %v", err)
+	}
+	_ = callRes
 }
 
 // test that deploying a contract with library dependencies works,
