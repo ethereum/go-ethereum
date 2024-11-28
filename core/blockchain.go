@@ -412,7 +412,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	bc.engine.VerifyHeader(bc, bc.CurrentHeader())
 
 	if bc.logger != nil && bc.logger.OnBlockchainInit != nil {
-		bc.logger.OnBlockchainInit(chainConfig)
+		bc.guardedOnBlockchainInit(chainConfig)
 	}
 	if bc.logger != nil && bc.logger.OnGenesisBlock != nil {
 		if block := bc.CurrentBlock(); block.Number.Uint64() == 0 {
@@ -423,7 +423,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 			if alloc == nil {
 				return nil, errors.New("live blockchain tracer requires genesis alloc to be set")
 			}
-			bc.logger.OnGenesisBlock(bc.genesisBlock, alloc)
+			bc.guardedOnGenesisBlock(bc.genesisBlock, alloc)
 		}
 	}
 
@@ -1155,7 +1155,7 @@ func (bc *BlockChain) Stop() {
 	}
 	// Allow tracers to clean-up and release resources.
 	if bc.logger != nil && bc.logger.OnClose != nil {
-		bc.logger.OnClose()
+		bc.guardedOnClose()
 	}
 	// Close the trie database, release all the held resources as the last step.
 	if err := bc.triedb.Close(); err != nil {
@@ -1752,7 +1752,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 			}
 			stats.processed++
 			if bc.logger != nil && bc.logger.OnSkippedBlock != nil {
-				bc.logger.OnSkippedBlock(tracing.BlockEvent{
+				bc.guardedOnSkippedBlock(tracing.BlockEvent{
 					Block:     block,
 					TD:        bc.GetTd(block.ParentHash(), block.NumberU64()-1),
 					Finalized: bc.CurrentFinalBlock(),
@@ -1879,18 +1879,15 @@ type blockProcessingResult struct {
 // it writes the block and associated state to database.
 func (bc *BlockChain) processBlock(block *types.Block, statedb *state.StateDB, start time.Time, setHead bool) (_ *blockProcessingResult, blockEndErr error) {
 	if bc.logger != nil && bc.logger.OnBlockStart != nil {
-		td := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
-		bc.logger.OnBlockStart(tracing.BlockEvent{
+		bc.guardedOnBlockStart(tracing.BlockEvent{
 			Block:     block,
-			TD:        td,
+			TD:        bc.GetTd(block.ParentHash(), block.NumberU64()-1),
 			Finalized: bc.CurrentFinalBlock(),
 			Safe:      bc.CurrentSafeBlock(),
 		})
 	}
 	if bc.logger != nil && bc.logger.OnBlockEnd != nil {
-		defer func() {
-			bc.logger.OnBlockEnd(blockEndErr)
-		}()
+		defer bc.guardedOnBlockEnd(blockEndErr)
 	}
 
 	// Process block using the parent state as reference point
