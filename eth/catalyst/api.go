@@ -18,6 +18,7 @@
 package catalyst
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -33,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/internal/syncx"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
@@ -151,8 +153,8 @@ type ConsensusAPI struct {
 	lastNewPayloadUpdate time.Time
 	lastNewPayloadLock   sync.Mutex
 
-	forkchoiceLock sync.Mutex // Lock for the forkChoiceUpdated method
-	newPayloadLock sync.Mutex // Lock for the NewPayload method
+	forkchoiceLock sync.Mutex          // Lock for the forkChoiceUpdated method
+	newPayloadLock syncx.ClosableMutex // Lock for the NewPayload method
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
@@ -832,7 +834,11 @@ func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashe
 	//    sequentially.
 	// Hence, we use a lock here, to be sure that the previous call has finished before we
 	// check whether we already have the block locally.
-	api.newPayloadLock.Lock()
+	ctx, _ := context.WithTimeout(context.Background(), time.Minute)
+	if !api.newPayloadLock.TryLockWithContext(ctx) {
+		// Lock not acquired.
+		return engine.PayloadStatusV1{Status: engine.SYNCING}, engine.GenericServerError
+	}
 	defer api.newPayloadLock.Unlock()
 
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
