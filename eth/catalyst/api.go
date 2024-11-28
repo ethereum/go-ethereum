@@ -99,6 +99,7 @@ var caps = []string{
 	"engine_newPayloadV2",
 	"engine_newPayloadV3",
 	"engine_newPayloadV4",
+	"engine_newPayloadV5",
 	"engine_newPayloadWithWitnessV1",
 	"engine_newPayloadWithWitnessV2",
 	"engine_newPayloadWithWitnessV3",
@@ -583,7 +584,7 @@ func (api *ConsensusAPI) NewPayloadV1(params engine.ExecutableData) (engine.Payl
 	if params.Withdrawals != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
 	}
-	return api.newPayload(params, nil, nil, nil, false)
+	return api.newPayload(params, nil, nil, nil, nil, false)
 }
 
 // NewPayloadV2 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -606,7 +607,7 @@ func (api *ConsensusAPI) NewPayloadV2(params engine.ExecutableData) (engine.Payl
 	if params.BlobGasUsed != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil blobGasUsed pre-cancun"))
 	}
-	return api.newPayload(params, nil, nil, nil, false)
+	return api.newPayload(params, nil, nil, nil, nil, false)
 }
 
 // NewPayloadV3 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -631,7 +632,7 @@ func (api *ConsensusAPI) NewPayloadV3(params engine.ExecutableData, versionedHas
 	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadV3 must only be called for cancun payloads"))
 	}
-	return api.newPayload(params, versionedHashes, beaconRoot, nil, false)
+	return api.newPayload(params, versionedHashes, beaconRoot, nil, nil, false)
 }
 
 // NewPayloadV4 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
@@ -663,7 +664,39 @@ func (api *ConsensusAPI) NewPayloadV4(params engine.ExecutableData, versionedHas
 	if err := validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
-	return api.newPayload(params, versionedHashes, beaconRoot, requests, false)
+	return api.newPayload(params, versionedHashes, beaconRoot, requests, nil, false)
+}
+
+// NewPayloadV5 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
+func (api *ConsensusAPI) NewPayloadV5(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes, inclusionList *engine.InclusionListV1) (engine.PayloadStatusV1, error) {
+	if params.Withdrawals == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
+	}
+	if params.ExcessBlobGas == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil excessBlobGas post-cancun"))
+	}
+	if params.BlobGasUsed == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil blobGasUsed post-cancun"))
+	}
+
+	if versionedHashes == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil versionedHashes post-cancun"))
+	}
+	if beaconRoot == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil beaconRoot post-cancun"))
+	}
+	if executionRequests == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil executionRequests post-prague"))
+	}
+	if inclusionList == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil inclusionList post-prague"))
+	}
+
+	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadV5 must only be called for prague payloads"))
+	}
+	requests := convertRequests(executionRequests)
+	return api.newPayload(params, versionedHashes, beaconRoot, requests, inclusionList, false)
 }
 
 // NewPayloadWithWitnessV1 is analogous to NewPayloadV1, only it also generates
@@ -672,7 +705,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV1(params engine.ExecutableData) (
 	if params.Withdrawals != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("withdrawals not supported in V1"))
 	}
-	return api.newPayload(params, nil, nil, nil, true)
+	return api.newPayload(params, nil, nil, nil, nil, true)
 }
 
 // NewPayloadWithWitnessV2 is analogous to NewPayloadV2, only it also generates
@@ -696,7 +729,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV2(params engine.ExecutableData) (
 	if params.BlobGasUsed != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("non-nil blobGasUsed pre-cancun"))
 	}
-	return api.newPayload(params, nil, nil, nil, true)
+	return api.newPayload(params, nil, nil, nil, nil, true)
 }
 
 // NewPayloadWithWitnessV3 is analogous to NewPayloadV3, only it also generates
@@ -722,7 +755,7 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV3(params engine.ExecutableData, v
 	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Cancun {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadWithWitnessV3 must only be called for cancun payloads"))
 	}
-	return api.newPayload(params, versionedHashes, beaconRoot, nil, true)
+	return api.newPayload(params, versionedHashes, beaconRoot, nil, nil, true)
 }
 
 // NewPayloadWithWitnessV4 is analogous to NewPayloadV4, only it also generates
@@ -755,7 +788,40 @@ func (api *ConsensusAPI) NewPayloadWithWitnessV4(params engine.ExecutableData, v
 	if err := validateRequests(requests); err != nil {
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
-	return api.newPayload(params, versionedHashes, beaconRoot, requests, true)
+	return api.newPayload(params, versionedHashes, beaconRoot, requests, nil, true)
+}
+
+// NewPayloadWithWitnessV5 is analogous to NewPayloadV5, only it also generates
+// and returns a stateless witness after running the payload.
+func (api *ConsensusAPI) NewPayloadWithWitnessV5(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, executionRequests []hexutil.Bytes, inclusionList *engine.InclusionListV1) (engine.PayloadStatusV1, error) {
+	if params.Withdrawals == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil withdrawals post-shanghai"))
+	}
+	if params.ExcessBlobGas == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil excessBlobGas post-cancun"))
+	}
+	if params.BlobGasUsed == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil blobGasUsed post-cancun"))
+	}
+
+	if versionedHashes == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil versionedHashes post-cancun"))
+	}
+	if beaconRoot == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil beaconRoot post-cancun"))
+	}
+	if executionRequests == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil executionRequests post-prague"))
+	}
+	if inclusionList == nil {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(errors.New("nil inclusionList post-prague"))
+	}
+
+	if api.eth.BlockChain().Config().LatestFork(params.Timestamp) != forks.Prague {
+		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.UnsupportedFork.With(errors.New("newPayloadWithWitnessV5 must only be called for prague payloads"))
+	}
+	requests := convertRequests(executionRequests)
+	return api.newPayload(params, versionedHashes, beaconRoot, requests, inclusionList, true)
 }
 
 // ExecuteStatelessPayloadV1 is analogous to NewPayloadV1, only it operates in
@@ -847,7 +913,7 @@ func (api *ConsensusAPI) ExecuteStatelessPayloadV4(params engine.ExecutableData,
 	return api.executeStatelessPayload(params, versionedHashes, beaconRoot, requests, opaqueWitness)
 }
 
-func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (engine.PayloadStatusV1, error) {
+func (api *ConsensusAPI) newPayload(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, inclusionList *engine.InclusionListV1, witness bool) (engine.PayloadStatusV1, error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
 	// 1. NewPayload( execdata-N ) is invoked from the CL. It goes all the way down to
