@@ -2,33 +2,39 @@ package syncx
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
 )
 
-func TestCancel(t *testing.T) {
-	t.Skip("not a good test, also time-consuming")
+func TestTryWithContext(t *testing.T) {
 	mu := NewClosableMutex()
 	var wg sync.WaitGroup
-	wg.Add(3)
+	res := []bool{false, false}
 	waiter := func(id int, waitTime time.Duration) {
 		defer wg.Done()
 		ctx, _ := context.WithTimeout(context.Background(), waitTime)
 		if mu.TryLockWithContext(ctx) {
-			fmt.Printf("%d. Sleeping\n", id)
-			time.Sleep(10 * time.Second)
-			fmt.Printf("%d. Waking\n", id)
 			mu.Unlock()
-		} else {
-			fmt.Printf("%d. Cancelling\n", id)
+			res[id] = true
 		}
 	}
-
-	go waiter(1, 5*time.Second)
-	time.Sleep(100 * time.Millisecond)
-	go waiter(2, 5*time.Second)
-	go waiter(3, 15*time.Second)
+	// Obtain the lock
+	if !mu.TryLock() {
+		t.Fatalf("lock failed")
+	}
+	// Launch goroutines
+	wg.Add(2)
+	go waiter(0, 100*time.Millisecond) // This one should cancel
+	go waiter(1, 5*time.Second)        // This one should make it
+	// Sleep for a bit.
+	time.Sleep(1 * time.Second)
+	mu.Unlock()
 	wg.Wait()
+	if have, want := res[0], false; have != want {
+		t.Fatalf("have %v want %v", have, want)
+	}
+	if have, want := res[1], true; have != want {
+		t.Fatalf("have %v want %v", have, want)
+	}
 }
