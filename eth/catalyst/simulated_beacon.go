@@ -218,7 +218,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		}
 	}
 	// Mark the payload as canon
-	_, err = c.engineAPI.newPayload(*payload, blobHashes, &common.Hash{}, envelope.Requests, false)
+	_, err = c.engineAPI.newPayload(*payload, blobHashes, &common.Hash{}, envelope.Requests, nil, false)
 	if err != nil {
 		return err
 	}
