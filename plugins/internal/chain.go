@@ -28,38 +28,49 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var _ = plugins.Chain(Chain{})
+var _ = plugins.Chain(&Chain{})
+var _ = Blockchain(&core.BlockChain{})
 
-type Chain struct {
-	chain *core.BlockChain
+type Blockchain interface {
+	CurrentHeader() *types.Header
+	GetCanonicalHash(uint64) common.Hash
+	CurrentFinalBlock() *types.Header
+	GetHeaderByHash(common.Hash) *types.Header
+	GetBlockByHash(common.Hash) *types.Block
+	GetReceiptsByHash(common.Hash) types.Receipts
+	StateCache() state.Database
 }
 
-func (c Chain) Head() (uint64, uint64) {
+type Chain struct {
+	chain Blockchain
+}
+
+func (c *Chain) Head() (uint64, uint64) {
 	return c.chain.CurrentHeader().Number.Uint64(), c.chain.CurrentFinalBlock().Number.Uint64()
 }
 
-func (c Chain) Header(number uint64) *types.Header {
+func (c *Chain) Header(number uint64) *types.Header {
 	hash := c.chain.GetCanonicalHash(number)
 	return c.chain.GetHeaderByHash(hash)
 }
 
-func (c Chain) Block(number uint64) *types.Block {
+func (c *Chain) Block(number uint64) *types.Block {
 	hash := c.chain.GetCanonicalHash(number)
 	return c.chain.GetBlockByHash(hash)
 }
 
-func (c Chain) Receipts(number uint64) types.Receipts {
+func (c *Chain) Receipts(number uint64) types.Receipts {
 	hash := c.chain.GetCanonicalHash(number)
 	return c.chain.GetReceiptsByHash(hash)
 }
 
-func (c Chain) State(root common.Hash) plugins.State {
+func (c *Chain) State(root common.Hash) plugins.State {
 	reader, err := c.chain.StateCache().Reader(root)
 	if err != nil {
 		return nil
 	}
 
-	return State{
+	return &State{
 		root:   root,
 		cache:  c.chain.StateCache(),
 		reader: reader,
@@ -72,7 +83,7 @@ type State struct {
 	reader state.Reader
 }
 
-func (s State) Account(addr common.Address) plugins.Account {
+func (s *State) Account(addr common.Address) plugins.Account {
 	hash := crypto.Keccak256Hash(addr.Bytes())
 	reader, err := s.cache.Reader(s.root)
 	if err != nil {
@@ -82,7 +93,7 @@ func (s State) Account(addr common.Address) plugins.Account {
 	if err != nil {
 		return nil
 	}
-	return Account{
+	return &Account{
 		root:    s.root,
 		hash:    hash,
 		account: account,
@@ -90,14 +101,14 @@ func (s State) Account(addr common.Address) plugins.Account {
 	}
 }
 
-func (s State) AccountIterator(seek common.Hash) snapshot.AccountIterator {
+func (s *State) AccountIterator(seek common.Hash) snapshot.AccountIterator {
 	if it, err := s.cache.Snapshot().AccountIterator(s.root, seek); err == nil {
 		return it
 	}
 	return nil
 }
 
-func (s State) NewAccount(addr common.Address, accRLP []byte) plugins.Account {
+func (s *State) NewAccount(addr common.Address, accRLP []byte) plugins.Account {
 	hash := crypto.Keccak256Hash(addr.Bytes())
 	var slim *types.SlimAccount
 	if err := rlp.DecodeBytes(accRLP, &slim); err != nil {
@@ -115,7 +126,7 @@ func (s State) NewAccount(addr common.Address, accRLP []byte) plugins.Account {
 	if account.Root == (common.Hash{}) {
 		account.Root = types.EmptyRootHash
 	}
-	return Account{
+	return &Account{
 		root:    s.root,
 		hash:    hash,
 		account: account,
@@ -131,22 +142,22 @@ type Account struct {
 	cache   state.Database
 }
 
-func (a Account) Balance() *uint256.Int {
+func (a *Account) Balance() *uint256.Int {
 	return a.account.Balance
 }
 
-func (a Account) Nonce() uint64 {
+func (a *Account) Nonce() uint64 {
 	return a.account.Nonce
 }
 
-func (a Account) Code() []byte {
+func (a *Account) Code() []byte {
 	if code, err := a.cache.ContractCode(a.addr, a.account.Root); err == nil {
 		return code
 	}
 	return nil
 }
 
-func (a Account) Storage(slot common.Hash) common.Hash {
+func (a *Account) Storage(slot common.Hash) common.Hash {
 	reader, err := a.cache.Reader(a.root)
 	if err != nil {
 		return common.Hash{}
@@ -157,7 +168,7 @@ func (a Account) Storage(slot common.Hash) common.Hash {
 	return common.Hash{}
 }
 
-func (a Account) StorageIterator(seek common.Hash) snapshot.StorageIterator {
+func (a *Account) StorageIterator(seek common.Hash) snapshot.StorageIterator {
 	if it, err := a.cache.Snapshot().StorageIterator(a.root, a.hash, seek); err == nil {
 		return it
 	}
