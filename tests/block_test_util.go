@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -56,6 +57,51 @@ func (t *BlockTest) UnmarshalJSON(in []byte) error {
 	return json.Unmarshal(in, &t.json)
 }
 
+// MarshalJSON implements json.Marshaler interface.
+func (t *BlockTest) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.json)
+}
+
+// FromChain creates a BlockTest from the history of the given chain.
+func FromChain(db ethdb.Database, chain *core.BlockChain, post *types.GenesisAlloc) (BlockTest, error) {
+	var (
+		bt     = BlockTest{}
+		head   = chain.CurrentHeader()
+		blocks = make([]btBlock, head.Number.Uint64())
+	)
+	for i := 1; i <= int(head.Number.Uint64()); i++ {
+		block := chain.GetBlockByNumber(uint64(i))
+		if block == nil {
+			return bt, fmt.Errorf("block %d not found", i)
+		}
+		btBlock, err := FromBlock(block)
+		if err != nil {
+			return bt, err
+		}
+		blocks[i-1] = btBlock
+	}
+	allocData := rawdb.ReadGenesisStateSpec(db, chain.Genesis().Hash())
+	if len(allocData) == 0 {
+		return bt, fmt.Errorf("alloc data missing")
+	}
+	var alloc types.GenesisAlloc
+	if err := alloc.UnmarshalJSON(allocData); err != nil {
+		return bt, fmt.Errorf("failed to read genesis alloc: %v", err)
+	}
+	if post == nil {
+		post = &types.GenesisAlloc{}
+	}
+	bt.json = btJSON{
+		Network:   chain.Config().LatestFork(head.Number, head.Time).String(),
+		Blocks:    blocks,
+		Genesis:   FromHeader(chain.Genesis().Header()),
+		Pre:       alloc,
+		Post:      *post,
+		BestBlock: common.UnprefixedHash(head.Hash()),
+	}
+	return bt, nil
+}
+
 type btJSON struct {
 	Blocks     []btBlock             `json:"blocks"`
 	Genesis    btHeader              `json:"genesisBlockHeader"`
@@ -71,6 +117,18 @@ type btBlock struct {
 	ExpectException string
 	Rlp             string
 	UncleHeaders    []*btHeader
+}
+
+func FromBlock(block *types.Block) (btBlock, error) {
+	header := FromHeader(block.Header())
+	enc, err := rlp.EncodeToBytes(block)
+	if err != nil {
+		return btBlock{}, err
+	}
+	return btBlock{
+		BlockHeader: &header,
+		Rlp:         "0x" + common.Bytes2Hex(enc),
+	}, nil
 }
 
 //go:generate go run github.com/fjl/gencodec -type btHeader -field-override btHeaderMarshaling -out gen_btheader.go
@@ -97,6 +155,32 @@ type btHeader struct {
 	BlobGasUsed           *uint64
 	ExcessBlobGas         *uint64
 	ParentBeaconBlockRoot *common.Hash
+}
+
+func FromHeader(header *types.Header) btHeader {
+	return btHeader{
+		Bloom:                 header.Bloom,
+		Coinbase:              header.Coinbase,
+		MixHash:               header.MixDigest,
+		Nonce:                 header.Nonce,
+		Number:                header.Number,
+		Hash:                  header.Hash(),
+		ParentHash:            header.ParentHash,
+		ReceiptTrie:           header.ReceiptHash,
+		StateRoot:             header.Root,
+		TransactionsTrie:      header.TxHash,
+		UncleHash:             header.UncleHash,
+		ExtraData:             header.Extra,
+		Difficulty:            header.Difficulty,
+		GasLimit:              header.GasLimit,
+		GasUsed:               header.GasUsed,
+		Timestamp:             header.Time,
+		BaseFeePerGas:         header.BaseFee,
+		WithdrawalsRoot:       header.WithdrawalsHash,
+		BlobGasUsed:           header.BlobGasUsed,
+		ExcessBlobGas:         header.ExcessBlobGas,
+		ParentBeaconBlockRoot: header.ParentBeaconRoot,
+	}
 }
 
 type btHeaderMarshaling struct {
