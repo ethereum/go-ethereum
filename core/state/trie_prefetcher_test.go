@@ -18,6 +18,7 @@ package state
 
 import (
 	"math/big"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -64,6 +65,55 @@ func TestUseAfterTerminate(t *testing.T) {
 	if tr := prefetcher.trie(common.Hash{}, db.originalRoot); tr == nil {
 		t.Errorf("Prefetcher returned nil trie after terminate")
 	}
+}
+
+func TestSchdeulerTerminationRaceCondition(t *testing.T) {
+	// The lock-based implementation of [subfetcher] had a race condition
+	// whereby schedule() could obtain the lock after the <-sf.stop branch of
+	// loop() had already checked for an empty queue. Although probabilistic,
+	// this test reliably triggered at a rate of ~4 in 10,000 on an Apple M3 Max
+	// chip.
+
+	t.Parallel()
+	db := filledStateDB()
+	skey := common.HexToHash("aaa")
+
+	// Maximise concurrency by synchronising all scheduling and termination.
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+
+	for i := 0; i < 50_000; i++ {
+		wg.Add(3)
+		fetcher := newSubfetcher(db.db, db.originalRoot, common.Hash{}, db.originalRoot, common.Address{})
+
+		var gotScheduleErr error
+		doneScheduling := make(chan struct{})
+		go func() {
+			defer wg.Done()
+			<-start
+			gotScheduleErr = fetcher.schedule(nil, []common.Hash{skey}, false)
+			close(doneScheduling)
+		}()
+
+		go func() {
+			defer wg.Done()
+			<-start
+			fetcher.terminate(false)
+		}()
+
+		go func() {
+			defer wg.Done()
+			<-doneScheduling
+			fetcher.wait()
+
+			if gotScheduleErr == nil && len(fetcher.tasks) > 0 {
+				t.Errorf("%T.schedule() returned nil error but %d task(s) remain in queue after %T.wait() returned", fetcher, len(fetcher.tasks), fetcher)
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
 }
 
 func TestVerklePrefetcher(t *testing.T) {
