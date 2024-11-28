@@ -19,6 +19,7 @@ package plugins
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 )
@@ -28,7 +29,7 @@ import (
 // without modifying the chain logic.
 type Plugin interface {
 	// Setup is called on startup when the Plugin is initialized.
-	Setup(chain Chain)
+	Setup(chain Chain, hooks SetHooks)
 	// Close is called when the geth node is torn down.
 	Close()
 	// NewHead is called when a new head is set.
@@ -75,4 +76,12 @@ type Account interface {
 	Storage(slot common.Hash) common.Hash
 	// StorageIterator creates an iterator over the storage slots of an account.
 	StorageIterator(seek common.Hash) snapshot.StorageIterator
+}
+
+// SetHooks allows the plugin to install hooks dynamically on the node.
+type SetHooks struct {
+	// SetTracingHooks allows a plugin to set tracing hooks.
+	SetTracingHooks func(hooks *tracing.Hooks)
+	// In the future we could add hooks here for plugins to hook deeper into
+	// block production, adding hooks into the txpool, etc.
 }
