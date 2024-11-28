@@ -83,7 +83,7 @@ func TestSchdeulerTerminationRaceCondition(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for i := 0; i < 50_000; i++ {
-		wg.Add(3)
+		wg.Add(2)
 		fetcher := newSubfetcher(db.db, db.originalRoot, common.Hash{}, db.originalRoot, common.Address{})
 
 		var gotScheduleErr error
@@ -98,16 +98,11 @@ func TestSchdeulerTerminationRaceCondition(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			fetcher.terminate(false)
-		}()
+			fetcher.terminate(false /*async*/)
 
-		go func() {
-			defer wg.Done()
 			<-doneScheduling
-			fetcher.wait()
-
 			if gotScheduleErr == nil && len(fetcher.tasks) > 0 {
-				t.Errorf("%T.schedule() returned nil error but %d task(s) remain in queue after %T.wait() returned", fetcher, len(fetcher.tasks), fetcher)
+				t.Errorf("%T.schedule() returned nil error but %d task(s) remain in queue after %T.terminate([blocking]) returned", fetcher, len(fetcher.tasks), fetcher)
 			}
 		}()
 	}
