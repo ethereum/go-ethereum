@@ -189,6 +189,7 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			calls     = make(map[string]*tmplMethod)
 			transacts = make(map[string]*tmplMethod)
 			events    = make(map[string]*tmplEvent)
+			errors    = make(map[string]*tmplError)
 			fallback  *tmplMethod
 			receive   *tmplMethod
 
@@ -304,6 +305,51 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			// Append the event to the accumulator list
 			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
 		}
+		for _, original := range evmABI.Errors {
+			// TODO: I copied this from events.  I think it should be correct but not totally sure
+			// even if it is correct, should consider deduplicating this into its own function.
+
+			// Normalize the event for capital cases and non-anonymous outputs
+			normalized := original
+
+			// Ensure there is no duplicated identifier
+			normalizedName := methodNormalizer(alias(aliases, original.Name))
+			// Name shouldn't start with a digit. It will make the generated code invalid.
+			if len(normalizedName) > 0 && unicode.IsDigit(rune(normalizedName[0])) {
+				normalizedName = fmt.Sprintf("E%s", normalizedName)
+				normalizedName = abi.ResolveNameConflict(normalizedName, func(name string) bool {
+					_, ok := eventIdentifiers[name]
+					return ok
+				})
+			}
+			if eventIdentifiers[normalizedName] {
+				return nil, fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
+			}
+			eventIdentifiers[normalizedName] = true
+			normalized.Name = normalizedName
+
+			used := make(map[string]bool)
+			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
+			copy(normalized.Inputs, original.Inputs)
+			for j, input := range normalized.Inputs {
+				if input.Name == "" || isKeyWord(input.Name) {
+					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
+				}
+				// Event is a bit special, we need to define event struct in binding,
+				// ensure there is no camel-case-style name conflict.
+				for index := 0; ; index++ {
+					if !used[capitalise(normalized.Inputs[j].Name)] {
+						used[capitalise(normalized.Inputs[j].Name)] = true
+						break
+					}
+					normalized.Inputs[j].Name = fmt.Sprintf("%s%d", normalized.Inputs[j].Name, index)
+				}
+				if hasStruct(input.Type) {
+					bindStructType(input.Type, structs)
+				}
+			}
+			errors[original.Name] = &tmplError{Original: original, Normalized: normalized}
+		}
 		// Add two special fallback functions if they exist
 		if evmABI.HasFallback() {
 			fallback = &tmplMethod{Original: evmABI.Fallback}
@@ -324,6 +370,7 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			Events:       events,
 			Libraries:    make(map[string]string),
 			AllLibraries: make(map[string]string),
+			Errors:       errors,
 		}
 
 		// Function 4-byte signatures are stored in the same sequence
