@@ -664,7 +664,7 @@ func (t *Tree) Journal(root common.Hash) (common.Hash, error) {
 
 	// Firstly write out the metadata of journal
 	journal := new(bytes.Buffer)
-	if err := rlp.Encode(journal, journalVersion); err != nil {
+	if err := rlp.Encode(journal, journalCurrentVersion); err != nil {
 		return common.Hash{}, err
 	}
 	diskroot := t.diskRoot()
