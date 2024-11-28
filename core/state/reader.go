@@ -32,21 +32,21 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/database"
 )
 
-// CodeReader defines the interface for accessing contract code.
-type CodeReader interface {
-	// ContractCode retrieves a particular contract's code.
+// ContractCodeReader defines the interface for accessing contract code.
+type ContractCodeReader interface {
+	// Code retrieves a particular contract's code.
 	//
 	// - Returns nil code along with nil error if the requested contract code
 	//   doesn't exist
 	// - Returns an error only if an unexpected issue occurs
-	ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error)
+	Code(addr common.Address, codeHash common.Hash) ([]byte, error)
 
-	// ContractCodeSize retrieves a particular contracts code's size.
+	// CodeSize retrieves a particular contracts code's size.
 	//
 	// - Returns zero code size along with nil error if the requested contract code
 	//   doesn't exist
 	// - Returns an error only if an unexpected issue occurs
-	ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error)
+	CodeSize(addr common.Address, codeHash common.Hash) (int, error)
 }
 
 // StateReader defines the interface for accessing accounts and storage slots
@@ -71,11 +71,11 @@ type StateReader interface {
 // Reader defines the interface for accessing accounts, storage slots and contract
 // code associated with a specific state.
 type Reader interface {
-	CodeReader
+	ContractCodeReader
 	StateReader
 }
 
-// cachingCodeReader implements CodeReader, accessing contract code either in
+// cachingCodeReader implements ContractCodeReader, accessing contract code either in
 // local key-value store or the shared code cache.
 type cachingCodeReader struct {
 	db ethdb.KeyValueReader
@@ -95,9 +95,9 @@ func newCachingCodeReader(db ethdb.KeyValueReader, codeCache *lru.SizeConstraine
 	}
 }
 
-// ContractCode implements CodeReader, retrieving a particular contract's code.
+// Code implements ContractCodeReader, retrieving a particular contract's code.
 // If the contract code doesn't exist, no error will be returned.
-func (r *cachingCodeReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
+func (r *cachingCodeReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
 	code, _ := r.codeCache.Get(codeHash)
 	if len(code) > 0 {
 		return code, nil
@@ -110,13 +110,13 @@ func (r *cachingCodeReader) ContractCode(addr common.Address, codeHash common.Ha
 	return code, nil
 }
 
-// ContractCodeSize implements CodeReader, retrieving a particular contracts code's size.
+// CodeSize implements ContractCodeReader, retrieving a particular contracts code's size.
 // If the contract code doesn't exist, no error will be returned.
-func (r *cachingCodeReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+func (r *cachingCodeReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	if cached, ok := r.codeSizeCache.Get(codeHash); ok {
 		return cached, nil
 	}
-	code, err := r.ContractCode(addr, codeHash)
+	code, err := r.Code(addr, codeHash)
 	if err != nil {
 		return 0, err
 	}
@@ -290,17 +290,17 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
-// singleReader is the wrapper of CodeReader and StateReader interface.
+// singleReader is the wrapper of ContractCodeReader and StateReader interface.
 type singleReader struct {
-	CodeReader
+	ContractCodeReader
 	StateReader
 }
 
 // newSingleReader constructs a reader with the supplied code reader and state reader.
-func newSingleReader(codeReader CodeReader, stateReader StateReader) *singleReader {
+func newSingleReader(codeReader ContractCodeReader, stateReader StateReader) *singleReader {
 	return &singleReader{
-		CodeReader:  codeReader,
-		StateReader: stateReader,
+		ContractCodeReader: codeReader,
+		StateReader:        stateReader,
 	}
 }
 
@@ -360,10 +360,10 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 }
 
 // ContractCode implements Reader, retrieving a particular contract's code.
-func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([]byte, error) {
+func (r *multiReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		code, err := reader.ContractCode(addr, codeHash)
+		code, err := reader.Code(addr, codeHash)
 		if err == nil {
 			return code, nil
 		}
@@ -373,10 +373,10 @@ func (r *multiReader) ContractCode(addr common.Address, codeHash common.Hash) ([
 }
 
 // ContractCodeSize implements Reader, retrieving a particular contracts code's size.
-func (r *multiReader) ContractCodeSize(addr common.Address, codeHash common.Hash) (int, error) {
+func (r *multiReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
 	var errs []error
 	for _, reader := range r.readers {
-		size, err := reader.ContractCodeSize(addr, codeHash)
+		size, err := reader.CodeSize(addr, codeHash)
 		if err == nil {
 			return size, nil
 		}
