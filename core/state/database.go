@@ -17,7 +17,6 @@
 package state
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -174,11 +173,7 @@ func NewDatabaseForTesting() *CachingDB {
 
 // Reader returns a state reader associated with the specified state root.
 func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
-	var readers []Reader
-
-	// Construct the code reader with retained caches. These caches are
-	// thread safe.
-	cReader := newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache)
+	var readers []StateReader
 
 	// Set up the state snapshot reader if available. This feature
 	// is optional and may be partially useful if it's not fully
@@ -186,7 +181,7 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	if db.snap != nil {
 		snap := db.snap.Snapshot(stateRoot)
 		if snap != nil {
-			readers = append(readers, newSingleReader(cReader, newFlatReader(snap)))
+			readers = append(readers, newFlatReader(snap))
 		}
 	}
 	// Set up the trie reader, which is expected to always be available
@@ -195,9 +190,13 @@ func (db *CachingDB) Reader(stateRoot common.Hash) (Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	readers = append(readers, newSingleReader(cReader, tr))
+	readers = append(readers, tr)
 
-	return newMultiReader(readers...)
+	combined, err := newMultiStateReader(readers...)
+	if err != nil {
+		return nil, err
+	}
+	return newReader(newCachingCodeReader(db.disk, db.codeCache, db.codeSizeCache), combined), nil
 }
 
 // OpenTrie opens the main account trie at a specific root hash.
@@ -230,18 +229,17 @@ func (db *CachingDB) OpenStorageTrie(stateRoot common.Hash, address common.Addre
 // ContractCodeWithPrefix retrieves a particular contract's code. If the
 // code can't be found in the cache, then check the existence with **new**
 // db scheme.
-func (db *CachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) ([]byte, error) {
+func (db *CachingDB) ContractCodeWithPrefix(address common.Address, codeHash common.Hash) []byte {
 	code, _ := db.codeCache.Get(codeHash)
 	if len(code) > 0 {
-		return code, nil
+		return code
 	}
 	code = rawdb.ReadCodeWithPrefix(db.disk, codeHash)
 	if len(code) > 0 {
 		db.codeCache.Add(codeHash, code)
 		db.codeSizeCache.Add(codeHash, len(code))
-		return code, nil
 	}
-	return nil, errors.New("not found")
+	return code
 }
 
 // TrieDB retrieves any intermediate trie-node caching layer.

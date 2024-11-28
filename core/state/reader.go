@@ -290,46 +290,32 @@ func (r *trieReader) Storage(addr common.Address, key common.Hash) (common.Hash,
 	return value, nil
 }
 
-// singleReader is the wrapper of ContractCodeReader and StateReader interface.
-type singleReader struct {
-	ContractCodeReader
-	StateReader
+// multiStateReader is the aggregation of a list of StateReader interface,
+// providing state access by leveraging all readers. The checking priority
+// is determined by the position in the reader list.
+type multiStateReader struct {
+	readers []StateReader // List of state readers, sorted by checking priority
 }
 
-// newSingleReader constructs a reader with the supplied code reader and state reader.
-func newSingleReader(codeReader ContractCodeReader, stateReader StateReader) *singleReader {
-	return &singleReader{
-		ContractCodeReader: codeReader,
-		StateReader:        stateReader,
-	}
-}
-
-// multiReader is the aggregation of a list of Reader interface, providing state
-// access by leveraging all readers. The checking priority is determined by the
-// position in the reader list.
-type multiReader struct {
-	readers []Reader // List of readers, sorted by checking priority
-}
-
-// newMultiReader constructs a multiReader instance with the given readers. The
-// priority among readers is assumed to be sorted. Note, it must contain at least
-// one reader for constructing a multiReader.
-func newMultiReader(readers ...Reader) (*multiReader, error) {
+// newMultiStateReader constructs a multiStateReader instance with the given
+// readers. The priority among readers is assumed to be sorted. Note, it must
+// contain at least one reader for constructing a multiStateReader.
+func newMultiStateReader(readers ...StateReader) (*multiStateReader, error) {
 	if len(readers) == 0 {
 		return nil, errors.New("empty reader set")
 	}
-	return &multiReader{
+	return &multiStateReader{
 		readers: readers,
 	}, nil
 }
 
-// Account implementing Reader interface, retrieving the account associated with
-// a particular address.
+// Account implementing StateReader interface, retrieving the account associated
+// with a particular address.
 //
 // - Returns a nil account if it does not exist
 // - Returns an error only if an unexpected issue occurs
 // - The returned account is safe to modify after the call
-func (r *multiReader) Account(addr common.Address) (*types.StateAccount, error) {
+func (r *multiStateReader) Account(addr common.Address) (*types.StateAccount, error) {
 	var errs []error
 	for _, reader := range r.readers {
 		acct, err := reader.Account(addr)
@@ -341,13 +327,13 @@ func (r *multiReader) Account(addr common.Address) (*types.StateAccount, error) 
 	return nil, errors.Join(errs...)
 }
 
-// Storage implementing Reader interface, retrieving the storage slot associated
-// with a particular account address and slot key.
+// Storage implementing StateReader interface, retrieving the storage slot
+// associated with a particular account address and slot key.
 //
 // - Returns an empty slot if it does not exist
 // - Returns an error only if an unexpected issue occurs
 // - The returned storage slot is safe to modify after the call
-func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
+func (r *multiStateReader) Storage(addr common.Address, slot common.Hash) (common.Hash, error) {
 	var errs []error
 	for _, reader := range r.readers {
 		slot, err := reader.Storage(addr, slot)
@@ -359,28 +345,16 @@ func (r *multiReader) Storage(addr common.Address, slot common.Hash) (common.Has
 	return common.Hash{}, errors.Join(errs...)
 }
 
-// ContractCode implements Reader, retrieving a particular contract's code.
-func (r *multiReader) Code(addr common.Address, codeHash common.Hash) ([]byte, error) {
-	var errs []error
-	for _, reader := range r.readers {
-		code, err := reader.Code(addr, codeHash)
-		if err == nil {
-			return code, nil
-		}
-		errs = append(errs, err)
-	}
-	return nil, errors.Join(errs...)
+// reader is the wrapper of ContractCodeReader and StateReader interface.
+type reader struct {
+	ContractCodeReader
+	StateReader
 }
 
-// ContractCodeSize implements Reader, retrieving a particular contracts code's size.
-func (r *multiReader) CodeSize(addr common.Address, codeHash common.Hash) (int, error) {
-	var errs []error
-	for _, reader := range r.readers {
-		size, err := reader.CodeSize(addr, codeHash)
-		if err == nil {
-			return size, nil
-		}
-		errs = append(errs, err)
+// newReader constructs a reader with the supplied code reader and state reader.
+func newReader(codeReader ContractCodeReader, stateReader StateReader) *reader {
+	return &reader{
+		ContractCodeReader: codeReader,
+		StateReader:        stateReader,
 	}
-	return 0, errors.Join(errs...)
 }
