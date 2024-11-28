@@ -253,13 +253,13 @@ func (s *stateSet) merge(other *stateSet) {
 	s.updateSize(delta)
 }
 
-// revert takes the original value of accounts and storages as input and reverts
+// revertTo takes the original value of accounts and storages as input and reverts
 // the latest state transition applied on the state set.
 //
 // Notably, this operation may result in the set containing more entries after a
 // revert. For example, if account x did not exist and was created during transition
 // w, reverting w will retain an x=nil entry in the set.
-func (s *stateSet) revert(accountOrigin map[common.Hash][]byte, storageOrigin map[common.Hash]map[common.Hash][]byte) {
+func (s *stateSet) revertTo(accountOrigin map[common.Hash][]byte, storageOrigin map[common.Hash]map[common.Hash][]byte) {
 	var delta int // size tracking
 	for addrHash, blob := range accountOrigin {
 		data, ok := s.accountData[addrHash]

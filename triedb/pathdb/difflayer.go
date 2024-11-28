@@ -126,7 +126,7 @@ func (dl *diffLayer) account(hash common.Hash, depth int) ([]byte, error) {
 // storage directly retrieves the storage data associated with a particular hash,
 // within a particular account.
 //
-// Note the returned account is not a copy, please don't modify it.
+// Note the returned storage slot is not a copy, please don't modify it.
 func (dl *diffLayer) storage(accountHash, storageHash common.Hash, depth int) ([]byte, error) {
 	// Hold the lock, ensure the parent won't be changed during the
 	// state accessing.

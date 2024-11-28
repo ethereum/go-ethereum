@@ -332,7 +332,7 @@ func (dl *diskLayer) revert(h *history) (*diskLayer, error) {
 	// needs to be reverted is not yet flushed and cached in node
 	// buffer, otherwise, manipulate persistent state directly.
 	if !dl.buffer.empty() {
-		err := dl.buffer.revert(dl.db.diskdb, nodes, accounts, storages)
+		err := dl.buffer.revertTo(dl.db.diskdb, nodes, accounts, storages)
 		if err != nil {
 			return nil, err
 		}

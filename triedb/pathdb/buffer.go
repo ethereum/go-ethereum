@@ -79,10 +79,10 @@ func (b *buffer) commit(nodes *nodeSet, states *stateSet) *buffer {
 	return b
 }
 
-// revert is the reverse operation of commit. It also merges the provided states
+// revertTo is the reverse operation of commit. It also merges the provided states
 // and trie nodes into the buffer. The key difference is that the provided state
 // set should reverse the changes made by the most recent state transition.
-func (b *buffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node, accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte) error {
+func (b *buffer) revertTo(db ethdb.KeyValueReader, nodes map[common.Hash]map[string]*trienode.Node, accounts map[common.Hash][]byte, storages map[common.Hash]map[common.Hash][]byte) error {
 	// Short circuit if no embedded state transition to revert
 	if b.layers == 0 {
 		return errStateUnrecoverable
@@ -94,8 +94,8 @@ func (b *buffer) revert(db ethdb.KeyValueReader, nodes map[common.Hash]map[strin
 		b.reset()
 		return nil
 	}
-	b.nodes.revert(db, nodes)
-	b.states.revert(accounts, storages)
+	b.nodes.revertTo(db, nodes)
+	b.states.revertTo(accounts, storages)
 	return nil
 }
 

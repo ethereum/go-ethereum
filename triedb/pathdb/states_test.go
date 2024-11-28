@@ -154,7 +154,7 @@ func TestStatesRevert(t *testing.T) {
 		},
 	)
 	a.merge(b)
-	a.revert(
+	a.revertTo(
 		map[common.Hash][]byte{
 			common.Hash{0xa}: {0xa0},
 			common.Hash{0xb}: {0xb0},
@@ -217,6 +217,69 @@ func TestStatesRevert(t *testing.T) {
 	blob, exist = a.storage(common.Hash{0xd}, common.Hash{0x1})
 	if exist || len(blob) != 0 {
 		t.Error("Unexpected value for d's storage")
+	}
+}
+
+// TestStateRevertAccountNullMarker tests the scenario that account x did not exist
+// before and was created during transition w, reverting w will retain an x=nil
+// entry in the set.
+func TestStateRevertAccountNullMarker(t *testing.T) {
+	a := newStates(nil, nil) // empty initial state
+	b := newStates(
+		map[common.Hash][]byte{
+			common.Hash{0xa}: {0xa},
+		},
+		nil,
+	)
+	a.merge(b) // create account 0xa
+	a.revertTo(
+		map[common.Hash][]byte{
+			common.Hash{0xa}: nil,
+		},
+		nil,
+	) // revert the transition b
+
+	blob, exist := a.account(common.Hash{0xa})
+	if !exist {
+		t.Fatal("null marker is not found")
+	}
+	if len(blob) != 0 {
+		t.Fatalf("Unexpected value for account, %v", blob)
+	}
+}
+
+// TestStateRevertStorageNullMarker tests the scenario that slot x did not exist
+// before and was created during transition w, reverting w will retain an x=nil
+// entry in the set.
+func TestStateRevertStorageNullMarker(t *testing.T) {
+	a := newStates(map[common.Hash][]byte{
+		common.Hash{0xa}: {0xa},
+	}, nil) // initial state with account 0xa
+
+	b := newStates(
+		nil,
+		map[common.Hash]map[common.Hash][]byte{
+			common.Hash{0xa}: {
+				common.Hash{0x1}: {0x1},
+			},
+		},
+	)
+	a.merge(b) // create slot 0x1
+	a.revertTo(
+		nil,
+		map[common.Hash]map[common.Hash][]byte{
+			common.Hash{0xa}: {
+				common.Hash{0x1}: nil,
+			},
+		},
+	) // revert the transition b
+
+	blob, exist := a.storage(common.Hash{0xa}, common.Hash{0x1})
+	if !exist {
+		t.Fatal("null marker is not found")
+	}
+	if len(blob) != 0 {
+		t.Fatalf("Unexpected value for storage slot, %v", blob)
 	}
 }
 
@@ -359,7 +422,7 @@ func TestStateSizeTracking(t *testing.T) {
 	}
 
 	// Revert the set to original status
-	a.revert(
+	a.revertTo(
 		map[common.Hash][]byte{
 			common.Hash{0xa}: {0xa0},
 			common.Hash{0xb}: {0xb0},
