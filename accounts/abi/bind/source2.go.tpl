@@ -69,9 +69,6 @@ var (
 		return &{{.Type}}{abi: *parsed}, nil
 	}
 
-	// TODO: create custom exported types where unpack would generate a struct return.
-
-	// TODO: test constructor with inputs
 	func (_{{$contract.Type}} *{{$contract.Type}}) PackConstructor({{range .Constructor.Inputs}} {{.Name}} {{bindtype .Type $structs}}, {{end}}) ([]byte, error) {
 		return _{{$contract.Type}}.abi.Pack("" {{range .Constructor.Inputs}}, {{.Name}}{{end}})
 	}
@@ -86,10 +83,16 @@ var (
 
 		{{/* Unpack method is needed only when there are return args */}}
 		{{if .Normalized.Outputs }}
-			func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) ({{if .Structured}}struct{ {{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type $structs}};{{end}} },{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
+		    {{ if .Structured }}
+		    type {{.Normalized.Name}}Output struct {
+		      {{range .Normalized.Outputs}}
+		      {{.Name}} {{bindtype .Type $structs}}{{end}}
+		    }
+		    {{ end }}
+			func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}(data []byte) ({{if .Structured}} {{.Normalized.Name}}Output,{{else}}{{range .Normalized.Outputs}}{{bindtype .Type $structs}},{{end}}{{end}} error) {
 				out, err := _{{$contract.Type}}.abi.Unpack("{{.Original.Name}}", data)
 				{{if .Structured}}
-				outstruct := new(struct{ {{range .Normalized.Outputs}} {{.Name}} {{bindtype .Type $structs}}; {{end}} })
+				outstruct := new({{.Normalized.Name}}Output)
 				if err != nil {
 					return *outstruct, err
 				}

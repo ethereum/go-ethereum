@@ -52,9 +52,6 @@ func NewC1() (*C1, error) {
 	return &C1{abi: *parsed}, nil
 }
 
-// TODO: create custom exported types where unpack would generate a struct return.
-
-// TODO: test constructor with inputs
 func (_C1 *C1) PackConstructor(v1 *big.Int, v2 *big.Int) ([]byte, error) {
 	return _C1.abi.Pack("", v1, v2)
 }
@@ -107,9 +104,6 @@ func NewC2() (*C2, error) {
 	return &C2{abi: *parsed}, nil
 }
 
-// TODO: create custom exported types where unpack would generate a struct return.
-
-// TODO: test constructor with inputs
 func (_C2 *C2) PackConstructor(v1 *big.Int, v2 *big.Int) ([]byte, error) {
 	return _C2.abi.Pack("", v1, v2)
 }
@@ -158,9 +152,6 @@ func NewL1() (*L1, error) {
 	return &L1{abi: *parsed}, nil
 }
 
-// TODO: create custom exported types where unpack would generate a struct return.
-
-// TODO: test constructor with inputs
 func (_L1 *L1) PackConstructor() ([]byte, error) {
 	return _L1.abi.Pack("")
 }
@@ -209,9 +200,6 @@ func NewL2() (*L2, error) {
 	return &L2{abi: *parsed}, nil
 }
 
-// TODO: create custom exported types where unpack would generate a struct return.
-
-// TODO: test constructor with inputs
 func (_L2 *L2) PackConstructor() ([]byte, error) {
 	return _L2.abi.Pack("")
 }
@@ -260,9 +248,6 @@ func NewL2b() (*L2b, error) {
 	return &L2b{abi: *parsed}, nil
 }
 
-// TODO: create custom exported types where unpack would generate a struct return.
-
-// TODO: test constructor with inputs
 func (_L2b *L2b) PackConstructor() ([]byte, error) {
 	return _L2b.abi.Pack("")
 }
@@ -311,9 +296,6 @@ func NewL3() (*L3, error) {
 	return &L3{abi: *parsed}, nil
 }
 
-// TODO: create custom exported types where unpack would generate a struct return.
-
-// TODO: test constructor with inputs
 func (_L3 *L3) PackConstructor() ([]byte, error) {
 	return _L3.abi.Pack("")
 }
@@ -362,9 +344,6 @@ func NewL4() (*L4, error) {
 	return &L4{abi: *parsed}, nil
 }
 
-// TODO: create custom exported types where unpack would generate a struct return.
-
-// TODO: test constructor with inputs
 func (_L4 *L4) PackConstructor() ([]byte, error) {
 	return _L4.abi.Pack("")
 }
@@ -413,9 +392,6 @@ func NewL4b() (*L4b, error) {
 	return &L4b{abi: *parsed}, nil
 }
 
-// TODO: create custom exported types where unpack would generate a struct return.
-
-// TODO: test constructor with inputs
 func (_L4b *L4b) PackConstructor() ([]byte, error) {
 	return _L4b.abi.Pack("")
 }
