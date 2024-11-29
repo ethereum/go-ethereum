@@ -41,7 +41,7 @@ You should treat 'masterseed.json' with utmost secrecy and make a backup of it!
 
 ## Remote interactions
 
-Clef is capable of managing both key-file based accounts as well as hardware wallets. To evaluate clef, we're going to point it to our Rinkeby testnet keystore and specify the Rinkeby chain ID for signing (Clef doesn't have a backing chain, so it doesn't know what network it runs on).
+Clef is capable of managing both key-file based accounts and hardware wallets. To evaluate clef, we're going to point it to our Rinkeby testnet keystore and specify the Rinkeby chain ID for signing (Clef doesn't have a backing chain, so it doesn't know what network it runs on).
 
 ```text
 $ clef --keystore ~/.ethereum/rinkeby/keystore --chainid 4
