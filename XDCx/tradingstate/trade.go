@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/XinFinOrg/XDPoSChain/common"
-	"github.com/XinFinOrg/XDPoSChain/crypto/sha3"
 	"github.com/globalsign/mgo/bson"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -136,7 +136,7 @@ func (t *Trade) SetBSON(raw bson.Raw) error {
 // The OrderHash, Amount, Taker and TradeNonce attributes must be
 // set before attempting to compute the trade orderBookHash
 func (t *Trade) ComputeHash() common.Hash {
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	sha.Write(t.MakerOrderHash.Bytes())
 	sha.Write(t.TakerOrderHash.Bytes())
 	return common.BytesToHash(sha.Sum(nil))
