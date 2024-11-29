@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build nacl || js || !cgo
-// +build nacl js !cgo
+//go:build nacl || js || !cgo || gofuzz
+// +build nacl js !cgo gofuzz
 
 package crypto
 
