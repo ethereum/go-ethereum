@@ -735,9 +735,9 @@ func testIncompleteStateSync(t *testing.T, scheme string) {
 	for _, node := range addedCodes {
 		val := rawdb.ReadCode(dstDb, node)
 		if len(val) == 0 {
-			fmt.Println("node code")
+			t.Logf("no code: %v", node)
 		} else {
-			fmt.Println("has code")
+			t.Logf("has code: %v", node)
 		}
 		rawdb.DeleteCode(dstDb, node)
 		if err := checkStateConsistency(dstDb, ndb.Scheme(), srcRoot); err == nil {
