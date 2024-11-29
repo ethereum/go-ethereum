@@ -35,7 +35,7 @@ type StateAccount struct {
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
 
-	Extra *StateAccountExtra
+	Extra *StateAccountExtra // only access via [ExtraPayloads] instances
 }
 
 // NewEmptyStateAccount constructs an empty state account.
@@ -71,7 +71,7 @@ type SlimAccount struct {
 	Root     []byte // Nil if root equals to types.EmptyRootHash
 	CodeHash []byte // Nil if hash equals to types.EmptyCodeHash
 
-	Extra *StateAccountExtra
+	Extra *StateAccountExtra // only access via [ExtraPayloads] instances
 }
 
 // SlimAccountRLP encodes the state account in 'slim RLP' format.

@@ -46,7 +46,7 @@ func TestStateObjectEmpty(t *testing.T) {
 		{
 			name: "explicit false bool",
 			registerAndSet: func(acc *types.StateAccount) {
-				types.RegisterExtras[bool]().SetOnStateAccount(acc, false)
+				types.RegisterExtras[bool]().SetOnPayloadCarrier(acc, false)
 			},
 			wantEmpty: true,
 		},
@@ -60,7 +60,7 @@ func TestStateObjectEmpty(t *testing.T) {
 		{
 			name: "true bool",
 			registerAndSet: func(acc *types.StateAccount) {
-				types.RegisterExtras[bool]().SetOnStateAccount(acc, true)
+				types.RegisterExtras[bool]().SetOnPayloadCarrier(acc, true)
 			},
 			wantEmpty: false,
 		},

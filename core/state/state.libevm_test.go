@@ -87,7 +87,7 @@ func TestGetSetExtra(t *testing.T) {
 				Root:     types.EmptyRootHash,
 				CodeHash: types.EmptyCodeHash[:],
 			}
-			payloads.SetOnStateAccount(want, extra)
+			payloads.SetOnPayloadCarrier(want, extra)
 
 			if diff := cmp.Diff(want, got); diff != "" {
 				t.Errorf("types.FullAccount(%T.Account()) diff (-want +got):\n%s", iter, diff)

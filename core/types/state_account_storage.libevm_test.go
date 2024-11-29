@@ -71,12 +71,12 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 		{
 			name: "true-boolean payload",
 			registerAndSetExtra: func(a *types.StateAccount) *types.StateAccount {
-				types.RegisterExtras[bool]().SetOnStateAccount(a, true)
+				types.RegisterExtras[bool]().SetOnPayloadCarrier(a, true)
 				return a
 			},
 			assertExtra: func(t *testing.T, sa *types.StateAccount) {
 				t.Helper()
-				assert.Truef(t, types.ExtraPayloads[bool]{}.FromStateAccount(sa), "")
+				assert.Truef(t, types.ExtraPayloads[bool]{}.FromPayloadCarrier(sa), "")
 			},
 			wantTrieHash: trueBool,
 		},
@@ -84,12 +84,12 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			name: "explicit false-boolean payload",
 			registerAndSetExtra: func(a *types.StateAccount) *types.StateAccount {
 				p := types.RegisterExtras[bool]()
-				p.SetOnStateAccount(a, false) // the explicit part
+				p.SetOnPayloadCarrier(a, false) // the explicit part
 				return a
 			},
 			assertExtra: func(t *testing.T, sa *types.StateAccount) {
 				t.Helper()
-				assert.Falsef(t, types.ExtraPayloads[bool]{}.FromStateAccount(sa), "")
+				assert.Falsef(t, types.ExtraPayloads[bool]{}.FromPayloadCarrier(sa), "")
 			},
 			wantTrieHash: falseBool,
 		},
@@ -102,7 +102,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			},
 			assertExtra: func(t *testing.T, sa *types.StateAccount) {
 				t.Helper()
-				assert.Falsef(t, types.ExtraPayloads[bool]{}.FromStateAccount(sa), "")
+				assert.Falsef(t, types.ExtraPayloads[bool]{}.FromPayloadCarrier(sa), "")
 			},
 			wantTrieHash: falseBool,
 		},
@@ -110,12 +110,12 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			name: "arbitrary payload",
 			registerAndSetExtra: func(a *types.StateAccount) *types.StateAccount {
 				p := arbitraryPayload{arbitraryData}
-				types.RegisterExtras[arbitraryPayload]().SetOnStateAccount(a, p)
+				types.RegisterExtras[arbitraryPayload]().SetOnPayloadCarrier(a, p)
 				return a
 			},
 			assertExtra: func(t *testing.T, sa *types.StateAccount) {
 				t.Helper()
-				got := types.ExtraPayloads[arbitraryPayload]{}.FromStateAccount(sa)
+				got := types.ExtraPayloads[arbitraryPayload]{}.FromPayloadCarrier(sa)
 				assert.Equalf(t, arbitraryPayload{arbitraryData}, got, "")
 			},
 			wantTrieHash: arbitrary,

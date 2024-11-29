@@ -26,16 +26,16 @@ import (
 )
 
 // RegisterExtras registers the type `SA` to be carried as an extra payload in
-// [StateAccount] structs. It is expected to be called in an `init()` function
-// and MUST NOT be called more than once.
+// [StateAccount] and [SlimAccount] structs. It is expected to be called in an
+// `init()` function and MUST NOT be called more than once.
 //
 // The payload will be treated as an extra struct field for the purposes of RLP
 // encoding and decoding. RLP handling is plumbed through to the `SA` via the
 // [StateAccountExtra] that holds it such that it acts as if there were a field
-// of type `SA` in all StateAccount structs.
+// of type `SA` in all StateAccount and SlimAccount structs.
 //
-// The payload can be acced via the [ExtraPayloads.FromStateAccount] method of
-// the accessor returned by RegisterExtras.
+// The payload can be accessed via the [ExtraPayloads.FromPayloadCarrier] method
+// of the accessor returned by RegisterExtras.
 func RegisterExtras[SA any]() ExtraPayloads[SA] {
 	if registeredExtras != nil {
 		panic("re-registration of Extras")
@@ -82,8 +82,8 @@ func (e *StateAccountExtra) clone() *StateAccountExtra {
 }
 
 // ExtraPayloads provides strongly typed access to the extra payload carried by
-// [StateAccount] structs. The only valid way to construct an instance is by a
-// call to [RegisterExtras].
+// [StateAccount] and [SlimAccount] structs. The only valid way to construct an
+// instance is by a call to [RegisterExtras].
 type ExtraPayloads[SA any] struct {
 	_ struct{} // make godoc show unexported fields so nobody tries to make their own instance ;)
 }
@@ -95,24 +95,36 @@ func (ExtraPayloads[SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountEx
 	}
 }
 
-// FromStateAccount returns the StateAccount's payload.
-func (ExtraPayloads[SA]) FromStateAccount(a *StateAccount) SA {
+// ExtraPayloadCarrier is implemented by both [StateAccount] and [SlimAccount],
+// allowing for their [StateAccountExtra] payloads to be accessed in a type-safe
+// manner by [ExtraPayloads] instances.
+type ExtraPayloadCarrier interface {
+	extra() *StateAccountExtra
+}
+
+var _ = []ExtraPayloadCarrier{
+	(*StateAccount)(nil),
+	(*SlimAccount)(nil),
+}
+
+// FromPayloadCarrier returns the carriers's payload.
+func (ExtraPayloads[SA]) FromPayloadCarrier(a ExtraPayloadCarrier) SA {
 	return pseudo.MustNewValue[SA](a.extra().payload()).Get()
 }
 
-// PointerFromStateAccount returns a pointer to the StateAccounts's extra
-// payload. This is guaranteed to be non-nil.
+// PointerFromPayloadCarrier returns a pointer to the carriers's extra payload.
+// This is guaranteed to be non-nil.
 //
-// Note that copying a StateAccount by dereferencing a pointer will result in a
-// shallow copy and that the *SA returned here will therefore be shared by all
-// copies. If this is not the desired behaviour, use
-// [StateAccount.Copy] or [ExtraPayloads.SetOnStateAccount].
-func (ExtraPayloads[SA]) PointerFromStateAccount(a *StateAccount) *SA {
+// Note that copying a [StateAccount] or [SlimAccount] by dereferencing a
+// pointer will result in a shallow copy and that the *SA returned here will
+// therefore be shared by all copies. If this is not the desired behaviour, use
+// [StateAccount.Copy] or [ExtraPayloads.SetOnPayloadCarrier].
+func (ExtraPayloads[SA]) PointerFromPayloadCarrier(a ExtraPayloadCarrier) *SA {
 	return pseudo.MustPointerTo[SA](a.extra().payload()).Value.Get()
 }
 
-// SetOnStateAccount sets the StateAccount's payload.
-func (ExtraPayloads[SA]) SetOnStateAccount(a *StateAccount, val SA) {
+// SetOnPayloadCarrier sets the carriers's payload.
+func (ExtraPayloads[SA]) SetOnPayloadCarrier(a ExtraPayloadCarrier, val SA) {
 	a.extra().t = pseudo.From(val).Type
 }
 
@@ -124,12 +136,20 @@ type StateAccountExtra struct {
 }
 
 func (a *StateAccount) extra() *StateAccountExtra {
-	if a.Extra == nil {
-		a.Extra = &StateAccountExtra{
+	return getOrSetNewStateAccountExtra(&a.Extra)
+}
+
+func (a *SlimAccount) extra() *StateAccountExtra {
+	return getOrSetNewStateAccountExtra(&a.Extra)
+}
+
+func getOrSetNewStateAccountExtra(curr **StateAccountExtra) *StateAccountExtra {
+	if *curr == nil {
+		*curr = &StateAccountExtra{
 			t: registeredExtras.newStateAccount(),
 		}
 	}
-	return a.Extra
+	return *curr
 }
 
 func (e *StateAccountExtra) payload() *pseudo.Type {
@@ -143,7 +163,7 @@ func (e *StateAccountExtra) payload() *pseudo.Type {
 // of tests.
 //
 // Equal MUST NOT be used in production. Instead, compare values returned by
-// [ExtraPayloads.FromStateAccount].
+// [ExtraPayloads.FromPayloadCarrier].
 func (e *StateAccountExtra) Equal(f *StateAccountExtra) bool {
 	if false {
 		// TODO(arr4n): calling this results in an error from cmp.Diff():
