@@ -24,42 +24,51 @@ import (
 
 	cloudflare "github.com/XinFinOrg/XDPoSChain/crypto/bn256/cloudflare"
 	google "github.com/XinFinOrg/XDPoSChain/crypto/bn256/google"
+	gurvy "github.com/consensys/gurvy/bn256"
 )
 
-func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1) {
+func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1, *gurvy.G1Affine) {
 	_, xc, err := cloudflare.RandomG1(input)
 	if err != nil {
 		// insufficient input
-		return nil, nil
+		return nil, nil, nil
 	}
 	xg := new(google.G1)
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
 	}
-	return xc, xg
+	xs := new(gurvy.G1Affine)
+	if err := xs.Unmarshal(xc.Marshal()); err != nil {
+		panic(fmt.Sprintf("Could not marshal cloudflare -> consensys:", err))
+	}
+	return xc, xg, xs
 }
 
-func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2) {
+func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2, *gurvy.G2Affine) {
 	_, xc, err := cloudflare.RandomG2(input)
 	if err != nil {
 		// insufficient input
-		return nil, nil
+		return nil, nil, nil
 	}
 	xg := new(google.G2)
 	if _, err := xg.Unmarshal(xc.Marshal()); err != nil {
-		panic(fmt.Sprintf("Could not marshal cloudflare -> google: %v", err))
+		panic(fmt.Sprintf("Could not marshal cloudflare -> google:", err))
 	}
-	return xc, xg
+	xs := new(gurvy.G2Affine)
+	if err := xs.Unmarshal(xc.Marshal()); err != nil {
+		panic(fmt.Sprintf("Could not marshal cloudflare -> consensys:", err))
+	}
+	return xc, xg, xs
 }
 
 // FuzzAdd fuzzez bn256 addition between the Google and Cloudflare libraries.
 func FuzzAdd(data []byte) int {
 	input := bytes.NewReader(data)
-	xc, xg := getG1Points(input)
+	xc, xg, xs := getG1Points(input)
 	if xc == nil {
 		return 0
 	}
-	yc, yg := getG1Points(input)
+	yc, yg, ys := getG1Points(input)
 	if yc == nil {
 		return 0
 	}
@@ -71,8 +80,16 @@ func FuzzAdd(data []byte) int {
 	rg := new(google.G1)
 	rg.Add(xg, yg)
 
+	tmpX := new(gurvy.G1Jac).FromAffine(xs)
+	tmpY := new(gurvy.G1Jac).FromAffine(ys)
+	rs := new(gurvy.G1Affine).FromJacobian(tmpX.AddAssign(tmpY))
+
 	if !bytes.Equal(rc.Marshal(), rg.Marshal()) {
-		panic("add mismatch")
+		panic("add mismatch: cloudflare/google")
+	}
+
+	if !bytes.Equal(rc.Marshal(), rs.Marshal()) {
+		panic("add mismatch: cloudflare/consensys")
 	}
 	return 1
 }
@@ -81,7 +98,7 @@ func FuzzAdd(data []byte) int {
 // libraries.
 func FuzzMul(data []byte) int {
 	input := bytes.NewReader(data)
-	pc, pg := getG1Points(input)
+	pc, pg, ps := getG1Points(input)
 	if pc == nil {
 		return 0
 	}
@@ -105,25 +122,43 @@ func FuzzMul(data []byte) int {
 	rg := new(google.G1)
 	rg.ScalarMult(pg, new(big.Int).SetBytes(buf))
 
+	rs := new(gurvy.G1Jac)
+	psJac := new(gurvy.G1Jac).FromAffine(ps)
+	rs.ScalarMultiplication(psJac, new(big.Int).SetBytes(buf))
+	rsAffine := new(gurvy.G1Affine).FromJacobian(rs)
+
 	if !bytes.Equal(rc.Marshal(), rg.Marshal()) {
-		panic("scalar mul mismatch")
+		panic("scalar mul mismatch: cloudflare/google")
+	}
+	if !bytes.Equal(rc.Marshal(), rsAffine.Marshal()) {
+		panic("scalar mul mismatch: cloudflare/consensys")
 	}
 	return 1
 }
 
 func FuzzPair(data []byte) int {
 	input := bytes.NewReader(data)
-	pc, pg := getG1Points(input)
+	pc, pg, ps := getG1Points(input)
 	if pc == nil {
 		return 0
 	}
-	tc, tg := getG2Points(input)
+	tc, tg, ts := getG2Points(input)
 	if tc == nil {
 		return 0
 	}
-	// Pair the two points and ensure thet result in the same output
-	if cloudflare.PairingCheck([]*cloudflare.G1{pc}, []*cloudflare.G2{tc}) != google.PairingCheck([]*google.G1{pg}, []*google.G2{tg}) {
-		panic("pair mismatch")
+	// Pair the two points and ensure they result in the same output
+	clPair := cloudflare.PairingCheck([]*cloudflare.G1{pc}, []*cloudflare.G2{tc})
+	if clPair != google.PairingCheck([]*google.G1{pg}, []*google.G2{tg}) {
+		panic("pairing mismatch: cloudflare/google")
 	}
+
+	coPair, err := gurvy.PairingCheck([]gurvy.G1Affine{*ps}, []gurvy.G2Affine{*ts})
+	if err != nil {
+		panic(fmt.Sprintf("gurvy encountered error: %v", err))
+	}
+	if clPair != coPair {
+		panic("pairing mismatch: cloudflare/consensys")
+	}
+
 	return 1
 }
