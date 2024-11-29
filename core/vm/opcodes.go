@@ -204,7 +204,7 @@ const (
 
 // 0xc0 range - extended-width modular arithmetic ops.
 const (
-	SETUPX OpCode = 0xc0 + iota
+	SETMODX OpCode = 0xc0 + iota
 	LOADX
 	STOREX
 	ADDMODX
@@ -418,7 +418,7 @@ var opCodeToString = [256]string{
 	SWAP16: "SWAP16",
 
 	// 0xc0 range - extended-range modular arithmetic ops
-	SETUPX:  "SETUPX",
+	SETMODX: "SETMODX",
 	LOADX:   "LOADX",
 	STOREX:  "STOREX",
 	ADDMODX: "ADDMODX",

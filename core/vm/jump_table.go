@@ -104,9 +104,9 @@ func newPragueEOFInstructionSet() JumpTable {
 
 func newEVMMAXInstructionSet() JumpTable {
 	instructionSet := newCancunInstructionSet()
-	instructionSet[SETUPX] = &operation{
-		execute:    opSetupx,
-		dynamicGas: gasSetupx,
+	instructionSet[SETMODX] = &operation{
+		execute:    opSetmodx,
+		dynamicGas: gasSetmodx,
 		minStack:   minStack(4, 0),
 		maxStack:   maxStack(4, 0),
 	}

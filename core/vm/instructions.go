@@ -954,7 +954,7 @@ func makeLog(size int) executionFunc {
 	}
 }
 
-func opSetupx(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+func opSetmodx(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	id, modOffset, modSize, allocSize := scope.Stack.pop(), scope.Stack.pop(), scope.Stack.pop(), scope.Stack.pop()
 	modulus := scope.Memory.GetCopy(modOffset.Uint64(), modSize.Uint64())
 

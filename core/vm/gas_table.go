@@ -54,7 +54,6 @@ func evmmaxMemoryGasCost(pc uint64, scope *ScopeContext, newMemSize uint64, newE
 	curEVMMAXMemSizePadded := toWordSize(curEVMMAXMemSize) * 32
 	newEVMMAXMemSizePadded := toWordSize(newEVMMAXMemSize) * 32
 
-	// if newEVMMAXMemSize + newEVMMemSize > curEVMMAXMemSize + curEVMMemSize
 	if newMemSizePadded > uint64(scope.Memory.Len()) || newEVMMAXMemSizePadded > curEVMMAXMemSizePadded {
 		// if this is called by the invocation of SETUPX, the new evm memory is
 		// 0, but we still need it to compute the fee
@@ -548,7 +547,7 @@ func isPowerOfTwo(val *big.Int) bool {
 	return false
 }
 
-func gasSetupx(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+func gasSetmodx(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	if !scope.Stack.Back(0).IsUint64() || !scope.Stack.Back(2).IsUint64() || !scope.Stack.Back(3).IsUint64() {
 		return 0, errors.New("one or more parameters overflows 64 bits")
 	}
@@ -619,9 +618,11 @@ func gasStorex(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uin
 	}
 
 	if scope.modExtState.active.IsModulusBinary() {
+		// TODO: seems pretty impossible that this can overflow, just adding a note
+		// here to remind myself to double-check this once again.
 		return toWordSize(storeSize) * params.CopyGas, nil
 	} else {
-		return count.Uint64() * uint64(params.MulmodxCost[int(scope.modExtState.active.ElemSize()/8)-1]), nil
+		return count.Uint64() * params.MulmodxCost[int(scope.modExtState.active.ElemSize()/8)-1], nil
 	}
 }
 
@@ -646,16 +647,21 @@ func gasLoadx(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint
 		return 0, errors.New("out of bounds destination")
 	}
 
-	loadSize := count.Uint64() * uint64(scope.modExtState.active.ElemSize())
+	loadSize, overflow := math.SafeMul(count.Uint64(), uint64(scope.modExtState.active.ElemSize()))
+	if overflow {
+		return 0, fmt.Errorf("overflow")
+	}
 	last, overflow := math.SafeAdd(dst.Uint64(), loadSize)
 	if overflow || last > uint64(scope.Memory.Len()) {
 		return 0, errors.New("out of bounds destination")
 	}
 
 	if scope.modExtState.active.IsModulusBinary() {
+		// TODO: seems pretty impossible that this can overflow, just adding a note
+		// here to remind myself to double-check this once again.
 		return toWordSize(loadSize) * params.CopyGas, nil
 	} else {
-		return count.Uint64() * uint64(params.MulmodxCost[int(scope.modExtState.active.ElemSize()/8)-1]), nil
+		return count.Uint64() * params.MulmodxCost[int(scope.modExtState.active.ElemSize()/8)-1], nil
 	}
 }
 
