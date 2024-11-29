@@ -97,7 +97,7 @@ func (ordersign OrderTxSigner) Equal(s2 OrderSigner) bool {
 
 // SignatureValues returns signature values. This signature needs to be in the [R || S || V] format where V is 0 or 1.
 func (ordersign OrderTxSigner) SignatureValues(tx *OrderTransaction, sig []byte) (r, s, v *big.Int, err error) {
-	if len(sig) != 65 {
+	if len(sig) != crypto.SignatureLength {
 		panic(fmt.Sprintf("wrong size for signature: got %d, want 65", len(sig)))
 	}
 	r = new(big.Int).SetBytes(sig[:32])

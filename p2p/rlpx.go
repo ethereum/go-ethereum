@@ -37,19 +37,19 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/crypto/ecies"
 	"github.com/XinFinOrg/XDPoSChain/crypto/secp256k1"
-	"golang.org/x/crypto/sha3"
 	"github.com/XinFinOrg/XDPoSChain/p2p/discover"
 	"github.com/XinFinOrg/XDPoSChain/rlp"
 	"github.com/golang/snappy"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
 	maxUint24 = ^uint32(0) >> 8
 
-	sskLen = 16 // ecies.MaxSharedKeyLength(pubKey) / 2
-	sigLen = 65 // elliptic S256
-	pubLen = 64 // 512 bit pubkey in uncompressed representation without format byte
-	shaLen = 32 // hash length (for nonce etc)
+	sskLen = 16                     // ecies.MaxSharedKeyLength(pubKey) / 2
+	sigLen = crypto.SignatureLength // elliptic S256
+	pubLen = 64                     // 512 bit pubkey in uncompressed representation without format byte
+	shaLen = 32                     // hash length (for nonce etc)
 
 	authMsgLen  = sigLen + shaLen + pubLen + shaLen + 1
 	authRespLen = pubLen + shaLen + 1

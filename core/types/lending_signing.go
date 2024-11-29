@@ -97,7 +97,7 @@ func (lendingsign LendingTxSigner) Equal(s2 LendingSigner) bool {
 
 // SignatureValues returns signature values. This signature needs to be in the [R || S || V] format where V is 0 or 1.
 func (lendingsign LendingTxSigner) SignatureValues(tx *LendingTransaction, sig []byte) (r, s, v *big.Int, err error) {
-	if len(sig) != 65 {
+	if len(sig) != crypto.SignatureLength {
 		panic(fmt.Sprintf("wrong size for signature: got %d, want 65", len(sig)))
 	}
 	r = new(big.Int).SetBytes(sig[:32])

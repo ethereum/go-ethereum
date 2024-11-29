@@ -42,6 +42,7 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/core/state"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/core/vm"
+	"github.com/XinFinOrg/XDPoSChain/crypto"
 	"github.com/XinFinOrg/XDPoSChain/eth/filters"
 	"github.com/XinFinOrg/XDPoSChain/ethdb"
 	"github.com/XinFinOrg/XDPoSChain/event"
@@ -101,7 +102,7 @@ func NewXDCSimulatedBackend(alloc core.GenesisAlloc, gasLimit uint64, chainConfi
 		GasLimit:  gasLimit, // need this big, support initial smart contract
 		Config:    chainConfig,
 		Alloc:     alloc,
-		ExtraData: append(make([]byte, 32), make([]byte, 65)...),
+		ExtraData: append(make([]byte, 32), make([]byte, crypto.SignatureLength)...),
 	}
 	genesis.MustCommit(database)
 	consensus := XDPoS.NewFaker(database, chainConfig)

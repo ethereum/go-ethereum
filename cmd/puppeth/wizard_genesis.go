@@ -105,7 +105,7 @@ func (w *wizard) makeGenesis() {
 				}
 			}
 		}
-		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
+		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+crypto.SignatureLength)
 		for i, signer := range signers {
 			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
 		}
@@ -179,7 +179,7 @@ func (w *wizard) makeGenesis() {
 		validatorCap := new(big.Int)
 		validatorCap.SetString("50000000000000000000000", 10)
 		var validatorCaps []*big.Int
-		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+65)
+		genesis.ExtraData = make([]byte, 32+len(signers)*common.AddressLength+crypto.SignatureLength)
 		for i, signer := range signers {
 			validatorCaps = append(validatorCaps, validatorCap)
 			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])

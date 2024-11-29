@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
+//go:build nacl || js || !cgo
 // +build nacl js !cgo
 
 package crypto
@@ -41,7 +42,7 @@ func Ecrecover(hash, sig []byte) ([]byte, error) {
 // SigToPub returns the public key that created the given signature.
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	// Convert to btcec input format with 'recovery id' v at the beginning.
-	btcsig := make([]byte, 65)
+	btcsig := make([]byte, SignatureLength)
 	btcsig[0] = sig[64] + 27
 	copy(btcsig[1:], sig)
 
@@ -58,7 +59,7 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 //
 // The produced signature is in the [R || S || V] format where V is 0 or 1.
 func Sign(hash []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
-	if len(hash) != 32 {
+	if len(hash) != DigestLength {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
 	if prv.Curve != btcec.S256() {
