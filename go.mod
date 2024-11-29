@@ -46,11 +46,10 @@ require (
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/consensys/gnark-crypto v0.10.0
-	github.com/crate-crypto/go-kzg-4844 v0.2.0
+	github.com/crate-crypto/go-kzg-4844 v0.3.0
 	github.com/deckarep/golang-set v1.8.0
 	github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498
-	github.com/ethereum/c-kzg-4844 v0.2.0
-	github.com/google/gofuzz v1.2.0
+	github.com/ethereum/c-kzg-4844 v0.3.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mattn/go-isatty v0.0.17
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
