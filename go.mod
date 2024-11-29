@@ -47,6 +47,7 @@ require (
 	github.com/consensys/gnark-crypto v0.4.1-0.20210426202927-39ac3d4b3f1f
 	github.com/deckarep/golang-set v1.8.0
 	github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498
+	github.com/google/gofuzz v1.2.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/mattn/go-isatty v0.0.17
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
