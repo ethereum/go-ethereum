@@ -44,6 +44,7 @@ require (
 )
 
 require (
+	github.com/btcsuite/btcd/btcec/v2 v2.3.4
 	github.com/consensys/gnark-crypto v0.4.1-0.20210426202927-39ac3d4b3f1f
 	github.com/deckarep/golang-set v1.8.0
 	github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498
@@ -59,6 +60,7 @@ require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/go-ole/go-ole v1.2.5 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
