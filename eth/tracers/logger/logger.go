@@ -94,31 +94,31 @@ func (s *StructLog) ErrorString() string {
 	return ""
 }
 
-func (log *StructLog) WriteTo(writer io.Writer) {
-	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", log.Op, log.Pc, log.Gas, log.GasCost)
-	if log.Err != nil {
-		fmt.Fprintf(writer, " ERROR: %v", log.Err)
+func (s *StructLog) WriteTo(writer io.Writer) {
+	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", s.Op, s.Pc, s.Gas, s.GasCost)
+	if s.Err != nil {
+		fmt.Fprintf(writer, " ERROR: %v", s.Err)
 	}
 	fmt.Fprintln(writer)
-	if len(log.Stack) > 0 {
+	if len(s.Stack) > 0 {
 		fmt.Fprintln(writer, "Stack:")
-		for i := len(log.Stack) - 1; i >= 0; i-- {
-			fmt.Fprintf(writer, "%08d  %s\n", len(log.Stack)-i-1, log.Stack[i].Hex())
+		for i := len(s.Stack) - 1; i >= 0; i-- {
+			fmt.Fprintf(writer, "%08d  %s\n", len(s.Stack)-i-1, s.Stack[i].Hex())
 		}
 	}
-	if len(log.Memory) > 0 {
+	if len(s.Memory) > 0 {
 		fmt.Fprintln(writer, "Memory:")
-		fmt.Fprint(writer, hex.Dump(log.Memory))
+		fmt.Fprint(writer, hex.Dump(s.Memory))
 	}
-	if len(log.Storage) > 0 {
+	if len(s.Storage) > 0 {
 		fmt.Fprintln(writer, "Storage:")
-		for h, item := range log.Storage {
+		for h, item := range s.Storage {
 			fmt.Fprintf(writer, "%x: %x\n", h, item)
 		}
 	}
-	if len(log.ReturnData) > 0 {
+	if len(s.ReturnData) > 0 {
 		fmt.Fprintln(writer, "ReturnData:")
-		fmt.Fprint(writer, hex.Dump(log.ReturnData))
+		fmt.Fprint(writer, hex.Dump(s.ReturnData))
 	}
 	fmt.Fprintln(writer)
 }
@@ -148,36 +148,36 @@ type StructLogRes struct {
 //   - memory: legacy uses a list of 64-char strings, each representing 32-byte chunks
 //     of evm memory. Non-legacy just uses a string of hexdata, no chunking.
 //   - storage: legacy has a storage-field.
-func (log *StructLog) toLegacyJSON() json.RawMessage {
+func (s *StructLog) toLegacyJSON() json.RawMessage {
 	msg := StructLogRes{
-		Pc:            log.Pc,
-		Op:            log.Op.String(),
-		Gas:           log.Gas,
-		GasCost:       log.GasCost,
-		Depth:         log.Depth,
-		Error:         log.ErrorString(),
-		RefundCounter: log.RefundCounter,
+		Pc:            s.Pc,
+		Op:            s.Op.String(),
+		Gas:           s.Gas,
+		GasCost:       s.GasCost,
+		Depth:         s.Depth,
+		Error:         s.ErrorString(),
+		RefundCounter: s.RefundCounter,
 	}
-	if log.Stack != nil {
-		stack := make([]string, len(log.Stack))
-		for i, stackValue := range log.Stack {
+	if s.Stack != nil {
+		stack := make([]string, len(s.Stack))
+		for i, stackValue := range s.Stack {
 			stack[i] = stackValue.Hex()
 		}
 		msg.Stack = &stack
 	}
-	if len(log.ReturnData) > 0 {
-		msg.ReturnData = hexutil.Bytes(log.ReturnData).String()
+	if len(s.ReturnData) > 0 {
+		msg.ReturnData = hexutil.Bytes(s.ReturnData).String()
 	}
-	if log.Memory != nil {
-		memory := make([]string, 0, (len(log.Memory)+31)/32)
-		for i := 0; i+32 <= len(log.Memory); i += 32 {
-			memory = append(memory, fmt.Sprintf("%x", log.Memory[i:i+32]))
+	if s.Memory != nil {
+		memory := make([]string, 0, (len(s.Memory)+31)/32)
+		for i := 0; i+32 <= len(s.Memory); i += 32 {
+			memory = append(memory, fmt.Sprintf("%x", s.Memory[i:i+32]))
 		}
 		msg.Memory = &memory
 	}
-	if log.Storage != nil {
+	if s.Storage != nil {
 		storage := make(map[string]string)
-		for i, storageValue := range log.Storage {
+		for i, storageValue := range s.Storage {
 			storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
 		}
 		msg.Storage = &storage

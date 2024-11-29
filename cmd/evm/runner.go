@@ -207,7 +207,6 @@ func runCmd(ctx *cli.Context) error {
 
 	var (
 		tracer      *tracing.Hooks
-		debugLogger *logger.StructLogger
 		prestate    *state.StateDB
 		chainConfig *params.ChainConfig
 		sender      = common.BytesToAddress([]byte("sender"))
@@ -219,10 +218,7 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.Bool(MachineFlag.Name) {
 		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
 	} else if ctx.Bool(DebugFlag.Name) {
-		debugLogger = logger.NewStreamingStructLogger(logconfig, os.Stderr)
-		tracer = debugLogger.Hooks()
-	} else {
-		debugLogger = logger.NewStreamingStructLogger(logconfig, os.Stderr)
+		tracer = logger.NewStreamingStructLogger(logconfig, os.Stderr).Hooks()
 	}
 
 	initialGas := ctx.Uint64(GasFlag.Name)
