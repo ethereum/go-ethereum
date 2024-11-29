@@ -26,13 +26,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// memoryGasCost calculates the quadratic gas for memory expansion. It does so
+// only for the EVM memory region that is expanded, not the total memory.
 func memoryGasCost(pc uint64, scope *ScopeContext, newMemSize uint64) (uint64, error) {
 	return evmmaxMemoryGasCost(pc, scope, newMemSize, scope.modExtState.AllocSize())
 }
 
-// evmmaxMemory calculates the quadratic gas for memory expansion. It does so
+// evmmaxMemoryGasCost calculates the quadratic gas for memory expansion. It does so
 // only for the memory region that is expanded, not the total memory.  It uses
-// the modified EVMMAX memory expansion rule: consider the size of memory to
+// the modified EIP-6690 memory expansion rule: consider the size of memory to
 // include EVM memory and the memory allocated by all active field contexts.
 func evmmaxMemoryGasCost(pc uint64, scope *ScopeContext, newMemSize uint64, newEVMMAXMemSize uint64) (uint64, error) {
 	if newMemSize == 0 && newEVMMAXMemSize == 0 {
