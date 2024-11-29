@@ -198,7 +198,7 @@ func newStateTracer(ctx *Context, cfg json.RawMessage, chainCfg *params.ChainCon
 	t := &stateTracer{
 		Balance: make(map[common.Address]*hexutil.Big),
 		Nonce: make(map[common.Address]hexutil.Uint64),
-		Storage: make(map[common.Address]map[common.Hash]common.Hash)
+		Storage: make(map[common.Address]map[common.Hash]common.Hash),
 	}
 	return &Tracer{
 		GetResult: func() (json.RawMessage, error) {
