@@ -140,17 +140,11 @@ func ApplyTransactionWithEVM(msg *Message, gp *GasPool, statedb *state.StateDB, 
 			defer func() { hooks.OnTxEnd(receipt, err) }()
 		}
 	}
-
-	// Create a new context to be used in the EVM environment.
-	txContext := NewEVMTxContext(msg)
-	evm.SetTxContext(txContext)
-
 	// Apply the transaction to the current state (included in the env).
 	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return nil, err
 	}
-
 	// Update the state with pending changes.
 	var root []byte
 	if evm.ChainConfig().IsByzantium(blockNumber) {

@@ -47,10 +47,6 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	txContext := vm.TxContext{
-		Origin:   from,
-		GasPrice: tx.GasPrice(),
-	}
 	context := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -90,7 +86,6 @@ func BenchmarkTransactionTrace(b *testing.B) {
 		//EnableReturnData: false,
 	})
 	evm := vm.NewEVM(context, state.StateDB, params.AllEthashProtocolChanges, vm.Config{Tracer: tracer.Hooks()})
-	evm.SetTxContext(txContext)
 	msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
@@ -101,8 +96,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		snap := state.StateDB.Snapshot()
 		tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
-		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-		res, err := st.TransitionDb()
+		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			b.Fatal(err)
 		}

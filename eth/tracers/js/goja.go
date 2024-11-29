@@ -260,7 +260,7 @@ func (t *jsTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 	t.ctx["block"] = t.vm.ToValue(t.env.BlockNumber.Uint64())
 	t.ctx["gas"] = t.vm.ToValue(tx.Gas())
-	gasPriceBig, err := t.toBig(t.vm, env.GasPrice.String())
+	gasPriceBig, err := t.toBig(t.vm, tx.EffectiveGasTipValue(env.BaseFee).String())
 	if err != nil {
 		t.err = err
 		return
