@@ -78,8 +78,12 @@ func (x *XDPoS_v2) voteHandler(chain consensus.ChainReader, voteMsg *types.Vote)
 
 	epochInfo, err := x.getEpochSwitchInfo(chain, nil, voteMsg.ProposedBlockInfo.Hash)
 	if err != nil {
-		log.Error("[voteHandler] Error when getting epoch switch Info", "error", err)
-		return errors.New("fail on voteHandler due to failure in getting epoch switch info")
+		return &utils.ErrIncomingMessageBlockNotFound{
+			Type:                "vote",
+			IncomingBlockHash:   voteMsg.ProposedBlockInfo.Hash,
+			IncomingBlockNumber: voteMsg.ProposedBlockInfo.Number,
+			Err:                 err,
+		}
 	}
 
 	certThreshold := x.config.V2.Config(uint64(voteMsg.ProposedBlockInfo.Round)).CertThreshold

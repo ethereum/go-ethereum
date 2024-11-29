@@ -3,7 +3,9 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
+	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 )
 
@@ -119,4 +121,15 @@ type ErrIncomingMessageRoundTooFarFromCurrentRound struct {
 
 func (e *ErrIncomingMessageRoundTooFarFromCurrentRound) Error() string {
 	return fmt.Sprintf("%s message round number: %v is too far away from currentRound: %v", e.Type, e.IncomingRound, e.CurrentRound)
+}
+
+type ErrIncomingMessageBlockNotFound struct {
+	Type                string
+	IncomingBlockHash   common.Hash
+	IncomingBlockNumber *big.Int
+	Err                 error
+}
+
+func (e *ErrIncomingMessageBlockNotFound) Error() string {
+	return fmt.Sprintf("%s proposed block is not found hash: %v, block number: %v, error: %s", e.Type, e.IncomingBlockHash.Hex(), e.IncomingBlockNumber, e.Err)
 }
