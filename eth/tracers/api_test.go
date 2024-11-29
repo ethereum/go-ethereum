@@ -197,7 +197,7 @@ type stateTracer struct {
 func newStateTracer(ctx *Context, cfg json.RawMessage, chainCfg *params.ChainConfig) (*Tracer, error) {
 	t := &stateTracer{
 		Balance: make(map[common.Address]*hexutil.Big),
-		Nonce: make(map[common.Address]hexutil.Uint64),
+		Nonce:   make(map[common.Address]hexutil.Uint64),
 		Storage: make(map[common.Address]map[common.Hash]common.Hash),
 	}
 	return &Tracer{
