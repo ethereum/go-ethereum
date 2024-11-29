@@ -54,7 +54,7 @@ func UseCKZG(use bool) error {
 	useCKZG.Store(use)
 
 	// Initializing the library can take 2-4 seconds - and can potentially crash
-	// on CKZG and non-ADX CPUs - so might as well so it now and don't wait until
+	// on CKZG and non-ADX CPUs - so might as well do it now and don't wait until
 	// a crypto operation is actually needed live.
 	if use {
 		ckzgIniter.Do(ckzgInit)
