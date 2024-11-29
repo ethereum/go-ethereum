@@ -61,8 +61,8 @@ func getG2Points(input io.Reader) (*cloudflare.G2, *google.G2, *bn254.G2Affine) 
 	return xc, xg, xs
 }
 
-// FuzzAdd fuzzez bn256 addition between the Google and Cloudflare libraries.
-func FuzzAdd(data []byte) int {
+// fuzzAdd fuzzez bn256 addition between the Google and Cloudflare libraries.
+func fuzzAdd(data []byte) int {
 	input := bytes.NewReader(data)
 	xc, xg, xs := getG1Points(input)
 	if xc == nil {
@@ -94,9 +94,9 @@ func FuzzAdd(data []byte) int {
 	return 1
 }
 
-// FuzzMul fuzzez bn256 scalar multiplication between the Google and Cloudflare
+// fuzzMul fuzzez bn256 scalar multiplication between the Google and Cloudflare
 // libraries.
-func FuzzMul(data []byte) int {
+func fuzzMul(data []byte) int {
 	input := bytes.NewReader(data)
 	pc, pg, ps := getG1Points(input)
 	if pc == nil {
@@ -136,7 +136,7 @@ func FuzzMul(data []byte) int {
 	return 1
 }
 
-func FuzzPair(data []byte) int {
+func fuzzPair(data []byte) int {
 	input := bytes.NewReader(data)
 	pc, pg, ps := getG1Points(input)
 	if pc == nil {
