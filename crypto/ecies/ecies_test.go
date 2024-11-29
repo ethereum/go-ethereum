@@ -42,17 +42,23 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 )
 
-// Ensure the KDF generates appropriately sized keys.
 func TestKDF(t *testing.T) {
-	msg := []byte("Hello, world")
-	h := sha256.New()
-
-	k, err := concatKDF(h, msg, nil, 64)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		length int
+		output []byte
+	}{
+		{6, decode("858b192fa2ed")},
+		{32, decode("858b192fa2ed4395e2bf88dd8d5770d67dc284ee539f12da8bceaa45d06ebae0")},
+		{48, decode("858b192fa2ed4395e2bf88dd8d5770d67dc284ee539f12da8bceaa45d06ebae0700f1ab918a5f0413b8140f9940d6955")},
+		{64, decode("858b192fa2ed4395e2bf88dd8d5770d67dc284ee539f12da8bceaa45d06ebae0700f1ab918a5f0413b8140f9940d6955f3467fd6672cce1024c5b1effccc0f61")},
 	}
-	if len(k) != 64 {
-		t.Fatalf("KDF: generated key is the wrong size (%d instead of 64\n", len(k))
+
+	for _, test := range tests {
+		h := sha256.New()
+		k := concatKDF(h, []byte("input"), nil, test.length)
+		if !bytes.Equal(k, test.output) {
+			t.Fatalf("KDF: generated key %x does not match expected output %x", k, test.output)
+		}
 	}
 }
 
@@ -293,8 +299,8 @@ func TestParamSelection(t *testing.T) {
 
 func testParamSelection(t *testing.T, c testCase) {
 	params := ParamsFromCurve(c.Curve)
-	if params == nil && c.Expected != nil {
-		t.Fatalf("%s (%s)\n", ErrInvalidParams.Error(), c.Name)
+	if params == nil {
+		t.Fatal("ParamsFromCurve returned nil")
 	} else if params != nil && !cmpParams(params, c.Expected) {
 		t.Fatalf("ecies: parameters should be invalid (%s)\n", c.Name)
 	}
@@ -328,7 +334,6 @@ func testParamSelection(t *testing.T, c testCase) {
 	if err == nil {
 		t.Fatalf("ecies: encryption should not have succeeded (%s)\n", c.Name)
 	}
-
 }
 
 // Ensure that the basic public key validation in the decryption operation
@@ -413,4 +418,12 @@ func hexKey(prv string) *PrivateKey {
 		panic(err)
 	}
 	return ImportECDSA(key)
+}
+
+func decode(s string) []byte {
+	bytes, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return bytes
 }
