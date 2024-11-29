@@ -18,10 +18,33 @@ package pathdb
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 )
+
+// slicePool is a shared pool of hash slice, for reducing the GC pressure.
+var slicePool = sync.Pool{
+	New: func() interface{} {
+		return make([]common.Hash, 0, 64) // Pre-allocate a slice with a reasonable capacity.
+	},
+}
+
+// getSlice obtains the hash slice from the shared pool.
+func getSlice() []common.Hash {
+	return slicePool.Get().([]common.Hash)
+}
+
+// returnSlice returns the hash slice back to the shared pool for following usage.
+func returnSlice(slice []common.Hash) {
+	// Discard the large slice for recycling
+	if len(slice) > 1024 {
+		return
+	}
+	// Reset the slice before putting it back into the pool
+	slicePool.Put(slice[:0])
+}
 
 // lookup is an internal help structure to quickly identify
 type lookup struct {
@@ -94,6 +117,9 @@ func (l *lookup) addLayer(diff *diffLayer) {
 		}
 		// Put the layer hash at the end of the list
 		for path := range nodes {
+			if _, exists := subset[path]; !exists {
+				subset[path] = getSlice()
+			}
 			subset[path] = append(subset[path], state)
 		}
 	}
@@ -134,6 +160,7 @@ func (l *lookup) removeLayer(diff *diffLayer) error {
 				return fmt.Errorf("failed to delete lookup %x %v", accountHash, []byte(path))
 			}
 			if len(subset[path]) == 0 {
+				returnSlice(subset[path])
 				delete(subset, path)
 			}
 		}
