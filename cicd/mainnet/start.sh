@@ -24,6 +24,13 @@ do
         bootnodes="${bootnodes},$line"
     fi
 done < "$input"
+#check last line since it's not included in "read" command https://stackoverflow.com/questions/12916352/shell-script-read-missing-last-line
+if [ -z "${bootnodes}" ]
+then
+    bootnodes=$line
+else
+    bootnodes="${bootnodes},$line"
+fi
 
 log_level=3
 if test -z "$LOG_LEVEL"
