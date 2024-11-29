@@ -101,24 +101,24 @@ func TestSharedKey(t *testing.T) {
 
 	prv2, err := GenerateKey(rand.Reader, DefaultCurve, nil)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Log(err.Error())
 		t.FailNow()
 	}
 
 	sk1, err := prv1.GenerateShared(&prv2.PublicKey, skLen, skLen)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Log(err.Error())
 		t.FailNow()
 	}
 
 	sk2, err := prv2.GenerateShared(&prv1.PublicKey, skLen, skLen)
 	if err != nil {
-		fmt.Println(err.Error())
+		t.Log(err.Error())
 		t.FailNow()
 	}
 
 	if !bytes.Equal(sk1, sk2) {
-		fmt.Println(ErrBadSharedKeys.Error())
+		t.Log(ErrBadSharedKeys.Error())
 		t.FailNow()
 	}
 }
