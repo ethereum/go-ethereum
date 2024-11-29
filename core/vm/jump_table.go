@@ -24,7 +24,7 @@ import (
 
 type (
 	executionFunc func(pc *uint64, interpreter *EVMInterpreter, callContext *ScopeContext) ([]byte, error)
-	gasFunc       func(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, memory *Memory, evmMemorySize uint64) (uint64, error) // last parameters are the requested memory sizes as uint64
+	gasFunc       func(pc uint64, evm *EVM, scope *ScopeContext, evmMemorySize uint64) (uint64, error) // last parameters are the requested memory sizes as uint64
 	// memorySizeFunc returns the required size, and whether the operation overflowed a uint64
 	memorySizeFunc func(*Stack) (memSize uint64, overflow bool)
 )

@@ -24,24 +24,24 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func gasSStore4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas := evm.AccessEvents.SlotGas(scope.Contract.Address(), stack.peek().Bytes32(), true)
+func gasSStore4762(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+	gas := evm.AccessEvents.SlotGas(scope.Contract.Address(), scope.Stack.peek().Bytes32(), true)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
 	return gas, nil
 }
 
-func gasSLoad4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas := evm.AccessEvents.SlotGas(scope.Contract.Address(), stack.peek().Bytes32(), false)
+func gasSLoad4762(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+	gas := evm.AccessEvents.SlotGas(scope.Contract.Address(), scope.Stack.peek().Bytes32(), false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
 	}
 	return gas, nil
 }
 
-func gasBalance4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	address := stack.peek().Bytes20()
+func gasBalance4762(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+	address := scope.Stack.peek().Bytes20()
 	gas := evm.AccessEvents.BasicDataGas(address, false)
 	if gas == 0 {
 		gas = params.WarmStorageReadCostEIP2929
@@ -49,8 +49,8 @@ func gasBalance4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem 
 	return gas, nil
 }
 
-func gasExtCodeSize4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	address := stack.peek().Bytes20()
+func gasExtCodeSize4762(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+	address := scope.Stack.peek().Bytes20()
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
@@ -61,8 +61,8 @@ func gasExtCodeSize4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, 
 	return gas, nil
 }
 
-func gasExtCodeHash4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	address := stack.peek().Bytes20()
+func gasExtCodeHash4762(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+	address := scope.Stack.peek().Bytes20()
 	if _, isPrecompile := evm.precompile(address); isPrecompile {
 		return 0, nil
 	}
@@ -74,8 +74,8 @@ func gasExtCodeHash4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, 
 }
 
 func makeCallVariantGasEIP4762(oldCalculator gasFunc) gasFunc {
-	return func(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		gas, err := oldCalculator(pc, evm, scope, stack, mem, memorySize)
+	return func(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+		gas, err := oldCalculator(pc, evm, scope, memorySize)
 		if err != nil {
 			return 0, err
 		}
@@ -97,8 +97,8 @@ var (
 	gasDelegateCallEIP4762 = makeCallVariantGasEIP4762(gasDelegateCall)
 )
 
-func gasSelfdestructEIP4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	beneficiaryAddr := common.Address(stack.peek().Bytes20())
+func gasSelfdestructEIP4762(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+	beneficiaryAddr := common.Address(scope.Stack.peek().Bytes20())
 	if _, isPrecompile := evm.precompile(beneficiaryAddr); isPrecompile {
 		return 0, nil
 	}
@@ -117,14 +117,14 @@ func gasSelfdestructEIP4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Sta
 	return statelessGas, nil
 }
 
-func gasCodeCopyEip4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-	gas, err := gasCodeCopy(pc, evm, scope, stack, mem, memorySize)
+func gasCodeCopyEip4762(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+	gas, err := gasCodeCopy(pc, evm, scope, memorySize)
 	if err != nil {
 		return 0, err
 	}
 	var (
-		codeOffset = stack.Back(1)
-		length     = stack.Back(2)
+		codeOffset = scope.Stack.Back(1)
+		length     = scope.Stack.Back(2)
 	)
 	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
 	if overflow {
@@ -137,13 +137,13 @@ func gasCodeCopyEip4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, 
 	return gas, nil
 }
 
-func gasExtCodeCopyEIP4762(pc uint64, evm *EVM, scope *ScopeContext, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+func gasExtCodeCopyEIP4762(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	// memory expansion first (dynamic part of pre-2929 implementation)
-	gas, err := gasExtCodeCopy(pc, evm, scope, stack, mem, memorySize)
+	gas, err := gasExtCodeCopy(pc, evm, scope, memorySize)
 	if err != nil {
 		return 0, err
 	}
-	addr := common.Address(stack.peek().Bytes20())
+	addr := common.Address(scope.Stack.peek().Bytes20())
 	wgas := evm.AccessEvents.BasicDataGas(addr, false)
 	if wgas == 0 {
 		wgas = params.WarmStorageReadCostEIP2929
