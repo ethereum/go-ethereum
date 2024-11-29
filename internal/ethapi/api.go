@@ -867,7 +867,6 @@ func applyMessage(ctx context.Context, b Backend, args TransactionArgs, state *s
 	if precompiles != nil {
 		evm.SetPrecompiles(precompiles)
 	}
-	evm.SetTxContext(core.NewEVMTxContext(msg))
 	res, err := applyMessageWithEVM(ctx, evm, msg, timeout, gp)
 	// If an internal state error occurred, let that have precedence. Otherwise,
 	// a "trie root missing" type of error will masquerade as e.g. "insufficient gas"
@@ -1331,17 +1330,17 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		// Apply the transaction with the access list tracer
 		tracer := logger.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer.Hooks(), NoBaseFee: true}
-		vmenv := b.GetEVM(ctx, statedb, header, &config, nil)
+		evm := b.GetEVM(ctx, statedb, header, &config, nil)
+
 		// Lower the basefee to 0 to avoid breaking EVM
 		// invariants (basefee < feecap).
 		if msg.GasPrice.Sign() == 0 {
-			vmenv.Context.BaseFee = new(big.Int)
+			evm.Context.BaseFee = new(big.Int)
 		}
 		if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
-			vmenv.Context.BlobBaseFee = new(big.Int)
+			evm.Context.BlobBaseFee = new(big.Int)
 		}
-		vmenv.SetTxContext(core.NewEVMTxContext(msg))
-		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.GasLimit))
+		res, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(msg.GasLimit))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}

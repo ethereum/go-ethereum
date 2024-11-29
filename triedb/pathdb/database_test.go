@@ -309,7 +309,7 @@ func (t *tester) generate(parent common.Hash) (common.Hash, *trienode.MergedNode
 			delete(t.storages, addrHash)
 		}
 	}
-	return root, ctx.nodes, NewStateSetWithOrigin(ctx.accountOrigin, ctx.storageOrigin)
+	return root, ctx.nodes, NewStateSetWithOrigin(ctx.accounts, ctx.storages, ctx.accountOrigin, ctx.storageOrigin)
 }
 
 // lastHash returns the latest root hash, or empty if nothing is cached.

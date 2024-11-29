@@ -472,9 +472,7 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 			}
 		}
 		if conf.IsPrague(num, g.Timestamp) {
-			emptyRequests := [][]byte{{0x00}, {0x01}, {0x02}}
-			rhash := types.CalcRequestsHash(emptyRequests)
-			head.RequestsHash = &rhash
+			head.RequestsHash = &types.EmptyRequestsHash
 		}
 	}
 	return types.NewBlock(head, &types.Body{Withdrawals: withdrawals}, nil, trie.NewStackTrie(nil))

@@ -45,7 +45,8 @@ var (
 //
 // - Version 0: initial version
 // - Version 1: storage.Incomplete field is removed
-const journalVersion uint64 = 1
+// - Version 2: add post-modification state values
+const journalVersion uint64 = 2
 
 // loadJournal tries to parse the layer journal from the disk.
 func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
@@ -108,7 +109,7 @@ func (db *Database) loadLayers() layer {
 		log.Info("Failed to load journal, discard it", "err", err)
 	}
 	// Return single layer with persistent state.
-	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, nil, newBuffer(db.config.WriteBufferSize, nil, 0))
+	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0))
 }
 
 // loadDiskLayer reads the binary blob from the layer journal, reconstructing
@@ -135,7 +136,12 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	if err := nodes.decode(r); err != nil {
 		return nil, err
 	}
-	return newDiskLayer(root, id, db, nil, newBuffer(db.config.WriteBufferSize, &nodes, id-stored)), nil
+	// Resolve flat state sets in aggregated buffer
+	var states stateSet
+	if err := states.decode(r); err != nil {
+		return nil, err
+	}
+	return newDiskLayer(root, id, db, nil, newBuffer(db.config.WriteBufferSize, &nodes, &states, id-stored)), nil
 }
 
 // loadDiffLayer reads the next sections of a layer journal, reconstructing a new
@@ -187,6 +193,10 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	}
 	// Step three, write the accumulated trie nodes into the journal
 	if err := dl.buffer.nodes.encode(w); err != nil {
+		return err
+	}
+	// Step four, write the accumulated flat states into the journal
+	if err := dl.buffer.states.encode(w); err != nil {
 		return err
 	}
 	log.Debug("Journaled pathdb disk layer", "root", dl.root)
