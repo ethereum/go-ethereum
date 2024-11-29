@@ -43,14 +43,6 @@ import (
 	"github.com/XinFinOrg/XDPoSChain/crypto"
 )
 
-//var dumpEnc bool
-//
-//func init() {
-//	flDump := flag.Bool("dump", false, "write encrypted test message to file")
-//	flag.Parse()
-//	dumpEnc = *flDump
-//}
-
 // Ensure the KDF generates appropriately sized keys.
 func TestKDF(t *testing.T) {
 	msg := []byte("Hello, world")
