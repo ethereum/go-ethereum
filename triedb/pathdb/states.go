@@ -188,8 +188,8 @@ func (s *stateSet) storageList(accountHash common.Hash) []common.Hash {
 	return list
 }
 
-// clearCache invalidates the cached account list and storage lists.
-func (s *stateSet) clearCache() {
+// clearLists invalidates the cached account list and storage lists.
+func (s *stateSet) clearLists() {
 	s.listLock.Lock()
 	defer s.listLock.Unlock()
 
@@ -249,7 +249,7 @@ func (s *stateSet) merge(other *stateSet) {
 	}
 	accountOverwrites.report(gcAccountMeter, gcAccountBytesMeter)
 	storageOverwrites.report(gcStorageMeter, gcStorageBytesMeter)
-	s.clearCache()
+	s.clearLists()
 	s.updateSize(delta)
 }
 
@@ -268,16 +268,11 @@ func (s *stateSet) revertTo(accountOrigin map[common.Hash][]byte, storageOrigin 
 		if !ok {
 			panic(fmt.Sprintf("non-existent account for reverting, %x", addrHash))
 		}
-		delta += len(blob) - len(data)
-
-		if len(blob) != 0 {
-			s.accountData[addrHash] = blob
-		} else {
-			if len(data) == 0 {
-				panic(fmt.Sprintf("invalid account mutation (null to null), %x", addrHash))
-			}
-			s.accountData[addrHash] = nil
+		if len(data) == 0 && len(blob) == 0 {
+			panic(fmt.Sprintf("invalid account mutation (null to null), %x", addrHash))
 		}
+		delta += len(blob) - len(data)
+		s.accountData[addrHash] = blob
 	}
 	// Overwrite the storage data with original value blindly
 	for addrHash, storage := range storageOrigin {
@@ -290,19 +285,14 @@ func (s *stateSet) revertTo(accountOrigin map[common.Hash][]byte, storageOrigin 
 			if !ok {
 				panic(fmt.Sprintf("non-existent storage slot for reverting, %x-%x", addrHash, storageHash))
 			}
-			delta += len(blob) - len(data)
-
-			if len(blob) != 0 {
-				slots[storageHash] = blob
-			} else {
-				if len(data) == 0 {
-					panic(fmt.Sprintf("invalid storage slot mutation (null to null), %x-%x", addrHash, storageHash))
-				}
-				slots[storageHash] = nil
+			if len(blob) == 0 && len(data) == 0 {
+				panic(fmt.Sprintf("invalid storage slot mutation (null to null), %x-%x", addrHash, storageHash))
 			}
+			delta += len(blob) - len(data)
+			slots[storageHash] = blob
 		}
 	}
-	s.clearCache()
+	s.clearLists()
 	s.updateSize(delta)
 }
 
@@ -336,7 +326,7 @@ func (s *stateSet) encode(w io.Writer) error {
 	type Storage struct {
 		AddrHash common.Hash
 		Keys     []common.Hash
-		Blobs    [][]byte
+		Vals     [][]byte
 	}
 	storages := make([]Storage, 0, len(s.storageData))
 	for addrHash, slots := range s.storageData {
@@ -349,7 +339,7 @@ func (s *stateSet) encode(w io.Writer) error {
 		storages = append(storages, Storage{
 			AddrHash: addrHash,
 			Keys:     keys,
-			Blobs:    vals,
+			Vals:     vals,
 		})
 	}
 	return rlp.Encode(w, storages)
@@ -493,7 +483,7 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 	type Storage struct {
 		Address common.Address
 		Keys    []common.Hash
-		Blobs   [][]byte
+		Vals    [][]byte
 	}
 	storages := make([]Storage, 0, len(s.storageOrigin))
 	for address, slots := range s.storageOrigin {
@@ -503,7 +493,7 @@ func (s *StateSetWithOrigin) encode(w io.Writer) error {
 			keys = append(keys, key)
 			vals = append(vals, val)
 		}
-		storages = append(storages, Storage{Address: address, Keys: keys, Blobs: vals})
+		storages = append(storages, Storage{Address: address, Keys: keys, Vals: vals})
 	}
 	return rlp.Encode(w, storages)
 }
@@ -537,7 +527,7 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	type Storage struct {
 		Address common.Address
 		Keys    []common.Hash
-		Blobs   [][]byte
+		Vals    [][]byte
 	}
 	var (
 		storages   []Storage
@@ -549,7 +539,7 @@ func (s *StateSetWithOrigin) decode(r *rlp.Stream) error {
 	for _, storage := range storages {
 		storageSet[storage.Address] = make(map[common.Hash][]byte)
 		for i := 0; i < len(storage.Keys); i++ {
-			storageSet[storage.Address][storage.Keys[i]] = storage.Blobs[i]
+			storageSet[storage.Address][storage.Keys[i]] = storage.Vals[i]
 		}
 	}
 	s.storageOrigin = storageSet
