@@ -10,7 +10,6 @@ import (
 
 	"github.com/XinFinOrg/XDPoSChain/accounts"
 	"github.com/XinFinOrg/XDPoSChain/accounts/abi/bind/backends"
-	"github.com/XinFinOrg/XDPoSChain/common"
 	"github.com/XinFinOrg/XDPoSChain/consensus/XDPoS"
 	"github.com/XinFinOrg/XDPoSChain/core/types"
 	"github.com/XinFinOrg/XDPoSChain/params"
@@ -195,11 +194,11 @@ func TestVoteMessageHandlerSuccessfullyGeneratedAndProcessQC(t *testing.T) {
 }
 
 func TestThrowErrorIfVoteMsgRoundIsMoreThanOneRoundAwayFromCurrentRound(t *testing.T) {
-	blockchain, _, _, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
+	blockchain, _, currentBlock, _, _, _ := PrepareXDCTestBlockChainForV2Engine(t, 905, params.TestXDPoSMockChainConfig, nil)
 	engineV2 := blockchain.Engine().(*XDPoS.XDPoS).EngineV2
 
 	blockInfo := &types.BlockInfo{
-		Hash:   common.HexToHash("0x1"),
+		Hash:   currentBlock.Hash(),
 		Round:  types.Round(6),
 		Number: big.NewInt(999),
 	}
@@ -397,7 +396,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	}
 
 	err := engineV2.VoteHandler(blockchain, voteMsg)
-	assert.Nil(t, err)
+	assert.Contains(t, err.Error(), "proposed block is not found")
 
 	voteMsg = &types.Vote{
 		ProposedBlockInfo: blockInfo,
@@ -405,7 +404,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 		GapNumber:         450,
 	}
 	err = engineV2.VoteHandler(blockchain, voteMsg)
-	assert.Nil(t, err)
+	assert.Contains(t, err.Error(), "proposed block is not found")
 
 	// Create a vote message that should trigger vote pool hook, but it shall not produce any QC yet
 	voteMsg = &types.Vote{
@@ -415,7 +414,7 @@ func TestVoteMessageShallNotThrowErrorIfBlockNotYetExist(t *testing.T) {
 	}
 
 	err = engineV2.VoteHandler(blockchain, voteMsg)
-	assert.Nil(t, err)
+	assert.Contains(t, err.Error(), "proposed block is not found")
 	currentRound, lockQuorumCert, highestQuorumCert, _, _, _ := engineV2.GetPropertiesFaker()
 	// Still using the initlised value because we did not yet go to the next round
 	assert.Nil(t, lockQuorumCert)

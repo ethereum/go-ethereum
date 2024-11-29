@@ -64,7 +64,6 @@ func AttachConsensusV2Hooks(adaptor *XDPoS.XDPoS, bc *core.BlockChain, chainConf
 			parentNumber--
 			parentHash = parentHeader.ParentHash
 			listBlockHash = append(listBlockHash, parentHash)
-			log.Debug("[HookPenalty] listBlockHash", "i", i, "len", len(listBlockHash), "parentHash", parentHash, "parentNumber", parentNumber)
 		}
 
 		// add list not miner to penalties

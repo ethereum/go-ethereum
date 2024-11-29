@@ -101,6 +101,10 @@ func (b *Bfter) Vote(peer string, vote *types.Vote) error {
 				log.Debug("vote round not equal", "error", err, "vote", vote.Hash())
 				return err
 			}
+			if _, ok := err.(*utils.ErrIncomingMessageBlockNotFound); ok {
+				log.Debug("vote proposed block not found", "error", err, "vote", vote.Hash())
+				return err
+			}
 			log.Error("handle BFT Vote", "error", err)
 			return err
 		}
