@@ -43,8 +43,8 @@ github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498 h1:Y9vTBSsV4hSwPSj4bac
 github.com/dop251/goja v0.0.0-20200721192441-a695b0cdd498/go.mod h1:Mw6PkjjMXWbTj+nnj4s3QPXq1jaT0s5pC0iFD4+BOAA=
 github.com/edsrzf/mmap-go v1.0.0 h1:CEBF7HpRnUCSJgGUb5h1Gm7e3VkmVDrR8lvWVLtrOFw=
 github.com/edsrzf/mmap-go v1.0.0/go.mod h1:YO35OhQPt3KJa3ryjFM5Bs14WD66h8eGKpfaBNrHW5M=
-github.com/ethereum/c-kzg-4844 v0.1.0 h1:BR9kUo6zAaFphuoNj39NquE3Sl0sD/oT0+idKZ4mkiI=
-github.com/ethereum/c-kzg-4844 v0.1.0/go.mod h1:WI2Nd82DMZAAZI1wV2neKGost9EKjvbpQR9OqE5Qqa8=
+github.com/ethereum/c-kzg-4844 v0.2.0 h1:+cUvymlnoDDQgMInp25Bo3OmLajmmY8mLJ/tLjqd77Q=
+github.com/ethereum/c-kzg-4844 v0.2.0/go.mod h1:WI2Nd82DMZAAZI1wV2neKGost9EKjvbpQR9OqE5Qqa8=
 github.com/fatih/color v1.13.0 h1:8LOYc1KYPPmyKMuN8QV2DNRWNbLo6LZ0iLs8+mlH53w=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
