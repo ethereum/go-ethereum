@@ -126,19 +126,19 @@ func newEVMMAXInstructionSet() JumpTable {
 	}
 	instructionSet[ADDMODX] = &operation{
 		execute:    opAddmodx,
-		dynamicGas: gasEVMMAXArithOp,
+		dynamicGas: makeEVMMAXArithGasFunc(params.AddOrSubCost),
 		minStack:   minStack(0, 0),
 		maxStack:   maxStack(0, 0),
 	}
 	instructionSet[SUBMODX] = &operation{
 		execute:    opSubmodx,
-		dynamicGas: gasEVMMAXArithOp,
+		dynamicGas: makeEVMMAXArithGasFunc(params.AddOrSubCost),
 		minStack:   minStack(0, 0),
 		maxStack:   maxStack(0, 0),
 	}
 	instructionSet[MULMODX] = &operation{
 		execute:    opMulmodx,
-		dynamicGas: gasEVMMAXArithOp,
+		dynamicGas: makeEVMMAXArithGasFunc(params.MulmodxCost),
 		minStack:   minStack(0, 0),
 		maxStack:   maxStack(0, 0),
 	}

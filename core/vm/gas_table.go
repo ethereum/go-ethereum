@@ -19,6 +19,7 @@ package vm
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -540,20 +541,32 @@ func gasEOFCreate(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (
 	panic("not implemented")
 }
 
+func isPowerOfTwo(val *big.Int) bool {
+	if val.Bit(val.BitLen()-1) == 1 && new(big.Int).SetBit(val, val.BitLen()-1, 0).Cmp(big.NewInt(0)) == 0 {
+		return true
+	}
+	return false
+}
+
 func gasSetupx(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
 	if !scope.Stack.Back(0).IsUint64() || !scope.Stack.Back(2).IsUint64() || !scope.Stack.Back(3).IsUint64() {
 		return 0, errors.New("one or more parameters overflows 64 bits")
 	}
 
 	modId := uint(scope.Stack.Back(0).Uint64())
+
 	if scope.modExtState.alloced[modId] != nil {
 		return 0, nil
 	}
 
+	modOffset := scope.Stack.Back(1).Uint64()
 	modSize := scope.Stack.Back(2).Uint64()
 	if modSize > 96 {
-		// TODO: ensure returning error here consumes all evm call context gas
 		return 0, fmt.Errorf("modulus cannot exceed 768 bits in width")
+	}
+	_, overflow := math.SafeAdd(modOffset, modSize)
+	if overflow {
+		return 0, fmt.Errorf("modulus offset + size overflows uint64.")
 	}
 
 	feAllocCount := scope.Stack.Back(3).Uint64()
@@ -561,7 +574,7 @@ func gasSetupx(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uin
 		return 0, fmt.Errorf("cannot allocate more than 256 field elements per modulus id")
 	}
 	paddedModSize := (modSize + 7) / 8
-	precompCost := uint64(params.SetupxPrecompCost[paddedModSize])
+	precompCost := params.SetmodxOddModulusCost[paddedModSize]
 
 	// the size in bytes of the field element heap that this call to SETUPX is
 	// allocating.
@@ -576,7 +589,11 @@ func gasSetupx(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uin
 	// and the maximum call-context allocatable memory + reasonable evm memory limit
 	// will not overflow a uint64.
 	memCost, _ := evmmaxMemoryGasCost(pc, scope, memorySize, allocSize)
-	return precompCost + memCost, nil
+	modBytes := scope.Memory.GetPtr(modOffset, modSize)
+	if !isPowerOfTwo(new(big.Int).SetBytes(modBytes)) {
+		return precompCost + memCost, nil
+	}
+	return memCost, nil
 }
 
 func gasStorex(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
@@ -642,24 +659,16 @@ func gasLoadx(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint
 	}
 }
 
-func gasEVMMAXArithOp(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
-	if scope.modExtState.active == nil {
-		return 0, errors.New("no active mod state")
+func makeEVMMAXArithGasFunc(opCosts []uint64) gasFunc {
+	return func(pc uint64, evm *EVM, scope *ScopeContext, memorySize uint64) (uint64, error) {
+		if scope.modExtState.active == nil {
+			return 0, errors.New("no active field context")
+		}
+		out, outStride, x, xStride, y, yStride, count := extractEVMMAXImmediateInputs(pc, scope.Contract.Code)
+		maxOffset := max(x+xStride*count, y+yStride*count, out+outStride*count)
+		if count == 0 || outStride == 0 || maxOffset > scope.modExtState.active.NumElems() {
+			return 0, errors.New("bad parameters")
+		}
+		return uint64(count) * opCosts[len(scope.modExtState.active.Modulus)-1], nil
 	}
-	_ = scope.Contract.Code[pc+7]
-	out := uint(scope.Contract.Code[pc+1])
-	out_stride := uint(scope.Contract.Code[pc+2])
-	x := uint(scope.Contract.Code[pc+3])
-	x_stride := uint(scope.Contract.Code[pc+4])
-	y := uint(scope.Contract.Code[pc+5])
-	y_stride := uint(scope.Contract.Code[pc+6])
-	count := uint(scope.Contract.Code[pc+7])
-
-	maxOffset := max(x+x_stride*count, y+y_stride*count, out+out_stride*count)
-	// TODO: might not need to assert count == 0 ?
-	if count == 0 || out_stride == 0 || maxOffset > scope.modExtState.active.NumElems() {
-		return 0, errors.New("bad parameters")
-	}
-	// TODO: fill in gas costs with table lookup multiplied by count...
-	return 1, nil
 }

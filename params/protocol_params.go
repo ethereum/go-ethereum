@@ -213,11 +213,11 @@ var (
 
 // EVMMAX constants
 var (
-	SetupxPrecompCost = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	SetmodxOddModulusCost = []uint64{23, 26, 29, 32, 36, 39, 42, 45, 48, 51, 54, 58}
 	// mulmodx cost lookup table
-	MulmodxCost = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	MulmodxCost = []uint64{1, 1, 1, 2, 2, 3, 4, 5, 7, 8, 10, 12}
 	// addmodx/submodx cost lookup table
-	AddOrSubCost = []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	AddOrSubCost = []uint64{1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2}
 	// the maximum size (in bytes) that can be allocated by all field contexts
 	// per EVM call frame
 	MaxFEAllocSize = 96 * 256
