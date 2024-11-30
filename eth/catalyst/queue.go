@@ -95,6 +95,22 @@ func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayl
 	return nil
 }
 
+// peek retrieves a previously stored payload itself or nil if it does not exist.
+func (q *payloadQueue) peek(id engine.PayloadID) *miner.Payload {
+	q.lock.RLock()
+	defer q.lock.RUnlock()
+
+	for _, item := range q.payloads {
+		if item == nil {
+			return nil // no more items
+		}
+		if item.id == id {
+			return item.payload
+		}
+	}
+	return nil
+}
+
 // has checks if a particular payload is already tracked.
 func (q *payloadQueue) has(id engine.PayloadID) bool {
 	q.lock.RLock()
