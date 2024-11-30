@@ -472,6 +472,41 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 			return err
 		}
 	}
+
+	// Fill the block with transactions in the inclusion list that are not included in the block.
+	isIncluded := make(map[common.Hash]bool)
+	for _, txs := range pendingPlainTxs {
+		for _, tx := range txs {
+			isIncluded[tx.Hash] = true
+		}
+	}
+	for _, txs := range pendingBlobTxs {
+		for _, tx := range txs {
+			isIncluded[tx.Hash] = true
+		}
+	}
+
+	pendingInclusionListTxs := make([]*types.Transaction, 0)
+	for _, tx := range env.inclusionList {
+		if isIncluded[tx.Hash()] {
+			continue
+		}
+
+		pendingInclusionListTxs = append(pendingInclusionListTxs, tx)
+	}
+
+	if len(pendingInclusionListTxs) > 0 {
+		gasLimit := env.header.GasLimit
+		if env.gasPool == nil {
+			env.gasPool = new(core.GasPool).AddGas(gasLimit)
+		}
+
+		for _, tx := range pendingInclusionListTxs {
+			env.state.SetTxContext(tx.Hash(), env.tcount)
+			miner.commitTransaction(env, tx) // Error is simply ignored. A transaction that cannot be appended at the end of the block can be skipped.
+		}
+	}
+
 	return nil
 }
 
