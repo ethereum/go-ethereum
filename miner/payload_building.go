@@ -37,13 +37,14 @@ import (
 // Check engine-api specification for more details.
 // https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#payloadattributesv3
 type BuildPayloadArgs struct {
-	Parent       common.Hash           // The parent block to build payload on top
-	Timestamp    uint64                // The provided timestamp of generated payload
-	FeeRecipient common.Address        // The provided recipient address for collecting transaction fee
-	Random       common.Hash           // The provided randomness value
-	Withdrawals  types.Withdrawals     // The provided withdrawals
-	BeaconRoot   *common.Hash          // The provided beaconRoot (Cancun)
-	Version      engine.PayloadVersion // Versioning byte for payload id calculation.
+	Parent        common.Hash           // The parent block to build payload on top
+	Timestamp     uint64                // The provided timestamp of generated payload
+	FeeRecipient  common.Address        // The provided recipient address for collecting transaction fee
+	Random        common.Hash           // The provided randomness value
+	Withdrawals   types.Withdrawals     // The provided withdrawals
+	BeaconRoot    *common.Hash          // The provided beaconRoot (Cancun)
+	InclusionList types.InclusionList   // The provided inclusion list transactions
+	Version       engine.PayloadVersion // Versioning byte for payload id calculation.
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -241,14 +242,15 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 		endTimer := time.NewTimer(time.Second * 12)
 
 		fullParams := &generateParams{
-			timestamp:   args.Timestamp,
-			forceTime:   true,
-			parentHash:  args.Parent,
-			coinbase:    args.FeeRecipient,
-			random:      args.Random,
-			withdrawals: args.Withdrawals,
-			beaconRoot:  args.BeaconRoot,
-			noTxs:       false,
+			timestamp:     args.Timestamp,
+			forceTime:     true,
+			parentHash:    args.Parent,
+			coinbase:      args.FeeRecipient,
+			random:        args.Random,
+			withdrawals:   args.Withdrawals,
+			beaconRoot:    args.BeaconRoot,
+			inclusionList: args.InclusionList,
+			noTxs:         false,
 		}
 
 		for {
