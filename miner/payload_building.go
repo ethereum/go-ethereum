@@ -79,6 +79,7 @@ type Payload struct {
 	requests      [][]byte
 	fullFees      *big.Int
 	stop          chan struct{}
+	inclusionList chan []*types.Transaction
 	lock          sync.Mutex
 	cond          *sync.Cond
 }
@@ -91,6 +92,7 @@ func newPayload(empty *types.Block, emptyRequests [][]byte, witness *stateless.W
 		emptyRequests: emptyRequests,
 		emptyWitness:  witness,
 		stop:          make(chan struct{}),
+		inclusionList: make(chan []*types.Transaction),
 	}
 	log.Info("Starting work on payload", "id", payload.id)
 	payload.cond = sync.NewCond(&payload.lock)
@@ -205,6 +207,13 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	return envelope
 }
 
+func (payload *Payload) UpdateWithInclusionList(inclusionList []*types.Transaction) {
+	payload.lock.Lock()
+	defer payload.lock.Unlock()
+
+	payload.inclusionList <- inclusionList
+}
+
 // buildPayload builds the payload according to the provided parameters.
 func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
@@ -250,6 +259,7 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 			beaconRoot:  args.BeaconRoot,
 			noTxs:       false,
 		}
+		var inclusionList []*types.Transaction
 
 		for {
 			select {
@@ -262,6 +272,9 @@ func (miner *Miner) buildPayload(args *BuildPayloadArgs, witness bool) (*Payload
 					log.Info("Error while generating work", "id", payload.id, "err", r.err)
 				}
 				timer.Reset(miner.config.Recommit)
+			case inclusionList = <-payload.inclusionList:
+				fullParams.inclusionList = inclusionList
+				timer.Reset(0)
 			case <-payload.stop:
 				log.Info("Stopping work on payload", "id", payload.id, "reason", "delivery")
 				return
