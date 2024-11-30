@@ -96,6 +96,7 @@ var caps = []string{
 	"engine_getPayloadV4",
 	"engine_getBlobsV1",
 	"engine_getInclusionListV1",
+	"engine_updatePayloadWithInclusionListV1",
 	"engine_newPayloadV1",
 	"engine_newPayloadV2",
 	"engine_newPayloadV3",
@@ -569,6 +570,22 @@ func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) (engine.Incl
 	api.localInclusionLists.put(parentHash, inclusionList)
 
 	return inclusionList, nil
+}
+
+func (api *ConsensusAPI) UpdatePayloadWithInclusionListV1(payloadID engine.PayloadID, inclusionList engine.InclusionList) (*engine.PayloadID, error) {
+	payload := api.localBlocks.peak(payloadID)
+	if payload == nil {
+		return nil, engine.UnknownPayload
+	}
+
+	inclusionListTxs, err := engine.InclusionListToTransactions(inclusionList)
+	if err != nil {
+		return nil, err
+	}
+
+	payload.UpdateWithInclusionList(inclusionListTxs)
+
+	return &payloadID, nil
 }
 
 // NewPayloadV1 creates an Eth1 block, inserts it in the chain, and returns the status of the chain.
