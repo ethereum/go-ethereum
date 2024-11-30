@@ -87,6 +87,7 @@ var caps = []string{
 	"engine_forkchoiceUpdatedV1",
 	"engine_forkchoiceUpdatedV2",
 	"engine_forkchoiceUpdatedV3",
+	"engine_forkchoiceUpdatedV4",
 	"engine_forkchoiceUpdatedWithWitnessV1",
 	"engine_forkchoiceUpdatedWithWitnessV2",
 	"engine_forkchoiceUpdatedWithWitnessV3",
@@ -252,7 +253,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
 		case params.BeaconRoot == nil:
 			return engine.STATUS_INVALID, attributesErr("missing beacon root")
-		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.Eip7805):
+		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka):
 			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun or prague payloads")
 		}
 	}
@@ -261,6 +262,22 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV3(update engine.ForkchoiceStateV1, pa
 	// forkchoiceUpdate into a function that only updates the head and then a
 	// function that kicks off block construction.
 	return api.forkchoiceUpdated(update, params, engine.PayloadV3, false)
+}
+
+// ForkchoiceUpdatedV4 is equivalent to V3 with the addition of inclusion list
+// in the payload attributes. It supports only PayloadAttributesV4.
+func (api *ConsensusAPI) ForkchoiceUpdatedV4(update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+	if params != nil {
+		switch {
+		case params.Withdrawals == nil:
+			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
+		case params.BeaconRoot == nil:
+			return engine.STATUS_INVALID, attributesErr("missing beacon root")
+		case !api.checkFork(params.Timestamp, forks.Eip7805):
+			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for eip7805 payloads")
+		}
+	}
+	return api.forkchoiceUpdated(update, params, engine.PayloadV4, false)
 }
 
 func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, payloadWitness bool) (engine.ForkChoiceResponse, error) {
@@ -390,18 +407,20 @@ func (api *ConsensusAPI) forkchoiceUpdated(update engine.ForkchoiceStateV1, payl
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
 		args := &miner.BuildPayloadArgs{
-			Parent:       update.HeadBlockHash,
-			Timestamp:    payloadAttributes.Timestamp,
-			FeeRecipient: payloadAttributes.SuggestedFeeRecipient,
-			Random:       payloadAttributes.Random,
-			Withdrawals:  payloadAttributes.Withdrawals,
-			BeaconRoot:   payloadAttributes.BeaconRoot,
-			Version:      payloadVersion,
+			Parent:        update.HeadBlockHash,
+			Timestamp:     payloadAttributes.Timestamp,
+			FeeRecipient:  payloadAttributes.SuggestedFeeRecipient,
+			Random:        payloadAttributes.Random,
+			Withdrawals:   payloadAttributes.Withdrawals,
+			BeaconRoot:    payloadAttributes.BeaconRoot,
+			InclusionList: payloadAttributes.InclusionList,
+			Version:       payloadVersion,
 		}
 		id := args.Id()
 		// If we already are busy generating this work, then we do not need
 		// to start a second process.
-		if api.localBlocks.has(id) {
+		if payload := api.localBlocks.peek(id); payload != nil {
+			payload.UpdateInclusionList(payloadAttributes.InclusionList)
 			return valid(&id), nil
 		}
 		payload, err := api.eth.Miner().BuildPayload(args, payloadWitness)
