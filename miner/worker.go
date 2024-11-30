@@ -53,11 +53,12 @@ type environment struct {
 	coinbase common.Address
 	evm      *vm.EVM
 
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
-	sidecars []*types.BlobTxSidecar
-	blobs    int
+	header        *types.Header
+	txs           []*types.Transaction
+	receipts      []*types.Receipt
+	sidecars      []*types.BlobTxSidecar
+	blobs         int
+	inclusionList []*types.Transaction
 
 	witness *stateless.Witness
 }
@@ -223,7 +224,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 	// Could potentially happen if starting to mine in an odd state.
 	// Note genParams.coinbase can be different with header.Coinbase
 	// since clique algorithm can modify the coinbase field in header.
-	env, err := miner.makeEnv(parent, header, genParams.coinbase, witness)
+	env, err := miner.makeEnv(parent, header, genParams.coinbase, genParams.inclusionList, witness)
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
@@ -238,7 +239,7 @@ func (miner *Miner) prepareWork(genParams *generateParams, witness bool) (*envir
 }
 
 // makeEnv creates a new environment for the sealing block.
-func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, witness bool) (*environment, error) {
+func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase common.Address, inclusionList []*types.Transaction, witness bool) (*environment, error) {
 	// Retrieve the parent state to execute on top.
 	state, err := miner.chain.StateAt(parent.Root)
 	if err != nil {
@@ -253,12 +254,13 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 	}
 	// Note the passed coinbase may be different with header.Coinbase.
 	return &environment{
-		signer:   types.MakeSigner(miner.chainConfig, header.Number, header.Time),
-		state:    state,
-		coinbase: coinbase,
-		header:   header,
-		witness:  state.Witness(),
-		evm:      vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
+		signer:        types.MakeSigner(miner.chainConfig, header.Number, header.Time),
+		state:         state,
+		coinbase:      coinbase,
+		header:        header,
+		inclusionList: inclusionList,
+		witness:       state.Witness(),
+		evm:           vm.NewEVM(core.NewEVMBlockContext(header, miner.chain, &coinbase), state, miner.chainConfig, vm.Config{}),
 	}, nil
 }
 
