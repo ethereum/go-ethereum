@@ -101,6 +101,7 @@ var caps = []string{
 	"engine_getBlobsV1",
 	"engine_getBlobsV2",
 	"engine_getInclusionListV1",
+	"engine_updatePayloadWithInclusionListV1",
 	"engine_newPayloadV1",
 	"engine_newPayloadV2",
 	"engine_newPayloadV3",
@@ -607,6 +608,19 @@ func (api *ConsensusAPI) GetInclusionListV1(parentHash common.Hash) (types.Inclu
 	api.localInclusionLists.put(parentHash, inclusionList)
 
 	return inclusionList, nil
+}
+
+func (api *ConsensusAPI) UpdatePayloadWithInclusionListV1(payloadID engine.PayloadID, inclusionList types.InclusionList) (*engine.PayloadID, error) {
+	payload := api.localBlocks.peek(payloadID)
+	if payload == nil {
+		return nil, engine.UnknownPayload
+	}
+
+	inclusionListTxs := api.getValidInclusionListTransactions(inclusionList)
+
+	payload.UpdateWithInclusionList(inclusionListTxs)
+
+	return &payloadID, nil
 }
 
 // Helper for NewPayload* methods.
