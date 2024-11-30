@@ -526,6 +526,49 @@ func (miner *Miner) fillTransactions(interrupt *atomic.Int32, env *environment) 
 			return err
 		}
 	}
+
+	// Filter out inclusion list transactions that are not included in the block.
+	isIncludedTx := make(map[common.Hash]bool)
+	for _, tx := range env.txs {
+		isIncludedTx[tx.Hash()] = true
+	}
+
+	opts := &txpool.ValidationOptions{
+		Config: miner.chainConfig,
+		Accept: 0 |
+			1<<types.LegacyTxType |
+			1<<types.AccessListTxType |
+			1<<types.DynamicFeeTxType |
+			1<<types.SetCodeTxType,
+		MaxSize: params.MaxBytesPerInclusionList,
+		MinTip:  miner.config.GasPrice,
+	}
+
+	for _, tx := range env.inclusionListTxs {
+		// Skip if a transaction is already included in the block.
+		if isIncludedTx[tx.Hash()] {
+			continue
+		}
+
+		// EIP-7805 doesn't support blob transactions in inclusion list
+		if tx.Type() == types.BlobTxType {
+			continue
+		}
+
+		// Skip if a transaction is intrinsically invalid.
+		if err := txpool.ValidateTransaction(tx, env.header, env.signer, opts); err != nil {
+			continue
+		}
+
+		// Add a transaction to the block.
+		env.state.SetTxContext(tx.Hash(), env.tcount)
+
+		if err := miner.commitTransaction(env, tx); err != nil {
+			// Skip if a transaction cannot be appended at the end of the block.
+			log.Trace("Skipping inclusion list transaction", "hash", tx.Hash(), "err", err)
+		}
+	}
+
 	return nil
 }
 
