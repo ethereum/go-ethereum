@@ -1937,3 +1937,127 @@ func TestNewPayloadWithInclusionList(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdatePayloadWithInclusionList(t *testing.T) {
+	genesis, blocks := generateMergeChain(100, false)
+
+	// Set cancun time to last block + 5 seconds
+	time := blocks[len(blocks)-1].Time() + 5
+	genesis.Config.ShanghaiTime = &time
+	genesis.Config.CancunTime = &time
+
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := NewConsensusAPI(ethservice)
+	parent := ethservice.BlockChain().CurrentHeader()
+	statedb, _ := ethservice.BlockChain().StateAt(parent.Root)
+
+	// Prepare transactions.
+	signer := types.LatestSigner(ethservice.BlockChain().Config())
+	testUserKey, _ := crypto.GenerateKey()
+	testUserAddress := crypto.PubkeyToAddress(testUserKey.PublicKey)
+	validTx1 := types.MustSignNewTx(testKey, signer, &types.LegacyTx{
+		Nonce:    statedb.GetNonce(testAddr),
+		To:       &testUserAddress,
+		Value:    big.NewInt(1000),
+		Gas:      params.TxGas,
+		GasPrice: big.NewInt(params.InitialBaseFee),
+	})
+	validTx2 := types.MustSignNewTx(testKey, signer, &types.AccessListTx{
+		ChainID:  ethservice.BlockChain().Config().ChainID,
+		Nonce:    statedb.GetNonce(testAddr) + 1,
+		To:       &testUserAddress,
+		Value:    big.NewInt(1000),
+		Gas:      params.TxGas,
+		GasPrice: big.NewInt(params.InitialBaseFee),
+	})
+	invalidTx := types.MustSignNewTx(testUserKey, signer, &types.AccessListTx{
+		ChainID:  ethservice.BlockChain().Config().ChainID,
+		Nonce:    statedb.GetNonce(testUserAddress),
+		To:       &testAddr,
+		Value:    big.NewInt(1000),
+		Gas:      params.TxGas,
+		GasPrice: big.NewInt(params.InitialBaseFee),
+	}) // This tx is invalid as `testUserAddress` has insufficient funds for `gas` * `price` + `value`.
+
+	// There is no transaction in the pool. The payload will contain only valid transactions in the inclusion list.
+
+	for i, tt := range []*struct {
+		name                 string
+		inclusionList        *engine.InclusionListV1
+		expectedTransactions int
+		expectedStatus       string
+	}{
+		{
+			name:                 "Block contains all transactions in the inclusion list",
+			inclusionList:        engine.TransactionsToInclusionList([]*types.Transaction{validTx1}),
+			expectedTransactions: 1,
+			expectedStatus:       engine.VALID,
+		},
+		{
+			name:                 "Block contains all transactions in the inclusion list",
+			inclusionList:        engine.TransactionsToInclusionList([]*types.Transaction{validTx1, validTx2}),
+			expectedTransactions: 2,
+			expectedStatus:       engine.VALID,
+		},
+		{
+			name:                 "Block misses only invalid transactions in the inclusion list",
+			inclusionList:        engine.TransactionsToInclusionList([]*types.Transaction{validTx1, invalidTx}),
+			expectedTransactions: 1,
+			expectedStatus:       engine.VALID,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build Shanghai block.
+			blockParams := engine.PayloadAttributes{
+				Timestamp:             parent.Time + 5 + uint64(i),
+				Random:                crypto.Keccak256Hash([]byte{byte(0)}),
+				SuggestedFeeRecipient: parent.Coinbase,
+				Withdrawals:           make([]*types.Withdrawal, 0),
+				BeaconRoot:            &common.Hash{42},
+			}
+			fcState := engine.ForkchoiceStateV1{
+				HeadBlockHash:      parent.Hash(),
+				SafeBlockHash:      common.Hash{},
+				FinalizedBlockHash: common.Hash{},
+			}
+
+			var (
+				payload *engine.ExecutionPayloadEnvelope
+				resp    engine.ForkChoiceResponse
+				err     error
+			)
+
+			// Start building the payload.
+			if resp, err = api.ForkchoiceUpdatedV3(fcState, &blockParams); err != nil {
+				t.Fatalf("error preparing payload, err=%v", err)
+			}
+			if resp.PayloadStatus.Status != engine.VALID {
+				t.Fatalf("error preparing payload, invalid status=%v", resp.PayloadStatus.Status)
+			}
+
+			// Update the payload with the inclusion list.
+			api.UpdatePayloadWithInclusionListV1(*resp.PayloadID, *tt.inclusionList)
+
+			// Get the payload.
+			if payload, err = api.getPayload(*resp.PayloadID, true); err != nil {
+				t.Fatalf("error getting payload, err=%v", err)
+			}
+
+			// Verify if the block contains all valid transactions in the inclusion list.
+			if len(payload.ExecutionPayload.Transactions) != tt.expectedTransactions {
+				t.Fatalf("expected %d transactions but got %d", tt.expectedTransactions, len(payload.ExecutionPayload.Transactions))
+			}
+
+			// Verify if the block satisfies the inclusion list constraints.
+			status, err := api.newPayload(*payload.ExecutionPayload, []common.Hash{}, &common.Hash{42}, nil, tt.inclusionList, false)
+			if err != nil {
+				t.Fatalf("error validating payload, err=%v", err)
+			}
+			if status.Status != tt.expectedStatus {
+				t.Fatalf("expected status %v but got %v", tt.expectedStatus, status.Status)
+			}
+		})
+	}
+}
