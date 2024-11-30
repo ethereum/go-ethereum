@@ -2086,6 +2086,7 @@ func TestInclusionList(t *testing.T) {
 	timestamp := blocks[len(blocks)-1].Time() + 5
 	genesis.Config.ShanghaiTime = &timestamp
 	genesis.Config.CancunTime = &timestamp
+	genesis.Config.Eip7805Time = &timestamp
 	genesis.Config.BlobScheduleConfig = params.DefaultBlobSchedule
 
 	n, ethservice := startEthService(t, genesis, blocks)
@@ -2127,24 +2128,39 @@ func TestInclusionList(t *testing.T) {
 	ethservice.TxPool().Add([]*types.Transaction{validTx1}, true)
 
 	for i, tt := range []*struct {
-		name           string
-		inclusionList  types.InclusionList
-		expectedStatus string
+		name                 string
+		inclusionList        types.InclusionList
+		updateInclusionList  bool
+		expectedTransactions int
+		expectedStatus       string
 	}{
 		{
-			name:           "Block contains all transactions in the inclusion list",
-			inclusionList:  types.TransactionsToInclusionList([]*types.Transaction{validTx1}),
-			expectedStatus: engine.VALID,
+			name:                 "Payload misses one transaction in the inclusion list, which could have been included",
+			inclusionList:        types.TransactionsToInclusionList([]*types.Transaction{validTx1, validTx2}),
+			updateInclusionList:  false,
+			expectedTransactions: 1,
+			expectedStatus:       engine.INCLUSION_LIST_UNSATISFIED,
 		},
 		{
-			name:           "Block misses one transaction in the inclusion list, which could have been included",
-			inclusionList:  types.TransactionsToInclusionList([]*types.Transaction{validTx1, validTx2}),
-			expectedStatus: engine.INCLUSION_LIST_UNSATISFIED,
+			name:                 "All transactions in the inclusion list are already included in the payload before update",
+			inclusionList:        types.TransactionsToInclusionList([]*types.Transaction{validTx1}),
+			updateInclusionList:  true,
+			expectedTransactions: 1,
+			expectedStatus:       engine.VALID,
 		},
 		{
-			name:           "Block misses only invalid transactions in the inclusion list",
-			inclusionList:  types.TransactionsToInclusionList([]*types.Transaction{validTx1, invalidTx}),
-			expectedStatus: engine.VALID,
+			name:                 "All transactions in the inclusion list that are not included in the payload before update",
+			inclusionList:        types.TransactionsToInclusionList([]*types.Transaction{validTx2}),
+			updateInclusionList:  true,
+			expectedTransactions: 2, // `validTx1` from the pool and `validTx2` from the inclusion list
+			expectedStatus:       engine.VALID,
+		},
+		{
+			name:                 "Payload includes all valid transactions in the inclusion list",
+			inclusionList:        types.TransactionsToInclusionList([]*types.Transaction{validTx1, validTx2, invalidTx}),
+			updateInclusionList:  true,
+			expectedTransactions: 2,
+			expectedStatus:       engine.VALID,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2169,20 +2185,31 @@ func TestInclusionList(t *testing.T) {
 			)
 
 			// Start building the payload.
-			if resp, err = api.ForkchoiceUpdatedV3(fcState, &blockParams); err != nil {
+			if resp, err = api.ForkchoiceUpdatedV4(fcState, &blockParams); err != nil {
 				t.Fatalf("error preparing payload, err=%v", err)
 			}
 			if resp.PayloadStatus.Status != engine.VALID {
 				t.Fatalf("error preparing payload, invalid status=%v", resp.PayloadStatus.Status)
+			}
+			time.Sleep(250 * time.Millisecond)
+
+			if tt.updateInclusionList {
+				// Update the payload with the inclusion list.
+				blockParams.InclusionList = tt.inclusionList
+				if resp, err = api.ForkchoiceUpdatedV4(fcState, &blockParams); err != nil {
+					t.Fatalf("error updating payload, err=%v", err)
+				}
+				time.Sleep(250 * time.Millisecond)
 			}
 
 			// Get the payload.
 			if payload, err = api.getPayload(*resp.PayloadID, true); err != nil {
 				t.Fatalf("error getting payload, err=%v", err)
 			}
-			// The payload is expected to have 1 transaction, which is `validTx1`.
-			if len(payload.ExecutionPayload.Transactions) != 1 {
-				t.Fatalf("expected 1 transaction but got %d", len(payload.ExecutionPayload.Transactions))
+
+			// Verify if the block contains all valid transactions in the inclusion list.
+			if len(payload.ExecutionPayload.Transactions) != tt.expectedTransactions {
+				t.Fatalf("expected %d transactions but got %d", tt.expectedTransactions, len(payload.ExecutionPayload.Transactions))
 			}
 
 			// Verify if the block satisfies the inclusion list constraints.
