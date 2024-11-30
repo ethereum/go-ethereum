@@ -136,6 +136,10 @@ type InclusionListV1 struct {
 	Transactions [][]byte `json:"transactions"  gencodec:"required"`
 }
 
+type UpdateInclusionListResponse struct {
+	PayloadID *PayloadID `json:"payloadId"`
+}
+
 type PayloadStatusV1 struct {
 	Status          string         `json:"status"`
 	Witness         *hexutil.Bytes `json:"witness"`
