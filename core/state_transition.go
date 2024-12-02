@@ -466,52 +466,12 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1)
 	}
 
-	// Check authorizations list validity.
+	// Apply EIP-7702 authorizations.
 	if msg.AuthList != nil {
 		for _, auth := range msg.AuthList {
-			// Verify chain ID is 0 or equal to current chain ID.
-			if auth.ChainID != 0 && st.evm.ChainConfig().ChainID.Uint64() != auth.ChainID {
-				continue
-			}
-			// Limit nonce to 2^64-1 per EIP-2681.
-			if auth.Nonce+1 < auth.Nonce {
-				continue
-			}
-			// Validate signature values and recover authority.
-			authority, err := auth.Authority()
-			if err != nil {
-				continue
-			}
-			// Check the authority account 1) doesn't have code or has exisiting
-			// delegation 2) matches the auth's nonce
-			st.state.AddAddressToAccessList(authority)
-			code := st.state.GetCode(authority)
-			if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
-				continue
-			}
-			if have := st.state.GetNonce(authority); have != auth.Nonce {
-				continue
-			}
-			// If the account already exists in state, refund the new account cost
-			// charged in the intrinsic calculation.
-			if exists := st.state.Exist(authority); exists {
-				st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
-			}
-			st.state.SetNonce(authority, auth.Nonce+1)
-			delegation := types.AddressToDelegation(auth.Address)
-			if auth.Address == (common.Address{}) {
-				// If the delegation is for the zero address, completely clear all
-				// delegations from the account.
-				delegation = []byte{}
-			}
-			st.state.SetCode(authority, delegation)
-
-			// Usually the transaction destination and delegation target are added to
-			// the access list in statedb.Prepare(..), however if the delegation is in
-			// the same transaction we need add here as Prepare already happened.
-			if *msg.To == authority {
-				st.state.AddAddressToAccessList(auth.Address)
-			}
+			// Note errors are ignored, we simply skip invalid authorizations here.
+			err := st.applyAuthorization(msg, &auth)
+			fmt.Println("err:", err)
 		}
 	}
 
@@ -563,6 +523,65 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		Err:         vmerr,
 		ReturnData:  ret,
 	}, nil
+}
+
+// validateAuthorization validates an EIP-7702 authorization against the state.
+func (st *stateTransition) validateAuthorization(auth *types.Authorization) (authority common.Address, err error) {
+	// Verify chain ID is 0 or equal to current chain ID.
+	if auth.ChainID != 0 && st.evm.ChainConfig().ChainID.Uint64() != auth.ChainID {
+		return authority, ErrAuthorizationWrongChainID
+	}
+	// Limit nonce to 2^64-1 per EIP-2681.
+	if auth.Nonce+1 < auth.Nonce {
+		return authority, ErrAuthorizationNonceOverflow
+	}
+	// Validate signature values and recover authority.
+	authority, err = auth.Authority()
+	if err != nil {
+		return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
+	}
+	// Check the authority account 1) doesn't have code or has exisiting
+	// delegation 2) matches the auth's nonce
+	st.state.AddAddressToAccessList(authority)
+	code := st.state.GetCode(authority)
+	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
+		return authority, ErrAuthorizationDestinationHasCode
+	}
+	if have := st.state.GetNonce(authority); have != auth.Nonce {
+		return authority, ErrAuthorizationNonceMismatch
+	}
+	return authority, nil
+}
+
+// applyAuthorization applies an EIP-7702 code delegation to the state.
+func (st *stateTransition) applyAuthorization(msg *Message, auth *types.Authorization) error {
+	authority, err := st.validateAuthorization(auth)
+	if err != nil {
+		return err
+	}
+
+	// If the account already exists in state, refund the new account cost
+	// charged in the intrinsic calculation.
+	if exists := st.state.Exist(authority); exists {
+		st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
+	}
+	st.state.SetNonce(authority, auth.Nonce+1)
+	delegation := types.AddressToDelegation(auth.Address)
+	if auth.Address == (common.Address{}) {
+		// If the delegation is for the zero address, completely clear all
+		// delegations from the account.
+		delegation = []byte{}
+	}
+	st.state.SetCode(authority, delegation)
+
+	// Usually the transaction destination and delegation target are added to
+	// the access list in statedb.Prepare(..), however if the delegation is in
+	// the same transaction we need add here as Prepare already happened.
+	if *msg.To == authority {
+		st.state.AddAddressToAccessList(auth.Address)
+	}
+
+	return nil
 }
 
 func (st *stateTransition) refundGas(refundQuotient uint64) uint64 {
