@@ -1049,8 +1049,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		} else {
 			result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 		}
-		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
-		result.BlobVersionedHashes = tx.BlobHashes()
 		result.AuthorizationList = tx.AuthList()
 	}
 	return result
