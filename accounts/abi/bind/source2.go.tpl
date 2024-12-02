@@ -148,4 +148,24 @@ var (
 			return out, nil
 		}
 	{{end}}
+
+    {{range .Errors}}
+		// {{$contract.Type}}{{.Normalized.Name}} represents a {{.Normalized.Name}} error raised by the {{$contract.Type}} contract.
+		type {{$contract.Type}}{{.Normalized.Name}} struct { {{range .Normalized.Inputs}}
+			{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $structs}}{{else}}{{bindtype .Type $structs}}{{end}}; {{end}}
+		}
+
+		func {{$contract.Type}}{{.Normalized.Name}}ErrorID() common.Hash {
+			return common.HexToHash("{{.Original.ID}}")
+		}
+
+		func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Error(raw []byte) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
+			errName := "{{.Normalized.Name}}"
+			out := new({{$contract.Type}}{{.Normalized.Name}})
+            if err := _{{$contract.Type}}.abi.UnpackIntoInterface(out, errName, raw); err != nil {
+                return nil, err
+            }
+			return out, nil
+		}
+    {{end}}
 {{end}}
