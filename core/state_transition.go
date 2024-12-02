@@ -463,7 +463,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 
 	if !contractCreation {
 		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From, st.state.GetNonce(sender.Address())+1)
+		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1)
 	}
 
 	// Check authorizations list validity.
