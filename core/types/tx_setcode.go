@@ -75,8 +75,8 @@ type Authorization struct {
 	Address common.Address `json:"address" gencodec:"required"`
 	Nonce   uint64         `json:"nonce" gencodec:"required"`
 	V       uint8          `json:"v" gencodec:"required"`
-	R       *big.Int       `json:"r" gencodec:"required"`
-	S       *big.Int       `json:"s" gencodec:"required"`
+	R       uint256.Int    `json:"r" gencodec:"required"`
+	S       uint256.Int    `json:"s" gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -84,8 +84,6 @@ type authorizationMarshaling struct {
 	ChainID hexutil.Uint64
 	Nonce   hexutil.Uint64
 	V       hexutil.Uint64
-	R       *hexutil.Big
-	S       *hexutil.Big
 }
 
 // SignAuth signs the provided authorization.
@@ -114,12 +112,12 @@ func (a *Authorization) withSignature(sig []byte) Authorization {
 		Address: a.Address,
 		Nonce:   a.Nonce,
 		V:       sig[64],
-		R:       r,
-		S:       s,
+		R:       *uint256.MustFromBig(r),
+		S:       *uint256.MustFromBig(s),
 	}
 }
 
-// Authority recovers the authorizing
+// Authority recovers the the authorizing account of an authorization.
 func (a Authorization) Authority() (common.Address, error) {
 	sighash := prefixedRlpHash(
 		0x05,
@@ -128,17 +126,16 @@ func (a Authorization) Authority() (common.Address, error) {
 			a.Address,
 			a.Nonce,
 		})
-	if !crypto.ValidateSignatureValues(a.V, a.R, a.S, true) {
+	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
 		return common.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format
-	r, s := a.R.Bytes(), a.S.Bytes()
-	sig := make([]byte, crypto.SignatureLength)
-	copy(sig[32-len(r):32], r)
-	copy(sig[64-len(s):64], s)
+	var sig [crypto.SignatureLength]byte
+	a.R.SetBytes32(sig[:32])
+	a.R.SetBytes32(sig[32:64])
 	sig[64] = a.V
 	// recover the public key from the signature
-	pub, err := crypto.Ecrecover(sighash[:], sig)
+	pub, err := crypto.Ecrecover(sighash[:], sig[:])
 	if err != nil {
 		return common.Address{}, err
 	}
