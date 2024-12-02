@@ -117,12 +117,10 @@ var (
 
 	// -- EIP-7702 errors --
 
-	// ErrEmptyAuthList is returned if a set code transaction has an empty auth list.
-	ErrEmptyAuthList = errors.New("set code transaction with empty auth list")
-
-	// ErrAuthSignatureVeryHigh is returned if a set code transaction has a
-	// signature with R or S larger than 2^256-1.
-	ErrAuthSignatureVeryHigh = errors.New("set code transaction has authorization with R or S value greater than 2^256 - 1")
+	// Message validation errors:
+	ErrEmptyAuthList         = errors.New("EIP-7702 transaction with empty auth list")
+	ErrSetCodeTxCreate       = errors.New("EIP-7702 transaction cannot be used to create contract")
+	ErrAuthSignatureVeryHigh = errors.New("EIP-7702 authorization with R or S value greater than 2^256 - 1")
 
 	// EIP-7702 state transition errors:
 	ErrAuthorizationWrongChainID       = errors.New("EIP-7702 authorization chain ID mismatch")

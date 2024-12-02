@@ -372,12 +372,20 @@ func (st *stateTransition) preCheck() error {
 		}
 	}
 	// Check that EIP-7702 authorization list signatures are well formed.
-	for i, auth := range msg.AuthList {
-		switch {
-		case auth.R.BitLen() > 256:
-			return fmt.Errorf("%w: address %v, authorization %d", ErrAuthSignatureVeryHigh, msg.From.Hex(), i)
-		case auth.S.BitLen() > 256:
-			return fmt.Errorf("%w: address %v, authorization %d", ErrAuthSignatureVeryHigh, msg.From.Hex(), i)
+	if msg.AuthList != nil {
+		if msg.To == nil {
+			return fmt.Errorf("%w (sender %v)", ErrSetCodeTxCreate, msg.From)
+		}
+		if len(msg.AuthList) == 0 {
+			return fmt.Errorf("%w (sender %v)", ErrEmptyAuthList, msg.From)
+		}
+		for i, auth := range msg.AuthList {
+			switch {
+			case auth.R.BitLen() > 256:
+				return fmt.Errorf("%w: address %v, authorization %d", ErrAuthSignatureVeryHigh, msg.From.Hex(), i)
+			case auth.S.BitLen() > 256:
+				return fmt.Errorf("%w: address %v, authorization %d", ErrAuthSignatureVeryHigh, msg.From.Hex(), i)
+			}
 		}
 	}
 	return st.buyGas()
@@ -449,11 +457,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// Check whether the init code size has been exceeded.
 	if rules.IsShanghai && contractCreation && len(msg.Data) > params.MaxInitCodeSize {
 		return nil, fmt.Errorf("%w: code size %v limit %v", ErrMaxInitCodeSizeExceeded, len(msg.Data), params.MaxInitCodeSize)
-	}
-
-	// If an authorization list exists, verify it is not empty.
-	if msg.AuthList != nil && len(msg.AuthList) == 0 {
-		return nil, fmt.Errorf("%w: address %v", ErrEmptyAuthList, msg.From.Hex())
 	}
 
 	// Execute the preparatory steps for state transition which includes:
