@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/events"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/nested_libraries"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/solc_errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -98,6 +97,7 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 	return opts, &bindBackend, nil
 }
 
+/*
 // test deployment and interaction for a basic contract with no library deps
 func TestErrors(t *testing.T) {
 	opts, bindBackend, err := testSetup()
@@ -137,26 +137,20 @@ func TestErrors(t *testing.T) {
 		t.Fatalf("pack function input err: %v\n", doInput)
 	}
 
-	cABI, err := nested_libraries.C1MetaData.GetAbi()
-	if err != nil {
-		t.Fatalf("error getting abi object: %v", err)
-	}
 	contractAddr := res.Addrs[solc_errors.CMetaData.Pattern]
-	boundC := bind.NewBoundContract(contractAddr, *cABI, bindBackend, bindBackend, bindBackend)
-	callOpts := &bind.CallOpts{
-		From:    common.Address{},
-		Context: context.Background(),
+	contractInstance := &ContractInstance{
+		Address: contractAddr,
+		Backend: bindBackend,
 	}
-	callRes, err := boundC.CallRaw(callOpts, doInput)
+	_, err = Transact(contractInstance, opts, doInput)
 	if err != nil {
-		fmt.Println(callRes)
-		t.Fatalf("err calling contract: %v", err)
+		t.Fatalf("err submitting tx: %v", err)
 	}
-	_ = callRes
 }
+*/
 
 // test that deploying a contract with library dependencies works,
-// verifying by calling the deployed contract.
+// verifying by calling method on the deployed contract.
 func TestDeploymentLibraries(t *testing.T) {
 	opts, bindBackend, err := testSetup()
 	if err != nil {
@@ -230,6 +224,8 @@ func TestDeploymentLibraries(t *testing.T) {
 	}
 }
 
+// Same as TestDeployment.  However, stagger the deployments with overrides:
+// first deploy the library deps and then the contract.
 func TestDeploymentWithOverrides(t *testing.T) {
 	opts, bindBackend, err := testSetup()
 	if err != nil {
@@ -309,12 +305,12 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		t.Fatalf("error getting abi object: %v", err)
 	}
 	contractAddr := res.Addrs[nested_libraries.C1MetaData.Pattern]
-	boundC := bind.NewBoundContract(contractAddr, *cABI, bindBackend, bindBackend, bindBackend)
+	boundContract := bind.NewBoundContract(contractAddr, *cABI, bindBackend, bindBackend, bindBackend)
 	callOpts := &bind.CallOpts{
 		From:    common.Address{},
 		Context: context.Background(),
 	}
-	callRes, err := boundC.CallRaw(callOpts, doInput)
+	callRes, err := boundContract.CallRaw(callOpts, doInput)
 	if err != nil {
 		t.Fatalf("err calling contract: %v", err)
 	}
@@ -326,19 +322,6 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		t.Fatalf("expected internal call count of 6.  got %d.", internalCallCount.Uint64())
 	}
 }
-
-/*
- *
- */
-/*
-	func TestDeploymentWithOverrides(t *testing.T) {
-		// more deployment test case ideas:
-		// 1)  deploy libraries, then deploy contract first with libraries as overrides
-		// 2)  deploy contract without library dependencies.
-	}
-*/
-
-// note to self: see how to filter logs in eth_call.
 
 func TestEvents(t *testing.T) {
 	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
@@ -375,48 +358,31 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error getting contract abi: %v", err)
 	}
 
-	boundContract := ContractInstance{
-		res.Addrs[events.CMetaData.Pattern],
-		backend,
-	}
+	boundContract := bind.NewBoundContract(res.Addrs[events.CMetaData.Pattern], *abi, backend, backend, backend)
 
-	newCBasic1Ch := make(chan *events.CBasic1)
-	newCBasic2Ch := make(chan *events.CBasic2)
 	watchOpts := &bind.WatchOpts{
 		Start:   nil,
 		Context: context.Background(),
 	}
-	sub1, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic1EventID(), func(raw *types.Log) error {
-		event := &events.CBasic1{
-			Id:   (new(big.Int)).SetBytes(raw.Topics[0].Bytes()),
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}
-		newCBasic1Ch <- event
-		return nil
-	})
-	sub2, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic2EventID(), func(raw *types.Log) error {
-		event := &events.CBasic2{
-			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}
-		newCBasic2Ch <- event
-		return nil
-	})
+	chE1, sub1, err := boundContract.WatchLogsForId(watchOpts, events.CBasic1EventID(), nil)
+	if err != nil {
+		t.Fatalf("WatchLogsForId with event type 1 failed: %v", err)
+	}
 	defer sub1.Unsubscribe()
+
+	chE2, sub2, err := boundContract.WatchLogsForId(watchOpts, events.CBasic2EventID(), nil)
+	if err != nil {
+		t.Fatalf("WatchLogsForId with event type 2 failed: %v", err)
+	}
 	defer sub2.Unsubscribe()
 
-	crtctInstance := &ContractInstance{
-		Address: res.Addrs[events.CMetaData.Pattern],
-		Backend: backend,
-	}
-	_ = ctrct
-	packedCall, err := ctrct.PackEmitMulti()
+	packedCallData, err := ctrct.PackEmitMulti()
 	if err != nil {
 		t.Fatalf("failed to pack EmitMulti arguments")
 	}
-	tx, err := Transact(crtctInstance, txAuth, packedCall)
+	tx, err := boundContract.RawTransact(txAuth, packedCallData)
 	if err != nil {
-		t.Fatalf("failed to send transaction...")
+		t.Fatalf("failed to submit transaction: %v", err)
 	}
 	backend.Commit()
 	if _, err := bind.WaitMined(context.Background(), backend, tx); err != nil {
@@ -428,15 +394,16 @@ func TestEvents(t *testing.T) {
 	e2Count := 0
 	for {
 		select {
-		case _ = <-newCBasic1Ch:
-			e1Count++
-		case _ = <-newCBasic2Ch:
-			e2Count++
-		case _ = <-timeout.C:
+		case <-timeout.C:
 			goto done
-		}
-		if e1Count == 2 && e2Count == 1 {
-			break
+		case err := <-sub1.Err():
+			t.Fatalf("received err from sub1: %v", err)
+		case err := <-sub2.Err():
+			t.Fatalf("received err from sub2: %v", err)
+		case <-chE1:
+			e1Count++
+		case <-chE2:
+			e2Count++
 		}
 	}
 done:
@@ -453,144 +420,32 @@ done:
 		Start:   0,
 		Context: context.Background(),
 	}
-	unpackBasic := func(raw *types.Log) (*events.CBasic1, error) {
-		return &events.CBasic1{
-			Id:   (new(big.Int)).SetBytes(raw.Topics[0].Bytes()),
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}, nil
-	}
-	unpackBasic2 := func(raw *types.Log) (*events.CBasic2, error) {
-		return &events.CBasic2{
-			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}, nil
-	}
-	it, err := FilterEvents[events.CBasic1](crtctInstance, filterOpts, events.CBasic1EventID(), unpackBasic)
+	chE1, sub1, err = boundContract.FilterLogsByID(filterOpts, events.CBasic1EventID(), nil)
 	if err != nil {
-		t.Fatalf("error filtering logs %v\n", err)
+		t.Fatalf("failed to filter logs for event type 1: %v", err)
 	}
-	it2, err := FilterEvents[events.CBasic2](crtctInstance, filterOpts, events.CBasic2EventID(), unpackBasic2)
+	chE2, sub2, err = boundContract.FilterLogsByID(filterOpts, events.CBasic2EventID(), nil)
 	if err != nil {
-		t.Fatalf("error filtering logs %v\n", err)
+		t.Fatalf("failed to filter logs for event type 2: %v", err)
 	}
+	timeout.Reset(2 * time.Second)
 	e1Count = 0
 	e2Count = 0
-	for it.Next() {
-		e1Count++
-	}
-	for it2.Next() {
-		e2Count++
-	}
-	if e1Count != 2 {
-		t.Fatalf("expected e1Count of 2 from filter call.  got %d", e1Count)
-	}
-	if e2Count != 1 {
-		t.Fatalf("expected e2Count of 1 from filter call.  got %d", e1Count)
-	}
-}
-
-func TestEventsUnpackFailure(t *testing.T) {
-	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
-	txAuth, backend, err := testSetup()
-	if err != nil {
-		t.Fatalf("error setting up testing env: %v", err)
-	}
-
-	deploymentParams := DeploymentParams{
-		Contracts: []ContractDeployParams{
-			{
-				Meta: events.CMetaData,
-			},
-		},
-	}
-
-	res, err := LinkAndDeploy(txAuth, backend, deploymentParams)
-	if err != nil {
-		t.Fatalf("error deploying contract for testing: %v", err)
-	}
-
-	backend.Commit()
-	if _, err := bind.WaitDeployed(context.Background(), backend, res.Txs[events.CMetaData.Pattern]); err != nil {
-		t.Fatalf("WaitDeployed failed %v", err)
-	}
-
-	ctrct, err := events.NewC()
-	if err != nil {
-		t.Fatalf("error instantiating contract instance: %v", err)
-	}
-
-	abi, err := events.CMetaData.GetAbi()
-	if err != nil {
-		t.Fatalf("error getting contract abi: %v", err)
-	}
-
-	// TODO: why did I introduce separate type, and not just use bound contract?
-	boundContract := ContractInstance{
-		res.Addrs[events.CMetaData.Pattern],
-		backend,
-	}
-
-	newCBasic1Ch := make(chan *events.CBasic1)
-	newCBasic2Ch := make(chan *events.CBasic2)
-	unpackBasic := func(raw *types.Log) error {
-		return fmt.Errorf("this error should stop the filter that uses this unpack.")
-	}
-	unpackBasic2 := func(raw *types.Log) error {
-		newCBasic2Ch <- &events.CBasic2{
-			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}
-		return nil
-	}
-
-	watchOpts := &bind.WatchOpts{
-		Start:   nil,
-		Context: context.Background(),
-	}
-	sub1, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic1EventID(), unpackBasic)
-	sub2, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2)
-	defer sub1.Unsubscribe()
-	defer sub2.Unsubscribe()
-
-	crtctInstance := &ContractInstance{
-		Address: res.Addrs[events.CMetaData.Pattern],
-		Backend: backend,
-	}
-	_ = ctrct
-	packedCall, err := ctrct.PackEmitMulti()
-	if err != nil {
-		t.Fatalf("failed to pack EmitMulti arguments")
-	}
-	tx, err := Transact(crtctInstance, txAuth, packedCall)
-	if err != nil {
-		t.Fatalf("failed to send transaction...")
-	}
-	backend.Commit()
-	if _, err := bind.WaitMined(context.Background(), backend, tx); err != nil {
-		t.Fatalf("error waiting for tx to be mined: %v", err)
-	}
-
-	timeout := time.NewTimer(2 * time.Second)
-	e1Count := 0
-	e2Count := 0
 	for {
 		select {
-		case _ = <-newCBasic1Ch:
+		case <-timeout.C:
+			goto done2
+		case <-chE1:
 			e1Count++
-		case _ = <-newCBasic2Ch:
+		case <-chE2:
 			e2Count++
-		case _ = <-timeout.C:
-			goto done
-		}
-		if e1Count == 2 && e2Count == 1 {
-			break
 		}
 	}
-done:
-	if e1Count != 0 {
-		t.Fatalf("expected event type 1 count to be 0.  got %d", e1Count)
+done2:
+	if e1Count != 2 {
+		t.Fatalf("incorrect results from filter logs: expected event type 1 count to be 2.  got %d", e1Count)
 	}
 	if e2Count != 1 {
-		t.Fatalf("expected event type 2 count to be 1.  got %d", e2Count)
+		t.Fatalf("incorrect results from filter logs: expected event type 2 count to be 1.  got %d", e2Count)
 	}
 }

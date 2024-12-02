@@ -152,6 +152,9 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	return c.address, tx, c, nil
 }
 
+// DeployContractRaw deploys a contract onto the Ethereum blockchain and binds the
+// deployment address with a Go wrapper.  It expects its parameters to be abi-encoded
+// bytes.
 func DeployContractRaw(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *BoundContract, error) {
 	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
 
@@ -402,7 +405,7 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 	}
 	res, err := c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
 	return res, nil
 }
@@ -463,17 +466,17 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 
 // FilterLogsByID filters contract logs for past blocks, returning the necessary
 // channels to construct a strongly typed bound iterator on top of them.
-func (c *BoundContract) FilterLogsByID(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+func (c *BoundContract) FilterLogsByID(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
 	return c.filterLogs(opts, eventID, query...)
 }
 
 // FilterLogs filters contract logs for past blocks, returning the necessary
 // channels to construct a strongly typed bound iterator on top of them.
-func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+func (c *BoundContract) FilterLogs(opts *FilterOpts, name string, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
 	return c.filterLogs(opts, c.abi.Events[name].ID, query...)
 }
 
-func (c *BoundContract) filterLogs(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+func (c *BoundContract) filterLogs(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(FilterOpts)
@@ -518,17 +521,17 @@ func (c *BoundContract) filterLogs(opts *FilterOpts, eventID common.Hash, query 
 
 // WatchLogs filters subscribes to contract logs for future blocks, returning a
 // subscription object that can be used to tear down the watcher.
-func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+func (c *BoundContract) WatchLogs(opts *WatchOpts, name string, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
 	return c.watchLogs(opts, c.abi.Events[name].ID, query...)
 }
 
 // WatchLogsForId filters subscribes to contract logs for future blocks, returning a
 // subscription object that can be used to tear down the watcher.
-func (c *BoundContract) WatchLogsForId(opts *WatchOpts, id common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+func (c *BoundContract) WatchLogsForId(opts *WatchOpts, id common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
 	return c.watchLogs(opts, id, query...)
 }
 
-func (c *BoundContract) watchLogs(opts *WatchOpts, eventID common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+func (c *BoundContract) watchLogs(opts *WatchOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(WatchOpts)

@@ -26,8 +26,3 @@ type ContractInstance interface {
 	Address() common.Address
 	Backend() ContractBackend
 }
-
-type ContractInstanceV2 interface {
-	Address() common.Address
-	Backend() ContractBackend
-}
