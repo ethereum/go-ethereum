@@ -144,8 +144,8 @@ type stAuthorization struct {
 	Address common.Address `json:"address" gencodec:"required"`
 	Nonce   uint64         `json:"nonce" gencodec:"required"`
 	V       uint8          `json:"v" gencodec:"required"`
-	R       *big.Int       `json:"r" gencodec:"required"`
-	S       *big.Int       `json:"s" gencodec:"required"`
+	R       uint256.Int    `json:"r" gencodec:"required"`
+	S       uint256.Int    `json:"s" gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -153,8 +153,6 @@ type stAuthorizationMarshaling struct {
 	ChainID math.HexOrDecimal64
 	Nonce   math.HexOrDecimal64
 	V       math.HexOrDecimal64
-	R       *math.HexOrDecimal256
-	S       *math.HexOrDecimal256
 }
 
 // GetChainConfig takes a fork definition and returns a chain config.
