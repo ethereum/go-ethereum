@@ -68,8 +68,7 @@ type SetCodeTx struct {
 
 //go:generate go run github.com/fjl/gencodec -type Authorization -field-override authorizationMarshaling -out gen_authorization.go
 
-// Authorization is an authorization from an account to deploy code at it's
-// address.
+// Authorization is an authorization from an account to deploy code at its address.
 type Authorization struct {
 	ChainID uint64         `json:"chainId" gencodec:"required"`
 	Address common.Address `json:"address" gencodec:"required"`
@@ -88,15 +87,8 @@ type authorizationMarshaling struct {
 
 // SignAuth signs the provided authorization.
 func SignAuth(auth Authorization, prv *ecdsa.PrivateKey) (Authorization, error) {
-	h := prefixedRlpHash(
-		0x05,
-		[]interface{}{
-			auth.ChainID,
-			auth.Address,
-			auth.Nonce,
-		})
-
-	sig, err := crypto.Sign(h[:], prv)
+	sighash := auth.sigHash()
+	sig, err := crypto.Sign(sighash[:], prv)
 	if err != nil {
 		return Authorization{}, err
 	}
@@ -117,22 +109,24 @@ func (a *Authorization) withSignature(sig []byte) Authorization {
 	}
 }
 
+func (a *Authorization) sigHash() common.Hash {
+	return prefixedRlpHash(0x05, []any{
+		a.ChainID,
+		a.Address,
+		a.Nonce,
+	})
+}
+
 // Authority recovers the the authorizing account of an authorization.
 func (a *Authorization) Authority() (common.Address, error) {
-	sighash := prefixedRlpHash(
-		0x05,
-		[]interface{}{
-			a.ChainID,
-			a.Address,
-			a.Nonce,
-		})
+	sighash := a.sigHash()
 	if !crypto.ValidateSignatureValues(a.V, a.R.ToBig(), a.S.ToBig(), true) {
 		return common.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format
 	var sig [crypto.SignatureLength]byte
-	a.R.SetBytes32(sig[:32])
-	a.R.SetBytes32(sig[32:64])
+	a.R.WriteToSlice(sig[:32])
+	a.S.WriteToSlice(sig[32:64])
 	sig[64] = a.V
 	// recover the public key from the signature
 	pub, err := crypto.Ecrecover(sighash[:], sig[:])
