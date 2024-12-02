@@ -58,7 +58,7 @@ type SetCodeTx struct {
 	Value      *uint256.Int
 	Data       []byte
 	AccessList AccessList
-	AuthList   AuthorizationList
+	AuthList   []Authorization
 
 	// Signature values
 	V *uint256.Int `json:"v" gencodec:"required"`
@@ -89,7 +89,7 @@ type authorizationMarshaling struct {
 }
 
 // SignAuth signs the provided authorization.
-func SignAuth(auth *Authorization, prv *ecdsa.PrivateKey) (*Authorization, error) {
+func SignAuth(auth Authorization, prv *ecdsa.PrivateKey) (Authorization, error) {
 	h := prefixedRlpHash(
 		0x05,
 		[]interface{}{
@@ -100,16 +100,16 @@ func SignAuth(auth *Authorization, prv *ecdsa.PrivateKey) (*Authorization, error
 
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
-		return nil, err
+		return Authorization{}, err
 	}
 	return auth.withSignature(sig), nil
 }
 
 // withSignature updates the signature of an Authorization to be equal the
 // decoded signature provided in sig.
-func (a *Authorization) withSignature(sig []byte) *Authorization {
+func (a *Authorization) withSignature(sig []byte) Authorization {
 	r, s, _ := decodeSignature(sig)
-	cpy := Authorization{
+	return Authorization{
 		ChainID: a.ChainID,
 		Address: a.Address,
 		Nonce:   a.Nonce,
@@ -117,10 +117,7 @@ func (a *Authorization) withSignature(sig []byte) *Authorization {
 		R:       r,
 		S:       s,
 	}
-	return &cpy
 }
-
-type AuthorizationList []*Authorization
 
 // Authority recovers the authorizing
 func (a Authorization) Authority() (common.Address, error) {
@@ -162,7 +159,7 @@ func (tx *SetCodeTx) copy() TxData {
 		Gas:   tx.Gas,
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
-		AuthList:   make(AuthorizationList, len(tx.AuthList)),
+		AuthList:   make([]Authorization, len(tx.AuthList)),
 		Value:      new(uint256.Int),
 		ChainID:    tx.ChainID,
 		GasTipCap:  new(uint256.Int),

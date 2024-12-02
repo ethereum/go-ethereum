@@ -475,7 +475,7 @@ func (tx *Transaction) WithBlobTxSidecar(sideCar *BlobTxSidecar) *Transaction {
 }
 
 // AuthList returns the authorizations list of the transaction.
-func (tx *Transaction) AuthList() AuthorizationList {
+func (tx *Transaction) AuthList() []Authorization {
 	setcodetx, ok := tx.inner.(*SetCodeTx)
 	if !ok {
 		return nil

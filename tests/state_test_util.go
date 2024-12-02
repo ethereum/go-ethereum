@@ -138,8 +138,7 @@ type stTransactionMarshaling struct {
 
 //go:generate go run github.com/fjl/gencodec -type stAuthorization -field-override stAuthorizationMarshaling -out gen_stauthorization.go
 
-// Authorization is an authorization from an account to deploy code at it's
-// address.
+// Authorization is an authorization from an account to deploy code at it's address.
 type stAuthorization struct {
 	ChainID uint64
 	Address common.Address `json:"address" gencodec:"required"`
@@ -442,18 +441,18 @@ func (tx *stTransaction) toMessage(ps stPostState, baseFee *big.Int) (*core.Mess
 	if gasPrice == nil {
 		return nil, errors.New("no gas price provided")
 	}
-	var authList types.AuthorizationList
+	var authList []types.Authorization
 	if tx.AuthorizationList != nil {
-		authList = make(types.AuthorizationList, 0)
-		for _, auth := range tx.AuthorizationList {
-			authList = append(authList, &types.Authorization{
+		authList = make([]types.Authorization, len(tx.AuthorizationList))
+		for i, auth := range tx.AuthorizationList {
+			authList[i] = types.Authorization{
 				ChainID: auth.ChainID,
 				Address: auth.Address,
 				Nonce:   auth.Nonce,
 				V:       auth.V,
 				R:       auth.R,
 				S:       auth.S,
-			})
+			}
 		}
 	}
 
