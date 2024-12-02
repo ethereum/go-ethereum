@@ -472,8 +472,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if msg.AuthList != nil {
 		for _, auth := range msg.AuthList {
 			// Note errors are ignored, we simply skip invalid authorizations here.
-			err := st.applyAuthorization(msg, &auth)
-			fmt.Println("err:", err)
+			st.applyAuthorization(msg, &auth)
 		}
 	}
 
