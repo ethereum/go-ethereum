@@ -49,7 +49,12 @@ var (
 	secp256k1halfN = new(big.Int).Div(secp256k1N, big.NewInt(2))
 )
 
-var errInvalidPubkey = errors.New("invalid secp256k1 public key")
+var (
+    // errInvalidPubkey is returned when an invalid secp256k1 public key is provided.
+    // This can occur during public key unmarshaling if the provided bytes do not
+    // represent a valid point on the secp256k1 curve.
+    errInvalidPubkey = errors.New("invalid secp256k1 public key")
+)
 
 // EllipticCurve contains curve operations.
 type EllipticCurve interface {
