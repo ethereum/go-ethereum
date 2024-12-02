@@ -78,4 +78,3 @@ func (_C *C) UnpackBadThingError(raw []byte) (*CBadThing, error) {
 	}
 	return out, nil
 }
-

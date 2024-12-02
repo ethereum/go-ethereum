@@ -25,7 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/events"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/nested_libraries"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -34,6 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"io"
 	"math/big"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -342,9 +347,15 @@ func TestEvents(t *testing.T) {
 			t.Fatalf("received err from sub1: %v", err)
 		case err := <-sub2.Err():
 			t.Fatalf("received err from sub2: %v", err)
-		case <-chE1:
+		case log := <-chE1:
+			if _, err := ctrct.UnpackBasic1Event(&log); err != nil {
+				t.Fatalf("failed to unpack basic1 type event: %v", err)
+			}
 			e1Count++
-		case <-chE2:
+		case log := <-chE2:
+			if _, err := ctrct.UnpackBasic2Event(&log); err != nil {
+				t.Fatalf("failed to unpack basic2 type event: %v", err)
+			}
 			e2Count++
 		}
 	}
@@ -389,5 +400,69 @@ done2:
 	}
 	if e2Count != 1 {
 		t.Fatalf("incorrect results from filter logs: expected event type 2 count to be 1.  got %d", e2Count)
+	}
+}
+
+func TestBindingGeneration(t *testing.T) {
+	matches, _ := filepath.Glob("../testdata/v2/*")
+	var dirs []string
+	for _, match := range matches {
+		f, _ := os.Stat(match)
+		if f.IsDir() {
+			fmt.Printf("match %s\n", f.Name())
+			dirs = append(dirs, f.Name())
+		}
+	}
+
+	for _, dir := range dirs {
+		var (
+			abis  []string
+			bins  []string
+			types []string
+			sigs  []map[string]string
+			libs  = make(map[string]string)
+		)
+		basePath := filepath.Join("../testdata/v2", dir)
+		combinedJsonPath := filepath.Join(basePath, "combined-abi.json")
+		abiBytes, err := os.ReadFile(combinedJsonPath)
+		if err != nil {
+			t.Fatalf("error trying to read file %s: %v", combinedJsonPath, err)
+		}
+		contracts, err := compiler.ParseCombinedJSON(abiBytes, "", "", "", "")
+		if err != nil {
+			t.Fatalf("Failed to read contract information from json output: %v", err)
+		}
+
+		fmt.Println(dir)
+		fmt.Printf("number of contracts: %d\n", len(contracts))
+		for name, contract := range contracts {
+			// fully qualified name is of the form <solFilePath>:<type>
+			nameParts := strings.Split(name, ":")
+			typeName := nameParts[len(nameParts)-1]
+			abi, err := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
+			if err != nil {
+				utils.Fatalf("Failed to parse ABIs from compiler output: %v", err)
+			}
+			abis = append(abis, string(abi))
+			bins = append(bins, contract.Code)
+			sigs = append(sigs, contract.Hashes)
+			types = append(types, typeName)
+
+			// Derive the library placeholder which is a 34 character prefix of the
+			// hex encoding of the keccak256 hash of the fully qualified library name.
+			// Note that the fully qualified library name is the path of its source
+			// file and the library name separated by ":".
+			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36] // the first 2 chars are 0x
+			libs[libPattern] = typeName
+		}
+		code, err := bind.BindV2(types, abis, bins, sigs, dir, libs, make(map[string]string))
+		if err != nil {
+			t.Fatalf("error creating bindings for package %s: %v", dir, err)
+		}
+
+		existingBindings, err := os.ReadFile(filepath.Join(basePath, "bindings.go"))
+		if code != string(existingBindings) {
+			t.Fatalf("code mismatch for %s", dir)
+		}
 	}
 }
