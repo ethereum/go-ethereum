@@ -585,10 +585,13 @@ func (st *stateTransition) applyAuthorization(msg *Message, auth *types.Authoriz
 	// Otherwise install delegation to auth.Address.
 	st.state.SetCode(authority, types.AddressToDelegation(auth.Address))
 
-	// Usually the delegation target is added to the access list in statedb.Prepare(..).
-	// However if the destination address of the transaction is an EOA, and the EOA gains
-	// a new delegation in the same transaction, we need to explicitly add the delegation
-	// address here since Prepare has already happened.
+	// If an account has a code delegation to another account, that account will be added to
+	// the access list in statedb.Prepare(..).
+	//
+	// However if the destination address of the transaction (msg) gains a new delegation
+	// in this same transaction, we need to explicitly warm the delegation address here,
+	// since Prepare has already happened. The intention here is to behave as if the
+	// delegation was already present before calling Prepare.
 	if *msg.To == authority {
 		st.state.AddAddressToAccessList(auth.Address)
 	}
