@@ -31,13 +31,41 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+var jt vm.JumpTable
+
+const initcode = "INITCODE"
+
 func init() {
 	jt = vm.NewPragueEOFInstructionSetForTesting()
 }
 
 var (
-	jt       vm.JumpTable
-	initcode = "INITCODE"
+	hexFlag = &cli.StringFlag{
+		Name:  "hex",
+		Usage: "Single container data parse and validation",
+	}
+	refTestFlag = &cli.StringFlag{
+		Name:  "test",
+		Usage: "Path to EOF validation reference test.",
+	}
+	eofParseCommand = &cli.Command{
+		Name:    "eofparse",
+		Aliases: []string{"eof"},
+		Usage:   "Parses hex eof container and returns validation errors (if any)",
+		Action:  eofParseAction,
+		Flags: []cli.Flag{
+			hexFlag,
+			refTestFlag,
+		},
+	}
+	eofDumpCommand = &cli.Command{
+		Name:   "eofdump",
+		Usage:  "Parses hex eof container and prints out human-readable representation of the container.",
+		Action: eofDumpAction,
+		Flags: []cli.Flag{
+			hexFlag,
+		},
+	}
 )
 
 func eofParseAction(ctx *cli.Context) error {
