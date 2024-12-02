@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"io"
 	"math/big"
-	"strings"
 	"testing"
 	"time"
 )
@@ -62,11 +61,6 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 			ethConf.Genesis.Difficulty = big.NewInt(0)
 		},
 	)
-
-	_, err := JSON(strings.NewReader(nested_libraries.C1MetaData.ABI))
-	if err != nil {
-		return nil, nil, err
-	}
 
 	signer := types.LatestSigner(params.AllDevChainProtocolChanges)
 	opts := &bind.TransactOpts{
@@ -96,58 +90,6 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 	}
 	return opts, &bindBackend, nil
 }
-
-/*
-// test deployment and interaction for a basic contract with no library deps
-func TestErrors(t *testing.T) {
-	opts, bindBackend, err := testSetup()
-	if err != nil {
-		t.Fatalf("err setting up test: %v", err)
-	}
-	defer bindBackend.Backend.Close()
-
-	deploymentParams := DeploymentParams{
-		Contracts: []ContractDeployParams{
-			{
-				Meta: solc_errors.CMetaData,
-			},
-		},
-	}
-	res, err := LinkAndDeploy(opts, bindBackend, deploymentParams)
-	if err != nil {
-		t.Fatalf("err: %+v\n", err)
-	}
-	bindBackend.Commit()
-
-	if len(res.Addrs) != 1 {
-		t.Fatalf("deployment should have generated 1 addresses.  got %d", len(res.Addrs))
-	}
-	for _, tx := range res.Txs {
-		_, err = bind.WaitDeployed(context.Background(), bindBackend, tx)
-		if err != nil {
-			t.Fatalf("error deploying library: %+v", err)
-		}
-	}
-	c, err := solc_errors.NewC()
-	if err != nil {
-		t.Fatalf("err is %v", err)
-	}
-	doInput, err := c.PackFoo()
-	if err != nil {
-		t.Fatalf("pack function input err: %v\n", doInput)
-	}
-
-	contractAddr := res.Addrs[solc_errors.CMetaData.Pattern]
-	contractInstance := &ContractInstance{
-		Address: contractAddr,
-		Backend: bindBackend,
-	}
-	_, err = Transact(contractInstance, opts, doInput)
-	if err != nil {
-		t.Fatalf("err submitting tx: %v", err)
-	}
-}
-*/
 
 // test that deploying a contract with library dependencies works,
 // verifying by calling method on the deployed contract.
