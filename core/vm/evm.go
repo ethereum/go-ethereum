@@ -575,6 +575,7 @@ func (evm *EVM) resolveCode(addr common.Address) []byte {
 		return code
 	}
 	if target, ok := types.ParseDelegation(code); ok {
+		// Note we only follow one level of delegation.
 		return evm.StateDB.GetCode(target)
 	}
 	return code
@@ -584,12 +585,12 @@ func (evm *EVM) resolveCode(addr common.Address) []byte {
 // After Prague, it can also resolve code hash of the account pointed to by a
 // delegation designator.
 func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
-	if !evm.chainRules.IsPrague {
-		return evm.StateDB.GetCodeHash(addr)
-	}
-	code := evm.StateDB.GetCode(addr)
-	if target, ok := types.ParseDelegation(code); ok {
-		return evm.StateDB.GetCodeHash(target)
+	if evm.chainRules.IsPrague {
+		code := evm.StateDB.GetCode(addr)
+		if target, ok := types.ParseDelegation(code); ok {
+			// Note we only follow one level of delegation.
+			return evm.StateDB.GetCodeHash(target)
+		}
 	}
 	return evm.StateDB.GetCodeHash(addr)
 }
