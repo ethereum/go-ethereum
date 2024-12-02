@@ -84,19 +84,20 @@ type execStats struct {
 
 func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, execStats, error) {
 	if bench {
+		testing.Init()
 		// Do one warm-up run
 		output, gasUsed, err := execFunc()
 		result := testing.Benchmark(func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				haveOutput, haveGasUsed, haveErr := execFunc()
 				if !bytes.Equal(haveOutput, output) {
-					b.Fatalf("output differs, have\n%x\nwant%x\n", haveOutput, output)
+					panic(fmt.Sprintf("output differs\nhave %x\nwant %x\n", haveOutput, output))
 				}
 				if haveGasUsed != gasUsed {
-					b.Fatalf("gas differs, have %v want%v", haveGasUsed, gasUsed)
+					panic(fmt.Sprintf("gas differs, have %v want %v", haveGasUsed, gasUsed))
 				}
 				if haveErr != err {
-					b.Fatalf("err differs, have %v want%v", haveErr, err)
+					panic(fmt.Sprintf("err differs, have %v want %v", haveErr, err))
 				}
 			}
 		})
@@ -137,7 +138,7 @@ func runCmd(ctx *cli.Context) error {
 	var (
 		tracer      *tracing.Hooks
 		debugLogger *logger.StructLogger
-		statedb     *state.StateDB
+		prestate    *state.StateDB
 		chainConfig *params.ChainConfig
 		sender      = common.BytesToAddress([]byte("sender"))
 		receiver    = common.BytesToAddress([]byte("receiver"))
@@ -174,7 +175,7 @@ func runCmd(ctx *cli.Context) error {
 	defer triedb.Close()
 	genesis := genesisConfig.MustCommit(db, triedb)
 	sdb := state.NewDatabase(triedb, nil)
-	statedb, _ = state.New(genesis.Root(), sdb)
+	prestate, _ = state.New(genesis.Root(), sdb)
 	chainConfig = genesisConfig.Config
 
 	if ctx.String(SenderFlag.Name) != "" {
@@ -231,7 +232,7 @@ func runCmd(ctx *cli.Context) error {
 	}
 	runtimeConfig := runtime.Config{
 		Origin:      sender,
-		State:       statedb,
+		State:       prestate,
 		GasLimit:    initialGas,
 		GasPrice:    flags.GlobalBig(ctx, PriceFlag.Name),
 		Value:       flags.GlobalBig(ctx, ValueFlag.Name),
@@ -274,14 +275,18 @@ func runCmd(ctx *cli.Context) error {
 	if ctx.Bool(CreateFlag.Name) {
 		input = append(code, input...)
 		execFunc = func() ([]byte, uint64, error) {
+			// don't mutate the state!
+			runtimeConfig.State = prestate.Copy()
 			output, _, gasLeft, err := runtime.Create(input, &runtimeConfig)
 			return output, gasLeft, err
 		}
 	} else {
 		if len(code) > 0 {
-			statedb.SetCode(receiver, code)
+			prestate.SetCode(receiver, code)
 		}
 		execFunc = func() ([]byte, uint64, error) {
+			// don't mutate the state!
+			runtimeConfig.State = prestate.Copy()
 			output, gasLeft, err := runtime.Call(receiver, input, &runtimeConfig)
 			return output, initialGas - gasLeft, err
 		}
@@ -291,7 +296,7 @@ func runCmd(ctx *cli.Context) error {
 	output, stats, err := timedExec(bench, execFunc)
 
 	if ctx.Bool(DumpFlag.Name) {
-		root, err := statedb.Commit(genesisConfig.Number, true)
+		root, err := runtimeConfig.State.Commit(genesisConfig.Number, true)
 		if err != nil {
 			fmt.Printf("Failed to commit changes %v\n", err)
 			return err
@@ -310,7 +315,7 @@ func runCmd(ctx *cli.Context) error {
 			logger.WriteTrace(os.Stderr, debugLogger.StructLogs())
 		}
 		fmt.Fprintln(os.Stderr, "#### LOGS ####")
-		logger.WriteLogs(os.Stderr, statedb.Logs())
+		logger.WriteLogs(os.Stderr, runtimeConfig.State.Logs())
 	}
 
 	if bench || ctx.Bool(StatDumpFlag.Name) {

@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -177,14 +178,100 @@ func (b *testBackend) StateAtTransaction(ctx context.Context, block *types.Block
 			return tx, context, statedb, release, nil
 		}
 		msg, _ := core.TransactionToMessage(tx, signer, block.BaseFee())
-		txContext := core.NewEVMTxContext(msg)
-		evm.SetTxContext(txContext)
 		if _, err := core.ApplyMessage(evm, msg, new(core.GasPool).AddGas(tx.Gas())); err != nil {
 			return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		statedb.Finalise(evm.ChainConfig().IsEIP158(block.Number()))
 	}
 	return nil, vm.BlockContext{}, nil, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, block.Hash())
+}
+
+type stateTracer struct {
+	Balance map[common.Address]*hexutil.Big
+	Nonce   map[common.Address]hexutil.Uint64
+	Storage map[common.Address]map[common.Hash]common.Hash
+}
+
+func newStateTracer(ctx *Context, cfg json.RawMessage, chainCfg *params.ChainConfig) (*Tracer, error) {
+	t := &stateTracer{
+		Balance: make(map[common.Address]*hexutil.Big),
+		Nonce:   make(map[common.Address]hexutil.Uint64),
+		Storage: make(map[common.Address]map[common.Hash]common.Hash),
+	}
+	return &Tracer{
+		GetResult: func() (json.RawMessage, error) {
+			return json.Marshal(t)
+		},
+		Hooks: &tracing.Hooks{
+			OnBalanceChange: func(addr common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
+				t.Balance[addr] = (*hexutil.Big)(new)
+			},
+			OnNonceChange: func(addr common.Address, prev, new uint64) {
+				t.Nonce[addr] = hexutil.Uint64(new)
+			},
+			OnStorageChange: func(addr common.Address, slot common.Hash, prev, new common.Hash) {
+				if t.Storage[addr] == nil {
+					t.Storage[addr] = make(map[common.Hash]common.Hash)
+				}
+				t.Storage[addr][slot] = new
+			},
+		},
+	}, nil
+}
+
+func TestStateHooks(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	var (
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		from    = crypto.PubkeyToAddress(key.PublicKey)
+		to      = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
+		genesis = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: types.GenesisAlloc{
+				from: {Balance: big.NewInt(params.Ether)},
+				to: {
+					Code: []byte{
+						byte(vm.PUSH1), 0x2a, // stack: [42]
+						byte(vm.PUSH1), 0x0, // stack: [0, 42]
+						byte(vm.SSTORE), // stack: []
+						byte(vm.STOP),
+					},
+				},
+			},
+		}
+		genBlocks = 2
+		signer    = types.HomesteadSigner{}
+		nonce     = uint64(0)
+		backend   = newTestBackend(t, genBlocks, genesis, func(i int, b *core.BlockGen) {
+			// Transfer from account[0] to account[1]
+			//    value: 1000 wei
+			//    fee:   0 wei
+			tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
+				Nonce:    nonce,
+				To:       &to,
+				Value:    big.NewInt(1000),
+				Gas:      params.TxGas,
+				GasPrice: b.BaseFee(),
+				Data:     nil}),
+				signer, key)
+			b.AddTx(tx)
+			nonce++
+		})
+	)
+	defer backend.teardown()
+	DefaultDirectory.Register("stateTracer", newStateTracer, false)
+	api := NewAPI(backend)
+	tracer := "stateTracer"
+	res, err := api.TraceCall(context.Background(), ethapi.TransactionArgs{From: &from, To: &to, Value: (*hexutil.Big)(big.NewInt(1000))}, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber), &TraceCallConfig{TraceConfig: TraceConfig{Tracer: &tracer}})
+	if err != nil {
+		t.Fatalf("failed to trace call: %v", err)
+	}
+	expected := `{"Balance":{"0x00000000000000000000000000000000deadbeef":"0x3e8","0x71562b71999873db5b286df957af199ec94617f7":"0xde0975924ed6f90"},"Nonce":{"0x71562b71999873db5b286df957af199ec94617f7":"0x3"},"Storage":{"0x00000000000000000000000000000000deadbeef":{"0x0000000000000000000000000000000000000000000000000000000000000000":"0x000000000000000000000000000000000000000000000000000000000000002a"}}}`
+	if expected != fmt.Sprintf("%s", res) {
+		t.Fatalf("unexpected trace result: have %s want %s", res, expected)
+	}
 }
 
 func TestTraceCall(t *testing.T) {
