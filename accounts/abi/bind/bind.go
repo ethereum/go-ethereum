@@ -393,7 +393,6 @@ func bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			}
 		}
 	}
-
 	// Check if that type has already been identified as a library
 	for i := 0; i < len(types); i++ {
 		_, ok := isLib[types[i]]
