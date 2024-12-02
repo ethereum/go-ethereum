@@ -222,22 +222,24 @@ func LinkAndDeploy(auth *bind.TransactOpts, backend bind.ContractBackend, deploy
 	return res, nil
 }
 
-// TODO: adding docs soon (jwasinger)
-func FilterLogs[T any](instance *ContractInstance, opts *bind.FilterOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
+// FilterEvents returns an iterator for filtering events that match the query
+// parameters (filter range, eventID, topics).  If unpack returns an error,
+// the iterator value is not updated, and the iterator is stopped with the
+// returned error.
+func FilterEvents[T any](instance *ContractInstance, opts *bind.FilterOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), topics ...[]any) (*EventIterator[T], error) {
 	backend := instance.Backend
 	c := bind.NewBoundContract(instance.Address, abi.ABI{}, backend, backend, backend)
-	logs, sub, err := c.FilterLogs(opts, eventID.String(), topics...)
+	logs, sub, err := c.FilterLogsByID(opts, eventID, topics...)
 	if err != nil {
 		return nil, err
 	}
 	return &EventIterator[T]{unpack: unpack, logs: logs, sub: sub}, nil
 }
 
-// WatchLogs causes logs emitted with a given event id from a specified
-// contract to be intercepted, unpacked, and forwarded to sink.  If
-// unpack returns an error, the returned subscription is closed with the
-// error.
-func WatchLogs(instance *ContractInstance, abi abi.ABI, opts *bind.WatchOpts, eventID common.Hash, onLog func(*types.Log) error, topics ...[]any) (event.Subscription, error) {
+// WatchEvents causes events emitted from a specified contract to be forwarded to
+// onLog if they match the query parameters (matching eventID and topics). If
+// onLog returns an error, the returned subscription is cancelled with that error.
+func WatchEvents(instance *ContractInstance, abi abi.ABI, opts *bind.WatchOpts, eventID common.Hash, onLog func(*types.Log) error, topics ...[]any) (event.Subscription, error) {
 	backend := instance.Backend
 	c := bind.NewBoundContract(instance.Address, abi, backend, backend, backend)
 	logs, sub, err := c.WatchLogsForId(opts, eventID, topics...)
@@ -262,7 +264,7 @@ func WatchLogs(instance *ContractInstance, abi abi.ABI, opts *bind.WatchOpts, ev
 	}), nil
 }
 
-// EventIterator is returned from FilterLogs and is used to iterate over the raw logs and unpacked data for events.
+// EventIterator is returned from FilterEvents and is used to iterate over the raw logs and unpacked data for events.
 type EventIterator[T any] struct {
 	event *T // event containing the contract specifics and raw log
 
