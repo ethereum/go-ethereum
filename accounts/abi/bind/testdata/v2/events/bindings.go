@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// Reference imports to suppress solc_errors if they are not otherwise used.
+// Reference imports to suppress errors if they are not otherwise used.
 var (
 	_ = errors.New
 	_ = big.NewInt
@@ -191,4 +191,3 @@ func (_C *C) UnpackBasic2Event(log *types.Log) (*CBasic2, error) {
 	out.Raw = log
 	return out, nil
 }
-

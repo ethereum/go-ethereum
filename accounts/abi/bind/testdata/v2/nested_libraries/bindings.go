@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// Reference imports to suppress solc_errors if they are not otherwise used.
+// Reference imports to suppress errors if they are not otherwise used.
 var (
 	_ = errors.New
 	_ = big.NewInt
@@ -415,4 +415,3 @@ func (_L4b *L4b) UnpackDo(data []byte) (*big.Int, error) {
 	return out0, err
 
 }
-
