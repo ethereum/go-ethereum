@@ -13,7 +13,6 @@ import (
 
 var (
 	metricsEnabled = false
-	initRan        = false
 )
 
 // Enabled is checked by functions that are deemed 'expensive', e.g. if a
