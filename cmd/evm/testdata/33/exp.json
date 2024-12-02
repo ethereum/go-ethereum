@@ -60,11 +60,6 @@
     "gasUsed": "0x15fa9",
     "currentBaseFee": "0x7",
     "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-    "requestsHash": "0x6036c41849da9c076ed79654d434017387a88fb833c2856b32e18218b3341c5f",
-    "requests": [
-      "0x",
-      "0x",
-      "0x"
-    ]
+    "requestsHash": "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   }
 }
