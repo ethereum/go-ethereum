@@ -153,8 +153,6 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 }
 
 func DeployContractRaw(opts *TransactOpts, bytecode []byte, backend ContractBackend, packedParams []byte) (common.Address, *types.Transaction, *BoundContract, error) {
-	// TODO: it's weird to instantiate a bound contract (implies existence of contract) in order to deploy a contract
-	// that doesn't yet exist
 	c := NewBoundContract(common.Address{}, abi.ABI{}, backend, backend, backend)
 
 	tx, err := c.transact(opts, nil, append(bytecode, packedParams...))
@@ -461,6 +459,12 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		return nil, err
 	}
 	return signedTx, nil
+}
+
+// FilterLogsByID filters contract logs for past blocks, returning the necessary
+// channels to construct a strongly typed bound iterator on top of them.
+func (c *BoundContract) FilterLogsByID(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (chan types.Log, event.Subscription, error) {
+	return c.filterLogs(opts, eventID, query...)
 }
 
 // FilterLogs filters contract logs for past blocks, returning the necessary

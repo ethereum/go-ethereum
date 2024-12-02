@@ -375,7 +375,6 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error getting contract abi: %v", err)
 	}
 
-	// TODO: why did I introduce separate type, and not just use bound contract?
 	boundContract := ContractInstance{
 		res.Addrs[events.CMetaData.Pattern],
 		backend,
@@ -387,7 +386,7 @@ func TestEvents(t *testing.T) {
 		Start:   nil,
 		Context: context.Background(),
 	}
-	sub1, err := WatchLogs(&boundContract, *abi, watchOpts, events.CBasic1EventID(), func(raw *types.Log) error {
+	sub1, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic1EventID(), func(raw *types.Log) error {
 		event := &events.CBasic1{
 			Id:   (new(big.Int)).SetBytes(raw.Topics[0].Bytes()),
 			Data: (new(big.Int)).SetBytes(raw.Data),
@@ -395,7 +394,7 @@ func TestEvents(t *testing.T) {
 		newCBasic1Ch <- event
 		return nil
 	})
-	sub2, err := WatchLogs(&boundContract, *abi, watchOpts, events.CBasic2EventID(), func(raw *types.Log) error {
+	sub2, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic2EventID(), func(raw *types.Log) error {
 		event := &events.CBasic2{
 			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
 			Data: (new(big.Int)).SetBytes(raw.Data),
@@ -448,7 +447,7 @@ done:
 		t.Fatalf("expected event type 2 count to be 1.  got %d", e2Count)
 	}
 
-	// now, test that we can filter those events that were just caught through the subscription
+	// now, test that we can filter those same logs after they were included in the chain
 
 	filterOpts := &bind.FilterOpts{
 		Start:   0,
@@ -466,12 +465,11 @@ done:
 			Data: (new(big.Int)).SetBytes(raw.Data),
 		}, nil
 	}
-	// TODO: test that returning error from unpack prevents event from being received by sink.
-	it, err := FilterLogs[events.CBasic1](crtctInstance, filterOpts, events.CBasic1EventID(), unpackBasic)
+	it, err := FilterEvents[events.CBasic1](crtctInstance, filterOpts, events.CBasic1EventID(), unpackBasic)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
-	it2, err := FilterLogs[events.CBasic2](crtctInstance, filterOpts, events.CBasic1EventID(), unpackBasic2)
+	it2, err := FilterEvents[events.CBasic2](crtctInstance, filterOpts, events.CBasic2EventID(), unpackBasic2)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
@@ -483,11 +481,11 @@ done:
 	for it2.Next() {
 		e2Count++
 	}
-	if e2Count != 1 {
-		t.Fatalf("bad")
+	if e1Count != 2 {
+		t.Fatalf("expected e1Count of 2 from filter call.  got %d", e1Count)
 	}
-	if e1Count != 1 {
-		t.Fatalf("bad")
+	if e2Count != 1 {
+		t.Fatalf("expected e2Count of 1 from filter call.  got %d", e1Count)
 	}
 }
 
@@ -549,8 +547,8 @@ func TestEventsUnpackFailure(t *testing.T) {
 		Start:   nil,
 		Context: context.Background(),
 	}
-	sub1, err := WatchLogs(&boundContract, *abi, watchOpts, events.CBasic1EventID(), unpackBasic)
-	sub2, err := WatchLogs(&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2)
+	sub1, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic1EventID(), unpackBasic)
+	sub2, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2)
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
 
