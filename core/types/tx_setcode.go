@@ -118,7 +118,7 @@ func (a *Authorization) withSignature(sig []byte) Authorization {
 }
 
 // Authority recovers the the authorizing account of an authorization.
-func (a Authorization) Authority() (common.Address, error) {
+func (a *Authorization) Authority() (common.Address, error) {
 	sighash := prefixedRlpHash(
 		0x05,
 		[]interface{}{
