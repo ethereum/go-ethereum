@@ -5,10 +5,10 @@ package types
 import (
 	"encoding/json"
 	"errors"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/holiman/uint256"
 )
 
 var _ = (*authorizationMarshaling)(nil)
@@ -20,16 +20,16 @@ func (a Authorization) MarshalJSON() ([]byte, error) {
 		Address common.Address `json:"address" gencodec:"required"`
 		Nonce   hexutil.Uint64 `json:"nonce" gencodec:"required"`
 		V       hexutil.Uint64 `json:"v" gencodec:"required"`
-		R       *hexutil.Big   `json:"r" gencodec:"required"`
-		S       *hexutil.Big   `json:"s" gencodec:"required"`
+		R       uint256.Int    `json:"r" gencodec:"required"`
+		S       uint256.Int    `json:"s" gencodec:"required"`
 	}
 	var enc Authorization
 	enc.ChainID = hexutil.Uint64(a.ChainID)
 	enc.Address = a.Address
 	enc.Nonce = hexutil.Uint64(a.Nonce)
 	enc.V = hexutil.Uint64(a.V)
-	enc.R = (*hexutil.Big)(a.R)
-	enc.S = (*hexutil.Big)(a.S)
+	enc.R = a.R
+	enc.S = a.S
 	return json.Marshal(&enc)
 }
 
@@ -40,8 +40,8 @@ func (a *Authorization) UnmarshalJSON(input []byte) error {
 		Address *common.Address `json:"address" gencodec:"required"`
 		Nonce   *hexutil.Uint64 `json:"nonce" gencodec:"required"`
 		V       *hexutil.Uint64 `json:"v" gencodec:"required"`
-		R       *hexutil.Big    `json:"r" gencodec:"required"`
-		S       *hexutil.Big    `json:"s" gencodec:"required"`
+		R       *uint256.Int    `json:"r" gencodec:"required"`
+		S       *uint256.Int    `json:"s" gencodec:"required"`
 	}
 	var dec Authorization
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -66,10 +66,10 @@ func (a *Authorization) UnmarshalJSON(input []byte) error {
 	if dec.R == nil {
 		return errors.New("missing required field 'r' for Authorization")
 	}
-	a.R = (*big.Int)(dec.R)
+	a.R = *dec.R
 	if dec.S == nil {
 		return errors.New("missing required field 's' for Authorization")
 	}
-	a.S = (*big.Int)(dec.S)
+	a.S = *dec.S
 	return nil
 }
