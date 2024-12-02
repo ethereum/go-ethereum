@@ -462,7 +462,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
 	if !contractCreation {
-		// Increment the nonce for the next transaction
+		// Increment the nonce for the next transaction.
+		// Note: EIP-7702 authorizations can also modify the nonce. We perform
+		// this update first to ensure correct validation of authorization nonces.
 		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1)
 	}
 
