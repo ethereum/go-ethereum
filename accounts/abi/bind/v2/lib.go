@@ -237,7 +237,7 @@ func FilterLogs[T any](instance *ContractInstance, opts *bind.FilterOpts, eventI
 // contract to be intercepted, unpacked, and forwarded to sink.  If
 // unpack returns an error, the returned subscription is closed with the
 // error.
-func WatchLogs[T any](instance *ContractInstance, abi abi.ABI, opts *bind.WatchOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
+func WatchLogs(instance *ContractInstance, abi abi.ABI, opts *bind.WatchOpts, eventID common.Hash, onLog func(*types.Log) error, topics ...[]any) (event.Subscription, error) {
 	backend := instance.Backend
 	c := bind.NewBoundContract(instance.Address, abi, backend, backend, backend)
 	logs, sub, err := c.WatchLogsForId(opts, eventID, topics...)
@@ -249,18 +249,9 @@ func WatchLogs[T any](instance *ContractInstance, abi abi.ABI, opts *bind.WatchO
 		for {
 			select {
 			case log := <-logs:
-				// New log arrived, parse the event and forward to the user
-				ev, err := unpack(&log)
+				err := onLog(&log)
 				if err != nil {
 					return err
-				}
-
-				select {
-				case sink <- ev:
-				case err := <-sub.Err():
-					return err
-				case <-quit:
-					return nil
 				}
 			case err := <-sub.Err():
 				return err

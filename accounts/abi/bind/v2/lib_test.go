@@ -381,26 +381,28 @@ func TestEvents(t *testing.T) {
 		backend,
 	}
 
-	unpackBasic := func(raw *types.Log) (*events.CBasic1, error) {
-		return &events.CBasic1{
-			Id:   (new(big.Int)).SetBytes(raw.Topics[0].Bytes()),
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}, nil
-	}
-	unpackBasic2 := func(raw *types.Log) (*events.CBasic2, error) {
-		return &events.CBasic2{
-			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}, nil
-	}
 	newCBasic1Ch := make(chan *events.CBasic1)
 	newCBasic2Ch := make(chan *events.CBasic2)
 	watchOpts := &bind.WatchOpts{
 		Start:   nil,
 		Context: context.Background(),
 	}
-	sub1, err := WatchLogs[events.CBasic1](&boundContract, *abi, watchOpts, events.CBasic1EventID(), unpackBasic, newCBasic1Ch)
-	sub2, err := WatchLogs[events.CBasic2](&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2, newCBasic2Ch)
+	sub1, err := WatchLogs(&boundContract, *abi, watchOpts, events.CBasic1EventID(), func(raw *types.Log) error {
+		event := &events.CBasic1{
+			Id:   (new(big.Int)).SetBytes(raw.Topics[0].Bytes()),
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}
+		newCBasic1Ch <- event
+		return nil
+	})
+	sub2, err := WatchLogs(&boundContract, *abi, watchOpts, events.CBasic2EventID(), func(raw *types.Log) error {
+		event := &events.CBasic2{
+			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}
+		newCBasic2Ch <- event
+		return nil
+	})
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
 
@@ -451,6 +453,18 @@ done:
 	filterOpts := &bind.FilterOpts{
 		Start:   0,
 		Context: context.Background(),
+	}
+	unpackBasic := func(raw *types.Log) (*events.CBasic1, error) {
+		return &events.CBasic1{
+			Id:   (new(big.Int)).SetBytes(raw.Topics[0].Bytes()),
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}, nil
+	}
+	unpackBasic2 := func(raw *types.Log) (*events.CBasic2, error) {
+		return &events.CBasic2{
+			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}, nil
 	}
 	// TODO: test that returning error from unpack prevents event from being received by sink.
 	it, err := FilterLogs[events.CBasic1](crtctInstance, filterOpts, events.CBasic1EventID(), unpackBasic)
@@ -518,23 +532,25 @@ func TestEventsUnpackFailure(t *testing.T) {
 		backend,
 	}
 
-	unpackBasic := func(raw *types.Log) (*events.CBasic1, error) {
-		return nil, fmt.Errorf("this error should stop the filter that uses this unpack.")
-	}
-	unpackBasic2 := func(raw *types.Log) (*events.CBasic2, error) {
-		return &events.CBasic2{
-			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}, nil
-	}
 	newCBasic1Ch := make(chan *events.CBasic1)
 	newCBasic2Ch := make(chan *events.CBasic2)
+	unpackBasic := func(raw *types.Log) error {
+		return fmt.Errorf("this error should stop the filter that uses this unpack.")
+	}
+	unpackBasic2 := func(raw *types.Log) error {
+		newCBasic2Ch <- &events.CBasic2{
+			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}
+		return nil
+	}
+
 	watchOpts := &bind.WatchOpts{
 		Start:   nil,
 		Context: context.Background(),
 	}
-	sub1, err := WatchLogs[events.CBasic1](&boundContract, *abi, watchOpts, events.CBasic1EventID(), unpackBasic, newCBasic1Ch)
-	sub2, err := WatchLogs[events.CBasic2](&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2, newCBasic2Ch)
+	sub1, err := WatchLogs(&boundContract, *abi, watchOpts, events.CBasic1EventID(), unpackBasic)
+	sub2, err := WatchLogs(&boundContract, *abi, watchOpts, events.CBasic2EventID(), unpackBasic2)
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
 
