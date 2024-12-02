@@ -562,9 +562,11 @@ func (st *stateTransition) applyAuthorization(msg *Message, auth *types.Authoriz
 
 	// If the account already exists in state, refund the new account cost
 	// charged in the intrinsic calculation.
-	if exists := st.state.Exist(authority); exists {
+	if st.state.Exist(authority) {
 		st.state.AddRefund(params.CallNewAccountGas - params.TxAuthTupleGas)
 	}
+
+	// Update nonce and account code.
 	st.state.SetNonce(authority, auth.Nonce+1)
 	delegation := types.AddressToDelegation(auth.Address)
 	if auth.Address == (common.Address{}) {
