@@ -553,6 +553,7 @@ func (st *stateTransition) validateAuthorization(auth *types.Authorization) (aut
 	code := st.state.GetCode(authority)
 	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
 		return authority, ErrAuthorizationDestinationHasCode
+
 	}
 	if have := st.state.GetNonce(authority); have != auth.Nonce {
 		return authority, ErrAuthorizationNonceMismatch
@@ -575,21 +576,22 @@ func (st *stateTransition) applyAuthorization(msg *Message, auth *types.Authoriz
 
 	// Update nonce and account code.
 	st.state.SetNonce(authority, auth.Nonce+1)
-	delegation := types.AddressToDelegation(auth.Address)
 	if auth.Address == (common.Address{}) {
-		// If the delegation is for the zero address, completely clear all
-		// delegations from the account.
-		delegation = []byte{}
+		// Delegation to zero address means clear.
+		st.state.SetCode(authority, nil)
+		return nil
 	}
-	st.state.SetCode(authority, delegation)
 
-	// Usually the transaction destination and delegation target are added to
-	// the access list in statedb.Prepare(..), however if the delegation is in
-	// the same transaction we need add here as Prepare already happened.
+	// Otherwise install delegation to auth.Address.
+	st.state.SetCode(authority, types.AddressToDelegation(auth.Address))
+
+	// Usually the delegation target is added to the access list in statedb.Prepare(..).
+	// However if the destination address of the transaction is an EOA, and the EOA gains
+	// a new delegation in the same transaction, we need to explicitly add the delegation
+	// address here since Prepare has already happened.
 	if *msg.To == authority {
 		st.state.AddAddressToAccessList(auth.Address)
 	}
-
 	return nil
 }
 
