@@ -544,8 +544,11 @@ func (st *stateTransition) validateAuthorization(auth *types.Authorization) (aut
 	if err != nil {
 		return authority, fmt.Errorf("%w: %v", ErrAuthorizationInvalidSignature, err)
 	}
-	// Check the authority account 1) doesn't have code or has exisiting
-	// delegation 2) matches the auth's nonce
+	// Check the authority account
+	//  1) doesn't have code or has exisiting delegation
+	//  2) matches the auth's nonce
+	//
+	// Note it is added to the access list even if the authorization is invalid.
 	st.state.AddAddressToAccessList(authority)
 	code := st.state.GetCode(authority)
 	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
