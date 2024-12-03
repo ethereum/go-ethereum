@@ -1,17 +1,17 @@
 # Lines starting with '#' are comments.
 # Each line is a file pattern followed by one or more owners.
 
-accounts/usbwallet              @gballet
-accounts/scwallet               @gballet
-accounts/abi                    @gballet @MariusVanDerWijden
-beacon/engine                   @MariusVanDerWijden @lightclient @fjl
-beacon/light                    @zsfelfoldi
-beacon/merkle                   @zsfelfoldi 
-beacon/types                    @zsfelfoldi @fjl
-beacon/params                   @zsfelfoldi @fjl
-cmd/clef                        @holiman
-cmd/evm                         @holiman @MariusVanDerWijden @lightclient
-core/state                      @rjl493456442 @holiman
+accounts/usbwallet/             @gballet
+accounts/scwallet/              @gballet
+accounts/abi/                   @gballet @MariusVanDerWijden
+beacon/engine/                  @MariusVanDerWijden @lightclient @fjl
+beacon/light/                   @zsfelfoldi
+beacon/merkle/                  @zsfelfoldi 
+beacon/types/                   @zsfelfoldi @fjl
+beacon/params/                  @zsfelfoldi @fjl
+cmd/clef/                       @holiman
+cmd/evm/                        @holiman @MariusVanDerWijden @lightclient
+core/state/                     @rjl493456442 @holiman
 crypto/                         @gballet @jwasinger @holiman @fjl
 core/                           @holiman @rjl493456442
 eth/                            @holiman @rjl493456442
