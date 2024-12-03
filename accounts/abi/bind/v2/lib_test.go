@@ -23,8 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/events"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/testdata/v2/nested_libraries"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/events"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2/internal/nested_libraries"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -380,7 +380,7 @@ done:
 }
 
 func TestBindingGeneration(t *testing.T) {
-	matches, _ := filepath.Glob("../testdata/v2/*")
+	matches, _ := filepath.Glob("internal/*")
 	var dirs []string
 	for _, match := range matches {
 		f, _ := os.Stat(match)
@@ -397,7 +397,7 @@ func TestBindingGeneration(t *testing.T) {
 			sigs  []map[string]string
 			libs  = make(map[string]string)
 		)
-		basePath := filepath.Join("../testdata/v2", dir)
+		basePath := filepath.Join("internal", dir)
 		combinedJsonPath := filepath.Join(basePath, "combined-abi.json")
 		abiBytes, err := os.ReadFile(combinedJsonPath)
 		if err != nil {
