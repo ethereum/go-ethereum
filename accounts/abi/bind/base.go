@@ -460,9 +460,9 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	return signedTx, nil
 }
 
-// FilterLogsByID filters contract logs for past blocks, returning the necessary
+// FilterLogsById filters contract logs for past blocks, returning the necessary
 // channels to construct a strongly typed bound iterator on top of them.
-func (c *BoundContract) FilterLogsByID(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
+func (c *BoundContract) FilterLogsById(opts *FilterOpts, eventID common.Hash, query ...[]interface{}) (<-chan types.Log, event.Subscription, error) {
 	return c.filterLogs(opts, eventID, query...)
 }
 

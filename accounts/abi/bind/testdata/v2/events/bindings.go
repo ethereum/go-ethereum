@@ -134,7 +134,9 @@ func CBasic1EventID() common.Hash {
 }
 
 func (_C *C) UnpackBasic1Event(log *types.Log) (*CBasic1, error) {
-	event := "Basic1"
+	// TODO: okay to index by the original name here?  I think so because we assume that the abi json is well-formed.
+	// and we only need normalized name when dealing with generated go symbols.
+	event := "basic1"
 	if log.Topics[0] != _C.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}
@@ -169,7 +171,9 @@ func CBasic2EventID() common.Hash {
 }
 
 func (_C *C) UnpackBasic2Event(log *types.Log) (*CBasic2, error) {
-	event := "Basic2"
+	// TODO: okay to index by the original name here?  I think so because we assume that the abi json is well-formed.
+	// and we only need normalized name when dealing with generated go symbols.
+	event := "basic2"
 	if log.Topics[0] != _C.abi.Events[event].ID {
 		return nil, errors.New("event signature mismatch")
 	}

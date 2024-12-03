@@ -125,7 +125,9 @@ var (
 		}
 
 		func (_{{$contract.Type}} *{{$contract.Type}}) Unpack{{.Normalized.Name}}Event(log *types.Log) (*{{$contract.Type}}{{.Normalized.Name}}, error) {
-			event := "{{.Normalized.Name}}"
+		    // TODO: okay to index by the original name here?  I think so because we assume that the abi json is well-formed.
+		    // and we only need normalized name when dealing with generated go symbols.
+			event := "{{.Original.Name}}"
 			if log.Topics[0] != _{{$contract.Type}}.abi.Events[event].ID {
 				return nil, errors.New("event signature mismatch")
 			}
