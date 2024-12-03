@@ -345,19 +345,23 @@ func (it *EventIterator[T]) Close() error {
 
 // Transact creates and submits a transaction to the bound contract instance
 // using the provided abi-encoded input (or nil).
-func Transact(instance *ContractInstance, opts *bind.TransactOpts, packedInput []byte) (*types.Transaction, error) {
+func Transact(instance *ContractInstance, opts *bind.TransactOpts, input []byte) (*types.Transaction, error) {
 	var (
 		addr    = instance.Address
 		backend = instance.Backend
 	)
 	c := bind.NewBoundContract(addr, abi.ABI{}, backend, backend, backend)
-	return c.RawTransact(opts, packedInput)
+	return c.RawTransact(opts, input)
 }
 
 // Call performs an eth_call on the given bound contract instance, using the
 // provided abi-encoded input (or nil).
-func Call(instance *ContractInstance, opts *bind.CallOpts, packedInput []byte) ([]byte, error) {
+func Call[T any](instance *ContractInstance, opts *bind.CallOpts, packedInput []byte, unpack func([]byte) (*T, error)) (*T, error) {
 	backend := instance.Backend
 	c := bind.NewBoundContract(instance.Address, abi.ABI{}, backend, backend, backend)
-	return c.CallRaw(opts, packedInput)
+	packedOutput, err := c.CallRaw(opts, packedInput)
+	if err != nil {
+		return nil, err
+	}
+	return unpack(packedOutput)
 }
