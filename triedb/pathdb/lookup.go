@@ -27,23 +27,26 @@ import (
 // slicePool is a shared pool of hash slice, for reducing the GC pressure.
 var slicePool = sync.Pool{
 	New: func() interface{} {
-		return make([]common.Hash, 0, 64) // Pre-allocate a slice with a reasonable capacity.
+		slice := make([]common.Hash, 0, 16) // Pre-allocate a slice with a reasonable capacity.
+		return &slice
 	},
 }
 
 // getSlice obtains the hash slice from the shared pool.
 func getSlice() []common.Hash {
-	return slicePool.Get().([]common.Hash)
+	slice := *slicePool.Get().(*[]common.Hash)
+	slice = slice[:0]
+	return slice
 }
 
 // returnSlice returns the hash slice back to the shared pool for following usage.
 func returnSlice(slice []common.Hash) {
 	// Discard the large slice for recycling
-	if len(slice) > 1024 {
+	if len(slice) > 128 {
 		return
 	}
 	// Reset the slice before putting it back into the pool
-	slicePool.Put(slice[:0])
+	slicePool.Put(&slice)
 }
 
 // lookup is an internal help structure to quickly identify
