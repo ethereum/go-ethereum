@@ -243,6 +243,9 @@ func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
 		return logger.NewStreamingStructLogger(config, os.Stderr).Hooks()
 	case ctx.Bool(TraceFlag.Name) && ctx.String(TraceFormatFlag.Name) == "json":
 		return logger.NewJSONLogger(config, os.Stderr)
+	case ctx.Bool(TraceFlag.Name) &&
+		(ctx.String(TraceFormatFlag.Name) == "md" || ctx.String(TraceFormatFlag.Name) == "markdown"):
+		return logger.NewMarkdownLogger(config, os.Stderr).Hooks()
 	case ctx.Bool(MachineFlag.Name):
 		return logger.NewJSONLogger(config, os.Stderr)
 	case ctx.Bool(DebugFlag.Name):

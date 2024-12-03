@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
-	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/triedb"
@@ -66,6 +65,7 @@ var runCommand = &cli.Command{
 		SenderFlag,
 		ValueFlag,
 		StatDumpFlag,
+		DumpFlag,
 	}, traceFlags),
 }
 
@@ -197,13 +197,6 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 }
 
 func runCmd(ctx *cli.Context) error {
-	logconfig := &logger.Config{
-		EnableMemory:     !ctx.Bool(TraceDisableMemoryFlag.Name),
-		DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
-		DisableStorage:   ctx.Bool(TraceDisableStorageFlag.Name),
-		EnableReturnData: !ctx.Bool(TraceDisableReturnDataFlag.Name),
-		Debug:            ctx.Bool(DebugFlag.Name),
-	}
 
 	var (
 		tracer      *tracing.Hooks
@@ -215,12 +208,7 @@ func runCmd(ctx *cli.Context) error {
 		blobHashes  []common.Hash  // TODO (MariusVanDerWijden) implement blob hashes in state tests
 		blobBaseFee = new(big.Int) // TODO (MariusVanDerWijden) implement blob fee in state tests
 	)
-	if ctx.Bool(MachineFlag.Name) {
-		tracer = logger.NewJSONLogger(logconfig, os.Stdout)
-	} else if ctx.Bool(DebugFlag.Name) {
-		tracer = logger.NewStreamingStructLogger(logconfig, os.Stderr).Hooks()
-	}
-
+	tracer = tracerFromFlags(ctx)
 	initialGas := ctx.Uint64(GasFlag.Name)
 	genesisConfig := new(core.Genesis)
 	genesisConfig.GasLimit = initialGas
