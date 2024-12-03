@@ -46,6 +46,11 @@ import (
 // Register adds the engine API to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum) error {
 	log.Warn("Engine API enabled", "protocol", "eth")
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic %v when register consensus api", r)
+		}
+	}()
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace:     "engine",
