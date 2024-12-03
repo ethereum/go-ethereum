@@ -87,8 +87,10 @@ func (s *hookedStateDB) GetCode(addr common.Address) []byte {
 
 func (s *hookedStateDB) GetCodeSize(addr common.Address) int {
 	size := s.inner.GetCodeSize(addr)
-	if s.hooks.OnCodeSizeRead != nil {
-		s.hooks.OnCodeSizeRead(addr, size)
+	if s.hooks.OnCodeRead != nil {
+		// GetCodeSize caches the code within the reader so this call is free.
+		code := s.inner.GetCode(addr)
+		s.hooks.OnCodeRead(addr, code)
 	}
 	return size
 }

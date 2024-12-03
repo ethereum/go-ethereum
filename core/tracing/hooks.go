@@ -186,9 +186,6 @@ type (
 	// CodeReadHook is called when EVM reads the code of an account.
 	CodeReadHook = func(addr common.Address, code []byte)
 
-	// CodeSizeReadHook is called when EVM reads the code size of an account.
-	CodeSizeReadHook = func(addr common.Address, size int)
-
 	// CodeHashReadHook is called when EVM reads the code hash of an account.
 	CodeHashReadHook = func(addr common.Address, hash common.Hash)
 
@@ -228,7 +225,6 @@ type Hooks struct {
 	OnBalanceRead  BalanceReadHook
 	OnNonceRead    NonceReadHook
 	OnCodeRead     CodeReadHook
-	OnCodeSizeRead CodeSizeReadHook
 	OnCodeHashRead CodeHashReadHook
 	OnStorageRead  StorageReadHook
 	// Block hash read

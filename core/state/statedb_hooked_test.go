@@ -94,7 +94,7 @@ func TestHooks(t *testing.T) {
 		"0xaa00000000000000000000000000000000000000.nonce read: 1337",
 		"0xaa00000000000000000000000000000000000000.code read: [19 37]",
 		"0xaa00000000000000000000000000000000000000.storage read 0x0000000000000000000000000000000000000000000000000000000000000001: 0x0000000000000000000000000000000000000000000000000000000000000022",
-		"0xaa00000000000000000000000000000000000000.code size read: 2",
+		"0xaa00000000000000000000000000000000000000.code read: [19 37]",
 		"0xaa00000000000000000000000000000000000000.code hash read: 0xa12ae05590de0c93a00bc7ac773c2fdb621e44f814985e72194f921c0050f728",
 	}
 	emitF := func(format string, a ...any) {
@@ -127,9 +127,6 @@ func TestHooks(t *testing.T) {
 		},
 		OnStorageRead: func(addr common.Address, slot common.Hash, value common.Hash) {
 			emitF("%v.storage read %v: %v", addr, slot, value)
-		},
-		OnCodeSizeRead: func(addr common.Address, size int) {
-			emitF("%v.code size read: %v", addr, size)
 		},
 		OnCodeHashRead: func(addr common.Address, hash common.Hash) {
 			emitF("%v.code hash read: %v", addr, hash)
