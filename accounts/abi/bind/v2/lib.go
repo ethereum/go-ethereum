@@ -237,9 +237,9 @@ func FilterEvents[T any](instance *ContractInstance, opts *bind.FilterOpts, even
 // contract to be intercepted, unpacked, and forwarded to sink.  If
 // unpack returns an error, the returned subscription is closed with the
 // error.
-func WatchEvents[T any](instance *ContractInstance, abi abi.ABI, opts *bind.WatchOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
+func WatchEvents[T any](instance *ContractInstance, opts *bind.WatchOpts, eventID common.Hash, unpack func(*types.Log) (*T, error), sink chan<- *T, topics ...[]any) (event.Subscription, error) {
 	backend := instance.Backend
-	c := bind.NewBoundContract(instance.Address, abi, backend, backend, backend)
+	c := bind.NewBoundContract(instance.Address, abi.ABI{}, backend, backend, backend)
 	logs, sub, err := c.WatchLogsForId(opts, eventID, topics...)
 	if err != nil {
 		return nil, err
