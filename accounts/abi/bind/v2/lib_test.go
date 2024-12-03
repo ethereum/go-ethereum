@@ -269,7 +269,6 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		t.Fatalf("expected internal call count of 6.  got %d.", internalCallCount.Uint64())
 	}
 }
-
 func TestEvents(t *testing.T) {
 	// test watch/filter logs method on a contract that emits various kinds of events (struct-containing, etc.)
 	txAuth, backend, err := testSetup()
@@ -305,31 +304,30 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error getting contract abi: %v", err)
 	}
 
-	boundContract := bind.NewBoundContract(res.Addrs[events.CMetaData.Pattern], *abi, backend, backend, backend)
+	boundContract := ContractInstance{
+		res.Addrs[events.CMetaData.Pattern],
+		backend,
+	}
 
+	newCBasic1Ch := make(chan *events.CBasic1)
+	newCBasic2Ch := make(chan *events.CBasic2)
 	watchOpts := &bind.WatchOpts{
 		Start:   nil,
 		Context: context.Background(),
 	}
-	chE1, sub1, err := boundContract.WatchLogsForId(watchOpts, events.CBasic1EventID(), nil)
-	if err != nil {
-		t.Fatalf("WatchLogsForId with event type 1 failed: %v", err)
-	}
+	sub1, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic1EventID(), ctrct.UnpackBasic1Event, newCBasic1Ch)
+	sub2, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic2EventID(), ctrct.UnpackBasic2Event, newCBasic2Ch)
 	defer sub1.Unsubscribe()
-
-	chE2, sub2, err := boundContract.WatchLogsForId(watchOpts, events.CBasic2EventID(), nil)
-	if err != nil {
-		t.Fatalf("WatchLogsForId with event type 2 failed: %v", err)
-	}
 	defer sub2.Unsubscribe()
 
-	packedCallData, err := ctrct.PackEmitMulti()
-	if err != nil {
-		t.Fatalf("failed to pack EmitMulti arguments")
+	crtctInstance := &ContractInstance{
+		Address: res.Addrs[events.CMetaData.Pattern],
+		Backend: backend,
 	}
-	tx, err := boundContract.RawTransact(txAuth, packedCallData)
+	packedInput, _ := ctrct.PackEmitMulti()
+	tx, err := Transact(crtctInstance, txAuth, packedInput)
 	if err != nil {
-		t.Fatalf("failed to submit transaction: %v", err)
+		t.Fatalf("failed to send transaction: %v", err)
 	}
 	backend.Commit()
 	if _, err := bind.WaitMined(context.Background(), backend, tx); err != nil {
@@ -341,22 +339,15 @@ func TestEvents(t *testing.T) {
 	e2Count := 0
 	for {
 		select {
-		case <-timeout.C:
-			goto done
-		case err := <-sub1.Err():
-			t.Fatalf("received err from sub1: %v", err)
-		case err := <-sub2.Err():
-			t.Fatalf("received err from sub2: %v", err)
-		case log := <-chE1:
-			if _, err := ctrct.UnpackBasic1Event(&log); err != nil {
-				t.Fatalf("failed to unpack basic1 type event: %v", err)
-			}
+		case _ = <-newCBasic1Ch:
 			e1Count++
-		case log := <-chE2:
-			if _, err := ctrct.UnpackBasic2Event(&log); err != nil {
-				t.Fatalf("failed to unpack basic2 type event: %v", err)
-			}
+		case _ = <-newCBasic2Ch:
 			e2Count++
+		case _ = <-timeout.C:
+			goto done
+		}
+		if e1Count == 2 && e2Count == 1 {
+			break
 		}
 	}
 done:
@@ -373,33 +364,39 @@ done:
 		Start:   0,
 		Context: context.Background(),
 	}
-	chE1, sub1, err = boundContract.FilterLogsByID(filterOpts, events.CBasic1EventID(), nil)
-	if err != nil {
-		t.Fatalf("failed to filter logs for event type 1: %v", err)
+	unpackBasic := func(raw *types.Log) (*events.CBasic1, error) {
+		return &events.CBasic1{
+			Id:   (new(big.Int)).SetBytes(raw.Topics[0].Bytes()),
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}, nil
 	}
-	chE2, sub2, err = boundContract.FilterLogsByID(filterOpts, events.CBasic2EventID(), nil)
-	if err != nil {
-		t.Fatalf("failed to filter logs for event type 2: %v", err)
+	unpackBasic2 := func(raw *types.Log) (*events.CBasic2, error) {
+		return &events.CBasic2{
+			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
+			Data: (new(big.Int)).SetBytes(raw.Data),
+		}, nil
 	}
-	timeout.Reset(2 * time.Second)
+	it, err := FilterEvents[events.CBasic1](crtctInstance, filterOpts, events.CBasic1EventID(), unpackBasic)
+	if err != nil {
+		t.Fatalf("error filtering logs %v\n", err)
+	}
+	it2, err := FilterEvents[events.CBasic2](crtctInstance, filterOpts, events.CBasic2EventID(), unpackBasic2)
+	if err != nil {
+		t.Fatalf("error filtering logs %v\n", err)
+	}
 	e1Count = 0
 	e2Count = 0
-	for {
-		select {
-		case <-timeout.C:
-			goto done2
-		case <-chE1:
-			e1Count++
-		case <-chE2:
-			e2Count++
-		}
+	for it.Next() {
+		e1Count++
 	}
-done2:
+	for it2.Next() {
+		e2Count++
+	}
 	if e1Count != 2 {
-		t.Fatalf("incorrect results from filter logs: expected event type 1 count to be 2.  got %d", e1Count)
+		t.Fatalf("expected e1Count of 2 from filter call.  got %d", e1Count)
 	}
 	if e2Count != 1 {
-		t.Fatalf("incorrect results from filter logs: expected event type 2 count to be 1.  got %d", e2Count)
+		t.Fatalf("expected e2Count of 1 from filter call.  got %d", e1Count)
 	}
 }
 
@@ -409,7 +406,6 @@ func TestBindingGeneration(t *testing.T) {
 	for _, match := range matches {
 		f, _ := os.Stat(match)
 		if f.IsDir() {
-			fmt.Printf("match %s\n", f.Name())
 			dirs = append(dirs, f.Name())
 		}
 	}
@@ -433,8 +429,6 @@ func TestBindingGeneration(t *testing.T) {
 			t.Fatalf("Failed to read contract information from json output: %v", err)
 		}
 
-		fmt.Println(dir)
-		fmt.Printf("number of contracts: %d\n", len(contracts))
 		for name, contract := range contracts {
 			// fully qualified name is of the form <solFilePath>:<type>
 			nameParts := strings.Split(name, ":")
