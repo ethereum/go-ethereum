@@ -15,7 +15,6 @@ The tracing interface has been extended with backwards-compatible changes to sup
 - `OnBalanceRead(addr common.Address, balance *big.Int)`: This hook is called when an account balance is read.
 - `OnNonceRead(addr common.Address, nonce uint64)`: This hook is called when an account nonce is read.
 - `OnCodeRead(addr common.Address, code []byte)`: This hook is called when an account code is read.
-- `OnCodeSizeRead(addr common.Address, size int)`: This hook is called when an account code size is read.
 - `OnCodeHashRead(addr common.Address, codeHash common.Hash)`: This hook is called when an account code hash is read.
 - `OnStorageRead(addr common.Address, slot common.Hash, value common.Hash)`: This hook is called when an account storage slot is read.
 - `OnBlockHashRead(blockNum uint64, hash common.Hash)`: This hook is called when a block hash is read by EVM.
