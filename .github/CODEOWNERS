@@ -24,8 +24,8 @@ trie/                           @rjl493456442
 triedb/                         @rjl493456442
 core/tracing/                   @s1na
 graphql/                        @s1na
-internal/ethapi                 @fjl @s1na @lightclient
-internal/era                    @lightclient
+internal/ethapi/                @fjl @s1na @lightclient
+internal/era/                   @lightclient
 metrics/                        @holiman
 miner/                          @MariusVanDerWijden @holiman @fjl @rjl493456442
 node/                           @fjl
