@@ -295,11 +295,6 @@ func TestEvents(t *testing.T) {
 		t.Fatalf("error instantiating contract instance: %v", err)
 	}
 
-	abi, err := events.CMetaData.GetAbi()
-	if err != nil {
-		t.Fatalf("error getting contract abi: %v", err)
-	}
-
 	boundContract := ContractInstance{
 		res.Addrs[events.CMetaData.Pattern],
 		backend,
@@ -311,8 +306,8 @@ func TestEvents(t *testing.T) {
 		Start:   nil,
 		Context: context.Background(),
 	}
-	sub1, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic1EventID(), ctrct.UnpackBasic1Event, newCBasic1Ch)
-	sub2, err := WatchEvents(&boundContract, *abi, watchOpts, events.CBasic2EventID(), ctrct.UnpackBasic2Event, newCBasic2Ch)
+	sub1, err := WatchEvents(&boundContract, watchOpts, events.CBasic1EventID(), ctrct.UnpackBasic1Event, newCBasic1Ch)
+	sub2, err := WatchEvents(&boundContract, watchOpts, events.CBasic2EventID(), ctrct.UnpackBasic2Event, newCBasic2Ch)
 	defer sub1.Unsubscribe()
 	defer sub2.Unsubscribe()
 
@@ -360,23 +355,11 @@ done:
 		Start:   0,
 		Context: context.Background(),
 	}
-	unpackBasic := func(raw *types.Log) (*events.CBasic1, error) {
-		return &events.CBasic1{
-			Id:   (new(big.Int)).SetBytes(raw.Topics[0].Bytes()),
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}, nil
-	}
-	unpackBasic2 := func(raw *types.Log) (*events.CBasic2, error) {
-		return &events.CBasic2{
-			Flag: false, // TODO: how to unpack different types to go types?  this should be exposed via abi package.
-			Data: (new(big.Int)).SetBytes(raw.Data),
-		}, nil
-	}
-	it, err := FilterEvents[events.CBasic1](crtctInstance, filterOpts, events.CBasic1EventID(), unpackBasic)
+	it, err := FilterEvents[events.CBasic1](crtctInstance, filterOpts, events.CBasic1EventID(), ctrct.UnpackBasic1Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
-	it2, err := FilterEvents[events.CBasic2](crtctInstance, filterOpts, events.CBasic2EventID(), unpackBasic2)
+	it2, err := FilterEvents[events.CBasic2](crtctInstance, filterOpts, events.CBasic2EventID(), ctrct.UnpackBasic2Event)
 	if err != nil {
 		t.Fatalf("error filtering logs %v\n", err)
 	}
