@@ -69,7 +69,7 @@ else
 fi
 
 INSTANCE_IP=$(curl https://checkip.amazonaws.com)
-netstats="${NODE_NAME}-${wallet}-${INSTANCE_IP}:xinfin_xdpos_hybrid_network_stats@devnetstats.hashlab.apothem.network:1999"
+netstats="${NODE_NAME}-${wallet}-${INSTANCE_IP}:xinfin_xdpos_hybrid_network_stats@devnetstats.hashlabs.apothem.network:1999"
 
 
 echo "Running a node with wallet: ${wallet} at IP: ${INSTANCE_IP}"

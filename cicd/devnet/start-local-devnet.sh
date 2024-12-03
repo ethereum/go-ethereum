@@ -46,7 +46,7 @@ else
   log_level=$LOG_LEVEL
 fi
 
-netstats="${NODE_NAME}-${wallet}-local:xinfin_xdpos_hybrid_network_stats@devnetstats.apothem.network:2000"
+netstats="${NODE_NAME}-${wallet}-local:xinfin_xdpos_hybrid_network_stats@devnetstats.hashlabs.apothem.network:1999"
 
 echo "Running a node with wallet: ${wallet} at local"
 
