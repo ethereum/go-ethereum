@@ -234,10 +234,6 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/secp256k1 \
 
 compile_fuzzer github.com/ethereum/go-ethereum/eth/protocols/eth \
   FuzzEthProtocolHandlers fuzz_eth_protocol_handlers \
-  $repo/eth/protocols/eth/handler_test.go
+  $repo/eth/protocols/eth/handler_test.go,$repo/eth/protocols/eth/peer_test.go
 
-
-#compile_fuzzer tests/fuzzers/vflux      FuzzClientPool fuzzClientPool
-#compile_fuzzer tests/fuzzers/difficulty Fuzz fuzzDifficulty
-#compile_fuzzer tests/fuzzers/les        Fuzz fuzzLes
 
