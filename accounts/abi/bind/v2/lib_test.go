@@ -148,21 +148,17 @@ func TestDeploymentLibraries(t *testing.T) {
 		t.Fatalf("pack function input err: %v\n", doInput)
 	}
 
-	cABI, err := nested_libraries.C1MetaData.GetAbi()
-	if err != nil {
-		t.Fatalf("error getting abi object: %v", err)
-	}
 	contractAddr := res.Addrs[nested_libraries.C1MetaData.Pattern]
-	boundC := bind.NewBoundContract(contractAddr, *cABI, bindBackend, bindBackend, bindBackend)
 	callOpts := &bind.CallOpts{
 		From:    common.Address{},
 		Context: context.Background(),
 	}
-	callRes, err := boundC.CallRaw(callOpts, doInput)
-	if err != nil {
-		t.Fatalf("err calling contract: %v", err)
+
+	ctrctInstance := &ContractInstance{
+		Address: contractAddr,
+		Backend: bindBackend,
 	}
-	internalCallCount, err := c.UnpackDo(callRes)
+	internalCallCount, err := Call[big.Int](ctrctInstance, callOpts, doInput, ctrct.UnpackDo)
 	if err != nil {
 		t.Fatalf("err unpacking result: %v", err)
 	}
