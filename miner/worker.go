@@ -273,6 +273,7 @@ func (self *worker) update() {
 	minePeriod := 2
 	MinePeriodCh := self.engine.(*XDPoS.XDPoS).MinePeriodCh
 	defer close(MinePeriodCh)
+	NewRoundCh := self.engine.(*XDPoS.XDPoS).NewRoundCh
 
 	timeout := time.NewTimer(time.Duration(minePeriod) * time.Second)
 	c := make(chan struct{})
@@ -308,6 +309,12 @@ func (self *worker) update() {
 
 		// Handle ChainHeadEvent
 		case <-self.chainHeadCh:
+			self.commitNewWork()
+			resetTime := getResetTime(self.chain, minePeriod, &prevReset0TimeMillisec)
+			timeout.Reset(resetTime)
+
+		// Handle new round
+		case <-NewRoundCh:
 			self.commitNewWork()
 			resetTime := getResetTime(self.chain, minePeriod, &prevReset0TimeMillisec)
 			timeout.Reset(resetTime)
