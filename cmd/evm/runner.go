@@ -245,7 +245,6 @@ func runCmd(ctx *cli.Context) error {
 	sdb := state.NewDatabase(triedb, nil)
 	prestate, _ = state.New(genesis.Root(), sdb)
 	chainConfig = genesisConfig.Config
-
 	if ctx.String(SenderFlag.Name) != "" {
 		sender = common.HexToAddress(ctx.String(SenderFlag.Name))
 	}

@@ -132,8 +132,8 @@ type StateDB struct {
 	transientStorage transientStorage
 
 	// Journal of state modifications. This is the backbone of
-	// Snapshot and RevertToSnapshot.
-	journal *journal
+	// Snapshot and RevertSnapshot.
+	journal journal
 
 	// State witness if cross validation is needed
 	witness *stateless.Witness
@@ -177,7 +177,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		mutations:            make(map[common.Address]*mutation),
 		logs:                 make(map[common.Hash][]*types.Log),
 		preimages:            make(map[common.Hash][]byte),
-		journal:              newJournal(),
+		journal:              newSparseJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
 	}
@@ -502,7 +502,7 @@ func (s *StateDB) SelfDestruct(addr common.Address) uint256.Int {
 	// If it is already marked as self-destructed, we do not need to add it
 	// for journalling a second time.
 	if !stateObject.selfDestructed {
-		s.journal.destruct(addr)
+		s.journal.destruct(addr, &stateObject.data)
 		stateObject.markSelfdestructed()
 	}
 	return prevBalance
@@ -642,7 +642,7 @@ func (s *StateDB) CreateContract(addr common.Address) {
 	obj := s.getStateObject(addr)
 	if !obj.newContract {
 		obj.newContract = true
-		s.journal.createContract(addr)
+		s.journal.createContract(addr, &obj.data)
 	}
 }
 
@@ -707,14 +707,21 @@ func (s *StateDB) Copy() *StateDB {
 	return state
 }
 
-// Snapshot returns an identifier for the current revision of the state.
-func (s *StateDB) Snapshot() int {
-	return s.journal.snapshot()
+// Snapshot starts a new journalled scope.
+func (s *StateDB) Snapshot() {
+	s.journal.snapshot()
 }
 
-// RevertToSnapshot reverts all state changes made since the given revision.
-func (s *StateDB) RevertToSnapshot(revid int) {
-	s.journal.revertToSnapshot(revid, s)
+// DiscardSnapshot removes the ability to roll back the changes in the most
+// recent journalled scope. After calling this method, the changes are considered
+// part of the parent scope.
+func (s *StateDB) DiscardSnapshot() {
+	s.journal.discardSnapshot()
+}
+
+// RevertSnapshot reverts all state changes made in the most recent journalled scope.
+func (s *StateDB) RevertSnapshot() {
+	s.journal.revertSnapshot(s)
 }
 
 // GetRefund returns the current value of the refund counter.
@@ -726,8 +733,9 @@ func (s *StateDB) GetRefund() uint64 {
 // the journal as well as the refunds. Finalise, however, will not push any updates
 // into the tries just yet. Only IntermediateRoot or Commit will do that.
 func (s *StateDB) Finalise(deleteEmptyObjects bool) {
-	addressesToPrefetch := make([]common.Address, 0, len(s.journal.dirties))
-	for addr := range s.journal.dirties {
+	dirties := s.journal.dirtyAccounts()
+	addressesToPrefetch := make([]common.Address, 0, len(dirties))
+	for _, addr := range dirties {
 		obj, exist := s.stateObjects[addr]
 		if !exist {
 			// ripeMD is 'touched' at block 1714175, in tx 0x1237f737031e40bcde4a8b7e717b2d15e3ecadfe49bb1bbc71ee9deb09c6fcf2
