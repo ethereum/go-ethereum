@@ -117,7 +117,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string, lang La
 		}
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
-			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
+			InputABI:    strings.ReplaceAll(strippedABI, "\"", "\\\""),
 			InputBin:    strings.TrimSpace(bytecodes[i]),
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
