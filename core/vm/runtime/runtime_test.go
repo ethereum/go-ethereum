@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/asm"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/program"
@@ -670,17 +671,23 @@ func TestColdAccountAccessCost(t *testing.T) {
 			want: 7600,
 		},
 	} {
-		tracer := logger.NewStructLogger(nil)
+		var step = 0
+		var have = uint64(0)
 		Execute(tc.code, nil, &Config{
 			EVMConfig: vm.Config{
-				Tracer: tracer.Hooks(),
+				Tracer: &tracing.Hooks{
+					OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+						// Uncomment to investigate failures:
+						//t.Logf("%d: %v %d", step, vm.OpCode(op).String(), cost)
+						if step == tc.step {
+							have = cost
+						}
+						step++
+					},
+				},
 			},
 		})
-		have := tracer.StructLogs()[tc.step].GasCost
 		if want := tc.want; have != want {
-			for ii, op := range tracer.StructLogs() {
-				t.Logf("%d: %v %d", ii, op.OpName(), op.GasCost)
-			}
 			t.Fatalf("testcase %d, gas report wrong, step %d, have %d want %d", i, tc.step, have, want)
 		}
 	}
