@@ -46,15 +46,16 @@ type Config struct {
 	DisableStorage   bool // disable storage capture
 	EnableReturnData bool // enable return data capture
 	Debug            bool // print output during capture end
-	Limit            int  // maximum length of output, but zero means unlimited
+	Limit            int  // maximum size of output, but zero means unlimited
+
 	// Chain overrides, can be used to execute a trace using future fork rules
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
 
 //go:generate go run github.com/fjl/gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 
-// StructLog is emitted to the EVM each cycle and lists information about the current internal state
-// prior to the execution of the statement.
+// StructLog is emitted to the EVM each cycle and lists information about the
+// current internal state prior to the execution of the statement.
 type StructLog struct {
 	Pc            uint64                      `json:"pc"`
 	Op            vm.OpCode                   `json:"op"`
@@ -94,12 +95,14 @@ func (s *StructLog) ErrorString() string {
 	return ""
 }
 
+// WriteTo writes the human-readable log data into the supplied writer.
 func (s *StructLog) WriteTo(writer io.Writer) {
 	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", s.Op, s.Pc, s.Gas, s.GasCost)
 	if s.Err != nil {
 		fmt.Fprintf(writer, " ERROR: %v", s.Err)
 	}
 	fmt.Fprintln(writer)
+
 	if len(s.Stack) > 0 {
 		fmt.Fprintln(writer, "Stack:")
 		for i := len(s.Stack) - 1; i >= 0; i-- {
@@ -123,9 +126,24 @@ func (s *StructLog) WriteTo(writer io.Writer) {
 	fmt.Fprintln(writer)
 }
 
-// StructLogRes stores a structured log emitted by the EVM while replaying a
-// transaction in debug mode
-type StructLogRes struct {
+// structLogLegacy stores a structured log emitted by the EVM while replaying a
+// transaction in debug mode. It's the legacy format used in tracer. The differences
+// between the structLog json and the 'legacy' json are:
+//
+// op:
+// Legacy uses string (e.g. "SSTORE"), non-legacy uses a byte.
+// non-legacy has an 'opName' field containing the op name.
+//
+// gas, gasCost:
+// Legacy uses integers, non-legacy hex-strings
+//
+// memory:
+// Legacy uses a list of 64-char strings, each representing 32-byte chunks
+// of evm memory. Non-legacy just uses a string of hexdata, no chunking.
+//
+// storage:
+// Legacy has a storage field while non-legacy doesn't.
+type structLogLegacy struct {
 	Pc            uint64             `json:"pc"`
 	Op            string             `json:"op"`
 	Gas           uint64             `json:"gas"`
@@ -139,17 +157,9 @@ type StructLogRes struct {
 	RefundCounter uint64             `json:"refund,omitempty"`
 }
 
-// toLegacyJSON converts the structlog to json-encoded legacy form (StructLogRes).
-//
-// The differences between the structlog json and the 'legacy' json are:
-// - Op. Legacy uses string (e.g. "SSTORE"), non-legacy uses a byte.
-//   - non-legacy has an 'opName' field containing the op name.
-//   - gas, gasCost: legacy uses integers, non-legacy hex-strings
-//   - memory: legacy uses a list of 64-char strings, each representing 32-byte chunks
-//     of evm memory. Non-legacy just uses a string of hexdata, no chunking.
-//   - storage: legacy has a storage-field.
+// toLegacyJSON converts the structLog to legacy json-encoded legacy form.
 func (s *StructLog) toLegacyJSON() json.RawMessage {
-	msg := StructLogRes{
+	msg := structLogLegacy{
 		Pc:            s.Pc,
 		Op:            s.Op.String(),
 		Gas:           s.Gas,
@@ -211,7 +221,7 @@ type StructLogger struct {
 	reason    error       // Textual reason for the interruption
 }
 
-// NewStructLogger returns a new logger
+// NewStreamingStructLogger returns a new streaming logger.
 func NewStreamingStructLogger(cfg *Config, writer io.Writer) *StructLogger {
 	l := NewStructLogger(cfg)
 	l.writer = writer
@@ -296,6 +306,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		}
 	}
 	log.Storage = storage
+
 	// create a log
 	if l.writer == nil {
 		entry := log.toLegacyJSON()
@@ -337,7 +348,7 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 		Gas:         l.usedGas,
 		Failed:      failed,
 		ReturnValue: returnVal,
-		StructLogs:  l.jsonLogs(),
+		StructLogs:  l.logs,
 	})
 }
 
@@ -362,10 +373,6 @@ func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
 	if receipt != nil {
 		l.usedGas = receipt.GasUsed
 	}
-}
-
-func (l *StructLogger) jsonLogs() []json.RawMessage {
-	return l.logs
 }
 
 // Error returns the VM error captured by the trace.
