@@ -207,7 +207,7 @@ func (n *Node) URLv4() string {
 		nodeid = fmt.Sprintf("%s.%x", scheme, n.id[:])
 	}
 	u := url.URL{Scheme: "enode"}
-	if n.NeedResolve() {
+	if n.Hostname() != "" {
 		// For DNS nodes: include DNS name, TCP port, and optional UDP port
 		u.User = url.User(nodeid)
 		u.Host = fmt.Sprintf("%s:%d", n.Hostname(), n.TCP())
