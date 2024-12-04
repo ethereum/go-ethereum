@@ -33,7 +33,6 @@ import (
 
 var (
 	incompleteNodeURL = regexp.MustCompile("(?i)^(?:enode://)?([0-9a-f]+)$")
-	lookupIPFunc      = net.LookupIP
 )
 
 // MustParseV4 parses a node URL. It panics if the URL is not valid.
