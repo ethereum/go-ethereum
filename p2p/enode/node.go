@@ -22,14 +22,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/bits"
 	"net"
 	"net/netip"
 	"strings"
-	"time"
-
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var errMissingPrefix = errors.New("missing 'enr:' prefix for base64-encoded record")
@@ -39,13 +37,10 @@ type Node struct {
 	r  enr.Record
 	id ID
 	// endpoint information
-	ip  netip.Addr
-	udp uint16
-	tcp uint16
-	// dns information
-	dnsName     string
-	dnsResolved time.Time
-	dnsTTL      time.Duration
+	ip       netip.Addr
+	udp      uint16
+	tcp      uint16
+	hostname string
 }
 
 // New wraps a node record. The record must be valid according to the given
@@ -189,6 +184,22 @@ func (n *Node) TCP() int {
 	return int(n.tcp)
 }
 
+// Endpoint returns the hostname of the node if set, otherwise the IP address.
+func (n *Node) Endpoint() string {
+	if n.hostname != "" {
+		return n.hostname
+	}
+	if n.ip.IsValid() {
+		return n.ip.String()
+	}
+	return ""
+}
+
+// NeedResolve checks if the node requires DNS resolution.
+func (n *Node) NeedResolve() bool {
+	return n.hostname != "" //TODO: Add check for n.ip.IsValid(), but we need to implement invalidation for the previous resolved IP
+}
+
 // UDPEndpoint returns the announced UDP endpoint.
 func (n *Node) UDPEndpoint() (netip.AddrPort, bool) {
 	if !n.ip.IsValid() || n.ip.IsUnspecified() || n.udp == 0 {
@@ -234,6 +245,9 @@ func (n *Node) Record() *enr.Record {
 	cpy := n.r
 	return &cpy
 }
+func (n *Node) Hostname() string {
+	return n.hostname
+}
 
 // ValidateComplete checks whether n has a valid IP and UDP port.
 // Deprecated: don't use this method.
@@ -260,84 +274,6 @@ func (n *Node) String() string {
 	enc, _ := rlp.EncodeToBytes(&n.r) // always succeeds because record is valid
 	b64 := base64.RawURLEncoding.EncodeToString(enc)
 	return "enr:" + b64
-}
-
-// resolveDNS attempts to resolve a DNS name to an IP address
-func (n *Node) resolveDNS(dnsName string) (netip.Addr, error) {
-	ips, err := net.LookupIP(dnsName)
-	if err != nil {
-		return netip.Addr{}, err
-	}
-	for _, ip := range ips {
-		if ip4 := ip.To4(); ip4 != nil {
-			addr, ok := netip.AddrFromSlice(ip4)
-			if ok {
-				return addr, nil
-			}
-		}
-	}
-	// Fall back to IPv6 if no IPv4 is available
-	for _, ip := range ips {
-		addr, ok := netip.AddrFromSlice(ip)
-		if ok {
-			return addr, nil
-		}
-	}
-
-	return netip.Addr{}, errors.New("no valid IP address found")
-}
-
-// SetDNS sets the DNS name and resolves it to an IP address
-func (n *Node) SetDNS(dnsName string, ttl time.Duration) error {
-	ip, err := n.resolveDNS(dnsName)
-	if err != nil {
-		return err
-	}
-
-	n.dnsName = dnsName
-	n.dnsResolved = time.Now()
-	n.dnsTTL = ttl
-
-	if ip.Is4() {
-		n.setIP4(ip)
-	} else {
-		n.setIP6(ip)
-	}
-	return nil
-}
-
-// DNSName returns the stored DNS name
-func (n *Node) DNSName() string {
-	return n.dnsName
-}
-
-// RefreshDNS updates the IP address from the stored DNS name
-func (n *Node) RefreshDNS(ttl time.Duration) error {
-	if n.dnsName == "" {
-		return errors.New("no DNS name set")
-	}
-	return n.SetDNS(n.dnsName, ttl)
-}
-
-// DisplayAddr returns either "hostname:port" or "ip:port"
-func (n *Node) DisplayAddr() string {
-	addr := n.dnsName
-	if addr == "" {
-		addr = n.ip.String()
-	}
-	return fmt.Sprintf("%s:%d", addr, n.tcp)
-}
-
-// NeedsDNSResolve returns true if the node has a DNS name that needs resolution
-func (n *Node) NeedsDNSResolve() bool {
-	if n.dnsName == "" {
-		return false
-	}
-	return !n.ip.IsValid() || time.Since(n.dnsResolved) > n.dnsTTL
-}
-
-func (n *Node) GetTTL() time.Duration {
-	return n.dnsTTL
 }
 
 // MarshalText implements encoding.TextMarshaler.

@@ -274,7 +274,7 @@ func TestNodeEndpoints(t *testing.T) {
 			node: func() *Node {
 				var r enr.Record
 				n := SignNull(&r, id)
-				n.dnsName = "example.com"
+				n.hostname = "example.com"
 				n.tcp = 30303
 				n.udp = 30303
 				return n
@@ -282,40 +282,6 @@ func TestNodeEndpoints(t *testing.T) {
 			wantTCP: 30303,
 			wantUDP: 30303,
 			wantDNS: "example.com",
-		},
-		{
-			name: "dns-with-ports",
-			node: func() *Node {
-				var r enr.Record
-				r.Set(enr.TCP(9000))
-				r.Set(enr.UDP(9001))
-				n := SignNull(&r, id)
-				n.dnsName = "node.example.org"
-				n.tcp = 9000
-				n.udp = 9001
-				return n
-			}(),
-			wantTCP: 9000,
-			wantUDP: 9001,
-			wantDNS: "node.example.org",
-		},
-		{
-			name: "dns-with-ip-fallback",
-			node: func() *Node {
-				var r enr.Record
-				r.Set(enr.IPv4Addr(netip.MustParseAddr("192.168.1.1")))
-				r.Set(enr.TCP(9000))
-				r.Set(enr.UDP(9000))
-				n := SignNull(&r, id)
-				n.dnsName = "node.example.org"
-				n.tcp = 9000
-				n.udp = 9000
-				return n
-			}(),
-			wantIP:  netip.MustParseAddr("192.168.1.1"),
-			wantTCP: 9000,
-			wantUDP: 9000,
-			wantDNS: "node.example.org",
 		},
 	}
 
@@ -333,8 +299,8 @@ func TestNodeEndpoints(t *testing.T) {
 			if quic, _ := test.node.QUICEndpoint(); test.wantQUIC != int(quic.Port()) {
 				t.Errorf("node has wrong QUIC port %d, want %d", quic.Port(), test.wantQUIC)
 			}
-			if test.wantDNS != test.node.DNSName() {
-				t.Errorf("node has wrong DNS name %s, want %s", test.node.DNSName(), test.wantDNS)
+			if test.wantDNS != test.node.Hostname() {
+				t.Errorf("node has wrong DNS name %s, want %s", test.node.Hostname(), test.wantDNS)
 			}
 		})
 	}

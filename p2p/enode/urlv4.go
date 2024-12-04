@@ -101,17 +101,25 @@ func NewV4(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int) *Node {
 	return n
 }
 
-func NewV4WithDNS(pubkey *ecdsa.PublicKey, ip net.IP, dnsName string, tcp, udp int) *Node {
-	n := NewV4(pubkey, ip, tcp, udp)
-	// Always set TCP/UDP ports regardless of IP
-	// This is to ensure that the node is always
-	// considered valid even if the IP is not
-	// set.
-	if len(ip) == 0 {
-		n.tcp = uint16(tcp)
-		n.udp = uint16(udp)
+func NewV4WithDNS(pubkey *ecdsa.PublicKey, ip net.IP, hostname string, tcp, udp int) *Node {
+	var r enr.Record
+	if tcp != 0 {
+		r.Set(enr.TCP(tcp))
 	}
-	n.dnsName = dnsName
+	if udp != 0 {
+		r.Set(enr.UDP(udp))
+	}
+	if len(ip) > 0 {
+		r.Set(enr.IP(ip))
+	}
+	signV4Compat(&r, pubkey)
+	n, err := New(v4CompatID{}, &r)
+	if err != nil {
+		panic(err)
+	}
+	n.tcp = uint16(tcp)
+	n.udp = uint16(udp)
+	n.hostname = hostname
 	return n
 }
 
@@ -125,6 +133,7 @@ func parseComplete(rawurl string) (*Node, error) {
 	var (
 		id               *ecdsa.PublicKey
 		tcpPort, udpPort uint64
+		node             *Node
 	)
 	u, err := url.Parse(rawurl)
 	if err != nil {
@@ -140,6 +149,16 @@ func parseComplete(rawurl string) (*Node, error) {
 	if id, err = parsePubkey(u.User.String()); err != nil {
 		return nil, fmt.Errorf("invalid public key (%v)", err)
 	}
+
+	// Parse the IP address if its one.
+	ip := net.ParseIP(u.Hostname())
+	if ip != nil {
+		// Ensure the IP is 4 bytes long for IPv4 addresses.
+		if ipv4 := ip.To4(); ipv4 != nil {
+			ip = ipv4
+		}
+	}
+	// Parse the port numbers.
 	if tcpPort, err = strconv.ParseUint(u.Port(), 10, 16); err != nil {
 		return nil, errors.New("invalid port")
 	}
@@ -151,20 +170,14 @@ func parseComplete(rawurl string) (*Node, error) {
 			return nil, errors.New("invalid discport in query")
 		}
 	}
-	// Check if hostname is an IP address and create node accordingly
-	hostname := u.Hostname()
-	ip := net.ParseIP(hostname)
-	if ip == nil {
-		ips, err := lookupIPFunc(hostname)
-		if err != nil {
-			return NewV4WithDNS(id, nil, hostname, int(tcpPort), int(udpPort)), nil
-		}
-		ip = ips[0]
+
+	if ip != nil {
+		node = NewV4(id, ip, int(tcpPort), int(udpPort))
+	} else {
+		node = NewV4WithDNS(id, nil, u.Hostname(), int(tcpPort), int(udpPort))
 	}
-	if ipv4 := ip.To4(); ipv4 != nil {
-		ip = ipv4
-	}
-	return NewV4(id, ip, int(tcpPort), int(udpPort)), nil
+
+	return node, nil
 }
 
 // parsePubkey parses a hex-encoded secp256k1 public key.
@@ -194,19 +207,23 @@ func (n *Node) URLv4() string {
 		nodeid = fmt.Sprintf("%s.%x", scheme, n.id[:])
 	}
 	u := url.URL{Scheme: "enode"}
-	if !n.ip.IsValid() && n.dnsName == "" {
-		u.Host = nodeid
-		return u.String()
-	}
-	u.User = url.User(nodeid)
-	if n.dnsName != "" {
-		u.Host = fmt.Sprintf("%s:%d", n.dnsName, n.TCP())
-	} else {
+	if n.NeedResolve() {
+		// For DNS nodes: include DNS name, TCP port, and optional UDP port
+		u.User = url.User(nodeid)
+		u.Host = fmt.Sprintf("%s:%d", n.Hostname(), n.TCP())
+		if n.UDP() != n.TCP() {
+			u.RawQuery = "discport=" + strconv.Itoa(n.UDP())
+		}
+	} else if n.ip.IsValid() {
+		// For IP-based nodes: include IP address, TCP port, and optional UDP port
 		addr := net.TCPAddr{IP: n.IP(), Port: n.TCP()}
+		u.User = url.User(nodeid)
 		u.Host = addr.String()
-	}
-	if n.UDP() != n.TCP() {
-		u.RawQuery = "discport=" + strconv.Itoa(n.UDP())
+		if n.UDP() != n.TCP() {
+			u.RawQuery = "discport=" + strconv.Itoa(n.UDP())
+		}
+	} else {
+		u.Host = nodeid
 	}
 	return u.String()
 }

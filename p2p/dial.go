@@ -77,6 +77,7 @@ var (
 	errRecentlyDialed   = errors.New("recently dialed")
 	errNetRestrict      = errors.New("not contained in netrestrict list")
 	errNoPort           = errors.New("node does not provide TCP port")
+	errNoResolvedIP     = errors.New("node does not provide a resolved IP")
 )
 
 // dialer creates outbound connections and submits them into Server.
@@ -135,7 +136,6 @@ type dialConfig struct {
 	log            log.Logger
 	clock          mclock.Clock
 	rand           *mrand.Rand
-	ttl            time.Duration
 }
 
 func (cfg dialConfig) withDefaults() dialConfig {
@@ -275,15 +275,13 @@ loop:
 		case node := <-d.addStaticCh:
 			id := node.ID()
 			_, exists := d.static[id]
-			d.log.Trace("Adding static node", "id", id, "addr", node.DisplayAddr(), "ip", node.IPAddr(), "added", !exists)
+			d.log.Trace("Adding static node", "id", id, "endpoint", node.Endpoint(), "added", !exists)
 			if exists {
 				continue loop
 			}
 			task := newDialTask(node, staticDialedConn)
 			d.static[id] = task
-			if err := d.checkDial(node); err != nil {
-				d.log.Trace("Discarding dial candidate", "id", node.ID(), "addr", node.DisplayAddr(), "ip", node.IPAddr(), "reason", err)
-			} else {
+			if d.checkDial(node) == nil {
 				d.addToStaticPool(task)
 			}
 
@@ -436,10 +434,42 @@ func (d *dialScheduler) removeFromStaticPool(idx int) {
 	task.staticPoolIndex = -1
 }
 
+func (d *dialScheduler) resolve(n *enode.Node) (*enode.Node, error) {
+	if n.NeedResolve() {
+		d.log.Debug("Attempting DNS resolution", "id", n.ID(), "name", n.Hostname())
+		ips, err := net.LookupIP(n.Hostname())
+		if err != nil {
+			d.log.Debug("DNS resolution failed", "id", n.ID(), "name", n.Hostname(), "err", err)
+			return n, err
+		}
+		d.log.Debug("DNS lookup succeeded", "id", n.ID(), "name", n.Hostname(), "ipcount", len(ips))
+
+		// Try IPv4 first
+		for _, ip := range ips {
+			if ip4 := ip.To4(); ip4 != nil {
+				resolved := enode.NewV4WithDNS(n.Pubkey(), ip4, n.Hostname(), n.TCP(), n.UDP())
+				d.log.Debug("DNS resolved to IPv4", "id", n.ID(), "name", n.Hostname(), "ip", ip4)
+				return resolved, nil
+			}
+		}
+		// Then try IPv6
+		for _, ip := range ips {
+			if ip6 := ip.To16(); ip6 != nil {
+				resolved := enode.NewV4WithDNS(n.Pubkey(), ip6, n.Hostname(), n.TCP(), n.UDP())
+				d.log.Debug("DNS resolved to IPv6", "id", n.ID(), "name", n.Hostname(), "ip", ip6)
+				return resolved, nil
+			}
+		}
+		d.log.Debug("DNS resolution found no usable IPs", "id", n.ID(), "name", n.Hostname())
+		return n, errNoResolvedIP
+	}
+	return n, nil
+}
+
 // startDial runs the given dial task in a separate goroutine.
 func (d *dialScheduler) startDial(task *dialTask) {
 	node := task.dest()
-	d.log.Trace("Starting p2p dial", "id", node.ID(), "addr", node.DisplayAddr(), "ip", node.IPAddr(), "flag", task.flags)
+	d.log.Trace("Starting p2p dial", "id", node.ID(), "endpoint", node.Endpoint(), "flag", task.flags)
 	hkey := string(node.ID().Bytes())
 	d.history.add(hkey, d.clock.Now().Add(dialHistoryExpiration))
 	d.dialing[node.ID()] = task
@@ -476,7 +506,16 @@ func (t *dialTask) dest() *enode.Node {
 }
 
 func (t *dialTask) run(d *dialScheduler) {
-	if !t.resolveIfNeeded(d) {
+	node := t.dest()
+	if node.NeedResolve() {
+		resolved, err := d.resolve(node)
+		if err != nil {
+			return
+		}
+		t.destPtr.Store(resolved)
+	}
+
+	if t.needResolve() && !t.resolve(d) {
 		return
 	}
 
@@ -491,36 +530,8 @@ func (t *dialTask) run(d *dialScheduler) {
 	}
 }
 
-// resolveIfNeeded attempts to resolve the node's IP address if it is invalid.
-// It returns true if the node's IP address is valid after resolution attempts.
-func (t *dialTask) resolveIfNeeded(d *dialScheduler) bool {
-	node := t.dest()
-
-	if t.flags&staticDialedConn != 0 {
-		if t.resolve(d) && node.IPAddr().IsValid() {
-			return true
-		}
-	}
-
-	if node.NeedsDNSResolve() {
-		if t.resolveDNS(d) && node.IPAddr().IsValid() {
-			return true
-		}
-	}
-
-	return false
-}
-
-// resolveDNS attempts to resolve the DNS name of the destination node.
-// It returns true if resolution succeeds.
-func (t *dialTask) resolveDNS(d *dialScheduler) bool {
-	node := t.dest()
-	d.log.Trace("Starting DNS resolution", "id", node.ID(), "addr", node.DisplayAddr())
-	if err := node.RefreshDNS(d.dialConfig.ttl); err != nil {
-		d.log.Trace("DNS resolution failed", "id", node.ID(), "addr", node.DisplayAddr())
-		return false
-	}
-	return true
+func (t *dialTask) needResolve() bool {
+	return t.flags&staticDialedConn != 0 && !t.dest().IPAddr().IsValid()
 }
 
 // resolve attempts to find the current endpoint for the destination
@@ -564,7 +575,8 @@ func (t *dialTask) dial(d *dialScheduler, dest *enode.Node) error {
 	dialMeter.Mark(1)
 	fd, err := d.dialer.Dial(d.ctx, dest)
 	if err != nil {
-		d.log.Trace("Dial error", "id", dest.ID(), "addr", dest.DisplayAddr(), "ip", dest.IPAddr(), "conn", t.flags, "err", cleanupDialErr(err))
+		addr, _ := dest.TCPEndpoint()
+		d.log.Trace("Dial error", "id", dest.ID(), "addr", addr, "conn", t.flags, "err", cleanupDialErr(err))
 		dialConnectionError.Mark(1)
 		return &dialError{err}
 	}
