@@ -479,6 +479,17 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		}
 	}
 
+	if !contractCreation {
+		if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
+			// Perform convenience warming of sender's delegation target. Although the
+			// sender is already warmed in Prepare(..), it's possible a delegation to
+			// the account was deployed during this transaction. To handle correctly,
+			// wait until the final state of delegations is determined before
+			// performing the resolution and warming.
+			st.state.AddAddressToAccessList(addr)
+		}
+	}
+
 	var (
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
@@ -585,16 +596,6 @@ func (st *stateTransition) applyAuthorization(msg *Message, auth *types.Authoriz
 	// Otherwise install delegation to auth.Address.
 	st.state.SetCode(authority, types.AddressToDelegation(auth.Address))
 
-	// If an account has a code delegation to another account, that account will be added to
-	// the access list in statedb.Prepare(..).
-	//
-	// However if the destination address of the transaction (msg) gains a new delegation
-	// in this same transaction, we need to explicitly warm the delegation address here,
-	// since Prepare has already happened. The intention here is to behave as if the
-	// delegation was already present before calling Prepare.
-	if *msg.To == authority {
-		st.state.AddAddressToAccessList(auth.Address)
-	}
 	return nil
 }
 
