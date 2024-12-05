@@ -33,8 +33,8 @@ import (
 	"path/filepath"
 )
 
-// fileWritingTracer is a tracer which wraps either a different tracer,
-// or a logger. On tx start, it creates a new file to direct output to,
+// fileWritingTracer wraps either a tracer or a logger. On tx start,
+// it instantiates a tracer/logger, creates a new file to direct output to,
 // and on tx end it closes the file.
 type fileWritingTracer struct {
 	txIndex     int
@@ -43,8 +43,7 @@ type fileWritingTracer struct {
 	baseDir     string
 
 	// for json-tracing
-	logConfig  *logger.Config
-	callFrames bool
+	logConfig *logger.Config
 
 	// for custom tracing
 	tracerName  string
@@ -53,20 +52,63 @@ type fileWritingTracer struct {
 	getResult   func() (json.RawMessage, error)
 }
 
-func newFileWritingTracer(baseDir string, logConfig *logger.Config, callFrames bool) *fileWritingTracer {
-	return &fileWritingTracer{
-		baseDir:    baseDir,
-		logConfig:  logConfig,
-		callFrames: callFrames,
+// jsonToFile creates hooks which uses an underlying jsonlogger, and writes the
+// jsonl-delimited output to a file, one per tx.
+func jsonToFile(baseDir string, logConfig *logger.Config, callFrames bool) *tracing.Hooks {
+	t := &fileWritingTracer{
+		baseDir:   baseDir,
+		logConfig: logConfig,
 	}
+	hooks := t.hooks()
+	if !callFrames {
+		hooks.OnEnter = nil
+	}
+	return hooks
 }
 
-func newFileWritingCustomTracer(baseDir, tracerName string, traceConfig json.RawMessage, chainConfig *params.ChainConfig) *fileWritingTracer {
-	return &fileWritingTracer{
+// tracerToFile creates hooks which uses an underlying tracer, and writes the
+// json-result to file, one per tx.
+func tracerToFile(baseDir, tracerName string, traceConfig json.RawMessage, chainConfig *params.ChainConfig) *tracing.Hooks {
+	t := &fileWritingTracer{
 		baseDir:     baseDir,
 		tracerName:  tracerName,
 		chainConfig: chainConfig,
 	}
+	return t.hooks()
+}
+
+func (l *fileWritingTracer) hooks() *tracing.Hooks {
+	hooks := &tracing.Hooks{
+		OnTxStart: l.OnTxStartJSONL,
+		OnTxEnd:   l.OnTxEnd,
+		// intentional no-op: we instantiate the l.inner on tx start, which has
+		// not yet happened at this point
+		//OnSystemCallStart: func() {},
+		OnEnter: func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+			if l.inner != nil && l.inner.OnEnter != nil {
+				l.inner.OnEnter(depth, typ, from, to, input, gas, value)
+			}
+		},
+		OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+			if l.inner != nil && l.inner.OnExit != nil {
+				l.inner.OnExit(depth, output, gasUsed, err, reverted)
+			}
+		},
+		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+			if l.inner.OnOpcode != nil {
+				l.inner.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
+			}
+		},
+		OnFault: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+			if l.inner != nil && l.inner.OnFault != nil {
+				l.inner.OnFault(pc, op, gas, cost, scope, depth, err)
+			}
+		},
+	}
+	if len(l.tracerName) > 0 { // a custom tracer
+		hooks.OnTxStart = l.OnTxStartJSON
+	}
+	return hooks
 }
 
 // OnTxStartJSONL is the OnTxStart-handler for jsonl logger.
@@ -79,11 +121,7 @@ func (l *fileWritingTracer) OnTxStartJSONL(env *tracing.VMContext, tx *types.Tra
 	}
 	log.Debug("Created tracing-file", "path", fname)
 	l.destination = traceFile
-	if !l.callFrames {
-		l.inner = logger.NewJSONLogger(l.logConfig, traceFile)
-	} else {
-		l.inner = logger.NewJSONLoggerWithCallFrames(l.logConfig, traceFile)
-	}
+	l.inner = logger.NewJSONLoggerWithCallFrames(l.logConfig, traceFile)
 	if l.inner.OnTxStart != nil {
 		l.inner.OnTxStart(env, tx, from)
 	}
@@ -128,42 +166,4 @@ func (l *fileWritingTracer) OnTxEnd(receipt *types.Receipt, err error) {
 		l.destination = nil
 	}
 	l.txIndex++
-}
-
-func (l *fileWritingTracer) Tracer() *tracers.Tracer {
-	hooks := &tracing.Hooks{
-		OnTxStart: l.OnTxStartJSONL,
-		OnTxEnd:   l.OnTxEnd,
-		// intentional no-op: we instantiate the l.inner on tx start, which has
-		// not yet happened at this point
-		//OnSystemCallStart: func() {},
-		OnEnter: func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-			if l.inner != nil && l.inner.OnEnter != nil {
-				l.inner.OnEnter(depth, typ, from, to, input, gas, value)
-			}
-		},
-		OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-			if l.inner != nil && l.inner.OnExit != nil {
-				l.inner.OnExit(depth, output, gasUsed, err, reverted)
-			}
-		},
-		OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
-			if l.inner.OnOpcode != nil {
-				l.inner.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
-			}
-		},
-		OnFault: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
-			if l.inner != nil && l.inner.OnFault != nil {
-				l.inner.OnFault(pc, op, gas, cost, scope, depth, err)
-			}
-		},
-	}
-	if len(l.tracerName) > 0 { // a custom tracer
-		hooks.OnTxStart = l.OnTxStartJSON
-	}
-	return &tracers.Tracer{
-		Hooks:     hooks,
-		GetResult: func() (json.RawMessage, error) { return nil, nil },
-		Stop:      func(err error) {},
-	}
 }

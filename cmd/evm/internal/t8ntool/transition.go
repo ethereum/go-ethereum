@@ -151,16 +151,14 @@ func Transition(ctx *cli.Context) error {
 	// Configure tracer
 	if ctx.IsSet(TraceTracerFlag.Name) { // Custom tracing
 		config := json.RawMessage(ctx.String(TraceTracerConfigFlag.Name))
-		tracer := newFileWritingCustomTracer(baseDir, ctx.String(TraceTracerFlag.Name), config, chainConfig).Tracer()
-		vmConfig.Tracer = tracer.Hooks
+		vmConfig.Tracer = tracerToFile(baseDir, ctx.String(TraceTracerFlag.Name), config, chainConfig)
 	} else if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
 		logConfig := &logger.Config{
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
 			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 		}
-		tracer := newFileWritingTracer(baseDir, logConfig, ctx.Bool(TraceEnableCallFramesFlag.Name)).Tracer()
-		vmConfig.Tracer = tracer.Hooks
+		vmConfig.Tracer = jsonToFile(baseDir, logConfig, ctx.Bool(TraceEnableCallFramesFlag.Name))
 	}
 	// Run the test and aggregate the result
 	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
