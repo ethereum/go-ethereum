@@ -636,7 +636,6 @@ func TestEstimateGas(t *testing.T) {
 				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
 				accounts[2].addr: {Balance: big.NewInt(params.Ether), Code: append(types.DelegationPrefix, accounts[3].addr.Bytes()...)},
-				// accounts[3].addr: {Code: []byte{byte(vm.ADDRESS), byte(vm.PUSH0), byte(vm.SSTORE)}},
 			},
 		}
 		genBlocks      = 10
