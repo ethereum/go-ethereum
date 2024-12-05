@@ -464,32 +464,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	// - reset transient storage(eip 1153)
 	st.state.Prepare(rules, msg.From, st.evm.Context.Coinbase, msg.To, vm.ActivePrecompiles(rules), msg.AccessList)
 
-	if !contractCreation {
-		// Increment the nonce for the next transaction.
-		// Note: EIP-7702 authorizations can also modify the nonce. We perform
-		// this update first to ensure correct validation of authorization nonces.
-		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1)
-	}
-
-	// Apply EIP-7702 authorizations.
-	if msg.AuthList != nil {
-		for _, auth := range msg.AuthList {
-			// Note errors are ignored, we simply skip invalid authorizations here.
-			st.applyAuthorization(msg, &auth)
-		}
-	}
-
-	if !contractCreation {
-		if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
-			// Perform convenience warming of sender's delegation target. Although the
-			// sender is already warmed in Prepare(..), it's possible a delegation to
-			// the account was deployed during this transaction. To handle correctly,
-			// wait until the final state of delegations is determined before
-			// performing the resolution and warming.
-			st.state.AddAddressToAccessList(addr)
-		}
-	}
-
 	var (
 		ret   []byte
 		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
@@ -497,6 +471,27 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	if contractCreation {
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
 	} else {
+		// Increment the nonce for the next transaction.
+		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1)
+
+		// Apply EIP-7702 authorizations.
+		if msg.AuthList != nil {
+			for _, auth := range msg.AuthList {
+				// Note errors are ignored, we simply skip invalid authorizations here.
+				st.applyAuthorization(msg, &auth)
+			}
+		}
+
+		// Perform convenience warming of sender's delegation target. Although the
+		// sender is already warmed in Prepare(..), it's possible a delegation to
+		// the account was deployed during this transaction. To handle correctly,
+		// simply wait until the final state of delegations is determined before
+		// performing the resolution and warming.
+		if addr, ok := types.ParseDelegation(st.state.GetCode(*msg.To)); ok {
+			st.state.AddAddressToAccessList(addr)
+		}
+
+		// Execute the transaction's call.
 		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
 	}
 
