@@ -31,32 +31,31 @@ import (
 
 // deployContract deploys a hex-encoded contract with the given constructor
 // input.  It returns the deployment transaction, address on success.
-func deployContract(backend bind.ContractBackend, auth *bind.TransactOpts, constructor []byte, contract string) (deploymentTx *types.Transaction, deploymentAddr common.Address, err error) {
+func deployContract(constructor []byte, contract string, deploy func(input, deployer []byte) (common.Address, *types.Transaction, error)) (deploymentAddr common.Address, deploymentTx *types.Transaction, err error) {
 	contractBinBytes, err := hex.DecodeString(contract[2:])
 	if err != nil {
-		return nil, common.Address{}, fmt.Errorf("contract bytecode is not a hex string: %s", contractBinBytes[2:])
+		return common.Address{}, nil, fmt.Errorf("contract bytecode is not a hex string: %s", contractBinBytes[2:])
 	}
-	addr, tx, _, err := bind.DeployContractRaw(auth, contractBinBytes, backend, constructor)
+	addr, tx, err := deploy(constructor, contractBinBytes)
 	if err != nil {
-		return nil, common.Address{}, fmt.Errorf("failed to deploy contract: %v", err)
+		return common.Address{}, nil, fmt.Errorf("failed to deploy contract: %v", err)
 	}
-	return tx, addr, nil
+	return addr, tx, nil
 }
 
 // deployLibs iterates the set contracts (map of pattern to hex-encoded
 // contract deployer code). Each contract is deployed, and the
 // resulting addresses/deployment-txs are returned on success.
-func deployLibs(backend bind.ContractBackend, auth *bind.TransactOpts, contracts map[string]string) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[string]common.Address, err error) {
+func deployLibs(contracts map[string]string, deploy func(input, deployer []byte) (common.Address, *types.Transaction, error)) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[string]common.Address, err error) {
 	deploymentTxs = make(map[common.Address]*types.Transaction)
 	deployAddrs = make(map[string]common.Address)
 
 	for pattern, contractBin := range contracts {
-		contractBinBytes, err := hex.DecodeString(contractBin[2:])
+		contractDeployer, err := hex.DecodeString(contractBin[2:])
 		if err != nil {
 			return deploymentTxs, deployAddrs, fmt.Errorf("contract bytecode is not a hex string: %s", contractBin[2:])
 		}
-		// TODO: can pass nil for constructor?
-		addr, tx, _, err := bind.DeployContractRaw(auth, contractBinBytes, backend, []byte{})
+		addr, tx, err := deploy([]byte{}, contractDeployer)
 		if err != nil {
 			return deploymentTxs, deployAddrs, fmt.Errorf("failed to deploy contract: %v", err)
 		}
@@ -155,10 +154,14 @@ type DeploymentResult struct {
 	Addrs map[string]common.Address
 }
 
+type ContractDeployer interface {
+	DeployContract(input []byte, deployer []byte) (common.Address, *types.Transaction, error)
+}
+
 // LinkAndDeploy deploys a specified set of contracts and their dependent
 // libraries.  If an error occurs, only contracts which were successfully
 // deployed are returned in the result.
-func LinkAndDeploy(auth *bind.TransactOpts, backend bind.ContractBackend, deployParams DeploymentParams) (res *DeploymentResult, err error) {
+func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []byte) (common.Address, *types.Transaction, error)) (res *DeploymentResult, err error) {
 	libMetas := deployParams.Libraries
 	overrides := deployParams.Overrides
 
@@ -188,7 +191,7 @@ func LinkAndDeploy(auth *bind.TransactOpts, backend bind.ContractBackend, deploy
 		if len(deployableDeps) == 0 {
 			break
 		}
-		deployTxs, deployAddrs, err := deployLibs(backend, auth, deployableDeps)
+		deployTxs, deployAddrs, err := deployLibs(deployableDeps, deploy)
 		for pattern, addr := range deployAddrs {
 			deployed[pattern] = addr
 			res.Addrs[pattern] = addr
@@ -205,7 +208,7 @@ func LinkAndDeploy(auth *bind.TransactOpts, backend bind.ContractBackend, deploy
 		if err != nil {
 			return res, err
 		}
-		contractTx, contractAddr, err := deployContract(backend, auth, contractParams.Input, linkedContract)
+		contractAddr, contractTx, err := deployContract(contractParams.Input, linkedContract, deploy)
 		if err != nil {
 			return res, err
 		}

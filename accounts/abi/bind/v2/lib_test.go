@@ -96,6 +96,13 @@ func testSetup() (*bind.TransactOpts, *backends.SimulatedBackend, error) {
 	return opts, &bindBackend, nil
 }
 
+func makeTestDeployer(auth *bind.TransactOpts, backend bind.ContractBackend) func(input, deployer []byte) (common.Address, *types.Transaction, error) {
+	return func(input, deployer []byte) (common.Address, *types.Transaction, error) {
+		addr, tx, _, err := bind.DeployContractRaw(auth, deployer, backend, input)
+		return addr, tx, err
+	}
+}
+
 // test that deploying a contract with library dependencies works,
 // verifying by calling method on the deployed contract.
 func TestDeploymentLibraries(t *testing.T) {
@@ -124,7 +131,8 @@ func TestDeploymentLibraries(t *testing.T) {
 		Libraries: nested_libraries.C1LibraryDeps,
 		Overrides: nil,
 	}
-	res, err := LinkAndDeploy(opts, bindBackend, deploymentParams)
+
+	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -181,7 +189,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		Libraries: nested_libraries.C1LibraryDeps,
 	}
 
-	res, err := LinkAndDeploy(opts, bindBackend, deploymentParams)
+	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -217,7 +225,7 @@ func TestDeploymentWithOverrides(t *testing.T) {
 		Libraries: nil,
 		Overrides: overrides,
 	}
-	res, err = LinkAndDeploy(opts, bindBackend, deploymentParams)
+	res, err = LinkAndDeploy(deploymentParams, makeTestDeployer(opts, bindBackend))
 	if err != nil {
 		t.Fatalf("err: %+v\n", err)
 	}
@@ -280,7 +288,7 @@ func TestEvents(t *testing.T) {
 		},
 	}
 
-	res, err := LinkAndDeploy(txAuth, backend, deploymentParams)
+	res, err := LinkAndDeploy(deploymentParams, makeTestDeployer(txAuth, backend))
 	if err != nil {
 		t.Fatalf("error deploying contract for testing: %v", err)
 	}
