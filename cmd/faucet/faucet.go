@@ -657,7 +657,7 @@ func sendSuccess(conn *wsConn, msg string) error {
 func authGitHub(url string) (string, string, common.Address, error) {
 	// Retrieve the gist from the GitHub Gist APIs
 	parts := strings.Split(url, "/")
-	req, _ := http.NewRequest("GET", "https://api.github.com/gists/"+parts[len(parts)-1], nil)
+	req, _ := http.NewRequest(http.MethodGet, "https://api.github.com/gists/"+parts[len(parts)-1], nil)
 	if *githubUser != "" {
 		req.SetBasicAuth(*githubUser, *githubToken)
 	}
