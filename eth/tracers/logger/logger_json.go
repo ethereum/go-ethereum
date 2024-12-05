@@ -69,11 +69,11 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 		l.cfg = &Config{}
 	}
 	l.hooks = &tracing.Hooks{
-		OnTxStart:         l.OnTxStart,
-		OnSystemCallStart: l.onSystemCallStart,
-		OnExit:            l.OnExit,
-		OnOpcode:          l.OnOpcode,
-		OnFault:           l.OnFault,
+		OnTxStart: l.OnTxStart,
+		//OnSystemCallStart: l.onSystemCallStart,
+		OnExit:   l.OnExit,
+		OnOpcode: l.OnOpcode,
+		OnFault:  l.OnFault,
 	}
 	return l.hooks
 }
@@ -86,12 +86,12 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 		l.cfg = &Config{}
 	}
 	l.hooks = &tracing.Hooks{
-		OnTxStart:         l.OnTxStart,
-		OnSystemCallStart: l.onSystemCallStart,
-		OnEnter:           l.OnEnter,
-		OnExit:            l.OnExit,
-		OnOpcode:          l.OnOpcode,
-		OnFault:           l.OnFault,
+		OnTxStart: l.OnTxStart,
+		//OnSystemCallStart: l.onSystemCallStart,
+		OnEnter:  l.OnEnter,
+		OnExit:   l.OnExit,
+		OnOpcode: l.OnOpcode,
+		OnFault:  l.OnFault,
 	}
 	return l.hooks
 }
