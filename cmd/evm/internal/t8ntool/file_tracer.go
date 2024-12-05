@@ -134,18 +134,16 @@ func (l *fileWritingTracer) Tracer() *tracers.Tracer {
 	hooks := &tracing.Hooks{
 		OnTxStart: l.OnTxStartJSONL,
 		OnTxEnd:   l.OnTxEnd,
-		OnSystemCallStart: func() {
-			if l.inner.OnSystemCallStart != nil {
-				l.inner.OnSystemCallStart()
-			}
-		},
+		// intentional no-op: we instantiate the l.inner on tx start, which has
+		// not yet happened at this point
+		//OnSystemCallStart: func() {},
 		OnEnter: func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-			if l.inner.OnEnter != nil {
+			if l.inner != nil && l.inner.OnEnter != nil {
 				l.inner.OnEnter(depth, typ, from, to, input, gas, value)
 			}
 		},
 		OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-			if l.inner.OnExit != nil {
+			if l.inner != nil && l.inner.OnExit != nil {
 				l.inner.OnExit(depth, output, gasUsed, err, reverted)
 			}
 		},
@@ -155,7 +153,7 @@ func (l *fileWritingTracer) Tracer() *tracers.Tracer {
 			}
 		},
 		OnFault: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
-			if l.inner.OnFault != nil {
+			if l.inner != nil && l.inner.OnFault != nil {
 				l.inner.OnFault(pc, op, gas, cost, scope, depth, err)
 			}
 		},

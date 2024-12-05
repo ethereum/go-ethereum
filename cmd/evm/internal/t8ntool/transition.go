@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -150,21 +149,21 @@ func Transition(ctx *cli.Context) error {
 	}
 
 	// Configure tracer
-	var tracer *tracers.Tracer
 	if ctx.IsSet(TraceTracerFlag.Name) { // Custom tracing
 		config := json.RawMessage(ctx.String(TraceTracerConfigFlag.Name))
-		tracer = newFileWritingCustomTracer(baseDir, ctx.String(TraceTracerFlag.Name), config, chainConfig).Tracer()
+		tracer := newFileWritingCustomTracer(baseDir, ctx.String(TraceTracerFlag.Name), config, chainConfig).Tracer()
+		vmConfig.Tracer = tracer.Hooks
 	} else if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
 		logConfig := &logger.Config{
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
 			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 		}
-		tracer = newFileWritingTracer(baseDir, logConfig, ctx.Bool(TraceEnableCallFramesFlag.Name)).Tracer()
+		tracer := newFileWritingTracer(baseDir, logConfig, ctx.Bool(TraceEnableCallFramesFlag.Name)).Tracer()
+		vmConfig.Tracer = tracer.Hooks
 	}
-
 	// Run the test and aggregate the result
-	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name), tracer)
+	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
 	if err != nil {
 		return err
 	}
