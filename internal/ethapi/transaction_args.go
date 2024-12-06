@@ -72,6 +72,9 @@ type TransactionArgs struct {
 	Commitments []kzg4844.Commitment `json:"commitments"`
 	Proofs      []kzg4844.Proof      `json:"proofs"`
 
+	// For SetCodeTxType
+	AuthList []types.Authorization `json:"authList"`
+
 	// This configures whether blobs are allowed to be passed.
 	blobSidecarAllowed bool
 }
@@ -473,6 +476,8 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck, skipEoA
 func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	usedType := types.LegacyTxType
 	switch {
+	case args.AuthList != nil || defaultType == types.SetCodeTxType:
+		usedType = types.SetCodeTxType
 	case args.BlobHashes != nil || defaultType == types.BlobTxType:
 		usedType = types.BlobTxType
 	case args.MaxFeePerGas != nil || defaultType == types.DynamicFeeTxType:
@@ -486,6 +491,28 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	}
 	var data types.TxData
 	switch usedType {
+	case types.SetCodeTxType:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		authList := []types.Authorization{}
+		if args.AuthList != nil {
+			authList = args.AuthList
+		}
+		data = &types.SetCodeTx{
+			To:         *args.To,
+			ChainID:    args.ChainID.ToInt().Uint64(),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(args.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(args.Value)),
+			Data:       args.data(),
+			AccessList: al,
+			AuthList:   authList,
+		}
+
 	case types.BlobTxType:
 		al := types.AccessList{}
 		if args.AccessList != nil {
