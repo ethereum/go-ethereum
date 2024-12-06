@@ -91,7 +91,8 @@ func linkContract(contract string, linkedLibs map[string]common.Address) (deploy
 //
 // contracts that have become fully linked in the current invocation are
 // returned.
-func linkLibs(pending *map[string]string, linked map[string]common.Address) (deployableDeps map[string]string) {
+func linkLibs(pending map[string]string, linked map[string]common.Address) (newPending map[string]string, deployableDeps map[string]string) {
+	newPending = make(map[string]string)
 	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
 	if err != nil {
 		panic(err)
@@ -102,23 +103,25 @@ func linkLibs(pending *map[string]string, linked map[string]common.Address) (dep
 	}
 	deployableDeps = make(map[string]string)
 
-	for pattern, dep := range *pending {
+	for pattern, dep := range pending {
+		newPending[pattern] = dep
 		// link references to dependent libraries that have been deployed
-		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(dep, -1) {
+		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(newPending[pattern], -1) {
 			matchingPattern := match[1]
 			addr, ok := linked[matchingPattern]
 			if !ok {
 				continue
 			}
-			(*pending)[pattern] = strings.ReplaceAll(dep, "__$"+matchingPattern+"$__", addr.String()[2:])
+
+			newPending[pattern] = strings.ReplaceAll(newPending[pattern], "__$"+matchingPattern+"$__", addr.String()[2:])
 		}
 		// if the library code became fully linked, move it from pending->linked.
-		if !reMatchAnyPattern.MatchString((*pending)[pattern]) {
-			deployableDeps[pattern] = (*pending)[pattern]
-			delete(*pending, pattern)
+		if !reMatchAnyPattern.MatchString(newPending[pattern]) {
+			deployableDeps[pattern] = newPending[pattern]
+			delete(newPending, pattern)
 		}
 	}
-	return deployableDeps
+	return newPending, deployableDeps
 }
 
 // ContractDeployParams represents state needed to deploy a contract:
@@ -187,10 +190,12 @@ func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []
 
 	// link and deploy dynamic libraries
 	for {
-		deployableDeps := linkLibs(&pending, deployed)
+		var deployableDeps map[string]string
+		pending, deployableDeps = linkLibs(pending, deployed)
 		if len(deployableDeps) == 0 {
 			break
 		}
+
 		deployTxs, deployAddrs, err := deployLibs(deployableDeps, deploy)
 		for pattern, addr := range deployAddrs {
 			deployed[pattern] = addr
