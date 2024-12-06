@@ -40,7 +40,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```eth.requiredblocks```: Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)
 
-- ```ethstats```: Reporting URL of a ethstats service (nodename:secret@host:port)
+- ```ethstats```: Reporting URL of an ethstats service (nodename:secret@host:port)
 
 - ```gcmode```: Blockchain garbage collection mode ("full", "archive") (default: full)
 
