@@ -205,9 +205,19 @@ func New(file string, cache int, handles int, namespace string, readonly bool) (
 		// and to https://github.com/cockroachdb/pebble/blob/master/db.go#L1892-L1903.
 		MemTableStopWritesThreshold: memTableLimit,
 
-		// The default compaction concurrency(1 thread),
-		// Here use all available CPUs for faster compaction.
-		MaxConcurrentCompactions: runtime.NumCPU,
+		// MaxConcurrentCompactions specifies the number of concurrent compaction.
+		// Pebble may run multiple compactions concurrently in different parts of
+		// the LSM (ie, different levels or non-overlapping key spaces of the same
+		// levels). Each one of these compactions by default can make use of up to
+		// 2 threads. One thread reads and performs most of the CPU work of the
+		// compaction, and the other thread performs the write syscalls to write
+		// output sstables.
+		//
+		// In order to not significantly affect the other parts of system, at most
+		// 3/4 available CPUs can be granted for compactions.
+		MaxConcurrentCompactions: func() int {
+			return 3 * runtime.NumCPU() / 8
+		},
 
 		// Per-level options. Options for at least one level must be specified. The
 		// options for the last level are used for all subsequent levels.
