@@ -92,6 +92,71 @@ func TestTripartiteDiffieHellman(t *testing.T) {
 	}
 }
 
+func TestBinaryEAA(t *testing.T) {
+	for i := 0; i < 10000; i++ {
+		_, Ga, err := RandomG1(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tmpLittleFermat := &gfP{}
+		tmpLittleFermat.Invert(&Ga.p.x)
+
+		tmpBinaryEAA := &gfP{}
+		tmpBinaryEAA.InvertVariableTime(&Ga.p.x)
+
+		tmpBinaryEAASelfSet := &gfP{}
+		tmpBinaryEAASelfSet.Set(&Ga.p.x)
+		tmpBinaryEAASelfSet.InvertVariableTime(tmpBinaryEAASelfSet)
+
+		if *tmpLittleFermat != *tmpBinaryEAA {
+			t.Fatalf("results of different inversion do not agree")
+		}
+
+		if *tmpLittleFermat != *tmpBinaryEAASelfSet {
+			t.Fatalf("self-assigned inversion is invalid")
+		}
+	}
+}
+
+func BenchmarkLittleFermatInversion(b *testing.B) {
+	el := gfP{0x0, 0x97816a916871ca8d, 0xb85045b68181585d, 0x30644e72e131a029}
+
+	b.ResetTimer()
+
+	tmp := &gfP{}
+	for i := 0; i < b.N; i++ {
+		tmp.Invert(&el)
+	}
+}
+
+func BenchmarkBinaryEEAInversion(b *testing.B) {
+	el := gfP{0x0, 0x97816a916871ca8d, 0xb85045b68181585d, 0x30644e72e131a029}
+
+	b.ResetTimer()
+
+	tmp := &gfP{}
+	for i := 0; i < b.N; i++ {
+		tmp.InvertVariableTime(&el)
+	}
+}
+
+func BenchmarkG1AddAndMakeAffine(b *testing.B) {
+	_, Ga, err := RandomG1(rand.Reader)
+	if err != nil {
+		b.Fatal(err)
+	}
+	_, Gb, err := RandomG1(rand.Reader)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		e := new(G1).Add(Ga, Gb)
+		e.p.MakeAffine()
+	}
+}
+
 func TestG2SelfAddition(t *testing.T) {
 	s, _ := rand.Int(rand.Reader, Order)
 	p := new(G2).ScalarBaseMult(s)

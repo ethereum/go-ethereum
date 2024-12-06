@@ -124,6 +124,32 @@ func (e *G1) Marshal() []byte {
 	return ret
 }
 
+// Marshal converts e to a byte slice.
+// Uses variable time algorithms for inversion
+// for transformation to affine coordinates
+func (e *G1) MarshalVariableTime() []byte {
+	// Each value is a 256-bit number.
+	const numBytes = 256 / 8
+
+	if e.p == nil {
+		e.p = &curvePoint{}
+	}
+
+	e.p.MakeAffineVariableTime()
+	ret := make([]byte, numBytes*2)
+	if e.p.IsInfinity() {
+		return ret
+	}
+	temp := &gfP{}
+
+	montDecode(temp, &e.p.x)
+	temp.Marshal(ret)
+	montDecode(temp, &e.p.y)
+	temp.Marshal(ret[numBytes:])
+
+	return ret
+}
+
 // Unmarshal sets e to the result of converting the output of Marshal back into
 // a group element and then returns e.
 func (e *G1) Unmarshal(m []byte) ([]byte, error) {

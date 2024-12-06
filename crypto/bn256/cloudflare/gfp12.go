@@ -143,6 +143,22 @@ func (e *gfP12) Square(a *gfP12) *gfP12 {
 	return e
 }
 
+func (e *gfP12) InvertVariableTime(a *gfP12) *gfP12 {
+	// See "Implementing cryptographic pairings", M. Scott, section 3.2.
+	// ftp://136.206.11.249/pub/crypto/pairings.pdf
+	t1, t2 := &gfP6{}, &gfP6{}
+
+	t1.Square(&a.x)
+	t2.Square(&a.y)
+	t1.MulTau(t1).Sub(t2, t1)
+	t2.InvertVariableTime(t1)
+
+	e.x.Neg(&a.x)
+	e.y.Set(&a.y)
+	e.MulScalar(e, t2)
+	return e
+}
+
 func (e *gfP12) Invert(a *gfP12) *gfP12 {
 	// See "Implementing cryptographic pairings", M. Scott, section 3.2.
 	// ftp://136.206.11.249/pub/crypto/pairings.pdf
