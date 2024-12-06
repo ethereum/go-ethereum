@@ -158,7 +158,7 @@ The ```bor server``` command runs the Bor client.
 
 - ```http.api```: API's offered over the HTTP-RPC interface (default: eth,net,web3,txpool,bor)
 
-- ```http.corsdomain```: Comma separated list of domains from which to accept cross origin requests (browser enforced) (default: localhost)
+- ```http.corsdomain```: Comma separated list of domains from which to accept cross-origin requests (browser enforced) (default: localhost)
 
 - ```http.ep-requesttimeout```: Request Timeout for rpc execution pool for HTTP requests (default: 0s)
 
