@@ -1,4 +1,4 @@
-name: i386 linux tests
+name: linux tests
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-32bits:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
@@ -22,3 +22,25 @@ jobs:
         env:
           GOOS: linux
           GOARCH: 386
+
+  build-64bits:
+    runs-on: 
+    - self-hosted-ghrtest-custom 
+    - size-xl-x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23.0
+          cache: false
+      - name: Run tests
+        run: |
+          git submodule update --init --depth 1 --recursive
+          go version
+          go run build/ci.go lint
+          go run build/ci.go check_tidy
+          go run build/ci.go check_generate
+          go run build/ci.go check_baddeps
+          go run build/ci.go install -dlgo
+          go run build/ci.go test -dlgo -short
