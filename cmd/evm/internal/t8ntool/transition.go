@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -28,8 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -151,14 +154,27 @@ func Transition(ctx *cli.Context) error {
 	// Configure tracer
 	if ctx.IsSet(TraceTracerFlag.Name) { // Custom tracing
 		config := json.RawMessage(ctx.String(TraceTracerConfigFlag.Name))
-		vmConfig.Tracer = tracerToFile(baseDir, ctx.String(TraceTracerFlag.Name), config, chainConfig)
+		tracer, err := tracers.DefaultDirectory.New(ctx.String(TraceTracerFlag.Name),
+			nil, config, chainConfig)
+		if err != nil {
+			return NewError(ErrorConfig, fmt.Errorf("failed instantiating tracer: %v", err))
+		}
+		vmConfig.Tracer = newResultWriter(baseDir, tracer)
 	} else if ctx.Bool(TraceFlag.Name) { // JSON opcode tracing
 		logConfig := &logger.Config{
 			DisableStack:     ctx.Bool(TraceDisableStackFlag.Name),
 			EnableMemory:     ctx.Bool(TraceEnableMemoryFlag.Name),
 			EnableReturnData: ctx.Bool(TraceEnableReturnDataFlag.Name),
 		}
-		vmConfig.Tracer = jsonToFile(baseDir, logConfig, ctx.Bool(TraceEnableCallFramesFlag.Name))
+		if ctx.Bool(TraceEnableCallFramesFlag.Name) {
+			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+				return logger.NewJSONLoggerWithCallFrames(logConfig, out)
+			})
+		} else {
+			vmConfig.Tracer = newFileWriter(baseDir, func(out io.Writer) *tracing.Hooks {
+				return logger.NewJSONLogger(logConfig, out)
+			})
+		}
 	}
 	// Run the test and aggregate the result
 	s, result, body, err := prestate.Apply(vmConfig, chainConfig, txIt, ctx.Int64(RewardFlag.Name))
