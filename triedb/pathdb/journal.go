@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-verkle"
 )
 
 var (
@@ -95,7 +96,15 @@ func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
 	var root = types.EmptyRootHash
 	if blob := rawdb.ReadAccountTrieNode(db.diskdb, nil); len(blob) > 0 {
-		root = crypto.Keccak256Hash(blob)
+		if db.isVerkle {
+			rootnode, err := verkle.ParseNode(blob, 0)
+			if err != nil {
+				log.Crit("Could not decode verkle root node")
+			}
+			root = rootnode.Commit().Bytes()
+		} else {
+			root = crypto.Keccak256Hash(blob)
+		}
 	}
 	// Load the layers by resolving the journal
 	head, err := db.loadJournal(root)
