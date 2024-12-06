@@ -45,6 +45,23 @@ type (
 	}
 	hashNode  []byte
 	valueNode []byte
+
+	//fullnodeEncoder is a type used exclusively for encoding. Briefly instantiating
+	// a fullnodeEncoder and initializing with existing slices is less memory
+	// intense than using the fullNode type.
+	fullnodeEncoder struct {
+		Children [17][]byte
+		flags    nodeFlag
+	}
+
+	//shortNodeEncoder is a type used exclusively for encoding. Briefly instantiating
+	// a shortNodeEncoder and initializing with existing slices is less memory
+	// intense than using the shortNode type.
+	shortNodeEncoder struct {
+		Key   []byte
+		Val   []byte
+		flags nodeFlag
+	}
 )
 
 // nilValueNode is used when collapsing internal trie nodes for hashing, since
@@ -67,16 +84,20 @@ type nodeFlag struct {
 	dirty bool     // whether the node has changes that must be written to the database
 }
 
-func (n *fullNode) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirty }
-func (n *shortNode) cache() (hashNode, bool) { return n.flags.hash, n.flags.dirty }
-func (n hashNode) cache() (hashNode, bool)   { return nil, true }
-func (n valueNode) cache() (hashNode, bool)  { return nil, true }
+func (n *fullNode) cache() (hashNode, bool)         { return n.flags.hash, n.flags.dirty }
+func (n *fullnodeEncoder) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirty }
+func (n *shortNode) cache() (hashNode, bool)        { return n.flags.hash, n.flags.dirty }
+func (n *shortNodeEncoder) cache() (hashNode, bool) { return n.flags.hash, n.flags.dirty }
+func (n hashNode) cache() (hashNode, bool)          { return nil, true }
+func (n valueNode) cache() (hashNode, bool)         { return nil, true }
 
 // Pretty printing.
-func (n *fullNode) String() string  { return n.fstring("") }
-func (n *shortNode) String() string { return n.fstring("") }
-func (n hashNode) String() string   { return n.fstring("") }
-func (n valueNode) String() string  { return n.fstring("") }
+func (n *fullNode) String() string         { return n.fstring("") }
+func (n *fullnodeEncoder) String() string  { return n.fstring("") }
+func (n *shortNode) String() string        { return n.fstring("") }
+func (n *shortNodeEncoder) String() string { return n.fstring("") }
+func (n hashNode) String() string          { return n.fstring("") }
+func (n valueNode) String() string         { return n.fstring("") }
 
 func (n *fullNode) fstring(ind string) string {
 	resp := fmt.Sprintf("[\n%s  ", ind)
@@ -89,8 +110,23 @@ func (n *fullNode) fstring(ind string) string {
 	}
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
+
+func (n *fullnodeEncoder) fstring(ind string) string {
+	resp := fmt.Sprintf("[\n%s  ", ind)
+	for i, node := range &n.Children {
+		if node == nil {
+			resp += fmt.Sprintf("%s: <nil> ", indices[i])
+		} else {
+			resp += fmt.Sprintf("%s: %x", indices[i], node)
+		}
+	}
+	return resp + fmt.Sprintf("\n%s] ", ind)
+}
 func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
+}
+func (n *shortNodeEncoder) fstring(ind string) string {
+	return fmt.Sprintf("{%x: %x} ", n.Key, n.Val)
 }
 func (n hashNode) fstring(ind string) string {
 	return fmt.Sprintf("<%x> ", []byte(n))

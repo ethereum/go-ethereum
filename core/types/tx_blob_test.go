@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/ecdsa"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -58,11 +59,21 @@ func TestBlobTxSize(t *testing.T) {
 	}
 }
 
+// emptyInit ensures that we init the kzg empties only once
 var (
-	emptyBlob          = new(kzg4844.Blob)
-	emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
-	emptyBlobProof, _  = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+	emptyInit       sync.Once
+	emptyBlob       *kzg4844.Blob
+	emptyBlobCommit kzg4844.Commitment
+	emptyBlobProof  kzg4844.Proof
 )
+
+func initEmpties() {
+	emptyInit.Do(func() {
+		emptyBlob = new(kzg4844.Blob)
+		emptyBlobCommit, _ = kzg4844.BlobToCommitment(emptyBlob)
+		emptyBlobProof, _ = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+	})
+}
 
 func createEmptyBlobTx(key *ecdsa.PrivateKey, withSidecar bool) *Transaction {
 	blobtx := createEmptyBlobTxInner(withSidecar)
@@ -71,6 +82,7 @@ func createEmptyBlobTx(key *ecdsa.PrivateKey, withSidecar bool) *Transaction {
 }
 
 func createEmptyBlobTxInner(withSidecar bool) *BlobTx {
+	initEmpties()
 	sidecar := &BlobTxSidecar{
 		Blobs:       []kzg4844.Blob{*emptyBlob},
 		Commitments: []kzg4844.Commitment{emptyBlobCommit},
