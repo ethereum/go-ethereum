@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/exp/rand"
 	"testing"
 )
 
@@ -70,12 +71,22 @@ func makeLinkTestCase(input map[rune][]rune, overrides map[rune]common.Address) 
 	}
 }
 
-func testLinkCase(t *testing.T, input map[rune][]rune, overrides map[rune]common.Address) {
+func testLinkCase(t *testing.T, input map[rune][]rune, overrides map[rune]struct{}) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	var testAddrNonce uint64
-
-	tc := makeLinkTestCase(input, overrides)
 	alreadyDeployed := make(map[common.Address]struct{})
+
+	// generate deterministic addresses for the override set.
+	rand.Seed(42)
+	overrideAddrs := make(map[rune]common.Address)
+	for contract, _ := range overrides {
+		var addr common.Address
+		rand.Read(addr[:])
+		overrideAddrs[contract] = addr
+		alreadyDeployed[addr] = struct{}{}
+	}
+
+	tc := makeLinkTestCase(input, overrideAddrs)
 	allContracts := make(map[rune]struct{})
 
 	for contract, deps := range input {
@@ -121,10 +132,15 @@ func testLinkCase(t *testing.T, input map[rune][]rune, overrides map[rune]common
 			Pattern: pattern,
 		})
 	}
+
+	overridePatterns := make(map[string]common.Address)
+	for pattern, override := range tc.overrides {
+		overridePatterns[pattern] = override
+	}
 	deployParams := DeploymentParams{
 		Contracts: contracts,
 		Libraries: libs,
-		Overrides: nil,
+		Overrides: overridePatterns,
 	}
 
 	res, err := LinkAndDeploy(deployParams, mockDeploy)
@@ -151,16 +167,16 @@ func TestContractLinking(t *testing.T) {
 	testLinkCase(t, map[rune][]rune{
 		'a': {'b', 'c', 'd', 'e'},
 		'e': {'f', 'g', 'h', 'i'}},
-		map[rune]common.Address{})
+		map[rune]struct{}{})
 
 	testLinkCase(t, map[rune][]rune{
 		'a': {'b', 'c', 'd', 'e'}},
-		map[rune]common.Address{})
+		map[rune]struct{}{})
 
 	// test single contract only without deps
 	testLinkCase(t, map[rune][]rune{
 		'a': {}},
-		map[rune]common.Address{})
+		map[rune]struct{}{})
 
 	// test that libraries at different levels of the tree can share deps,
 	// and that these shared deps will only be deployed once.
@@ -168,17 +184,27 @@ func TestContractLinking(t *testing.T) {
 		'a': {'b', 'c', 'd', 'e'},
 		'e': {'f', 'g', 'h', 'i', 'm'},
 		'i': {'j', 'k', 'l', 'm'}},
-		map[rune]common.Address{})
+		map[rune]struct{}{})
 
 	// test two contracts can be deployed which don't share deps
 	testLinkCase(t, map[rune][]rune{
 		'a': {'b', 'c', 'd', 'e'},
 		'f': {'g', 'h', 'i', 'j'}},
-		map[rune]common.Address{})
+		map[rune]struct{}{})
 
 	// test two contracts can be deployed which share deps
 	testLinkCase(t, map[rune][]rune{
 		'a': {'b', 'c', 'd', 'e'},
 		'f': {'g', 'c', 'd', 'j'}},
-		map[rune]common.Address{})
+		map[rune]struct{}{})
+
+	// test that one contract with overrides for all lib deps
+	testLinkCase(t, map[rune][]rune{
+		'a': {'b', 'c', 'd', 'e'}},
+		map[rune]struct{}{'b': {}, 'c': {}, 'd': {}, 'e': {}})
+
+	// test deployment of a contract with overrides
+	testLinkCase(t, map[rune][]rune{
+		'a': {}},
+		map[rune]struct{}{'a': {}})
 }

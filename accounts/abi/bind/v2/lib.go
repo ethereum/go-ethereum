@@ -157,71 +157,108 @@ type DeploymentResult struct {
 	Addrs map[string]common.Address
 }
 
+func (d *DeploymentResult) Accumulate(other *DeploymentResult) {
+	for pattern, tx := range other.Txs {
+		d.Txs[pattern] = tx
+	}
+	for pattern, addr := range other.Addrs {
+		d.Addrs[pattern] = addr
+	}
+}
+
 type ContractDeployer interface {
 	DeployContract(input []byte, deployer []byte) (common.Address, *types.Transaction, error)
+}
+
+type depTreeBuilder struct {
+	overrides map[string]common.Address
+}
+type depTreeNode struct {
+	pattern      string
+	unlinkedCode string
+	nodes        []*depTreeNode
+}
+
+func (d *depTreeBuilder) buildDepTree(contractBin string, libs map[string]string) *depTreeNode {
+	node := depTreeNode{contractBin, contractBin, nil}
+
+	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
+	if err != nil {
+		panic(err)
+	}
+	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contractBin, -1) {
+		pattern := match[1]
+		if _, ok := d.overrides[pattern]; ok {
+			continue
+		}
+		node.nodes = append(node.nodes, d.buildDepTree(libs[pattern], libs))
+	}
+	return &node
+}
+
+type treeDeployer struct {
+	deployedAddrs map[string]common.Address
+	deployerTxs   map[string]*types.Transaction
+	inputs        map[string][]byte
+	deploy        func(input, deployer []byte) (common.Address, *types.Transaction, error)
+	err           error
+}
+
+func (d *treeDeployer) linkAndDeploy(node *depTreeNode) {
+	for _, childNode := range node.nodes {
+		d.linkAndDeploy(childNode)
+	}
+	// link in all node dependencies and produce the deployer bytecode
+	deployerCode := node.unlinkedCode
+	for _, child := range node.nodes {
+		deployerCode = strings.ReplaceAll(deployerCode, child.pattern, d.deployedAddrs[child.pattern].String()[2:])
+	}
+	// deploy the contract.
+	addr, tx, err := d.deploy(d.inputs[node.pattern], common.Hex2Bytes(deployerCode))
+	if err != nil {
+		d.err = err
+	} else {
+		d.deployedAddrs[node.pattern] = addr
+		d.deployerTxs[node.pattern] = tx
+	}
+}
+
+func (d *treeDeployer) Result() (*DeploymentResult, error) {
+	if d.err != nil {
+		return nil, d.err
+	}
+	return &DeploymentResult{
+		Txs:   d.deployerTxs,
+		Addrs: d.deployedAddrs,
+	}, nil
 }
 
 // LinkAndDeploy deploys a specified set of contracts and their dependent
 // libraries.  If an error occurs, only contracts which were successfully
 // deployed are returned in the result.
 func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []byte) (common.Address, *types.Transaction, error)) (res *DeploymentResult, err error) {
-	libMetas := deployParams.Libraries
-	overrides := deployParams.Overrides
-
-	res = &DeploymentResult{
+	// re-express libraries as a map of pattern -> pre-link binary
+	unlinkedLibs := make(map[string]string)
+	for _, meta := range deployParams.Libraries {
+		unlinkedLibs[meta.Pattern] = meta.Bin
+	}
+	accumRes := &DeploymentResult{
 		Txs:   make(map[string]*types.Transaction),
 		Addrs: make(map[string]common.Address),
 	}
-
-	// re-express libraries as a map of pattern -> pre-link binary
-	pending := make(map[string]string)
-	for _, meta := range libMetas {
-		pending[meta.Pattern] = meta.Bin
-	}
-
-	// initialize the set of already-deployed contracts with given override addresses
-	deployed := make(map[string]common.Address)
-	for pattern, deployAddr := range overrides {
-		deployed[pattern] = deployAddr
-		if _, ok := pending[pattern]; ok {
-			delete(pending, pattern)
-		}
-	}
-
-	// link and deploy dynamic libraries
-	for {
-		var deployableDeps map[string]string
-		pending, deployableDeps = linkLibs(pending, deployed)
-		if len(deployableDeps) == 0 {
-			break
-		}
-
-		deployTxs, deployAddrs, err := deployLibs(deployableDeps, deploy)
-		for pattern, addr := range deployAddrs {
-			deployed[pattern] = addr
-			res.Addrs[pattern] = addr
-			res.Txs[pattern] = deployTxs[addr]
-		}
+	for _, contract := range deployParams.Contracts {
+		treeBuilder := depTreeBuilder{deployParams.Overrides}
+		tree := treeBuilder.buildDepTree(contract.Meta.Bin, unlinkedLibs)
+		deployer := treeDeployer{deploy: deploy}
+		deployer.linkAndDeploy(tree)
+		res, err := deployer.Result()
 		if err != nil {
-			return res, err
+			return accumRes, err
 		}
-	}
+		accumRes.Accumulate(res)
 
-	// link and deploy contracts
-	for _, contractParams := range deployParams.Contracts {
-		linkedContract, err := linkContract(contractParams.Meta.Bin, deployed)
-		if err != nil {
-			return res, err
-		}
-		contractAddr, contractTx, err := deployContract(contractParams.Input, linkedContract, deploy)
-		if err != nil {
-			return res, err
-		}
-		res.Txs[contractParams.Meta.Pattern] = contractTx
-		res.Addrs[contractParams.Meta.Pattern] = contractAddr
 	}
-
-	return res, nil
+	return accumRes, nil
 }
 
 // TODO: this will be generated as part of the bindings, contain the ABI (or metadata object?) and errors
