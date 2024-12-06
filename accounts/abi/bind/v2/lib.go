@@ -255,7 +255,6 @@ func WatchEvents[T any](instance *ContractInstance, opts *bind.WatchOpts, eventI
 				// New log arrived, parse the event and forward to the user
 				ev, err := unpack(&log)
 				if err != nil {
-					fmt.Printf("unpack err: %v", err)
 					return err
 				}
 
