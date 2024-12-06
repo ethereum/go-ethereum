@@ -439,6 +439,7 @@ func (p *Pipeline) cccStage(candidates <-chan *BlockCandidate, deadline time.Tim
 					lastTxn := candidate.Txs[candidate.Txs.Len()-1]
 					cccTimer.UpdateSince(cccStart)
 					if err != nil {
+						log.Warn("failed to apply CCC", "txHash", lastTxn.Hash().Hex(), "err", err)
 						resultCh <- &Result{
 							OverflowingTx:    lastTxn,
 							OverflowingTrace: candidate.LastTrace,
