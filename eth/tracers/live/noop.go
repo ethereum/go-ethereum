@@ -57,6 +57,12 @@ func newNoopTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 		OnCodeChange:     t.OnCodeChange,
 		OnStorageChange:  t.OnStorageChange,
 		OnLog:            t.OnLog,
+		OnBalanceRead:    t.OnBalanceRead,
+		OnNonceRead:      t.OnNonceRead,
+		OnCodeRead:       t.OnCodeRead,
+		OnCodeHashRead:   t.OnCodeHashRead,
+		OnStorageRead:    t.OnStorageRead,
+		OnBlockHashRead:  t.OnBlockHashRead,
 	}, nil
 }
 
@@ -107,6 +113,18 @@ func (t *noop) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 func (t *noop) OnLog(l *types.Log) {
 
 }
+
+func (t *noop) OnBalanceRead(addr common.Address, bal *big.Int) {}
+
+func (t *noop) OnNonceRead(addr common.Address, nonce uint64) {}
+
+func (t *noop) OnCodeRead(addr common.Address, code []byte) {}
+
+func (t *noop) OnCodeHashRead(addr common.Address, hash common.Hash) {}
+
+func (t *noop) OnStorageRead(addr common.Address, slot, val common.Hash) {}
+
+func (t *noop) OnBlockHashRead(number uint64, hash common.Hash) {}
 
 func (t *noop) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
 }
