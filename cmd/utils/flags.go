@@ -2138,6 +2138,10 @@ func MakeChain(ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockCh
 		gspec   = MakeGenesis(ctx)
 		chainDb = MakeChainDatabase(ctx, stack, readonly)
 	)
+	return MakeChainWithGenesisBlockAndChainDB(gspec, chainDb, ctx, stack, readonly)
+}
+
+func MakeChainWithGenesisBlockAndChainDB(gspec *core.Genesis, chainDb ethdb.Database, ctx *cli.Context, stack *node.Node, readonly bool) (*core.BlockChain, ethdb.Database) {
 	config, err := core.LoadChainConfig(chainDb, gspec)
 	if err != nil {
 		Fatalf("%v", err)
