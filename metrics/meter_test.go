@@ -28,18 +28,15 @@ func TestGetOrRegisterMeter(t *testing.T) {
 }
 
 func TestMeterDecay(t *testing.T) {
-	ma := meterArbiter{
-		ticker: time.NewTicker(time.Millisecond),
-		meters: make(map[*StandardMeter]struct{}),
-	}
-	defer ma.ticker.Stop()
 	m := newStandardMeter()
-	ma.meters[m] = struct{}{}
 	m.Mark(1)
-	ma.tickMeters()
+
+	// Rate is only updated after a sampling period (5s)
+	// elapses.
+	m.addToTimestamp(-5 * time.Second)
 	rateMean := m.Snapshot().RateMean()
-	time.Sleep(100 * time.Millisecond)
-	ma.tickMeters()
+
+	m.addToTimestamp(-5 * time.Second)
 	if m.Snapshot().RateMean() >= rateMean {
 		t.Error("m.RateMean() didn't decrease")
 	}
@@ -50,18 +47,6 @@ func TestMeterNonzero(t *testing.T) {
 	m.Mark(3)
 	if count := m.Snapshot().Count(); count != 3 {
 		t.Errorf("m.Count(): 3 != %v\n", count)
-	}
-}
-
-func TestMeterStop(t *testing.T) {
-	l := len(arbiter.meters)
-	m := NewMeter()
-	if l+1 != len(arbiter.meters) {
-		t.Errorf("arbiter.meters: %d != %d\n", l+1, len(arbiter.meters))
-	}
-	m.Stop()
-	if l != len(arbiter.meters) {
-		t.Errorf("arbiter.meters: %d != %d\n", l, len(arbiter.meters))
 	}
 }
 
