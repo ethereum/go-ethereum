@@ -150,10 +150,7 @@ func (srv *Server) portMappingLoop() {
 					continue
 				}
 
-				external := m.port
-				if m.extPort != 0 {
-					external = m.extPort
-				}
+				external := m.extPort
 				log := newLogger(m.protocol, external, m.port)
 
 				log.Trace("Attempting port mapping")
