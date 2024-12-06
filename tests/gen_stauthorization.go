@@ -5,10 +5,10 @@ package tests
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/holiman/uint256"
 )
 
 var _ = (*stAuthorizationMarshaling)(nil)
@@ -17,19 +17,19 @@ var _ = (*stAuthorizationMarshaling)(nil)
 func (s stAuthorization) MarshalJSON() ([]byte, error) {
 	type stAuthorization struct {
 		ChainID math.HexOrDecimal64
-		Address common.Address      `json:"address" gencodec:"required"`
-		Nonce   math.HexOrDecimal64 `json:"nonce" gencodec:"required"`
-		V       math.HexOrDecimal64 `json:"v" gencodec:"required"`
-		R       uint256.Int         `json:"r" gencodec:"required"`
-		S       uint256.Int         `json:"s" gencodec:"required"`
+		Address common.Address        `json:"address" gencodec:"required"`
+		Nonce   math.HexOrDecimal64   `json:"nonce" gencodec:"required"`
+		V       math.HexOrDecimal64   `json:"v" gencodec:"required"`
+		R       *math.HexOrDecimal256 `json:"r" gencodec:"required"`
+		S       *math.HexOrDecimal256 `json:"s" gencodec:"required"`
 	}
 	var enc stAuthorization
 	enc.ChainID = math.HexOrDecimal64(s.ChainID)
 	enc.Address = s.Address
 	enc.Nonce = math.HexOrDecimal64(s.Nonce)
 	enc.V = math.HexOrDecimal64(s.V)
-	enc.R = s.R
-	enc.S = s.S
+	enc.R = (*math.HexOrDecimal256)(s.R)
+	enc.S = (*math.HexOrDecimal256)(s.S)
 	return json.Marshal(&enc)
 }
 
@@ -37,11 +37,11 @@ func (s stAuthorization) MarshalJSON() ([]byte, error) {
 func (s *stAuthorization) UnmarshalJSON(input []byte) error {
 	type stAuthorization struct {
 		ChainID *math.HexOrDecimal64
-		Address *common.Address      `json:"address" gencodec:"required"`
-		Nonce   *math.HexOrDecimal64 `json:"nonce" gencodec:"required"`
-		V       *math.HexOrDecimal64 `json:"v" gencodec:"required"`
-		R       *uint256.Int         `json:"r" gencodec:"required"`
-		S       *uint256.Int         `json:"s" gencodec:"required"`
+		Address *common.Address       `json:"address" gencodec:"required"`
+		Nonce   *math.HexOrDecimal64  `json:"nonce" gencodec:"required"`
+		V       *math.HexOrDecimal64  `json:"v" gencodec:"required"`
+		R       *math.HexOrDecimal256 `json:"r" gencodec:"required"`
+		S       *math.HexOrDecimal256 `json:"s" gencodec:"required"`
 	}
 	var dec stAuthorization
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -65,10 +65,10 @@ func (s *stAuthorization) UnmarshalJSON(input []byte) error {
 	if dec.R == nil {
 		return errors.New("missing required field 'r' for stAuthorization")
 	}
-	s.R = *dec.R
+	s.R = (*big.Int)(dec.R)
 	if dec.S == nil {
 		return errors.New("missing required field 's' for stAuthorization")
 	}
-	s.S = *dec.S
+	s.S = (*big.Int)(dec.S)
 	return nil
 }
