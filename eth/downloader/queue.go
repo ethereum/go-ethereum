@@ -882,7 +882,7 @@ func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt, recei
 // to access the queue, so they already need a lock anyway.
 func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	taskQueue *prque.Prque[int64, *types.Header], pendPool map[string]*fetchRequest,
-	reqTimer metrics.Timer, resInMeter metrics.Meter, resDropMeter metrics.Meter,
+	reqTimer *metrics.Timer, resInMeter, resDropMeter *metrics.Meter,
 	results int, validate func(index int, header *types.Header) error,
 	reconstruct func(index int, result *fetchResult)) (int, error) {
 	// Short circuit if the data was never requested
