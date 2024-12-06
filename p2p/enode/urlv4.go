@@ -33,7 +33,6 @@ import (
 
 var (
 	incompleteNodeURL = regexp.MustCompile("(?i)^(?:enode://)?([0-9a-f]+)$")
-	lookupIPFunc      = net.LookupIP
 )
 
 // MustParseV4 parses a node URL. It panics if the URL is not valid.
@@ -101,6 +100,28 @@ func NewV4(pubkey *ecdsa.PublicKey, ip net.IP, tcp, udp int) *Node {
 	return n
 }
 
+func NewV4WithDNS(pubkey *ecdsa.PublicKey, ip net.IP, hostname string, tcp, udp int) *Node {
+	var r enr.Record
+	if tcp != 0 {
+		r.Set(enr.TCP(tcp))
+	}
+	if udp != 0 {
+		r.Set(enr.UDP(udp))
+	}
+	if len(ip) > 0 {
+		r.Set(enr.IP(ip))
+	}
+	signV4Compat(&r, pubkey)
+	n, err := New(v4CompatID{}, &r)
+	if err != nil {
+		panic(err)
+	}
+	n.tcp = uint16(tcp)
+	n.udp = uint16(udp)
+	n.hostname = hostname
+	return n
+}
+
 // isNewV4 returns true for nodes created by NewV4.
 func isNewV4(n *Node) bool {
 	var k s256raw
@@ -111,6 +132,7 @@ func parseComplete(rawurl string) (*Node, error) {
 	var (
 		id               *ecdsa.PublicKey
 		tcpPort, udpPort uint64
+		node             *Node
 	)
 	u, err := url.Parse(rawurl)
 	if err != nil {
@@ -126,18 +148,14 @@ func parseComplete(rawurl string) (*Node, error) {
 	if id, err = parsePubkey(u.User.String()); err != nil {
 		return nil, fmt.Errorf("invalid public key (%v)", err)
 	}
-	// Parse the IP address.
+
+	// Parse the IP address if its one.
 	ip := net.ParseIP(u.Hostname())
-	if ip == nil {
-		ips, err := lookupIPFunc(u.Hostname())
-		if err != nil {
-			return nil, err
+	if ip != nil {
+		// Ensure the IP is 4 bytes long for IPv4 addresses.
+		if ipv4 := ip.To4(); ipv4 != nil {
+			ip = ipv4
 		}
-		ip = ips[0]
-	}
-	// Ensure the IP is 4 bytes long for IPv4 addresses.
-	if ipv4 := ip.To4(); ipv4 != nil {
-		ip = ipv4
 	}
 	// Parse the port numbers.
 	if tcpPort, err = strconv.ParseUint(u.Port(), 10, 16); err != nil {
@@ -151,7 +169,14 @@ func parseComplete(rawurl string) (*Node, error) {
 			return nil, errors.New("invalid discport in query")
 		}
 	}
-	return NewV4(id, ip, int(tcpPort), int(udpPort)), nil
+
+	if ip != nil {
+		node = NewV4(id, ip, int(tcpPort), int(udpPort))
+	} else {
+		node = NewV4WithDNS(id, nil, u.Hostname(), int(tcpPort), int(udpPort))
+	}
+
+	return node, nil
 }
 
 // parsePubkey parses a hex-encoded secp256k1 public key.
@@ -181,15 +206,23 @@ func (n *Node) URLv4() string {
 		nodeid = fmt.Sprintf("%s.%x", scheme, n.id[:])
 	}
 	u := url.URL{Scheme: "enode"}
-	if !n.ip.IsValid() {
-		u.Host = nodeid
-	} else {
+	if n.Hostname() != "" {
+		// For DNS nodes: include DNS name, TCP port, and optional UDP port
+		u.User = url.User(nodeid)
+		u.Host = fmt.Sprintf("%s:%d", n.Hostname(), n.TCP())
+		if n.UDP() != n.TCP() {
+			u.RawQuery = "discport=" + strconv.Itoa(n.UDP())
+		}
+	} else if n.ip.IsValid() {
+		// For IP-based nodes: include IP address, TCP port, and optional UDP port
 		addr := net.TCPAddr{IP: n.IP(), Port: n.TCP()}
 		u.User = url.User(nodeid)
 		u.Host = addr.String()
 		if n.UDP() != n.TCP() {
 			u.RawQuery = "discport=" + strconv.Itoa(n.UDP())
 		}
+	} else {
+		u.Host = nodeid
 	}
 	return u.String()
 }
