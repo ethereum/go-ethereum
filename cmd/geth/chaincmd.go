@@ -290,7 +290,13 @@ func importChain(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
 
-	chain, db := utils.MakeChain(ctx, stack, false)
+	db := utils.MakeChainDatabase(ctx, stack, false)
+
+	// if the error is not nil, no genesis is present in the db and so the default
+	// behavior of creating the genesis block applies.
+	genesis, _ := core.ReadGenesis(db)
+
+	chain, db := utils.MakeChainWithGenesisBlockAndChainDB(genesis, db, ctx, stack, false)
 	defer db.Close()
 
 	// Start periodically gathering memory profiles
