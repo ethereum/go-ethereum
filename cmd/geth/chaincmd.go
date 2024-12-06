@@ -101,6 +101,8 @@ if one is set.  Otherwise it prints the genesis from the datadir.`,
 			utils.VMTraceFlag,
 			utils.VMTraceJsonConfigFlag,
 			utils.TransactionHistoryFlag,
+			utils.LogHistoryFlag,
+			utils.LogNoHistoryFlag,
 			utils.StateHistoryFlag,
 		}, utils.DatabaseFlags),
 		Description: `
