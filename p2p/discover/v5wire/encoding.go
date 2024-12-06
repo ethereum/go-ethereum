@@ -504,27 +504,34 @@ func (c *Codec) decodeWhoareyou(head *Header, headerData []byte) (Packet, error)
 func (c *Codec) decodeHandshakeMessage(fromAddr string, head *Header, headerData, msgData []byte) (n *enode.Node, p Packet, err error) {
 	node, auth, session, err := c.decodeHandshake(fromAddr, head)
 	if err != nil {
-		c.sc.deleteHandshake(auth.h.SrcID, fromAddr)
+		if auth != nil && auth.isHandshakeAuthDataValid() {
+			c.sc.deleteHandshake(auth.h.SrcID, fromAddr)
+		}
 		return nil, nil, err
 	}
 
 	// Decrypt the message using the new session keys.
 	msg, err := c.decryptMessage(msgData, head.Nonce[:], headerData, session.readKey)
 	if err != nil {
-		c.sc.deleteHandshake(auth.h.SrcID, fromAddr)
+		if auth != nil && auth.isHandshakeAuthDataValid() {
+			c.sc.deleteHandshake(auth.h.SrcID, fromAddr)
+		}
 		return node, msg, err
 	}
 
 	// Handshake OK, drop the challenge and store the new session keys.
 	c.sc.storeNewSession(auth.h.SrcID, fromAddr, session)
 	c.sc.deleteHandshake(auth.h.SrcID, fromAddr)
+
 	return node, msg, nil
 }
 
-func (c *Codec) decodeHandshake(fromAddr string, head *Header) (n *enode.Node, auth handshakeAuthData, s *session, err error) {
-	if auth, err = c.decodeHandshakeAuthData(head); err != nil {
-		return nil, auth, nil, err
+func (c *Codec) decodeHandshake(fromAddr string, head *Header) (n *enode.Node, auth *handshakeAuthData, s *session, err error) {
+	var tempAuth handshakeAuthData
+	if tempAuth, err = c.decodeHandshakeAuthData(head); err != nil {
+		return nil, nil, nil, err
 	}
+	auth = &tempAuth
 
 	// Verify against our last WHOAREYOU.
 	challenge := c.sc.getHandshake(auth.h.SrcID, fromAddr)
@@ -669,4 +676,10 @@ func bytesCopy(r *bytes.Buffer) []byte {
 	b := make([]byte, r.Len())
 	copy(b, r.Bytes())
 	return b
+}
+
+// isHandshakeAuthDataValid checks if handshakeAuthData is valid
+func (auth *handshakeAuthData) isHandshakeAuthDataValid() bool {
+	// Conditions for the auth to be considered valid
+	return auth != nil && len(auth.signature) > 0 && len(auth.pubkey) > 0 && auth.h.SrcID != (enode.ID{})
 }
