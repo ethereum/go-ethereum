@@ -45,9 +45,7 @@ type Config struct {
 	DisableStack     bool // disable stack capture
 	DisableStorage   bool // disable storage capture
 	EnableReturnData bool // enable return data capture
-	Debug            bool // print output during capture end
 	Limit            int  // maximum size of output, but zero means unlimited
-
 	// Chain overrides, can be used to execute a trace using future fork rules
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
@@ -324,12 +322,13 @@ func (l *StructLogger) OnExit(depth int, output []byte, gasUsed uint64, err erro
 	}
 	l.output = output
 	l.err = err
-	if l.cfg.Debug {
-		fmt.Printf("%#x\n", output)
-		if err != nil {
-			fmt.Printf(" error: %v\n", err)
-		}
-	}
+	// TODO @holiman, should we output the per-scope output?
+	//if l.cfg.Debug {
+	//	fmt.Printf("%#x\n", output)
+	//	if err != nil {
+	//		fmt.Printf(" error: %v\n", err)
+	//	}
+	//}
 }
 
 func (l *StructLogger) GetResult() (json.RawMessage, error) {

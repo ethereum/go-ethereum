@@ -758,7 +758,6 @@ func (api *API) standardTraceBlockToFile(ctx context.Context, block *types.Block
 		logConfig = config.Config
 		txHash = config.TxHash
 	}
-	logConfig.Debug = true
 
 	// Execute transaction, either tracing all or just the requested one
 	var (
