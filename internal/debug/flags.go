@@ -136,8 +136,8 @@ var (
 		Category: flags.LoggingCategory,
 	}
 	traceFlag = &cli.StringFlag{
-		Name:     "trace",
-		Usage:    "Write execution trace to the given file",
+		Name:     "go-execution-trace",
+		Usage:    "Write Go execution trace to the given file",
 		Category: flags.LoggingCategory,
 	}
 )

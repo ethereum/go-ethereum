@@ -45,5 +45,5 @@ func (set *StateSet) internal() *pathdb.StateSetWithOrigin {
 	if set == nil {
 		return nil
 	}
-	return pathdb.NewStateSetWithOrigin(set.AccountsOrigin, set.StoragesOrigin)
+	return pathdb.NewStateSetWithOrigin(set.Accounts, set.Storages, set.AccountsOrigin, set.StoragesOrigin)
 }

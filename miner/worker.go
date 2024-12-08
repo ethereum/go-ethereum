@@ -121,18 +121,15 @@ func (miner *Miner) generateWork(params *generateParams, witness bool) *newPaylo
 	// Collect consensus-layer requests if Prague is enabled.
 	var requests [][]byte
 	if miner.chainConfig.IsPrague(work.header.Number, work.header.Time) {
+		requests = [][]byte{}
 		// EIP-6110 deposits
-		depositRequests, err := core.ParseDepositLogs(allLogs, miner.chainConfig)
-		if err != nil {
+		if err := core.ParseDepositLogs(&requests, allLogs, miner.chainConfig); err != nil {
 			return &newPayloadResult{err: err}
 		}
-		requests = append(requests, depositRequests)
-		// EIP-7002 withdrawals
-		withdrawalRequests := core.ProcessWithdrawalQueue(work.evm)
-		requests = append(requests, withdrawalRequests)
+		// EIP-7002
+		core.ProcessWithdrawalQueue(&requests, work.evm)
 		// EIP-7251 consolidations
-		consolidationRequests := core.ProcessConsolidationQueue(work.evm)
-		requests = append(requests, consolidationRequests)
+		core.ProcessConsolidationQueue(&requests, work.evm)
 	}
 	if requests != nil {
 		reqHash := types.CalcRequestsHash(requests)
