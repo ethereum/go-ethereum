@@ -71,7 +71,13 @@ func makeLinkTestCase(input map[rune][]rune, overrides map[rune]common.Address) 
 	}
 }
 
-func testLinkCase(t *testing.T, input map[rune][]rune, overrides map[rune]struct{}, expectDeployed map[rune]struct{}) {
+type linkTestCaseInput struct {
+	input          map[rune][]rune
+	overrides      map[rune]struct{}
+	expectDeployed map[rune]struct{}
+}
+
+func testLinkCase(t *testing.T, tcInput linkTestCaseInput) {
 	testAddr := crypto.PubkeyToAddress(testKey.PublicKey)
 	var testAddrNonce uint64
 	overridesAddrs := make(map[common.Address]struct{})
@@ -79,17 +85,17 @@ func testLinkCase(t *testing.T, input map[rune][]rune, overrides map[rune]struct
 	// generate deterministic addresses for the override set.
 	rand.Seed(42)
 	overrideAddrs := make(map[rune]common.Address)
-	for contract, _ := range overrides {
+	for contract, _ := range tcInput.overrides {
 		var addr common.Address
 		rand.Read(addr[:])
 		overrideAddrs[contract] = addr
 		overridesAddrs[addr] = struct{}{}
 	}
 
-	tc := makeLinkTestCase(input, overrideAddrs)
+	tc := makeLinkTestCase(tcInput.input, overrideAddrs)
 	allContracts := make(map[rune]struct{})
 
-	for contract, deps := range input {
+	for contract, deps := range tcInput.input {
 		allContracts[contract] = struct{}{}
 		for _, dep := range deps {
 			allContracts[dep] = struct{}{}
@@ -145,10 +151,10 @@ func testLinkCase(t *testing.T, input map[rune][]rune, overrides map[rune]struct
 		t.Fatalf("got error from LinkAndDeploy: %v\n", err)
 	}
 
-	if len(res.Addrs) != len(expectDeployed) {
-		t.Fatalf("got %d deployed contracts.  expected %d.\n", len(res.Addrs), len(expectDeployed))
+	if len(res.Addrs) != len(tcInput.expectDeployed) {
+		t.Fatalf("got %d deployed contracts.  expected %d.\n", len(res.Addrs), len(tcInput.expectDeployed))
 	}
-	for contract, _ := range expectDeployed {
+	for contract, _ := range tcInput.expectDeployed {
 		pattern := crypto.Keccak256Hash([]byte(string(contract))).String()[2:36]
 		if _, ok := res.Addrs[pattern]; !ok {
 			t.Fatalf("expected contract %s was not deployed\n", string(contract))
@@ -163,100 +169,111 @@ func testLinkCase(t *testing.T, input map[rune][]rune, overrides map[rune]struct
 
 func TestContractLinking(t *testing.T) {
 
-	testLinkCase(t, map[rune][]rune{
-		'a': {'b', 'c', 'd', 'e'}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {'b', 'c', 'd', 'e'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {},
-		})
+		},
+	})
 
-	testLinkCase(t, map[rune][]rune{
-		'a': {'b', 'c', 'd', 'e'},
-		'e': {'f', 'g', 'h', 'i'}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {'b', 'c', 'd', 'e'},
+			'e': {'f', 'g', 'h', 'i'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {},
-		})
+		}})
 
 	// test single contract only without deps
-	testLinkCase(t, map[rune][]rune{
-		'a': {}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {},
-		})
+		}})
 
 	// test that libraries at different levels of the tree can share deps,
 	// and that these shared deps will only be deployed once.
-	testLinkCase(t, map[rune][]rune{
-		'a': {'b', 'c', 'd', 'e'},
-		'e': {'f', 'g', 'h', 'i', 'm'},
-		'i': {'j', 'k', 'l', 'm'}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {'b', 'c', 'd', 'e'},
+			'e': {'f', 'g', 'h', 'i', 'm'},
+			'i': {'j', 'k', 'l', 'm'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {}, 'k': {}, 'l': {}, 'm': {},
-		})
+		}})
 
 	// test two contracts can be deployed which don't share deps
-	testLinkCase(t, map[rune][]rune{
-		'a': {'b', 'c', 'd', 'e'},
-		'f': {'g', 'h', 'i', 'j'}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {'b', 'c', 'd', 'e'},
+			'f': {'g', 'h', 'i', 'j'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'i': {}, 'j': {},
-		})
+		}})
 
 	// test two contracts can be deployed which share deps
-	testLinkCase(t, map[rune][]rune{
-		'a': {'b', 'c', 'd', 'e'},
-		'f': {'g', 'c', 'd', 'h'}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {'b', 'c', 'd', 'e'},
+			'f': {'g', 'c', 'd', 'h'}},
 		map[rune]struct{}{},
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {},
-		})
+		}})
 
 	// test one contract with overrides for all lib deps
-	testLinkCase(t, map[rune][]rune{
-		'a': {'b', 'c', 'd', 'e'}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {'b', 'c', 'd', 'e'}},
 		map[rune]struct{}{'b': {}, 'c': {}, 'd': {}, 'e': {}},
 		map[rune]struct{}{
 			'a': {},
-		})
+		}})
 
 	// test one contract with overrides for some lib deps
-	testLinkCase(t, map[rune][]rune{
-		'a': {'b', 'c'}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {'b', 'c'}},
 		map[rune]struct{}{'b': {}, 'c': {}},
 		map[rune]struct{}{
 			'a': {},
-		})
+		}})
 
 	// test deployment of a contract with overrides
-	testLinkCase(t, map[rune][]rune{
-		'a': {}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {}},
 		map[rune]struct{}{'a': {}},
-		map[rune]struct{}{})
+		map[rune]struct{}{}})
 
 	// two contracts share some dependencies.  one contract is marked as an override.  all dependencies for the non-override
 	// contract will be deployed
-	testLinkCase(t, map[rune][]rune{
+	testLinkCase(t, linkTestCaseInput{map[rune][]rune{
 		'a': {'b', 'c', 'd', 'e'},
 		'f': {'g', 'c', 'd', 'h'}},
 		map[rune]struct{}{'a': {}},
 		map[rune]struct{}{
 			'f': {}, 'g': {}, 'c': {}, 'd': {}, 'h': {},
-		})
+		}})
 
 	// test nested libraries that share deps at different levels of the tree.. with override.
-	testLinkCase(t, map[rune][]rune{
-		'a': {'b', 'c', 'd', 'e'},
-		'e': {'f', 'g', 'h', 'i', 'm'},
-		'i': {'j', 'k', 'l', 'm'}},
+	testLinkCase(t, linkTestCaseInput{
+		map[rune][]rune{
+			'a': {'b', 'c', 'd', 'e'},
+			'e': {'f', 'g', 'h', 'i', 'm'},
+			'i': {'j', 'k', 'l', 'm'}},
 		map[rune]struct{}{
 			'i': {},
 		},
 		map[rune]struct{}{
 			'a': {}, 'b': {}, 'c': {}, 'd': {}, 'e': {}, 'f': {}, 'g': {}, 'h': {}, 'm': {},
-		})
+		}})
 	// TODO: same as the above case but nested one level of dependencies deep (?)
 }
