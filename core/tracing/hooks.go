@@ -174,21 +174,6 @@ type (
 	// LogHook is called when a log is emitted.
 	LogHook = func(log *types.Log)
 
-	// BalanceReadHook is called when EVM reads the balance of an account.
-	BalanceReadHook = func(addr common.Address, bal *big.Int)
-
-	// NonceReadHook is called when EVM reads the nonce of an account.
-	NonceReadHook = func(addr common.Address, nonce uint64)
-
-	// CodeReadHook is called when EVM reads the code of an account.
-	CodeReadHook = func(addr common.Address, code []byte)
-
-	// CodeHashReadHook is called when EVM reads the code hash of an account.
-	CodeHashReadHook = func(addr common.Address, hash common.Hash)
-
-	// StorageReadHook is called when EVM reads a storage slot of an account.
-	StorageReadHook = func(addr common.Address, slot, value common.Hash)
-
 	// BlockHashReadHook is called when EVM reads the blockhash of a block.
 	BlockHashReadHook = func(blockNumber uint64, hash common.Hash)
 )
@@ -218,12 +203,6 @@ type Hooks struct {
 	OnCodeChange    CodeChangeHook
 	OnStorageChange StorageChangeHook
 	OnLog           LogHook
-	// State reads
-	OnBalanceRead  BalanceReadHook
-	OnNonceRead    NonceReadHook
-	OnCodeRead     CodeReadHook
-	OnCodeHashRead CodeHashReadHook
-	OnStorageRead  StorageReadHook
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
 }

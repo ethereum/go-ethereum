@@ -90,12 +90,6 @@ func TestHooks(t *testing.T) {
 		"0xaa00000000000000000000000000000000000000.storage slot 0x0000000000000000000000000000000000000000000000000000000000000001: 0x0000000000000000000000000000000000000000000000000000000000000000 ->0x0000000000000000000000000000000000000000000000000000000000000011",
 		"0xaa00000000000000000000000000000000000000.storage slot 0x0000000000000000000000000000000000000000000000000000000000000001: 0x0000000000000000000000000000000000000000000000000000000000000011 ->0x0000000000000000000000000000000000000000000000000000000000000022",
 		"log 100",
-		"0xaa00000000000000000000000000000000000000.balance read: 50",
-		"0xaa00000000000000000000000000000000000000.nonce read: 1337",
-		"0xaa00000000000000000000000000000000000000.code read: [19 37]",
-		"0xaa00000000000000000000000000000000000000.storage read 0x0000000000000000000000000000000000000000000000000000000000000001: 0x0000000000000000000000000000000000000000000000000000000000000022",
-		"0xaa00000000000000000000000000000000000000.code read: [19 37]",
-		"0xaa00000000000000000000000000000000000000.code hash read: 0xa12ae05590de0c93a00bc7ac773c2fdb621e44f814985e72194f921c0050f728",
 	}
 	emitF := func(format string, a ...any) {
 		result = append(result, fmt.Sprintf(format, a...))
@@ -116,21 +110,6 @@ func TestHooks(t *testing.T) {
 		OnLog: func(log *types.Log) {
 			emitF("log %v", log.TxIndex)
 		},
-		OnBalanceRead: func(addr common.Address, bal *big.Int) {
-			emitF("%v.balance read: %v", addr, bal)
-		},
-		OnNonceRead: func(addr common.Address, nonce uint64) {
-			emitF("%v.nonce read: %v", addr, nonce)
-		},
-		OnCodeRead: func(addr common.Address, code []byte) {
-			emitF("%v.code read: %v", addr, code)
-		},
-		OnStorageRead: func(addr common.Address, slot common.Hash, value common.Hash) {
-			emitF("%v.storage read %v: %v", addr, slot, value)
-		},
-		OnCodeHashRead: func(addr common.Address, hash common.Hash) {
-			emitF("%v.code hash read: %v", addr, hash)
-		},
 	})
 	sdb.AddBalance(common.Address{0xaa}, uint256.NewInt(100), tracing.BalanceChangeUnspecified)
 	sdb.SubBalance(common.Address{0xaa}, uint256.NewInt(50), tracing.BalanceChangeTransfer)
@@ -143,12 +122,6 @@ func TestHooks(t *testing.T) {
 	sdb.AddLog(&types.Log{
 		Address: common.Address{0xbb},
 	})
-	sdb.GetBalance(common.Address{0xaa})
-	sdb.GetNonce(common.Address{0xaa})
-	sdb.GetCode(common.Address{0xaa})
-	sdb.GetState(common.Address{0xaa}, common.HexToHash("0x01"))
-	sdb.GetCodeSize(common.Address{0xaa})
-	sdb.GetCodeHash(common.Address{0xaa})
 	for i, want := range wants {
 		if have := result[i]; have != want {
 			t.Fatalf("error event %d, have\n%v\nwant%v\n", i, have, want)
