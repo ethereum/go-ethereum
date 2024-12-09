@@ -312,7 +312,7 @@ func StartPProf(address string, withMetrics bool) {
 	}
 	log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
 	go func() {
-		if err := http.ListenAndServe("0.0.0.0:8080", nil); err != nil {
+		if err := http.ListenAndServe(address, nil); err != nil {
 			log.Error("Failure in running pprof server", "err", err)
 		}
 	}()

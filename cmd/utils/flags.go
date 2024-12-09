@@ -71,7 +71,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/portalnetwork/portalwire"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/ethereum/go-ethereum/triedb/hashdb"
@@ -928,86 +927,6 @@ Please note that --` + MetricsHTTPFlag.Name + ` must be set to start the server.
 		Usage:    "InfluxDB organization name (v2 only)",
 		Value:    metrics.DefaultConfig.InfluxDBOrganization,
 		Category: flags.MetricsCategory,
-	}
-
-	PortalRPCListenAddrFlag = &cli.StringFlag{
-		Name:     "rpc.addr",
-		Usage:    "HTTP-RPC server listening interface",
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalRPCPortFlag = &cli.IntFlag{
-		Name:     "rpc.port",
-		Usage:    "HTTP-RPC server listening port",
-		Value:    node.DefaultHTTPPort,
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalDataDirFlag = &cli.StringFlag{
-		Name:     "data.dir",
-		Usage:    "Data dir of where the data file located",
-		Value:    "./",
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalDataCapacityFlag = &cli.Uint64Flag{
-		Name:     "data.capacity",
-		Usage:    "The capacity of the data stored, the unit is MB",
-		Value:    1000 * 10, // 10 GB
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalNATFlag = &cli.StringFlag{
-		Name:     "nat",
-		Usage:    "NAT port mapping mechanism (any|none|upnp|pmp|stun|pmp:<IP>|extip:<IP>|stun:<IP>)",
-		Value:    "any",
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalUDPListenAddrFlag = &cli.StringFlag{
-		Name:     "udp.addr",
-		Usage:    "Protocol UDP server listening interface",
-		Value:    "",
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalUDPPortFlag = &cli.IntFlag{
-		Name:     "udp.port",
-		Usage:    "Protocol UDP server listening port",
-		Value:    node.DefaultUDPPort,
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalLogLevelFlag = &cli.IntFlag{
-		Name:     "loglevel",
-		Usage:    "Loglevel of portal network",
-		Value:    node.DefaultLoglevel,
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalLogFormatFlag = &cli.StringFlag{
-		Name:     "logformat",
-		Usage:    "Log format to use (json|logfmt|terminal)",
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalPrivateKeyFlag = &cli.StringFlag{
-		Name:     "private.key",
-		Usage:    "Private key of p2p node, hex format without 0x prifix",
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalBootNodesFlag = &cli.StringFlag{
-		Name:     "bootnodes",
-		Usage:    "Comma separated enode URLs for P2P discovery bootstrap",
-		Category: flags.PortalNetworkCategory,
-	}
-
-	PortalNetworksFlag = &cli.StringSliceFlag{
-		Name:     "networks",
-		Usage:    "Portal sub networks: history, beacon, state",
-		Category: flags.PortalNetworkCategory,
-		Value:    cli.NewStringSlice(portalwire.History.Name()),
 	}
 )
 
