@@ -1,0 +1,51 @@
+name: Build and publish forkdiff github-pages
+permissions:
+  contents: write
+on:
+  push:
+    branches:
+      - portal
+      - gethintegration
+jobs:
+  deploy:
+    concurrency: ci-${{ github.ref }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout shisui origin
+        uses: actions/checkout@v3
+        with:
+          path: ./
+          ref: portal
+          fetch-depth: 1
+      - name: Checkout shisui
+        uses: actions/checkout@v3
+        with:
+          path: ./shisui
+          ref: gethintegration
+          fetch-depth: 1
+      - name: Checkout go-ethereum
+        uses: actions/checkout@v3
+        with:
+          repository: ethereum/go-ethereum
+          path: ./go-ethereum
+          ref: master
+          fetch-depth: 1
+      - name: Build forkdiff
+        uses: "docker://protolambda/forkdiff:latest"
+        with:
+          args: -repo=./shisui  -fork=./fork.yaml -out=./index.html -upstream-repo=./go-ethereum
+
+      - name: Build pages
+        run: |
+          mkdir -p ./tmp/pages
+          mv index.html ./tmp/pages/index.html
+          touch ./tmp/pages/.nojekyll
+          if [ "$GITHUB_REPOSITORY" == "optimism-java/shisui" ]; then
+              echo "shisui.github.io" > tmp/pages/CNAME
+          fi;
+
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: ./tmp/pages
+          clean: true
