@@ -43,6 +43,7 @@ const (
 	findnodeResultLimit     = 16 // applies in FINDNODE handler
 	totalNodesResponseLimit = 5  // applies in waitForNodes
 
+	// change to a configurable value
 	respTimeoutV5 = 3 * time.Second
 )
 
@@ -62,9 +63,10 @@ type codecV5 interface {
 // UDPv5 is the implementation of protocol version 5.
 type UDPv5 struct {
 	// static fields
-	conn           UDPConn
-	tab            *Table
-	nodeMu         sync.Mutex
+	conn   UDPConn
+	tab    *Table
+	nodeMu sync.Mutex
+	// addr -> node cache which cached the nodes we have sent packets to or received packets from recently.
 	cachedAddrNode map[string]*enode.Node
 	netrestrict    *netutil.Netlist
 	priv           *ecdsa.PrivateKey
@@ -262,30 +264,11 @@ func (t *UDPv5) ResolveNodeId(id enode.ID) *enode.Node {
 
 // AllNodes returns all the nodes stored in the local table.
 func (t *UDPv5) AllNodes() []*enode.Node {
-	t.tab.mutex.Lock()
-	defer t.tab.mutex.Unlock()
-	nodes := make([]*enode.Node, 0)
-
-	for _, b := range &t.tab.buckets {
-		for _, n := range b.entries {
-			nodes = append(nodes, n.Node)
-		}
-	}
-	return nodes
+	return t.tab.NodeList()
 }
 
 func (t *UDPv5) RoutingTableInfo() [][]string {
-	t.tab.mutex.Lock()
-	defer t.tab.mutex.Unlock()
-	nodes := make([][]string, 0)
-	for _, b := range &t.tab.buckets {
-		bucketNodes := make([]string, 0)
-		for _, n := range b.entries {
-			bucketNodes = append(bucketNodes, "0x"+n.ID().String())
-		}
-		nodes = append(nodes, bucketNodes)
-	}
-	return nodes
+	return t.tab.NodeIds()
 }
 
 // LocalNode returns the current local Node running the
@@ -602,6 +585,7 @@ func (t *UDPv5) dispatch() {
 			t.sendNextCall(c.id)
 
 		case r := <-t.sendCh:
+			// make send request by another thread also be cached to handle WHOAREYOU
 			c := &callV5{id: r.destID, addr: r.destAddr}
 			c.node = r.destNode
 			c.packet = r.msg
@@ -619,7 +603,6 @@ func (t *UDPv5) dispatch() {
 			c.nonce = nonce
 			t.activeCallByAuth[nonce] = c
 			t.startResponseTimeout(c)
-			//t.send(r.destID, r.destAddr, r.msg, nil)
 
 		case p := <-t.packetInCh:
 			t.handlePacket(p.Data, p.Addr)

@@ -174,24 +174,6 @@ func (tab *Table) Nodes() [][]BucketNode {
 	return nodes
 }
 
-// NodeList returns all nodes contained in the table.
-func (tab *Table) NodeList() []*enode.Node {
-	if !tab.isInitDone() {
-		return nil
-	}
-
-	tab.mutex.Lock()
-	defer tab.mutex.Unlock()
-
-	var nodes []*enode.Node
-	for _, b := range &tab.buckets {
-		for _, n := range b.entries {
-			nodes = append(nodes, n.Node)
-		}
-	}
-	return nodes
-}
-
 func (tab *Table) self() *enode.Node {
 	return tab.net.Self()
 }
@@ -525,13 +507,11 @@ func (tab *Table) removeIP(b *bucket, ip netip.Addr) {
 // The caller must hold tab.mutex.
 func (tab *Table) handleAddNode(req addNodeOp) bool {
 	if req.node.ID() == tab.self().ID() {
-		tab.log.Debug("this node is already in table", "id", req.node.ID())
 		return false
 	}
 	// For nodes from inbound contact, there is an additional safety measure: if the table
 	// is still initializing the node is not added.
 	if req.isInbound && !tab.isInitDone() {
-		tab.log.Debug("table is not ready")
 		return false
 	}
 
@@ -539,18 +519,15 @@ func (tab *Table) handleAddNode(req addNodeOp) bool {
 	n, _ := tab.bumpInBucket(b, req.node, req.isInbound)
 	if n != nil {
 		// Already in bucket.
-		tab.log.Debug("the node is already in table", "id", req.node.ID())
 		return false
 	}
 	if len(b.entries) >= BucketSize {
 		// Bucket full, maybe add as replacement.
-		tab.log.Debug("the bucket is full and will add in replacement", "id", req.node.ID())
 		tab.addReplacement(b, req.node)
 		return false
 	}
 	if !tab.addIP(b, req.node.IPAddr()) {
 		// Can't add: IP limit reached.
-		tab.log.Debug("IP limit reached", "id", req.node.ID())
 		return false
 	}
 
@@ -718,10 +695,12 @@ func pushNode(list []*tableNode, n *tableNode, max int) ([]*tableNode, *tableNod
 	return list, removed
 }
 
+// WaitInit waits until the table is initialized.
 func (tab *Table) WaitInit() {
 	<-tab.initDone
 }
 
+// NodeIds returns the node IDs in the table.
 func (tab *Table) NodeIds() [][]string {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
@@ -736,13 +715,33 @@ func (tab *Table) NodeIds() [][]string {
 	return nodes
 }
 
+// Config returns the table's configuration.
 func (tab *Table) Config() Config {
 	return tab.cfg
 }
 
+// DeleteNode removes a node from the table.
 func (tab *Table) DeleteNode(n *enode.Node) {
 	tab.mutex.Lock()
 	defer tab.mutex.Unlock()
 	b := tab.bucket(n.ID())
 	tab.deleteInBucket(b, n.ID())
+}
+
+// NodeList returns all nodes contained in the table.
+func (tab *Table) NodeList() []*enode.Node {
+	if !tab.isInitDone() {
+		return nil
+	}
+
+	tab.mutex.Lock()
+	defer tab.mutex.Unlock()
+
+	var nodes []*enode.Node
+	for _, b := range &tab.buckets {
+		for _, n := range b.entries {
+			nodes = append(nodes, n.Node)
+		}
+	}
+	return nodes
 }
