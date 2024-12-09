@@ -63,7 +63,6 @@ func (s *hookedStateDB) GetNonce(addr common.Address) uint64 {
 
 func (s *hookedStateDB) GetCodeHash(addr common.Address) common.Hash {
 	return s.inner.GetCodeHash(addr)
-
 }
 
 func (s *hookedStateDB) GetCode(addr common.Address) []byte {
