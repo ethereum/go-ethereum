@@ -197,7 +197,6 @@ func timedExec(bench bool, execFunc func() ([]byte, uint64, error)) ([]byte, exe
 }
 
 func runCmd(ctx *cli.Context) error {
-
 	var (
 		tracer      *tracing.Hooks
 		prestate    *state.StateDB
