@@ -61,3 +61,18 @@ func TestAutoDiscRace(t *testing.T) {
 		}
 	}
 }
+
+func TestStunDefault(t *testing.T) {
+	nat, err := Parse("stun:default")
+	if err != nil {
+		t.Errorf("should no err, but get %v", err)
+	}
+	stun := nat.(STUN)
+	if stun.serverAddr.String() != STUNDefaultServerAddr {
+		t.Errorf("want addr %s, got addr %s", STUNDefaultServerAddr, stun.serverAddr.String())
+	}
+	_, err = stun.ExternalIP()
+	if err != nil {
+		t.Errorf("get err: %v", err)
+	}
+}

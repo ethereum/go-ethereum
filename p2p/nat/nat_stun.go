@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2024 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/pion/stun"
+	"github.com/pion/stun/v2"
 )
 
 // The code are from erigon p2p/nat/nat_stun.go
@@ -30,14 +30,18 @@ import (
 const STUNDefaultServerAddr = "159.223.0.83:3478"
 
 type STUN struct {
-	serverAddr string
+	serverAddr *net.UDPAddr
 }
 
-func NewSTUN(serverAddr string) STUN {
-	if serverAddr == "" {
+func NewSTUN(serverAddr string) (Interface, error) {
+	if serverAddr == "default" {
 		serverAddr = STUNDefaultServerAddr
 	}
-	return STUN{serverAddr: serverAddr}
+	addr, err := net.ResolveUDPAddr("udp4", serverAddr)
+	if err != nil {
+		return nil, err
+	}
+	return STUN{serverAddr: addr}, nil
 }
 
 func (s STUN) String() string {
@@ -57,15 +61,16 @@ func (STUN) DeleteMapping(string, int, int) error {
 }
 
 func (s STUN) ExternalIP() (net.IP, error) {
-	conn, err := stun.Dial("udp4", s.serverAddr)
+	conn, err := stun.Dial("udp4", s.serverAddr.String())
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = conn.Close()
-	}()
+	defer conn.Close()
 
-	message := stun.MustBuild(stun.TransactionID, stun.BindingRequest)
+	message, err := stun.Build(stun.TransactionID, stun.BindingRequest)
+	if err != nil {
+		return nil, err
+	}
 	var response *stun.Event
 	err = conn.Do(message, func(event stun.Event) {
 		response = &event
