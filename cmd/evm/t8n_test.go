@@ -634,7 +634,6 @@ func TestEvmRun(t *testing.T) {
 			wantStderr: "./testdata/evmrun/8.out.2.txt",
 		},
 	} {
-
 		tt.Logf("args: go run ./cmd/evm %v\n", strings.Join(tc.input, " "))
 		tt.Run("evm-test", tc.input...)
 
@@ -656,8 +655,8 @@ func TestEvmRun(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %d: could not read expected output: %v", i, err)
 			}
-			if string(have) != string(want) {
-				t.Fatalf("test %d, output wrong\nhave %q\nwant %q\n", i, string(have), string(want))
+			if have != string(want) {
+				t.Fatalf("test %d, output wrong\nhave %q\nwant %q\n", i, have, string(want))
 			}
 		}
 	}
