@@ -27,7 +27,7 @@ import (
 func GetExtra[SA any](s *StateDB, p types.ExtraPayloads[SA], addr common.Address) SA {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return p.FromPayloadCarrier(&stateObject.data)
+		return p.StateAccount.Get(&stateObject.data)
 	}
 	var zero SA
 	return zero
@@ -45,9 +45,9 @@ func setExtraOnObject[SA any](s *stateObject, p types.ExtraPayloads[SA], addr co
 	s.db.journal.append(extraChange[SA]{
 		payloads: p,
 		account:  &addr,
-		prev:     p.FromPayloadCarrier(&s.data),
+		prev:     p.StateAccount.Get(&s.data),
 	})
-	p.SetOnPayloadCarrier(&s.data, extra)
+	p.StateAccount.Set(&s.data, extra)
 }
 
 // extraChange is a [journalEntry] for [SetExtra] / [setExtraOnObject].
@@ -60,5 +60,5 @@ type extraChange[SA any] struct {
 func (e extraChange[SA]) dirtied() *common.Address { return e.account }
 
 func (e extraChange[SA]) revert(s *StateDB) {
-	e.payloads.SetOnPayloadCarrier(&s.getStateObject(*e.account).data, e.prev)
+	e.payloads.StateAccount.Set(&s.getStateObject(*e.account).data, e.prev)
 }

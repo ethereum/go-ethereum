@@ -38,7 +38,12 @@ import (
 // The payload can be accessed via the [ExtraPayloads.FromPayloadCarrier] method
 // of the accessor returned by RegisterExtras.
 func RegisterExtras[SA any]() ExtraPayloads[SA] {
-	var extra ExtraPayloads[SA]
+	extra := ExtraPayloads[SA]{
+		StateAccount: pseudo.NewAccessor[ExtraPayloadCarrier, SA](
+			func(a ExtraPayloadCarrier) *pseudo.Type { return a.extra().payload() },
+			func(a ExtraPayloadCarrier, t *pseudo.Type) { a.extra().t = t },
+		),
+	}
 	registeredExtras.MustRegister(&extraConstructors{
 		stateAccountType: func() string {
 			var x SA
@@ -81,7 +86,7 @@ func (e *StateAccountExtra) clone() *StateAccountExtra {
 // [StateAccount] and [SlimAccount] structs. The only valid way to construct an
 // instance is by a call to [RegisterExtras].
 type ExtraPayloads[SA any] struct {
-	_ struct{} // make godoc show unexported fields so nobody tries to make their own instance ;)
+	StateAccount pseudo.Accessor[ExtraPayloadCarrier, SA] // Also provides [SlimAccount] access.
 }
 
 func (ExtraPayloads[SA]) cloneStateAccount(s *StateAccountExtra) *StateAccountExtra {
@@ -101,27 +106,6 @@ type ExtraPayloadCarrier interface {
 var _ = []ExtraPayloadCarrier{
 	(*StateAccount)(nil),
 	(*SlimAccount)(nil),
-}
-
-// FromPayloadCarrier returns the carriers's payload.
-func (ExtraPayloads[SA]) FromPayloadCarrier(a ExtraPayloadCarrier) SA {
-	return pseudo.MustNewValue[SA](a.extra().payload()).Get()
-}
-
-// PointerFromPayloadCarrier returns a pointer to the carriers's extra payload.
-// This is guaranteed to be non-nil.
-//
-// Note that copying a [StateAccount] or [SlimAccount] by dereferencing a
-// pointer will result in a shallow copy and that the *SA returned here will
-// therefore be shared by all copies. If this is not the desired behaviour, use
-// [StateAccount.Copy] or [ExtraPayloads.SetOnPayloadCarrier].
-func (ExtraPayloads[SA]) PointerFromPayloadCarrier(a ExtraPayloadCarrier) *SA {
-	return pseudo.MustPointerTo[SA](a.extra().payload()).Value.Get()
-}
-
-// SetOnPayloadCarrier sets the carriers's payload.
-func (ExtraPayloads[SA]) SetOnPayloadCarrier(a ExtraPayloadCarrier, val SA) {
-	a.extra().t = pseudo.From(val).Type
 }
 
 // A StateAccountExtra carries the extra payload, if any, registered with

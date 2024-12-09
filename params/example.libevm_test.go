@@ -85,12 +85,12 @@ type RulesExtra struct {
 
 // FromChainConfig returns the extra payload carried by the ChainConfig.
 func FromChainConfig(c *params.ChainConfig) ChainConfigExtra {
-	return payloads.FromChainConfig(c)
+	return payloads.ChainConfig.Get(c)
 }
 
 // FromRules returns the extra payload carried by the Rules.
 func FromRules(r *params.Rules) RulesExtra {
-	return payloads.FromRules(r)
+	return payloads.Rules.Get(r)
 }
 
 // myForkPrecompiledContracts is analogous to the vm.PrecompiledContracts<Fork>

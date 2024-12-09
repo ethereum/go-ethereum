@@ -160,30 +160,30 @@ func TestModificationOfZeroExtras(t *testing.T) {
 	// closure is demonstrably over the original zero values.
 	assertChainConfigExtra := func(t *testing.T, want ccExtra, msg string) {
 		t.Helper()
-		assert.Equalf(t, want, extras.FromChainConfig(config), "%T: "+msg, &config)
+		assert.Equalf(t, want, extras.ChainConfig.Get(config), "%T: "+msg, &config)
 	}
 	assertRulesExtra := func(t *testing.T, want rulesExtra, msg string) {
 		t.Helper()
-		assert.Equalf(t, want, extras.FromRules(rules), "%T: "+msg, &rules)
+		assert.Equalf(t, want, extras.Rules.Get(rules), "%T: "+msg, &rules)
 	}
 
 	assertChainConfigExtra(t, ccExtra{}, "zero value")
 	assertRulesExtra(t, rulesExtra{}, "zero value")
 
 	const answer = 42
-	extras.PointerFromChainConfig(config).X = answer
+	extras.ChainConfig.GetPointer(config).X = answer
 	assertChainConfigExtra(t, ccExtra{X: answer}, "after setting via pointer field")
 
 	const pi = 314159
-	extras.PointerFromRules(rules).X = pi
+	extras.Rules.GetPointer(rules).X = pi
 	assertRulesExtra(t, rulesExtra{X: pi}, "after setting via pointer field")
 
 	ccReplace := ccExtra{X: 142857}
-	extras.SetOnChainConfig(config, ccReplace)
+	extras.ChainConfig.Set(config, ccReplace)
 	assertChainConfigExtra(t, ccReplace, "after replacement of entire extra via `*pointer = x`")
 
 	rulesReplace := rulesExtra{X: 18101986}
-	extras.SetOnRules(rules, rulesReplace)
+	extras.Rules.Set(rules, rulesReplace)
 	assertRulesExtra(t, rulesReplace, "after replacement of entire extra via `*pointer = x`")
 
 	if t.Failed() {
@@ -199,27 +199,27 @@ func TestModificationOfZeroExtras(t *testing.T) {
 
 		ccCopy := *config
 		t.Run("ChainConfig", func(t *testing.T) {
-			assert.Equal(t, extras.FromChainConfig(&ccCopy), ccReplace, "extras copied")
+			assert.Equal(t, extras.ChainConfig.Get(&ccCopy), ccReplace, "extras copied")
 
-			extras.PointerFromChainConfig(&ccCopy).X = seqUp
+			extras.ChainConfig.GetPointer(&ccCopy).X = seqUp
 			assertChainConfigExtra(t, ccExtra{X: seqUp}, "original changed via copied.PointerFromChainConfig because copy only shallow")
 
 			ccReplace = ccExtra{X: seqDown}
-			extras.SetOnChainConfig(&ccCopy, ccReplace)
-			assert.Equal(t, extras.FromChainConfig(&ccCopy), ccReplace, "SetOnChainConfig effect")
+			extras.ChainConfig.Set(&ccCopy, ccReplace)
+			assert.Equal(t, extras.ChainConfig.Get(&ccCopy), ccReplace, "SetOnChainConfig effect")
 			assertChainConfigExtra(t, ccExtra{X: seqUp}, "original unchanged after copied.SetOnChainConfig")
 		})
 
 		rCopy := *rules
 		t.Run("Rules", func(t *testing.T) {
-			assert.Equal(t, extras.FromRules(&rCopy), rulesReplace, "extras copied")
+			assert.Equal(t, extras.Rules.Get(&rCopy), rulesReplace, "extras copied")
 
-			extras.PointerFromRules(&rCopy).X = seqUp
+			extras.Rules.GetPointer(&rCopy).X = seqUp
 			assertRulesExtra(t, rulesExtra{X: seqUp}, "original changed via copied.PointerFromRuels because copy only shallow")
 
 			rulesReplace = rulesExtra{X: seqDown}
-			extras.SetOnRules(&rCopy, rulesReplace)
-			assert.Equal(t, extras.FromRules(&rCopy), rulesReplace, "SetOnRules effect")
+			extras.Rules.Set(&rCopy, rulesReplace)
+			assert.Equal(t, extras.Rules.Get(&rCopy), rulesReplace, "SetOnRules effect")
 			assertRulesExtra(t, rulesExtra{X: seqUp}, "original unchanged after copied.SetOnRules")
 		})
 	})

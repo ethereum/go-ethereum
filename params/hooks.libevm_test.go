@@ -36,7 +36,7 @@ func TestChainConfigHooks_Description(t *testing.T) {
 	hooks := &hookstest.Stub{
 		DescriptionSuffix: "Arran was here",
 	}
-	hooks.Register(t).SetOnChainConfig(c, hooks)
+	hooks.Register(t).ChainConfig.Set(c, hooks)
 	require.Equal(t, want, c.Description(), "ChainConfigHooks.Description() is appended to non-extras equivalent")
 }
 
@@ -49,7 +49,7 @@ func TestChainConfigHooks_CheckConfigForkOrder(t *testing.T) {
 	hooks := &hookstest.Stub{
 		CheckConfigForkOrderFn: func() error { return err },
 	}
-	hooks.Register(t).SetOnChainConfig(c, hooks)
+	hooks.Register(t).ChainConfig.Set(c, hooks)
 	require.Equal(t, err, c.CheckConfigForkOrder(), "CheckConfigForkOrder() with error-producing hook")
 }
 
@@ -72,7 +72,7 @@ func TestChainConfigHooks_CheckConfigCompatible(t *testing.T) {
 	hooks := &hookstest.Stub{
 		CheckConfigCompatibleFn: makeCompatErr,
 	}
-	hooks.Register(t).SetOnChainConfig(c, hooks)
+	hooks.Register(t).ChainConfig.Set(c, hooks)
 	want := makeCompatErr(newcfg, new(big.Int).SetUint64(headNumber), headTimestamp)
 	require.Equal(t, want, c.CheckCompatible(newcfg, headNumber, headTimestamp), "CheckCompatible() with error-producing hook")
 }

@@ -51,72 +51,68 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 		arbitrary   = common.HexToHash("0x94eecff1444ab69437636630918c15596e001b30b973f03e06006ae20aa6e307")
 	)
 
+	// An assertion is the actual test to be performed. It is returned upon
+	// registration, instead of being a standalone field in the test, because
+	// each one uses a different generic parameter.
+	type assertion func(*testing.T, *types.StateAccount)
 	tests := []struct {
 		name                string
-		registerAndSetExtra func(*types.StateAccount) *types.StateAccount
-		assertExtra         func(*testing.T, *types.StateAccount)
+		registerAndSetExtra func(*types.StateAccount) (*types.StateAccount, assertion)
 		wantTrieHash        common.Hash
 	}{
 		{
 			name: "vanilla geth",
-			registerAndSetExtra: func(a *types.StateAccount) *types.StateAccount {
-				return a
-			},
-			assertExtra: func(t *testing.T, a *types.StateAccount) {
-				t.Helper()
-				assert.Truef(t, a.Extra.Equal(nil), "%T.%T.IsEmpty()", a, a.Extra)
+			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
+				//nolint:thelper // It's more useful if this test failure shows this line instead of its call site
+				return a, func(t *testing.T, got *types.StateAccount) {
+					assert.Truef(t, a.Extra.Equal(nil), "%T.%T.IsEmpty()", a, a.Extra)
+				}
 			},
 			wantTrieHash: vanillaGeth,
 		},
 		{
 			name: "true-boolean payload",
-			registerAndSetExtra: func(a *types.StateAccount) *types.StateAccount {
-				types.RegisterExtras[bool]().SetOnPayloadCarrier(a, true)
-				return a
-			},
-			assertExtra: func(t *testing.T, sa *types.StateAccount) {
-				t.Helper()
-				assert.Truef(t, types.ExtraPayloads[bool]{}.FromPayloadCarrier(sa), "")
+			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
+				e := types.RegisterExtras[bool]()
+				e.StateAccount.Set(a, true)
+				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
+					assert.Truef(t, e.StateAccount.Get(got), "")
+				}
 			},
 			wantTrieHash: trueBool,
 		},
 		{
 			name: "explicit false-boolean payload",
-			registerAndSetExtra: func(a *types.StateAccount) *types.StateAccount {
-				p := types.RegisterExtras[bool]()
-				p.SetOnPayloadCarrier(a, false) // the explicit part
-				return a
-			},
-			assertExtra: func(t *testing.T, sa *types.StateAccount) {
-				t.Helper()
-				assert.Falsef(t, types.ExtraPayloads[bool]{}.FromPayloadCarrier(sa), "")
+			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
+				e := types.RegisterExtras[bool]()
+				e.StateAccount.Set(a, false) // the explicit part
+
+				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
+					assert.Falsef(t, e.StateAccount.Get(got), "")
+				}
 			},
 			wantTrieHash: falseBool,
 		},
 		{
 			name: "implicit false-boolean payload",
-			registerAndSetExtra: func(a *types.StateAccount) *types.StateAccount {
-				types.RegisterExtras[bool]()
+			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
+				e := types.RegisterExtras[bool]()
 				// Note that `a` is reflected, unchanged (the implicit part).
-				return a
-			},
-			assertExtra: func(t *testing.T, sa *types.StateAccount) {
-				t.Helper()
-				assert.Falsef(t, types.ExtraPayloads[bool]{}.FromPayloadCarrier(sa), "")
+				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
+					assert.Falsef(t, e.StateAccount.Get(got), "")
+				}
 			},
 			wantTrieHash: falseBool,
 		},
 		{
 			name: "arbitrary payload",
-			registerAndSetExtra: func(a *types.StateAccount) *types.StateAccount {
+			registerAndSetExtra: func(a *types.StateAccount) (*types.StateAccount, assertion) {
+				e := types.RegisterExtras[arbitraryPayload]()
 				p := arbitraryPayload{arbitraryData}
-				types.RegisterExtras[arbitraryPayload]().SetOnPayloadCarrier(a, p)
-				return a
-			},
-			assertExtra: func(t *testing.T, sa *types.StateAccount) {
-				t.Helper()
-				got := types.ExtraPayloads[arbitraryPayload]{}.FromPayloadCarrier(sa)
-				assert.Equalf(t, arbitraryPayload{arbitraryData}, got, "")
+				e.StateAccount.Set(a, p)
+				return a, func(t *testing.T, got *types.StateAccount) { //nolint:thelper
+					assert.Equalf(t, arbitraryPayload{arbitraryData}, e.StateAccount.Get(got), "")
+				}
 			},
 			wantTrieHash: arbitrary,
 		},
@@ -127,7 +123,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			types.TestOnlyClearRegisteredExtras()
 			t.Cleanup(types.TestOnlyClearRegisteredExtras)
 
-			acct := tt.registerAndSetExtra(&types.StateAccount{
+			acct, asserter := tt.registerAndSetExtra(&types.StateAccount{
 				Nonce:    42,
 				Balance:  uint256.NewInt(314159),
 				Root:     types.EmptyRootHash,
@@ -147,7 +143,7 @@ func TestStateAccountExtraViaTrieStorage(t *testing.T) {
 			if diff := cmp.Diff(acct, got); diff != "" {
 				t.Errorf("%T.GetAccount() not equal to value passed to %[1]T.UpdateAccount(); diff (-want +got):\n%s", state, diff)
 			}
-			tt.assertExtra(t, got)
+			asserter(t, got)
 		})
 	}
 }
