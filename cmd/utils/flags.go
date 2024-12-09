@@ -2016,6 +2016,7 @@ func SetupMetrics(cfg *metrics.Config) {
 	}
 }
 
+// SplitTagsFlag parses a comma-separated list of k=v metrics tags.
 func SplitTagsFlag(tagsFlag string) map[string]string {
 	tags := strings.Split(tagsFlag, ",")
 	tagsMap := map[string]string{}
