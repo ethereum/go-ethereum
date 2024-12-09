@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover/v5wire"
@@ -63,11 +64,9 @@ type codecV5 interface {
 // UDPv5 is the implementation of protocol version 5.
 type UDPv5 struct {
 	// static fields
-	conn   UDPConn
-	tab    *Table
-	nodeMu sync.Mutex
-	// addr -> node cache which cached the nodes we have sent packets to or received packets from recently.
-	cachedAddrNode map[string]*enode.Node
+	conn           UDPConn
+	tab            *Table
+	cachedAddrNode *lru.Cache[string, *enode.Node]
 	netrestrict    *netutil.Netlist
 	priv           *ecdsa.PrivateKey
 	localNode      *enode.LocalNode
@@ -156,7 +155,7 @@ func newUDPv5(conn UDPConn, ln *enode.LocalNode, cfg Config) (*UDPv5, error) {
 	t := &UDPv5{
 		// static fields
 		conn:           newMeteredConn(conn),
-		cachedAddrNode: make(map[string]*enode.Node),
+		cachedAddrNode: lru.NewCache[string, *enode.Node](1024),
 		localNode:      ln,
 		db:             ln.Database(),
 		netrestrict:    cfg.NetRestrict,
@@ -983,19 +982,14 @@ func packNodes(reqid []byte, nodes []*enode.Node) []*v5wire.Nodes {
 }
 
 func (t *UDPv5) putCache(addr string, node *enode.Node) {
-	t.nodeMu.Lock()
-	defer t.nodeMu.Unlock()
-	if n, ok := t.cachedAddrNode[addr]; ok {
+	if n, ok := t.cachedAddrNode.Get(addr); ok {
 		t.log.Debug("Update cached node", "old", n.ID(), "new", node.ID())
 	}
-	t.cachedAddrNode[addr] = node
+	t.cachedAddrNode.Add(addr, node)
 }
 
 func (t *UDPv5) GetCachedNode(addr string) (*enode.Node, bool) {
-	t.nodeMu.Lock()
-	defer t.nodeMu.Unlock()
-	n, ok := t.cachedAddrNode[addr]
-	return n, ok
+	return t.cachedAddrNode.Get(addr)
 }
 
 func (t *UDPv5) Table() *Table {
