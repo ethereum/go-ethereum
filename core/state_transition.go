@@ -559,7 +559,6 @@ func (st *stateTransition) validateAuthorization(auth *types.Authorization) (aut
 	code := st.state.GetCode(authority)
 	if _, ok := types.ParseDelegation(code); len(code) != 0 && !ok {
 		return authority, ErrAuthorizationDestinationHasCode
-
 	}
 	if have := st.state.GetNonce(authority); have != auth.Nonce {
 		return authority, ErrAuthorizationNonceMismatch
