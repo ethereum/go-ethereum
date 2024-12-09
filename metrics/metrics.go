@@ -23,8 +23,10 @@ func Enabled() bool {
 
 // Enable enables the metrics system.
 // The Enabled-flag is expected to be set, once, during startup, but toggling off and on
-// is not supported,
-// Enable is not safe to call concurrently. It has no effect if it was already called.
+// is not supported.
+//
+// Enable is not safe to call concurrently. You need to call this as early as possible in
+// the program, before any metrics collection will happen.
 func Enable() {
 	metricsEnabled = true
 }
