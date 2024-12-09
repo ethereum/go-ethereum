@@ -94,7 +94,7 @@ func (db *Database) loadLayers() layer {
 	// Retrieve the root node of persistent state.
 	root, err := nodeToHash(rawdb.ReadAccountTrieNode(db.diskdb, nil), db.isVerkle)
 	if err != nil {
-		log.Crit("Invalid root verkle node", "err", err)
+		log.Crit("Failed to compute root node hash", "err", err)
 	}
 	// Load the layers by resolving the journal
 	head, err := db.loadJournal(root)
@@ -263,8 +263,7 @@ func (db *Database) Journal(root common.Hash) error {
 	}
 	// Firstly write out the metadata of journal
 	journal := new(bytes.Buffer)
-	err := rlp.Encode(journal, journalVersion)
-	if err != nil {
+	if err := rlp.Encode(journal, journalVersion); err != nil {
 		return err
 	}
 	// Secondly write out the state root in disk, ensure all layers
