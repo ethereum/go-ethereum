@@ -17,8 +17,6 @@
 package v2
 
 import (
-	"encoding/hex"
-	"fmt"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -28,101 +26,6 @@ import (
 	"regexp"
 	"strings"
 )
-
-// deployContract deploys a hex-encoded contract with the given constructor
-// input.  It returns the deployment transaction, address on success.
-func deployContract(constructor []byte, contract string, deploy func(input, deployer []byte) (common.Address, *types.Transaction, error)) (deploymentAddr common.Address, deploymentTx *types.Transaction, err error) {
-	contractBinBytes, err := hex.DecodeString(contract[2:])
-	if err != nil {
-		return common.Address{}, nil, fmt.Errorf("contract bytecode is not a hex string: %s", contractBinBytes[2:])
-	}
-	addr, tx, err := deploy(constructor, contractBinBytes)
-	if err != nil {
-		return common.Address{}, nil, fmt.Errorf("failed to deploy contract: %v", err)
-	}
-	return addr, tx, nil
-}
-
-// deployLibs iterates the set contracts (map of pattern to hex-encoded
-// contract deployer code). Each contract is deployed, and the
-// resulting addresses/deployment-txs are returned on success.
-func deployLibs(contracts map[string]string, deploy func(input, deployer []byte) (common.Address, *types.Transaction, error)) (deploymentTxs map[common.Address]*types.Transaction, deployAddrs map[string]common.Address, err error) {
-	deploymentTxs = make(map[common.Address]*types.Transaction)
-	deployAddrs = make(map[string]common.Address)
-
-	for pattern, contractBin := range contracts {
-		contractDeployer, err := hex.DecodeString(contractBin[2:])
-		if err != nil {
-			return deploymentTxs, deployAddrs, fmt.Errorf("contract bytecode is not a hex string: %s", contractBin[2:])
-		}
-		addr, tx, err := deploy([]byte{}, contractDeployer)
-		if err != nil {
-			return deploymentTxs, deployAddrs, fmt.Errorf("failed to deploy contract: %v", err)
-		}
-		deploymentTxs[addr] = tx
-		deployAddrs[pattern] = addr
-	}
-
-	return deploymentTxs, deployAddrs, nil
-}
-
-// linkContract takes an unlinked contract deployer hex-encoded code, a map of
-// already-deployed library dependencies, replaces references to deployed library
-// dependencies in the contract code, and returns the contract deployment bytecode on
-// success.
-func linkContract(contract string, linkedLibs map[string]common.Address) (deployableContract string, err error) {
-	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
-	if err != nil {
-		return "", err
-	}
-	// link in any library the contract depends on
-	for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(contract, -1) {
-		matchingPattern := match[1]
-		addr := linkedLibs[matchingPattern]
-		contract = strings.ReplaceAll(contract, "__$"+matchingPattern+"$__", addr.String()[2:])
-	}
-	return contract, nil
-}
-
-// linkLibs iterates the set of dependencies that have yet to be
-// linked/deployed (pending), replacing references to library dependencies
-// (i.e. mutating pending) if those dependencies are fully linked/deployed
-// (in 'linked').
-//
-// contracts that have become fully linked in the current invocation are
-// returned.
-func linkLibs(pending map[string]string, linked map[string]common.Address) (newPending map[string]string, deployableDeps map[string]string) {
-	newPending = make(map[string]string)
-	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
-	if err != nil {
-		panic(err)
-	}
-	reMatchAnyPattern, err := regexp.Compile("__\\$.*\\$__")
-	if err != nil {
-		panic(err)
-	}
-	deployableDeps = make(map[string]string)
-
-	for pattern, dep := range pending {
-		newPending[pattern] = dep
-		// link references to dependent libraries that have been deployed
-		for _, match := range reMatchSpecificPattern.FindAllStringSubmatch(newPending[pattern], -1) {
-			matchingPattern := match[1]
-			addr, ok := linked[matchingPattern]
-			if !ok {
-				continue
-			}
-
-			newPending[pattern] = strings.ReplaceAll(newPending[pattern], "__$"+matchingPattern+"$__", addr.String()[2:])
-		}
-		// if the library code became fully linked, move it from pending->linked.
-		if !reMatchAnyPattern.MatchString(newPending[pattern]) {
-			deployableDeps[pattern] = newPending[pattern]
-			delete(newPending, pattern)
-		}
-	}
-	return newPending, deployableDeps
-}
 
 // ContractDeployParams represents state needed to deploy a contract:
 // the metdata and constructor input (which can be nil if no input is specified).
@@ -172,6 +75,7 @@ type ContractDeployer interface {
 
 type depTreeBuilder struct {
 	overrides map[string]common.Address
+	libs      map[string]string
 }
 type depTreeNode struct {
 	pattern      string
@@ -179,8 +83,8 @@ type depTreeNode struct {
 	nodes        []*depTreeNode
 }
 
-func (d *depTreeBuilder) buildDepTree(contractBin string, libs map[string]string) *depTreeNode {
-	node := depTreeNode{contractBin, contractBin, nil}
+func (d *depTreeBuilder) buildDepTree(pattern string, contractBin string) *depTreeNode {
+	node := depTreeNode{pattern, contractBin, nil}
 
 	reMatchSpecificPattern, err := regexp.Compile("__\\$([a-f0-9]+)\\$__")
 	if err != nil {
@@ -191,7 +95,7 @@ func (d *depTreeBuilder) buildDepTree(contractBin string, libs map[string]string
 		if _, ok := d.overrides[pattern]; ok {
 			continue
 		}
-		node.nodes = append(node.nodes, d.buildDepTree(libs[pattern], libs))
+		node.nodes = append(node.nodes, d.buildDepTree(pattern, d.libs[pattern]))
 	}
 	return &node
 }
@@ -247,9 +151,15 @@ func LinkAndDeploy(deployParams DeploymentParams, deploy func(input, deployer []
 		Addrs: make(map[string]common.Address),
 	}
 	for _, contract := range deployParams.Contracts {
-		treeBuilder := depTreeBuilder{deployParams.Overrides}
-		tree := treeBuilder.buildDepTree(contract.Meta.Bin, unlinkedLibs)
-		deployer := treeDeployer{deploy: deploy}
+		if _, ok := deployParams.Overrides[contract.Meta.Pattern]; ok {
+			continue
+		}
+		treeBuilder := depTreeBuilder{deployParams.Overrides, unlinkedLibs}
+		tree := treeBuilder.buildDepTree(contract.Meta.Pattern, contract.Meta.Bin)
+		deployer := treeDeployer{
+			deploy:        deploy,
+			deployedAddrs: make(map[string]common.Address),
+			deployerTxs:   make(map[string]*types.Transaction)}
 		deployer.linkAndDeploy(tree)
 		res, err := deployer.Result()
 		if err != nil {
