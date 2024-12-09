@@ -54,23 +54,3 @@ var DefaultConfig = Config{
 	InfluxDBBucket:       "geth",
 	InfluxDBOrganization: "geth",
 }
-
-// ShisuiDefaultConfig is the default config for metrics used in shisui.
-var ShisuiDefaultConfig = Config{
-	Enabled:          false,
-	EnabledExpensive: false,
-	HTTP:             "127.0.0.1",
-	Port:             6060,
-	EnableInfluxDB:   false,
-	InfluxDBEndpoint: "http://localhost:8086",
-	InfluxDBDatabase: "shisui",
-	InfluxDBUsername: "test",
-	InfluxDBPassword: "test",
-	InfluxDBTags:     "host=localhost",
-
-	// influxdbv2-specific flags
-	EnableInfluxDBV2:     false,
-	InfluxDBToken:        "test",
-	InfluxDBBucket:       "shisui",
-	InfluxDBOrganization: "shisui",
-}
